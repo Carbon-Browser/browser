@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Point;
 import android.os.SystemClock;
-import android.support.test.InstrumentationRegistry;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.widget.LinearLayout;
 
-import androidx.annotation.IntDef;
-
-import com.google.common.collect.ImmutableMap;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.After;
@@ -32,34 +29,30 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
-import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-import org.chromium.base.FeatureList;
-import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.test.params.ParameterAnnotations;
-import org.chromium.base.test.params.ParameterProvider;
-import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.JniMocker;
-import org.chromium.chrome.browser.WebContentsFactory;
 import org.chromium.chrome.browser.app.ChromeActivity;
-import org.chromium.chrome.browser.compositor.bottombar.OverlayContentProgressObserver;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel.PanelState;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel.StateChangeReason;
+import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelContentProgressObserver;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelManager;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelManagerWrapper;
 import org.chromium.chrome.browser.compositor.bottombar.contextualsearch.ContextualSearchPanel;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManagerImpl;
+import org.chromium.chrome.browser.content.WebContentsFactory;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchFakeServer.ContextualSearchTestHost;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchFakeServer.FakeResolveSearch;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchFakeServer.FakeSlowResolveSearch;
 import org.chromium.chrome.browser.firstrun.FirstRunStatus;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
 import org.chromium.chrome.browser.locale.LocaleManager;
 import org.chromium.chrome.browser.locale.LocaleManagerDelegate;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
+import org.chromium.chrome.browser.readaloud.ReadAloudController;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
@@ -67,25 +60,19 @@ import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.content_public.browser.SelectAroundCaretResult;
 import org.chromium.content_public.browser.SelectionClient;
 import org.chromium.content_public.browser.SelectionPopupController;
+import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.DOMUtils;
-import org.chromium.content_public.browser.test.util.KeyUtils;
 import org.chromium.content_public.browser.test.util.TestSelectionPopupController;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.browser.test.util.TouchCommon;
 import org.chromium.content_public.browser.test.util.WebContentsUtils;
 import org.chromium.net.test.EmbeddedTestServer;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.touch_selection.SelectionEventType;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 
-/**
- * This is a base class for various Contextual Search instrumentation tests.
- */
+/** This is a base class for various Contextual Search instrumentation tests. */
 public class ContextualSearchInstrumentationBase {
     @ClassRule
     public static final ChromeTabbedActivityTestRule sActivityTestRule =
@@ -95,21 +82,30 @@ public class ContextualSearchInstrumentationBase {
     public final BlankCTATabInitialStateRule mInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
 
-    @Rule
-    public JniMocker mocker = new JniMocker();
-
-    @Mock
-    ContextualSearchManager.Natives mContextualSearchManagerJniMock;
-
     // --------------------------------------------------------------------------------------------
 
-    /**
-     * ContextualSearchPanel wrapper that prevents native calls.
-     */
+    /** ContextualSearchPanel wrapper that prevents native calls. */
     protected static class ContextualSearchPanelWrapper extends ContextualSearchPanel {
-        public ContextualSearchPanelWrapper(Context context, LayoutManagerImpl layoutManager,
-                OverlayPanelManager panelManager) {
-            super(context, layoutManager, panelManager, null, null, null, 0, null, 0, null);
+        public ContextualSearchPanelWrapper(
+                Context context,
+                LayoutManagerImpl layoutManager,
+                OverlayPanelManager panelManager,
+                Profile profile,
+                BrowserControlsManager browserControlsManager) {
+            super(
+                    context,
+                    layoutManager,
+                    panelManager,
+                    browserControlsManager,
+                    null,
+                    profile,
+                    null,
+                    0,
+                    null,
+                    true,
+                    null,
+                    sActivityTestRule.getActivity().getEdgeToEdgeControllerSupplierForTesting(),
+                    /* desktopWindowStateManager= */ null);
         }
 
         @Override
@@ -124,53 +120,76 @@ public class ContextualSearchInstrumentationBase {
 
     // --------------------------------------------------------------------------------------------
 
-    /**
-     * ContextualSearchManager wrapper that prevents network requests and most native calls.
-     */
+    /** ContextualSearchManager wrapper that prevents network requests and most native calls. */
     protected static class ContextualSearchManagerWrapper extends ContextualSearchManager {
         public ContextualSearchManagerWrapper(ChromeActivity activity) {
-            super(activity, null, activity.getRootUiCoordinatorForTesting().getScrimCoordinator(),
-                    activity.getActivityTabProvider(), activity.getFullscreenManager(),
-                    activity.getBrowserControlsManager(), activity.getWindowAndroid(),
-                    activity.getTabModelSelector(), () -> activity.getLastUserInteractionTime());
+            super(
+                    activity,
+                    ProfileManager.getLastUsedRegularProfile(),
+                    null,
+                    activity.getRootUiCoordinatorForTesting().getScrimCoordinator(),
+                    activity.getActivityTabProvider(),
+                    activity.getFullscreenManager(),
+                    activity.getBrowserControlsManager(),
+                    activity.getWindowAndroid(),
+                    activity.getTabModelSelector(),
+                    activity.getEdgeToEdgeControllerSupplierForTesting());
             setSelectionController(new MockCSSelectionController(activity, this));
-            WebContents webContents = WebContentsFactory.createWebContents(
-                    Profile.getLastUsedRegularProfile(), false);
-            ContentView cv = ContentView.createContentView(
-                    activity, null /* eventOffsetHandler */, webContents);
-            webContents.initialize(null, ViewAndroidDelegate.createBasicDelegate(cv), null,
-                    activity.getWindowAndroid(), WebContents.createDefaultInternalsHolder());
+            Profile profile = ProfileManager.getLastUsedRegularProfile();
+            WebContents webContents = WebContentsFactory.createWebContents(profile, false, false);
+            ContentView cv = ContentView.createContentView(activity, webContents);
+            webContents.setDelegates(
+                    null,
+                    ViewAndroidDelegate.createBasicDelegate(cv),
+                    null,
+                    activity.getWindowAndroid(),
+                    WebContents.createDefaultInternalsHolder());
             SelectionPopupController selectionPopupController =
                     WebContentsUtils.createSelectionPopupController(webContents);
             selectionPopupController.setSelectionClient(this.getContextualSearchSelectionClient());
+
             MockContextualSearchPolicy policy =
-                    new MockContextualSearchPolicy(getSelectionController());
+                    new MockContextualSearchPolicy(profile, getSelectionController());
             setContextualSearchPolicy(policy);
-            getSelectionController().setPolicy(policy);
         }
 
         @Override
         public void startSearchTermResolutionRequest(
                 String selection, boolean isExactResolve, ContextualSearchContext searchContext) {
             // Skip native calls and immediately "resolve" the search term.
-            onSearchTermResolutionResponse(true, 200, selection, selection, "", "", false, 0, 10,
-                    "", "", "", "", QuickActionCategory.NONE, "", "", 0, "");
+            onSearchTermResolutionResponse(
+                    true,
+                    200,
+                    selection,
+                    selection,
+                    "",
+                    "",
+                    false,
+                    0,
+                    10,
+                    "",
+                    "",
+                    "",
+                    "",
+                    QuickActionCategory.NONE,
+                    "",
+                    "",
+                    0,
+                    "");
         }
 
         /**
          * @return A stubbed SelectionPopupController for mocking text selection.
          */
         public StubbedSelectionPopupController getBaseSelectionPopupController() {
-            return (StubbedSelectionPopupController) getSelectionController()
-                    .getSelectionPopupController();
+            return (StubbedSelectionPopupController)
+                    getSelectionController().getSelectionPopupController();
         }
     }
 
     // --------------------------------------------------------------------------------------------
 
-    /**
-     * Selection controller that mocks out anything to do with a WebContents.
-     */
+    /** Selection controller that mocks out anything to do with a WebContents. */
     private static class MockCSSelectionController extends ContextualSearchSelectionController {
         private StubbedSelectionPopupController mPopupController;
 
@@ -188,9 +207,7 @@ public class ContextualSearchInstrumentationBase {
 
     // --------------------------------------------------------------------------------------------
 
-    /**
-     * A SelectionPopupController that has some methods stubbed out for testing.
-     */
+    /** A SelectionPopupController that has some methods stubbed out for testing. */
     protected static final class StubbedSelectionPopupController
             extends TestSelectionPopupController {
         private String mCurrentText;
@@ -219,48 +236,44 @@ public class ContextualSearchInstrumentationBase {
 
     // --------------------------------------------------------------------------------------------
 
-    /**
-     * Trigger text selection on the contextual search manager.
-     */
+    /** Trigger text selection on the contextual search manager. */
     protected void mockLongpressText(String text) {
         mContextualSearchManager.getBaseSelectionPopupController().setSelectedText(text);
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mContextualSearchClient.onSelectionEvent(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mContextualSearchClient.onSelectionEvent(
                                 SelectionEventType.SELECTION_HANDLES_SHOWN, 0, 0));
     }
 
-    /**
-     * Trigger text selection on the contextual search manager.
-     */
+    /** Trigger text selection on the contextual search manager. */
     protected void mockTapText(String text) {
         mContextualSearchManager.getBaseSelectionPopupController().setSelectedText(text);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mContextualSearchManager.getGestureStateListener().onTouchDown();
-            mContextualSearchManager.onShowUnhandledTapUIIfNeeded(0, 0);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mContextualSearchManager.getGestureStateListener().onTouchDown();
+                    mContextualSearchManager.onShowUnhandledTapUiIfNeeded(0, 0);
+                });
     }
 
-    /**
-     * Trigger empty space tap.
-     */
+    /** Trigger empty space tap. */
     protected void mockTapEmptySpace() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mContextualSearchManager.onShowUnhandledTapUIIfNeeded(0, 0);
-            mContextualSearchClient.onSelectionEvent(
-                    SelectionEventType.SELECTION_HANDLES_CLEARED, 0, 0);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mContextualSearchManager.onShowUnhandledTapUiIfNeeded(0, 0);
+                    mContextualSearchClient.onSelectionEvent(
+                            SelectionEventType.SELECTION_HANDLES_CLEARED, 0, 0);
+                });
     }
 
-    /**
-     * Generates a call indicating that surrounding text and selection range are available.
-     */
+    /** Generates a call indicating that surrounding text and selection range are available. */
     protected void generateTextSurroundingSelectionAvailable() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // It only makes sense to send dummy data here because we can't easily control
-            // what's in the native context.
-            mContextualSearchManager.onTextSurroundingSelectionAvailable("UTF-8", "unused", 0, 0);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // It only makes sense to send placeholder data here because we can't easily
+                    // control what's in the native context.
+                    mContextualSearchManager.onTextSurroundingSelectionAvailable(
+                            "UTF-8", "unused", 0, 0);
+                });
     }
 
     /**
@@ -268,38 +281,28 @@ public class ContextualSearchInstrumentationBase {
      * action has completed with the given result.
      */
     protected void generateSelectWordAroundCaretAck() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // It only makes sense to send dummy data here because we can't easily control
-            // what's in the native context.
-            mContextualSearchClient.selectAroundCaretAck(new SelectAroundCaretResult(0, 0, 0, 0));
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // It only makes sense to send placeholder data here because we can't easily
+                    // control what's in the native context.
+                    mContextualSearchClient.selectAroundCaretAck(
+                            new SelectAroundCaretResult(0, 0, 0, 0));
+                });
     }
 
     // --------------------------------------------------------------------------------------------
-
-    /**
-     * Parameter provider for enabling/disabling triggering-related Features.
-     */
-    public static class FeatureParamProvider implements ParameterProvider {
-        @Override
-        public Iterable<ParameterSet> getParameters() {
-            return Arrays.asList(new ParameterSet().value(EnabledFeature.NONE).name("default"),
-                    new ParameterSet()
-                            .value(EnabledFeature.TRANSLATIONS)
-                            .name("enableTranslations"));
-        }
-    }
 
     /**
      * The DOM node for the word "search" on the test page, which causes a plain search response
      * with the Search Term "Search" from the Fake server.
      */
     protected static final String SEARCH_NODE = "search";
+
     protected static final String SEARCH_NODE_TERM = "Search";
 
     /**
-     * The DOM node for the word "intelligence" on the test page, which causes a search response
-     * for the Search Term "Intelligence" and also includes Related Searches suggestions.
+     * The DOM node for the word "intelligence" on the test page, which causes a search response for
+     * the Search Term "Intelligence" and also includes Related Searches suggestions.
      */
     protected static final String RELATED_SEARCHES_NODE = "intelligence";
 
@@ -307,7 +310,6 @@ public class ContextualSearchInstrumentationBase {
     private static final int TEST_TIMEOUT = 1500;
     private static final int TEST_EXPECTED_FAILURE_TIMEOUT = 1000;
 
-    private static final int PANEL_INTERACTION_MAX_RETRIES = 3;
     private static final int PANEL_INTERACTION_RETRY_DELAY_MS = 200;
 
     private static final int DOUBLE_TAP_DELAY_MULTIPLIER = 3;
@@ -318,51 +320,8 @@ public class ContextualSearchInstrumentationBase {
     private static final String LOW_PRIORITY_INVALID_SEARCH_ENDPOINT = "/s/invalid";
     private static final String CONTEXTUAL_SEARCH_PREFETCH_PARAM = "&pf=c";
 
-    //--------------------------------------------------------------------------------------------
-    // Feature maps that we use for parameterized tests.
-    // NOTE: We want to test all Features under development both on and off, regardless of whether
-    // they are enabled in fieldtrial_testing_config.json, to catch regressions during rollout.
-    //--------------------------------------------------------------------------------------------
-
-    /**
-     * This represents the current fully-launched configuration, with no other Features.
-     */
-    protected static final ImmutableMap<String, Boolean> ENABLE_NONE = ImmutableMap.of(
-            // All false
-            ChromeFeatureList.RELATED_SEARCHES, false, ChromeFeatureList.RELATED_SEARCHES_IN_BAR,
-            false, ChromeFeatureList.RELATED_SEARCHES_UI, false,
-            ChromeFeatureList.CONTEXTUAL_SEARCH_FORCE_CAPTION, false,
-            ChromeFeatureList.CONTEXTUAL_TRIGGERS_SELECTION_HANDLES, false);
-
-    /** This is the Related Searches Feature in the MVP configuration. */
-    private static final ImmutableMap<String, Boolean> ENABLE_RELATED_SEARCHES = ImmutableMap.of(
-            // Related Searches needs these 3:
-            ChromeFeatureList.RELATED_SEARCHES, true, ChromeFeatureList.RELATED_SEARCHES_IN_BAR,
-            true, ChromeFeatureList.RELATED_SEARCHES_UI, true,
-            ChromeFeatureList.CONTEXTUAL_SEARCH_FORCE_CAPTION, false,
-            ChromeFeatureList.CONTEXTUAL_TRIGGERS_SELECTION_HANDLES, false);
-
-    /** This is the helper-test Feature. */
-    private static final ImmutableMap<String, Boolean> ENABLE_FORCE_CAPTION = ImmutableMap.of(
-            ChromeFeatureList.RELATED_SEARCHES, false, ChromeFeatureList.RELATED_SEARCHES_IN_BAR,
-            false, ChromeFeatureList.RELATED_SEARCHES_UI, false,
-            // Just this one enabled:
-            ChromeFeatureList.CONTEXTUAL_SEARCH_FORCE_CAPTION, true,
-            ChromeFeatureList.CONTEXTUAL_TRIGGERS_SELECTION_HANDLES, false);
-
-    /** This is the contextual triggers feature set that alters tap to show selection handles. */
-    private static final ImmutableMap<String, Boolean> ENABLE_CONTEXTUAL_TRIGGERS = ImmutableMap.of(
-            ChromeFeatureList.RELATED_SEARCHES, false, ChromeFeatureList.RELATED_SEARCHES_IN_BAR,
-            false, ChromeFeatureList.RELATED_SEARCHES_UI, false,
-            ChromeFeatureList.CONTEXTUAL_SEARCH_FORCE_CAPTION, false,
-            // Just this one enabled:
-            ChromeFeatureList.CONTEXTUAL_TRIGGERS_SELECTION_HANDLES, true);
-
-    //--------------------------------------------------------------------------------------------
-    // Feature maps that we use for individual tests.
-    //--------------------------------------------------------------------------------------------
-    protected static final ImmutableMap<String, Boolean> ENABLE_RELATED_SEARCHES_IN_BAR =
-            ENABLE_RELATED_SEARCHES;
+    protected static final String EXTERNAL_APP_URL =
+            "intent://test/#Intent;scheme=externalappscheme;end";
 
     protected ContextualSearchManager mManager;
     protected ContextualSearchPolicy mPolicy;
@@ -386,44 +345,28 @@ public class ContextualSearchInstrumentationBase {
     // State for an individual test.
     private FakeSlowResolveSearch mLatestSlowResolveSearch;
 
-    @IntDef({EnabledFeature.NONE, EnabledFeature.TRANSLATIONS, EnabledFeature.PRIVACY_NEUTRAL,
-            EnabledFeature.PRIVACY_NEUTRAL_WITH_RELATED_SEARCHES,
-            EnabledFeature.CONTEXTUAL_TRIGGERS})
-    @Retention(RetentionPolicy.SOURCE)
-    @interface EnabledFeature {
-        int NONE = 0;
-        int TRANSLATIONS = 1;
-        int PRIVACY_NEUTRAL = 2;
-        int PRIVACY_NEUTRAL_WITH_RELATED_SEARCHES = 3;
-        int CONTEXTUAL_TRIGGERS = 4;
-    }
-
-    // Tracks whether a long-press triggering experiment is active.
-    private @EnabledFeature int mEnabledFeature;
-
-    @ParameterAnnotations.UseMethodParameterBefore(FeatureParamProvider.class)
-    public void setFeatureParameterForTest(@EnabledFeature int enabledFeature) {
-        mEnabledFeature = enabledFeature;
-    }
-
     @Before
     public void setUp() throws Exception {
         final ChromeActivity activity = sActivityTestRule.getActivity();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            FirstRunStatus.setFirstRunFlowComplete(true);
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    FirstRunStatus.setFirstRunFlowComplete(true);
 
-            mPanelManager = new OverlayPanelManagerWrapper();
-            mPanelManager.setContainerView(new LinearLayout(activity));
-            mContextualSearchManager = new ContextualSearchManagerWrapper(activity);
-            mContextualSearchClient = mContextualSearchManager.getContextualSearchSelectionClient();
+                    mPanelManager = new OverlayPanelManagerWrapper();
+                    mPanelManager.setContainerView(new LinearLayout(activity));
+                    mContextualSearchManager = new ContextualSearchManagerWrapper(activity);
+                    mContextualSearchClient =
+                            mContextualSearchManager.getContextualSearchSelectionClient();
 
-            LocaleManager.getInstance().setDelegateForTest(new LocaleManagerDelegate() {
-                @Override
-                public boolean needToCheckForSearchEnginePromo() {
-                    return false;
-                }
-            });
-        });
+                    LocaleManager.getInstance()
+                            .setDelegateForTest(
+                                    new LocaleManagerDelegate() {
+                                        @Override
+                                        public boolean needToCheckForSearchEnginePromo() {
+                                            return false;
+                                        }
+                                    });
+                });
 
         mTestServer = sActivityTestRule.getTestServer();
 
@@ -432,7 +375,7 @@ public class ContextualSearchInstrumentationBase {
         // so wait until that is set. https://crbug.com/1327063
         sActivityTestRule.assertWaitForPageScaleFactorMatch(1.0f);
 
-        mManager = sActivityTestRule.getActivity().getContextualSearchManagerSupplier().get();
+        mManager = sActivityTestRule.getActivity().getContextualSearchManagerForTesting();
         mTestHost = new ContextualSearchInstrumentationTestHost();
 
         Assert.assertNotNull(mManager);
@@ -442,11 +385,15 @@ public class ContextualSearchInstrumentationBase {
         mSelectionController = mManager.getSelectionController();
         mPolicy = mManager.getContextualSearchPolicy();
         mPolicy.overrideDecidedStateForTesting(true);
-        mSelectionController.setPolicy(mPolicy);
 
-        mFakeServer = new ContextualSearchFakeServer(mPolicy, mTestHost, mManager,
-                mManager.getOverlayContentDelegate(), new OverlayContentProgressObserver(),
-                sActivityTestRule.getActivity());
+        mFakeServer =
+                new ContextualSearchFakeServer(
+                        mPolicy,
+                        mTestHost,
+                        mManager,
+                        mManager.getOverlayPanelContentDelegate(),
+                        new OverlayPanelContentProgressObserver(),
+                        sActivityTestRule.getActivity());
 
         mPanel.setOverlayPanelContentFactory(mFakeServer);
         mManager.setNetworkCommunicator(mFakeServer);
@@ -456,48 +403,34 @@ public class ContextualSearchInstrumentationBase {
 
         IntentFilter filter = new IntentFilter(Intent.ACTION_VIEW);
         filter.addCategory(Intent.CATEGORY_BROWSABLE);
-        filter.addDataScheme("market");
-        mActivityMonitor = InstrumentationRegistry.getInstrumentation().addMonitor(
-                filter, new Instrumentation.ActivityResult(Activity.RESULT_OK, null), true);
+        filter.addDataScheme("externalappscheme");
+        mActivityMonitor =
+                InstrumentationRegistry.getInstrumentation()
+                        .addMonitor(
+                                filter,
+                                new Instrumentation.ActivityResult(Activity.RESULT_OK, null),
+                                true);
 
         mDpToPx = sActivityTestRule.getActivity().getResources().getDisplayMetrics().density;
 
         // Set the test Features map for all tests regardless of whether they are parameterized.
         // Non-parameterized tests typically override this setting by calling setTestFeatures
         // again.
-        ImmutableMap<String, Boolean> whichFeature = null;
-        switch (mEnabledFeature) {
-            case EnabledFeature.NONE:
-                whichFeature = ENABLE_NONE;
-                break;
-            case EnabledFeature.PRIVACY_NEUTRAL:
-                whichFeature = ENABLE_FORCE_CAPTION;
-                break;
-            case EnabledFeature.PRIVACY_NEUTRAL_WITH_RELATED_SEARCHES:
-                whichFeature = ENABLE_RELATED_SEARCHES;
-                break;
-            case EnabledFeature.CONTEXTUAL_TRIGGERS:
-                whichFeature = ENABLE_CONTEXTUAL_TRIGGERS;
-                break;
-        }
-        Assert.assertNotNull(
-                "Did you change test Features without setting the correct Map?", whichFeature);
-        FeatureList.setTestFeatures(whichFeature);
         // If Related Searches is enabled we need to also set that it's OK to send page content.
-        // TODO(donnd): Find a better way to discern if we need to establish sendingUrlOK is needed.
-        if (mEnabledFeature == EnabledFeature.PRIVACY_NEUTRAL_WITH_RELATED_SEARCHES) {
-            mPolicy.overrideAllowSendingPageUrlForTesting(true);
-        }
+        mPolicy.overrideAllowSendingPageUrlForTesting(true);
+
+        MockitoAnnotations.openMocks(this);
     }
 
     @After
     public void tearDown() throws Exception {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            FirstRunStatus.setFirstRunFlowComplete(false);
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    FirstRunStatus.setFirstRunFlowComplete(false);
 
-            if (mManager != null) mManager.dismissContextualSearchBar();
-            if (mPanel != null) mPanel.closePanel(StateChangeReason.UNKNOWN, false);
-        });
+                    if (mManager != null) mManager.dismissContextualSearchBar();
+                    if (mPanel != null) mPanel.closePanel(StateChangeReason.UNKNOWN, false);
+                });
         if (mActivityMonitor != null) {
             InstrumentationRegistry.getInstrumentation().removeMonitor(mActivityMonitor);
         }
@@ -526,25 +459,34 @@ public class ContextualSearchInstrumentationBase {
 
         @Override
         public void waitForSelectionToBe(final String text) {
-            CriteriaHelper.pollInstrumentationThread(() -> {
-                Criteria.checkThat(getSelectedText(), Matchers.is(text));
-            }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+            CriteriaHelper.pollInstrumentationThread(
+                    () -> {
+                        Criteria.checkThat(getSelectedText(), Matchers.is(text));
+                    },
+                    TEST_TIMEOUT,
+                    DEFAULT_POLLING_INTERVAL);
         }
 
         @Override
         public void waitForSearchTermResolutionToStart(final FakeResolveSearch search) {
             CriteriaHelper.pollInstrumentationThread(
-                    ()
-                            -> { return search.didStartSearchTermResolution(); },
-                    "Fake Search Term Resolution never started.", TEST_TIMEOUT,
+                    () -> {
+                        return search.didStartSearchTermResolution();
+                    },
+                    "Fake Search Term Resolution never started.",
+                    TEST_TIMEOUT,
                     DEFAULT_POLLING_INTERVAL);
         }
 
         @Override
         public void waitForSearchTermResolutionToFinish(final FakeResolveSearch search) {
-            CriteriaHelper.pollInstrumentationThread(() -> {
-                return search.didFinishSearchTermResolution();
-            }, "Fake Search was never ready.", TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+            CriteriaHelper.pollInstrumentationThread(
+                    () -> {
+                        return search.didFinishSearchTermResolution();
+                    },
+                    "Fake Search was never ready.",
+                    TEST_TIMEOUT,
+                    DEFAULT_POLLING_INTERVAL);
         }
 
         @Override
@@ -553,10 +495,10 @@ public class ContextualSearchInstrumentationBase {
         }
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Helper Functions and Methods.
     // TODO(donnd): Mark protected and use these in ContextualSearchManagerTest.
-    //============================================================================================
+    // ============================================================================================
 
     /** Triggers the panel to show in the peeking state. */
     void triggerPanelPeek() throws Exception {
@@ -568,45 +510,17 @@ public class ContextualSearchInstrumentationBase {
         void run() throws TimeoutException;
     }
 
-    // Panel interactions are flaky, see crbug.com/635661. Rather than adding a long delay to
-    // each test, we can retry failures. When trying to make the panel peak, we may also have to
-    // clear the selection before trying again.
-    protected void retryPanelBarInteractions(ThrowingRunnable r, boolean clearSelection)
-            throws AssertionError, TimeoutException {
-        int tries = 0;
-        boolean success = false;
-        while (!success) {
-            tries++;
-            try {
-                r.run();
-                success = true;
-            } catch (AssertionError | TimeoutException e) {
-                if (tries > PANEL_INTERACTION_MAX_RETRIES) {
-                    Log.e(TAG, "ctxs Failed interactions and giving up.", e);
-                    Thread.dumpStack();
-                    throw e;
-                } else {
-                    Log.e(TAG, "Failed to peek panel bar, trying again.", e);
-                    if (clearSelection) clearSelection();
-                    try {
-                        Thread.sleep(PANEL_INTERACTION_RETRY_DELAY_MS);
-                    } catch (InterruptedException ex) {
-                    }
-                }
-            }
-        }
-    }
-
     protected void clearSelection() {
-        ThreadUtils.runOnUiThreadBlocking(() -> {
-            SelectionPopupController.fromWebContents(sActivityTestRule.getWebContents())
-                    .clearSelection();
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    SelectionPopupController.fromWebContents(sActivityTestRule.getWebContents())
+                            .clearSelection();
+                });
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Public API
-    //============================================================================================
+    // ============================================================================================
 
     /**
      * Simulates a long-press on the given node without waiting for the panel to respond.
@@ -624,14 +538,13 @@ public class ContextualSearchInstrumentationBase {
      * @param nodeId A string containing the node ID.
      */
     public void longPressNode(String nodeId) throws TimeoutException {
-        retryPanelBarInteractions(() -> {
-            longPressNodeWithoutWaiting(nodeId);
-            waitForPanelToPeek();
-        }, true);
+        longPressNodeWithoutWaiting(nodeId);
+        waitForPanelToPeek();
     }
 
     /**
      * Simulates a resolving trigger on the given node but does not wait for the panel to peek.
+     *
      * @param nodeId A string containing the node ID.
      */
     protected void triggerResolve(String nodeId) throws TimeoutException {
@@ -640,6 +553,7 @@ public class ContextualSearchInstrumentationBase {
 
     /**
      * Simulates a non-resolve trigger on the given node and waits for the panel to peek.
+     *
      * @param nodeId A string containing the node ID.
      */
     protected void triggerNonResolve(String nodeId) throws TimeoutException {
@@ -648,6 +562,7 @@ public class ContextualSearchInstrumentationBase {
 
     /**
      * Waits for the selected text string to be the given string, and asserts.
+     *
      * @param text The string to wait for the selection to become.
      */
     protected void waitForSelectionToBe(final String text) {
@@ -656,13 +571,18 @@ public class ContextualSearchInstrumentationBase {
 
     /**
      * Asserts that the action bar does or does not become visible in response to a selection.
+     *
      * @param visible Whether the Action Bar must become visible or not.
      */
     protected void assertWaitForSelectActionBarVisible(final boolean visible) {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(
-                    getSelectionPopupController().isSelectActionBarShowing(), Matchers.is(visible));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            getSelectionPopupController().isSelectActionBarShowing(),
+                            Matchers.is(visible));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     protected SelectionPopupController getSelectionPopupController() {
@@ -708,9 +628,8 @@ public class ContextualSearchInstrumentationBase {
         // Make sure the selection controller knows we did a drag.
         // TODO(donnd): figure out how to reliably simulate a drag on all platforms.
         float unused = 0.0f;
-        @SelectionEventType
-        int dragStoppedEvent = SelectionEventType.SELECTION_HANDLE_DRAG_STOPPED;
-        TestThreadUtils.runOnUiThreadBlocking(
+        @SelectionEventType int dragStoppedEvent = SelectionEventType.SELECTION_HANDLE_DRAG_STOPPED;
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> mSelectionController.handleSelectionEvent(dragStoppedEvent, unused, unused));
 
         waitForSelectActionBarVisible();
@@ -735,9 +654,9 @@ public class ContextualSearchInstrumentationBase {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(runnable);
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Fake Searches Helpers
-    //============================================================================================
+    // ============================================================================================
 
     /**
      * Simulates a non-resolving search.
@@ -774,8 +693,9 @@ public class ContextualSearchInstrumentationBase {
      * @param nodeId The id of the node to be tapped.
      * @param isResolveExpected Whether a resolve is expected or not. Enforce by asserting.
      */
-    protected FakeResolveSearch simulateResolvableSearchAndAssertResolveAndPreload(String nodeId,
-            boolean isResolveExpected) throws InterruptedException, TimeoutException {
+    protected FakeResolveSearch simulateResolvableSearchAndAssertResolveAndPreload(
+            String nodeId, boolean isResolveExpected)
+            throws InterruptedException, TimeoutException {
         FakeResolveSearch search = mFakeServer.getFakeResolveSearch(nodeId);
         assertNotNull("Could not find FakeResolveSearch for node ID:" + nodeId, search);
         search.simulate();
@@ -798,7 +718,8 @@ public class ContextualSearchInstrumentationBase {
     protected void simulateSlowResolveSearch(String nodeId)
             throws InterruptedException, TimeoutException {
         mLatestSlowResolveSearch = mFakeServer.getFakeSlowResolveSearch(nodeId);
-        assertNotNull("Could not find FakeSlowResolveSearch for node ID:" + nodeId,
+        assertNotNull(
+                "Could not find FakeSlowResolveSearch for node ID:" + nodeId,
                 mLatestSlowResolveSearch);
         mLatestSlowResolveSearch.simulate();
         waitForPanelToPeek();
@@ -814,21 +735,17 @@ public class ContextualSearchInstrumentationBase {
         assertLoadedSearchTermMatches(mLatestSlowResolveSearch.getSearchTerm());
     }
 
-    /**
-     * Registers all fake searches to be used in tests.
-     */
+    /** Registers all fake searches to be used in tests. */
     private void registerFakeSearches() throws Exception {
         mFakeServer.registerFakeSearches();
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Fake Response
     // TODO(donnd): remove these methods and use the new infrastructure instead.
-    //============================================================================================
+    // ============================================================================================
 
-    /**
-     * Posts a fake response on the Main thread.
-     */
+    /** Posts a fake response on the Main thread. */
     private final class FakeResponseOnMainThread implements Runnable {
         private final ResolvedSearchTerm mResolvedSearchTerm;
 
@@ -846,12 +763,22 @@ public class ContextualSearchInstrumentationBase {
      * Fakes a server response with the parameters given and startAdjust and endAdjust equal to 0.
      * {@See ContextualSearchManager#handleSearchTermResolutionResponse}.
      */
-    protected void fakeResponse(boolean isNetworkUnavailable, int responseCode, String searchTerm,
-            String displayText, String alternateTerm, boolean doPreventPreload) {
-        fakeResponse(new ResolvedSearchTerm
-                             .Builder(isNetworkUnavailable, responseCode, searchTerm, displayText,
-                                     alternateTerm, doPreventPreload)
-                             .build());
+    protected void fakeResponse(
+            boolean isNetworkUnavailable,
+            int responseCode,
+            String searchTerm,
+            String displayText,
+            String alternateTerm,
+            boolean doPreventPreload) {
+        fakeResponse(
+                new ResolvedSearchTerm.Builder(
+                                isNetworkUnavailable,
+                                responseCode,
+                                searchTerm,
+                                displayText,
+                                alternateTerm,
+                                doPreventPreload)
+                        .build());
     }
 
     /**
@@ -860,14 +787,14 @@ public class ContextualSearchInstrumentationBase {
      */
     protected void fakeResponse(ResolvedSearchTerm resolvedSearchTerm) {
         if (mFakeServer.getSearchTermRequested() != null) {
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                    new FakeResponseOnMainThread(resolvedSearchTerm));
+            InstrumentationRegistry.getInstrumentation()
+                    .runOnMainSync(new FakeResponseOnMainThread(resolvedSearchTerm));
         }
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Content Helpers
-    //============================================================================================
+    // ============================================================================================
 
     /**
      * @return The Panel's WebContents.
@@ -883,76 +810,74 @@ public class ContextualSearchInstrumentationBase {
         return mFakeServer.isContentVisible();
     }
 
-    /**
-     * Asserts that the Panel's WebContents is created.
-     */
+    /** Asserts that the Panel's WebContents is created. */
     protected void assertWebContentsCreated() {
         Assert.assertNotNull(getPanelWebContents());
     }
 
-    /**
-     * Asserts that the Panel's WebContents is not created.
-     */
+    /** Asserts that the Panel's WebContents is not created. */
     protected void assertNoWebContents() {
         Assert.assertNull(getPanelWebContents());
     }
 
-    /**
-     * Asserts that the Panel's WebContents is visible.
-     */
+    /** Asserts that the Panel's WebContents is visible. */
     protected void assertWebContentsVisible() {
         Assert.assertTrue(isWebContentsVisible());
     }
 
-    /**
-     * Asserts that the Panel's WebContents.onShow() method was never called.
-     */
+    /** Asserts that the Panel's WebContents was never shown. */
     protected void assertNeverCalledWebContentsOnShow() {
         Assert.assertFalse(mFakeServer.didEverCallWebContentsOnShow());
     }
 
-    /**
-     * Asserts that the Panel's WebContents is created
-     */
+    /** Asserts that the Panel's WebContents is created */
     protected void assertWebContentsCreatedButNeverMadeVisible() {
         assertWebContentsCreated();
         Assert.assertFalse(isWebContentsVisible());
         assertNeverCalledWebContentsOnShow();
     }
 
-    //============================================================================================
+    // ============================================================================================
     // Assertions for different states
-    //============================================================================================
+    // ============================================================================================
 
     void assertPeekingPanelNonResolve() {
         assertLoadedNoUrl();
     }
+
     // TODO(donnd): flesh out the assertions below.
     void assertClosedPanelNonResolve() {}
+
     void assertPanelNeverOpened() {
         // Check that we recorded a histogram entry for not-seen.
     }
+
     void assertPeekingPanelResolve() {
         assertLoadedLowPriorityUrl();
     }
+
     /** Asserts that the expanded panel did a resolve for the given {@code searchTerm}. */
     void assertExpandedPanelResolve(String searchTerm) {
         assertLoadedSearchTermMatches(searchTerm);
     }
+
     void assertExpandedPanelNonResolve() {
         assertSearchTermNotRequested();
     }
+
     void assertClosedPanelResolve() {}
 
-    //============================================================================================
+    // ============================================================================================
 
     /**
      * Fakes navigation of the Content View to the URL that was previously requested.
+     *
      * @param isFailure whether the request resulted in a failure.
      */
     protected void fakeContentViewDidNavigate(boolean isFailure) {
         String url = mFakeServer.getLoadedUrl();
-        mManager.getOverlayContentDelegate().onMainFrameNavigation(url, false, isFailure, false);
+        mManager.getOverlayPanelContentDelegate()
+                .onMainFrameNavigation(url, false, isFailure, false);
     }
 
     /**
@@ -962,10 +887,8 @@ public class ContextualSearchInstrumentationBase {
      * @param nodeId A string containing the node ID.
      */
     protected void clickWordNode(String nodeId) throws TimeoutException {
-        retryPanelBarInteractions(() -> {
-            clickNode(nodeId);
-            waitForPanelToPeek();
-        }, true);
+        clickNode(nodeId);
+        waitForPanelToFreshlyPeek();
     }
 
     /**
@@ -976,16 +899,6 @@ public class ContextualSearchInstrumentationBase {
      */
     public void triggerNode(Tab tab, String nodeId) throws TimeoutException {
         DOMUtils.longPressNode(tab.getWebContents(), nodeId);
-    }
-
-    /**
-     * Simulates a key press.
-     *
-     * @param keycode The key's code.
-     */
-    private void pressKey(int keycode) {
-        KeyUtils.singleKeyEventActivity(InstrumentationRegistry.getInstrumentation(),
-                sActivityTestRule.getActivity(), keycode);
     }
 
     /**
@@ -1010,66 +923,61 @@ public class ContextualSearchInstrumentationBase {
                 "Expected to find searchTerm '" + searchTerm + "', " + message, doesMatch);
     }
 
-    /**
-     * Asserts that the given parameters are present in the most recently loaded URL.
-     */
+    /** Asserts that the given parameters are present in the most recently loaded URL. */
     protected void assertContainsParameters(String... terms) {
         Assert.assertNotNull("Fake server didn't load a SERP URL", mFakeServer.getLoadedUrl());
         for (String term : terms) {
-            Assert.assertTrue("Expected search term not found:" + term,
+            Assert.assertTrue(
+                    "Expected search term not found:" + term,
                     mFakeServer.getLoadedUrl().contains(term));
         }
     }
 
-    /**
-     * Asserts that a Search Term has been requested.
-     */
+    /** Asserts that a Search Term has been requested. */
     protected void assertSearchTermRequested() {
         Assert.assertNotNull(mFakeServer.getSearchTermRequested());
     }
 
-    /**
-     * Asserts that there has not been any Search Term requested.
-     */
+    /** Asserts that there has not been any Search Term requested. */
     private void assertSearchTermNotRequested() {
         Assert.assertNull(mFakeServer.getSearchTermRequested());
     }
 
-    /**
-     * Asserts that the panel is currently closed or in an undefined state.
-     */
+    /** Asserts that the panel is currently closed or in an undefined state. */
     void assertPanelClosedOrUndefined() {
         boolean success = false;
         if (mPanel == null) {
             success = true;
         } else {
-            @PanelState
-            int panelState = mPanel.getPanelState();
+            @PanelState int panelState = mPanel.getPanelState();
             success = panelState == PanelState.CLOSED || panelState == PanelState.UNDEFINED;
         }
-        Assert.assertTrue("Expected the panel to be closed or undefined but it was in state: "
+        Assert.assertTrue(
+                "Expected the panel to be closed or undefined but it was in state: "
                         + mPanel.getPanelState(),
                 success);
     }
 
-    /**
-     * Asserts that no URL has been loaded in the Overlay Panel.
-     */
+    /** Asserts that no URL has been loaded in the Overlay Panel. */
     protected void assertLoadedNoUrl() {
-        Assert.assertTrue("Requested a search or preload when none was expected!",
+        Assert.assertTrue(
+                "Requested a search or preload when none was expected!",
                 mFakeServer.getLoadedUrl() == null);
     }
 
-    /**
-     * Asserts that a low-priority URL has been loaded in the Overlay Panel.
-     */
+    /** Asserts that a low-priority URL has been loaded in the Overlay Panel. */
     protected void assertLoadedLowPriorityUrl() {
-        String message = "Expected a low priority search request URL, but got "
-                + (mFakeServer.getLoadedUrl() != null ? mFakeServer.getLoadedUrl() : "null");
-        Assert.assertTrue(message,
+        String message =
+                "Expected a low priority search request URL, but got "
+                        + (mFakeServer.getLoadedUrl() != null
+                                ? mFakeServer.getLoadedUrl()
+                                : "null");
+        Assert.assertTrue(
+                message,
                 mFakeServer.getLoadedUrl() != null
                         && mFakeServer.getLoadedUrl().contains(LOW_PRIORITY_SEARCH_ENDPOINT));
-        Assert.assertTrue("Low priority request does not have the required prefetch parameter!",
+        Assert.assertTrue(
+                "Low priority request does not have the required prefetch parameter!",
                 mFakeServer.getLoadedUrl() != null
                         && mFakeServer.getLoadedUrl().contains(CONTEXTUAL_SEARCH_PREFETCH_PARAM));
     }
@@ -1079,24 +987,30 @@ public class ContextualSearchInstrumentationBase {
      * Panel (in order to produce an error).
      */
     protected void assertLoadedLowPriorityInvalidUrl() {
-        String message = "Expected a low priority invalid search request URL, but got "
-                + (String.valueOf(mFakeServer.getLoadedUrl()));
-        Assert.assertTrue(message,
+        String message =
+                "Expected a low priority invalid search request URL, but got "
+                        + String.valueOf(mFakeServer.getLoadedUrl());
+        Assert.assertTrue(
+                message,
                 mFakeServer.getLoadedUrl() != null
-                        && mFakeServer.getLoadedUrl().contains(
-                                LOW_PRIORITY_INVALID_SEARCH_ENDPOINT));
-        Assert.assertTrue("Low priority request does not have the required prefetch parameter!",
+                        && mFakeServer
+                                .getLoadedUrl()
+                                .contains(LOW_PRIORITY_INVALID_SEARCH_ENDPOINT));
+        Assert.assertTrue(
+                "Low priority request does not have the required prefetch parameter!",
                 mFakeServer.getLoadedUrl() != null
                         && mFakeServer.getLoadedUrl().contains(CONTEXTUAL_SEARCH_PREFETCH_PARAM));
     }
 
-    /**
-     * Asserts that a normal priority URL has been loaded in the Overlay Panel.
-     */
+    /** Asserts that a normal priority URL has been loaded in the Overlay Panel. */
     protected void assertLoadedNormalPriorityUrl() {
-        String message = "Expected a normal priority search request URL, but got "
-                + (mFakeServer.getLoadedUrl() != null ? mFakeServer.getLoadedUrl() : "null");
-        Assert.assertTrue(message,
+        String message =
+                "Expected a normal priority search request URL, but got "
+                        + (mFakeServer.getLoadedUrl() != null
+                                ? mFakeServer.getLoadedUrl()
+                                : "null");
+        Assert.assertTrue(
+                message,
                 mFakeServer.getLoadedUrl() != null
                         && mFakeServer.getLoadedUrl().contains(NORMAL_PRIORITY_SEARCH_ENDPOINT));
         Assert.assertTrue(
@@ -1106,16 +1020,20 @@ public class ContextualSearchInstrumentationBase {
     }
 
     /**
-     * Waits for a Normal priority URL to be loaded, or asserts that the load never happened.
-     * This is needed when we test with a live internet connection and an invalid url fails to
-     * load (as expected.  See crbug.com/682953 for background.
+     * Waits for a Normal priority URL to be loaded, or asserts that the load never happened. This
+     * is needed when we test with a live internet connection and an invalid url fails to load (as
+     * expected. See crbug.com/682953 for background.
      */
     protected void waitForNormalPriorityUrlLoaded() {
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(mFakeServer.getLoadedUrl(), Matchers.notNullValue());
-            Criteria.checkThat(mFakeServer.getLoadedUrl(),
-                    Matchers.containsString(NORMAL_PRIORITY_SEARCH_ENDPOINT));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(mFakeServer.getLoadedUrl(), Matchers.notNullValue());
+                    Criteria.checkThat(
+                            mFakeServer.getLoadedUrl(),
+                            Matchers.containsString(NORMAL_PRIORITY_SEARCH_ENDPOINT));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     /**
@@ -1129,6 +1047,7 @@ public class ContextualSearchInstrumentationBase {
 
     /**
      * Asserts that a Search Term has been requested.
+     *
      * @param isExactResolve Whether the Resolve request must be exact (non-expanding).
      */
     protected void assertExactResolve(boolean isExactResolve) {
@@ -1144,22 +1063,35 @@ public class ContextualSearchInstrumentationBase {
     }
 
     /**
-     * Waits for the Search Panel to expand, and asserts that it did expand.
+     * Waits for the Search Panel (the Search Bar) to peek up from the bottom, and asserts that it
+     * did peek. Ignores an existing Search Panel that peeked.
      */
+    protected void waitForPanelToFreshlyPeek() {
+        int lastPeekSequence = mPanel.getLastPeekSequence();
+        final @PanelState int state = PanelState.PEEKED;
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(mPanel, Matchers.notNullValue());
+                    Criteria.checkThat(mPanel.getPanelState(), Matchers.is(state));
+                    Criteria.checkThat(
+                            mPanel.getLastPeekSequence(), Matchers.not(lastPeekSequence));
+                    Criteria.checkThat(mPanel.isHeightAnimationRunning(), Matchers.is(false));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
+    }
+
+    /** Waits for the Search Panel to expand, and asserts that it did expand. */
     protected void waitForPanelToExpand() {
         waitForPanelToEnterState(PanelState.EXPANDED);
     }
 
-    /**
-     * Waits for the Search Panel to maximize, and asserts that it did maximize.
-     */
+    /** Waits for the Search Panel to maximize, and asserts that it did maximize. */
     protected void waitForPanelToMaximize() {
         waitForPanelToEnterState(PanelState.MAXIMIZED);
     }
 
-    /**
-     * Waits for the Search Panel to close, and asserts that it did close.
-     */
+    /** Waits for the Search Panel to close, and asserts that it did close. */
     protected void waitForPanelToClose() {
         waitForPanelToEnterState(PanelState.CLOSED);
     }
@@ -1170,24 +1102,26 @@ public class ContextualSearchInstrumentationBase {
      * @param state The {@link PanelState} to wait for.
      */
     private void waitForPanelToEnterState(final @PanelState int state) {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(mPanel, Matchers.notNullValue());
-            Criteria.checkThat(mPanel.getPanelState(), Matchers.is(state));
-            Criteria.checkThat(mPanel.isHeightAnimationRunning(), Matchers.is(false));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(mPanel, Matchers.notNullValue());
+                    Criteria.checkThat(mPanel.getPanelState(), Matchers.is(state));
+                    Criteria.checkThat(mPanel.isHeightAnimationRunning(), Matchers.is(false));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     /**
-     * Asserts that the panel is still in the given state and continues to stay that way
-     * for a while.
-     * Waits for a reasonable amount of time for the panel to change to a different state,
-     * and verifies that it did not change state while this method is executing.
-     * Note that it's quite possible for the panel to transition through some other state and
-     * back to the initial state before this method is called without that being detected,
-     * because this method only monitors state during its own execution.
+     * Asserts that the panel is still in the given state and continues to stay that way for a
+     * while. Waits for a reasonable amount of time for the panel to change to a different state,
+     * and verifies that it did not change state while this method is executing. Note that it's
+     * quite possible for the panel to transition through some other state and back to the initial
+     * state before this method is called without that being detected, because this method only
+     * monitors state during its own execution.
+     *
      * @param initialState The initial state of the panel at the beginning of an operation that
-     *        should not change the panel state.
-     * @throws InterruptedException
+     *     should not change the panel state.
      */
     protected void assertPanelStillInState(final @PanelState int initialState)
             throws InterruptedException {
@@ -1202,10 +1136,8 @@ public class ContextualSearchInstrumentationBase {
     }
 
     /**
-     * Shorthand for a common sequence:
-     * 1) Waits for gesture processing,
-     * 2) Waits for the panel to close,
-     * 3) Asserts that there is no selection and that the panel closed.
+     * Shorthand for a common sequence: 1) Waits for gesture processing, 2) Waits for the panel to
+     * close, 3) Asserts that there is no selection and that the panel closed.
      */
     protected void waitForGestureToClosePanelAndAssertNoSelection() {
         waitForPanelToClose();
@@ -1221,14 +1153,14 @@ public class ContextualSearchInstrumentationBase {
      * until it has been dissolved.
      */
     private void waitForSelectionEmpty() {
-        CriteriaHelper.pollUiThread(()
-                                            -> mSelectionController.isSelectionEmpty(),
-                "Selection never empty.", TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> mSelectionController.isSelectionEmpty(),
+                "Selection never empty.",
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
-    /**
-     * Waits for the panel to close and then waits for the selection to dissolve.
-     */
+    /** Waits for the panel to close and then waits for the selection to dissolve. */
     protected void waitForPanelToCloseAndSelectionEmpty() {
         waitForPanelToClose();
         waitForSelectionEmpty();
@@ -1241,7 +1173,7 @@ public class ContextualSearchInstrumentationBase {
         // refinement from nearby taps. The double-tap timeout is sufficiently
         // short that this shouldn't conflict with tap refinement by the user.
         int doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout();
-        Thread.sleep(doubleTapTimeout * DOUBLE_TAP_DELAY_MULTIPLIER);
+        Thread.sleep(doubleTapTimeout * ((long) DOUBLE_TAP_DELAY_MULTIPLIER));
     }
 
     /**
@@ -1257,8 +1189,14 @@ public class ContextualSearchInstrumentationBase {
         float dragEndY = size.y * endY;
         long downTime = SystemClock.uptimeMillis();
         TouchCommon.dragStart(sActivityTestRule.getActivity(), dragStartX, dragStartY, downTime);
-        TouchCommon.dragTo(sActivityTestRule.getActivity(), dragStartX, dragEndX, dragStartY,
-                dragEndY, stepCount, downTime);
+        TouchCommon.dragTo(
+                sActivityTestRule.getActivity(),
+                dragStartX,
+                dragEndX,
+                dragStartY,
+                dragEndY,
+                stepCount,
+                downTime);
         TouchCommon.dragEnd(sActivityTestRule.getActivity(), dragEndX, dragEndY, downTime);
     }
 
@@ -1276,39 +1214,43 @@ public class ContextualSearchInstrumentationBase {
         int halfCount = stepCount / 2;
         long downTime = SystemClock.uptimeMillis();
         TouchCommon.dragStart(sActivityTestRule.getActivity(), dragStartX, dragStartY, downTime);
-        TouchCommon.dragTo(sActivityTestRule.getActivity(), dragStartX, dragEndX, dragStartY,
-                dragEndY, halfCount, downTime);
+        TouchCommon.dragTo(
+                sActivityTestRule.getActivity(),
+                dragStartX,
+                dragEndX,
+                dragStartY,
+                dragEndY,
+                halfCount,
+                downTime);
         // Generate events in the stationary end position in order to simulate a "pause" in
         // the movement, therefore preventing this gesture from being interpreted as a fling.
-        TouchCommon.dragTo(sActivityTestRule.getActivity(), dragEndX, dragEndX, dragEndY, dragEndY,
-                halfCount, downTime);
+        TouchCommon.dragTo(
+                sActivityTestRule.getActivity(),
+                dragEndX,
+                dragEndX,
+                dragEndY,
+                dragEndY,
+                halfCount,
+                downTime);
         TouchCommon.dragEnd(sActivityTestRule.getActivity(), dragEndX, dragEndY, downTime);
     }
 
-    /**
-     * Flings the panel up to its expanded state.
-     */
+    /** Flings the panel up to its expanded state. */
     protected void flingPanelUp() {
         fling(0.5f, 0.95f, 0.5f, 0.55f, 1000);
     }
 
-    /**
-     * Swipes the panel down to its peeked state.
-     */
+    /** Swipes the panel down to its peeked state. */
     protected void swipePanelDown() {
-        swipe(0.5f, 0.55f, 0.5f, 0.95f, 100);
+        swipe(0.5f, 0.55f, 0.5f, 0.95f, 1000);
     }
 
-    /**
-     * Scrolls the base page.
-     */
+    /** Scrolls the base page. */
     protected void scrollBasePage() {
         fling(0.f, 0.75f, 0.f, 0.7f, 100);
     }
 
-    /**
-     * Taps the base page near the top.
-     */
+    /** Taps the base page near the top. */
     protected void tapBasePageToClosePanel() {
         // TODO(donnd): This is not reliable. Find a better approach.
         // This taps on the panel in an area that will be selected if the "intelligence" node has
@@ -1324,9 +1266,7 @@ public class ContextualSearchInstrumentationBase {
         waitForPanelToClose();
     }
 
-    /**
-     * Taps the base page at the given x, y position.
-     */
+    /** Taps the base page at the given x, y position. */
     private void tapBasePage(float x, float y) {
         View root = sActivityTestRule.getActivity().getWindow().getDecorView().getRootView();
         x *= root.getWidth();
@@ -1334,117 +1274,55 @@ public class ContextualSearchInstrumentationBase {
         TouchCommon.singleClickView(root, (int) x, (int) y);
     }
 
-    /**
-     * Click various places to cause the panel to show, expand, then close.
-     */
-    protected void clickToExpandAndClosePanel() throws TimeoutException {
-        clickWordNode("states");
-        expandAndClosePanel();
-        waitForSelectionEmpty();
+    /** Expands the panel by directly asking the panel to expand. */
+    protected void expandPanel() throws TimeoutException {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPanel.notifyBarTouched(0);
+                    if (mFakeServer.getContentsObserver() != null) {
+                        mFakeServer.getContentsObserver().onVisibilityChanged(Visibility.VISIBLE);
+                    }
+                    mPanel.animatePanelToState(
+                            PanelState.EXPANDED,
+                            StateChangeReason.UNKNOWN,
+                            PANEL_INTERACTION_RETRY_DELAY_MS);
+                    float tapX = (mPanel.getOffsetX() + mPanel.getWidth()) / 2f;
+                    float tapY = (mPanel.getOffsetY() + mPanel.getBarContainerHeight()) / 2f;
+                    mPanel.handleBarClick(tapX, tapY);
+                });
     }
 
-    /**
-     * Expand the panel and then close it.
-     */
-    protected void expandAndClosePanel() throws TimeoutException {
-        expandPanelAndAssert();
-        closePanel();
-    }
-
-    /**
-     * Tap on the peeking Bar to expand the panel, then close it.
-     */
-    @Deprecated
-    protected void tapBarToExpandAndClosePanel() throws TimeoutException {
-        tapPeekingBarToExpandAndAssert();
-        closePanel();
-    }
-
-    /**
-     * Generate a click in the middle of panel's bar. TODO(donnd): Replace this method with
-     * panelBarClick since this appears to be unreliable.
-     */
-    protected void clickPanelBar() {
-        View root = sActivityTestRule.getActivity().getWindow().getDecorView().getRootView();
-        float tapX = ((mPanel.getOffsetX() + mPanel.getWidth()) / 2f) * mDpToPx;
-        float tapY = (mPanel.getOffsetY() + (mPanel.getBarContainerHeight() / 2f)) * mDpToPx;
-
-        TouchCommon.singleClickView(root, (int) tapX, (int) tapY);
-    }
-
-    /**
-     * Taps the peeking bar to expand the panel
-     */
-    @Deprecated
-    protected void tapPeekingBarToExpandAndAssert() throws TimeoutException {
-        retryPanelBarInteractions(() -> {
-            clickPanelBar();
-            waitForPanelToExpand();
-        }, false);
-    }
-
-    /**
-     * Expands the panel and asserts that it did actually expand.
-     */
+    /** Expands the panel and asserts that it did actually expand. */
     protected void expandPanelAndAssert() throws TimeoutException {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mPanel.notifyBarTouched(0);
-            mFakeServer.getContentsObserver().wasShown();
-            mPanel.animatePanelToState(PanelState.EXPANDED, StateChangeReason.UNKNOWN,
-                    PANEL_INTERACTION_RETRY_DELAY_MS);
-        });
+        expandPanel();
         waitForPanelToExpand();
     }
 
-    /**
-     * Simple sequence useful for checking if a Search Request is prefetched.
-     * Resets the fake server and clicks near to cause a search, then closes the panel,
-     * which takes us back to the starting state except that the fake server knows
-     * if a prefetch occurred.
-     */
-    protected void clickToTriggerPrefetch() throws Exception {
-        mFakeServer.reset();
-        simulateResolveSearch("search");
-        closePanel();
-        waitForPanelToCloseAndSelectionEmpty();
-    }
-
-    /**
-     * Force the Panel to peek.
-     */
+    /** Force the Panel to peek. */
     protected void peekPanel() {
         // TODO(donnd): use a consistent method of running these test tasks, and it's probably
-        // best to use TestThreadUtils.runOnUiThreadBlocking as done elsewhere in this file.
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                () -> { mPanel.peekPanel(StateChangeReason.UNKNOWN); });
+        // best to use ThreadUtils.runOnUiThreadBlocking as done elsewhere in this file.
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            mPanel.peekPanel(StateChangeReason.UNKNOWN);
+                        });
         waitForPanelToPeek();
     }
 
-    /**
-     * Force the Panel to expand, and wait for it to do so.
-     */
-    protected void expandPanel() {
-        // TODO(donnd): use a consistent method of running these test tasks, and it's probably
-        // best to use TestThreadUtils.runOnUiThreadBlocking as done elsewhere in this file.
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                () -> { mPanel.expandPanel(StateChangeReason.UNKNOWN); });
-        waitForPanelToExpand();
-    }
-
-    /**
-     * Force the Panel to maximize, and wait for it to do so.
-     */
+    /** Force the Panel to maximize, and wait for it to do so. */
     protected void maximizePanel() {
         // TODO(donnd): use a consistent method of running these test tasks, and it's probably
-        // best to use TestThreadUtils.runOnUiThreadBlocking as done elsewhere in this file.
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                () -> { mPanel.maximizePanel(StateChangeReason.UNKNOWN); });
+        // best to use ThreadUtils.runOnUiThreadBlocking as done elsewhere in this file.
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            mPanel.maximizePanel(StateChangeReason.UNKNOWN);
+                        });
         waitForPanelToMaximize();
     }
 
-    /**
-     * Fakes a response to the Resolve request.
-     */
+    /** Fakes a response to the Resolve request. */
     protected void fakeAResponse() {
         fakeResponse(false, 200, "states", "United States Intelligence", "alternate-term", false);
         waitForPanelToPeek();
@@ -1452,28 +1330,39 @@ public class ContextualSearchInstrumentationBase {
         assertContainsParameters("states", "alternate-term");
     }
 
-    /**
-     * Force the Panel to handle a click on open-in-a-new-tab icon.
-     */
+    /** Force the Panel to handle a click on open-in-a-new-tab icon. */
     protected void forceOpenTabIconClick() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            mPanel.handleBarClick(mPanel.getOpenTabIconX() + mPanel.getOpenTabIconDimension() / 2,
-                    mPanel.getBarHeight() / 2);
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            mPanel.handleBarClick(
+                                    mPanel.getOpenTabIconX() + mPanel.getOpenTabIconDimension() / 2,
+                                    mPanel.getBarHeight() / 2);
+                        });
     }
 
-    /**
-     * Force the Panel to close.
-     */
+    /** Force the Panel to close. */
     protected void closePanel() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(
-                () -> { mPanel.closePanel(StateChangeReason.UNKNOWN, false); });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            mPanel.closePanel(StateChangeReason.UNKNOWN, false);
+                        });
     }
 
-    /**
-     * Waits for the Action Bar to be visible in response to a selection.
-     */
+    /** Waits for the Action Bar to be visible in response to a selection. */
     protected void waitForSelectActionBarVisible() {
         assertWaitForSelectActionBarVisible(true);
+    }
+
+    /** Updates Read Aloud Controller's active playback tab. */
+    protected void changeReadAloudActivePlaybackTab() {
+        ReadAloudController readAloudController =
+                sActivityTestRule.getActivity().getReadAloudControllerForTesting();
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        readAloudController.setActivePlaybackTab(
+                                sActivityTestRule.getActivity().getActivityTab()));
     }
 }

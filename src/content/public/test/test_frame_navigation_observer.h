@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,18 @@ class TestFrameNavigationObserver : public WebContentsObserver {
 
   net::Error last_net_error_code() const { return last_net_error_code_; }
 
+  bool navigation_started() const { return navigation_started_; }
+
  private:
   // WebContentsObserver
   void DidStartNavigation(NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
   void DidStopLoading() override;
 
+  void GuestDidStopLoading();
+
   // The id of the FrameTreeNode in which navigations are peformed.
-  int frame_tree_node_id_;
+  FrameTreeNodeId frame_tree_node_id_;
 
   // If true the navigation has started.
   bool navigation_started_ = false;
@@ -69,11 +73,14 @@ class TestFrameNavigationObserver : public WebContentsObserver {
   net::Error last_net_error_code_ = net::OK;
 
   // Saved parameters from NavigationHandle.
-  absl::optional<ui::PageTransition> transition_type_;
+  std::optional<ui::PageTransition> transition_type_;
   GURL last_committed_url_;
 
   // The RunLoop used to spin the message loop.
   base::RunLoop run_loop_;
+
+  // Used to observe load stops if the frame is in a guest.
+  base::CallbackListSubscription guest_on_load_subscription_;
 };
 
 }  // namespace content

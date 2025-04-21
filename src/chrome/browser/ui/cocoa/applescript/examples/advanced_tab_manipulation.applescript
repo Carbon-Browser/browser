@@ -1,4 +1,4 @@
--- Copyright (c) 2010 The Chromium Authors. All rights reserved.
+-- Copyright 2010 The Chromium Authors
 -- Use of this source code is governed by a BSD-style license that can be
 -- found in the LICENSE file.
 
@@ -13,6 +13,9 @@ tell application "Chromium"
     
     save in "/Users/Foo/Documents/Google" as "complete html"
     -- Saves the contents of the tab with the accompanying resources.
+
+    save in "/Users/Foo/Documents/Google" as "single file"
+    -- Saves the contents of the tab in a self-contained MHTML file.
     
     -- Note: both the |in| and |as| part are optional, without it user is
     -- prompted for one.

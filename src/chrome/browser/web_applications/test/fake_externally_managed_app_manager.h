@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <vector>
 
-#include "chrome/browser/web_applications/externally_managed_app_manager_impl.h"
+#include "chrome/browser/web_applications/externally_managed_app_manager.h"
 #include "components/webapps/browser/install_result_code.h"
 
 namespace web_app {
 
-class FakeExternallyManagedAppManager : public ExternallyManagedAppManagerImpl {
+class FakeExternallyManagedAppManager : public ExternallyManagedAppManager {
  public:
   explicit FakeExternallyManagedAppManager(Profile* profile);
   ~FakeExternallyManagedAppManager() override;
@@ -42,8 +42,8 @@ class FakeExternallyManagedAppManager : public ExternallyManagedAppManagerImpl {
       base::RepeatingCallback<ExternallyManagedAppManager::InstallResult(
           const ExternalInstallOptions&)>;
 
-  using HandleUninstallRequestCallback =
-      base::RepeatingCallback<bool(const GURL&, ExternalInstallSource)>;
+  using HandleUninstallRequestCallback = base::RepeatingCallback<
+      webapps::UninstallResultCode(const GURL&, ExternalInstallSource)>;
 
   // Set a callback to handle install requests. If set, this callback will be
   // used in place of the real installation process. The callback takes a const

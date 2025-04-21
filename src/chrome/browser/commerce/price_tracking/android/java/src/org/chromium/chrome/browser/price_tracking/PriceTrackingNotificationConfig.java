@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ public class PriceTrackingNotificationConfig {
         int defaultTimeout = (int) TimeUnit.HOURS.toMillis(3);
         if (FeatureList.isInitialized()) {
             return ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                    ChromeFeatureList.COMMERCE_PRICE_TRACKING, NOTIFICATION_TIMEOUT_PARAM,
+                    ChromeFeatureList.PRICE_ANNOTATIONS,
+                    NOTIFICATION_TIMEOUT_PARAM,
                     defaultTimeout);
         }
         return defaultTimeout;
@@ -38,8 +39,9 @@ public class PriceTrackingNotificationConfig {
         int defaultWindow = (int) TimeUnit.DAYS.toMillis(1);
         if (FeatureList.isInitialized()) {
             return ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                    ChromeFeatureList.COMMERCE_PRICE_TRACKING,
-                    NOTIFICATION_TIMESTAMPS_STORE_WINDOW_PARAM, defaultWindow);
+                    ChromeFeatureList.PRICE_ANNOTATIONS,
+                    NOTIFICATION_TIMESTAMPS_STORE_WINDOW_PARAM,
+                    defaultWindow);
         }
         return defaultWindow;
     }
@@ -58,7 +60,7 @@ public class PriceTrackingNotificationConfig {
                 return defaultNumber;
             }
             return ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                    ChromeFeatureList.COMMERCE_PRICE_TRACKING, param, defaultNumber);
+                    ChromeFeatureList.PRICE_ANNOTATIONS, param, defaultNumber);
         }
         return defaultNumber;
     }

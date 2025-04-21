@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
+#include "google_apis/common/base_requests.h"
 #include "google_apis/common/dummy_auth_service.h"
 #include "google_apis/common/request_sender.h"
 #include "google_apis/common/test_util.h"
@@ -60,7 +62,9 @@ class FakeMultipartUploadRequest : public MultipartUploadRequestBase {
 
   ~FakeMultipartUploadRequest() override = default;
 
-  std::string GetRequestType() const override { return "POST"; }
+  HttpRequestMethod GetRequestType() const override {
+    return HttpRequestMethod::kPost;
+  }
 
   bool GetContentData(std::string* content_type,
                       std::string* content_data) override {
@@ -109,7 +113,7 @@ class DriveBaseRequestsTest : public testing::Test {
     network::mojom::URLLoaderFactoryParamsPtr params =
         network::mojom::URLLoaderFactoryParams::New();
     params->process_id = network::mojom::kBrowserProcessId;
-    params->is_corb_enabled = false;
+    params->is_orb_enabled = false;
     network_context_->CreateURLLoaderFactory(
         url_loader_factory_.BindNewPipeAndPassReceiver(), std::move(params));
     test_shared_loader_factory_ =

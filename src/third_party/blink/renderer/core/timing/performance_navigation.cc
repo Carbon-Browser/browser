@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/core/timing/performance_navigation.h"
 
+#include "third_party/blink/public/web/web_navigation_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_object_builder.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -47,8 +48,10 @@ uint8_t PerformanceNavigation::type() const {
 
   switch (DomWindow()->document()->Loader()->GetNavigationType()) {
     case kWebNavigationTypeReload:
+    case kWebNavigationTypeFormResubmittedReload:
       return kTypeReload;
     case kWebNavigationTypeBackForward:
+    case kWebNavigationTypeFormResubmittedBackForward:
       return kTypeBackForward;
     default:
       return kTypeNavigate;
@@ -67,12 +70,12 @@ uint16_t PerformanceNavigation::redirectCount() const {
   return timing.RedirectCount();
 }
 
-ScriptValue PerformanceNavigation::toJSONForBinding(
+ScriptObject PerformanceNavigation::toJSONForBinding(
     ScriptState* script_state) const {
   V8ObjectBuilder result(script_state);
   result.AddNumber("type", type());
   result.AddNumber("redirectCount", redirectCount());
-  return result.GetScriptValue();
+  return result.ToScriptObject();
 }
 
 void PerformanceNavigation::Trace(Visitor* visitor) const {

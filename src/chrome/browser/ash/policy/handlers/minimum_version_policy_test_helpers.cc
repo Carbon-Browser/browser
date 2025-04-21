@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,33 +8,31 @@
 
 namespace policy {
 
-base::Value CreateMinimumVersionPolicyRequirement(const std::string& version,
-                                                  int warning,
-                                                  int eol_warning) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey(MinimumVersionPolicyHandler::kChromeOsVersion, version);
-  dict.SetIntKey(MinimumVersionPolicyHandler::kWarningPeriod, warning);
-  dict.SetIntKey(MinimumVersionPolicyHandler::kEolWarningPeriod, eol_warning);
-  return dict;
+base::Value::Dict CreateMinimumVersionPolicyRequirement(
+    const std::string& version,
+    int warning,
+    int eol_warning) {
+  return base::Value::Dict()
+      .Set(MinimumVersionPolicyHandler::kChromeOsVersion, version)
+      .Set(MinimumVersionPolicyHandler::kWarningPeriod, warning)
+      .Set(MinimumVersionPolicyHandler::kEolWarningPeriod, eol_warning);
 }
 
-base::Value CreateMinimumVersionPolicyValue(base::Value requirements,
-                                            bool unmanaged_user_restricted) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey(MinimumVersionPolicyHandler::kRequirements,
-              std::move(requirements));
-  dict.SetBoolKey(MinimumVersionPolicyHandler::kUnmanagedUserRestricted,
-                  unmanaged_user_restricted);
-  return dict;
+base::Value::Dict CreateMinimumVersionPolicyValue(
+    base::Value::List requirements,
+    bool unmanaged_user_restricted) {
+  return base::Value::Dict()
+      .Set(MinimumVersionPolicyHandler::kRequirements, std::move(requirements))
+      .Set(MinimumVersionPolicyHandler::kUnmanagedUserRestricted,
+           unmanaged_user_restricted);
 }
 
-base::Value CreateMinimumVersionSingleRequirementPolicyValue(
+base::Value::Dict CreateMinimumVersionSingleRequirementPolicyValue(
     const std::string& version,
     int warning,
     int eol_warning,
     bool unmanaged_user_restricted) {
-  base::Value requirement_list(base::Value::Type::LIST);
-  requirement_list.Append(
+  auto requirement_list = base::Value::List().Append(
       CreateMinimumVersionPolicyRequirement(version, warning, eol_warning));
   return CreateMinimumVersionPolicyValue(std::move(requirement_list),
                                          unmanaged_user_restricted);

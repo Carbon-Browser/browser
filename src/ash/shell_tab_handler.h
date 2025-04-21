@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SHELL_TAB_HANDLER_H_
 #define ASH_SHELL_TAB_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/events/event_handler.h"
 
 namespace ash {
@@ -25,7 +26,7 @@ class ShellTabHandler : public ui::EventHandler {
   void OnKeyEvent(ui::KeyEvent* key_event) override;
 
  private:
-  Shell* const shell_;
+  const raw_ptr<Shell> shell_;
 };
 
 }  // namespace ash

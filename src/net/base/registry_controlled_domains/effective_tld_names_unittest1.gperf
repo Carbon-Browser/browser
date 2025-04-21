@@ -1,5 +1,5 @@
 %{
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 // Test file used by registry_controlled_domain_unittest.
@@ -24,4 +24,5 @@ no, 0
 priv.no, 4
 private, 4
 xn--fiqs8s, 0
+er, 2
 %%

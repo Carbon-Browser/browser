@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium Authors. All rights reserved.
+/* Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD_style license that can be
  * found in the LICENSE file. */
 
@@ -12,6 +12,7 @@
   options: {
     CSS: {
       prefix: 'cros',
+      preblend: true,
     },
     proto: {
       field_name: 'cros_colors',
@@ -39,6 +40,7 @@
     color_disabled: {
       light: "$google_grey_600",
       dark: "$google_grey_500",
+      generate_per_mode: true,
     },
     color_prominent: {
       light: "$google_blue_600",
@@ -59,13 +61,14 @@
       generate_inverted: true,
     },
     color_positive: {
-      light: "$google_green_600",
+      light: "$google_green_700",
       dark: "$google_green_300",
     },
     color_selection: {
       light: "$google_blue_700",
       dark: "$google_blue_200",
       debug: "$google_red_700",
+      generate_per_mode: true,
     },
 
     /*
@@ -74,6 +77,7 @@
     bg_color: {
       light: "$white",
       dark: "$google_grey_900",
+      generate_per_mode: true,
     },
     bg_color_elevation_1: {
       light: "$white",
@@ -229,6 +233,7 @@
     highlight_color_hover: {
       light: "rgba($google_grey_700.rgb, 0.2)",
       dark: "rgba($white.rgb, 0.2)",
+      generate_per_mode: true,
     },
     highlight_color_focus: {
       light: "rgba($black.rgb, $ripple_opacity)",
@@ -341,7 +346,7 @@
     },
     /* button-icon */
     button_icon_color_primary: {
-      light: "$google_grey_200",
+      light: "$white",
       dark: "$google_grey_900",
     },
     button_icon_color_primary_disabled: {
@@ -382,8 +387,8 @@
     menu_item_background_hover: "$ripple_color",
 
     /* nudge */
-    nudge_label_color: "$text_color_primary_inverted",
-    nudge_icon_color: "$icon_color_primary_inverted",
+    nudge_label_color: "$button_label_color_primary",
+    nudge_icon_color: "$button_icon_color_primary",
     nudge_background_color: "$color_prominent",
 
     /* scroll bar */
@@ -397,6 +402,11 @@
     /* slider */
     slider_color_active: "$color_prominent",
     slider_color_inactive: "$color_secondary",
+    slider_label_background_color: "$color_prominent",
+    slider_label_text_color: {
+      light: "$white",
+      dark: "$google_grey_900",
+    },
     slider_track_color_active: "rgba($slider_color_active.rgb, $second_tone_opacity)",
     slider_track_color_inactive: "rgba($slider_color_inactive.rgb, $second_tone_opacity)",
 
@@ -494,7 +504,11 @@
     },
     /* TODO(crbug.com/1284178) waiting for UX input to see how to combine
     this variable together with `dialog_title_background_color` */
-    dialog_title_bar_color: "blend($highlight_color_hover, $bg_color)",
+    dialog_title_bar_color: {
+      light: "blend($highlight_color_hover_light, $bg_color_light)",
+      dark: "blend($highlight_color_hover_dark, $bg_color_dark)",
+      generate_per_mode: true,
+    },
 
     /* toast */
     /* Toast colors are inverted for contrast. */
@@ -509,6 +523,12 @@
     selection_outline: {
       light: "rgba($black.rgb, 0.1)",
       dark: "rgba($white.rgb, 0.12)",
+    },
+
+    /* color palette swatch */
+    swatch_border: {
+      light: "rgba($google_grey_900.rgb, 0.5)",
+      dark: "rgba($white.rgb, 0.38)",
     },
 
     /* Taken from go/ea-asset-palette. */
@@ -539,22 +559,43 @@
     },
     illustration_secondary_color: {
       light: "$google_grey_200",
-      dark: "blend(rgba($google_grey_200.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_grey_200.rgb, 0.3), $illustration_base_color)",
     },
     illustration_color_1_shade_1: {
       light: "$google_blue_300",
-      dark: "blend(rgba($google_blue_600.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_600.rgb, 0.3), $illustration_base_color)",
     },
     illustration_color_1_shade_2: {
       light: "$google_blue_100",
-      dark: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_300.rgb, 0.3), $illustration_base_color)",
     },
     /* Elevated variants of dark mode colors for illustrations. These are only
        used in dark mode, and so do not need a light mode variant. */
-    illustration_dark_elevation_color_1_shade_1: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
-    illustration_dark_elevation_color_1_shade_2: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
-    illustration_dark_elevation_base_color: "#323336",
-    illustration_dark_elevation_secondary_color: "$google_grey_700"
+    illustration_elevation_color_1_shade_1: {
+      light: "$illustration_color_1_shade_1",
+      dark: "blend(rgba($google_blue_600.rgb, 0.4), $illustration_elevation_base_color)",
+    },
+    illustration_elevation_color_1_shade_2: {
+      light: "$illustration_color_1_shade_2",
+      dark: "blend(rgba($google_blue_300.rgb, 0.4), $illustration_elevation_base_color)",
+    },
+    illustration_elevation_base_color: {
+      light: "$illustration_base_color",
+      dark: "#323336",
+    },
+    illustration_elevation_secondary_color: {
+      light: "$illustration_secondary_color",
+      dark: "$google_grey_700",
+    },
+    /* Preview colors for color correction settings. */
+    color_preview_red: "$google_red_600",
+    color_preview_orange: "$google_orange_600",
+    color_preview_yellow: "$google_yellow_600",
+    color_preview_green: "$google_green_600",
+    color_preview_cyan: "$google_cyan_600",
+    color_preview_blue: "$google_blue_600",
+    color_preview_purple: "$google_purple_600",
+    color_preview_grey: "$google_grey_600",
   },
   opacities: {
     disabled_opacity: 0.38,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """blinkpy/ presubmit script.
@@ -10,8 +10,6 @@ for more details about the presubmit API built into gcl.
 import inspect
 import sys
 
-USE_PYTHON3 = True
-
 
 def CheckChangeOnUpload(input_api, output_api):
     results = []
@@ -20,7 +18,7 @@ def CheckChangeOnUpload(input_api, output_api):
         os_path.join(
             os_path.dirname(
                 os_path.abspath(inspect.getfile(CheckChangeOnUpload))), '..'))
-    from blinkpy.web_tests.lint_test_expectations_presubmit import (
+    from blinkpy.presubmit.lint_test_expectations import (
         PresubmitCheckTestExpectations)
     results.extend(PresubmitCheckTestExpectations(input_api, output_api))
     return results

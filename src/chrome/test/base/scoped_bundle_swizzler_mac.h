@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,9 @@
 
 #include <memory>
 
-namespace base {
-namespace mac {
+namespace base::apple {
 class ScopedObjCClassSwizzler;
-}  // namespace mac
-}  // namespace base
+}  // namespace base::apple
 
 // Within a given scope, swizzles the implementation of +[NSBundle mainBundle]
 // to return a partial mock of the original bundle. This partial mock has a
@@ -31,7 +29,7 @@ class ScopedBundleSwizzlerMac {
   ~ScopedBundleSwizzlerMac();
 
  private:
-  std::unique_ptr<base::mac::ScopedObjCClassSwizzler> class_swizzler_;
+  std::unique_ptr<base::apple::ScopedObjCClassSwizzler> class_swizzler_;
 };
 
 #endif  // CHROME_TEST_BASE_SCOPED_BUNDLE_SWIZZLER_MAC_H_

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,19 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "content/renderer/pepper/pepper_file_ref_renderer_host.h"
 #include "content/renderer/render_frame_impl.h"
-#include "content/renderer/render_view_impl.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/host/dispatch_host_message.h"
 #include "ppapi/host/ppapi_host.h"
 #include "ppapi/proxy/ppapi_messages.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/file_path_conversion.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_vector.h"
@@ -42,7 +41,7 @@ class PepperFileChooserHost::CompletionHandler {
                        blink::mojom::FileChooserParamsPtr params) {
     if (!render_frame)
       return false;
-    render_frame->GetBrowserInterfaceBroker()->GetInterface(
+    render_frame->GetBrowserInterfaceBroker().GetInterface(
         file_chooser_.BindNewPipeAndPassReceiver());
     file_chooser_.set_disconnect_handler(base::BindOnce(
         &CompletionHandler::OnConnectionError, base::Unretained(this)));
@@ -170,7 +169,7 @@ int32_t PepperFileChooserHost::OnShow(
 
   params->requestor = renderer_ppapi_host_->GetDocumentURL(pp_instance());
 
-  handler_ = new CompletionHandler(AsWeakPtr());
+  handler_ = new CompletionHandler(weak_factory_.GetWeakPtr());
   RenderFrameImpl* render_frame = static_cast<RenderFrameImpl*>(
       renderer_ppapi_host_->GetRenderFrameForInstance(pp_instance()));
 

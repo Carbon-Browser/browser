@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,13 @@ class DeviceAccountsSynchronizerImpl : public DeviceAccountsSynchronizer {
 
   // DeviceAccountsSynchronizer implementation.
   void ReloadAllAccountsFromSystemWithPrimaryAccount(
-      const absl::optional<CoreAccountId>& primary_account_id) override;
+      const std::optional<CoreAccountId>& primary_account_id) override;
+
+#if BUILDFLAG(IS_ANDROID)
+  void SeedAccountsThenReloadAllAccountsWithPrimaryAccount(
+      const std::vector<AccountInfo>& accounts,
+      const std::optional<CoreAccountId>& primary_account_id) override;
+#endif
 
 #if BUILDFLAG(IS_IOS)
   void ReloadAccountFromSystem(const CoreAccountId& account_id) override;

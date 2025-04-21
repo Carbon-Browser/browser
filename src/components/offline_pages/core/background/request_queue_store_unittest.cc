@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,18 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/background/request_queue.h"
 #include "components/offline_pages/core/background/save_page_request.h"
 #include "components/offline_pages/core/offline_clock.h"
 #include "sql/database.h"
 #include "sql/statement.h"
+#include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace offline_pages {
@@ -64,7 +65,7 @@ SavePageRequest GetTestRequest(const GURL& url, const GURL& original_url) {
 
 void BuildTestStoreWithSchemaFromM57(const base::FilePath& file,
                                      const GURL& url) {
-  sql::Database connection;
+  sql::Database connection(sql::test::kTestTag);
   ASSERT_TRUE(
       connection.Open(file.Append(FILE_PATH_LITERAL("RequestQueue.db"))));
   ASSERT_TRUE(connection.is_open());
@@ -109,7 +110,7 @@ void BuildTestStoreWithSchemaFromM57(const base::FilePath& file,
 void BuildTestStoreWithSchemaFromM58(const base::FilePath& file,
                                      const GURL& url,
                                      const GURL& original_url) {
-  sql::Database connection;
+  sql::Database connection(sql::test::kTestTag);
   ASSERT_TRUE(
       connection.Open(file.Append(FILE_PATH_LITERAL("RequestQueue.db"))));
   ASSERT_TRUE(connection.is_open());
@@ -156,7 +157,7 @@ void BuildTestStoreWithSchemaFromM58(const base::FilePath& file,
 void BuildTestStoreWithSchemaFromM61(const base::FilePath& file,
                                      const GURL& url,
                                      const GURL& original_url) {
-  sql::Database connection;
+  sql::Database connection(sql::test::kTestTag);
   ASSERT_TRUE(
       connection.Open(file.Append(FILE_PATH_LITERAL("RequestQueue.db"))));
   ASSERT_TRUE(connection.is_open());
@@ -205,7 +206,7 @@ void BuildTestStoreWithSchemaFromM61(const base::FilePath& file,
 void BuildTestStoreWithSchemaFromM72(const base::FilePath& file,
                                      const GURL& url,
                                      const GURL& original_url) {
-  sql::Database connection;
+  sql::Database connection(sql::test::kTestTag);
   ASSERT_TRUE(
       connection.Open(file.Append(FILE_PATH_LITERAL("RequestQueue.db"))));
   ASSERT_TRUE(connection.is_open());
@@ -282,7 +283,7 @@ class RequestQueueStoreTestBase : public testing::Test {
   const std::vector<std::unique_ptr<SavePageRequest>>& last_requests() const {
     return last_requests_;
   }
-  absl::optional<AddRequestResult> last_add_result() const {
+  std::optional<AddRequestResult> last_add_result() const {
     return last_add_result_;
   }
 
@@ -296,19 +297,20 @@ class RequestQueueStoreTestBase : public testing::Test {
  private:
   LastResult last_result_;
   UpdateStatus last_update_status_;
-  absl::optional<AddRequestResult> last_add_result_;
+  std::optional<AddRequestResult> last_add_result_;
   std::unique_ptr<UpdateRequestsResult> last_update_result_;
   std::vector<std::unique_ptr<SavePageRequest>> last_requests_;
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      task_runner_current_default_handle_;
 };
 
 RequestQueueStoreTestBase::RequestQueueStoreTestBase()
     : last_result_(LastResult::RESULT_NONE),
       last_update_status_(UpdateStatus::FAILED),
       task_runner_(new base::TestMockTimeTaskRunner),
-      task_runner_handle_(task_runner_) {
+      task_runner_current_default_handle_(task_runner_) {
   EXPECT_TRUE(temp_directory_.CreateUniqueTempDir());
 }
 
@@ -324,7 +326,7 @@ void RequestQueueStoreTestBase::PumpLoop() {
 void RequestQueueStoreTestBase::ClearResults() {
   last_result_ = LastResult::RESULT_NONE;
   last_update_status_ = UpdateStatus::FAILED;
-  last_add_result_ = absl::nullopt;
+  last_add_result_ = std::nullopt;
   last_requests_.clear();
   last_update_result_.reset(nullptr);
 }
@@ -370,7 +372,8 @@ class RequestQueueStoreTest : public RequestQueueStoreTestBase {
  public:
   std::unique_ptr<RequestQueueStore> BuildStore() {
     return std::make_unique<RequestQueueStore>(
-        base::ThreadTaskRunnerHandle::Get(), temp_directory_.GetPath());
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        temp_directory_.GetPath());
   }
   std::unique_ptr<RequestQueueStore> BuildStoreWithOldSchema(
       int version,
@@ -393,7 +396,8 @@ class RequestQueueStoreTest : public RequestQueueStoreTestBase {
     }
 
     return std::make_unique<RequestQueueStore>(
-        base::ThreadTaskRunnerHandle::Get(), temp_directory_.GetPath());
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        temp_directory_.GetPath());
   }
 
   // Performs checks on the database to verify it works after upgrading.
@@ -607,7 +611,7 @@ TEST_F(RequestQueueStoreTest, AddRequest) {
   store->AddRequest(request, RequestQueue::AddOptions(),
                     base::BindOnce(&RequestQueueStoreTestBase::AddRequestDone,
                                    base::Unretained(this)));
-  ASSERT_EQ(absl::nullopt, this->last_add_result());
+  ASSERT_EQ(std::nullopt, this->last_add_result());
   this->PumpLoop();
   ASSERT_EQ(AddRequestResult::SUCCESS, this->last_add_result());
 
@@ -626,7 +630,7 @@ TEST_F(RequestQueueStoreTest, AddRequest) {
   store->AddRequest(request, RequestQueue::AddOptions(),
                     base::BindOnce(&RequestQueueStoreTestBase::AddRequestDone,
                                    base::Unretained(this)));
-  ASSERT_EQ(absl::nullopt, this->last_add_result());
+  ASSERT_EQ(std::nullopt, this->last_add_result());
   this->PumpLoop();
   ASSERT_EQ(AddRequestResult::ALREADY_EXISTS, this->last_add_result());
 

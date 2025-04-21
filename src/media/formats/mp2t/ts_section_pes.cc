@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/mp2t/ts_section_pes.h"
 
@@ -9,6 +14,7 @@
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "media/base/bit_reader.h"
+#include "media/base/byte_queue.h"
 #include "media/base/stream_parser_buffer.h"
 #include "media/base/timestamp_constants.h"
 #include "media/formats/mp2t/es_parser.h"
@@ -51,8 +57,7 @@ TsSectionPes::~TsSectionPes() {
 }
 
 bool TsSectionPes::Parse(bool payload_unit_start_indicator,
-                         const uint8_t* buf,
-                         int size) {
+                         base::span<const uint8_t> buf) {
   // Ignore partial PES.
   if (wait_for_pusi_ && !payload_unit_start_indicator)
     return true;
@@ -76,8 +81,9 @@ bool TsSectionPes::Parse(bool payload_unit_start_indicator,
   }
 
   // Add the data to the parser state.
-  if (size > 0)
-    pes_byte_queue_.Push(buf, size);
+  if (!buf.empty()) {
+    RCHECK(pes_byte_queue_.Push(buf));
+  }
 
   // Try emitting the current PES packet.
   return (parse_result && Emit(false));

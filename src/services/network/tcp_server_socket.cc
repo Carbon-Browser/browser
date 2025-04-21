@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/tcp_server_socket.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_conversions.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -16,7 +17,6 @@
 #include "net/log/net_log.h"
 #include "net/socket/tcp_server_socket.h"
 #include "services/network/tcp_connected_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 
@@ -42,25 +42,31 @@ TCPServerSocket::TCPServerSocket(
 
 TCPServerSocket::~TCPServerSocket() {}
 
-int TCPServerSocket::Listen(const net::IPEndPoint& local_addr,
-                            int backlog,
-                            net::IPEndPoint* local_addr_out) {
+base::expected<net::IPEndPoint, int32_t> TCPServerSocket::Listen(
+    const net::IPEndPoint& local_addr,
+    int backlog,
+    std::optional<bool> ipv6_only) {
   if (backlog == 0) {
     // SocketPosix::Listen and TCPSocketWin::Listen DCHECKs on backlog > 0.
-    return net::ERR_INVALID_ARGUMENT;
+    return base::unexpected(net::ERR_INVALID_ARGUMENT);
   }
   backlog_ = backlog;
-  int net_error = socket_->Listen(local_addr, backlog);
-  if (net_error == net::OK)
-    net_error = socket_->GetLocalAddress(local_addr_out);
-  return net_error;
+  int net_error = socket_->Listen(local_addr, backlog, ipv6_only);
+  net::IPEndPoint local_addr_out;
+  if (net_error == net::OK) {
+    net_error = socket_->GetLocalAddress(&local_addr_out);
+  }
+  if (net_error == net::OK) {
+    return local_addr_out;
+  }
+  return base::unexpected(net_error);
 }
 
 void TCPServerSocket::Accept(
     mojo::PendingRemote<mojom::SocketObserver> observer,
     AcceptCallback callback) {
   if (pending_accepts_queue_.size() >= static_cast<size_t>(backlog_)) {
-    std::move(callback).Run(net::ERR_INSUFFICIENT_RESOURCES, absl::nullopt,
+    std::move(callback).Run(net::ERR_INSUFFICIENT_RESOURCES, std::nullopt,
                             mojo::NullRemote(),
                             mojo::ScopedDataPipeConsumerHandle(),
                             mojo::ScopedDataPipeProducerHandle());
@@ -72,6 +78,13 @@ void TCPServerSocket::Accept(
   if (pending_accepts_queue_.size() == 1)
     ProcessNextAccept();
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+void TCPServerSocket::AttachConnectionTracker(
+    mojo::PendingRemote<mojom::SocketConnectionTracker> connection_tracker) {
+  connection_tracker_ = std::move(connection_tracker);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void TCPServerSocket::SetSocketForTest(
     std::unique_ptr<net::ServerSocket> socket) {
@@ -127,7 +140,7 @@ void TCPServerSocket::OnAcceptCompleted(int result) {
              std::move(send_producer_handle));
   } else {
     std::move(pending_accept->callback)
-        .Run(result, absl::nullopt, mojo::NullRemote(),
+        .Run(result, std::nullopt, mojo::NullRemote(),
              mojo::ScopedDataPipeConsumerHandle(),
              mojo::ScopedDataPipeProducerHandle());
   }

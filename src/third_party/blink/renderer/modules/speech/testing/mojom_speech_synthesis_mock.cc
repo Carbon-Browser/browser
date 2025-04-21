@@ -64,7 +64,8 @@ void MojomSpeechSynthesisMock::SpeakingErrorOccurred(TimerBase*) {
 
 void MojomSpeechSynthesisMock::SpeakingFinished(TimerBase*) {
   DCHECK(current_utterance_);
-  current_client_->OnFinishedSpeaking();
+  current_client_->OnFinishedSpeaking(
+      blink::mojom::SpeechSynthesisErrorCode::kNoError);
   SpeakNext();
 }
 
@@ -75,7 +76,7 @@ void MojomSpeechSynthesisMock::SpeakNext() {
   current_utterance_.reset();
   current_client_.reset();
 
-  if (queued_requests_.IsEmpty())
+  if (queued_requests_.empty())
     return;
 
   SpeechRequest next_request = queued_requests_.TakeFirst();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,20 @@
 #define CHROME_BROWSER_ASH_LOGIN_SCREENS_MARKETING_OPT_IN_SCREEN_H_
 
 #include <memory>
+#include <string_view>
 #include <unordered_set>
-#include "base/bind.h"
-#include "base/callback.h"
+
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/marketing_opt_in_screen_handler.h"
 #include "components/prefs/pref_change_registrar.h"
 
 namespace ash {
+
+class MarketingOptInScreenView;
 
 // This is Sync settings screen that is displayed as a part of user first
 // sign-in flow.
@@ -80,7 +83,7 @@ class MarketingOptInScreen : public BaseScreen {
 
  protected:
   // BaseScreen:
-  bool MaybeSkip(WizardContext* context) override;
+  bool MaybeSkip(WizardContext& context) override;
   void ShowImpl() override;
   void HideImpl() override;
 
@@ -125,22 +128,20 @@ class MarketingOptInScreen : public BaseScreen {
   bool ignore_pref_sync_for_testing_ = false;
 
   // Default country list.
-  const base::flat_set<base::StringPiece> default_countries_{"us", "ca", "gb"};
+  const base::flat_set<std::string_view> default_countries_{"us", "ca", "gb"};
 
-  // Extended country list. Protected behind the flag:
-  // - kOobeMarketingAdditionalCountriesSupported (DEFAULT_ON)
-  const base::flat_set<base::StringPiece> additional_countries_{
+  // Extended country list.
+  const base::flat_set<std::string_view> additional_countries_{
       "fr", "nl", "fi", "se", "no", "dk", "es", "it", "jp", "au"};
 
-  // Countries with double opt-in.  Behind the flag:
-  // - kOobeMarketingDoubleOptInCountriesSupported (DEFAULT_OFF)
-  const base::flat_set<base::StringPiece> double_opt_in_countries_{"de"};
+  // Countries with double opt-in.
+  const base::flat_set<std::string_view> double_opt_in_countries_{"de"};
 
   // Countries in which the toggle will be enabled by default.
-  const base::flat_set<base::StringPiece> default_opt_in_countries_{"us"};
+  const base::flat_set<std::string_view> default_opt_in_countries_{"us"};
 
   // Countries that require the screen to show a footer with legal information.
-  const base::flat_set<base::StringPiece> countries_with_legal_footer{"ca"};
+  const base::flat_set<std::string_view> countries_with_legal_footer{"ca"};
 
   // Timer to record user changed value for the accessibility setting to turn
   // shelf navigation buttons on in tablet mode. The metric is recorded with 10
@@ -152,11 +153,5 @@ class MarketingOptInScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MarketingOptInScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_MARKETING_OPT_IN_SCREEN_H_

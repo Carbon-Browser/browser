@@ -12,8 +12,18 @@
 #define IN_LIBXSLT
 #include "libxslt.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
+#ifdef WITH_MODULES
+  #ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+  #else
+    #include <dlfcn.h>
+  #endif
+#endif
 
 #include <libxml/xmlmemory.h>
 #include <libxml/tree.h>
@@ -21,13 +31,12 @@
 #include <libxml/xmlerror.h>
 #include <libxml/parserInternals.h>
 #include <libxml/xpathInternals.h>
-#ifdef WITH_MODULES
-#include <libxml/xmlmodule.h>
-#endif
 #include <libxml/list.h>
 #include <libxml/xmlIO.h>
+#include <libxml/threads.h>
 #include "xslt.h"
 #include "xsltInternals.h"
+#include "xsltlocale.h"
 #include "xsltutils.h"
 #include "imports.h"
 #include "extensions.h"
@@ -334,16 +343,13 @@ typedef void (*exsltRegisterFunction) (void);
 static int
 xsltExtModuleRegisterDynamic(const xmlChar * URI)
 {
-
-    xmlModulePtr m;
+    void *m;
     exsltRegisterFunction regfunc;
     xmlChar *ext_name;
     char module_filename[PATH_MAX];
     const xmlChar *ext_directory = NULL;
     const xmlChar *protocol = NULL;
     xmlChar *i, *regfunc_name;
-    void *vregfunc;
-    int rc;
 
     /* check for bad inputs */
     if (URI == NULL)
@@ -404,7 +410,7 @@ xsltExtModuleRegisterDynamic(const xmlChar * URI)
 
     /* build the module filename, and confirm the module exists */
     xmlStrPrintf((xmlChar *) module_filename, sizeof(module_filename),
-                 "%s/%s%s", ext_directory, ext_name, LIBXML_MODULE_EXTENSION);
+                 "%s/%s%s", ext_directory, ext_name, MODULE_EXTENSION);
 
 #ifdef WITH_XSLT_DEBUG_EXTENSIONS
     xsltGenericDebug(xsltGenericDebugContext,
@@ -412,6 +418,7 @@ xsltExtModuleRegisterDynamic(const xmlChar * URI)
                      module_filename, URI);
 #endif
 
+#if LIBXML_VERSION < 21300
     if (1 != xmlCheckFilename(module_filename)) {
 
 #ifdef WITH_XSLT_DEBUG_EXTENSIONS
@@ -422,14 +429,19 @@ xsltExtModuleRegisterDynamic(const xmlChar * URI)
         xmlFree(ext_name);
         return (-1);
     }
+#endif
 
     /* attempt to open the module */
-    m = xmlModuleOpen(module_filename, 0);
+#ifdef _WIN32
+    m = LoadLibraryA(module_filename);
+#else
+    m = dlopen(module_filename, RTLD_LOCAL | RTLD_NOW);
+#endif
     if (NULL == m) {
 
 #ifdef WITH_XSLT_DEBUG_EXTENSIONS
 	xsltGenericDebug(xsltGenericDebugContext,
-                     "xmlModuleOpen failed for plugin: %s\n", module_filename);
+                     "dlopen failed for plugin: %s\n", module_filename);
 #endif
 
         xmlFree(ext_name);
@@ -440,10 +452,12 @@ xsltExtModuleRegisterDynamic(const xmlChar * URI)
     regfunc_name = xmlStrdup(ext_name);
     regfunc_name = xmlStrcat(regfunc_name, BAD_CAST "_init");
 
-    vregfunc = NULL;
-    rc = xmlModuleSymbol(m, (const char *) regfunc_name, &vregfunc);
-    regfunc = vregfunc;
-    if (0 == rc) {
+#ifdef _WIN32
+    regfunc = (void *) GetProcAddress(m, (const char *) regfunc_name);
+#else
+    regfunc = dlsym(m, (const char *) regfunc_name);
+#endif
+    if (regfunc != NULL) {
         /*
 	 * Call the module's init function.  Note that this function
 	 * calls xsltRegisterExtModuleFull which will add the module
@@ -459,12 +473,16 @@ xsltExtModuleRegisterDynamic(const xmlChar * URI)
 
 #ifdef WITH_XSLT_DEBUG_EXTENSIONS
 	xsltGenericDebug(xsltGenericDebugContext,
-                     "xmlModuleSymbol failed for plugin: %s, regfunc: %s\n",
+                     "dlsym failed for plugin: %s, regfunc: %s\n",
                      module_filename, regfunc_name);
 #endif
 
         /* if regfunc not found unload the module immediately */
-        xmlModuleClose(m);
+#ifdef _WIN32
+        FreeLibrary(m);
+#else
+        dlclose(m);
+#endif
     }
 
     xmlFree(ext_name);
@@ -738,8 +756,11 @@ xsltStyleInitializeStylesheetModule(xsltStylesheetPtr style,
     * Store the user-data in the context of the given stylesheet.
     */
     dataContainer = xsltNewExtData(module, userData);
-    if (dataContainer == NULL)
+    if (dataContainer == NULL) {
+	if (module->styleShutdownFunc)
+	    module->styleShutdownFunc(style, URI, userData);
 	return (NULL);
+    }
 
     if (xmlHashAddEntry(style->extInfos, URI,
 	(void *) dataContainer) < 0)
@@ -805,17 +826,13 @@ xsltStyleGetExtData(xsltStylesheetPtr style, const xmlChar * URI)
     * Old behaviour.
     */
     tmpStyle = style;
-    while (tmpStyle != NULL) {
-	if (tmpStyle->extInfos != NULL) {
-	    dataContainer =
-		(xsltExtDataPtr) xmlHashLookup(tmpStyle->extInfos, URI);
-	    if (dataContainer != NULL) {
-		return(dataContainer->extData);
-	    }
-	}
-	tmpStyle = xsltNextImport(tmpStyle);
+    if (tmpStyle->extInfos != NULL) {
+        dataContainer =
+            (xsltExtDataPtr) xmlHashLookup(tmpStyle->extInfos, URI);
+        if (dataContainer != NULL) {
+            return(dataContainer->extData);
+        }
     }
-    tmpStyle = style;
 #endif
 
     dataContainer =
@@ -920,9 +937,8 @@ xsltGetExtData(xsltTransformContextPtr ctxt, const xmlChar * URI)
                 return (NULL);
 
             data = xsltNewExtData(module, extData);
-            if (data == NULL)
-                return (NULL);
-            if (xmlHashAddEntry(ctxt->extInfos, URI, (void *) data) < 0) {
+            if ((data == NULL) ||
+                (xmlHashAddEntry(ctxt->extInfos, URI, (void *) data) < 0)) {
                 xsltTransformError(ctxt, NULL, NULL,
                                    "Failed to register module data: %s\n",
                                    URI);
@@ -994,6 +1010,8 @@ xsltInitCtxtExt(void *payload, void *data, const xmlChar * URI)
     }
     ctxtData = xsltNewExtData(module, extData);
     if (ctxtData == NULL) {
+        if (module->shutdownFunc)
+            module->shutdownFunc(ctxt->ctxt, URI, extData);
         ctxt->ret = -1;
         return;
     }
@@ -1001,6 +1019,9 @@ xsltInitCtxtExt(void *payload, void *data, const xmlChar * URI)
     if (ctxt->ctxt->extInfos == NULL)
         ctxt->ctxt->extInfos = xmlHashCreate(10);
     if (ctxt->ctxt->extInfos == NULL) {
+        if (module->shutdownFunc)
+            module->shutdownFunc(ctxt->ctxt, URI, extData);
+        xsltFreeExtData(ctxtData);
         ctxt->ret = -1;
         return;
     }
@@ -2256,12 +2277,18 @@ xsltRegisterTestModule(void)
 }
 
 static void
-xsltHashScannerModuleFree(void *payload ATTRIBUTE_UNUSED,
+xsltHashScannerModuleFree(void *payload,
                           void *data ATTRIBUTE_UNUSED,
                           const xmlChar *name ATTRIBUTE_UNUSED)
 {
 #ifdef WITH_MODULES
-    xmlModuleClose(payload);
+#ifdef _WIN32
+    FreeLibrary(payload);
+#else
+    dlclose(payload);
+#endif
+#else
+    (void) payload;
 #endif
 }
 
@@ -2343,32 +2370,34 @@ xsltDebugDumpExtensions(FILE * output)
         output = stdout;
     fprintf(output,
             "Registered XSLT Extensions\n--------------------------\n");
-    if (!xsltFunctionsHash)
+    xmlMutexLock(xsltExtMutex);
+    if (!xsltFunctionsHash) {
         fprintf(output, "No registered extension functions\n");
-    else {
-        fprintf(output, "Registered Extension Functions:\n");
-        xmlMutexLock(xsltExtMutex);
+    } else {
+        fprintf(output, "Registered extension functions:\n");
         xmlHashScanFull(xsltFunctionsHash, xsltDebugDumpExtensionsCallback,
                         output);
-        xmlMutexUnlock(xsltExtMutex);
     }
-    if (!xsltElementsHash)
-        fprintf(output, "\nNo registered extension elements\n");
-    else {
-        fprintf(output, "\nRegistered Extension Elements:\n");
-        xmlMutexLock(xsltExtMutex);
+    if (!xsltTopLevelsHash) {
+        fprintf(output, "\nNo registered top-level extension elements\n");
+    } else {
+        fprintf(output, "\nRegistered top-level extension elements:\n");
+        xmlHashScanFull(xsltTopLevelsHash, xsltDebugDumpExtensionsCallback,
+                        output);
+    }
+    if (!xsltElementsHash) {
+        fprintf(output, "\nNo registered instruction extension elements\n");
+    } else {
+        fprintf(output, "\nRegistered instruction extension elements:\n");
         xmlHashScanFull(xsltElementsHash, xsltDebugDumpExtensionsCallback,
                         output);
-        xmlMutexUnlock(xsltExtMutex);
     }
-    if (!xsltExtensionsHash)
+    if (!xsltExtensionsHash) {
         fprintf(output, "\nNo registered extension modules\n");
-    else {
-        fprintf(output, "\nRegistered Extension Modules:\n");
-        xmlMutexLock(xsltExtMutex);
+    } else {
+        fprintf(output, "\nRegistered extension modules:\n");
         xmlHashScanFull(xsltExtensionsHash, xsltDebugDumpExtModulesCallback,
                         output);
-        xmlMutexUnlock(xsltExtMutex);
     }
-
+    xmlMutexUnlock(xsltExtMutex);
 }

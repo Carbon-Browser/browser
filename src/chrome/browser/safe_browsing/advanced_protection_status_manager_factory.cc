@@ -1,15 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
+
+namespace {
+
+std::unique_ptr<KeyedService> BuildService(content::BrowserContext* context) {
+  Profile* profile = Profile::FromBrowserContext(context);
+  return std::make_unique<safe_browsing::AdvancedProtectionStatusManager>(
+      profile->GetPrefs(), IdentityManagerFactory::GetForProfile(profile));
+}
+
+}  // namespace
 
 namespace safe_browsing {
 
@@ -23,35 +31,43 @@ AdvancedProtectionStatusManagerFactory::GetForProfile(Profile* profile) {
 // static
 AdvancedProtectionStatusManagerFactory*
 AdvancedProtectionStatusManagerFactory::GetInstance() {
-  return base::Singleton<AdvancedProtectionStatusManagerFactory>::get();
+  static base::NoDestructor<AdvancedProtectionStatusManagerFactory> instance;
+  return instance.get();
+}
+
+// static
+BrowserContextKeyedServiceFactory::TestingFactory
+AdvancedProtectionStatusManagerFactory::GetDefaultFactoryForTesting() {
+  return base::BindRepeating(&BuildService);
 }
 
 AdvancedProtectionStatusManagerFactory::AdvancedProtectionStatusManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AdvancedProtectionStatusManager",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
 AdvancedProtectionStatusManagerFactory::
-    ~AdvancedProtectionStatusManagerFactory() {}
+    ~AdvancedProtectionStatusManagerFactory() = default;
 
-KeyedService* AdvancedProtectionStatusManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AdvancedProtectionStatusManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  Profile* profile = Profile::FromBrowserContext(context);
-  return new AdvancedProtectionStatusManager(
-      profile->GetPrefs(), IdentityManagerFactory::GetForProfile(profile));
+  return BuildService(context);
 }
 
 bool AdvancedProtectionStatusManagerFactory::
     ServiceIsCreatedWithBrowserContext() const {
   return true;
-}
-
-content::BrowserContext*
-AdvancedProtectionStatusManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }
 
 }  // namespace safe_browsing

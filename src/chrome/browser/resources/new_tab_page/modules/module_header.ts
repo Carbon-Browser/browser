@@ -1,13 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 
-import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {loadTimeData} from '../i18n_setup.js';
 
 import {getTemplate} from './module_header.html.js';
 
@@ -71,11 +69,11 @@ export class ModuleHeaderElement extends PolymerElement {
 
       dismissText: String,
       disableText: String,
+      moreActionsText: String,
 
-      modulesRedesignedEnabled_: {
-        type: Boolean,
-        value: () => loadTimeData.getBoolean('modulesRedesignedEnabled'),
-        reflectToAttribute: true,
+      iconStyle_: {
+        type: String,
+        computed: `computeIconStyle_(iconSrc)`,
       },
     };
   }
@@ -89,7 +87,11 @@ export class ModuleHeaderElement extends PolymerElement {
   hideMenuButton: boolean;
   dismissText: string;
   disableText: string;
-  private modulesRedesignedEnabled_: boolean;
+  moreActionsText: string;
+
+  private computeIconStyle_() {
+    return `-webkit-mask-image: url(${this.iconSrc});`;
+  }
 
   private onInfoButtonClick_() {
     this.$.actionMenu.close();

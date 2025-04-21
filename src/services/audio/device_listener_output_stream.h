@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_AUDIO_DEVICE_LISTENER_OUTPUT_STREAM_H_
 #define SERVICES_AUDIO_DEVICE_LISTENER_OUTPUT_STREAM_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
 
@@ -52,11 +53,11 @@ class DeviceListenerOutputStream final
   // AudioOutputStream::AudioSourceCallback implementation.
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const media::AudioGlitchInfo& glitch_info,
                  media::AudioBus* dest) final;
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const media::AudioGlitchInfo& glitch_info,
                  media::AudioBus* dest,
                  bool is_mixing) final;
   void OnError(ErrorType type) final;
@@ -65,7 +66,7 @@ class DeviceListenerOutputStream final
 
   const raw_ptr<media::AudioManager> audio_manager_;
 
-  const raw_ptr<media::AudioOutputStream, DanglingUntriaged> stream_;
+  raw_ptr<media::AudioOutputStream> stream_;
 
   // Callback to process the device change.
   base::OnceClosure on_device_change_callback_;

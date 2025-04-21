@@ -1,36 +1,37 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
 import '../print_preview_utils.js';
 import './destination_dialog_style.css.js';
 import './destination_list.js';
 import './print_preview_search_box.js';
 import './print_preview_shared.css.js';
 import './print_preview_vars.css.js';
-import '../strings.m.js';
+import '/strings.m.js';
 import './throbber.css.js';
 import './destination_list_item.js';
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {ListPropertyUpdateMixin} from 'chrome://resources/js/list_property_update_mixin.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Destination} from '../data/destination.js';
-import {DestinationStore, DestinationStoreEventType} from '../data/destination_store.js';
+import type {Destination} from '../data/destination.js';
+import type {DestinationStore} from '../data/destination_store.js';
+import {DestinationStoreEventType} from '../data/destination_store.js';
 import {NativeLayerImpl} from '../native_layer.js';
 
 import {getTemplate} from './destination_dialog.html.js';
-import {PrintPreviewDestinationListItemElement} from './destination_list_item.js';
-import {PrintPreviewSearchBoxElement} from './print_preview_search_box.js';
+import type {PrintPreviewDestinationListItemElement} from './destination_list_item.js';
+import type {PrintPreviewSearchBoxElement} from './print_preview_search_box.js';
 
 export interface PrintPreviewDestinationDialogElement {
   $: {

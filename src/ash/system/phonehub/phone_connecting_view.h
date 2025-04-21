@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/phonehub/phone_hub_content_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
@@ -18,9 +19,9 @@ class PhoneHubInterstitialView;
 // your phone either for the first time after user has opted in or for resuming
 // an interrupted connection.
 class ASH_EXPORT PhoneConnectingView : public PhoneHubContentView {
- public:
-  METADATA_HEADER(PhoneConnectingView);
+  METADATA_HEADER(PhoneConnectingView, PhoneHubContentView)
 
+ public:
   PhoneConnectingView();
   PhoneConnectingView(const PhoneConnectingView&) = delete;
   PhoneConnectingView& operator=(const PhoneConnectingView&) = delete;
@@ -32,7 +33,7 @@ class ASH_EXPORT PhoneConnectingView : public PhoneHubContentView {
  private:
   // Responsible for displaying the connecting UI contents.
   // Owned by view hierarchy.
-  PhoneHubInterstitialView* content_view_ = nullptr;
+  raw_ptr<PhoneHubInterstitialView> content_view_ = nullptr;
 };
 
 }  // namespace ash

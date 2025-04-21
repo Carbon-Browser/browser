@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,6 +187,21 @@ bool SyscallSets::IsFileSystem(int sysno) {
 #if defined(__i386__) || defined(__arm__) || \
     (defined(ARCH_CPU_MIPS_FAMILY) && defined(ARCH_CPU_32_BITS))
     case __NR_utimensat_time64:
+#endif
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SyscallSets::IsTruncate(int sysno) {
+  switch (sysno) {
+    case __NR_ftruncate:
+    case __NR_truncate:
+#if defined(__i386__) || defined(__arm__) || \
+    (defined(ARCH_CPU_MIPS_FAMILY) && defined(ARCH_CPU_32_BITS))
+    case __NR_ftruncate64:
+    case __NR_truncate64:
 #endif
       return true;
     default:
@@ -481,22 +496,6 @@ bool SyscallSets::IsAllowedEpoll(int sysno) {
   }
 }
 
-bool SyscallSets::IsAllowedGetOrModifySocket(int sysno) {
-  switch (sysno) {
-#if !defined(__aarch64__)
-    case __NR_pipe:
-#endif
-    case __NR_pipe2:
-      return true;
-    default:
-#if defined(__x86_64__) || defined(__arm__) || defined(__mips__) || \
-    defined(__aarch64__)
-    case __NR_socketpair:  // We will want to inspect its argument.
-#endif
-      return false;
-  }
-}
-
 bool SyscallSets::IsDeniedGetOrModifySocket(int sysno) {
   switch (sysno) {
 #if defined(__x86_64__) || defined(__arm__) || defined(__mips__) || \
@@ -549,6 +548,7 @@ bool SyscallSets::IsAllowedAddressSpaceAccess(int sysno) {
     case __NR_mlock:
     case __NR_munlock:
     case __NR_munmap:
+    case __NR_mseal:
       return true;
     case __NR_madvise:
     case __NR_mincore:
@@ -1097,9 +1097,6 @@ bool SyscallSets::IsExtendedAttributes(int sysno) {
 // TODO(jln): classify this better.
 bool SyscallSets::IsMisc(int sysno) {
   switch (sysno) {
-#if !defined(__mips__)
-    case __NR_getrandom:
-#endif
     case __NR_name_to_handle_at:
     case __NR_open_by_handle_at:
     case __NR_perf_event_open:
@@ -1196,4 +1193,14 @@ bool SyscallSets::IsMipsMisc(int sysno) {
   }
 }
 #endif  // defined(__mips__)
+
+bool SyscallSets::IsGoogle3Threading(int sysno) {
+  switch (sysno) {
+    case __NR_getitimer:
+    case __NR_setitimer:
+      return true;
+    default:
+      return false;
+  }
+}
 }  // namespace sandbox.

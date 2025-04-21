@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "base/check.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "remoting/host/win/remoting_host_messages.h"

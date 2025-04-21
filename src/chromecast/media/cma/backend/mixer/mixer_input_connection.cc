@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/media/api/audio_provider.h"
@@ -36,7 +36,6 @@
 #include "media/base/audio_bus.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/filters/audio_renderer_algorithm.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromecast {
 namespace media {
@@ -50,6 +49,7 @@ constexpr base::TimeDelta kInactivityTimeout = base::Seconds(5);
 constexpr int64_t kDefaultMaxTimestampError = 2000;
 // Max absolute value for timestamp errors, to avoid overflow/underflow.
 constexpr int64_t kTimestampErrorLimit = 1000000;
+constexpr int kMaxChannels = 32;
 
 constexpr int kAudioMessageHeaderSize =
     mixer_service::MixerSocket::kAudioMessageHeaderSize;
@@ -328,7 +328,7 @@ class MixerInputConnection::TimestampedFader : public AudioProvider {
   const int num_channels_;
   const int sample_rate_;
 
-  absl::optional<int> pending_silence_;
+  std::optional<int> pending_silence_;
   FaderProvider fader_provider_;
   AudioFader fader_;
   bool after_silence_ = true;
@@ -374,7 +374,7 @@ MixerInputConnection::MixerInputConnection(
       enable_audio_clock_simulation_(pts_is_timestamp_ ||
                                      params.enable_audio_clock_simulation()),
       effective_playout_channel_(playout_channel_),
-      io_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      io_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       max_queued_frames_(std::max(GetQueueSize(params), algorithm_fill_size_)),
       start_threshold_frames_(GetStartThreshold(params)),
       never_timeout_connection_(params.never_timeout_connection()),
@@ -1067,7 +1067,8 @@ int MixerInputConnection::FillAudioPlaybackFrames(
       remaining_silence_frames_ = 0;
     }
 
-    float* channels[num_channels_];
+    CHECK_LE(num_channels_, kMaxChannels);
+    float* channels[kMaxChannels];
     for (int c = 0; c < num_channels_; ++c) {
       channels[c] = buffer->channel(c) + write_offset;
     }
@@ -1196,8 +1197,8 @@ int MixerInputConnection::FillTimestampedAudio(int num_frames,
                               input_samples_per_second_);
 
     const int64_t error =
-        base::clamp(playout_time - desired_playout_time, -kTimestampErrorLimit,
-                    kTimestampErrorLimit);
+        std::clamp(playout_time - desired_playout_time, -kTimestampErrorLimit,
+                   kTimestampErrorLimit);
     if (error < -max_timestamp_error_ ||
         (after_silence &&
          error < -1e6 / (input_samples_per_second_ * playback_rate_))) {

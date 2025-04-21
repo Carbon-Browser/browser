@@ -1,14 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web_view/shell/shell_translation_delegate.h"
 
 #import <UIKit/UIKit.h>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ShellTranslationDelegate ()
 // Action Sheet to prompt user whether or not the page should be translated.
@@ -119,14 +115,26 @@
         targetLanguage, error);
 }
 
+- (void)translationController:(CWVTranslationController*)controller
+    didDeterminePageLanguageDetectionDetails:
+        (CWVTranslationLanguageDetectionDetails*)pageLanguageDetectionDetails {
+  NSLog(@"%@:%@", NSStringFromSelector(_cmd), pageLanguageDetectionDetails);
+}
+
 #pragma mark - Private
 
 - (UIWindow*)anyKeyWindow {
-  NSArray<UIWindow*>* windows = [UIApplication sharedApplication].windows;
-  for (UIWindow* window in windows) {
-    if (window.isKeyWindow)
-      return window;
+  for (UIWindowScene* windowScene in UIApplication.sharedApplication
+           .connectedScenes) {
+    NSAssert([windowScene isKindOfClass:[UIWindowScene class]],
+             @"UIScene is not a UIWindowScene: %@", windowScene);
+    for (UIWindow* window in windowScene.windows) {
+      if (window.isKeyWindow) {
+        return window;
+      }
+    }
   }
+
   return nil;
 }
 

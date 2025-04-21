@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -337,15 +337,28 @@ mojo.internal.interfaceSupport.Endpoint = class {
 };
 
 /**
+ * @param {!mojo.internal.interfaceSupport.Endpoint} endpoint
+ * @param {!ArrayBuffer} buffer
+ * @export
+ */
+mojo.internal.interfaceSupport.acceptBufferForTesting = function(
+    endpoint, buffer) {
+  endpoint.router_.onMessageReceived_(buffer, []);
+};
+
+/**
  * Creates a new Endpoint wrapping a given pipe handle.
  *
- * @param {!MojoHandle|!mojo.internal.interfaceSupport.Endpoint} pipeOrEndpoint
+ * @param {!MojoHandle|!mojo.internal.interfaceSupport.Endpoint}
+ *     pipeOrEndpoint
  * @param {boolean=} setNamespaceBit
  * @return {!mojo.internal.interfaceSupport.Endpoint}
  */
 mojo.internal.interfaceSupport.createEndpoint = function(
     pipeOrEndpoint, setNamespaceBit = false) {
-  if (pipeOrEndpoint.constructor.name != 'MojoHandle') {
+  // `watch` is defined on MojoHandle but not Endpoint, so if it is not defined
+  // we know this is an Endpoint.
+  if (pipeOrEndpoint.watch === undefined) {
     return /** @type {!mojo.internal.interfaceSupport.Endpoint} */(
         pipeOrEndpoint);
   }
@@ -396,8 +409,6 @@ mojo.internal.interfaceSupport.PipeControlMessageHandler = class {
    * @param {!mojo.pipeControl.RunOrClosePipeInput} input
    */
   send(input) {
-    const spec = /** @type {!mojo.internal.StructSpec} */ (
-        mojo.pipeControl.RunOrClosePipeMessageParamsSpec.$.$.structSpec);
     const message = new mojo.internal.Message(
         null, 0xffffffff, 0, mojo.pipeControl.RUN_OR_CLOSE_PIPE_MESSAGE_ID, 0,
         /** @type {!mojo.internal.StructSpec} */
@@ -575,7 +586,7 @@ mojo.internal.interfaceSupport.PendingReceiver = class {
  * serialize requests and deserialize their replies, both according to
  * declarative message structure specs.
  *
- * TODO(crbug.com/1012109): Use a bounded generic type instead of
+ * TODO(crbug.com/40102194): Use a bounded generic type instead of
  * mojo.internal.interfaceSupport.PendingReceiver.
  * @implements {mojo.internal.interfaceSupport.EndpointClient}
  * @export
@@ -696,14 +707,35 @@ mojo.internal.interfaceSupport.InterfaceRemoteBase = class {
       return Promise.reject(new Error('The pipe has already been closed.'));
     }
 
+    // Turns a functions args into an object where each property corresponds to
+    // an argument.
+    //
+    // Each argument in `args` has a single corresponding field in `fields`
+    // except for optional numerics which map to two fields in `fields`. This
+    // means args' indexes don't exactly match `fields`'s. As we iterate
+    // over the fields we keep track of how many optional numeric args we've
+    // seen to get the right `args` index.
     const value = {};
-    paramStruct.$.structSpec.fields.forEach(
-        (field, index) => value[field.name] = args[index]);
+    let nullableValueKindFields = 0;
+    paramStruct.$.structSpec.fields.forEach((field, index) => {
+      const fieldArgsIndex = index - nullableValueKindFields;
+      if (!mojo.internal.isNullableValueKindField(field)) {
+        value[field.name] = args[fieldArgsIndex];
+        return;
+      }
+
+      const props = field.nullableValueKindProperties;
+      if (props.isPrimary) {
+        nullableValueKindFields++;
+        value[props.originalFieldName] = args[fieldArgsIndex];
+      }
+    });
+
     const requestId = this.endpoint_.generateRequestId();
     this.endpoint_.send(
-        ordinal, requestId,
-        maybeResponseStruct ? mojo.internal.kMessageFlagExpectsResponse : 0,
-        paramStruct, value);
+      ordinal, requestId,
+      maybeResponseStruct ? mojo.internal.kMessageFlagExpectsResponse : 0,
+      paramStruct, value);
     if (!maybeResponseStruct) {
       return Promise.resolve();
     }
@@ -1057,10 +1089,24 @@ mojo.internal.interfaceSupport.InterfaceReceiverHelperInternal = class {
     if (!request)
       throw new Error('Received malformed message');
 
-    let result = handler.handler.apply(
-        null,
-        handler.paramStruct.$.structSpec.fields.map(
-            field => request[field.name]));
+    // Each field in `handler.paramStruct.$.structSpec.fields` corresponds to
+    // an argument, except for optional numerics where two fields correspond to
+    // a single argument.
+    const args = [];
+    for (const field of handler.paramStruct.$.structSpec.fields) {
+      if (!mojo.internal.isNullableValueKindField(field)) {
+        args.push(request[field.name]);
+        continue;
+      }
+
+      const props = field.nullableValueKindProperties;
+      if (!props.isPrimary) {
+        continue;
+      }
+      args.push(request[props.originalFieldName]);
+    }
+
+    let result = handler.handler.apply(null, args);
 
     // If the message expects a response, the handler must return either a
     // well-formed response object, or a Promise that will eventually yield one.

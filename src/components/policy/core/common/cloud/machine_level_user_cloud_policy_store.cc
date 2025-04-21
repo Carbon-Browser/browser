@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 
 #include "base/files/file_path.h"
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/policy/core/common/cloud/dm_token.h"
 #include "components/policy/core/common/cloud/user_cloud_policy_store.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 
 namespace em = enterprise_management;
@@ -50,7 +52,7 @@ MachineLevelUserCloudPolicyStore::MachineLevelUserCloudPolicyStore(
       machine_dm_token_(machine_dm_token),
       machine_client_id_(machine_client_id) {}
 
-MachineLevelUserCloudPolicyStore::~MachineLevelUserCloudPolicyStore() {}
+MachineLevelUserCloudPolicyStore::~MachineLevelUserCloudPolicyStore() = default;
 
 // static
 std::unique_ptr<MachineLevelUserCloudPolicyStore>
@@ -93,7 +95,8 @@ void MachineLevelUserCloudPolicyStore::LoadImmediately() {
   // avoid an unnecessary disk access. Policies will be fetched after enrollment
   // succeeded.
   if (!machine_dm_token_.is_valid()) {
-    VLOG(1) << "LoadImmediately ignored, no DM token present.";
+    VLOG_POLICY(1, POLICY_FETCHING)
+        << "LoadImmediately ignored, no DM token present.";
 #if BUILDFLAG(IS_ANDROID)
     // On Android, some dependencies (e.g. FirstRunActivity) are blocked until
     // the PolicyService is initialized, which waits on all policy providers to
@@ -113,7 +116,7 @@ void MachineLevelUserCloudPolicyStore::LoadImmediately() {
 #endif  // BUILDFLAG(IS_ANDROID)
     return;
   }
-  VLOG(1) << "Load policy cache Immediately.";
+  VLOG_POLICY(1, POLICY_FETCHING) << "Load policy cache Immediately.";
   DesktopCloudPolicyStore::LoadImmediately();
 }
 
@@ -121,10 +124,10 @@ void MachineLevelUserCloudPolicyStore::Load() {
   // There is no global dm token, stop loading the policy cache. The policy will
   // be fetched in the end of enrollment process.
   if (!machine_dm_token_.is_valid()) {
-    VLOG(1) << "Load ignored, no DM token present.";
+    VLOG_POLICY(1, POLICY_FETCHING) << "Load ignored, no DM token present.";
     return;
   }
-  VLOG(1) << "Load policy cache.";
+  VLOG_POLICY(1, POLICY_FETCHING) << "Load policy cache.";
   DesktopCloudPolicyStore::Load();
 }
 
@@ -179,9 +182,10 @@ PolicyLoadResult MachineLevelUserCloudPolicyStore::LoadExternalCachedPolicies(
   // Load the key and signature of the key from Extennal policy info file and
   // use it to verify all Chrome and components policies. The browser will
   // redownload the policeis in case of validation failure.
-  VLOG(1) << (policy_info_load_result.policy.has_new_public_key()
-                  ? "External policy has public key."
-                  : "External policy doesn't have public key.");
+  VLOG_POLICY(1, POLICY_PROCESSING)
+      << (policy_info_load_result.policy.has_new_public_key()
+              ? "External policy has public key."
+              : "External policy doesn't have public key.");
   policy_cache_load_result.key.set_signing_key(
       policy_info_load_result.policy.new_public_key());
   policy_cache_load_result.key.set_signing_key_signature(
@@ -200,14 +204,15 @@ MachineLevelUserCloudPolicyStore::CreateValidator(
   auto validator = std::make_unique<UserCloudPolicyValidator>(
       std::move(policy_fetch_response), background_task_runner());
   validator->ValidatePolicyType(
-      GetMachineLevelUserCloudPolicyTypeForCurrentOS());
+      dm_protocol::kChromeMachineLevelUserCloudPolicyType);
   validator->ValidateDMToken(machine_dm_token_.value(),
                              CloudPolicyValidatorBase::DM_TOKEN_REQUIRED);
   validator->ValidateDeviceId(machine_client_id_,
                               CloudPolicyValidatorBase::DEVICE_ID_REQUIRED);
   if (has_policy()) {
     validator->ValidateTimestamp(
-        base::Time::FromJavaTime(policy()->timestamp()), option);
+        base::Time::FromMillisecondsSinceUnixEpoch(policy()->timestamp()),
+        option);
   }
   validator->ValidatePayload();
   return validator;

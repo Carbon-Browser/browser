@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Helpers to read GRD files and estimate resource ID usages.
@@ -9,7 +9,6 @@ tags. This approach avoids the complexties of conditional inclusions, but
 produces a conservative estimate of ID usages.
 """
 
-from __future__ import print_function
 
 import collections
 import os
@@ -18,7 +17,7 @@ from grit import grd_reader
 from grit import util
 from grit.tool.update_resource_ids import common
 
-TAGS_OF_INTEREST = set(['include', 'message', 'structure'])
+TAGS_OF_INTEREST = {'include', 'message', 'structure'}
 
 def _CountResourceUsage(grd, seen_files):
   tag_name_to_count = {tag: set() for tag in TAGS_OF_INTEREST}
@@ -37,11 +36,13 @@ def _CountResourceUsage(grd, seen_files):
   return {k: len(v) for k, v in tag_name_to_count.items() if v}
 
 
-def GenerateResourceUsages(item_list, src_dir, fake, seen_files):
+def GenerateResourceUsages(item_list, input_file_path, src_dir, fake,
+                           seen_files):
   """Visits a list of ItemInfo to generate maps from tag name to usage.
 
   Args:
-    root_obj: Root dict of a resource_ids file.
+    item_list: ID assignments and structure from the parsed resource_ids.
+    input_file_path: The path for the resource_ids input.
     src_dir: Absolute directory of Chrome's src/ directory.
     fake: For testing: Sets 10 as usages for all tags, to avoid reading GRD.
     seen_files: A set to collect paths of files read.
@@ -55,7 +56,7 @@ def GenerateResourceUsages(item_list, src_dir, fake, seen_files):
       yield item, tag_name_to_usage
     return
   for item in item_list:
-    supported_tag_names = set(tag.name for tag in item.tags)
+    supported_tag_names = {tag.name for tag in item.tags}
     if item.meta and 'sizes' in item.meta:
       # If META has "sizes" field, use it instead of reading GRD.
       tag_name_to_usage = collections.Counter()
@@ -81,5 +82,6 @@ def GenerateResourceUsages(item_list, src_dir, fake, seen_files):
       if not tag_names.issubset(supported_tag_names):
         missing = [t + 's' for t in tag_names - supported_tag_names]
         raise ValueError(
-            'Resource ids for %s needs entry for %s' % (item.grd, missing))
+            'Resource ids for %s missing entry for %s. Check %s.' %
+            (item.grd, missing, os.path.relpath(input_file_path, src_dir)))
     yield item, tag_name_to_usage

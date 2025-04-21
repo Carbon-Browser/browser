@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import math
 import os
 import random
 import sys
-import typing
+from typing import Any, List
 import unittest
 
 from gpu_tests import color_profile_manager
@@ -32,45 +32,29 @@ class ScreenshotSyncIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     """The name by which this test is invoked on the command line."""
     return 'screenshot_sync'
 
-  # The command line options (which are passed to subclasses'
-  # GenerateGpuTests) *must* be configured here, via a call to
-  # SetParsedCommandLineOptions. If they are not, an error will be
-  # raised when running the tests.
-  _parsed_command_line_options = None
-
-  @classmethod
-  def SetParsedCommandLineOptions(cls, options: ct.ParsedCmdArgs) -> None:
-    cls._parsed_command_line_options = options
-
-  @classmethod
-  def GetParsedCommandLineOptions(cls) -> ct.ParsedCmdArgs:
-    return cls._parsed_command_line_options
-
   @classmethod
   def AddCommandlineArgs(cls, parser: ct.CmdArgParser) -> None:
     super(ScreenshotSyncIntegrationTest, cls).AddCommandlineArgs(parser)
-    parser.add_option(
+    parser.add_argument(
         '--dont-restore-color-profile-after-test',
-        dest='dont_restore_color_profile_after_test',
         action='store_true',
         default=False,
-        help="(Mainly on Mac) don't restore the system's original color "
-        'profile after the test completes; leave the system using the sRGB '
-        'color profile. See http://crbug.com/784456.')
+        help=("(Mainly on Mac) don't restore the system's original color "
+              'profile after the test completes; leave the system using the '
+              'sRGB color profile. See http://crbug.com/784456.'))
 
   @classmethod
   def SetUpProcess(cls) -> None:
-    options = cls.GetParsedCommandLineOptions()
+    super(cls, ScreenshotSyncIntegrationTest).SetUpProcess()
+    options = cls.GetOriginalFinderOptions()
     color_profile_manager.ForceUntilExitSRGB(
         options.dont_restore_color_profile_after_test)
-    super(cls, ScreenshotSyncIntegrationTest).SetUpProcess()
     cls.CustomizeBrowserArgs([])
     cls.StartBrowser()
     cls.SetStaticServerDirs([gpu_path_util.GPU_DATA_DIR])
 
   @classmethod
-  def GenerateBrowserArgs(cls, additional_args: typing.List[str]
-                          ) -> typing.List[str]:
+  def GenerateBrowserArgs(cls, additional_args: List[str]) -> List[str]:
     """Adds default arguments to |additional_args|.
 
     See the parent class' method documentation for additional information.
@@ -81,14 +65,14 @@ class ScreenshotSyncIntegrationTest(gpu_integration_test.GpuIntegrationTest):
         cba.FORCE_COLOR_PROFILE_SRGB,
         cba.ENSURE_FORCED_COLOR_PROFILE,
         # --test-type=gpu is used to suppress the "Google API Keys are
-        # missing" infobar, which causes flakiness in tests.
+        # missing" and "Chrome for Testing" infobars, which cause flakiness
+        # in tests.
         cba.TEST_TYPE_GPU,
     ])
     return default_args
 
   @classmethod
   def GenerateGpuTests(cls, options: ct.ParsedCmdArgs) -> ct.TestGenerator:
-    cls.SetParsedCommandLineOptions(options)
     yield ('ScreenshotSync_SWRasterWithCanvas', 'screenshot_sync_canvas.html',
            ['--disable-gpu-rasterization'])
     yield ('ScreenshotSync_SWRasterWithDivs', 'screenshot_sync_divs.html',
@@ -158,7 +142,7 @@ class ScreenshotSyncIntegrationTest(gpu_integration_test.GpuIntegrationTest):
       self._CheckScreenshot()
 
   @classmethod
-  def ExpectationsFiles(cls) -> typing.List[str]:
+  def ExpectationsFiles(cls) -> List[str]:
     return [
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'test_expectations',
@@ -166,7 +150,7 @@ class ScreenshotSyncIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     ]
 
 
-def load_tests(loader: unittest.TestLoader, tests: typing.Any,
-               pattern: typing.Any) -> unittest.TestSuite:
+def load_tests(loader: unittest.TestLoader, tests: Any,
+               pattern: Any) -> unittest.TestSuite:
   del loader, tests, pattern  # Unused.
   return gpu_integration_test.LoadAllTestsInModule(sys.modules[__name__])

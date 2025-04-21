@@ -2,8 +2,7 @@ include_rules = [
   "-components/payments/content/android",
   "+ash/components/arc",
   "+ash/public/cpp/external_arc/overlay",
-  # TODO(b/129295708): Remove after move is complete.
-  "+components/arc",
+  "+chromeos/components/payments",
   "+components/autofill",
   "+components/keyed_service/content",
   "+components/keyed_service/core",
@@ -18,8 +17,11 @@ include_rules = [
   "+components/webdata/common",
   "+components/webdata_services",
   "+content/public",
+  "+content/test",
   "+crypto",
-  "+device/fido",
+  "+device/fido/fido_transport_protocol.h",
+  "+device/fido/fido_types.h",
+  "+device/fido/public_key_credential_descriptor.h",
   "+mojo/public/cpp",
   "+net",
   "+services/data_decoder/public/cpp",
@@ -39,3 +41,15 @@ include_rules = [
   "+ui/base",
   "+ui/gfx",
 ]
+
+specific_include_rules = {
+  "mock_payment_manifest_web_data_service.cc": [
+    "+components/os_crypt/async/browser/test_utils.h"
+  ],
+  "mock_payment_manifest_web_data_service.cc": [
+    "+components/os_crypt/async/browser/test_utils.h"
+  ],
+  ".*test.(cc|h)": [
+    "+components/os_crypt/async/browser/test_utils.h"
+  ]
+}

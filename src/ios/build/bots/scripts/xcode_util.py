@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,16 +6,58 @@ import distutils.version
 import glob
 import logging
 import os
+import re
 import shutil
 import subprocess
+import sys
+import time
+import traceback
 
+import iossim_util
+import mac_util
+import test_runner
 import test_runner_errors
+
+THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+CHROMIUM_SRC_DIR = os.path.abspath(os.path.join(THIS_DIR, '../../../..'))
+sys.path.extend([
+    os.path.abspath(os.path.join(CHROMIUM_SRC_DIR, 'build/util/lib/proto')),
+    os.path.abspath(os.path.join(CHROMIUM_SRC_DIR, 'build/util/'))
+])
+import measures
 
 LOGGER = logging.getLogger(__name__)
 XcodeIOSSimulatorDefaultRuntimeFilename = 'iOS.simruntime'
 XcodeIOSSimulatorRuntimeRelPath = ('Contents/Developer/Platforms/'
                                    'iPhoneOS.platform/Library/Developer/'
                                    'CoreSimulator/Profiles/Runtimes')
+XcodeCipdFiles = ['.cipd', '.xcode_versions']
+XcodeIOSSimulatorRuntimeBuildTagRegx = r'ios_runtime_build:(.*)'
+XcodeIOSSimulatorRuntimeVersionTagRegx = r'ios_runtime_version:(.*)'
+XcodeIOSSimulatorRuntimeDMGCipdPath = 'infra_internal/ios/xcode/ios_runtime_dmg'
+
+# TODO(crbug.com/40910268): remove Legacy Download once iOS 15.5 is deprecated
+IOS_SIM_RUNTIME_BUILTIN_STATE = ['Legacy Download', 'Bundled with Xcode']
+
+IOS_DMG_ADD_MAX_RETRIES = 2
+IOS_DMG_ADD_RETRY_DELAY = 5  # seconds
+
+
+def describe_cipd_ref(pkg_path, ref):
+  cmd = ['cipd', 'describe', pkg_path, '-version', ref]
+  output = ''
+  try:
+    output = subprocess.check_output(
+        cmd, stderr=subprocess.STDOUT).decode('utf-8')
+  except subprocess.CalledProcessError:
+    LOGGER.debug('cipd describe cmd %s returned nothing' % cmd)
+  return output
+
+
+def convert_ios_version_to_cipd_ref(ios_version):
+  # Transform iOS version to the runtime version format required by
+  # mac_toolchain. e.g. "14.4" -> "ios-14-4"
+  return 'ios-' + ios_version.replace('.', '-')
 
 
 def _using_new_mac_toolchain(mac_toolchain):
@@ -25,7 +67,7 @@ def _using_new_mac_toolchain(mac_toolchain):
   download single runtimes. Legacy mac_toolchain can only download Xcode package
   as a whole package. The function tells the difference by checking the
   existence of a new command line switch in new version.
-  TODO(crbug.com/1191260): Remove this util function when the new mac_toolchain
+  TODO(crbug.com/40174473): Remove this util function when the new mac_toolchain
   version is rolled to everywhere using this script.
   """
   cmd = [
@@ -62,6 +104,7 @@ def _is_legacy_xcode_package(xcode_app_path):
   runtimes_in_xcode = glob.glob(
       os.path.join(xcode_app_path, XcodeIOSSimulatorRuntimeRelPath,
                    '*.simruntime'))
+
   is_legacy = len(runtimes_in_xcode) >= 2
   if not is_legacy:
     for runtime in runtimes_in_xcode:
@@ -88,15 +131,13 @@ def _install_runtime(mac_toolchain, install_path, xcode_build_version,
   # status folders, so mac_toolchain(underlying CIPD) will work to download a
   # new one.
   if len(existing_runtimes) == 0:
-    for dir_name in ['.cipd', '.xcode_versions']:
+    for dir_name in XcodeCipdFiles:
       dir_path = os.path.join(install_path, dir_name)
       if os.path.exists(dir_path):
         LOGGER.warning('Removing %s in runtime cache folder.', dir_path)
         shutil.rmtree(dir_path)
 
-  # Transform iOS version to the runtime version format required my the tool.
-  # e.g. "14.4" -> "ios-14-4"
-  runtime_version = 'ios-' + ios_version.replace('.', '-')
+  runtime_version = convert_ios_version_to_cipd_ref(ios_version)
 
   cmd = [
       mac_toolchain,
@@ -191,7 +232,7 @@ def select(xcode_app_path):
       '-s',
       xcode_app_path,
   ]
-  LOGGER.debug('Selecting XCode with command %s and "xcrun simctl list".' % cmd)
+  LOGGER.debug('Selecting Xcode with command %s and "xcrun simctl list".' % cmd)
   output = subprocess.check_output(
       cmd, stderr=subprocess.STDOUT).decode('utf-8')
 
@@ -215,7 +256,7 @@ def _install_xcode(mac_toolchain, xcode_build_version, xcode_path,
   include runtimes, even though it's installed with new mac_toolchain and
   "-with-runtime=False" switch.
 
-  TODO(crbug.com/1191260): Remove the last argument when the new mac_toolchain
+  TODO(crbug.com/40174473): Remove the last argument when the new mac_toolchain
   version is rolled to everywhere using this script.
 
   Args:
@@ -258,6 +299,8 @@ def install(mac_toolchain, xcode_build_version, xcode_app_path, **runtime_args):
 
   If using legacy mac_toolchain, install the whole legacy Xcode package. (Will
   raise if the Xcode package isn't legacy.)
+  UPDATE: all MacOS13+ bots will also install the whole legacy Xcode package due
+  to the new codesign restrictions in crbug/1406204
 
   If using new mac_toolchain, first install the Xcode package:
   * If installed Xcode is legacy one (with runtimes bundled), return.
@@ -286,9 +329,29 @@ def install(mac_toolchain, xcode_build_version, xcode_app_path, **runtime_args):
   """
   using_new_mac_toolchain = _using_new_mac_toolchain(mac_toolchain)
 
+  # (crbug/1406204): for MacOS13+, cipd files are automatically removed in
+  # mac_toolchain prior to runFirstLaunch because they will cause codesign
+  # check failures. If the cached Xcode still contains cipd files, it means
+  # that something went wrong during the install process, and the Xcode should
+  # be re-installed.
+  if mac_util.is_macos_13_or_higher():
+    LOGGER.debug('checking if the cached Xcode is corrupted...')
+    for dir_name in XcodeCipdFiles:
+      dir_path = os.path.join(xcode_app_path, dir_name)
+      if os.path.exists(dir_path):
+        LOGGER.debug('Xcode cache will be re-created because it contains %s' %
+                     dir_path)
+        shutil.rmtree(xcode_app_path)
+        os.mkdir(xcode_app_path)
+        break
+
   _install_xcode(mac_toolchain, xcode_build_version, xcode_app_path,
                  using_new_mac_toolchain)
-  is_legacy_xcode_package = _is_legacy_xcode_package(xcode_app_path)
+
+  # (crbug/1406204): for MacOS13+, we are using Xcode fat upload/download again,
+  # so runtime should not be installed separately.
+  is_legacy_xcode_package = mac_util.is_macos_13_or_higher(
+  ) or _is_legacy_xcode_package(xcode_app_path)
 
   if not using_new_mac_toolchain and not is_legacy_xcode_package:
     # Legacy mac_toolchain can't handle the situation when no runtime is in
@@ -314,6 +377,96 @@ def install(mac_toolchain, xcode_build_version, xcode_app_path, **runtime_args):
   return is_legacy_xcode_package
 
 
+def _install_runtime_dmg(mac_toolchain, install_path, ios_version,
+                         xcode_build_version):
+  runtime_version = convert_ios_version_to_cipd_ref(ios_version)
+  cmd = [
+      mac_toolchain, 'install-runtime-dmg', '-runtime-version', runtime_version,
+      '-xcode-version', xcode_build_version, '-output-dir', install_path
+  ]
+
+  LOGGER.debug('Installing runtime dmg with command: %s' % cmd)
+  output = subprocess.check_call(cmd, stderr=subprocess.STDOUT)
+  return output
+
+
+def get_runtime_dmg_name(runtime_dmg_folder):
+  runtime_dmg_name = glob.glob(os.path.join(runtime_dmg_folder, '*.dmg'))
+  return runtime_dmg_name[0]
+
+
+def get_latest_runtime_build_cipd(xcode_version, ios_version):
+  # Use Xcode version first to find the matching iOS runtime,
+  # if the runtime returned is not the desired version,
+  # then use desired version to match as a fallback
+  runtime_version = convert_ios_version_to_cipd_ref(ios_version)
+  output = describe_cipd_ref(XcodeIOSSimulatorRuntimeDMGCipdPath, xcode_version)
+  runtime_build_match = re.search(XcodeIOSSimulatorRuntimeBuildTagRegx, output,
+                                  re.MULTILINE)
+  runtime_version_match = re.search(XcodeIOSSimulatorRuntimeVersionTagRegx,
+                                    output, re.MULTILINE)
+  if runtime_build_match and runtime_version_match:
+    if runtime_version_match.group(1) == runtime_version:
+      return runtime_build_match.group(1)
+
+  output = describe_cipd_ref(XcodeIOSSimulatorRuntimeDMGCipdPath,
+                             runtime_version)
+  runtime_build_match = re.search(XcodeIOSSimulatorRuntimeBuildTagRegx, output)
+  if runtime_build_match:
+    return runtime_build_match.group(1)
+  return None
+
+
+def is_runtime_builtin(ios_version):
+  runtime = iossim_util.get_simulator_runtime_info(ios_version)
+  return iossim_util.is_simulator_runtime_builtin(runtime)
+
+
+def install_runtime_dmg(mac_toolchain, runtime_cache_folder, ios_version,
+                        xcode_build_version):
+  if is_runtime_builtin(ios_version):
+    LOGGER.debug(
+        'Runtime is already built-in, no need to install from mac_toolchain')
+    return
+
+  runtime_build_to_install = get_latest_runtime_build_cipd(
+      xcode_build_version, ios_version)
+  if runtime_build_to_install is None:
+    raise test_runner_errors.RuntimeBuildNotFoundError(ios_version)
+
+  # check if the desired runtime build already exists on disk
+  if iossim_util.get_simulator_runtime_info_by_build(
+      runtime_build_to_install) is None:
+
+    # clean up least used runtime first to free up disk space if possible.
+    iossim_util.delete_least_recently_used_simulator_runtimes()
+
+    _install_runtime_dmg(mac_toolchain, runtime_cache_folder, ios_version,
+                         xcode_build_version)
+    runtime_dmg_name = get_runtime_dmg_name(runtime_cache_folder)
+
+    # crbug.com/370036129: sometimes the dmg add command fails with
+    # exit status 5 for unknown reasons. Attempt to retry if it fails.
+    attempt_count = measures.count('add_runtime_attempts')
+    for attempt in range(IOS_DMG_ADD_MAX_RETRIES + 1):
+      attempt_count.record()
+      try:
+        output = iossim_util.add_simulator_runtime(runtime_dmg_name)
+        break
+      except Exception as e:
+        if attempt < IOS_DMG_ADD_MAX_RETRIES and e.returncode == 5:
+          logging.warning(
+              'Adding iOS runtime failed with exit code 5. Retrying...')
+          time.sleep(IOS_DMG_ADD_RETRY_DELAY)
+        else:
+          raise
+    iossim_util.override_default_iphonesim_runtime(output, ios_version)
+  else:
+    LOGGER.debug(
+        'Runtime %s already exists, no need to install from mac_toolchain',
+        runtime_build_to_install)
+
+
 def version():
   """Invokes xcodebuild -version
 
@@ -327,7 +480,7 @@ def version():
       'xcodebuild',
       '-version',
   ]
-  LOGGER.debug('Checking XCode version with command: %s' % cmd)
+  LOGGER.debug('Checking Xcode version with command: %s' % cmd)
 
   output = subprocess.check_output(cmd).decode('utf-8')
   output = output.splitlines()
@@ -353,3 +506,156 @@ def using_xcode_13_or_higher():
   LOGGER.debug('Checking if Xcode version is 13 or higher')
   return distutils.version.LooseVersion(
       '13.0') <= distutils.version.LooseVersion(version()[0])
+
+
+def using_xcode_15_or_higher():
+  """Returns true if using Xcode version 15 or higher."""
+  LOGGER.debug('Checking if Xcode version is 15 or higher')
+  return distutils.version.LooseVersion(
+      '15.0') <= distutils.version.LooseVersion(version()[0])
+
+
+def using_xcode_16_or_higher():
+  """Returns true if using Xcode version 16 or higher."""
+  LOGGER.debug('Checking if Xcode version is 16 or higher')
+  return distutils.version.LooseVersion(
+      '16.0') <= distutils.version.LooseVersion(version()[0])
+
+
+def is_local_run():
+  """Use the existence of the LUCI_CONTEXT environment variable to determine
+  whether we are running on a bot or running locally.
+
+  Returns:
+    (bool) True if running locally, false if on a bot."""
+  return not os.environ.get('LUCI_CONTEXT')
+
+
+def validate_local_xcode_install(xcode_build_version):
+  """Confirm that the locally installed Xcode version matches the arguments
+  passed to the test runner.
+
+  Args:
+    xcode_build_version: (str) Xcode version passed as an argument to the test
+      runner, e.g. "16a242d"
+
+  Raises:
+    test_runner_errors.LocalRunXcodeError when the requested Xcode version is
+      not installed locally
+  """
+  _, local_version = version()
+  if xcode_build_version.lower() != local_version.lower():
+    raise test_runner_errors.LocalRunXcodeError(xcode_build_version,
+                                                local_version)
+
+
+def validate_local_ios_runtime(xcode_build_version, ios_version):
+  """Confirm that the locally installed iOS simulator runtimes match the
+  arguments passed to the test runner.
+
+  Args:
+    xcode_build_version: (str) Xcode version passed as an argument to the test
+      runner, e.g. "16a242d"
+    ios_version: (str) iOS version passed as an argument to the test
+      runner, e.g. "18.0"
+
+  Raises:
+    test_runner_errors.LocalRunRuntimeError when the requested iOS version is
+     not installed locally
+  """
+  runtime_build = get_latest_runtime_build_cipd(xcode_build_version,
+                                                ios_version)
+  local_runtime = iossim_util.get_simulator_runtime_info_by_build(runtime_build)
+  if not local_runtime:
+    raise test_runner_errors.LocalRunRuntimeError(ios_version, runtime_build)
+
+
+def install_xcode(mac_toolchain_cmd, xcode_build_version, xcode_path,
+                  runtime_cache_prefix, ios_version):
+  """Installs the requested Xcode build version.
+
+    Returns:
+      (bool, bool)
+        First bool: True if installation was successful. False otherwise.
+        Second bool: True if Xcode is legacy package. False if it's new.
+    """
+  if is_local_run():
+    validate_local_xcode_install(xcode_build_version)
+    if ios_version:
+      # skip runtime validation if no ios_version is provided (indicating an
+      # on-device test run)
+      validate_local_ios_runtime(xcode_build_version, ios_version)
+    return (True, False)
+
+  try:
+    if not mac_toolchain_cmd:
+      raise test_runner_errors.MacToolchainNotFoundError(mac_toolchain_cmd)
+    # Guard against incorrect install paths. On swarming, this path
+    # should be a requested named cache, and it must exist.
+    if not os.path.exists(xcode_path):
+      raise test_runner_errors.XcodePathNotFoundError(xcode_path)
+
+    runtime_cache_folder = None
+    # Runner script only utilizes runtime cache when it's a simulator task.
+    if ios_version:
+      runtime_cache_folder = construct_runtime_cache_folder(
+          runtime_cache_prefix, ios_version)
+      if not os.path.exists(runtime_cache_folder):
+        # Depending on infra project, runtime named cache might not be
+        # deployed. Create the dir if it doesn't exist since xcode_util
+        # assumes it exists.
+        # TODO(crbug.com/40174473): Raise error instead of creating dirs after
+        # runtime named cache is deployed everywhere.
+        os.makedirs(runtime_cache_folder)
+    # install() installs the Xcode & iOS runtime, and returns a bool
+    # indicating if the Xcode version in CIPD is a legacy Xcode package (which
+    # includes iOS runtimes).
+    # Update as of 2023: for MacOS13+, iOS runtime will not be installed in
+    # install(). See install_runtime_dmg below().
+    is_legacy_xcode = install(
+        mac_toolchain_cmd,
+        xcode_build_version,
+        xcode_path,
+        runtime_cache_folder=runtime_cache_folder,
+        ios_version=ios_version)
+    select(xcode_path)
+
+    # Starting MacOS13+, additional simulator runtime will be installed
+    # in DMG format
+    if ios_version and mac_util.is_macos_13_or_higher():
+      install_runtime_dmg(mac_toolchain_cmd, runtime_cache_folder, ios_version,
+                          xcode_build_version)
+  except subprocess.CalledProcessError as e:
+    # Flush buffers to ensure correct output ordering.
+    sys.stdout.flush()
+    sys.stderr.write(traceback.format_exc())
+    sys.stderr.write('Xcode build version %s failed to install: %s\n' %
+                     (xcode_build_version, e))
+    sys.stderr.flush()
+    return False, False
+  else:
+    return True, is_legacy_xcode
+
+
+def xctest_path(test_app_path: str) -> str:
+  """Gets xctest-file from egtests/PlugIns folder.
+
+  Returns:
+      A path for xctest in the format of /PlugIns/file.xctest
+
+  Raises:
+      PlugInsNotFoundError: If no PlugIns folder found in egtests.app.
+      XCTestPlugInNotFoundError: If no xctest-file found in PlugIns.
+  """
+  plugins_dir = os.path.join(test_app_path, 'PlugIns')
+  if not os.path.exists(plugins_dir):
+    raise test_runner.PlugInsNotFoundError(plugins_dir)
+  plugin_xctest = None
+  if os.path.exists(plugins_dir):
+    for plugin in os.listdir(plugins_dir):
+      if plugin.endswith('.xctest'):
+        plugin_xctest = os.path.join(plugins_dir, plugin)
+  if not plugin_xctest:
+    raise test_runner.XCTestPlugInNotFoundError(plugin_xctest)
+
+  return plugin_xctest.replace(test_app_path, '')

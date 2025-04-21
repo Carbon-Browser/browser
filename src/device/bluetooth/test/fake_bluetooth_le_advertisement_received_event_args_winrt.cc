@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/test/fake_bluetooth_le_advertisement_received_event_args_winrt.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/strings/string_piece.h"
 #include "device/bluetooth/test/fake_bluetooth_adapter_winrt.h"
 
 namespace device {
@@ -26,7 +26,7 @@ using Microsoft::WRL::ComPtr;
 FakeBluetoothLEAdvertisementReceivedEventArgsWinrt::
     FakeBluetoothLEAdvertisementReceivedEventArgsWinrt(
         int16_t rssi,
-        base::StringPiece address,
+        std::string_view address,
         ComPtr<IBluetoothLEAdvertisement> advertisement)
     : rssi_(rssi),
       raw_address_(FakeBluetoothAdapterWinrt::ToRawBluetoothAddress(address)),

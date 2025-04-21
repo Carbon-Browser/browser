@@ -1,4 +1,4 @@
-# Copyright (c) 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -33,10 +33,10 @@ class CSSProtoWriter(json5_generator.Writer):
             'input_files':
             self._input_files,
             'property_names':
-            '\n'.join('  "%s",' % property['name'].original
+            '\n'.join(f'  "{property.name.original}",'
                       for property in self._all_properties),
             'value_keywords':
-            '\n'.join('  "%s",' % keyword.original
+            '\n'.join(f'  "{keyword.original}",'
                       for keyword in self._keywords),
         }
 
@@ -44,7 +44,7 @@ class CSSProtoWriter(json5_generator.Writer):
     def generate_proto(self):
         property_symbols = []
         for i, property in enumerate(self._all_properties):
-            symbol = property['name'].to_macro_case()
+            symbol = property.name.to_macro_case()
             if symbol == 'OVERFLOW':  # Conflicts with a system header
                 symbol = 'OVERFLOW_'
             property_symbols.append('    %s = %d;' % (symbol, i + 1))
@@ -66,6 +66,9 @@ class CSSProtoWriter(json5_generator.Writer):
             elif keyword.original == 'nan':
                 # Conflicts with a system header
                 symbol = 'NOT_A_NUMBER'
+            elif keyword.original == 'unicode':
+                # Conflicts with UNICODE macro.
+                symbol = 'UNICODE_'
             keyword_symbols.append('    %s = %d;' % (symbol, i + 1))
         keyword_symbols.append('    INVALID_VALUE = %d;' %
                                (len(self._keywords) + 1))

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class ContentSettingBubbleModelDelegate {
   virtual void ShowLearnMorePage(ContentSettingsType type) = 0;
 
  protected:
-  virtual ~ContentSettingBubbleModelDelegate() {}
+  virtual ~ContentSettingBubbleModelDelegate() = default;
 };
 
 #endif  // CHROME_BROWSER_UI_CONTENT_SETTINGS_CONTENT_SETTING_BUBBLE_MODEL_DELEGATE_H_

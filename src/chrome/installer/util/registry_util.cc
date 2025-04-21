@@ -1,10 +1,11 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/installer/util/registry_util.h"
 
 #include <windows.h>
+
 #include <string>
 
 #include "base/command_line.h"
@@ -144,7 +145,7 @@ ProgramCompare::ProgramCompare(const base::FilePath& path_to_match)
   }
 }
 
-ProgramCompare::~ProgramCompare() {}
+ProgramCompare::~ProgramCompare() = default;
 
 bool ProgramCompare::Evaluate(const std::wstring& value) const {
   // Suss out the exe portion of the value, which is expected to be a command

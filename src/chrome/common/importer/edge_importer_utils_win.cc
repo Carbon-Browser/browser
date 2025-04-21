@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,8 +78,6 @@ bool IsEdgeFavoritesLegacyMode() {
 
 bool EdgeImporterCanImport() {
   base::File::Info file_info;
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return false;
   return base::GetFileInfo(GetEdgeDataFilePath(), &file_info) &&
          file_info.is_directory;
 }

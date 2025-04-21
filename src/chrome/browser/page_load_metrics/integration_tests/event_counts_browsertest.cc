@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class EventCountsBrowserTest : public MetricIntegrationTest {
 
     // content::SimulateTouchEventAt can only be used in Aura, however
     // chrome.gpuBenchmarking.tap can be used on all platforms.
-    command_line->AppendSwitch(cc::switches::kEnableGpuBenchmarking);
+    command_line->AppendSwitch(switches::kEnableGpuBenchmarking);
   }
 };
 

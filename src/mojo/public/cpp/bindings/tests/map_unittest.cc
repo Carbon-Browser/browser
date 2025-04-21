@@ -1,15 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <utility>
 
 #include "base/containers/flat_map.h"
 #include "mojo/public/cpp/bindings/tests/rect_chromium.h"
-#include "mojo/public/interfaces/bindings/tests/rect.mojom.h"
-#include "mojo/public/interfaces/bindings/tests/test_structs.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/rect.test-mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_structs.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {

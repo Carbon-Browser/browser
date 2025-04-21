@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,9 @@ SpeechRecognitionEventListener*
   return nullptr;
 }
 
-bool ShellSpeechRecognitionManagerDelegate::FilterProfanities(
-    int render_process_id) {
-  return false;
-}
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_ANDROID)
+void ShellSpeechRecognitionManagerDelegate::BindSpeechRecognitionContext(
+    mojo::PendingReceiver<media::mojom::SpeechRecognitionContext> receiver) {}
+#endif  // !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

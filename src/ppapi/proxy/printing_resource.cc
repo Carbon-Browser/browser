@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/proxy/printing_resource.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ipc/ipc_message.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/proxy/dispatch_reply_message.h"

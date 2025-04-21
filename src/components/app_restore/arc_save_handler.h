@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -133,7 +134,7 @@ class COMPONENT_EXPORT(APP_RESTORE) ArcSaveHandler {
   // |arc_window_candidates_| is used to record those initialized ARC app
   // windows, whose tasks have not been created. Once the task for the window is
   // created, the window is removed from |arc_window_candidates_|.
-  std::set<aura::Window*> arc_window_candidates_;
+  std::set<raw_ptr<aura::Window, SetExperimental>> arc_window_candidates_;
 
   // Timer used to check whether a task is created. App launching could have
   // failed. If an app is launched without a task created, the launch record

@@ -1,9 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_PUBLIC_WEBUI_WEB_UI_IOS_MESSAGE_HANDLER_H_
 #define IOS_WEB_PUBLIC_WEBUI_WEB_UI_IOS_MESSAGE_HANDLER_H_
+
+#import "base/memory/raw_ptr.h"
 
 namespace web {
 
@@ -34,7 +36,7 @@ class WebUIIOSMessageHandler {
   // Provide external classes access to web_ui() and set_web_ui().
   friend class WebUIIOSImpl;
 
-  WebUIIOS* web_ui_;
+  raw_ptr<WebUIIOS> web_ui_;
 };
 
 }  // namespace web

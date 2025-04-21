@@ -1,22 +1,23 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/image_writer_private/image_writer_utility_client.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/services/removable_storage_writer/public/mojom/removable_storage_writer.mojom.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_process_host.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace extensions {
@@ -59,7 +60,7 @@ class ImageWriterUtilityClient::RemovableStorageWriterClientImpl
     image_writer_utility_client_->OperationProgress(progress);
   }
 
-  void Complete(const absl::optional<std::string>& error) override {
+  void Complete(const std::optional<std::string>& error) override {
     if (error) {
       image_writer_utility_client_->OperationFailed(error.value());
     } else {
@@ -148,8 +149,8 @@ void ImageWriterUtilityClient::Cancel(CancelCallback cancel_callback) {
   DCHECK(cancel_callback);
 
   ResetRequest();
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(cancel_callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(cancel_callback));
 }
 
 void ImageWriterUtilityClient::Shutdown() {

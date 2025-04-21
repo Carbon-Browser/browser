@@ -1,6 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+// Note: The following chrome:// URLs are not actually fetched at runtime. They
+// are handled in
+// components/security_interstitials/core/browser/resources:bundle_js, which
+// finds the correct files and inlines them.
+import {HIDDEN_CLASS, preventDefaultOnPoundLinkClicks, SecurityInterstitialCommandId, sendCommand} from 'chrome://interstitials/common/resources/interstitial_common.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 /**
  * Restores the interstitial content to the initial state if the window size
@@ -13,15 +20,20 @@ function onResize() {
 
   // Check for change in window size.
   if (window.matchMedia(mediaQuery).matches) {
-    const hiddenDetails = $('details').classList.add(HIDDEN_CLASS);
-    $('main-content').classList.remove(HIDDEN_CLASS);
-    $('icon').setAttribute('aria-label', loadTimeData.getString('heading'));
+    const hiddenDetails =
+        document.querySelector('#details').classList.add(HIDDEN_CLASS);
+    document.querySelector('#main-content').classList.remove(HIDDEN_CLASS);
+    document.querySelector('#icon').setAttribute(
+        'aria-label', loadTimeData.getString('heading'));
   } else {
-    $('icon').removeAttribute('aria-label');
+    document.querySelector('#icon').removeAttribute('aria-label');
   }
 }
 
 function initPage() {
+  // `loadTimeDataRaw` is injected to the `window` scope from C++.
+  loadTimeData.data = window.loadTimeDataRaw;
+
   const isGiantWebView = loadTimeData.getBoolean('is_giant');
   const interstitialType = loadTimeData.getString('type');
   const safebrowsing = interstitialType === 'SAFEBROWSING';
@@ -35,15 +47,19 @@ function initPage() {
 
   preventDefaultOnPoundLinkClicks();
 
-  $('details-link').addEventListener('click', function(event) {
-    const hiddenDetails = $('details').classList.toggle(HIDDEN_CLASS);
-    $('main-content').classList.toggle(HIDDEN_CLASS, !hiddenDetails);
-  });
+  document.querySelector('#details-link')
+      .addEventListener('click', function(event) {
+        const hiddenDetails =
+            document.querySelector('#details').classList.toggle(HIDDEN_CLASS);
+        document.querySelector('#main-content')
+            .classList.toggle(HIDDEN_CLASS, !hiddenDetails);
+      });
 
   if (safebrowsing) {
-    $('proceed-link').addEventListener('click', function(event) {
-      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
-    });
+    document.querySelector('#proceed-link')
+        .addEventListener('click', function(event) {
+          sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+        });
   }
 
   window.addEventListener('resize', onResize);

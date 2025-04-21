@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,8 +15,10 @@
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "third_party/blink/public/common/common_export.h"
+#include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_url_entry_mojom_traits.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/common/user_agent/user_agent_mojom_traits.h"
+#include "third_party/blink/public/mojom/peerconnection/webrtc_ip_handling_policy.mojom.h"
 #include "third_party/blink/public/mojom/renderer_preferences.mojom-shared.h"
 #include "ui/gfx/mojom/font_render_params_mojom_traits.h"
 
@@ -62,6 +65,14 @@ struct BLINK_COMMON_EXPORT
     return data.use_subpixel_positioning;
   }
 
+  static const float& text_contrast(const ::blink::RendererPreferences& data) {
+    return data.text_contrast;
+  }
+
+  static const float& text_gamma(const ::blink::RendererPreferences& data) {
+    return data.text_gamma;
+  }
+
   static const uint32_t& focus_ring_color(
       const ::blink::RendererPreferences& data) {
     return data.focus_ring_color;
@@ -92,7 +103,7 @@ struct BLINK_COMMON_EXPORT
     return data.browser_handles_all_top_level_requests;
   }
 
-  static absl::optional<base::TimeDelta> caret_blink_interval(
+  static std::optional<base::TimeDelta> caret_blink_interval(
       const ::blink::RendererPreferences& data) {
     return data.caret_blink_interval;
   }
@@ -122,9 +133,21 @@ struct BLINK_COMMON_EXPORT
     return data.enable_encrypted_media;
   }
 
-  static const std::string& webrtc_ip_handling_policy(
+#if BUILDFLAG(IS_CHROMEOS)
+  static const bool& use_overlay_scrollbar(
       const ::blink::RendererPreferences& data) {
+    return data.use_overlay_scrollbar;
+  }
+#endif
+
+  static const ::blink::mojom::WebRtcIpHandlingPolicy&
+  webrtc_ip_handling_policy(const ::blink::RendererPreferences& data) {
     return data.webrtc_ip_handling_policy;
+  }
+
+  static const std::vector<::blink::WebRtcIpHandlingUrlEntry>&
+  webrtc_ip_handling_urls(const ::blink::RendererPreferences& data) {
+    return data.webrtc_ip_handling_urls;
   }
 
   static const uint16_t& webrtc_udp_min_port(
@@ -142,11 +165,6 @@ struct BLINK_COMMON_EXPORT
     return data.webrtc_local_ips_allowed_urls;
   }
 
-  static const bool& webrtc_allow_legacy_tls_protocols(
-      const ::blink::RendererPreferences& data) {
-    return data.webrtc_allow_legacy_tls_protocols;
-  }
-
   static const ::blink::UserAgentOverride& user_agent_override(
       const ::blink::RendererPreferences& data) {
     return data.user_agent_override;
@@ -157,6 +175,11 @@ struct BLINK_COMMON_EXPORT
     return data.accept_languages;
   }
 
+  static const bool& send_subresource_notification(
+      const ::blink::RendererPreferences& data) {
+    return data.send_subresource_notification;
+  }
+
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   static const std::string& system_font_family_name(
       const ::blink::RendererPreferences& data) {
@@ -164,7 +187,7 @@ struct BLINK_COMMON_EXPORT
   }
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   static const bool& selection_clipboard_buffer_available(
       const ::blink::RendererPreferences& data) {
     return data.selection_clipboard_buffer_available;

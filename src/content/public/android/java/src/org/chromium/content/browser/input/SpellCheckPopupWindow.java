@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@ import android.content.Context;
 import android.text.SpannableString;
 import android.view.View;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
  * A subclass of SuggestionsPopupWindow to be used for showing suggestions from a spell check
  * marker.
  */
+@NullMarked
 public class SpellCheckPopupWindow extends SuggestionsPopupWindow {
     private String[] mSuggestions = new String[0];
 
@@ -23,14 +26,15 @@ public class SpellCheckPopupWindow extends SuggestionsPopupWindow {
      * @param windowAndroid The current WindowAndroid instance.
      * @param parentView The view used to attach the PopupWindow.
      */
-    public SpellCheckPopupWindow(Context context, TextSuggestionHost textSuggestionHost,
-            WindowAndroid windowAndroid, View parentView) {
+    public SpellCheckPopupWindow(
+            Context context,
+            TextSuggestionHost textSuggestionHost,
+            @Nullable WindowAndroid windowAndroid,
+            View parentView) {
         super(context, textSuggestionHost, windowAndroid, parentView);
     }
 
-    /**
-     * Shows the spell check menu at the specified coordinates (relative to the viewport).
-     */
+    /** Shows the spell check menu at the specified coordinates (relative to the viewport). */
     public void show(double caretX, double caretY, String highlightedText, String[] suggestions) {
         mSuggestions = suggestions.clone();
         setAddToDictionaryEnabled(true);

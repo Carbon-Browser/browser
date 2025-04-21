@@ -1,19 +1,42 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_MOJOM_WAYLAND_OVERLAY_CONFIG_MOJOM_TRAITS_H_
 #define UI_OZONE_PLATFORM_WAYLAND_MOJOM_WAYLAND_OVERLAY_CONFIG_MOJOM_TRAITS_H_
 
-#include "skia/public/mojom/skcolor_mojom_traits.h"
+#include "skia/public/mojom/skcolor4f_mojom_traits.h"
+#include "ui/gfx/mojom/color_space_mojom_traits.h"
 #include "ui/gfx/mojom/gpu_fence_handle_mojom_traits.h"
 #include "ui/gfx/mojom/overlay_priority_hint_mojom_traits.h"
 #include "ui/gfx/mojom/overlay_transform_mojom_traits.h"
 #include "ui/gfx/mojom/rrect_f_mojom_traits.h"
+#include "ui/gfx/mojom/transform_mojom_traits.h"
+#include "ui/gfx/overlay_plane_data.h"
 #include "ui/ozone/platform/wayland/common/wayland_overlay_config.h"
 #include "ui/ozone/platform/wayland/mojom/wayland_overlay_config.mojom-shared.h"
 
 namespace mojo {
+
+template <>
+struct UnionTraits<wl::mojom::TransformUnionDataView,
+                   absl::variant<gfx::OverlayTransform, gfx::Transform>> {
+  static wl::mojom::TransformUnionDataView::Tag GetTag(
+      const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform);
+
+  static gfx::OverlayTransform overlay_transform(
+      const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform) {
+    return absl::get<gfx::OverlayTransform>(transform);
+  }
+
+  static gfx::Transform matrix_transform(
+      const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform) {
+    return absl::get<gfx::Transform>(transform);
+  }
+
+  static bool Read(wl::mojom::TransformUnionDataView data,
+                   absl::variant<gfx::OverlayTransform, gfx::Transform>* out);
+};
 
 template <>
 struct StructTraits<wl::mojom::WaylandOverlayConfigDataView,
@@ -22,7 +45,12 @@ struct StructTraits<wl::mojom::WaylandOverlayConfigDataView,
     return input.z_order;
   }
 
-  static const gfx::OverlayTransform& transform(
+  static const std::optional<gfx::ColorSpace>& color_space(
+      const wl::WaylandOverlayConfig& input) {
+    return input.color_space;
+  }
+
+  static const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform(
       const wl::WaylandOverlayConfig& input) {
     return input.transform;
   }
@@ -63,16 +91,6 @@ struct StructTraits<wl::mojom::WaylandOverlayConfigDataView,
   static const gfx::OverlayPriorityHint& priority_hint(
       const wl::WaylandOverlayConfig& input) {
     return input.priority_hint;
-  }
-
-  static const gfx::RRectF& rounded_clip_bounds(
-      const wl::WaylandOverlayConfig& input) {
-    return input.rounded_clip_bounds;
-  }
-
-  static const absl::optional<SkColor>& background_color(
-      const wl::WaylandOverlayConfig& input) {
-    return input.background_color;
   }
 
   static bool Read(wl::mojom::WaylandOverlayConfigDataView data,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
-#include "components/permissions/permission_request_id.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 #include "url/gurl.h"
@@ -28,7 +27,7 @@ void MidiSysexPermissionContext::UpdateTabContext(const PermissionRequestID& id,
                                                   bool allowed) {
   content_settings::PageSpecificContentSettings* content_settings =
       content_settings::PageSpecificContentSettings::GetForFrame(
-          id.render_process_id(), id.render_frame_id());
+          id.global_render_frame_host_id());
   if (!content_settings)
     return;
 
@@ -36,14 +35,10 @@ void MidiSysexPermissionContext::UpdateTabContext(const PermissionRequestID& id,
     content_settings->OnContentAllowed(ContentSettingsType::MIDI_SYSEX);
 
     content::ChildProcessSecurityPolicy::GetInstance()
-        ->GrantSendMidiSysExMessage(id.render_process_id());
+        ->GrantSendMidiSysExMessage(id.global_render_frame_host_id().child_id);
   } else {
     content_settings->OnContentBlocked(ContentSettingsType::MIDI_SYSEX);
   }
-}
-
-bool MidiSysexPermissionContext::IsRestrictedToSecureOrigins() const {
-  return true;
 }
 
 }  // namespace permissions

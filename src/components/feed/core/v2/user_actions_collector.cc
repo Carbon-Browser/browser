@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "components/feed/core/v2/user_actions_collector.h"
@@ -12,7 +12,6 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "components/feed/core/common/pref_names.h"
@@ -71,7 +70,7 @@ void UserActionsCollector::UpdateUserProfileOnLinkClick(
 
 void UserActionsCollector::InitStoreFromPrefs() {
   const base::Value::List& list_value_from_disk =
-      profile_prefs_->GetValueList(prefs::kFeedOnDeviceUserActionsCollector);
+      profile_prefs_->GetList(prefs::kFeedOnDeviceUserActionsCollector);
   size_t count_values_during_store_initialization = 0;
 
   const size_t entries_in_pref = list_value_from_disk.size();
@@ -140,10 +139,7 @@ std::string UserActionsCollector::EntryToString(
   visit_metadata_proto.SerializeToString(&serialized_entry);
   DCHECK(!serialized_entry.empty());
 
-  std::string base64_encoded;
-  base::Base64Encode(serialized_entry, &base64_encoded);
-
-  return base64_encoded;
+  return base::Base64Encode(serialized_entry);
 }
 
 bool UserActionsCollector::ShouldIncludeVisitMetadataEntry(

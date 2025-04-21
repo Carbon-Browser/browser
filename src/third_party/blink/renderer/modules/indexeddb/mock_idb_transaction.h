@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 
 namespace blink {
 
+// Mock for the **remote** (i.e. the browser side of the Mojo connection).
 class MockIDBTransaction
     : public testing::StrictMock<mojom::blink::IDBTransaction> {
  public:
@@ -44,4 +45,4 @@ class MockIDBTransaction
 
 }  // namespace blink
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_INDEXEDDB_MOCK_WEB_IDB_TRANSACTION_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_INDEXEDDB_MOCK_IDB_TRANSACTION_H_

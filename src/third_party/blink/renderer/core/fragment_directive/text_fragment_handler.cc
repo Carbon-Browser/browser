@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "components/shared_highlighting/core/common/disabled_sites.h"
 #include "components/shared_highlighting/core/common/fragment_directives_utils.h"
 #include "components/shared_highlighting/core/common/shared_highlighting_features.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 #include "third_party/blink/renderer/core/annotation/annotation_selector.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -24,6 +24,7 @@
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_selector_generator.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/layout/hit_test_result.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 
 namespace blink {
@@ -108,7 +109,7 @@ void TextFragmentHandler::RemoveFragments() {
 }
 
 // static
-bool TextFragmentHandler::IsOverTextFragment(HitTestResult result) {
+bool TextFragmentHandler::IsOverTextFragment(const HitTestResult& result) {
   if (!result.InnerNode() || !result.InnerNodeFrame()) {
     return false;
   }
@@ -126,7 +127,7 @@ bool TextFragmentHandler::IsOverTextFragment(HitTestResult result) {
   auto markers = marker_controller.MarkersAroundPosition(
       ToPositionInFlatTree(marker_position),
       DocumentMarker::MarkerTypes::TextFragment());
-  return !markers.IsEmpty();
+  return !markers.empty();
 }
 
 void TextFragmentHandler::ExtractTextFragmentsMatches(
@@ -147,7 +148,7 @@ void TextFragmentHandler::ExtractFirstFragmentRect(
     ExtractFirstFragmentRectCallback callback) {
   gfx::Rect rect_in_viewport;
 
-  if (annotation_agents_.IsEmpty()) {
+  if (annotation_agents_.empty()) {
     std::move(callback).Run(gfx::Rect());
     return;
   }
@@ -204,8 +205,8 @@ void TextFragmentHandler::StartGeneratingForCurrentSelection() {
   }
   GetTextFragmentSelectorGenerator()->Generate(
       *current_selection_range,
-      WTF::Bind(&TextFragmentHandler::DidFinishSelectorGeneration,
-                WrapWeakPersistent(this)));
+      WTF::BindOnce(&TextFragmentHandler::DidFinishSelectorGeneration,
+                    WrapWeakPersistent(this)));
 }
 
 void TextFragmentHandler::Trace(Visitor* visitor) const {
@@ -218,8 +219,11 @@ void TextFragmentHandler::Trace(Visitor* visitor) const {
 void TextFragmentHandler::DidDetachDocumentOrFrame() {
   // Clear out any state in the generator and cancel pending tasks so they
   // don't run after frame detachment.
-  if (GetTextFragmentSelectorGenerator())
+  if (GetTextFragmentSelectorGenerator()) {
     GetTextFragmentSelectorGenerator()->Reset();
+    // The generator is preserved since that's used in RequestSelector to
+    // determine whether to respond with kNotGenerated.
+  }
 
   annotation_agents_.clear();
 }
@@ -259,10 +263,8 @@ bool TextFragmentHandler::ShouldPreemptivelyGenerateFor(LocalFrame* frame) {
     return true;
 
   // Only generate for iframe urls if they are supported
-  return base::FeatureList::IsEnabled(
-             shared_highlighting::kSharedHighlightingAmp) &&
-         shared_highlighting::SupportsLinkGenerationInIframe(
-             GURL(frame->GetDocument()->Url()));
+  return shared_highlighting::SupportsLinkGenerationInIframe(
+      GURL(frame->GetDocument()->Url()));
 }
 
 // static
@@ -275,7 +277,7 @@ void TextFragmentHandler::OpenedContextMenuOverSelection(LocalFrame* frame) {
     return;
   }
 
-  if (frame->Selection().SelectedText().IsEmpty())
+  if (frame->Selection().SelectedText().empty())
     return;
 
   if (!frame->GetTextFragmentHandler())

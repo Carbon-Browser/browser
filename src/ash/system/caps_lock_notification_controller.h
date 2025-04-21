@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace ash {
 
 // Controller class to manage caps lock notification.
 class ASH_EXPORT CapsLockNotificationController
-    : public ImeControllerImpl::Observer {
+    : public ImeController::Observer {
  public:
   CapsLockNotificationController();
 
@@ -26,10 +26,7 @@ class ASH_EXPORT CapsLockNotificationController
 
   static bool IsSearchKeyMappedToCapsLock();
 
-  // See Shell::RegisterProfilePrefs().
-  static void RegisterProfilePrefs(PrefRegistrySimple* registry, bool for_test);
-
-  // ImeControllerImpl::Observer:
+  // ImeController::Observer:
   void OnCapsLockChanged(bool enabled) override;
   void OnKeyboardLayoutNameChanged(const std::string&) override {}
 };

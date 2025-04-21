@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/skia/include/core/SkColor.h"
 
 namespace gfx {
@@ -49,6 +50,10 @@ class ASH_PUBLIC_EXPORT AccessibilityFocusRingController {
   // Hides highlight on screen.
   // TODO(katie): Add |caller_id| to highlights as well.
   virtual void HideHighlights() = 0;
+
+  // Callback used when SetFocusRing is called, for testing.
+  virtual void SetFocusRingObserverForTesting(
+      base::RepeatingCallback<void()> observer) = 0;
 
  protected:
   AccessibilityFocusRingController();

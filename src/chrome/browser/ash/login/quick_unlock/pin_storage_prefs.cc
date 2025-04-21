@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "ash/constants/ash_pref_names.h"
 #include "chrome/browser/ash/login/quick_unlock/pin_backend.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
+#include "chromeos/ash/components/osauth/impl/prefs.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
@@ -15,14 +16,13 @@ namespace quick_unlock {
 
 // static
 void PinStoragePrefs::RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  registry->RegisterStringPref(prefs::kQuickUnlockPinSalt, "");
-  registry->RegisterStringPref(prefs::kQuickUnlockPinSecret, "");
+  ash::RegisterPinStoragePrefs(registry);
 }
 
 PinStoragePrefs::PinStoragePrefs(PrefService* pref_service)
     : pref_service_(pref_service) {}
 
-PinStoragePrefs::~PinStoragePrefs() {}
+PinStoragePrefs::~PinStoragePrefs() = default;
 
 void PinStoragePrefs::AddUnlockAttempt() {
   ++unlock_attempt_count_;

@@ -1,16 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_shim/app_shim_listener.h"
 
 #import <Foundation/Foundation.h>
+#include <bsm/libbsm.h>
 #include <unistd.h>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/path_service.h"
 #include "base/task/thread_pool.h"
@@ -21,10 +22,10 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/mac/app_mode_common.h"
-#include "components/version_info/version_info.h"
+#include "components/variations/net/variations_command_line.h"
 #include "content/public/browser/browser_task_traits.h"
 
-AppShimListener::AppShimListener() {}
+AppShimListener::AppShimListener() = default;
 
 void AppShimListener::Init() {
   has_initialized_ = true;
@@ -81,29 +82,37 @@ void AppShimListener::InitOnBackgroundThread() {
       std::make_unique<apps::MachBootstrapAcceptor>(name_fragment, this);
   mach_acceptor_->Start();
 
-  // Create a symlink containing the current version string. This allows the
-  // shim to load the same framework version as the currently running Chrome
-  // process.
+  // Create a symlink containing the current version string and a bit indicating
+  // whether or not the MojoIpcz feature is enabled. This allows the shim to
+  // load the same framework version as the currently running Chrome process,
+  // and it ensures that both processes are using the same IPC implementation.
   base::FilePath version_path =
       user_data_dir.Append(app_mode::kRunningChromeVersionSymlinkName);
+  const auto config =
+      app_mode::ChromeConnectionConfig::GenerateForCurrentProcess();
   base::DeleteFile(version_path);
-  base::CreateSymbolicLink(base::FilePath(version_info::GetVersionNumber()),
-                           version_path);
+  base::CreateSymbolicLink(config.EncodeAsPath(), version_path);
+
+  if (!variations::VariationsCommandLine::GetForCurrentProcess().WriteToFile(
+          user_data_dir.Append(app_mode::kFeatureStateFileName))) {
+    LOG(ERROR) << "Failed to write feature state to " << user_data_dir;
+  }
 }
 
 void AppShimListener::OnClientConnected(mojo::PlatformChannelEndpoint endpoint,
-                                        base::ProcessId peer_pid) {
-  // TODO(https://crbug.com/1052131): Remove NSLog logging, and move to an
+                                        audit_token_t audit_token) {
+  // TODO(crbug.com/40674145): Remove NSLog logging, and move to an
   // internal debugging URL.
-  NSLog(@"AppShim: Connection received from pid %d", peer_pid);
+  NSLog(@"AppShim: Connection received from pid %d",
+        audit_token_to_pid(audit_token));
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
-      base::BindOnce(&AppShimHostBootstrap::CreateForChannelAndPeerID,
-                     std::move(endpoint), peer_pid));
+      base::BindOnce(&AppShimHostBootstrap::CreateForChannelAndPeerAuditToken,
+                     std::move(endpoint), audit_token));
 }
 
 void AppShimListener::OnServerChannelCreateError() {
-  // TODO(https://crbug.com/272577): Set a timeout and attempt to reconstruct
+  // TODO(crbug.com/41035623): Set a timeout and attempt to reconstruct
   // the channel. Until cases where the error could occur are better known,
   // just reset the acceptor to allow failure to be communicated via the test
   // API.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "base/component_export.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 namespace switches {
 
@@ -23,13 +22,17 @@ COMPONENT_EXPORT(UI_BASE) extern const char kDisableModalAnimations[];
 COMPONENT_EXPORT(UI_BASE) extern const char kShowMacOverlayBorders[];
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS)
-COMPONENT_EXPORT(UI_BASE) extern const char kEnableResourcesFileSharing[];
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+COMPONENT_EXPORT(UI_BASE) extern const char kSystemFontFamily[];
 #endif
 
-COMPONENT_EXPORT(UI_BASE) extern const char kDisableCompositedAntialiasing[];
-COMPONENT_EXPORT(UI_BASE) extern const char kDisableDwmComposition[];
+#if BUILDFLAG(IS_LINUX)
+COMPONENT_EXPORT(UI_BASE) extern const char kUiToolkitFlag[];
+COMPONENT_EXPORT(UI_BASE) extern const char kDisableGtkIme[];
+#endif
+
 COMPONENT_EXPORT(UI_BASE) extern const char kDisableTouchDragDrop[];
+COMPONENT_EXPORT(UI_BASE) extern const char kDRMVirtualConnectorIsExternal[];
 COMPONENT_EXPORT(UI_BASE) extern const char kEnableTouchDragDrop[];
 COMPONENT_EXPORT(UI_BASE) extern const char kForceCaptionStyle[];
 COMPONENT_EXPORT(UI_BASE) extern const char kForceDarkMode[];

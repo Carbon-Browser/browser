@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "content/common/content_export.h"
 #include "media/base/media_resource.h"
@@ -34,7 +35,7 @@ class CONTENT_EXPORT FlingingRendererClient
 
   FlingingRendererClient(
       ClientExtentionPendingReceiver client_extension_receiver,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       std::unique_ptr<media::MojoRenderer> mojo_renderer,
       media::RemotePlayStateChangeCB remote_play_state_change_cb);
 
@@ -47,14 +48,15 @@ class CONTENT_EXPORT FlingingRendererClient
   void Initialize(media::MediaResource* media_resource,
                   media::RendererClient* client,
                   media::PipelineStatusCallback init_cb) override;
+  media::RendererType GetRendererType() override;
 
   // media::mojom::FlingingRendererClientExtension implementation
   void OnRemotePlayStateChange(media::MediaStatus::State state) override;
 
  private:
-  scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
 
-  media::RendererClient* client_;
+  raw_ptr<media::RendererClient> client_;
 
   media::RemotePlayStateChangeCB remote_play_state_change_cb_;
 

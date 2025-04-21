@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -252,7 +252,7 @@ class LanguageSettingsPrivateGetSpellcheckWordsFunction
       const SpellcheckCustomDictionary::Change& dictionary_change) override;
 
   // Returns the list of words from the loaded custom dictionary.
-  std::unique_ptr<base::ListValue> GetSpellcheckWords() const;
+  base::Value::List GetSpellcheckWords() const;
 };
 
 // Implements the languageSettingsPrivate.addSpellcheckWord method.

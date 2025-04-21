@@ -1,20 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_AUDIO_PROCESSOR_CONTROLS_H_
 #define MEDIA_BASE_AUDIO_PROCESSOR_CONTROLS_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "media/base/media_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
 // Audio processing metrics that are reported by the audio service.
 struct MEDIA_EXPORT AudioProcessingStats {
-  absl::optional<double> echo_return_loss;
-  absl::optional<double> echo_return_loss_enhancement;
+  std::optional<double> echo_return_loss;
+  std::optional<double> echo_return_loss_enhancement;
 };
 
 // Interactions with the audio service.

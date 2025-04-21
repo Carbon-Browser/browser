@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "cc/input/main_thread_scrolling_reason.h"
 #include "cc/test/fake_impl_task_runner_provider.h"
 #include "cc/test/fake_layer_tree_host_impl.h"
+#include "cc/test/layer_test_common.h"
 #include "cc/test/test_task_graph_runner.h"
 #include "cc/trees/clip_node.h"
 #include "cc/trees/draw_property_utils.h"
@@ -166,7 +167,7 @@ TEST(PropertyTreeTest, ComputeTransformSiblingSingularAncestor) {
   tree.UpdateTransforms(1);
 
   TransformNode singular;
-  singular.local.matrix().setRC(2, 2, 0.0);
+  singular.local.set_rc(2, 2, 0.0);
   singular.id = tree.Insert(singular, 1);
 
   TransformNode child;
@@ -199,7 +200,7 @@ TEST(PropertyTreeTest, ComputeTransformSiblingSingularAncestor) {
 // Tests that the transform for fixed elements is translated based on the
 // overscroll nodes scroll_offset and that the clip node has an outset based on
 // the overscroll distance.
-TEST(PropertyTreeTest, FixedElementInverseTranslation) {
+TEST(PropertyTreeTest, UndoOverscroll) {
   FakeProtectedSequenceSynchronizer synchronizer;
   PropertyTrees property_trees(synchronizer);
 
@@ -225,13 +226,9 @@ TEST(PropertyTreeTest, FixedElementInverseTranslation) {
   overscroll_node.id = transform_tree.Insert(overscroll_node, 1);
   viewport_property_ids.overscroll_elasticity_transform = overscroll_node.id;
 
-  transform_tree.set_fixed_elements_dont_overscroll(true);
-
   TransformNode fixed_node;
-  fixed_node.is_fixed_to_viewport = true;
+  fixed_node.should_undo_overscroll = true;
   fixed_node.id = transform_tree.Insert(fixed_node, 2);
-
-  EXPECT_TRUE(transform_tree.ShouldUndoOverscroll(&fixed_node));
 
   transform_tree.UpdateTransforms(2,
                                   &viewport_property_ids);  // overscroll_node
@@ -286,7 +283,7 @@ TEST(PropertyTreeTest, TransformsWithFlattening) {
   property_trees.ResetCachedData();
 
   gfx::Transform flattened_rotation_about_x = rotation_about_x;
-  flattened_rotation_about_x.FlattenTo2d();
+  flattened_rotation_about_x.Flatten();
 
   gfx::Transform to_target;
   property_trees.GetToTarget(child, effect_parent, &to_target);
@@ -462,7 +459,7 @@ TEST(PropertyTreeTest, FlatteningWhenDestinationHasOnlyFlatAncestors) {
   draw_property_utils::ComputeTransforms(&tree, ViewportPropertyIds());
 
   gfx::Transform flattened_rotation_about_x = rotation_about_x;
-  flattened_rotation_about_x.FlattenTo2d();
+  flattened_rotation_about_x.Flatten();
 
   gfx::Transform grand_child_to_parent;
   tree.CombineTransformsBetween(grand_child, parent, &grand_child_to_parent);
@@ -532,7 +529,7 @@ TEST(PropertyTreeTest, SingularTransformSnapTest) {
 
   gfx::Transform rounded;
   property_trees.GetToTarget(child, effect_parent, &rounded);
-  rounded.RoundTranslationComponents();
+  rounded.Round2dTranslationComponents();
   property_trees.GetToTarget(child, effect_parent, &to_target);
   EXPECT_NE(to_target, rounded);
 }
@@ -675,7 +672,7 @@ TEST(EffectTreeTest, CopyOutputRequestsThatBecomeIllegalAreDropped) {
 // (fractionally) larger due to floating point precision errors, and if the
 // scroll offset is near zero that can naively lead to a negative offset being
 // returned which is not desirable.
-TEST(ScrollTreeTest, GetPixelSnappedScrollOffsetNegativeOffset) {
+TEST(ScrollTreeTest, GetScrollOffsetForScrollTimelineNegativeOffset) {
   FakeProtectedSequenceSynchronizer synchronizer;
   PropertyTrees property_trees(synchronizer);
   ScrollTree& scroll_tree = property_trees.scroll_tree_mutable();
@@ -697,7 +694,8 @@ TEST(ScrollTreeTest, GetPixelSnappedScrollOffsetNegativeOffset) {
   transform_tree.Node(transform_node_id)->needs_local_transform_update = false;
 
   // The returned offset should be clamped at a minimum of 0.
-  gfx::PointF offset = scroll_tree.GetPixelSnappedScrollOffset(scroll_node_id);
+  gfx::PointF offset = scroll_tree.GetScrollOffsetForScrollTimeline(
+      *scroll_tree.Node(scroll_node_id));
   EXPECT_EQ(offset.y(), 0);
 }
 
@@ -721,8 +719,9 @@ TEST(ScrollTreeTest, PushScrollUpdatesFromMainThreadIntegerDelta) {
   // Set up FakeLayerTreeHostImpl.
   TestTaskGraphRunner task_graph_runner;
   FakeImplTaskRunnerProvider impl_task_runner_provider;
-  FakeLayerTreeHostImpl host_impl(
-      LayerTreeSettings(), &impl_task_runner_provider, &task_graph_runner);
+  FakeLayerTreeHostImpl host_impl(CommitToPendingTreeLayerTreeSettings(),
+                                  &impl_task_runner_provider,
+                                  &task_graph_runner);
   host_impl.CreatePendingTree();
 
   // Set up pending property trees.

@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://tab-strip.top-chrome/alert_indicator.js';
 
-import {AlertIndicatorElement} from 'chrome://tab-strip.top-chrome/alert_indicator.js';
-
+import type {AlertIndicatorElement} from 'chrome://tab-strip.top-chrome/alert_indicator.js';
 import {assertEquals, assertFalse, assertNotEquals} from 'chrome://webui-test/chai_assert.js';
 
 suite('AlertIndicator', () => {
@@ -14,7 +13,7 @@ suite('AlertIndicator', () => {
   let alertIndicatorStyle: CSSStyleDeclaration;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     alertIndicatorElement = document.createElement('tabstrip-alert-indicator');
     document.body.appendChild(alertIndicatorElement);

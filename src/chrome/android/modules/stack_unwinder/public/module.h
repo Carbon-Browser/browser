@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
+#include "base/profiler/native_unwinder_android_memory_regions_map.h"
 #include "base/profiler/unwinder.h"
 #include "chrome/android/features/stack_unwinder/public/function_types.h"
-#include "chrome/android/features/stack_unwinder/public/memory_regions_map.h"
 
 namespace stack_unwinder {
 
@@ -29,21 +29,15 @@ class Module {
   // Attempts to load the module. May be invoked only if IsInstalled().
   static std::unique_ptr<Module> Load();
 
-  // Returns a map representing the current memory regions (modules, stacks,
-  // etc.).
-  std::unique_ptr<MemoryRegionsMap> CreateMemoryRegionsMap();
-
-  // Creates a new native stack unwinder.
-  std::unique_ptr<base::Unwinder> CreateNativeUnwinder(
-      MemoryRegionsMap* memory_regions_map,
-      uintptr_t exclude_module_with_base_address);
+  // Stub function
+  // TODO(crbug.com/375463618): Remove this function and clean up the support
+  // machinery for executing native code.
+  void DoNothing();
 
  private:
-  Module(CreateMemoryRegionsMapFunction create_memory_regions_map,
-         CreateNativeUnwinderFunction create_native_unwinder);
+  explicit Module(DoNothingFunction do_nothing);
 
-  const CreateMemoryRegionsMapFunction create_memory_regions_map_;
-  const CreateNativeUnwinderFunction create_native_unwinder_;
+  const DoNothingFunction do_nothing_;
 };
 
 }  // namespace stack_unwinder

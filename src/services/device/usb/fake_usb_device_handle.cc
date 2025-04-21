@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/notreached.h"
 #include "services/device/usb/usb_device.h"
@@ -88,7 +88,9 @@ void FakeUsbDeviceHandle::ControlTransfer(
     }
 
     if (direction == UsbTransferDirection::INBOUND) {
-      memcpy(buffer->front(), &data_[position_], bytes_transferred);
+      auto source_data = UNSAFE_TODO(base::span(data_.get(), size_));
+      base::span(buffer->as_vector())
+          .copy_prefix_from(source_data.subspan(position_, bytes_transferred));
       position_ += bytes_transferred;
     }
 

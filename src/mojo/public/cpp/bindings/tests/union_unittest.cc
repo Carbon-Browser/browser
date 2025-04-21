@@ -1,15 +1,23 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
+
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/rand_util.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/lib/array_internal.h"
 #include "mojo/public/cpp/bindings/lib/message_fragment.h"
@@ -21,8 +29,8 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/tests/union_unittest.test-mojom.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
-#include "mojo/public/interfaces/bindings/tests/test_structs.mojom.h"
-#include "mojo/public/interfaces/bindings/tests/test_unions.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_structs.test-mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_unions.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {
@@ -57,9 +65,8 @@ size_t SerializeUnion(InputType& input,
   return message->payload_buffer()->cursor() - payload_start;
 }
 
-template <typename DataViewType, typename InputType>
+template <typename DataViewType, bool nullable_elements, typename InputType>
 size_t SerializeArray(InputType& input,
-                      bool nullable_elements,
                       mojo::Message* message,
                       typename DataViewType::Data_** out_data) {
   *message = mojo::Message(0, 0, 0, 0, nullptr);
@@ -67,8 +74,8 @@ size_t SerializeArray(InputType& input,
 
   mojo::internal::MessageFragment<typename DataViewType::Data_> fragment(
       *message);
-  mojo::internal::ContainerValidateParams validate_params(0, nullable_elements,
-                                                          nullptr);
+  constexpr const mojo::internal::ContainerValidateParams& validate_params =
+      mojo::internal::GetArrayValidator<0, nullable_elements, nullptr>();
   mojo::internal::Serialize<DataViewType>(input, fragment, &validate_params);
   *out_data = fragment.is_null() ? nullptr : fragment.data();
   return message->payload_buffer()->cursor() - payload_start;
@@ -281,6 +288,7 @@ TEST(UnionTest, SerializeNotNull) {
 }
 
 TEST(UnionTest, SerializeIsNullInlined) {
+  base::MetricsSubSampler::ScopedNeverSampleForTesting no_subsampling_;
   PodUnionPtr pod;
 
   Message message(0, 0, 0, 0, nullptr);
@@ -292,6 +300,28 @@ TEST(UnionTest, SerializeIsNullInlined) {
   mojo::internal::Serialize<PodUnionDataView>(pod, fragment, true);
   EXPECT_TRUE(fragment->is_null());
   EXPECT_EQ(16U + sizeof(mojo::internal::MessageHeader), buffer.cursor());
+
+  PodUnionPtr pod2;
+  mojo::internal::Deserialize<PodUnionDataView>(fragment.data(), &pod2,
+                                                nullptr);
+  EXPECT_TRUE(pod2.is_null());
+}
+
+TEST(UnionTest, SerializeIsNullInlinedV3) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(kMojoMessageAlwaysUseLatestVersion);
+
+  PodUnionPtr pod;
+
+  Message message(0, 0, 0, 0, nullptr);
+  mojo::internal::Buffer& buffer = *message.payload_buffer();
+  EXPECT_EQ(sizeof(mojo::internal::MessageHeaderV3), buffer.cursor());
+
+  mojo::internal::MessageFragment<internal::PodUnion_Data> fragment(message);
+  fragment.Allocate();
+  mojo::internal::Serialize<PodUnionDataView>(pod, fragment, true);
+  EXPECT_TRUE(fragment->is_null());
+  EXPECT_EQ(16U + sizeof(mojo::internal::MessageHeaderV3), buffer.cursor());
 
   PodUnionPtr pod2;
   mojo::internal::Deserialize<PodUnionDataView>(fragment.data(), &pod2,
@@ -486,8 +516,8 @@ TEST(UnionTest, PodUnionInArraySerialization) {
 
   mojo::Message message;
   mojo::internal::Array_Data<internal::PodUnion_Data>* data;
-  EXPECT_EQ(40U, SerializeArray<ArrayDataView<PodUnionDataView>>(
-                     array, false, &message, &data));
+  EXPECT_EQ(40U, (SerializeArray<ArrayDataView<PodUnionDataView>, false>(
+                     array, &message, &data)));
 
   std::vector<PodUnionPtr> array2;
   mojo::internal::Deserialize<ArrayDataView<PodUnionDataView>>(data, &array2,
@@ -504,8 +534,8 @@ TEST(UnionTest, PodUnionInArraySerializationWithNull) {
 
   mojo::Message message;
   mojo::internal::Array_Data<internal::PodUnion_Data>* data;
-  EXPECT_EQ(40U, SerializeArray<ArrayDataView<PodUnionDataView>>(
-                     array, true, &message, &data));
+  EXPECT_EQ(40U, (SerializeArray<ArrayDataView<PodUnionDataView>, true>(
+                     array, &message, &data)));
 
   std::vector<PodUnionPtr> array2;
   mojo::internal::Deserialize<ArrayDataView<PodUnionDataView>>(data, &array2,
@@ -523,8 +553,8 @@ TEST(UnionTest, ObjectUnionInArraySerialization) {
 
   mojo::Message message;
   mojo::internal::Array_Data<internal::ObjectUnion_Data>* data;
-  const size_t size = SerializeArray<ArrayDataView<ObjectUnionDataView>>(
-      array, false, &message, &data);
+  const size_t size = SerializeArray<ArrayDataView<ObjectUnionDataView>, false>(
+      array, &message, &data);
   EXPECT_EQ(72U, size);
 
   std::vector<char> new_buf;
@@ -536,7 +566,8 @@ TEST(UnionTest, ObjectUnionInArraySerialization) {
           new_buf.data());
   mojo::internal::ValidationContext validation_context(
       data, static_cast<uint32_t>(size), 0, 0);
-  mojo::internal::ContainerValidateParams validate_params(0, false, nullptr);
+  constexpr const mojo::internal::ContainerValidateParams& validate_params =
+      mojo::internal::GetArrayValidator<0, false, nullptr>();
   ASSERT_TRUE(mojo::internal::Array_Data<internal::ObjectUnion_Data>::Validate(
       data, &validation_context, &validate_params));
 
@@ -675,9 +706,10 @@ TEST(UnionTest, PodUnionInMapSerialization) {
 
   using DataType = typename mojo::internal::MojomTypeTraits<MojomType>::Data;
   mojo::internal::MessageFragment<DataType> fragment(message);
-  mojo::internal::ContainerValidateParams validate_params(
-      new mojo::internal::ContainerValidateParams(0, false, nullptr),
-      new mojo::internal::ContainerValidateParams(0, false, nullptr));
+  constexpr const mojo::internal::ContainerValidateParams& validate_params =
+      mojo::internal::GetMapValidator<
+          mojo::internal::GetArrayValidator<0, false, nullptr>(),
+          mojo::internal::GetArrayValidator<0, false, nullptr>()>();
   mojo::internal::Serialize<MojomType>(map, fragment, &validate_params);
   EXPECT_EQ(120U, message.payload_buffer()->cursor() - payload_start);
 
@@ -700,9 +732,10 @@ TEST(UnionTest, PodUnionInMapSerializationWithNull) {
 
   using DataType = mojo::internal::MojomTypeTraits<MojomType>::Data;
   mojo::internal::MessageFragment<DataType> fragment(message);
-  mojo::internal::ContainerValidateParams validate_params(
-      new mojo::internal::ContainerValidateParams(0, false, nullptr),
-      new mojo::internal::ContainerValidateParams(0, true, nullptr));
+  constexpr const mojo::internal::ContainerValidateParams& validate_params =
+      mojo::internal::GetMapValidator<
+          mojo::internal::GetArrayValidator<0, false, nullptr>(),
+          mojo::internal::GetArrayValidator<0, true, nullptr>()>();
   mojo::internal::Serialize<MojomType>(map, fragment, &validate_params);
   EXPECT_EQ(120U, message.payload_buffer()->cursor() - payload_start);
 
@@ -1143,6 +1176,19 @@ TEST(UnionTest, InlineUnionAllocationWithNonPODFirstField) {
   // Regression test for https://crbug.com/1114366. Should not crash.
   UnionWithStringForFirstFieldPtr u;
   u = UnionWithStringForFirstField::NewS("hey");
+}
+
+TEST(UnionTest, UnionObjectHash) {
+  constexpr size_t kTestSeed = 31;
+  UnionWithStringForFirstFieldPtr union1(
+      UnionWithStringForFirstField::NewS("hello world"));
+  UnionWithStringForFirstFieldPtr union2(
+      UnionWithStringForFirstField::NewS("hello world"));
+
+  EXPECT_EQ(union1->Hash(kTestSeed), union2->Hash(kTestSeed));
+
+  union2->set_s("hello universe");
+  EXPECT_NE(union1->Hash(kTestSeed), union2->Hash(kTestSeed));
 }
 
 class ExtensibleTestUnionExchange

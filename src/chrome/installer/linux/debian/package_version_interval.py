@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -130,13 +130,13 @@ def parse_dep(dep):
   Returns:
       A PackageVersionInterval.
   """
-  package_name_regex = '[a-z][a-z0-9\+\-\.]+'
+  package_name_regex = r'[a-z][a-z0-9\+\-\.]+'
   match = re.match('^(%s)$' % package_name_regex, dep)
   if match:
     return PackageVersionInterval(dep, match.group(1),
         PackageVersionIntervalEndpoint(True, None, None),
         PackageVersionIntervalEndpoint(True, None, None))
-  match = re.match('^(%s) \(([\>\=\<]+) ([\~0-9A-Za-z\+\-\.\:]+)\)$' %
+  match = re.match(r'^(%s) \(([\>\=\<]+) ([\~0-9A-Za-z\+\-\.\:]+)\)$' %
                    package_name_regex, dep)
   if match:
     (start, end) = version_interval_endpoints_from_exp(
@@ -147,7 +147,7 @@ def parse_dep(dep):
 
 
 def parse_interval_set(deps):
-  """Parses a disjunction of package version requirements.
+  r"""Parses a disjunction of package version requirements.
 
   Args:
       deps: A string of the format

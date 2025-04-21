@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "chrome/common/webui_url_constants.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
+#include "components/security_interstitials/core/metrics_helper.h"
 #include "content/public/browser/web_contents.h"
 
 // static
@@ -51,11 +52,17 @@ void HttpsOnlyModeControllerClient::Proceed() {
           profile->GetSSLHostStateDelegate());
   // StatefulSSLHostStateDelegate can be null during tests.
   if (state) {
-    state->AllowHttpForHost(request_url_.host(), web_contents_);
+    // Notifies the browser process when a HTTP exception is allowed in
+    // HTTPS-First Mode.
+    web_contents_->SetAlwaysSendSubresourceNotifications();
+
+    state->AllowHttpForHost(
+        request_url_.host(),
+        web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
   }
   auto* tab_helper = HttpsOnlyModeTabHelper::FromWebContents(web_contents_);
   tab_helper->set_is_navigation_upgraded(false);
-  tab_helper->set_is_navigation_fallback(true);
+  tab_helper->set_is_navigation_fallback(false);
   web_contents_->GetController().Reload(content::ReloadType::NORMAL, false);
   // The failed https navigation will remain as a forward entry, so it needs to
   // be removed.

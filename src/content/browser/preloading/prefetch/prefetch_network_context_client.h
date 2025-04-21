@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define CONTENT_BROWSER_PRELOADING_PREFETCH_PREFETCH_NETWORK_CONTEXT_CLIENT_H_
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "services/network/public/mojom/network_context.mojom.h"
+#include "services/network/public/cpp/network_service_buildflags.h"
+#include "services/network/public/mojom/network_context_client.mojom.h"
 
 namespace content {
 
@@ -31,7 +31,7 @@ class PrefetchNetworkContextClient
       const std::vector<url::Origin>& origins,
       OnCanSendReportingReportsCallback callback) override;
   void OnCanSendDomainReliabilityUpload(
-      const GURL& origin,
+      const url::Origin& origin,
       OnCanSendDomainReliabilityUploadCallback callback) override;
 #if BUILDFLAG(IS_ANDROID)
   void OnGenerateHttpNegotiateAuthToken(
@@ -44,12 +44,11 @@ class PrefetchNetworkContextClient
 #if BUILDFLAG(IS_CHROMEOS)
   void OnTrustAnchorUsed() override;
 #endif
-  void OnTrustTokenIssuanceDivertedToSystem(
-      network::mojom::FulfillTrustTokenIssuanceRequestPtr request,
-      OnTrustTokenIssuanceDivertedToSystemCallback callback) override;
+#if BUILDFLAG(IS_CT_SUPPORTED)
   void OnCanSendSCTAuditingReport(
       OnCanSendSCTAuditingReportCallback callback) override;
   void OnNewSCTAuditingReportSent() override;
+#endif
 };
 
 }  // namespace content

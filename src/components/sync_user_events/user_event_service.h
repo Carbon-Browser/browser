@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 
 namespace syncer {
 
-class ModelTypeControllerDelegate;
+class DataTypeControllerDelegate;
 
 class UserEventService : public KeyedService {
  public:
@@ -33,7 +33,7 @@ class UserEventService : public KeyedService {
       const sync_pb::UserEventSpecifics& specifics) = 0;
 
   // Returns the underlying Sync integration point.
-  virtual base::WeakPtr<syncer::ModelTypeControllerDelegate>
+  virtual base::WeakPtr<syncer::DataTypeControllerDelegate>
   GetControllerDelegate() = 0;
 };
 

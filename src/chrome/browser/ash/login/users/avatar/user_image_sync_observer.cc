@@ -1,15 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/users/avatar/user_image_sync_observer.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "chrome/browser/ash/login/users/avatar/user_image_manager.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
+#include "base/functional/bind.h"
+#include "chrome/browser/ash/login/users/avatar/user_image_manager_impl.h"
+#include "chrome/browser/ash/login/users/avatar/user_image_manager_registry.h"
 #include "chrome/browser/ash/login/users/default_user_image/default_user_images.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/prefs/pref_service_syncable_util.h"
@@ -19,7 +20,6 @@
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
@@ -31,14 +31,14 @@ const char kImageIndex[] = "image_index";
 
 bool IsIndexSupported(int index) {
   return default_user_image::IsValidIndex(index) ||
-         (index == user_manager::User::USER_IMAGE_PROFILE);
+         (index == user_manager::UserImage::Type::kProfile);
 }
 
 }  // anonymous namespace
 
 UserImageSyncObserver::UserImageSyncObserver(const user_manager::User* user)
     : user_(user),
-      prefs_(NULL),
+      prefs_(nullptr),
       is_synced_(false),
       local_image_changed_(false) {
   user_manager::UserManager::Get()->AddObserver(this);
@@ -48,16 +48,19 @@ UserImageSyncObserver::UserImageSyncObserver(const user_manager::User* user)
   } else {
     auto* session_manager = session_manager::SessionManager::Get();
     // SessionManager might not exist in unit tests.
-    if (session_manager)
+    if (session_manager) {
       session_observation_.Observe(session_manager);
+    }
   }
 }
 
 UserImageSyncObserver::~UserImageSyncObserver() {
-  if (!is_synced_ && prefs_)
+  if (!is_synced_ && prefs_) {
     prefs_->RemoveObserver(this);
-  if (pref_change_registrar_)
+  }
+  if (pref_change_registrar_) {
     pref_change_registrar_->RemoveAll();
+  }
 
   user_manager::UserManager::Get()->RemoveObserver(this);
 }
@@ -78,9 +81,7 @@ void UserImageSyncObserver::OnProfileGained(Profile* profile) {
       kUserImageInfo,
       base::BindRepeating(&UserImageSyncObserver::OnPreferenceChanged,
                           base::Unretained(this)));
-  is_synced_ = chromeos::features::IsSyncSettingsCategorizationEnabled()
-                   ? prefs_->AreOsPriorityPrefsSyncing()
-                   : prefs_->IsPrioritySyncing();
+  is_synced_ = prefs_->AreOsPriorityPrefsSyncing();
   if (!is_synced_) {
     prefs_->AddObserver(this);
   } else {
@@ -109,8 +110,9 @@ void UserImageSyncObserver::OnPreferenceChanged(const std::string& pref_name) {
 }
 
 void UserImageSyncObserver::OnUserProfileLoaded(const AccountId& account_id) {
-  if (user_->GetAccountId() != account_id)
+  if (user_->GetAccountId() != account_id) {
     return;
+  }
 
   Profile* profile = ProfileHelper::Get()->GetProfileByAccountId(account_id);
   DCHECK(profile);
@@ -119,16 +121,15 @@ void UserImageSyncObserver::OnUserProfileLoaded(const AccountId& account_id) {
 }
 
 void UserImageSyncObserver::OnUserImageChanged(const user_manager::User& user) {
-  if (is_synced_)
+  if (is_synced_) {
     UpdateSyncedImageFromLocal();
-  else
+  } else {
     local_image_changed_ = true;
+  }
 }
 
 void UserImageSyncObserver::OnIsSyncingChanged() {
-  is_synced_ = chromeos::features::IsSyncSettingsCategorizationEnabled()
-                   ? prefs_->AreOsPriorityPrefsSyncing()
-                   : prefs_->IsPrioritySyncing();
+  is_synced_ = prefs_->AreOsPriorityPrefsSyncing();
   if (is_synced_) {
     prefs_->RemoveObserver(this);
     OnInitialSync();
@@ -138,14 +139,15 @@ void UserImageSyncObserver::OnIsSyncingChanged() {
 void UserImageSyncObserver::UpdateSyncedImageFromLocal() {
   int local_index = user_->image_index();
   if (!IsIndexSupported(local_index)) {
-    local_index = user_manager::User::USER_IMAGE_INVALID;
+    local_index = user_manager::UserImage::Type::kInvalid;
   }
   int synced_index;
-  if (GetSyncedImageIndex(&synced_index) && (synced_index == local_index))
+  if (GetSyncedImageIndex(&synced_index) && (synced_index == local_index)) {
     return;
-  DictionaryPrefUpdate update(prefs_, kUserImageInfo);
-  base::Value* dict = update.Get();
-  dict->SetIntKey(kImageIndex, local_index);
+  }
+  ScopedDictPrefUpdate update(prefs_, kUserImageInfo);
+  base::Value::Dict& dict = update.Get();
+  dict.Set(kImageIndex, local_index);
   VLOG(1) << "Saved avatar index " << local_index << " to sync.";
 }
 
@@ -153,11 +155,12 @@ void UserImageSyncObserver::UpdateLocalImageFromSynced() {
   int synced_index;
   GetSyncedImageIndex(&synced_index);
   int local_index = user_->image_index();
-  if ((synced_index == local_index) || !IsIndexSupported(synced_index))
+  if ((synced_index == local_index) || !IsIndexSupported(synced_index)) {
     return;
-  UserImageManager* image_manager =
-      ChromeUserManager::Get()->GetUserImageManager(user_->GetAccountId());
-  if (synced_index == user_manager::User::USER_IMAGE_PROFILE) {
+  }
+  UserImageManagerImpl* image_manager =
+      UserImageManagerRegistry::Get()->GetManager(user_->GetAccountId());
+  if (synced_index == user_manager::UserImage::Type::kProfile) {
     image_manager->SaveUserImageFromProfileImage();
   } else {
     image_manager->SaveUserDefaultImageIndex(synced_index);
@@ -166,11 +169,11 @@ void UserImageSyncObserver::UpdateLocalImageFromSynced() {
 }
 
 bool UserImageSyncObserver::GetSyncedImageIndex(int* index) {
-  *index = user_manager::User::USER_IMAGE_INVALID;
-  const base::Value::Dict& dict = prefs_->GetValueDict(kUserImageInfo);
-  absl::optional<int> maybe_index = dict.FindInt(kImageIndex);
+  *index = user_manager::UserImage::Type::kInvalid;
+  const base::Value::Dict& dict = prefs_->GetDict(kUserImageInfo);
+  std::optional<int> maybe_index = dict.FindInt(kImageIndex);
   if (!maybe_index.has_value()) {
-    *index = user_manager::User::USER_IMAGE_INVALID;
+    *index = user_manager::UserImage::Type::kInvalid;
     return false;
   }
 

@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/mediastream/transferred_media_stream_track.h"
 
+#include <cstdint>
 #include <memory>
 
-#include "base/callback_helpers.h"
-#include "base/strings/stringprintf.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_double_range.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_long_range.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_media_stream_track_state.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_capabilities.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_constraints.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_settings.h"
@@ -29,21 +30,20 @@
 #include "third_party/blink/renderer/modules/mediastream/apply_constraints_request.h"
 #include "third_party/blink/renderer/modules/mediastream/browser_capture_media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/media_constraints_impl.h"
-#include "third_party/blink/renderer/modules/mediastream/media_error_state.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_track_video_stats.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_utils.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_video_track.h"
 #include "third_party/blink/renderer/modules/mediastream/overconstrained_error.h"
 #include "third_party/blink/renderer/modules/mediastream/processed_local_audio_source.h"
-#include "third_party/blink/renderer/modules/mediastream/user_media_controller.h"
+#include "third_party/blink/renderer/modules/mediastream/user_media_client.h"
 #include "third_party/blink/renderer/modules/mediastream/webaudio_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_web_audio_source.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -53,7 +53,9 @@ TransferredMediaStreamTrack::TransferredMediaStreamTrack(
     ExecutionContext* execution_context,
     const TransferredValues& data)
     : transferred_component_(
-          MakeGarbageCollected<TransferredMediaStreamComponent>()),
+          MakeGarbageCollected<TransferredMediaStreamComponent>(
+              TransferredMediaStreamComponent::TransferredValues{.id =
+                                                                     data.id})),
       execution_context_(execution_context),
       data_(data) {}
 
@@ -88,9 +90,10 @@ bool TransferredMediaStreamTrack::enabled() const {
 void TransferredMediaStreamTrack::setEnabled(bool enabled) {
   if (track_) {
     track_->setEnabled(enabled);
+    return;
   }
-  // TODO(https://crbug.com/1288839): Save and forward to track_ once it's
-  // initialized.
+  setter_call_order_.push_back(SET_ENABLED);
+  enabled_state_list_.push_back(enabled);
 }
 
 bool TransferredMediaStreamTrack::muted() const {
@@ -110,26 +113,31 @@ String TransferredMediaStreamTrack::ContentHint() const {
 void TransferredMediaStreamTrack::SetContentHint(const String& content_hint) {
   if (track_) {
     track_->SetContentHint(content_hint);
+    return;
   }
-  // TODO(https://crbug.com/1288839): Save and forward to track_ once it's
-  // initialized.
+  setter_call_order_.push_back(SET_CONTENT_HINT);
+  content_hint_list_.push_back(content_hint);
 }
 
-String TransferredMediaStreamTrack::readyState() const {
+V8MediaStreamTrackState TransferredMediaStreamTrack::readyState() const {
   if (track_) {
     return track_->readyState();
   }
-  return ReadyStateToString(data_.ready_state);
+  return ReadyStateToV8TrackState(data_.ready_state);
 }
 
 MediaStreamTrack* TransferredMediaStreamTrack::clone(
-    ScriptState* script_state) {
+    ExecutionContext* execution_context) {
   if (track_) {
-    return track_->clone(script_state);
+    return track_->clone(execution_context);
   }
-  // TODO(https://crbug.com/1288839): Create another TransferredMediaStreamTrack
-  // and call track_->clone() once track_ is initialized.
-  return nullptr;
+
+  auto* cloned_tmst = MakeGarbageCollected<TransferredMediaStreamTrack>(
+      execution_context, data_);
+
+  setter_call_order_.push_back(CLONE);
+  clone_list_.push_back(cloned_tmst);
+  return cloned_tmst;
 }
 
 void TransferredMediaStreamTrack::stopTrack(
@@ -165,6 +173,15 @@ MediaTrackSettings* TransferredMediaStreamTrack::getSettings() const {
   return MediaTrackSettings::Create();
 }
 
+V8UnionMediaStreamTrackAudioStatsOrMediaStreamTrackVideoStats*
+TransferredMediaStreamTrack::stats() {
+  if (track_) {
+    return track_->stats();
+  }
+  // TODO(https://crbug.com/1288839): return the transferred value.
+  return nullptr;
+}
+
 CaptureHandle* TransferredMediaStreamTrack::getCaptureHandle() const {
   if (track_) {
     return track_->getCaptureHandle();
@@ -173,22 +190,25 @@ CaptureHandle* TransferredMediaStreamTrack::getCaptureHandle() const {
   return CaptureHandle::Create();
 }
 
-ScriptPromise TransferredMediaStreamTrack::applyConstraints(
+ScriptPromise<IDLUndefined> TransferredMediaStreamTrack::applyConstraints(
     ScriptState* script_state,
     const MediaTrackConstraints* constraints) {
   if (track_) {
     return track_->applyConstraints(script_state, constraints);
   }
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(script_state);
+  auto promise = resolver->Promise();
   applyConstraints(resolver, constraints);
   return promise;
 }
 
 void TransferredMediaStreamTrack::applyConstraints(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLUndefined>* resolver,
     const MediaTrackConstraints* constraints) {
-  constraints_list_.push_back(std::make_pair(resolver, constraints));
+  setter_call_order_.push_back(APPLY_CONSTRAINTS);
+  constraints_list_.push_back(
+      MakeGarbageCollected<ConstraintsPair>(resolver, constraints));
 }
 
 void TransferredMediaStreamTrack::SetImplementation(MediaStreamTrack* track) {
@@ -196,10 +216,32 @@ void TransferredMediaStreamTrack::SetImplementation(MediaStreamTrack* track) {
   transferred_component_.Clear();
 
   // Replaying mutations which happened before this point.
-  for (auto it : constraints_list_) {
-    track->applyConstraints(it.first, it.second);
+  for (const auto& setter_function : setter_call_order_) {
+    switch (setter_function) {
+      case APPLY_CONSTRAINTS: {
+        const auto& entry = constraints_list_.front();
+        track->applyConstraints(entry->resolver, entry->constraints);
+        constraints_list_.pop_front();
+        break;
+      }
+      case SET_CONTENT_HINT: {
+        track->SetContentHint(content_hint_list_.front());
+        content_hint_list_.pop_front();
+        break;
+      }
+      case SET_ENABLED: {
+        track->setEnabled(enabled_state_list_.front());
+        enabled_state_list_.pop_front();
+        break;
+      }
+      case CLONE: {
+        MediaStreamTrack* real_track_clone = track->clone(execution_context_);
+        clone_list_.front()->SetImplementation(real_track_clone);
+        clone_list_.pop_front();
+        break;
+      }
+    }
   }
-  constraints_list_.clear();
 
   // Set up an EventPropagator helper to forward any events fired on track so
   // that they're re-dispatched to anything that's listening on this.
@@ -213,6 +255,20 @@ void TransferredMediaStreamTrack::SetImplementation(MediaStreamTrack* track) {
     track_->AddObserver(observer);
   }
   observers_.clear();
+}
+
+void TransferredMediaStreamTrack::SetComponentImplementation(
+    MediaStreamComponent* component) {
+  transferred_component_->SetImplementation(component);
+}
+
+void TransferredMediaStreamTrack::SetInitialConstraints(
+    const MediaConstraints& constraints) {
+  if (track_) {
+    track_->SetInitialConstraints(constraints);
+  }
+  // TODO(https://crbug.com/1288839): Save and forward to track_ once it's
+  // initialized.
 }
 
 void TransferredMediaStreamTrack::SetConstraints(
@@ -235,7 +291,7 @@ MediaStreamComponent* TransferredMediaStreamTrack::Component() const {
   if (track_) {
     return track_->Component();
   }
-  return transferred_component_;
+  return transferred_component_.Get();
 }
 
 bool TransferredMediaStreamTrack::Ended() const {
@@ -261,6 +317,15 @@ void TransferredMediaStreamTrack::UnregisterMediaStream(MediaStream* stream) {
   // initialized.
 }
 
+void TransferredMediaStreamTrack::RegisterSink(
+    SpeechRecognitionMediaStreamAudioSink* sink) {
+  if (track_) {
+    track_->RegisterSink(sink);
+  }
+  // TODO(https://crbug.com/1288839): Save and forward to track_ once it's
+  // initialized.
+}
+
 // EventTarget
 const AtomicString& TransferredMediaStreamTrack::InterfaceName() const {
   // TODO(https://crbug.com/1288839): Should TMST have its own interface name?
@@ -268,7 +333,7 @@ const AtomicString& TransferredMediaStreamTrack::InterfaceName() const {
 }
 
 ExecutionContext* TransferredMediaStreamTrack::GetExecutionContext() const {
-  return execution_context_;
+  return execution_context_.Get();
 }
 
 void TransferredMediaStreamTrack::AddedEventListener(
@@ -289,9 +354,12 @@ bool TransferredMediaStreamTrack::HasPendingActivity() const {
 }
 
 std::unique_ptr<AudioSourceProvider>
-TransferredMediaStreamTrack::CreateWebAudioSource(int context_sample_rate) {
+TransferredMediaStreamTrack::CreateWebAudioSource(
+    int context_sample_rate,
+    base::TimeDelta platform_buffer_duration) {
   if (track_) {
-    return track_->CreateWebAudioSource(context_sample_rate);
+    return track_->CreateWebAudioSource(context_sample_rate,
+                                        platform_buffer_duration);
   }
   // TODO(https://crbug.com/1288839): Create one based on transferred data?
   return nullptr;
@@ -305,24 +373,32 @@ ImageCapture* TransferredMediaStreamTrack::GetImageCapture() {
   return nullptr;
 }
 
-absl::optional<base::UnguessableToken>
-TransferredMediaStreamTrack::serializable_session_id() const {
+std::optional<const MediaStreamDevice> TransferredMediaStreamTrack::device()
+    const {
   if (track_) {
-    return track_->serializable_session_id();
+    return track_->device();
   }
   // TODO(https://crbug.com/1288839): Return transferred data
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
-void TransferredMediaStreamTrack::CloseFocusWindowOfOpportunity() {
+void TransferredMediaStreamTrack::BeingTransferred(
+    const base::UnguessableToken& transfer_id) {
   if (track_) {
-    track_->CloseFocusWindowOfOpportunity();
+    track_->BeingTransferred(transfer_id);
+    stopTrack(GetExecutionContext());
+    return;
   }
   // TODO(https://crbug.com/1288839): Save and forward to track_ once it's
   // initialized.
 }
-#endif
+
+bool TransferredMediaStreamTrack::TransferAllowed(String& message) const {
+  if (track_) {
+    return track_->TransferAllowed(message);
+  }
+  return clone_list_.empty();
+}
 
 void TransferredMediaStreamTrack::AddObserver(Observer* observer) {
   if (track_) {
@@ -363,6 +439,19 @@ void TransferredMediaStreamTrack::Trace(Visitor* visitor) const {
   visitor->Trace(execution_context_);
   visitor->Trace(event_propagator_);
   visitor->Trace(observers_);
+  visitor->Trace(constraints_list_);
+  visitor->Trace(clone_list_);
+}
+
+TransferredMediaStreamTrack::ConstraintsPair::ConstraintsPair(
+    ScriptPromiseResolver<IDLUndefined>* resolver,
+    const MediaTrackConstraints* constraints)
+    : resolver(resolver), constraints(constraints) {}
+
+void TransferredMediaStreamTrack::ConstraintsPair::Trace(
+    Visitor* visitor) const {
+  visitor->Trace(resolver);
+  visitor->Trace(constraints);
 }
 
 }  // namespace blink

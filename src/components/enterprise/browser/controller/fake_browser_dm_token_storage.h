@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define COMPONENTS_ENTERPRISE_BROWSER_CONTROLLER_FAKE_BROWSER_DM_TOKEN_STORAGE_H_
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/weak_ptr.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 
 namespace policy {
@@ -63,6 +62,7 @@ class FakeBrowserDMTokenStorage : public BrowserDMTokenStorage {
     std::string InitEnrollmentToken() override;
     std::string InitDMToken() override;
     bool InitEnrollmentErrorOption() override;
+    bool CanInitEnrollmentToken() const override;
     BrowserDMTokenStorage::StoreTask SaveDMTokenTask(
         const std::string& token,
         const std::string& client_id) override;

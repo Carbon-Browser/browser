@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/weak_ptr.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/printer_translator.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -64,7 +63,7 @@ class SyncedPrintersManager : public KeyedService {
   // completion of this method, the |observer| can be safely destroyed.
   virtual void RemoveObserver(SyncedPrintersManager::Observer* observer) = 0;
 
-  // Returns a ModelTypeSyncBridge for the sync client.
+  // Returns a DataTypeSyncBridge for the sync client.
   virtual PrintersSyncBridge* GetSyncBridge() = 0;
 
 };

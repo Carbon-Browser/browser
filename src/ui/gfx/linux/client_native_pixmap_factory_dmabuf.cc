@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -26,18 +27,12 @@ class ClientNativePixmapOpaque : public ClientNativePixmap {
       : pixmap_handle_(std::move(pixmap_handle)) {}
   ~ClientNativePixmapOpaque() override = default;
 
-  bool Map() override {
-    NOTREACHED();
-    return false;
-  }
+  bool Map() override { return false; }
   void Unmap() override { NOTREACHED(); }
   size_t GetNumberOfPlanes() const override {
     return pixmap_handle_.planes.size();
   }
-  void* GetMemoryAddress(size_t plane) const override {
-    NOTREACHED();
-    return nullptr;
-  }
+  void* GetMemoryAddress(size_t plane) const override { NOTREACHED(); }
   int GetStride(size_t plane) const override {
     CHECK_LT(plane, pixmap_handle_.planes.size());
     // Even though a ClientNativePixmapOpaque should not be mapped, we may still
@@ -79,18 +74,58 @@ class ClientNativePixmapFactoryDmabuf : public ClientNativePixmapFactory {
       case gfx::BufferUsage::CAMERA_AND_CPU_READ_WRITE:
       case gfx::BufferUsage::SCANOUT_VEA_CPU_READ:
       case gfx::BufferUsage::VEA_READ_CAMERA_AND_CPU_READ_WRITE:
-      case gfx::BufferUsage::SCANOUT_FRONT_RENDERING:
+      case gfx::BufferUsage::SCANOUT_FRONT_RENDERING: {
+        if (!CanFitImageForSizeAndFormat(
+                handle, size, format, /*assume_single_memory_object=*/false)) {
+          DLOG(ERROR) << "Failed to verify the size and format of the handle.";
+          return nullptr;
+        }
+
+        for (size_t i = 0; i < handle.planes.size(); ++i) {
+          if (!base::IsValueInRangeForNumericType<size_t>(
+                  handle.planes[i].offset) ||
+              !base::IsValueInRangeForNumericType<size_t>(
+                  handle.planes[i].size)) {
+            return nullptr;
+          }
+
+          if (!handle.planes[i].fd.is_valid())
+            return nullptr;
+
+          const int fd = handle.planes[i].fd.get();
+          const off_t dma_buf_size = lseek(fd, /*offset=*/0, SEEK_END);
+          if (dma_buf_size == static_cast<off_t>(-1)) {
+            PLOG(ERROR) << "Failed to get the size of the dma-buf";
+            return nullptr;
+          }
+          if (lseek(fd, /*offset=*/0, SEEK_SET) == static_cast<off_t>(-1)) {
+            PLOG(ERROR) << "Failed to reset the file offset of the dma-buf";
+            return nullptr;
+          }
+          if (!base::IsValueInRangeForNumericType<size_t>(dma_buf_size))
+            return nullptr;
+
+          base::CheckedNumeric<uint64_t> size_to_map =
+              base::CheckAdd(handle.planes[i].size, handle.planes[i].offset);
+          if (!size_to_map.IsValid<size_t>())
+            return nullptr;
+          if (size_to_map.ValueOrDie<size_t>() >
+              base::checked_cast<size_t>(dma_buf_size)) {
+            return nullptr;
+          }
+        }
         return ClientNativePixmapDmaBuf::ImportFromDmabuf(std::move(handle),
                                                           size, format);
+      }
       case gfx::BufferUsage::GPU_READ:
       case gfx::BufferUsage::SCANOUT:
       case gfx::BufferUsage::SCANOUT_VDA_WRITE:
+      case gfx::BufferUsage::PROTECTED_SCANOUT:
       case gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
         return base::WrapUnique(
             new ClientNativePixmapOpaque(std::move(handle)));
     }
     NOTREACHED();
-    return nullptr;
   }
 };
 

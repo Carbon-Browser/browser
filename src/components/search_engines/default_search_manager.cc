@@ -1,25 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/search_engines/default_search_manager.h"
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/compiler_specific.h"
-#include "base/i18n/case_conversion.h"
-#include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/time/time.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/metrics/histogram.h"
+#include "base/metrics/histogram_functions.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_value_map.h"
@@ -29,16 +22,8 @@
 #include "components/search_engines/template_url_prepopulate_data.h"
 
 namespace {
-
 bool g_fallback_search_engines_disabled = false;
-
 }  // namespace
-
-// A dictionary to hold all data related to the Default Search Engine.
-// Eventually, this should replace all the data stored in the
-// default_search_provider.* prefs.
-const char DefaultSearchManager::kDefaultSearchProviderDataPrefName[] =
-    "default_search_provider_data.template_url_data";
 
 const char DefaultSearchManager::kID[] = "id";
 const char DefaultSearchManager::kShortName[] = "short_name";
@@ -49,6 +34,7 @@ const char DefaultSearchManager::kSyncGUID[] = "synced_guid";
 const char DefaultSearchManager::kURL[] = "url";
 const char DefaultSearchManager::kSuggestionsURL[] = "suggestions_url";
 const char DefaultSearchManager::kImageURL[] = "image_url";
+const char DefaultSearchManager::kImageTranslateURL[] = "image_translate_url";
 const char DefaultSearchManager::kNewTabURL[] = "new_tab_url";
 const char DefaultSearchManager::kContextualSearchURL[] =
     "contextual_search_url";
@@ -64,6 +50,15 @@ const char DefaultSearchManager::kSuggestionsURLPostParams[] =
 const char DefaultSearchManager::kImageURLPostParams[] =
     "image_url_post_params";
 const char DefaultSearchManager::kSideSearchParam[] = "side_search_param";
+const char DefaultSearchManager::kSideImageSearchParam[] =
+    "side_image_search_param";
+const char DefaultSearchManager::kImageSearchBrandingLabel[] =
+    "image_search_branding_label";
+const char DefaultSearchManager::kSearchIntentParams[] = "search_intent_params";
+const char DefaultSearchManager::kImageTranslateSourceLanguageParamKey[] =
+    "image_translate_source_language_param_key";
+const char DefaultSearchManager::kImageTranslateTargetLanguageParamKey[] =
+    "image_translate_target_language_param_key";
 
 const char DefaultSearchManager::kSafeForAutoReplace[] = "safe_for_autoreplace";
 const char DefaultSearchManager::kInputEncodings[] = "input_encodings";
@@ -74,21 +69,31 @@ const char DefaultSearchManager::kLastVisited[] = "last_visited";
 
 const char DefaultSearchManager::kUsageCount[] = "usage_count";
 const char DefaultSearchManager::kAlternateURLs[] = "alternate_urls";
-const char DefaultSearchManager::kCreatedByPolicy[] = "created_by_policy";
+const char DefaultSearchManager::kPolicyOrigin[] = "policy_origin";
 const char DefaultSearchManager::kDisabledByPolicy[] = "disabled_by_policy";
 const char DefaultSearchManager::kCreatedFromPlayAPI[] =
     "created_from_play_api";
+const char DefaultSearchManager::kFeaturedByPolicy[] = "featured_by_policy";
 const char DefaultSearchManager::kPreconnectToSearchUrl[] =
     "preconnect_to_search_url";
 const char DefaultSearchManager::kPrefetchLikelyNavigations[] =
     "prefetch_likely_navigations";
 const char DefaultSearchManager::kIsActive[] = "is_active";
 const char DefaultSearchManager::kStarterPackId[] = "starter_pack_id";
+const char DefaultSearchManager::kEnforcedByPolicy[] = "enforced_by_policy";
+
+const char DefaultSearchManager::kDefaultSearchEngineMirroredMetric[] =
+    "Search.DefaultSearchEngineMirrored";
 
 DefaultSearchManager::DefaultSearchManager(
     PrefService* pref_service,
+    search_engines::SearchEngineChoiceService* search_engine_choice_service,
     const ObserverCallback& change_observer)
-    : pref_service_(pref_service), change_observer_(change_observer) {
+    : pref_service_(pref_service),
+      search_engine_choice_service_(search_engine_choice_service),
+      change_observer_(change_observer),
+      search_engine_choice_service_observation_(this),
+      prefs_default_search_(pref_service, search_engine_choice_service) {
   if (pref_service_) {
     pref_change_registrar_.Init(pref_service_);
     pref_change_registrar_.Add(
@@ -100,17 +105,38 @@ DefaultSearchManager::DefaultSearchManager(
         base::BindRepeating(&DefaultSearchManager::OnOverridesPrefChanged,
                             base::Unretained(this)));
   }
-  LoadPrepopulatedDefaultSearch();
+  LoadPrepopulatedFallbackSearch();
+  if (search_engine_choice_service->IsProfileEligibleForDseGuestPropagation()) {
+    // Observe the SearchEngineChoiceService because the saved DSE can change
+    // during a Guest session and we need to restore it for the next session.
+    // TODO(crbug.com: 369959287): This is not needed if we destroy the guest
+    // profile.
+    search_engine_choice_service_observation_.Observe(
+        search_engine_choice_service);
+    LoadSavedGuestSearch();
+  }
   LoadDefaultSearchEngineFromPrefs();
+  const base::Value::Dict& url_dict =
+      pref_service_->GetDict(kDefaultSearchProviderDataPrefName);
+  const base::Value::Dict& mirrored_dict =
+      pref_service_->GetDict(kMirroredDefaultSearchProviderDataPrefName);
+  if (mirrored_dict.empty() && !url_dict.empty()) {
+    pref_service_->SetDict(kMirroredDefaultSearchProviderDataPrefName,
+                           url_dict.Clone());
+  } else {
+    base::UmaHistogramBoolean(
+        DefaultSearchManager::kDefaultSearchEngineMirroredMetric,
+        mirrored_dict == url_dict);
+  }
 }
 
-DefaultSearchManager::~DefaultSearchManager() {
-}
+DefaultSearchManager::~DefaultSearchManager() = default;
 
 // static
 void DefaultSearchManager::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterDictionaryPref(kDefaultSearchProviderDataPrefName);
+  registry->RegisterDictionaryPref(kMirroredDefaultSearchProviderDataPrefName);
 }
 
 // static
@@ -131,22 +157,22 @@ const TemplateURLData* DefaultSearchManager::GetDefaultSearchEngine(
   if (default_search_mandatory_by_policy_) {
     if (source)
       *source = FROM_POLICY;
-    return prefs_default_search_.get();
+    return prefs_default_search_.Get();
   }
   if (default_search_recommended_by_policy_) {
     if (source)
       *source = FROM_POLICY_RECOMMENDED;
-    return prefs_default_search_.get();
+    return prefs_default_search_.Get();
   }
   if (extension_default_search_) {
     if (source)
       *source = FROM_EXTENSION;
     return extension_default_search_.get();
   }
-  if (prefs_default_search_) {
+  if (prefs_default_search_.Get()) {
     if (source)
       *source = FROM_USER;
-    return prefs_default_search_.get();
+    return prefs_default_search_.Get();
   }
   if (source)
     *source = FROM_FALLBACK;
@@ -155,8 +181,9 @@ const TemplateURLData* DefaultSearchManager::GetDefaultSearchEngine(
 
 std::unique_ptr<TemplateURLData>
 DefaultSearchManager::GetDefaultSearchEngineIgnoringExtensions() const {
-  if (prefs_default_search_)
-    return std::make_unique<TemplateURLData>(*prefs_default_search_);
+  if (prefs_default_search_.Get()) {
+    return std::make_unique<TemplateURLData>(*prefs_default_search_.Get());
+  }
 
   if (default_search_mandatory_by_policy_ ||
       default_search_recommended_by_policy_) {
@@ -171,7 +198,7 @@ DefaultSearchManager::GetDefaultSearchEngineIgnoringExtensions() const {
   const base::Value* user_value =
       pref_service_->GetUserPrefValue(kDefaultSearchProviderDataPrefName);
   if (user_value && user_value->is_dict()) {
-    auto turl_data = TemplateURLDataFromDictionary(*user_value);
+    auto turl_data = TemplateURLDataFromDictionary(user_value->GetDict());
     if (turl_data)
       return turl_data;
   }
@@ -191,28 +218,36 @@ DefaultSearchManager::GetDefaultSearchEngineSource() const {
 }
 
 const TemplateURLData* DefaultSearchManager::GetFallbackSearchEngine() const {
-  return g_fallback_search_engines_disabled ? nullptr
-                                            : fallback_default_search_.get();
+  if (g_fallback_search_engines_disabled) {
+    return nullptr;
+  }
+  if (saved_guest_search_) {
+    return saved_guest_search_.get();
+  }
+  return fallback_default_search_.get();
 }
 
 void DefaultSearchManager::SetUserSelectedDefaultSearchEngine(
     const TemplateURLData& data) {
   if (!pref_service_) {
-    prefs_default_search_ = std::make_unique<TemplateURLData>(data);
-    MergePrefsDataWithPrepopulated();
+    prefs_default_search_.SetAndReconcile(
+        std::make_unique<TemplateURLData>(data));
     NotifyObserver();
     return;
   }
-
-  pref_service_->Set(kDefaultSearchProviderDataPrefName,
-                     *TemplateURLDataToDictionary(data));
+  pref_service_->SetDict(kDefaultSearchProviderDataPrefName,
+                         TemplateURLDataToDictionary(data));
+#if BUILDFLAG(IS_ANDROID)
+  // Commit the pref immediately so it isn't lost if the app is killed.
+  pref_service_->CommitPendingWrite();
+#endif
 }
 
 void DefaultSearchManager::ClearUserSelectedDefaultSearchEngine() {
   if (pref_service_) {
     pref_service_->ClearPref(kDefaultSearchProviderDataPrefName);
   } else {
-    prefs_default_search_.reset();
+    prefs_default_search_.SetAndReconcile({});
     NotifyObserver();
   }
 }
@@ -221,6 +256,11 @@ void DefaultSearchManager::OnDefaultSearchPrefChanged() {
   bool source_was_fallback = GetDefaultSearchEngineSource() == FROM_FALLBACK;
 
   LoadDefaultSearchEngineFromPrefs();
+  // Mirror the dse pref to the mirrored pref.
+  const base::Value::Dict& url_dict =
+      pref_service_->GetDict(kDefaultSearchProviderDataPrefName);
+  pref_service_->SetDict(kMirroredDefaultSearchProviderDataPrefName,
+                         url_dict.Clone());
 
   // The effective DSE may have changed unless we were using the fallback source
   // both before and after the above load.
@@ -229,7 +269,7 @@ void DefaultSearchManager::OnDefaultSearchPrefChanged() {
 }
 
 void DefaultSearchManager::OnOverridesPrefChanged() {
-  LoadPrepopulatedDefaultSearch();
+  LoadPrepopulatedFallbackSearch();
 
   const TemplateURLData* effective_data = GetDefaultSearchEngine(nullptr);
   if (effective_data && effective_data->prepopulate_id) {
@@ -239,54 +279,22 @@ void DefaultSearchManager::OnOverridesPrefChanged() {
   }
 }
 
-void DefaultSearchManager::MergePrefsDataWithPrepopulated() {
-  if (!prefs_default_search_ || !prefs_default_search_->prepopulate_id)
-    return;
+void DefaultSearchManager::OnSavedGuestSearchChanged() {
+  LoadSavedGuestSearch();
 
-  // TODO(crbug.com/1049784): Parameters for search engine created from play api
-  // should be preserved even if corresponding prepopulated search engine
-  // exists. This logic will be revisited as part of implementation of
-  // crbug.com/1049784, which will enable updating play api search engine
-  // parameters with prepopulated data.
-  if (prefs_default_search_->created_from_play_api)
-    return;
-
-  std::vector<std::unique_ptr<TemplateURLData>> prepopulated_urls =
-      TemplateURLPrepopulateData::GetPrepopulatedEngines(pref_service_,
-                                                         nullptr);
-
-  auto default_engine = std::find_if(
-      prepopulated_urls.begin(), prepopulated_urls.end(),
-      [&](const std::unique_ptr<TemplateURLData>& url) {
-        return url->prepopulate_id == prefs_default_search_->prepopulate_id;
-      });
-
-  if (default_engine == prepopulated_urls.end())
-    return;
-
-  auto& engine = *default_engine;
-
-  if (!prefs_default_search_->safe_for_autoreplace) {
-    engine->safe_for_autoreplace = false;
-    engine->SetKeyword(prefs_default_search_->keyword());
-    engine->SetShortName(prefs_default_search_->short_name());
+  const TemplateURLData* effective_data = GetDefaultSearchEngine(nullptr);
+  if (effective_data && effective_data->prepopulate_id) {
+    // A user-selected, policy-selected or fallback pre-populated engine is
+    // active and may have changed with this event.
+    NotifyObserver();
   }
-
-  engine->id = prefs_default_search_->id;
-  engine->sync_guid = prefs_default_search_->sync_guid;
-  engine->date_created = prefs_default_search_->date_created;
-  engine->last_modified = prefs_default_search_->last_modified;
-  engine->last_visited = prefs_default_search_->last_visited;
-  engine->favicon_url = prefs_default_search_->favicon_url;
-
-  prefs_default_search_ = std::move(engine);
 }
 
 void DefaultSearchManager::LoadDefaultSearchEngineFromPrefs() {
   if (!pref_service_)
     return;
 
-  prefs_default_search_.reset();
+  prefs_default_search_.SetAndReconcile({});
   extension_default_search_.reset();
   const PrefService::Preference* pref =
       pref_service_->FindPreference(kDefaultSearchProviderDataPrefName);
@@ -294,35 +302,47 @@ void DefaultSearchManager::LoadDefaultSearchEngineFromPrefs() {
   default_search_mandatory_by_policy_ = pref->IsManaged();
   default_search_recommended_by_policy_ = pref->IsRecommended();
 
-  const base::Value* url_dict =
-      pref_service_->GetDictionary(kDefaultSearchProviderDataPrefName);
-  if (url_dict->DictEmpty())
+  const base::Value::Dict& url_dict =
+      pref_service_->GetDict(kDefaultSearchProviderDataPrefName);
+  if (url_dict.empty()) {
     return;
+  }
 
   if (default_search_mandatory_by_policy_ ||
       default_search_recommended_by_policy_) {
-    if (url_dict->FindBoolKey(kDisabledByPolicy).value_or(false))
+    if (url_dict.FindBool(kDisabledByPolicy).value_or(false))
       return;
   }
 
-  auto turl_data = TemplateURLDataFromDictionary(*url_dict);
+  auto turl_data = TemplateURLDataFromDictionary(url_dict);
   if (!turl_data)
     return;
 
-  // Check if default search preference is overriden by extension.
+  // Check if default search preference is overridden by extension.
   if (pref->IsExtensionControlled()) {
     extension_default_search_ = std::move(turl_data);
   } else {
-    prefs_default_search_ = std::move(turl_data);
-    MergePrefsDataWithPrepopulated();
+    prefs_default_search_.SetAndReconcile(std::move(turl_data));
   }
 }
 
-void DefaultSearchManager::LoadPrepopulatedDefaultSearch() {
+void DefaultSearchManager::LoadSavedGuestSearch() {
+  std::optional<int> prepopulate_id =
+      search_engine_choice_service_->GetSavedSearchEngineBetweenGuestSessions();
+  if (prepopulate_id.has_value()) {
+    saved_guest_search_ =
+        TemplateURLPrepopulateData::GetPrepopulatedEngineFromFullList(
+            &*pref_service_, &*search_engine_choice_service_, *prepopulate_id);
+  } else {
+    saved_guest_search_.reset();
+  }
+}
+
+void DefaultSearchManager::LoadPrepopulatedFallbackSearch() {
   std::unique_ptr<TemplateURLData> data =
-      TemplateURLPrepopulateData::GetPrepopulatedDefaultSearch(pref_service_);
+      TemplateURLPrepopulateData::GetPrepopulatedFallbackSearch(
+          pref_service_, search_engine_choice_service_);
   fallback_default_search_ = std::move(data);
-  MergePrefsDataWithPrepopulated();
 }
 
 void DefaultSearchManager::NotifyObserver() {

@@ -1,16 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://access-code-cast/access_code_cast.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
-import {AccessCodeCastElement} from 'chrome://access-code-cast/access_code_cast.js';
+import type {AccessCodeCastElement} from 'chrome://access-code-cast/access_code_cast.js';
 import {AddSinkResultCode, CastDiscoveryMethod} from 'chrome://access-code-cast/access_code_cast.mojom-webui.js';
 import {BrowserProxy} from 'chrome://access-code-cast/browser_proxy.js';
 import {RouteRequestResultCode} from 'chrome://access-code-cast/route_request_result_code.mojom-webui.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 import {createTestProxy} from './test_access_code_cast_browser_proxy.js';
 
@@ -25,7 +24,7 @@ suite('AccessCodeCastAppTest', () => {
     );
     BrowserProxy.setInstance(mockProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     app = document.createElement('access-code-cast-app');
     document.body.appendChild(app);
     await waitAfterNextRender(app);

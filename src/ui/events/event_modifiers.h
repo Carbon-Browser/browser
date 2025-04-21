@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ enum {
   MODIFIER_RIGHT_MOUSE_BUTTON,
   MODIFIER_BACK_MOUSE_BUTTON,
   MODIFIER_FORWARD_MOUSE_BUTTON,
+  MODIFIER_FUNCTION,
   MODIFIER_NUM_MODIFIERS
 };
 

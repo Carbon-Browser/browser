@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/ash/idle_detector.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/offline_login_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
+#include "chromeos/ash/components/login/auth/auth_factor_editor.h"
+#include "chromeos/ash/experiences/idle_detector/idle_detector.h"
 
 namespace ash {
+
+class OfflineLoginView;
 
 // This class represents offline login screen: that handles login in offline
 // mode with provided username and password checked against cryptohome.
@@ -56,7 +57,19 @@ class OfflineLoginScreen
                           const std::string& password);
   void HandleEmailSubmitted(const std::string& username);
 
+  void OnGetAuthFactorsConfiguration(std::unique_ptr<UserContext> user_context,
+                                     std::optional<AuthenticationError> error);
+
+  // The editor is used to call `ListAuthFactors` to fetch password & pin factor
+  // status. It does not change factor status.
+  // TODO: Update `Authenticator` to allow AuthSession to start earlier so we
+  // could get auth factor status from the AuthSession.
+  AuthFactorEditor auth_factor_editor_;
+
   base::WeakPtr<OfflineLoginView> view_;
+
+  // Whether the user has only pin factor and should be authenticated by pin.
+  bool authenticate_by_pin_ = false;
 
   // True when network is available.
   bool is_network_available_ = false;
@@ -78,11 +91,5 @@ class OfflineLoginScreen
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OfflineLoginScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_OFFLINE_LOGIN_SCREEN_H_

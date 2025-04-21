@@ -1,20 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
 import 'chrome://new-tab-page/lazy_load.js';
 
-import {VoiceSearchOverlayElement} from 'chrome://new-tab-page/lazy_load.js';
+import type {VoiceSearchOverlayElement} from 'chrome://new-tab-page/lazy_load.js';
 import {$$, NewTabPageProxy, VoiceAction as Action, VoiceError as Error, WindowProxy} from 'chrome://new-tab-page/new_tab_page.js';
 import {PageCallbackRouter, PageHandlerRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {flushTasks, isVisible} from 'chrome://webui-test/test_util.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import type {MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {fakeMetricsPrivate} from 'chrome://webui-test/metrics_test_support.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import type {TestMock} from 'chrome://webui-test/test_mock.js';
+import {isVisible, microtasksFinished} from 'chrome://webui-test/test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../chai_assert.js';
-
-import {fakeMetricsPrivate, MetricsTracker} from './metrics_test_support.js';
 import {assertNotStyle, assertStyle, installMock, keydown} from './test_support.js';
 
 function createResults(n: number): SpeechRecognitionEvent {
@@ -72,11 +72,11 @@ let mockSpeechRecognition: MockSpeechRecognition;
 
 suite('NewTabPageVoiceSearchOverlayTest', () => {
   let voiceSearchOverlay: VoiceSearchOverlayElement;
-  let windowProxy: TestBrowserProxy;
+  let windowProxy: TestMock<WindowProxy>;
   let metrics: MetricsTracker;
 
   setup(async () => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     window.webkitSpeechRecognition =
         MockSpeechRecognition as unknown as typeof SpeechRecognition;
@@ -116,9 +116,10 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     assertStyle(voiceSearchOverlay.$.micVolume, '--mic-volume-level', '0');
   });
 
-  test('on audio received shows speak text', () => {
+  test('on audio received shows speak text', async () => {
     // Act.
     mockSpeechRecognition.onaudiostart!();
+    await microtasksFinished();
 
     // Assert.
     assertTrue(isVisible(
@@ -128,12 +129,13 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     assertStyle(voiceSearchOverlay.$.micVolume, '--mic-volume-level', '0');
   });
 
-  test('on speech received starts volume animation', () => {
+  test('on speech received starts volume animation', async () => {
     // Arrange.
     windowProxy.setResultFor('random', 0.5);
 
     // Act.
     mockSpeechRecognition.onspeechstart!();
+    await microtasksFinished();
 
     // Assert.
     assertTrue(
@@ -141,15 +143,16 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     assertStyle(voiceSearchOverlay.$.micVolume, '--mic-volume-level', '0.5');
   });
 
-  test('on result received shows recognized text', () => {
+  test('on result received shows recognized text', async () => {
     // Arrange.
     windowProxy.setResultFor('random', 0.5);
     const result = createResults(2);
-    Object.assign(result.results[0]![0], {transcript: 'hello'});
-    Object.assign(result.results[1]![0], {confidence: 0, transcript: 'world'});
+    Object.assign(result.results[0]![0]!, {transcript: 'hello'});
+    Object.assign(result.results[1]![0]!, {confidence: 0, transcript: 'world'});
 
     // Act.
     mockSpeechRecognition.onresult!(result);
+    await microtasksFinished();
 
     // Assert.
     const [intermediateResult, finalResult] =
@@ -170,8 +173,8 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     loadTimeData.overrideValues({googleBaseUrl: googleBaseUrl});
     windowProxy.setResultFor('random', 0);
     const result = createResults(1);
-    Object.assign(result.results[0], {isFinal: true});
-    Object.assign(result.results[0]![0], {transcript: 'hello world'});
+    Object.assign(result.results[0]!, {isFinal: true});
+    Object.assign(result.results[0]![0]!, {transcript: 'hello world'});
 
     // Act.
     mockSpeechRecognition.onresult!(result);
@@ -220,6 +223,7 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
             mockSpeechRecognition.onerror!
                 (new webkitSpeechRecognitionError('error', {error}));
           }
+          await microtasksFinished();
 
           // Assert.
           assertTrue(isVisible(voiceSearchOverlay.shadowRoot!.querySelector(
@@ -241,9 +245,10 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
         });
       });
 
-  test('on end received shows error text if no final result', () => {
+  test('on end received shows error text if no final result', async () => {
     // Act.
     mockSpeechRecognition.onend!();
+    await microtasksFinished();
 
     // Assert.
     assertTrue(isVisible(
@@ -252,21 +257,22 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
         '#errors *[error="audio-capture"]')));
   });
 
-  test('on end received shows result text if final result', () => {
+  test('on end received shows result text if final result', async () => {
     // Arrange.
     const result = createResults(1);
-    Object.assign(result.results[0], {isFinal: true});
+    Object.assign(result.results[0]!, {isFinal: true});
 
     // Act.
     mockSpeechRecognition.onresult!(result);
     mockSpeechRecognition.onend!();
+    await microtasksFinished();
 
     // Assert.
     assertTrue(isVisible(
         voiceSearchOverlay.shadowRoot!.querySelector('#texts *[text=result]')));
   });
 
-  const test_params = [
+  const testParams = [
     {
       functionName: 'onaudiostart',
       arguments: [],
@@ -293,7 +299,7 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     },
   ];
 
-  test_params.forEach(function(param) {
+  testParams.forEach(function(param) {
     test(`${param.functionName} received resets timer`, async () => {
       // Act.
       // Need to account for previously set timers.
@@ -311,6 +317,7 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
 
     // Act.
     callback();
+    await microtasksFinished();
 
     // Assert.
     assertTrue(isVisible(
@@ -343,25 +350,20 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     assertTrue(mockSpeechRecognition.abortCalled);
   });
 
-  ([
-    ['#retryLink', Action.TRY_AGAIN_LINK],
-    ['#micButton', Action.TRY_AGAIN_MIC_BUTTON],
-  ] as Array<[string, Action]>)
-      .forEach(([id, action]) => {
-        test(`clicking '${id}' starts voice search if in retry state`, () => {
-          // Arrange.
-          mockSpeechRecognition.onnomatch!();
-          mockSpeechRecognition.startCalled = false;
+  test(`clicking '#retryLink' starts voice search if in retry state`, () => {
+    // Arrange.
+    mockSpeechRecognition.onnomatch!();
+    mockSpeechRecognition.startCalled = false;
 
-          // Act.
-          $$<HTMLElement>(voiceSearchOverlay, id)!.click();
+    // Act.
+    $$<HTMLElement>(voiceSearchOverlay, '#retryLink')!.click();
 
-          // Assert.
-          assertTrue(mockSpeechRecognition.startCalled);
-          assertEquals(1, metrics.count('NewTabPage.VoiceActions'));
-          assertEquals(1, metrics.count('NewTabPage.VoiceActions', action));
-        });
-      });
+    // Assert.
+    assertTrue(mockSpeechRecognition.startCalled);
+    assertEquals(1, metrics.count('NewTabPage.VoiceActions'));
+    assertEquals(
+        1, metrics.count('NewTabPage.VoiceActions', Action.TRY_AGAIN_LINK));
+  });
 
   [' ', 'Enter'].forEach(key => {
     test(`'${key}' submits query if result`, () => {

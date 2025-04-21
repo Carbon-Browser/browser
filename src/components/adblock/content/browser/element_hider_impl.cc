@@ -17,17 +17,20 @@
 
 #include "components/adblock/content/browser/element_hider_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/json/json_string_value_serializer.h"
 #include "base/json/string_escape.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
-#include "components/adblock/core/subscription/subscription_collection.h"
-#include "components/grit/components_resources.h"
+#include "components/adblock/content/browser/eyeo_document_info.h"
+#include "components/adblock/core/resources/grit/adblock_resources.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_frame_host.h"
@@ -36,6 +39,10 @@
 
 namespace adblock {
 namespace {
+
+using ContentFiltersData = InstalledSubscription::ContentFiltersData;
+using SelectorWithCss =
+    InstalledSubscription::ContentFiltersData::SelectorWithCss;
 
 std::string GenerateBlockedElemhideJavaScript(
     const std::string& url,
@@ -67,16 +74,14 @@ std::string GenerateBlockedElemhideJavaScript(
   return result;
 }
 
-std::string GenerateStylesheet(SubscriptionCollection* subscription_collection,
-                               const GURL& url,
-                               const std::vector<GURL>& frame_hierarchy,
-                               const SiteKey& sitekey) {
+void GenerateStylesheet(const GURL& url,
+                        ContentFiltersData& eh_input_data,
+                        std::string& output) {
   TRACE_EVENT1("eyeo", "GenerateStylesheet", "url", url.spec());
-  DCHECK(subscription_collection);
 
-  std::vector<base::StringPiece> selectors =
-      subscription_collection->GetElementHideSelectors(url, frame_hierarchy,
-                                                       sitekey);
+  const base::span<std::string_view> selectors(
+      eh_input_data.elemhide_selectors);
+
   // Chromium's Blink engine supports only up to 8,192 simple selectors, and
   // even fewer compound selectors, in a rule. The exact number of selectors
   // that would work depends on their sizes (e.g. "#foo .bar" has a size of 2).
@@ -87,116 +92,142 @@ std::string GenerateStylesheet(SubscriptionCollection* subscription_collection,
   // this approach is more efficient and has worked well in practice. In theory
   // this could still lead to some selectors not working on Chromium, but it is
   // highly unlikely.
-
-  if (selectors.empty())
-    return "";
   const size_t max_selector_count = 1024u;
-  std::string composed_stylesheet;
-  for (size_t i = 0; i < selectors.size(); i += max_selector_count) {
-    const size_t batch_size =
-        std::min(max_selector_count, selectors.size() - i);
-    const base::span<base::StringPiece> selectors_batch(&selectors[i],
-                                                        batch_size);
-    composed_stylesheet += base::JoinString(selectors_batch, ", ") +
-                           " {display: none !important;}\n";
+  for (size_t i = 0; i < eh_input_data.elemhide_selectors.size();
+       i += max_selector_count) {
+    const size_t batch_size = std::min(
+        max_selector_count, eh_input_data.elemhide_selectors.size() - i);
+    output += base::JoinString(selectors.subspan(i, batch_size), ", ") +
+              " {display: none !important;}\n";
   }
-  return composed_stylesheet;
 }
 
-std::string GenerateElemHidingEmuJavaScript(
-    SubscriptionCollection* subscription_collection,
-    const GURL& url) {
+void GenerateElemHidingEmuJavaScript(const GURL& url,
+                                     ContentFiltersData& ehe_input_data,
+                                     std::string& output) {
   TRACE_EVENT1("eyeo", "GenerateElemHidingEmuJavaScript", "url", url.spec());
-
-  DCHECK(subscription_collection);
-
-  std::vector<base::StringPiece> selectors =
-      subscription_collection->GetElementHideEmulationSelectors(url);
-
-  DVLOG(2) << "[eyeo] Got " << selectors.size() << " selectors for url " << url;
-
-  if (selectors.empty()) {
-    return std::string();
-  }
-
   // build the string with selectors
   std::string build_string;
-
-  for (const auto& selector : selectors) {
+  for (const auto& selector : ehe_input_data.elemhide_selectors) {
     build_string.append("{selector:");
     base::EscapeJSONString(selector, true, &build_string);
-    build_string.append(", text:");
-    base::EscapeJSONString(url.host(), true, &build_string);
     build_string.append("}, \n");
   }
-
-  std::string elem_hide_emu_js =
-      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
-          IDR_ADBLOCK_ELEMHIDE_EMU_JS);
+  for (const auto& selector : ehe_input_data.remove_selectors) {
+    build_string.append("{selector:");
+    base::EscapeJSONString(selector, true, &build_string);
+    build_string.append(", text: \"remove()\"}, \n");
+  }
+  for (const auto& selector_with_css : ehe_input_data.selectors_to_inline_css) {
+    build_string.append("{selector:");
+    base::EscapeJSONString(selector_with_css.first, true, &build_string);
+    build_string.append(", text:");
+    base::EscapeJSONString(selector_with_css.second, true, &build_string);
+    build_string.append("}, \n");
+  }
+  output = ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+      IDR_ADBLOCK_ELEMHIDE_EMU_JS);
 
   base::ReplaceSubstringsAfterOffset(
-      &elem_hide_emu_js, 0, "{{elemHidingEmulatedPatternsDef}}", build_string);
-  return elem_hide_emu_js;
+      &output, 0, "{{elemHidingEmulatedPatternsDef}}", build_string);
 }
 
-std::string CompileScript(const std::string& snippets_lib,
-                          std::string snippets) {
-  std::string script = "({{callback}})({}, ...{{snippets}});";
-  base::ReplaceSubstringsAfterOffset(&script, 0, "{{callback}}", snippets_lib);
-  base::ReplaceSubstringsAfterOffset(&script, 0, "{{snippets}}", snippets);
-  return script;
-}
-
-std::string GenerateSnippetScript(
-    SubscriptionCollection* subscription_collection,
-    const GURL& url,
-    const std::vector<GURL>& frame_hierarchy) {
-  TRACE_EVENT1("eyeo", "GenerateSnippetScript", "url", url.spec());
-
-  // snippets must be JSON representation of the array of arrays of snippets
-  const std::string snippets =
-      subscription_collection->GenerateSnippetsJson(url, frame_hierarchy);
-
-  if (snippets.empty())
+std::string GenerateXpath3Dep() {
+  static std::string xpath3_dep =
+      "(" +
+      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+          IDR_ADBLOCK_SNIPPETS_XPATH3_DEP_JS) +
+      ")();";
+  if (xpath3_dep == "()();") {
+    LOG(WARNING) << "[eyeo] Snippets library does not support xpath3!";
     return "";
+  }
+  return xpath3_dep;
+}
 
+void GenerateSnippetScript(const GURL& url,
+                           base::Value::List input,
+                           std::string& output) {
+  TRACE_EVENT1("eyeo", "GenerateSnippetScript", "url", url.spec());
+  // snippets must be JSON representation of the array of arrays of snippets
+  std::string serialized;
+  JSONStringValueSerializer serializer(&serialized);
+  serializer.Serialize(std::move(input));
   // snippets_lib should be the library as-is, without any escaping or JSON
   // parsing.
   static std::string snippets_lib =
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
           IDR_ADBLOCK_SNIPPETS_JS);
-  return CompileScript(snippets_lib, std::move(snippets));
+
+  output = "{{xpath3}}({{callback}})({}, ...{{snippets}});";
+  bool require_xpath3 =
+      serialized.find("hide-if-matches-xpath3") != std::string::npos;
+  base::ReplaceSubstringsAfterOffset(&output, 0, "{{xpath3}}",
+                                     require_xpath3 ? GenerateXpath3Dep() : "");
+  base::ReplaceSubstringsAfterOffset(&output, 0, "{{callback}}", snippets_lib);
+  base::ReplaceSubstringsAfterOffset(&output, 0, "{{snippets}}", serialized);
+}
+
+void AppendContentFiltersData(ContentFiltersData& target,
+                              const ContentFiltersData& source) {
+  base::ranges::copy(source.elemhide_selectors,
+                     std::back_inserter(target.elemhide_selectors));
+  base::ranges::copy(source.remove_selectors,
+                     std::back_inserter(target.remove_selectors));
+  base::ranges::copy(source.selectors_to_inline_css,
+                     std::back_inserter(target.selectors_to_inline_css));
 }
 
 ElementHider::ElemhideInjectionData PrepareElemhideEmulationData(
-    std::unique_ptr<SubscriptionCollection> subscription_collection,
-    GURL gurl,
-    std::vector<GURL> frame_hierarchy,
-    SiteKey sitekey) {
-  TRACE_EVENT1("eyeo", "PrepareElemhideEmulationData", "url", gurl.spec());
+    const SubscriptionService::Snapshot subscription_collections,
+    const GURL url,
+    const std::vector<GURL> frame_hierarchy,
+    const SiteKey sitekey) {
+  TRACE_EVENT1("eyeo", "PrepareElemhideEmulationData", "url", url.spec());
 
-  // user domains allowing is implemented as adding exception filter for
-  // domain so we can just use filter engine to do the work.
-  if (!gurl.SchemeIsHTTPOrHTTPS())
-    return {};
-
-  bool doc_allowlisted = !!subscription_collection->FindBySpecialFilter(
-      SpecialFilterType::Document, gurl, frame_hierarchy, sitekey);
-  bool ehe_allowlisted =
-      doc_allowlisted ||
-      subscription_collection->FindBySpecialFilter(
-          SpecialFilterType::Elemhide, gurl, frame_hierarchy, sitekey);
-
-  ElementHider::ElemhideInjectionData result;
-  if (!ehe_allowlisted) {
-    result.stylesheet = GenerateStylesheet(subscription_collection.get(), gurl,
-                                           frame_hierarchy, sitekey);
-    result.elemhide_js =
-        GenerateElemHidingEmuJavaScript(subscription_collection.get(), gurl);
+  ContentFiltersData eh_data, eh_emu_data;
+  base::Value::List snippet_js;
+  for (const auto& collection : subscription_collections) {
+    bool doc_allowlisted = !!collection->FindBySpecialFilter(
+        SpecialFilterType::Document, url, frame_hierarchy, sitekey);
+    bool ehe_allowlisted =
+        doc_allowlisted ||
+        collection->FindBySpecialFilter(SpecialFilterType::Elemhide, url,
+                                        frame_hierarchy, sitekey);
+    if (!ehe_allowlisted) {
+      auto collection_eh_data =
+          collection->GetElementHideData(url, frame_hierarchy, sitekey);
+      auto collection_eh_emu_data =
+          collection->GetElementHideEmulationData(url);
+      AppendContentFiltersData(eh_data, collection_eh_data);
+      AppendContentFiltersData(eh_emu_data, collection_eh_emu_data);
+    }
+    if (!doc_allowlisted) {
+      base::ranges::for_each(
+          collection->GenerateSnippets(url, frame_hierarchy),
+          [&snippet_js](auto& item) { snippet_js.Append(std::move(item)); });
+    }
   }
-  if (!doc_allowlisted) {
-    result.snippet_js = GenerateSnippetScript(subscription_collection.get(),
-                                              gurl, frame_hierarchy);
+  ElementHider::ElemhideInjectionData result;
+  if (!eh_data.elemhide_selectors.empty()) {
+    DVLOG(2) << "[eyeo] Got EH " << eh_data.elemhide_selectors.size()
+             << " hide selectors for url " << url;
+    GenerateStylesheet(url, eh_data, result.stylesheet);
+  }
+  if (!eh_emu_data.elemhide_selectors.empty() ||
+      !eh_emu_data.remove_selectors.empty() ||
+      !eh_emu_data.selectors_to_inline_css.empty()) {
+    DVLOG(2) << "[eyeo] Got EH emulation "
+             << eh_emu_data.elemhide_selectors.size() << " hide selectors, "
+             << eh_emu_data.remove_selectors.size() << " remove selectors and "
+             << eh_emu_data.selectors_to_inline_css.size()
+             << " inline CSS selectors and for url" << url;
+    GenerateElemHidingEmuJavaScript(url, eh_emu_data, result.elemhide_js);
+  }
+  if (!snippet_js.empty()) {
+    DVLOG(2) << "[eyeo] Got " << snippet_js.size() << " snippets for url "
+             << url;
+    GenerateSnippetScript(url, std::move(snippet_js), result.snippet_js);
   }
   return result;
 }
@@ -214,10 +245,18 @@ void InsertUserCSSAndApplyElemHidingEmuJS(
     std::move(on_finished).Run(std::move(input));
     return;
   }
+  auto* info = EyeoDocumentInfo::GetOrCreateForCurrentDocument(frame_host);
+  if (info->IsElementHidingDone()) {
+    std::move(on_finished).Run(ElementHider::ElemhideInjectionData{});
+    return;
+  } else {
+    info->SetElementHidingDone();
+  }
+
   if (!input.stylesheet.empty()) {
     frame_host->InsertAbpElemhideStylesheet(input.stylesheet);
-    DVLOG(1) << "[eyeo] Element hiding - inserted stylesheet in frame"
-             << " '" << frame_host->GetFrameName() << "'";
+    DVLOG(1) << "[eyeo] Element hiding - inserted stylesheet in frame" << " '"
+             << frame_host->GetFrameName() << "'";
   }
 
   if (!input.elemhide_js.empty()) {
@@ -226,8 +265,8 @@ void InsertUserCSSAndApplyElemHidingEmuJS(
         content::RenderFrameHost::JavaScriptResultCallback(),
         content::ISOLATED_WORLD_ID_ADBLOCK);
 
-    DVLOG(1) << "[eyeo] Element hiding emulation - called JS in frame"
-             << " '" << frame_host->GetFrameName() << "'";
+    DVLOG(1) << "[eyeo] Element hiding emulation - executed JS in frame" << " '"
+             << frame_host->GetFrameName() << "'";
   }
 
   if (!input.snippet_js.empty()) {
@@ -239,8 +278,8 @@ void InsertUserCSSAndApplyElemHidingEmuJS(
         content::RenderFrameHost::JavaScriptResultCallback(),
         content::ISOLATED_WORLD_ID_ADBLOCK);
 
-    DVLOG(1) << "[eyeo] Snippet - called JS in frame"
-             << " '" << frame_host->GetFrameName() << "'";
+    DVLOG(1) << "[eyeo] Snippet - executed JS in frame" << " '"
+             << frame_host->GetFrameName() << "'";
   }
 
   std::move(on_finished).Run(std::move(input));
@@ -259,19 +298,19 @@ void ElementHiderImpl::ApplyElementHidingEmulationOnPage(
     content::RenderFrameHost* render_frame_host,
     SiteKey sitekey,
     base::OnceCallback<void(const ElemhideInjectionData&)> on_finished) {
-  if (!subscription_service_->IsInitialized()) {
-    subscription_service_->RunWhenInitialized(base::BindOnce(
-        &ElementHiderImpl::ApplyElementHidingEmulationInternal,
-        weak_ptr_factory_.GetWeakPtr(), std::move(url),
-        std::move(frame_hierarchy), render_frame_host->GetGlobalId(),
-        std::move(sitekey), std::move(on_finished)));
+  auto* info = EyeoDocumentInfo::GetForCurrentDocument(render_frame_host);
+  if (info && info->IsElementHidingDone()) {
+    std::move(on_finished).Run(ElementHider::ElemhideInjectionData{});
     return;
   }
-
-  ApplyElementHidingEmulationInternal(
-      std::move(url), std::move(frame_hierarchy),
-      render_frame_host->GetGlobalId(), std::move(sitekey),
-      std::move(on_finished));
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {},
+      base::BindOnce(&PrepareElemhideEmulationData,
+                     subscription_service_->GetCurrentSnapshot(),
+                     std::move(url), std::move(frame_hierarchy),
+                     std::move(sitekey)),
+      base::BindOnce(&InsertUserCSSAndApplyElemHidingEmuJS,
+                     render_frame_host->GetGlobalId(), std::move(on_finished)));
 }
 
 bool ElementHiderImpl::IsElementTypeHideable(
@@ -293,6 +332,16 @@ void ElementHiderImpl::HideBlockedElement(
     content::RenderFrameHost* render_frame_host) {
   TRACE_EVENT1("eyeo", "ElementHiderFlatbufferImpl::HideBlockedElemenet", "url",
                url.spec());
+  if (!render_frame_host->IsInLifecycleState(
+          content::RenderFrameHost::LifecycleState::kActive)) {
+    // The frame is not active, so we can't execute JS in it, otherwise we
+    // trigger an assertion in RenderFrameHostImpl::AssertFrameWasCommitted():
+    // see DPD-2884.
+    // TODO(mpawlowski): Instead of ignoring the hide blocked element request,
+    // we should instead defer it until the frame becomes active. This requires
+    // more changes to the code and automated tests. See DPD-2890.
+    return;
+  }
   // we can't get relative URL from URLRequest
   // so the hack is to select in JS with filename_with_query selector and then
   // check every found element's full absolute URL
@@ -311,24 +360,8 @@ void ElementHiderImpl::HideBlockedElement(
       content::RenderFrameHost::JavaScriptResultCallback(),
       content::ISOLATED_WORLD_ID_ADBLOCK);
 
-  VLOG(1) << "[eyeo] Element hiding - called JS: " << js;
-}
-
-void ElementHiderImpl::ApplyElementHidingEmulationInternal(
-    GURL url,
-    std::vector<GURL> frame_hierarchy,
-    content::GlobalRenderFrameHostId frame_host_id,
-    SiteKey sitekey,
-    base::OnceCallback<void(const ElementHider::ElemhideInjectionData&)>
-        on_finished) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {},
-      base::BindOnce(&PrepareElemhideEmulationData,
-                     subscription_service_->GetCurrentSnapshot(),
-                     std::move(url), std::move(frame_hierarchy),
-                     std::move(sitekey)),
-      base::BindOnce(&InsertUserCSSAndApplyElemHidingEmuJS, frame_host_id,
-                     std::move(on_finished)));
+  DVLOG(1) << "[eyeo] Element hiding - executed JS in frame" << " '"
+           << render_frame_host->GetFrameName() << "'";
 }
 
 }  // namespace adblock

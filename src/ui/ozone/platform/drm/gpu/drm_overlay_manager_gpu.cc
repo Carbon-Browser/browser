@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_manager.h"
 #include "ui/ozone/platform/drm/gpu/drm_thread_proxy.h"
@@ -16,8 +16,10 @@ namespace ui {
 
 DrmOverlayManagerGpu::DrmOverlayManagerGpu(
     DrmThreadProxy* drm_thread_proxy,
+    bool handle_overlays_swap_failure,
     bool allow_sync_and_real_buffer_page_flip_testing)
-    : DrmOverlayManager(allow_sync_and_real_buffer_page_flip_testing),
+    : DrmOverlayManager(handle_overlays_swap_failure,
+                        allow_sync_and_real_buffer_page_flip_testing),
       drm_thread_proxy_(drm_thread_proxy) {}
 
 DrmOverlayManagerGpu::~DrmOverlayManagerGpu() = default;

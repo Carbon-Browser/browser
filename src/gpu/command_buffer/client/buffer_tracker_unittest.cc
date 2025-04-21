@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,13 +33,14 @@ class MockClientCommandBufferImpl : public MockClientCommandBuffer {
   scoped_refptr<gpu::Buffer> CreateTransferBuffer(
       uint32_t size,
       int32_t* id,
+      uint32_t alignment = 0,
       TransferBufferAllocationOption option =
           TransferBufferAllocationOption::kLoseContextOnOOM) override {
     if (context_lost_) {
       *id = -1;
       return nullptr;
     }
-    return MockClientCommandBuffer::CreateTransferBuffer(size, id);
+    return MockClientCommandBuffer::CreateTransferBuffer(size, id, alignment);
   }
 
   void set_context_lost(bool context_lost) {

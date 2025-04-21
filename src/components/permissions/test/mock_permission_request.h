@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,15 +23,31 @@ class MockPermissionRequest : public PermissionRequest {
   MockPermissionRequest(const GURL& requesting_origin,
                         RequestType request_type,
                         PermissionRequestGestureType gesture_type);
+  MockPermissionRequest(RequestType request_type,
+                        bool embedded_permission_element_initiated);
+  MockPermissionRequest(
+      const GURL& requesting_origin,
+      RequestType request_type,
+      std::vector<std::string> requested_audio_capture_device_ids,
+      std::vector<std::string> requested_video_capture_device_ids);
 
   ~MockPermissionRequest() override;
 
-  void PermissionDecided(ContentSetting result, bool is_one_time);
+  void RegisterOnPermissionDecidedCallback(base::OnceClosure callback);
+
+  void PermissionDecided(ContentSetting result,
+                         bool is_one_time,
+                         bool is_final_decision);
   void MarkFinished();
 
   bool granted();
   bool cancelled();
   bool finished();
+
+  const std::vector<std::string>& GetRequestedAudioCaptureDeviceIds()
+      const override;
+  const std::vector<std::string>& GetRequestedVideoCaptureDeviceIds()
+      const override;
 
   std::unique_ptr<MockPermissionRequest> CreateDuplicateRequest() const;
 
@@ -39,6 +55,10 @@ class MockPermissionRequest : public PermissionRequest {
   bool granted_;
   bool cancelled_;
   bool finished_;
+
+  base::OnceClosure on_permission_decided_;
+  std::vector<std::string> requested_audio_capture_device_ids_;
+  std::vector<std::string> requested_video_capture_device_ids_;
 };
 
 }  // namespace permissions

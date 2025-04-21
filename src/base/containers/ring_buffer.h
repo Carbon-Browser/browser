@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,10 @@
 
 #include <stddef.h>
 
+#include <array>
+
 #include "base/check.h"
+#include "base/memory/raw_ref.h"
 
 namespace base {
 
@@ -64,32 +67,34 @@ class RingBuffer {
    public:
     size_t index() const { return index_; }
 
-    const T* operator->() const { return &buffer_.ReadBuffer(index_); }
-    const T* operator*() const { return &buffer_.ReadBuffer(index_); }
+    const T* operator->() const { return &buffer_->ReadBuffer(index_); }
+    const T* operator*() const { return &buffer_->ReadBuffer(index_); }
 
     Iterator& operator++() {
       index_++;
-      if (index_ == kSize)
+      if (index_ == kSize) {
         out_of_range_ = true;
+      }
       return *this;
     }
 
     Iterator& operator--() {
-      if (index_ == 0)
+      if (index_ == 0) {
         out_of_range_ = true;
+      }
       index_--;
       return *this;
     }
 
     operator bool() const {
-      return !out_of_range_ && buffer_.IsFilledIndex(index_);
+      return !out_of_range_ && buffer_->IsFilledIndex(index_);
     }
 
    private:
     Iterator(const RingBuffer<T, kSize>& buffer, size_t index)
         : buffer_(buffer), index_(index), out_of_range_(false) {}
 
-    const RingBuffer<T, kSize>& buffer_;
+    const raw_ref<const RingBuffer<T, kSize>> buffer_;
     size_t index_;
     bool out_of_range_;
 
@@ -100,8 +105,9 @@ class RingBuffer {
   // Example usage (iterate from oldest to newest value):
   //  for (RingBuffer<T, kSize>::Iterator it = ring_buffer.Begin(); it; ++it) {}
   Iterator Begin() const {
-    if (current_index_ < kSize)
+    if (current_index_ < kSize) {
       return Iterator(*this, kSize - current_index_);
+    }
     return Iterator(*this, 0);
   }
 
@@ -123,7 +129,7 @@ class RingBuffer {
     return buffer_index < current_index_;
   }
 
-  T buffer_[kSize];
+  std::array<T, kSize> buffer_;
   size_t current_index_;
 };
 

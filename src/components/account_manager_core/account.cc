@@ -1,12 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/account_manager_core/account.h"
 
 #include "base/check.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace account_manager {
+
+// static
+AccountKey AccountKey::FromGaiaId(const GaiaId& gaia_id) {
+  return AccountKey(gaia_id.ToString(), AccountType::kGaia);
+}
 
 AccountKey::AccountKey(const std::string& id, AccountType type)
     : id_(id), account_type_(type) {

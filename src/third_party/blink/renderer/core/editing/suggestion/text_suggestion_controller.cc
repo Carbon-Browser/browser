@@ -1,12 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/suggestion/text_suggestion_controller.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
-#include "third_party/blink/renderer/core/clipboard/data_transfer.h"
-#include "third_party/blink/renderer/core/clipboard/data_transfer_access_policy.h"
+#include "base/ranges/algorithm.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
@@ -148,7 +147,8 @@ SuggestionInfosWithNodeAndHighlightColor ComputeSuggestionInfos(
       node_suggestion_marker_pairs_sorted_by_length.front().second.Get());
 
   suggestion_infos_with_node_and_highlight_color.highlight_color =
-      (first_suggestion_marker->SuggestionHighlightColor() == 0)
+      (first_suggestion_marker->SuggestionHighlightColor() ==
+       Color::kTransparent)
           ? LayoutTheme::TapHighlightColor()
           : first_suggestion_marker->SuggestionHighlightColor();
 
@@ -170,14 +170,15 @@ SuggestionInfosWithNodeAndHighlightColor ComputeSuggestionInfos(
       const String& suggestion = marker_suggestions[suggestion_index];
       if (suggestion_infos.size() == max_number_of_suggestions)
         break;
-      if (std::find_if(suggestion_infos.begin(), suggestion_infos.end(),
-                       [marker, &suggestion](const TextSuggestionInfo& info) {
-                         return info.span_start ==
-                                    (int32_t)marker->StartOffset() &&
-                                info.span_end == (int32_t)marker->EndOffset() &&
-                                info.suggestion == suggestion;
-                       }) != suggestion_infos.end())
+      if (base::ranges::any_of(
+              suggestion_infos,
+              [marker, &suggestion](const TextSuggestionInfo& info) {
+                return info.span_start == (int32_t)marker->StartOffset() &&
+                       info.span_end == (int32_t)marker->EndOffset() &&
+                       info.suggestion == suggestion;
+              })) {
         continue;
+      }
 
       TextSuggestionInfo suggestion_info;
       suggestion_info.marker_tag = marker->Tag();
@@ -205,19 +206,11 @@ bool TextSuggestionController::IsMenuOpen() const {
 
 void TextSuggestionController::HandlePotentialSuggestionTap(
     const PositionInFlatTree& caret_position) {
-  if (!IsAvailable()) {
-    // TODO(crbug.com/1054955): We should fix caller not to make this happens.
-    NOTREACHED();
+  if (!IsAvailable() || GetFrame() != GetDocument().GetFrame()) {
+    // TODO(crbug.com/1054955, crbug.com/1409155, crbug.com/1412036): Callsites
+    // should not call this function in these conditions.
     return;
   }
-  if (GetFrame() != GetDocument().GetFrame()) {
-    // TODO(crbug.com/1054955): We should fix caller not to make this happens.
-    NOTREACHED();
-    return;
-  }
-  // TODO(crbug.com/779126): add support for suggestions in immersive mode.
-  if (GetFrame().GetSettings()->GetImmersiveModeEnabled())
-    return;
 
   // It's theoretically possible, but extremely unlikely, that the user has
   // managed to tap on some text after TextSuggestionController has told the
@@ -239,7 +232,7 @@ void TextSuggestionController::HandlePotentialSuggestionTap(
     return;
 
   const auto* marker = DynamicTo<SuggestionMarker>(node_and_marker.second);
-  if (marker && marker->Suggestions().IsEmpty())
+  if (marker && marker->Suggestions().empty())
     return;
 
   if (!text_suggestion_host_.is_bound()) {
@@ -271,7 +264,7 @@ void TextSuggestionController::ReplaceActiveSuggestionRange(
           GetFrame().GetDocument()->Markers().MarkersIntersectingRange(
               range_to_check, DocumentMarker::MarkerTypes::ActiveSuggestion());
 
-  if (node_marker_pairs.IsEmpty())
+  if (node_marker_pairs.empty())
     return;
 
   const Text* const marker_text_node = node_marker_pairs.front().first;
@@ -396,7 +389,7 @@ void TextSuggestionController::SuggestionMenuTimeoutCallback(
       node_suggestion_marker_pairs =
           GetFrame().GetDocument()->Markers().MarkersIntersectingRange(
               range_to_check, DocumentMarker::MarkerTypes::Suggestion());
-  if (!node_suggestion_marker_pairs.IsEmpty()) {
+  if (!node_suggestion_marker_pairs.empty()) {
     ShowSuggestionMenu(node_suggestion_marker_pairs, max_number_of_suggestions);
     return;
   }
@@ -406,7 +399,7 @@ void TextSuggestionController::SuggestionMenuTimeoutCallback(
       node_spelling_marker_pairs =
           GetFrame().GetDocument()->Markers().MarkersIntersectingRange(
               range_to_check, DocumentMarker::MarkerTypes::Misspelling());
-  if (!node_spelling_marker_pairs.IsEmpty())
+  if (!node_spelling_marker_pairs.empty())
     ShowSpellCheckMenu(node_spelling_marker_pairs.front());
 
   // If we get here, that means the user tapped on a spellcheck or suggestion
@@ -428,9 +421,9 @@ void TextSuggestionController::ShowSpellCheckMenu(
   is_suggestion_menu_open_ = true;
   GetFrame().Selection().SetCaretEnabled(false);
   GetDocument().Markers().AddActiveSuggestionMarker(
-      active_suggestion_range, SK_ColorTRANSPARENT,
+      active_suggestion_range, Color::kTransparent,
       ui::mojom::ImeTextSpanThickness::kNone,
-      ui::mojom::ImeTextSpanUnderlineStyle::kSolid, SK_ColorTRANSPARENT,
+      ui::mojom::ImeTextSpanUnderlineStyle::kSolid, Color::kTransparent,
       LayoutTheme::GetTheme().PlatformActiveSpellingMarkerHighlightColor());
 
   Vector<String> suggestions;
@@ -444,6 +437,11 @@ void TextSuggestionController::ShowSpellCheckMenu(
     suggestion_ptrs.push_back(std::move(info_ptr));
   }
 
+  // |FrameSelection::AbsoluteCaretBounds()| requires clean layout.
+  // TODO(editing-dev): The use of UpdateStyleAndLayout
+  // needs to be audited.  See http://crbug.com/590369 for more details.
+  GetFrame().GetDocument()->UpdateStyleAndLayout(
+      DocumentUpdateReason::kSpellCheck);
   const gfx::Rect& absolute_bounds =
       GetFrame().Selection().AbsoluteCaretBounds();
   const gfx::Rect& viewport_bounds =
@@ -458,7 +456,7 @@ void TextSuggestionController::ShowSuggestionMenu(
     const HeapVector<std::pair<Member<const Text>, Member<DocumentMarker>>>&
         node_suggestion_marker_pairs,
     size_t max_number_of_suggestions) {
-  DCHECK(!node_suggestion_marker_pairs.IsEmpty());
+  DCHECK(!node_suggestion_marker_pairs.empty());
 
   SuggestionInfosWithNodeAndHighlightColor
       suggestion_infos_with_node_and_highlight_color = ComputeSuggestionInfos(
@@ -466,7 +464,7 @@ void TextSuggestionController::ShowSuggestionMenu(
 
   Vector<TextSuggestionInfo>& suggestion_infos =
       suggestion_infos_with_node_and_highlight_color.suggestion_infos;
-  if (suggestion_infos.IsEmpty())
+  if (suggestion_infos.empty())
     return;
 
   int span_union_start = suggestion_infos[0].span_start;
@@ -496,8 +494,8 @@ void TextSuggestionController::ShowSuggestionMenu(
                                     Position(text_node, span_union_end));
 
   GetDocument().Markers().AddActiveSuggestionMarker(
-      marker_range, SK_ColorTRANSPARENT, ui::mojom::ImeTextSpanThickness::kThin,
-      ui::mojom::ImeTextSpanUnderlineStyle::kSolid, SK_ColorTRANSPARENT,
+      marker_range, Color::kTransparent, ui::mojom::ImeTextSpanThickness::kThin,
+      ui::mojom::ImeTextSpanUnderlineStyle::kSolid, Color::kTransparent,
       suggestion_infos_with_node_and_highlight_color.highlight_color);
 
   is_suggestion_menu_open_ = true;
@@ -622,40 +620,8 @@ void TextSuggestionController::ReplaceRangeWithText(const EphemeralRange& range,
   GetFrame().Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder().SetBaseAndExtent(range).Build());
 
-  // TODO(editing-dev): We should check whether |TextSuggestionController| is
-  // available or not.
-  // TODO(editing-dev): The use of UpdateStyleAndLayout
-  // needs to be audited.  See http://crbug.com/590369 for more details.
-  GetFrame().GetDocument()->UpdateStyleAndLayout(
-      DocumentUpdateReason::kSpellCheck);
-
-  // Dispatch 'beforeinput'.
-  Element* const target = FindEventTargetFrom(
-      GetFrame(), GetFrame().Selection().ComputeVisibleSelectionInDOMTree());
-
-  DataTransfer* const data_transfer = DataTransfer::Create(
-      DataTransfer::DataTransferType::kInsertReplacementText,
-      DataTransferAccessPolicy::kReadable,
-      DataObject::CreateFromString(replacement));
-
-  const bool is_canceled =
-      DispatchBeforeInputDataTransfer(
-          target, InputEvent::InputType::kInsertReplacementText,
-          data_transfer) != DispatchEventResult::kNotCanceled;
-
-  // 'beforeinput' event handler may destroy target frame.
-  if (!IsAvailable())
-    return;
-
-  // TODO(editing-dev): The use of UpdateStyleAndLayout
-  // needs to be audited.  See http://crbug.com/590369 for more details.
-  GetFrame().GetDocument()->UpdateStyleAndLayout(
-      DocumentUpdateReason::kSpellCheck);
-
-  if (is_canceled)
-    return;
-  GetFrame().GetEditor().ReplaceSelectionWithText(
-      replacement, false, false, InputEvent::InputType::kInsertReplacementText);
+  InsertTextAndSendInputEventsOfTypeInsertReplacementText(GetFrame(),
+                                                          replacement);
 }
 
 }  // namespace blink

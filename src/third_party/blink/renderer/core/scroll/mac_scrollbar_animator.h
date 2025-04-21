@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ class CORE_EXPORT MacScrollbar {
   virtual ~MacScrollbar() = default;
 
   virtual void SetEnabled(bool) = 0;
-  virtual void SetOverlayColorTheme(ScrollbarOverlayColorTheme) = 0;
   virtual float GetKnobAlpha() = 0;
   virtual float GetTrackAlpha() = 0;
   virtual int GetTrackBoxWidth() = 0;

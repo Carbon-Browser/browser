@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Print a version and prepare the artifacts for "avd" CIPD package.
@@ -30,7 +30,6 @@ _SRC_PATH = os.path.abspath(
 # The src-relative files and dirs we would like to include in the CIPD.
 _BASE_DEPS = [
     # vpython, binaries and avd configs used by //tools/android/avd/avd.py
-    '.vpython',
     '.vpython3',
     'third_party/android_sdk/public/cmdline-tools/',
     'third_party/android_sdk/public/platform-tools/',
@@ -76,8 +75,11 @@ def _compute_hash_paths(base_path, *rel_paths):
         dirs.sort()  # ensure we walk dirs in sorted order
         files.sort()
         for f_name in files:
-          rel_file_path = os.path.relpath(os.path.join(root, f_name), base_path)
-          _file_hash(sha, rel_file_path, base_path)
+          f_path = os.path.join(root, f_name)
+          # Check if it's a file to prevent following symlinks.
+          if os.path.isfile(f_path):
+            rel_file_path = os.path.relpath(f_path, base_path)
+            _file_hash(sha, rel_file_path, base_path)
 
   return sha.hexdigest()
 

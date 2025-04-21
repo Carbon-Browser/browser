@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <stddef.h>
 
-#include "base/callback_forward.h"
 #include "base/containers/id_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "components/content_settings/core/common/content_settings.h"
@@ -42,12 +42,9 @@ class WebTestStorageAccessManager
                 receiver);
 
  private:
-  raw_ptr<BrowserContext> browser_context_;
+  raw_ref<BrowserContext> browser_context_;
 
   mojo::ReceiverSet<blink::test::mojom::StorageAccessAutomation> receivers_;
-
-  ContentSettingsForOneType content_settings_for_automation_;
-  bool third_party_cookies_blocked_ = false;
 };
 
 }  // namespace content

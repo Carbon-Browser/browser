@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_RENDERER_SUPERVISED_USER_SUPERVISED_USER_ERROR_PAGE_CONTROLLER_DELEGATE_H_
 #define CHROME_RENDERER_SUPERVISED_USER_SUPERVISED_USER_ERROR_PAGE_CONTROLLER_DELEGATE_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 // Called when the interstitial calls the installed JS methods.
 class SupervisedUserErrorPageControllerDelegate {
@@ -24,12 +24,8 @@ class SupervisedUserErrorPageControllerDelegate {
   // Called to initiate local URL approval flow.
   virtual void RequestUrlAccessLocal(UrlAccessRequestInitiated callback) = 0;
 
-  // Called to trigger user feedback UI from the URL blocked with explicit
-  // content filter.
-  virtual void Feedback() = 0;
-
  protected:
-  virtual ~SupervisedUserErrorPageControllerDelegate() {}
+  virtual ~SupervisedUserErrorPageControllerDelegate() = default;
 };
 
 #endif  // CHROME_RENDERER_SUPERVISED_USER_SUPERVISED_USER_ERROR_PAGE_CONTROLLER_DELEGATE_H_

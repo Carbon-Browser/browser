@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -37,8 +36,8 @@ class VKMSTest : public testing::Test {
         drm_device_.BindNewPipeAndPassReceiver());
     run_loop.Run();
 
-    auto [path, file] = ui::test::FindDrmDriverOrDie("vkms");
-    drm_device_->AddGraphicsDevice(path, std::move(file));
+    auto [path, fd] = ui::test::FindDrmDriverOrDie("vkms");
+    drm_device_->AddGraphicsDevice(path, mojo::PlatformHandle(std::move(fd)));
   }
 
  protected:
@@ -68,12 +67,17 @@ class VKMSTest : public testing::Test {
     }
 
     base::RunLoop run_loop;
-    auto callback = base::BindLambdaForTesting([&run_loop](bool success) {
-      EXPECT_TRUE(success) << "Unable to set up displays.";
-      run_loop.Quit();
-    });
-    drm_device_->ConfigureNativeDisplays(
-        params, display::kTestModeset | display::kCommitModeset, callback);
+    auto callback = base::BindLambdaForTesting(
+        [&run_loop](const std::vector<display::DisplayConfigurationParams>&
+                        request_results,
+                    bool success) {
+          EXPECT_TRUE(success) << "Unable to set up displays.";
+          run_loop.Quit();
+        });
+    drm_device_->ConfigureNativeDisplays(params,
+                                         {display::ModesetFlag::kTestModeset,
+                                          display::ModesetFlag::kCommitModeset},
+                                         callback);
     run_loop.Run();
 
     return RefreshDisplays();
@@ -134,8 +138,9 @@ TEST_F(VKMSTest, SinglePlanePageFlip) {
       /*flags=*/0, &buffer, &framebuffer);
 
   auto planes = std::vector<ui::DrmOverlayPlane>();
-  planes.emplace_back(framebuffer,
-                      std::make_unique<gfx::GpuFence>(gfx::GpuFenceHandle()));
+  planes.push_back(ui::DrmOverlayPlane::TestPlane(
+      framebuffer, gfx::ColorSpace::CreateSRGB(),
+      std::make_unique<gfx::GpuFence>(gfx::GpuFenceHandle())));
 
   base::RunLoop run_loop;
   auto submission_callback =

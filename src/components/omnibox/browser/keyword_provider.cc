@@ -1,18 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/omnibox/browser/keyword_provider.h"
 
-#include <algorithm>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
-#include "base/containers/cxx20_erase.h"
+#include "base/containers/contains.h"
 #include "base/i18n/case_conversion.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/escape.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -22,11 +22,13 @@
 #include "components/omnibox/browser/keyword_extensions_delegate.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/search_provider.h"
-#include "components/search_engines/omnibox_focus_type.h"
+#include "components/omnibox/common/omnibox_feature_configs.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/search_engines/template_url_starter_pack_data.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_formatter.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/url_constants.h"
@@ -36,18 +38,15 @@ namespace {
 // Helper functor for Start(), for sorting keyword matches by quality.
 class CompareQuality {
  public:
-  // A keyword is of higher quality when a greater fraction of the important
-  // part of it has been typed, that is, when the meaningful keyword length is
-  // shorter.
+  // A keyword is of higher quality when a greater fraction of it has been
+  // typed, that is, when it is shorter.
   //
   // TODO(pkasting): Most recent and most frequent keywords are probably
   // better rankings than the fraction of the keyword typed.  We should
   // always put any exact matches first no matter what, since the code in
   // Start() assumes this (and it makes sense).
-  bool operator()(
-      const TemplateURLService::TURLAndMeaningfulLength t_url_match1,
-      const TemplateURLService::TURLAndMeaningfulLength t_url_match2) const {
-    return t_url_match1.second < t_url_match2.second;
+  bool operator()(const TemplateURL* t_url1, const TemplateURL* t_url2) const {
+    return t_url1->keyword().length() < t_url2->keyword().length();
   }
 };
 
@@ -69,8 +68,7 @@ class ScopedEndExtensionKeywordMode {
 
 ScopedEndExtensionKeywordMode::ScopedEndExtensionKeywordMode(
     KeywordExtensionsDelegate* delegate)
-    : delegate_(delegate) {
-}
+    : delegate_(delegate) {}
 
 ScopedEndExtensionKeywordMode::~ScopedEndExtensionKeywordMode() {
   if (delegate_)
@@ -87,7 +85,8 @@ KeywordProvider::KeywordProvider(AutocompleteProviderClient* client,
                                  AutocompleteProviderListener* listener)
     : AutocompleteProvider(AutocompleteProvider::TYPE_KEYWORD),
       model_(client->GetTemplateURLService()),
-      extensions_delegate_(client->GetKeywordExtensionsDelegate(this)) {
+      extensions_delegate_(client->GetKeywordExtensionsDelegate(this)),
+      client_(client) {
   AddListener(listener);
 }
 
@@ -129,7 +128,7 @@ std::u16string KeywordProvider::SplitReplacementStringFromInput(
   // And extract the replacement string.
   std::u16string remaining_input;
   SplitKeywordFromInput(trimmed_input, trim_leading_whitespace,
-      &remaining_input);
+                        &remaining_input);
   return remaining_input;
 }
 
@@ -167,8 +166,9 @@ const TemplateURL* KeywordProvider::GetSubstitutingTemplateURLForInput(
       } else {
         // If somehow the cursor was before the remaining text, set it to 0,
         // otherwise adjust it relative to the remaining text.
-        cursor_position = offset > static_cast<int>(remaining_input.length()) ?
-            0u : remaining_input.length() - offset;
+        cursor_position = offset > static_cast<int>(remaining_input.length())
+                              ? 0u
+                              : remaining_input.length() - offset;
       }
     }
     input->UpdateText(remaining_input, cursor_position, input->parts());
@@ -179,24 +179,29 @@ const TemplateURL* KeywordProvider::GetSubstitutingTemplateURLForInput(
 }
 
 // static
-AutocompleteInput KeywordProvider::AdjustInputForStarterPackEngines(
+KeywordProvider::AdjustedInputAndStarterPackEngine
+KeywordProvider::AdjustInputForStarterPackEngines(
     const AutocompleteInput& input,
     TemplateURLService* model) {
   DCHECK(model);
 
-  // If we're in a starter pack scope, we want to run the provider with only
-  // the user text AFTER the keyword.  i.e. if the input is "@history text",
+  // If the feature is disabled, or not in keyword mode, then `input` is
+  // definitely not in a starter pack scope, so early exit.
+  if (!input.prefer_keyword()) {
+    return {input, nullptr};
+  }
+
+  // If in a starter pack scope, should run the provider with only
+  // the user text AFTER the keyword.  E.g. if the input is "@history text",
   // set the autocomplete input to just "text".
   AutocompleteInput keyword_input = input;
   const TemplateURL* keyword_provider =
       KeywordProvider::GetSubstitutingTemplateURLForInput(model,
                                                           &keyword_input);
-  if (OmniboxFieldTrial::IsSiteSearchStarterPackEnabled() &&
-      input.prefer_keyword() && keyword_provider &&
-      keyword_provider->starter_pack_id() > 0) {
-    return keyword_input;
-  }
-  return input;
+  if (keyword_provider && keyword_provider->starter_pack_id() > 0)
+    return {keyword_input, keyword_provider};
+
+  return {input, nullptr};
 }
 
 std::u16string KeywordProvider::GetKeywordForText(
@@ -238,10 +243,10 @@ std::u16string KeywordProvider::GetKeywordForText(
     return std::u16string();
   }
 
-  // Don't provide a keyword if it's a starter pack engine and the starter pack
-  // feature flag is not enabled.
-  if (!OmniboxFieldTrial::IsSiteSearchStarterPackEnabled() &&
-      template_url->starter_pack_id() != 0) {
+  // The built-in history keyword mode is disabled in incognito mode.  Don't
+  // provide a keyword in that case.
+  if (client_->IsOffTheRecord() &&
+      template_url->starter_pack_id() == TemplateURLStarterPackData::kHistory) {
     return std::u16string();
   }
 
@@ -254,9 +259,8 @@ AutocompleteMatch KeywordProvider::CreateVerbatimMatch(
     const AutocompleteInput& input) {
   // A verbatim match is allowed to be the default match when appropriate.
   return CreateAutocompleteMatch(
-      GetTemplateURLService()->GetTemplateURLForKeyword(keyword),
-      keyword.length(), input, keyword.length(),
-      SplitReplacementStringFromInput(text, true),
+      GetTemplateURLService()->GetTemplateURLForKeyword(keyword), input,
+      keyword.length(), SplitReplacementStringFromInput(text, true),
       input.allow_exact_keyword_match(), 0, false);
 }
 
@@ -267,11 +271,11 @@ void KeywordProvider::DeleteMatch(const AutocompleteMatch& match) {
     return i.keyword == match.keyword &&
            i.fill_into_edit == match.fill_into_edit;
   };
-  base::EraseIf(matches_, pred);
+  std::erase_if(matches_, pred);
 
   std::u16string keyword, remaining_input;
-  if (!ExtractKeywordFromInput(
-          keyword_input_, GetTemplateURLService(), &keyword, &remaining_input))
+  if (!ExtractKeywordFromInput(keyword_input_, GetTemplateURLService(),
+                               &keyword, &remaining_input))
     return;
   const TemplateURL* const template_url =
       GetTemplateURLService()->GetTemplateURLForKeyword(keyword);
@@ -302,8 +306,9 @@ void KeywordProvider::Start(const AutocompleteInput& input,
       extensions_delegate_->IncrementInputId();
   }
 
-  if (input.focus_type() != OmniboxFocusType::DEFAULT)
+  if (input.IsZeroSuggest()) {
     return;
+  }
 
   GetTemplateURLService();
   DCHECK(model_);
@@ -321,8 +326,7 @@ void KeywordProvider::Start(const AutocompleteInput& input,
   // typed, if the user uses them enough and isn't obviously typing something
   // else.  In this case we'd consider all input here to be query input.
   std::u16string keyword, remaining_input;
-  if (!ExtractKeywordFromInput(input, model_, &keyword,
-                               &remaining_input))
+  if (!ExtractKeywordFromInput(input, model_, &keyword, &remaining_input))
     return;
 
   keyword_input_ = input;
@@ -333,11 +337,11 @@ void KeywordProvider::Start(const AutocompleteInput& input,
   // |minimal_changes| case, but since we'd still have to recalculate their
   // relevances and we can just recreate the results synchronously anyway, we
   // don't bother.
-  TemplateURLService::TURLsAndMeaningfulLengths matches;
+  TemplateURLService::TemplateURLVector matches;
   model_->AddMatchingKeywords(keyword, !remaining_input.empty(), &matches);
 
   for (auto i(matches.begin()); i != matches.end();) {
-    const TemplateURL* template_url = i->first;
+    const TemplateURL* template_url = *i;
 
     // Prune any extension keywords that are disallowed in incognito mode (if
     // we're incognito), or disabled.
@@ -350,10 +354,8 @@ void KeywordProvider::Start(const AutocompleteInput& input,
     }
 
     // Prune any substituting keywords if there is no substitution.
-    if (template_url->SupportsReplacement(
-            model_->search_terms_data()) &&
-        remaining_input.empty() &&
-        !input.allow_exact_keyword_match()) {
+    if (template_url->SupportsReplacement(model_->search_terms_data()) &&
+        remaining_input.empty() && !input.allow_exact_keyword_match()) {
       i = matches.erase(i);
       continue;
     }
@@ -368,9 +370,8 @@ void KeywordProvider::Start(const AutocompleteInput& input,
   // in the autocomplete popup.
   // Any exact match is going to be the highest quality match, and thus at the
   // front of our vector.
-  if (matches.front().first->keyword() == keyword) {
-    const TemplateURL* template_url = matches.front().first;
-    const size_t meaningful_keyword_length = matches.front().second;
+  if (matches.front()->keyword() == keyword) {
+    const TemplateURL* template_url = matches.front();
     const bool is_extension_keyword =
         template_url->type() == TemplateURL::OMNIBOX_API_EXTENSION;
 
@@ -379,9 +380,18 @@ void KeywordProvider::Start(const AutocompleteInput& input,
     // non-empty non-extension keyword (i.e., a regular keyword that
     // supports replacement and that has extra text following it),
     // then SearchProvider creates the exact (a.k.a. verbatim) match.
-    if (!remaining_input.empty() && !is_extension_keyword)
+    //
+    // TODO(manukh): The above comment seems to on longer be true; search won't
+    //   create keyword suggestions. So when `VitalizeAutocompletedKeywords` is
+    //   true, create them here. If `VitalizeAutocompletedKeywords` proves
+    //   useful, we should clean up the keyword provider. Otherwise, we should
+    //   consider deleting the keyword provider; it's matches are scored to low
+    //   to appear usually anyways.
+    if (!remaining_input.empty() && !is_extension_keyword &&
+        !omnibox_feature_configs::VitalizeAutocompletedKeywords::Get()
+             .enabled) {
       return;
-
+    }
     // TODO(pkasting): We should probably check that if the user explicitly
     // typed a scheme, that scheme matches the one in |template_url|.
 
@@ -390,8 +400,7 @@ void KeywordProvider::Start(const AutocompleteInput& input,
     // input), allow the match to be the default match when appropriate.
     // For exactly-typed non-substituting keywords, it's always appropriate.
     matches_.push_back(CreateAutocompleteMatch(
-        template_url, meaningful_keyword_length, input, keyword.length(),
-        remaining_input,
+        template_url, input, keyword.length(), remaining_input,
         input.allow_exact_keyword_match() ||
             !template_url->SupportsReplacement(model_->search_terms_data()),
         -1, false));
@@ -405,24 +414,12 @@ void KeywordProvider::Start(const AutocompleteInput& input,
         keyword_mode_toggle.StayInKeywordMode();
     }
   } else {
-    for (TemplateURLService::TURLsAndMeaningfulLengths::const_iterator i(
+    for (TemplateURLService::TemplateURLVector::const_iterator i(
              matches.begin());
          (i != matches.end()) && (matches_.size() < provider_max_matches_);
          ++i) {
-      // Skip keywords that we've already added.  It's possible we may have
-      // retrieved the same keyword twice.  For example, the keyword
-      // "abc.abc.com" may be retrieved for the input "abc" from the full
-      // keyword matching and the domain matching passes.
-      ACMatches::const_iterator duplicate = std::find_if(
-          matches_.begin(), matches_.end(),
-          [&i] (const AutocompleteMatch& m) {
-            return m.keyword == i->first->keyword();
-          });
-      if (duplicate == matches_.end()) {
-        matches_.push_back(CreateAutocompleteMatch(
-            i->first, i->second, input, keyword.length(), remaining_input,
-            false, -1, false));
-      }
+      matches_.push_back(CreateAutocompleteMatch(
+          *i, input, keyword.length(), remaining_input, false, -1, false));
     }
   }
 }
@@ -438,7 +435,7 @@ void KeywordProvider::Stop(bool clear_cached_results,
     extensions_delegate_->MaybeEndExtensionKeywordMode();
 }
 
-KeywordProvider::~KeywordProvider() {}
+KeywordProvider::~KeywordProvider() = default;
 
 // static
 bool KeywordProvider::ExtractKeywordFromInput(
@@ -459,18 +456,14 @@ bool KeywordProvider::ExtractKeywordFromInput(
 // static
 int KeywordProvider::CalculateRelevance(metrics::OmniboxInputType type,
                                         bool complete,
-                                        bool sufficiently_complete,
                                         bool supports_replacement,
                                         bool prefer_keyword,
                                         bool allow_exact_keyword_match) {
   if (!complete) {
-    const int sufficiently_complete_score =
-        OmniboxFieldTrial::KeywordScoreForSufficientlyCompleteMatch();
-    // If we have a special score to apply for sufficiently-complete matches,
-    // do so.
-    if (sufficiently_complete && (sufficiently_complete_score > -1))
-      return sufficiently_complete_score;
-    return (type == metrics::OmniboxInputType::URL) ? 700 : 450;
+    return (type == metrics::OmniboxInputType::URL)
+               ? 700
+               : omnibox_feature_configs::VitalizeAutocompletedKeywords::Get()
+                     .score;
   }
   if (!supports_replacement)
     return 1500;
@@ -480,7 +473,6 @@ int KeywordProvider::CalculateRelevance(metrics::OmniboxInputType type,
 
 AutocompleteMatch KeywordProvider::CreateAutocompleteMatch(
     const TemplateURL* template_url,
-    const size_t meaningful_keyword_length,
     const AutocompleteInput& input,
     size_t prefix_length,
     const std::u16string& remaining_input,
@@ -488,21 +480,17 @@ AutocompleteMatch KeywordProvider::CreateAutocompleteMatch(
     int relevance,
     bool deletable) {
   DCHECK(template_url);
-  const bool supports_replacement =
-      template_url->url_ref().SupportsReplacement(
-          GetTemplateURLService()->search_terms_data());
+  const bool supports_replacement = template_url->url_ref().SupportsReplacement(
+      GetTemplateURLService()->search_terms_data());
 
   // Create an edit entry of "[keyword] [remaining input]".  This is helpful
   // even when [remaining input] is empty, as the user can select the popup
   // choice and immediately begin typing in query input.
   const std::u16string& keyword = template_url->keyword();
   const bool keyword_complete = (prefix_length == keyword.length());
-  const bool sufficiently_complete =
-      (prefix_length >= meaningful_keyword_length);
   if (relevance < 0) {
     relevance =
         CalculateRelevance(input.type(), keyword_complete,
-                           sufficiently_complete,
                            // When the user wants keyword matches to take
                            // preference, score them highly regardless of
                            // whether the input provides query text.
@@ -529,9 +517,14 @@ AutocompleteMatch KeywordProvider::CreateAutocompleteMatch(
   // into keyword templates.
   FillInURLAndContents(remaining_input, template_url, &match);
 
-  match.keyword = keyword;
-  match.from_keyword = true;
-  match.transition = ui::PAGE_TRANSITION_KEYWORD;
+  // TODO(manukh) Consider not showing HISTORY_KEYWORD suggestions; i.e. not
+  //   showing keyword matches for keywords that don't support replacement; they
+  //   don't seem useful.
+  if (supports_replacement) {
+    match.keyword = keyword;
+    match.from_keyword = true;
+    match.transition = ui::PAGE_TRANSITION_KEYWORD;
+  }
 
   return match;
 }
@@ -601,7 +594,7 @@ std::u16string KeywordProvider::CleanUserInputKeyword(
   url::Component scheme_component;
   if (url::ExtractScheme(result.c_str(), static_cast<int>(result.length()),
                          &scheme_component)) {
-    const base::StringPiece16 scheme = base::StringPiece16(result).substr(
+    const std::u16string_view scheme = std::u16string_view(result).substr(
         scheme_component.begin, scheme_component.len);
     if (scheme == url::kHttpScheme16 || scheme == url::kHttpsScheme16) {
       // Remove the scheme and the trailing ':'.
@@ -609,7 +602,7 @@ std::u16string KeywordProvider::CleanUserInputKeyword(
       if (template_url_service->GetTemplateURLForKeyword(result) != nullptr)
         return result;
       // Many schemes usually have "//" after them, so strip it too.
-      constexpr base::StringPiece16 kAfterScheme(u"//");
+      constexpr std::u16string_view kAfterScheme(u"//");
       if (base::StartsWith(result, kAfterScheme))
         result.erase(0, kAfterScheme.length());
       if (template_url_service->GetTemplateURLForKeyword(result) != nullptr)
@@ -621,10 +614,10 @@ std::u16string KeywordProvider::CleanUserInputKeyword(
   // The 'www.' stripping is done directly here instead of calling
   // url_formatter::StripWWW because we're not assuming that the keyword is a
   // hostname.
-  constexpr base::StringPiece16 kWww(u"www.");
+  constexpr std::u16string_view kWww(u"www.");
   result = base::StartsWith(result, kWww, base::CompareCase::SENSITIVE)
                ? result.substr(kWww.length())
-               : result;
+               : std::move(result);
   if (template_url_service->GetTemplateURLForKeyword(result) != nullptr)
     return result;
 

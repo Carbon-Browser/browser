@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ std::unique_ptr<SidePanelInfo> ParseFromDictionary(const Extension& extension,
                                                    std::u16string* error) {
   SidePanelManifestKeys manifest_keys;
   if (!SidePanelManifestKeys::ParseFromDictionary(
-          extension.manifest()->available_values(), &manifest_keys, error)) {
+          extension.manifest()->available_values(), manifest_keys, *error)) {
     return nullptr;
   }
   auto info = std::make_unique<SidePanelInfo>();
@@ -84,10 +84,14 @@ bool SidePanelManifestHandler::Validate(
     std::string* error,
     std::vector<InstallWarning>* warnings) const {
   std::string path = SidePanelInfo::GetDefaultPath(extension);
-  if (!ExtensionResourceExists(extension, path)) {
+  GURL side_panel_url = extension->GetResourceURL(path);
+
+  if (!side_panel_url.is_valid() ||
+      !ExtensionResourceExists(extension, side_panel_url.path())) {
     *error = errors::kSidePanelManifestDefaultPathError;
     return false;
   }
+
   return true;
 }
 

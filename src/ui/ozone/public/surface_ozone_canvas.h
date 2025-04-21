@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
+#include "ui/gfx/frame_data.h"
 
 class SkCanvas;
 
@@ -72,7 +73,8 @@ class COMPONENT_EXPORT(OZONE_BASE) SurfaceOzoneCanvas {
   // themselves if the buffer swap is asynchronous, for example, or it needs to
   // do something else before the callback is called. Also check the comment
   // near the SupportsAsyncBufferSwap.
-  virtual void OnSwapBuffers(SwapBuffersCallback swap_ack_callback);
+  virtual void OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                             gfx::FrameData data);
 
   // Returns the maximum number of pending frames.
   virtual int MaxFramesPending() const;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.RootMatchers.withDecorView;
+import static androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
@@ -18,7 +19,6 @@ import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import static org.chromium.base.test.util.Restriction.RESTRICTION_TYPE_NON_LOW_END_DEVICE;
@@ -32,15 +32,14 @@ import static org.chromium.ui.test.util.ViewUtils.onViewWaiting;
 
 import android.content.res.Configuration;
 import android.graphics.drawable.Animatable;
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.test.espresso.NoMatchingRootException;
 import androidx.test.espresso.contrib.RecyclerViewActions;
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.UiDevice;
 
 import org.junit.After;
@@ -49,53 +48,49 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
-import org.chromium.chrome.browser.compositor.layouts.Layout;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.multiwindow.MultiWindowUtils;
-import org.chromium.chrome.features.start_surface.TabSwitcherAndStartSurfaceLayout;
-import org.chromium.chrome.tab_ui.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ActivityTestUtils;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.components.feature_engagement.FeatureConstants;
+import org.chromium.components.feature_engagement.Tracker;
+import org.chromium.components.omnibox.OmniboxFeatureList;
+import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
-import org.chromium.ui.test.util.UiRestriction;
 
 import java.io.IOException;
 
 /** End-to-end tests for TabGridIph component. */
 @RunWith(ChromeJUnit4ClassRunner.class)
-// clang-format off
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
-        "enable-features=IPH_TabGroupsDragAndDrop<TabGroupsDragAndDrop",
-        "force-fieldtrials=TabGroupsDragAndDrop/Enabled",
-        "force-fieldtrial-params=TabGroupsDragAndDrop.Enabled:availability/any/" +
-        "event_trigger/" +
-        "name%3Aiph_tabgroups_drag_and_drop;comparator%3A==0;window%3A30;storage%3A365/" +
-        "event_trigger2/" +
-        "name%3Aiph_tabgroups_drag_and_drop;comparator%3A<2;window%3A90;storage%3A365/" +
-        "event_used/" +
-        "name%3Atab_drag_and_drop_to_group;comparator%3A==0;window%3A365;storage%3A365/" +
-        "session_rate/<1"
-})
-@Restriction({UiRestriction.RESTRICTION_TYPE_PHONE, RESTRICTION_TYPE_NON_LOW_END_DEVICE})
-@Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID,
-    ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-@Features.DisableFeatures(ChromeFeatureList.CLOSE_TAB_SUGGESTIONS)
+@CommandLineFlags.Add(ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE)
+@Restriction({DeviceFormFactor.PHONE, RESTRICTION_TYPE_NON_LOW_END_DEVICE})
+@EnableFeatures(
+        "IPH_TabGroupsDragAndDrop:availability/any"
+            + "/event_trigger/name%3Aiph_tabgroups_drag_and_drop;comparator%3A==0;window%3A30;storage%3A365"
+            + "/event_trigger2/name%3Aiph_tabgroups_drag_and_drop;comparator%3A<2;window%3A90;storage%3A365"
+            + "/event_used/name%3Atab_drag_and_drop_to_group;comparator%3A==0;window%3A365;storage%3A365"
+            + "/session_rate/<1")
+@DisableFeatures({OmniboxFeatureList.ANDROID_HUB_SEARCH})
+@DoNotBatch(reason = "Batching can cause message state to leak between tests.")
 public class TabGridIphTest {
-    // clang-format on
     private ModalDialogManager mModalDialogManager;
+    private Tracker mTracker;
 
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
@@ -105,22 +100,38 @@ public class TabGridIphTest {
             ChromeRenderTestRule.Builder.withPublicCorpus()
                     .setBugComponent(
                             ChromeRenderTestRule.Component.UI_BROWSER_MOBILE_TAB_SWITCHER_GRID)
+                    .setRevision(3)
                     .build();
 
     @Before
     public void setUp() {
+        IphMessageService.setSkipIphInTestsForTesting(false);
         mActivityTestRule.startMainActivityOnBlankPage();
-        Layout layout = mActivityTestRule.getActivity().getLayoutManager().getOverviewLayout();
-        assertTrue(layout instanceof TabSwitcherAndStartSurfaceLayout);
+        TabUiTestHelper.verifyTabSwitcherLayoutType(mActivityTestRule.getActivity());
         CriteriaHelper.pollUiThread(
                 mActivityTestRule.getActivity().getTabModelSelector()::isTabStateInitialized);
-        mModalDialogManager = TestThreadUtils.runOnUiThreadBlockingNoException(
-                mActivityTestRule.getActivity()::getModalDialogManager);
+        mModalDialogManager =
+                ThreadUtils.runOnUiThreadBlocking(
+                        mActivityTestRule.getActivity()::getModalDialogManager);
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTracker =
+                            TrackerFactory.getTrackerForProfile(
+                                    mActivityTestRule.getProfile(false));
+                });
+        CriteriaHelper.pollUiThread(mTracker::isInitialized);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return mTracker.wouldTriggerHelpUi(
+                            FeatureConstants.TAB_GROUPS_DRAG_AND_DROP_FEATURE);
+                });
     }
 
     @After
     public void tearDown() {
         ActivityTestUtils.clearActivityOrientation(mActivityTestRule.getActivity());
+        ThreadUtils.runOnUiThreadBlocking(
+                TabSwitcherMessageManager::resetHasAppendedMessagesForTesting);
     }
 
     @Test
@@ -129,10 +140,9 @@ public class TabGridIphTest {
         final ChromeTabbedActivity cta = mActivityTestRule.getActivity();
 
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(
-                TabSwitcherCoordinator::hasAppendedMessagesForTesting);
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
         // Check the IPH message card is showing and open the IPH dialog.
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
         onView(allOf(withId(R.id.action_button), withParent(withId(R.id.tab_grid_message_item))))
                 .perform(click());
         verifyIphDialogShowing(cta);
@@ -142,7 +152,7 @@ public class TabGridIphTest {
         verifyIphDialogHiding(cta);
 
         // Check the IPH message card is showing and open the IPH dialog.
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
         onView(allOf(withId(R.id.action_button), withParent(withId(R.id.tab_grid_message_item))))
                 .perform(click());
         verifyIphDialogShowing(cta);
@@ -153,14 +163,15 @@ public class TabGridIphTest {
         onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Check the IPH message card is showing and open the IPH dialog.
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
         onView(allOf(withId(R.id.action_button), withParent(withId(R.id.tab_grid_message_item))))
                 .perform(click());
         verifyIphDialogShowing(cta);
 
         // Click outside of the dialog area to close the IPH dialog.
-        View dialogView = mModalDialogManager.getCurrentDialogForTest().get(
-                ModalDialogProperties.CUSTOM_VIEW);
+        View dialogView =
+                mModalDialogManager
+                        .getCurrentDialogForTest()
+                        .get(ModalDialogProperties.CUSTOM_VIEW);
         int[] location = new int[2];
         // Get the position of the dialog view and click slightly above so that we essentially click
         // on the scrim.
@@ -178,8 +189,8 @@ public class TabGridIphTest {
         createTabs(cta, true, 1);
         enterTabSwitcher(cta);
         assertTrue(cta.getTabModelSelector().getCurrentModel().isIncognito());
-        CriteriaHelper.pollUiThread(TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
     }
 
     @Test
@@ -188,18 +199,16 @@ public class TabGridIphTest {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
 
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(
-                TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Restart chrome to verify that IPH message card is still there.
         TabUiTestHelper.finishActivity(mActivityTestRule.getActivity());
         mActivityTestRule.startMainActivityFromLauncher();
         cta = mActivityTestRule.getActivity();
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(
-                TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Remove the message card and dismiss the feature by clicking close button.
         onView(allOf(withId(R.id.close_button), withParent(withId(R.id.tab_grid_message_item))))
@@ -221,10 +230,10 @@ public class TabGridIphTest {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
 
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(
-                TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
+        ChromeRenderTestRule.sanitize(cta.findViewById(R.id.tab_grid_message_item));
         mRenderTestRule.render(
                 cta.findViewById(R.id.tab_grid_message_item), "iph_entrance_portrait");
     }
@@ -237,12 +246,16 @@ public class TabGridIphTest {
 
         enterTabSwitcher(cta);
         ActivityTestUtils.rotateActivityToOrientation(cta, Configuration.ORIENTATION_LANDSCAPE);
-        CriteriaHelper.pollUiThread(
-                TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(allOf(withParent(withId(R.id.compositor_view_holder)), withId(R.id.tab_list_view)))
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(
+                        allOf(
+                                isDescendantOfA(
+                                        withId(TabUiTestHelper.getTabSwitcherAncestorId(cta))),
+                                withId(R.id.tab_list_recycler_view)))
                 .perform(RecyclerViewActions.scrollTo(withId(R.id.tab_grid_message_item)));
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
+        ChromeRenderTestRule.sanitize(cta.findViewById(R.id.tab_grid_message_item));
         mRenderTestRule.render(
                 cta.findViewById(R.id.tab_grid_message_item), "iph_entrance_landscape");
     }
@@ -254,48 +267,63 @@ public class TabGridIphTest {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
 
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(allOf(withId(R.id.action_button), withParent(withId(R.id.tab_grid_message_item))))
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(
+                        allOf(
+                                withId(R.id.action_button),
+                                withParent(withId(R.id.tab_grid_message_item))))
                 .perform(click());
         verifyIphDialogShowing(cta);
 
-        View iphDialogView = mModalDialogManager.getCurrentDialogForTest().get(
-                ModalDialogProperties.CUSTOM_VIEW);
+        View iphDialogView =
+                mModalDialogManager
+                        .getCurrentDialogForTest()
+                        .get(ModalDialogProperties.CUSTOM_VIEW);
         // Freeze animation and wait until animation is really frozen.
         ChromeRenderTestRule.sanitize(iphDialogView);
         ImageView iphImageView = iphDialogView.findViewById(R.id.animation_drawable);
         Animatable iphAnimation = (Animatable) iphImageView.getDrawable();
         CriteriaHelper.pollUiThread(() -> !iphAnimation.isRunning());
 
+        ChromeRenderTestRule.sanitize(iphDialogView);
         mRenderTestRule.render(iphDialogView, "iph_dialog_portrait");
     }
 
     @Test
     @MediumTest
     @Feature({"RenderTest"})
-    @DisabledTest(message = "crbug.com/1300743")
     public void testRenderIphDialog_Landscape() throws IOException {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
+        ActivityTestUtils.rotateActivityToOrientation(cta, Configuration.ORIENTATION_LANDSCAPE);
 
         enterTabSwitcher(cta);
-        ActivityTestUtils.rotateActivityToOrientation(cta, Configuration.ORIENTATION_LANDSCAPE);
-        CriteriaHelper.pollUiThread(TabSwitcherCoordinator::hasAppendedMessagesForTesting);
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
         // Scroll to the position of the IPH entrance so that it is completely showing for Espresso
         // click.
-        onView(allOf(withParent(withId(R.id.compositor_view_holder)), withId(R.id.tab_list_view)))
+        onViewWaiting(
+                        allOf(
+                                isDescendantOfA(
+                                        withId(TabUiTestHelper.getTabSwitcherAncestorId(cta))),
+                                withId(R.id.tab_list_recycler_view)))
                 .perform(RecyclerViewActions.scrollToPosition(1));
-        onView(allOf(withId(R.id.action_button), withParent(withId(R.id.tab_grid_message_item))))
+        onViewWaiting(
+                        allOf(
+                                withId(R.id.action_button),
+                                withParent(withId(R.id.tab_grid_message_item))))
                 .perform(click());
         verifyIphDialogShowing(cta);
 
-        View iphDialogView = mModalDialogManager.getCurrentDialogForTest().get(
-                ModalDialogProperties.CUSTOM_VIEW);
+        View iphDialogView =
+                mModalDialogManager
+                        .getCurrentDialogForTest()
+                        .get(ModalDialogProperties.CUSTOM_VIEW);
         // Freeze animation and wait until animation is really frozen.
         ChromeRenderTestRule.sanitize(iphDialogView);
         ImageView iphImageView = iphDialogView.findViewById(R.id.animation_drawable);
         Animatable iphAnimation = (Animatable) iphImageView.getDrawable();
         CriteriaHelper.pollUiThread(() -> !iphAnimation.isRunning());
 
+        ChromeRenderTestRule.sanitize(iphDialogView);
         mRenderTestRule.render(iphDialogView, "iph_dialog_landscape");
     }
 
@@ -305,22 +333,24 @@ public class TabGridIphTest {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
 
         enterTabSwitcher(cta);
-        CriteriaHelper.pollUiThread(TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Close the last tab in tab switcher and the IPH item should not be showing.
-        closeFirstTabInTabSwitcher();
-        CriteriaHelper.pollUiThread(() -> !TabSwitcherCoordinator.hasAppendedMessagesForTesting());
+        closeFirstTabInTabSwitcher(cta);
+        CriteriaHelper.pollUiThread(
+                () -> !TabSwitcherMessageManager.hasAppendedMessagesForTesting());
         verifyTabSwitcherCardCount(cta, 0);
         onView(withId(R.id.tab_grid_message_item)).check(doesNotExist());
 
         // Undo the closure of the last tab and the IPH item should reshow.
         CriteriaHelper.pollInstrumentationThread(TabUiTestHelper::verifyUndoBarShowingAndClickUndo);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Close the last tab in the tab switcher.
-        closeFirstTabInTabSwitcher();
-        CriteriaHelper.pollUiThread(() -> !TabSwitcherCoordinator.hasAppendedMessagesForTesting());
+        closeFirstTabInTabSwitcher(cta);
+        CriteriaHelper.pollUiThread(
+                () -> !TabSwitcherMessageManager.hasAppendedMessagesForTesting());
         verifyTabSwitcherCardCount(cta, 0);
         onView(withId(R.id.tab_grid_message_item)).check(doesNotExist());
 
@@ -329,34 +359,41 @@ public class TabGridIphTest {
                 InstrumentationRegistry.getInstrumentation(), cta, false, true);
         enterTabSwitcher(cta);
         verifyTabSwitcherCardCount(cta, 1);
-        CriteriaHelper.pollUiThread(TabSwitcherCoordinator::hasAppendedMessagesForTesting);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        CriteriaHelper.pollUiThread(TabSwitcherMessageManager::hasAppendedMessagesForTesting);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
     }
 
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1245260")
-    public void testSwipeToDismiss_IPH() {
+    @DisabledTest(message = "Consistent failures despite revival effort in b/341267765")
+    public void testSwipeToDismiss_Iph() {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
         enterTabSwitcher(cta);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
-        RecyclerView.ViewHolder viewHolder = ((RecyclerView) cta.findViewById(R.id.tab_list_view))
-                                                     .findViewHolderForAdapterPosition(1);
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        RecyclerView.ViewHolder viewHolder =
+                ((RecyclerView) cta.findViewById(R.id.tab_list_recycler_view))
+                        .findViewHolderForAdapterPosition(1);
         assertEquals(TabProperties.UiType.MESSAGE, viewHolder.getItemViewType());
 
-        onView(allOf(withParent(withId(R.id.compositor_view_holder)), withId(R.id.tab_list_view)))
-                .perform(RecyclerViewActions.actionOnItemAtPosition(
-                        1, getSwipeToDismissAction(true)));
+        onView(
+                        allOf(
+                                isDescendantOfA(
+                                        withId(TabUiTestHelper.getTabSwitcherAncestorId(cta))),
+                                withId(R.id.tab_list_recycler_view)))
+                .perform(
+                        RecyclerViewActions.actionOnItemAtPosition(
+                                1, getSwipeToDismissAction(true)));
 
         onView(withId(R.id.tab_grid_message_item)).check(doesNotExist());
     }
 
     @Test
     @MediumTest
-    public void testNotShowIPHInMultiWindowMode() {
+    @DisabledTest(message = "Still flaky on arm builds despite revival effort in b/341267765")
+    public void testNotShowIphInMultiWindowMode() {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
         enterTabSwitcher(cta);
-        onView(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
+        onViewWaiting(withId(R.id.tab_grid_message_item)).check(matches(isDisplayed()));
 
         // Mock that user enters multi-window mode, and the IPH message should not show in tab
         // switcher.
@@ -374,18 +411,19 @@ public class TabGridIphTest {
 
     private void verifyIphDialogShowing(ChromeTabbedActivity cta) {
         // Verify IPH dialog view.
-        onView(withId(R.id.iph_dialog))
-                .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
-                .check((v, noMatchException) -> {
-                    if (noMatchException != null) throw noMatchException;
+        onViewWaiting(withId(R.id.iph_dialog))
+                .check(
+                        (v, noMatchException) -> {
+                            if (noMatchException != null) throw noMatchException;
 
-                    String title = cta.getString(R.string.iph_drag_and_drop_title);
-                    assertEquals(title, ((TextView) v.findViewById(R.id.title)).getText());
+                            String title = cta.getString(R.string.iph_drag_and_drop_title);
+                            assertEquals(title, ((TextView) v.findViewById(R.id.title)).getText());
 
-                    String description = cta.getString(R.string.iph_drag_and_drop_content);
-                    assertEquals(
-                            description, ((TextView) v.findViewById(R.id.description)).getText());
-                });
+                            String description = cta.getString(R.string.iph_drag_and_drop_content);
+                            assertEquals(
+                                    description,
+                                    ((TextView) v.findViewById(R.id.description)).getText());
+                        });
         // Verify ModalDialog button.
         onView(withId(R.id.positive_button))
                 .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
@@ -393,22 +431,10 @@ public class TabGridIphTest {
     }
 
     private void verifyIphDialogHiding(ChromeTabbedActivity cta) {
-        boolean isShowing = true;
-        try {
-            onView(withId(R.id.iph_dialog))
-                    .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
-                    .check(matches(isDisplayed()));
-        } catch (NoMatchingRootException e) {
-            isShowing = false;
-        } catch (Exception e) {
-            assert false : "error when inspecting iph dialog.";
-        }
-        assertFalse(isShowing);
+        onView(withId(R.id.iph_dialog)).check(doesNotExist());
     }
 
     private void exitIphDialogByClickingButton(ChromeTabbedActivity cta) {
-        onView(withId(R.id.positive_button))
-                .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
-                .perform(click());
+        onView(withId(R.id.positive_button)).perform(click());
     }
 }

@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <Windows.h>
+
 #include <intrin.h>
 
 #include "base/compiler_specific.h"
@@ -16,24 +17,22 @@ namespace {
 
 bool IsHardwareEnforcedShadowStacksEnabled() {
   // Only supported post Win 10 2004.
-  if (base::win::GetVersion() < base::win::Version::WIN10_20H1)
-    return false;
-
-  auto get_process_mitigation_policy =
-      reinterpret_cast<decltype(&GetProcessMitigationPolicy)>(::GetProcAddress(
-          ::GetModuleHandleA("kernel32.dll"), "GetProcessMitigationPolicy"));
-
-  PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY uss_policy;
-  if (!get_process_mitigation_policy(GetCurrentProcess(),
-                                     ProcessUserShadowStackPolicy, &uss_policy,
-                                     sizeof(uss_policy))) {
+  if (base::win::GetVersion() < base::win::Version::WIN10_20H1) {
     return false;
   }
 
-  if (uss_policy.EnableUserShadowStack)
-    return true;
-  else
+  PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY uss_policy;
+  if (!::GetProcessMitigationPolicy(GetCurrentProcess(),
+                                    ProcessUserShadowStackPolicy, &uss_policy,
+                                    sizeof(uss_policy))) {
     return false;
+  }
+
+  if (uss_policy.EnableUserShadowStack) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void* return_address;
@@ -46,10 +45,11 @@ void* return_address;
 // stack.
 NOINLINE void Bug() {
   void* pvAddressOfReturnAddress = _AddressOfReturnAddress();
-  if (!return_address)
+  if (!return_address) {
     return_address = *reinterpret_cast<void**>(pvAddressOfReturnAddress);
-  else
+  } else {
     *reinterpret_cast<void**>(pvAddressOfReturnAddress) = return_address;
+  }
 }
 
 NOINLINE void A() {

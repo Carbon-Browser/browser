@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,9 @@ void WriteMetricsForReportingToPrefs(
     LOG(ERROR) << "Could not determine Termina version for usage reporting";
   }
 
-  profile_prefs->SetInt64(crostini::prefs::kCrostiniLastLaunchTimeWindowStart,
-                          last_launch_time_window_start.ToJavaTime());
+  profile_prefs->SetInt64(
+      crostini::prefs::kCrostiniLastLaunchTimeWindowStart,
+      last_launch_time_window_start.InMillisecondsSinceUnixEpoch());
   profile_prefs->SetString(
       crostini::prefs::kCrostiniLastLaunchTerminaComponentVersion,
       crostini_version);

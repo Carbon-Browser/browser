@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "ui/base/l10n/l10n_util.h"
+
+namespace lookalikes {
 
 void RecordUkmForLookalikeUrlBlockingPage(
     ukm::SourceId source_id,
@@ -86,7 +88,7 @@ void PopulateLookalikeUrlBlockingPageStrings(base::Value::Dict& load_time_data,
 #if BUILDFLAG(IS_IOS)
     // On iOS, offer to close the page instead of navigating to NTP when the
     // safe URL is empty or invalid, and unable to go back.
-    absl::optional<bool> maybe_cant_go_back =
+    std::optional<bool> maybe_cant_go_back =
         load_time_data.FindBool("cant_go_back");
     if (maybe_cant_go_back && *maybe_cant_go_back) {
       load_time_data.Set(
@@ -95,7 +97,9 @@ void PopulateLookalikeUrlBlockingPageStrings(base::Value::Dict& load_time_data,
     }
 #endif
   }
-  load_time_data.Set("lookalikeRequestHostname", request_url.host());
+  load_time_data.Set(
+      "lookalikeConsoleMessage",
+      lookalikes::GetConsoleMessage(request_url, /*is_new_heuristic=*/false));
 }
 
 void PopulateStringsForSharedHTML(base::Value::Dict& load_time_data) {
@@ -111,3 +115,5 @@ void PopulateStringsForSharedHTML(base::Value::Dict& load_time_data) {
 
   load_time_data.Set("type", "LOOKALIKE");
 }
+
+}  // namespace lookalikes

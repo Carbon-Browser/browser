@@ -1,13 +1,9 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 
 """Chromium presubmit script for src/tools/media_engagement_preload."""
-
-# This line is 'magic' in that git-cl looks for it to decide whether to
-# use Python3 instead of Python2 when running the code in this file.
-USE_PYTHON3 = True
 
 
 def _RunMakeDafsaTests(input_api, output_api):
@@ -22,9 +18,7 @@ def _RunMakeDafsaTests(input_api, output_api):
           input_api,
           output_api,
           input_api.PresubmitLocalPath(),
-          files_to_check=['.*test\.py$'],
-          run_on_python2=False,
-          skip_shebang_check=True))
+          files_to_check=['.*test\.py$']))
 
 
 def CheckChangeOnUpload(input_api, output_api):

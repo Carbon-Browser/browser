@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,16 +21,15 @@ class FakeDeviceNamePolicyHandler : public DeviceNamePolicyHandler {
 
   // DeviceNamePolicyHandler:
   DeviceNamePolicy GetDeviceNamePolicy() const override;
-  absl::optional<std::string> GetHostnameChosenByAdministrator() const override;
+  std::optional<std::string> GetHostnameChosenByAdministrator() const override;
 
   // Sets new device name and policy if different from the current device name
   // and/or policy.
-  void SetPolicyState(
-      DeviceNamePolicy policy,
-      const absl::optional<std::string>& hostname_from_template);
+  void SetPolicyState(DeviceNamePolicy policy,
+                      const std::optional<std::string>& hostname_from_template);
 
  private:
-  absl::optional<std::string> hostname_ = absl::nullopt;
+  std::optional<std::string> hostname_ = std::nullopt;
   DeviceNamePolicy device_name_policy_;
 };
 

@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/test/test_tile_task_runner.h"
+
+#include <utility>
 
 #include "base/check.h"
 
@@ -36,6 +38,9 @@ void TestTileTaskRunner::CompleteTask(TileTask* task) {
   DCHECK(task->state().IsFinished() || task->state().IsCanceled());
   task->OnTaskCompleted();
   task->DidComplete();
+  if (auto& dependent = task->external_dependent()) {
+    std::move(dependent)->ExternalDependencyCompleted();
+  }
 }
 
 }  // namespace cc

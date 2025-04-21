@@ -1,182 +1,166 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 GEN_INCLUDE(['dictation_test_base.js']);
 
 /** Test fixture for editing_util.js. */
-DictationEditingUtilTest = class extends DictationE2ETestBase {
-  /** @override */
-  async setUpDeferred() {
-    await super.setUpDeferred();
-    await importModule(
-        'EditingUtil', '/accessibility_common/dictation/editing_util.js');
-  }
-};
+DictationEditingUtilTest = class extends DictationE2ETestBase {};
 
-AX_TEST_F('DictationEditingUtilTest', 'ReplacePhrase', function() {
+AX_TEST_F('DictationEditingUtilTest', 'GetReplacePhraseData', function() {
   let value;
   let caretIndex;
   let deletePhrase;
-  let insertPhrase;
+  let result;
   const f = () =>
-      EditingUtil.replacePhrase(value, caretIndex, deletePhrase, insertPhrase);
+      EditingUtil.getReplacePhraseData(value, caretIndex, deletePhrase);
 
   // Simple delete.
   value = 'This is a difficult test';
   caretIndex = value.length;
   deletePhrase = 'difficult';
-  insertPhrase = '';
-  assertEquals('This is a test', f().value);
-  assertEquals(9, f().caretIndex);
+  result = f();
+  assertEquals(9, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Case-insensitive delete.
   value = 'This is a DIFFICULT test';
   caretIndex = value.length;
   deletePhrase = 'difficult';
-  insertPhrase = '';
-  assertEquals('This is a test', f().value);
-  assertEquals(9, f().caretIndex);
+  result = f();
+  assertEquals(9, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Delete when there are multiple instances of `deletePhrase`.
   value = 'The cow jumped over the moon';
   caretIndex = value.length;
   deletePhrase = 'the';
-  insertPhrase = '';
-  assertEquals('The cow jumped over moon', f().value);
-  assertEquals(19, f().caretIndex);
+  result = f();
+  assertEquals(19, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Delete only content to the left of the caret.
   // "The cow| jumped over the moon"
   value = 'The cow jumped over the moon';
   caretIndex = 7;
   deletePhrase = 'the';
-  insertPhrase = '';
-  assertEquals('cow jumped over the moon', f().value);
-  assertEquals(0, f().caretIndex);
+  result = f();
+  assertEquals(0, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Delete last word.
   value = 'The cow jumped over the moon.';
   caretIndex = value.length;
   deletePhrase = 'moon';
-  insertPhrase = '';
-  assertEquals('The cow jumped over the.', f().value);
-  assertEquals(23, f().caretIndex);
+  result = f();
+  assertEquals(23, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Delete only at word boundaries.
   value = 'A square is also a rectangle';
   caretIndex = value.length;
   deletePhrase = 'a';
-  insertPhrase = '';
-  assertEquals('A square is also rectangle', f().value);
-  assertEquals(16, f().caretIndex);
+  result = f();
+  assertEquals(16, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Nothing is deleted if we can't find `deletePhrase`.
   value = 'This is a test';
   caretIndex = value.length;
   deletePhrase = 'coconut';
-  insertPhrase = '';
-  assertEquals('This is a test', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
 
   // Nothing is deleted if the caret is at index 0.
   value = 'This is a test';
   caretIndex = 0;
   deletePhrase = 'test';
-  insertPhrase = '';
-  assertEquals('This is a test', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
 
   // Nothing is deleted if the caret is in the middle of the matched phrase.
   // "A squ|are is also a rectangle".
   value = 'A square is also a rectangle';
   caretIndex = 5;
   deletePhrase = 'square';
-  insertPhrase = '';
-  assertEquals('A square is also a rectangle', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
+
+  // Verify that we don't unexpectedly remove punctuation.
+  value = 'Hello world.';
+  caretIndex = value.length;
+  deletePhrase = 'world';
+  result = f();
+  assertEquals(5, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Nothing is deleted if `deletePhrase` includes punctuation.
   value = 'Hello world.';
   caretIndex = value.length;
   deletePhrase = 'world.';
-  insertPhrase = '';
-  assertEquals('Hello world.', f().value);
-  assertEquals(caretIndex, f().caretIndex);
-
-  // Simple replacement.
-  value = 'This is a difficult test';
-  caretIndex = value.length;
-  deletePhrase = 'difficult';
-  insertPhrase = 'simple';
-  assertEquals('This is a simple test', f().value);
-  assertEquals(16, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
 
   // Replace multiple words.
   value = 'The cow jumped over the moon';
   caretIndex = value.length;
   deletePhrase = 'jumped over the moon';
-  insertPhrase = 'went to bed early';
-  assertEquals('The cow went to bed early', f().value);
-  assertEquals(25, f().caretIndex);
+  result = f();
+  assertEquals(7, result.newIndex);
+  assertEquals(deletePhrase.length + 1, result.deleteLength);
 
   // Edge case: value is empty.
   value = '';
   caretIndex = 0;
   deletePhrase = 'coconut';
-  insertPhrase = '';
-  assertEquals('', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
 
   // Edge case: caretIndex is negative.
   value = 'This is a test';
   caretIndex = -1;
   deletePhrase = 'test';
-  insertPhrase = '';
-  assertEquals('This is a test', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(null, result);
 
   // Edge case: caretIndex is larger than `value.length`. We treat this as
   // if the text caret is at the end of value.
   value = 'Hello';
   caretIndex = 5000;
   deletePhrase = 'Hello';
-  insertPhrase = '';
-  assertEquals('', f().value);
-  assertEquals(0, f().caretIndex);
+  result = f();
+  assertEquals(0, result.newIndex);
+  assertEquals(deletePhrase.length, result.deleteLength);
 });
 
-AX_TEST_F('DictationEditingUtilTest', 'InsertBefore', function() {
+AX_TEST_F('DictationEditingUtilTest', 'GetInsertBeforeIndex', function() {
   let value;
   let caretIndex;
-  let insertPhrase;
   let beforePhrase;
+  let result;
   const f = () =>
-      EditingUtil.insertBefore(value, caretIndex, insertPhrase, beforePhrase);
+      EditingUtil.getInsertBeforeIndex(value, caretIndex, beforePhrase);
 
   // Simple insert.
   value = 'This is a test.';
   caretIndex = value.length;
-  insertPhrase = 'simple';
   beforePhrase = 'test';
-  assertEquals('This is a simple test.', f().value);
-  assertEquals(16, f().caretIndex);
+  result = f();
+  assertEquals(9, result);
 
   // Insert and match multiple words.
   value = 'This is a test';
   caretIndex = value.length;
-  insertPhrase = 'This is a drill';
   beforePhrase = 'This is a test';
-  assertEquals('This is a drill This is a test', f().value);
-  assertEquals(insertPhrase.length, f().caretIndex);
+  result = f();
+  assertEquals(0, result);
 
   // Nothing is inserted if `beforePhrase` isn't present.
   value = 'This is a test';
   caretIndex = value.length;
-  insertPhrase = 'pineapple';
   beforePhrase = 'coconut';
-  assertEquals('This is a test', f().value);
-  assertEquals(caretIndex, f().caretIndex);
+  result = f();
+  assertEquals(-1, result);
 });
 
 AX_TEST_F('DictationEditingUtilTest', 'SelectBetween', function() {
@@ -398,6 +382,12 @@ AX_TEST_F('DictationEditingUtilTest', 'SmartSpacing', function() {
   caretIndex = value.length;
   commitText = 'world';
   assertEquals(' world', f());
+
+  // The below pattern is observed in an empty gmail compose box.
+  value = '\n';
+  caretIndex = value.length;
+  commitText = 'Hello';
+  assertEquals('Hello', f());
 });
 
 AX_TEST_F('DictationEditingUtilTest', 'SmartCapitalization', function() {
@@ -446,6 +436,12 @@ AX_TEST_F('DictationEditingUtilTest', 'SmartCapitalization', function() {
   caretIndex = value.length;
   commitText = 'world';
   assertEquals('world', f());
+
+  // The below pattern is observed in an empty gmail compose box.
+  value = '\n';
+  caretIndex = value.length;
+  commitText = 'hello';
+  assertEquals('Hello', f());
 });
 
 AX_TEST_F('DictationEditingUtilTest', 'NavNextSentJa', function() {

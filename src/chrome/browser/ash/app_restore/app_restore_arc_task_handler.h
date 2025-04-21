@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,15 @@
 #include <utility>
 
 #include "base/scoped_observation.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/common/buildflags.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
 
 namespace ash {
+
 namespace full_restore {
 class ArcGhostWindowHandler;
 class FullRestoreAppLaunchHandlerArcAppBrowserTest;
@@ -23,7 +24,20 @@ class FullRestoreAppLaunchHandlerArcAppBrowserTest;
 
 namespace app_restore {
 
-class ArcAppLaunchHandler;
+class ArcAppSingleRestoreHandler;
+class ArcAppQueueRestoreHandler;
+
+namespace {
+
+enum class LauncherType {
+  kFullRestore,
+  kWindowPredictor,
+  kDeskTemplate,
+};
+
+using LauncherTag = std::pair<LauncherType, int32_t>;
+
+}  // namespace
 
 // The AppRestoreArcTaskHandler class observes ArcAppListPrefs, and calls
 // app restore clients to update the ARC app launch info when a task is created
@@ -34,18 +48,14 @@ class AppRestoreArcTaskHandler : public KeyedService,
                                  public ArcAppListPrefs::Observer,
                                  public arc::ArcSessionManagerObserver {
  public:
-  static AppRestoreArcTaskHandler* GetForProfile(Profile* profile);
-
   explicit AppRestoreArcTaskHandler(Profile* profile);
   AppRestoreArcTaskHandler(const AppRestoreArcTaskHandler&) = delete;
   AppRestoreArcTaskHandler& operator=(const AppRestoreArcTaskHandler&) = delete;
   ~AppRestoreArcTaskHandler() override;
 
-#if BUILDFLAG(ENABLE_WAYLAND_SERVER)
   full_restore::ArcGhostWindowHandler* window_handler() {
     return window_handler_.get();
   }
-#endif
 
   // Check if the AppId existed in any arc app launch handler restore queue.
   // When different launch handler which corresponding to different restore
@@ -53,17 +63,22 @@ class AppRestoreArcTaskHandler : public KeyedService,
   // which window info should be applied.
   bool IsAppPendingRestore(const std::string& arc_app_id) const;
 
-  ArcAppLaunchHandler* full_restore_arc_app_launch_handler() {
-    return full_restore_arc_app_launch_handler_observer_;
-  }
-  ArcAppLaunchHandler* window_predictor_arc_app_launch_handler() {
-    return window_predictor_arc_app_launch_handler_observer_;
-  }
+  // Get or create full restore arc app queue restore handler.
+  ArcAppQueueRestoreHandler* GetFullRestoreArcAppQueueRestoreHandler();
 
-  ArcAppLaunchHandler* GetDeskTemplateArcAppLaunchHandler(int32_t launch_id);
-  void ClearDeskTemplateArcAppLaunchHandler(int32_t launch_id);
+  // Get or create window predictor arc app restore handler by
+  // `launch_id`.
+  ArcAppSingleRestoreHandler* GetWindowPredictorArcAppRestoreHandler(
+      int32_t launch_id);
+
+  // Get or create desk template arc app queue restore handler by `launch_id`.
+  ArcAppQueueRestoreHandler* GetDeskTemplateArcAppQueueRestoreHandler(
+      int32_t launch_id);
+  void ClearDeskTemplateArcAppQueueRestoreHandler(int32_t launch_id);
 
   // ArcAppListPrefs::Observer.
+  void OnAppStatesChanged(const std::string& id,
+                          const ArcAppListPrefs::AppInfo& app_info) override;
   void OnTaskCreated(int32_t task_id,
                      const std::string& package_name,
                      const std::string& activity,
@@ -89,27 +104,29 @@ class AppRestoreArcTaskHandler : public KeyedService,
   void Shutdown() override;
 
  private:
-  friend class ash::full_restore::FullRestoreAppLaunchHandlerArcAppBrowserTest;
+  friend class full_restore::FullRestoreAppLaunchHandlerArcAppBrowserTest;
 
-  // Used for testing to install a handler for full restore.
-  void CreateFullRestoreHandlerForTest();
+  ArcAppQueueRestoreHandler* CreateOrGetArcAppQueueRestoreHandler(
+      LauncherTag launcher_tag,
+      bool call_init_callback);
+
+  ArcAppSingleRestoreHandler* CreateOrGetArcAppSingleRestoreHandler(
+      LauncherTag launcher_tag);
 
   base::ScopedObservation<ArcAppListPrefs, ArcAppListPrefs::Observer>
       arc_prefs_observer_{this};
 
-#if BUILDFLAG(ENABLE_WAYLAND_SERVER)
   std::unique_ptr<full_restore::ArcGhostWindowHandler> window_handler_;
-#endif
 
-  // Maps launch ids to ArcAppLaunchHandlers. Positive ids are used for desk
-  // template launches. Negative ids are used for full restore and the window
-  // predictor.
-  std::map<int32_t, std::unique_ptr<ArcAppLaunchHandler>>
-      arc_app_launch_handlers_;
+  // Maps LauncherTag to ArcAppQueueRestoreHandlers. Currently FullRestore
+  // and DeskTemplate use it.
+  std::map<LauncherTag, std::unique_ptr<ArcAppQueueRestoreHandler>>
+      arc_app_queue_restore_handlers_;
 
-  ArcAppLaunchHandler* full_restore_arc_app_launch_handler_observer_ = nullptr;
-  ArcAppLaunchHandler* window_predictor_arc_app_launch_handler_observer_ =
-      nullptr;
+  // Maps LauncherTag to ArcAppSingleRestoreHandlers. Currently WindowPredictor
+  // use it.
+  std::map<LauncherTag, std::unique_ptr<ArcAppSingleRestoreHandler>>
+      arc_app_single_restore_handlers_;
 
   // These cache the readiness status of the subsystems needed to launch ARC
   // apps. They are used when new handlers are dynamically created so that the

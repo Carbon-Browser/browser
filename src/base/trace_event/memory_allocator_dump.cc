@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ MemoryAllocatorDump::MemoryAllocatorDump(
     : absolute_name_(absolute_name),
       guid_(guid),
       level_of_detail_(level_of_detail),
-      flags_(Flags::DEFAULT) {
+      flags_(Flags::kDefault) {
   // The |absolute_name| cannot be empty.
   DCHECK(!absolute_name.empty());
 
@@ -56,15 +56,13 @@ void MemoryAllocatorDump::AddString(const char* name,
                                     const char* units,
                                     const std::string& value) {
   // String attributes are disabled in background mode.
-  if (level_of_detail_ == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (level_of_detail_ == MemoryDumpLevelOfDetail::kBackground) {
     NOTREACHED();
-    return;
   }
   entries_.emplace_back(name, units, value);
 }
 
 void MemoryAllocatorDump::AsValueInto(TracedValue* value) const {
-  std::string string_conversion_buffer;
   value->BeginDictionaryWithCopiedName(absolute_name_);
   value->SetString("guid", guid_.ToString());
   value->BeginDictionary("attrs");
@@ -73,11 +71,9 @@ void MemoryAllocatorDump::AsValueInto(TracedValue* value) const {
     value->BeginDictionaryWithCopiedName(entry.name);
     switch (entry.entry_type) {
       case Entry::kUint64:
-        SStringPrintf(&string_conversion_buffer, "%" PRIx64,
-                      entry.value_uint64);
         value->SetString("type", kTypeScalar);
         value->SetString("units", entry.units);
-        value->SetString("value", string_conversion_buffer);
+        value->SetString("value", StringPrintf("%" PRIx64, entry.value_uint64));
         break;
       case Entry::kString:
         value->SetString("type", kTypeString);
@@ -88,8 +84,9 @@ void MemoryAllocatorDump::AsValueInto(TracedValue* value) const {
     value->EndDictionary();
   }
   value->EndDictionary();  // "attrs": { ... }
-  if (flags_)
+  if (flags_) {
     value->SetInteger("flags", flags_);
+  }
   value->EndDictionary();  // "allocator_name/heap_subheap": { ... }
 }
 
@@ -98,7 +95,7 @@ void MemoryAllocatorDump::AsProtoInto(
         MemoryNode* memory_node) const {
   memory_node->set_id(guid_.ToUint64());
   memory_node->set_absolute_name(absolute_name_);
-  if (flags() & WEAK) {
+  if (flags() & kWeak) {
     memory_node->set_weak(true);
   }
 
@@ -140,8 +137,9 @@ void MemoryAllocatorDump::AsProtoInto(
 }
 
 uint64_t MemoryAllocatorDump::GetSizeInternal() const {
-  if (cached_size_.has_value())
+  if (cached_size_.has_value()) {
     return *cached_size_;
+  }
   for (const auto& entry : entries_) {
     if (entry.entry_type == Entry::kUint64 && entry.units == kUnitsBytes &&
         strcmp(entry.name.c_str(), kNameSize) == 0) {
@@ -167,8 +165,10 @@ MemoryAllocatorDump::Entry::Entry(std::string name,
     : name(name), units(units), entry_type(kString), value_string(value) {}
 
 bool MemoryAllocatorDump::Entry::operator==(const Entry& rhs) const {
-  if (!(name == rhs.name && units == rhs.units && entry_type == rhs.entry_type))
+  if (!(name == rhs.name && units == rhs.units &&
+        entry_type == rhs.entry_type)) {
     return false;
+  }
   switch (entry_type) {
     case EntryType::kUint64:
       return value_uint64 == rhs.value_uint64;
@@ -176,7 +176,6 @@ bool MemoryAllocatorDump::Entry::operator==(const Entry& rhs) const {
       return value_string == rhs.value_string;
   }
   NOTREACHED();
-  return false;
 }
 
 void PrintTo(const MemoryAllocatorDump::Entry& entry, std::ostream* out) {

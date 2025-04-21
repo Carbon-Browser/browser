@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <map>
 
 #include "base/containers/flat_set.h"
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/unguessable_token.h"
@@ -19,7 +19,6 @@
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/cross_origin_embedder_policy.mojom-forward.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/devtools/devtools_agent.mojom.h"
 #include "url/gurl.h"
 
@@ -171,7 +170,7 @@ class ServiceWorkerDevToolsManager {
 
   // Clients may retain agent host for the terminated shared worker,
   // and we reconnect them when shared worker is restarted.
-  base::flat_set<ServiceWorkerDevToolsAgentHost*> stopped_hosts_;
+  base::flat_set<raw_ptr<ServiceWorkerDevToolsAgentHost>> stopped_hosts_;
 };
 
 }  // namespace content

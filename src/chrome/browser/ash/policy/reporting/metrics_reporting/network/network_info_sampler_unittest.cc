@@ -1,25 +1,26 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/network_info_sampler.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_device_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/dbus/shill/shill_device_client.h"
 #include "dbus/object_path.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace reporting {
@@ -52,7 +53,8 @@ class NetworkInfoSamplerTest : public ::testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  ::ash::ShillDeviceClient::TestInterface* device_client_;
+  raw_ptr<::ash::ShillDeviceClient::TestInterface, DanglingUntriaged>
+      device_client_;
 
  private:
   base::test::TaskEnvironment task_environment_;
@@ -95,7 +97,7 @@ TEST_F(NetworkInfoSamplerTest, AllTypes) {
   MetricData result;
   NetworkInfoSampler sampler;
   sampler.MaybeCollect(
-      base::BindLambdaForTesting([&](absl::optional<MetricData> metric_data) {
+      base::BindLambdaForTesting([&](std::optional<MetricData> metric_data) {
         ASSERT_TRUE(metric_data.has_value());
         result = std::move(metric_data.value());
       }));
@@ -171,7 +173,7 @@ TEST_F(NetworkInfoSamplerTest, NoDevices) {
   bool callback_called = false;
   NetworkInfoSampler sampler;
   sampler.MaybeCollect(
-      base::BindLambdaForTesting([&](absl::optional<MetricData> metric_data) {
+      base::BindLambdaForTesting([&](std::optional<MetricData> metric_data) {
         ASSERT_FALSE(metric_data.has_value());
         callback_called = true;
       }));

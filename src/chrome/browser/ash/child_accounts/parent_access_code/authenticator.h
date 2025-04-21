@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,13 @@
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_PARENT_ACCESS_CODE_AUTHENTICATOR_H_
 
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/account_id/account_id.h"
-#include "crypto/hmac.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace base {
-class DictionaryValue;
-class Value;
-}  // namespace base
 
 namespace ash {
 namespace parent_access {
@@ -27,8 +22,8 @@ class AccessCodeConfig {
  public:
   // Returns AccessCodeConfig created from a |dictionary|, if the |dictionary|
   // contains valid config data.
-  static absl::optional<AccessCodeConfig> FromDictionary(
-      const base::DictionaryValue& value);
+  static std::optional<AccessCodeConfig> FromDictionary(
+      const base::Value::Dict& dictionary);
 
   // TODO(agawronska): Make constructor private.
   // To create valid AccessCodeConfig:
@@ -60,7 +55,7 @@ class AccessCodeConfig {
   }
 
   // Converts the AccessCodeConfig object to its dictionary equivalent.
-  base::Value ToDictionary() const;
+  base::Value::Dict ToDictionary() const;
 
  private:
   std::string shared_secret_;
@@ -122,28 +117,25 @@ class Authenticator {
   // Generates parent access code from the given |timestamp|. Returns the code
   // if generation was successful. |timestamp| needs to be greater or equal Unix
   // Epoch.
-  absl::optional<AccessCode> Generate(base::Time timestamp) const;
+  std::optional<AccessCode> Generate(base::Time timestamp) const;
 
   // Returns AccessCode structure with validity information, if |code| is
   // valid for the given timestamp. |timestamp| needs to be greater or equal
   // Unix Epoch.
-  absl::optional<AccessCode> Validate(const std::string& code,
-                                      base::Time timestamp) const;
+  std::optional<AccessCode> Validate(const std::string& code,
+                                     base::Time timestamp) const;
 
  private:
   // Returns AccessCode structure with validity information, if |code| is valid
   // for the range [|valid_from|, |valid_to|). |valid_to| needs to be greater or
   // equal to |valid_from|. |valid_from| needs to be greater or equal Unix
   // Epoch.
-  absl::optional<AccessCode> ValidateInRange(const std::string& code,
-                                             base::Time valid_from,
-                                             base::Time valid_to) const;
+  std::optional<AccessCode> ValidateInRange(const std::string& code,
+                                            base::Time valid_from,
+                                            base::Time valid_to) const;
 
   // Configuration used to generate and validate parent access code.
   const AccessCodeConfig config_;
-
-  // Keyed-hash message authentication generator.
-  crypto::HMAC hmac_{crypto::HMAC::SHA1};
 };
 
 }  // namespace parent_access

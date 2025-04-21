@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Wrapper script for java_deobfuscate.
@@ -18,7 +18,8 @@ def main():
   classpath = [
       os.path.join(DIR_SOURCE_ROOT, 'build', 'android', 'stacktrace',
                    'java_deobfuscate_java.jar'),
-      os.path.join(DIR_SOURCE_ROOT, 'third_party', 'r8', 'lib', 'r8.jar')
+      os.path.join(DIR_SOURCE_ROOT, 'third_party', 'r8', 'cipd', 'lib',
+                   'r8.jar')
   ]
   java_path = os.path.join(DIR_SOURCE_ROOT, 'third_party', 'jdk', 'current',
                            'bin', 'java')

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 namespace content {
 
 void InitializeMac() {
-  [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+  [NSUserDefaults.standardUserDefaults registerDefaults:@{
     // Exceptions routed to -[NSApplication reportException:] should crash
     // immediately, as opposed being swallowed or presenting UI that gives the
     // user a choice in the matter.

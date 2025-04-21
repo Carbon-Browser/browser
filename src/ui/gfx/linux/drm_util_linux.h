@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,10 @@ gfx::BufferFormat GetBufferFormatFromFourCCFormat(int format);
 
 // Returns true if the fourcc format is known.
 bool IsValidBufferFormat(uint32_t current_format);
+
+// Returns a human-readable string for a DRM FourCC format, or
+// DRM_FORMAT_INVALID for an unknown or unsupported DRM format.
+const char* DrmFormatToString(uint32_t format);
 
 }  // namespace ui
 

@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/webui/file_manager/file_manager_untrusted_ui.h"
 
@@ -17,15 +22,10 @@ namespace ash {
 namespace file_manager {
 
 FileManagerUntrustedUIConfig::FileManagerUntrustedUIConfig()
-    : WebUIConfig(content::kChromeUIUntrustedScheme,
-                  kChromeUIFileManagerUntrustedHost) {}
+    : DefaultWebUIConfig(content::kChromeUIUntrustedScheme,
+                         kChromeUIFileManagerUntrustedHost) {}
 
 FileManagerUntrustedUIConfig::~FileManagerUntrustedUIConfig() = default;
-
-std::unique_ptr<content::WebUIController>
-FileManagerUntrustedUIConfig::CreateWebUIController(content::WebUI* web_ui) {
-  return std::make_unique<FileManagerUntrustedUI>(web_ui);
-}
 
 FileManagerUntrustedUI::FileManagerUntrustedUI(content::WebUI* web_ui)
     : ui::UntrustedWebUIController(web_ui) {
@@ -34,8 +34,7 @@ FileManagerUntrustedUI::FileManagerUntrustedUI(content::WebUI* web_ui)
           web_ui->GetWebContents()->GetBrowserContext(),
           kChromeUIFileManagerUntrustedURL);
 
-  untrusted_source->AddResourcePaths(base::make_span(
-      kFileManagerUntrustedResources, kFileManagerUntrustedResourcesSize));
+  untrusted_source->AddResourcePaths(kFileManagerUntrustedResources);
 
   untrusted_source->AddFrameAncestor(GURL(kChromeUIFileManagerURL));
 

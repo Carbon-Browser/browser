@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,9 @@ class MenuButtonController;
 //
 ////////////////////////////////////////////////////////////////////////////////
 class VIEWS_EXPORT MenuButton : public LabelButton {
+  METADATA_HEADER(MenuButton, LabelButton)
+
  public:
-  METADATA_HEADER(MenuButton);
   explicit MenuButton(PressedCallback callback = PressedCallback(),
                       const std::u16string& text = std::u16string(),
                       int button_context = style::CONTEXT_BUTTON);

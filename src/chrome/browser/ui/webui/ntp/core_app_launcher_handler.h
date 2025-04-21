@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,6 @@
 #include "chrome/common/extensions/extension_constants.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
-namespace user_prefs {
-class PrefRegistrySyncable;
-}
-
 class Profile;
 
 class CoreAppLauncherHandler : public content::WebUIMessageHandler {
@@ -25,9 +21,6 @@ class CoreAppLauncherHandler : public content::WebUIMessageHandler {
   CoreAppLauncherHandler& operator=(const CoreAppLauncherHandler&) = delete;
 
   ~CoreAppLauncherHandler() override;
-
-  // Register app launcher preferences.
-  static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
  private:
   // Callback for the "recordAppLaunchByUrl" message. Takes an escaped URL and

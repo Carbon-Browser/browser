@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "third_party/blink/renderer/modules/bluetooth/bluetooth_error.h"
 #include "third_party/blink/renderer/modules/bluetooth/bluetooth_remote_gatt_server.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 
 namespace blink {
@@ -34,6 +35,7 @@ BluetoothDevice::BluetoothDevice(ExecutionContext* context,
                                  mojom::blink::WebBluetoothDevicePtr device,
                                  Bluetooth* bluetooth)
     : ExecutionContextClient(context),
+      ActiveScriptWrappable<BluetoothDevice>({}),
       attribute_instance_map_(
           MakeGarbageCollected<BluetoothAttributeInstanceMap>(this)),
       device_(std::move(device)),
@@ -100,19 +102,20 @@ void BluetoothDevice::Trace(Visitor* visitor) const {
   visitor->Trace(bluetooth_);
   visitor->Trace(watch_advertisements_resolver_);
   visitor->Trace(client_receiver_);
-  EventTargetWithInlineData::Trace(visitor);
+  visitor->Trace(abort_handle_map_);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 
 // https://webbluetoothcg.github.io/web-bluetooth/#dom-bluetoothdevice-watchadvertisements
-ScriptPromise BluetoothDevice::watchAdvertisements(
+ScriptPromise<IDLUndefined> BluetoothDevice::watchAdvertisements(
     ScriptState* script_state,
     const WatchAdvertisementsOptions* options,
     ExceptionState& exception_state) {
   ExecutionContext* context = GetExecutionContext();
   if (!context) {
     exception_state.ThrowTypeError(kInactiveDocumentError);
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   CHECK(context->IsSecureContext());
@@ -122,17 +125,21 @@ ScriptPromise BluetoothDevice::watchAdvertisements(
     // 1.1. If options.signal’s aborted flag is set, then abort
     // watchAdvertisements with this and abort these steps.
     if (options->signal()->aborted()) {
-      AbortWatchAdvertisements();
+      AbortWatchAdvertisements(options->signal());
       exception_state.ThrowDOMException(DOMExceptionCode::kAbortError,
                                         kAbortErrorMessage);
-      return ScriptPromise();
+      return EmptyPromise();
     }
 
     // 1.2. Add the following abort steps to options.signal:
     // 1.2.1. Abort watchAdvertisements with this.
     // 1.2.2. Reject promise with AbortError.
-    options->signal()->AddAlgorithm(WTF::Bind(
-        &BluetoothDevice::AbortWatchAdvertisements, WrapPersistent(this)));
+    if (!abort_handle_map_.Contains(options->signal())) {
+      auto* handle = options->signal()->AddAlgorithm(WTF::BindOnce(
+          &BluetoothDevice::AbortWatchAdvertisements, WrapWeakPersistent(this),
+          WrapWeakPersistent(options->signal())));
+      abort_handle_map_.insert(options->signal(), handle);
+    }
   }
 
   // 2. If this.[[watchAdvertisementsState]] is 'pending-watch':
@@ -140,13 +147,13 @@ ScriptPromise BluetoothDevice::watchAdvertisements(
     // 'pending-watch' 2.1. Reject promise with InvalidStateError.
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       kInvalidStateErrorMessage);
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // 2. If this.[[watchAdvertisementsState]] is 'watching':
   // 'watching' 2.1. Resolve promise with undefined.
   if (client_receiver_.is_bound() && !watch_advertisements_resolver_)
-    return ScriptPromise::CastUndefined(script_state);
+    return ToResolvedUndefinedPromise(script_state);
 
   // 2. If this.[[watchAdvertisementsState]] is 'not-watching':
   DCHECK(!client_receiver_.is_bound());
@@ -154,7 +161,8 @@ ScriptPromise BluetoothDevice::watchAdvertisements(
   // 'not-watching' 2.1. Set this.[[watchAdvertisementsState]] to
   // 'pending-watch'.
   watch_advertisements_resolver_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+          script_state, exception_state.GetContext());
   mojo::PendingAssociatedRemote<mojom::blink::WebBluetoothAdvertisementClient>
       client;
   client_receiver_.Bind(client.InitWithNewEndpointAndPassReceiver(),
@@ -165,13 +173,13 @@ ScriptPromise BluetoothDevice::watchAdvertisements(
   // the same device.
   bluetooth_->Service()->WatchAdvertisementsForDevice(
       device_->id, std::move(client),
-      WTF::Bind(&BluetoothDevice::WatchAdvertisementsCallback,
-                WrapPersistent(this)));
+      WTF::BindOnce(&BluetoothDevice::WatchAdvertisementsCallback,
+                    WrapPersistent(this)));
   return watch_advertisements_resolver_->Promise();
 }
 
 // https://webbluetoothcg.github.io/web-bluetooth/#abort-watchadvertisements
-void BluetoothDevice::AbortWatchAdvertisements() {
+void BluetoothDevice::AbortWatchAdvertisements(AbortSignal* signal) {
   // 1. Set this.[[watchAdvertisementsState]] to 'not-watching'.
   // 2. Set device.watchingAdvertisements to false.
   // 3.1. If no more BluetoothDevices in the whole UA have
@@ -190,20 +198,28 @@ void BluetoothDevice::AbortWatchAdvertisements() {
         kAbortErrorMessage));
     watch_advertisements_resolver_.Clear();
   }
+
+  DCHECK(signal);
+  abort_handle_map_.erase(signal);
 }
 
-ScriptPromise BluetoothDevice::forget(ScriptState* script_state,
-                                      ExceptionState& exception_state) {
+ScriptPromise<IDLUndefined> BluetoothDevice::forget(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   if (!GetExecutionContext()) {
     exception_state.ThrowTypeError(kInactiveDocumentError);
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+      script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
   bluetooth_->Service()->ForgetDevice(
-      device_->id, WTF::Bind(&BluetoothDevice::ForgetCallback,
-                             WrapPersistent(this), WrapPersistent(resolver)));
+      device_->id, WTF::BindOnce(
+                       [](ScriptPromiseResolver<IDLUndefined>* resolver) {
+                         resolver->Resolve();
+                       },
+                       WrapPersistent(resolver)));
 
   return promise;
 }
@@ -223,8 +239,7 @@ bool BluetoothDevice::HasPendingActivity() const {
 void BluetoothDevice::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   if (event_type == event_type_names::kGattserverdisconnected) {
     UseCounter::Count(GetExecutionContext(),
                       WebFeature::kGATTServerDisconnectedEvent);
@@ -256,10 +271,6 @@ void BluetoothDevice::WatchAdvertisementsCallback(
   // 2.2.3.3. Resolve promise with undefined.
   watch_advertisements_resolver_->Resolve();
   watch_advertisements_resolver_.Clear();
-}
-
-void BluetoothDevice::ForgetCallback(ScriptPromiseResolver* resolver) {
-  resolver->Resolve();
 }
 
 }  // namespace blink

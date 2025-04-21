@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,16 +19,18 @@ bool IsValidUrl(const std::string& url) {
   for (const char& c : url) {
     if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
           (c >= '0' && c <= '9') ||
-          valid_characters.find(c) != valid_characters.end()))
+          valid_characters.find(c) != valid_characters.end())) {
       return false;
+    }
   }
   return true;
 }
 
 bool IsValidName(const std::string& name) {
   for (const char& c : name) {
-    if (!(IsAsciiAlpha(c) || IsAsciiDigit(c) || c == '/' || c == '_'))
+    if (!(IsAsciiAlpha(c) || IsAsciiDigit(c) || c == '/' || c == '_')) {
       return false;
+    }
   }
   return true;
 }

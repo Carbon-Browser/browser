@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,23 +11,14 @@
 
 namespace mirroring {
 namespace features {
-
+// TODO(crbug.com/40177436): Remove model name checks for querying receiver
+// capabilities.
 COMPONENT_EXPORT(MIRRORING_SERVICE)
-extern const base::Feature kOpenscreenCastStreamingSession;
+BASE_DECLARE_FEATURE(kCastDisableModelNameCheck);
 
+// TODO(crbug.com/40255351): Should be removed once working properly.
 COMPONENT_EXPORT(MIRRORING_SERVICE)
-extern const base::Feature kCastStreamingAv1;
-
-COMPONENT_EXPORT(MIRRORING_SERVICE)
-extern const base::Feature kCastStreamingVp9;
-
-COMPONENT_EXPORT(MIRRORING_SERVICE)
-extern const base::Feature kCastUseBlocklistForRemotingQuery;
-
-COMPONENT_EXPORT(MIRRORING_SERVICE)
-extern const base::Feature kCastForceEnableRemotingQuery;
-
-bool IsCastStreamingAV1Enabled();
+BASE_DECLARE_FEATURE(kCastEnableStreamingWithHiDPI);
 
 }  // namespace features
 }  // namespace mirroring

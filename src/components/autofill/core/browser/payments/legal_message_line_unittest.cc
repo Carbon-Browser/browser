@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,27 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
+
+// Prints out a legal message |line| to |os|.
+std::ostream& operator<<(std::ostream& os, const LegalMessageLine& line) {
+  os << "{text: '" << line.text() << "', links: [";
+  for (const LegalMessageLine::Link& link : line.links()) {
+    os << "{range: (" << link.range.start() << ", " << link.range.end()
+       << "), url: '" << link.url << "'}";
+  }
+  os << "]}";
+  return os;
+}
+
+// Prints out legal message |lines| to |os|.
+std::ostream& operator<<(std::ostream& os, const LegalMessageLines& lines) {
+  os << "[";
+  for (const LegalMessageLine& line : lines) {
+    os << line;
+  }
+  os << "]";
+  return os;
+}
 
 namespace {
 
@@ -251,69 +272,22 @@ const std::vector<TestCase>& TestCaseData() {
   return *cases;
 }
 
-}  // namespace
-
-// Prints out a legal message |line| to |os|.
-std::ostream& operator<<(std::ostream& os, const LegalMessageLine& line) {
-  os << "{text: '" << line.text() << "', links: [";
-  for (const Link& link : line.links()) {
-    os << "{range: (" << link.range.start() << ", " << link.range.end()
-       << "), url: '" << link.url << "'}";
-  }
-
-  os << "]}";
-  return os;
-}
-
-// Prints out legal message |lines| to |os|.
-std::ostream& operator<<(std::ostream& os, const LegalMessageLines& lines) {
-  os << "[";
-  for (const LegalMessageLine& line : lines)
-    os << line;
-
-  os << "]";
-  return os;
-}
-
-// Prints out |test_case| to |os|.
-std::ostream& operator<<(std::ostream& os, const int test_case) {
-  os << "{message_json: '" << TestCaseData()[test_case].message_json
-     << "', expected_lines: " << TestCaseData()[test_case].expected_lines
-     << "}";
-  return os;
-}
-
-// Compares two legal message lines |lhs| and |rhs|.
-bool operator==(const LegalMessageLine& lhs, const LegalMessageLine& rhs) {
-  if (lhs.text() != rhs.text() || lhs.links().size() != rhs.links().size())
-    return false;
-
-  for (size_t i = 0; i < lhs.links().size(); ++i) {
-    if (lhs.links()[i].range != rhs.links()[i].range)
-      return false;
-
-    if (lhs.links()[i].url != rhs.links()[i].url)
-      return false;
-  }
-
-  return true;
-}
-
 class LegalMessageLineTest : public ::testing::TestWithParam<int> {
  public:
-  LegalMessageLineTest() {}
-  ~LegalMessageLineTest() override {}
+  LegalMessageLineTest() = default;
+  ~LegalMessageLineTest() override = default;
 };
 
 // Verifies that legal message parsing is correct.
 TEST_P(LegalMessageLineTest, Parsing) {
   const TestCase& test_case = TestCaseData()[GetParam()];
-  absl::optional<base::Value> value(
+  std::optional<base::Value> value(
       base::JSONReader::Read(test_case.message_json));
   ASSERT_TRUE(value);
   ASSERT_TRUE(value->is_dict());
   LegalMessageLines actual_lines;
-  LegalMessageLine::Parse(*value, &actual_lines, test_case.escape_apostrophes);
+  LegalMessageLine::Parse(value->GetDict(), &actual_lines,
+                          test_case.escape_apostrophes);
 
   EXPECT_EQ(test_case.expected_lines, actual_lines);
 }
@@ -322,4 +296,5 @@ INSTANTIATE_TEST_SUITE_P(TestCases,
                          LegalMessageLineTest,
                          testing::ValuesIn(TestCaseValues()));
 
+}  // namespace
 }  // namespace autofill

@@ -1,17 +1,23 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/compositor/debug_utils.h"
 
 #include <stddef.h>
 
 #include <iomanip>
+#include <optional>
 #include <ostream>
 #include <string>
 
 #include "base/logging.h"
-#include "base/numerics/math_constants.h"
+#include "base/numerics/angle_conversions.h"
 #include "cc/trees/layer_tree_host.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/point.h"
@@ -25,13 +31,18 @@ namespace {
 
 void PrintLayerHierarchyImp(const Layer* layer,
                             int indent,
-                            gfx::Point mouse_location,
-                            std::ostringstream* out) {
+                            const gfx::Point& mouse_location,
+                            std::ostringstream* out,
+                            DebugLayerChildCallback child_cb) {
   std::string indent_str(indent, ' ');
 
-  layer->transform().TransformPointReverse(&mouse_location);
-  bool mouse_inside_layer_bounds = layer->bounds().Contains(mouse_location);
-  mouse_location.Offset(-layer->bounds().x(), -layer->bounds().y());
+  gfx::Point transformed_mouse_location = layer->transform()
+                                              .InverseMapPoint(mouse_location)
+                                              .value_or(mouse_location);
+  const bool mouse_inside_layer_bounds =
+      layer->bounds().Contains(transformed_mouse_location);
+  const gfx::Point mouse_location_in_layer =
+      transformed_mouse_location - layer->bounds().origin().OffsetFromOrigin();
 
   *out << indent_str;
   if (mouse_inside_layer_bounds)
@@ -83,6 +94,17 @@ void PrintLayerHierarchyImp(const Layer* layer,
     }
   }
 
+  const auto clip_rect = layer->clip_rect();
+  if (!clip_rect.IsEmpty()) {
+    *out << " clip_rect:" << clip_rect.ToString();
+  }
+
+  if (!layer->rounded_corner_radii().IsEmpty()) {
+    *out << "\n" << property_indent_str;
+    *out << "rounded-corners-radii: "
+         << layer->rounded_corner_radii().ToString();
+  }
+
   const ui::Layer* mask = const_cast<ui::Layer*>(layer)->layer_mask_layer();
 
   if (mask) {
@@ -96,27 +118,30 @@ void PrintLayerHierarchyImp(const Layer* layer,
     *out << "opacity: " << std::setprecision(2) << layer->opacity();
   }
 
-  gfx::DecomposedTransform decomp;
-  if (!layer->transform().IsIdentity() &&
-      gfx::DecomposeTransform(&decomp, layer->transform())) {
-    *out << '\n' << property_indent_str;
-    *out << "translation: " << std::fixed << decomp.translate[0];
-    *out << ", " << decomp.translate[1];
+  if (!layer->transform().IsIdentity()) {
+    if (std::optional<gfx::DecomposedTransform> decomp =
+            layer->transform().Decompose()) {
+      *out << '\n' << property_indent_str;
+      *out << "translation: " << std::fixed << decomp->translate[0];
+      *out << ", " << decomp->translate[1];
 
-    *out << '\n' << property_indent_str;
-    *out << "rotation: ";
-    *out << std::acos(decomp.quaternion.w()) * 360.0 / base::kPiDouble;
+      *out << '\n' << property_indent_str;
+      *out << "rotation: ";
+      *out << base::RadToDeg(std::acos(decomp->quaternion.w()) * 2);
 
-    *out << '\n' << property_indent_str;
-    *out << "scale: " << decomp.scale[0];
-    *out << ", " << decomp.scale[1];
+      *out << '\n' << property_indent_str;
+      *out << "scale: " << decomp->scale[0];
+      *out << ", " << decomp->scale[1];
+    }
   }
 
   *out << '\n';
 
-  for (size_t i = 0, count = layer->children().size(); i < count; ++i) {
-    PrintLayerHierarchyImp(
-        layer->children()[i], indent + 3, mouse_location, out);
+  std::vector<raw_ptr<ui::Layer, VectorExperimental>> children =
+      child_cb ? child_cb.Run(layer) : layer->children();
+  for (ui::Layer* child : children) {
+    PrintLayerHierarchyImp(child, indent + 3, mouse_location_in_layer, out,
+                           child_cb);
   }
 }
 
@@ -131,9 +156,10 @@ void PrintLayerHierarchy(const Layer* layer, const gfx::Point& mouse_location) {
 
 void PrintLayerHierarchy(const Layer* layer,
                          const gfx::Point& mouse_location,
-                         std::ostringstream* out) {
+                         std::ostringstream* out,
+                         DebugLayerChildCallback child_cb) {
   *out << "Layer hierarchy:\n";
-  PrintLayerHierarchyImp(layer, 0, mouse_location, out);
+  PrintLayerHierarchyImp(layer, 0, mouse_location, out, child_cb);
 }
 
 }  // namespace ui

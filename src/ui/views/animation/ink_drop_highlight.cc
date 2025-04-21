@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/animation/animation.h"
@@ -120,8 +120,9 @@ void InkDropHighlight::AnimateFade(AnimationType animation_type,
                             ? visible_opacity_
                             : kHiddenOpacity;
   views::AnimationBuilder builder;
-  if (effective_duration.is_positive())
+  if (effective_duration.is_positive()) {
     animation_abort_handle_ = builder.GetAbortHandle();
+  }
   builder
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
@@ -141,23 +142,25 @@ void InkDropHighlight::AnimateFade(AnimationType animation_type,
 gfx::Transform InkDropHighlight::CalculateTransform() const {
   gfx::Transform transform;
   // No transform needed for a solid color layer.
-  if (!layer_delegate_)
+  if (!layer_delegate_) {
     return transform;
+  }
 
   transform.Translate(center_point_.x(), center_point_.y());
   gfx::Vector2dF layer_offset = layer_delegate_->GetCenteringOffset();
   transform.Translate(-layer_offset.x(), -layer_offset.y());
 
   // Add subpixel correction to the transform.
-  transform.ConcatTransform(
+  transform.PostConcat(
       GetTransformSubpixelCorrection(transform, layer_->device_scale_factor()));
 
   return transform;
 }
 
 void InkDropHighlight::AnimationStartedCallback(AnimationType animation_type) {
-  if (observer_)
+  if (observer_) {
     observer_->AnimationStarted(animation_type);
+  }
 }
 
 void InkDropHighlight::AnimationEndedCallback(
@@ -165,11 +168,13 @@ void InkDropHighlight::AnimationEndedCallback(
     InkDropAnimationEndedReason reason) {
   // AnimationEndedCallback() may be invoked when this is being destroyed and
   // |layer_| may be null.
-  if (animation_type == AnimationType::kFadeOut && layer_)
+  if (animation_type == AnimationType::kFadeOut && layer_) {
     layer_->SetVisible(false);
+  }
 
-  if (observer_)
+  if (observer_) {
     observer_->AnimationEnded(animation_type, reason);
+  }
 }
 
 }  // namespace views

@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://print/print_preview.js';
-import {PrintPreviewLayoutSettingsElement} from 'chrome://print/print_preview.js';
 
+import type {PrintPreviewLayoutSettingsElement} from 'chrome://print/print_preview.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, fakeDataBind} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
 
 import {selectOption} from './print_preview_test_utils.js';
 
@@ -15,7 +15,7 @@ suite('LayoutSettingsTest', function() {
 
   /** @override */
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     const model = document.createElement('print-preview-model');
     document.body.appendChild(model);
 
@@ -27,12 +27,11 @@ suite('LayoutSettingsTest', function() {
   });
 
   // Tests that setting the setting updates the UI.
-  test('set setting', async () => {
+  test('set setting', () => {
     const select = layoutSection.shadowRoot!.querySelector('select')!;
     assertEquals('portrait', select.value);
 
     layoutSection.setSetting('layout', true);
-    await eventToPromise('process-select-change', layoutSection);
     assertEquals('landscape', select.value);
   });
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,8 @@ class InputEvent final : public UIEvent {
 
  public:
   static InputEvent* Create(const AtomicString& type,
-                            const InputEventInit* initializer) {
-    return MakeGarbageCollected<InputEvent>(type, initializer);
-  }
+                            const InputEventInit* initializer,
+                            ExceptionState& exception_state);
 
   // https://w3c.github.io/input-events/#h-interface-inputevent-attributes
   enum class InputType {
@@ -39,6 +38,7 @@ class InputEvent final : public UIEvent {
     kInsertTranspose,
     kInsertReplacementText,
     kInsertCompositionText,
+    kInsertLink,
     // Deletion.
     kDeleteWordBackward,
     kDeleteWordForward,
@@ -73,11 +73,6 @@ class InputEvent final : public UIEvent {
     kNumberOfInputTypes,
   };
 
-  enum EventCancelable : bool {
-    kNotCancelable = false,
-    kIsCancelable = true,
-  };
-
   enum EventIsComposing : bool {
     kNotComposing = false,
     kIsComposing = true,
@@ -85,12 +80,10 @@ class InputEvent final : public UIEvent {
 
   static InputEvent* CreateBeforeInput(InputType,
                                        const String& data,
-                                       EventCancelable,
                                        EventIsComposing,
                                        const StaticRangeVector*);
   static InputEvent* CreateBeforeInput(InputType,
                                        DataTransfer*,
-                                       EventCancelable,
                                        EventIsComposing,
                                        const StaticRangeVector*);
   static InputEvent* CreateInput(InputType,
@@ -98,7 +91,16 @@ class InputEvent final : public UIEvent {
                                  EventIsComposing,
                                  const StaticRangeVector*);
 
-  InputEvent(const AtomicString&, const InputEventInit*);
+  InputEvent(const AtomicString&, const InputEventInit*, ExceptionState&);
+  // This variant of the constructor is more efficient than the InputEventInit
+  // variant.
+  InputEvent(const AtomicString& type,
+             const UIEventInit& init,
+             InputType input_type,
+             const String& data,
+             DataTransfer* data_transfer,
+             EventIsComposing is_composing,
+             const StaticRangeVector* ranges);
 
   String inputType() const;
   const String& data() const { return data_; }

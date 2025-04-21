@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_RENDERER_CONTEXT_MENU_CONTEXT_MENU_DELEGATE_H_
 
 #include <memory>
+#include "base/memory/raw_ptr.h"
 
 class RenderViewContextMenuBase;
 
@@ -22,6 +23,8 @@ class ContextMenuDelegate {
 
   ContextMenuDelegate(const ContextMenuDelegate&) = delete;
   ContextMenuDelegate& operator=(const ContextMenuDelegate&) = delete;
+
+  void ClearWebContents();
 
   virtual ~ContextMenuDelegate();
 
@@ -41,6 +44,9 @@ class ContextMenuDelegate {
 
   // Displays the context menu.
   virtual void ShowMenu(std::unique_ptr<RenderViewContextMenuBase> menu) = 0;
+
+ private:
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
 };
 
 #endif  // COMPONENTS_RENDERER_CONTEXT_MENU_CONTEXT_MENU_DELEGATE_H_

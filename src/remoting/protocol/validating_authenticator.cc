@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,17 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 ValidatingAuthenticator::ValidatingAuthenticator(
     const std::string& remote_jid,
@@ -30,9 +30,19 @@ ValidatingAuthenticator::ValidatingAuthenticator(
   DCHECK(!remote_jid_.empty());
   DCHECK(validation_callback_);
   DCHECK(current_authenticator_);
+  ChainStateChangeAfterAcceptedWithUnderlying(*current_authenticator_);
 }
 
 ValidatingAuthenticator::~ValidatingAuthenticator() = default;
+
+CredentialsType ValidatingAuthenticator::credentials_type() const {
+  return current_authenticator_->credentials_type();
+}
+
+const Authenticator& ValidatingAuthenticator::implementing_authenticator()
+    const {
+  return current_authenticator_->implementing_authenticator();
+}
 
 Authenticator::State ValidatingAuthenticator::state() const {
   return pending_auth_message_ ? MESSAGE_READY : state_;
@@ -47,8 +57,17 @@ Authenticator::RejectionReason ValidatingAuthenticator::rejection_reason()
   return rejection_reason_;
 }
 
+Authenticator::RejectionDetails ValidatingAuthenticator::rejection_details()
+    const {
+  return rejection_details_;
+}
+
 const std::string& ValidatingAuthenticator::GetAuthKey() const {
   return current_authenticator_->GetAuthKey();
+}
+
+const SessionPolicies* ValidatingAuthenticator::GetSessionPolicies() const {
+  return current_authenticator_->GetSessionPolicies();
 }
 
 std::unique_ptr<ChannelAuthenticator>
@@ -68,7 +87,8 @@ void ValidatingAuthenticator::ProcessMessage(
                      weak_factory_.GetWeakPtr(), std::move(resume_callback)));
 }
 
-std::unique_ptr<jingle_xmpp::XmlElement> ValidatingAuthenticator::GetNextMessage() {
+std::unique_ptr<jingle_xmpp::XmlElement>
+ValidatingAuthenticator::GetNextMessage() {
   if (pending_auth_message_) {
     DCHECK(state_ == ACCEPTED || state_ == WAITING_MESSAGE);
     return std::move(pending_auth_message_);
@@ -93,23 +113,28 @@ void ValidatingAuthenticator::OnValidateComplete(base::OnceClosure callback,
       return;
 
     case Result::ERROR_INVALID_CREDENTIALS:
-      rejection_reason_ = Authenticator::INVALID_CREDENTIALS;
+      rejection_reason_ = RejectionReason::INVALID_CREDENTIALS;
       break;
 
     case Result::ERROR_INVALID_ACCOUNT:
-      rejection_reason_ = Authenticator::INVALID_ACCOUNT_ID;
+      rejection_reason_ = RejectionReason::INVALID_ACCOUNT_ID;
       break;
 
     case Result::ERROR_TOO_MANY_CONNECTIONS:
-      rejection_reason_ = Authenticator::TOO_MANY_CONNECTIONS;
+      rejection_reason_ = RejectionReason::TOO_MANY_CONNECTIONS;
       break;
 
     case Result::ERROR_REJECTED_BY_USER:
-      rejection_reason_ = Authenticator::REJECTED_BY_USER;
+      rejection_reason_ = RejectionReason::REJECTED_BY_USER;
+      break;
+
+    case Result::ERROR_UNAUTHORIZED_ACCOUNT:
+      rejection_reason_ = RejectionReason::UNAUTHORIZED_ACCOUNT;
       break;
   }
 
   state_ = Authenticator::REJECTED;
+  rejection_details_ = RejectionDetails("Validation failed.");
 
   // Clear the pending message so the signal strategy will generate a new
   // SESSION_REJECT message in response to this state change.
@@ -125,6 +150,7 @@ void ValidatingAuthenticator::UpdateState(base::OnceClosure resume_callback) {
   state_ = current_authenticator_->state();
   if (state_ == REJECTED) {
     rejection_reason_ = current_authenticator_->rejection_reason();
+    rejection_details_ = current_authenticator_->rejection_details();
   } else if (state_ == MESSAGE_READY) {
     DCHECK(!pending_auth_message_);
     pending_auth_message_ = current_authenticator_->GetNextMessage();
@@ -142,5 +168,13 @@ void ValidatingAuthenticator::UpdateState(base::OnceClosure resume_callback) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+void ValidatingAuthenticator::NotifyStateChangeAfterAccepted() {
+  state_ = current_authenticator_->state();
+  if (state_ == REJECTED) {
+    rejection_reason_ = current_authenticator_->rejection_reason();
+    rejection_details_ = current_authenticator_->rejection_details();
+  }
+  Authenticator::NotifyStateChangeAfterAccepted();
+}
+
+}  // namespace remoting::protocol

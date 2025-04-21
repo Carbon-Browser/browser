@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,9 +36,10 @@ ShellExtensionSystemFactory::ShellExtensionSystemFactory()
 ShellExtensionSystemFactory::~ShellExtensionSystemFactory() {
 }
 
-KeyedService* ShellExtensionSystemFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ShellExtensionSystemFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* context) const {
-  return new ShellExtensionSystem(context);
+  return std::make_unique<ShellExtensionSystem>(context);
 }
 
 BrowserContext* ShellExtensionSystemFactory::GetBrowserContextToUse(

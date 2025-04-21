@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/test_audio_thread.h"
 
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 
 namespace media {
@@ -21,7 +21,7 @@ TestAudioThread::TestAudioThread(bool use_real_thread) {
     CHECK(thread_->Start());
     task_runner_ = thread_->task_runner();
   } else {
-    task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   }
 }
 

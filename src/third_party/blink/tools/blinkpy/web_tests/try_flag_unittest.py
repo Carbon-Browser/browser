@@ -1,11 +1,11 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import unittest
 
 from blinkpy.common.host_mock import MockHost
-from blinkpy.common.net.git_cl import TryJobStatus
+from blinkpy.common.net.git_cl import BuildStatus
 from blinkpy.common.net.git_cl_mock import MockGitCL
 from blinkpy.common.net.results_fetcher import Build
 from blinkpy.common.net.web_test_results import WebTestResults
@@ -19,9 +19,9 @@ class TryFlagTest(unittest.TestCase):
         self.mac_build = Build('mac-rel', 101)
         self.win_build = Build('win7-rel', 102)
         self.mock_try_results = {
-            self.linux_build: TryJobStatus('COMPLETED', 'SUCCESS'),
-            self.win_build: TryJobStatus('COMPLETED', 'SUCCESS'),
-            self.mac_build: TryJobStatus('COMPLETED', 'SUCCESS')
+            self.linux_build: BuildStatus.SUCCESS,
+            self.win_build: BuildStatus.SUCCESS,
+            self.mac_build: BuildStatus.SUCCESS
         }
         super(TryFlagTest, self).__init__(*args, **kwargs)
 
@@ -70,7 +70,7 @@ class TryFlagTest(unittest.TestCase):
     def _setup_mock_results(self, results_fetcher):
         results_fetcher.set_results(
             self.linux_build,
-            WebTestResults(
+            WebTestResults.from_json(
                 {
                     'tests': {
                         'something': {
@@ -87,10 +87,10 @@ class TryFlagTest(unittest.TestCase):
                         }
                     }
                 },
-                step_name='blink_web_tests (with patch)'))
+                step_name='blink_web_tests'))
         results_fetcher.set_results(
             self.win_build,
-            WebTestResults(
+            WebTestResults.from_json(
                 {
                     'tests': {
                         'something': {
@@ -107,10 +107,10 @@ class TryFlagTest(unittest.TestCase):
                         }
                     }
                 },
-                step_name='blink_web_tests (with patch)'))
+                step_name='blink_web_tests'))
         results_fetcher.set_results(
             self.mac_build,
-            WebTestResults(
+            WebTestResults.from_json(
                 {
                     'tests': {
                         'something': {
@@ -127,7 +127,7 @@ class TryFlagTest(unittest.TestCase):
                         }
                     }
                 },
-                step_name='blink_web_tests (with patch)'))
+                step_name='blink_web_tests'))
 
     def test_update(self):
         host = MockHost()
@@ -145,19 +145,9 @@ class TryFlagTest(unittest.TestCase):
         cmd = ['update', '--flag=--foo']
         TryFlag(cmd, host, MockGitCL(host, self.mock_try_results)).run()
 
-        def results_url(build):
-            return '%s/%s/%s/%s/layout-test-results/results.html' % (
-                'https://test-results.appspot.com/data/layout_results',
-                build.builder_name, build.build_number,
-                'blink_web_tests%20%28with%20patch%29')
-
         self.assertEqual(
             host.stdout.getvalue(), '\n'.join([
-                'Fetching results...',
-                '-- Linux: %s' % results_url(self.linux_build),
-                '-- Mac: %s' % results_url(self.mac_build),
-                '-- Win: %s' % results_url(self.win_build), '',
-                '### 1 unexpected passes:', '',
+                'Fetching results...', '', '### 1 unexpected passes:', '',
                 '[ Mac ] something/pass-unexpectedly-mac.html [ Pass ]', '',
                 '### 5 unexpected failures:', '',
                 '[ Linux ] something/fail-everywhere.html [ Failure ]',

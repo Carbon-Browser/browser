@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,6 @@ class DialogOverlayImpl : public ui::ViewAndroidObserver,
 
   // WindowAndroidObserver
   void OnRootWindowVisibilityChanged(bool visible) override;
-  void OnCompositingDidCommit() override {}
   void OnAttachCompositor() override {}
   void OnDetachCompositor() override {}
   void OnActivityStopped() override {}

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,28 +16,28 @@ namespace policies {
 
 class MockWorkingSetTrimmerPolicy : public WorkingSetTrimmerPolicy {
  public:
-  MockWorkingSetTrimmerPolicy() {}
+  MockWorkingSetTrimmerPolicy() = default;
 
   MockWorkingSetTrimmerPolicy(const MockWorkingSetTrimmerPolicy&) = delete;
   MockWorkingSetTrimmerPolicy& operator=(const MockWorkingSetTrimmerPolicy&) =
       delete;
 
-  ~MockWorkingSetTrimmerPolicy() override {}
+  ~MockWorkingSetTrimmerPolicy() override = default;
 
-  MOCK_METHOD1(TrimWorkingSet, bool(const ProcessNode*));
+  MOCK_METHOD1(TrimWorkingSet, void(const ProcessNode*));
 };
 
 class WorkingSetTrimmerPolicyTest : public GraphTestHarness {
  public:
   using Super = GraphTestHarness;
 
-  WorkingSetTrimmerPolicyTest() {}
+  WorkingSetTrimmerPolicyTest() = default;
 
   WorkingSetTrimmerPolicyTest(const WorkingSetTrimmerPolicyTest&) = delete;
   WorkingSetTrimmerPolicyTest& operator=(const WorkingSetTrimmerPolicyTest&) =
       delete;
 
-  ~WorkingSetTrimmerPolicyTest() override {}
+  ~WorkingSetTrimmerPolicyTest() override = default;
 
   void SetUp() override {
     Super::SetUp();

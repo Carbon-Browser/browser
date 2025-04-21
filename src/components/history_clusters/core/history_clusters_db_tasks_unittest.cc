@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/history_clusters/core/history_clusters_db_tasks.h"
 
@@ -39,10 +44,11 @@ TEST(HistoryClustersDBTasksTest, BeginTimeCalculation) {
       },
   };
 
-  for (size_t i = 0; i < std::size(test_data); ++i) {
-    SCOPED_TRACE(base::StringPrintf("Testing case i=%d", int(i)));
+  int i = 0;
+  for (const auto& test_item : test_data) {
+    SCOPED_TRACE(base::StringPrintf("Testing case i=%d", i++));
 
-    auto& test_case = test_data[i];
+    auto& test_case = test_item;
 
     ASSERT_TRUE(test_case.end_time_exploded.HasValidValues());
     base::Time end_time;
@@ -53,7 +59,7 @@ TEST(HistoryClustersDBTasksTest, BeginTimeCalculation) {
         GetAnnotatedVisitsToCluster::GetBeginTimeOnDayBoundary(end_time);
     base::Time::Exploded begin_exploded;
     begin_time.LocalExplode(&begin_exploded);
-    auto& expected_begin = test_case.expected_begin_time_exploded;
+    const auto& expected_begin = test_case.expected_begin_time_exploded;
     EXPECT_EQ(begin_exploded.year, expected_begin.year);
     EXPECT_EQ(begin_exploded.month, expected_begin.month);
     // We specifically ignore day-of-week, because it uses UTC, and we don't

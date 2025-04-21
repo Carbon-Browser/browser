@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/process/process_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "chrome/browser/memory/oom_memory_details.h"
 #include "ui/base/text/bytes_formatting.h"
 
 namespace memory {
@@ -26,8 +25,7 @@ OomMemoryDetails::OomMemoryDetails(const std::string& title)
   start_time_ = base::TimeTicks::Now();
 }
 
-OomMemoryDetails::~OomMemoryDetails() {
-}
+OomMemoryDetails::~OomMemoryDetails() = default;
 
 void OomMemoryDetails::OnDetailsAvailable() {
   base::TimeDelta delta = base::TimeTicks::Now() - start_time_;

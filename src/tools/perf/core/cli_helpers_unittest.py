@@ -1,16 +1,12 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import subprocess
 import unittest
+from unittest import mock
 
 import six
-
-if six.PY2:
-  import mock
-else:
-  import unittest.mock as mock  # pylint: disable=no-name-in-module,import-error,wrong-import-order
 
 from core import cli_helpers
 from telemetry import decorators

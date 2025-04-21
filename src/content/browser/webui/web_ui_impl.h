@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,42 +7,46 @@
 
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "content/browser/webui/url_data_manager_backend.h"
 #include "content/common/content_export.h"
 #include "content/common/web_ui.mojom.h"
 #include "content/public/browser/web_ui.h"
+#include "content/public/common/bindings_policy.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
+#include "third_party/blink/public/mojom/loader/local_resource_loader_config.mojom.h"
 
 namespace content {
+class NavigationRequest;
 class RenderFrameHost;
 class RenderFrameHostImpl;
-class WebContentsImpl;
 class WebUIMainFrameObserver;
 
-class CONTENT_EXPORT WebUIImpl : public WebUI,
-                                 public mojom::WebUIHost,
-                                 public base::SupportsWeakPtr<WebUIImpl> {
+class CONTENT_EXPORT WebUIImpl : public WebUI, public mojom::WebUIHost {
  public:
-  explicit WebUIImpl(WebContentsImpl* contents,
-                     RenderFrameHostImpl* frame_host);
-  ~WebUIImpl() override;
+  explicit WebUIImpl(WebContents* web_contents);
+  explicit WebUIImpl(NavigationRequest* request);
   WebUIImpl(const WebUIImpl&) = delete;
   WebUIImpl& operator=(const WebUIImpl&) = delete;
+  ~WebUIImpl() override;
+
+  // A WebUIImpl object is created and owned by the WebUI navigation's
+  // NavigationRequest, until a RenderFrameHost has been picked for the
+  // navigation, at which point the ownership of the WebUIImpl object is moved
+  // to the RenderFrameHost. This function is called when that happens.
+  void SetRenderFrameHost(RenderFrameHost* render_frame_host);
 
   // Called when a RenderFrame is created for a WebUI (reload after a renderer
   // crash) or when a WebUI is created for a RenderFrame (i.e. navigating from
   // chrome://downloads to chrome://bookmarks) or when both are new (i.e.
   // opening a new tab).
   void WebUIRenderFrameCreated(RenderFrameHost* render_frame_host);
-
-  // Called when a RenderFrame is reused for the same WebUI type (i.e. reload).
-  void RenderFrameReused(RenderFrameHost* render_frame_host);
 
   // Called when the owning RenderFrameHost has started unloading.
   void RenderFrameHostUnloading();
@@ -64,42 +68,25 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // WebUI implementation:
   WebContents* GetWebContents() override;
   WebUIController* GetController() override;
+  RenderFrameHost* GetRenderFrameHost() override;
   void SetController(std::unique_ptr<WebUIController> controller) override;
   float GetDeviceScaleFactor() override;
   const std::u16string& GetOverriddenTitle() override;
   void OverrideTitle(const std::u16string& title) override;
-  int GetBindings() override;
-  void SetBindings(int bindings) override;
+  BindingsPolicySet GetBindings() override;
+  void SetBindings(BindingsPolicySet bindings) override;
   const std::vector<std::string>& GetRequestableSchemes() override;
   void AddRequestableScheme(const char* scheme) override;
   void AddMessageHandler(std::unique_ptr<WebUIMessageHandler> handler) override;
-  void RegisterMessageCallback(base::StringPiece message,
+  void RegisterMessageCallback(std::string_view message,
                                MessageCallback callback) override;
-  void RegisterDeprecatedMessageCallback(
-      base::StringPiece message,
-      const DeprecatedMessageCallback& callback) override;
   void ProcessWebUIMessage(const GURL& source_url,
                            const std::string& message,
                            base::Value::List args) override;
   bool CanCallJavascript() override;
-  void CallJavascriptFunctionUnsafe(const std::string& function_name) override;
-  void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                    const base::Value& arg) override;
-  void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                    const base::Value& arg1,
-                                    const base::Value& arg2) override;
-  void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                    const base::Value& arg1,
-                                    const base::Value& arg2,
-                                    const base::Value& arg3) override;
-  void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                    const base::Value& arg1,
-                                    const base::Value& arg2,
-                                    const base::Value& arg3,
-                                    const base::Value& arg4) override;
   void CallJavascriptFunctionUnsafe(
-      const std::string& function_name,
-      const std::vector<const base::Value*>& args) override;
+      std::string_view function_name,
+      base::span<const base::ValueView> args) override;
   std::vector<std::unique_ptr<WebUIMessageHandler>>* GetHandlersForTesting()
       override;
 
@@ -110,7 +97,10 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
     return web_contents_observer_.get();
   }
 
-  RenderFrameHostImpl* frame_host() const { return frame_host_; }
+  bool HasRenderFrameHost() const;
+
+  static blink::mojom::LocalResourceLoaderConfigPtr
+  GetLocalResourceLoaderConfigForTesting(URLDataManagerBackend* data_backend);
 
  private:
   friend class WebUIMainFrameObserver;
@@ -124,20 +114,18 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // Called internally and by the owned WebUIMainFrameObserver.
   void DisallowJavascriptOnAllHandlers();
 
-  // A map of message name -> message handling callback.
-  std::map<std::string, MessageCallback> message_callbacks_;
+  blink::mojom::LocalResourceLoaderConfigPtr GetLocalResourceLoaderConfig();
 
   // A map of message name -> message handling callback.
-  // TODO(crbug.com/1243386): Remove once RegisterDeprecatedMessageCallback()
-  // instances are migrated to RegisterMessageCallback().
-  std::map<std::string, DeprecatedMessageCallback>
-      deprecated_message_callbacks_;
+  std::map<std::string, MessageCallback> message_callbacks_;
 
   // Options that may be overridden by individual Web UI implementations. The
   // bool options default to false. See the public getters for more information.
   std::u16string overridden_title_;  // Defaults to empty string.
-  int bindings_;  // The bindings from BindingsPolicy that should be enabled for
-                  // this page.
+
+  // The bindings that should be enabled for this page.
+  BindingsPolicySet bindings_ =
+      BindingsPolicySet({BindingsPolicyValue::kWebUi});
 
   // The URL schemes that can be requested by this document.
   std::vector<std::string> requestable_schemes_;
@@ -151,14 +139,24 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // This lead to one UAF. See https://crbug.com/1308391
   // See regression test:
   // `WebUIImplBrowserTest::SynchronousWebContentDeletionInUnload`
-  raw_ptr<WebContents, DisableDanglingPtrDetection> web_contents_;
-  raw_ptr<RenderFrameHostImpl, DisableDanglingPtrDetection> frame_host_;
+  const raw_ptr<WebContents, DisableDanglingPtrDetection> web_contents_;
+
+  // During WebUI construction, `frame_host_` might stay unset for a while,
+  // as the WebUIImpl object is created early in a navigation, and a
+  // RenderFrameHost for the navigation might not be created until the final
+  // response for the navigation is received in some cases
+  // (after `NavigationRequest::OnResponseStarted()`).
+  // During WebUI destruction, `frame_host_` is always valid except
+  // if the WebContents is destroyed by the WebUIController subclass.
+  // See regression test:
+  // `WebUIImplBrowserTest::SynchronousWebContentDeletionInUnload`
+  base::WeakPtr<RenderFrameHostImpl> frame_host_;
 
   // The WebUIMessageHandlers we own.
   std::vector<std::unique_ptr<WebUIMessageHandler>> handlers_;
 
   // Notifies this WebUI about notifications in the main frame.
-  std::unique_ptr<WebUIMainFrameObserver> web_contents_observer_;
+  const std::unique_ptr<WebUIMainFrameObserver> web_contents_observer_;
 
   std::unique_ptr<WebUIController> controller_;
 

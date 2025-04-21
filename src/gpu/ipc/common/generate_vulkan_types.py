@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,7 +14,7 @@ import typing
 
 from xml.etree import ElementTree
 
-_VK_XML_FILE = "third_party/vulkan-deps/vulkan-headers/src/registry/vk.xml"
+_VK_XML_FILE = "third_party/vulkan-headers/src/registry/vk.xml"
 
 _STRUCTS = [
   "VkExtensionProperties",
@@ -232,7 +232,7 @@ def WriteMojomTypes(types: typing.Iterable[str], mojom_file: typing.IO) -> None:
 
 def GenerateMojom(mojom_file: typing.IO) -> None:
   mojom_file.write(
-'''// Copyright 2019 The Chromium Authors. All rights reserved.
+'''// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -284,7 +284,7 @@ struct StructTraits<gpu::mojom::%sDataView, %s> {
       assert array_len
       traits_header_file.write(
 """
-  static base::StringPiece %s(const %s& input) {
+  static std::string_view %s(const %s& input) {
     return input.%s;
   }
 """ % (field_name, name, field_name))
@@ -334,7 +334,7 @@ bool StructTraits<gpu::mojom::%sDataView, %s>::Read(
       read_method = "Read%s" % (NormalizedCamelCase(field_name))
       traits_source_file.write(
 """
-  base::StringPiece %s;
+  std::string_view %s;
   if (!data.%s(&%s))
     return false;
   %s.copy(out->%s, sizeof(out->%s));
@@ -390,13 +390,12 @@ struct EnumTraits<gpu::mojom::%s, %s> {
 """
       default:
         NOTREACHED();
-        return gpu::mojom::%s::INVALID_VALUE;
     }
   }
 
   static bool FromMojom(gpu::mojom::%s input, %s* out) {
     switch (input) {
-""" % (name, name, name))
+""" % (name, name))
 
   for value_name, _, mojom_value_name in _enums[name]:
     traits_header_file.write(
@@ -409,11 +408,9 @@ struct EnumTraits<gpu::mojom::%s, %s> {
 """
       case gpu::mojom::%s::INVALID_VALUE:
         NOTREACHED();
-        return false;
 
     }
     NOTREACHED();
-    return false;
   }
 };""" % name)
 
@@ -422,7 +419,7 @@ struct EnumTraits<gpu::mojom::%s, %s> {
 def GenerateTraitsFile(traits_header_file: typing.IO,
                        traits_source_file: typing.IO) -> None:
   traits_header_file.write(
-"""// Copyright 2019 The Chromium Authors. All rights reserved.
+"""// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -435,8 +432,9 @@ def GenerateTraitsFile(traits_header_file: typing.IO,
 #ifndef GPU_IPC_COMMON_VULKAN_TYPES_MOJOM_TRAITS_H_
 #define GPU_IPC_COMMON_VULKAN_TYPES_MOJOM_TRAITS_H_
 
+#include <string_view>
+
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "gpu/ipc/common/vulkan_types.h"
 #include "gpu/ipc/common/vulkan_types.mojom-shared.h"
 
@@ -444,7 +442,7 @@ namespace mojo {
 """)
 
   traits_source_file.write(
-"""// Copyright 2019 The Chromium Authors. All rights reserved.
+"""// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -478,7 +476,7 @@ namespace mojo {
 
 def GenerateTypemapFile(typemap_file: typing.IO) -> None:
   typemap_file.write(
-"""# Copyright 2019 The Chromium Authors. All rights reserved.
+"""# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 

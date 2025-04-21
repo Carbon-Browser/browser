@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,6 @@
 
 namespace base {
 namespace subtle {
-
-namespace {
-
-void RecordMappingWasBlockedHistogram(bool blocked) {
-  UmaHistogramBoolean("SharedMemory.MapBlockedForSecurity", blocked);
-}
-
-}  // namespace
 
 // static
 PlatformSharedMemoryRegion PlatformSharedMemoryRegion::CreateWritable(
@@ -47,33 +39,33 @@ PlatformSharedMemoryRegion::PassPlatformHandle() {
   return std::move(handle_);
 }
 
-absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
+std::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
     uint64_t offset,
     size_t size,
     SharedMemoryMapper* mapper) const {
-  if (!IsValid())
-    return absl::nullopt;
+  if (!IsValid()) {
+    return std::nullopt;
+  }
 
-  if (size == 0)
-    return absl::nullopt;
+  if (size == 0) {
+    return std::nullopt;
+  }
 
   size_t end_byte;
   if (!CheckAdd(offset, size).AssignIfValid(&end_byte) || end_byte > size_) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // TODO(dcheng): Presumably the actual size of the mapping is rounded to
   // `SysInfo::VMAllocationGranularity()`. Should this accounting be done with
   // that in mind?
   if (!SharedMemorySecurityPolicy::AcquireReservationForMapping(size)) {
-    RecordMappingWasBlockedHistogram(/*blocked=*/true);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  RecordMappingWasBlockedHistogram(/*blocked=*/false);
-
-  if (!mapper)
+  if (!mapper) {
     mapper = SharedMemoryMapper::GetDefaultInstance();
+  }
 
   // The backing mapper expects offset to be aligned to
   // `SysInfo::VMAllocationGranularity()`.
@@ -98,6 +90,17 @@ absl::optional<span<uint8_t>> PlatformSharedMemoryRegion::MapAt(
   }
 
   return result;
+}
+
+void PlatformSharedMemoryRegion::Unmap(span<uint8_t> mapping,
+                                       SharedMemoryMapper* mapper) {
+  if (!mapper) {
+    mapper = SharedMemoryMapper::GetDefaultInstance();
+  }
+
+  mapper->Unmap(mapping);
+
+  SharedMemorySecurityPolicy::ReleaseReservationForMapping(mapping.size());
 }
 
 }  // namespace subtle

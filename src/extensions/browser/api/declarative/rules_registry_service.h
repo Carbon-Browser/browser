@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "extensions/browser/api/declarative/rules_cache_delegate.h"
 #include "extensions/browser/api/declarative/rules_registry.h"
+#include "extensions/browser/api/web_request/web_request_event_router_factory.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
@@ -113,6 +114,11 @@ class RulesRegistryService : public BrowserContextKeyedAPI,
   // For testing.
   void SimulateExtensionUninstalled(const Extension* extension);
 
+  // For testing. Returns true if `rule_registries_` has the RulesRegistry for
+  // `event_name` and `rules_registry_id`.
+  bool HasRulesRegistryForTesting(int rules_registry_id,
+                                  const std::string& event_name);
+
  private:
   friend class BrowserContextKeyedAPIFactory<RulesRegistryService>;
 
@@ -165,7 +171,8 @@ class RulesRegistryService : public BrowserContextKeyedAPI,
 
   // Weak pointer into rule_registries_ to make it easier to handle content rule
   // conditions.
-  raw_ptr<ContentRulesRegistry> content_rules_registry_;
+  raw_ptr<ContentRulesRegistry, AcrossTasksDanglingUntriaged>
+      content_rules_registry_;
 
   // Listen to extension load, unloaded notification.
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>
@@ -174,6 +181,16 @@ class RulesRegistryService : public BrowserContextKeyedAPI,
   raw_ptr<content::BrowserContext> browser_context_;
 
   base::ObserverList<Observer>::Unchecked observers_;
+};
+
+template <>
+struct BrowserContextFactoryDependencies<RulesRegistryService> {
+  static void DeclareFactoryDependencies(
+      BrowserContextKeyedAPIFactory<RulesRegistryService>* factory) {
+    factory->DependsOn(
+        ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+    factory->DependsOn(WebRequestEventRouterFactory::GetInstance());
+  }
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,20 @@ namespace page_load_metrics {
 namespace test {
 
 // WeakMockTimer is a MockTimer that allows clients to keep WeakPtr<>s to it.
-class WeakMockTimer : public base::MockOneShotTimer,
-                      public base::SupportsWeakPtr<WeakMockTimer> {
+class WeakMockTimer final : public base::MockOneShotTimer {
  public:
   WeakMockTimer();
+  ~WeakMockTimer() override;
 
   WeakMockTimer(const WeakMockTimer&) = delete;
   WeakMockTimer& operator=(const WeakMockTimer&) = delete;
+
+  base::WeakPtr<WeakMockTimer> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<WeakMockTimer> weak_ptr_factory_{this};
 };
 
 // WeakMockTimerProvider is a testing helper class that test classes can inherit

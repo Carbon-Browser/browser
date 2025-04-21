@@ -1,10 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser.accessibility;
 
-import java.util.Calendar;
+import android.os.SystemClock;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -14,6 +18,7 @@ import java.util.Set;
  * throttle and queue AccessibilityEvents that are sent in quick succession. This ensures we do
  * not overload the system and create lag by sending superfluous events.
  */
+@NullMarked
 public class AccessibilityEventDispatcher {
     // Maps an AccessibilityEvent type to a throttle delay in milliseconds. This is populated once
     // in the constructor.
@@ -40,9 +45,6 @@ public class AccessibilityEventDispatcher {
     // can maintain a connection through JNI to the native code.
     private Client mClient;
 
-    // Simple boolean to plumb through the ContentFeatureList enabled/disabled flag.
-    private boolean mOnDemandEnabled;
-
     /**
      * Callback interface to link {@link WebContentsAccessibilityImpl} with an instance of the
      * {@link AccessibilityEventDispatcher} so we can separate out queueing/throttling logic into a
@@ -62,7 +64,7 @@ public class AccessibilityEventDispatcher {
          *
          * @param toRemove              The Runnable to remove.
          */
-        void removeRunnable(Runnable toRemove);
+        void removeRunnable(@Nullable Runnable toRemove);
 
         /**
          * Build an AccessibilityEvent for the given id and type. Requires a connection through the
@@ -76,17 +78,16 @@ public class AccessibilityEventDispatcher {
         boolean dispatchEvent(int virtualViewId, int eventType);
     }
 
-    /**
-     *  Create an AccessibilityEventDispatcher and define the delays for event types.
-     */
-    public AccessibilityEventDispatcher(Client mClient, Map<Integer, Integer> eventThrottleDelays,
-            Set<Integer> viewIndependentEventsToThrottle, Set<Integer> relevantEventTypes,
-            boolean onDemandEnabled) {
+    /** Create an AccessibilityEventDispatcher and define the delays for event types. */
+    public AccessibilityEventDispatcher(
+            Client mClient,
+            Map<Integer, Integer> eventThrottleDelays,
+            Set<Integer> viewIndependentEventsToThrottle,
+            Set<Integer> relevantEventTypes) {
         this.mClient = mClient;
         this.mEventThrottleDelays = eventThrottleDelays;
         this.mViewIndependentEventsToThrottle = viewIndependentEventsToThrottle;
         this.mRelevantEventTypes = relevantEventTypes;
-        this.mOnDemandEnabled = onDemandEnabled;
     }
 
     /**
@@ -98,8 +99,8 @@ public class AccessibilityEventDispatcher {
      * @param eventType         The AccessibilityEvent type.
      */
     public void enqueueEvent(int virtualViewId, int eventType) {
-        // Check whether OnDemand feature is enabled and if this is a relevant event type.
-        if (mOnDemandEnabled && !mRelevantEventTypes.contains(eventType)) {
+        // Check if this is a relevant event type.
+        if (!mRelevantEventTypes.contains(eventType)) {
             return;
         }
 
@@ -113,7 +114,7 @@ public class AccessibilityEventDispatcher {
         // fired an event of this type for this id, or the last time was longer ago than the delay
         // for this eventType as per |mEventThrottleDelays|, then we allow this event to be sent
         // immediately and record the time and clear any lingering callbacks.
-        long now = Calendar.getInstance().getTimeInMillis();
+        long now = SystemClock.elapsedRealtime();
         long uuid = uuid(virtualViewId, eventType);
         if (mEventLastFiredTimes.get(uuid) == null
                 || now - mEventLastFiredTimes.get(uuid) >= mEventThrottleDelays.get(eventType)) {
@@ -132,23 +133,35 @@ public class AccessibilityEventDispatcher {
             // |mPendingEvents| of the same |uuid|, and set a delay equal.
             mClient.removeRunnable(mPendingEvents.get(uuid));
 
-            Runnable myRunnable = () -> {
-                // We have delayed firing this event, so accessibility may not be enabled or the
-                // node may be invalid, in which case dispatch will return false.
-                if (mClient.dispatchEvent(virtualViewId, eventType)) {
-                    // After sending event, record time it was sent
-                    mEventLastFiredTimes.put(uuid, Calendar.getInstance().getTimeInMillis());
-                }
+            Runnable myRunnable =
+                    () -> {
+                        // We have delayed firing this event, so accessibility may not be enabled or
+                        // the node may be invalid, in which case dispatch will return false.
+                        if (mClient.dispatchEvent(virtualViewId, eventType)) {
+                            // After sending event, record time it was sent
+                            mEventLastFiredTimes.put(uuid, SystemClock.elapsedRealtime());
+                        }
 
-                // Remove any lingering callbacks and pending events regardless of success.
-                mClient.removeRunnable(mPendingEvents.get(uuid));
-                mPendingEvents.remove(uuid);
-            };
+                        // Remove any lingering callbacks and pending events regardless of success.
+                        mClient.removeRunnable(mPendingEvents.get(uuid));
+                        mPendingEvents.remove(uuid);
+                    };
 
-            mClient.postRunnable(myRunnable,
+            mClient.postRunnable(
+                    myRunnable,
                     (mEventLastFiredTimes.get(uuid) + mEventThrottleDelays.get(eventType)) - now);
             mPendingEvents.put(uuid, myRunnable);
         }
+    }
+
+    /**
+     * Helper method to cancel all posted Runnables if the Client object is being destroyed early.
+     */
+    public void clearQueue() {
+        for (Long uuid : mPendingEvents.keySet()) {
+            mClient.removeRunnable(mPendingEvents.get(uuid));
+        }
+        mPendingEvents.clear();
     }
 
     /**
@@ -157,14 +170,6 @@ public class AccessibilityEventDispatcher {
      */
     public void updateRelevantEventTypes(Set<Integer> relevantEventTypes) {
         this.mRelevantEventTypes = relevantEventTypes;
-    }
-
-    /**
-     * Helper method to set the OnDemand feature enabled boolean.
-     * @param onDemandEnabled           boolean is feature enabled
-     */
-    public void setOnDemandEnabled(boolean onDemandEnabled) {
-        mOnDemandEnabled = onDemandEnabled;
     }
 
     /**

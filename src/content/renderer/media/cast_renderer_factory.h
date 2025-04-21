@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/renderer_factory.h"
 
 namespace blink {
@@ -27,7 +28,7 @@ class VideoRendererSink;
 namespace content {
 
 // RendererFactory implementation for Cast. This class is similar to
-// DefaultRendererFactory, but provides its own CastAudioRenderer for audio.
+// RendererImplFactory, but provides its own CastAudioRenderer for audio.
 class CastRendererFactory final : public media::RendererFactory {
  public:
   using GetGpuFactoriesCB =

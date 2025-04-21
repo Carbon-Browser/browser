@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import "mojo/public/mojom/base/time.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "url/mojom/url.mojom";
 
-// Next MinVersion: 14
+// Next MinVersion: 24
 
 [Stable, Extensible]
 enum MediaPlaybackState {
@@ -37,6 +37,9 @@ enum MediaSessionAction {
   [MinVersion=11] kHangUp,
   [MinVersion=12] kRaise,
   [MinVersion=13] kSetMute,
+  [MinVersion=18] kPreviousSlide,
+  [MinVersion=18] kNextSlide,
+  [MinVersion=19] kEnterAutoPictureInPicture,
 };
 
 [Stable, Extensible]
@@ -46,6 +49,9 @@ enum MediaSessionImageType {
 
   // The icon associated with the source of the media session.
   kSourceIcon,
+
+  // The artwork associated with its chapters in the media session.
+  [MinVersion=22] kChapter,
 };
 
 [Stable, Extensible]
@@ -73,6 +79,15 @@ struct MediaImage {
   array<gfx.mojom.Size> sizes;
 };
 
+// Chapter info in MediaMetadata
+// Spec: https://wicg.github.io/mediasession/
+[Stable]
+struct ChapterInformation {
+  mojo_base.mojom.String16 title;
+  mojo_base.mojom.TimeDelta startTime;
+  array<MediaImage> artwork;
+};
+
 // MediaMetadata
 [Stable]
 struct MediaMetadata {
@@ -85,6 +100,9 @@ struct MediaMetadata {
   // session. This could be the name of the app or the name of the site playing
   // media.
   mojo_base.mojom.String16 source_title;
+
+  // Also defined in the spec: https://wicg.github.io/mediasession/
+  [MinVersion=21] array<ChapterInformation>? chapters;
 };
 
 // The color type of the bitmap.
@@ -128,6 +146,17 @@ enum CameraState {
   kTurnedOff,
 };
 
+[Stable]
+struct RemotePlaybackMetadata {
+  string video_codec@0;
+  string audio_codec@1;
+  bool remote_playback_disabled@2;
+  [MinVersion=17] bool remote_playback_started@3;
+  // Deprecated, was remoting_device_friendly_name
+  [MinVersion=17] string? unused_field@4;
+  [MinVersion=18] bool is_encrypted_media@5;
+};
+
 // Contains state information about a MediaSession.
 [Stable]
 struct MediaSessionInfo {
@@ -167,7 +196,8 @@ struct MediaSessionInfo {
   // If true then the session is considered to be sensitive (e.g. from an
   // off the record profile). This may result in it being hidden from certain
   // UIs (e.g. lock screen media controls).
-  [MinVersion=6] bool is_sensitive;
+  // DEPRECATED, use |hide_metadata| instead.
+  [MinVersion=6] bool deprecated_is_sensitive;
 
   // The picture-in-picture state tells the client whether the media is
   // currently in a picture-in-picture window.
@@ -193,6 +223,25 @@ struct MediaSessionInfo {
 
   // Tracks whether the media player is muted.
   [MinVersion=12] bool muted;
+
+  // Tracks whether the associated WebContents has a presentation.
+  [MinVersion=14] bool has_presentation;
+
+  // Stores the Media metadata used for Remote Playback.
+  [MinVersion=15] RemotePlaybackMetadata? remote_playback_metadata;
+
+  // If true then media metadata will be hidden from the OS' media controllers.
+  [MinVersion=16] bool hide_metadata;
+
+  // Indicates if this MediaSession should be ignored when finding a new active
+  // session. This occurs for instanced web app system media controls that
+  // cause the browser to never want to track web app media sessions.
+  [MinVersion=20] bool ignore_for_active_session;
+
+  // Indicates if this MediaSession has any players that meet the visibility
+  // threshold defined by |HTMLVideoElement| (kVisibilityThreshold) and tracked
+  // by the |MediaVideoVisibilityTracker|.
+  [MinVersion=21] bool meets_visibility_threshold;
 };
 
 // Contains debugging information about a MediaSession. This will be displayed
@@ -235,7 +284,7 @@ interface MediaSessionObserver {
 
 // A MediaSession manages the media session and audio focus for a given
 // WebContents or ARC app.
-// Next Method ID: 22
+// Next Method ID: 28
 [Stable]
 interface MediaSession {
   [Stable, Extensible]
@@ -338,4 +387,25 @@ interface MediaSession {
 
   // Mute or unmute the media player.
   [MinVersion=13] SetMute@22(bool mute);
+
+  // Request Media Remoting once there are available sinks.
+  [MinVersion=16] RequestMediaRemoting@23();
+
+  // Go back to previous slide.
+  [MinVersion=18] PreviousSlide@24();
+
+  // Go to next slide.
+  [MinVersion=18] NextSlide@25();
+
+  // Automatically enter picture-in-picture from a non-user source (e.g. in
+  // reaction to content being hidden).
+  [MinVersion=19] EnterAutoPictureInPicture@26();
+
+  // Returns whether or not MediaSession has any players that contain a video
+  // that is sufficiently visible.
+  //
+  // A sufficiently visible video is one that meets the visibility threshold
+  // defined by |HTMLVideoElement| (kVisibilityThreshold). |HTMLVideoElement|
+  // visibility is computed by the |MediaVideoVisibilityTracker|.
+  [MinVersion=23] GetVisibility@27() => (bool has_sufficiently_visible_video);
 };

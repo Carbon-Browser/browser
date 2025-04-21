@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,11 +85,12 @@ void NtpFeedContentFetcher::FetchFollowingFeedArticles(
   feedwire::Request request = CreateFeedQueryRefreshRequest(
       StreamType(StreamKind::kFollowing),
       feedwire::FeedQuery::INTERACTIVE_WEB_FEED, RequestMetadata(),
-      /*consistency_token=*/std::string());
+      /*consistency_token=*/std::string(), SingleWebFeedEntryPoint::kOther,
+      /*doc_view_counts=*/{});
 
   feedwire::ClientInfo* client_info =
       request.mutable_feed_request()->mutable_client_info();
-  // TODO(https://crbug.com/1328951): For the desktop feed prototype we call the
+  // TODO(crbug.com/40842320): For the desktop feed prototype we call the
   // Android endpoint and need to pretend we are an Android client. This won't
   // be the case for the launch.
   client_info->set_platform_type(feedwire::ClientInfo::ANDROID_ID);
@@ -112,7 +113,7 @@ NtpFeedContentFetcher::NetworkDelegate::NetworkDelegate(
     : identity_manager_(identity_manager) {}
 
 std::string NtpFeedContentFetcher::NetworkDelegate::GetLanguageTag() {
-  // TODO(https://crbug.com/1328951): Change this for the final implementation.
+  // TODO(crbug.com/40842320): Change this for the final implementation.
   return std::string();
 }
 
@@ -122,7 +123,7 @@ AccountInfo NtpFeedContentFetcher::NetworkDelegate::GetAccountInfo() {
 }
 
 bool NtpFeedContentFetcher::NetworkDelegate::IsOffline() {
-  // TODO(https://crbug.com/1328951): Change this for the final implementation.
+  // TODO(crbug.com/40842320): Change this for the final implementation.
   return false;
 }
 

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,8 +17,6 @@ source_set("browser") {
 
   deps = [
     "//media/capture",
-    "//media/cast:common",
-    "//media/cast:net",
     "//media/mojo/common:common",
     "//media/mojo/mojom:remoting",
     "//mojo/public/cpp/bindings",
@@ -34,8 +32,6 @@ source_set("unittests") {
     "//base",
     "//base/test:test_support",
     "//content/test:test_support",
-    "//media/cast:common",
-    "//media/cast:net",
     "//media/cast:test_support",
     "//media/mojo/mojom:remoting",
     "//mojo/public/cpp/bindings",

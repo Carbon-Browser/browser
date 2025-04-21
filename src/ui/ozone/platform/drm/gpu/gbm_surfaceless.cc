@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/notreached.h"
+#include "base/functional/bind.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
+#include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gl/gl_bindings.h"
@@ -38,16 +38,13 @@ void WaitForFence(EGLDisplay display, EGLSyncKHR fence) {
 }  // namespace
 
 GbmSurfaceless::GbmSurfaceless(GbmSurfaceFactory* surface_factory,
+                               gl::GLDisplayEGL* display,
                                std::unique_ptr<DrmWindowProxy> window,
                                gfx::AcceleratedWidget widget)
-    : SurfacelessEGL(gl::GLSurfaceEGL::GetGLDisplayEGL(), gfx::Size()),
-      surface_factory_(surface_factory),
+    : surface_factory_(surface_factory),
       window_(std::move(window)),
       widget_(widget),
-      has_implicit_external_sync_(
-          GetGLDisplayEGL()->ext->b_EGL_ARM_implicit_external_sync),
-      has_image_flush_external_(
-          GetGLDisplayEGL()->ext->b_EGL_EXT_image_flush_external) {
+      display_(display) {
   surface_factory_->RegisterSurface(window_->widget(), this);
   supports_plane_gpu_fences_ = window_->SupportsGpuFences();
   unsubmitted_frames_.push_back(std::make_unique<PendingFrame>());
@@ -58,23 +55,12 @@ void GbmSurfaceless::QueueOverlayPlane(DrmOverlayPlane plane) {
   planes_.push_back(std::move(plane));
 }
 
-bool GbmSurfaceless::Initialize(gl::GLSurfaceFormat format) {
-  if (!SurfacelessEGL::Initialize(format))
-    return false;
-  return true;
-}
-
-gfx::SwapResult GbmSurfaceless::SwapBuffers(PresentationCallback callback) {
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
-}
-
 bool GbmSurfaceless::ScheduleOverlayPlane(
-    gl::GLImage* image,
+    gl::OverlayImage image,
     std::unique_ptr<gfx::GpuFence> gpu_fence,
     const gfx::OverlayPlaneData& overlay_plane_data) {
-  unsubmitted_frames_.back()->overlays.push_back(
-      gl::GLSurfaceOverlay(image, std::move(gpu_fence), overlay_plane_data));
+  unsubmitted_frames_.back()->overlays.emplace_back(
+      std::move(image), std::move(gpu_fence), overlay_plane_data);
   return true;
 }
 
@@ -82,21 +68,6 @@ bool GbmSurfaceless::Resize(const gfx::Size& size,
                             float scale_factor,
                             const gfx::ColorSpace& color_space,
                             bool has_alpha) {
-  if (window_)
-    window_->SetColorSpace(color_space);
-
-  return SurfacelessEGL::Resize(size, scale_factor, color_space, has_alpha);
-}
-
-bool GbmSurfaceless::IsOffscreen() {
-  return false;
-}
-
-bool GbmSurfaceless::SupportsAsyncSwap() {
-  return true;
-}
-
-bool GbmSurfaceless::SupportsPostSubBuffer() {
   return true;
 }
 
@@ -104,20 +75,10 @@ bool GbmSurfaceless::SupportsPlaneGpuFences() const {
   return supports_plane_gpu_fences_;
 }
 
-gfx::SwapResult GbmSurfaceless::PostSubBuffer(int x,
-                                              int y,
-                                              int width,
-                                              int height,
-                                              PresentationCallback callback) {
-  // The actual sub buffer handling is handled at higher layers.
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
-}
-
-void GbmSurfaceless::SwapBuffersAsync(
-    SwapCompletionCallback completion_callback,
-    PresentationCallback presentation_callback) {
-  TRACE_EVENT0("drm", "GbmSurfaceless::SwapBuffersAsync");
+void GbmSurfaceless::Present(SwapCompletionCallback completion_callback,
+                             PresentationCallback presentation_callback,
+                             gfx::FrameData data) {
+  TRACE_EVENT0("drm", "GbmSurfaceless::Present");
   // If last swap failed, don't try to schedule new ones.
   if (!last_swap_buffers_result_) {
     std::move(completion_callback)
@@ -127,16 +88,13 @@ void GbmSurfaceless::SwapBuffersAsync(
     return;
   }
 
-  if ((!has_image_flush_external_ && !supports_plane_gpu_fences_) ||
-      requires_gl_flush_on_swap_buffers_) {
+  if (!supports_plane_gpu_fences_) {
     glFlush();
   }
 
 #if BUILDFLAG(USE_OPENGL_APITRACE)
   gl::TerminateFrame();  // Notify end of frame at buffer swap request.
 #endif
-
-  unsubmitted_frames_.back()->Flush();
 
   PendingFrame* frame = unsubmitted_frames_.back().get();
   frame->completion_callback = std::move(completion_callback);
@@ -161,7 +119,7 @@ void GbmSurfaceless::SwapBuffersAsync(
 
   // TODO: the following should be replaced by a per surface flush as it gets
   // implemented in GL drivers.
-  EGLSyncKHR fence = InsertFence(has_implicit_external_sync_);
+  EGLSyncKHR fence = InsertFence();
   CHECK_NE(fence, EGL_NO_SYNC_KHR) << "eglCreateSyncKHR failed";
 
   base::OnceClosure fence_wait_task =
@@ -176,60 +134,21 @@ void GbmSurfaceless::SwapBuffersAsync(
       std::move(fence_wait_task), std::move(fence_retired_callback));
 }
 
-void GbmSurfaceless::PostSubBufferAsync(
-    int x,
-    int y,
-    int width,
-    int height,
-    SwapCompletionCallback completion_callback,
-    PresentationCallback presentation_callback) {
-  // The actual sub buffer handling is handled at higher layers.
-  SwapBuffersAsync(std::move(completion_callback),
-                   std::move(presentation_callback));
-}
-
-EGLConfig GbmSurfaceless::GetConfig() {
-  if (!config_) {
-    EGLint config_attribs[] = {EGL_BUFFER_SIZE,
-                               32,
-                               EGL_ALPHA_SIZE,
-                               8,
-                               EGL_BLUE_SIZE,
-                               8,
-                               EGL_GREEN_SIZE,
-                               8,
-                               EGL_RED_SIZE,
-                               8,
-                               EGL_RENDERABLE_TYPE,
-                               EGL_OPENGL_ES2_BIT,
-                               EGL_SURFACE_TYPE,
-                               EGL_DONT_CARE,
-                               EGL_NONE};
-    config_ = ChooseEGLConfig(GetEGLDisplay(), config_attribs);
-  }
-  return config_;
-}
-
 void GbmSurfaceless::SetRelyOnImplicitSync() {
   use_egl_fence_sync_ = false;
 }
 
-void GbmSurfaceless::SetForceGlFlushOnSwapBuffers() {
-  requires_gl_flush_on_swap_buffers_ = true;
-}
-
-gfx::SurfaceOrigin GbmSurfaceless::GetOrigin() const {
-  return gfx::SurfaceOrigin::kTopLeft;
+void GbmSurfaceless::SetNotifyNonSimpleOverlayFailure() {
+  notify_non_simple_overlay_failure_ = true;
 }
 
 GbmSurfaceless::~GbmSurfaceless() {
-  Destroy();  // The EGL surface must be destroyed before SurfaceOzone.
   surface_factory_->UnregisterSurface(window_->widget());
 }
 
-GbmSurfaceless::PendingFrame::PendingFrame() {}
+GbmSurfaceless::PendingFrame::PendingFrame() = default;
 
-GbmSurfaceless::PendingFrame::~PendingFrame() {}
+GbmSurfaceless::PendingFrame::~PendingFrame() = default;
 
 bool GbmSurfaceless::PendingFrame::ScheduleOverlayPlanes(
     gfx::AcceleratedWidget widget) {
@@ -239,19 +158,23 @@ bool GbmSurfaceless::PendingFrame::ScheduleOverlayPlanes(
   return true;
 }
 
-void GbmSurfaceless::PendingFrame::Flush() {
-  for (const auto& overlay : overlays)
-    overlay.Flush();
-}
-
 void GbmSurfaceless::SubmitFrame() {
   DCHECK(!unsubmitted_frames_.empty());
 
   if (unsubmitted_frames_.front()->ready && !submitted_frame_) {
+    bool should_handle_non_simple_overlay_failure = false;
     for (auto& overlay : unsubmitted_frames_.front()->overlays) {
       if (overlay.z_order() == 0 && overlay.gpu_fence()) {
         submitted_frame_gpu_fence_ = std::make_unique<gfx::GpuFence>(
             overlay.gpu_fence()->GetGpuFenceHandle().Clone());
+      }
+
+      // At the moment, only fullscreen overlays are treated in a special way.
+      // if other types of overlays also need special handling, then also
+      // update the DrmOverlayManager, which handles that.
+      if (overlay.overlay_type() == gfx::OverlayType::kFullScreen &&
+          should_handle_non_simple_overlay_failure) {
+        should_handle_non_simple_overlay_failure = true;
         break;
       }
     }
@@ -262,27 +185,41 @@ void GbmSurfaceless::SubmitFrame() {
         submitted_frame_->ScheduleOverlayPlanes(widget_);
 
     if (!schedule_planes_succeeded) {
-      OnSubmission(gfx::SwapResult::SWAP_FAILED,
+      OnSubmission(should_handle_non_simple_overlay_failure,
+                   gfx::SwapResult::SWAP_FAILED,
                    /*release_fence=*/gfx::GpuFenceHandle());
       OnPresentation(gfx::PresentationFeedback::Failure());
       return;
     }
 
-    window_->SchedulePageFlip(std::move(planes_),
-                              base::BindOnce(&GbmSurfaceless::OnSubmission,
-                                             weak_factory_.GetWeakPtr()),
-                              base::BindOnce(&GbmSurfaceless::OnPresentation,
-                                             weak_factory_.GetWeakPtr()));
+    window_->SchedulePageFlip(
+        std::move(planes_),
+        base::BindOnce(&GbmSurfaceless::OnSubmission,
+                       weak_factory_.GetWeakPtr(),
+                       should_handle_non_simple_overlay_failure),
+        base::BindOnce(&GbmSurfaceless::OnPresentation,
+                       weak_factory_.GetWeakPtr()));
     planes_.clear();
   }
 }
 
-EGLSyncKHR GbmSurfaceless::InsertFence(bool implicit) {
+EGLSyncKHR GbmSurfaceless::InsertFence() {
+  const bool has_global_fence = display_->ext->b_EGL_ANGLE_global_fence_sync;
+  const bool has_implicit_external_fence =
+      display_->ext->b_EGL_ARM_implicit_external_sync;
+
+  // Prefer EGL_ANGLE_global_fence_sync as it guarantees synchronization with
+  // past submissions from all contexts, rather than the current context.
+  const EGLenum syncType =
+      has_global_fence ? EGL_SYNC_GLOBAL_FENCE_ANGLE : EGL_SYNC_FENCE_KHR;
+  const bool use_implicit_external_sync =
+      has_implicit_external_fence && !has_global_fence;
   const EGLint attrib_list[] = {EGL_SYNC_CONDITION_KHR,
                                 EGL_SYNC_PRIOR_COMMANDS_IMPLICIT_EXTERNAL_ARM,
                                 EGL_NONE};
-  return eglCreateSyncKHR(GetEGLDisplay(), EGL_SYNC_FENCE_KHR,
-                          implicit ? attrib_list : NULL);
+
+  return eglCreateSyncKHR(GetEGLDisplay(), syncType,
+                          use_implicit_external_sync ? attrib_list : nullptr);
 }
 
 void GbmSurfaceless::FenceRetired(PendingFrame* frame) {
@@ -290,8 +227,17 @@ void GbmSurfaceless::FenceRetired(PendingFrame* frame) {
   SubmitFrame();
 }
 
-void GbmSurfaceless::OnSubmission(gfx::SwapResult result,
+void GbmSurfaceless::OnSubmission(bool should_handle_fullscreen_overlay_failure,
+                                  gfx::SwapResult result,
                                   gfx::GpuFenceHandle release_fence) {
+  // Handling fullscreen overlays' failures means usage of the
+  // gfx::SwapResult::SWAP_NON_SIMPLE_OVERLAYS_FAILED. That way, viz is able to
+  // recover from the error. The gpu watchdog will reset as viz will either
+  // reschedule the same frame or it'll send a new one if it's already queued.
+  if (should_handle_fullscreen_overlay_failure &&
+      result == gfx::SwapResult::SWAP_FAILED) {
+    result = gfx::SwapResult::SWAP_NON_SIMPLE_OVERLAYS_FAILED;
+  }
   submitted_frame_->swap_result = result;
   if (!release_fence.is_null()) {
     std::move(submitted_frame_->completion_callback)
@@ -322,6 +268,10 @@ void GbmSurfaceless::OnPresentation(const gfx::PresentationFeedback& feedback) {
   }
 
   SubmitFrame();
+}
+
+EGLDisplay GbmSurfaceless::GetEGLDisplay() {
+  return display_->GetDisplay();
 }
 
 }  // namespace ui

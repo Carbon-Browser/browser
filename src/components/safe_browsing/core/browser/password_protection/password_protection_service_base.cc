@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,21 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_reuse_detector.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/password_protection/password_protection_request.h"
 #include "components/safe_browsing/core/browser/sync/sync_utils.h"
+#include "components/safe_browsing/core/browser/verdict_cache_manager.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/utils.h"
 #include "google_apis/google_api_keys.h"
@@ -36,7 +37,7 @@ using PasswordReuseEvent = LoginReputationClientRequest::PasswordReuseEvent;
 
 namespace {
 
-// Keys for storing password protection verdict into a DictionaryValue.
+// Keys for storing password protection verdict into a base::Value::Dict.
 const int kRequestTimeoutMs = 10000;
 const char kPasswordProtectionRequestUrl[] =
     "https://sb-ssl.google.com/safebrowsing/clientreport/login";
@@ -46,14 +47,15 @@ bool IsSecuritySensitiveVerdict(
     LoginReputationClientResponse::VerdictType verdict_type) {
   switch (verdict_type) {
     case LoginReputationClientResponse::SAFE:
+    // UNSPECIFIED is not considered sensitive because it is the default verdict
+    // if no ping is sent (e.g. timeout, allowlist hit).
+    case LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED:
       return false;
     case LoginReputationClientResponse::LOW_REPUTATION:
     case LoginReputationClientResponse::PHISHING:
-    case LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED:
       return true;
   }
   NOTREACHED() << "Unexpected verdict_type: " << verdict_type;
-  return false;
 }
 
 // Log security sensitive event if required.
@@ -99,6 +101,9 @@ PasswordProtectionServiceBase::~PasswordProtectionServiceBase() {
 
 // static
 bool PasswordProtectionServiceBase::CanGetReputationOfURL(const GURL& url) {
+  if (VerdictCacheManager::has_artificial_cached_url()) {
+    return true;
+  }
   if (!safe_browsing::CanGetReputationOfUrl(url)) {
     return false;
   }
@@ -150,13 +155,6 @@ bool PasswordProtectionServiceBase::CanSendPing(
           CanGetReputationOfURL(main_frame_url));
 }
 
-bool PasswordProtectionServiceBase::
-    IsSyncingGMAILPasswordWithSignedInProtectionEnabled(
-        ReusedPasswordAccountType password_type) const {
-  return password_type.account_type() == ReusedPasswordAccountType::GMAIL &&
-         password_type.is_account_syncing();
-}
-
 void PasswordProtectionServiceBase::RequestFinished(
     PasswordProtectionRequest* request,
     RequestOutcome outcome,
@@ -174,15 +172,6 @@ void PasswordProtectionServiceBase::RequestFinished(
     if (outcome != RequestOutcome::RESPONSE_ALREADY_CACHED) {
       CacheVerdict(request->main_frame_url(), request->trigger_type(),
                    password_type, *response, base::Time::Now());
-    }
-
-    // If it's password alert mode and a Gsuite/enterprise account, we do not
-    // show a modal warning.
-    if (outcome == RequestOutcome::PASSWORD_ALERT_MODE &&
-        (password_type.account_type() == ReusedPasswordAccountType::GSUITE ||
-         password_type.account_type() ==
-             ReusedPasswordAccountType::NON_GAIA_ENTERPRISE)) {
-      return;
     }
 
     if (ShouldShowModalWarning(request->trigger_type(), password_type,
@@ -214,7 +203,8 @@ void PasswordProtectionServiceBase::RequestFinished(
 // Disabled on Android, because enterprise reporting extension is not supported.
 #if !BUILDFLAG(IS_ANDROID)
     MaybeReportPasswordReuseDetected(
-        request, request->username(), request->password_type(),
+        request->main_frame_url(), request->username(),
+        request->password_type(),
         verdict == LoginReputationClientResponse::PHISHING, warning_shown);
 #endif
 
@@ -278,10 +268,10 @@ int PasswordProtectionServiceBase::GetRequestTimeoutInMS() {
   return kRequestTimeoutMs;
 }
 
-void PasswordProtectionServiceBase::OnURLsDeleted(
+void PasswordProtectionServiceBase::OnHistoryDeletions(
     history::HistoryService* history_service,
     const history::DeletionInfo& deletion_info) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindRepeating(&PasswordProtectionServiceBase::
                               RemoveUnhandledSyncPasswordReuseOnURLsDeleted,
@@ -320,7 +310,6 @@ PasswordProtectionServiceBase::GetPasswordProtectionReusedPasswordType(
       break;
   }
   NOTREACHED();
-  return PasswordReuseEvent::REUSED_PASSWORD_TYPE_UNKNOWN;
 }
 
 ReusedPasswordAccountType
@@ -339,27 +328,28 @@ PasswordProtectionServiceBase::GetPasswordProtectionReusedPasswordAccountType(
       return reused_password_account_type;
     case PasswordType::PRIMARY_ACCOUNT_PASSWORD: {
       reused_password_account_type.set_is_account_syncing(
-          IsPrimaryAccountSyncing());
+          IsPrimaryAccountSyncingHistory());
       if (!IsPrimaryAccountSignedIn()) {
         reused_password_account_type.set_account_type(
             ReusedPasswordAccountType::UNKNOWN);
         return reused_password_account_type;
       }
       reused_password_account_type.set_account_type(
-          IsAccountGmail(username) ? ReusedPasswordAccountType::GMAIL
-                                   : ReusedPasswordAccountType::GSUITE);
+          IsAccountConsumer(username) ? ReusedPasswordAccountType::GMAIL
+                                      : ReusedPasswordAccountType::GSUITE);
       return reused_password_account_type;
     }
     case PasswordType::OTHER_GAIA_PASSWORD: {
       AccountInfo account_info = GetAccountInfoForUsername(username);
-      if (account_info.account_id.empty()) {
+      if (account_info.account_id.empty() ||
+          account_info.hosted_domain.empty()) {
         reused_password_account_type.set_account_type(
             ReusedPasswordAccountType::UNKNOWN);
         return reused_password_account_type;
       }
       reused_password_account_type.set_account_type(
-          IsAccountGmail(username) ? ReusedPasswordAccountType::GMAIL
-                                   : ReusedPasswordAccountType::GSUITE);
+          IsAccountConsumer(username) ? ReusedPasswordAccountType::GMAIL
+                                      : ReusedPasswordAccountType::GSUITE);
       return reused_password_account_type;
     }
     case PasswordType::PASSWORD_TYPE_UNKNOWN:
@@ -369,7 +359,6 @@ PasswordProtectionServiceBase::GetPasswordProtectionReusedPasswordAccountType(
       return reused_password_account_type;
   }
   NOTREACHED();
-  return reused_password_account_type;
 }
 
 // static
@@ -408,7 +397,6 @@ bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForPinging(
       return false;
   }
   NOTREACHED();
-  return false;
 }
 
 bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForModalWarning(
@@ -419,7 +407,7 @@ bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForModalWarning(
 // Currently password reuse warnings are only supported for saved passwords
 // and GAIA passwords on Android.
 #if BUILDFLAG(IS_ANDROID)
-  return IsSyncingGMAILPasswordWithSignedInProtectionEnabled(password_type);
+  return password_type.account_type() == ReusedPasswordAccountType::GMAIL;
 #else
   if (password_type.account_type() ==
       ReusedPasswordAccountType::NON_GAIA_ENTERPRISE)

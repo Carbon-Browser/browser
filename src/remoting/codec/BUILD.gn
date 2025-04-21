@@ -1,14 +1,20 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+import("//remoting/remoting_options.gni")
 
 source_set("encoder") {
   sources = [
     "audio_encoder.h",
     "encoder_bitrate_filter.cc",
     "encoder_bitrate_filter.h",
+    "utils.cc",
+    "utils.h",
     "video_encoder.cc",
     "video_encoder.h",
+    "video_encoder_active_map.cc",
+    "video_encoder_active_map.h",
     "video_encoder_helper.cc",
     "video_encoder_helper.h",
     "video_encoder_verbatim.cc",
@@ -26,7 +32,6 @@ source_set("encoder") {
 
   deps = [
     ":vpx_codec",
-    "//base/third_party/dynamic_annotations",
     "//build:chromeos_buildflags",
     "//remoting/base:base",
     "//remoting/proto",
@@ -42,7 +47,7 @@ source_set("encoder") {
 
   # Currently, building WebrtcVideoEncoderGpu is only supported on Windows and
   # Linux, and encoding with WebrtcVideoEncoderGpu is only supported on Windows.
-  if (is_win || is_linux || is_chromeos) {
+  if (remoting_enable_h264 && (is_win || is_linux || is_chromeos)) {
     public_configs = [ "//skia:skia_config" ]
     sources += [
       "webrtc_video_encoder_gpu.cc",
@@ -87,7 +92,6 @@ source_set("decoder") {
   deps = [
     ":vpx_codec",
     "//base:base",
-    "//base/third_party/dynamic_annotations",
     "//remoting/base:base",
     "//remoting/proto",
     "//remoting/protocol:session_config",
@@ -110,7 +114,6 @@ source_set("vpx_codec") {
 
   deps = [
     "//base:base",
-    "//base/third_party/dynamic_annotations",
     "//remoting/proto",
     "//third_party/libyuv",
     "//third_party/webrtc_overrides:webrtc_component",

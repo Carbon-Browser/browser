@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class MockVirtualKeyboardControllerObserver
   MockVirtualKeyboardControllerObserver& operator=(
       const MockVirtualKeyboardControllerObserver&) = delete;
 
-  virtual ~MockVirtualKeyboardControllerObserver() = default;
+  ~MockVirtualKeyboardControllerObserver() override = default;
 
   MOCK_METHOD1(OnKeyboardVisible, void(const gfx::Rect&));
   MOCK_METHOD0(OnKeyboardHidden, void());
@@ -141,10 +141,6 @@ class OnScreenKeyboardTest : public ::testing::Test {
 // This test validates the on screen keyboard path (tabtip.exe) which is read
 // from the registry.
 TEST_F(OnScreenKeyboardTest, OSKPath) {
-  // The on screen keyboard is only available on Windows 8+.
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   std::unique_ptr<OnScreenKeyboardDisplayManagerTabTip>
       keyboard_display_manager(CreateTabTip());
   EXPECT_NE(nullptr, keyboard_display_manager);

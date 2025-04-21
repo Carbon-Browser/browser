@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,21 +18,26 @@ import androidx.appcompat.widget.SearchView;
 import androidx.core.view.MenuItemCompat;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.build.BuildConfig;
 import org.chromium.components.browser_ui.settings.ChromeImageViewPreference;
+import org.chromium.components.browser_ui.settings.CustomDividerFragment;
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
 import org.chromium.components.browser_ui.settings.ManagedPreferencesUtils;
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Locale;
 
 /**
- * Shows a particular chosen object (e.g. a USB device) and the list of sites that have been
- * granted access to it by the user.
+ * Shows a particular chosen object (e.g. a USB device) and the list of sites that have been granted
+ * access to it by the user.
  */
-public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
+public class ChosenObjectSettings extends BaseSiteSettingsFragment
+        implements EmbeddableSettingsPage, CustomDividerFragment {
     public static final String EXTRA_OBJECT_INFOS = "org.chromium.chrome.preferences.object_infos";
     public static final String EXTRA_SITES = "org.chromium.chrome.preferences.site_set";
     public static final String EXTRA_CATEGORY =
@@ -49,6 +54,8 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
     // If not blank, represents a substring to use to search for site names.
     private String mSearch = "";
 
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
+
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         // Set empty preferences screen.
@@ -59,20 +66,30 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
     @Override
     @SuppressWarnings("unchecked")
     public void onActivityCreated(Bundle savedInstanceState) {
-        setDivider(null);
         int contentSettingsType = getArguments().getInt(EXTRA_CATEGORY);
-        mCategory = SiteSettingsCategory.createFromContentSettingsType(
-                getSiteSettingsDelegate().getBrowserContextHandle(), contentSettingsType);
+        mCategory =
+                SiteSettingsCategory.createFromContentSettingsType(
+                        getSiteSettingsDelegate().getBrowserContextHandle(), contentSettingsType);
         mObjectInfos =
                 (ArrayList<ChosenObjectInfo>) getArguments().getSerializable(EXTRA_OBJECT_INFOS);
         checkObjectConsistency();
         mSites = (ArrayList<Website>) getArguments().getSerializable(EXTRA_SITES);
         String title = getArguments().getString(SingleCategorySettings.EXTRA_TITLE);
-        if (title != null) getActivity().setTitle(title);
+        if (title != null) mPageTitle.set(title);
 
         setHasOptionsMenu(true);
 
         super.onActivityCreated(savedInstanceState);
+    }
+
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
+    }
+
+    @Override
+    public boolean hasDivider() {
+        return false;
     }
 
     /**
@@ -99,31 +116,39 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
         MenuItem searchItem = menu.findItem(R.id.search);
         mSearchView = (SearchView) MenuItemCompat.getActionView(searchItem);
         mSearchView.setImeOptions(EditorInfo.IME_FLAG_NO_FULLSCREEN);
-        SearchView.OnQueryTextListener queryTextListener = new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                return true;
-            }
+        SearchView.OnQueryTextListener queryTextListener =
+                new SearchView.OnQueryTextListener() {
+                    @Override
+                    public boolean onQueryTextSubmit(String query) {
+                        return true;
+                    }
 
-            @Override
-            public boolean onQueryTextChange(String query) {
-                // Make search case-insensitive.
-                query = query.toLowerCase(Locale.getDefault());
+                    @Override
+                    public boolean onQueryTextChange(String query) {
+                        // Make search case-insensitive.
+                        query = query.toLowerCase(Locale.getDefault());
 
-                if (query.equals(mSearch)) return true;
+                        if (query.equals(mSearch)) return true;
 
-                mSearch = query;
-                getInfo();
-                return true;
-            }
-        };
+                        mSearch = query;
+                        getInfo();
+                        return true;
+                    }
+                };
         mSearchView.setOnQueryTextListener(queryTextListener);
 
         if (getSiteSettingsDelegate().isHelpAndFeedbackEnabled()) {
-            MenuItem help = menu.add(
-                    Menu.NONE, R.id.menu_id_site_settings_help, Menu.NONE, R.string.menu_help);
-            help.setIcon(VectorDrawableCompat.create(
-                    getResources(), R.drawable.ic_help_and_feedback, getContext().getTheme()));
+            MenuItem help =
+                    menu.add(
+                            Menu.NONE,
+                            R.id.menu_id_site_settings_help,
+                            Menu.NONE,
+                            R.string.menu_help);
+            help.setIcon(
+                    TraceEventVectorDrawableCompat.create(
+                            getResources(),
+                            R.drawable.ic_help_and_feedback,
+                            getContext().getTheme()));
         }
     }
 
@@ -167,7 +192,7 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
         if (hasManagedObject) {
             ManagedPreferencesUtils.showManagedSettingsCannotBeResetToast(getContext());
         } else {
-            getActivity().finish();
+            getSettingsNavigation().finishCurrentSettings(this);
         }
     }
 
@@ -190,8 +215,8 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
                         mObjectInfos.add(info);
                         if (mSearch.isEmpty()
                                 || site.getTitle()
-                                           .toLowerCase(Locale.getDefault())
-                                           .contains(mSearch)) {
+                                        .toLowerCase(Locale.getDefault())
+                                        .contains(mSearch)) {
                             mSites.add(site);
                         }
                     }
@@ -204,7 +229,7 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
             // them back to SingleCategorySettings which will now no longer offer the option to
             // examine the permissions for this object.
             if (mObjectInfos.isEmpty()) {
-                getActivity().finish();
+                getSettingsNavigation().finishCurrentSettings(ChosenObjectSettings.this);
             } else {
                 resetList();
             }
@@ -214,11 +239,11 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
     /**
      * Refreshes the list of sites with access to the object being examined.
      *
-     * resetList() is called to refresh the view when the data is ready.
+     * <p>resetList() is called to refresh the view when the data is ready.
      */
     private void getInfo() {
         WebsitePermissionsFetcher fetcher =
-                new WebsitePermissionsFetcher(getSiteSettingsDelegate().getBrowserContextHandle());
+                new WebsitePermissionsFetcher(getSiteSettingsDelegate());
         fetcher.fetchPreferencesForCategory(mCategory, new ResultsPopulator());
     }
 
@@ -232,18 +257,22 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
         ChromeImageViewPreference header = new ChromeImageViewPreference(getStyledContext());
         String titleText = mObjectInfos.get(0).getName();
         String dialogMsg =
-                String.format(getView().getContext().getString(
-                                      R.string.chosen_object_website_reset_confirmation_for),
-                        titleText);
+                getView()
+                        .getContext()
+                        .getString(
+                                R.string.chosen_object_website_reset_confirmation_for, titleText);
 
         header.setTitle(titleText);
-        header.setImageView(R.drawable.ic_delete_white_24dp,
-                R.string.website_settings_revoke_all_permissions_for_device, (View view) -> {
-                    new AlertDialog
-                            .Builder(getContext(), R.style.ThemeOverlay_BrowserUI_AlertDialog)
+        header.setImageView(
+                R.drawable.ic_delete_white_24dp,
+                R.string.website_settings_revoke_all_permissions_for_device,
+                (View view) -> {
+                    new AlertDialog.Builder(
+                                    getContext(), R.style.ThemeOverlay_BrowserUI_AlertDialog)
                             .setTitle(R.string.reset)
                             .setMessage(dialogMsg)
-                            .setPositiveButton(R.string.reset,
+                            .setPositiveButton(
+                                    R.string.reset,
                                     (DialogInterface dialog, int which) -> {
                                         revokeObjectPermissions();
                                         getInfo();
@@ -257,7 +286,7 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
         // WebsitePreference to extend ChromeBasePreference to more easily set dividers
         // programmatically.
         Preference divider = new Preference(getStyledContext());
-        divider.setLayoutResource(R.layout.divider_preference);
+        divider.setLayoutResource(R.layout.horizontal_divider);
         preferenceScreen.addPreference(divider);
     }
 
@@ -275,29 +304,33 @@ public class ChosenObjectSettings extends SiteSettingsPreferenceFragment {
         for (int i = 0; i < mSites.size() && i < mObjectInfos.size(); ++i) {
             Website site = mSites.get(i);
             ChosenObjectInfo info = mObjectInfos.get(i);
-            WebsitePreference preference = new WebsitePreference(
-                    getStyledContext(), getSiteSettingsDelegate(), site, mCategory);
+            WebsitePreference preference =
+                    new WebsitePreference(
+                            getStyledContext(), getSiteSettingsDelegate(), site, mCategory);
 
             preference.getExtras().putSerializable(SingleWebsiteSettings.EXTRA_SITE, site);
             preference.setFragment(SingleWebsiteSettings.class.getCanonicalName());
-            preference.setImageView(R.drawable.ic_delete_white_24dp,
-                    R.string.website_settings_revoke_device_permission, (View view) -> {
+            preference.setImageView(
+                    R.drawable.ic_delete_white_24dp,
+                    R.string.website_settings_revoke_device_permission,
+                    (View view) -> {
                         info.revoke(getSiteSettingsDelegate().getBrowserContextHandle());
                         getInfo();
                     });
 
-            preference.setManagedPreferenceDelegate(new ForwardingManagedPreferenceDelegate(
-                    getSiteSettingsDelegate().getManagedPreferenceDelegate()) {
-                @Override
-                public boolean isPreferenceControlledByPolicy(Preference preference) {
-                    return info.isManaged();
-                }
+            preference.setManagedPreferenceDelegate(
+                    new ForwardingManagedPreferenceDelegate(
+                            getSiteSettingsDelegate().getManagedPreferenceDelegate()) {
+                        @Override
+                        public boolean isPreferenceControlledByPolicy(Preference preference) {
+                            return info.isManaged();
+                        }
 
-                @Override
-                public boolean isPreferenceClickDisabledByPolicy(Preference preference) {
-                    return false;
-                }
-            });
+                        @Override
+                        public boolean isPreferenceClickDisabled(Preference preference) {
+                            return false;
+                        }
+                    });
 
             preferenceScreen.addPreference(preference);
         }

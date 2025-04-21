@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/device/usb/usb_descriptors.h"
 
@@ -11,7 +16,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "services/device/usb/mock_usb_device_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,7 +37,9 @@ namespace {
 
 ACTION_P2(InvokeCallback, data, length) {
   size_t transferred_length = std::min(length, arg6->size());
-  memcpy(arg6->front(), data, transferred_length);
+  base::span(arg6->as_vector())
+      .copy_prefix_from(
+          UNSAFE_TODO(base::span(data, length)).first(transferred_length));
   std::move(arg8).Run(UsbTransferStatus::COMPLETED, arg6, transferred_length);
 }
 
@@ -363,8 +370,7 @@ TEST_F(UsbDescriptorsTest, StringDescriptor) {
                                     'o',  0,    ' ', 0, 'w', 0, 'o', 0, 'r', 0,
                                     'l',  0,    'd', 0, '!', 0};
   std::u16string string;
-  ASSERT_TRUE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_TRUE(ParseUsbStringDescriptor(kBuffer, &string));
   EXPECT_EQ(u"Hello world!", string);
 }
 
@@ -372,16 +378,14 @@ TEST_F(UsbDescriptorsTest, ShortStringDescriptorHeader) {
   // The buffer is just too darn short.
   static const uint8_t kBuffer[] = {0x01};
   std::u16string string;
-  ASSERT_FALSE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_FALSE(ParseUsbStringDescriptor(kBuffer, &string));
 }
 
 TEST_F(UsbDescriptorsTest, ShortStringDescriptor) {
   // The buffer is just too darn short.
   static const uint8_t kBuffer[] = {0x01, 0x03};
   std::u16string string;
-  ASSERT_FALSE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_FALSE(ParseUsbStringDescriptor(kBuffer, &string));
 }
 
 TEST_F(UsbDescriptorsTest, OddLengthStringDescriptor) {
@@ -389,8 +393,7 @@ TEST_F(UsbDescriptorsTest, OddLengthStringDescriptor) {
   static const uint8_t kBuffer[] = {0x0d, 0x03, 'H', 0,   'e', 0,  'l',
                                     0,    'l',  0,   'o', 0,   '!'};
   std::u16string string;
-  ASSERT_TRUE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_TRUE(ParseUsbStringDescriptor(kBuffer, &string));
   EXPECT_EQ(u"Hello", string);
 }
 
@@ -398,8 +401,7 @@ TEST_F(UsbDescriptorsTest, EmptyStringDescriptor) {
   // The string is empty.
   static const uint8_t kBuffer[] = {0x02, 0x03};
   std::u16string string;
-  ASSERT_TRUE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_TRUE(ParseUsbStringDescriptor(kBuffer, &string));
   EXPECT_EQ(std::u16string(), string);
 }
 
@@ -407,8 +409,7 @@ TEST_F(UsbDescriptorsTest, OneByteStringDescriptor) {
   // The string is only one byte.
   static const uint8_t kBuffer[] = {0x03, 0x03, '?'};
   std::u16string string;
-  ASSERT_TRUE(ParseUsbStringDescriptor(
-      std::vector<uint8_t>(kBuffer, kBuffer + sizeof(kBuffer)), &string));
+  ASSERT_TRUE(ParseUsbStringDescriptor(kBuffer, &string));
   EXPECT_EQ(std::u16string(), string);
 }
 

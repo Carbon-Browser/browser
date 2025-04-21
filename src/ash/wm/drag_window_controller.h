@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "ash/ash_export.h"
 #include "base/gtest_prod_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace aura {
@@ -27,10 +27,9 @@ namespace ash {
 // Phantom windows called "drag windows" represent the window on other displays.
 class ASH_EXPORT DragWindowController {
  public:
-  DragWindowController(
-      aura::Window* window,
-      bool is_touch_dragging,
-      const absl::optional<gfx::Rect>& shadow_bounds = absl::nullopt);
+  DragWindowController(aura::Window* window,
+                       bool is_touch_dragging,
+                       bool create_window_shadow);
   DragWindowController(const DragWindowController&) = delete;
   DragWindowController& operator=(const DragWindowController&) = delete;
   virtual ~DragWindowController();
@@ -40,13 +39,13 @@ class ASH_EXPORT DragWindowController {
   // updates the opacity of the original window.
   void Update();
 
+  float old_opacity_for_testing() const { return old_opacity_; }
+
  private:
   class DragWindowDetails;
   FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest, DragWindowController);
   FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest,
                            DragWindowControllerAcrossThreeDisplays);
-  FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest,
-                           DragWindowControllerWithCustomShadowBounds);
 
   // Returns the currently active drag windows.
   int GetDragWindowsCountForTest() const;
@@ -60,13 +59,13 @@ class ASH_EXPORT DragWindowController {
   void RequestLayerPaintForTest();
 
   // The original window.
-  aura::Window* window_;
+  raw_ptr<aura::Window> window_;
 
   // Indicates touch dragging, as opposed to mouse dragging.
   const bool is_touch_dragging_;
 
-  // Used if the drag windows may need their shadows adjusted.
-  const absl::optional<gfx::Rect> shadow_bounds_;
+  // If true, create a drop shadow for the drag window.
+  const bool create_window_shadow_;
 
   // |window_|'s opacity before the drag. Used to revert opacity after the drag.
   const float old_opacity_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/not_fatal_until.h"
 #include "base/sequence_checker.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
@@ -60,8 +61,8 @@ bool IsInternalPage(content::WebContents* contents) {
 
 class SysInfoDelegate : public SessionRestorePolicy::Delegate {
  public:
-  SysInfoDelegate() {}
-  ~SysInfoDelegate() override {}
+  SysInfoDelegate() = default;
+  ~SysInfoDelegate() override = default;
 
   size_t GetNumberOfCores() const override {
     return base::SysInfo::NumberOfProcessors();
@@ -150,9 +151,8 @@ void TabDataAccess::SetUsedInBgFromSiteDataDB(
           return;
         }
         auto* reader =
-            performance_manager::SiteDataRecorder::Data::FromPageNode(
-                page_node.get())
-                ->reader();
+            performance_manager::SiteDataRecorder::Data::GetReaderForPageNode(
+                page_node.get());
         // The tab won't have a reader if it doesn't have an URL tracked in the
         // site data database.
         if (!reader) {
@@ -182,7 +182,7 @@ void TabDataAccess::SetUsedInBgFromSiteDataDB(
       performance_manager::PerformanceManager::GetPrimaryPageNodeForWebContents(
           contents),
       tab_data->used_in_bg_setter_cancel_callback.callback(),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   performance_manager::PerformanceManager::CallOnGraph(
       FROM_HERE, std::move(call_on_graph_cb));
@@ -223,7 +223,7 @@ void TabDataAccess::OnSiteDataAvailable(
     return;
 
   auto it = policy->tab_data_.find(contents);
-  DCHECK(it != policy->tab_data_.end());
+  CHECK(it != policy->tab_data_.end(), base::NotFatalUntil::M130);
   auto* tab_data = it->second.get();
 
   SetUsedInBgFromSiteData(tab_data, contents, reader_data);
@@ -233,10 +233,6 @@ void TabDataAccess::OnSiteDataAvailable(
     policy->notify_tab_score_changed_callback_.Run(contents, tab_data->score);
 
   ++policy->tabs_scored_;
-  DCHECK(tab_data->used_in_bg.has_value());
-  if (tab_data->used_in_bg)
-    ++policy->tabs_used_in_bg_;
-
   policy->DispatchNotifyAllTabsScoredIfNeeded();
 }
 #endif
@@ -246,15 +242,7 @@ SessionRestorePolicy::SessionRestorePolicy()
       delegate_(SysInfoDelegate::Get()),
       simultaneous_tab_loads_(CalculateSimultaneousTabLoads()) {}
 
-SessionRestorePolicy::~SessionRestorePolicy() {
-  // Record the number of tabs involved in the session restore that use
-  // background communications mechanisms.
-  DCHECK_GE(tabs_used_in_bg_, tabs_used_in_bg_restored_);
-  UMA_HISTOGRAM_COUNTS_100("SessionRestore.BackgroundUseCaseTabCount.Total",
-                           tabs_used_in_bg_);
-  UMA_HISTOGRAM_COUNTS_100("SessionRestore.BackgroundUseCaseTabCount.Restored",
-                           tabs_used_in_bg_restored_);
-}
+SessionRestorePolicy::~SessionRestorePolicy() = default;
 
 float SessionRestorePolicy::AddTabForScoring(content::WebContents* contents) {
   DCHECK(!base::Contains(tab_data_, contents));
@@ -293,7 +281,7 @@ float SessionRestorePolicy::AddTabForScoring(content::WebContents* contents) {
   tab_data->is_app = IsApp(contents);
   tab_data->is_internal = IsInternalPage(contents);
   tab_data->site_engagement = delegate_->GetSiteEngagementScore(contents);
-  tab_data->last_active = now_ - contents->GetLastActiveTime();
+  tab_data->last_active = now_ - contents->GetLastActiveTimeTicks();
 
   // The local database doesn't exist on Android at all.
 #if !BUILDFLAG(IS_ANDROID)
@@ -318,15 +306,11 @@ float SessionRestorePolicy::AddTabForScoring(content::WebContents* contents) {
 
 void SessionRestorePolicy::RemoveTabForScoring(content::WebContents* contents) {
   auto it = tab_data_.find(contents);
-  DCHECK(it != tab_data_.end());
+  CHECK(it != tab_data_.end(), base::NotFatalUntil::M130);
   auto* tab_data = it->second.get();
 
   if (HasFinalScore(tab_data)) {
     --tabs_scored_;
-
-    // Tabs are removed from the policy engine when they start loading.
-    if (tab_data->UsedInBg())
-      ++tabs_used_in_bg_restored_;
   }
 
   tab_data_.erase(it);
@@ -352,13 +336,13 @@ bool SessionRestorePolicy::ShouldLoad(content::WebContents* contents) const {
   }
 
   auto it = tab_data_.find(contents);
-  DCHECK(it != tab_data_.end());
+  CHECK(it != tab_data_.end(), base::NotFatalUntil::M130);
   const TabData* tab_data = it->second.get();
 
   // Enforce a max time since use if one is specified.
   if (!max_time_since_last_use_to_restore_.is_zero()) {
     base::TimeDelta time_since_active =
-        delegate_->NowTicks() - contents->GetLastActiveTime();
+        delegate_->NowTicks() - contents->GetLastActiveTimeTicks();
     if (time_since_active > max_time_since_last_use_to_restore_)
       return false;
   }
@@ -445,7 +429,7 @@ void SessionRestorePolicy::DispatchNotifyAllTabsScoredIfNeeded() {
 
   // This is done asynchronously so that this notification doesn't arrive before
   // a tab score is delivered.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SessionRestorePolicy::NotifyAllTabsScored,
                                 weak_factory_.GetWeakPtr()));
   notification_state_ = NotificationState::kEnRoute;
@@ -547,9 +531,9 @@ void SessionRestorePolicy::UpdateSiteEngagementScoreForTesting(
   it->second->site_engagement = score;
 }
 
-SessionRestorePolicy::Delegate::Delegate() {}
+SessionRestorePolicy::Delegate::Delegate() = default;
 
-SessionRestorePolicy::Delegate::~Delegate() {}
+SessionRestorePolicy::Delegate::~Delegate() = default;
 
 SessionRestorePolicy::TabData::TabData() = default;
 

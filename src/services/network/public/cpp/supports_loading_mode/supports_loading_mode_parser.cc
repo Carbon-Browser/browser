@@ -1,35 +1,37 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/supports_loading_mode/supports_loading_mode_parser.h"
 
+#include <optional>
+#include <ranges>
+
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/structured_headers.h"
 #include "services/network/public/mojom/supports_loading_mode.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 
 namespace {
 
-constexpr base::StringPiece kSupportsLoadingMode = "Supports-Loading-Mode";
+constexpr std::string_view kSupportsLoadingMode = "Supports-Loading-Mode";
 constexpr struct KnownLoadingMode {
-  base::StringPiece token;
+  std::string_view token;
   mojom::LoadingMode enumerator;
 } kKnownLoadingModes[] = {
     {"default", mojom::LoadingMode::kDefault},
     {"uncredentialed-prefetch", mojom::LoadingMode::kUncredentialedPrefetch},
     {"uncredentialed-prerender", mojom::LoadingMode::kUncredentialedPrerender},
+    {"credentialed-prerender", mojom::LoadingMode::kCredentialedPrerender},
     {"fenced-frame", mojom::LoadingMode::kFencedFrame},
 };
 
 }  // namespace
 
 mojom::SupportsLoadingModePtr ParseSupportsLoadingMode(
-    base::StringPiece header_value) {
+    std::string_view header_value) {
   // A parse error in the HTTP structured headers syntax is a parse error for
   // the header value as a whole.
   auto list = net::structured_headers::ParseList(header_value);
@@ -55,8 +57,9 @@ mojom::SupportsLoadingModePtr ParseSupportsLoadingMode(
     const auto& token = item.item.GetString();
     const auto* it =
         base::ranges::find(kKnownLoadingModes, token, &KnownLoadingMode::token);
-    if (it == base::ranges::end(kKnownLoadingModes))
+    if (it == std::ranges::end(kKnownLoadingModes)) {
       continue;
+    }
 
     modes.push_back(it->enumerator);
   }
@@ -70,10 +73,12 @@ mojom::SupportsLoadingModePtr ParseSupportsLoadingMode(
 
 mojom::SupportsLoadingModePtr ParseSupportsLoadingMode(
     const net::HttpResponseHeaders& headers) {
-  std::string header_value;
-  if (!headers.GetNormalizedHeader(kSupportsLoadingMode, &header_value))
+  std::optional<std::string> header_value =
+      headers.GetNormalizedHeader(kSupportsLoadingMode);
+  if (!header_value) {
     return nullptr;
-  return ParseSupportsLoadingMode(header_value);
+  }
+  return ParseSupportsLoadingMode(*header_value);
 }
 
 }  // namespace network

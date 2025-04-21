@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "base/process/process_handle.h"
 #include "base/types/pass_key.h"
@@ -73,6 +73,8 @@ class TracingServiceController {
 
   TracingServiceController();
 
+  // Handles disconnection by the tracing service.
+  void OnTracingServiceDisconnected();
   void RegisterClientOnUIThread(base::ProcessId pid,
                                 EnableTracingCallback callback);
   void RemoveClient(base::ProcessId pid);

@@ -1,22 +1,30 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "base/debug/dwarf_line_no.h"
 
-#include "base/memory/raw_ptr.h"
+#include "partition_alloc/pointers/raw_ref.h"
 
 #ifdef USE_SYMBOLIZE
-#include "base/debug/buffered_dwarf_reader.h"
-
-#include "base/third_party/symbolize/symbolize.h"
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <algorithm>
-#include <limits>
-
+#include <charconv>
 #include <cstdint>
+#include <limits>
+#include <system_error>
 
-#include <unistd.h>
+#include "base/debug/buffered_dwarf_reader.h"
+#include "base/third_party/symbolize/symbolize.h"
+#include "partition_alloc/pointers/raw_ptr.h"
 
 namespace base {
 namespace debug {
@@ -189,7 +197,7 @@ void EvaluateLineNumberProgram(const int fd,
    private:
     raw_ptr<LineNumberInfo> info;
     uint64_t module_relative_pc;
-    const ProgramInfo& program_info;
+    const raw_ref<const ProgramInfo> program_info;
 
    public:
     OnCommitImpl(LineNumberInfo* info,
@@ -211,10 +219,11 @@ void EvaluateLineNumberProgram(const int fd,
 
       // If module_relative_pc is out of range, skip.
       if (module_relative_pc < registers->last_address ||
-          module_relative_pc >= registers->address)
+          module_relative_pc >= registers->address) {
         return;
+      }
 
-      if (registers->last_file < program_info.num_filenames) {
+      if (registers->last_file < program_info->num_filenames) {
         info->line = registers->last_line;
         info->column = registers->last_column;
 
@@ -223,19 +232,19 @@ void EvaluateLineNumberProgram(const int fd,
         // follow spec, but seems to be common behavior. See the following LLVM
         // bug for more info: https://reviews.llvm.org/D11003
         if (registers->last_file == 0 &&
-            program_info.filename_offsets[0] == 0 &&
-            1 < program_info.num_filenames) {
-          program_info.filename_offsets[0] = program_info.filename_offsets[1];
-          program_info.filename_dirs[0] = program_info.filename_dirs[1];
+            program_info->filename_offsets[0] == 0 &&
+            1 < program_info->num_filenames) {
+          program_info->filename_offsets[0] = program_info->filename_offsets[1];
+          program_info->filename_dirs[0] = program_info->filename_dirs[1];
         }
 
         if (registers->last_file < kMaxFilenames) {
           info->module_filename_offset =
-              program_info.filename_offsets[registers->last_file];
+              program_info->filename_offsets[registers->last_file];
 
-          uint8_t dir = program_info.filename_dirs[registers->last_file];
-          info->module_dir_offset = program_info.directory_offsets[dir];
-          info->dir_size = program_info.directory_sizes[dir];
+          uint8_t dir = program_info->filename_dirs[registers->last_file];
+          info->module_dir_offset = program_info->directory_offsets[dir];
+          info->dir_size = program_info->directory_sizes[dir];
         }
       }
     }
@@ -249,8 +258,9 @@ void EvaluateLineNumberProgram(const int fd,
   // advance) + opcode_base.
   uint8_t opcode;
   while (reader.position() < program_info.end_offset && info->line == 0) {
-    if (!reader.ReadInt8(opcode))
+    if (!reader.ReadInt8(opcode)) {
       return;
+    }
 
     // It's SPECIAL OPCODE TIME!. They're so special that they make up the
     // vast majority of the opcodes and are the first thing described in the
@@ -264,8 +274,9 @@ void EvaluateLineNumberProgram(const int fd,
       const int line_adjust =
           program_info.line_base + (adjusted_opcode % program_info.line_range);
       if (line_adjust < 0) {
-        if (static_cast<uint64_t>(-line_adjust) > registers.line)
+        if (static_cast<uint64_t>(-line_adjust) > registers.line) {
           return;
+        }
         registers.line -= static_cast<uint64_t>(-line_adjust);
       } else {
         registers.line += static_cast<uint64_t>(line_adjust);
@@ -282,11 +293,13 @@ void EvaluateLineNumberProgram(const int fd,
           // Extended opcode.
           uint64_t extended_opcode;
           uint64_t extended_opcode_length;
-          if (!reader.ReadLeb128(extended_opcode_length))
+          if (!reader.ReadLeb128(extended_opcode_length)) {
             return;
+          }
           uint64_t next_opcode = reader.position() + extended_opcode_length;
-          if (!reader.ReadLeb128(extended_opcode))
+          if (!reader.ReadLeb128(extended_opcode)) {
             return;
+          }
           switch (extended_opcode) {
             case 1: {
               // DW_LNE_end_sequence
@@ -299,8 +312,9 @@ void EvaluateLineNumberProgram(const int fd,
             case 2: {
               // DW_LNE_set_address
               uint32_t value;
-              if (!reader.ReadInt32(value))
+              if (!reader.ReadInt32(value)) {
                 return;
+              }
               registers.address = value;
               registers.op_index = 0;
               break;
@@ -316,8 +330,9 @@ void EvaluateLineNumberProgram(const int fd,
 
               // dir index
               uint64_t value;
-              if (!reader.ReadLeb128(value))
+              if (!reader.ReadLeb128(value)) {
                 return;
+              }
               size_t cur_filename = program_info.num_filenames;
               if (cur_filename < kMaxFilenames && value < kMaxDirectories) {
                 ++program_info.num_filenames;
@@ -329,20 +344,23 @@ void EvaluateLineNumberProgram(const int fd,
               }
 
               // modification time
-              if (!reader.ReadLeb128(value))
+              if (!reader.ReadLeb128(value)) {
                 return;
+              }
 
               // source file length
-              if (!reader.ReadLeb128(value))
+              if (!reader.ReadLeb128(value)) {
                 return;
+              }
               break;
             }
 
             case 4: {
               // DW_LNE_set_discriminator
               uint64_t value;
-              if (!reader.ReadLeb128(value))
+              if (!reader.ReadLeb128(value)) {
                 return;
+              }
               registers.discriminator = value;
               break;
             }
@@ -369,8 +387,9 @@ void EvaluateLineNumberProgram(const int fd,
         case 2: {
           // DW_LNS_advance_pc
           uint64_t op_advance;
-          if (!reader.ReadLeb128(op_advance))
+          if (!reader.ReadLeb128(op_advance)) {
             return;
+          }
           registers.OpAdvance(&program_info, op_advance);
           break;
         }
@@ -378,11 +397,13 @@ void EvaluateLineNumberProgram(const int fd,
         case 3: {
           // DW_LNS_advance_line
           int64_t line_advance;
-          if (!reader.ReadLeb128(line_advance))
+          if (!reader.ReadLeb128(line_advance)) {
             return;
+          }
           if (line_advance < 0) {
-            if (static_cast<uint64_t>(-line_advance) > registers.line)
+            if (static_cast<uint64_t>(-line_advance) > registers.line) {
               return;
+            }
             registers.line -= static_cast<uint64_t>(-line_advance);
           } else {
             registers.line += static_cast<uint64_t>(line_advance);
@@ -393,8 +414,9 @@ void EvaluateLineNumberProgram(const int fd,
         case 4: {
           // DW_LNS_set_file
           uint64_t value;
-          if (!reader.ReadLeb128(value))
+          if (!reader.ReadLeb128(value)) {
             return;
+          }
           registers.file = value;
           break;
         }
@@ -402,8 +424,9 @@ void EvaluateLineNumberProgram(const int fd,
         case 5: {
           // DW_LNS_set_column
           uint64_t value;
-          if (!reader.ReadLeb128(value))
+          if (!reader.ReadLeb128(value)) {
             return;
+          }
           registers.column = value;
           break;
         }
@@ -428,8 +451,9 @@ void EvaluateLineNumberProgram(const int fd,
         case 9: {
           // DW_LNS_fixed_advance_pc
           uint16_t value;
-          if (!reader.ReadInt16(value))
+          if (!reader.ReadInt16(value)) {
             return;
+          }
           registers.address += value;
           registers.op_index = 0;
           break;
@@ -448,8 +472,9 @@ void EvaluateLineNumberProgram(const int fd,
         case 12: {
           // DW_LNS_set_isa
           uint64_t value;
-          if (!reader.ReadLeb128(value))
+          if (!reader.ReadLeb128(value)) {
             return;
+          }
           registers.isa = value;
           break;
         }
@@ -467,8 +492,9 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
                             bool is_64bit,
                             uint64_t cu_name_offset,
                             ProgramInfo* program_info) {
-  if (!reader->ReadOffset(is_64bit, program_info->header_length))
+  if (!reader->ReadOffset(is_64bit, program_info->header_length)) {
     return false;
+  }
   program_info->start_offset = reader->position() + program_info->header_length;
 
   if (!reader->ReadInt8(program_info->minimum_instruction_length) ||
@@ -481,8 +507,9 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
   }
 
   for (int i = 0; i < (program_info->opcode_base - 1); i++) {
-    if (!reader->ReadInt8(program_info->standard_opcode_lengths[i]))
+    if (!reader->ReadInt8(program_info->standard_opcode_lengths[i])) {
       return false;
+    }
   }
 
   // Table ends with a single null line. This basically means search for 2
@@ -491,8 +518,9 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
   for (;;) {
     // Read a byte.
     last = cur;
-    if (!reader->ReadInt8(cur))
+    if (!reader->ReadInt8(cur)) {
       return false;
+    }
 
     if (last == 0 && cur == 0) {
       // We're at the last entry where it's a double null.
@@ -508,10 +536,12 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
       program_info->directory_sizes[cur_dir] = 1;
     }
     do {
-      if (!reader->ReadInt8(cur))
+      if (!reader->ReadInt8(cur)) {
         return false;
-      if (cur_dir < kMaxDirectories)
+      }
+      if (cur_dir < kMaxDirectories) {
         ++program_info->directory_sizes[cur_dir];
+      }
     } while (cur != '\0');
   }
 
@@ -521,8 +551,9 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
   for (;;) {
     // Read a byte.
     last = cur;
-    if (!reader->ReadInt8(cur))
+    if (!reader->ReadInt8(cur)) {
       return false;
+    }
 
     if (last == 0 && cur == 0) {
       // We're at the last entry where it's a double null.
@@ -533,15 +564,17 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
     // first byte of the filename above.
     uint64_t filename_offset = reader->position() - 1;
     do {
-      if (!reader->ReadInt8(cur))
+      if (!reader->ReadInt8(cur)) {
         return false;
+      }
     } while (cur != '\0');
 
     uint64_t value;
 
     // Dir index
-    if (!reader->ReadLeb128(value))
+    if (!reader->ReadLeb128(value)) {
       return false;
+    }
     size_t cur_filename = program_info->num_filenames;
     if (cur_filename < kMaxFilenames && value < kMaxDirectories) {
       ++program_info->num_filenames;
@@ -550,12 +583,14 @@ bool ParseDwarf4ProgramInfo(BufferedDwarfReader* reader,
     }
 
     // Modification time
-    if (!reader->ReadLeb128(value))
+    if (!reader->ReadLeb128(value)) {
       return false;
+    }
 
     // Bytes in file.
-    if (!reader->ReadLeb128(value))
+    if (!reader->ReadLeb128(value)) {
       return false;
+    }
   }
 
   // Set up the 0th filename.
@@ -1112,13 +1147,24 @@ void SerializeLineNumberInfoToString(int fd,
   }
 
   out[out_pos - 1] = ':';
-  char* tmp = google::itoa_r(static_cast<intptr_t>(info.line), out + out_pos,
-                             out_size - out_pos, 10, 0);
-  out_pos += strlen(tmp) + 1;
-  out[out_pos - 1] = ':';
-  tmp = google::itoa_r(static_cast<intptr_t>(info.column), out + out_pos,
-                       out_size - out_pos, 10, 0);
-  out_pos += strlen(tmp) + 1;
+  auto result = std::to_chars(out + out_pos, out + out_size,
+                              static_cast<intptr_t>(info.line));
+  if (result.ec != std::errc()) {
+    out[out_pos - 1] = '\0';
+    return;
+  }
+  out_pos = static_cast<size_t>(result.ptr - out);
+
+  out[out_pos++] = ':';
+  result = std::to_chars(out + out_pos, out + out_size,
+                         static_cast<intptr_t>(info.column));
+  if (result.ec != std::errc()) {
+    out[out_pos - 1] = '\0';
+    return;
+  }
+  out_pos = static_cast<size_t>(result.ptr - out);
+
+  out[out_pos++] = '\0';
 }
 
 // Reads the Line Number info for a compile unit.
@@ -1160,7 +1206,7 @@ bool GetLineNumberInfoFromObject(int fd,
 }
 
 struct FrameInfo {
-  uint64_t* cu_offset;
+  raw_ptr<uint64_t> cu_offset;
   uintptr_t pc;
 };
 
@@ -1265,19 +1311,17 @@ void PopulateCompileUnitOffsets(int fd,
 
 }  // namespace
 
-bool GetDwarfSourceLineNumber(void* pc,
-                              uintptr_t cu_offset,
+bool GetDwarfSourceLineNumber(const void* pc,
+                              uint64_t cu_offset,
                               char* out,
                               size_t out_size) {
   uint64_t pc0 = reinterpret_cast<uint64_t>(pc);
   uint64_t object_start_address = 0;
-  uint64_t object_end_address = 0;
   uint64_t object_base_address = 0;
 
   google::FileDescriptor object_fd(google::FileDescriptor(
       google::OpenObjectFileContainingPcAndGetStartAddress(
-          pc0, object_start_address, object_end_address, object_base_address,
-          nullptr, 0)));
+          pc0, object_start_address, object_base_address, nullptr, 0)));
 
   if (!object_fd.get()) {
     return false;
@@ -1291,14 +1335,12 @@ bool GetDwarfSourceLineNumber(void* pc,
   return true;
 }
 
-void GetDwarfCompileUnitOffsets(void* const* trace,
+void GetDwarfCompileUnitOffsets(const void* const* trace,
                                 uint64_t* cu_offsets,
                                 size_t num_frames) {
-  // Ensure `cu_offsets` always has a known state.
-  memset(cu_offsets, 0, sizeof(uint64_t) * num_frames);
-
-  FrameInfo* frame_info =
-      static_cast<FrameInfo*>(alloca(sizeof(FrameInfo) * num_frames));
+  // LINT.IfChange(max_stack_frames)
+  FrameInfo frame_info[250] = {};
+  // LINT.ThenChange(stack_trace.h:max_stack_frames)
   for (size_t i = 0; i < num_frames; i++) {
     // The `cu_offset` also encodes the original sort order.
     frame_info[i].cu_offset = &cu_offsets[i];
@@ -1313,30 +1355,30 @@ void GetDwarfCompileUnitOffsets(void* const* trace,
   std::sort_heap(&frame_info[0], &frame_info[num_frames - 1], pc_comparator);
 
   // Walk the frame_info one compilation unit at a time.
-  size_t cur_frame = 0;
-  while (cur_frame < num_frames) {
+  for (size_t cur_frame = 0; cur_frame < num_frames; ++cur_frame) {
     uint64_t object_start_address = 0;
-    uint64_t object_end_address = 0;
     uint64_t object_base_address = 0;
     google::FileDescriptor object_fd(google::FileDescriptor(
         google::OpenObjectFileContainingPcAndGetStartAddress(
-            frame_info[cur_frame].pc, object_start_address, object_end_address,
-            object_base_address, nullptr, 0)));
+            frame_info[cur_frame].pc, object_start_address, object_base_address,
+            nullptr, 0)));
 
-    // Find the last frame that is contained in the current object.
-    size_t first_frame_in_next_object = cur_frame + 1;
-    while (first_frame_in_next_object < num_frames &&
-           frame_info[first_frame_in_next_object].pc < object_end_address) {
-      first_frame_in_next_object++;
+    // Some stack frames may not have a corresponding object file, e.g. a call
+    // frame inside the Linux kernel's vdso. Just skip over these stack frames,
+    // as this is done on a best-effort basis.
+    if (object_fd.get() < 0) {
+      continue;
     }
 
-    // Populate the cu_offsets for each of the frames from [cur_frame,
-    // last_frame_in_object] inclusive.
-    PopulateCompileUnitOffsets(object_fd.get(), &frame_info[cur_frame],
-                               first_frame_in_next_object - cur_frame,
-                               object_base_address);
+    // TODO(crbug.com/40228616): Consider exposing the end address so a
+    // range of frames can be bulk-populated. This was originally implemented,
+    // but line number symbolization is currently broken by default (and also
+    // broken in sandboxed processes). The various issues will be addressed
+    // incrementally in follow-up patches, and the optimization here restored if
+    // needed.
 
-    cur_frame = first_frame_in_next_object;
+    PopulateCompileUnitOffsets(object_fd.get(), &frame_info[cur_frame], 1,
+                               object_base_address);
   }
 }
 
@@ -1350,14 +1392,14 @@ void GetDwarfCompileUnitOffsets(void* const* trace,
 namespace base {
 namespace debug {
 
-bool GetDwarfSourceLineNumber(void* pc,
-                              uintptr_t cu_offset,
+bool GetDwarfSourceLineNumber(const void* pc,
+                              uint64_t cu_offset,
                               char* out,
                               size_t out_size) {
   return false;
 }
 
-void GetDwarfCompileUnitOffsets(void* const* trace,
+void GetDwarfCompileUnitOffsets(const void* const* trace,
                                 uint64_t* cu_offsets,
                                 size_t num_frames) {
   // Provide defined values even in the stub.

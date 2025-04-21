@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -197,8 +197,8 @@ class PDFiumFormFiller : public FPDF_FORMFILLINFO, public IPDF_JSPLATFORM {
   class EngineInIsolateScope {
    public:
     EngineInIsolateScope(PDFiumEngine* engine, v8::Isolate* isolate);
-    EngineInIsolateScope(EngineInIsolateScope&&);
-    EngineInIsolateScope& operator=(EngineInIsolateScope&&);
+    EngineInIsolateScope(EngineInIsolateScope&&) noexcept;
+    EngineInIsolateScope& operator=(EngineInIsolateScope&&) noexcept;
     ~EngineInIsolateScope();
 
     PDFiumEngine* engine() { return engine_; }
@@ -210,8 +210,9 @@ class PDFiumFormFiller : public FPDF_FORMFILLINFO, public IPDF_JSPLATFORM {
 
   class EngineInIsolateScopeFactory {
    public:
-    explicit EngineInIsolateScopeFactory(PDFiumEngine* engine);
-    EngineInIsolateScopeFactory(const EngineInIsolateScope&) = delete;
+    EngineInIsolateScopeFactory(PDFiumEngine* engine,
+                                ScriptOption script_option);
+    EngineInIsolateScopeFactory(const EngineInIsolateScopeFactory&) = delete;
     EngineInIsolateScopeFactory& operator=(
         const EngineInIsolateScopeFactory&&) = delete;
     ~EngineInIsolateScopeFactory();
@@ -226,7 +227,7 @@ class PDFiumFormFiller : public FPDF_FORMFILLINFO, public IPDF_JSPLATFORM {
     // because indirect callers of `PDFiumFormFiller` might not be embedding V8
     // separately. This can happen in utility processes (through callers of
     // //pdf/pdf.h) and in Pepper plugin processes.
-    const raw_ptr<v8::Isolate> callback_isolate_;
+    const raw_ptr<v8::Isolate, DanglingUntriaged> callback_isolate_;
   };
 
   // Gets an `EngineInIsolateScope` using `engine_in_isolate_scope_factory_`.

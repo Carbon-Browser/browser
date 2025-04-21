@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted_memory.h"
 #include "printing/pdf_render_settings.h"
@@ -31,7 +31,7 @@ class PwgRasterConverter {
   using ResultCallback =
       base::OnceCallback<void(base::ReadOnlySharedMemoryRegion /*region*/)>;
 
-  virtual ~PwgRasterConverter() {}
+  virtual ~PwgRasterConverter() = default;
 
   static std::unique_ptr<PwgRasterConverter> CreateDefault();
 
@@ -49,7 +49,8 @@ class PwgRasterConverter {
       const cloud_devices::CloudDeviceDescription& printer_capabilities,
       const cloud_devices::CloudDeviceDescription& ticket);
 
-  virtual void Start(const base::RefCountedMemory* data,
+  virtual void Start(const std::optional<bool>& use_skia,
+                     const base::RefCountedMemory* data,
                      const PdfRenderSettings& conversion_settings,
                      const PwgRasterSettings& bitmap_settings,
                      ResultCallback callback) = 0;

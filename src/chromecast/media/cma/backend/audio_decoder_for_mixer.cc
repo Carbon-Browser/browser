@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -76,7 +76,6 @@ int ToPlayoutChannel(AudioChannel audio_channel) {
       return 1;
   }
   NOTREACHED();
-  return kChannelAll;
 }
 
 int MaxQueuedFrames(int sample_rate) {
@@ -453,6 +452,10 @@ AudioDecoderForMixer::GetAudioTrackTimestamp() {
   return AudioTrackTimestamp();
 }
 
+int AudioDecoderForMixer::GetStartThresholdInFrames() {
+  return 0;
+}
+
 void AudioDecoderForMixer::OnBufferDecoded(
     uint64_t input_bytes,
     bool has_config,
@@ -568,7 +571,7 @@ void AudioDecoderForMixer::WritePcm(scoped_refptr<DecoderBufferBase> buffer) {
                                 buffer->timestamp());
 }
 
-void AudioDecoderForMixer::FillNextBuffer(void* buffer,
+void AudioDecoderForMixer::FillNextBuffer(base::span<uint8_t> buffer,
                                           int frames,
                                           int64_t delay_timestamp,
                                           int64_t delay) {

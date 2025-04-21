@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,18 @@ import android.os.ParcelFileDescriptor;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.android_webview.common.VariationsFastFetchModeUtils;
 import org.chromium.android_webview.common.variations.VariationsUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.components.variations.firstrun.VariationsSeedFetcher.SeedInfo;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.util.Date;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * VariationsSeedHolder is a singleton which manages the local copy of the variations seed - both
@@ -29,7 +34,9 @@ import java.io.FileOutputStream;
 public class VariationsSeedHolder {
     private static final String TAG = "VariationsSeedHolder";
 
-    private static final VariationsSeedHolder sInstance = new VariationsSeedHolder();
+    private static class LazyHolder {
+        static final VariationsSeedHolder sInstance = new VariationsSeedHolder();
+    }
 
     private static void writeSeedWithoutClosing(SeedInfo seed, ParcelFileDescriptor destination) {
         // writeSeed() will close "out", but closing "out" will not close "destination".
@@ -44,6 +51,10 @@ public class VariationsSeedHolder {
     private SeedInfo mSeed;
     // Set true when we fail to load a seed, to prevent future loads until SeedUpdater runs.
     private boolean mFailedReadingSeed;
+
+    private final SafeModeSeedUpdateNotifier mSafeModeSeedUpdateNotifier =
+            new SafeModeSeedUpdateNotifier();
+    private Date mFakeDateForTesting;
 
     // A Runnable which handles an individual request for the seed. Must run on mSeedThread.
     private class SeedWriter implements Runnable {
@@ -118,6 +129,7 @@ public class VariationsSeedHolder {
                 }
                 VariationsUtils.replaceOldWithNewSeed();
                 mFailedReadingSeed = false;
+                mSafeModeSeedUpdateNotifier.reportSeedUpdateCompletion();
             } finally {
                 mOnFinished.run();
             }
@@ -126,13 +138,13 @@ public class VariationsSeedHolder {
 
     @VisibleForTesting
     protected VariationsSeedHolder() {
-        mSeedThread = new HandlerThread(/*name=*/"seed_holder");
+        mSeedThread = new HandlerThread(/* name= */ "seed_holder");
         mSeedThread.start();
         mSeedHandler = new Handler(mSeedThread.getLooper());
     }
 
-    /* package */ static VariationsSeedHolder getInstance() {
-        return sInstance;
+    public static VariationsSeedHolder getInstance() {
+        return LazyHolder.sInstance;
     }
 
     public void writeSeedIfNewer(ParcelFileDescriptor destination, long date) {
@@ -150,4 +162,53 @@ public class VariationsSeedHolder {
 
     // overridden by tests
     public void onWriteFinished() {}
+
+    /**
+     * A seed updater class tailored to notify that Variations seeds have been updated specifically
+     * for SafeMode scenarios
+     */
+    private class SafeModeSeedUpdateNotifier {
+        // Stores a list of requests to notify the requester, SafeModeVariationsSeedContentProvider,
+        // as soon as the Variations Fast Fetch Mode seed is fresh, where fresh is considered to be
+        // < 15 minutes old.
+        private final Queue<Runnable> mSafeModeVariationsSeedContentProviderCallback =
+                new ConcurrentLinkedQueue<Runnable>();
+
+        public void hasSeedUpdateCompletedAsync(Runnable r) {
+            mSafeModeVariationsSeedContentProviderCallback.add(r);
+            if (isSeedFileFresh()) {
+                reportSeedUpdateCompletion();
+            }
+        }
+
+        public void reportSeedUpdateCompletion() {
+            Runnable r;
+            while ((r = mSafeModeVariationsSeedContentProviderCallback.poll()) != null) {
+                r.run();
+            }
+        }
+    }
+
+    public void hasSeedUpdateCompletedAsync(Runnable r) {
+        mSafeModeSeedUpdateNotifier.hasSeedUpdateCompletedAsync(r);
+    }
+
+    @VisibleForTesting
+    public boolean isSeedFileFresh() {
+        long currTimestamp = getCurrentTimestamp();
+        long lastModified = VariationsUtils.getSeedFile().lastModified();
+        return (lastModified > 0
+                && (currTimestamp - lastModified)
+                        < VariationsFastFetchModeUtils.MAX_ALLOWABLE_SEED_AGE_MS);
+    }
+
+    public void setDateForTesting(Date date) {
+        var oldValue = mFakeDateForTesting;
+        mFakeDateForTesting = date;
+        ResettersForTesting.register(() -> mFakeDateForTesting = oldValue);
+    }
+
+    private long getCurrentTimestamp() {
+        return mFakeDateForTesting != null ? mFakeDateForTesting.getTime() : new Date().getTime();
+    }
 }

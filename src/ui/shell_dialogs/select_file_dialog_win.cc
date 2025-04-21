@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,18 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/registry.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -28,7 +28,9 @@
 #include "ui/shell_dialogs/execute_select_file_win.h"
 #include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/shell_dialogs/select_file_utils_win.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "url/gurl.h"
 
 namespace ui {
 
@@ -124,7 +126,7 @@ std::vector<FileFilterSpec> FormatFilterForExtensions(
       // Having '*' in the description could cause the windows file dialog to
       // not include the file extension in the file dialog. So strip out any '*'
       // characters if `keep_extension_visible` is set.
-      base::ReplaceChars(desc, u"*", base::StringPiece16(), &desc);
+      base::ReplaceChars(desc, u"*", std::u16string_view(), &desc);
     }
 
     result.push_back({desc, ext});
@@ -174,7 +176,7 @@ class SelectFileDialogImpl : public ui::SelectFileDialog,
                       int file_type_index,
                       const base::FilePath::StringType& default_extension,
                       gfx::NativeWindow owning_window,
-                      void* params) override;
+                      const GURL* caller) override;
 
  private:
   ~SelectFileDialogImpl() override;
@@ -187,7 +189,6 @@ class SelectFileDialogImpl : public ui::SelectFileDialog,
   // Returns the result of the select file operation to the listener.
   void OnSelectFileExecuted(Type type,
                             std::unique_ptr<RunState> run_state,
-                            void* params,
                             const std::vector<base::FilePath>& paths,
                             int index);
 
@@ -242,7 +243,7 @@ void SelectFileDialogImpl::SelectFileImpl(
     int file_type_index,
     const base::FilePath::StringType& default_extension,
     gfx::NativeWindow owning_window,
-    void* params) {
+    const GURL* caller) {
   has_multiple_file_type_choices_ =
       file_types ? file_types->extensions.size() > 1 : true;
 
@@ -260,9 +261,9 @@ void SelectFileDialogImpl::SelectFileImpl(
       base::BindOnce(&DoSelectFileOnDialogTaskRunner,
                      execute_select_file_callback_, type, title, default_path,
                      filter, file_type_index, default_extension, owner,
-                     base::ThreadTaskRunnerHandle::Get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
                      base::BindOnce(&SelectFileDialogImpl::OnSelectFileExecuted,
-                                    this, type, std::move(run_state), params)));
+                                    this, type, std::move(run_state))));
 }
 
 bool SelectFileDialogImpl::HasMultipleFileTypeChoicesImpl() {
@@ -285,13 +286,12 @@ void SelectFileDialogImpl::ListenerDestroyed() {
 void SelectFileDialogImpl::OnSelectFileExecuted(
     Type type,
     std::unique_ptr<RunState> run_state,
-    void* params,
     const std::vector<base::FilePath>& paths,
     int index) {
   if (listener_) {
     // The paths vector is empty when the user cancels the dialog.
     if (paths.empty()) {
-      listener_->FileSelectionCanceled(params);
+      listener_->FileSelectionCanceled();
     } else {
       switch (type) {
         case SELECT_FOLDER:
@@ -300,10 +300,11 @@ void SelectFileDialogImpl::OnSelectFileExecuted(
         case SELECT_SAVEAS_FILE:
         case SELECT_OPEN_FILE:
           DCHECK_EQ(paths.size(), 1u);
-          listener_->FileSelected(paths[0], index, params);
+          listener_->FileSelected(SelectedFileInfo(paths[0]), index);
           break;
         case SELECT_OPEN_MULTI_FILE:
-          listener_->MultiFilesSelected(paths, params);
+          listener_->MultiFilesSelected(
+              FilePathListToSelectedFileInfoList(paths));
           break;
         case SELECT_NONE:
           NOTREACHED();

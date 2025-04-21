@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,8 +71,7 @@ void GLES2DecoderTestBase::SpecializedSetup<cmds::CheckFramebufferStatus, 0>(
                     kServiceRenderbufferId);
   DoBindFramebuffer(GL_FRAMEBUFFER, client_framebuffer_id_,
                     kServiceFramebufferId);
-  DoRenderbufferStorage(
-      GL_RENDERBUFFER, GL_RGBA4, GL_RGBA, 1, 1, GL_NO_ERROR);
+  DoRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA4, 1, 1, GL_NO_ERROR);
   DoFramebufferRenderbuffer(
       GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
       client_renderbuffer_id_, kServiceRenderbufferId, GL_NO_ERROR);
@@ -191,4 +190,3 @@ void GLES2DecoderTestBase::
 
 }  // namespace gles2
 }  // namespace gpu
-

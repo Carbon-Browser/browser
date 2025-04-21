@@ -1,21 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_TEST_TRUST_TOKEN_REQUEST_HANDLER_H_
 #define SERVICES_NETWORK_TEST_TRUST_TOKEN_REQUEST_HANDLER_H_
 
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/network/trust_tokens/types.h"
 #include "url/gurl.h"
-
 namespace network {
 namespace test {
 
@@ -42,14 +42,6 @@ class TrustTokenRequestHandler {
 
   // TODO(davidvc): Provide a way to specify when keys expire.
 
-  // See |Options::client_signing_outcome| below.
-  enum class SigningOutcome {
-    // Expect a well-formed RR and possibly a Sec-Signature header.
-    kSuccess,
-    // Expect an empty Sec-Redemption-Record header and no Sec-Signature header.
-    kFailure,
-  };
-
   enum class ServerOperationOutcome {
     kExecuteOperationAsNormal,
     kUnconditionalFailure,
@@ -64,15 +56,10 @@ class TrustTokenRequestHandler {
     // The number of issuance key pairs to provide via key commitment results.
     int num_keys = 1;
 
-    // Specifies whether the client-side signing operation is expected to
-    // succeed. Unlike issuance and redemption, clients send signed requests
-    // even when the operation failures, but the outcome affects the shape of
-    // the expected request.
-    SigningOutcome client_signing_outcome = SigningOutcome::kSuccess;
-
     // The protocol version with which to parameterize the server-side
     // cryptographic logic. We return this value in key commitment results.
-    std::string protocol_version = "TrustTokenV3PMB";
+    std::string protocol_version = internal::ProtocolVersionToString(
+        mojom::TrustTokenProtocolVersion::kTrustTokenV3Pmb);
 
     // The key commitment ID.
     int id = 1;
@@ -115,21 +102,12 @@ class TrustTokenRequestHandler {
 
   // Given a base64-encoded issuance request, processes the
   // request and returns either nullopt (on error) or a base64-encoded response.
-  absl::optional<std::string> Issue(base::StringPiece issuance_request);
+  std::optional<std::string> Issue(std::string_view issuance_request);
 
   // Given a base64-encoded redemption request, processes the
-  // request and returns either nullopt (on error) or a base64-encoded response.
-  // On success, the response's redemption record will have a lifetime of
-  // |kRRLifetime|. We use a ludicrously long lifetime because there's no way
-  // to mock time in browser tests, and we don't want the RR expiring
-  // unexpectedly.
-  //
-  // TODO(davidvc): This needs to be expanded to be able to provide
-  // RRs that have already expired. (This seems like the easiest way of
-  // exercising client-side RR expiry logic in end-to-end tests, because
-  // there's no way to fast-forward a clock past an expiry time.)
-  static const base::TimeDelta kRrLifetime;
-  absl::optional<std::string> Redeem(base::StringPiece redemption_request);
+  // request and returns either nullopt (on error) or a string containing
+  // the metadata values.
+  std::optional<std::string> Redeem(std::string_view redemption_request);
 
   // Stores a representation of a signed request with the given destination and
   // headers in a manner that can be retrieved for inspection by calling
@@ -141,7 +119,7 @@ class TrustTokenRequestHandler {
   std::set<std::string> hashes_of_redemption_bound_public_keys() const;
 
   // Returns a structured representation of the last signed request received.
-  absl::optional<TrustTokenSignedRequest> last_incoming_signed_request() const;
+  std::optional<TrustTokenSignedRequest> last_incoming_signed_request() const;
 
  private:
   struct Rep;  // Contains state internal to this class's implementation.

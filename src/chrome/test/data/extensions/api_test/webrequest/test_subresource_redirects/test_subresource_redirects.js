@@ -1,6 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+const isServiceWorker = ('ServiceWorkerGlobalScope' in self);
 
 var pass = chrome.test.callbackPass;
 var dataURL = 'data:text/plain,redirected1';
@@ -16,33 +18,46 @@ function getURLWebAccessible() {
 function assertRedirectSucceeds(url, redirectURL, callback) {
   // Load a page to be sure webRequest listeners are set up.
   navigateAndWait(getURL('simpleLoad/b.html'), function() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.onload = pass(function() {
+    passCallback = pass((response) => {
       if (callback) callback();
-      chrome.test.assertEq(xhr.responseURL, redirectURL);
+      chrome.test.assertEq(response.url, redirectURL);
     });
-    xhr.onerror = function() {
+    fetch(url).then((response) => {
+      passCallback(response);
+    }).catch((e) => {
       if (callback) callback();
-      chrome.test.fail();
-    };
-    xhr.send();
+      chrome.test.fail(e);
+    });
   });
 }
 
 function assertRedirectFails(url, callback) {
   // Load a page to be sure webRequest listeners are set up.
   navigateAndWait(getURL('simpleLoad/b.html'), function() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.onload = function() {
-      if (callback) callback();
-      chrome.test.fail();
-    };
-    xhr.onerror = pass(function() {
+    passCallback = pass(() => {
       if (callback) callback();
     });
-    xhr.send();
+    fetch(url).then((response) => {
+      if (callback) callback();
+      chrome.test.fail();
+    }).catch((e) => {
+      passCallback();
+    });
+  });
+}
+
+const nonServiceWorkerTests = [
+  // TODO(crbug.com/40243056): These two tests hang.
+  'subresourceRedirectHasSameRequestIdOnHeadersReceived',
+  'subresourceRedirectHasSameRequestIdOnBeforeRequest'
+];
+
+function getFilteredTests(tests) {
+  if (!isServiceWorker) {
+    return tests;
+  }
+  return tests.filter(function(op) {
+    return !nonServiceWorkerTests.includes(op.name);
   });
 }
 
@@ -54,11 +69,12 @@ loadScript.then(async function() {
   var onHeadersReceivedExtraInfoSpec = ['blocking'];
   if (config.customArg) {
     let args = JSON.parse(config.customArg);
-    if (args.useExtraHeaders)
+    if (args.useExtraHeaders) {
       onHeadersReceivedExtraInfoSpec.push('extraHeaders');
+    }
   }
 
-    runTests([
+  runTests(getFilteredTests([
     function subresourceRedirectToDataUrlOnHeadersReceived() {
       var url = getServerURL('echo');
       var listener = function(details) {
@@ -233,5 +249,5 @@ loadScript.then(async function() {
             onBeforeRequestListener);
       });
     },
-  ]);
+  ]));
 })});

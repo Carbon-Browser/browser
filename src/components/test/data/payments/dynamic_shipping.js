@@ -1,21 +1,8 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-/* global PaymentRequest:false */
-
-/**
- * Launches the PaymentRequest UI that offers free shipping in California and
- * $5.00 shipping in US. Does not allow shipping outside of US.
- *
- * Legacy entry-point until basic-card is disabled
- */
-function buy() { // eslint-disable-line no-unused-vars
-  buyWithMethods(
-      [{supportedMethods: 'basic-card', data: {supportedNetworks: ['visa']}}]);
-}
 
 /**
  * Launches the PaymentRequest UI that offers free shipping in California and
@@ -23,9 +10,9 @@ function buy() { // eslint-disable-line no-unused-vars
  *
  * @param {String} methodData - An array of payment method objects.
  */
-function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
+function buyWithMethods(methodData) {
   try {
-    var details = {
+    const details = {
       total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}},
       displayItems: [
         {
@@ -37,8 +24,8 @@ function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
       ],
     };
 
-    var request = new PaymentRequest(
-        methodData, details, {requestShipping: true});
+    const request =
+        new PaymentRequest(methodData, details, {requestShipping: true});
 
     request.addEventListener('shippingaddresschange', function(evt) {
       evt.updateWith(new Promise(function(resolve) {
@@ -73,7 +60,7 @@ function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
  */
 function updateDetails(details, addr) {
   if (addr.country === 'US') {
-    var shippingOption = {
+    const shippingOption = {
       id: '',
       label: '',
       amount: {currency: 'USD', value: '0.00'},

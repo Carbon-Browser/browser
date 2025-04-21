@@ -1,12 +1,20 @@
+load(
+    "@org_tensorflow//tensorflow/lite/core/shims:cc_library_with_tflite.bzl",
+    "cc_library_with_tflite",
+)
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],  # Apache 2.0
 )
 
-cc_library(
+cc_library_with_tflite(
     name = "tflite_modules",
     srcs = ["tflite_modules.cc"],
     hdrs = ["tflite_modules.h"],
+    tflite_deps = [
+        "//tensorflow_lite_support/cc/task/core:tflite_engine",
+    ],
     deps = [
         ":bert_utils",
         ":constants",
@@ -20,7 +28,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@org_tensorflow//tensorflow/lite:framework",
+        "@org_tensorflow//tensorflow/lite:framework_stable",
         "@org_tensorflow//tensorflow/lite:string_util",
         "@org_tensorflow//tensorflow/lite/kernels:kernel_util",
     ],

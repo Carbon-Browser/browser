@@ -1,20 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/cookie_access_delegate_impl.h"
 
+#include <optional>
 #include <set>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "net/base/schemeful_site.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_util.h"
-#include "net/cookies/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 
@@ -50,6 +51,14 @@ net::CookieAccessSemantics CookieAccessDelegateImpl::GetAccessSemantics(
   }
 }
 
+net::CookieScopeSemantics CookieAccessDelegateImpl::GetScopeSemantics(
+    const net::CanonicalCookie& cookie) const {
+  if (!cookie_settings_) {
+    return net::CookieScopeSemantics::UNKNOWN;
+  }
+  return cookie_settings_->GetCookieScopeSemanticsForDomain(cookie.Domain());
+}
+
 bool CookieAccessDelegateImpl::ShouldIgnoreSameSiteRestrictions(
     const GURL& url,
     const net::SiteForCookies& site_for_cookies) const {
@@ -60,49 +69,31 @@ bool CookieAccessDelegateImpl::ShouldIgnoreSameSiteRestrictions(
   return false;
 }
 
-absl::optional<net::FirstPartySetMetadata>
+std::optional<std::pair<net::FirstPartySetMetadata,
+                        net::FirstPartySetsCacheFilter::MatchInfo>>
 CookieAccessDelegateImpl::ComputeFirstPartySetMetadataMaybeAsync(
     const net::SchemefulSite& site,
     const net::SchemefulSite* top_frame_site,
-    const std::set<net::SchemefulSite>& party_context,
-    base::OnceCallback<void(net::FirstPartySetMetadata)> callback) const {
-  if (!first_party_sets_access_delegate_)
-    return {net::FirstPartySetMetadata()};
-  return first_party_sets_access_delegate_->ComputeMetadata(
-      site, top_frame_site, party_context, std::move(callback));
-}
-
-absl::optional<FirstPartySetsAccessDelegate::OwnerResult>
-CookieAccessDelegateImpl::FindFirstPartySetOwner(
-    const net::SchemefulSite& site,
-    base::OnceCallback<void(FirstPartySetsManager::OwnerResult)> callback)
-    const {
+    base::OnceCallback<void(net::FirstPartySetMetadata,
+                            net::FirstPartySetsCacheFilter::MatchInfo)>
+        callback) const {
   if (!first_party_sets_access_delegate_) {
-    return absl::make_optional<FirstPartySetsManager::OwnerResult>(
-        absl::nullopt);
+    return std::make_pair(net::FirstPartySetMetadata(),
+                          net::FirstPartySetsCacheFilter::MatchInfo());
   }
-  return first_party_sets_access_delegate_->FindOwner(site,
-                                                      std::move(callback));
+  return first_party_sets_access_delegate_->ComputeMetadata(
+      site, top_frame_site, std::move(callback));
 }
 
-absl::optional<FirstPartySetsAccessDelegate::OwnersResult>
-CookieAccessDelegateImpl::FindFirstPartySetOwners(
+std::optional<FirstPartySetsAccessDelegate::EntriesResult>
+CookieAccessDelegateImpl::FindFirstPartySetEntries(
     const base::flat_set<net::SchemefulSite>& sites,
-    base::OnceCallback<void(FirstPartySetsAccessDelegate::OwnersResult)>
+    base::OnceCallback<void(FirstPartySetsAccessDelegate::EntriesResult)>
         callback) const {
   if (!first_party_sets_access_delegate_)
-    return {{}};
-  return first_party_sets_access_delegate_->FindOwners(sites,
-                                                       std::move(callback));
-}
-
-absl::optional<FirstPartySetsAccessDelegate::SetsByOwner>
-CookieAccessDelegateImpl::RetrieveFirstPartySets(
-    base::OnceCallback<void(FirstPartySetsAccessDelegate::SetsByOwner)>
-        callback) const {
-  if (!first_party_sets_access_delegate_)
-    return {{}};
-  return first_party_sets_access_delegate_->Sets(std::move(callback));
+    return FirstPartySetsAccessDelegate::EntriesResult();
+  return first_party_sets_access_delegate_->FindEntries(sites,
+                                                        std::move(callback));
 }
 
 }  // namespace network

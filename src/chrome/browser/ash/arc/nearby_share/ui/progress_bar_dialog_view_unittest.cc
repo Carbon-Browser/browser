@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <memory>
 
 #include "ash/components/arc/compat_mode/test/compat_mode_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace arc {
@@ -18,7 +19,8 @@ class ProgressBarDialogViewTest : public CompatModeTestBase {
   // CompatModeTestBase:
   void SetUp() override {
     CompatModeTestBase::SetUp();
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
     dialog_view_ = widget_->SetContentsView(
         std::make_unique<ProgressBarDialogView>(/*is_multiple_files=*/false));
     widget_->Show();
@@ -31,7 +33,7 @@ class ProgressBarDialogViewTest : public CompatModeTestBase {
   }
 
  protected:
-  ProgressBarDialogView* dialog_view_;
+  raw_ptr<ProgressBarDialogView, DanglingUntriaged> dialog_view_;
   std::unique_ptr<views::Widget> widget_;
 };
 

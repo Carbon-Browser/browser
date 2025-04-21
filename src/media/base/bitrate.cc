@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,11 @@ namespace media {
 Bitrate Bitrate::VariableBitrate(uint32_t target_bps, uint32_t peak_bps) {
   DCHECK_GE(peak_bps, target_bps);
   return Bitrate(Mode::kVariable, target_bps, peak_bps);
+}
+
+// static
+Bitrate Bitrate::ExternalRateControl() {
+  return Bitrate(Mode::kExternal, 0, 0);
 }
 
 bool Bitrate::operator==(const Bitrate& right) const {
@@ -36,6 +41,8 @@ std::string Bitrate::ToString() const {
     case Mode::kVariable:
       return base::StringPrintf("VBR: target %d bps, peak %d bps", target_bps_,
                                 peak_bps_);
+    case Mode::kExternal:
+      return base::StringPrintf("External");
   }
 }
 

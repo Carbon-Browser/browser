@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -113,7 +113,7 @@ class CaptureHandleManagerTest : public RenderViewHostImplTestHarness {
     CHECK_LT(device_count_, kMaxDevices);
     auto& device = devices_[++device_count_];
 
-    const WebContentsMediaCaptureId id(frame->GetProcess()->GetID(),
+    const WebContentsMediaCaptureId id(frame->GetProcess()->GetDeprecatedID(),
                                        frame->GetRoutingID());
     device.id = id.ToString();
     device.display_media_info = media::mojom::DisplayMediaInformation::New();
@@ -134,11 +134,11 @@ class CaptureHandleManagerTest : public RenderViewHostImplTestHarness {
 
  private:
   static constexpr size_t kMaxCallbackHelpers = 10;
-  CallbackHelper callback_helpers_[kMaxCallbackHelpers];
+  std::array<CallbackHelper, kMaxCallbackHelpers> callback_helpers_;
   size_t callback_helper_count_ = 0;
 
   static constexpr size_t kMaxDevices = 10;
-  MediaStreamDevice devices_[kMaxDevices];
+  std::array<MediaStreamDevice, kMaxDevices> devices_;
   size_t device_count_ = 0;
 };
 

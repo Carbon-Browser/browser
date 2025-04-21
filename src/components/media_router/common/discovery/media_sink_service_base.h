@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,9 +65,8 @@ class MediaSinkServiceBase {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  // Overridden by subclass to initiate action triggered by user gesture, e.g.
-  // start one-off round of discovery.
-  virtual void OnUserGesture() {}
+  // Starts a new round of the discovery process as soon as possible.
+  virtual void DiscoverSinksNow() {}
 
   // Adds or updates, or removes a sink.
   // Notifies |observers_| that the sink has been added, updated, or removed.
@@ -120,7 +119,7 @@ class MediaSinkServiceBase {
 
   // The following fields exist temporarily for sending back discovered sinks to
   // the Media Router extension.
-  // TODO(https://crbug.com/809249): Remove once the extension no longer need
+  // TODO(crbug.com/40561499): Remove once the extension no longer need
   // the sinks.
 
   // Callback to MediaRouter to provide sinks to the MR extension.

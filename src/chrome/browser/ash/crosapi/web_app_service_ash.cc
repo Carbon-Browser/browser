@@ -1,16 +1,26 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/web_app_service_ash.h"
 
+#include <utility>
+
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
+#include "components/sync/model/string_ordinal.h"
 
 namespace crosapi {
 
 WebAppServiceAsh::WebAppServiceAsh() = default;
-WebAppServiceAsh::~WebAppServiceAsh() = default;
+WebAppServiceAsh::~WebAppServiceAsh() {
+  for (auto& observer : observers_) {
+    observer.OnWebAppServiceAshDestroyed();
+  }
+}
 
 void WebAppServiceAsh::AddObserver(Observer* observer) {
   observers_.AddObserver(observer);
@@ -30,7 +40,7 @@ void WebAppServiceAsh::RegisterWebAppProviderBridge(
   if (web_app_provider_bridge_.is_bound()) {
     // At the moment only a single registration (from a single client) is
     // supported. The rest will be ignored.
-    // TODO(crbug.com/1174246): Support SxS lacros.
+    // TODO(crbug.com/40167449): Support SxS lacros.
     LOG(WARNING) << "WebAppProviderBridge already connected";
     return;
   }
@@ -53,9 +63,9 @@ void WebAppServiceAsh::GetAssociatedAndroidPackage(
     return;
   }
 
-  const absl::optional<std::string> package_name =
+  const std::optional<std::string> package_name =
       apk_web_app_service->GetPackageNameForWebApp(app_id);
-  const absl::optional<std::string> fingerprint =
+  const std::optional<std::string> fingerprint =
       apk_web_app_service->GetCertificateSha256Fingerprint(app_id);
 
   // Any web-only TWA should have an associated package name and fingerprint.
@@ -68,9 +78,19 @@ void WebAppServiceAsh::GetAssociatedAndroidPackage(
   std::move(callback).Run(std::move(result));
 }
 
+void WebAppServiceAsh::MigrateLauncherState(
+    const std::string& from_app_id,
+    const std::string& to_app_id,
+    MigrateLauncherStateCallback callback) {
+  Profile* profile = ProfileManager::GetPrimaryUserProfile();
+  web_app::WebAppProvider::GetForLocalAppsUnchecked(profile)
+      ->ui_manager()
+      .MigrateLauncherState(from_app_id, to_app_id, std::move(callback));
+}
+
 mojom::WebAppProviderBridge* WebAppServiceAsh::GetWebAppProviderBridge() {
   // At the moment only a single connection is supported.
-  // TODO(crbug.com/1174246): Support SxS lacros.
+  // TODO(crbug.com/40167449): Support SxS lacros.
   if (!web_app_provider_bridge_.is_bound()) {
     return nullptr;
   }

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2019 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -108,7 +108,11 @@ def main():
   # As a heuristic, find all .sh files in the crashreports directory, then
   # zip each up along with all other files that have the same basename with
   # different extensions.
-  for reproducer in glob.glob(os.path.join(CRASHREPORTS_DIR, '*.sh')):
+  clang_reproducers = glob.glob(os.path.join(CRASHREPORTS_DIR, '*.sh'))
+  # lld reproducers just leave a .tar
+  lld_reproducers = glob.glob(
+      os.path.join(CRASHREPORTS_DIR, 'linker-crash*.tar'))
+  for reproducer in clang_reproducers + lld_reproducers:
     base = os.path.splitext(os.path.basename(reproducer))[0]
     ProcessCrashreport(base, args.source)
 

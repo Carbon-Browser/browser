@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,21 +13,18 @@
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
+#include "chrome/test/base/platform_browser_test.h"
 #include "chrome/test/payments/payment_request_test_controller.h"
 #include "chrome/test/payments/personal_data_manager_test_util.h"
 #include "chrome/test/payments/test_event_waiter.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
+#include "components/payments/core/const_csp_checker.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/content_mock_cert_verifier.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "url/gurl.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/test/base/android/android_browser_test.h"
-#else
-#include "chrome/test/base/in_process_browser_test.h"
-#endif
 
 namespace content {
 class RenderFrameHost;
@@ -46,6 +43,8 @@ class PaymentRequestPlatformBrowserTestBase
 
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpOnMainThread() override;
+  void SetUpInProcessBrowserTestFixture() override;
+  void TearDownInProcessBrowserTestFixture() override;
 
   // Navigates |window| to the URL to a server based on the given |file_path|
   // (relative to components/test/data/payments) using |hostname| or 127.0.0.1.
@@ -98,6 +97,10 @@ class PaymentRequestPlatformBrowserTestBase
   void ResetEventWaiterForSingleEvent(TestEvent event);
   void ResetEventWaiterForEventSequence(std::list<TestEvent> event_sequence);
 
+  // Return a weak pointer to a Content Security Policy (CSP) checker for
+  // tests.
+  base::WeakPtr<CSPChecker> GetCSPCheckerForTests();
+
   // Wait for the event(s) passed to ResetEventWaiter*() to occur.
   void WaitForObservedEvent();
 
@@ -118,7 +121,9 @@ class PaymentRequestPlatformBrowserTestBase
  private:
   std::unique_ptr<EventWaiter> event_waiter_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
+  content::ContentMockCertVerifier mock_cert_verifier_;
   PaymentRequestTestController test_controller_;
+  ConstCSPChecker const_csp_checker_{/*allow=*/true};
 };
 
 }  // namespace payments

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/favicon/core/favicon_service.h"
@@ -46,9 +46,8 @@ void RecordFaviconAvailabilityAndLatencyMetric(
 // it only has domain-scoped cookies, but visitors are redirected to HTTPS on
 // visiting. It defaults to a HTTP scheme, but the favicon will be associated
 // with the HTTPS URL and hence won't be found if we include the scheme in the
-// lookup. Set |fallback_to_host|=true so the favicon database will fall back to
+// lookup. Set `fallback_to_host`=true so the favicon database will fall back to
 // matching only the hostname to have the best chance of finding a favicon.
-// TODO(victorvianna): Consider passing this as a parameter in the API.
 const bool kFallbackToHost = true;
 
 // Parameter used for local bitmap queries by page url.
@@ -71,7 +70,8 @@ HistoryUiFaviconRequestHandlerImpl::HistoryUiFaviconRequestHandlerImpl(
   DCHECK(large_icon_service);
 }
 
-HistoryUiFaviconRequestHandlerImpl::~HistoryUiFaviconRequestHandlerImpl() {}
+HistoryUiFaviconRequestHandlerImpl::~HistoryUiFaviconRequestHandlerImpl() =
+    default;
 
 void HistoryUiFaviconRequestHandlerImpl::GetRawFaviconForPageURL(
     const GURL& page_url,
@@ -121,7 +121,7 @@ void HistoryUiFaviconRequestHandlerImpl::OnBitmapLocalDataAvailable(
 
   if (can_send_history_data_getter_.Run()) {
     // base::SplitOnceCallback() is necessary here because
-    // |response_callback| is needed to build both the empty response and local
+    // `response_callback` is needed to build both the empty response and local
     // lookup callbacks. This is safe because only one of the two is called.
     auto split_response_callback =
         base::SplitOnceCallback(std::move(response_callback));
@@ -134,7 +134,7 @@ void HistoryUiFaviconRequestHandlerImpl::OnBitmapLocalDataAvailable(
         base::BindOnce(
             base::IgnoreResult(&FaviconService::GetRawFaviconForPageURL),
             // base::Unretained() is safe here as RequestFromGoogleServer()
-            // doesn't execute the callback if |this| is deleted.
+            // doesn't execute the callback if `this` is deleted.
             base::Unretained(favicon_service_), page_url,
             GetIconTypesForLocalQuery(), desired_size_in_pixel, kFallbackToHost,
             std::move(split_response_callback.second),
@@ -166,7 +166,7 @@ void HistoryUiFaviconRequestHandlerImpl::OnImageLocalDataAvailable(
 
   if (can_send_history_data_getter_.Run()) {
     // base::SplitOnceCallback() is necessary here because
-    // |response_callback| is needed to build both the empty response and local
+    // `response_callback` is needed to build both the empty response and local
     // lookup callbacks. This is safe because only one of the two is called.
     auto split_response_callback =
         base::SplitOnceCallback(std::move(response_callback));
@@ -179,7 +179,7 @@ void HistoryUiFaviconRequestHandlerImpl::OnImageLocalDataAvailable(
         base::BindOnce(
             base::IgnoreResult(&FaviconService::GetFaviconImageForPageURL),
             // base::Unretained() is safe here as RequestFromGoogleServer()
-            // doesn't execture the callback if |this| is deleted.
+            // doesn't execture the callback if `this` is deleted.
             base::Unretained(favicon_service_), page_url,
             std::move(split_response_callback.second),
             &cancelable_task_tracker_),
@@ -230,8 +230,7 @@ void HistoryUiFaviconRequestHandlerImpl::RequestFromGoogleServer(
   large_icon_service_
       ->GetLargeIconOrFallbackStyleFromGoogleServerSkippingLocalCache(
           page_url,
-          /*may_page_url_be_private=*/true, /*should_trim_url_path=*/false,
-          traffic_annotation,
+          /*should_trim_page_url_path=*/false, traffic_annotation,
           base::BindOnce(
               &HistoryUiFaviconRequestHandlerImpl::OnGoogleServerDataAvailable,
               weak_ptr_factory_.GetWeakPtr(),

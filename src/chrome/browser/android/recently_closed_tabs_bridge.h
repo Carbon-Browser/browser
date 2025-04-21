@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/android/tab_model/android_live_tab_context_wrapper.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -26,7 +27,7 @@ class TabIterator {
  public:
   using iterator_category = std::forward_iterator_tag;
   using difference_type = size_t;
-  using value_type = sessions::TabRestoreService::Tab;
+  using value_type = sessions::tab_restore::Tab;
   using pointer = value_type*;
   using reference = value_type&;
 
@@ -39,7 +40,7 @@ class TabIterator {
 
   static TabIterator end(const sessions::TabRestoreService::Entries& entries);
 
-  // Whether the current entry is a sessions::TabRestoreService::Tab.
+  // Whether the current entry is a sessions::tab_restore::Tab.
   bool IsCurrentEntryTab() const;
 
   // Gets an iterator to the current entry being traversed.
@@ -49,19 +50,19 @@ class TabIterator {
   TabIterator operator++(int);
   bool operator==(TabIterator other) const;
   bool operator!=(TabIterator other) const;
-  const sessions::TabRestoreService::Tab& operator*() const;
-  const sessions::TabRestoreService::Tab* operator->() const;
+  const sessions::tab_restore::Tab& operator*() const;
+  const sessions::tab_restore::Tab* operator->() const;
 
  private:
   void SetupInnerTabList();
 
-  const sessions::TabRestoreService::Entries& entries_;
+  const raw_ref<const sessions::TabRestoreService::Entries> entries_;
   sessions::TabRestoreService::Entries::const_iterator current_entry_;
-  const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>* tabs_ =
-      nullptr;
-  absl::optional<std::vector<std::unique_ptr<
-      sessions::TabRestoreService::Tab>>::const_reverse_iterator>
-      current_tab_ = absl::nullopt;
+  raw_ptr<const std::vector<std::unique_ptr<sessions::tab_restore::Tab>>>
+      tabs_ = nullptr;
+  std::optional<std::vector<
+      std::unique_ptr<sessions::tab_restore::Tab>>::const_reverse_iterator>
+      current_tab_ = std::nullopt;
 };
 
 // Provides the list of recently closed tabs to Java.
@@ -75,10 +76,6 @@ class RecentlyClosedTabsBridge : public sessions::TabRestoreServiceObserver {
 
   void Destroy(JNIEnv* env);
 
-  jboolean GetRecentlyClosedTabs(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& jtabs,
-      jint max_tab_count);
   jboolean GetRecentlyClosedEntries(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& jentries,

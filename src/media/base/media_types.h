@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_MEDIA_TYPES_H_
 #define MEDIA_BASE_MEDIA_TYPES_H_
+
+#include <optional>
 
 #include "media/base/audio_codecs.h"
 #include "media/base/audio_decoder_config.h"
@@ -21,23 +23,26 @@ namespace media {
 struct MEDIA_EXPORT AudioType {
   static AudioType FromDecoderConfig(const AudioDecoderConfig& config);
 
-  AudioCodec codec;
-  AudioCodecProfile profile;
-  bool spatial_rendering;
+  AudioCodec codec = AudioCodec::kUnknown;
+  AudioCodecProfile profile = AudioCodecProfile::kUnknown;
+  bool spatial_rendering = false;
 };
 
 struct MEDIA_EXPORT VideoType {
   static VideoType FromDecoderConfig(const VideoDecoderConfig& config);
 
-  VideoCodec codec;
-  VideoCodecProfile profile;
-  int level;
+  VideoCodec codec = VideoCodec::kUnknown;
+  VideoCodecProfile profile = VIDEO_CODEC_PROFILE_UNKNOWN;
+  VideoCodecLevel level = kNoVideoCodecLevel;
   VideoColorSpace color_space;
-  gfx::HdrMetadataType hdr_metadata_type;
+  gfx::HdrMetadataType hdr_metadata_type = gfx::HdrMetadataType::kNone;
+  std::optional<VideoChromaSampling> subsampling;
+  std::optional<uint8_t> bit_depth;
 };
 
 MEDIA_EXPORT bool operator==(const AudioType& x, const AudioType& y);
 MEDIA_EXPORT bool operator!=(const AudioType& x, const AudioType& y);
+MEDIA_EXPORT bool operator<(const AudioType& x, const AudioType& y);
 MEDIA_EXPORT bool operator==(const VideoType& x, const VideoType& y);
 MEDIA_EXPORT bool operator!=(const VideoType& x, const VideoType& y);
 

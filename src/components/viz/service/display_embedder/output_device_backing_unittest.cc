@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ namespace {
 
 size_t GetViewportSizeInBytes(const gfx::Size& viewport_size) {
   size_t bytes = std::numeric_limits<size_t>::max();
-  CHECK(ResourceSizes::MaybeSizeInBytes(viewport_size, RGBA_8888, &bytes));
+  CHECK(ResourceSizes::MaybeSizeInBytes(viewport_size,
+                                        SinglePlaneFormat::kRGBA_8888, &bytes));
   return bytes;
 }
 

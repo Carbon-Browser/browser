@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,6 @@
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom-forward.h"
 
 namespace content {
-
-class PermissionControllerImpl;
 
 // On Android, NFC requires the Activity associated with the context in order to
 // access the NFC system APIs. NFCHost provides this functionality by mapping
@@ -44,7 +42,7 @@ class NFCHost : public WebContentsObserver {
   void Close();
 
   // The permission controller for this browser context.
-  raw_ptr<PermissionControllerImpl> permission_controller_;
+  raw_ptr<PermissionController> permission_controller_;
 
   mojo::Remote<device::mojom::NFCProvider> nfc_provider_;
 

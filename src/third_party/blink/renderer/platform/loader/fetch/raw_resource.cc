@@ -27,6 +27,9 @@
 
 #include <memory>
 
+#include "base/compiler_specific.h"
+#include "base/containers/span.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -96,11 +99,12 @@ RawResource::RawResource(const ResourceRequest& resource_request,
                          const ResourceLoaderOptions& options)
     : Resource(resource_request, type, options) {}
 
-void RawResource::AppendData(const char* data, size_t length) {
+void RawResource::AppendData(
+    absl::variant<SegmentedBuffer, base::span<const char>> data) {
   if (GetResourceRequest().UseStreamOnResponse())
     return;
 
-  Resource::AppendData(data, length);
+  Resource::AppendData(std::move(data));
 }
 
 class RawResource::PreloadBytesConsumerClient final
@@ -119,14 +123,13 @@ class RawResource::PreloadBytesConsumerClient final
       return;
     }
     while (resource_->HasClient(client)) {
-      const char* buffer = nullptr;
-      size_t available = 0;
-      auto result = bytes_consumer_->BeginRead(&buffer, &available);
+      base::span<const char> buffer;
+      auto result = bytes_consumer_->BeginRead(buffer);
       if (result == BytesConsumer::Result::kShouldWait)
         return;
       if (result == BytesConsumer::Result::kOk) {
-        client->DataReceived(resource_, buffer, available);
-        result = bytes_consumer_->EndRead(available);
+        client->DataReceived(resource_, buffer);
+        result = bytes_consumer_->EndRead(buffer.size());
       }
       if (result != BytesConsumer::Result::kOk) {
         return;
@@ -313,47 +316,6 @@ void RawResource::MatchPreload(const FetchParameters& params) {
       !params.GetResourceRequest().UseStreamOnResponse();
 }
 
-static bool ShouldIgnoreHeaderForCacheReuse(AtomicString header_name) {
-  // FIXME: This list of headers that don't affect cache policy almost certainly
-  // isn't complete.
-  DEFINE_STATIC_LOCAL(
-      HashSet<AtomicString>, headers,
-      ({"Cache-Control", "If-Modified-Since", "If-None-Match", "Origin",
-        "Pragma", "Purpose", "Referer", "User-Agent"}));
-  return headers.Contains(header_name);
-}
-
-Resource::MatchStatus RawResource::CanReuse(
-    const FetchParameters& new_fetch_parameters) const {
-  const ResourceRequest& new_request =
-      new_fetch_parameters.GetResourceRequest();
-  // Ensure most headers match the existing headers before continuing. Note that
-  // the list of ignored headers includes some headers explicitly related to
-  // caching. A more detailed check of caching policy will be performed later,
-  // this is simply a list of headers that we might permit to be different and
-  // still reuse the existing Resource.
-  const HTTPHeaderMap& new_headers = new_request.HttpHeaderFields();
-  const HTTPHeaderMap& old_headers = GetResourceRequest().HttpHeaderFields();
-
-  for (const auto& header : new_headers) {
-    AtomicString header_name = header.key;
-    if (!ShouldIgnoreHeaderForCacheReuse(header_name) &&
-        header.value != old_headers.Get(header_name)) {
-      return MatchStatus::kRequestHeadersDoNotMatch;
-    }
-  }
-
-  for (const auto& header : old_headers) {
-    AtomicString header_name = header.key;
-    if (!ShouldIgnoreHeaderForCacheReuse(header_name) &&
-        header.value != new_headers.Get(header_name)) {
-      return MatchStatus::kRequestHeadersDoNotMatch;
-    }
-  }
-
-  return Resource::CanReuse(new_fetch_parameters);
-}
-
 void RawResourceClient::DidDownloadToBlob(Resource*,
                                           scoped_refptr<BlobDataHandle>) {}
 
@@ -384,7 +346,8 @@ NOINLINE void RawResourceClientStateChecker::DataSent() {
 }
 
 NOINLINE void RawResourceClientStateChecker::ResponseReceived() {
-  SECURITY_CHECK(state_ == kStarted);
+  // TODO(crbug.com/1431421): remove |state_| dump when the cause is clarified.
+  SECURITY_CHECK(state_ == kStarted) << " state_ was " << state_;
   state_ = kResponseReceived;
 }
 

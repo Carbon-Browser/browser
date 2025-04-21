@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/tracing/arc_system_model.h"
 
-#include <stdio.h>
-
+#include <cstdio>
+#include <optional>
 #include <set>
 
 #include "base/strings/stringprintf.h"
@@ -22,41 +22,43 @@ constexpr char kKeyThreads[] = "threads";
 
 bool LoadThreads(const base::Value* value,
                  ArcSystemModel::ThreadMap* out_threads) {
-  if (!value || !value->is_dict())
+  if (!value || !value->is_dict()) {
     return false;
+  }
 
-  for (const auto it : value->DictItems()) {
+  for (const auto it : value->GetDict()) {
     int tid;
-    if (sscanf(it.first.c_str(), "%d", &tid) != 1)
+    if (sscanf(it.first.c_str(), "%d", &tid) != 1) {
       return false;
+    }
 
-    if (!it.second.is_dict())
+    if (!it.second.is_dict()) {
       return false;
+    }
 
-    const base::Value* name = it.second.FindKey(kKeyName);
-    if (!name || !name->is_string())
+    const std::string* name = it.second.GetDict().FindString(kKeyName);
+    if (!name) {
       return false;
-    const base::Value* pid = it.second.FindKey(kKeyPid);
-    if (!pid || !pid->is_int())
+    }
+    const std::optional<int> pid = it.second.GetDict().FindInt(kKeyPid);
+    if (!pid) {
       return false;
+    }
 
-    (*out_threads)[tid] =
-        ArcSystemModel::ThreadInfo(pid->GetInt(), name->GetString());
+    (*out_threads)[tid] = ArcSystemModel::ThreadInfo(pid.value(), *name);
   }
 
   return true;
 }
 
-base::DictionaryValue SerializeThreads(
-    const ArcSystemModel::ThreadMap& threads) {
-  base::DictionaryValue result;
+base::Value::Dict SerializeThreads(const ArcSystemModel::ThreadMap& threads) {
+  base::Value::Dict result;
 
   for (auto& thread_info : threads) {
-    base::DictionaryValue entry;
-    entry.SetKey(kKeyPid, base::Value(thread_info.second.pid));
-    entry.SetKey(kKeyName, base::Value(thread_info.second.name));
-    result.SetKey(base::StringPrintf("%d", thread_info.first),
-                  std::move(entry));
+    base::Value::Dict entry;
+    entry.Set(kKeyPid, base::Value(thread_info.second.pid));
+    entry.Set(kKeyName, base::Value(thread_info.second.name));
+    result.Set(base::StringPrintf("%d", thread_info.first), std::move(entry));
   }
 
   return result;
@@ -93,13 +95,15 @@ void ArcSystemModel::Trim(uint64_t trim_timestamp) {
       trim_timestamp, ArcCpuEvent::Type::kActive /* does not matter */,
       0 /* tid, does not matter */);
   for (auto& cpu_events : all_cpu_events_) {
-    if (cpu_events.empty())
+    if (cpu_events.empty()) {
       continue;
+    }
     auto cpu_cut_pos =
         std::lower_bound(cpu_events.begin(), cpu_events.end(), cpu_trim_point,
                          CompareByTimestampPred<ArcCpuEvent>);
-    if (cpu_cut_pos == cpu_events.begin())
+    if (cpu_cut_pos == cpu_events.begin()) {
       continue;  // Nothing to trim.
+    }
     // Keep the last message for this CPU, that would be clamped to
     // |trim_timestamp|.
     if (cpu_cut_pos == cpu_events.end() ||
@@ -138,11 +142,13 @@ void ArcSystemModel::Trim(uint64_t trim_timestamp) {
 
 void ArcSystemModel::CloseRangeForValueEvents(uint64_t max_timestamp) {
   std::map<ArcValueEvent::Type, std::pair<uint64_t, int>> last_timestamps;
-  for (const auto& it : memory_events_)
+  for (const auto& it : memory_events_) {
     last_timestamps[it.type] = {it.timestamp, it.value};
+  }
   for (const auto& it : last_timestamps) {
-    if (it.second.first < max_timestamp)
+    if (it.second.first < max_timestamp) {
       memory_events_.emplace_back(max_timestamp, it.first, it.second.second);
+    }
   }
 }
 
@@ -152,26 +158,30 @@ void ArcSystemModel::CopyFrom(const ArcSystemModel& other) {
   memory_events_ = other.memory_events_;
 }
 
-base::DictionaryValue ArcSystemModel::Serialize() const {
-  base::DictionaryValue result;
-  result.SetKey(kKeyThreads, SerializeThreads(thread_map_));
-  result.SetKey(kKeyCpu, SerializeAllCpuEvents(all_cpu_events_));
-  result.SetKey(kKeyMemory, SerializeValueEvents(memory_events_));
+base::Value::Dict ArcSystemModel::Serialize() const {
+  base::Value::Dict result;
+  result.Set(kKeyThreads, SerializeThreads(thread_map_));
+  result.Set(kKeyCpu, SerializeAllCpuEvents(all_cpu_events_));
+  result.Set(kKeyMemory, SerializeValueEvents(memory_events_));
   return result;
 }
 
 bool ArcSystemModel::Load(const base::Value* root) {
-  if (!root || !root->is_dict())
+  if (!root || !root->is_dict()) {
     return false;
+  }
 
-  if (!LoadThreads(root->FindKey(kKeyThreads), &thread_map_))
+  if (!LoadThreads(root->GetDict().Find(kKeyThreads), &thread_map_)) {
     return false;
+  }
 
-  if (!LoadAllCpuEvents(root->FindKey(kKeyCpu), &all_cpu_events_))
+  if (!LoadAllCpuEvents(root->GetDict().Find(kKeyCpu), &all_cpu_events_)) {
     return false;
+  }
 
-  if (!LoadValueEvents(root->FindKey(kKeyMemory), &memory_events_))
+  if (!LoadValueEvents(root->GetDict().Find(kKeyMemory), &memory_events_)) {
     return false;
+  }
 
   return true;
 }

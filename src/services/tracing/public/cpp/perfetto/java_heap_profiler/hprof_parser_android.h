@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define SERVICES_TRACING_PUBLIC_CPP_PERFETTO_JAVA_HEAP_PROFILER_HPROF_PARSER_ANDROID_H_
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "services/tracing/public/cpp/perfetto/java_heap_profiler/hprof_buffer_android.h"
 #include "services/tracing/public/cpp/perfetto/java_heap_profiler/hprof_instances_android.h"
 #include "third_party/perfetto/protos/perfetto/trace/profiling/heap_graph.pbzero.h"
@@ -18,7 +18,8 @@
 namespace tracing {
 
 using ObjectId = uint64_t;
-using RootType = ::perfetto::protos::pbzero::HeapGraphRoot_Type;
+using RootType = ::perfetto::protos::pbzero::HeapGraphRoot::Type;
+using HeapGraphRoot = ::perfetto::protos::pbzero::HeapGraphRoot;
 const uint64_t kInvalidObjectId = std::numeric_limits<uint64_t>::max();
 
 // This class takes in a temporary file_path where Java API endpoint
@@ -182,7 +183,7 @@ class COMPONENT_EXPORT(TRACING_CPP) HprofParser {
   // Returns true after setting the position of |hprof_buffer_| to point to the
   // |field_name| in class.
   [[nodiscard]] bool SeekToFieldPosition(ClassInstance* instance,
-                                         base::StringPiece field_name);
+                                         std::string_view field_name);
 
   std::unordered_map<ObjectId, std::unique_ptr<StringReference>> strings_;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +44,9 @@ class DevToolsPageHandler : public ManifestHandler {
   ~DevToolsPageHandler() override;
 
   bool Parse(Extension* extension, std::u16string* error) override;
+  bool Validate(const Extension* extension,
+                std::string* error,
+                std::vector<InstallWarning>* warnings) const override;
 
  private:
   base::span<const char* const> Keys() const override;

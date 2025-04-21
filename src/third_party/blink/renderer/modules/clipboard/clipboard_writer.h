@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_CLIPBOARD_CLIPBOARD_WRITER_H_
 
 #include "base/sequence_checker.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
-#include "third_party/blink/renderer/core/fileapi/file_reader_loader_client.h"
+#include "third_party/blink/renderer/core/fileapi/file_reader_client.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard_promise.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
@@ -18,8 +19,8 @@ namespace blink {
 class FileReaderLoader;
 class SystemClipboard;
 
-// Interface for writing an individual Clipboard API format as a Blob to the
-// System Clipboard, safely and asynchronously.
+// Interface for writing an individual Clipboard API format as a Blob or
+// String to the System Clipboard, safely and asynchronously.
 //
 // ClipboardWriter takes as input a ClipboardPromise, which manages writing
 // multiple formats and passes in unsanitized clipboard payloads.
@@ -51,35 +52,23 @@ class SystemClipboard;
 // SelfKeepAlive, and keeps itself alive afterwards during cross-thread
 // operations by using WrapCrossThreadPersistent.
 class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
-                        public FileReaderLoaderClient {
+                        public FileReaderAccumulator {
  public:
-  // For writing sanitized MIME types.
-  // IsValidType() must return true on types passed into `mime_type`.
   static ClipboardWriter* Create(SystemClipboard* system_clipboard,
                                  const String& mime_type,
                                  ClipboardPromise* promise);
 
   ~ClipboardWriter() override;
 
-  // Returns whether ClipboardWriter has implemented support for this type.
-  //
-  // IsValidType() is expected to be called before Create(). If it returns false
-  // for a `mime_type`, Create() must not be called with that `mime_type`.
-  //
-  // IsValidType() is used for both ClipboardWriter and ClipboardReader, as read
-  // and write currently support the same types. If this changes in the future,
-  // please create separate IsValidType functions.
-  static bool IsValidType(const String& mime_type);
-  // Begins the sequence of writing the Blob to the system clipbaord.
-  void WriteToSystem(Blob* blob);
+  // Begins the sequence of writing the ClipboardItemData to the system
+  // clipboard.
+  void WriteToSystem(V8UnionBlobOrString* clipboard_item_data);
 
-  // FileReaderLoaderClient.
-  void DidStartLoading() override;
-  void DidReceiveData() override;
-  void DidFinishLoading() override;
+  // FileReaderClient.
+  void DidFinishLoading(FileReaderData) override;
   void DidFail(FileErrorCode) override;
 
-  void Trace(Visitor*) const;
+  void Trace(Visitor*) const override;
 
  protected:
   ClipboardWriter(SystemClipboard* system_clipboard, ClipboardPromise* promise);
@@ -94,7 +83,7 @@ class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
   // be valid by the time it's used.
   SystemClipboard* system_clipboard() {
     DCHECK(promise_->GetLocalFrame());
-    return system_clipboard_;
+    return system_clipboard_.Get();
   }
 
   // This ClipboardPromise owns this ClipboardWriter. Subclasses use `promise_`
@@ -111,10 +100,9 @@ class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
   // TaskRunner for reading files.
   const scoped_refptr<base::SingleThreadTaskRunner> file_reading_task_runner_;
   // This FileReaderLoader will load the Blob.
-  std::unique_ptr<FileReaderLoader> file_reader_;
+  Member<FileReaderLoader> file_reader_;
   // Access to the global sanitized system clipboard.
   Member<SystemClipboard> system_clipboard_;
-
   // Oilpan: ClipboardWriter must remain alive until Member<T>::Clear() is
   // called, to keep the FileReaderLoader alive and avoid unexpected UaPs.
   SelfKeepAlive<ClipboardWriter> self_keep_alive_{this};

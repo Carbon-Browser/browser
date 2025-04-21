@@ -1,17 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/thread_pool/test_task_factory.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
@@ -43,15 +43,17 @@ bool TestTaskFactory::PostTask(PostNestedTask post_nested_task,
 
 void TestTaskFactory::WaitForAllTasksToRun() const {
   AutoLock auto_lock(lock_);
-  while (ran_tasks_.size() < num_posted_tasks_)
+  while (ran_tasks_.size() < num_posted_tasks_) {
     cv_.Wait();
+  }
 }
 
 void TestTaskFactory::RunTaskCallback(size_t task_index,
                                       PostNestedTask post_nested_task,
                                       OnceClosure after_task_closure) {
-  if (post_nested_task == PostNestedTask::YES)
+  if (post_nested_task == PostNestedTask::YES) {
     PostTask(PostNestedTask::NO, OnceClosure());
+  }
 
   if (execution_mode_ == TaskSourceExecutionMode::kSingleThread ||
       execution_mode_ == TaskSourceExecutionMode::kSequenced) {
@@ -59,25 +61,27 @@ void TestTaskFactory::RunTaskCallback(size_t task_index,
                     ->RunsTasksInCurrentSequence());
   }
 
-  // Verify TaskRunnerHandles are set as expected in the task's scope.
+  // Verify task runner CurrentDefaultHandles are set as expected in the task's
+  // scope.
   switch (execution_mode_) {
     case TaskSourceExecutionMode::kJob:
     case TaskSourceExecutionMode::kParallel:
-      EXPECT_FALSE(ThreadTaskRunnerHandle::IsSet());
-      EXPECT_FALSE(SequencedTaskRunnerHandle::IsSet());
+      EXPECT_FALSE(SingleThreadTaskRunner::HasCurrentDefault());
+      EXPECT_FALSE(SequencedTaskRunner::HasCurrentDefault());
       break;
     case TaskSourceExecutionMode::kSequenced:
-      EXPECT_FALSE(ThreadTaskRunnerHandle::IsSet());
-      EXPECT_TRUE(SequencedTaskRunnerHandle::IsSet());
-      EXPECT_EQ(task_runner_, SequencedTaskRunnerHandle::Get());
+      EXPECT_FALSE(SingleThreadTaskRunner::HasCurrentDefault());
+      EXPECT_TRUE(SequencedTaskRunner::HasCurrentDefault());
+      EXPECT_EQ(task_runner_, SequencedTaskRunner::GetCurrentDefault());
       break;
     case TaskSourceExecutionMode::kSingleThread:
-      // SequencedTaskRunnerHandle inherits from ThreadTaskRunnerHandle so
-      // both are expected to be "set" in the kSingleThread case.
-      EXPECT_TRUE(ThreadTaskRunnerHandle::IsSet());
-      EXPECT_TRUE(SequencedTaskRunnerHandle::IsSet());
-      EXPECT_EQ(task_runner_, ThreadTaskRunnerHandle::Get());
-      EXPECT_EQ(task_runner_, SequencedTaskRunnerHandle::Get());
+      // SequencedTaskRunner::CurrentDefaultHandle inherits from
+      // SingleThreadTaskRunner::CurrentDefaultHandle so both are expected to be
+      // "set" in the kSingleThread case.
+      EXPECT_TRUE(SingleThreadTaskRunner::HasCurrentDefault());
+      EXPECT_TRUE(SequencedTaskRunner::HasCurrentDefault());
+      EXPECT_EQ(task_runner_, SingleThreadTaskRunner::GetCurrentDefault());
+      EXPECT_EQ(task_runner_, SequencedTaskRunner::GetCurrentDefault());
       break;
   }
 
@@ -92,18 +96,21 @@ void TestTaskFactory::RunTaskCallback(size_t task_index,
       ADD_FAILURE() << "A task didn't run in the expected order.";
     }
 
-    if (execution_mode_ == TaskSourceExecutionMode::kSingleThread)
+    if (execution_mode_ == TaskSourceExecutionMode::kSingleThread) {
       EXPECT_TRUE(thread_checker_.CalledOnValidThread());
+    }
 
-    if (ran_tasks_.find(task_index) != ran_tasks_.end())
+    if (ran_tasks_.find(task_index) != ran_tasks_.end()) {
       ADD_FAILURE() << "A task ran more than once.";
+    }
     ran_tasks_.insert(task_index);
 
     cv_.Signal();
   }
 
-  if (!after_task_closure.is_null())
+  if (!after_task_closure.is_null()) {
     std::move(after_task_closure).Run();
+  }
 }
 
 }  // namespace test

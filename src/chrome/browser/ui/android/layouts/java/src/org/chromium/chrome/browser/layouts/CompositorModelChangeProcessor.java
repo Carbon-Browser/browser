@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor.ViewBinder;
 import org.chromium.ui.modelutil.PropertyObservable;
 
+import java.util.Set;
+
 /**
  * A specialized ModelChangeProcessor for compositor. When a new frame is generated, it will bind
  * the whole Model to the View. If everything is idle, it requests another frame on Property
@@ -28,16 +30,13 @@ public class CompositorModelChangeProcessor<V extends SceneLayer> {
      * request another frame.
      */
     public static class FrameRequestSupplier extends ObservableSupplierImpl<Long> {
-        @NonNull
-        private final Runnable mRenderRequestRunnable;
+        @NonNull private final Runnable mRenderRequestRunnable;
 
         public FrameRequestSupplier(@NonNull Runnable renderRequestRunnable) {
             mRenderRequestRunnable = renderRequestRunnable;
         }
 
-        /**
-         * Request to generate a new frame.
-         */
+        /** Request to generate a new frame. */
         void request() {
             mRenderRequestRunnable.run();
         }
@@ -49,23 +48,32 @@ public class CompositorModelChangeProcessor<V extends SceneLayer> {
     private final FrameRequestSupplier mFrameSupplier;
     private final PropertyObservable.PropertyObserver<PropertyKey> mPropertyObserver;
     private final Callback<Long> mNewFrameCallback;
+    private final Set<PropertyKey> mExclusions;
 
     /**
      * Construct a new CompositorModelChangeProcessor.
+     *
      * @param model The model containing the data to be bound to the view.
      * @param view The view which the model will be bound to.
      * @param viewBinder This is used to bind the model to the view.
      * @param frameSupplier A supplier for the new generated frame.
+     * @param exclusions When the value of any of these PropertyKeys change, a new frame will not be
+     *     requested. The model will still be bound to the view.
      */
-    private CompositorModelChangeProcessor(PropertyModel model, V view,
+    private CompositorModelChangeProcessor(
+            PropertyModel model,
+            V view,
             ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
-            FrameRequestSupplier frameSupplier, boolean performInitialBind) {
+            FrameRequestSupplier frameSupplier,
+            boolean performInitialBind,
+            Set<PropertyKey> exclusions) {
         mModel = model;
         mView = view;
         mViewBinder = viewBinder;
         mFrameSupplier = frameSupplier;
         mNewFrameCallback = this::onNewFrame;
         mFrameSupplier.addObserver(mNewFrameCallback);
+        mExclusions = exclusions;
 
         if (performInitialBind) {
             onPropertyChanged(model, null);
@@ -76,8 +84,32 @@ public class CompositorModelChangeProcessor<V extends SceneLayer> {
     }
 
     /**
-     * Creates a CompositorModelChangeProcessor observing the given {@code model} and
-     * {@code frameSupplier}.
+     * Creates a CompositorModelChangeProcessor observing the given {@code model} and {@code
+     * frameSupplier}.
+     *
+     * @param model The model containing the data to be bound to the view.
+     * @param view The view which the model will be bound to.
+     * @param viewBinder This is used to bind the model to the view.
+     * @param frameSupplier A supplier for the new generated frame.
+     * @param performInitialBind Whether the model should be immediately bound to the view.
+     * @param exclusions When the value of any of these PropertyKeys change, a new frame will not be
+     *     requested. The model will still be bound to the view.
+     */
+    public static <V extends SceneLayer> CompositorModelChangeProcessor<V> create(
+            PropertyModel model,
+            V view,
+            ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
+            FrameRequestSupplier frameSupplier,
+            boolean performInitialBind,
+            Set<PropertyKey> exclusions) {
+        return new CompositorModelChangeProcessor(
+                model, view, viewBinder, frameSupplier, performInitialBind, exclusions);
+    }
+
+    /**
+     * Creates a CompositorModelChangeProcessor observing the given {@code model} and {@code
+     * frameSupplier}.
+     *
      * @param model The model containing the data to be bound to the view.
      * @param view The view which the model will be bound to.
      * @param viewBinder This is used to bind the model to the view.
@@ -85,30 +117,32 @@ public class CompositorModelChangeProcessor<V extends SceneLayer> {
      * @param performInitialBind Whether the model should be immediately bound to the view.
      */
     public static <V extends SceneLayer> CompositorModelChangeProcessor<V> create(
-            PropertyModel model, V view, ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
-            FrameRequestSupplier frameSupplier, boolean performInitialBind) {
-        return new CompositorModelChangeProcessor(
-                model, view, viewBinder, frameSupplier, performInitialBind);
+            PropertyModel model,
+            V view,
+            ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
+            FrameRequestSupplier frameSupplier,
+            boolean performInitialBind) {
+        return create(model, view, viewBinder, frameSupplier, performInitialBind, null);
     }
 
     /**
-     * Creates a CompositorModelChangeProcessor observing the given {@code model} and
-     * {@code frameSupplier}. The model will be bound to the view initially, and request a new
-     * frame.
+     * Creates a CompositorModelChangeProcessor observing the given {@code model} and {@code
+     * frameSupplier}. The model will be bound to the view initially, and request a new frame.
+     *
      * @param model The model containing the data to be bound to the view.
      * @param view The view which the model will be bound to.
      * @param viewBinder This is used to bind the model to the view.
      * @param frameSupplier A supplier for the new generated frame.
      */
     public static <V extends SceneLayer> CompositorModelChangeProcessor<V> create(
-            PropertyModel model, V view, ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
+            PropertyModel model,
+            V view,
+            ViewBinder<PropertyModel, V, PropertyKey> viewBinder,
             FrameRequestSupplier frameSupplier) {
         return create(model, view, viewBinder, frameSupplier, true);
     }
 
-    /**
-     * Clean up members.
-     */
+    /** Clean up members. */
     public void destroy() {
         mModel.removeObserver(mPropertyObserver);
         mFrameSupplier.removeObserver(mNewFrameCallback);
@@ -124,6 +158,9 @@ public class CompositorModelChangeProcessor<V extends SceneLayer> {
 
     private void onPropertyChanged(PropertyObservable<PropertyKey> model, PropertyKey propertyKey) {
         assert model == mModel;
+        if (mExclusions != null && mExclusions.contains(propertyKey)) {
+            return;
+        }
 
         mFrameSupplier.request();
     }

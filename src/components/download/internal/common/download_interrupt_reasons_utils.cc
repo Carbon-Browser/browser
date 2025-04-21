@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -119,8 +119,6 @@ DownloadInterruptReason ConvertNetErrorToInterruptReason(
   }
 
   NOTREACHED();
-
-  return DOWNLOAD_INTERRUPT_REASON_NONE;
 }
 
 DownloadInterruptReason ConvertMojoNetworkRequestStatusToInterruptReason(
@@ -148,9 +146,7 @@ DownloadInterruptReason ConvertMojoNetworkRequestStatusToInterruptReason(
       return DOWNLOAD_INTERRUPT_REASON_NETWORK_FAILED;
     default:
       NOTREACHED();
-      break;
   }
-  return DOWNLOAD_INTERRUPT_REASON_NONE;
 }
 
 }  // namespace download

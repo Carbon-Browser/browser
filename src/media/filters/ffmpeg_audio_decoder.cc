@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/filters/ffmpeg_audio_decoder.h"
 
@@ -9,16 +14,18 @@
 #include <functional>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/audio_discard_helper.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/limits.h"
+#include "media/base/media_switches.h"
 #include "media/base/timestamp_constants.h"
 #include "media/ffmpeg/ffmpeg_common.h"
 #include "media/ffmpeg/ffmpeg_decoding_loop.h"
@@ -55,7 +62,8 @@ FFmpegAudioDecoder::FFmpegAudioDecoder(
       state_(DecoderState::kUninitialized),
       av_sample_format_(0),
       media_log_(media_log),
-      pool_(new AudioBufferMemoryPool()) {
+      pool_(base::MakeRefCounted<AudioBufferMemoryPool>(
+          kFFmpegBufferAddressAlignment)) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -78,7 +86,7 @@ void FFmpegAudioDecoder::Initialize(const AudioDecoderConfig& config,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(config.IsValidConfig());
 
-  InitCB bound_init_cb = BindToCurrentLoop(std::move(init_cb));
+  InitCB bound_init_cb = base::BindPostTaskToCurrentDefault(std::move(init_cb));
 
   if (config.is_encrypted()) {
     std::move(bound_init_cb)
@@ -105,7 +113,7 @@ void FFmpegAudioDecoder::Initialize(const AudioDecoderConfig& config,
 
   // Success!
   config_ = config;
-  output_cb_ = BindToCurrentLoop(output_cb);
+  output_cb_ = base::BindPostTaskToCurrentDefault(output_cb);
   state_ = DecoderState::kNormal;
   std::move(bound_init_cb).Run(DecoderStatus::Codes::kOk);
 }
@@ -115,7 +123,8 @@ void FFmpegAudioDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(decode_cb);
   CHECK_NE(state_, DecoderState::kUninitialized);
-  DecodeCB decode_cb_bound = BindToCurrentLoop(std::move(decode_cb));
+  DecodeCB decode_cb_bound =
+      base::BindPostTaskToCurrentDefault(std::move(decode_cb));
 
   if (state_ == DecoderState::kError) {
     std::move(decode_cb_bound).Run(DecoderStatus::Codes::kFailed);
@@ -155,6 +164,12 @@ void FFmpegAudioDecoder::DecodeBuffer(const DecoderBuffer& buffer,
     return;
   }
 
+  if (!buffer.end_of_stream() && buffer.is_encrypted()) {
+    DLOG(ERROR) << "Encrypted buffer not supported";
+    std::move(decode_cb).Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
+    return;
+  }
+
   if (!FFmpegDecode(buffer)) {
     state_ = DecoderState::kError;
     std::move(decode_cb).Run(DecoderStatus::Codes::kFailed);
@@ -169,12 +184,14 @@ void FFmpegAudioDecoder::DecodeBuffer(const DecoderBuffer& buffer,
 
 bool FFmpegAudioDecoder::FFmpegDecode(const DecoderBuffer& buffer) {
   AVPacket* packet = av_packet_alloc();
-  if (buffer.end_of_stream()) {
-    packet->data = NULL;
+  if (buffer.end_of_stream() || buffer.size() == 0) {
+    packet->data = nullptr;
     packet->size = 0;
   } else {
     packet->data = const_cast<uint8_t*>(buffer.data());
-    packet->size = buffer.data_size();
+    packet->size = buffer.size();
+    packet->pts =
+        ConvertToTimeBase(codec_context_->time_base, buffer.timestamp());
 
     DCHECK(packet->data);
     DCHECK_GT(packet->size, 0);
@@ -312,7 +329,7 @@ bool FFmpegAudioDecoder::ConfigureDecoder(const AudioDecoderConfig& config) {
   ReleaseFFmpegResources();
 
   // Initialize AVCodecContext structure.
-  codec_context_.reset(avcodec_alloc_context3(NULL));
+  codec_context_.reset(avcodec_alloc_context3(nullptr));
   AudioDecoderConfigToAVCodecContext(config, codec_context_.get());
 
   codec_context_->opaque = this;
@@ -321,7 +338,7 @@ bool FFmpegAudioDecoder::ConfigureDecoder(const AudioDecoderConfig& config) {
   if (!config.should_discard_decoder_delay())
     codec_context_->flags2 |= AV_CODEC_FLAG2_SKIP_MANUAL;
 
-  AVDictionary* codec_options = NULL;
+  AVDictionary* codec_options = nullptr;
   if (config.codec() == AudioCodec::kOpus) {
     codec_context_->request_sample_fmt = AV_SAMPLE_FMT_FLT;
 
@@ -382,8 +399,7 @@ int FFmpegAudioDecoder::GetAudioBuffer(struct AVCodecContext* s,
 
   // Since this routine is called by FFmpeg when a buffer is required for
   // audio data, use the values supplied by FFmpeg (ignoring the current
-  // settings). FFmpegDecode() gets to determine if the buffer is useable or
-  // not.
+  // settings). FFmpegDecode() gets to determine if the buffer is usable or not.
   AVSampleFormat format = static_cast<AVSampleFormat>(frame->format);
   SampleFormat sample_format =
       AVSampleFormatToSampleFormat(format, s->codec_id);

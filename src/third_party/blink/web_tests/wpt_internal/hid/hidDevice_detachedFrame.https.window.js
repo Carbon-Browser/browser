@@ -2,7 +2,7 @@
 // META: script=/resources/testdriver.js
 // META: script=/resources/testdriver-vendor.js
 // META: script=/webhid/resources/common.js
-// META: script=/webhid/resources/automation.js
+// META: script=resources/automation.js
 'use strict';
 
 const kTestVendorId = 0x1234;
@@ -38,26 +38,24 @@ async function getDetachedHidDevice() {
 
 hid_test(async (t) => {
   const device = await getDetachedHidDevice();
-  let error = new Error();
   try {
     await device.open();
+    assert_unreached();
   } catch (e) {
     // Cannot use promise_rejects_dom() because |e| is thrown from a different
     // global.
-    error = e;
+    assert_equals(e.name, 'NotSupportedError');
   }
-  assert_equals(error.name, 'NotSupportedError');
 }, 'open() rejects in a detached context');
 
 hid_test(async (t) => {
   const device = await getDetachedHidDevice();
-  let error = new Error();
   try {
     await device.forget();
+    assert_unreached();
   } catch (e) {
     // Cannot use promise_rejects_dom() because |e| is thrown from a different
     // global.
-    error = e;
+    assert_equals(e.name, 'NotSupportedError');
   }
-  assert_equals(error.name, 'NotSupportedError');
 }, 'forget() rejects in a detached context');

@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/crash/core/app/crash_export_thunks.h"
 
@@ -8,9 +13,9 @@
 #include <type_traits>
 
 #include "base/process/process.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "components/crash/core/app/crash_reporter_client.h"
 #include "components/crash/core/app/crashpad.h"
 #include "components/crash/core/app/dump_hung_process_with_ptype.h"
 #include "third_party/crashpad/crashpad/client/crashpad_client.h"
@@ -53,6 +58,14 @@ int CrashForException_ExportThunk(EXCEPTION_POINTERS* info) {
 // not enforced to avoid blocking startup code on synchronizing them.
 void SetUploadConsent_ExportThunk(bool consent) {
   crash_reporter::SetUploadConsent(consent);
+}
+
+bool GetUploadConsent_ExportThunk() {
+  return crash_reporter::GetCrashReporterClient()->GetCollectStatsConsent();
+}
+
+void GetProductInfo_ExportThunk(crash_reporter::ProductInfo* product_info) {
+  return crash_reporter::GetCrashReporterClient()->GetProductInfo(product_info);
 }
 
 HANDLE InjectDumpForHungInput_ExportThunk(HANDLE process) {

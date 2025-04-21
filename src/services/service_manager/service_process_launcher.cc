@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 
 #include "base/base_paths.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/field_trial.h"
 #include "base/path_service.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
@@ -22,13 +23,10 @@
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
-#include "mojo/public/cpp/system/core.h"
 #include "mojo/public/cpp/system/invitation.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/sandbox_type.h"
@@ -37,14 +35,18 @@
 #include "services/service_manager/public/mojom/service.mojom.h"
 #include "services/service_manager/switches.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "base/apple/mach_port_rendezvous.h"
+#endif
+
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "sandbox/linux/services/namespace_sandbox.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-
 #include <windows.h>
+
+#include "base/win/windows_version.h"
 #endif
 
 namespace service_manager {
@@ -127,6 +129,15 @@ mojo::PendingRemote<mojom::Service> ServiceProcessLauncher::Start(
                                           disabled_features);
   }
 
+  // Use --force-field-trials to make the child process to create field trials.
+  std::string field_trial_states;
+  base::FieldTrialList::AllStatesToString(&field_trial_states);
+  if (!field_trial_states.empty()) {
+    DCHECK(!child_command_line->HasSwitch(::switches::kForceFieldTrials));
+    child_command_line->AppendSwitchASCII(::switches::kForceFieldTrials,
+                                          field_trial_states);
+  }
+
   child_command_line->AppendSwitchASCII(switches::kServiceName, target.name());
 #ifndef NDEBUG
   child_command_line->AppendSwitchASCII("g",
@@ -153,8 +164,8 @@ mojo::PendingRemote<mojom::Service> ServiceProcessLauncher::Start(
   }
 
   state_ = base::WrapRefCounted(new ProcessState);
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&ProcessState::LaunchInBackground, state_, target,
                      sandbox_type, std::move(child_command_line),
                      std::move(handle_passing_info), std::move(channel),
@@ -251,7 +262,7 @@ base::ProcessId ServiceProcessLauncher::ProcessState::LaunchInBackground(
     return base::kNullProcessId;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Always log instead of DVLOG because knowing which pid maps to which
   // service is vital for interpreting crashes after-the-fact and Chrome OS
   // devices generally run release builds, even in development.

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,7 +24,8 @@
 #include "components/translate/core/common/translate_errors.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "ui/base/interaction/element_identifier.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -48,6 +49,8 @@ class View;
 class TranslateBubbleView : public LocationBarBubbleDelegateView,
                             public ui::SimpleMenuModel::Delegate,
                             public views::TabbedPaneListener {
+  METADATA_HEADER(TranslateBubbleView, LocationBarBubbleDelegateView)
+
  public:
   // Item IDs for the option button's menu.
   enum OptionsMenuItem {
@@ -55,7 +58,8 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
     NEVER_TRANSLATE_LANGUAGE,
     NEVER_TRANSLATE_SITE,
     CHANGE_TARGET_LANGUAGE,
-    CHANGE_SOURCE_LANGUAGE
+    CHANGE_SOURCE_LANGUAGE,
+    OPEN_LANGUAGE_SETTINGS
   };
 
   // Element IDs for ui::ElementTracker.
@@ -71,10 +75,11 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kSourceLanguageCombobox);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kSourceLanguageDoneButton);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kErrorMessage);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kOpenLanguageSettings);
 
   TranslateBubbleView(views::View* anchor_view,
                       std::unique_ptr<TranslateBubbleModel> model,
-                      translate::TranslateErrors::Type error_type,
+                      translate::TranslateErrors error_type,
                       content::WebContents* web_contents,
                       base::OnceClosure on_closing);
 
@@ -94,7 +99,8 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   bool ShouldShowWindowTitle() const override;
   void WindowClosing() override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void OnWidgetClosing(views::Widget* widget) override;
 
   // ui::SimpleMenuModel::Delegate:
@@ -107,7 +113,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
 
   // Initialize the bubble in the correct view state when it is shown.
   void SetViewState(translate::TranslateStep step,
-                    translate::TranslateErrors::Type error_type);
+                    translate::TranslateErrors error_type);
 
   // LocationBarBubbleDelegateView:
   void CloseBubble() override;
@@ -242,7 +248,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   void SwitchTabForViewState(TranslateBubbleModel::ViewState view_state);
 
   // Switches to the error view.
-  void SwitchToErrorView(translate::TranslateErrors::Type error_type);
+  void SwitchToErrorView(translate::TranslateErrors error_type);
 
   // Updates the advanced view.
   void UpdateAdvancedView();
@@ -270,6 +276,9 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   // translation. Then close the bubble view.
   void RevertOrDeclineTranslation();
 
+  // Helper method to announce the passed-in text to the screenreader.
+  void AnnounceTextToScreenReader(const std::u16string& announcement_text);
+
   raw_ptr<views::View> translate_view_ = nullptr;
   raw_ptr<views::View> error_view_ = nullptr;
   raw_ptr<views::View> advanced_view_source_ = nullptr;
@@ -296,7 +305,9 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
 
   std::unique_ptr<TranslateBubbleModel> model_;
 
-  translate::TranslateErrors::Type error_type_;
+  translate::TranslateErrors error_type_;
+
+  base::WeakPtr<actions::ActionItem> translate_action_item_ = nullptr;
 
   // Whether the window is an incognito window.
   const bool is_in_incognito_window_;

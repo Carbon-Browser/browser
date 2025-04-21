@@ -37,7 +37,6 @@
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/audio/audio_processor.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -79,9 +78,8 @@ class PLATFORM_EXPORT AudioDSPKernelProcessor : public AudioProcessor {
   bool RequiresTailProcessing() const override;
 
  protected:
-  Vector<std::unique_ptr<AudioDSPKernel>> kernels_;
+  Vector<std::unique_ptr<AudioDSPKernel>> kernels_ GUARDED_BY(process_lock_);
   mutable base::Lock process_lock_;
-  bool has_just_reset_;
 };
 
 }  // namespace blink

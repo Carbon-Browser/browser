@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/android/cdm/media_drm_storage_factory.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/media/android/cdm/media_drm_origin_id_manager.h"
@@ -21,7 +22,6 @@
 #include "content/public/browser/render_frame_host.h"
 #include "media/base/android/media_drm_bridge.h"
 #include "media/base/media_switches.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -72,14 +72,11 @@ void ReportStatusToUmaAndNotifyCaller(OriginIdReadyCB callback,
 
 void CreateOriginIdWithMediaDrmOriginIdManager(Profile* profile,
                                                OriginIdReadyCB callback) {
-  // Only need to origin IDs if MediaDrm supports it.
-  DCHECK(media::MediaDrmBridge::IsPerOriginProvisioningSupported());
-
   auto* origin_id_manager =
       MediaDrmOriginIdManagerFactory::GetForProfile(profile);
   if (!origin_id_manager) {
     ReportResultToUma(GetOriginIdResult::kFailureWithNoFactory);
-    std::move(callback).Run(false, absl::nullopt);
+    std::move(callback).Run(false, std::nullopt);
     return;
   }
 
@@ -88,9 +85,6 @@ void CreateOriginIdWithMediaDrmOriginIdManager(Profile* profile,
 }
 
 void CreateOriginId(OriginIdReadyCB callback) {
-  // Only need to origin IDs if MediaDrm supports it.
-  DCHECK(media::MediaDrmBridge::IsPerOriginProvisioningSupported());
-
   auto origin_id = base::UnguessableToken::Create();
   DVLOG(2) << __func__ << ": origin_id = " << origin_id;
 
@@ -100,8 +94,6 @@ void CreateOriginId(OriginIdReadyCB callback) {
 
 void AllowEmptyOriginId(content::RenderFrameHost* render_frame_host,
                         base::OnceCallback<void(bool)> callback) {
-  DCHECK(media::MediaDrmBridge::IsPerOriginProvisioningSupported());
-
   if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
     // If per-application provisioning is supported by the device, use of the
     // empty origin ID won't work so don't allow it.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 namespace content {
 
 NavigationController::LoadURLParams::LoadURLParams(const GURL& url)
-    : url(url), is_renderer_initiated(false) {}
+    : url(url) {}
 
 NavigationController::LoadURLParams::LoadURLParams(
     NavigationController::LoadURLParams&&) = default;
@@ -24,6 +24,7 @@ NavigationController::LoadURLParams::LoadURLParams(const OpenURLParams& input)
       initiator_frame_token(input.initiator_frame_token),
       initiator_process_id(input.initiator_process_id),
       initiator_origin(input.initiator_origin),
+      initiator_base_url(input.initiator_base_url),
       source_site_instance(input.source_site_instance),
       load_type(input.post_data ? LOAD_TYPE_HTTP_POST : LOAD_TYPE_DEFAULT),
       transition_type(input.transition),
@@ -40,7 +41,8 @@ NavigationController::LoadURLParams::LoadURLParams(const OpenURLParams& input)
       href_translate(input.href_translate),
       reload_type(input.reload_type),
       impression(input.impression),
-      is_pdf(input.is_pdf) {
+      is_pdf(input.is_pdf),
+      has_rel_opener(input.has_rel_opener) {
 #if DCHECK_IS_ON()
   DCHECK(input.Valid());
 #endif
@@ -55,7 +57,7 @@ NavigationController::LoadURLParams::LoadURLParams(const OpenURLParams& input)
   // Implementation notes:
   //   The following LoadURLParams don't have an equivalent in OpenURLParams:
   //     base_url_for_data_url
-  //     virtual_url_for_data_url
+  //     virtual_url_for_special_cases
   //     data_url_as_string
   //
   //     can_load_local_resources
@@ -76,8 +78,7 @@ NavigationController::LoadURLParams::LoadURLParams(const OpenURLParams& input)
   //     triggering_event_info
 }
 
-NavigationController::LoadURLParams::~LoadURLParams() {
-}
+NavigationController::LoadURLParams::~LoadURLParams() = default;
 
 NavigationController::LoadURLParams&
 NavigationController::LoadURLParams::operator=(

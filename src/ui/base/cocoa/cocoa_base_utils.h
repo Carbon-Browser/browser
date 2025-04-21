@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,14 +27,6 @@ COMPONENT_EXPORT(UI_BASE)
 WindowOpenDisposition WindowOpenDispositionFromNSEventWithFlags(
     NSEvent* event,
     NSUInteger flags);
-
-// Converts a point from window coordinates to screen coordinates.
-COMPONENT_EXPORT(UI_BASE)
-NSPoint ConvertPointFromWindowToScreen(NSWindow* window, NSPoint point);
-
-// Converts a point from screen coordinates to window coordinates.
-COMPONENT_EXPORT(UI_BASE)
-NSPoint ConvertPointFromScreenToWindow(NSWindow* window, NSPoint point);
 
 }  // namespace ui
 

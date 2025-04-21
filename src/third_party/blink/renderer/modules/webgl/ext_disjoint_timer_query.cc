@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,13 +37,28 @@ void EXTDisjointTimerQuery::deleteQueryEXT(WebGLTimerQueryEXT* query) {
   WebGLExtensionScopedContext scoped(this);
   if (!query || scoped.IsLost())
     return;
-  query->DeleteObject(scoped.Context()->ContextGL());
 
-  if (query == current_elapsed_query_)
+  if (!query->Validate(nullptr, scoped.Context())) {
+    scoped.Context()->SynthesizeGLError(
+        GL_INVALID_OPERATION, "delete",
+        "object does not belong to this context");
+    return;
+  }
+
+  if (query->MarkedForDeletion()) {
+    // Specified to be a no-op.
+    return;
+  }
+
+  if (query == current_elapsed_query_) {
+    scoped.Context()->ContextGL()->EndQueryEXT(query->Target());
     current_elapsed_query_.Clear();
+  }
+
+  query->DeleteObject(scoped.Context()->ContextGL());
 }
 
-GLboolean EXTDisjointTimerQuery::isQueryEXT(WebGLTimerQueryEXT* query) {
+bool EXTDisjointTimerQuery::isQueryEXT(WebGLTimerQueryEXT* query) {
   WebGLExtensionScopedContext scoped(this);
   if (!query || scoped.IsLost() || query->MarkedForDeletion() ||
       !query->Validate(nullptr, scoped.Context())) {
@@ -128,8 +143,8 @@ void EXTDisjointTimerQuery::queryCounterEXT(WebGLTimerQueryEXT* query,
     return;
   }
 
-  // Timestamps are disabled in WebGL due to lack of driver support on multiple
-  // platforms, so we don't actually perform a GL call.
+  scoped.Context()->ContextGL()->QueryCounterEXT(query->Object(), target);
+
   query->SetTarget(target);
   query->ResetCachedResult();
 }

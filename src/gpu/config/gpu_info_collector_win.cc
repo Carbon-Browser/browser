@@ -1,43 +1,43 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/config/gpu_info_collector.h"
 
 // C system before C++ system.
-#include <stddef.h>
-#include <stdint.h>
-
-// This has to be included before windows.h.
-#include "third_party/re2/src/re2/re2.h"
-
-#include <windows.h>
-
+#include <DirectML.h>
 #include <d3d11.h>
 #include <d3d11_3.h>
-#include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <vulkan/vulkan.h>
 #include <wrl/client.h>
 
 #include "base/file_version_info_win.h"
+#include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/path_service.h"
 #include "base/scoped_native_library.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"
 #include "build/branding_buildflags.h"
 #include "gpu/config/gpu_util.h"
-#include "ui/gl/direct_composition_surface_win.h"
+#include "third_party/microsoft_dxheaders/src/include/directx/d3d12.h"
+#include "third_party/microsoft_dxheaders/src/include/directx/dxcore.h"
+#include "third_party/re2/src/re2/re2.h"
+#include "ui/gl/direct_composition_support.h"
 #include "ui/gl/gl_angle_util_win.h"
+#include "ui/gl/gl_display.h"
 #include "ui/gl/gl_surface_egl.h"
+#include "ui/gl/gl_utils.h"
 
 namespace gpu {
 
@@ -74,7 +74,6 @@ inline D3D12FeatureLevel ConvertToHistogramFeatureLevel(
       return D3D12FeatureLevel::kD3DFeatureLevel_11_1;
     default:
       NOTREACHED();
-      return D3D12FeatureLevel::kD3DFeatureLevelUnknown;
   }
 }
 
@@ -119,7 +118,6 @@ D3D12ShaderModel ConvertToHistogramShaderVersion(uint32_t version) {
 
     default:
       NOTREACHED();
-      return D3D12ShaderModel::kUnknownOrNoD3D12Devices;
   }
 }
 
@@ -161,20 +159,6 @@ bool GetActiveAdapterLuid(LUID* luid) {
 
 }  // namespace
 
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING) && defined(OFFICIAL_BUILD)
-// This function has a real implementation for official builds that can
-// be found in src/third_party/amd.
-bool GetAMDSwitchableInfo(bool* is_switchable,
-                          uint32_t* active_vendor_id,
-                          uint32_t* active_device_id);
-#else
-bool GetAMDSwitchableInfo(bool* is_switchable,
-                          uint32_t* active_vendor_id,
-                          uint32_t* active_device_id) {
-  return false;
-}
-#endif
-
 // This has to be called after a context is created, active GPU is identified,
 // and GPU driver bug workarounds are computed again. Otherwise the workaround
 // |disable_direct_composition| may not be correctly applied.
@@ -182,40 +166,141 @@ bool GetAMDSwitchableInfo(bool* is_switchable,
 // finalized because this function depends on GL is ANGLE's GLES or not.
 void CollectHardwareOverlayInfo(OverlayInfo* overlay_info) {
   if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE) {
-    overlay_info->direct_composition =
-        gl::DirectCompositionSurfaceWin::IsDirectCompositionSupported();
-    overlay_info->supports_overlays =
-        gl::DirectCompositionSurfaceWin::AreOverlaysSupported();
+    overlay_info->direct_composition = gl::DirectCompositionSupported();
+    overlay_info->supports_overlays = gl::DirectCompositionOverlaysSupported();
     overlay_info->nv12_overlay_support = FlagsToOverlaySupport(
         overlay_info->supports_overlays,
-        gl::DirectCompositionSurfaceWin::GetOverlaySupportFlags(
-            DXGI_FORMAT_NV12));
+        gl::GetDirectCompositionOverlaySupportFlags(DXGI_FORMAT_NV12));
     overlay_info->yuy2_overlay_support = FlagsToOverlaySupport(
         overlay_info->supports_overlays,
-        gl::DirectCompositionSurfaceWin::GetOverlaySupportFlags(
-            DXGI_FORMAT_YUY2));
-    overlay_info->bgra8_overlay_support = FlagsToOverlaySupport(
+        gl::GetDirectCompositionOverlaySupportFlags(DXGI_FORMAT_YUY2));
+    overlay_info->bgra8_overlay_support =
+        FlagsToOverlaySupport(overlay_info->supports_overlays,
+                              gl::GetDirectCompositionOverlaySupportFlags(
+                                  DXGI_FORMAT_B8G8R8A8_UNORM));
+    overlay_info->rgb10a2_overlay_support =
+        FlagsToOverlaySupport(overlay_info->supports_overlays,
+                              gl::GetDirectCompositionOverlaySupportFlags(
+                                  DXGI_FORMAT_R10G10B10A2_UNORM));
+    overlay_info->p010_overlay_support = FlagsToOverlaySupport(
         overlay_info->supports_overlays,
-        gl::DirectCompositionSurfaceWin::GetOverlaySupportFlags(
-            DXGI_FORMAT_B8G8R8A8_UNORM));
-    overlay_info->rgb10a2_overlay_support = FlagsToOverlaySupport(
-        overlay_info->supports_overlays,
-        gl::DirectCompositionSurfaceWin::GetOverlaySupportFlags(
-            DXGI_FORMAT_R10G10B10A2_UNORM));
+        gl::GetDirectCompositionOverlaySupportFlags(DXGI_FORMAT_P010));
+  }
+}
+
+std::string DriverVersionToString(LARGE_INTEGER driver_version) {
+  return base::StringPrintf("%d.%d.%d.%d", HIWORD(driver_version.HighPart),
+                            LOWORD(driver_version.HighPart),
+                            HIWORD(driver_version.LowPart),
+                            LOWORD(driver_version.LowPart));
+}
+
+void CollectNPUInformation(GPUInfo* gpu_info) {
+  // Enumerate all dxcore adapters to retrieve the NPUs.
+  base::ScopedNativeLibrary dxcore_library(
+      base::LoadSystemLibrary(L"DXCore.dll"));
+  if (!dxcore_library.is_valid()) {
+    return;
+  }
+  using DXCoreCreateAdapterFactoryProc =
+      decltype(static_cast<STDMETHODIMP (*)(REFIID, void**)>(
+          DXCoreCreateAdapterFactory));
+  DXCoreCreateAdapterFactoryProc dxcore_create_adapter_factory_proc =
+      reinterpret_cast<DXCoreCreateAdapterFactoryProc>(
+          dxcore_library.GetFunctionPointer("DXCoreCreateAdapterFactory"));
+  if (!dxcore_create_adapter_factory_proc) {
+    return;
+  }
+  Microsoft::WRL::ComPtr<IDXCoreAdapterFactory> dxcore_factory;
+  HRESULT hr =
+      dxcore_create_adapter_factory_proc(IID_PPV_ARGS(&dxcore_factory));
+  if (FAILED(hr)) {
+    return;
+  }
+  // First query for NPU devices that satisfy the generic machine learning
+  // property. Note this must be done as a separate query from core compute
+  // because `CreateAdapterList()` returns the logical intersection of all
+  // filter properties, not union.
+  const std::array<GUID, 1> dx_guids_generic_ml = {
+      DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML};
+  Microsoft::WRL::ComPtr<IDXCoreAdapterList> adapter_list;
+  hr = dxcore_factory->CreateAdapterList(dx_guids_generic_ml.size(),
+                                         dx_guids_generic_ml.data(),
+                                         IID_PPV_ARGS(&adapter_list));
+  if (FAILED(hr)) {
+    return;
+  }
+  uint32_t adapter_count = adapter_list->GetAdapterCount();
+
+  // If no generic ML devices were found, then retry with the core compute
+  // filter, getting an adapter list that only contains core-compute capable
+  // devices.
+  if (adapter_count == 0) {
+    adapter_list.Reset();
+
+    const std::array<GUID, 1> dx_guids_core_compute = {
+        DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE};
+    hr = dxcore_factory->CreateAdapterList(dx_guids_core_compute.size(),
+                                           dx_guids_core_compute.data(),
+                                           IID_PPV_ARGS(&adapter_list));
+    if (FAILED(hr)) {
+      return;
+    }
+    adapter_count = adapter_list->GetAdapterCount();
+  }
+  for (uint32_t adapter_index = 0; adapter_index < adapter_count;
+       ++adapter_index) {
+    Microsoft::WRL::ComPtr<IDXCoreAdapter> dxcore_adapter;
+    hr = adapter_list->GetAdapter(adapter_index, IID_PPV_ARGS(&dxcore_adapter));
+    if (FAILED(hr)) {
+      return;
+    }
+    // Because GPUs usually also have the core-compute capability, then we need
+    // to filter out the GPUs with `DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS` or
+    // `DXCORE_ADAPTER_ATTRIBUTE_D3D11_GRAPHICS` attribute to
+    // get the NPUs.
+    bool is_hardware;
+    if (SUCCEEDED(dxcore_adapter->GetProperty(DXCoreAdapterProperty::IsHardware,
+                                              &is_hardware)) &&
+        is_hardware &&
+        !dxcore_adapter->IsAttributeSupported(
+            DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS) &&
+        !dxcore_adapter->IsAttributeSupported(
+            DXCORE_ADAPTER_ATTRIBUTE_D3D11_GRAPHICS)) {
+      GPUInfo::GPUDevice device;
+      DXCoreHardwareID hardware_id;
+      if (SUCCEEDED(dxcore_adapter->GetProperty(
+              DXCoreAdapterProperty::HardwareID, &hardware_id))) {
+        device.vendor_id = hardware_id.vendorID;
+        device.device_id = hardware_id.deviceID;
+      }
+      uint64_t raw_driver_version;
+      if (SUCCEEDED(dxcore_adapter->GetProperty(
+              DXCoreAdapterProperty::DriverVersion, &raw_driver_version))) {
+        LARGE_INTEGER driver_version;
+        driver_version.QuadPart = static_cast<LONGLONG>(raw_driver_version);
+        device.driver_version = DriverVersionToString(driver_version);
+      }
+      LUID instance_luid;
+      if (SUCCEEDED(dxcore_adapter->GetProperty(
+              DXCoreAdapterProperty::InstanceLuid, &instance_luid))) {
+        device.luid =
+            CHROME_LUID{instance_luid.LowPart, instance_luid.HighPart};
+      }
+      gpu_info->npus.push_back(device);
+    }
   }
 }
 
 bool CollectDriverInfoD3D(GPUInfo* gpu_info) {
   TRACE_EVENT0("gpu", "CollectDriverInfoD3D");
 
+  CollectNPUInformation(gpu_info);
+
   Microsoft::WRL::ComPtr<IDXGIFactory1> dxgi_factory;
   HRESULT hr = ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
   if (FAILED(hr))
     return false;
-
-  bool found_amd = false;
-  bool found_intel = false;
-  bool found_nvidia = false;
 
   UINT i;
   Microsoft::WRL::ComPtr<IDXGIAdapter> dxgi_adapter;
@@ -235,49 +320,15 @@ bool CollectDriverInfoD3D(GPUInfo* gpu_info) {
     hr = dxgi_adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice),
                                              &umd_version);
     if (SUCCEEDED(hr)) {
-      device.driver_version = base::StringPrintf(
-          "%d.%d.%d.%d", HIWORD(umd_version.HighPart),
-          LOWORD(umd_version.HighPart), HIWORD(umd_version.LowPart),
-          LOWORD(umd_version.LowPart));
+      device.driver_version = DriverVersionToString(umd_version);
     } else {
       DLOG(ERROR) << "Unable to retrieve the umd version of adapter: "
                   << desc.Description << " HR: " << std::hex << hr;
     }
-    switch (device.vendor_id) {
-      case 0x8086:
-        found_intel = true;
-        break;
-      case 0x1002:
-        found_amd = true;
-        break;
-      case 0x10de:
-        found_nvidia = true;
-        break;
-      default:
-        break;
-    }
-
     if (i == 0) {
       gpu_info->gpu = device;
     } else {
       gpu_info->secondary_gpus.push_back(device);
-    }
-  }
-
-  if (found_intel && base::win::GetVersion() < base::win::Version::WIN10) {
-    // Since Windows 10 (and Windows 8.1 on some systems), switchable graphics
-    // platforms are managed by Windows and each adapter is accessible as
-    // separate devices.
-    // See https://msdn.microsoft.com/en-us/windows/dn265501(v=vs.80)
-    if (found_amd) {
-      bool is_amd_switchable = false;
-      uint32_t active_vendor = 0, active_device = 0;
-      GetAMDSwitchableInfo(&is_amd_switchable, &active_vendor, &active_device);
-      gpu_info->amd_switchable = is_amd_switchable;
-    } else if (found_nvidia) {
-      // nvd3d9wrap.dll is loaded into all processes when Optimus is enabled.
-      HMODULE nvd3d9wrap = GetModuleHandleW(L"nvd3d9wrap.dll");
-      gpu_info->optimus = nvd3d9wrap != nullptr;
     }
   }
 
@@ -346,13 +397,15 @@ bool CanCreateD3D12Device(IDXGIAdapter* dxgi_adapter) {
 }
 
 // DirectX 12 are included with Windows 10 and Server 2016.
-void GetGpuSupportedD3D12Version(uint32_t& d3d12_feature_level,
-                                 uint32_t& highest_shader_model_version) {
-  TRACE_EVENT0("gpu", "GetGpuSupportedD3D12Version");
+void GetGpuSupportedDirectXVersion(uint32_t& d3d12_feature_level,
+                                   uint32_t& highest_shader_model_version,
+                                   uint32_t& directml_feature_level) {
+  TRACE_EVENT0("gpu", "GetGpuSupportedDirectXVersion");
 
   // Initialize to 0 to indicated an unknown type in UMA.
   d3d12_feature_level = 0;
   highest_shader_model_version = 0;
+  directml_feature_level = 0;
 
   base::ScopedNativeLibrary d3d12_library(
       base::FilePath(FILE_PATH_LITERAL("d3d12.dll")));
@@ -364,11 +417,11 @@ void GetGpuSupportedD3D12Version(uint32_t& d3d12_feature_level,
       D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0,
       D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
 
-  PFN_D3D12_CREATE_DEVICE D3D12CreateDevice =
+  PFN_D3D12_CREATE_DEVICE d3d12_create_device_proc =
       reinterpret_cast<PFN_D3D12_CREATE_DEVICE>(
           d3d12_library.GetFunctionPointer("D3D12CreateDevice"));
   Microsoft::WRL::ComPtr<ID3D12Device> d3d12_device;
-  if (D3D12CreateDevice) {
+  if (d3d12_create_device_proc) {
     Microsoft::WRL::ComPtr<IDXGIFactory1> dxgi_factory;
     HRESULT hr = ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
     if (FAILED(hr)) {
@@ -388,34 +441,75 @@ void GetGpuSupportedD3D12Version(uint32_t& d3d12_feature_level,
     // For the default adapter only: EnumAdapters(0, ...).
     // Check to see if the adapter supports Direct3D 12.
     for (auto level : feature_levels) {
-      if (SUCCEEDED(D3D12CreateDevice(dxgi_adapter.Get(), level,
-                                      _uuidof(ID3D12Device), &d3d12_device))) {
+      if (SUCCEEDED(d3d12_create_device_proc(dxgi_adapter.Get(), level,
+                                             _uuidof(ID3D12Device),
+                                             &d3d12_device))) {
         d3d12_feature_level = level;
         break;
       }
     }
-  }
 
-  // Query the maximum supported shader model version.
-  if (d3d12_device) {
-    // As per the documentation, CheckFeatureSupport will return E_INVALIDARG if
-    // the shader model is not known by the current runtime, so we loop in
-    // decreasing shader model version to determine the highest supported model:
-    // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_feature_data_shader_model.
-    const D3D_SHADER_MODEL shader_models[] = {
-        D3D_SHADER_MODEL_6_7, D3D_SHADER_MODEL_6_6, D3D_SHADER_MODEL_6_5,
-        D3D_SHADER_MODEL_6_4, D3D_SHADER_MODEL_6_3, D3D_SHADER_MODEL_6_2,
-        D3D_SHADER_MODEL_6_1, D3D_SHADER_MODEL_6_0, D3D_SHADER_MODEL_5_1,
-    };
+    // Query the maximum supported shader model version.
+    if (d3d12_device) {
+      // As per the documentation, CheckFeatureSupport will return E_INVALIDARG
+      // if the shader model is not known by the current runtime, so we loop in
+      // decreasing shader model version to determine the highest supported
+      // model:
+      // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_feature_data_shader_model.
+      const D3D_SHADER_MODEL shader_models[] = {
+          D3D_SHADER_MODEL_6_7, D3D_SHADER_MODEL_6_6, D3D_SHADER_MODEL_6_5,
+          D3D_SHADER_MODEL_6_4, D3D_SHADER_MODEL_6_3, D3D_SHADER_MODEL_6_2,
+          D3D_SHADER_MODEL_6_1, D3D_SHADER_MODEL_6_0, D3D_SHADER_MODEL_5_1,
+      };
 
-    for (auto model : shader_models) {
-      D3D12_FEATURE_DATA_SHADER_MODEL shader_model_data = {};
-      shader_model_data.HighestShaderModel = model;
-      if (SUCCEEDED(d3d12_device->CheckFeatureSupport(
-              D3D12_FEATURE_SHADER_MODEL, &shader_model_data,
-              sizeof(shader_model_data)))) {
-        highest_shader_model_version = shader_model_data.HighestShaderModel;
-        break;
+      for (auto model : shader_models) {
+        D3D12_FEATURE_DATA_SHADER_MODEL shader_model_data = {};
+        shader_model_data.HighestShaderModel = model;
+        if (SUCCEEDED(d3d12_device->CheckFeatureSupport(
+                D3D12_FEATURE_SHADER_MODEL, &shader_model_data,
+                sizeof(shader_model_data)))) {
+          highest_shader_model_version = shader_model_data.HighestShaderModel;
+          break;
+        }
+      }
+      // DirectML is supported starting on D3D12.
+      base::ScopedNativeLibrary dml_library(
+          base::ScopedNativeLibrary(base::LoadSystemLibrary(L"directml.dll")));
+      if (!dml_library.is_valid()) {
+        return;
+      }
+      // On older versions of windows DMLCreateDevice accepts a different
+      // number of parameters. We should use DMLCreateDevice1 which always
+      // takes the same number of parameters to ensure consistency
+      // among all versions of windows.
+      auto dml_create_device1_proc =
+          reinterpret_cast<decltype(DMLCreateDevice1)*>(
+              dml_library.GetFunctionPointer("DMLCreateDevice1"));
+      if (!dml_create_device1_proc) {
+        return;
+      }
+      Microsoft::WRL::ComPtr<IDMLDevice> dml_device;
+      if (FAILED(dml_create_device1_proc(
+              d3d12_device.Get(), DML_CREATE_DEVICE_FLAG_NONE,
+              DML_FEATURE_LEVEL_1_0, IID_PPV_ARGS(&dml_device)))) {
+        return;
+      }
+
+      DML_FEATURE_LEVEL feature_levels_requested[] = {
+          DML_FEATURE_LEVEL_1_0, DML_FEATURE_LEVEL_2_0, DML_FEATURE_LEVEL_2_1,
+          DML_FEATURE_LEVEL_3_0, DML_FEATURE_LEVEL_3_1, DML_FEATURE_LEVEL_4_0,
+          DML_FEATURE_LEVEL_4_1, DML_FEATURE_LEVEL_5_0};
+
+      DML_FEATURE_QUERY_FEATURE_LEVELS feature_levels_query = {
+          std::size(feature_levels_requested), feature_levels_requested};
+
+      DML_FEATURE_DATA_FEATURE_LEVELS feature_levels_supported = {};
+      if (SUCCEEDED(dml_device->CheckFeatureSupport(
+              DML_FEATURE_FEATURE_LEVELS, sizeof(feature_levels_query),
+              &feature_levels_query, sizeof(feature_levels_supported),
+              &feature_levels_supported))) {
+        directml_feature_level =
+            feature_levels_supported.MaxSupportedFeatureLevel;
       }
     }
   }
@@ -543,7 +637,6 @@ bool InitVulkanInstanceProc(
     PFN_vkEnumeratePhysicalDevices* vkEnumeratePhysicalDevices,
     PFN_vkEnumerateDeviceExtensionProperties*
         vkEnumerateDeviceExtensionProperties) {
-
   *vkEnumeratePhysicalDevices =
       reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(
           vkGetInstanceProcAddr(vk_instance, "vkEnumeratePhysicalDevices"));
@@ -641,9 +734,6 @@ uint32_t GetGpuSupportedVulkanVersion(
 void RecordGpuSupportedDx12VersionHistograms(
     uint32_t d3d12_feature_level,
     uint32_t highest_shader_model_version) {
-  bool supports_dx12 =
-      (d3d12_feature_level >= D3D_FEATURE_LEVEL_12_0) ? true : false;
-  UMA_HISTOGRAM_BOOLEAN("GPU.SupportsDX12", supports_dx12);
   UMA_HISTOGRAM_ENUMERATION(
       "GPU.D3D12FeatureLevel",
       ConvertToHistogramFeatureLevel(d3d12_feature_level));
@@ -670,7 +760,7 @@ bool CollectD3D11FeatureInfo(D3D_FEATURE_LEVEL* d3d11_feature_level,
     return false;
 
   // The order of feature levels to attempt to create in D3D CreateDevice.
-  // TODO(crbug.com/1312519): Using 12_2 in kFeatureLevels[] will cause failure
+  // TODO(crbug.com/40831714): Using 12_2 in kFeatureLevels[] will cause failure
   // in D3D11CreateDevice(). Limit the highest feature to 12_1.
   const D3D_FEATURE_LEVEL kFeatureLevels[] = {
       D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1,
@@ -725,8 +815,9 @@ bool CollectContextGraphicsInfo(GPUInfo* gpu_info) {
 
   DCHECK(gpu_info);
 
-  if (!CollectGraphicsInfoGL(gpu_info))
+  if (!CollectGraphicsInfoGL(gpu_info, gl::GetDefaultDisplayEGL())) {
     return false;
+  }
 
   // ANGLE's renderer strings are of the form:
   // ANGLE (<adapter_identifier> Direct3D<version> vs_x_x ps_x_x)
@@ -735,27 +826,19 @@ bool CollectContextGraphicsInfo(GPUInfo* gpu_info) {
   int vertex_shader_minor_version = 0;
   int pixel_shader_major_version = 0;
   int pixel_shader_minor_version = 0;
-  if (RE2::FullMatch(gpu_info->gl_renderer,
-                     "ANGLE \\(.*\\)") &&
-      RE2::PartialMatch(gpu_info->gl_renderer,
-                        " Direct3D(\\w+)",
+  if (RE2::FullMatch(gpu_info->gl_renderer, "ANGLE \\(.*\\)") &&
+      RE2::PartialMatch(gpu_info->gl_renderer, " Direct3D(\\w+)",
                         &direct3d_version) &&
-      RE2::PartialMatch(gpu_info->gl_renderer,
-                        " vs_(\\d+)_(\\d+)",
+      RE2::PartialMatch(gpu_info->gl_renderer, " vs_(\\d+)_(\\d+)",
                         &vertex_shader_major_version,
                         &vertex_shader_minor_version) &&
-      RE2::PartialMatch(gpu_info->gl_renderer,
-                        " ps_(\\d+)_(\\d+)",
+      RE2::PartialMatch(gpu_info->gl_renderer, " ps_(\\d+)_(\\d+)",
                         &pixel_shader_major_version,
                         &pixel_shader_minor_version)) {
-    gpu_info->vertex_shader_version =
-        base::StringPrintf("%d.%d",
-                           vertex_shader_major_version,
-                           vertex_shader_minor_version);
-    gpu_info->pixel_shader_version =
-        base::StringPrintf("%d.%d",
-                           pixel_shader_major_version,
-                           pixel_shader_minor_version);
+    gpu_info->vertex_shader_version = base::StringPrintf(
+        "%d.%d", vertex_shader_major_version, vertex_shader_minor_version);
+    gpu_info->pixel_shader_version = base::StringPrintf(
+        "%d.%d", pixel_shader_major_version, pixel_shader_minor_version);
 
     DCHECK(!gpu_info->vertex_shader_version.empty());
     // Note: do not reorder, used by UMA_HISTOGRAM below

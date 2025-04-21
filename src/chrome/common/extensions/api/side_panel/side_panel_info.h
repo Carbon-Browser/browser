@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@ struct SidePanelInfo : public Extension::ManifestData {
   // Get default_path.
   static std::string GetDefaultPath(const Extension* extension);
 
-  // SidePanelService relies on this local extension path if it's not set using
-  // the companion API. SidePanelService source of truth.
+  // SidePanelService relies on this local extension path only if it wasn't set
+  // using `sidePanel` API.
   std::string default_path;
 };
 

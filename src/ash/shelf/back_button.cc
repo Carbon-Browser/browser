@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,28 +14,35 @@
 #include "ash/wm/window_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
+#include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
 
-// static
-const char BackButton::kViewClassName[] = "ash/BackButton";
-
 BackButton::BackButton(Shelf* shelf) : ShelfControlButton(shelf, this) {
-  SetAccessibleName(l10n_util::GetStringUTF16(IDS_ASH_SHELF_BACK_BUTTON_TITLE));
+  GetViewAccessibility().SetName(
+      l10n_util::GetStringUTF16(IDS_ASH_SHELF_BACK_BUTTON_TITLE));
   SetFlipCanvasOnPaintForRTLUI(true);
 }
 
 BackButton::~BackButton() {}
 
 void BackButton::HandleLocaleChange() {
-  SetAccessibleName(l10n_util::GetStringUTF16(IDS_ASH_SHELF_BACK_BUTTON_TITLE));
-  TooltipTextChanged();
+  ax_name_change_subscription_ =
+      GetViewAccessibility().AddStringAttributeChangedCallback(
+          ax::mojom::StringAttribute::kName,
+          base::BindRepeating(&BackButton::OnAXNameChanged,
+                              base::Unretained(this)));
+
+  GetViewAccessibility().SetName(
+      l10n_util::GetStringUTF16(IDS_ASH_SHELF_BACK_BUTTON_TITLE));
 }
 
 void BackButton::PaintButtonContents(gfx::Canvas* canvas) {
@@ -47,14 +54,6 @@ void BackButton::PaintButtonContents(gfx::Canvas* canvas) {
           AshColorProvider::ContentLayerType::kButtonIconColor));
   canvas->DrawImageInt(img, GetCenterPoint().x() - img.width() / 2,
                        GetCenterPoint().y() - img.height() / 2);
-}
-
-const char* BackButton::GetClassName() const {
-  return kViewClassName;
-}
-
-std::u16string BackButton::GetTooltipText(const gfx::Point& p) const {
-  return GetAccessibleName();
 }
 
 void BackButton::OnShelfButtonAboutToRequestFocusFromTabTraversal(
@@ -92,5 +91,13 @@ void BackButton::OnThemeChanged() {
   ShelfControlButton::OnThemeChanged();
   SchedulePaint();
 }
+
+void BackButton::OnAXNameChanged(ax::mojom::StringAttribute attribute,
+                                 const std::optional<std::string>& name) {
+  SetCachedTooltipText(GetViewAccessibility().GetCachedName());
+}
+
+BEGIN_METADATA(BackButton)
+END_METADATA
 
 }  // namespace ash

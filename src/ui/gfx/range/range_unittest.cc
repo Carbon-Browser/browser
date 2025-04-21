@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -195,6 +195,22 @@ TYPED_TEST(RangeTest, SetReversedRange) {
   EXPECT_TRUE(r.IsValid());
   EXPECT_EQ(21U, r.GetMin());
   EXPECT_EQ(25U, r.GetMax());
+}
+
+TYPED_TEST(RangeTest, MatchDirection) {
+  TypeParam r(20, 10);
+  EXPECT_TRUE(r.is_reversed());
+  EXPECT_EQ(20U, r.start());
+  EXPECT_EQ(10U, r.end());
+  EXPECT_EQ(10U, r.length());
+  EXPECT_TRUE(r.IsValid());
+
+  r.MatchDirection(TypeParam(10, 20));
+  EXPECT_FALSE(r.is_reversed());
+  EXPECT_EQ(10U, r.start());
+  EXPECT_EQ(20U, r.end());
+  EXPECT_EQ(10U, r.length());
+  EXPECT_TRUE(r.IsValid());
 }
 
 TYPED_TEST(RangeTest, ContainAndIntersect) {

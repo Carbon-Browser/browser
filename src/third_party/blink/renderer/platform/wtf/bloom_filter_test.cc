@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,9 +78,9 @@ TEST_F(BloomFilterTest, NonCountingBloomFilterKeyBoundary) {
 }
 
 TEST_F(BloomFilterTest, NonCountingBloomFilterBasic) {
-  unsigned alfa = AtomicString("Alfa").Impl()->ExistingHash();
-  unsigned bravo = AtomicString("Bravo").Impl()->ExistingHash();
-  unsigned charlie = AtomicString("Charlie").Impl()->ExistingHash();
+  unsigned alfa = AtomicString("Alfa").Hash();
+  unsigned bravo = AtomicString("Bravo").Hash();
+  unsigned charlie = AtomicString("Charlie").Hash();
 
   BloomFilter<12> filter;
   EXPECT_FALSE(filter.MayContain(alfa));

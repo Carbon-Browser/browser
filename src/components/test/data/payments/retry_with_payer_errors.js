@@ -1,19 +1,19 @@
 /*
- * Copyright 2018 The Chromium Authors. All rights reserved.
+ * Copyright 2018 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-var gShowPromise = null;
-var gPaymentResponse = null;
+let gShowPromise = null;
+let gPaymentResponse = null;
 
 /**
  * Launches the PaymentRequest UI
  *
  * Legacy entry-point for basic-card tests; to be removed.
  */
-function buy() { // eslint-disable-line no-unused-vars
-  var options = {
+function buy() {
+  const options = {
     requestPayerEmail: true,
     requestPayerName: true,
     requestPayerPhone: true,
@@ -33,8 +33,8 @@ function buy() { // eslint-disable-line no-unused-vars
  * @param {sequence<PaymentMethodData>} methodData An array of payment method
  *        objects.
  */
-function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
-  var options = {
+function buyWithMethods(methodData) {
+  const options = {
     requestPayerEmail: true,
     requestPayerName: true,
     requestPayerPhone: true,
@@ -47,7 +47,7 @@ function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
  * response as gPaymentResponse and sets the response as the HTML body text for
  * test consumption.
  */
-async function processShowResponse() { // eslint-disable-line no-unused-vars
+async function processShowResponse() {
   gPaymentResponse = await gShowPromise;
   print(JSON.stringify(gPaymentResponse, undefined, 2));
 }
@@ -57,7 +57,7 @@ async function processShowResponse() { // eslint-disable-line no-unused-vars
  *
  * @param {PaymentValidationErrors} validationErrors Represent validation errors
  */
-function retry(validationErrors) { // eslint-disable-line no-unused-vars
+function retry(validationErrors) {
   if (gPaymentResponse == null) {
     return;
   }

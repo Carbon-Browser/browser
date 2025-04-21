@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/exo/gamepad.h"
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 namespace exo {
@@ -131,8 +131,7 @@ void Gamepad::RemoveObserver(GamepadObserver* observer) {
 }
 
 void Gamepad::OnGamepadFocused() {
-  can_vibrate_ =
-      base::FeatureList::IsEnabled(chromeos::features::kGamepadVibration);
+  can_vibrate_ = base::FeatureList::IsEnabled(ash::features::kGamepadVibration);
 }
 
 void Gamepad::OnGamepadFocusLost() {

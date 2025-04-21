@@ -1,22 +1,22 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/util/image_util.h"
 
+#include <string_view>
+
 #include "base/base64.h"
+#include "base/containers/span.h"
+#include "skia/ext/codec_utils.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "third_party/skia/include/core/SkEncodedImageFormat.h"
-#include "third_party/skia/include/core/SkImageEncoder.h"
-#include "third_party/skia/include/core/SkStream.h"
-#include "ui/gfx/image/buffer_w_stream.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
 namespace webui {
 
 std::string MakeDataURIForImage(base::span<const uint8_t> image_data,
-                                base::StringPiece mime_subtype) {
+                                std::string_view mime_subtype) {
   std::string result = "data:image/";
   result.append(mime_subtype.begin(), mime_subtype.end());
   result += ";base64,";
@@ -26,12 +26,7 @@ std::string MakeDataURIForImage(base::span<const uint8_t> image_data,
 
 std::string EncodePNGAndMakeDataURI(gfx::ImageSkia image, float scale_factor) {
   const SkBitmap& bitmap = image.GetRepresentation(scale_factor).GetBitmap();
-  gfx::BufferWStream stream;
-  const bool encoding_succeeded =
-      SkEncodeImage(&stream, bitmap, SkEncodedImageFormat::kPNG, 100);
-  DCHECK(encoding_succeeded);
-  return MakeDataURIForImage(
-      base::as_bytes(base::make_span(stream.TakeBuffer())), "png");
+  return skia::EncodePngAsDataUri(bitmap.pixmap());
 }
 
 }  // namespace webui

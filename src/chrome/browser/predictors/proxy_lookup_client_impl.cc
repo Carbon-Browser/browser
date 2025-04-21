@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/common/task_annotator.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -19,24 +19,24 @@ namespace predictors {
 
 ProxyLookupClientImpl::ProxyLookupClientImpl(
     const GURL& url,
-    const net::NetworkIsolationKey& network_isolation_key,
+    const net::NetworkAnonymizationKey& network_anonymization_key,
     ProxyLookupCallback callback,
     network::mojom::NetworkContext* network_context)
     : callback_(std::move(callback)) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   proxy_lookup_start_time_ = base::TimeTicks::Now();
-  network_context->LookUpProxyForURL(url, network_isolation_key,
+  network_context->LookUpProxyForURL(url, network_anonymization_key,
                                      receiver_.BindNewPipeAndPassRemote());
   receiver_.set_disconnect_handler(
       base::BindOnce(&ProxyLookupClientImpl::OnProxyLookupComplete,
-                     base::Unretained(this), net::ERR_ABORTED, absl::nullopt));
+                     base::Unretained(this), net::ERR_ABORTED, std::nullopt));
 }
 
 ProxyLookupClientImpl::~ProxyLookupClientImpl() = default;
 
 void ProxyLookupClientImpl::OnProxyLookupComplete(
     int32_t net_error,
-    const absl::optional<net::ProxyInfo>& proxy_info) {
+    const std::optional<net::ProxyInfo>& proxy_info) {
   UMA_HISTOGRAM_TIMES("Navigation.Preconnect.ProxyLookupLatency",
                       base::TimeTicks::Now() - proxy_lookup_start_time_);
 

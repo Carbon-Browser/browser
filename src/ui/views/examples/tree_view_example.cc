@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -31,8 +32,9 @@ class ExampleTreeViewDrawingProvider : public views::TreeViewDrawingProvider {
 
   std::u16string GetAuxiliaryTextForNode(views::TreeView* tree_view,
                                          ui::TreeModelNode* node) override {
-    if (tree_view->GetSelectedNode() == node)
+    if (tree_view->GetSelectedNode() == node) {
       return GetStringUTF16(IDS_TREE_VIEW_SELECTED_LABEL);
+    }
     return views::TreeViewDrawingProvider::GetAuxiliaryTextForNode(tree_view,
                                                                    node);
   }
@@ -45,8 +47,7 @@ class ExampleTreeViewDrawingProvider : public views::TreeViewDrawingProvider {
 
 }  // namespace
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 TreeViewExample::TreeViewExample()
     : ExampleBase(GetStringUTF8(IDS_TREE_VIEW_SELECT_LABEL).c_str()),
@@ -55,9 +56,11 @@ TreeViewExample::TreeViewExample()
           1)) {}
 
 TreeViewExample::~TreeViewExample() {
-  // Remove the model from the view.
-  if (tree_view_)
+  if (tree_view_) {
     tree_view_->SetModel(nullptr);
+    tree_view_->set_context_menu_controller(nullptr);
+    tree_view_->SetController(nullptr);
+  }
 }
 
 void TreeViewExample::CreateExampleView(View* container) {
@@ -130,15 +133,17 @@ void TreeViewExample::CreateExampleView(View* container) {
   remove_ = button_panel->AddChildView(std::move(remove));
   change_title_ = button_panel->AddChildView(std::move(change_title));
 
-  for (View* view : button_panel->children())
+  for (View* view : button_panel->children()) {
     view->SetProperty(views::kFlexBehaviorKey, full_flex);
+  }
 }
 
 void TreeViewExample::AddNewNode() {
   NodeType* selected_node =
       static_cast<NodeType*>(tree_view_->GetSelectedNode());
-  if (!selected_node)
+  if (!selected_node) {
     selected_node = model_.GetRoot();
+  }
   NodeType* new_node = model_.Add(
       selected_node, std::make_unique<NodeType>(selected_node->GetTitle(), 1));
   tree_view_->SetSelectedNode(new_node);
@@ -182,7 +187,7 @@ bool TreeViewExample::CanEdit(TreeView* tree_view, ui::TreeModelNode* node) {
 void TreeViewExample::ShowContextMenuForViewImpl(
     View* source,
     const gfx::Point& point,
-    ui::MenuSourceType source_type) {
+    ui::mojom::MenuSourceType source_type) {
   context_menu_model_ = std::make_unique<ui::SimpleMenuModel>(this);
   context_menu_model_->AddItem(ID_EDIT,
                                GetStringUTF16(IDS_TREE_VIEW_EDIT_BUTTON_LABEL));
@@ -223,5 +228,4 @@ void TreeViewExample::ExecuteCommand(int command_id, int event_flags) {
   }
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

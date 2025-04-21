@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "build/config/linux/dbus/buildflags.h"
 #include "chrome/browser/status_icons/desktop_notification_balloon.h"
 #include "chrome/browser/status_icons/status_icon.h"
 #include "ui/gfx/image/image_skia.h"
@@ -59,7 +60,9 @@ class StatusIconLinuxWrapper : public StatusIcon,
 
  private:
   enum StatusIconType {
+#if BUILDFLAG(USE_DBUS)
     kTypeDbus,
+#endif
     kTypeWindowed,
     kTypeNone,
   };
@@ -70,7 +73,7 @@ class StatusIconLinuxWrapper : public StatusIcon,
                          StatusIconType status_icon_type,
                          const gfx::ImageSkia& image,
                          const std::u16string& tool_tip);
-#if defined(USE_DBUS)
+#if BUILDFLAG(USE_DBUS)
   StatusIconLinuxWrapper(scoped_refptr<StatusIconLinuxDbus> status_icon,
                          const gfx::ImageSkia& image,
                          const std::u16string& tool_tip);
@@ -80,17 +83,17 @@ class StatusIconLinuxWrapper : public StatusIcon,
                          const gfx::ImageSkia& image,
                          const std::u16string& tool_tip);
 
+  ui::StatusIconLinux* GetStatusIcon();
+
   // Notification balloon.
   DesktopNotificationBalloon notification_;
 
   // The status icon may be ref-counted (via |status_icon_dbus_|) or owned by
-  // |this| (via |status_icon_linux_|).  Either way, |status_icon_| points to
-  // the underlying object.
-#if defined(USE_DBUS)
+  // |this| (via |status_icon_linux_|).
+#if BUILDFLAG(USE_DBUS)
   scoped_refptr<StatusIconLinuxDbus> status_icon_dbus_;
 #endif
   std::unique_ptr<ui::StatusIconLinux> status_icon_linux_;
-  raw_ptr<ui::StatusIconLinux> status_icon_;
   StatusIconType status_icon_type_;
 
   gfx::ImageSkia image_;

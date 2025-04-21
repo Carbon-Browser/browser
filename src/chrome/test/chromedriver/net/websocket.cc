@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/354307328): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/test/chromedriver/net/websocket.h"
 
@@ -9,12 +14,14 @@
 #include <string.h>
 
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
 #include "base/json/json_writer.h"
 #include "base/rand_util.h"
@@ -49,7 +56,7 @@ bool ResolveHost(const std::string& host,
   hints.ai_socktype = SOCK_STREAM;
 
   struct addrinfo* result;
-  if (getaddrinfo(host.c_str(), NULL, &hints, &result))
+  if (getaddrinfo(host.c_str(), nullptr, &hints, &result))
     return false;
 
   auto list = net::AddressList::CreateFromAddrinfo(result);
@@ -67,7 +74,7 @@ WebSocket::WebSocket(const GURL& url,
       listener_(listener),
       state_(INITIALIZED),
       write_buffer_(base::MakeRefCounted<net::DrainableIOBuffer>(
-          base::MakeRefCounted<net::IOBuffer>(0),
+          base::MakeRefCounted<net::IOBufferWithSize>(),
           0)),
       read_buffer_(
           base::MakeRefCounted<net::IOBufferWithSize>(read_buffer_size)) {}
@@ -90,7 +97,7 @@ void WebSocket::Connect(net::CompletionOnceCallback callback) {
       std::move(callback).Run(net::ERR_ADDRESS_UNREACHABLE);
       return;
     }
-    base::ListValue endpoints;
+    base::Value::List endpoints;
     for (auto endpoint : addresses)
       endpoints.Append(endpoint.ToStringWithoutPort());
     std::string json;
@@ -133,16 +140,17 @@ bool WebSocket::Send(const std::string& message) {
   header.final = true;
   header.masked = true;
   header.payload_length = message.length();
-  int header_size = net::GetWebSocketFrameHeaderSize(header);
+  size_t header_size = net::GetWebSocketFrameHeaderSize(header);
   net::WebSocketMaskingKey masking_key = net::GenerateWebSocketMaskingKey();
   std::string header_str;
   header_str.resize(header_size);
-  CHECK_EQ(header_size, net::WriteWebSocketFrameHeader(
-      header, &masking_key, &header_str[0], header_str.length()));
+  CHECK_EQ(header_size,
+           base::checked_cast<size_t>(net::WriteWebSocketFrameHeader(
+               header, &masking_key, base::as_writable_byte_span(header_str))));
 
   std::string masked_message = message;
-  net::MaskWebSocketFramePayload(
-      masking_key, 0, &masked_message[0], masked_message.length());
+  net::MaskWebSocketFramePayload(masking_key, 0,
+                                 base::as_writable_byte_span(masked_message));
   Write(header_str + masked_message);
   return true;
 }
@@ -158,7 +166,7 @@ void WebSocket::OnSocketConnect(int code) {
     return;
   }
 
-  base::Base64Encode(base::RandBytesAsString(16), &sec_key_);
+  sec_key_ = base::Base64Encode(base::RandBytesAsVector(16));
   std::string handshake = base::StringPrintf(
       "GET %s HTTP/1.1\r\n"
       "Host: %s\r\n"
@@ -208,9 +216,10 @@ void WebSocket::ContinueWritingIfNecessary() {
   if (!write_buffer_->BytesRemaining()) {
     if (pending_write_.empty())
       return;
+    const size_t pending_write_length = pending_write_.length();
     write_buffer_ = base::MakeRefCounted<net::DrainableIOBuffer>(
-        base::MakeRefCounted<net::StringIOBuffer>(pending_write_),
-        pending_write_.length());
+        base::MakeRefCounted<net::StringIOBuffer>(std::move(pending_write_)),
+        pending_write_length);
     pending_write_.clear();
   }
   int code = socket_->Write(
@@ -236,9 +245,23 @@ void WebSocket::Read() {
 }
 
 void WebSocket::OnRead(bool read_again, int code) {
-  if (code <= 0) {
+  if (code == 0) {
+    // On POSIX and FUCHSIA:
+    //   code >= 0 is the result of POSIX read function call:
+    //     code > 0 denotes the amount of successfully read bytes
+    //     code == 0 means that we have reached EOF.
+    //       The latter one is issued upon receiving a FIN packet.
+    //   code < 0 is an error code
+    // On Windows:
+    //   code >=0 is the result of recv function call (winsocks.h)
+    //     It has the same semantic as in the POSIX case
+    //   code < 0 is an error code
+    code = net::ERR_CONNECTION_CLOSED;
+  }
+
+  if (code < 0) {
     VLOG(4) << "WebSocket::OnRead error " << net::ErrorToShortString(code);
-    Close(code ? code : net::ERR_FAILED);
+    Close(code);
     return;
   }
 
@@ -261,17 +284,16 @@ void WebSocket::OnReadDuringHandshake(const char* data, int len) {
   VLOG(4) << "WebSocket::OnReadDuringHandshake\n" << std::string(data, len);
   handshake_response_ += std::string(data, len);
   size_t headers_end = net::HttpUtil::LocateEndOfHeaders(
-      handshake_response_.data(), handshake_response_.size(), 0);
+      base::as_byte_span(handshake_response_), 0);
   if (headers_end == std::string::npos)
     return;
 
   const char kMagicKey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-  std::string websocket_accept;
-  base::Base64Encode(base::SHA1HashString(sec_key_ + kMagicKey),
-                     &websocket_accept);
+  std::string websocket_accept =
+      base::Base64Encode(base::SHA1HashString(sec_key_ + kMagicKey));
   auto headers = base::MakeRefCounted<net::HttpResponseHeaders>(
       net::HttpUtil::AssembleRawHeaders(
-          base::StringPiece(handshake_response_.data(), headers_end)));
+          std::string_view(handshake_response_.data(), headers_end)));
   if (headers->response_code() != 101 ||
       !headers->HasHeaderValue("Upgrade", "WebSocket") ||
       !headers->HasHeaderValue("Connection", "Upgrade") ||
@@ -285,12 +307,21 @@ void WebSocket::OnReadDuringHandshake(const char* data, int len) {
   state_ = OPEN;
   InvokeConnectCallback(net::OK);
   if (!leftover_message.empty())
-    OnReadDuringOpen(leftover_message.c_str(), leftover_message.length());
+    OnReadDuringOpen(leftover_message.data(), leftover_message.length());
 }
 
-void WebSocket::OnReadDuringOpen(const char* data, int len) {
+void WebSocket::OnReadDuringOpen(char* data, int len) {
   std::vector<std::unique_ptr<net::WebSocketFrameChunk>> frame_chunks;
-  CHECK(parser_.Decode(data, len, &frame_chunks));
+
+  // TODO(crbug.com/354307328): It's not possible to construct
+  // this span soundedly here. OnReadDuringOpen() should
+  // receive a span instead of a pointer and length.
+  auto data_span = UNSAFE_BUFFERS(base::as_writable_byte_span(
+      base::span(data, base::checked_cast<size_t>(len))));
+
+  // Call the parser's Decode method
+  CHECK(parser_.Decode(data_span, &frame_chunks));
+
   for (size_t i = 0; i < frame_chunks.size(); ++i) {
     const auto& header = frame_chunks[i]->header;
     if (header) {
@@ -318,7 +349,7 @@ void WebSocket::OnReadDuringOpen(const char* data, int len) {
     std::vector<char> payload(buffer.begin(), buffer.end());
     if (is_current_frame_masked_) {
       MaskWebSocketFramePayload(current_masking_key_, current_frame_offset_,
-                                payload.data(), payload.size());
+                                base::as_writable_byte_span(payload));
     }
     next_message_ += std::string(payload.data(), payload.size());
     current_frame_offset_ += payload.size();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,8 @@ ContextLostReason GetContextLostReason(gpu::error::Error error,
     case gpu::error::kNoError:
     case gpu::error::kLostContext:
       NOTREACHED();
-      return CONTEXT_LOST_UNKNOWN;
   }
   NOTREACHED();
-  return CONTEXT_LOST_UNKNOWN;
 }
 
 }  // namespace viz

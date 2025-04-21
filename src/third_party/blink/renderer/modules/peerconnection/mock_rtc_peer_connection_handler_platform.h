@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,45 +14,17 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
 #include "third_party/webrtc/api/stats/rtc_stats.h"
+#include "third_party/webrtc/api/test/mock_peerconnectioninterface.h"
+#include "third_party/webrtc/api/test/mock_session_description_interface.h"
 
 namespace blink {
 
-class MockSessionDescription : public webrtc::SessionDescriptionInterface {
+class MockSessionDescription : public webrtc::MockSessionDescriptionInterface {
  public:
   MockSessionDescription(const std::string& type, const std::string& sdp)
       : type_(type), sdp_(sdp) {}
   ~MockSessionDescription() override = default;
-  cricket::SessionDescription* description() override {
-    NOTIMPLEMENTED();
-    return nullptr;
-  }
-  const cricket::SessionDescription* description() const override {
-    NOTIMPLEMENTED();
-    return nullptr;
-  }
-  std::string session_id() const override {
-    NOTIMPLEMENTED();
-    return std::string();
-  }
-  std::string session_version() const override {
-    NOTIMPLEMENTED();
-    return std::string();
-  }
   std::string type() const override { return type_; }
-  bool AddCandidate(const webrtc::IceCandidateInterface* candidate) override {
-    NOTIMPLEMENTED();
-    return false;
-  }
-  size_t number_of_mediasections() const override {
-    NOTIMPLEMENTED();
-    return 0;
-  }
-  const webrtc::IceCandidateCollection* candidates(
-      size_t mediasection_index) const override {
-    NOTIMPLEMENTED();
-    return nullptr;
-  }
-
   bool ToString(std::string* out) const override {
     *out = sdp_;
     return true;
@@ -88,9 +60,9 @@ class MockRTCPeerConnectionHandlerPlatform : public RTCPeerConnectionHandler {
 
   bool Initialize(ExecutionContext* context,
                   const webrtc::PeerConnectionInterface::RTCConfiguration&,
-                  GoogMediaConstraints* media_constraints,
                   WebLocalFrame*,
-                  ExceptionState&) override;
+                  ExceptionState&,
+                  RTCRtpTransport*) override;
   void Close() override;
   void CloseAndUnregister() override;
 
@@ -108,9 +80,7 @@ class MockRTCPeerConnectionHandlerPlatform : public RTCPeerConnectionHandler {
       const webrtc::PeerConnectionInterface::RTCConfiguration&) override;
   void AddIceCandidate(RTCVoidRequest*, RTCIceCandidatePlatform*) override;
   void RestartIce() override;
-  void GetStats(RTCStatsRequest*) override;
-  void GetStats(RTCStatsReportCallback,
-                const Vector<webrtc::NonStandardGroupId>&) override;
+  void GetStats(RTCStatsReportCallback) override;
   webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>>
   AddTransceiverWithTrack(MediaStreamComponent*,
                           const webrtc::RtpTransceiverInit&) override;
@@ -122,13 +92,10 @@ class MockRTCPeerConnectionHandlerPlatform : public RTCPeerConnectionHandler {
       const MediaStreamDescriptorVector&) override;
   webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>> RemoveTrack(
       RTCRtpSenderPlatform*) override;
-  scoped_refptr<webrtc::DataChannelInterface> CreateDataChannel(
+  rtc::scoped_refptr<webrtc::DataChannelInterface> CreateDataChannel(
       const String& label,
       const webrtc::DataChannelInit&) override;
   webrtc::PeerConnectionInterface* NativePeerConnection() override;
-  void RunSynchronousOnceClosureOnSignalingThread(
-      CrossThreadOnceClosure closure,
-      const char* trace_event_name) override;
   void RunSynchronousOnceClosureOnSignalingThread(
       base::OnceClosure closure,
       const char* trace_event_name) override;
@@ -139,6 +106,8 @@ class MockRTCPeerConnectionHandlerPlatform : public RTCPeerConnectionHandler {
   class DummyRTCRtpTransceiverPlatform;
 
   Vector<std::unique_ptr<DummyRTCRtpTransceiverPlatform>> transceivers_;
+  rtc::scoped_refptr<webrtc::MockPeerConnectionInterface>
+      native_peer_connection_;
 };
 
 }  // namespace blink

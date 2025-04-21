@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/common/mojom/permission_set_mojom_traits.h"
 
 #include "extensions/common/manifest_handler.h"
+#include "extensions/common/manifest_handler_registry.h"
 #include "extensions/common/mojom/permission_set.mojom.h"
 #include "extensions/common/permissions/api_permission_set.h"
 #include "extensions/common/permissions/mock_manifest_permission.h"
@@ -19,10 +20,10 @@ using mojo::test::SerializeAndDeserialize;
 
 class MockManifestHandler : public ManifestHandler {
  public:
-  MockManifestHandler() {}
+  MockManifestHandler() = default;
   MockManifestHandler(const MockManifestHandler&) = delete;
   MockManifestHandler& operator=(const MockManifestHandler&) = delete;
-  ~MockManifestHandler() override {}
+  ~MockManifestHandler() override = default;
 
   bool Parse(Extension* extension, std::u16string* error) override {
     return true;
@@ -43,12 +44,12 @@ TEST(PermissionSetMojomTraitsTest, BasicAPIPermission) {
       PermissionsInfo::GetInstance()->GetByID(mojom::APIPermissionID::kSocket);
   std::unique_ptr<APIPermission> input = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
-    ASSERT_TRUE(
-        input->FromValue(&base::Value::AsListValue(value), nullptr, nullptr));
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
+    ASSERT_TRUE(input->FromValue(&value, nullptr, nullptr));
   }
 
   std::unique_ptr<APIPermission> output = nullptr;
@@ -63,12 +64,12 @@ TEST(PermissionSetMojomTraitsTest, BasicAPIPermissionSet) {
   std::unique_ptr<APIPermission> permission =
       permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
-    ASSERT_TRUE(permission->FromValue(&base::Value::AsListValue(value), nullptr,
-                                      nullptr));
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
+    ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
 
   APIPermissionSet input;
@@ -131,12 +132,12 @@ TEST(PermissionSetMojomTraitsTest, BasicPermissionSet) {
   std::unique_ptr<APIPermission> permission =
       permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
-    ASSERT_TRUE(permission->FromValue(&base::Value::AsListValue(value), nullptr,
-                                      nullptr));
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
+    ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
 
   APIPermissionSet apis;

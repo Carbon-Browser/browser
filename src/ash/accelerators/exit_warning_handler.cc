@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include "ash/accelerators/accelerator_lookup.h"
+#include "ash/public/cpp/accelerator_actions.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
@@ -21,6 +23,7 @@
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/text_utils.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view.h"
@@ -29,6 +32,8 @@
 
 namespace ash {
 namespace {
+
+using AcceleratorDetails = AcceleratorLookup::AcceleratorDetails;
 
 const int64_t kTimeOutMilliseconds = 2000;
 // Color of the text of the warning message.
@@ -42,11 +47,18 @@ const int kVerticalMarginAroundText = 100;
 
 class ExitWarningWidgetDelegateView : public views::WidgetDelegateView {
  public:
-  ExitWarningWidgetDelegateView()
-      : text_(l10n_util::GetStringUTF16(IDS_ASH_SIGN_OUT_WARNING_POPUP_TEXT)),
-        accessible_name_(l10n_util::GetStringUTF16(
-            IDS_ASH_SIGN_OUT_WARNING_POPUP_TEXT_ACCESSIBLE)),
-        text_width_(0) {
+  ExitWarningWidgetDelegateView() : text_width_(0) {
+    std::vector<AcceleratorDetails> accelerators =
+        Shell::Get()->accelerator_lookup()->GetAvailableAcceleratorsForAction(
+            AcceleratorAction::kExit);
+    CHECK(!accelerators.empty());
+    // TODO(jimmyxgong): For now fetch the first accelerator of the list. But
+    // maybe there's a possibility to check which accelerator was most recently
+    // pressed.
+    text_ = l10n_util::GetStringFUTF16(
+        IDS_ASH_SIGN_OUT_WARNING_POPUP_TEXT_DYNAMIC,
+        AcceleratorLookup::GetAcceleratorDetailsText(accelerators[0]));
+
     ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
     const gfx::FontList& font_list =
         rb.GetFontList(ui::ResourceBundle::LargeFont);
@@ -63,6 +75,10 @@ class ExitWarningWidgetDelegateView : public views::WidgetDelegateView {
     label->SetSubpixelRenderingEnabled(false);
     AddChildView(std::move(label));
     SetLayoutManager(std::make_unique<views::FillLayout>());
+
+    GetViewAccessibility().SetRole(ax::mojom::Role::kAlert);
+    GetViewAccessibility().SetName(l10n_util::GetStringUTF16(
+        IDS_ASH_SIGN_OUT_WARNING_POPUP_TEXT_ACCESSIBLE));
   }
 
   ExitWarningWidgetDelegateView(const ExitWarningWidgetDelegateView&) = delete;
@@ -77,14 +93,8 @@ class ExitWarningWidgetDelegateView : public views::WidgetDelegateView {
     views::WidgetDelegateView::OnPaint(canvas);
   }
 
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-    node_data->SetName(accessible_name_);
-    node_data->role = ax::mojom::Role::kAlert;
-  }
-
  private:
   std::u16string text_;
-  std::u16string accessible_name_;
   int text_width_;
 };
 
@@ -144,10 +154,11 @@ void ExitWarningHandler::Show() {
   gfx::Size ps = delegate->GetPreferredSize();
   gfx::Rect bounds((rs.width() - ps.width()) / 2,
                    (rs.height() - ps.height()) / 3, ps.width(), ps.height());
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      views::Widget::InitParams::TYPE_POPUP);
+
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.accept_events = false;
   params.z_order = ui::ZOrderLevel::kFloatingUIElement;
   params.delegate = delegate;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Chromium Authors. All rights reserved.
+ * Copyright 2019 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,11 +8,10 @@
  * Launch PaymentRequest with a show promise and a single pre-selected option
  * for shipping worldwide and a handler for shipping address change events that
  * does not change anything.
- * @param {string} supportedMethods The payment method that is supported by this
- *        request.
+ * @param {string} supportedMethods - The payment method identifier.
  */
-function buyWithMethods(supportedMethods) { // eslint-disable-line no-unused-vars, max-len
-  var finalizedDetails = {
+function buy(supportedMethods) {
+  const finalizedDetails = {
     total: {label: 'Total', amount: {currency: 'USD', value: '1.00'}},
     shippingOptions: [{
       id: '1',
@@ -23,7 +22,7 @@ function buyWithMethods(supportedMethods) { // eslint-disable-line no-unused-var
   };
 
   try {
-    var request = new PaymentRequest(
+    const request = new PaymentRequest(
         [{supportedMethods}], {
           total: {
             label: 'PENDING TOTAL',
@@ -57,4 +56,3 @@ function buyWithMethods(supportedMethods) { // eslint-disable-line no-unused-var
     print(error.message);
   }
 }
-

@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/linux/audio_pipe_reader.h"
 
@@ -10,6 +15,7 @@
 
 #include <memory>
 
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/message_loop/message_pump_type.h"
@@ -24,9 +30,7 @@ namespace remoting {
 class AudioPipeReaderTest : public testing::Test,
                             public AudioPipeReader::StreamObserver {
  public:
-  AudioPipeReaderTest()
-    : stop_at_position_(-1) {
-  }
+  AudioPipeReaderTest() : stop_at_position_(-1) {}
 
   AudioPipeReaderTest(const AudioPipeReaderTest&) = delete;
   AudioPipeReaderTest& operator=(const AudioPipeReaderTest&) = delete;
@@ -37,14 +41,13 @@ class AudioPipeReaderTest : public testing::Test,
     audio_thread_.reset(new base::Thread("TestAudioThread"));
     audio_thread_->StartWithOptions(
         base::Thread::Options(base::MessagePumpType::IO, 0));
-    reader_ = AudioPipeReader::Create(audio_thread_->task_runner(),
-                                      pipe_path_);
+    reader_ = AudioPipeReader::Create(audio_thread_->task_runner(), pipe_path_);
     reader_->AddObserver(this);
   }
 
   // AudioPipeReader::StreamObserver interface.
   void OnDataRead(scoped_refptr<base::RefCountedString> data) override {
-    read_data_ += data->data();
+    read_data_ += data->as_string();
     if (stop_at_position_ > 0 &&
         static_cast<int>(read_data_.size()) >= stop_at_position_) {
       stop_at_position_ = -1;
@@ -71,8 +74,7 @@ class AudioPipeReaderTest : public testing::Test,
   }
 
   void WriteAndWait(const std::string& data) {
-    ASSERT_EQ(static_cast<int>(data.size()),
-              output_->WriteAtCurrentPos(data.data(), data.size()));
+    ASSERT_TRUE(output_->WriteAtCurrentPosAndCheck(base::as_byte_span(data)));
     WaitForInput(data.size());
   }
 

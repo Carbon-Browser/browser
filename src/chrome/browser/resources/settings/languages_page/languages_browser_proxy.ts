@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
  */
 
 // <if expr="is_win">
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 // </if>
 
 export interface LanguagesBrowserProxy {
@@ -17,9 +17,9 @@ export interface LanguagesBrowserProxy {
    * Sets the prospective UI language to the chosen language. This won't
    * affect the actual UI language until a restart.
    */
-  setProspectiveUILanguage(languageCode: string): void;
+  setProspectiveUiLanguage(languageCode: string): void;
 
-  getProspectiveUILanguage(): Promise<string>;
+  getProspectiveUiLanguage(): Promise<string>;
 
   // </if>
 
@@ -28,11 +28,11 @@ export interface LanguagesBrowserProxy {
 
 export class LanguagesBrowserProxyImpl implements LanguagesBrowserProxy {
   // <if expr="is_win">
-  setProspectiveUILanguage(languageCode: string) {
+  setProspectiveUiLanguage(languageCode: string) {
     chrome.send('setProspectiveUILanguage', [languageCode]);
   }
 
-  getProspectiveUILanguage() {
+  getProspectiveUiLanguage() {
     return sendWithPromise('getProspectiveUILanguage');
   }
 

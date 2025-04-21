@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ class OffscreenDocumentHost : public ExtensionHost {
  public:
   OffscreenDocumentHost(const Extension& extension,
                         content::SiteInstance* site_instance,
+                        content::BrowserContext* browser_context,
                         const GURL& url);
 
   OffscreenDocumentHost(const OffscreenDocumentHost&) = delete;

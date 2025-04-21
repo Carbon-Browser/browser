@@ -18,8 +18,6 @@ If this is not convenient (changes of the above affect the whole application) th
 gn gen --args='eyeo_application_name="My great browser" eyeo_application_version="99.99.0.1"...' ...
 ```
 
-Warning: gn `abp_application_name` and `abp_application_version` variables are deprecated since eyeo Chromium SDK version 105.
-
 ## How to set build arguments for user counting?
 
 These `gn` arguments are required for the SDK to correctly count active users and attribute usage to the product.
@@ -39,11 +37,9 @@ Always keep the auth token secret, do not embed it in open-source repositories o
 
 User counting does not transfer any user-identifiable data to eyeo, nor does it allow tracking or profiling users by eyeo.
 
-Warning: gn `adb_telemetry_client_id` and `adb_telemetry_activeping_auth_token` variables are deprecated since eyeo Chromium SDK version 105.
-
 ## How to disable ad-blocking on a specific domain?
 
-Call [AdblockController](chrome/android/java/src/org/chromium/chrome/browser/adblock/AdblockController.java)'s `addAllowedDomain()` method.
+Call [AdblockController](components/adblock/android/java/src/org/chromium/components/adblock/AdblockController.java)'s `addAllowedDomain()` method.
 
 The following example makes eyeo Chromium SDK cease blocking ads on the specified domain:
 
@@ -51,7 +47,7 @@ The following example makes eyeo Chromium SDK cease blocking ads on the specifie
 import org.chromium.components.adblock.AdblockController;
 
 String domain = "example.com";
-AdblockController.getInstance().addAllowedDomain(domain);
+AdblockController.getInstance(Profile.getLastUsedRegularProfile()).addAllowedDomain(domain);
 ```
 
 To re-enable blocking ads on the specified domain:
@@ -60,7 +56,7 @@ To re-enable blocking ads on the specified domain:
 import org.chromium.components.adblock.AdblockController;
 
 String domain = "example.com";
-AdblockController.getInstance().removeAllowedDomain(domain);
+AdblockController.getInstance(Profile.getLastUsedRegularProfile()).removeAllowedDomain(domain);
 ```
 
 Note: Pass a *domain* (`example.com`) as an argument, not a URL (`http://www.example.com/page.html`).
@@ -68,15 +64,15 @@ Note: Pass a *domain* (`example.com`) as an argument, not a URL (`http://www.exa
 
 ## How to receive notifications about blocked or allowed network requests?
 
-Implement the `AdblockController.AdBlockedObserver` interface.
+Implement the `ResourceClassificationNotifier.ResourceFilteringObserver` interface.
 
-Add your observer by calling `AdblockController.getInstance().addOnAdBlockedObserver()` and remove it by
-calling `AdblockController.getInstance().removeOnAdBlockedObserver()`. Do not add an `AdBlockedObserver` if you are not going to consume these notifications, as it has a small performance penalty.
+Add your observer by calling `ResourceClassificationNotifier.getInstance(...).addResourceFilteringObserver()` and remove it by
+calling `ResourceClassificationNotifier.getInstance(...).removeResourceFilteringObserver()`. Do not add a `ResourceFilteringObserver` if you are not going to consume these notifications, as it has a small performance penalty.
 
 
 ## How to add and remove subscription(s) to my filter lists?
 
-Call [AdblockController](chrome/android/java/src/org/chromium/chrome/browser/adblock/AdblockController.java)'s `addCustomSubscription()` method.
+Call [AdblockController](chrome/android/java/src/org/chromium/chrome/browser/adblock/AdblockController.java)'s `installSubscription()` method.
 
 The following example makes eyeo Chromium SDK install (download and parse) the filter list:
 
@@ -84,8 +80,10 @@ The following example makes eyeo Chromium SDK install (download and parse) the f
 import org.chromium.components.adblock.AdblockController;
 
 URL myFilterList = new URL("http://example.com/my_list.txt");
-AdblockController.getInstance().addCustomSubscription(myFilterList);
+AdblockController.getInstance(Profile.getLastUsedRegularProfile()).installSubscription(myFilterList);
 ```
+
+For snippet filters from the filter list to be supported, the list must be listed in `config::GetKnownSubscriptions` in `components/adblock/core/subscription_config.cc` with SubscriptionPrivilegedFilterStatus::Allowed.
 
 To remove a custom filter list:
 
@@ -93,7 +91,7 @@ To remove a custom filter list:
 import org.chromium.components.adblock.AdblockController;
 
 URL myFilterList = new URL("http://example.com/my_list.txt");
-AdblockController.getInstance().removeCustomSubscription(myFilterList);
+AdblockController.getInstance(Profile.getLastUsedRegularProfile()).uninstallSubscription(myFilterList);
 ```
 
 
@@ -153,7 +151,7 @@ In order to bundle more filter lists:
     }
 
     ```
-3. Add the generated FlatBuffer file into the ResourceBundle via `components/resources/adblock_resources.grdp`:
+3. Add the generated FlatBuffer file into the ResourceBundle via `components/adblock/core/resources/adblock_resources.grd`:
     ```
     <include name="IDR_ADBLOCK_FLATBUFFER_MY_LIST" file="${root_gen_dir}/components/resources/adblocking/my_list.fb" use_base_dir="false" type="BINDATA" compress="gzip" />
     ```
@@ -208,17 +206,13 @@ The bundled filter list will be replaced by a version of the filter list downloa
 
 ## How to test filters?
 
-Eyeo provides testing pages for eyeo Chromium SDK's ad-blocking features on https://testpages.adblockplus.org. You need to subscribe to the accompanying [test filter list](https://testpages.adblockplus.org/en/abp-testcase-subscription.txt) before loading them. To learn how to subscribe to a specific filter list, consult "How to add and remove subscription(s) to my filter lists" in this page.
+Eyeo provides testing pages for eyeo Chromium SDK's ad-blocking features on https://abptestpages.org. You need to subscribe to the accompanying [test filter list](https://abptestpages.org/en/abp-testcase-subscription.txt) before loading them. To learn how to subscribe to a specific filter list, consult "How to add and remove subscription(s) to my filter lists" in this page.
 
 
 ## How to find out what has changed between eyeo Chromium SDK releases?
 
 Differences across versions are listed in [the changelog](components/adblock/CHANGELOG.md).
 
-You can also use our [interdiff script](/tools/adblock/interdiff.py) to compare two git revision ranges.
+You can also use our [interdiff script](tools/eyeo/generate_interdiffs.sh) to compare two git revision ranges.
 
-The script requires the patchutils package to be available.
-* On Mac it is available via `brew install patchutils`
-* On Linux you can use your package manager, for example `sudo apt install patchutils`
-
-To get a combined patch, execute the script to obtain the changes introduced by eyeo Chromium SDK compared to vanilla Chromium in the old branch, and the same for the new new branch. You can obtain the necessary hashes for the revision ranges from release announcements. To get help on how to use the script, run `./interdiff.py --help`.
+To get a combined patch, execute the script to obtain the changes introduced by eyeo Chromium SDK compared to vanilla Chromium in the old branch, and the same for the new new branch. You can obtain the necessary hashes for the revision ranges from release announcements. To get help on how to use the script, run `./generate_interdiffs.sh --help`.

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ public class OfflineItem implements Cloneable {
     public static class Progress {
         public final long value;
         public final Long max;
-        @OfflineItemProgressUnit
-        public final int unit;
+        @OfflineItemProgressUnit public final int unit;
 
         public Progress(long value, Long max, int unit) {
             this.value = value;
@@ -71,8 +70,7 @@ public class OfflineItem implements Cloneable {
     // Display metadata.
     public String title;
     public String description;
-    @OfflineItemFilter
-    public int filter;
+    @OfflineItemFilter public int filter;
     public boolean isTransient;
     public boolean isSuggested;
     public boolean isAccelerated;
@@ -96,21 +94,19 @@ public class OfflineItem implements Cloneable {
     public GURL originalUrl;
     public boolean isOffTheRecord;
     public String otrProfileId;
+    public GURL referrerUrl;
+    public boolean hasUserGesture;
 
     // In Progress Metadata.
-    @OfflineItemState
-    public int state;
+    @OfflineItemState public int state;
     public boolean isResumable;
     public boolean allowMetered;
     public long receivedBytes;
     public Progress progress;
     public long timeRemainingMs;
     public boolean isDangerous;
-    @FailState
-    public int failState;
-    @PendingState
-    public int pendingState;
-    public OfflineItemSchedule schedule;
+    @FailState public int failState;
+    @PendingState public int pendingState;
 
     public OfflineItem() {
         id = new ContentId();
@@ -144,6 +140,8 @@ public class OfflineItem implements Cloneable {
         clone.originalUrl = originalUrl;
         clone.isOffTheRecord = isOffTheRecord;
         clone.otrProfileId = otrProfileId;
+        clone.referrerUrl = referrerUrl;
+        clone.hasUserGesture = hasUserGesture;
         clone.state = state;
         clone.isResumable = isResumable;
         clone.allowMetered = allowMetered;
@@ -151,7 +149,6 @@ public class OfflineItem implements Cloneable {
         clone.timeRemainingMs = timeRemainingMs;
         clone.failState = failState;
         clone.pendingState = pendingState;
-        if (schedule != null) clone.schedule = schedule.clone();
 
         if (progress != null) {
             clone.progress = new Progress(progress.value, progress.max, progress.unit);

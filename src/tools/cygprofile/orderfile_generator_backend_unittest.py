@@ -1,5 +1,5 @@
-#!/usr/bin/env vpython
-# Copyright 2015 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import orderfile_generator_backend
 class TestOrderfileGenerator(unittest.TestCase):
   def testStepRecorder(self):
     """Checks that the step recorder records step timings correctly."""
-    step_recorder = orderfile_generator_backend.StepRecorder(False)
+    step_recorder = orderfile_generator_backend.StepRecorder()
     self.assertFalse(step_recorder.ErrorRecorded())
     step_recorder.BeginStep('foo')
     self.assertFalse(step_recorder.ErrorRecorded())

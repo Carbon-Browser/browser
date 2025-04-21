@@ -1,12 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browsing_topics/browsing_topics_page_load_data_tracker.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "components/browsing_topics/util.h"
 #include "components/history/content/browser/history_context_helper.h"
 #include "components/history/core/browser/history_service.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browsing_topics_site_data_manager.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_frame_host.h"
@@ -44,11 +46,25 @@ BrowsingTopicsPageLoadDataTracker::~BrowsingTopicsPageLoadDataTracker() {
 
 BrowsingTopicsPageLoadDataTracker::BrowsingTopicsPageLoadDataTracker(
     content::Page& page)
+    : BrowsingTopicsPageLoadDataTracker(
+          page,
+          /*redirect_count=*/0,
+          /*redirect_with_topics_invoked_count=*/0,
+          /*source_id_before_redirects=*/
+          page.GetMainDocument().GetPageUkmSourceId()) {}
+
+BrowsingTopicsPageLoadDataTracker::BrowsingTopicsPageLoadDataTracker(
+    content::Page& page,
+    int redirect_count,
+    int redirect_with_topics_invoked_count,
+    ukm::SourceId source_id_before_redirects)
     : content::PageUserData<BrowsingTopicsPageLoadDataTracker>(page),
       hashed_main_frame_host_(HashMainFrameHostForStorage(
           page.GetMainDocument().GetLastCommittedOrigin().host())),
-      source_id_(page.GetMainDocument().GetPageUkmSourceId()) {
-  DCHECK(page.IsPrimary());
+      redirect_count_(redirect_count),
+      redirect_with_topics_invoked_count_(redirect_with_topics_invoked_count),
+      source_id_before_redirects_(source_id_before_redirects) {
+  source_id_ = page.GetMainDocument().GetPageUkmSourceId();
 
   // TODO(yaoxia): consider dropping the permissions policy checks. We require
   // that the API is used in the page, and that already implies that the
@@ -61,18 +77,52 @@ BrowsingTopicsPageLoadDataTracker::BrowsingTopicsPageLoadDataTracker(
           blink::mojom::PermissionsPolicyFeature::kBrowsingTopics) &&
       page.GetMainDocument().IsFeatureEnabled(
           blink::mojom::PermissionsPolicyFeature::
-              kBrowsingTopicsBackwardCompatible)) {
-    eligible_to_commit_ = true;
+              kBrowsingTopicsBackwardCompatible) &&
+      page.GetMainDocument().IsLastCrossDocumentNavigationStartedByUser()) {
+    eligible_to_observe_ = true;
   }
 }
 
 void BrowsingTopicsPageLoadDataTracker::OnBrowsingTopicsApiUsed(
     const HashedDomain& hashed_context_domain,
-    history::HistoryService* history_service) {
-  if (!eligible_to_commit_)
-    return;
+    const std::string& context_domain,
+    history::HistoryService* history_service,
+    bool observe) {
+  CHECK(page().IsPrimary());
 
-  // On the first API usage in the page, set the allowed bit in history.
+  if (!topics_invoked_) {
+    // We want an accurate measure up to 4 redirects, which corresponds to 5
+    // page loads. Numbers beyond that will be grouped to the overflow bucket
+    // `kExclusiveMaxBucket`.
+    int kExclusiveMaxBucket = 5;
+    base::UmaHistogramExactLinear(
+        "BrowsingTopics.PageLoad.OnTopicsFirstInvoked.RedirectCount",
+        redirect_count_, kExclusiveMaxBucket);
+    base::UmaHistogramExactLinear(
+        "BrowsingTopics.PageLoad.OnTopicsFirstInvoked."
+        "RedirectWithTopicsInvokedCount",
+        redirect_with_topics_invoked_count_, kExclusiveMaxBucket);
+
+    if (redirect_with_topics_invoked_count_ >= 1) {
+      ukm::UkmRecorder* ukm_recorder = ukm::UkmRecorder::Get();
+      ukm::builders::BrowsingTopics_TopicsRedirectChainDetected builder(
+          source_id_before_redirects_);
+
+      builder.SetNumberOfPagesCallingTopics(
+          redirect_with_topics_invoked_count_ + 1);
+
+      builder.Record(ukm_recorder->Get());
+    }
+
+    topics_invoked_ = true;
+  }
+
+  if (!observe || !eligible_to_observe_) {
+    return;
+  }
+
+  // On the first Topics observation in the page, set the allowed bit in
+  // history.
   if (observed_hashed_context_domains_.empty()) {
     content::WebContents* web_contents =
         content::WebContents::FromRenderFrameHost(&page().GetMainDocument());
@@ -83,7 +133,7 @@ void BrowsingTopicsPageLoadDataTracker::OnBrowsingTopicsApiUsed(
         web_contents->GetLastCommittedURL());
   }
 
-  DCHECK_LE(
+  CHECK_LE(
       blink::features::
           kBrowsingTopicsMaxNumberOfApiUsageContextDomainsToStorePerPageLoad
               .Get(),
@@ -117,11 +167,11 @@ void BrowsingTopicsPageLoadDataTracker::OnBrowsingTopicsApiUsed(
   // app enters background, it may be killed without further notification.
   page()
       .GetMainDocument()
-      .GetProcess()
-      ->GetStoragePartition()
+      .GetBrowserContext()
+      ->GetDefaultStoragePartition()
       ->GetBrowsingTopicsSiteDataManager()
-      ->OnBrowsingTopicsApiUsed(hashed_main_frame_host_,
-                                {hashed_context_domain}, base::Time::Now());
+      ->OnBrowsingTopicsApiUsed(hashed_main_frame_host_, hashed_context_domain,
+                                context_domain, base::Time::Now());
 }
 
 PAGE_USER_DATA_KEY_IMPL(BrowsingTopicsPageLoadDataTracker);

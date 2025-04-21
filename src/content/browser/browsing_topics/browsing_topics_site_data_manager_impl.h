@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,13 @@ class CONTENT_EXPORT BrowsingTopicsSiteDataManagerImpl
 
   void OnBrowsingTopicsApiUsed(
       const browsing_topics::HashedHost& hashed_main_frame_host,
-      const base::flat_set<browsing_topics::HashedDomain>&
-          hashed_context_domains,
+      const browsing_topics::HashedDomain& hashed_context_domain,
+      const std::string& context_domain,
       base::Time time) override;
+
+  void GetContextDomainsFromHashedContextDomains(
+      const std::set<browsing_topics::HashedDomain>& hashed_context_domains,
+      GetContextDomainsFromHashedContextDomainsCallback callback) override;
 
  private:
   base::SequenceBound<BrowsingTopicsSiteDataStorage> storage_;

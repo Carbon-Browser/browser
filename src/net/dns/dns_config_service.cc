@@ -1,25 +1,25 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/dns/dns_config_service.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/dns/dns_hosts.h"
 #include "net/dns/serial_worker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -29,7 +29,7 @@ const base::TimeDelta DnsConfigService::kInvalidationTimeout =
 
 DnsConfigService::DnsConfigService(
     base::FilePath::StringPieceType hosts_file_path,
-    absl::optional<base::TimeDelta> config_change_delay)
+    std::optional<base::TimeDelta> config_change_delay)
     : config_change_delay_(config_change_delay),
       hosts_file_path_(hosts_file_path) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
@@ -101,12 +101,12 @@ DnsConfigService::HostsReader::WorkItem::WorkItem(
 
 DnsConfigService::HostsReader::WorkItem::~WorkItem() = default;
 
-absl::optional<DnsHosts> DnsConfigService::HostsReader::WorkItem::ReadHosts() {
+std::optional<DnsHosts> DnsConfigService::HostsReader::WorkItem::ReadHosts() {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   DnsHosts dns_hosts;
   if (!dns_hosts_parser_->ParseHosts(&dns_hosts))
-    return absl::nullopt;
+    return std::nullopt;
 
   return dns_hosts;
 }
@@ -229,7 +229,7 @@ void DnsConfigService::OnTimeout() {
 }
 
 void DnsConfigService::OnCompleteConfig() {
-  timer_.AbandonAndStop();
+  timer_.Stop();
   if (!need_update_)
     return;
   need_update_ = false;
@@ -245,7 +245,7 @@ void DnsConfigService::OnCompleteConfig() {
 void DnsConfigService::OnConfigChanged(bool succeeded) {
   if (config_change_delay_) {
     // Ignore transient flutter of config source by delaying the signal a bit.
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&DnsConfigService::OnConfigChangedDelayed,
                        weak_factory_.GetWeakPtr(), succeeded),

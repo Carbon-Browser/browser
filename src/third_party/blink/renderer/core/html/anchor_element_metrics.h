@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,16 @@
 
 namespace blink {
 
-class Document;
-class HTMLAnchorElement;
+class HTMLAnchorElementBase;
 
-// Helper function that returns the root document the anchor element is in.
-Document* GetRootDocument(const HTMLAnchorElement& anchor);
+// Exported for testing only.
+CORE_EXPORT uint32_t AnchorElementId(const HTMLAnchorElementBase& element);
 
-uint32_t AnchorElementId(const HTMLAnchorElement& element);
-
+// Returns null if the given element should not be evaluated.
 // Exported for testing only.
 CORE_EXPORT
 mojom::blink::AnchorElementMetricsPtr CreateAnchorElementMetrics(
-    const HTMLAnchorElement&);
+    const HTMLAnchorElementBase&);
 
 }  // namespace blink
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_KEY_MANAGEMENT_BROWSER_KEY_ROTATION_LAUNCHER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/scoped_refptr.h"
@@ -24,6 +25,8 @@ namespace enterprise_connectors {
 
 class KeyRotationLauncher {
  public:
+  using SynchronizationCallback = base::OnceCallback<void(std::optional<int>)>;
+
   static std::unique_ptr<KeyRotationLauncher> Create(
       policy::BrowserDMTokenStorage* dm_token_storage,
       policy::DeviceManagementService* device_management_service,

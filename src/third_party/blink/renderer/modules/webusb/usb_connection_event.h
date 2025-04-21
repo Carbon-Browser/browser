@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class USBConnectionEvent final : public Event {
   USBConnectionEvent(const AtomicString& type, const USBConnectionEventInit*);
   USBConnectionEvent(const AtomicString& type, USBDevice*);
 
-  USBDevice* device() const { return device_; }
+  USBDevice* device() const { return device_.Get(); }
 
   void Trace(Visitor*) const override;
 

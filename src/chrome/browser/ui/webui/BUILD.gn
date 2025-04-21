@@ -1,67 +1,105 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//chromeos/dbus/config/use_real_dbus_clients.gni")
+import("//extensions/buildflags/buildflags.gni")
+import("//tools/metrics/generate_allowlist_from_histograms_file.gni")
+
+generate_allowlist_from_histograms_file("webui_url_hashes") {
+  namespace = "webui_metrics"
+  input_xml_file = "//tools/metrics/histograms/enums.xml"
+  tag = "enum"
+  output_file = "webui_url_hashes.h"
+  allow_list_name = "WebUIUrlHashes"
+}
 
 source_set("configs") {
   sources = [
     "chrome_untrusted_web_ui_configs.cc",
     "chrome_untrusted_web_ui_configs.h",
-    "chrome_untrusted_web_ui_configs_common.cc",
-    "chrome_untrusted_web_ui_configs_common.h",
     "chrome_web_ui_configs.cc",
     "chrome_web_ui_configs.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
+  if (!is_android) {
+    public_deps = [ "//chrome/browser/ui/webui/commerce" ]
+  }
+
   deps = [
+    ":webui",
+    "//chrome/browser/optimization_guide:optimization_guide",
+    "//chrome/browser/ui",
+    "//chrome/browser/ui/webui/safe_browsing",
+    "//components/compose:buildflags",
+    "//components/lens:buildflags",
+    "//components/security_interstitials/content:security_interstitial_page",
     "//content/public/browser",
-    "//printing/buildflags:buildflags",
+    "//extensions/buildflags:buildflags",
+    "//printing/buildflags",
     "//skia",
     "//third_party/abseil-cpp:absl",
   ]
 
-  if (is_android) {
-    sources += [
-      "chrome_untrusted_web_ui_configs_android.cc",
-      "chrome_untrusted_web_ui_configs_android.h",
-    ]
-  }
-
-  if (is_mac || is_win || is_linux || is_chromeos || is_fuchsia) {
-    sources += [
-      "chrome_untrusted_web_ui_configs_desktop.cc",
-      "chrome_untrusted_web_ui_configs_desktop.h",
-    ]
-
-    deps += [ "//chrome/browser/ui/webui/image_editor:image_editor_ui" ]
-  }
-
-  # Includes Ash Chrome and Lacros Chrome
-  if (is_chromeos) {
-    sources += [
-      "chrome_untrusted_web_ui_configs_chromeos.cc",
-      "chrome_untrusted_web_ui_configs_chromeos.h",
-      "chrome_web_ui_configs_chromeos.cc",
-      "chrome_web_ui_configs_chromeos.h",
-    ]
-    deps += [ "//build:chromeos_buildflags" ]
-  }
-
-  if (is_chromeos_ash) {
+  if (is_win || is_mac || is_linux || is_chromeos) {
     deps += [
-      "//ash/constants",
-      "//ash/webui/eche_app_ui",
-      "//ash/webui/file_manager:file_manager_untrusted_ui",
-      "//ash/webui/help_app_ui",
-      "//ash/webui/os_feedback_ui",
-      "//chrome/browser/ash",
+      "//chrome/browser/ui/lens",
+      "//chrome/browser/ui/views/side_panel",
+      "//chrome/browser/ui/webui/signin",
     ]
-    if (!is_official_build) {
+
+    if (!is_chromeos) {
       deps += [
-        "//ash/webui/demo_mode_app_ui",
-        "//ash/webui/sample_system_web_app_ui",
+        "//chrome/browser/ui/webui/signin:profile",
+        "//chrome/browser/ui/webui/whats_new",
       ]
     }
+  }
+
+  if (is_chromeos) {
+    deps += [
+      "//chrome/browser/ui/webui/ash/config",
+      "//chromeos/constants",
+    ]
+  }
+}
+
+source_set("webui") {
+  sources = [
+    "constrained_web_dialog_ui.cc",
+    "constrained_web_dialog_ui.h",
+  ]
+
+  sources += get_target_outputs(":webui_url_hashes")
+
+  public_deps = [ "//content/public/browser" ]
+
+  deps = [
+    ":webui_url_hashes",
+    "//chrome/common",
+    "//extensions/buildflags",
+  ]
+  if (enable_extensions) {
+    deps += [ "//chrome/browser/extensions" ]
+  }
+  if (!is_android) {
+    deps += [ "//ui/web_dialogs" ]
+  }
+}
+
+if (!is_android) {
+  source_set("webui_util") {
+    sources = [
+      "webui_embedding_context.cc",
+      "webui_embedding_context.h",
+    ]
+
+    deps = [
+      "//chrome/browser/ui/browser_window:browser_window",
+      "//chrome/browser/ui/tabs:tabs_public",
+    ]
   }
 }

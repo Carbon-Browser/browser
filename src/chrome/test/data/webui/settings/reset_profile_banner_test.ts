@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {ResetBrowserProxyImpl, Router, routes, SettingsResetProfileBannerElement} from 'chrome://settings/settings.js';
+import type {SettingsResetProfileBannerElement} from 'chrome://settings/settings.js';
+import {ResetBrowserProxyImpl, Router, routes} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 import {TestResetBrowserProxy} from './test_reset_browser_proxy.js';
@@ -17,7 +18,7 @@ suite('BannerTests', function() {
   setup(function() {
     browserProxy = new TestResetBrowserProxy();
     ResetBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     resetBanner = document.createElement('settings-reset-profile-banner');
     document.body.appendChild(resetBanner);
     assertTrue(resetBanner.$.dialog.open);

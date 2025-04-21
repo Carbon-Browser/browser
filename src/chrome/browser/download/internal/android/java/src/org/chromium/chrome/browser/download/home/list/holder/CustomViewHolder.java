@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,9 @@ public class CustomViewHolder extends ListItemViewHolder {
     /** Creates a new {@link CustomViewHolder} instance. */
     public CustomViewHolder(ViewGroup parent) {
         super(new FrameLayout(parent.getContext()));
-        itemView.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        itemView.setLayoutParams(
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     // ListItemViewHolder implemenation.
@@ -35,7 +36,8 @@ public class CustomViewHolder extends ListItemViewHolder {
         if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(viewItem.customView);
 
         viewGroup.removeAllViews();
-        viewGroup.addView(viewItem.customView,
+        viewGroup.addView(
+                viewItem.customView,
                 new ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }

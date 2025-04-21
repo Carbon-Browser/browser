@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,10 +23,5 @@ void DistillCurrentPage(content::WebContents* source_web_contents);
 // ownership of any WebContents.
 void DistillAndView(content::WebContents* source_web_contents,
                     content::WebContents* destination_web_contents);
-
-// Navigates back to the original page from which this page was distilled.
-// |distilled_web_contents| must not be null and must point to an already
-// distilled page. This method does not take ownership of the web contents.
-void ReturnToOriginalPage(content::WebContents* distilled_web_contents);
 
 #endif  // CHROME_BROWSER_DOM_DISTILLER_TAB_UTILS_H_

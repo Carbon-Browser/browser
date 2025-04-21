@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,7 +24,7 @@ def oncall(
         name,
         url,
         show_primary_secondary_labels = None,
-        branch_selector = branches.MAIN):
+        branch_selector = branches.selector.MAIN):
     """Define an oncall rotation to appear in a console header.
 
     Args:
@@ -44,7 +44,7 @@ def oncall(
         show_primary_secondary_labels = show_primary_secondary_labels,
     ))
 
-def link_group(*, name, links, branch_selector = branches.MAIN):
+def link_group(*, name, links, branch_selector = branches.selector.MAIN):
     """Define a link group to appear in a console header.
 
     A link group is a set of links that are displayed together under a common
@@ -68,7 +68,7 @@ def link_group(*, name, links, branch_selector = branches.MAIN):
         links = links,
     ))
 
-def link(*, url, text, alt = None, branch_selector = branches.MAIN):
+def link(*, url, text, alt = None, branch_selector = branches.selector.MAIN):
     """Define a link to appear in a console header.
 
     Args:
@@ -93,7 +93,7 @@ def console_group(
         *,
         console_ids,
         title = None,
-        branch_selector = branches.MAIN):
+        branch_selector = branches.selector.MAIN):
     """Define a console group.
 
     A console group is a set of consoles that will be displayed in the header.
@@ -122,7 +122,8 @@ def header(
         oncalls = None,
         link_groups = None,
         console_groups = None,
-        tree_status_host = None):
+        tree_status_host = None,
+        tree_name = None):
     """Define a console header.
 
     The returned object can be specified as the header when defining a console
@@ -135,15 +136,20 @@ def header(
         in the header.
       console_groups - Optional list of console groups returned from
         `console_group` to display in the header.
-      tree_status_host - Optional URL of the tree status host. If provided, the
-        current tree status is displayed at the top of the header, colored
-        according to the status of the tree.
+      tree_status_host - DEPRECATED: Use tree_name instead.
+        Optional URL of the tree status host.
+        If provided, the current tree status is displayed at the top of the header,
+        colored according to the status of the tree.
+      tree_name - Name of the tree in LUCI Tree Status app.
+        If provided, the current tree status is displayed at the top of the header,
+        colored according to the status of the tree.
     """
     return _remove_none_values(dict(
         oncalls = _remove_none(oncalls or []),
         links = _remove_none(link_groups or []),
         console_groups = _remove_none(console_groups or []),
         tree_status_host = tree_status_host,
+        tree_name = tree_name,
     ))
 
 headers = struct(

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,12 +33,10 @@ BlinkSchemefulSite::BlinkSchemefulSite(const net::SchemefulSite& site) {
   // We clamp up to 0 because DefaultPortForScheme() can return -1 for
   // non-standard schemes which net::SchemefulSite stores as 0. So we need to
   // make sure our check matches.
-  DCHECK(site_as_origin_->Port() ==
-         std::max(url::DefaultPortForScheme(
-                      site_as_origin_->Protocol().Ascii().c_str(),
-                      static_cast<int>(
-                          site_as_origin_->Protocol().Ascii().length())),
-                  0));
+  DCHECK(
+      site_as_origin_->Port() ==
+      std::max(url::DefaultPortForScheme(site_as_origin_->Protocol().Ascii()),
+               0));
 }
 
 BlinkSchemefulSite::operator net::SchemefulSite() const {

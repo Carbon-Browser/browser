@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@
 #include "net/base/net_errors.h"
 #include "net/base/network_isolation_key.h"
 #include "net/base/port_util.h"
-#include "net/cert/test_root_certs.h"
 #include "net/cert/x509_certificate.h"
 #include "net/dns/public/dns_query_type.h"
 #include "net/log/net_log_with_source.h"
+#include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "url/gurl.h"
 
@@ -61,17 +61,12 @@ bool GetLocalCertificatesDir(const base::FilePath& certificates_dir,
   }
 
   base::FilePath src_dir;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir)) {
     return false;
+  }
 
   *local_certificates_dir = src_dir.Append(certificates_dir);
   return true;
-}
-
-bool RegisterRootCertsInternal(const base::FilePath& file_path) {
-  TestRootCerts* root_certs = TestRootCerts::GetInstance();
-  return root_certs->AddFromFile(file_path.AppendASCII("ocsp-test-root.pem")) &&
-         root_certs->AddFromFile(file_path.AppendASCII("root_ca_cert.pem"));
 }
 
 }  // namespace
@@ -114,7 +109,6 @@ base::FilePath BaseTestServer::SSLOptions::GetCertificateFile() const {
     default:
       NOTREACHED();
   }
-  return base::FilePath();
 }
 
 BaseTestServer::BaseTestServer(Type type) : type_(type) {
@@ -138,11 +132,6 @@ const HostPortPair& BaseTestServer::host_port_pair() const {
   return host_port_pair_;
 }
 
-const base::Value& BaseTestServer::server_data() const {
-  DCHECK(server_data_);
-  return *server_data_;
-}
-
 std::string BaseTestServer::GetScheme() const {
   switch (type_) {
     case TYPE_WS:
@@ -152,7 +141,6 @@ std::string BaseTestServer::GetScheme() const {
     default:
       NOTREACHED();
   }
-  return std::string();
 }
 
 bool BaseTestServer::GetAddressList(AddressList* address_list) const {
@@ -210,10 +198,8 @@ bool BaseTestServer::GetFilePathWithReplacements(
   for (auto it = text_to_replace.begin(); it != end; ++it) {
     const std::string& old_text = it->first;
     const std::string& new_text = it->second;
-    std::string base64_old;
-    std::string base64_new;
-    base::Base64Encode(old_text, &base64_old);
-    base::Base64Encode(new_text, &base64_new);
+    std::string base64_old = base::Base64Encode(old_text);
+    std::string base64_new = base::Base64Encode(new_text);
     if (first_query_parameter) {
       new_file_path += "?";
       first_query_parameter = false;
@@ -230,30 +216,16 @@ bool BaseTestServer::GetFilePathWithReplacements(
   return true;
 }
 
-void BaseTestServer::RegisterTestCerts() {
-  bool added_root_certs = RegisterRootCertsInternal(GetTestCertsDirectory());
-  DCHECK(added_root_certs);
+ScopedTestRoot BaseTestServer::RegisterTestCerts() {
+  auto root = ImportCertFromFile(GetTestCertsDirectory(), "root_ca_cert.pem");
+  if (!root)
+    return ScopedTestRoot();
+  return ScopedTestRoot(CertificateList{root});
 }
 
-bool BaseTestServer::LoadTestRootCert() const {
-  TestRootCerts* root_certs = TestRootCerts::GetInstance();
-  DCHECK(root_certs);
-
-  // Should always use absolute path to load the root certificate.
-  base::FilePath root_certificate_path;
-  if (!GetLocalCertificatesDir(certificates_dir_, &root_certificate_path)) {
-    LOG(ERROR) << "Could not get local certificates directory from "
-               << certificates_dir_ << ".";
-    return false;
-  }
-
-  if (!RegisterRootCertsInternal(root_certificate_path)) {
-    LOG(ERROR) << "Could not register root certificates from "
-               << root_certificate_path << ".";
-    return false;
-  }
-
-  return true;
+bool BaseTestServer::LoadTestRootCert() {
+  scoped_test_root_ = RegisterTestCerts();
+  return !scoped_test_root_.IsEmpty();
 }
 
 scoped_refptr<X509Certificate> BaseTestServer::GetCertificate() const {
@@ -273,7 +245,7 @@ scoped_refptr<X509Certificate> BaseTestServer::GetCertificate() const {
 
   CertificateList certs_in_file =
       X509Certificate::CreateCertificateListFromBytes(
-          base::as_bytes(base::make_span(cert_data)),
+          base::as_byte_span(cert_data),
           X509Certificate::FORMAT_PEM_CERT_SEQUENCE);
   if (certs_in_file.empty())
     return nullptr;
@@ -310,9 +282,7 @@ bool BaseTestServer::SetAndParseServerData(const std::string& server_data,
     return false;
   }
 
-  server_data_ = std::move(*parsed_json);
-
-  absl::optional<int> port_value = server_data_->FindIntKey("port");
+  std::optional<int> port_value = parsed_json->GetDict().FindInt("port");
   if (!port_value) {
     LOG(ERROR) << "Could not find port value";
     return false;
@@ -342,15 +312,13 @@ bool BaseTestServer::SetupWhenServerStarted() {
 }
 
 void BaseTestServer::CleanUpWhenStoppingServer() {
-  TestRootCerts* root_certs = TestRootCerts::GetInstance();
-  root_certs->Clear();
-
+  scoped_test_root_.Reset({});
   host_port_pair_.set_port(0);
   allowed_port_.reset();
   started_ = false;
 }
 
-absl::optional<base::Value::Dict> BaseTestServer::GenerateArguments() const {
+std::optional<base::Value::Dict> BaseTestServer::GenerateArguments() const {
   base::Value::Dict arguments;
   arguments.Set("host", host_port_pair_.host());
   arguments.Set("port", host_port_pair_.port());
@@ -379,7 +347,7 @@ absl::optional<base::Value::Dict> BaseTestServer::GenerateArguments() const {
           !base::PathExists(certificate_path)) {
         LOG(ERROR) << "Certificate path " << certificate_path.value()
                    << " doesn't exist. Can't launch https server.";
-        return absl::nullopt;
+        return std::nullopt;
       }
       arguments.Set("cert-and-key-file", certificate_path.AsUTF8Unsafe());
     }
@@ -396,7 +364,7 @@ absl::optional<base::Value::Dict> BaseTestServer::GenerateArguments() const {
       if (it->IsAbsolute() && !base::PathExists(*it)) {
         LOG(ERROR) << "Client authority path " << it->value()
                    << " doesn't exist. Can't launch https server.";
-        return absl::nullopt;
+        return std::nullopt;
       }
       ssl_client_certs.Append(it->AsUTF8Unsafe());
     }
@@ -406,7 +374,7 @@ absl::optional<base::Value::Dict> BaseTestServer::GenerateArguments() const {
     }
   }
 
-  return absl::make_optional(std::move(arguments));
+  return std::make_optional(std::move(arguments));
 }
 
 }  // namespace net

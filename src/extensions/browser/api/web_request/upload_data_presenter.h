@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,15 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
-#include <vector>
+#include <string_view>
 
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
+#include "base/values.h"
 
 namespace base {
-class DictionaryValue;
 class FilePath;
-class ListValue;
-class Value;
 }
 
 namespace extensions {
@@ -38,7 +36,7 @@ namespace subtle {
 // Appends a dictionary {'key': 'value'} to |list|.
 void AppendKeyValuePair(const char* key,
                         base::Value value,
-                        base::ListValue* list);
+                        base::Value::List& list);
 
 }  // namespace subtle
 
@@ -57,10 +55,10 @@ class UploadDataPresenter {
   UploadDataPresenter& operator=(const UploadDataPresenter&) = delete;
 
   virtual ~UploadDataPresenter();
-  virtual void FeedBytes(base::StringPiece bytes) = 0;
+  virtual void FeedBytes(std::string_view bytes) = 0;
   virtual void FeedFile(const base::FilePath& path) = 0;
   virtual bool Succeeded() = 0;
-  virtual std::unique_ptr<base::Value> Result() = 0;
+  virtual std::optional<base::Value> TakeResult() = 0;
 
  protected:
   UploadDataPresenter() {}
@@ -79,29 +77,28 @@ class RawDataPresenter : public UploadDataPresenter {
   ~RawDataPresenter() override;
 
   // Implementation of UploadDataPresenter.
-  void FeedBytes(base::StringPiece bytes) override;
+  void FeedBytes(std::string_view bytes) override;
   void FeedFile(const base::FilePath& path) override;
   bool Succeeded() override;
-  std::unique_ptr<base::Value> Result() override;
+  std::optional<base::Value> TakeResult() override;
 
  private:
-  void FeedNextBytes(const char* bytes, size_t size);
+  void FeedNextBytes(base::span<const uint8_t> bytes);
   void FeedNextFile(const std::string& filename);
   FRIEND_TEST_ALL_PREFIXES(WebRequestUploadDataPresenterTest, RawData);
 
-  const bool success_;
-  std::unique_ptr<base::ListValue> list_;
+  base::Value::List list_;
 };
 
 // This class inspects the contents of bytes elements. It uses the
 // parser classes inheriting from FormDataParser to parse the concatenated
 // content of such elements. If the parsing is successful, the parsed form is
-// returned as a DictionaryValue. For example, a form consisting of
+// returned as a Value of type DICT. For example, a form consisting of
 // <input name="check" type="checkbox" value="A" checked />
 // <input name="check" type="checkbox" value="B" checked />
 // <input name="text" type="text" value="abc" />
 // would be represented as {"check": ["A", "B"], "text": ["abc"]} (although as a
-// DictionaryValue, not as a JSON string).
+// Value, not as a JSON string).
 class ParsedDataPresenter : public UploadDataPresenter {
  public:
   explicit ParsedDataPresenter(const net::HttpRequestHeaders& request_headers);
@@ -112,10 +109,10 @@ class ParsedDataPresenter : public UploadDataPresenter {
   ~ParsedDataPresenter() override;
 
   // Implementation of UploadDataPresenter.
-  void FeedBytes(base::StringPiece bytes) override;
+  void FeedBytes(std::string_view bytes) override;
   void FeedFile(const base::FilePath& path) override;
   bool Succeeded() override;
-  std::unique_ptr<base::Value> Result() override;
+  std::optional<base::Value> TakeResult() override;
 
   // Allows to create ParsedDataPresenter without request headers. Uses the
   // parser for "application/x-www-form-urlencoded" form encoding. Only use this
@@ -131,7 +128,7 @@ class ParsedDataPresenter : public UploadDataPresenter {
 
   std::unique_ptr<FormDataParser> parser_;
   bool success_;
-  std::unique_ptr<base::DictionaryValue> dictionary_;
+  std::optional<base::Value::Dict> dictionary_;
 };
 
 }  // namespace extensions

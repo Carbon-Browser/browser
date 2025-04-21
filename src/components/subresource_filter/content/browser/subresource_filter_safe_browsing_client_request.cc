@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/subresource_filter/content/browser/subresource_filter_safe_browsing_client.h"
 #include "content/public/browser/browser_thread.h"
 #include "url/gurl.h"
@@ -26,33 +27,32 @@ SubresourceFilterSafeBrowsingClientRequest::
         base::TimeTicks start_time,
         scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
             database_manager,
-        scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
         SubresourceFilterSafeBrowsingClient* client)
-    : request_id_(request_id),
+    : safe_browsing::SafeBrowsingDatabaseManager::Client(GetPassKey()),
+      request_id_(request_id),
       start_time_(start_time),
       database_manager_(std::move(database_manager)),
       client_(client) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-  timer_.SetTaskRunner(std::move(io_task_runner));
+  CHECK_CURRENTLY_ON(content::BrowserThread::UI, base::NotFatalUntil::M129);
 }
 
 SubresourceFilterSafeBrowsingClientRequest::
     ~SubresourceFilterSafeBrowsingClientRequest() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+  CHECK_CURRENTLY_ON(content::BrowserThread::UI, base::NotFatalUntil::M129);
   if (!request_completed_)
     database_manager_->CancelCheck(this);
   timer_.Stop();
 }
 
 void SubresourceFilterSafeBrowsingClientRequest::Start(const GURL& url) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+  CHECK_CURRENTLY_ON(content::BrowserThread::UI, base::NotFatalUntil::M129);
   // Just return SAFE if the database is not supported.
   bool synchronous_finish =
       database_manager_->CheckUrlForSubresourceFilter(url, this);
   if (synchronous_finish) {
     request_completed_ = true;
     SendCheckResultToClient(false /* served_from_network */,
-                            safe_browsing::SB_THREAT_TYPE_SAFE,
+                            safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE,
                             safe_browsing::ThreatMetadata());
     return;
   }
@@ -67,16 +67,16 @@ void SubresourceFilterSafeBrowsingClientRequest::OnCheckBrowseUrlResult(
     const GURL& url,
     safe_browsing::SBThreatType threat_type,
     const safe_browsing::ThreatMetadata& metadata) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+  CHECK_CURRENTLY_ON(content::BrowserThread::UI, base::NotFatalUntil::M129);
   request_completed_ = true;
   SendCheckResultToClient(true /* served_from_network */, threat_type,
                           metadata);
 }
 
 void SubresourceFilterSafeBrowsingClientRequest::OnCheckUrlTimeout() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+  CHECK_CURRENTLY_ON(content::BrowserThread::UI, base::NotFatalUntil::M129);
   SendCheckResultToClient(true /* served_from_network */,
-                          safe_browsing::SB_THREAT_TYPE_SAFE,
+                          safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE,
                           safe_browsing::ThreatMetadata());
 }
 

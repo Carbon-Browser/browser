@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@
 
 namespace syncer {
 
-// TODO(crbug.com/1152824): Avoid using thread-safe refcounting, since it's only
-// needed by a few (one?) browser test.
+// TODO(crbug.com/40733890): Avoid using thread-safe refcounting, since it's
+// only needed by a few (one?) browser test.
 struct SyncData::InternalData
     : public base::RefCountedThreadSafe<InternalData> {
   InternalData() = default;
@@ -47,25 +47,25 @@ SyncData& SyncData::operator=(SyncData&& other) = default;
 SyncData::~SyncData() = default;
 
 // Static.
-SyncData SyncData::CreateLocalDelete(const std::string& client_tag_unhashed,
-                                     ModelType datatype) {
+SyncData SyncData::CreateLocalDelete(std::string_view client_tag_unhashed,
+                                     DataType datatype) {
   sync_pb::EntitySpecifics specifics;
   AddDefaultFieldValue(datatype, &specifics);
-  return CreateLocalData(client_tag_unhashed, std::string(), specifics);
+  return CreateLocalData(client_tag_unhashed, {}, specifics);
 }
 
 // Static.
-SyncData SyncData::CreateLocalData(const std::string& client_tag_unhashed,
-                                   const std::string& non_unique_title,
+SyncData SyncData::CreateLocalData(std::string_view client_tag_unhashed,
+                                   std::string_view non_unique_title,
                                    const sync_pb::EntitySpecifics& specifics) {
-  const ModelType model_type = GetModelTypeFromSpecifics(specifics);
-  DCHECK(IsRealDataType(model_type));
+  const DataType data_type = GetDataTypeFromSpecifics(specifics);
+  DCHECK(IsRealDataType(data_type));
 
   DCHECK(!client_tag_unhashed.empty());
 
   SyncData data(base::MakeRefCounted<InternalData>());
   data.ptr_->client_tag_hash =
-      ClientTagHash::FromUnhashed(model_type, client_tag_unhashed);
+      ClientTagHash::FromUnhashed(data_type, client_tag_unhashed);
   data.ptr_->non_unique_name = non_unique_title;
   data.ptr_->specifics = specifics;
   return data;
@@ -77,6 +77,7 @@ SyncData SyncData::CreateRemoteData(sync_pb::EntitySpecifics specifics,
   SyncData data(base::MakeRefCounted<InternalData>());
   data.ptr_->client_tag_hash = client_tag_hash;
   data.ptr_->specifics = std::move(specifics);
+  DCHECK(IsRealDataType(data.GetDataType()));
   return data;
 }
 
@@ -88,8 +89,8 @@ const sync_pb::EntitySpecifics& SyncData::GetSpecifics() const {
   return ptr_->specifics;
 }
 
-ModelType SyncData::GetDataType() const {
-  return GetModelTypeFromSpecifics(GetSpecifics());
+DataType SyncData::GetDataType() const {
+  return GetDataTypeFromSpecifics(GetSpecifics());
 }
 
 ClientTagHash SyncData::GetClientTagHash() const {
@@ -101,12 +102,13 @@ const std::string& SyncData::GetTitle() const {
 }
 
 std::string SyncData::ToString() const {
-  if (!IsValid())
+  if (!IsValid()) {
     return "<Invalid SyncData>";
+  }
 
-  std::string type = ModelTypeToDebugString(GetDataType());
+  std::string type = DataTypeToDebugString(GetDataType());
   std::string specifics;
-  base::JSONWriter::WriteWithOptions(*EntitySpecificsToValue(GetSpecifics()),
+  base::JSONWriter::WriteWithOptions(EntitySpecificsToValue(GetSpecifics()),
                                      base::JSONWriter::OPTIONS_PRETTY_PRINT,
                                      &specifics);
 

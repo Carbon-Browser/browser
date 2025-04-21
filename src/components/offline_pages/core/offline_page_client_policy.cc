@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/no_destructor.h"
 #include "base/time/time.h"
 #include "components/offline_pages/core/client_namespace_constants.h"
-#include "components/offline_pages/core/offline_page_client_policy.h"
 
 namespace offline_pages {
 
@@ -59,13 +58,6 @@ PolicyData BuildPolicies() {
     auto policy =
         OfflinePageClientPolicy::CreatePersistent(kNTPSuggestionsNamespace);
     policy.is_supported_by_download = true;
-    all_policies.push_back(policy);
-  }
-  {
-    auto policy = OfflinePageClientPolicy::CreateTemporary(
-        kSuggestedArticlesNamespace, base::Days(30));
-    policy.is_supported_by_download = true;
-    policy.is_suggested = true;
     all_policies.push_back(policy);
   }
   {
@@ -151,8 +143,9 @@ const OfflinePageClientPolicy& GetPolicy(const std::string& name) {
   const std::map<std::string, OfflinePageClientPolicy>& policies =
       GetPolicyData().policies;
   const auto& iter = policies.find(name);
-  if (iter != policies.end())
+  if (iter != policies.end()) {
     return iter->second;
+  }
   // Fallback when the namespace isn't defined.
   return policies.at(kDefaultNamespace);
 }

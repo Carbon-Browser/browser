@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class PositionCacheImplPerfTest : public ::testing::Test {
 
  protected:
   static constexpr size_t kBatchSize = 5000;
-  std::vector<std::pair<WifiData, mojom::Geoposition>> data_;
+  std::vector<std::pair<WifiData, mojom::GeopositionPtr>> data_;
   base::test::TaskEnvironment task_environment_;
   PositionCacheImpl cache_;
 };
@@ -56,7 +56,7 @@ class PositionCacheImplPerfTest : public ::testing::Test {
 TEST_F(PositionCacheImplPerfTest, Adding) {
   base::Time start = base::Time::Now();
   for (const auto& pair : data_)
-    cache_.CachePosition(pair.first, pair.second);
+    cache_.CachePosition(pair.first, *pair.second);
   base::Time end = base::Time::Now();
   auto reporter = SetUpReporter(kStoryBaseline);
   reporter.AddResult(kMetricAddTimeMs, base::TimeDelta(end - start));
@@ -64,7 +64,7 @@ TEST_F(PositionCacheImplPerfTest, Adding) {
 
 TEST_F(PositionCacheImplPerfTest, Finding) {
   for (const auto& pair : data_)
-    cache_.CachePosition(pair.first, pair.second);
+    cache_.CachePosition(pair.first, *pair.second);
   base::Time start = base::Time::Now();
   for (const auto& pair : data_)
     cache_.FindPosition(pair.first);

@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_DEEP_SCANNING_FAILURE_MODAL_DIALOG_H_
 #define CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_DEEP_SCANNING_FAILURE_MODAL_DIALOG_H_
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -21,9 +22,9 @@ namespace safe_browsing {
 // A tab modal dialog that provides more information to the user about the
 // prompt for deep scanning.
 class DeepScanningFailureModalDialog : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(DeepScanningFailureModalDialog);
+  METADATA_HEADER(DeepScanningFailureModalDialog, views::DialogDelegateView)
 
+ public:
   // Show this dialog for the given |web_contents|.
   static void ShowForWebContents(content::WebContents* web_contents,
                                  base::OnceClosure accept_callback,
@@ -44,7 +45,7 @@ class DeepScanningFailureModalDialog : public views::DialogDelegateView {
   ~DeepScanningFailureModalDialog() override;
 
   // views::DialogDelegate implementation:
-  bool IsDialogButtonEnabled(ui::DialogButton button) const override;
+  bool IsDialogButtonEnabled(ui::mojom::DialogButton button) const override;
   bool ShouldShowCloseButton() const override;
 
  private:

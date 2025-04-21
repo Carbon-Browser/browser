@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "base/compiler_specific.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -27,24 +28,6 @@
 namespace crashpad {
 
 namespace {
-
-// Sanitizers annotations.
-#if defined(__has_attribute)
-#if __has_attribute(no_sanitize)
-#define NO_SANITIZE(what) __attribute__((no_sanitize(what)))
-#endif
-#endif
-#if !defined(NO_SANITIZE)
-#define NO_SANITIZE(what)
-#endif
-
-// DISABLE_CFI_ICALL -- Disable Control Flow Integrity indirect call checks.
-#if BUILDFLAG(IS_WIN)
-// Windows also needs __declspec(guard(nocf)).
-#define DISABLE_CFI_ICALL NO_SANITIZE("cfi-icall") __declspec(guard(nocf))
-#else
-#define DISABLE_CFI_ICALL NO_SANITIZE("cfi-icall")
-#endif
 
 template <typename Functor>
 struct FunctorTraits;

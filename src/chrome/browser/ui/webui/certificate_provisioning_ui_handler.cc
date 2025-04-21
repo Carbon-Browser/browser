@@ -1,15 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <string>
-
-#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/webui/certificate_provisioning_ui_handler.h"
 
-#include "base/bind.h"
+#include <string>
+
+#include "base/check_is_test.h"
 #include "base/containers/span.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/i18n/time_formatting.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
@@ -21,11 +22,6 @@
 #include "content/public/browser/web_ui.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/time_format.h"
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/profiles/profile.h"
-#include "chromeos/lacros/lacros_service.h"
-#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/crosapi/cert_provisioning_ash.h"
@@ -42,15 +38,6 @@ namespace {
 
 crosapi::mojom::CertProvisioning* GetCertProvisioningInterface(
     Profile* profile) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  chromeos::LacrosService* service = chromeos::LacrosService::Get();
-  if (!profile->IsMainProfile() || !service ||
-      !service->IsAvailable<crosapi::mojom::CertProvisioning>()) {
-    return nullptr;
-  }
-  return service->GetRemote<crosapi::mojom::CertProvisioning>().get();
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (!ash::ProfileHelper::IsPrimaryProfile(profile)) {
     return nullptr;
@@ -96,6 +83,18 @@ std::u16string StateToText(CertProvisioningProcessState state) {
     case CertProvisioningProcessState::kCanceled:
       return l10n_util::GetStringUTF16(
           IDS_SETTINGS_CERTIFICATE_MANAGER_PROVISIONING_STATUS_CANCELED);
+    case CertProvisioningProcessState::kReadyForNextOperation:
+      return l10n_util::GetStringUTF16(
+          IDS_SETTINGS_CERTIFICATE_MANAGER_PROVISIONING_STATUS_READY_FOR_NEXT_OPERATION);
+    case CertProvisioningProcessState::kAuthorizeInstructionReceived:
+      return l10n_util::GetStringUTF16(
+          IDS_SETTINGS_CERTIFICATE_MANAGER_PROVISIONING_STATUS_AUTHORIZE_INSTRUCTION_RECEIVED);
+    case CertProvisioningProcessState::kProofOfPossessionInstructionReceived:
+      return l10n_util::GetStringUTF16(
+          IDS_SETTINGS_CERTIFICATE_MANAGER_PROVISIONING_STATUS_PROOF_OF_POSSESSION_INSTRUCTION_RECEIVED);
+    case CertProvisioningProcessState::kImportCertificateInstructionReceived:
+      return l10n_util::GetStringUTF16(
+          IDS_SETTINGS_CERTIFICATE_MANAGER_PROVISIONING_STATUS_IMPORT_CERTIFICATE_INSTRUCTION_RECEIVED);
   }
   NOTREACHED();
 }
@@ -106,7 +105,7 @@ std::u16string StateToText(CertProvisioningProcessState state) {
 std::u16string MakeStatusMessage(
     bool did_fail,
     CertProvisioningProcessState state,
-    const absl::optional<std::string>& failure_message) {
+    const std::optional<std::string>& failure_message) {
   if (!did_fail) {
     return StateToText(state);
   }
@@ -122,8 +121,9 @@ std::u16string MakeStatusMessage(
 // "5 minutes ago".
 std::u16string GetTimeSinceLastUpdate(base::Time last_update_time) {
   const base::Time now = base::Time::NowFromSystemTime();
-  if (last_update_time.is_null() || last_update_time > now)
+  if (last_update_time.is_null() || last_update_time > now) {
     return std::u16string();
+  }
   const base::TimeDelta elapsed_time = now - last_update_time;
   return ui::TimeFormat::Simple(ui::TimeFormat::FORMAT_ELAPSED,
                                 ui::TimeFormat::LENGTH_SHORT, elapsed_time);
@@ -131,8 +131,9 @@ std::u16string GetTimeSinceLastUpdate(base::Time last_update_time) {
 
 std::u16string GetMessageFromBackendError(
     const crosapi::mojom::CertProvisioningBackendServerErrorPtr& call_info) {
-  if (!call_info)
+  if (!call_info) {
     return std::u16string();
+  }
 
   std::u16string time_u16 =
       base::UTF8ToUTF16(base::TimeFormatHTTP(call_info->time));
@@ -180,13 +181,19 @@ void CertificateProvisioningUiHandler::RegisterMessages() {
       base::BindRepeating(&CertificateProvisioningUiHandler::
                               HandleTriggerCertificateProvisioningProcessUpdate,
                           base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "triggerCertificateProvisioningProcessReset",
+      base::BindRepeating(&CertificateProvisioningUiHandler::
+                              HandleTriggerCertificateProvisioningProcessReset,
+                          base::Unretained(this)));
 }
 
 void CertificateProvisioningUiHandler::OnStateChanged() {
   // If Javascript is not allowed yet, the UI will request a refresh during its
   // first message to the handler.
-  if (!IsJavascriptAllowed())
+  if (!IsJavascriptAllowed()) {
     return;
+  }
 
   RefreshCertificateProvisioningProcesses();
 }
@@ -221,6 +228,20 @@ void CertificateProvisioningUiHandler::
 }
 
 void CertificateProvisioningUiHandler::
+    HandleTriggerCertificateProvisioningProcessReset(
+        const base::Value::List& args) {
+  CHECK_EQ(1U, args.size());
+  const base::Value& cert_profile_id = args[0];
+  if (!cert_profile_id.is_string()) {
+    return;
+  }
+
+  if (cert_provisioning_interface_) {
+    cert_provisioning_interface_->ResetOneProcess(cert_profile_id.GetString());
+  }
+}
+
+void CertificateProvisioningUiHandler::
     RefreshCertificateProvisioningProcesses() {
   if (cert_provisioning_interface_) {
     cert_provisioning_interface_->GetStatus(
@@ -231,33 +252,30 @@ void CertificateProvisioningUiHandler::
 
 void CertificateProvisioningUiHandler::GotStatus(
     std::vector<crosapi::mojom::CertProvisioningProcessStatusPtr> status) {
-  base::ListValue all_processes;
+  base::Value::List all_processes;
 
   for (auto& process : status) {
-    base::Value entry(base::Value::Type::DICTIONARY);
-    entry.SetStringKey("certProfileId", std::move(process->cert_profile_id));
-    entry.SetStringKey("certProfileName",
-                       std::move(process->cert_profile_name));
-    entry.SetBoolKey("isDeviceWide", process->is_device_wide);
-    entry.SetStringKey("timeSinceLastUpdate",
-                       GetTimeSinceLastUpdate(process->last_update_time));
-    entry.SetStringKey(
-        "lastUnsuccessfulMessage",
-        GetMessageFromBackendError(process->last_backend_server_error));
-    entry.SetIntKey("stateId", static_cast<int>(process->state));
-    entry.SetStringKey("status",
-                       MakeStatusMessage(process->did_fail, process->state,
-                                         process->failure_message));
-    entry.SetStringKey("publicKey",
-                       x509_certificate_model::ProcessRawSubjectPublicKeyInfo(
-                           process->public_key));
+    base::Value::Dict entry;
+    entry.Set("certProfileId", std::move(process->cert_profile_id));
+    entry.Set("certProfileName", std::move(process->cert_profile_name));
+    entry.Set("isDeviceWide", process->is_device_wide);
+    entry.Set("timeSinceLastUpdate",
+              GetTimeSinceLastUpdate(process->last_update_time));
+    entry.Set("lastUnsuccessfulMessage",
+              GetMessageFromBackendError(process->last_backend_server_error));
+    entry.Set("stateId", static_cast<int>(process->state));
+    entry.Set("status", MakeStatusMessage(process->did_fail, process->state,
+                                          process->failure_message));
+    entry.Set("publicKey",
+              x509_certificate_model::ProcessRawSubjectPublicKeyInfo(
+                  process->public_key));
 
     all_processes.Append(std::move(entry));
   }
 
   ++ui_refresh_count_for_testing_;
   FireWebUIListener("certificate-provisioning-processes-changed",
-                    std::move(all_processes));
+                    all_processes);
 }
 
 }  // namespace chromeos::cert_provisioning

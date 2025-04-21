@@ -1,10 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/capture/content/capture_resolution_chooser.h"
 
 #include <stddef.h>
+
+#include <array>
+#include <numeric>
 
 #include "base/location.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -46,7 +49,7 @@ void ExpectIsWithinBoundsAndSameAspectRatio(const Location& location,
 // correctly found when searched.
 void TestSnappedFrameSizes(CaptureResolutionChooser* chooser,
                            const gfx::Size& smallest_size) {
-  const int kSizes[17][2] = {
+  const std::array<std::array<const int, 2>, 17> kSizes = {{
       {kMaxFrameWidth, kMaxFrameHeight},
       {3520, 1980},
       {3200, 1800},
@@ -64,7 +67,7 @@ void TestSnappedFrameSizes(CaptureResolutionChooser* chooser,
       {640, 360},
       {480, 270},
       {320, 180},
-  };
+  }};
 
   const gfx::Size largest_size(kMaxFrameWidth, kMaxFrameHeight);
   chooser->SetSourceSize(largest_size);
@@ -263,8 +266,8 @@ TEST(CaptureResolutionChooserTest, ReasonableCaptureSizeWhenMissingSourceSize) {
   // Finally, updating the source size to be exactly in the middle of the
   // constraints range should result in the capture size being updated to that
   // same size.
-  const gfx::Size middle_size((kMinFrameWidth + kMaxFrameWidth) / 2,
-                              (kMinFrameHeight + kMaxFrameHeight) / 2);
+  static constexpr gfx::Size middle_size(std::midpoint(kMinFrameWidth, kMaxFrameWidth),
+                              std::midpoint(kMinFrameHeight, kMaxFrameHeight));
   chooser.SetSourceSize(middle_size);
   EXPECT_EQ(middle_size, chooser.capture_size());
 }

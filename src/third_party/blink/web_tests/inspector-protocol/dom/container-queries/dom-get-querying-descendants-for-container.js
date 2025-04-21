@@ -1,4 +1,4 @@
-(async function (testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   const { dp } = await testRunner.startURL(
     '../resources/dom-get-querying-descendants-for-container.html',
     'Test CSS.getQueryingDescendantsForContainer method for container query containers');
@@ -34,6 +34,8 @@
 
   await testQueryingDescendantsResult('#container-unnamed', '.desc-unnamed');
   await testQueryingDescendantsResult('#container-named', '.desc-named');
+  await testQueryingDescendantsResult('#container-unnamed-style', '.desc-unnamed-style');
+  await testQueryingDescendantsResult('#container-named-style', '.desc-named-style');
 
   testRunner.completeTest();
 });

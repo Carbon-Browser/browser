@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,36 +23,24 @@ class CORE_EXPORT TextFormat final : public ScriptWrappable {
 
  public:
   static TextFormat* Create(const TextFormatInit* dict);
-  static TextFormat* Create(uint32_t range_start,
-                            uint32_t range_end,
-                            const String& text_color,
-                            const String& background_color,
-                            const String& underline_color,
+  static TextFormat* Create(wtf_size_t range_start,
+                            wtf_size_t range_end,
                             const String& underline_style,
                             const String& underline_thickness);
   explicit TextFormat(const TextFormatInit* dict);
-  TextFormat(uint32_t range_start,
-             uint32_t range_end,
-             const String& text_color,
-             const String& background_color,
-             const String& underline_color,
+  TextFormat(wtf_size_t range_start,
+             wtf_size_t range_end,
              const String& underline_style,
              const String& underline_thickness);
 
-  uint32_t rangeStart() const;
-  uint32_t rangeEnd() const;
-  String textColor() const;
-  String backgroundColor() const;
-  String underlineColor() const;
+  wtf_size_t rangeStart() const;
+  wtf_size_t rangeEnd() const;
   String underlineStyle() const;
   String underlineThickness() const;
 
  private:
-  uint32_t range_start_ = 0;
-  uint32_t range_end_ = 0;
-  String text_color_;
-  String background_color_;
-  String underline_color_;
+  wtf_size_t range_start_ = 0;
+  wtf_size_t range_end_ = 0;
   String underline_style_;
   String underline_thickness_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "device/bluetooth/test/bluetooth_test_android.h"
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
 #include "device/bluetooth/test/bluetooth_test_mac.h"
 #elif BUILDFLAG(IS_WIN)
 #include "device/bluetooth/test/bluetooth_test_win.h"

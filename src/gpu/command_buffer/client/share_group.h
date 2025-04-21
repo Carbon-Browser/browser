@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef GPU_COMMAND_BUFFER_CLIENT_SHARE_GROUP_H_
 #define GPU_COMMAND_BUFFER_CLIENT_SHARE_GROUP_H_
@@ -186,7 +191,7 @@ class GLES2_IMPL_EXPORT ShareGroup
   uint64_t tracing_guid_;
 
   mutable base::Lock lost_lock_;
-  bool lost_ = false;
+  bool lost_ GUARDED_BY(lost_lock_) = false;
 };
 
 }  // namespace gles2

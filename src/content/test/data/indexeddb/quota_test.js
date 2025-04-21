@@ -1,20 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function test() {
-  if (window.webkitStorageInfo) {
+  if (navigator.storage) {
     window.jsTestIsAsync = true;
-    navigator.webkitTemporaryStorage.queryUsageAndQuota(
-      initUsageCallback,
-      unexpectedErrorCallback);
+    navigator.storage.estimate()
+        .then(initUsageCallback)
+        .catch(unexpectedErrorCallback);
   } else
-    debug("This test requires window.webkitStorageInfo.");
+    debug('This test requires navigator.storage.');
 }
 
-function initUsageCallback(usage, quota) {
-  origReturnedUsage = returnedUsage = usage;
-  origReturnedQuota = returnedQuota = quota;
+function initUsageCallback(result) {
+  origReturnedUsage = returnedUsage = result.usage;
+  origReturnedQuota = returnedQuota = result.quota;
   debug("original quota is " + displaySize(origReturnedQuota));
   debug("original usage is " + displaySize(origReturnedUsage));
 
@@ -43,7 +43,11 @@ function initQuotaEnforcing() {
   debug("Chunk size: " + displaySize(len));
   debug("Expecting at most " + maxExpectedWrites + " writes, but we could " +
         "have more if snappy is used or LevelDB is about to compact.");
-  data = Array(1+len).join("X");
+  // The data needs to be randomized to avoid compression.
+  data = '';
+  for (let i = 0; i < 1 + len / 8; i++) {
+    data += Math.random().toString(36).slice(2, 10);
+  }
   dataLength = data.length;
   dataAdded = 0;
   successfulWrites = 0;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/unified_slider_view.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/timer/timer.h"
 
 namespace ash {
 
@@ -30,13 +31,26 @@ class ASH_EXPORT MicGainSliderController : public UnifiedSliderListener {
       MapDeviceSliderCallback* test_slider_device_callback);
 
   // UnifiedSliderListener:
-  views::View* CreateView() override;
+  std::unique_ptr<UnifiedSliderView> CreateView() override;
+  QsSliderCatalogName GetCatalogName() override;
   void SliderValueChanged(views::Slider* sender,
                           float value,
                           float old_value,
                           views::SliderChangeReason reason) override;
 
   void SliderButtonPressed();
+
+ private:
+  // Records when the user changes the gain via slider to metrics.
+  void RecordGainChanged();
+
+  // Timer used to prevent the input gain from recording each time the user
+  // moves the slider while setting the desired volume.
+  base::DelayTimer input_gain_metric_delay_timer_;
+
+#if DCHECK_IS_ON()
+  bool created_view_ = false;
+#endif
 };
 
 }  // namespace ash

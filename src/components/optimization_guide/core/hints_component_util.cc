@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -178,7 +178,8 @@ std::unique_ptr<OptimizationFilter> ProcessOptimizationFilter(
 
   return std::make_unique<OptimizationFilter>(
       std::move(bloom_filter), std::move(regexps), std::move(exclusion_regexps),
-      optimization_filter.skip_host_suffix_checking());
+      optimization_filter.skip_host_suffix_checking(),
+      optimization_filter.bloom_filter_format());
 }
 
 }  // namespace optimization_guide

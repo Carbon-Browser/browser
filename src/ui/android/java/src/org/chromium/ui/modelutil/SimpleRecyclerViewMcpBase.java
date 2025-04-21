@@ -1,29 +1,35 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui.modelutil;
 
-import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 /**
  * A model change processor (MCP), i.e. an implementation of {@link RecyclerViewAdapter.Delegate},
- * which represents a homogeneous {@link SimpleList} of items that are independent of each other.
- * It is intended primarily (but not exclusively) for use in a {@link RecyclerView}.
+ * which represents a homogeneous {@link SimpleList} of items that are independent of each other. It
+ * is intended primarily (but not exclusively) for use in a {@link RecyclerView}.
+ *
  * @param <T> The type of items in the list.
  * @param <VH> The view holder type that shows items.
  * @param <P> The payload type for partial updates. If the model change processor doesn't support
- * partial updates, use the {@link SimpleRecyclerViewMcp} subclass.
+ *     partial updates, use the {@link SimpleRecyclerViewMcp} subclass.
  */
-public class SimpleRecyclerViewMcpBase<T, VH, P>
-        extends ForwardingListObservable<P> implements RecyclerViewAdapter.Delegate<VH, P> {
+@NullMarked
+public class SimpleRecyclerViewMcpBase<T, VH, P> extends ForwardingListObservable<P>
+        implements RecyclerViewAdapter.Delegate<VH, P> {
     private final SimpleList<T> mModel;
-    private final ItemViewTypeCallback<T> mItemViewTypeCallback;
+    private final @Nullable ItemViewTypeCallback<T> mItemViewTypeCallback;
     private final ViewBinder<T, VH, P> mViewBinder;
 
-    public SimpleRecyclerViewMcpBase(@Nullable ItemViewTypeCallback<T> itemViewTypeCallback,
-            ViewBinder<T, VH, P> viewBinder, ListModelBase<T, P> model) {
+    public SimpleRecyclerViewMcpBase(
+            @Nullable ItemViewTypeCallback<T> itemViewTypeCallback,
+            ViewBinder<T, VH, P> viewBinder,
+            ListModelBase<T, P> model) {
         mItemViewTypeCallback = itemViewTypeCallback;
         mViewBinder = viewBinder;
         mModel = model;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,12 @@ SSLInfo::SSLInfo() = default;
 
 SSLInfo::SSLInfo(const SSLInfo& info) = default;
 
-SSLInfo::~SSLInfo() = default;
+SSLInfo::SSLInfo(SSLInfo&& info) = default;
 
 SSLInfo& SSLInfo::operator=(const SSLInfo& info) = default;
 
-void SSLInfo::Reset() {
-  *this = SSLInfo();
-}
+SSLInfo& SSLInfo::operator=(SSLInfo&& info) = default;
+
+SSLInfo::~SSLInfo() = default;
 
 }  // namespace net

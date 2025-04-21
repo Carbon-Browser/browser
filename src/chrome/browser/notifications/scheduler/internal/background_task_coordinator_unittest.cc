@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/notifications/scheduler/internal/notification_entry.h"
@@ -39,10 +39,10 @@ const std::vector<test::ImpressionTestData> kSingleClientImpressionTestData = {{
     SchedulerClientType::kTest1,
     1 /* current_max_daily_show */,
     {} /* impressions */,
-    absl::nullopt /* suppression_info */,
+    std::nullopt /* suppression_info */,
     0 /* negative_events_count */,
-    absl::nullopt /* negative_event_ts */,
-    absl::nullopt /* last_shown_ts */
+    std::nullopt /* negative_event_ts */,
+    std::nullopt /* last_shown_ts */
 }
 
 };
@@ -51,18 +51,18 @@ const std::vector<test::ImpressionTestData> kClientsImpressionTestData = {
     {SchedulerClientType::kTest1,
      1 /* current_max_daily_show */,
      {} /* impressions */,
-     absl::nullopt /* suppression_info */,
+     std::nullopt /* suppression_info */,
      0 /* negative_events_count */,
-     absl::nullopt /* negative_event_ts */,
-     absl::nullopt /* last_shown_ts */},
+     std::nullopt /* negative_event_ts */,
+     std::nullopt /* last_shown_ts */},
     {
         SchedulerClientType::kTest2,
         2 /* current_max_daily_show */,
         {} /* impressions */,
-        absl::nullopt /* suppression_info */,
+        std::nullopt /* suppression_info */,
         0 /* negative_events_count */,
-        absl::nullopt /* negative_event_ts */,
-        absl::nullopt /* last_shown_ts */,
+        std::nullopt /* negative_event_ts */,
+        std::nullopt /* last_shown_ts */,
 
     }};
 

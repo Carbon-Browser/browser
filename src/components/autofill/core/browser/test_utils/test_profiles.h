@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,9 @@ namespace autofill::test {
 // Defines the |value| and |verification_status| for a specific Autofill
 // |field_type|
 struct ProfileTestData {
-  ServerFieldType field_type;
+  FieldType field_type;
   std::string value;
-  structured_address::VerificationStatus verification_status =
-      structured_address::VerificationStatus::kNoStatus;
+  VerificationStatus verification_status = VerificationStatus::kNoStatus;
 };
 
 // Set the values and verification statuses for the field types in
@@ -39,7 +38,8 @@ void SetProfileObservedTestValues(AutofillProfile* profile,
 
 // A standard AutofillProfile. All subsequent profiles are defined with respect
 // to this one.
-AutofillProfile StandardProfile();
+AutofillProfile StandardProfile(
+    AddressCountryCode country_code = AddressCountryCode("US"));
 
 // This profile is similar to the standard profile defined above.
 // Here, the verification status for the name is 'only' observed. When merged

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,14 @@ class CommandUpdater;
 // View for the password icon in the Omnibox.
 class ManagePasswordsIconViews : public ManagePasswordsIconView,
                                  public PageActionIconView {
+  METADATA_HEADER(ManagePasswordsIconViews, PageActionIconView)
+
  public:
-  METADATA_HEADER(ManagePasswordsIconViews);
   ManagePasswordsIconViews(
       CommandUpdater* updater,
       IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
-      PageActionIconView::Delegate* page_action_icon_delegate);
+      PageActionIconView::Delegate* page_action_icon_delegate,
+      Browser* browser);
   ManagePasswordsIconViews(const ManagePasswordsIconViews&) = delete;
   ManagePasswordsIconViews& operator=(const ManagePasswordsIconViews&) = delete;
   ~ManagePasswordsIconViews() override;

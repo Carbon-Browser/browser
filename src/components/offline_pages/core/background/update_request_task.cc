@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 
 namespace offline_pages {
@@ -16,7 +16,7 @@ UpdateRequestTask::UpdateRequestTask(RequestQueueStore* store,
                                      RequestQueueStore::UpdateCallback callback)
     : store_(store), request_id_(request_id), callback_(std::move(callback)) {}
 
-UpdateRequestTask::~UpdateRequestTask() {}
+UpdateRequestTask::~UpdateRequestTask() = default;
 
 void UpdateRequestTask::Run() {
   ReadRequest();

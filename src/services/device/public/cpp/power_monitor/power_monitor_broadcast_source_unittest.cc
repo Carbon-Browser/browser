@@ -1,14 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/public/cpp/power_monitor/power_monitor_broadcast_source.h"
 
 #include "base/memory/raw_ptr.h"
+#include "base/power_monitor/power_observer.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace device {
@@ -26,14 +27,15 @@ class PowerMonitorBroadcastSourceTest : public testing::Test {
 
   void SetUp() override {
     auto power_monitor_source = std::make_unique<PowerMonitorBroadcastSource>(
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
     power_monitor_source_ptr_ = power_monitor_source.get();
-    base::PowerMonitor::Initialize(std::move(power_monitor_source));
+    base::PowerMonitor::GetInstance()->Initialize(
+        std::move(power_monitor_source));
     power_monitor_source_ptr_->Init(mojo::NullRemote());
   }
 
   void TearDown() override {
-    base::PowerMonitor::ShutdownForTesting();
+    base::PowerMonitor::GetInstance()->ShutdownForTesting();
     base::RunLoop().RunUntilIdle();
   }
 
@@ -44,13 +46,15 @@ class PowerMonitorBroadcastSourceTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_;
 
  private:
-  raw_ptr<PowerMonitorBroadcastSource> power_monitor_source_ptr_;
+  raw_ptr<PowerMonitorBroadcastSource, DanglingUntriaged>
+      power_monitor_source_ptr_;
 };
 
 TEST_F(PowerMonitorBroadcastSourceTest, PowerMessageReceiveBroadcast) {
   base::test::PowerMonitorTestObserver observer;
-  base::PowerMonitor::AddPowerSuspendObserver(&observer);
-  base::PowerMonitor::AddPowerStateObserver(&observer);
+  auto* power_monitor = base::PowerMonitor::GetInstance();
+  power_monitor->AddPowerSuspendObserver(&observer);
+  power_monitor->AddPowerStateObserver(&observer);
 
   // Sending resume when not suspended should have no effect.
   client()->Resume();
@@ -78,29 +82,43 @@ TEST_F(PowerMonitorBroadcastSourceTest, PowerMessageReceiveBroadcast) {
   EXPECT_EQ(observer.resumes(), 1);
 
   // Pretend the device has gone on battery power
-  client()->PowerStateChange(true);
+  client()->PowerStateChange(
+      base::PowerStateObserver::BatteryPowerStatus::kBatteryPower);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(observer.power_state_changes(), 1);
-  EXPECT_EQ(observer.last_power_state(), true);
+  EXPECT_EQ(observer.last_power_status(),
+            base::PowerStateObserver::BatteryPowerStatus::kBatteryPower);
 
   // Repeated indications the device is on battery power should be suppressed.
-  client()->PowerStateChange(true);
+  client()->PowerStateChange(
+      base::PowerStateObserver::BatteryPowerStatus::kBatteryPower);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(observer.power_state_changes(), 1);
 
   // Pretend the device has gone off battery power
-  client()->PowerStateChange(false);
+  client()->PowerStateChange(
+      base::PowerStateObserver::BatteryPowerStatus::kExternalPower);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(observer.power_state_changes(), 2);
-  EXPECT_EQ(observer.last_power_state(), false);
+  EXPECT_EQ(observer.last_power_status(),
+            base::PowerStateObserver::BatteryPowerStatus::kExternalPower);
 
   // Repeated indications the device is off battery power should be suppressed.
-  client()->PowerStateChange(false);
+  client()->PowerStateChange(
+      base::PowerStateObserver::BatteryPowerStatus::kExternalPower);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(observer.power_state_changes(), 2);
 
-  base::PowerMonitor::RemovePowerSuspendObserver(&observer);
-  base::PowerMonitor::RemovePowerStateObserver(&observer);
+  // Sending unknown signal should be propagated properly.
+  client()->PowerStateChange(
+      base::PowerStateObserver::BatteryPowerStatus::kUnknown);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(observer.power_state_changes(), 3);
+  EXPECT_EQ(observer.last_power_status(),
+            base::PowerStateObserver::BatteryPowerStatus::kUnknown);
+
+  power_monitor->RemovePowerSuspendObserver(&observer);
+  power_monitor->RemovePowerStateObserver(&observer);
 }
 
 }  // namespace device

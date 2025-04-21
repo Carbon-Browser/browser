@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ namespace content {
 // static
 blink::mojom::FetchAPIResponsePtr BackgroundFetchSettledFetch::CloneResponse(
     const blink::mojom::FetchAPIResponsePtr& response) {
-  // TODO(https://crbug.com/876546): Replace this method with response.Clone()
+  // TODO(crbug.com/41409379): Replace this method with response.Clone()
   // if the associated bug is fixed.
   if (response.is_null())
     return nullptr;
@@ -59,7 +59,10 @@ blink::mojom::FetchAPIRequestPtr BackgroundFetchSettledFetch::CloneRequest(
       request->redirect_mode, request->integrity, request->priority,
       request->fetch_window_id, request->keepalive, request->is_reload,
       request->is_history_navigation, request->devtools_stack_id,
-      request->trust_token_params.Clone(), request->target_address_space);
+      request->trust_token_params.Clone(), request->target_address_space,
+      request->attribution_reporting_eligibility,
+      request->attribution_reporting_support,
+      /*service_worker_race_network_request_token=*/std::nullopt);
 }
 
 }  // namespace content

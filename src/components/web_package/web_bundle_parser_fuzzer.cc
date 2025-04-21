@@ -1,18 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/web_package/web_bundle_parser.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/icu_util.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
-#include "components/web_package/web_bundle_parser.h"
 #include "components/web_package/web_bundle_parser_factory.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -26,7 +28,7 @@ class DataSource : public web_package::mojom::BundleDataSource {
 
   void Read(uint64_t offset, uint64_t length, ReadCallback callback) override {
     if (offset >= data_.size()) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     const auto start = data_.begin() + offset;
@@ -46,6 +48,8 @@ class DataSource : public web_package::mojom::BundleDataSource {
       mojo::PendingReceiver<web_package::mojom::BundleDataSource> receiver) {
     receivers_.Add(this, std::move(receiver));
   }
+
+  void Close(CloseCallback callback) override { std::move(callback).Run(); }
 
  private:
   bool is_random_access_context_;
@@ -70,6 +74,7 @@ class WebBundleParserFuzzer {
     web_package::WebBundleParserFactory factory_impl;
     web_package::mojom::WebBundleParserFactory& factory = factory_impl;
     factory.GetParserForDataSource(parser_.BindNewPipeAndPassReceiver(),
+                                   /*base_url=*/std::nullopt,
                                    std::move(data_source_remote));
 
     quit_loop_ = run_loop->QuitClosure();
@@ -80,8 +85,9 @@ class WebBundleParserFuzzer {
       return;
     } else {
       parser_->ParseMetadata(
-          /*offset=*/-1, base::BindOnce(&WebBundleParserFuzzer::OnParseMetadata,
-                                        base::Unretained(this)));
+          /*offset=*/std::nullopt,
+          base::BindOnce(&WebBundleParserFuzzer::OnParseMetadata,
+                         base::Unretained(this)));
     }
   }
 
@@ -104,8 +110,9 @@ class WebBundleParserFuzzer {
       std::move(quit_loop_).Run();
       return;
     }
-    for (auto& item : metadata->requests)
+    for (auto& item : metadata->requests) {
       locations_.push_back(std::move(item.second));
+    }
     ParseResponses(0);
   }
 

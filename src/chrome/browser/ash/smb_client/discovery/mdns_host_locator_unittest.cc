@@ -1,12 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/smb_client/discovery/mdns_host_locator.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 class MDnsHostLocatorTest : public testing::Test {
  public:
@@ -28,5 +27,4 @@ TEST_F(MDnsHostLocatorTest, RemoveLocal) {
   EXPECT_EQ(RemoveLocal("QNAP.LoCaL"), "QNAP");
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

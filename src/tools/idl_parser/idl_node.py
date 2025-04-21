@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -71,7 +71,7 @@ class IDLAttribute(object):
 # IDLNode
 #
 # This class implements the AST tree, providing the associations between
-# parents and children.  It also contains a namepsace and propertynode to
+# parents and children.  It also contains a namespace and propertynode to
 # allow for look-ups.  IDLNode is derived from IDLRelease, so it is
 # version aware.
 #

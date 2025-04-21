@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/ptr_util.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/memory/ptr_util.h"
+#import "base/strings/string_number_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "base/time/time.h"
 #import "ios/web/navigation/navigation_item_impl.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
@@ -14,14 +15,10 @@
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/test/web_int_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "url/url_canon.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "url/url_canon.h"
 
 using base::ASCIIToUTF16;
 
@@ -52,7 +49,7 @@ const char kOnLoadCheckScript[] = "isOnLoadPlaceholderTextVisible()";
 const char kNoOpCheckScript[] = "isNoOpPlaceholderTextVisible()";
 
 // Wait timeout for state updates.
-const NSTimeInterval kWaitForStateUpdateTimeout = 5.0;
+constexpr base::TimeDelta kWaitForStateUpdateTimeout = base::Seconds(5);
 
 }  // namespace
 
@@ -80,9 +77,8 @@ class HistoryStateOperationsTest : public web::WebIntTest {
   // Reloads the page and waits for the load to finish.
   [[nodiscard]] bool Reload() {
     return ExecuteBlockAndWaitForLoad(GetLastCommittedItem()->GetURL(), ^{
-      // TODO(crbug.com/677364): Use NavigationManager::Reload() once it no
-      // longer requires a web delegate.
-      web_state()->ExecuteJavaScript(u"window.location.reload()");
+      web_state()->GetNavigationManager()->Reload(web::ReloadType::NORMAL,
+                                                  /*check_for_repost=*/false);
     });
   }
 
@@ -237,38 +233,6 @@ TEST_F(HistoryStateOperationsTest, NoOpReplaceDifferentOrigin) {
   WaitForNoOpText();
 }
 
-// Tests that calling window.history.replaceState() with only a new title
-// successfully replaces the current NavigationItem's title.
-// TODO(crbug.com/677356): Enable this test once the NavigationItem's title is
-// updated from within the web layer.
-TEST_F(HistoryStateOperationsTest, DISABLED_TitleReplacement) {
-  // Navigate to about:blank then navigate back to the test page.  The created
-  // NavigationItem can be used later to verify that the title is replaced
-  // rather than pushed.
-  GURL about_blank("about:blank");
-  ASSERT_TRUE(LoadUrl(about_blank));
-  web::NavigationItem* about_blank_item = GetLastCommittedItem();
-  EXPECT_TRUE(ExecuteBlockAndWaitForLoad(state_operations_url(), ^{
-    navigation_manager()->GoBack();
-  }));
-  EXPECT_EQ(state_operations_url(), GetLastCommittedItem()->GetURL());
-  // Set up the state parameters and tap the replace state button.
-  std::string empty_state;
-  std::string new_title("NEW TITLE");
-  GURL empty_url;
-  SetStateParams(empty_state, new_title, empty_url);
-  ASSERT_TRUE(web::test::TapWebViewElementWithId(web_state(), kReplaceStateId));
-  // Wait for the title to be reflected in the NavigationItem.
-  BOOL completed = base::test::ios::WaitUntilConditionOrTimeout(
-      kWaitForStateUpdateTimeout, ^{
-        return GetLastCommittedItem()->GetTitle() == ASCIIToUTF16(new_title);
-      });
-  EXPECT_TRUE(completed) << "Failed to validate NavigationItem title.";
-  // Verify that the forward navigation was not pruned.
-  EXPECT_EQ(GetIndexOfNavigationItem(GetLastCommittedItem()) + 1,
-            GetIndexOfNavigationItem(about_blank_item));
-}
-
 // Tests that calling window.history.replaceState() with a new state object
 // replaces the state object for the current NavigationItem.
 TEST_F(HistoryStateOperationsTest, StateReplacement) {
@@ -321,7 +285,7 @@ TEST_F(HistoryStateOperationsTest, StateReplacement) {
 #else
 #define MAYBE_StateReplacementReload DISABLED_StateReplacementReload
 #endif
-// TODO(crbug.com/720381): Enable this test on device.
+// TODO(crbug.com/40519813): Enable this test on device.
 TEST_F(HistoryStateOperationsTest, MAYBE_StateReplacementReload) {
   // Set up the state parameters and tap the replace state button.
   std::string new_state("STATE OBJECT");

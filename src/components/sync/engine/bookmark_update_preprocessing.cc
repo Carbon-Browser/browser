@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <array>
 
+#include "base/base64.h"
 #include "base/containers/span.h"
-#include "base/guid.h"
 #include "base/hash/sha1.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
@@ -15,6 +15,8 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/uuid.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/base/hash_util.h"
 #include "components/sync/base/unique_position.h"
 #include "components/sync/protocol/bookmark_specifics.pb.h"
@@ -28,36 +30,38 @@ namespace {
 // Used in metric "Sync.BookmarkGUIDSource2". These values are persisted to
 // logs. Entries should not be renumbered and numeric values should never be
 // reused.
+// LINT.IfChange(BookmarkGUIDSource)
 enum class BookmarkGuidSource {
-  // GUID came from specifics.
+  // UUID came from specifics.
   kSpecifics = 0,
-  // GUID came from originator_client_item_id and is valid.
+  // UUID came from originator_client_item_id and is valid.
   kValidOCII = 1,
-  // GUID not found in the specifics and originator_client_item_id is invalid,
+  // UUID not found in the specifics and originator_client_item_id is invalid,
   // so field left empty (currently unused).
   kDeprecatedLeftEmpty = 2,
-  // GUID not found in the specifics and originator_client_item_id is invalid,
-  // so the GUID is inferred from combining originator_client_item_id and
+  // UUID not found in the specifics and originator_client_item_id is invalid,
+  // so the UUID is inferred from combining originator_client_item_id and
   // originator_cache_guid.
   kInferred = 3,
-  // GUID not found in the specifics and the update doesn't have enough
+  // UUID not found in the specifics and the update doesn't have enough
   // information to infer it. This is likely because the update contains a
   // client tag instead of originator information.
   kLeftEmptyPossiblyForClientTag = 4,
   kMaxValue = kLeftEmptyPossiblyForClientTag,
 };
+// LINT.ThenChange(/tools/metrics/histograms/metadata/sync/enums.xml:BookmarkGUIDSource)
 
 inline void LogGuidSource(BookmarkGuidSource source) {
   base::UmaHistogramEnumeration("Sync.BookmarkGUIDSource2", source);
 }
 
-std::string ComputeGuidFromBytes(base::span<const uint8_t> bytes) {
+std::string ComputeUuidFromBytes(base::span<const uint8_t> bytes) {
   DCHECK_GE(bytes.size(), 16U);
 
   // This implementation is based on the equivalent logic in base/guid.cc.
 
-  // Set the GUID to version 4 as described in RFC 4122, section 4.4.
-  // The format of GUID version 4 must be xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx,
+  // Set the UUID to version 4 as described in RFC 4122, section 4.4.
+  // The format of UUID version 4 must be xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx,
   // where y is one of [8, 9, A, B].
 
   // Clear the version bits and set the version to 4:
@@ -75,26 +79,45 @@ std::string ComputeGuidFromBytes(base::span<const uint8_t> bytes) {
 }
 
 // Bookmarks created before 2015 (https://codereview.chromium.org/1136953013)
-// have an originator client item ID that is NOT a GUID. Hence, an alternative
-// method must be used to infer a GUID deterministically from a combination of
+// have an originator client item ID that is NOT a UUID. Hence, an alternative
+// method must be used to infer a UUID deterministically from a combination of
 // sync fields that is known to be a) immutable and b) unique per synced
 // bookmark.
 std::string InferGuidForLegacyBookmark(
     const std::string& originator_cache_guid,
     const std::string& originator_client_item_id) {
   DCHECK(
-      !base::GUID::ParseCaseInsensitive(originator_client_item_id).is_valid());
+      !base::Uuid::ParseCaseInsensitive(originator_client_item_id).is_valid());
 
   const std::string unique_tag =
       base::StrCat({originator_cache_guid, originator_client_item_id});
-  const base::SHA1Digest hash =
-      base::SHA1HashSpan(base::as_bytes(base::make_span(unique_tag)));
+  const base::SHA1Digest hash = base::SHA1Hash(base::as_byte_span(unique_tag));
 
-  static_assert(base::kSHA1Length >= 16, "16 bytes needed to infer GUID");
+  static_assert(base::kSHA1Length >= 16, "16 bytes needed to infer UUID");
 
-  const std::string guid = ComputeGuidFromBytes(base::make_span(hash));
-  DCHECK(base::GUID::ParseLowercase(guid).is_valid());
+  const std::string guid = ComputeUuidFromBytes(base::span(hash));
+  DCHECK(base::Uuid::ParseLowercase(guid).is_valid());
   return guid;
+}
+
+// Legacy method to calculate unique position suffix for the bookmarks which did
+// not have client tag hash.
+UniquePosition::Suffix GenerateUniquePositionSuffixForBookmark(
+    const std::string& originator_cache_guid,
+    const std::string& originator_client_item_id) {
+  // Blank PB with just the field in it has termination symbol,
+  // handy for delimiter.
+  sync_pb::EntitySpecifics serialized_type;
+  AddDefaultFieldValue(BOOKMARKS, &serialized_type);
+  std::string hash_input;
+  serialized_type.AppendToString(&hash_input);
+  hash_input.append(originator_cache_guid + originator_client_item_id);
+  UniquePosition::Suffix suffix;
+  std::string suffix_str =
+      base::Base64Encode(base::SHA1Hash(base::as_byte_span(hash_input)));
+  CHECK_EQ(suffix.size(), suffix_str.size());
+  base::ranges::copy(suffix_str, suffix.begin());
+  return suffix;
 }
 
 sync_pb::UniquePosition GetUniquePositionFromSyncEntity(
@@ -103,12 +126,12 @@ sync_pb::UniquePosition GetUniquePositionFromSyncEntity(
     return update_entity.unique_position();
   }
 
-  std::string suffix;
+  UniquePosition::Suffix suffix;
   if (update_entity.has_originator_cache_guid() &&
       update_entity.has_originator_client_item_id()) {
-    suffix =
-        GenerateSyncableBookmarkHash(update_entity.originator_cache_guid(),
-                                     update_entity.originator_client_item_id());
+    suffix = GenerateUniquePositionSuffixForBookmark(
+        update_entity.originator_cache_guid(),
+        update_entity.originator_client_item_id());
   } else {
     suffix = UniquePosition::RandomSuffix();
   }
@@ -167,7 +190,7 @@ void AdaptTypeForBookmark(const sync_pb::SyncEntity& update_entity,
   }
   // Remaining cases should be unreachable today. In case SyncEntity.folder gets
   // removed in the future, with legacy data still being around prior to M94,
-  // infer folderness based on the present of field |url| (only populated for
+  // infer folderness based on the present of field `url` (only populated for
   // URL bookmarks).
   specifics->mutable_bookmark()->set_type(
       specifics->bookmark().has_url() ? sync_pb::BookmarkSpecifics::URL
@@ -197,37 +220,39 @@ void AdaptTitleForBookmark(const sync_pb::SyncEntity& update_entity,
 void AdaptGuidForBookmark(const sync_pb::SyncEntity& update_entity,
                           sync_pb::EntitySpecifics* specifics) {
   DCHECK(specifics);
-  // Tombstones and permanent entities don't have a GUID.
+  // Tombstones and permanent entities don't have a UUID.
   if (update_entity.deleted() ||
       !update_entity.server_defined_unique_tag().empty()) {
     return;
   }
   DCHECK(specifics->has_bookmark());
   // Legacy clients don't populate the guid field in the BookmarkSpecifics, so
-  // we use the originator_client_item_id instead, if it is a valid GUID.
+  // we use the originator_client_item_id instead, if it is a valid UUID.
   // Otherwise, we leave the field empty.
   if (specifics->bookmark().has_guid()) {
     LogGuidSource(BookmarkGuidSource::kSpecifics);
     return;
   }
-  if (base::IsValidGUID(update_entity.originator_client_item_id())) {
-    // Bookmarks created around 2016, between [M44..M52) use an uppercase GUID
+  if (base::Uuid::ParseCaseInsensitive(
+          update_entity.originator_client_item_id())
+          .is_valid()) {
+    // Bookmarks created around 2016, between [M44..M52) use an uppercase UUID
     // as originator client item ID, so it needs to be lowercased to adhere to
-    // the invariant that GUIDs in specifics are canonicalized.
+    // the invariant that UUIDs in specifics are canonicalized.
     specifics->mutable_bookmark()->set_guid(
         base::ToLowerASCII(update_entity.originator_client_item_id()));
-    DCHECK(base::IsValidGUIDOutputString(specifics->bookmark().guid()));
+    DCHECK(base::Uuid::ParseLowercase(specifics->bookmark().guid()).is_valid());
     LogGuidSource(BookmarkGuidSource::kValidOCII);
   } else if (update_entity.originator_cache_guid().empty() &&
              update_entity.originator_client_item_id().empty()) {
-    // There's no GUID that could be inferred from empty originator
+    // There's no UUID that could be inferred from empty originator
     // information.
     LogGuidSource(BookmarkGuidSource::kLeftEmptyPossiblyForClientTag);
   } else {
     specifics->mutable_bookmark()->set_guid(
         InferGuidForLegacyBookmark(update_entity.originator_cache_guid(),
                                    update_entity.originator_client_item_id()));
-    DCHECK(base::IsValidGUIDOutputString(specifics->bookmark().guid()));
+    DCHECK(base::Uuid::ParseLowercase(specifics->bookmark().guid()).is_valid());
     LogGuidSource(BookmarkGuidSource::kInferred);
   }
 }

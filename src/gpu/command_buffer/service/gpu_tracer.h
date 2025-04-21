@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,8 +99,8 @@ class GPU_GLES2_EXPORT GPUTracer {
   }
 
   scoped_refptr<gl::GPUTimingClient> gpu_timing_client_;
-  const unsigned char* gpu_trace_srv_category_;
-  const unsigned char* gpu_trace_dev_category_;
+  raw_ptr<const unsigned char> gpu_trace_srv_category_;
+  raw_ptr<const unsigned char> gpu_trace_dev_category_;
   // Disable gpu.device tracing if context is corrupted or not GL.
   bool can_trace_dev_;
 

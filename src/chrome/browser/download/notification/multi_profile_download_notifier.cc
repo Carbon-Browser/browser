@@ -1,10 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/download/notification/multi_profile_download_notifier.h"
 
+#include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "components/download/public/common/simple_download_manager.h"
 #include "content/public/browser/download_manager.h"
 
@@ -24,16 +28,19 @@ MultiProfileDownloadNotifier::MultiProfileDownloadNotifier(
 MultiProfileDownloadNotifier::~MultiProfileDownloadNotifier() = default;
 
 void MultiProfileDownloadNotifier::AddProfile(Profile* profile) {
-  if (!client_->ShouldObserveProfile(profile))
+  // The multi profile download notifier is not needed for irregular profiles
+  // that don't support it, like the system profile. In addition it needs some
+  // keyed service that might not be available for those profiles.
+  if (AreKeyedServicesDisabledForProfileByDefault(profile) ||
+      !client_->ShouldObserveProfile(profile)) {
     return;
+  }
 
   content::DownloadManager* manager = profile->GetDownloadManager();
-  auto it = std::find_if(download_notifiers_.begin(), download_notifiers_.end(),
-                         [manager](const auto& notifier) {
-                           return notifier->GetManager() == manager;
-                         });
-  if (it != download_notifiers_.end())
+  if (base::Contains(download_notifiers_, manager,
+                     &download::AllDownloadItemNotifier::GetManager)) {
     return;
+  }
 
   profile_observer_.AddObservation(profile);
   download_notifiers_.emplace(
@@ -46,7 +53,7 @@ void MultiProfileDownloadNotifier::AddProfile(Profile* profile) {
   }
 }
 
-std::vector<download::DownloadItem*>
+std::vector<raw_ptr<download::DownloadItem, VectorExperimental>>
 MultiProfileDownloadNotifier::GetAllDownloads() {
   download::SimpleDownloadManager::DownloadVector downloads;
   for (const auto& download_notifier : download_notifiers_) {
@@ -92,11 +99,9 @@ void MultiProfileDownloadNotifier::OnManagerGoingDown(
     content::DownloadManager* manager) {
   client_->OnManagerGoingDown(manager);
 
-  auto it = std::find_if(download_notifiers_.begin(), download_notifiers_.end(),
-                         [manager](const auto& notifier) {
-                           return notifier->GetManager() == manager;
-                         });
-  DCHECK(it != download_notifiers_.end());
+  auto it = base::ranges::find(download_notifiers_, manager,
+                               &download::AllDownloadItemNotifier::GetManager);
+  CHECK(it != download_notifiers_.end(), base::NotFatalUntil::M130);
   download_notifiers_.erase(it);
 }
 

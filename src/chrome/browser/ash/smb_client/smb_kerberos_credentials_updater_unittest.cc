@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "base/test/mock_callback.h"
 #include "base/values.h"
 #include "chrome/browser/ash/kerberos/kerberos_credentials_manager.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -26,8 +26,7 @@
 
 using ::base::test::RunClosure;
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -37,22 +36,19 @@ constexpr char kOtherPrincipal[] = "icebear_cloud@EXAMPLE.COM";
 constexpr char kPassword[] = "m1sst1ped>_<";
 constexpr char kConfig[] = "[libdefaults]";
 
-std::unique_ptr<MockUserManager> CreateMockUserManager() {
-  std::unique_ptr<MockUserManager> mock_user_manager =
-      std::make_unique<testing::NiceMock<MockUserManager>>();
-  mock_user_manager->AddUser(AccountId::FromUserEmail(kProfileEmail));
-  return mock_user_manager;
-}
-
 }  // namespace
 
 class SmbKerberosCredentialsUpdaterTest : public testing::Test {
  public:
   SmbKerberosCredentialsUpdaterTest()
-      : scoped_user_manager_(CreateMockUserManager()),
+      : scoped_user_manager_(std::make_unique<FakeChromeUserManager>()),
         local_state_(TestingBrowserProcess::GetGlobal()) {
     // Enable Kerberos via policy.
     SetPref(prefs::kKerberosEnabled, base::Value(true));
+
+    auto* user_manager =
+        static_cast<FakeChromeUserManager*>(user_manager::UserManager::Get());
+    user_manager->AddUser(AccountId::FromUserEmail(kProfileEmail));
 
     // Initialize User, Profile and KerberosCredentialsManager.
     KerberosClient::InitializeFake();
@@ -203,5 +199,4 @@ TEST_F(SmbKerberosCredentialsUpdaterTest, KerberosGetsEnabled) {
   EXPECT_EQ(credentials_updater_->active_account_name(), kPrincipal);
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

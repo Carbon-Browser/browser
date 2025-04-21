@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SANDBOX_LINUX_BPF_DSL_CONS_H_
 
 #include <memory>
+#include <utility>
 
 #include "sandbox/sandbox_export.h"
 

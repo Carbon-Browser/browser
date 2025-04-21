@@ -1,20 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "fuchsia_web/runners/cast/cast_component.h"
 
-#include <fuchsia/legacymetrics/cpp/fidl.h>
+#include <fuchsia/ui/views/cpp/fidl.h>
+#include <lib/async/default.h>
 #include <lib/fidl/cpp/binding.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
+#include <lib/trace/event.h>
+
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/task/current_thread.h"
 #include "components/cast/message_port/fuchsia/create_web_message.h"
@@ -22,8 +30,6 @@
 #include "components/cast/message_port/platform_message_port.h"
 #include "fuchsia_web/runners/cast/cast_runner.h"
 #include "fuchsia_web/runners/cast/cast_streaming.h"
-#include "fuchsia_web/runners/cast/fidl/fidl/chromium/cast/cpp/fidl.h"
-#include "fuchsia_web/runners/common/modular/agent_manager.h"
 #include "fuchsia_web/runners/common/web_component.h"
 
 namespace {
@@ -70,66 +76,35 @@ bool CastComponent::Params::AreComplete() const {
   return true;
 }
 
-CastComponent::CastComponent(base::StringPiece debug_name,
+CastComponent::CastComponent(std::string_view debug_name,
                              WebContentRunner* runner,
                              CastComponent::Params params,
                              bool is_headless)
-    : WebComponent(debug_name,
-                   runner,
-                   std::move(params.startup_context),
-                   std::move(params.controller_request)),
+    : WebComponent(debug_name, runner, std::move(params.startup_context)),
       is_headless_(is_headless),
-      agent_manager_(std::move(params.agent_manager)),
       application_config_(std::move(params.application_config)),
       url_rewrite_rules_provider_(std::move(params.url_rewrite_rules_provider)),
       initial_url_rewrite_rules_(
           std::move(params.initial_url_rewrite_rules.value())),
       api_bindings_client_(std::move(params.api_bindings_client)),
-      application_context_(params.application_context.Bind()),
+      application_context_(std::move(params.application_context),
+                           async_get_default_dispatcher()),
       media_settings_(std::move(params.media_settings.value())),
-      headless_disconnect_watch_(FROM_HERE) {
+      headless_disconnect_watch_(FROM_HERE),
+      trace_flow_id_(params.trace_flow_id) {
+  TRACE_DURATION("cast_runner", "Create CastComponent", "name", debug_name_);
+  TRACE_FLOW_STEP("cast_runner", "CastComponent", trace_flow_id_);
+
   base::AutoReset<bool> constructor_active_reset(&constructor_active_, true);
+  component_controller_.Bind(std::move(params.controller_request));
 }
 
 CastComponent::~CastComponent() = default;
 
-void CastComponent::SetOnDestroyedCallback(base::OnceClosure on_destroyed) {
-  on_destroyed_ = std::move(on_destroyed);
-}
-
-void CastComponent::ConnectMetricsRecorder(
-    fidl::InterfaceRequest<fuchsia::legacymetrics::MetricsRecorder> request) {
-  startup_context()->svc()->Connect(std::move(request));
-}
-
-void CastComponent::ConnectAudio(
-    fidl::InterfaceRequest<fuchsia::media::Audio> request) {
-  agent_manager_->ConnectToAgentService(application_config_.agent_url(),
-                                        std::move(request));
-}
-
-void CastComponent::ConnectDeviceWatcher(
-    fidl::InterfaceRequest<fuchsia::camera3::DeviceWatcher> request) {
-  agent_manager_->ConnectToAgentService(application_config_.agent_url(),
-                                        std::move(request));
-}
-
-bool CastComponent::HasWebPermission(
-    fuchsia::web::PermissionType permission_type) const {
-  if (!application_config_.has_permissions()) {
-    return false;
-  }
-
-  for (auto& permission : application_config_.permissions()) {
-    if (permission.has_type() && permission.type() == permission_type) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 void CastComponent::StartComponent() {
+  TRACE_DURATION("cast_runner", "StartComponent");
+  TRACE_FLOW_STEP("cast_runner", "CastComponent", trace_flow_id_);
+
   if (application_config_.has_enable_remote_debugging() &&
       application_config_.enable_remote_debugging()) {
     WebComponent::EnableRemoteDebugging();
@@ -142,8 +117,7 @@ void CastComponent::StartComponent() {
   url_rewrite_rules_provider_.set_error_handler([this](zx_status_t status) {
     ZX_LOG_IF(ERROR, status != ZX_OK, status)
         << "UrlRequestRewriteRulesProvider disconnected.";
-    DestroyComponent(kRewriteRulesProviderDisconnectExitCode,
-                     fuchsia::sys::TerminationReason::INTERNAL_ERROR);
+    DestroyComponent(kRewriteRulesProviderDisconnectExitCode);
   });
   OnRewriteRulesReceived(std::move(initial_url_rewrite_rules_));
 
@@ -156,7 +130,7 @@ void CastComponent::StartComponent() {
   }
 
   if (IsAppConfigForCastStreaming(application_config_)) {
-    // TODO(crbug.com/1082821): Remove this once the Cast Streaming Receiver
+    // TODO(crbug.com/40131115): Remove this once the Cast Streaming Receiver
     // component has been implemented.
 
     // Register the MessagePort for the Cast Streaming Receiver.
@@ -169,8 +143,7 @@ void CastComponent::StartComponent() {
         CreateWebMessage("", std::move(message_port_for_web_engine)),
         [this](fuchsia::web::Frame_PostMessage_Result result) {
           if (result.is_err()) {
-            DestroyComponent(kBindingsFailureExitCode,
-                             fuchsia::sys::TerminationReason::INTERNAL_ERROR);
+            DestroyComponent(kBindingsFailureExitCode);
           }
         });
     api_bindings_client_->OnPortConnected(kCastStreamingMessagePortName,
@@ -180,8 +153,7 @@ void CastComponent::StartComponent() {
   api_bindings_client_->AttachToFrame(
       frame(), connector_.get(),
       base::BindOnce(&CastComponent::DestroyComponent, base::Unretained(this),
-                     kBindingsFailureExitCode,
-                     fuchsia::sys::TerminationReason::INTERNAL_ERROR));
+                     kBindingsFailureExitCode));
 
   // Media loading has to be unblocked by the agent via the
   // ApplicationController.
@@ -193,11 +165,11 @@ void CastComponent::StartComponent() {
   }
 
   application_controller_ = std::make_unique<ApplicationControllerImpl>(
-      frame(), application_context_.get());
+      frame(), application_context_, trace_flow_id_);
 
   // Apply application-specific web permissions to the fuchsia.web.Frame.
   if (application_config_.has_permissions()) {
-    // TODO(crbug.com/1136994): Replace this with the PermissionManager API
+    // TODO(crbug.com/40724536): Replace this with the PermissionManager API
     // when available.
     const std::string origin =
         GURL(application_config_.web_url()).DeprecatedGetOriginAsURL().spec();
@@ -218,22 +190,32 @@ void CastComponent::StartComponent() {
   fuchsia::web::ContentAreaSettings settings;
   // Disable scrollbars on all Cast applications.
   settings.set_hide_scrollbars(true);
-  // Get the theme from the system service.
-  settings.set_theme(fuchsia::settings::ThemeType::DEFAULT);
+
+  // Get the theme from `fuchsia.settings.Display`, except in headless mode
+  // where the service may not be available.
+  if (!is_headless_) {
+    settings.set_theme(fuchsia::settings::ThemeType::DEFAULT);
+  }
+
   frame()->SetContentAreaSettings(std::move(settings));
 }
 
-void CastComponent::DestroyComponent(int64_t exit_code,
-                                     fuchsia::sys::TerminationReason reason) {
+void CastComponent::DestroyComponent(int64_t exit_code) {
   DCHECK(!constructor_active_);
 
-  std::move(on_destroyed_).Run();
+  TRACE_DURATION("cast_runner", "CastComponent::DestroyComponent", "name",
+                 debug_name_);
+  TRACE_FLOW_END("cast_runner", "CastComponent", trace_flow_id_);
 
-  // If the component EXITED then pass the |exit_code| to the Agent, to allow it
-  // to distinguish graceful termination from crashes.
-  if (reason == fuchsia::sys::TerminationReason::EXITED &&
-      application_controller_) {
-    application_context_->OnApplicationExit(exit_code);
+  // If the `application_controller_` is available then use it to inform the
+  // Agent of the `exit_code`. For graceful teardown (whether self-initiated by
+  // the web content, or due to a component `Stop()` request) the Agent expects
+  // to be notified with `exit_code` set to `ZX_OK`.  All other `exit_code`
+  // values, or failure to report one, indicate teardown due to error.
+  if (application_controller_) {
+    auto result = application_context_->OnApplicationExit(exit_code);
+    LOG_IF(ERROR, result.is_error())
+        << base::FidlMethodResultErrorMessage(result, "OnApplicationExit");
   }
 
   // frame() is about to be destroyed, so there is no need to perform cleanup
@@ -241,7 +223,15 @@ void CastComponent::DestroyComponent(int64_t exit_code,
   api_bindings_client_->DetachFromFrame(frame());
   connector_->DetachFromFrame();
 
-  WebComponent::DestroyComponent(exit_code, reason);
+  // If the `application_config_` specifies that the web content should be
+  // granted an extended shutdown delay, then use `CloseFrameWithTimeout()` to
+  // close it before tearing down the component.
+  if (application_config_.has_shutdown_delay()) {
+    CloseFrameWithTimeout(
+        base::TimeDelta::FromZxDuration(application_config_.shutdown_delay()));
+  }
+
+  WebComponent::DestroyComponent(exit_code);
 }
 
 void CastComponent::OnRewriteRulesReceived(
@@ -273,20 +263,13 @@ void CastComponent::OnNavigationStateChanged(
                                          std::move(callback));
 }
 
-void CastComponent::CreateView(
-    zx::eventpair view_token,
-    fidl::InterfaceRequest<fuchsia::sys::ServiceProvider> incoming_services,
-    fidl::InterfaceHandle<fuchsia::sys::ServiceProvider> outgoing_services) {
-  scenic::ViewRefPair view_ref_pair = scenic::ViewRefPair::New();
-  CreateViewWithViewRef(std::move(view_token),
-                        std::move(view_ref_pair.control_ref),
-                        std::move(view_ref_pair.view_ref));
-}
-
 void CastComponent::CreateViewWithViewRef(
     zx::eventpair view_token,
     fuchsia::ui::views::ViewRefControl control_ref,
     fuchsia::ui::views::ViewRef view_ref) {
+  TRACE_DURATION("cast_runner", "CastComponent::CreateViewWithViewRef");
+  TRACE_FLOW_STEP("cast_runner", "CastComponent", trace_flow_id_);
+
   if (is_headless_) {
     // For headless CastComponents, |view_token| does not actually connect to a
     // Scenic View. It is merely used as a conduit for propagating termination
@@ -305,12 +288,40 @@ void CastComponent::CreateViewWithViewRef(
 }
 
 void CastComponent::CreateView2(fuchsia::ui::app::CreateView2Args view_args) {
+  TRACE_DURATION("cast_runner", "CastComponent::CreateView2");
+  TRACE_FLOW_STEP("cast_runner", "CastComponent", trace_flow_id_);
+
   if (is_headless_) {
     frame()->EnableHeadlessRendering();
     return;
   }
 
   WebComponent::CreateView2(std::move(view_args));
+}
+
+void CastComponent::Kill() {
+  // The Component Framework has requested forcible teardown, so immediately
+  // destroy this component.
+  DestroyComponent(ZX_OK);
+}
+
+void CastComponent::Stop() {
+  TRACE_DURATION("cast_runner", "CastComponent::Stop");
+  TRACE_FLOW_STEP("cast_runner", "CastComponent", trace_flow_id_);
+
+  // The Component Framework has requested graceful teardown, so request that
+  // the `Frame` close the page. The framework typically allows components
+  // several seconds to complete teardown, before forcibly `Kill()`ing them.
+  // Using a timeout of 1 minute here effectively ensures that the content
+  // has until the framework timeout expires, in which to teardown.
+  constexpr base::TimeDelta kStopTimeout = base::Minutes(1u);
+  frame()->Close(std::move(fuchsia::web::FrameCloseRequest().set_timeout(
+      kStopTimeout.ToZxDuration())));
+}
+
+void CastComponent::handle_unknown_method(uint64_t ordinal,
+                                          bool method_has_response) {
+  LOG(ERROR) << "Unknown method called on CastComponent. Ordinal: " << ordinal;
 }
 
 void CastComponent::OnZxHandleSignalled(zx_handle_t handle,

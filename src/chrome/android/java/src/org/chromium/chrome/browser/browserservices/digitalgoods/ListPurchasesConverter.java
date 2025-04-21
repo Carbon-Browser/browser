@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,7 @@ import org.chromium.payments.mojom.BillingResponseCode;
 import org.chromium.payments.mojom.DigitalGoods.ListPurchases_Response;
 import org.chromium.payments.mojom.PurchaseReference;
 
-/**
- * A converter that deals with the results of ListPurchases calls.
- */
+/** A converter that deals with the results of ListPurchases calls. */
 class ListPurchasesConverter {
     private static final String TAG = "DigitalGoods";
 
@@ -65,9 +63,10 @@ class ListPurchasesConverter {
                 int code = args.getInt(KEY_RESPONSE_CODE);
                 Parcelable[] array = args.getParcelableArray(KEY_PURCHASES_LIST);
 
-                PurchaseReference[] reference = convertParcelableArray(
-                        array, ListPurchasesConverter::convertPurchaseReference)
-                                                        .toArray(new PurchaseReference[0]);
+                PurchaseReference[] reference =
+                        convertParcelableArray(
+                                        array, ListPurchasesConverter::convertPurchaseReference)
+                                .toArray(new PurchaseReference[0]);
                 callback.call(convertResponseCode(code, args), reference);
             }
         };

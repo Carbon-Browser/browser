@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
 
-struct wl_client;
 struct wl_resource;
 
 namespace wl {
@@ -26,28 +25,19 @@ class TestDataDeviceManager;
 
 class TestDataDevice : public TestSelectionDevice {
  public:
-  struct DragDelegate {
-    virtual void StartDrag(TestDataSource* source,
-                           MockSurface* origin,
-                           uint32_t serial) = 0;
-  };
-
-  TestDataDevice(wl_resource* resource,
-                 wl_client* client,
-                 TestDataDeviceManager* manager);
+  TestDataDevice(wl_resource* resource, TestDataDeviceManager* manager);
 
   TestDataDevice(const TestDataDevice&) = delete;
   TestDataDevice& operator=(const TestDataDevice&) = delete;
 
   ~TestDataDevice() override;
 
-  void set_drag_delegate(DragDelegate* delegate) { drag_delegate_ = delegate; }
-
   TestDataOffer* CreateAndSendDataOffer();
   void SetSelection(TestDataSource* data_source, uint32_t serial);
   void StartDrag(TestDataSource* data_source,
                  MockSurface* origin,
                  uint32_t serial);
+  void SendOfferAndEnter(MockSurface* origin, const gfx::Point& location);
 
   void OnEnter(uint32_t serial,
                wl_resource* surface,
@@ -58,13 +48,20 @@ class TestDataDevice : public TestSelectionDevice {
   void OnMotion(uint32_t time, wl_fixed_t x, wl_fixed_t y);
   void OnDrop();
 
-  wl_client* client() { return client_; }
+  uint32_t drag_serial() const { return drag_serial_; }
+
+  // Configure this data device to not send offer/enter events next time it
+  // receives a start_drag request. Useful for tests that wish to emulate
+  // some specific compositor behavior when starting a drag session.
+  void disable_auto_send_start_drag_events() {
+    auto_send_start_drag_events_ = false;
+  }
 
  private:
-  raw_ptr<wl_client> client_ = nullptr;
-  raw_ptr<DragDelegate> drag_delegate_ = nullptr;
-
   const raw_ptr<TestDataDeviceManager> manager_;
+
+  uint32_t drag_serial_ = 0;
+  bool auto_send_start_drag_events_ = true;
 };
 
 }  // namespace wl

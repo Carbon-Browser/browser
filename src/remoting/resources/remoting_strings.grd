@@ -7,7 +7,7 @@
       <emit emit_type="prepend"/>
     </output>
 
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/af.pak" lang="af" type="data_package"/>
     </if>
     <output filename="remoting/resources/am.pak" lang="am" type="data_package"/>
@@ -16,14 +16,14 @@
     <output filename="remoting/resources/bn.pak" lang="bn" type="data_package"/>
     <output filename="remoting/resources/ca.pak" lang="ca" type="data_package"/>
     <output filename="remoting/resources/cs.pak" lang="cs" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/cy.pak" lang="cy" type="data_package"/>
     </if>
     <output filename="remoting/resources/da.pak" lang="da" type="data_package"/>
     <output filename="remoting/resources/de.pak" lang="de" type="data_package"/>
     <output filename="remoting/resources/el.pak" lang="el" type="data_package"/>
     <output filename="remoting/resources/en-GB.pak" lang="en-GB" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/en-US.pak" lang="en" type="data_package"/>
     </if>
     <output filename="remoting/resources/en.pak" lang="en" type="data_package"/>
@@ -36,14 +36,14 @@
     </if>
     <output filename="remoting/resources/es.pak" lang="es" type="data_package"/>
     <output filename="remoting/resources/et.pak" lang="et" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/eu.pak" lang="eu" type="data_package"/>
     </if>
     <output filename="remoting/resources/fa.pak" lang="fa" type="data_package"/>
     <output filename="remoting/resources/fi.pak" lang="fi" type="data_package"/>
     <output filename="remoting/resources/fil.pak" lang="fil" type="data_package"/>
     <output filename="remoting/resources/fr.pak" lang="fr" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/gl.pak" lang="gl" type="data_package"/>
     </if>
     <output filename="remoting/resources/gu.pak" lang="gu" type="data_package"/>
@@ -52,7 +52,7 @@
     <output filename="remoting/resources/hr.pak" lang="hr" type="data_package"/>
     <output filename="remoting/resources/hu.pak" lang="hu" type="data_package"/>
     <output filename="remoting/resources/id.pak" lang="id" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/is.pak" lang="is" type="data_package"/>
     </if>
     <output filename="remoting/resources/it.pak" lang="it" type="data_package"/>
@@ -91,7 +91,7 @@
     <output filename="remoting/resources/vi.pak" lang="vi" type="data_package"/>
     <output filename="remoting/resources/zh-CN.pak" lang="zh-CN" type="data_package"/>
     <output filename="remoting/resources/zh-TW.pak" lang="zh-TW" type="data_package"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/zu.pak" lang="zu" type="data_package"/>
     </if>
 
@@ -99,7 +99,7 @@
     <output filename="remoting/resources/ar-XB.pak" lang="ar-XB" type="data_package"/>
     <output filename="remoting/resources/en-XA.pak" lang="en-XA" type="data_package"/>
 
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/af/messages.json" lang="af" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/am/messages.json" lang="am" type="chrome_messages_json"/>
@@ -108,7 +108,7 @@
     <output filename="remoting/resources/_locales/bn/messages.json" lang="bn" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/ca/messages.json" lang="ca" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/cs/messages.json" lang="cs" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/cy/messages.json" lang="cy" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/da/messages.json" lang="da" type="chrome_messages_json"/>
@@ -116,7 +116,7 @@
     <output filename="remoting/resources/_locales/fa/messages.json" lang="fa" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/el/messages.json" lang="el" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/en/messages.json" lang="en" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <!-- lang="en-US" will create an empty json file. -->
       <output filename="remoting/resources/_locales/en_US/messages.json" lang="en" type="chrome_messages_json"/>
     </if>
@@ -130,13 +130,13 @@
       <output filename="remoting/resources/_locales/es_419/messages.json" lang="es-419" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/et/messages.json" lang="et" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/eu/messages.json" lang="eu" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/fi/messages.json" lang="fi" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/fil/messages.json" lang="fil" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/fr/messages.json" lang="fr" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/gl/messages.json" lang="gl" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/gu/messages.json" lang="gu" type="chrome_messages_json"/>
@@ -145,7 +145,7 @@
     <output filename="remoting/resources/_locales/hr/messages.json" lang="hr" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/hu/messages.json" lang="hu" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/id/messages.json" lang="id" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/is/messages.json" lang="is" type="chrome_messages_json"/>
     </if>
     <output filename="remoting/resources/_locales/it/messages.json" lang="it" type="chrome_messages_json"/>
@@ -184,61 +184,13 @@
     <output filename="remoting/resources/_locales/vi/messages.json" lang="vi" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/zh_CN/messages.json" lang="zh-CN" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/zh_TW/messages.json" lang="zh-TW" type="chrome_messages_json"/>
-    <if expr="chromeos_ash or chromeos_lacros">
+    <if expr="is_chromeos">
       <output filename="remoting/resources/_locales/zu/messages.json" lang="zu" type="chrome_messages_json"/>
     </if>
 
     <!-- Pseudolocales -->
     <output filename="remoting/resources/_locales/ar_XB/messages.json" lang="ar-XB" type="chrome_messages_json"/>
     <output filename="remoting/resources/_locales/en_XA/messages.json" lang="en-XA" type="chrome_messages_json"/>
-
-    <if expr="is_android">
-      <output filename="remoting/android/res/values-am/remoting_strings.xml" lang="am" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ar/remoting_strings.xml" lang="ar" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-bg/remoting_strings.xml" lang="bg" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ca/remoting_strings.xml" lang="ca" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-cs/remoting_strings.xml" lang="cs" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-da/remoting_strings.xml" lang="da" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-de/remoting_strings.xml" lang="de" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-el/remoting_strings.xml" lang="el" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values/remoting_strings.xml" lang="en" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-en-rGB/remoting_strings.xml" lang="en-GB" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-es/remoting_strings.xml" lang="es" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-es-rUS/remoting_strings.xml" lang="es-419" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-fa/remoting_strings.xml" lang="fa" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-fi/remoting_strings.xml" lang="fi" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-tl/remoting_strings.xml" lang="fil" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-fr/remoting_strings.xml" lang="fr" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-hi/remoting_strings.xml" lang="hi" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-hr/remoting_strings.xml" lang="hr" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-hu/remoting_strings.xml" lang="hu" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-in/remoting_strings.xml" lang="id" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-it/remoting_strings.xml" lang="it" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-iw/remoting_strings.xml" lang="he" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ja/remoting_strings.xml" lang="ja" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ko/remoting_strings.xml" lang="ko" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-lt/remoting_strings.xml" lang="lt" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-lv/remoting_strings.xml" lang="lv" type="android" context="android_java"/>
-    <!-- The translation console uses 'no' for Norwegian (Bokmål), but Android uses 'nb'. -->
-      <output filename="remoting/android/res/values-nb/remoting_strings.xml" lang="no" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-nl/remoting_strings.xml" lang="nl" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-pl/remoting_strings.xml" lang="pl" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-pt-rBR/remoting_strings.xml" lang="pt-BR" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-pt-rPT/remoting_strings.xml" lang="pt-PT" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ro/remoting_strings.xml" lang="ro" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-ru/remoting_strings.xml" lang="ru" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-sk/remoting_strings.xml" lang="sk" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-sl/remoting_strings.xml" lang="sl" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-sr/remoting_strings.xml" lang="sr" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-sv/remoting_strings.xml" lang="sv" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-sw/remoting_strings.xml" lang="sw" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-th/remoting_strings.xml" lang="th" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-tr/remoting_strings.xml" lang="tr" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-uk/remoting_strings.xml" lang="uk" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-vi/remoting_strings.xml" lang="vi" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-zh-rCN/remoting_strings.xml" lang="zh-CN" type="android" context="android_java"/>
-      <output filename="remoting/android/res/values-zh-rTW/remoting_strings.xml" lang="zh-TW" type="android" context="android_java"/>
-    </if>
   </outputs>
   <translations>
     <file path="remoting_strings_af.xtb" lang="af"/>
@@ -353,7 +305,7 @@
           Google LLC
         </message>
         <message name="IDS_COPYRIGHT" desc="The copyright message specified in the version information of each Chrome Remote Desktop Host executable. It should be updated every year.">
-          Copyright 2022 Google LLC. All Rights Reserved.
+          Copyright 2024 Google LLC. All Rights Reserved.
         </message>
         <message name="IDS_DISPLAY_SERVICE_NAME" desc="The name of the Windows service installed by Chrome Remote Desktop.">
           Chrome Remote Desktop Service
@@ -395,7 +347,7 @@
           The Chromium Authors
         </message>
         <message name="IDS_COPYRIGHT" desc="The copyright message specified in the version information of each Chromoting Host executable. It should be updated every year.">
-          Copyright 2022 The Chromium Authors. All Rights Reserved.
+          Copyright 2024 The Chromium Authors. All Rights Reserved.
         </message>
         <message name="IDS_DISPLAY_SERVICE_NAME" desc="The name of the Windows service installed by Chromoting.">
           Chromoting Service
@@ -676,20 +628,6 @@
       <message desc="Label for general-purpose OK buttons." name="IDS_OK">
         OK
       </message>
-      <if expr="is_android">
-        <!-- Android uses a different format for placeholder -->
-        <message desc="Message that is spoken (for accessibility) whenever the user selects an account from a list displayed in the application." name="IDS_LOG_IN_ACCOUNT_ACCESSIBILITY_DESCRIPTION" formatter_data="android_java" meaning="Spoken message">
-          Signed in as <ph name="EMAIL_ADDRESS">%1$s<ex>test@gmail.com</ex></ph>.
-        </message>
-        <message desc="This string represents a host status line, which is shown below the host name for offline hosts.  The status line consists of 1) a host offline status (i.e. a specific 'Host failed to read the policy.' or 'Invalid host owner.' or a generic 'Host if offline.') and 2) statement when the host was last seen online (i.e. 'Last seen online 20 minutes ago.')."
-                 name="IDS_HOST_STATUS_LINE" formatter_data="android_java">
-          <ph name="OPTIONAL_OFFLINE_REASON">%2$s<ex>Host failed to read the policy.</ex></ph>  Last seen online <ph name="RELATIVE_TIMESTAMP">%1$s<ex>yesterday</ex></ph>.
-        </message>
-        <message desc="Content description (used for accessibility) of a host icon representing an offline host."
-                 name="IDS_HOST_ICON_OFFLINE_DESCRIPTION" formatter_data="android_java">
-          Offline.
-        </message>
-      </if>
       <if expr="not is_android">
         <message desc="Short message being popped up whenever the user selects an account from a list displayed in the application." name="IDS_LOG_IN_ACCOUNT_DESCRIPTION" meaning="UI element">
           Signed in as <ph name="EMAIL_ADDRESS">$1<ex>test@gmail.com</ex></ph>.
@@ -753,12 +691,6 @@
                name="IDS_OFFLINE_REASON_HOST_RETRIES_EXCEEDED" formatter_data="android_java">
         Host crashed or failed to start.
       </message>
-      <if expr="is_android">
-        <message desc="Description of why host is offline, when client gets a host-offline-reason it doesn't recognize."
-                 name="IDS_OFFLINE_REASON_UNKNOWN" formatter_data="android_java">
-          Unrecognized host error: <ph name="HOST_OFFLINE_REASON">%1$s<ex>EXIT_CODE_FROM_HOST_NEWER_THAN_CLIENT</ex></ph>.
-        </message>
-      </if>
       <if expr="not is_android">
         <message desc="Description of why host is offline, when client gets a host-offline-reason it doesn't recognize."
                  name="IDS_OFFLINE_REASON_UNKNOWN">

@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/media_router/query_result_manager.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "components/media_router/browser/media_sinks_observer.h"
 #include "components/media_router/browser/test/mock_media_router.h"
@@ -33,16 +33,16 @@ const char kOrigin[] = "https://origin.com";
 
 class MockObserver : public MediaSinkWithCastModesObserver {
  public:
-  MOCK_METHOD1(OnSinksUpdated,
-               void(const std::vector<MediaSinkWithCastModes>& sinks));
+  MOCK_METHOD(void,
+              OnSinksUpdated,
+              (const std::vector<MediaSinkWithCastModes>& sinks));
 };
 
 }  // namespace
 
 class QueryResultManagerTest : public ::testing::Test {
  public:
-  QueryResultManagerTest()
-      : mock_router_(), query_result_manager_(&mock_router_) {}
+  QueryResultManagerTest() : query_result_manager_(&mock_router_) {}
 
   QueryResultManagerTest(const QueryResultManagerTest&) = delete;
   QueryResultManagerTest& operator=(const QueryResultManagerTest&) = delete;
@@ -81,12 +81,14 @@ class QueryResultManagerTest : public ::testing::Test {
 
 // Requires that the elements of |expected| are unique.
 MATCHER_P(VectorSetEquals, expected, "") {
-  if (expected.size() != arg.size())
+  if (expected.size() != arg.size()) {
     return false;
+  }
 
   for (size_t i = 0; i < expected.size(); ++i) {
-    if (!base::Contains(arg, expected[i]))
+    if (!base::Contains(arg, expected[i])) {
       return false;
+    }
   }
   return true;
 }
@@ -180,7 +182,7 @@ TEST_F(QueryResultManagerTest, MultipleQueries) {
       {sink1, {}}, {sink2, {}}, {sink3, {}}, {sink4, {}}};
   const auto& sinks_observers = query_result_manager_.sinks_observers_;
   auto* any_sink_observer =
-      sinks_observers.find(absl::optional<MediaSource>())->second.get();
+      sinks_observers.find(std::optional<MediaSource>())->second.get();
   EXPECT_CALL(mock_observer_, OnSinksUpdated(VectorSetEquals(expected_sinks)));
   any_sink_observer->OnSinksUpdated(sinks_query_result, {});
 

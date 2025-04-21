@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_BUFFERING_BYTES_CONSUMER_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/types/pass_key.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
@@ -28,6 +29,12 @@ class PLATFORM_EXPORT BufferingBytesConsumer final
     : public BytesConsumer,
       private BytesConsumer::Client {
  public:
+  // Once `total_buffer_size_` reaches this, we will stop reading until it drops
+  // below it again. For most users the simple cache won't store any file larger
+  // than 55MB, so there's no point in buffering more than that. This limit is
+  // only applied when the BufferedBytesConsumerLimitSize feature is enabled.
+  static constexpr size_t kMaxBufferSize = 55 * 1024 * 1024;
+
   // Creates a BufferingBytesConsumer that waits some delay before beginning
   // to buffer data from the underlying consumer. This delay provides an
   // opportunity for the data to be drained before buffering begins. The
@@ -63,7 +70,7 @@ class PLATFORM_EXPORT BufferingBytesConsumer final
   void StopBuffering();
 
   // BufferingBytesConsumer
-  Result BeginRead(const char** buffer, size_t* available) override;
+  Result BeginRead(base::span<const char>& buffer) override;
   Result EndRead(size_t read_size) override;
   scoped_refptr<BlobDataHandle> DrainAsBlobDataHandle(BlobSizePolicy) override;
   scoped_refptr<EncodedFormData> DrainAsFormData() override;
@@ -73,7 +80,7 @@ class PLATFORM_EXPORT BufferingBytesConsumer final
   void Cancel() override;
   PublicState GetPublicState() const override;
   Error GetError() const override;
-  String DebugName() const override { return "BufferingBytesConsumer"; }
+  String DebugName() const override;
 
   void Trace(Visitor*) const override;
 
@@ -89,6 +96,9 @@ class PLATFORM_EXPORT BufferingBytesConsumer final
   HeapDeque<Member<HeapVector<char>>> buffer_;
   size_t offset_for_first_chunk_ = 0;
 
+  // The sum of the sizes of all Vectors in `buffer_`.
+  size_t total_buffer_size_ = 0;
+
   enum class BufferingState {
     kDelayed,
     kStarted,
@@ -98,7 +108,9 @@ class PLATFORM_EXPORT BufferingBytesConsumer final
 
   bool has_seen_end_of_data_ = false;
   bool has_seen_error_ = false;
+  bool is_limiting_total_buffer_size_;
   Member<BytesConsumer::Client> client_;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace blink

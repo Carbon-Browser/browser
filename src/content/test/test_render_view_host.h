@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/input/cursor_manager.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "components/viz/host/host_frame_sink_client.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
@@ -23,9 +24,10 @@
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_renderer_host.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+#include "ui/base/cursor/cursor.h"
 #include "ui/base/ime/dummy_text_input_client.h"
-#include "ui/base/layout.h"
 #include "ui/base/page_transition_types.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
 #if defined(USE_AURA)
@@ -88,6 +90,7 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
       const std::string& url,
       const std::vector<std::string>& file_paths,
       blink::mojom::ShareService::ShareCallback callback) override;
+  uint64_t GetNSViewId() const override;
 #endif  // BUILDFLAG(IS_MAC)
 
   // Notified in response to a CommitPending where there is no content for
@@ -108,7 +111,7 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
                    const gfx::Rect& anchor_rect) override {}
   void Focus() override {}
   void SetIsLoading(bool is_loading) override {}
-  void UpdateCursor(const WebCursor& cursor) override;
+  void UpdateCursor(const ui::Cursor& cursor) override;
   void RenderProcessGone() override;
   void ShowWithVisibility(PageVisibilityState page_visibility) override;
   void Destroy() override;
@@ -117,15 +120,18 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
                                  const gfx::Rect& bounds) override {}
   void ClearKeyboardTriggeredTooltip() override {}
   gfx::Rect GetBoundsInRootWindow() override;
-  blink::mojom::PointerLockResult LockMouse(bool) override;
-  blink::mojom::PointerLockResult ChangeMouseLock(bool) override;
-  void UnlockMouse() override;
+  const viz::LocalSurfaceId& IncrementSurfaceIdForNavigation() override;
+  blink::mojom::PointerLockResult LockPointer(bool) override;
+  blink::mojom::PointerLockResult ChangePointerLock(bool) override;
+  void UnlockPointer() override;
   const viz::FrameSinkId& GetFrameSinkId() const override;
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   viz::SurfaceId GetCurrentSurfaceId() const override;
   std::unique_ptr<SyntheticGestureTarget> CreateSyntheticGestureTarget()
       override;
   ui::Compositor* GetCompositor() override;
+  input::CursorManager* GetCursorManager() override;
+  void InvalidateLocalSurfaceIdAndAllocationGroup() override {}
 
   bool is_showing() const { return is_showing_; }
   bool is_occluded() const { return is_occluded_; }
@@ -135,7 +141,7 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
   void OnFrameTokenChanged(uint32_t frame_token,
                            base::TimeTicks activation_time) override;
 
-  const WebCursor& last_cursor() const { return last_cursor_; }
+  const ui::Cursor& last_cursor() const { return last_cursor_; }
 
   void SetCompositor(ui::Compositor* compositor) { compositor_ = compositor; }
 
@@ -153,14 +159,14 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
  protected:
   // RenderWidgetHostViewBase:
   void UpdateBackgroundColor() override;
-  absl::optional<DisplayFeature> GetDisplayFeature() override;
+  std::optional<DisplayFeature> GetDisplayFeature() override;
   void SetDisplayFeatureForTesting(
       const DisplayFeature* display_feature) override;
   void NotifyHostAndDelegateOnWasShown(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) override;
-  void RequestPresentationTimeFromHostOrDelegate(
+  void RequestSuccessfulPresentationTimeFromHostOrDelegate(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) override;
-  void CancelPresentationTimeRequestForHostAndDelegate() override;
+  void CancelSuccessfulPresentationTimeRequestForHostAndDelegate() override;
 
   viz::FrameSinkId frame_sink_id_;
 
@@ -168,8 +174,10 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
   bool is_showing_;
   bool is_occluded_;
   PageVisibilityState page_visibility_ = PageVisibilityState::kHidden;
+#if !BUILDFLAG(IS_IOS)
   ui::DummyTextInputClient text_input_client_;
-  WebCursor last_cursor_;
+#endif
+  ui::Cursor last_cursor_;
 
   // Latest capture sequence number which is incremented when the caller
   // requests surfaces be synchronized via
@@ -183,9 +191,11 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
   std::unique_ptr<aura::Window> window_;
 #endif
 
-  absl::optional<DisplayFeature> display_feature_;
+  std::optional<DisplayFeature> display_feature_;
 
-  raw_ptr<ui::Compositor> compositor_ = nullptr;
+  raw_ptr<ui::Compositor, DanglingUntriaged> compositor_ = nullptr;
+
+  input::CursorManager cursor_manager_;
 };
 
 // TestRenderWidgetHostViewChildFrame -----------------------------------------
@@ -266,8 +276,8 @@ class TestRenderViewHost : public RenderViewHostImpl,
       RenderViewHostDelegate* delegate,
       int32_t routing_id,
       int32_t main_frame_routing_id,
-      bool swapped_out,
-      scoped_refptr<BrowsingContextState> main_browsing_context_state);
+      scoped_refptr<BrowsingContextState> main_browsing_context_state,
+      CreateRenderViewHostCase create_case);
 
   TestRenderViewHost(const TestRenderViewHost&) = delete;
   TestRenderViewHost& operator=(const TestRenderViewHost&) = delete;
@@ -275,7 +285,7 @@ class TestRenderViewHost : public RenderViewHostImpl,
   // RenderViewHostImpl overrides.
   MockRenderProcessHost* GetProcess() const override;
   bool CreateRenderView(
-      const absl::optional<blink::FrameToken>& opener_frame_token,
+      const std::optional<blink::FrameToken>& opener_frame_token,
       int proxy_route_id,
       bool window_was_created_with_opener) override;
   bool IsTestRenderViewHost() const override;
@@ -296,7 +306,7 @@ class TestRenderViewHost : public RenderViewHostImpl,
   }
 
   // The opener frame route id passed to CreateRenderView().
-  const absl::optional<blink::FrameToken>& opener_frame_token() const {
+  const std::optional<blink::FrameToken>& opener_frame_token() const {
     return opener_frame_token_;
   }
 
@@ -323,7 +333,7 @@ class TestRenderViewHost : public RenderViewHostImpl,
   raw_ptr<int> delete_counter_;
 
   // See opener_frame_token() above.
-  absl::optional<blink::FrameToken> opener_frame_token_;
+  std::optional<blink::FrameToken> opener_frame_token_;
 
   std::unique_ptr<TestPageBroadcast> page_broadcast_;
 };
@@ -358,9 +368,8 @@ class RenderViewHostImplTestHarness : public RenderViewHostTestHarness {
   TestRenderFrameHost* main_test_rfh();
 
  private:
-  typedef std::unique_ptr<ui::test::ScopedSetSupportedResourceScaleFactors>
-      ScopedSetSupportedScaleFactors;
-  ScopedSetSupportedScaleFactors scoped_set_supported_scale_factors_;
+  ui::test::ScopedSetSupportedResourceScaleFactors
+      scoped_set_supported_scale_factors_{{ui::k100Percent}};
 };
 
 }  // namespace content

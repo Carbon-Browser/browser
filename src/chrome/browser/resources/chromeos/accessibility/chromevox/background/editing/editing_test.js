@@ -1,36 +1,21 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for editing tests.
  */
-ChromeVoxEditingTest = class extends ChromeVoxNextE2ETest {
-  constructor() {
-    super();
-  }
-
+ChromeVoxEditingTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'BrailleBackground',
-        '/chromevox/background/braille/braille_background.js');
-    await importModule(
-        'DesktopAutomationInterface',
-        '/chromevox/background/desktop_automation_interface.js');
-    await importModule('EventGenerator', '/common/event_generator.js');
-    await importModule(
-        'EditableLine', '/chromevox/background/editing/editable_line.js');
-    await importModule(
-        'TextEditHandler', '/chromevox/background/editing/editing.js');
-    await importModule(
-        'TtsBackground', '/chromevox/background/tts_background.js');
+
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.IntentCommandType = chrome.automation.IntentCommandType;
+    globalThis.RoleType = chrome.automation.RoleType;
   }
 
   press(keyCode, modifiers) {
@@ -52,6 +37,12 @@ ChromeVoxEditingTest = class extends ChromeVoxNextE2ETest {
     input.focus();
     await this.waitForEvent(input, EventType.FOCUS);
     return input;
+  }
+
+  routeBraille(mockFeedback, position) {
+    BrailleCommandHandler.onBrailleKeyEvent(
+        {command: BrailleKeyCommand.ROUTING, displayPosition: position},
+        mockFeedback.lastMatchedBraille);
   }
 };
 
@@ -83,7 +74,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'Focus', async function() {
       .expectBraille(
           'textArea Line 1\nline 2\nline 3 mled', {startIndex: 9, endIndex: 9});
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'Multiline', async function() {
@@ -105,7 +96,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'Multiline', async function() {
       .expectSpeech('line 2', 'selected')
       .expectBraille('line 2\n', {startIndex: 0, endIndex: 6});
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'TextButNoSelectionChange', async function() {
@@ -120,14 +111,14 @@ AX_TEST_F('ChromeVoxEditingTest', 'TextButNoSelectionChange', async function() {
         let timer;
         let input = document.getElementById('input');
         function poll(e) {
-          if (input.selectionStart == 0) {
+          if (input.selectionStart === 0) {
             return;
           }
 
           input.value = 'text2';
-          window.clearInterval(timer);
+          clearInterval(timer);
         }
-        timer = window.setInterval(poll, 200);
+        timer = setInterval(poll, 200);
       </script>
     `);
   const input = root.find({role: RoleType.TEXT_FIELD});
@@ -137,12 +128,12 @@ AX_TEST_F('ChromeVoxEditingTest', 'TextButNoSelectionChange', async function() {
       .call(input.setSelection.bind(input, 5, 5))
       .expectBraille('text2 ed', {startIndex: 5, endIndex: 5});
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByLine', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -158,16 +149,16 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByLine', async function() {
       document.getElementById('go').addEventListener('click', function() {
         let sel = getSelection();
         sel.modify('move', dir, 'line');
-        if (dir == 'forward') {
+        if (dir === 'forward') {
           line++;
         } else {
           line--;
         }
 
-        if (line == 0) {
+        if (line === 0) {
           dir = 'forward';
         }
-        if (line == 2) {
+        if (line === 2) {
           dir = 'backward';
         }
       }, true);
@@ -188,13 +179,13 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByLine', async function() {
       .expectBraille('\n')
       .call(moveByLine)
       .expectSpeech('hello', 'Heading 2')
-      .expectBraille('hello h2 mled')
-      .replay();
+      .expectBraille('hello h2 mled');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByCharacter', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -207,16 +198,16 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByCharacter', async function() {
       document.getElementById('go').addEventListener('click', function() {
         let sel = getSelection();
         sel.modify('move', dir, 'character');
-        if (dir == 'forward') {
+        if (dir === 'forward') {
           char++;
         } else {
           char--;
         }
 
-        if (char == 0) {
+        if (char === 0) {
           dir = 'forward';
         }
-        if (char == 16) {
+        if (char === 16) {
           dir = 'backward';
         }
       }, true);
@@ -261,16 +252,16 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByCharacter', async function() {
 
       .call(moveByChar)
       .expectSpeech(' ')
-      .expectBraille(lineText, {startIndex: 9, endIndex: 9})
+      .expectBraille(lineText, {startIndex: 9, endIndex: 9});
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
     'ChromeVoxEditingTest', 'RichTextMoveByCharacterAllAttributes',
     async function() {
       // Turn on rich text output settings.
-      localStorage['announceRichTextAttributes'] = 'true';
+      SettingsManager.set('announceRichTextAttributes', true);
 
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree(`
@@ -427,9 +418,9 @@ AX_TEST_F(
           .expectSpeech('Black, 100% opacity.')
           .expectSpeech('Not link')
           .expectSpeech('Not underline')
-          .expectBraille(lineText, {startIndex: 35, endIndex: 35})
+          .expectBraille(lineText, {startIndex: 35, endIndex: 35});
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 // Tests specifically for cursor workarounds.
@@ -471,8 +462,8 @@ AX_TEST_F(
           .expectBraille(lineText, {startIndex: 5, endIndex: 5})
           .call(moveByChar)
           .expectSpeech('w')
-          .expectBraille(lineText, {startIndex: 6, endIndex: 6})
-          .replay();
+          .expectBraille(lineText, {startIndex: 6, endIndex: 6});
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -507,14 +498,14 @@ AX_TEST_F(
           .expectBraille(lineText, {startIndex: 3, endIndex: 3})
           .call(moveByChar)
           .expectSpeech('End of text')
-          .expectBraille(lineText, {startIndex: 4, endIndex: 4})
+          .expectBraille(lineText, {startIndex: 4, endIndex: 4});
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextLinkOutput', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -551,9 +542,9 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextLinkOutput', async function() {
       .expectBraille(lineOnLinkText, {startIndex: 4, endIndex: 4})
       .call(moveByChar)
       .expectSpeech('t')
-      .expectBraille(lineOnLinkText, {startIndex: 5, endIndex: 5})
+      .expectBraille(lineOnLinkText, {startIndex: 5, endIndex: 5});
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -584,9 +575,9 @@ AX_TEST_F(
           .call(moveByChar)
           .expectSpeech('s', 'selected')
           .call(moveByChar)
-          .expectSpeech('t', 'selected')
+          .expectSpeech('t', 'selected');
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextImageByCharacter', async function() {
@@ -601,7 +592,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextImageByCharacter', async function() {
       let moveCount = 0;
       document.getElementById('go').addEventListener('click', function() {
         moveCount++;
-        if (moveCount == 9) {
+        if (moveCount === 9) {
           dir = 'backward';
         }
 
@@ -651,7 +642,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextImageByCharacter', async function() {
     mockFeedback.expectBraille.apply(mockFeedback, backItem.braille);
   }
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextSelectByLine', async function() {
@@ -759,9 +750,9 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextSelectByLine', async function() {
       // Shrinking.
       .call(move)
       .expectSpeech('ne', '22222 li', 'unselected')
-      .expectBraille('22222 line\n', {startIndex: 8, endIndex: 11})
+      .expectBraille('22222 line\n', {startIndex: 8, endIndex: 11});
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -867,9 +858,9 @@ AX_TEST_F(
           .call(move)
           .expectSpeech('ine', 'Link')
           .expectSpeech('33333 li', 'List item', 'selected')
-          .expectBraille('11111 line h1', {startIndex: 7, endIndex: 10})
+          .expectBraille('11111 line h1', {startIndex: 7, endIndex: 10});
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1231,8 +1222,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'TelTrimsWhitespace', async function() {
 
       // Deletion.
       .call(enterKey)
-      .expectSpeech('1')
-      .replay();
+      .expectSpeech('1');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'BackwardWordDelete', async function() {
@@ -1259,8 +1250,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'BackwardWordDelete', async function() {
       .expectSpeech('is , deleted')
       .expectBraille('this\u00a0mled', {startIndex: 5, endIndex: 5})
       .call(this.press(KeyCode.BACK, {ctrl: true}))
-      .expectBraille(' mled', {startIndex: 0, endIndex: 0})
-      .replay();
+      .expectBraille(' mled', {startIndex: 0, endIndex: 0});
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -1289,8 +1280,8 @@ AX_TEST_F(
           .call(this.press(KeyCode.BACK, {ctrl: true}))
           .expectSpeech('line, deleted')
           .call(this.press(KeyCode.BACK, {ctrl: true}))
-          .expectSpeech('first , deleted')
-          .replay();
+          .expectSpeech('first , deleted');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxEditingTest', 'GrammarErrors', async function() {
@@ -1329,9 +1320,9 @@ AX_TEST_F('ChromeVoxEditingTest', 'GrammarErrors', async function() {
       .call(moveByChar)
       .expectSpeech('e')
       .call(moveByChar)
-      .expectSpeech(' ', 'Leaving grammar error')
+      .expectSpeech(' ', 'Leaving grammar error');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 // Flaky test, crbug.com/1098642.
@@ -1352,8 +1343,8 @@ AX_TEST_F(
           .call(this.press(KeyCode.RETURN))
           .expectSpeech('\n')
           .call(this.press(KeyCode.A))
-          .expectSpeech('a')
-          .replay();
+          .expectSpeech('a');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxEditingTest', 'SelectAll', async function() {
@@ -1378,8 +1369,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'SelectAll', async function() {
       .call(this.press(KeyCode.HOME, {ctrl: true}))
       .expectSpeech('first line')
       .call(this.press(KeyCode.A, {ctrl: true}))
-      .expectSpeech('first line', 'second line', 'third line', 'selected')
-      .replay();
+      .expectSpeech('first line', 'second line', 'third line', 'selected');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'TextAreaBrailleEmptyLine', async function() {
@@ -1392,9 +1383,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'TextAreaBrailleEmptyLine', async function() {
   mockFeedback.call(this.press(KeyCode.UP)).expectBraille('two\n');
   mockFeedback.call(this.press(KeyCode.UP)).expectBraille('one\n');
   mockFeedback.call(this.press(KeyCode.UP)).expectBraille('\n');
-  mockFeedback.call(this.press(KeyCode.UP))
-      .expectBraille('test\nmled')
-      .replay();
+  mockFeedback.call(this.press(KeyCode.UP)).expectBraille('test\nmled');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'MoveByCharacterIntent', async function() {
@@ -1418,8 +1408,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'MoveByCharacterIntent', async function() {
       .call(this.press(KeyCode.LEFT))
       .expectSpeech('\n')
       .call(this.press(KeyCode.LEFT))
-      .expectSpeech('3')
-      .replay();
+      .expectSpeech('3');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'MoveByLineIntent', async function() {
@@ -1440,8 +1430,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'MoveByLineIntent', async function() {
       .call(this.press(KeyCode.UP))
       .expectSpeech('456')
       .call(this.press(KeyCode.UP))
-      .expectSpeech('123')
-      .replay();
+      .expectSpeech('123');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'SelectAllBareTextContent', async function() {
@@ -1454,8 +1444,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'SelectAllBareTextContent', async function() {
   mockFeedback.call(this.press(KeyCode.END, {ctrl: true}))
       .expectSpeech('unread')
       .call(this.press(KeyCode.A, {ctrl: true}))
-      .expectSpeech('unread', 'selected')
-      .replay();
+      .expectSpeech('unread', 'selected');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'InputEvents', async function() {
@@ -1464,8 +1454,6 @@ AX_TEST_F('ChromeVoxEditingTest', 'InputEvents', async function() {
   const input = await this.focusFirstTextField(root);
 
   // EventType.TEXT_SELECTION_CHANGED fires on focus as well.
-  //
-  // TODO(nektar): Deprecate and remove TEXT_SELECTION_CHANGED.
   event = await this.waitForEditableEvent();
   assertEquals(EventType.TEXT_SELECTION_CHANGED, event.type);
   assertEquals(input, event.target);
@@ -1473,27 +1461,27 @@ AX_TEST_F('ChromeVoxEditingTest', 'InputEvents', async function() {
 
   this.press(KeyCode.A)();
 
-  event = await this.waitForEditableEvent();
-  assertEquals(EventType.VALUE_IN_TEXT_FIELD_CHANGED, event.type);
-  assertEquals(input, event.target);
-  assertEquals('a', input.value);
-
-  // We deliberately used EventType.TEXT_SELECTION_CHANGED instead of
+  // We deliberately use EventType.TEXT_SELECTION_CHANGED instead of
   // EventType.DOCUMENT_SELECTION_CHANGED for text fields.
   event = await this.waitForEditableEvent();
   assertEquals(EventType.TEXT_SELECTION_CHANGED, event.type);
   assertEquals(input, event.target);
   assertEquals('a', input.value);
 
+  event = await this.waitForEditableEvent();
+  assertEquals(EventType.VALUE_IN_TEXT_FIELD_CHANGED, event.type);
+  assertEquals(input, event.target);
+  assertEquals('a', input.value);
+
   this.press(KeyCode.B)();
 
   event = await this.waitForEditableEvent();
-  assertEquals(EventType.VALUE_IN_TEXT_FIELD_CHANGED, event.type);
+  assertEquals(EventType.TEXT_SELECTION_CHANGED, event.type);
   assertEquals(input, event.target);
   assertEquals('ab', input.value);
 
   event = await this.waitForEditableEvent();
-  assertEquals(EventType.TEXT_SELECTION_CHANGED, event.type);
+  assertEquals(EventType.VALUE_IN_TEXT_FIELD_CHANGED, event.type);
   assertEquals(input, event.target);
   assertEquals('ab', input.value);
 });
@@ -1578,8 +1566,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'MarkedContent', async function() {
       .call(this.press(KeyCode.DOWN))
       .expectSpeech('This is ')
       .expectSpeech(
-          'Suggest', 'Delete', `everyone's`, 'Delete end', 'Suggest end')
-      .replay();
+          'Suggest', 'Delete', `everyone's`, 'Delete end', 'Suggest end');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxEditingTest', 'NestedInsertionDeletion', async function() {
@@ -1602,11 +1590,11 @@ AX_TEST_F('ChromeVoxEditingTest', 'NestedInsertionDeletion', async function() {
           'I ', 'Suggest', 'Username', 'Insert', 'was', 'Insert end', 'Delete',
           'am', 'Delete end', 'Suggest end', ' typing')
       .call(this.press(KeyCode.DOWN))
-      .expectSpeech('End')
-      .replay();
+      .expectSpeech('End');
+  await mockFeedback.replay();
 });
 
-// TODO(https://crbug.com/1342870): Test is flaky.
+// TODO(b/321663219): Re-enable when flakiness is resolved.
 AX_TEST_F(
     'ChromeVoxEditingTest', 'DISABLED_MoveByCharSuggestions', async function() {
       const mockFeedback = this.createMockFeedback();
@@ -1652,13 +1640,14 @@ AX_TEST_F(
           .call(this.press(KeyCode.LEFT))
           .expectSpeech('Suggest', 'Insert', 'w')
           .call(this.press(KeyCode.DOWN))
-          .expectSpeech('End')
-          .replay();
+          .expectSpeech('End');
+      await mockFeedback.replay();
     });
 
-AX_TEST_F('ChromeVoxEditingTest', 'MoveByWordSuggestions', async function() {
-  const mockFeedback = this.createMockFeedback();
-  const site = `
+AX_TEST_F(
+    'ChromeVoxEditingTest', 'MoveByWordSuggestions', async function() {
+      const mockFeedback = this.createMockFeedback();
+      const site = `
     <div contenteditable="true" role="textbox">
       <p>Start</p>
       <span>I </span>
@@ -1668,29 +1657,29 @@ AX_TEST_F('ChromeVoxEditingTest', 'MoveByWordSuggestions', async function() {
       <p>End</p>
     </div>
   `;
-  const root = await this.runWithLoadedTree(site);
-  await this.focusFirstTextField(root);
+      const root = await this.runWithLoadedTree(site);
+      await this.focusFirstTextField(root);
 
-  mockFeedback.call(this.press(KeyCode.DOWN))
-      .expectSpeech('I ')
-      // Move forward through line.
-      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-      .expectSpeech('I')
-      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-      .expectSpeech('Suggest', 'Username', 'Insert', 'was', 'Insert end')
-      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-      .expectSpeech('Delete', 'am', 'Delete end', 'Suggest end')
-      // Move backward through line.
-      .call(this.press(KeyCode.LEFT, {ctrl: true}))
-      .expectSpeech('Delete', 'am', 'Delete end', 'Suggest end')
-      .call(this.press(KeyCode.LEFT, {ctrl: true}))
-      .expectSpeech('Suggest', 'Username', 'Insert', 'was')
-      .call(this.press(KeyCode.LEFT, {ctrl: true}))
-      .expectSpeech('I')
-      .call(this.press(KeyCode.DOWN))
-      .expectSpeech('End')
-      .replay();
-});
+      mockFeedback.call(this.press(KeyCode.DOWN))
+          .expectSpeech('I ')
+          // Move forward through line.
+          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+          .expectSpeech('I')
+          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+          .expectSpeech('Suggest', 'Username', 'Insert', 'was', 'Insert end')
+          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+          .expectSpeech('Delete', 'am', 'Delete end', 'Suggest end')
+          // Move backward through line.
+          .call(this.press(KeyCode.LEFT, {ctrl: true}))
+          .expectSpeech('Delete', 'am', 'Delete end', 'Suggest end')
+          .call(this.press(KeyCode.LEFT, {ctrl: true}))
+          .expectSpeech('Suggest', 'Username', 'Insert', 'was')
+          .call(this.press(KeyCode.LEFT, {ctrl: true}))
+          .expectSpeech('I')
+          .call(this.press(KeyCode.DOWN))
+          .expectSpeech('End');
+      await mockFeedback.replay();
+    });
 
 AX_TEST_F(
     'ChromeVoxEditingTest', 'MoveByWordSuggestionsNoIntents', async function() {
@@ -1749,8 +1738,8 @@ AX_TEST_F(
           // right arrow key.
           .call(doCmd('nativeNextWord'))
           .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-          .expectSpeech('Suggest', 'Username', 'Insert', 'was', 'Insert end')
-          .replay();
+          .expectSpeech('Suggest', 'Username', 'Insert', 'was', 'Insert end');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxEditingTest', 'Separator', async function() {
@@ -1788,9 +1777,9 @@ AX_TEST_F('ChromeVoxEditingTest', 'Separator', async function() {
       .call(this.press(KeyCode.LEFT))
       // Notice this reads the entire line which is generally undesirable
       // except for special cases like this.
-      .expectSpeech('Hello')
+      .expectSpeech('Hello');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 // Test for the issue in crbug.com/1203840. This case was causing an infinite
@@ -1823,8 +1812,8 @@ AX_TEST_F(
       mockFeedback.call(this.press(KeyCode.DOWN))
           .expectSpeech('This is a test')
           .call(this.press(KeyCode.DOWN))
-          .expectSpeech('End')
-          .replay();
+          .expectSpeech('End');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1847,13 +1836,13 @@ AX_TEST_F(
       // ensure we don't depend on Blink's behaviors which can change based
       // on style. We want to work directly with only the automation api
       // itself to ensure we have full coverage.
-      let htmlAttributes = {};
       let htmlTag = '';
       let state = {};
-      Object.defineProperty(
-          input, 'htmlAttributes', {get: () => htmlAttributes});
+      let nonAtomicTextFieldRoot = false;
       Object.defineProperty(input, 'htmlTag', {get: () => htmlTag});
       Object.defineProperty(input, 'state', {get: () => state});
+      Object.defineProperty(
+          input, 'nonAtomicTextFieldRoot', {get: () => nonAtomicTextFieldRoot});
 
       // An invalid editable.
       let didThrow = false;
@@ -1866,59 +1855,49 @@ AX_TEST_F(
       assertTrue(didThrow, 'Non-editable created editable handler.');
 
       // A simple editable.
-      htmlAttributes = {};
       htmlTag = '';
       state = {editable: true};
+      nonAtomicTextFieldRoot = false;
       handler = new TextEditHandler(input);
       assertEquals(
           'AutomationEditableText', handler.editableText_.constructor.name,
           'Incorrect backing object for simple editable.');
 
       // A non-rich editable via multiline.
-      htmlAttributes = {};
       htmlTag = '';
       state = {editable: true, multiline: true};
+      nonAtomicTextFieldRoot = false;
       handler = new TextEditHandler(input);
       assertEquals(
           'AutomationEditableText', handler.editableText_.constructor.name,
           'Incorrect object for multiline editable.');
 
       // A rich editable via textarea tag.
-      htmlAttributes = {};
       htmlTag = 'textarea';
       state = {editable: true};
+      nonAtomicTextFieldRoot = false;
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for textarea html tag.');
 
       // A rich editable via state.
-      htmlAttributes = {};
       htmlTag = '';
       state = {editable: true, richlyEditable: true};
+      nonAtomicTextFieldRoot = false;
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for richly editable state.');
 
       // A rich editable via contenteditable. (aka <div contenteditable>).
-      htmlAttributes = {contenteditable: ''};
-      htmlTag = '';
+      htmlTag = 'div';
       state = {editable: true};
+      nonAtomicTextFieldRoot = true;
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for content editable.');
-
-      // A rich editable via contenteditable. (aka <div
-      // contenteditable=true>).
-      htmlAttributes = {contenteditable: 'true'};
-      htmlTag = '';
-      state = {editable: true};
-      handler = new TextEditHandler(input);
-      assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
-          'Incorrect object for content editable true.');
 
       // Note that it is not possible to have <div
       // contenteditable="someInvalidValue"> or <div contenteditable=false>
@@ -1926,7 +1905,7 @@ AX_TEST_F(
       // that.
     });
 
-// TODO(https://crbug.com/1254742): flakes due to underlying bug with
+// TODO(crbug.com/40794522): flakes due to underlying bug with
 // accessibility intents.
 AX_TEST_F(
     'ChromeVoxEditingTest', 'DISABLED_ParagraphNavigation', async function() {
@@ -1969,8 +1948,8 @@ AX_TEST_F(
           .call(ctrlDown)
           .expectSpeech('Another paragraph, number two.')
           .call(this.press(KeyCode.DOWN))
-          .expectSpeech('paragraph, ')
-          .replay();
+          .expectSpeech('paragraph, ');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1992,11 +1971,12 @@ AX_TEST_F(
           .call(this.press(KeyCode.UP))
           .expectNextSpeechUtteranceIsNot('Article')
           .expectNextSpeechUtteranceIsNot('Article end')
-          .expectSpeech('hello')
-          .replay();
+          .expectSpeech('hello');
+      await mockFeedback.replay();
     });
 
-AX_TEST_F('ChromeVoxEditingTest', 'TableNavigation', async function() {
+// crbug.com/1356181 Disable due to flaky.
+AX_TEST_F('ChromeVoxEditingTest', 'DISABLED_TableNavigation', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = `
     <div contenteditable role="textbox" tabindex=0>
@@ -2022,8 +2002,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'TableNavigation', async function() {
       .expectSpeech('hello', 'world')
       .expectSpeech('row 1 column 1')
       .call(this.press(KeyCode.RIGHT))
-      .expectSpeech('e')
-      .replay();
+      .expectSpeech('e');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -2035,37 +2015,35 @@ AX_TEST_F(
       await this.focusFirstTextField(root);
 
       // In case LibLouis takes a while to load.
-      if (!ChromeVox.braille.displayManager_.translatorManager_.liblouis_
-               .isLoaded()) {
-        await new Promise(r => {
-          ChromeVox.braille.displayManager_.translatorManager_.liblouis_
-              .onInstanceLoad_ = r;
-        });
+      if (!BrailleTranslatorManager.instance.liblouis_.isLoaded()) {
+        await new Promise(
+            resolve =>
+                BrailleTranslatorManager.instance.liblouis_.onInstanceLoad_ =
+                    resolve);
       }
 
       // Fake an available display.
-      ChromeVox.braille.displayManager_.refreshDisplayState_(
+      BrailleDisplayManager.instance.refreshDisplayState_(
           {available: true, textRowCount: 1, textColumnCount: 40});
 
       // Set braille to use 6-dot braille (which is defaulted to UEB grade 2
       // contracted braille).
-      localStorage['brailleTable'] = 'en-ueb-g2';
+      SettingsManager.set('brailleTable', 'en-ueb-g2');
 
       // Wait for it to be fully refreshed (liblouis loads the new tables, our
       // translators are re-created).
-      await BrailleBackground.instance.getTranslatorManager()
-          .loadTablesForTest();
+      await BrailleTranslatorManager.instance.loadTablesForTest();
 
       // Fake an available display.
-      ChromeVox.braille.displayManager_.refreshDisplayState_(
+      BrailleDisplayManager.instance.refreshDisplayState_(
           {available: true, textRowCount: 1, textColumnCount: 40});
 
       // Set braille to use 6-dot braille (which is defaulted to UEB grade 2
       // contracted braille).
-      localStorage['brailleTable'] = 'en-ueb-g2';
+      SettingsManager.set('brailleTable', 'en-ueb-g2');
       await new Promise(
-          r => BrailleBackground.instance.getTranslatorManager().refresh(
-              localStorage['brailleTable'], undefined, r));
+          resolve => BrailleTranslatorManager.instance.refresh(
+              SettingsManager.getString('brailleTable'), undefined, resolve));
 
       async function waitForBrailleDots(expectedDots) {
         return new Promise(r => {
@@ -2131,40 +2109,43 @@ AX_TEST_F('ChromeVoxEditingTest', 'ContextMenus', async function() {
       .call(doCmd('contextMenu'))
       .expectSpeech(' menu opened')
       .call(this.press(KeyCode.ESCAPE))
-      .expectSpeech('ab', 'selected')
-      .replay();
+      .expectSpeech('ab', 'selected');
+  await mockFeedback.replay();
 });
 
-AX_TEST_F('ChromeVoxEditingTest', 'NativeCharWordCommands', async function() {
-  const mockFeedback = this.createMockFeedback();
-  const site = `
+// TODO(b/321663219): Re-enable when flakiness is resolved.
+AX_TEST_F(
+    'ChromeVoxEditingTest', 'DISABLED_NativeCharWordCommands',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      const site = `
     <p>start</p>
     <div role="textbox" contenteditable>This is a test</div>
   `;
-  const root = await this.runWithLoadedTree(site);
-  await this.focusFirstTextField(root);
+      const root = await this.runWithLoadedTree(site);
+      await this.focusFirstTextField(root);
 
-  const textField = root.find({role: RoleType.TEXT_FIELD});
-  mockFeedback.expectSpeech('Text area')
-      .call(this.press(KeyCode.HOME, {ctrl: true}))
-      .call(this.press(KeyCode.RIGHT))
-      .expectSpeech('h')
-      .call(this.press(KeyCode.RIGHT))
-      .expectSpeech('i')
-      .call(this.press(KeyCode.LEFT))
-      .expectSpeech('h')
+      const textField = root.find({role: RoleType.TEXT_FIELD});
+      mockFeedback.expectSpeech('Text area')
+          .call(this.press(KeyCode.HOME, {ctrl: true}))
+          .call(this.press(KeyCode.RIGHT))
+          .expectSpeech('h')
+          .call(this.press(KeyCode.RIGHT))
+          .expectSpeech('i')
+          .call(this.press(KeyCode.LEFT))
+          .expectSpeech('h')
 
-      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-      .expectSpeech('This')
-      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-      .expectSpeech('is')
-      .call(this.press(KeyCode.LEFT, {ctrl: true}))
-      .expectSpeech('is')
-      .call(this.press(KeyCode.LEFT, {ctrl: true}))
-      .expectSpeech('This')
+          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+          .expectSpeech(/This\s*/)
+          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+          .expectSpeech('is')
+          .call(this.press(KeyCode.LEFT, {ctrl: true}))
+          .expectSpeech('is')
+          .call(this.press(KeyCode.LEFT, {ctrl: true}))
+          .expectSpeech(/This\s*/);
 
-      .replay();
-});
+      await mockFeedback.replay();
+    });
 
 AX_TEST_F('ChromeVoxEditingTest', 'TablesWithEmptyCells', async function() {
   const mockFeedback = this.createMockFeedback();
@@ -2198,9 +2179,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'TablesWithEmptyCells', async function() {
       .call(() => textField.setSelection(0, 1))
       .expectSpeech('A', 'selected')
 
-      // Non-breaking spaces (\u00a0) get preprocessed later by TtsBackground
-      // to ' '. This comes as part of speak line output in
-      // AutomationRichEditableText.
+      // Non-breaking spaces (\u00a0) get preprocessed later by PrimaryTts
+      // to ' '. This comes as part of speak line output in RichEditableText.
       .call(doCmd('nativeNextCharacter'))
       .call(() => textField.setSelection(1, 1))
       .expectSpeech('\u00a0', 'row 1 column 1')
@@ -2215,13 +2195,15 @@ AX_TEST_F('ChromeVoxEditingTest', 'TablesWithEmptyCells', async function() {
 
       .call(doCmd('nativeNextCharacter'))
       .call(() => cell22.setSelection(0, 0))
-      .expectSpeech('\u00a0', 'row 2 column 2')
+      .expectSpeech('\u00a0', 'row 2 column 2');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
+// TODO(b/321663219): Re-enable when flakiness is resolved.
 AX_TEST_F(
-    'ChromeVoxEditingTest', 'NonbreakingSpaceNewLineOrSpace', async function() {
+    'ChromeVoxEditingTest', 'DISABLED_NonbreakingSpaceNewLineOrSpace',
+    async function() {
       const mockFeedback = this.createMockFeedback();
       const site = `
     <div contenteditable="true" role="textbox">
@@ -2287,9 +2269,9 @@ AX_TEST_F(
           .call(this.press(KeyCode.LEFT))
           .expectSpeech('\n')
           .call(this.press(KeyCode.LEFT))
-          .expectSpeech('e')
+          .expectSpeech('e');
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2323,9 +2305,9 @@ AX_TEST_F(
           .call(doCmd('nextLink'))
           .expectSpeech('fourth', 'Internal link')
           .call(this.press(KeyCode.RIGHT, {shift: true, ctrl: true}))
-          .expectSpeech('fourth', 'Link', 'selected')
+          .expectSpeech('fourth', 'Link', 'selected');
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2344,7 +2326,194 @@ AX_TEST_F(
           .call(this.press(KeyCode.A))
           .expectBraille('a mled', {startIndex: 1, endIndex: 1})
           .call(this.press(KeyCode.BACK))
-          .expectBraille(' mled', {startIndex: 0, endIndex: 0})
+          .expectBraille(' mled', {startIndex: 0, endIndex: 0});
+
+      await mockFeedback.replay();
+    });
+
+// Regression test that large text areas produce output.
+// TODO(crbug.com/40944160): re-enable this test once its flakiness is resolved.
+AX_TEST_F(
+    'ChromeVoxEditingTest', 'DISABLED_GiantTextAreaPerformance',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      const site = `
+    <p>start</p>
+    <textarea></textarea>
+    <script>
+      const codepointCount = 35536 * 10;
+      const greeking1024Codepoints = 'Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse    cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua elit.';
+
+      let value = '';
+      while (value.length < codepointCount) {
+        value += greeking1024Codepoints;
+      }
+      let textarea = document.querySelector('textarea');
+      textarea.value = value;
+      textarea.setSelectionRange(0, 0);
+    </script>
+  `;
+      const root = await this.runWithLoadedTree(site);
+      await this.focusFirstTextField(root);
+
+      const textField = root.find({role: RoleType.TEXT_FIELD});
+      mockFeedback.expectSpeech('Text area')
+          .call(this.press(KeyCode.DOWN))
+          .expectSpeech('amet, consectetur')
+          .call(this.press(KeyCode.RIGHT))
+          .expectSpeech('m')
 
           .replay();
     });
+
+AX_TEST_F(
+    'ChromeVoxEditingTest', 'BrailleMoveByCharacterWord', async function() {
+      const mockFeedback = this.createMockFeedback();
+      const site = `
+    <p>start</p>
+    <div role="textbox" contenteditable><p>this is a test</p></div>
+  `;
+      const root = await this.runWithLoadedTree(site);
+      await this.focusFirstTextField(root);
+
+      const doBrailleEditCommand = command => () =>
+          BrailleCommandHandler.onEditCommand_(command);
+      const route = position => () => this.routeBraille(mockFeedback, position);
+
+      const textField = root.find({role: RoleType.TEXT_FIELD});
+      mockFeedback.expectSpeech('Text area')
+          .expectBraille('this is a test mled', {startIndex: -1, endIndex: -1})
+
+          .call(doBrailleEditCommand('nextWord'))
+          .expectSpeech('this')
+          .expectBraille('this is a test mled', {startIndex: 4, endIndex: 4})
+
+          .call(doBrailleEditCommand('nextWord'))
+          .expectSpeech('is')
+          .expectBraille('this is a test mled', {startIndex: 7, endIndex: 7})
+
+          .call(doBrailleEditCommand('nextWord'))
+          .expectSpeech('a')
+          .expectBraille('this is a test mled', {startIndex: 9, endIndex: 9})
+
+          .call(doBrailleEditCommand('previousWord'))
+          .expectSpeech('a')
+          .expectBraille('this is a test mled', {startIndex: 8, endIndex: 8})
+
+          .call(doBrailleEditCommand('previousWord'))
+          .expectSpeech('is')
+          .expectBraille('this is a test mled', {startIndex: 5, endIndex: 5})
+
+          .call(doBrailleEditCommand('previousCharacter'))
+          .expectSpeech(' ')
+          .expectBraille('this is a test mled', {startIndex: 4, endIndex: 4})
+
+
+          .call(doBrailleEditCommand('previousCharacter'))
+          .expectSpeech('s')
+          .expectBraille('this is a test mled', {startIndex: 3, endIndex: 3})
+
+          .call(doBrailleEditCommand('previousCharacter'))
+          .expectSpeech('i')
+          .expectBraille('this is a test mled', {startIndex: 2, endIndex: 2})
+
+          .call(doBrailleEditCommand('nextCharacter'))
+          .expectSpeech('s')
+          .expectBraille('this is a test mled', {startIndex: 3, endIndex: 3})
+
+          .call(route(0))
+          .expectSpeech('t')
+          .expectBraille('this is a test mled', {startIndex: 0, endIndex: 0})
+
+          .call(route(6))
+          .expectSpeech('s')
+          .expectBraille('this is a test mled', {startIndex: 6, endIndex: 6})
+
+          .call(route(7))
+          .expectSpeech(' ')
+          .expectBraille('this is a test mled', {startIndex: 7, endIndex: 7});
+
+      await mockFeedback.replay();
+    });
+
+AX_TEST_F('ChromeVoxEditingTest', 'SelectAcrossSoftLineWraps', async function() {
+  const mockFeedback = this.createMockFeedback();
+  const site = `
+    <p>start</p>
+    <div role=textbox contenteditable>Copy this message into any text field. Move to the top, then select with shift+down arrow. Notice that text selection reads from the beginning of the very long line when pressing shift+down arrow. This continues to happen until encountering a line break
+like this one.
+    </div>
+  `;
+  const root = await this.runWithLoadedTree(site);
+  await this.focusFirstTextField(root);
+
+  const textField = root.find({role: RoleType.TEXT_FIELD});
+  mockFeedback.expectSpeech('Text area')
+      .call(this.press(KeyCode.DOWN, {shift: true}))
+      .expectSpeech(
+          'Copy this message into any text field. Move to the top, then select with shift+down arrow. Notice that text selection reads from the beginning of the very long line when ',
+          'selected')
+      .call(this.press(KeyCode.DOWN, {shift: true}))
+      .expectSpeech(
+          'pressing shift+down arrow. This continues to happen until encountering a line breaklike this one.',
+          'selected');
+
+  await mockFeedback.replay();
+});
+
+AX_TEST_F('ChromeVoxEditingTest', 'OnEvent', async function() {
+  const setIntent = {command: IntentCommandType.SET_SELECTION};
+  const clearIntent = {command: IntentCommandType.CLEAR_SELECTION};
+  const otherIntent = {command: 'something else'};
+
+  const root = await this.runWithLoadedTree('<input type=text>');
+  await this.focusFirstTextField(root);
+  const textField = root.find({role: RoleType.TEXT_FIELD});
+
+  const handler = TextEditHandler.createForNode(textField);
+  let receivedIntents;
+  const captureIntents = intents => receivedIntents = intents;
+
+  // If the event target is not focused, onEvent should exit early.
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: {state: {}}});
+  assertUndefined(receivedIntents);
+
+  // If the event target is not the node given to the event handler, onEvent
+  // should exit early.
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: root});
+  assertUndefined(receivedIntents);
+
+  // Check that the intents are set, as expected, and onUpdate is called.
+  textField.state.focused = true;
+  handler.inferredIntents_ = ['b'];
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: textField, intents: [otherIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals(otherIntent, receivedIntents[0]);
+
+  // Check that inferred intents are used if no intents are provided.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  const intents = [];
+  handler.onEvent({target: textField, intents});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
+
+  // Check that inferred intents override provided intents if event.intents
+  // contains SET_SELECTION.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  handler.onEvent({target: textField, intents: [setIntent, otherIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
+
+  // Check that inferred intents override provided intents if event.intents
+  // contains CLEAR_SELECTION.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  handler.onEvent({target: textField, intents: [otherIntent, clearIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
+});

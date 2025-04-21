@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,23 @@ namespace crypto {
 class ScopedMockUnexportableKeyProvider {
  public:
   ScopedMockUnexportableKeyProvider();
+  ScopedMockUnexportableKeyProvider(const ScopedMockUnexportableKeyProvider&) =
+      delete;
+  ScopedMockUnexportableKeyProvider(ScopedMockUnexportableKeyProvider&&) =
+      delete;
   ~ScopedMockUnexportableKeyProvider();
+};
+
+// `ScopedNullUnexportableKeyProvider` causes `GetUnexportableKeyProvider` to
+// return a nullptr, emulating the key provider not being supported.
+class ScopedNullUnexportableKeyProvider {
+ public:
+  ScopedNullUnexportableKeyProvider();
+  ScopedNullUnexportableKeyProvider(const ScopedNullUnexportableKeyProvider&) =
+      delete;
+  ScopedNullUnexportableKeyProvider(ScopedNullUnexportableKeyProvider&&) =
+      delete;
+  ~ScopedNullUnexportableKeyProvider();
 };
 
 }  // namespace crypto

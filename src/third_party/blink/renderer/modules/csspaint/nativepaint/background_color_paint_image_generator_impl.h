@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,15 +26,7 @@ class MODULES_EXPORT BackgroundColorPaintImageGeneratorImpl final
 
   // The |container_size| is without subpixel snapping.
   scoped_refptr<Image> Paint(const gfx::SizeF& container_size,
-                             const Node*,
-                             const Vector<Color>& animated_colors,
-                             const Vector<double>& offsets,
-                             const absl::optional<double>& progress) final;
-
-  bool GetBGColorPaintWorkletParams(Node* node,
-                                    Vector<Color>* animated_colors,
-                                    Vector<double>* offsets,
-                                    absl::optional<double>* progress) final;
+                             const Node*) final;
 
   Animation* GetAnimationIfCompositable(const Element* element) final;
 

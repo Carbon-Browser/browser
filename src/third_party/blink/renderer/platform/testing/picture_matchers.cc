@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,8 @@ class DrawsRectangleCanvas : public SkCanvas {
     unsigned paint_alpha = static_cast<unsigned>(paint.getAlpha());
     SkPaint paint_with_alpha(paint);
     paint_with_alpha.setAlpha(static_cast<U8CPU>(alpha_ * paint_alpha / 255));
-    Color color = Color(paint_with_alpha.getColor());
+    // TODO(https://crbug.com/1351544): This class should use SkColor4f.
+    Color color = Color::FromSkColor(paint_with_alpha.getColor());
 
     rects_.emplace_back(clipped_rect, color);
     SkCanvas::onDrawRect(rect, paint);
@@ -107,7 +108,8 @@ class DrawsRectanglesMatcher
         if (listener->IsInterested()) {
           *listener << "at index " << index << " which draws "
                     << actual_rect_with_color.rect.ToString() << " with color "
-                    << actual_rect_with_color.color.Serialized() << "\n";
+                    << actual_rect_with_color.color.SerializeAsCSSColor()
+                    << "\n";
         }
         return false;
       }
@@ -122,7 +124,7 @@ class DrawsRectanglesMatcher
       const auto& rect_with_color = rects_with_color_[index];
       *os << "at index " << index << " rect draws "
           << rect_with_color.rect.ToString() << " with color "
-          << rect_with_color.color.Serialized() << "\n";
+          << rect_with_color.color.SerializeAsCSSColor() << "\n";
     }
   }
 

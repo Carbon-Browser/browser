@@ -1,12 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/android/resources/nine_patch_resource.h"
-#include "ui/android/ui_android_jni_headers/ResourceFactory_jni.h"
 #include "ui/gfx/geometry/rect.h"
 
-using base::android::JavaParamRef;
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "ui/android/ui_android_jni_headers/ResourceFactory_jni.h"
+
+using jni_zero::JavaParamRef;
 
 namespace ui {
 

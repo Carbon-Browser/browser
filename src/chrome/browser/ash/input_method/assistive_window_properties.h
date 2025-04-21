@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 #include <vector>
-#include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
+
+#include "chrome/browser/ui/ash/input_method/assistive_delegate.h"
 
 namespace ash {
 namespace input_method {
@@ -21,7 +22,7 @@ struct AssistiveWindowProperties {
 
   bool operator==(const AssistiveWindowProperties& other) const;
 
-  ui::ime::AssistiveWindowType type = ui::ime::AssistiveWindowType::kNone;
+  ash::ime::AssistiveWindowType type = ash::ime::AssistiveWindowType::kNone;
   bool visible = false;
   std::u16string announce_string;
   std::vector<std::u16string> candidates;
@@ -31,12 +32,5 @@ struct AssistiveWindowProperties {
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::AssistiveWindowProperties;
-}  // namespace input_method
-}  // namespace chromeos
 
 #endif  //  CHROME_BROWSER_ASH_INPUT_METHOD_ASSISTIVE_WINDOW_PROPERTIES_H_

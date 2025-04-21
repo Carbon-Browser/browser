@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,7 @@ RefreshTokenRevoker::RefreshTokenRevoker()
                     g_browser_process->system_network_context_manager()
                         ->GetSharedURLLoaderFactory()) {}
 
-RefreshTokenRevoker::~RefreshTokenRevoker() {
-}
+RefreshTokenRevoker::~RefreshTokenRevoker() = default;
 
 void RefreshTokenRevoker::Revoke(const std::string& token) {
   DVLOG(1) << "Starting RefreshTokenRevoker for token: " << token;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -147,7 +147,7 @@ def dash_to_camelcase(word):
 
 def to_snake_case(name):
   name = re.sub(r"([A-Z]{2,})([A-Z][a-z])", r"\1_\2", name)
-  return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name, sys.maxsize).lower()
+  return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name, count=sys.maxsize).lower()
 
 
 def to_method_case(config, name):
@@ -288,6 +288,7 @@ def create_string_type_definition():
     "raw_type": "String",
     "raw_pass_type": "const String&",
     "raw_return_type": "String",
+    "is_primitive": True
   }
 
 
@@ -303,6 +304,7 @@ def create_binary_type_definition():
     "raw_type": "Binary",
     "raw_pass_type": "const Binary&",
     "raw_return_type": "Binary",
+    "is_primitive": True
   }
 
 
@@ -333,9 +335,9 @@ def create_primitive_type_definition(type):
     "raw_type": typedefs[type],
     "raw_pass_type": typedefs[type],
     "raw_return_type": typedefs[type],
-    "default_value": defaults[type]
+    "default_value": defaults[type],
+    "is_primitive": True
   }
-
 
 def wrap_array_definition(type):
   # pylint: disable=W0622
@@ -424,6 +426,20 @@ class Protocol(object):
         refs.add(json["$ref"])
     return refs
 
+  def check_if_dependency_declared(self, domain, refs):
+    dependencies = domain.get('dependencies', set())
+    for ref in refs:
+      type_definition = self.type_definitions[ref]
+      if type_definition.get('is_primitive', False):
+        continue
+      domain_match = re.match(r'^(.*)[.]', ref)
+      if domain_match:
+        referenced_domain_name = domain_match.group(1)
+        if referenced_domain_name != domain['domain'] and not referenced_domain_name in dependencies:
+            sys.stderr.write(("Domains [%s] uses type [%s] from domain [%s], but did not declare the dependency\n\n"
+                    ) % (domain["domain"], ref, referenced_domain_name))
+            exit(1)
+
   def generate_used_types(self):
     all_refs = set()
     for domain in self.json_api["domains"]:
@@ -431,11 +447,19 @@ class Protocol(object):
       if "commands" in domain:
         for command in domain["commands"]:
           if self.generate_command(domain_name, command["name"]):
-            all_refs |= self.all_references(command)
+            all_refs_command = self.all_references(command)
+            # If the command has a redirect, it is as if it didn't exist on this domain.
+            if not command.get('redirect', False):
+              self.check_if_dependency_declared(domain, all_refs_command)
+            all_refs |= all_refs_command
+
       if "events" in domain:
         for event in domain["events"]:
           if self.generate_event(domain_name, event["name"]):
-            all_refs |= self.all_references(event)
+            all_refs_event = self.all_references(event)
+            self.check_if_dependency_declared(domain, all_refs_event)
+            all_refs |= all_refs_event
+
 
     dependencies = self.generate_type_dependencies()
     queue = set(all_refs)
@@ -517,6 +541,12 @@ class Protocol(object):
     if prop["type"] == "array":
       return wrap_array_definition(self.resolve_type(prop["items"]))
     return self.type_definitions[prop["type"]]
+
+  def optional_type(self, prop):
+      type = self.resolve_type(prop)
+      template = ("std::optional<{}>" if type.get('is_primitive', False)
+                  else "std::unique_ptr<{}>")
+      return template.format(type.get("raw_type"))
 
   def generate_command(self, domain, command):
     if not self.config.protocol.options:

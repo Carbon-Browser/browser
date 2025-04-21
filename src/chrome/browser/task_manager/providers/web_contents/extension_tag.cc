@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ ExtensionTag::ExtensionTag(content::WebContents* web_contents,
                            const extensions::mojom::ViewType view_type)
     : WebContentsTag(web_contents), view_type_(view_type) {}
 
-ExtensionTag::~ExtensionTag() {
-}
+ExtensionTag::~ExtensionTag() = default;
 
 }  // namespace task_manager

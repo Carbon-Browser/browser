@@ -1,17 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_CROSS_ORIGIN_OPENER_POLICY_MOJOM_TRAITS_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_CROSS_ORIGIN_OPENER_POLICY_MOJOM_TRAITS_H_
 
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "services/network/public/cpp/cross_origin_opener_policy.h"
 #include "services/network/public/mojom/cross_origin_opener_policy.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 
@@ -23,7 +23,7 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
       const network::CrossOriginOpenerPolicy& coop) {
     return coop.value;
   }
-  static const absl::optional<std::string>& reporting_endpoint(
+  static const std::optional<std::string>& reporting_endpoint(
       const network::CrossOriginOpenerPolicy& coop) {
     return coop.reporting_endpoint;
   }
@@ -31,7 +31,7 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
       const network::CrossOriginOpenerPolicy& coop) {
     return coop.report_only_value;
   }
-  static const absl::optional<std::string>& report_only_reporting_endpoint(
+  static const std::optional<std::string>& report_only_reporting_endpoint(
       const network::CrossOriginOpenerPolicy& coop) {
     return coop.report_only_reporting_endpoint;
   }

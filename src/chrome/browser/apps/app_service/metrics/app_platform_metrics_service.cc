@@ -1,10 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/metrics/app_platform_metrics_service.h"
 
+#include "base/feature_list.h"
 #include "base/time/time.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_ash.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -39,6 +42,11 @@ AppPlatformMetricsService::AppPlatformMetricsService(Profile* profile)
 
 AppPlatformMetricsService::~AppPlatformMetricsService() {
   timer_.Stop();
+
+  // Also notify observers.
+  for (auto& observer : observers_) {
+    observer.OnAppPlatformMetricsServiceWillBeDestroyed();
+  }
 }
 
 // static
@@ -50,6 +58,8 @@ void AppPlatformMetricsService::RegisterProfilePrefs(
   registry->RegisterDictionaryPref(kAppUsageTime);
   registry->RegisterDictionaryPref(kAppInputEventsKey);
   registry->RegisterDictionaryPref(kWebsiteUsageTime);
+
+  AppDiscoveryMetrics::RegisterProfilePrefs(registry);
 }
 
 // static
@@ -59,12 +69,17 @@ int AppPlatformMetricsService::GetDayIdForTesting(base::Time time) {
 
 void AppPlatformMetricsService::Start(
     apps::AppRegistryCache& app_registry_cache,
-    InstanceRegistry& instance_registry) {
+    InstanceRegistry& instance_registry,
+    apps::AppCapabilityAccessCache& app_capability_access_cache) {
   app_platform_app_metrics_ = std::make_unique<apps::AppPlatformMetrics>(
       profile_, app_registry_cache, instance_registry);
   app_platform_input_metrics_ = std::make_unique<apps::AppPlatformInputMetrics>(
-      profile_, instance_registry);
-  website_metrics_ = std::make_unique<apps::WebsiteMetrics>(profile_);
+      profile_, app_registry_cache, instance_registry);
+  website_metrics_ = std::make_unique<apps::WebsiteMetrics>(
+      profile_, GetUserTypeByDeviceTypeMetrics());
+  app_discovery_metrics_ = std::make_unique<apps::AppDiscoveryMetrics>(
+      profile_, app_registry_cache, instance_registry,
+      app_platform_app_metrics_.get(), app_capability_access_cache);
 
   day_id_ = profile_->GetPrefs()->GetInteger(kAppPlatformMetricsDayId);
   CheckForNewDay();
@@ -81,6 +96,22 @@ void AppPlatformMetricsService::Start(
   noisy_appkm_reporting_interval_timer_.Start(
       FROM_HERE, kNoisyAppKMReportInterval, this,
       &AppPlatformMetricsService::CheckForNoisyAppKMReportingInterval);
+
+  // Also notify observers.
+  for (auto& observer : observers_) {
+    observer.OnAppPlatformMetricsInit(app_platform_app_metrics_.get());
+    observer.OnWebsiteMetricsInit(website_metrics_.get());
+  }
+}
+
+void AppPlatformMetricsService::AddObserver(
+    AppPlatformMetricsService::Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void AppPlatformMetricsService::RemoveObserver(
+    AppPlatformMetricsService::Observer* observer) {
+  observers_.RemoveObserver(observer);
 }
 
 void AppPlatformMetricsService::SetWebsiteMetricsForTesting(

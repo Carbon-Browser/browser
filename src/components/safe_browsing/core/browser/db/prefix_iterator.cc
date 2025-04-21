@@ -1,12 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/safe_browsing/core/browser/db/prefix_iterator.h"
 
+#include <string_view>
+
 namespace safe_browsing {
 
-PrefixIterator::PrefixIterator(base::StringPiece prefixes,
+PrefixIterator::PrefixIterator(std::string_view prefixes,
                                size_t index,
                                size_t size)
     : prefixes_(prefixes), index_(index), size_(size) {}

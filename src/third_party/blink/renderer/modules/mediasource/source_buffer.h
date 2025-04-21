@@ -38,6 +38,8 @@
 #include "third_party/blink/public/platform/web_source_buffer_client.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_append_mode.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
@@ -59,14 +61,13 @@ class ExceptionState;
 class MediaSource;
 class MediaSourceTracer;
 class MediaSourceAttachmentSupplement;
-class ScriptPromiseResolver;
 class ScriptState;
 class SourceBufferConfig;
 class TimeRanges;
 class VideoTrackList;
 class WebSourceBuffer;
 
-class SourceBuffer final : public EventTargetWithInlineData,
+class SourceBuffer final : public EventTarget,
                            public ActiveScriptWrappable<SourceBuffer>,
                            public ExecutionContextLifecycleObserver,
                            public WebSourceBufferClient {
@@ -74,24 +75,22 @@ class SourceBuffer final : public EventTargetWithInlineData,
   USING_PRE_FINALIZER(SourceBuffer, Dispose);
 
  public:
-  static AtomicString SegmentsKeyword();
-  static AtomicString SequenceKeyword();
-
   SourceBuffer(std::unique_ptr<WebSourceBuffer>, MediaSource*, EventQueue*);
   ~SourceBuffer() override;
 
   // SourceBuffer.idl methods
-  const AtomicString& mode() const { return mode_; }
-  void setMode(const AtomicString&, ExceptionState&);
+  V8AppendMode mode() const { return V8AppendMode(mode_); }
+  void setMode(const V8AppendMode&, ExceptionState&);
   bool updating() const { return updating_; }
   TimeRanges* buffered(ExceptionState&) const;
   double timestampOffset() const;
   void setTimestampOffset(double, ExceptionState&);
   void appendBuffer(DOMArrayBuffer* data, ExceptionState&);
   void appendBuffer(NotShared<DOMArrayBufferView> data, ExceptionState&);
-  ScriptPromise appendEncodedChunks(ScriptState* script_state,
-                                    const V8EncodedChunks* chunks,
-                                    ExceptionState& exception_state);
+  ScriptPromise<IDLUndefined> appendEncodedChunks(
+      ScriptState* script_state,
+      const V8EncodedChunks* chunks,
+      ExceptionState& exception_state);
   void abort(ExceptionState&);
   void remove(double start, double end, ExceptionState&);
   void changeType(const String& type, ExceptionState&);
@@ -118,7 +117,7 @@ class SourceBuffer final : public EventTargetWithInlineData,
   // may also require the same, since they can be called from within these
   // methods.
   void SetMode_Locked(
-      AtomicString,
+      V8AppendMode::Enum,
       ExceptionState*,
       MediaSourceAttachmentSupplement::ExclusiveKey /* passkey */);
   void GetBuffered_Locked(
@@ -149,34 +148,14 @@ class SourceBuffer final : public EventTargetWithInlineData,
   void Trace(Visitor*) const override;
 
  private:
-  struct PendingAppendDataDeleter {
-    void operator()(unsigned char* buffer) {
-      WTF::Partitions::BufferFree(buffer);
-    }
-  };
-  using PendingAppendDataPtr =
-      std::unique_ptr<unsigned char[], PendingAppendDataDeleter>;
-
   void Dispose();
 
   bool IsRemoved() const;
   void ScheduleEvent(const AtomicString& event_name);
 
-  // A zero |size| is invalid. |pending_append_data_| must previously own
-  // nothing. If the allocation is unsuccessful, |pending_append_data_| will
-  // own the allocated space. Returns true on success, false otherwise.
-  [[nodiscard]] bool AllocatePendingAppendData(wtf_size_t size);
-
-  // Note that zero-sized async appends are possible. In such case,
-  // |pending_append_data_| will be nullptr. Calling ClearPendingAppendData() in
-  // this case is still ok upon async work completion or abort (the actual free
-  // is conditioned). Likewise, even if there is no pending append, it is ok to
-  // call this to simplify reset paths.
-  void ClearPendingAppendData();
-
   bool PrepareAppend(double media_time, size_t new_data_size, ExceptionState&);
   bool EvictCodedFrames(double media_time, size_t new_data_size);
-  void AppendBufferInternal(const unsigned char*, size_t, ExceptionState&);
+  void AppendBufferInternal(base::span<const unsigned char>, ExceptionState&);
   void AppendEncodedChunksAsyncPart();
   void AppendBufferAsyncPart();
   void AppendError(MediaSourceAttachmentSupplement::ExclusiveKey /* passkey */);
@@ -214,8 +193,7 @@ class SourceBuffer final : public EventTargetWithInlineData,
       ExceptionState* exception_state,
       MediaSourceAttachmentSupplement::ExclusiveKey /* passkey */);
   void AppendBufferInternal_Locked(
-      const unsigned char*,
-      size_t,
+      base::span<const unsigned char>,
       ExceptionState*,
       MediaSourceAttachmentSupplement::ExclusiveKey /* passkey */);
   void AppendEncodedChunksAsyncPart_Locked(
@@ -263,7 +241,7 @@ class SourceBuffer final : public EventTargetWithInlineData,
   Member<TrackDefaultList> track_defaults_;
   Member<EventQueue> async_event_queue_;
 
-  AtomicString mode_;
+  V8AppendMode::Enum mode_ = V8AppendMode::Enum::kSegments;
   bool updating_;
 
   double timestamp_offset_;
@@ -278,23 +256,14 @@ class SourceBuffer final : public EventTargetWithInlineData,
   // appendEncodedChunks(), or remove(). The following three sections
   // respectively track the async state for these pending operations:
 
-  // These are valid only during the scope of synchronous and asynchronous
-  // follow-up of appendBuffer(). No residual bytes in |pending_append_data_|
-  // can remain outside of that scope; it is reset and the backing store is
-  // freed when it is cleared. See AllocatePendingAppendData() and
-  // ClearPendingAppendData(). |pending_append_data_| evaluates to a nullptr if
-  // it is empty. In addition to when there is no async appendBuffer() work
-  // pending, this can also occur during the asynchronous follow-up of a
-  // zero-byte appendBuffer() call.
-  PendingAppendDataPtr pending_append_data_;
-  wtf_size_t pending_append_data_size_;
-  wtf_size_t pending_append_data_offset_;
+  // This handle is valid only during the scope of synchronous and asynchronous
+  // follow-up of appendBuffer().
   TaskHandle append_buffer_async_task_handle_;
 
   // This resolver is set and valid only during the scope of synchronous and
   // asynchronous follow-up of appendEncodedChunks().
   std::unique_ptr<media::StreamParser::BufferQueue> pending_chunks_to_buffer_;
-  Member<ScriptPromiseResolver> append_encoded_chunks_resolver_;
+  Member<ScriptPromiseResolver<IDLUndefined>> append_encoded_chunks_resolver_;
   TaskHandle append_encoded_chunks_async_task_handle_;
 
   // These are valid only during the scope of synchronous and asynchronous

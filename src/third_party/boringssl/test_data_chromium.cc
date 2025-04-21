@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 
-// BoringSSL requires a GetTestData function to pick up test data files. By
-// default, BoringSSL generates a source file with the data embedded, but this
-// exceeds the limit for the _CheckForTooLargeFiles presubmit check.
+// Tests running on Chromium infrastructure cannot find their test data without
+// using `base::PathService`, so we swap out the `GetTestData` function with a
+// Chromium-specific one.
 std::string GetTestData(const char *path) {
   base::FilePath file_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path);
   file_path = file_path.AppendASCII("third_party/boringssl/src");
   file_path = file_path.AppendASCII(path);
 

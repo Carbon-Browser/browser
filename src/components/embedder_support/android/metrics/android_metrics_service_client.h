@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,26 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial.h"
+#include "base/scoped_multi_source_observation.h"
+#include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "components/metrics/enabled_state_provider.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "components/metrics/metrics_service_client.h"
+#include "components/metrics/persistent_synthetic_trial_observer.h"
 #include "components/variations/synthetic_trial_registry.h"
 #include "components/version_info/android/channel_getter.h"
-#include "components/version_info/version_info.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
+#include "content/public/browser/render_process_host_creation_observer.h"
+#include "content/public/browser/render_process_host_observer.h"
+#include "content/public/browser/web_contents.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -92,9 +97,11 @@ extern const char kCrashpadHistogramAllocatorName[];
 //
 // To match chrome on other platforms (including android), the MetricsService is
 // always created.
-class AndroidMetricsServiceClient : public MetricsServiceClient,
-                                    public EnabledStateProvider,
-                                    public content::NotificationObserver {
+class AndroidMetricsServiceClient
+    : public MetricsServiceClient,
+      public EnabledStateProvider,
+      public content::RenderProcessHostCreationObserver,
+      public content::RenderProcessHostObserver {
  public:
   AndroidMetricsServiceClient();
   ~AndroidMetricsServiceClient() override;
@@ -122,6 +129,9 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
   // of IsOffTheRecordSessionActive().
   void UpdateUkmService();
 
+  // Updates the state of the DWA service if it's running.
+  void UpdateDwaService();
+
   // Whether or not consent state has been determined, regardless of whether
   // it is positive or negative.
   bool IsConsentDetermined() const;
@@ -145,26 +155,33 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
   SystemProfileProto::Channel GetChannel() override;
   bool IsExtendedStableChannel() override;
   std::string GetVersionString() override;
+  void MergeSubprocessHistograms() override;
   void CollectFinalMetricsForLog(
       const base::OnceClosure done_callback) override;
   std::unique_ptr<MetricsLogUploader> CreateUploader(
       const GURL& server_url,
       const GURL& insecure_server_url,
-      base::StringPiece mime_type,
+      std::string_view mime_type,
       MetricsLogUploader::MetricServiceType service_type,
       const MetricsLogUploader::UploadCallback& on_upload_complete) override;
   base::TimeDelta GetStandardUploadInterval() override;
   bool IsUkmAllowedForAllProfiles() override;
+  bool IsDwaAllowedForAllProfiles() override;
   bool ShouldStartUpFastForTesting() const override;
 
   // Gets the embedding app's package name if it's OK to log. Otherwise, this
   // returns the empty string.
   std::string GetAppPackageNameIfLoggable() override;
 
-  // content::NotificationObserver
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
+  void OnWebContentsCreated(content::WebContents* web_contents);
+
+  // content::RenderProcessHostCreationObserver
+  void OnRenderProcessHostCreated(content::RenderProcessHost* host) override;
+
+  // RenderProcessHostObserver:
+  void RenderProcessExited(
+      content::RenderProcessHost* host,
+      const content::ChildProcessTerminationInfo& info) override;
 
   // Runs |closure| when CollectFinalMetricsForLog() is called, when we begin
   // collecting final metrics.
@@ -196,6 +213,9 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
   // should use `GetAppPackageNameIfLoggable`.
   std::string GetAppPackageName();
 
+  // Returns the installer type of the app.
+  virtual InstallerPackageType GetInstallerPackageType();
+
  protected:
   // Called by MaybeStartMetrics() to allow embedder specific initialization.
   virtual void OnMetricsStart() = 0;
@@ -221,9 +241,6 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
   // indicate reporting is disabled. Sampling is due to storage/bandwidth
   // considerations.
   virtual bool IsInSample() const;
-
-  // Returns the installer type of the app.
-  virtual InstallerPackageType GetInstallerPackageType();
 
   // Determines if the embedder app is the type of app for which we may log the
   // package name. If this returns false, GetAppPackageNameIfLoggable() must
@@ -262,12 +279,24 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
 
   void RegisterMetricsProvidersAndInitState();
   void CreateUkmService();
+  void CreateDwaService();
+
+  void OnApplicationNotIdle();
+  void OnDidStartLoading();
 
   std::unique_ptr<MetricsStateManager> metrics_state_manager_;
   std::unique_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+  // Metrics service observer for synthetic trials.
+  metrics::PersistentSyntheticTrialObserver synthetic_trial_observer_;
+  base::ScopedObservation<variations::SyntheticTrialRegistry,
+                          variations::SyntheticTrialObserver>
+      synthetic_trial_observation_{&synthetic_trial_observer_};
   std::unique_ptr<MetricsService> metrics_service_;
   std::unique_ptr<ukm::UkmService> ukm_service_;
-  content::NotificationRegistrar registrar_;
+  std::unique_ptr<metrics::dwa::DwaService> dwa_service_;
+  base::ScopedMultiSourceObservation<content::RenderProcessHost,
+                                     content::RenderProcessHostObserver>
+      host_observation_{this};
   raw_ptr<PrefService> pref_service_ = nullptr;
   bool init_finished_ = false;
   bool set_consent_finished_ = false;
@@ -292,6 +321,8 @@ class AndroidMetricsServiceClient : public MetricsServiceClient,
   // BrowserThread::UI. Use |sequence_checker_| to enforce that the
   // MetricsServiceClient is used on a single thread.
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<AndroidMetricsServiceClient> weak_ptr_factory_{this};
 };
 
 }  // namespace metrics

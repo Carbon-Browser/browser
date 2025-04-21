@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,13 +14,14 @@
 #include "ui/gfx/canvas.h"
 #include "ui/views/controls/button/button.h"
 
-class GlassBrowserFrameView;
+class BrowserFrameViewWin;
 
 class WindowsCaptionButton : public views::Button {
+  METADATA_HEADER(WindowsCaptionButton, views::Button)
+
  public:
-  METADATA_HEADER(WindowsCaptionButton);
   WindowsCaptionButton(PressedCallback callback,
-                       GlassBrowserFrameView* frame_view,
+                       BrowserFrameViewWin* frame_view,
                        ViewID button_type,
                        const std::u16string& accessible_name);
   WindowsCaptionButton(const WindowsCaptionButton&) = delete;
@@ -28,7 +29,8 @@ class WindowsCaptionButton : public views::Button {
   ~WindowsCaptionButton() override;
 
   // views::Button:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void OnPaintBackground(gfx::Canvas* canvas) override;
   void PaintButtonContents(gfx::Canvas* canvas) override;
 
@@ -52,7 +54,7 @@ class WindowsCaptionButton : public views::Button {
   // Paints the minimize/maximize/restore/close icon for the button.
   void PaintSymbol(gfx::Canvas* canvas);
 
-  raw_ptr<GlassBrowserFrameView> frame_view_;
+  raw_ptr<BrowserFrameViewWin> frame_view_;
   std::unique_ptr<Windows10IconPainter> icon_painter_;
   ViewID button_type_;
 };

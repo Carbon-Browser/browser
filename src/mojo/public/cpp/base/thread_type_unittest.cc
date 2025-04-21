@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@ namespace mojo_base::thread_type_unittest {
 TEST(ThreadTypeTest, ThreadType) {
   static constexpr base::ThreadType kTestTypes[] = {
       base::ThreadType::kBackground, base::ThreadType::kDefault,
-      base::ThreadType::kCompositing, base::ThreadType::kDisplayCritical,
-      base::ThreadType::kRealtimeAudio};
+      base::ThreadType::kDisplayCritical, base::ThreadType::kRealtimeAudio};
 
   for (auto thread_type_in : kTestTypes) {
     base::ThreadType thread_type_out;

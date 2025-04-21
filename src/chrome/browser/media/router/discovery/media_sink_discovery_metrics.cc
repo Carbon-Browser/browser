@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ void DeviceCountMetrics::RecordDeviceCountsIfNeeded(
 }
 
 void DeviceCountMetrics::SetClockForTest(base::Clock* clock) {
-  clock_ = std::move(clock);
+  clock_ = clock;
 }
 
 // static
@@ -53,8 +53,6 @@ const char CastDeviceCountMetrics::kHistogramCastKnownDeviceCount[] =
     "MediaRouter.Cast.Discovery.KnownDevicesCount";
 const char CastDeviceCountMetrics::kHistogramCastConnectedDeviceCount[] =
     "MediaRouter.Cast.Discovery.ConnectedDevicesCount";
-const char CastDeviceCountMetrics::kHistogramCastCachedSinksAvailableCount[] =
-    "MediaRouter.Cast.Discovery.CachedSinksAvailableCount";
 const char CastDeviceCountMetrics::kHistogramCastDiscoverySinkSource[] =
     "MediaRouter.Cast.Discovery.SinkSource";
 
@@ -63,12 +61,6 @@ void CastDeviceCountMetrics::RecordDeviceCounts(size_t available_device_count,
   UMA_HISTOGRAM_COUNTS_100(kHistogramCastConnectedDeviceCount,
                            available_device_count);
   UMA_HISTOGRAM_COUNTS_100(kHistogramCastKnownDeviceCount, known_device_count);
-}
-
-void CastDeviceCountMetrics::RecordCachedSinksAvailableCount(
-    size_t cached_sink_count) {
-  UMA_HISTOGRAM_COUNTS_100(kHistogramCastCachedSinksAvailableCount,
-                           cached_sink_count);
 }
 
 void CastDeviceCountMetrics::RecordCastSinkDiscoverySource(
@@ -83,8 +75,6 @@ const char CastAnalytics::kHistogramCastChannelConnectResult[] =
     "MediaRouter.Cast.Channel.ConnectResult";
 const char CastAnalytics::kHistogramCastChannelError[] =
     "MediaRouter.Cast.Channel.Error";
-const char CastAnalytics::kHistogramCastDeviceNameLength[] =
-    "MediaRouter.Cast.DeviceNameLength";
 const char CastAnalytics::kHistogramCastMdnsChannelOpenSuccess[] =
     "MediaRouter.Cast.Mdns.Channel.Open_Success";
 const char CastAnalytics::kHistogramCastMdnsChannelOpenFailure[] =
@@ -115,11 +105,6 @@ void CastAnalytics::RecordDeviceChannelOpenDuration(
   } else {
     UMA_HISTOGRAM_TIMES(kHistogramCastMdnsChannelOpenFailure, duration);
   }
-}
-
-// static
-void CastAnalytics::RecordDeviceNameLength(size_t length) {
-  base::UmaHistogramCounts100(kHistogramCastDeviceNameLength, length);
 }
 
 void WiredDisplayDeviceCountMetrics::RecordDeviceCounts(

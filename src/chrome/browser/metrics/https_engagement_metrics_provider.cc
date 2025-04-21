@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include "chrome/browser/page_load_metrics/observers/https_engagement_metrics/https_engagement_service_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
 
-HttpsEngagementMetricsProvider::HttpsEngagementMetricsProvider() {}
+HttpsEngagementMetricsProvider::HttpsEngagementMetricsProvider() = default;
 
-HttpsEngagementMetricsProvider::~HttpsEngagementMetricsProvider() {}
+HttpsEngagementMetricsProvider::~HttpsEngagementMetricsProvider() = default;
 
 void HttpsEngagementMetricsProvider::ProvideCurrentSessionData(
     metrics::ChromeUserMetricsExtension* uma_proto) {

@@ -23,8 +23,15 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/text/text_run.h"
 
+#include "base/memory/raw_ptr_exclusion.h"
+#include "third_party/blink/renderer/platform/text/bidi_paragraph.h"
 #include "third_party/blink/renderer/platform/text/character.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
@@ -33,11 +40,12 @@ namespace blink {
 
 struct SameSizeAsTextRun {
   DISALLOW_NEW();
-  const void* pointer;
-  int integers[2];
-  float floats[2];
-  uint32_t bitfields : 10;
-  TabSize tab_size;
+  union {
+    // RAW_PTR_EXCLUSION: #union
+    RAW_PTR_EXCLUSION const void* pointer;
+  };
+  int integer;
+  uint32_t bitfields : 4;
 };
 
 ASSERT_SIZE(TextRun, SameSizeAsTextRun);
@@ -60,8 +68,7 @@ String TextRun::NormalizedUTF16() const {
   const UChar* source;
   String string_for8_bit_run;
   if (Is8Bit()) {
-    string_for8_bit_run =
-        String::Make16BitFrom8BitSource(Characters8(), length());
+    string_for8_bit_run = String::Make16BitFrom8BitSource(Span8());
     source = string_for8_bit_run.Characters16();
   } else {
     source = Characters16();
@@ -82,7 +89,11 @@ String TextRun::NormalizedUTF16() const {
     } else if (Character::TreatAsSpace(character) &&
                character != kNoBreakSpaceCharacter) {
       character = kSpaceCharacter;
-    } else if (Character::TreatAsZeroWidthSpaceInComplexScript(character)) {
+    } else if (Character::TreatAsZeroWidthSpaceInComplexScriptLegacy(
+                   character)) {
+      // Repalce only ZWS-like characters in BMP because we'd like to avoid
+      // changing the string length.
+      DCHECK_LT(character, 0x10000);
       character = kZeroWidthSpaceCharacter;
     }
 
@@ -102,6 +113,10 @@ unsigned TextRun::IndexOfSubRun(const TextRun& sub_run) const {
       return static_cast<unsigned>(start_index);
   }
   return std::numeric_limits<unsigned>::max();
+}
+
+void TextRun::SetDirectionFromText() {
+  SetDirection(BidiParagraph::BaseDirectionForStringOrLtr(ToStringView()));
 }
 
 }  // namespace blink

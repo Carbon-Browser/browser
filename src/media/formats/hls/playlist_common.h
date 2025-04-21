@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_FORMATS_HLS_PLAYLIST_COMMON_H_
 #define MEDIA_FORMATS_HLS_PLAYLIST_COMMON_H_
 
+#include <optional>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
@@ -13,15 +14,14 @@
 #include "media/formats/hls/tags.h"
 #include "media/formats/hls/types.h"
 #include "media/formats/hls/variable_dictionary.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace media::hls {
 
 // State common to parsing both multivariant and media playlists.
 struct CommonParserState {
-  absl::optional<XVersionTag> version_tag;
-  absl::optional<XIndependentSegmentsTag> independent_segments_tag;
+  std::optional<XVersionTag> version_tag;
+  std::optional<XIndependentSegmentsTag> independent_segments_tag;
 
   // The dictionary for variables defined in the current playlist.
   VariableDictionary variable_dict;
@@ -31,9 +31,10 @@ struct CommonParserState {
   // playlist, or a media playlist without other variants).
   raw_ptr<const VariableDictionary> parent_variable_dict = nullptr;
 
-  // Returns the version specified by `version_tag`, or the default version if
-  // the playlist did not contain a version tag.
-  types::DecimalInteger GetVersion() const;
+  // Checks that the versions given by `expected_version` and `version_tag`
+  // match. If `version_tag` is `std::nullopt`, the version given is implicitly
+  // `Playlist::kDefaultVersion`.
+  bool CheckVersion(types::DecimalInteger expected_version) const;
 };
 
 // Validates that the first line of the given SourceLineIterator contains a
@@ -44,14 +45,14 @@ ParseStatus::Or<M3uTag> CheckM3uTag(SourceLineIterator* src_iter);
 void HandleUnknownTag(TagItem);
 
 // Handles parsing for tags that may appear in multivariant or media playlists.
-absl::optional<ParseStatus> ParseCommonTag(TagItem, CommonParserState* state);
+std::optional<ParseStatus> ParseCommonTag(TagItem, CommonParserState* state);
 
 // Attempts to parse a tag from the given item, ensuring it has not been
 // already appeared in the playlist.
 template <typename T, typename... Args>
-absl::optional<ParseStatus> ParseUniqueTag(TagItem tag,
-                                           absl::optional<T>& out,
-                                           Args&&... args) {
+std::optional<ParseStatus> ParseUniqueTag(TagItem tag,
+                                          std::optional<T>& out,
+                                          Args&&... args) {
   DCHECK(tag.GetName() == ToTagName(T::kName));
 
   // Ensure this tag has not already appeared.
@@ -60,12 +61,11 @@ absl::optional<ParseStatus> ParseUniqueTag(TagItem tag,
   }
 
   auto tag_result = T::Parse(tag, std::forward<Args>(args)...);
-  if (tag_result.has_error()) {
+  if (!tag_result.has_value())
     return std::move(tag_result).error();
-  }
   out = std::move(tag_result).value();
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 ParseStatus::Or<GURL> ParseUri(UriItem item,

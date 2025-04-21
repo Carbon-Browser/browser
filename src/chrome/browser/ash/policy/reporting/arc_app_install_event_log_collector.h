@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,11 @@
 
 #include "ash/components/arc/mojom/policy.mojom-forward.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
 #include "chrome/browser/ash/policy/reporting/install_event_log_collector_base.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 
 class Profile;
 
@@ -49,6 +50,10 @@ class ArcAppInstallEventLogCollector : public InstallEventLogCollectorBase,
         std::unique_ptr<enterprise_management::AppInstallReportLogEvent>
             event) = 0;
 
+    // Uses a package's installation status to update policy success rate data.
+    virtual void UpdatePolicySuccessRate(const std::string& package,
+                                         bool success) = 0;
+
    protected:
     virtual ~Delegate() = default;
   };
@@ -71,24 +76,15 @@ class ArcAppInstallEventLogCollector : public InstallEventLogCollectorBase,
   void SuspendDone(base::TimeDelta sleep_duration) override;
 
   // arc::ArcPolicyBridge::Observer:
-  void OnCloudDpsRequested(base::Time time,
-                           const std::set<std::string>& package_names) override;
-  void OnCloudDpsSucceeded(base::Time time,
-                           const std::set<std::string>& package_names) override;
-  void OnCloudDpsFailed(base::Time time,
-                        const std::string& package_name,
-                        arc::mojom::InstallErrorReason reason) override;
-  void OnReportDirectInstall(
-      base::Time time,
-      const std::set<std::string>& package_names) override;
-  void OnReportForceInstallMainLoopFailed(
+  void OnPlayStoreLocalPolicySet(
       base::Time time,
       const std::set<std::string>& package_names) override;
 
   // ArcAppListPrefs::Observer:
   void OnInstallationStarted(const std::string& package_name) override;
   void OnInstallationFinished(const std::string& package_name,
-                              bool success) override;
+                              bool success,
+                              bool is_launchable_app) override;
 
  protected:
   // Overrides to handle events from InstallEventLogCollectorBase.
@@ -97,7 +93,7 @@ class ArcAppInstallEventLogCollector : public InstallEventLogCollectorBase,
   void OnConnectionStateChanged(network::mojom::ConnectionType type) override;
 
  private:
-  Delegate* const delegate_;
+  const raw_ptr<Delegate> delegate_;
 
   // Set of apps whose push-install is currently pending.
   std::set<std::string> pending_packages_;

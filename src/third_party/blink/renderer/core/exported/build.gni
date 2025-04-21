@@ -1,8 +1,9 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 blink_core_sources_exported = [
+  "web_ai_features.cc",
   "web_array_buffer.cc",
   "web_array_buffer_converter.cc",
   "web_blob.cc",
@@ -11,6 +12,7 @@ blink_core_sources_exported = [
   "web_custom_element.cc",
   "web_dev_tools_agent_impl.cc",
   "web_dev_tools_agent_impl.h",
+  "web_disallow_transition_scope.cc",
   "web_document.cc",
   "web_dom_activity_logger.cc",
   "web_dom_event.cc",
@@ -24,7 +26,6 @@ blink_core_sources_exported = [
   "web_frame_content_dumper.cc",
   "web_frame_serializer.cc",
   "web_heap.cc",
-  "web_history_entry.cc",
   "web_history_item.cc",
   "web_hit_test_result.cc",
   "web_image.cc",
@@ -35,7 +36,6 @@ blink_core_sources_exported = [
   "web_isolated_world_info.cc",
   "web_label_element.cc",
   "web_language_detection_details.cc",
-  "web_memory_statistics.cc",
   "web_message_port_converter.cc",
   "web_meta_element.cc",
   "web_navigation_params.cc",
@@ -43,7 +43,8 @@ blink_core_sources_exported = [
   "web_option_element.cc",
   "web_page_popup_impl.cc",
   "web_page_popup_impl.h",
-  "web_performance.cc",
+  "web_performance_metrics_for_reporting.cc",
+  "web_performance_metrics_for_nested_contexts.cc",
   "web_plugin_container_impl.cc",
   "web_plugin_container_impl.h",
   "web_plugin_document.cc",
@@ -72,16 +73,19 @@ blink_core_sources_exported = [
 ]
 
 blink_core_tests_exported = [
+  "web_disallow_transition_scope_test.cc",
   "web_document_subresource_filter_test.cc",
   "web_document_test.cc",
   "web_drag_data_test.cc",
   "web_element_test.cc",
+  "web_form_control_element_test.cc",
   "web_frame_serializer_sanitization_test.cc",
   "web_frame_serializer_test.cc",
   "web_frame_serializer_test_helper.cc",
   "web_frame_serializer_test_helper.h",
   "web_image_test.cc",
   "web_meaningful_layouts_test.cc",
+  "web_link_preview_triggerer_test.cc",
   "web_node_test.cc",
   "web_plugin_container_test.cc",
   "web_range_test.cc",

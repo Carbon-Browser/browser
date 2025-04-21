@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,8 +70,8 @@ class BASE_EXPORT IATPatchFunction {
  private:
   HMODULE module_handle_ = nullptr;
   raw_ptr<void> intercept_function_ = nullptr;
-  void* original_function_ = nullptr;
-  IMAGE_THUNK_DATA* iat_thunk_ = nullptr;
+  raw_ptr<void> original_function_ = nullptr;
+  raw_ptr<IMAGE_THUNK_DATA> iat_thunk_ = nullptr;
 };
 
 }  // namespace win

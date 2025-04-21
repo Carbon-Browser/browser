@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class EditSearchEngineControllerDelegate {
                                const std::string& url) = 0;
 
  protected:
-  virtual ~EditSearchEngineControllerDelegate() {}
+  virtual ~EditSearchEngineControllerDelegate() = default;
 };
 
 // EditSearchEngineController provides the core platform independent logic
@@ -43,7 +43,7 @@ class EditSearchEngineController {
   EditSearchEngineController& operator=(const EditSearchEngineController&) =
       delete;
 
-  ~EditSearchEngineController() {}
+  ~EditSearchEngineController() = default;
 
   // Returns true if the value of |title_input| is a valid search engine name.
   bool IsTitleValid(const std::u16string& title_input) const;

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <GLES2/gl2ext.h>
 #include <GLES2/gl2extchromium.h>
 #include <GLES3/gl3.h>
+
 #include <memory>
 #include <utility>
 #include <vector>
@@ -15,17 +16,15 @@
 #include "base/containers/flat_map.h"
 #include "cc/paint/display_item_list.h"
 #include "cc/paint/image_provider.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/client/client_test_helper.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gles2_interface_stub.h"
 #include "gpu/command_buffer/common/capabilities.h"
-#include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/ganesh/GrTypes.h"
 #include "ui/gfx/color_space.h"
 
 using testing::_;
@@ -205,7 +204,8 @@ class RasterImplementationGLESTest : public testing::Test {
 
   void SetUp() override {
     gl_ = std::make_unique<RasterMockGLES2Interface>();
-    ri_ = std::make_unique<RasterImplementationGLES>(gl_.get(), &support_);
+    ri_ = std::make_unique<RasterImplementationGLES>(gl_.get(), &support_,
+                                                     gpu::Capabilities());
   }
 
   void TearDown() override {}
@@ -354,7 +354,7 @@ TEST_F(RasterImplementationGLESTest, GetQueryObjectui64vEXT) {
 
 TEST_F(RasterImplementationGLESTest, CreateAndConsumeForGpuRaster) {
   const GLuint kTextureId = 23;
-  const auto mailbox = gpu::Mailbox::GenerateForSharedImage();
+  const auto mailbox = gpu::Mailbox::Generate();
   EXPECT_CALL(*gl_, CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name))
       .WillOnce(Return(kTextureId));
   GLuint texture_id = ri_->CreateAndConsumeForGpuRaster(mailbox);

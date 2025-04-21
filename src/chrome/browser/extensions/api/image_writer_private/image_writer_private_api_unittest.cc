@@ -1,8 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/pattern.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -10,7 +10,6 @@
 #include "chrome/browser/extensions/api/image_writer_private/removable_storage_provider.h"
 #include "chrome/browser/extensions/api/image_writer_private/test_utils.h"
 #include "chrome/browser/extensions/extension_api_unittest.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/common/extensions/api/image_writer_private.h"
 #include "chromeos/components/disks/disks_prefs.h"
 #include "components/prefs/pref_service.h"
@@ -18,11 +17,11 @@
 #include "extensions/browser/api_unittest.h"
 
 namespace extensions {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 using api::image_writer_private::RemovableStorageDevice;
 class ImageWriterPrivateApiUnittest : public ExtensionApiUnittest {
  public:
-  ImageWriterPrivateApiUnittest() {}
+  ImageWriterPrivateApiUnittest() = default;
 
   void SetUp() override {
     ExtensionApiUnittest::SetUp();
@@ -48,9 +47,9 @@ TEST_F(ImageWriterPrivateApiUnittest,
   prefs->SetBoolean(disks::prefs::kExternalStorageDisabled, true);
   auto function = base::MakeRefCounted<
       ImageWriterPrivateListRemovableStorageDevicesFunction>();
-  std::unique_ptr<base::Value> devices =
+  std::optional<base::Value::List> devices =
       RunFunctionAndReturnList(function.get(), "[]");
-  ASSERT_TRUE(devices.get() && devices.get()->GetListDeprecated().empty())
+  ASSERT_TRUE(devices && devices->empty())
       << "Under policy ListDevices should return an empty list.";
 }
 
@@ -66,6 +65,6 @@ TEST_F(ImageWriterPrivateApiUnittest,
                          image_writer::error::kDeviceWriteError));
 }
 
-#endif  // if BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // if BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace extensions

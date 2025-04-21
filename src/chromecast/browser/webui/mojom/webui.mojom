@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ interface WebUi {
   RegisterMessageCallback(string message, pending_remote<MessageCallback> cb);
 
   // Execute a Javascript |function| with |args|.
-  CallJavascriptFunction(string function, array<mojo_base.mojom.Value> args);
+  CallJavascriptFunction(string function, mojo_base.mojom.ListValue args);
 };
 
 // Implement this interface to provide resources for a given host. This
@@ -52,4 +52,3 @@ interface WebUiClient {
   CreateResources(string host,
                   pending_receiver<Resources> resources);
 };
-

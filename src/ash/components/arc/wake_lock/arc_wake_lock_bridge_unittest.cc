@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_power_instance.h"
 #include "ash/components/arc/test/fake_wake_lock_instance.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "services/device/public/cpp/test/test_wake_lock_provider.h"

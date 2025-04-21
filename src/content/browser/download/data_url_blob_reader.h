@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -48,7 +48,7 @@ class DataURLBlobReader : public mojo::DataPipeDrainer::Client {
   void Start(base::OnceClosure callback);
 
   // mojo::DataPipeDrainer:
-  void OnDataAvailable(const void* data, size_t num_bytes) override;
+  void OnDataAvailable(base::span<const uint8_t> data) override;
   void OnDataComplete() override;
 
   // Called when failed to read from blob.

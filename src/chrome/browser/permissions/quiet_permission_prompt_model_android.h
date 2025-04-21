@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "components/permissions/permission_ui_selector.h"
 #include "url/gurl.h"
 
@@ -37,8 +38,9 @@ struct QuietPermissionPromptModelAndroid {
   SecondaryButtonBehavior secondary_button_behavior;
 };
 
-QuietPermissionPromptModelAndroid GetQuietNotificationPermissionPromptModel(
-    permissions::PermissionUiSelector::QuietUiReason reason);
+QuietPermissionPromptModelAndroid GetQuietPermissionPromptModel(
+    permissions::PermissionUiSelector::QuietUiReason reason,
+    ContentSettingsType content_settings_type);
 
 GURL GetNotificationBlockedLearnMoreUrl();
 

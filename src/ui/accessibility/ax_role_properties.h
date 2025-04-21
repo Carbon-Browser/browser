@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,11 +39,6 @@ AX_BASE_EXPORT bool IsButton(const ax::mojom::Role role);
 
 // Returns true if the provided role belongs to a cell or a table header.
 AX_BASE_EXPORT bool IsCellOrTableHeader(const ax::mojom::Role role);
-
-// Returns true if the role is expected to be the parent of a child tree.
-// Can return false for a child tree owner if an ARIA role was used, e.g.
-// <iframe role="region">.
-AX_BASE_EXPORT bool IsChildTreeOwner(const ax::mojom::Role role);
 
 // Returns true if the provided role belongs to an object on which a click
 // handler is commonly attached, or to an object that carries out an action when
@@ -90,6 +85,14 @@ AX_BASE_EXPORT bool IsDateOrTimeInput(const ax::mojom::Role role);
 // Returns true if the provided role represents a dialog.
 AX_BASE_EXPORT bool IsDialog(const ax::mojom::Role role);
 
+// Returns true if the role represents an HTML embedding element, i.e. an
+// element that can embed content from another source such as an <iframe> or a
+// <embed>.
+//
+// Can return false for an embedding element if an ARIA role was used, e.g.
+// <iframe role="region">.
+AX_BASE_EXPORT bool IsEmbeddingElement(const ax::mojom::Role role);
+
 // Returns true if the provided role is a form.
 AX_BASE_EXPORT bool IsForm(const ax::mojom::Role role);
 
@@ -104,9 +107,6 @@ AX_BASE_EXPORT bool IsGridLike(const ax::mojom::Role role);
 // Returns true if the provided role belongs to a heading.
 AX_BASE_EXPORT bool IsHeading(const ax::mojom::Role role);
 
-// Returns true if the provided role belongs to a heading or a table header.
-AX_BASE_EXPORT bool IsHeadingOrTableHeader(const ax::mojom::Role role);
-
 // Returns true if the provided role belongs to an iframe.
 AX_BASE_EXPORT bool IsIframe(const ax::mojom::Role role);
 
@@ -119,6 +119,9 @@ AX_BASE_EXPORT bool IsImageOrVideo(const ax::mojom::Role role);
 // Returns true if the provided role is item-like, specifically if it can hold
 // pos_in_set and set_size values. Roles that are item-like are not set-like.
 AX_BASE_EXPORT bool IsItemLike(const ax::mojom::Role role);
+
+// Returns true if the provided role is likely to be an active descendant.
+AX_BASE_EXPORT bool IsLikelyActiveDescendantRole(const ax::mojom::Role role);
 
 // Returns true if the role is a subclass of the ARIA Landmark abstract role.
 AX_BASE_EXPORT bool IsLandmark(const ax::mojom::Role role);
@@ -158,9 +161,9 @@ AX_BASE_EXPORT bool IsRangeValueSupported(const ax::mojom::Role role);
 
 // Returns true if this object supports readonly.
 //
-// Note: This returns false for table cells and headers, it is up to the
-//       caller to make sure that they are included IFF they are within an
-//       ARIA-1.1+ role='grid' or 'treegrid', and not role='table'.
+// Note: This returns false for table headers, it is up to the caller to make
+//       sure that they are included IFF they are within an ARIA-1.1+
+//       role='grid' or 'treegrid', and not role='table'.
 AX_BASE_EXPORT bool IsReadOnlySupported(const ax::mojom::Role role);
 
 // Returns true if the provided role is at the root of a window-like container,
@@ -222,6 +225,9 @@ AX_BASE_EXPORT bool IsTableLike(const ax::mojom::Role role);
 // table is not used for layout purposes.
 AX_BASE_EXPORT bool IsTableRow(ax::mojom::Role role);
 
+// Returns true if the provided role belongs to a table, a grid, or a treegrid.
+AX_BASE_EXPORT bool IsTableWithColumns(ax::mojom::Role role);
+
 // Returns true if the provided role is text-related, e.g., static text, line
 // break, or inline text box.
 AX_BASE_EXPORT bool IsText(ax::mojom::Role role);
@@ -263,6 +269,16 @@ AX_BASE_EXPORT bool SupportsRequired(const ax::mojom::Role role);
 
 // Returns true if the provided role supports toggle.
 AX_BASE_EXPORT bool SupportsToggle(const ax::mojom::Role role);
+
+// Returns true if the provided role is one of the roles considered plain
+// elements. Check AXObject::IsPlainContent()
+AX_BASE_EXPORT bool IsPlainContentElement(const ax::mojom::Role role);
+
+// Returns true if the provided role allows for arrow keys expanding or
+// collapsing the element.
+// https://www.w3.org/WAI/ARIA/apg/patterns/treeview/examples/treeview-1b/
+AX_BASE_EXPORT bool SupportsArrowKeysForExpandCollapse(
+    const ax::mojom::Role role);
 
 }  // namespace ui
 

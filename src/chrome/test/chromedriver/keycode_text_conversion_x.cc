@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -104,27 +109,24 @@ bool GetXModifierMask(x11::Connection* connection,
                       int modifier,
                       x11::KeyButMask* x_modifier) {
   auto mod_map = connection->GetModifierMapping().Sync();
-  if (!mod_map)
+  if (!mod_map) {
     return false;
+  }
   bool found = false;
-  int max_mod_keys = mod_map->keycodes_per_modifier;
-  for (int mod_index = 0; mod_index <= 8; ++mod_index) {
-    for (int key_index = 0; key_index < max_mod_keys; ++key_index) {
-      auto key = mod_map->keycodes[mod_index * max_mod_keys + key_index];
-      auto keysym = x11::Connection::Get()->KeycodeToKeysym(key, 0);
-      if (modifier == kAltKeyModifierMask)
-        found = keysym == XK_Alt_L || keysym == XK_Alt_R;
-      else if (modifier == kMetaKeyModifierMask)
-        found = keysym == XK_Meta_L || keysym == XK_Meta_R;
-      else if (modifier == kNumLockKeyModifierMask)
-        found = keysym == XK_Num_Lock;
-      if (found) {
-        *x_modifier = static_cast<x11::KeyButMask>(1 << mod_index);
-        break;
-      }
-    }
-    if (found)
-      break;
+  size_t key_idx = 0;
+  for (; !found && key_idx < mod_map->keycodes.size(); ++key_idx) {
+    auto key = mod_map->keycodes[key_idx];
+    auto keysym = x11::Connection::Get()->KeycodeToKeysym(key, 0);
+    found = (modifier == kAltKeyModifierMask &&
+             (keysym == XK_Alt_L || keysym == XK_Alt_R)) ||
+            (modifier == kMetaKeyModifierMask &&
+             (keysym == XK_Meta_L || keysym == XK_Meta_R)) ||
+            (modifier == kNumLockKeyModifierMask && keysym == XK_Num_Lock);
+  }
+  if (found) {
+    int max_mod_keys = mod_map->keycodes_per_modifier;
+    int mod_index = key_idx / max_mod_keys;
+    *x_modifier = static_cast<x11::KeyButMask>(1 << mod_index);
   }
   return found;
 }
@@ -173,11 +175,11 @@ bool ConvertKeyCodeToText(ui::KeyboardCode key_code,
   key_event.opcode = x11::KeyEvent::Press;
   x11::Event event(false, std::move(key_event));
   uint16_t character = ui::GetCharacterFromXEvent(event);
-
-  if (!character)
-    *text = std::string();
-  else
+  if (character) {
     *text = base::UTF16ToUTF8(std::u16string(1, character));
+  } else {
+    *text = std::string();
+  }
   return true;
 }
 

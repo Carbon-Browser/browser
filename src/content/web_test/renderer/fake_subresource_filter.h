@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-shared.h"
 #include "third_party/blink/public/platform/web_document_subresource_filter.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 
@@ -29,7 +30,7 @@ class FakeSubresourceFilter : public blink::WebDocumentSubresourceFilter {
 
   // blink::WebDocumentSubresourceFilter:
   LoadPolicy GetLoadPolicy(const blink::WebURL& resource_url,
-                           blink::mojom::RequestContextType) override;
+                           network::mojom::RequestDestination) override;
   LoadPolicy GetLoadPolicyForWebSocketConnect(
       const blink::WebURL& url) override;
   LoadPolicy GetLoadPolicyForWebTransportConnect(

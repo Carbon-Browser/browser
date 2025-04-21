@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "build/build_config.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom.h"
@@ -276,6 +277,12 @@ class MockWidgetInputHandler : public blink::mojom::WidgetInputHandler {
   void GetFrameWidgetInputHandler(
       mojo::PendingAssociatedReceiver<blink::mojom::FrameWidgetInputHandler>
           interface_request) override;
+  void UpdateBrowserControlsState(
+      cc::BrowserControlsState constraints,
+      cc::BrowserControlsState current,
+      bool animate,
+      const std::optional<cc::BrowserControlsOffsetTagsInfo>& offset_tags_info)
+      override;
 
   using MessageVector = std::vector<std::unique_ptr<DispatchedMessage>>;
   MessageVector GetAndResetDispatchedMessages();

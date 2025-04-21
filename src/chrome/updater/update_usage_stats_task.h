@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,24 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/updater_scope.h"
 
 namespace updater {
+
+bool OtherAppUsageStatsAllowed(const std::vector<std::string>& app_ids,
+                               UpdaterScope scope);
+
+// Reads usage stats for each app from the system instead of persisted data,
+// specifically from the registry for Windows. `include_only_these_app_ids`
+// allows for including only app ids that are both in the registry and in
+// `include_only_these_app_ids`, and is used for unit tests.
+bool AreRawUsageStatsEnabled(
+    UpdaterScope scope,
+    const std::vector<std::string>& include_only_these_app_ids = {});
 
 class PersistedData;
 
@@ -31,8 +42,6 @@ class UpdateUsageStatsTask
   FRIEND_TEST_ALL_PREFIXES(UpdateUsageStatsTaskTest, OneAppEnabled);
   FRIEND_TEST_ALL_PREFIXES(UpdateUsageStatsTaskTest, ZeroAppsEnabled);
   virtual ~UpdateUsageStatsTask();
-
-  bool UsageStatsAllowed(const std::vector<std::string>& app_ids) const;
 
   SEQUENCE_CHECKER(sequence_checker_);
   const UpdaterScope scope_;

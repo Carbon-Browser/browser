@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,17 +49,14 @@ class PasswordCheckBridge : public PasswordCheckManager::Observer {
 
   // Called by Java to update a single compromised credential in the password
   // store.
-  void UpdateCredential(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& credential,
-      const base::android::JavaParamRef<jstring>& new_password);
+  void UpdateCredential(JNIEnv* env,
+                        const base::android::JavaParamRef<jobject>& credential,
+                        std::string& new_password);
 
   // Called by Java to launch the edit credential UI.
-  void OnEditCredential(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& credential,
-      const base::android::JavaParamRef<jobject>& context,
-      const base::android::JavaParamRef<jobject>& settings_launcher);
+  void OnEditCredential(JNIEnv* env,
+                        const base::android::JavaParamRef<jobject>& credential,
+                        const base::android::JavaParamRef<jobject>& context);
 
   // Called by Java to remove a single compromised credentials from the password
   // store.
@@ -67,14 +64,11 @@ class PasswordCheckBridge : public PasswordCheckManager::Observer {
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& credentials);
 
+  // Checks if user is signed into their account to perform the check.
+  bool HasAccountForRequest(JNIEnv* env);
+
   // Called by Java when the bridge is no longer needed. Destructs itself.
   void Destroy(JNIEnv* env);
-
-  // Checks if script refreshment is finished.
-  bool AreScriptsRefreshed(JNIEnv* env) const;
-
-  // Invokes scripts refreshment.
-  void RefreshScripts(JNIEnv* env);
 
   // Called by the check manager when the saved passwords have been first loaded
   // in memory. `count` is the number of saved passwords.

@@ -1,11 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
+#include <inttypes.h>
+
 #include <iostream>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "base/at_exit.h"
 #include "base/base_paths.h"
@@ -14,17 +23,16 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "crypto/openssl_util.h"
 #include "crypto/sha2.h"
 #include "net/cert/root_store_proto_full/root_store.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/boringssl/src/include/openssl/bio.h"
 #include "third_party/boringssl/src/include/openssl/err.h"
 #include "third_party/boringssl/src/include/openssl/pem.h"
@@ -35,16 +43,16 @@ using chrome_root_store::RootStore;
 namespace {
 
 // Returns a map from hex-encoded SHA-256 hash to DER certificate, or
-// `absl::nullopt` if not found.
-absl::optional<std::map<std::string, std::string>> DecodeCerts(
-    base::StringPiece in) {
-  // TODO(https://crbug.com/1216547): net/cert/pem.h has a much nicer API, but
+// `std::nullopt` if not found.
+std::optional<std::map<std::string, std::string>> DecodeCerts(
+    std::string_view in) {
+  // TODO(crbug.com/40770548): net/cert/pem.h has a much nicer API, but
   // it would require some build refactoring to avoid a circular dependency.
   // This is assuming that the chrome trust store code goes in
   // net/cert/internal, which it may not.
   bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(in.data(), in.size()));
   if (!bio) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   std::map<std::string, std::string> certs;
   for (;;) {
@@ -60,7 +68,7 @@ absl::optional<std::map<std::string, std::string>> DecodeCerts(
         break;
       }
       LOG(ERROR) << "Error reading PEM.";
-      return absl::nullopt;
+      return std::nullopt;
     }
     bssl::UniquePtr<char> scoped_name(name);
     bssl::UniquePtr<char> scoped_header(header);
@@ -68,30 +76,30 @@ absl::optional<std::map<std::string, std::string>> DecodeCerts(
     if (strcmp(name, "CERTIFICATE") != 0) {
       LOG(ERROR) << "Found PEM block of type " << name
                  << " instead of CERTIFICATE";
-      return absl::nullopt;
+      return std::nullopt;
     }
-    std::string sha256_hex = base::ToLowerASCII(
-        base::HexEncode(crypto::SHA256Hash(base::make_span(data, len))));
+    std::string sha256_hex = base::ToLowerASCII(base::HexEncode(
+        crypto::SHA256Hash(base::span(data, base::checked_cast<size_t>(len)))));
     certs[sha256_hex] = std::string(data, data + len);
   }
   return std::move(certs);
 }
 
-absl::optional<RootStore> ReadTextRootStore(
+std::optional<RootStore> ReadTextRootStore(
     const base::FilePath& root_store_path,
     const base::FilePath& certs_path) {
   std::string root_store_text;
   if (!base::ReadFileToString(base::MakeAbsoluteFilePath(root_store_path),
                               &root_store_text)) {
     LOG(ERROR) << "Could not read " << root_store_path;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   RootStore root_store;
   if (!google::protobuf::TextFormat::ParseFromString(root_store_text,
                                                      &root_store)) {
     LOG(ERROR) << "Could not parse " << root_store_path;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::map<std::string, std::string> certs;
@@ -100,12 +108,12 @@ absl::optional<RootStore> ReadTextRootStore(
     if (!base::ReadFileToString(base::MakeAbsoluteFilePath(certs_path),
                                 &certs_data)) {
       LOG(ERROR) << "Could not read " << certs_path;
-      return absl::nullopt;
+      return std::nullopt;
     }
     auto certs_opt = DecodeCerts(certs_data);
     if (!certs_opt) {
       LOG(ERROR) << "Could not decode " << certs_path;
-      return absl::nullopt;
+      return std::nullopt;
     }
     certs = std::move(*certs_opt);
   }
@@ -120,7 +128,7 @@ absl::optional<RootStore> ReadTextRootStore(
     auto iter = certs.find(anchor.sha256_hex());
     if (iter == certs.end()) {
       LOG(ERROR) << "Could not find certificate " << anchor.sha256_hex();
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     // Remove the certificate from `certs`. This both checks for duplicate
@@ -132,10 +140,19 @@ absl::optional<RootStore> ReadTextRootStore(
   if (!certs.empty()) {
     LOG(ERROR) << "Unused certificate (SHA-256 hash " << certs.begin()->first
                << ") in " << certs_path;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return std::move(root_store);
+}
+
+std::string SecondsFromEpochToBaseTime(int64_t t) {
+  return base::StrCat({"base::Time::UnixEpoch() + base::Seconds(",
+                       base::NumberToString(t), ")"});
+}
+
+std::string VersionFromString(std::string_view version_str) {
+  return base::StrCat({"\"", version_str, "\""});
 }
 
 // Returns true if file was correctly written, false otherwise.
@@ -144,21 +161,19 @@ bool WriteRootCppFile(const RootStore& root_store,
   // Root store should have at least one trust anchors.
   CHECK_GT(root_store.trust_anchors_size(), 0);
 
-  std::string string_to_write =
-      "// This file is auto-generated, DO NOT EDIT.\n\n"
-      "const ChromeRootCertInfo kChromeRootCertList[] = {\n";
+  const std::string kNulloptString = "std::nullopt";
 
-  for (auto& anchor : root_store.trust_anchors()) {
+  std::string string_to_write =
+      "// This file is auto-generated, DO NOT EDIT.\n\n";
+
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    const auto& anchor = root_store.trust_anchors(i);
     // Every trust anchor at this point should have a DER.
     CHECK(!anchor.der().empty());
     std::string der = anchor.der();
 
-    // Begin struct. Assumed type of ChromeRootCertInfo:
-    //
-    // struct {
-    //   base::span<const uint8_t> der;
-    // };
-    string_to_write += "    {{{";
+    base::StringAppendF(&string_to_write,
+                        "constexpr uint8_t kChromeRootCert%d[] = {", i);
 
     // Convert each character to hex representation, escaped.
     for (auto c : der) {
@@ -167,12 +182,90 @@ bool WriteRootCppFile(const RootStore& root_store,
     }
 
     // End struct
-    string_to_write += "}}},\n";
+    string_to_write += "};\n";
+
+    if (anchor.constraints_size() > 0) {
+      int constraint_num = 0;
+      for (const auto& constraint : anchor.constraints()) {
+        if (constraint.permitted_dns_names_size() > 0) {
+          base::StringAppendF(&string_to_write,
+                              "constexpr std::string_view "
+                              "kChromeRootConstraint%dNames%d[] = {",
+                              i, constraint_num);
+          for (const auto& name : constraint.permitted_dns_names()) {
+            base::StringAppendF(&string_to_write, "\"%s\",", name);
+          }
+          string_to_write += "};\n";
+        }
+        constraint_num++;
+      }
+
+      base::StringAppendF(&string_to_write,
+                          "constexpr StaticChromeRootCertConstraints "
+                          "kChromeRootConstraints%d[] = {",
+                          i);
+
+      std::vector<std::string> constraint_strings;
+      constraint_num = 0;
+      for (const auto& constraint : anchor.constraints()) {
+        std::vector<std::string> constraint_params;
+
+        constraint_params.push_back(
+            constraint.has_sct_not_after_sec()
+                ? SecondsFromEpochToBaseTime(constraint.sct_not_after_sec())
+                : kNulloptString);
+
+        constraint_params.push_back(
+            constraint.has_sct_all_after_sec()
+                ? SecondsFromEpochToBaseTime(constraint.sct_all_after_sec())
+                : kNulloptString);
+
+        constraint_params.push_back(
+            constraint.has_min_version()
+                ? VersionFromString(constraint.min_version())
+                : kNulloptString);
+
+        constraint_params.push_back(
+            constraint.has_max_version_exclusive()
+                ? VersionFromString(constraint.max_version_exclusive())
+                : kNulloptString);
+
+        if (constraint.permitted_dns_names_size() > 0) {
+          constraint_params.push_back(base::StringPrintf(
+              "kChromeRootConstraint%dNames%d", i, constraint_num));
+        } else {
+          constraint_params.push_back("{}");
+        }
+
+        constraint_strings.push_back(
+            base::StrCat({"{", base::JoinString(constraint_params, ","), "}"}));
+
+        constraint_num++;
+      }
+
+      string_to_write += base::JoinString(constraint_strings, ",");
+      string_to_write += "};\n";
+    }
+  }
+
+  string_to_write += "constexpr ChromeRootCertInfo kChromeRootCertList[] = {\n";
+
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    const auto& anchor = root_store.trust_anchors(i);
+    base::StringAppendF(&string_to_write, "    {kChromeRootCert%d, ", i);
+    if (anchor.constraints_size() > 0) {
+      base::StringAppendF(&string_to_write, "kChromeRootConstraints%d", i);
+    } else {
+      string_to_write += "{}";
+    }
+    string_to_write += "},\n";
   }
   string_to_write += "};";
 
-  string_to_write += "\n\n\nstatic const int64_t kRootStoreVersion = " +
-                     base::NumberToString(root_store.version_major()) + ";\n";
+  base::StringAppendF(&string_to_write,
+                      "\n\n\nstatic const int64_t kRootStoreVersion = %" PRId64
+                      ";\n",
+                      root_store.version_major());
   if (!base::WriteFile(cpp_path, string_to_write)) {
     return false;
   }
@@ -192,6 +285,12 @@ bool WriteEvCppFile(const RootStore& root_store,
   for (auto& anchor : root_store.trust_anchors()) {
     // Every trust anchor at this point should have a DER.
     CHECK(!anchor.der().empty());
+    if (anchor.ev_policy_oids_size() == 0) {
+      // The same input file is used for the Chrome Root Store and EV enabled
+      // certificates. Skip anchors that have no EV policy OIDs when generating
+      // the EV include file.
+      continue;
+    }
 
     std::string sha256_hash = crypto::SHA256HashString(anchor.der());
 
@@ -200,7 +299,7 @@ bool WriteEvCppFile(const RootStore& root_store,
     // struct EVMetadata {
     //  static const size_t kMaxOIDsPerCA = 2;
     //  SHA256HashValue fingerprint;
-    //  const base::StringPiece policy_oids[kMaxOIDsPerCA];
+    //  const std::string_view policy_oids[kMaxOIDsPerCA];
     // };
     string_to_write += "    {\n";
     string_to_write += "        {{";
@@ -226,13 +325,9 @@ bool WriteEvCppFile(const RootStore& root_store,
     // Chrome Root Store textprotos.
     const int kMaxPolicyOids = 2;
     int oids_size = anchor.ev_policy_oids_size();
-    std::string hexencode_hash =
-        base::HexEncode(sha256_hash.data(), sha256_hash.size());
+    std::string hexencode_hash = base::HexEncode(sha256_hash);
     if (oids_size > kMaxPolicyOids) {
       PLOG(ERROR) << hexencode_hash << " has too many OIDs!";
-      return false;
-    } else if (oids_size < 1) {
-      PLOG(ERROR) << hexencode_hash << " has no OIDs!";
       return false;
     }
     for (int i = 0; i < kMaxPolicyOids; i++) {
@@ -255,10 +350,6 @@ bool WriteEvCppFile(const RootStore& root_store,
   return true;
 }
 
-bool ValidCppOutputFormatValue(base::StringPiece value) {
-  return (value == "root" || value == "ev");
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -270,37 +361,35 @@ int main(int argc, char** argv) {
       logging::LOG_TO_SYSTEM_DEBUG_LOG | logging::LOG_TO_STDERR;
   logging::InitLogging(settings);
 
-  crypto::EnsureOpenSSLInit();
-
   base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
   base::FilePath proto_path = command_line.GetSwitchValuePath("write-proto");
-  base::FilePath cpp_path = command_line.GetSwitchValuePath("write-cpp");
-  std::string cpp_output_format =
-      command_line.GetSwitchValueASCII("cpp-output-format");
+  base::FilePath root_store_cpp_path =
+      command_line.GetSwitchValuePath("write-cpp-root-store");
+  base::FilePath ev_roots_cpp_path =
+      command_line.GetSwitchValuePath("write-cpp-ev-roots");
   base::FilePath root_store_path =
       command_line.GetSwitchValuePath("root-store");
   base::FilePath certs_path = command_line.GetSwitchValuePath("certs");
 
-  if ((proto_path.empty() && cpp_path.empty()) || root_store_path.empty() ||
-      command_line.HasSwitch("help") ||
-      (!cpp_path.empty() && !ValidCppOutputFormatValue(cpp_output_format))) {
-    std::cerr << cpp_output_format << " ";
+  if ((proto_path.empty() && root_store_cpp_path.empty() &&
+       ev_roots_cpp_path.empty()) ||
+      root_store_path.empty() || command_line.HasSwitch("help")) {
     std::cerr << "Usage: root_store_tool "
               << "--root-store=TEXTPROTO_FILE "
               << "[--certs=CERTS_FILE] "
               << "[--write-proto=PROTO_FILE] "
-              << "[--write-cpp=CPP_FILE --cpp-output-format=[ev|root]] "
-              << std::endl;
+              << "[--write-cpp-root-store=CPP_FILE] "
+              << "[--write-cpp-ev-roots=CPP_FILE] " << std::endl;
     return 1;
   }
 
-  absl::optional<RootStore> root_store =
+  std::optional<RootStore> root_store =
       ReadTextRootStore(root_store_path, certs_path);
   if (!root_store) {
     return 1;
   }
 
-  // TODO(https://crbug.com/1216547): Figure out how to use the serialized
+  // TODO(crbug.com/40770548): Figure out how to use the serialized
   // proto to support component update.
   // components/resources/ssl/ssl_error_assistant/push_proto.py
   // does it through a GCS bucket (I think) so that might be an option.
@@ -317,20 +406,15 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (!cpp_path.empty()) {
-    bool success;
-    if (cpp_output_format == "root") {
-      success = WriteRootCppFile(*root_store, cpp_path);
-    } else if (cpp_output_format == "ev") {
-      success = WriteEvCppFile(*root_store, cpp_path);
-    } else {
-      // Unknown format.
-      success = false;
-    }
-    if (!success) {
-      PLOG(ERROR) << "Error writing cpp include file";
-      return 1;
-    }
+  if (!root_store_cpp_path.empty() &&
+      !WriteRootCppFile(*root_store, root_store_cpp_path)) {
+    PLOG(ERROR) << "Error writing root store C++ include file";
+    return 1;
+  }
+  if (!ev_roots_cpp_path.empty() &&
+      !WriteEvCppFile(*root_store, ev_roots_cpp_path)) {
+    PLOG(ERROR) << "Error writing EV roots C++ include file";
+    return 1;
   }
 
   return 0;

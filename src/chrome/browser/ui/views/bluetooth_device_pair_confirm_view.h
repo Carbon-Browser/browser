@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,12 @@
 // A dialog allowing the user to confirm Bluetooth device pairing with or
 // without PIN being displayed.
 class BluetoothDevicePairConfirmView : public views::DialogDelegateView {
+  METADATA_HEADER(BluetoothDevicePairConfirmView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(BluetoothDevicePairConfirmView);
   BluetoothDevicePairConfirmView(
       const std::u16string& device_identifier,
-      const absl::optional<std::u16string> pin,
+      const std::optional<std::u16string>& pin,
       content::BluetoothDelegate::PairPromptCallback close_callback);
   BluetoothDevicePairConfirmView(const BluetoothDevicePairConfirmView&) =
       delete;
@@ -29,10 +30,11 @@ class BluetoothDevicePairConfirmView : public views::DialogDelegateView {
 
   // Initialize the controls on the dialog.
   void InitControls(const std::u16string& device_identifier,
-                    const absl::optional<std::u16string> pin);
+                    const std::optional<std::u16string>& pin);
 
   // View:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
   // WidgetDelegate:
   std::u16string GetWindowTitle() const override;

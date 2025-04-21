@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,11 +46,15 @@ public class WebContentsRegistry {
     public static void initializeWebContents(
             WebContents webContents, ContentView contentView, WindowAndroid window) {
         for (WebContentsHolder holder : sSesionIdToWebContents.values()) {
-            if (holder.webContents.equals(webContents) && !webContents.isDestroyed()) {
+            if (holder.webContents.equals(webContents)) {
                 if (!holder.initialized) {
                     // TODO(derekjchow): productVersion
-                    webContents.initialize("", ViewAndroidDelegate.createBasicDelegate(contentView),
-                            contentView, window, WebContents.createDefaultInternalsHolder());
+                    webContents.setDelegates(
+                            "",
+                            ViewAndroidDelegate.createBasicDelegate(contentView),
+                            contentView,
+                            window,
+                            WebContents.createDefaultInternalsHolder());
                 } else {
                     webContents.getViewAndroidDelegate().setContainerView(contentView);
                     webContents.setTopLevelNativeWindow(window);

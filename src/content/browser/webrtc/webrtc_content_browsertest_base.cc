@@ -1,16 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/webrtc/webrtc_content_browsertest_base.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/common/content_switches.h"
@@ -21,8 +20,8 @@
 #include "media/base/media_switches.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/audio/cras_audio_handler.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
 #endif
 
@@ -30,12 +29,8 @@ namespace content {
 
 void WebRtcContentBrowserTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnforceWebRtcIPPermissionCheck);
-
   // Loopback interface is the non-default local address. They should only be in
-  // the candidate list if the ip handling policy is "default" AND the media
-  // permission is granted.
+  // the candidate list if the the media permission is granted.
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kAllowLoopbackInPeerConnection);
 }
@@ -43,7 +38,7 @@ void WebRtcContentBrowserTestBase::SetUpCommandLine(
 void WebRtcContentBrowserTestBase::SetUp() {
   // We need pixel output when we dig pixels out of video tags for verification.
   EnablePixelOutput();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::CrasAudioClient::InitializeFake();
   ash::CrasAudioHandler::InitializeForTesting();
 #endif
@@ -54,7 +49,7 @@ void WebRtcContentBrowserTestBase::SetUp() {
 
 void WebRtcContentBrowserTestBase::TearDown() {
   ContentBrowserTest::TearDown();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::CrasAudioHandler::Shutdown();
   ash::CrasAudioClient::Shutdown();
 #endif
@@ -63,14 +58,6 @@ void WebRtcContentBrowserTestBase::TearDown() {
 void WebRtcContentBrowserTestBase::AppendUseFakeUIForMediaStreamFlag() {
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kUseFakeUIForMediaStream);
-}
-
-// Executes |javascript|. The script is required to use
-// window.domAutomationController.send to send a string value back to here.
-std::string WebRtcContentBrowserTestBase::ExecuteJavascriptAndReturnResult(
-    const std::string& javascript) {
-  return EvalJs(shell(), javascript, EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-      .ExtractString();
 }
 
 void WebRtcContentBrowserTestBase::MakeTypicalCall(
@@ -82,20 +69,8 @@ void WebRtcContentBrowserTestBase::MakeTypicalCall(
   GURL url(embedded_test_server()->GetURL(html_file));
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
-  ExecuteJavascriptAndWaitForOk(javascript);
+  EXPECT_TRUE(ExecJs(shell(), javascript));
 }
-
-void WebRtcContentBrowserTestBase::ExecuteJavascriptAndWaitForOk(
-    const std::string& javascript) {
-  std::string result = ExecuteJavascriptAndReturnResult(javascript);
-  if (result != "OK") {
-    if (result.empty())
-      result = "(nothing)";
-    printf("From javascript: %s\nWhen executing '%s'\n", result.c_str(),
-           javascript.c_str());
-    FAIL();
-  }
- }
 
  std::string WebRtcContentBrowserTestBase::GenerateGetUserMediaCall(
      const char* function_name,

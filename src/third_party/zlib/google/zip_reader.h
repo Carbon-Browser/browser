@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef THIRD_PARTY_ZLIB_GOOGLE_ZIP_READER_H_
@@ -10,10 +10,11 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/time/time.h"
@@ -128,14 +129,17 @@ class ZipReader {
 
     // True if the entry is a directory.
     // False if the entry is a file.
-    bool is_directory;
+    bool is_directory = false;
 
     // True if the entry path cannot be converted to a safe relative path. This
     // happens if a file entry (not a directory) has a filename "." or "..".
-    bool is_unsafe;
+    bool is_unsafe = false;
 
     // True if the file content is encrypted.
-    bool is_encrypted;
+    bool is_encrypted = false;
+
+    // True if the encryption scheme is AES.
+    bool uses_aes_encryption = false;
 
     // Entry POSIX permissions (POSIX systems only).
     int posix_mode;
@@ -278,7 +282,7 @@ class ZipReader {
 
   // Normalizes the given path passed as UTF-16 string piece. Sets entry_.path,
   // entry_.is_directory and entry_.is_unsafe.
-  void Normalize(base::StringPiece16 in);
+  void Normalize(std::u16string_view in);
 
   // Runs the ListenerCallback at a throttled rate.
   void ReportProgress(ListenerCallback listener_callback, uint64_t bytes) const;

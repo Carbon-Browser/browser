@@ -1,27 +1,38 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_constants.h"
+#include "components/feature_engagement/public/configuration_provider.h"
+#include "components/feature_engagement/public/field_trial_configuration_provider.h"
+#include "components/feature_engagement/public/local_configuration_provider.h"
 #include "components/feature_engagement/public/tracker.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/user_education/user_education_configuration_provider.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/growth/campaigns_configuration_provider.h"
+#endif
 
 namespace feature_engagement {
 
 // static
 TrackerFactory* TrackerFactory::GetInstance() {
-  return base::Singleton<TrackerFactory>::get();
+  static base::NoDestructor<TrackerFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -32,14 +43,26 @@ feature_engagement::Tracker* TrackerFactory::GetForBrowserContext(
 }
 
 TrackerFactory::TrackerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "feature_engagement::Tracker",
-          BrowserContextDependencyManager::GetInstance()) {
-}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // The service is needed by the System Profile OTR (that manages
+              // the Profile Picker) to track elements for IPHs displayed in
+              // the Profile Picker.
+              .WithSystem(ProfileSelection::kOffTheRecordOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 TrackerFactory::~TrackerFactory() = default;
 
-KeyedService* TrackerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+TrackerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
@@ -52,13 +75,20 @@ KeyedService* TrackerFactory::BuildServiceInstanceFor(
 
   leveldb_proto::ProtoDatabaseProvider* db_provider =
       profile->GetDefaultStoragePartition()->GetProtoDatabaseProvider();
-  return feature_engagement::Tracker::Create(
-      storage_dir, background_task_runner, db_provider);
-}
+  auto providers =
+      feature_engagement::Tracker::GetDefaultConfigurationProviders();
+#if !BUILDFLAG(IS_ANDROID)
+  providers.emplace_back(
+      std::make_unique<UserEducationConfigurationProvider>());
+#endif
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  providers.emplace_back(
+      std::make_unique<growth::CampaignsConfigurationProvider>());
+#endif
 
-content::BrowserContext* TrackerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return feature_engagement::Tracker::Create(
+      storage_dir, background_task_runner, db_provider, nullptr,
+      std::move(providers));
 }
 
 }  // namespace feature_engagement

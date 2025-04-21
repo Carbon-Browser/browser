@@ -1,14 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "base/files/file_path.h"
+#include "base/files/scoped_temp_dir.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/checked_math.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/timer/elapsed_timer.h"
@@ -44,14 +48,14 @@ TEST_F(V4StorePerftest, StressTest) {
 #endif
 
   static_assert(kMaxHashPrefixLength == crypto::kSHA256Length,
-                "SHA256 produces a valid FullHash");
+                "SHA256 produces a valid FullHashStr");
   CHECK(base::IsValidForType<size_t>(
       base::CheckMul(kNumPrefixes, kMaxHashPrefixLength)));
 
   // Keep the full hashes as one big string to avoid tons of allocations /
   // deallocations in the test.
   std::string full_hashes(kNumPrefixes * kMaxHashPrefixLength, 0);
-  base::StringPiece full_hashes_piece = base::StringPiece(full_hashes);
+  std::string_view full_hashes_piece = std::string_view(full_hashes);
   std::vector<std::string> prefixes;
   for (size_t i = 0; i < kNumPrefixes; i++) {
     size_t index = i * kMaxHashPrefixLength;
@@ -60,16 +64,26 @@ TEST_F(V4StorePerftest, StressTest) {
     prefixes.push_back(full_hashes.substr(index, kMinHashPrefixLength));
   }
 
-  auto store = std::make_unique<TestV4Store>(
-      base::MakeRefCounted<base::TestSimpleTaskRunner>(), base::FilePath());
-  store->SetPrefixes(std::move(prefixes), kMinHashPrefixLength);
+  base::ScopedTempDir temp_dir;
+  ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
+  base::FilePath store_path =
+      temp_dir.GetPath().AppendASCII("V4StoreTest.store");
+
+  auto task_runner = base::MakeRefCounted<base::TestSimpleTaskRunner>();
+  auto store = std::make_unique<V4Store>(task_runner, store_path);
+  std::sort(prefixes.begin(), prefixes.end());
+  store->hash_prefix_map_->Clear();
+  store->hash_prefix_map_->Append(kMinHashPrefixLength, base::StrCat(prefixes));
+
+  V4StoreFileFormat file_format;
+  ASSERT_EQ(WRITE_SUCCESS, store->WriteToDisk(&file_format));
 
   size_t matches = 0;
   auto reporter = SetUpV4StoreReporter("stress_test");
   base::ElapsedTimer timer;
   for (size_t i = 0; i < kNumPrefixes; i++) {
     size_t index = i * kMaxHashPrefixLength;
-    base::StringPiece full_hash =
+    std::string_view full_hash =
         full_hashes_piece.substr(index, kMaxHashPrefixLength);
     matches += !store->GetMatchingHashPrefix(full_hash).empty();
   }

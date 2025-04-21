@@ -1,16 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "chrome/browser/ui/cocoa/chrome_command_dispatcher_delegate.h"
 
+#include "base/apple/owned_objc.h"
 #include "base/check.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
+#include "components/input/native_web_keyboard_event.h"
 #include "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "ui/base/accelerators/accelerator_manager.h"
+#import "ui/base/cocoa/nsmenu_additions.h"
 #include "ui/content_accelerators/accelerator_util.h"
 #include "ui/views/widget/widget.h"
 
@@ -21,8 +23,9 @@
                                    (ui::AcceleratorManager::HandlerPriority)
                                        priority {
   NSWindow* window = [event window];
-  if (!window)
+  if (!window) {
     return NO;
+  }
 
   // Logic for handling Views windows.
   //
@@ -42,7 +45,8 @@
   // when the focused view is not a RenderWidgetHostView, which is why this
   // logic is necessary. Duplicating the logic adds a bit of redundant work,
   // but doesn't cause problems.
-  content::NativeWebKeyboardEvent keyboard_event(event);
+  input::NativeWebKeyboardEvent keyboard_event(
+      (base::apple::OwnedNSEvent(event)));
   ui::Accelerator accelerator =
       ui::GetAcceleratorFromNativeWebKeyboardEvent(keyboard_event);
   auto* bridge =
@@ -98,20 +102,41 @@
     return ui::PerformKeyEquivalentResult::kDrop;
   }
 
-  if (result.found()) {
-    auto* bridge =
-        remote_cocoa::NativeWidgetNSWindowBridge::GetFromNativeWindow(window);
-    if (bridge) {
-      bool was_executed = false;
-      bridge->host()->ExecuteCommand(
-          result.chrome_command, WindowOpenDisposition::CURRENT_TAB,
-          true /* is_before_first_responder */, &was_executed);
-      if (was_executed)
-        return ui::PerformKeyEquivalentResult::kHandled;
-    }
+  if (!result.found()) {
+    return ui::PerformKeyEquivalentResult::kUnhandled;
   }
 
-  return ui::PerformKeyEquivalentResult::kUnhandled;
+  auto* bridge =
+      remote_cocoa::NativeWidgetNSWindowBridge::GetFromNativeWindow(window);
+  if (bridge == nullptr) {
+    return ui::PerformKeyEquivalentResult::kUnhandled;
+  }
+
+  bool will_execute = false;
+  const bool kIsBeforeFirstResponder = true;
+
+  // See if this command will execute on the window bridge side.
+  bridge->host()->WillExecuteCommand(result.chrome_command,
+                                     WindowOpenDisposition::CURRENT_TAB,
+                                     kIsBeforeFirstResponder, &will_execute);
+
+  // On macOS, command key shortcuts flash the title of their owning menu
+  // in the menu bar. In Chrome, that doesn't happen for File->New Window,
+  // File->New Tab, Tab->Select Next Tab and other commands executed on the
+  // window bridge side. Now that we know the command will be executed by
+  // the window bridge we'll manually flash the menu title. This also causes
+  // VoiceOver to speak the command, which wasn't happening before this change.
+  if (will_execute) {
+    [NSMenu flashMenuForChromeCommand:result.chrome_command];
+  }
+
+  bool was_executed = false;
+  bridge->host()->ExecuteCommand(result.chrome_command,
+                                 WindowOpenDisposition::CURRENT_TAB,
+                                 kIsBeforeFirstResponder, &was_executed);
+
+  return was_executed ? ui::PerformKeyEquivalentResult::kHandled
+                      : ui::PerformKeyEquivalentResult::kUnhandled;
 }
 
 - (ui::PerformKeyEquivalentResult)postPerformKeyEquivalent:(NSEvent*)event
@@ -145,7 +170,7 @@
       bool was_executed = false;
       bridge->host()->ExecuteCommand(
           result.chrome_command, WindowOpenDisposition::CURRENT_TAB,
-          false /* is_before_first_responder */, &was_executed);
+          /*is_before_first_responder=*/false, &was_executed);
       DCHECK(was_executed);
       return ui::PerformKeyEquivalentResult::kHandled;
     }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include <compare>
 #include <iosfwd>
 
 #include "base/base_export.h"
@@ -66,29 +67,8 @@ class UniqueProcId {
   // valid within the current process sandbox.
   ProcessId GetUnsafeValue() const { return value_; }
 
-  bool operator==(const UniqueProcId& other) const {
-    return value_ == other.value_;
-  }
-
-  bool operator!=(const UniqueProcId& other) const {
-    return value_ != other.value_;
-  }
-
-  bool operator<(const UniqueProcId& other) const {
-    return value_ < other.value_;
-  }
-
-  bool operator<=(const UniqueProcId& other) const {
-    return value_ <= other.value_;
-  }
-
-  bool operator>(const UniqueProcId& other) const {
-    return value_ > other.value_;
-  }
-
-  bool operator>=(const UniqueProcId& other) const {
-    return value_ >= other.value_;
-  }
+  friend bool operator==(const UniqueProcId&, const UniqueProcId&) = default;
+  friend auto operator<=>(const UniqueProcId&, const UniqueProcId&) = default;
 
  private:
   ProcessId value_;

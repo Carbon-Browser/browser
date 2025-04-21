@@ -1,17 +1,20 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_UI_FRAME_MULTITASK_MENU_MULTITASK_MENU_H_
 #define CHROMEOS_UI_FRAME_MULTITASK_MENU_MULTITASK_MENU_H_
 
-#include <cstddef>
-
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "chromeos/ui/frame/caption_buttons/snap_controller.h"
-#include "chromeos/ui/frame/multitask_menu/multitask_button.h"
-#include "chromeos/ui/frame/multitask_menu/split_button.h"
+#include "chromeos/ui/frame/multitask_menu/multitask_menu_view.h"
+#include "ui/aura/window.h"
+#include "ui/aura/window_observer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/display/display_observer.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
+#include "ui/views/widget/unique_widget_ptr.h"
 
 namespace views {
 class View;
@@ -20,58 +23,49 @@ class Widget;
 
 namespace chromeos {
 
-// MultitaskMenu is the window operation menu attached to frame
-// size button.
+// MultitaskMenu is the window layout menu attached to frame size button.
 class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) MultitaskMenu
     : public views::BubbleDialogDelegateView,
-      public views::WidgetObserver {
- public:
-  MultitaskMenu(views::View* anchor, aura::Window* parent_window);
+      public display::DisplayObserver,
+      public aura::WindowObserver {
+  METADATA_HEADER(MultitaskMenu, views::BubbleDialogDelegateView)
 
+ public:
+  MultitaskMenu(views::View* anchor,
+                views::Widget* parent_widget,
+                bool close_on_move_out);
   MultitaskMenu(const MultitaskMenu&) = delete;
   MultitaskMenu& operator=(const MultitaskMenu&) = delete;
-
   ~MultitaskMenu() override;
 
-  // For testing.
-  SplitButtonView* half_button_for_testing() const {
-    return half_button_.get();
-  }
-  SplitButtonView* partial_button_for_testing() const {
-    return partial_button_.get();
-  }
-  MultitaskBaseButton* full_button_for_testing() const {
-    return full_button_.get();
-  }
-  MultitaskBaseButton* float_button_for_testing() const {
-    return float_button_.get();
+  MultitaskMenuView* multitask_menu_view() {
+    return multitask_menu_view_.get();
   }
 
-  // views::WidgetObserver:
-  void OnWidgetDestroying(views::Widget* widget) override;
-
-  // Displays the MultitaskMenu.
-  void ShowBubble();
-  // Hides the currently-showing MultitaskMenu.
   void HideBubble();
 
+  base::WeakPtr<MultitaskMenu> GetWeakPtr();
+
+  // display::DisplayObserver:
+  void OnDisplayMetricsChanged(const display::Display& display,
+                               uint32_t changed_metrics) override;
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
+
+  // aura::WindowObserver:
+  void OnWindowPropertyChanged(aura::Window* window,
+                               const void* key,
+                               intptr_t old) override;
+  void OnWindowDestroying(aura::Window* window) override;
+
  private:
-  // Callbacks for the buttons in the multitask menu view.
-  void SplitButtonPressed(SnapDirection snap);
-  void PartialButtonPressed(SnapDirection snap);
+  raw_ptr<MultitaskMenuView> multitask_menu_view_ = nullptr;
 
-  void FullScreenButtonPressed();
-  void FloatButtonPressed();
+  std::optional<display::ScopedDisplayObserver> display_observer_;
 
-  raw_ptr<views::Widget> bubble_widget_ = nullptr;
-  base::ScopedObservation<views::Widget, views::WidgetObserver>
-      bubble_widget_observer_{this};
+  base::ScopedObservation<aura::Window, aura::WindowObserver>
+      window_observation_{this};
 
-  // Saved for testing purpose.
-  raw_ptr<SplitButtonView> half_button_;
-  raw_ptr<SplitButtonView> partial_button_;
-  raw_ptr<MultitaskBaseButton> full_button_;
-  raw_ptr<MultitaskBaseButton> float_button_;
+  base::WeakPtrFactory<MultitaskMenu> weak_factory_{this};
 };
 
 }  // namespace chromeos

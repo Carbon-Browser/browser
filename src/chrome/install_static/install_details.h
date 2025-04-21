@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -138,6 +138,17 @@ class InstallDetails {
   // The IID and the TypeLib of the IElevator interface that provides silent
   // elevation functionality.
   const IID& elevator_iid() const { return payload_->mode->elevator_iid; }
+
+  // The CLSID of the COM server that provides ETW tracing functionality.
+  const CLSID& tracing_service_clsid() const {
+    return payload_->mode->tracing_service_clsid;
+  }
+
+  // The IID and the TypeLib of the ISystemTraceSession interface that provides
+  // ETW tracing functionality.
+  const IID& tracing_service_iid() const {
+    return payload_->mode->tracing_service_iid;
+  }
 
   // Returns the unsuffixed portion of the AppUserModelId. The AppUserModelId is
   // used to group an app's windows together on the Windows taskbar along with

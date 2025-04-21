@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_routine.h"
 #include "chrome/browser/ash/net/network_diagnostics/tls_prober.h"
 #include "net/base/host_port_pair.h"
+#include "services/network/public/cpp/network_context_getter.h"
 
 namespace network {
 namespace mojom {
@@ -31,12 +32,13 @@ class HttpsFirewallRoutine : public NetworkDiagnosticsRoutine {
  public:
   using TlsProberGetterCallback =
       base::RepeatingCallback<std::unique_ptr<TlsProber>(
-          TlsProber::NetworkContextGetter network_context_getter,
+          network::NetworkContextGetter network_context_getter,
           net::HostPortPair host_port_pair,
           bool negotiate_tls,
           TlsProber::TlsProbeCompleteCallback callback)>;
 
-  HttpsFirewallRoutine();
+  explicit HttpsFirewallRoutine(
+      chromeos::network_diagnostics::mojom::RoutineCallSource source);
   HttpsFirewallRoutine(const HttpsFirewallRoutine&) = delete;
   HttpsFirewallRoutine& operator=(const HttpsFirewallRoutine&) = delete;
   ~HttpsFirewallRoutine() override;
@@ -69,7 +71,7 @@ class HttpsFirewallRoutine : public NetworkDiagnosticsRoutine {
 
   // Creates an instance of TlsProber.
   static std::unique_ptr<TlsProber> CreateAndExecuteTlsProber(
-      TlsProber::NetworkContextGetter network_context_getter,
+      network::NetworkContextGetter network_context_getter,
       net::HostPortPair host_port_pair,
       bool negotiate_tls,
       TlsProber::TlsProbeCompleteCallback callback);

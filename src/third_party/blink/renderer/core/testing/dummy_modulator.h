@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,8 @@ class DummyModulator : public Modulator {
                  network::mojom::RequestDestination destination,
                  const ScriptFetchOptions&,
                  ModuleScriptCustomFetchType,
-                 ModuleTreeClient*) override;
+                 ModuleTreeClient*,
+                 String referrer) override;
   void FetchSingle(const ModuleScriptFetchRequest&,
                    ResourceFetcher*,
                    ModuleGraphLevel,
@@ -59,10 +60,12 @@ class DummyModulator : public Modulator {
       ModuleTreeClient*) override;
   ModuleScript* GetFetchedModuleScript(const KURL&, ModuleType) override;
   KURL ResolveModuleSpecifier(const String&, const KURL&, String*) override;
+  String GetIntegrityMetadataString(const KURL&) const override;
+  IntegrityMetadataSet GetIntegrityMetadata(const KURL&) const override;
   bool HasValidContext() override;
   void ResolveDynamically(const ModuleRequest& module_request,
                           const ReferrerScriptInfo&,
-                          ScriptPromiseResolver*) override;
+                          ScriptPromiseResolver<IDLAny>*) override;
   ModuleImportMeta HostGetImportMetaProperties(
       v8::Local<v8::Module>) const override;
   ModuleType ModuleTypeFromRequest(

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,17 @@
 #define CHROME_BROWSER_ASH_ARC_NEARBY_SHARE_NEARBY_SHARE_SESSION_IMPL_H_
 
 #include "ash/components/arc/mojom/nearby_share.mojom.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/nearby_share/share_info_file_handler.h"
-#include "chrome/browser/sharesheet/sharesheet_service.h"
+#include "chrome/browser/sharesheet/sharesheet_types.h"
 #include "chromeos/components/sharesheet/constants.h"
 #include "components/services/app_service/public/cpp/intent.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
@@ -34,6 +38,13 @@ class NearbyShareSessionImpl : public mojom::NearbyShareSessionHost,
                                public aura::EnvObserver {
  public:
   using SessionFinishedCallback = base::OnceCallback<void(uint32_t)>;
+  using SharesheetCallback = base::RepeatingCallback<void(
+      gfx::NativeWindow native_window,
+      apps::IntentPtr intent,
+      sharesheet::LaunchSource source,
+      sharesheet::DeliveredCallback delivered_callback,
+      sharesheet::CloseCallback close_callback,
+      sharesheet::ActionCleanupCallback cleanup_callback)>;
 
   NearbyShareSessionImpl(
       Profile* profile,
@@ -60,13 +71,19 @@ class NearbyShareSessionImpl : public mojom::NearbyShareSessionHost,
   void OnWindowVisibilityChanged(aura::Window* const window,
                                  bool visible) override;
 
+  // Sets a callback which will be called instead of showing the Sharesheet
+  // bubble.
+  void SetSharesheetCallbackForTesting(SharesheetCallback callback) {
+    test_sharesheet_callback_ = std::move(callback);
+  }
+
  private:
   // Called once an ARC window is found for the given |task_id_|. This will
   // either prepare files or directly show the Nearby Share bubble.
   void OnArcWindowFound(aura::Window* const arc_window);
 
   // Converts |share_info_| to |apps::IntentPtr| type.
-  apps::IntentPtr ConvertShareIntentInfoToIntent() const;
+  apps::IntentPtr ConvertShareIntentInfoToIntent();
 
   void OnNearbyShareBubbleShown(sharesheet::SharesheetResult result);
 
@@ -80,7 +97,7 @@ class NearbyShareSessionImpl : public mojom::NearbyShareSessionHost,
   // Calls |SharesheetService.ShowNearbyShareBubble()| to start the Chrome
   // Nearby Share user flow and display bubble in ARC window.
   void ShowNearbyShareBubbleInArcWindow(
-      absl::optional<base::File::Error> result = absl::nullopt);
+      std::optional<base::File::Error> result = std::nullopt);
 
   // Called back once the session duration exceeds the maximum duration.
   void OnTimerFired();
@@ -126,10 +143,10 @@ class NearbyShareSessionImpl : public mojom::NearbyShareSessionHost,
   mojom::ShareIntentInfoPtr share_info_;
 
   // Unowned pointer.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // Unowned pointer
-  aura::Window* arc_window_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> arc_window_ = nullptr;
 
   // Created and lives on the UI thread but is destructed on the IO thread.
   scoped_refptr<ShareInfoFileHandler> file_handler_;
@@ -156,6 +173,9 @@ class NearbyShareSessionImpl : public mojom::NearbyShareSessionHost,
 
   // Callback when the Nearby Share Session is finished and no longer needed.
   SessionFinishedCallback session_finished_callback_;
+
+  // Test callback to override the sharesheet bubble in test environments.
+  SharesheetCallback test_sharesheet_callback_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

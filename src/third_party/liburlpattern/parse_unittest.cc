@@ -1,15 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by an MIT-style license that can be
 // found in the LICENSE file or at https://opensource.org/licenses/MIT.
 
 #include "third_party/liburlpattern/parse.h"
+
+#include <string_view>
+
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 #include "third_party/liburlpattern/pattern.h"
 
 namespace {
 
-absl::StatusOr<std::string> PassThrough(absl::string_view input) {
+absl::StatusOr<std::string> PassThrough(std::string_view input) {
   return std::string(input);
 }
 
@@ -17,14 +20,14 @@ absl::StatusOr<std::string> PassThrough(absl::string_view input) {
 
 namespace liburlpattern {
 
-absl::StatusOr<std::string> ToUpper(absl::string_view input) {
+absl::StatusOr<std::string> ToUpper(std::string_view input) {
   std::string output;
   std::transform(input.begin(), input.end(), std::back_inserter(output),
                  [](unsigned char c) { return std::toupper(c); });
   return output;
 }
 
-void RunParseTest(absl::string_view pattern,
+void RunParseTest(std::string_view pattern,
                   absl::StatusOr<std::vector<Part>> expected,
                   EncodeCallback callback = PassThrough) {
   auto result = Parse(pattern, std::move(callback));

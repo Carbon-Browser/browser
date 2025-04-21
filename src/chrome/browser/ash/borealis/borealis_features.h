@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,16 @@
 #include <ostream>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/expected.h"
 
 class Profile;
 
 namespace borealis {
 
-class AsyncAllowChecker;
+class AsyncHardwareChecker;
 
 class BorealisFeatures {
  public:
@@ -29,11 +31,8 @@ class BorealisFeatures {
     kBlockedOnChildAccount,
     kVmPolicyBlocked,
     kUserPrefBlocked,
-    kBlockedOnBetaStable,
     kBlockedByFlag,
-    kUnsupportedModel,
-    kHardwareChecksFailed,
-    kIncorrectToken,
+    kInsufficientHardware,
   };
 
   // Creates a per-profile instance of the feature-checker for borealis.
@@ -45,30 +44,20 @@ class BorealisFeatures {
   // borealis can run, other statuses imply an error.
   void IsAllowed(base::OnceCallback<void(AllowStatus)> callback);
 
-  // Returns the partial AllowStatus which only performs synchronous checks.
-  // Borealis must first pass this check and then the async ones to be truly
-  // allowed.
-  //
-  // This method is useful for systems that need to initialize borealis
-  // components before the async checks returns.
-  AllowStatus MightBeAllowed();
-
   // Returns true if borealis has been installed and can be run in the profile.
   bool IsEnabled();
 
-  // Sets the token used to authorize borealis. Since doing this will usually
-  // cause IsAllowed() to change we also invoke |callback| with the new
-  // allowedness status.
-  void SetVmToken(std::string token,
-                  base::OnceCallback<void(AllowStatus)> callback);
-
  private:
-  void OnVmTokenDetermined(base::OnceCallback<void(AllowStatus)> callback,
-                           std::string hashed_token);
+  // Allowedness failures should be from most-unable-to-fix to most fixable.
+  // Hence we divide the synchronous checks into pre- and post- hardware.
+  AllowStatus PreHardwareChecks();
+  AllowStatus PostHardwareChecks();
 
-  Profile* const profile_;
-  std::unique_ptr<AsyncAllowChecker> async_checker_;
-  // TODO(b/218403711): remove this.
+  void OnHardwareChecked(base::OnceCallback<void(AllowStatus)> callback,
+                         base::expected<AllowStatus*, bool> hardware_status);
+
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
+  std::unique_ptr<AsyncHardwareChecker> async_checker_;
   base::WeakPtrFactory<BorealisFeatures> weak_factory_{this};
 };
 

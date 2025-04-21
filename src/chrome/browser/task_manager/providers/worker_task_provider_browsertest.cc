@@ -1,17 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/task_manager/providers/task_provider_observer.h"
 #include "chrome/browser/task_manager/providers/worker_task_provider.h"
@@ -43,13 +44,6 @@ namespace task_manager {
 
 namespace {
 
-void OnUnblockOnProfileCreation(base::RunLoop* run_loop,
-                                Profile* profile,
-                                Profile::CreateStatus status) {
-  if (status == Profile::CREATE_STATUS_INITIALIZED)
-    run_loop->Quit();
-}
-
 std::u16string ExpectedTaskTitle(const std::string& title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_SERVICE_WORKER_PREFIX,
                                     base::UTF8ToUTF16(title));
@@ -61,7 +55,7 @@ int GetChildProcessID(Browser* browser) {
       ->GetActiveWebContents()
       ->GetPrimaryMainFrame()
       ->GetProcess()
-      ->GetID();
+      ->GetDeprecatedID();
 }
 
 }  // namespace
@@ -90,14 +84,10 @@ class WorkerTaskProviderBrowserTest : public InProcessBrowserTest,
 
   Browser* CreateNewProfileAndSwitch() {
     ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-    // Create an additional profile.
     base::FilePath new_path =
         profile_manager->GenerateNextProfileDirectoryPath();
-    base::RunLoop run_loop;
-    profile_manager->CreateProfileAsync(
-        new_path, base::BindRepeating(&OnUnblockOnProfileCreation, &run_loop));
-    run_loop.Run();
+    // Create an additional profile.
+    profiles::testing::CreateProfileSync(profile_manager, new_path);
 
     profiles::SwitchToProfile(new_path, /* always_create = */ false,
                               base::DoNothing());
@@ -132,13 +122,15 @@ class WorkerTaskProviderBrowserTest : public InProcessBrowserTest,
 
   void TaskRemoved(Task* task) override {
     DCHECK(task);
-    base::Erase(tasks_, task);
+    std::erase(tasks_, task);
 
     if (expected_task_count_ == tasks_.size())
       StopWaiting();
   }
 
-  const std::vector<Task*>& tasks() const { return tasks_; }
+  const std::vector<raw_ptr<Task, VectorExperimental>>& tasks() const {
+    return tasks_;
+  }
   TaskProvider* task_provider() const { return task_provider_.get(); }
 
  protected:
@@ -158,7 +150,7 @@ class WorkerTaskProviderBrowserTest : public InProcessBrowserTest,
   std::unique_ptr<WorkerTaskProvider> task_provider_;
 
   // Tasks created by |task_provider_|.
-  std::vector<Task*> tasks_;
+  std::vector<raw_ptr<Task, VectorExperimental>> tasks_;
 
   base::OnceClosure quit_closure_for_waiting_;
 
@@ -192,7 +184,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser())->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -230,7 +222,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(incognito)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -286,13 +278,13 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
                                base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser_1)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(1);
   EXPECT_EQ(task_2, tasks()[0]);
 
   GetServiceWorkerContext(browser_2)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -327,7 +319,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest, CreateExistingTasks) {
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser())->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -337,7 +329,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest, CreateExistingTasks) {
 // Tests that destroying a profile while updating will correctly remove the
 // existing tasks. An incognito browser is used because a regular profile is
 // never truly destroyed until browser shutdown (See https://crbug.com/88586).
-// TODO(crbug.com/1168407): Fix the flakiness and re-enable this.
+// TODO(crbug.com/40743320): Fix the flakiness and re-enable this.
 IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
                        DISABLED_DestroyedProfile) {
   StartUpdating();

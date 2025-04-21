@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,4 +13,6 @@ import android.net.Uri;
  * For all member variable descriptions see the C++ class.
  * TODO(dtrainor): Investigate making all class members for this and the C++ counterpart const.
  */
-public class OfflineItemShareInfo { public Uri uri; }
+public class OfflineItemShareInfo {
+    public Uri uri;
+}

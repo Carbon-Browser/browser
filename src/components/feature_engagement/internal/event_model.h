@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 
 namespace feature_engagement {
@@ -55,6 +55,9 @@ class EventModel {
   // TimeProvider::GetCurrentDay()).
   virtual void IncrementEvent(const std::string& event_name,
                               uint32_t current_day) = 0;
+
+  // Removes data associated with `event_name`.
+  virtual void ClearEvent(const std::string& event_name) = 0;
 
   // Increments the snooze count for the day.
   // Updates the last_snooze_time_us.

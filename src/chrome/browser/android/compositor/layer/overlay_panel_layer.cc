@@ -1,14 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/compositor/layer/overlay_panel_layer.h"
 
-#include "cc/layers/layer.h"
-#include "cc/layers/nine_patch_layer.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/ui_resource_layer.h"
 #include "cc/resources/scoped_ui_resource.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/nine_patch_layer.h"
+#include "cc/slim/solid_color_layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/android/resources/nine_patch_resource.h"
 #include "ui/android/resources/resource_manager.h"
@@ -17,7 +17,7 @@
 
 namespace android {
 
-scoped_refptr<cc::Layer> OverlayPanelLayer::GetIconLayer() {
+scoped_refptr<cc::slim::Layer> OverlayPanelLayer::GetIconLayer() {
   if (panel_icon_resource_id_ == kInvalidResourceID)
     return nullptr;
   ui::Resource* panel_icon_resource = resource_manager_->GetResource(
@@ -34,7 +34,8 @@ scoped_refptr<cc::Layer> OverlayPanelLayer::GetIconLayer() {
   return panel_icon_;
 }
 
-void OverlayPanelLayer::AddBarTextLayer(scoped_refptr<cc::Layer> text_layer) {
+void OverlayPanelLayer::AddBarTextLayer(
+    scoped_refptr<cc::slim::Layer> text_layer) {
   if (text_container_->parent() != layer_)
     layer_->AddChild(text_container_);
   if (text_layer->parent() != text_container_)
@@ -61,7 +62,7 @@ void OverlayPanelLayer::SetResourceIds(int bar_text_resource_id,
 
 void OverlayPanelLayer::SetProperties(
     float dp_to_px,
-    const scoped_refptr<cc::Layer>& content_layer,
+    const scoped_refptr<cc::slim::Layer>& content_layer,
     float content_offset_y,
     float panel_x,
     float panel_y,
@@ -70,6 +71,7 @@ void OverlayPanelLayer::SetProperties(
     int bar_background_color,
     float bar_margin_side,
     float bar_margin_top,
+    float bar_margin_bottom,
     float bar_height,
     float bar_offset_y,
     float bar_text_opacity,
@@ -102,6 +104,7 @@ void OverlayPanelLayer::SetProperties(
   ui::NinePatchResource* rounded_bar_top_resource = nullptr;
   content_top_y += bar_margin_top;
   content_height -= bar_margin_top;
+  content_height -= bar_margin_bottom;
 
   rounded_bar_top_resource =
       ui::NinePatchResource::From(resource_manager_->GetStaticResourceWithTint(
@@ -175,7 +178,7 @@ void OverlayPanelLayer::SetProperties(
   bar_background_->SetBounds(background_size);
   bar_background_->SetPosition(
       gfx::PointF(0.f, bar_top_y + rounded_top_height));
-  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  // TODO(crbug.com/40219248): Remove FromColor and make all SkColor4f.
   bar_background_->SetBackgroundColor(
       SkColor4f::FromColor(bar_background_color));
 
@@ -199,7 +202,7 @@ void OverlayPanelLayer::SetProperties(
   // ---------------------------------------------------------------------------
   // Panel Icon
   // ---------------------------------------------------------------------------
-  scoped_refptr<cc::Layer> icon_layer = GetIconLayer();
+  scoped_refptr<cc::slim::Layer> icon_layer = GetIconLayer();
   if (icon_layer) {
     // If the icon is not the default width, add or remove padding so it appears
     // centered.
@@ -427,21 +430,21 @@ void OverlayPanelLayer::SetProgressBar(int progress_bar_background_resource_id,
 
 OverlayPanelLayer::OverlayPanelLayer(ui::ResourceManager* resource_manager)
     : resource_manager_(resource_manager),
-      layer_(cc::Layer::Create()),
-      panel_shadow_(cc::NinePatchLayer::Create()),
-      rounded_bar_top_(cc::NinePatchLayer::Create()),
-      bar_background_(cc::SolidColorLayer::Create()),
-      bar_text_(cc::UIResourceLayer::Create()),
-      bar_shadow_(cc::UIResourceLayer::Create()),
-      panel_icon_(cc::UIResourceLayer::Create()),
-      drag_handlebar_(cc::UIResourceLayer::Create()),
-      open_tab_icon_(cc::UIResourceLayer::Create()),
-      close_icon_(cc::UIResourceLayer::Create()),
-      content_container_(cc::SolidColorLayer::Create()),
-      text_container_(cc::Layer::Create()),
-      bar_border_(cc::SolidColorLayer::Create()),
-      progress_bar_(cc::NinePatchLayer::Create()),
-      progress_bar_background_(cc::NinePatchLayer::Create()) {
+      layer_(cc::slim::Layer::Create()),
+      panel_shadow_(cc::slim::NinePatchLayer::Create()),
+      rounded_bar_top_(cc::slim::NinePatchLayer::Create()),
+      bar_background_(cc::slim::SolidColorLayer::Create()),
+      bar_text_(cc::slim::UIResourceLayer::Create()),
+      bar_shadow_(cc::slim::UIResourceLayer::Create()),
+      panel_icon_(cc::slim::UIResourceLayer::Create()),
+      drag_handlebar_(cc::slim::UIResourceLayer::Create()),
+      open_tab_icon_(cc::slim::UIResourceLayer::Create()),
+      close_icon_(cc::slim::UIResourceLayer::Create()),
+      content_container_(cc::slim::SolidColorLayer::Create()),
+      text_container_(cc::slim::Layer::Create()),
+      bar_border_(cc::slim::SolidColorLayer::Create()),
+      progress_bar_(cc::slim::NinePatchLayer::Create()),
+      progress_bar_background_(cc::slim::NinePatchLayer::Create()) {
   // Background colors for each widget are set in SetProperties, where variable
   // colors are available.
   layer_->SetMasksToBounds(false);
@@ -501,10 +504,9 @@ OverlayPanelLayer::OverlayPanelLayer(ui::ResourceManager* resource_manager)
   progress_bar_->SetFillCenter(true);
 }
 
-OverlayPanelLayer::~OverlayPanelLayer() {
-}
+OverlayPanelLayer::~OverlayPanelLayer() = default;
 
-scoped_refptr<cc::Layer> OverlayPanelLayer::layer() {
+scoped_refptr<cc::slim::Layer> OverlayPanelLayer::layer() {
   return layer_;
 }
 

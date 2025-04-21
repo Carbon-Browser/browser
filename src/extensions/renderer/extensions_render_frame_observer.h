@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,13 +33,15 @@ class ExtensionsRenderFrameObserver : public content::RenderFrameObserver,
   // Toggles visual muting of the render view area. This is on when a
   // constrained window is showing.
   void SetVisuallyDeemphasized(bool deemphasized) override;
+  void SetSupportsDraggableRegions(bool supports_draggable_regions) override;
 
   // RenderFrameObserver implementation.
-  void DetailedConsoleMessageAdded(const std::u16string& message,
-                                   const std::u16string& source,
-                                   const std::u16string& stack_trace,
-                                   uint32_t line_number,
-                                   int32_t severity_level) override;
+  void DetailedConsoleMessageAdded(
+      const std::u16string& message,
+      const std::u16string& source,
+      const std::u16string& stack_trace,
+      uint32_t line_number,
+      blink::mojom::ConsoleMessageLevel level) override;
   void OnDestruct() override;
 
   // true if webview is overlayed with grey color.

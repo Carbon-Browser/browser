@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -15,10 +15,15 @@ class _Feature(str):
         str.__init__(self)
         self._is_context_dependent = (
             RuntimeEnabledFeatures.is_context_dependent(self))
+        self._is_origin_trial = RuntimeEnabledFeatures.is_origin_trial(self)
 
     @property
     def is_context_dependent(self):
         return self._is_context_dependent
+
+    @property
+    def is_origin_trial(self):
+        return self._is_origin_trial
 
 
 class _GlobalNameAndFeature(object):
@@ -56,20 +61,26 @@ class Exposure(object):
                 other.context_independent_runtime_enabled_features)
             self._context_dependent_runtime_enabled_features = tuple(
                 other.context_dependent_runtime_enabled_features)
+            self._origin_trial_features = tuple(other._origin_trial_features)
             self._context_enabled_features = tuple(
                 other.context_enabled_features)
             self._only_in_coi_contexts = other.only_in_coi_contexts
-            self._only_in_direct_socket_contexts = (
-                other.only_in_direct_socket_contexts)
+            self._only_in_coi_contexts_or_runtime_enabled_features = tuple(
+                other.only_in_coi_contexts_or_runtime_enabled_features)
+            self._only_in_injection_mitigated_contexts = other.only_in_injection_mitigated_contexts
+            self._only_in_isolated_contexts = other.only_in_isolated_contexts
             self._only_in_secure_contexts = other.only_in_secure_contexts
         else:
             self._global_names_and_features = tuple()
             self._runtime_enabled_features = tuple()
             self._context_independent_runtime_enabled_features = tuple()
             self._context_dependent_runtime_enabled_features = tuple()
+            self._origin_trial_features = tuple()
             self._context_enabled_features = tuple()
             self._only_in_coi_contexts = False
-            self._only_in_direct_socket_contexts = False
+            self._only_in_coi_contexts_or_runtime_enabled_features = tuple()
+            self._only_in_injection_mitigated_contexts = False
+            self._only_in_isolated_contexts = False
             self._only_in_secure_contexts = None
 
     @property
@@ -99,6 +110,13 @@ class Exposure(object):
         return self._context_dependent_runtime_enabled_features
 
     @property
+    def origin_trial_features(self):
+        """
+        Returns a list of origin trial features.
+        """
+        return self._origin_trial_features
+
+    @property
     def context_enabled_features(self):
         """
         Returns a list of context enabled features.  This construct is exposed
@@ -118,15 +136,36 @@ class Exposure(object):
         return self._only_in_coi_contexts
 
     @property
-    def only_in_direct_socket_contexts(self):
+    def only_in_coi_contexts_or_runtime_enabled_features(self):
         """
-        Returns whether this construct is available only in contexts deemed
-        suitable to host Direct Sockets. The returned value is a boolean:
-        True if the construct is restricted to these contexts, False if not.
+        Returns a list of runtime enabled features that affects cross-origin
+        isolation.
+
+        If the list is not empty, this construct is available only in
+        cross-origin isolated contexts or when any of the specified runtime
+        enabled features (supposed to be origin trials) gets enabled.
+        """
+        return self._only_in_coi_contexts_or_runtime_enabled_features
+
+    @property
+    def only_in_injection_mitigated_contexts(self):
+        """
+        Returns whether this construct is available only in contexts with
+        sufficient injection attack mitigations. The returned value is a
+        boolean: True if the construct is restricted, False otherwise.
+        """
+        return self._only_in_injection_mitigated_contexts
+
+    @property
+    def only_in_isolated_contexts(self):
+        """
+        Returns whether this construct is available only in isolated app
+        contexts. The returned value is a boolean: True if the construct
+        is restricted to isolated application contexts, False if not.
 
         TODO(crbug.com/1206150): This needs a specification (and definition).
         """
-        return self._only_in_direct_socket_contexts
+        return self._only_in_isolated_contexts
 
     @property
     def only_in_secure_contexts(self):
@@ -156,7 +195,8 @@ class Exposure(object):
 
         if (self.context_dependent_runtime_enabled_features
                 or self.context_enabled_features or self.only_in_coi_contexts
-                or self.only_in_direct_socket_contexts
+                or self.only_in_injection_mitigated_contexts
+                or self.only_in_isolated_contexts
                 or self.only_in_secure_contexts):
             return True
 
@@ -180,9 +220,12 @@ class ExposureMutable(Exposure):
         self._runtime_enabled_features = []
         self._context_independent_runtime_enabled_features = []
         self._context_dependent_runtime_enabled_features = []
+        self._origin_trial_features = []
         self._context_enabled_features = []
         self._only_in_coi_contexts = False
-        self._only_in_direct_socket_contexts = False
+        self._only_in_coi_contexts_or_runtime_enabled_features = []
+        self._only_in_injection_mitigated_contexts = False
+        self._only_in_isolated_contexts = False
         self._only_in_secure_contexts = None
 
     def __getstate__(self):
@@ -202,6 +245,8 @@ class ExposureMutable(Exposure):
             self._context_dependent_runtime_enabled_features.append(feature)
         else:
             self._context_independent_runtime_enabled_features.append(feature)
+        if feature.is_origin_trial:
+            self._origin_trial_features.append(feature)
         self._runtime_enabled_features.append(feature)
 
     def add_context_enabled_feature(self, name):
@@ -212,9 +257,18 @@ class ExposureMutable(Exposure):
         assert isinstance(value, bool)
         self._only_in_coi_contexts = value
 
-    def set_only_in_direct_socket_contexts(self, value):
+    def add_only_in_coi_contexts_or_runtime_enabled_feature(self, name):
+        assert isinstance(name, str)
+        self._only_in_coi_contexts_or_runtime_enabled_features.append(
+            _Feature(name))
+
+    def set_only_in_injection_mitigated_contexts(self, value):
         assert isinstance(value, bool)
-        self._only_in_direct_socket_contexts = value
+        self._only_in_injection_mitigated_contexts = value
+
+    def set_only_in_isolated_contexts(self, value):
+        assert isinstance(value, bool)
+        self._only_in_isolated_contexts = value
 
     def set_only_in_secure_contexts(self, value):
         assert (isinstance(value, (bool, str))

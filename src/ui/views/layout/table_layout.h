@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #define UI_VIEWS_LAYOUT_TABLE_LAYOUT_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/layout/layout_manager_base.h"
 #include "ui/views/layout/layout_types.h"
@@ -131,8 +132,6 @@ class VIEWS_EXPORT TableLayout : public LayoutManagerBase {
 
   TableLayout& SetMinimumSize(const gfx::Size& size);
 
-  TableLayout& SetIncludeHidden(bool include_hidden);
-
  protected:
   ProposedLayout CalculateProposedLayout(
       const SizeBounds& size_bounds) const override;
@@ -171,7 +170,8 @@ class VIEWS_EXPORT TableLayout : public LayoutManagerBase {
   // Calculates the preferred width of each view, as well as updating the
   // ViewStates' `remaining_width`.
   void CalculateSize(SizeCalculationType type,
-                     const std::vector<ViewState*>& view_states) const;
+                     const std::vector<raw_ptr<ViewState, VectorExperimental>>&
+                         view_states) const;
 
   // Distributes `delta` among the resizable columns.
   void Resize(int delta) const;
@@ -181,7 +181,8 @@ class VIEWS_EXPORT TableLayout : public LayoutManagerBase {
   // target width.
   void ResizeUsingMin(int delta) const;
 
-  // Only use the minimum size if all the columns the view is in are resizable.
+  // Only use the minimum size if any of the columns the view is in
+  // is resizable. Fixed columns will retain their fixed width.
   bool CanUseMinimum(const ViewState& view_state) const;
 
   // Columns.
@@ -192,7 +193,7 @@ class VIEWS_EXPORT TableLayout : public LayoutManagerBase {
 
   // Columns wider than this limit will be ignored when computing linked
   // columns' sizes.
-  absl::optional<int> linked_column_size_limit_;
+  std::optional<int> linked_column_size_limit_;
 
   // Minimum preferred size.
   gfx::Size minimum_size_;
@@ -201,10 +202,8 @@ class VIEWS_EXPORT TableLayout : public LayoutManagerBase {
   mutable std::vector<std::unique_ptr<ViewState>> view_states_by_row_span_;
 
   // ViewStates sorted based on column_span in ascending order.
-  mutable std::vector<ViewState*> view_states_by_col_span_;
-
-  // Indicates whether hidden views are included.
-  bool include_hidden_ = false;
+  mutable std::vector<raw_ptr<ViewState, VectorExperimental>>
+      view_states_by_col_span_;
 };
 
 }  // namespace views

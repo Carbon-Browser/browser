@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ class ClipboardRestrictionServiceTest : public testing::Test {
   ClipboardRestrictionService* service() { return service_.get(); }
 
  protected:
-  void SetPolicy(absl::optional<std::vector<std::string>> enable_patterns,
-                 absl::optional<std::vector<std::string>> disable_patterns,
+  void SetPolicy(std::optional<std::vector<std::string>> enable_patterns,
+                 std::optional<std::vector<std::string>> disable_patterns,
                  int min_data_size = 100) {
     base::Value::Dict pref_dict;
 

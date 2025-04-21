@@ -1,11 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/device/bluetooth/le/remote_characteristic_impl.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromecast/base/bind_to_task_runner.h"
 #include "chromecast/device/bluetooth/le/gatt_client_manager_impl.h"
 #include "chromecast/device/bluetooth/le/remote_descriptor_impl.h"
@@ -121,7 +124,7 @@ RemoteCharacteristicImpl::CreateDescriptorMap() {
   }
 
   if (fake_cccd_) {
-    DCHECK(ret.find(RemoteDescriptor::kCccdUuid) == ret.end());
+    DCHECK(!base::Contains(ret, RemoteDescriptor::kCccdUuid));
     ret[fake_cccd_->uuid] = new RemoteDescriptorImpl(
         device_, gatt_client_manager_, fake_cccd_.get(), io_task_runner_);
   }
@@ -237,7 +240,7 @@ void RemoteCharacteristicImpl::SetRegisterNotificationOrIndicationInternal(
   }
 
   auto it = uuid_to_descriptor_.find(RemoteDescriptor::kCccdUuid);
-  DCHECK(it != uuid_to_descriptor_.end());
+  CHECK(it != uuid_to_descriptor_.end(), base::NotFatalUntil::M130);
 
   // CCCD must exist. |fake_cccd_| should have been created if it doesn't exist.
   std::vector<uint8_t> write_val = indication

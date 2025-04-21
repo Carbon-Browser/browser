@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/remote_commands/user_remote_commands_service.h"
+#include "chrome/browser/enterprise/remote_commands/user_remote_commands_service_factory.h"
 #include "chrome/browser/enterprise/util/managed_browser_utils.h"
 #include "chrome/browser/policy/cloud/user_policy_signin_service_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -33,6 +35,7 @@
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_change_event.h"
 #include "content/public/browser/storage_partition.h"
@@ -57,21 +60,25 @@ UserPolicySigninService::UserPolicySigninService(
                                   system_url_loader_factory),
       profile_prefs_(profile->GetPrefs()),
       profile_(profile) {
-  if (g_browser_process->profile_manager())
-    g_browser_process->profile_manager()->AddObserver(this);
+  if (ProfileManager* profile_manager = g_browser_process->profile_manager())
+    profile_manager_observation_.Observe(profile_manager);
 }
 
-UserPolicySigninService::~UserPolicySigninService() {}
+UserPolicySigninService::~UserPolicySigninService() = default;
 
-void UserPolicySigninService::ShutdownUserCloudPolicyManager() {
+void UserPolicySigninService::ShutdownCloudPolicyManager() {
   CancelPendingRegistration();
-  UserPolicySigninServiceBase::ShutdownUserCloudPolicyManager();
+  auto* remote_command_service =
+      enterprise_commands::UserRemoteCommandsServiceFactory::GetForProfile(
+          profile_);
+  if (remote_command_service) {
+    remote_command_service->Shutdown();
+  }
+  UserPolicySigninServiceBase::ShutdownCloudPolicyManager();
 }
 
 void UserPolicySigninService::Shutdown() {
-  // Don't handle ProfileManager when testing because it is null.
-  if (g_browser_process->profile_manager())
-    g_browser_process->profile_manager()->RemoveObserver(this);
+  profile_manager_observation_.Reset();
   if (identity_manager())
     identity_manager()->RemoveObserver(this);
   CancelPendingRegistration();
@@ -83,9 +90,9 @@ void UserPolicySigninService::OnPrimaryAccountChanged(
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   if (profile_manager && IsSignoutEvent(event)) {
     UpdateProfileAttributesWhenSignout(profile_, profile_manager);
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   } else if (IsTurnOffSyncEvent(event)) {
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   }
 }
 
@@ -94,17 +101,21 @@ void UserPolicySigninService::OnProfileAdded(Profile* profile) {
     InitializeOnProfileReady(profile);
 }
 
+void UserPolicySigninService::OnProfileManagerDestroying() {
+  profile_manager_observation_.Reset();
+}
+
 void UserPolicySigninService::InitializeOnProfileReady(Profile* profile) {
   DCHECK_EQ(profile, profile_);
 
   // If using a TestingProfile with no IdentityManager or
-  // UserCloudPolicyManager, skip initialization.
+  // CloudPolicyManager, skip initialization.
   if (!policy_manager() || !identity_manager()) {
     DVLOG(1) << "Skipping initialization for tests due to missing components.";
     return;
   }
 
-  // Shutdown the UserCloudPolicyManager when the user signs out. We start
+  // Shutdown the CloudPolicyManager when the user signs out. We start
   // observing the IdentityManager here because we don't want to get signout
   // notifications until after the profile has started initializing
   // (http://crbug.com/316229).
@@ -113,7 +124,7 @@ void UserPolicySigninService::InitializeOnProfileReady(Profile* profile) {
   AccountId account_id = AccountIdFromAccountInfo(
       identity_manager()->GetPrimaryAccountInfo(consent_level()));
   if (!CanApplyPolicies(/*check_for_refresh_token=*/false)) {
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   } else {
     InitializeForSignedInUser(account_id,
                               profile->GetDefaultStoragePartition()
@@ -128,7 +139,33 @@ bool UserPolicySigninService::CanApplyPolicies(bool check_for_refresh_token) {
   }
 
   return (profile_can_be_managed_for_testing_ ||
-          chrome::enterprise_util::ProfileCanBeManaged(profile_));
+          enterprise_util::ProfileCanBeManaged(profile_));
+}
+
+void UserPolicySigninService::InitializeCloudPolicyManager(
+    const AccountId& account_id,
+    std::unique_ptr<CloudPolicyClient> client) {
+  UserPolicySigninServiceBase::InitializeCloudPolicyManager(account_id,
+                                                            std::move(client));
+  // Triggers the initialization of user remote commands service.
+  auto* remote_command_service =
+      enterprise_commands::UserRemoteCommandsServiceFactory::GetForProfile(
+          profile_);
+  if (remote_command_service) {
+    remote_command_service->Init();
+  }
+}
+
+CloudPolicyClient::DeviceDMTokenCallback
+UserPolicySigninService::GetDeviceDMTokenIfAffiliatedCallback() {
+  if (device_dm_token_callback_for_testing_) {
+    return device_dm_token_callback_for_testing_;
+  }
+  return base::BindRepeating(&GetDeviceDMTokenIfAffiliated);
+}
+
+std::string UserPolicySigninService::GetProfileId() {
+  return ::policy::GetProfileId(profile_);
 }
 
 base::TimeDelta UserPolicySigninService::GetTryRegistrationDelay() {
@@ -162,7 +199,7 @@ void UserPolicySigninService::UpdateLastPolicyCheckTime() {
 }
 
 signin::ConsentLevel UserPolicySigninService::GetConsentLevelForRegistration() {
-  return signin::ConsentLevel::kSync;
+  return signin::ConsentLevel::kSignin;
 }
 
 }  // namespace policy

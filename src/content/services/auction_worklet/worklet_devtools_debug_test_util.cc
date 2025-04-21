@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/341324165): Fix and remove.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/services/auction_worklet/worklet_devtools_debug_test_util.h"
 
@@ -52,7 +57,8 @@ TestDevToolsAgentClient::TestDevToolsAgentClient(
                                 session_.BindNewEndpointAndPassReceiver(),
                                 io_session_.BindNewPipeAndPassReceiver(),
                                 nullptr, use_binary_protocol_,
-                                /*client_is_trusted=*/true, session_id_);
+                                /*client_is_trusted=*/true, session_id_,
+                                /*session_waits_for_debugger=*/false);
 }
 
 TestDevToolsAgentClient::~TestDevToolsAgentClient() = default;
@@ -159,7 +165,7 @@ void TestDevToolsAgentClient::LogEvent(
 
   // Now make it into a base::Value, to make it easy to look stuff up in it,
   // and queue it.
-  absl::optional<base::Value> val = base::JSONReader::Read(payload_json);
+  std::optional<base::Value> val = base::JSONReader::Read(payload_json);
   CHECK(val.has_value());
   Event event;
   event.type = type;

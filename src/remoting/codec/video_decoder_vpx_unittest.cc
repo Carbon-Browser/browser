@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,16 +18,18 @@ class VideoDecoderVpxTest : public testing::Test {
   std::unique_ptr<VideoEncoderVpx> encoder_;
   std::unique_ptr<VideoDecoderVpx> decoder_;
 
-  VideoDecoderVpxTest() : encoder_(VideoEncoderVpx::CreateForVP8()),
-                          decoder_(VideoDecoderVpx::CreateForVP8()) {
-  }
+  VideoDecoderVpxTest()
+      : encoder_(VideoEncoderVpx::CreateForVP8()),
+        decoder_(VideoDecoderVpx::CreateForVP8()) {}
 
-  void TestGradient(int screen_width, int screen_height,
-                    double max_error_limit, double mean_error_limit) {
+  void TestGradient(int screen_width,
+                    int screen_height,
+                    double max_error_limit,
+                    double mean_error_limit) {
     TestVideoEncoderDecoderGradient(
         encoder_.get(), decoder_.get(),
-        webrtc::DesktopSize(screen_width, screen_height),
-        max_error_limit, mean_error_limit);
+        webrtc::DesktopSize(screen_width, screen_height), max_error_limit,
+        mean_error_limit);
   }
 };
 

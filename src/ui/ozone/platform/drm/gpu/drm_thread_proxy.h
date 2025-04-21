@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/ozone/platform/drm/gpu/drm_thread.h"
 #include "ui/ozone/platform/drm/mojom/device_cursor.mojom.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 #include "ui/ozone/public/hardware_capabilities.h"
 #include "ui/ozone/public/overlay_surface_candidate.h"
 
@@ -93,6 +95,9 @@ class DrmThreadProxy {
 
   bool WaitUntilDrmThreadStarted();
   scoped_refptr<base::SingleThreadTaskRunner> GetDrmThreadTaskRunner();
+
+  // Passes a DRM modifiers filter through to the DRM thread.
+  void SetDrmModifiersFilter(std::unique_ptr<DrmModifiersFilter> filter);
 
  private:
   DrmThread drm_thread_;

@@ -1,18 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_POLICY_CLOUD_USER_POLICY_SIGNIN_SERVICE_MOBILE_H_
 #define CHROME_BROWSER_POLICY_CLOUD_USER_POLICY_SIGNIN_SERVICE_MOBILE_H_
 
-#include <memory>
-#include <string>
-#include <vector>
-
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "components/policy/core/browser/cloud/user_policy_signin_service_base.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -28,8 +25,6 @@ class SharedURLLoaderFactory;
 }
 
 namespace policy {
-
-class CloudPolicyClientRegistrationHelper;
 
 // A specialization of UserPolicySigninServiceBase for Android.
 class UserPolicySigninService : public UserPolicySigninServiceBase,
@@ -50,7 +45,7 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
 
   // Overridden from UserPolicySigninServiceForProfile to cancel the pending
   // delayed registration.
-  void ShutdownUserCloudPolicyManager() override;
+  void ShutdownCloudPolicyManager() override;
 
   // signin::IdentityManager::Observer implementation:
   void OnPrimaryAccountChanged(
@@ -58,6 +53,7 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
 
   // ProfileManagerObserver implementation.
   void OnProfileAdded(Profile* profile) override;
+  void OnProfileManagerDestroying() override;
 
   void set_profile_can_be_managed_for_testing(bool can_be_managed) {
     profile_can_be_managed_for_testing_ = can_be_managed;
@@ -72,6 +68,12 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
   void UpdateLastPolicyCheckTime() override;
   signin::ConsentLevel GetConsentLevelForRegistration() override;
   bool CanApplyPolicies(bool check_for_refresh_token) override;
+  void InitializeCloudPolicyManager(
+      const AccountId& account_id,
+      std::unique_ptr<CloudPolicyClient> client) override;
+  CloudPolicyClient::DeviceDMTokenCallback
+  GetDeviceDMTokenIfAffiliatedCallback() override;
+  std::string GetProfileId() override;
 
   // Initializes the UserPolicySigninService once its owning Profile becomes
   // ready. If the Profile has a signed-in account associated with it at startup
@@ -84,15 +86,14 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
   // attributes entry.
   bool profile_can_be_managed_for_testing_ = false;
 
-  std::unique_ptr<CloudPolicyClientRegistrationHelper> registration_helper_;
+  base::ScopedObservation<ProfileManager, ProfileManagerObserver>
+      profile_manager_observation_{this};
 
   // The PrefService associated with the profile.
   raw_ptr<PrefService> profile_prefs_;
 
   // Parent profile for this service.
   raw_ptr<Profile> profile_;
-
-  base::WeakPtrFactory<UserPolicySigninService> weak_factory_{this};
 };
 
 }  // namespace policy

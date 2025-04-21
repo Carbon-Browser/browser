@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_PAINT_SKOTTIE_FRAME_DATA_PROVIDER_H_
 #define CC_PAINT_SKOTTIE_FRAME_DATA_PROVIDER_H_
 
+#include <optional>
+#include <string_view>
+
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece.h"
 #include "cc/paint/paint_export.h"
 #include "cc/paint/skottie_frame_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace cc {
@@ -64,9 +65,9 @@ class CC_PAINT_EXPORT SkottieFrameDataProvider {
   // their images if desired. May be null if the asset didn't have dimensions
   // specified in the Lottie file.
   virtual scoped_refptr<ImageAsset> LoadImageAsset(
-      base::StringPiece resource_id,
+      std::string_view resource_id,
       const base::FilePath& resource_path,
-      const absl::optional<gfx::Size>& size) = 0;
+      const std::optional<gfx::Size>& size) = 0;
 };
 
 }  // namespace cc

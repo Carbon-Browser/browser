@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 
 #include <memory>
 
-#include "chrome/browser/chromeos/fileapi/file_system_backend_delegate.h"
+#include "chrome/browser/ash/fileapi/file_system_backend_delegate.h"
 
 namespace arc {
 
-// Delegate implementation of the some methods in chromeos::FileSystemBackend
+// Delegate implementation of the some methods in ash::FileSystemBackend
 // for ARC content file system.
 class ArcContentFileSystemBackendDelegate
-    : public chromeos::FileSystemBackendDelegate {
+    : public ash::FileSystemBackendDelegate {
  public:
   ArcContentFileSystemBackendDelegate();
 
@@ -40,8 +40,6 @@ class ArcContentFileSystemBackendDelegate
       storage::FileSystemContext* context) override;
   storage::WatcherManager* GetWatcherManager(
       storage::FileSystemType type) override;
-  void GetRedirectURLForContents(const storage::FileSystemURL& url,
-                                 storage::URLCallback callback) override;
 
  private:
   std::unique_ptr<storage::AsyncFileUtil> async_file_util_;

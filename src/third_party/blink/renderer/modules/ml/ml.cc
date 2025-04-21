@@ -1,91 +1,141 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/ml/ml.h"
 
-#include "components/ml/mojom/web_platform_model.mojom-blink.h"
+#include "services/webnn/public/mojom/webnn_context_provider.mojom-blink-forward.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_context_options.h"
-#include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_ml_device_type.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_ml_power_preference.h"
+#include "third_party/blink/renderer/modules/ml/ml_context.h"
+#include "third_party/blink/renderer/modules/ml/webnn/ml_error.h"
+#include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 
 namespace blink {
 
 namespace {
 
-using ml::model_loader::mojom::blink::CreateModelLoaderOptionsPtr;
-using ml::model_loader::mojom::blink::MLService;
+webnn::mojom::blink::CreateContextOptions::Device ConvertBlinkDeviceTypeToMojo(
+    const V8MLDeviceType& device_type_blink) {
+  switch (device_type_blink.AsEnum()) {
+    case V8MLDeviceType::Enum::kCpu:
+      return webnn::mojom::blink::CreateContextOptions::Device::kCpu;
+    case V8MLDeviceType::Enum::kGpu:
+      return webnn::mojom::blink::CreateContextOptions::Device::kGpu;
+    case V8MLDeviceType::Enum::kNpu:
+      return webnn::mojom::blink::CreateContextOptions::Device::kNpu;
+  }
+}
+
+webnn::mojom::blink::CreateContextOptions::PowerPreference
+ConvertBlinkPowerPreferenceToMojo(
+    const V8MLPowerPreference& power_preference_blink) {
+  switch (power_preference_blink.AsEnum()) {
+    case V8MLPowerPreference::Enum::kDefault:
+      return webnn::mojom::blink::CreateContextOptions::PowerPreference::
+          kDefault;
+    case V8MLPowerPreference::Enum::kLowPower:
+      return webnn::mojom::blink::CreateContextOptions::PowerPreference::
+          kLowPower;
+    case V8MLPowerPreference::Enum::kHighPerformance:
+      return webnn::mojom::blink::CreateContextOptions::PowerPreference::
+          kHighPerformance;
+  }
+}
 
 }  // namespace
 
 ML::ML(ExecutionContext* execution_context)
-    : execution_context_(execution_context),
-      remote_service_(execution_context_.Get()) {}
-
-void ML::CreateModelLoader(ScriptState* script_state,
-                           ExceptionState& exception_state,
-                           CreateModelLoaderOptionsPtr options,
-                           MLService::CreateModelLoaderCallback callback) {
-  if (!BootstrapMojoConnectionIfNeeded(script_state, exception_state)) {
-    // An exception has already been thrown in
-    // `BootstrapMojoConnectionIfNeeded()`.
-    return;
-  }
-  remote_service_->CreateModelLoader(std::move(options), std::move(callback));
-}
+    : ExecutionContextClient(execution_context),
+      webnn_context_provider_(execution_context) {}
 
 void ML::Trace(Visitor* visitor) const {
-  visitor->Trace(execution_context_);
-  visitor->Trace(remote_service_);
-
+  visitor->Trace(webnn_context_provider_);
+  visitor->Trace(pending_resolvers_);
+  ExecutionContextClient::Trace(visitor);
   ScriptWrappable::Trace(visitor);
 }
 
-ScriptPromise ML::createContext(ScriptState* script_state,
-                                MLContextOptions* option,
-                                ExceptionState& exception_state) {
+ScriptPromise<MLContext> ML::createContext(ScriptState* script_state,
+                                           MLContextOptions* options,
+                                           ExceptionState& exception_state) {
+  ScopedMLTrace scoped_trace("ML::createContext");
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Invalid script state");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<MLContext>>(
+      script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
 
-  // Notice that currently, we just create the context in the renderer. In the
-  // future we may add backend query ability to check whether a context is
-  // supportable or not. At that time, this function will be truly asynced.
-  auto* ml_context = MakeGarbageCollected<MLContext>(
-      option->devicePreference(), option->powerPreference(),
-      option->modelFormat(), option->numThreads(), this);
-  resolver->Resolve(ml_context);
+  // Ensure `resolver` is rejected if the `CreateWebNNContext()` callback isn't
+  // run due to a WebNN service connection error.
+  pending_resolvers_.insert(resolver);
+
+  EnsureWebNNServiceConnection();
+
+  webnn_context_provider_->CreateWebNNContext(
+      webnn::mojom::blink::CreateContextOptions::New(
+          ConvertBlinkDeviceTypeToMojo(options->deviceType()),
+          ConvertBlinkPowerPreferenceToMojo(options->powerPreference())),
+      WTF::BindOnce(
+          [](ML* ml, ScriptPromiseResolver<MLContext>* resolver,
+             MLContextOptions* options,
+             webnn::mojom::blink::CreateContextResultPtr result) {
+            ml->pending_resolvers_.erase(resolver);
+
+            ExecutionContext* context = resolver->GetExecutionContext();
+            if (!context) {
+              return;
+            }
+
+            if (result->is_error()) {
+              const webnn::mojom::blink::Error& create_context_error =
+                  *result->get_error();
+              resolver->RejectWithDOMException(
+                  WebNNErrorCodeToDOMExceptionCode(create_context_error.code),
+                  create_context_error.message);
+              return;
+            }
+
+            resolver->Resolve(MakeGarbageCollected<MLContext>(
+                context, options->deviceType(), options->powerPreference(),
+                std::move(result->get_success())));
+          },
+          WrapPersistent(this), WrapPersistent(resolver),
+          WrapPersistent(options)));
 
   return promise;
 }
 
-bool ML::BootstrapMojoConnectionIfNeeded(ScriptState* script_state,
-                                         ExceptionState& exception_state) {
-  // We need to do the following check because the execution context of this
-  // navigator may be invalid (e.g. the frame is detached).
-  if (!script_state->ContextIsValid()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "The execution context is invalid");
-    return false;
+void ML::OnWebNNServiceConnectionError() {
+  webnn_context_provider_.reset();
+
+  for (const auto& resolver : pending_resolvers_) {
+    resolver->RejectWithDOMException(DOMExceptionCode::kUnknownError,
+                                     "WebNN service connection error.");
   }
-  // Note that we do not use `ExecutionContext::From(script_state)` because
-  // the ScriptState passed in may not be guaranteed to match the execution
-  // context associated with this navigator, especially with
-  // cross-browsing-context calls.
-  if (!remote_service_.is_bound()) {
-    execution_context_->GetBrowserInterfaceBroker().GetInterface(
-        remote_service_.BindNewPipeAndPassReceiver(
-            execution_context_->GetTaskRunner(TaskType::kInternalDefault)));
+  pending_resolvers_.clear();
+}
+
+void ML::EnsureWebNNServiceConnection() {
+  if (webnn_context_provider_.is_bound()) {
+    return;
   }
-  return true;
+  GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
+      webnn_context_provider_.BindNewPipeAndPassReceiver(
+          GetExecutionContext()->GetTaskRunner(TaskType::kMachineLearning)));
+  // Bind should always succeed because ml.idl is gated on the same feature flag
+  // as `WebNNContextProvider`.
+  CHECK(webnn_context_provider_.is_bound());
+  webnn_context_provider_.set_disconnect_handler(WTF::BindOnce(
+      &ML::OnWebNNServiceConnectionError, WrapWeakPersistent(this)));
 }
 
 }  // namespace blink

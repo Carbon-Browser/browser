@@ -32,6 +32,7 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_PLUGIN_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_PLUGIN_H_
 
+#include "base/containers/span.h"
 #include "cc/paint/paint_canvas.h"
 #include "third_party/blink/public/common/page/drag_operation.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-shared.h"
@@ -135,7 +136,7 @@ class WebPlugin {
   }
 
   virtual void DidReceiveResponse(const WebURLResponse&) = 0;
-  virtual void DidReceiveData(const char* data, size_t data_length) = 0;
+  virtual void DidReceiveData(base::span<const char> data) = 0;
   virtual void DidFinishLoading() = 0;
   virtual void DidFailLoading(const WebURLError&) = 0;
 
@@ -149,13 +150,17 @@ class WebPlugin {
     return false;
   }
 
-  // Sets up printing with the specified printParams. Returns the number of
-  // pages to be printed at these settings.
+  // Begins a print session with the given `print_params`. A call to
+  // `PrintPage()` can only be made after after a successful call to
+  // `PrintBegin()`. Returns the number of pages required for the print output.
+  // A returned value of 0 indicates failure.
   virtual int PrintBegin(const WebPrintParams& print_params) { return 0; }
 
-  virtual void PrintPage(int page_number, cc::PaintCanvas* canvas) {}
+  // Prints the page specified by `page_index`, using the parameters passed to
+  // `PrintBegin()`, into `canvas`.
+  virtual void PrintPage(int page_index, cc::PaintCanvas* canvas) {}
 
-  // Ends the print operation.
+  // Ends the print session. Further calls to `PrintPages()` will fail.
   virtual void PrintEnd() {}
 
   virtual bool HasSelection() const { return false; }
@@ -243,10 +248,6 @@ class WebPlugin {
   virtual bool CanRotateView() { return false; }
   // Rotates the plugin's view of its content.
   virtual void RotateView(RotationType type) {}
-  // Check whether a plugin can be interacted with. A positive return value
-  // means the plugin has not loaded and hence cannot be interacted with.
-  // The plugin could, however, load successfully later.
-  virtual bool IsPlaceholder() { return true; }
   // Check whether a plugin failed to load, with there being no possibility of
   // it loading later.
   virtual bool IsErrorPlaceholder() { return false; }

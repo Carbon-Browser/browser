@@ -15,10 +15,10 @@ SubscriptionCollection --> ThreadPool:
 ThreadPool -> SubscriptionCollection: HasElemhideAllowingFilter()
 SubscriptionCollection --> ThreadPool:
 opt if document and css injection not allowlisted
-ThreadPool -> SubscriptionCollection: GetElementHideSelectors()
+ThreadPool -> SubscriptionCollection: GetElementHideData()
 SubscriptionCollection --> ThreadPool:
-ThreadPool -> SubscriptionCollection: GetElementHideEmulationSelectors()
-SubscriptionCollection --> ThreadPool: Injected script will be generated for extended\nselectors like -abp-has and -abp-contains.\nSometimes the standard CSS it's powerful enough\nto hide something.
+ThreadPool -> SubscriptionCollection: GetElementHideEmulationData()
+SubscriptionCollection --> ThreadPool: Injected script will be generated for extended\nselectors like -abp-has and -abp-contains.\nSometimes the standard CSS isn't powerful enough\nto hide something.
 end
 opt if document not allowlisted
 ThreadPool -> SubscriptionCollection: GenerateSnippetsJson()

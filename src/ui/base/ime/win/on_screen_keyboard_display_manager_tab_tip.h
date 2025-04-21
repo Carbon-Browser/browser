@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN)
 
   void NotifyKeyboardVisible(const gfx::Rect& occluded_rect);
   void NotifyKeyboardHidden();
+  bool IsKeyboardAttachedToDevice(HWND hwnd);
 
   std::unique_ptr<OnScreenKeyboardDetector> keyboard_detector_;
   base::ObserverList<VirtualKeyboardControllerObserver, false>::Unchecked

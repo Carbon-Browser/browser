@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/keyboard/keyboard_controller_impl.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -20,13 +21,13 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/test/display_manager_test_api.h"
@@ -121,7 +122,7 @@ class TestContainerBehavior : public keyboard::ContainerBehavior {
   gfx::Rect occluded_bounds_;
   gfx::Rect draggable_area_;
   gfx::Rect area_to_remain_on_screen_;
-  absl::optional<gfx::Rect> adjusted_bounds_in_screen_;
+  std::optional<gfx::Rect> adjusted_bounds_in_screen_;
 };
 
 class KeyboardControllerImplTest : public AshTestBase {
@@ -184,15 +185,16 @@ class KeyboardControllerImplTest : public AshTestBase {
   }
 
   void SetKeyboardConfigToPref(const base::Value& value) {
-    base::Value features(base::Value::Type::DICTIONARY);
-    features.SetKey("auto_complete_enabled", value.Clone());
-    features.SetKey("auto_correct_enabled", value.Clone());
-    features.SetKey("handwriting_enabled", value.Clone());
-    features.SetKey("spell_check_enabled", value.Clone());
-    features.SetKey("voice_input_enabled", value.Clone());
+    auto features = base::Value::Dict()
+                        .Set("auto_complete_enabled", value.Clone())
+                        .Set("auto_correct_enabled", value.Clone())
+                        .Set("handwriting_enabled", value.Clone())
+                        .Set("spell_check_enabled", value.Clone())
+                        .Set("voice_input_enabled", value.Clone());
     PrefService* prefs =
         Shell::Get()->session_controller()->GetLastActiveUserPrefService();
-    prefs->Set(prefs::kAccessibilityVirtualKeyboardFeatures, features);
+    prefs->SetDict(prefs::kAccessibilityVirtualKeyboardFeatures,
+                   std::move(features));
   }
 
   void VerifyKeyboardConfig(const KeyboardConfig& config, bool expected_value) {
@@ -269,7 +271,7 @@ TEST_F(KeyboardControllerImplTest,
   keyboard_controller()->SetEnableFlag(KeyboardEnableFlag::kExtensionEnabled);
 
   // Set the policy for virtual keyboard features.
-  base::Value features(base::Value::Type::DICTIONARY);
+  base::Value features(base::Value::Type::DICT);
   PrefService* prefs =
       Shell::Get()->session_controller()->GetLastActiveUserPrefService();
   prefs->Set(prefs::kAccessibilityVirtualKeyboardFeatures, features);
@@ -513,7 +515,7 @@ TEST_F(KeyboardControllerImplTest, VisualBoundsInMultipleDisplays) {
   keyboard_ui_controller()->ShowKeyboardInDisplay(
       display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
           .GetSecondaryDisplay());
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   gfx::Rect root_bounds = keyboard_ui_controller()->visual_bounds_in_root();
   EXPECT_EQ(0, root_bounds.x());
@@ -531,7 +533,7 @@ TEST_F(KeyboardControllerImplTest, OccludedBoundsInMultipleDisplays) {
   keyboard_ui_controller()->ShowKeyboardInDisplay(
       display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
           .GetSecondaryDisplay());
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   gfx::Rect screen_bounds =
       keyboard_ui_controller()->GetWorkspaceOccludedBoundsInScreen();
@@ -688,7 +690,7 @@ TEST_F(KeyboardControllerImplTest, ShowKeyboardInSecondaryDisplay) {
   keyboard_ui_controller()->ShowKeyboardInDisplay(GetSecondaryDisplay());
   EXPECT_EQ(GetSecondaryRootWindow(),
             keyboard_ui_controller()->GetRootWindow());
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
   EXPECT_TRUE(
       !keyboard_ui_controller()->GetKeyboardWindow()->bounds().IsEmpty());
 }
@@ -703,7 +705,7 @@ TEST_F(KeyboardControllerImplTest, SwipeUpToShowHotSeat) {
   keyboard_controller()->SetEnableFlag(KeyboardEnableFlag::kExtensionEnabled);
 
   keyboard_ui_controller()->ShowKeyboard(/* lock */ false);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   gfx::Rect display_bounds =
       display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
@@ -715,7 +717,7 @@ TEST_F(KeyboardControllerImplTest, SwipeUpToShowHotSeat) {
                                              num_scroll_steps);
 
   // Keyboard should hide and gesture should forward to the shelf.
-  ASSERT_TRUE(keyboard::WaitUntilHidden());
+  ASSERT_TRUE(keyboard::test::WaitUntilHidden());
   EXPECT_EQ(HotseatState::kExtended, GetShelfLayoutManager()->hotseat_state());
 }
 
@@ -729,7 +731,7 @@ TEST_F(KeyboardControllerImplTest, FlingUpToShowOverviewMode) {
   keyboard_controller()->SetEnableFlag(KeyboardEnableFlag::kExtensionEnabled);
 
   keyboard_ui_controller()->ShowKeyboard(/* lock */ false);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   gfx::Rect display_bounds =
       display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
@@ -745,7 +747,7 @@ TEST_F(KeyboardControllerImplTest, FlingUpToShowOverviewMode) {
                                              scroll_steps);
 
   // Keyboard should hide and gesture should forward to the shelf.
-  ASSERT_TRUE(keyboard::WaitUntilHidden());
+  ASSERT_TRUE(keyboard::test::WaitUntilHidden());
   EXPECT_EQ(HotseatState::kShownHomeLauncher,
             GetShelfLayoutManager()->hotseat_state());
 }
@@ -758,7 +760,7 @@ TEST_F(KeyboardControllerImplTest, SwipeUpDoesntHideKeyboardInClamshellMode) {
   keyboard_controller()->SetEnableFlag(KeyboardEnableFlag::kExtensionEnabled);
 
   keyboard_ui_controller()->ShowKeyboard(/* lock */ false);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   gfx::Rect display_bounds =
       display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
@@ -769,7 +771,45 @@ TEST_F(KeyboardControllerImplTest, SwipeUpDoesntHideKeyboardInClamshellMode) {
   GetEventGenerator()->GestureScrollSequence(start, end, time_delta,
                                              num_scroll_steps);
 
-  EXPECT_FALSE(keyboard::IsKeyboardHiding());
+  EXPECT_FALSE(keyboard::test::IsKeyboardHiding());
+}
+
+TEST_F(KeyboardControllerImplTest, RecordsKeyRepeatSettings) {
+  // Initially expect no user preferences recorded.
+  base::HistogramTester histogram_tester;
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatDelay", /*count=*/0u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatEnabled", /*count=*/0u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatInterval", /*count=*/0u);
+
+  SimulateUserLogin("user1");
+
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatDelay", /*count=*/1u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatEnabled", /*count=*/1u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatInterval", /*count=*/1u);
+
+  SimulateUserLogin("user2");
+
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatDelay", /*count=*/2u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatEnabled", /*count=*/2u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatInterval", /*count=*/2u);
+
+  SimulateUserLogin("user1");
+
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatDelay", /*count=*/2u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatEnabled", /*count=*/2u);
+  histogram_tester.ExpectTotalCount(
+      "ChromeOS.Settings.Device.KeyboardAutoRepeatInterval", /*count=*/2u);
 }
 
 }  // namespace ash

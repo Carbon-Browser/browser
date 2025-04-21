@@ -28,6 +28,7 @@
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_options.h"
 #include "third_party/blink/renderer/core/html/parser/html_tokenizer.h"
+#include "third_party/blink/renderer/core/html_element_lookup_trie.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding_registry.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -42,12 +43,12 @@ HTMLMetaCharsetParser::HTMLMetaCharsetParser()
 
 HTMLMetaCharsetParser::~HTMLMetaCharsetParser() = default;
 
-bool HTMLMetaCharsetParser::ProcessMeta() {
-  const HTMLToken::AttributeList& token_attributes = token_.Attributes();
+bool HTMLMetaCharsetParser::ProcessMeta(const HTMLToken& token) {
+  const HTMLToken::AttributeList& token_attributes = token.Attributes();
   HTMLAttributeList attributes;
   for (const HTMLToken::Attribute& token_attribute : token_attributes) {
     String attribute_name = token_attribute.NameAttemptStaticStringCreation();
-    String attribute_value = token_attribute.Value8BitIfNecessary();
+    String attribute_value = token_attribute.Value();
     attributes.push_back(std::make_pair(attribute_name, attribute_value));
   }
 
@@ -59,8 +60,7 @@ bool HTMLMetaCharsetParser::ProcessMeta() {
 // is over.
 static const int kBytesToCheckUnconditionally = 1024;
 
-bool HTMLMetaCharsetParser::CheckForMetaCharset(const char* data,
-                                                wtf_size_t length) {
+bool HTMLMetaCharsetParser::CheckForMetaCharset(base::span<const char> data) {
   if (done_checking_)
     return true;
 
@@ -83,31 +83,32 @@ bool HTMLMetaCharsetParser::CheckForMetaCharset(const char* data,
   // are disallowed in <head>, we don't bail out until we've checked at least
   // bytesToCheckUnconditionally bytes of input.
 
-  input_.Append(SegmentedString(assumed_codec_->Decode(data, length)));
+  input_.Append(SegmentedString(assumed_codec_->Decode(base::as_bytes(data))));
 
-  while (tokenizer_->NextToken(input_, token_)) {
-    bool end = token_.GetType() == HTMLToken::kEndTag;
-    if (end || token_.GetType() == HTMLToken::kStartTag) {
-      String tag_name =
-          AttemptStaticStringCreation(token_.GetName(), kLikely8Bit);
-      if (!end) {
-        tokenizer_->UpdateStateFor(tag_name);
-        if (ThreadSafeMatch(tag_name, html_names::kMetaTag) && ProcessMeta()) {
+  while (HTMLToken* token = tokenizer_->NextToken(input_)) {
+    bool end = token->GetType() == HTMLToken::kEndTag;
+    if (end || token->GetType() == HTMLToken::kStartTag) {
+      const html_names::HTMLTag tag = token->GetName().IsEmpty()
+                                          ? html_names::HTMLTag::kUnknown
+                                          : LookupHtmlTag(token->GetName());
+      if (!end && tag != html_names::HTMLTag::kUnknown) {
+        tokenizer_->UpdateStateFor(tag);
+        if (tag == html_names::HTMLTag::kMeta && ProcessMeta(*token)) {
           done_checking_ = true;
           return true;
         }
       }
 
-      if (!ThreadSafeMatch(tag_name, html_names::kScriptTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kNoscriptTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kStyleTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kLinkTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kMetaTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kObjectTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kTitleTag) &&
-          !ThreadSafeMatch(tag_name, html_names::kBaseTag) &&
-          (end || !ThreadSafeMatch(tag_name, html_names::kHTMLTag)) &&
-          (end || !ThreadSafeMatch(tag_name, html_names::kHeadTag))) {
+      if (tag != html_names::HTMLTag::kScript &&
+          tag != html_names::HTMLTag::kNoscript &&
+          tag != html_names::HTMLTag::kStyle &&
+          tag != html_names::HTMLTag::kLink &&
+          tag != html_names::HTMLTag::kMeta &&
+          tag != html_names::HTMLTag::kObject &&
+          tag != html_names::HTMLTag::kTitle &&
+          tag != html_names::HTMLTag::kBase &&
+          (end || tag != html_names::HTMLTag::kHTML) &&
+          (end || tag != html_names::HTMLTag::kHead)) {
         in_head_section_ = false;
       }
     }
@@ -118,7 +119,7 @@ bool HTMLMetaCharsetParser::CheckForMetaCharset(const char* data,
       return true;
     }
 
-    token_.Clear();
+    token->Clear();
   }
 
   return false;

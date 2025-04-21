@@ -20,16 +20,6 @@ README.md
 =========
 This file.
 
-wpt.config.json
-===============
-The configuration file used when running WPTServe. Note that this file loads
-after wpt/config.default.json and this configuration gets merged onto it. When
-changing the ports (HTTP/S, WS/S), make sure to also:
-
-- update `WPT_HOST_AND_PORTS` in
-  `//third_party/blink/tools/blinkpy/web_tests/port/driver.py`
-- update WebTestContentBrowserClient::GetOriginsRequiringDedicatedProcess()
-
 checkout.sh
 ===========
 Running this script without arguments will remove the existing checkout
@@ -48,7 +38,7 @@ for self-signed CA. By default, WPTServe generates these files using the
 "openssl" command, but we check in pre-generated files to avoid "openssl"
 dependency.
 
-These certificates will expire in January 2025. Here is an instruction to
+These certificates will expire in February 2033. Here is an instruction to
 re-generate them:
 
 1. Make sure the following commands are in $PATH.
@@ -59,13 +49,10 @@ re-generate them:
  - sed
 2. Run update_certs.py
 3. Look at the "Not After" date in the output of the command, and update
-  "January 2025" in this document and expiration_date in wptserve.py to new
+  "February 2033" in this document and expiration_date in wptserve.py to new
   expiration date.
-4. Update certs/127.0.0.1.sxg.\*.
-  Please refer to
-  //third_party/blink/web_tests/http/tests/loading/sxg/resources/README.md
-5. git commit
-6. git cl upload, etc.
+4. git commit
+5. git cl upload, etc.
 
 Rolling in WPT
 ==============
@@ -104,7 +91,7 @@ Read instructions in WPT README:
 https://github.com/web-platform-tests/wpt/blob/master/README.md
 
 Also, check out the WPTServe Documentation
-(https://wptserve.readthedocs.org/en/latest/).
+(https://web-platform-tests.org/tools/wptserve/docs/).
 
 Note that editing /etc/hosts is not required for run_web_tests.py since
 content_shell is invoked with flags to map all \*.test domains to 127.0.0.1.

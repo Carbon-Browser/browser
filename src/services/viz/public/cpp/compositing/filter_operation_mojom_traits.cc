@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,11 +46,10 @@ viz::mojom::FilterType CCFilterTypeToMojo(
       return viz::mojom::FilterType::SATURATING_BRIGHTNESS;
     case cc::FilterOperation::ALPHA_THRESHOLD:
       return viz::mojom::FilterType::ALPHA_THRESHOLD;
-    case cc::FilterOperation::STRETCH:
-      return viz::mojom::FilterType::STRETCH;
+    case cc::FilterOperation::OFFSET:
+      return viz::mojom::FilterType::OFFSET;
   }
   NOTREACHED();
-  return viz::mojom::FilterType::FILTER_TYPE_LAST;
 }
 
 cc::FilterOperation::FilterType MojoFilterTypeToCC(
@@ -86,11 +85,10 @@ cc::FilterOperation::FilterType MojoFilterTypeToCC(
       return cc::FilterOperation::SATURATING_BRIGHTNESS;
     case viz::mojom::FilterType::ALPHA_THRESHOLD:
       return cc::FilterOperation::ALPHA_THRESHOLD;
-    case viz::mojom::FilterType::STRETCH:
-      return cc::FilterOperation::STRETCH;
+    case viz::mojom::FilterType::OFFSET:
+      return cc::FilterOperation::OFFSET;
   }
   NOTREACHED();
-  return cc::FilterOperation::FILTER_TYPE_LAST;
 }
 
 }  // namespace
@@ -129,10 +127,10 @@ bool StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation>::
       out->set_amount(data.amount());
       gfx::Point offset;
       SkColor4f drop_shadow_color;
-      if (!data.ReadDropShadowOffset(&offset) ||
+      if (!data.ReadOffset(&offset) ||
           !data.ReadDropShadowColor(&drop_shadow_color))
         return false;
-      out->set_drop_shadow_offset(offset);
+      out->set_offset(offset);
       out->set_drop_shadow_color(drop_shadow_color);
       return true;
     }
@@ -142,8 +140,7 @@ bool StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation>::
       if (!matrix.is_null()) {
         // Guaranteed by prior validation of the FilterOperation struct
         // because this array specifies a fixed size in the mojom.
-        DCHECK_EQ(matrix.size(), 20u);
-        out->set_matrix(base::make_span<20>(matrix));
+        out->set_matrix(*base::span(matrix).to_fixed_extent<20>());
       }
       return true;
     }
@@ -162,17 +159,17 @@ bool StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation>::
       return true;
     }
     case cc::FilterOperation::ALPHA_THRESHOLD: {
-      out->set_amount(data.amount());
-      out->set_outer_threshold(data.outer_threshold());
       cc::FilterOperation::ShapeRects shape;
       if (!data.ReadShape(&shape))
         return false;
       out->set_shape(shape);
       return true;
     }
-    case cc::FilterOperation::STRETCH: {
-      out->set_amount(data.amount());
-      out->set_outer_threshold(data.outer_threshold());
+    case cc::FilterOperation::OFFSET: {
+      gfx::Point offset;
+      if (!data.ReadOffset(&offset))
+        return false;
+      out->set_offset(offset);
       return true;
     }
   }

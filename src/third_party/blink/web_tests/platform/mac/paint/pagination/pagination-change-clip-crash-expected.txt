@@ -10,16 +10,16 @@
       ]
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='background'",
+      "name": "LayoutBlockFlow DIV id='background'",
       "position": [8, 426],
       "bounds": [769, 300],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 600]
+      "bounds": [15, 600],
+      "contentsOpaque": true
     }
   ]
 }

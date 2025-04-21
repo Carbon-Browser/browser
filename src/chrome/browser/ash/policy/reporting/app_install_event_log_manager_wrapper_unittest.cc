@@ -1,19 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/reporting/app_install_event_log_manager_wrapper.h"
 
 #include "ash/components/arc/arc_prefs.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/policy/reporting/arc_app_install_event_log.h"
+#include "chrome/browser/ash/policy/reporting/arc_app_install_event_log_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -54,13 +56,17 @@ class AppInstallEventLogManagerWrapperTestable
   using AppInstallEventLogManagerWrapper::Init;
 
   // AppInstallEventLogManagerWrapper:
-  MOCK_METHOD0(CreateManager, void());
-  MOCK_METHOD0(DestroyManager, void());
+  MOCK_METHOD(void, CreateManager, (), (override));
+  MOCK_METHOD(void, DestroyManager, (), (override));
+  MOCK_METHOD(void, CreateEncryptedReporter, (), (override));
+  MOCK_METHOD(void, DestroyEncryptedReporter, (), (override));
 };
 
 }  // namespace
 
-class AppInstallEventLogManagerWrapperTest : public testing::Test {
+class AppInstallEventLogManagerWrapperTest
+    : public testing::Test,
+      public ::testing::WithParamInterface<bool> {
  protected:
   AppInstallEventLogManagerWrapperTest()
       : log_file_path_(profile_.GetPath().Append(kLogFileName)) {}
@@ -71,7 +77,16 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
       const AppInstallEventLogManagerWrapperTest&) = delete;
 
   // testing::Test:
-  void SetUp() override { app_list_.Append(kPackageName); }
+  void SetUp() override {
+    app_list_.Append(kPackageName);
+    if (encrypted_reporting_feature_enabled()) {
+      scoped_feature_list_.InitAndEnableFeature(
+          policy::kUseEncryptedReportingPipelineToReportArcAppInstallEvents);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          policy::kUseEncryptedReportingPipelineToReportArcAppInstallEvents);
+    }
+  }
 
   void PopulateLogFileAndPrefs() {
     ArcAppInstallEventLog log(log_file_path_);
@@ -80,9 +95,10 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
     event.set_event_type(em::AppInstallReportLogEvent::SUCCESS);
     log.Add(kPackageName, event);
     log.Store();
-    profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsRequested,
-                             app_list_);
-    profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsPending, app_list_);
+    profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsRequested,
+                                 app_list_.Clone());
+    profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsPending,
+                                 app_list_.Clone());
   }
 
   void FlushPendingTasks() {
@@ -113,9 +129,9 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
 
   void VerifyLogFileAndPrefsNotCleared() {
     EXPECT_TRUE(base::PathExists(log_file_path_));
-    EXPECT_EQ(app_list_, *profile_.GetPrefs()->GetList(
+    EXPECT_EQ(app_list_, profile_.GetPrefs()->GetList(
                              arc::prefs::kArcPushInstallAppsRequested));
-    EXPECT_EQ(app_list_, *profile_.GetPrefs()->GetList(
+    EXPECT_EQ(app_list_, profile_.GetPrefs()->GetList(
                              arc::prefs::kArcPushInstallAppsPending));
   }
 
@@ -129,15 +145,18 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
                     ->IsDefaultValue());
   }
 
+  bool encrypted_reporting_feature_enabled() { return GetParam(); }
+
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
 
   const base::FilePath log_file_path_;
-  base::ListValue app_list_;
+  base::Value::List app_list_;
 
   std::unique_ptr<AppInstallEventLogManagerWrapperTestable> wrapper_;
 
   scoped_refptr<base::SequencedTaskRunner> log_task_runner_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Populate a log file and the prefs holding the lists of apps for which
@@ -145,15 +164,20 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
 // Create a wrapper. Verify that a manager is created and neither the log file
 // nor the prefs are cleared. Then, destroy the wrapper. Verify that neither the
 // log file nor the prefs are cleared.
-TEST_F(AppInstallEventLogManagerWrapperTest, EnableCreate) {
+TEST_P(AppInstallEventLogManagerWrapperTest, EnableCreate) {
   PopulateLogFileAndPrefs();
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   true);
 
   CreateWrapper();
 
-  EXPECT_CALL(*wrapper_, CreateManager());
-  EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter());
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter()).Times(0);
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager());
+    EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  }
   InitWrapper();
   VerifyLogFileAndPrefsNotCleared();
   Mock::VerifyAndClearExpectations(&wrapper_);
@@ -166,15 +190,20 @@ TEST_F(AppInstallEventLogManagerWrapperTest, EnableCreate) {
 // push-install has been requested and is still pending. Disable reporting.
 // Create a wrapper. Verify that no manager is created and the log file and the
 // prefs are cleared.
-TEST_F(AppInstallEventLogManagerWrapperTest, DisableCreate) {
+TEST_P(AppInstallEventLogManagerWrapperTest, DisableCreate) {
   PopulateLogFileAndPrefs();
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   false);
 
   CreateWrapper();
 
-  EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
-  EXPECT_CALL(*wrapper_, DestroyManager());
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter());
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyManager());
+  }
   InitWrapper();
   VerifyLogFileAndPrefsCleared();
 }
@@ -184,19 +213,29 @@ TEST_F(AppInstallEventLogManagerWrapperTest, DisableCreate) {
 // the prefs holding the lists of apps for which push-install has been requested
 // and is still pending. Then, destroy the wrapper. Verify that neither the log
 // file nor the prefs are cleared.
-TEST_F(AppInstallEventLogManagerWrapperTest, CreateEnable) {
+TEST_P(AppInstallEventLogManagerWrapperTest, CreateEnable) {
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   false);
 
   CreateWrapper();
 
-  EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
-  EXPECT_CALL(*wrapper_, DestroyManager());
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter());
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyManager());
+  }
   InitWrapper();
   Mock::VerifyAndClearExpectations(&wrapper_);
 
-  EXPECT_CALL(*wrapper_, CreateManager());
-  EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter());
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter()).Times(0);
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager());
+    EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  }
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   true);
   Mock::VerifyAndClearExpectations(&wrapper_);
@@ -213,21 +252,31 @@ TEST_F(AppInstallEventLogManagerWrapperTest, CreateEnable) {
 // Create a wrapper. Verify that a manager is created and neither the log file
 // nor the prefs are cleared. Then, disable reporting. Verify that the manager
 // is destroyed and the log file and the prefs are cleared.
-TEST_F(AppInstallEventLogManagerWrapperTest, CreateDisable) {
+TEST_P(AppInstallEventLogManagerWrapperTest, CreateDisable) {
   PopulateLogFileAndPrefs();
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   true);
 
   CreateWrapper();
 
-  EXPECT_CALL(*wrapper_, CreateManager());
-  EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter());
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter()).Times(0);
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager());
+    EXPECT_CALL(*wrapper_, DestroyManager()).Times(0);
+  }
   InitWrapper();
   VerifyLogFileAndPrefsNotCleared();
   Mock::VerifyAndClearExpectations(&wrapper_);
 
-  EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
-  EXPECT_CALL(*wrapper_, DestroyManager());
+  if (encrypted_reporting_feature_enabled()) {
+    EXPECT_CALL(*wrapper_, CreateEncryptedReporter()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyEncryptedReporter());
+  } else {
+    EXPECT_CALL(*wrapper_, CreateManager()).Times(0);
+    EXPECT_CALL(*wrapper_, DestroyManager());
+  }
   profile_.GetPrefs()->SetBoolean(prefs::kArcAppInstallEventLoggingEnabled,
                                   false);
   Mock::VerifyAndClearExpectations(&wrapper_);
@@ -235,4 +284,7 @@ TEST_F(AppInstallEventLogManagerWrapperTest, CreateDisable) {
   VerifyLogFileAndPrefsCleared();
 }
 
+INSTANTIATE_TEST_SUITE_P(All,
+                         AppInstallEventLogManagerWrapperTest,
+                         testing::Bool());
 }  // namespace policy

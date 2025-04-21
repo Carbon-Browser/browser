@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """
@@ -8,8 +8,8 @@ described in Web IDL https://webidl.spec.whatwg.org/.
 Each rule class must inherit RuleBase.
 """
 
-from validator.framework import target
 from validator.framework import RuleBase
+from validator.framework import target
 
 
 class ForbiddenNullableDictionaryTypeForArguments(RuleBase):

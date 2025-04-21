@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ WebViewApkProcess* WebViewApkProcess::GetInstance() {
 // static
 // Must be called exactly once during the process startup.
 void WebViewApkProcess::Init() {
-  // TODO(crbug.com/1179303): Add check to assert this is only loaded by
+  // TODO(crbug.com/40749658): Add check to assert this is only loaded by
   // LibraryProcessType PROCESS_WEBVIEW_NONEMBEDDED.
 
   // This doesn't have to be thread safe, because it should only happen once on

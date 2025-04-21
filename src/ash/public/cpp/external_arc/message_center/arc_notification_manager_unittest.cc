@@ -1,6 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "ash/public/cpp/external_arc/message_center/arc_notification_manager.h"
 
 #include <map>
 #include <memory>
@@ -12,9 +14,10 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_notifications_instance.h"
 #include "ash/public/cpp/arc_app_id_provider.h"
-#include "ash/public/cpp/external_arc/message_center/arc_notification_manager.h"
 #include "ash/public/cpp/message_center/arc_notification_manager_delegate.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
+#include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -31,6 +34,10 @@ constexpr char kDummyNotificationKey[] = "DUMMY_NOTIFICATION_KEY";
 constexpr char kHistogramNameActionEnabled[] =
     "Arc.Notifications.ActionEnabled";
 constexpr char kHistogramNameStyle[] = "Arc.Notifications.Style";
+constexpr char kHistogramNameInlineReplyEnabled[] =
+    "Arc.Notifications.InlineReplyEnabled";
+constexpr char kHistogramNameIsCustomNotification[] =
+    "Arc.Notifications.IsCustomNotification";
 
 class TestArcAppIdProvider : public ArcAppIdProvider {
  public:
@@ -61,6 +68,10 @@ class MockMessageCenter : public message_center::FakeMessageCenter {
     visible_notifications_.insert(notification.get());
     std::string id = notification->id();
     owned_notifications_[id] = std::move(notification);
+
+    if (on_added_notification_callback_) {
+      on_added_notification_callback_.Run();
+    }
   }
 
   void RemoveNotification(const std::string& id, bool by_user) override {
@@ -77,7 +88,10 @@ class MockMessageCenter : public message_center::FakeMessageCenter {
     return visible_notifications_;
   }
 
-  void SetQuietMode(bool in_quiet_mode) override {
+  void SetQuietMode(
+      bool in_quiet_mode,
+      message_center::QuietModeSourceType type =
+          message_center::QuietModeSourceType::kUserAction) override {
     if (in_quiet_mode != in_quiet_mode_) {
       in_quiet_mode_ = in_quiet_mode;
       for (auto& observer : observer_list())
@@ -87,11 +101,16 @@ class MockMessageCenter : public message_center::FakeMessageCenter {
 
   bool IsQuietMode() const override { return in_quiet_mode_; }
 
+  void SetOnAddedNotificationCallback(base::RepeatingClosure callback) {
+    on_added_notification_callback_ = callback;
+  }
+
  private:
   message_center::NotificationList::Notifications visible_notifications_;
   std::map<std::string, std::unique_ptr<message_center::Notification>>
       owned_notifications_;
   bool in_quiet_mode_ = false;
+  base::RepeatingClosure on_added_notification_callback_;
 };
 
 class FakeArcNotificationManagerDelegate
@@ -107,9 +126,21 @@ class FakeArcNotificationManagerDelegate
   ~FakeArcNotificationManagerDelegate() override = default;
 
   // ArcNotificationManagerDelegate:
-  bool IsPublicSessionOrKiosk() const override { return false; }
+  bool IsManagedGuestSessionOrKiosk() const override { return false; }
   void ShowMessageCenter() override {}
   void HideMessageCenter() override {}
+};
+
+class FakeObserver : public ArcNotificationManagerBase::Observer {
+ public:
+  FakeObserver() = default;
+  ~FakeObserver() override = default;
+
+  void OnNotificationUpdated(const std::string& notification_id,
+                             const std::string& app_id) override {}
+  void OnNotificationRemoved(const std::string& notification_id) override {}
+  void OnArcNotificationManagerDestroyed(
+      ArcNotificationManagerBase* manager) override {}
 };
 
 }  // anonymous namespace
@@ -333,16 +364,46 @@ TEST_F(ArcNotificationManagerTest,
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(kHistogramNameActionEnabled, 0);
   histogram_tester.ExpectTotalCount(kHistogramNameStyle, 0);
+  histogram_tester.ExpectTotalCount(kHistogramNameInlineReplyEnabled, 0);
+  histogram_tester.ExpectTotalCount(kHistogramNameIsCustomNotification, 0);
 
   // Create notification
   std::string key = CreateNotification();
   histogram_tester.ExpectTotalCount(kHistogramNameActionEnabled, 1);
   histogram_tester.ExpectTotalCount(kHistogramNameStyle, 1);
+  histogram_tester.ExpectTotalCount(kHistogramNameInlineReplyEnabled, 1);
+  histogram_tester.ExpectTotalCount(kHistogramNameIsCustomNotification, 1);
 
   // Update notification
   CreateNotificationWithKey(key);
   histogram_tester.ExpectTotalCount(kHistogramNameActionEnabled, 1);
   histogram_tester.ExpectTotalCount(kHistogramNameStyle, 1);
+  histogram_tester.ExpectTotalCount(kHistogramNameInlineReplyEnabled, 1);
+  histogram_tester.ExpectTotalCount(kHistogramNameIsCustomNotification, 1);
+}
+
+TEST_F(ArcNotificationManagerTest, NotificationRemovedWhileAddingOne) {
+  ConnectMojoChannel();
+
+  // Create and remove enough number of notifications causing relocation in the
+  // map.
+  CreateNotificationWithKey("notification1");
+  EXPECT_EQ(1u, message_center()->GetVisibleNotifications().size());
+
+  FakeObserver observer;
+  arc_notification_manager()->AddObserver(&observer);
+
+  // Set the callback to remove added notification immediately
+  message_center()->SetOnAddedNotificationCallback(base::BindLambdaForTesting(
+      [arc_notification_manager = arc_notification_manager()]() {
+        arc_notification_manager->SendNotificationRemovedFromChrome(
+            "notification2");
+      }));
+
+  // It should not crash.
+  CreateNotificationWithKey("notification2");
+
+  arc_notification_manager()->RemoveObserver(&observer);
 }
 
 }  // namespace ash

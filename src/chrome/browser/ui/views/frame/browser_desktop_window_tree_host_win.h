@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_DESKTOP_WINDOW_TREE_HOST_WIN_H_
 
 #include <shobjidl.h>
+
 #include <wrl/client.h>
 
 #include <memory>
@@ -19,6 +20,7 @@
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host.h"
 #include "chrome/browser/ui/views/frame/minimize_button_metrics_win.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host_win.h"
 
 class BrowserFrame;
@@ -29,7 +31,7 @@ class VirtualDesktopHelper;
 namespace views {
 class DesktopNativeWidgetAura;
 class NativeMenuWin;
-}
+}  // namespace views
 
 class BrowserDesktopWindowTreeHostWin
     : public BrowserDesktopWindowTreeHost,
@@ -57,7 +59,7 @@ class BrowserDesktopWindowTreeHostWin
 
   // Overridden from DesktopWindowTreeHostWin:
   void Init(const views::Widget::InitParams& params) override;
-  void Show(ui::WindowShowState show_state,
+  void Show(ui::mojom::WindowShowState show_state,
             const gfx::Rect& restore_bounds) override;
   std::string GetWorkspace() const override;
   int GetInitialShowState() const override;
@@ -66,7 +68,6 @@ class BrowserDesktopWindowTreeHostWin
   bool GetDwmFrameInsetsInPixels(gfx::Insets* insets) const override;
   void HandleCreate() override;
   void HandleDestroying() override;
-  void HandleFrameChanged() override;
   void HandleWindowScaleFactorChanged(float window_scale_factor) override;
   bool PreHandleMSG(UINT message,
                     WPARAM w_param,
@@ -76,6 +77,7 @@ class BrowserDesktopWindowTreeHostWin
   views::FrameMode GetFrameMode() const override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
+  void HandleWindowMinimizedOrRestored(bool restored) override;
 
   // ProfileAttributesStorage::Observer:
   void OnProfileAvatarChanged(const base::FilePath& profile_path) override;
@@ -86,8 +88,6 @@ class BrowserDesktopWindowTreeHostWin
   // Kicks off an asynchronous update of |workspace_|, and notifies
   // WindowTreeHost of its value.
   void UpdateWorkspace();
-
-  bool IsOpaqueHostedAppFrame() const;
 
   void SetWindowIcon(bool badged);
 

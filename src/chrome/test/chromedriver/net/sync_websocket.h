@@ -1,12 +1,13 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_TEST_CHROMEDRIVER_NET_SYNC_WEBSOCKET_H_
 #define CHROME_TEST_CHROMEDRIVER_NET_SYNC_WEBSOCKET_H_
 
-#include <base/callback.h>
 #include <string>
+
+#include "base/functional/callback.h"
 
 class GURL;
 class Timeout;
@@ -16,7 +17,7 @@ class SyncWebSocket {
  public:
   enum class StatusCode { kOk = 0, kTimeout, kDisconnected };
 
-  virtual ~SyncWebSocket() {}
+  virtual ~SyncWebSocket() = default;
 
   virtual void SetId(const std::string& socket_id) {}
 

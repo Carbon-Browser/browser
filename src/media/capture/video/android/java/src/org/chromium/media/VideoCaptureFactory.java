@@ -1,58 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.media;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.os.Build;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
-import org.chromium.base.ContextUtils;
-import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 /**
- * This class implements a factory of Android Video Capture objects for Chrome.
- * Cameras are identified by |id|. Video Capture objects allocated via
- * createVideoCapture() are explicitly owned by the caller. ChromiumCameraInfo
- * is an internal class with some static methods needed from the rest of the
- * class to manipulate the |id|s of devices.
- **/
+ * This class implements a factory of Android Video Capture objects for Chrome. Cameras are
+ * identified by |id|. Video Capture objects allocated via createVideoCapture() are explicitly owned
+ * by the caller.
+ */
 @JNINamespace("media")
 @SuppressWarnings("deprecation")
+@NullMarked
 class VideoCaptureFactory {
-    // Internal class to encapsulate camera device id manipulations.
-    static class ChromiumCameraInfo {
-        private static int sNumberOfSystemCameras = -1;
-        private static final String TAG = "media";
-
-        private static int getNumberOfCameras() {
-            if (sNumberOfSystemCameras == -1) {
-                // getNumberOfCameras() would not fail due to lack of permission, but the
-                // following operations on camera would. "No permission" isn't a fatal
-                // error in WebView, specially for those applications which have no purpose
-                // to use a camera, but "load page" requires it. So, output a warning log
-                // and carry on pretending the system has no camera(s).  This optimization
-                // applies only to pre-M on Android because that is when runtime permissions
-                // were introduced.
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                        && ContextUtils.getApplicationContext().getPackageManager().checkPermission(
-                                   Manifest.permission.CAMERA,
-                                   ContextUtils.getApplicationContext().getPackageName())
-                                != PackageManager.PERMISSION_GRANTED) {
-                    sNumberOfSystemCameras = 0;
-                    Log.w(TAG, "Missing android.permission.CAMERA permission, "
-                                    + "no system camera available.");
-                } else {
-                    sNumberOfSystemCameras = VideoCaptureCamera2.getNumberOfCameras();
-                }
-            }
-            return sNumberOfSystemCameras;
-        }
-    }
-
     @CalledByNative
     static boolean isLegacyOrDeprecatedDevice(int id) {
         return VideoCaptureCamera2.isLegacyDevice(id);
@@ -69,7 +35,7 @@ class VideoCaptureFactory {
 
     @CalledByNative
     static int getNumberOfCameras() {
-        return ChromiumCameraInfo.getNumberOfCameras();
+        return VideoCaptureCamera2.getNumberOfCameras();
     }
 
     @CalledByNative
@@ -97,7 +63,7 @@ class VideoCaptureFactory {
     }
 
     @CalledByNative
-    static String getDeviceId(int index) {
+    static @Nullable String getDeviceId(int index) {
         if (isLegacyOrDeprecatedDevice(index)) {
             return VideoCaptureCamera.getDeviceId(index);
         }
@@ -105,7 +71,7 @@ class VideoCaptureFactory {
     }
 
     @CalledByNative
-    static String getDeviceName(int index) {
+    static @Nullable String getDeviceName(int index) {
         if (isLegacyOrDeprecatedDevice(index)) {
             return VideoCaptureCamera.getName(index);
         }
@@ -113,7 +79,7 @@ class VideoCaptureFactory {
     }
 
     @CalledByNative
-    static VideoCaptureFormat[] getDeviceSupportedFormats(int index) {
+    static VideoCaptureFormat @Nullable [] getDeviceSupportedFormats(int index) {
         if (isLegacyOrDeprecatedDevice(index)) {
             return VideoCaptureCamera.getDeviceSupportedFormats(index);
         }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,15 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/native_library.h"
 #include "base/profiler/frame.h"
+#include "base/profiler/module_cache.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
 #include "base/profiler/stack_sampling_profiler.h"
 #include "base/synchronization/waitable_event.h"
@@ -21,7 +24,6 @@
 namespace base {
 
 class Unwinder;
-class ModuleCache;
 
 // A thread to target for profiling that will run the supplied closure.
 class TargetThread : public PlatformThread::Delegate {
@@ -49,8 +51,8 @@ class TargetThread : public PlatformThread::Delegate {
 
 // Addresses near the start and end of a function.
 struct FunctionAddressRange {
-  const void* start;
-  const void* end;
+  raw_ptr<const void> start;
+  raw_ptr<const void> end;
 };
 
 // Represents a stack unwind scenario to be sampled by the
@@ -170,6 +172,9 @@ void ExpectStackContains(const std::vector<Frame>& stack,
 void ExpectStackDoesNotContain(
     const std::vector<Frame>& stack,
     const std::vector<FunctionAddressRange>& functions);
+
+// Load test library with given name.
+NativeLibrary LoadTestLibrary(std::string_view library_name);
 
 // Loads the other library, which defines a function to be called in the
 // WITH_OTHER_LIBRARY configuration.

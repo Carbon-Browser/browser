@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <array>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_pending_task.h"
@@ -35,12 +36,16 @@ namespace policy {
 
 namespace {
 
-const char* kExternalPolicyDataKeys[] = {"external_policy_data_1",
-                                         "external_policy_data_2",
-                                         "external_policy_data_3"};
-const char* kExternalPolicyDataURLs[] = {"http://example.com/data_1",
-                                         "http://example.com/data_2",
-                                         "http://example.com/data_3"};
+auto kExternalPolicyDataKeys = std::to_array<const char*>({
+    "external_policy_data_1",
+    "external_policy_data_2",
+    "external_policy_data_3",
+});
+auto kExternalPolicyDataURLs = std::to_array<const char*>({
+    "http://example.com/data_1",
+    "http://example.com/data_2",
+    "http://example.com/data_3",
+});
 
 const int64_t kExternalPolicyDataMaxSize = 20;
 

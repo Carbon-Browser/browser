@@ -1,17 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "build/build_config.h"
-
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/notreached.h"
 #include "base/pickle.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
+#include "build/build_config.h"
 #include "ipc/ipc_message.h"
 #include "ipc/ipc_test_base.h"
 #include "ipc/message_filter.h"
@@ -45,7 +48,7 @@ namespace IPC {
 
 namespace {
 
-void CreateRunLoopAndRun(base::RunLoop** run_loop_ptr) {
+void CreateRunLoopAndRun(raw_ptr<base::RunLoop>* run_loop_ptr) {
   base::RunLoop run_loop;
   *run_loop_ptr = &run_loop;
   run_loop.Run();
@@ -77,12 +80,12 @@ class QuitListener : public IPC::Listener {
 
   void OnBadMessage(const BadType& bad_type) {
     // Should never be called since IPC wouldn't be deserialized correctly.
-    CHECK(false);
+    NOTREACHED();
   }
 
   bool bad_message_received_ = false;
   bool quit_message_received_ = false;
-  base::RunLoop* run_loop_ = nullptr;
+  raw_ptr<base::RunLoop> run_loop_ = nullptr;
 };
 
 class ChannelReflectorListener : public IPC::Listener {
@@ -124,10 +127,10 @@ class ChannelReflectorListener : public IPC::Listener {
     run_loop_->QuitWhenIdle();
   }
 
-  base::RunLoop* run_loop_ = nullptr;
+  raw_ptr<base::RunLoop> run_loop_ = nullptr;
 
  private:
-  IPC::Channel* channel_ = nullptr;
+  raw_ptr<IPC::Channel> channel_ = nullptr;
 };
 
 class MessageCountFilter : public IPC::MessageFilter {
@@ -204,7 +207,7 @@ class MessageCountFilter : public IPC::MessageFilter {
 
   void OnBadMessage(const BadType& bad_type) {
     // Should never be called since IPC wouldn't be deserialized correctly.
-    CHECK(false);
+    NOTREACHED();
   }
 
   bool GetSupportedMessageClasses(
@@ -251,7 +254,8 @@ class IPCChannelProxyTest : public IPCChannelMojoTestBase {
     listener_ = std::make_unique<QuitListener>();
     channel_proxy_ = IPC::ChannelProxy::Create(
         TakeHandle().release(), IPC::Channel::MODE_SERVER, listener_.get(),
-        thread_->task_runner(), base::ThreadTaskRunnerHandle::Get());
+        thread_->task_runner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void TearDown() override {

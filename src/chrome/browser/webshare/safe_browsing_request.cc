@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "components/safe_browsing/core/common/features.h"
+#include "content/public/browser/browser_thread.h"
 #include "url/gurl.h"
 
 namespace {
@@ -28,11 +29,15 @@ constexpr base::TimeDelta kSafeBrowsingCheckTimeout = base::Seconds(2);
 class SafeBrowsingRequest::SafeBrowsingClient
     : public safe_browsing::SafeBrowsingDatabaseManager::Client {
  public:
-  SafeBrowsingClient(scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
-                         database_manager,
-                     base::WeakPtr<SafeBrowsingRequest> handler,
-                     scoped_refptr<base::TaskRunner> handler_task_runner)
-      : database_manager_(database_manager),
+  SafeBrowsingClient(
+      base::PassKey<safe_browsing::SafeBrowsingDatabaseManager::Client>
+          pass_key,
+      scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
+          database_manager,
+      base::WeakPtr<SafeBrowsingRequest> handler,
+      scoped_refptr<base::TaskRunner> handler_task_runner)
+      : safe_browsing::SafeBrowsingDatabaseManager::Client(std::move(pass_key)),
+        database_manager_(database_manager),
         handler_(handler),
         handler_task_runner_(handler_task_runner) {}
 
@@ -42,7 +47,7 @@ class SafeBrowsingRequest::SafeBrowsingClient
   }
 
   void CheckUrl(const GURL& url) {
-    DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
     // Start the timer before the call to CheckDownloadUrl(), as it may
     // call back into CheckDownloadUrl() synchronously.
@@ -50,7 +55,7 @@ class SafeBrowsingRequest::SafeBrowsingClient
                    &SafeBrowsingClient::OnTimeout);
 
     if (database_manager_->CheckDownloadUrl({url}, this)) {
-      timeout_.AbandonAndStop();
+      timeout_.Stop();
       SendResultToHandler(/*is_url_safe=*/true);
     }
   }
@@ -74,8 +79,9 @@ class SafeBrowsingRequest::SafeBrowsingClient
   void OnCheckDownloadUrlResult(
       const std::vector<GURL>& url_chain,
       safe_browsing::SBThreatType threat_type) override {
-    timeout_.AbandonAndStop();
-    bool is_url_safe = threat_type == safe_browsing::SB_THREAT_TYPE_SAFE;
+    timeout_.Stop();
+    bool is_url_safe =
+        threat_type == safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE;
     SendResultToHandler(is_url_safe);
   }
 
@@ -93,17 +99,13 @@ SafeBrowsingRequest::SafeBrowsingRequest(
     base::OnceCallback<void(bool)> callback)
     : callback_(std::move(callback)) {
   client_ = std::make_unique<SafeBrowsingClient>(
+      safe_browsing::SafeBrowsingDatabaseManager::Client::GetPassKey(),
       database_manager, weak_factory_.GetWeakPtr(),
-      base::SequencedTaskRunnerHandle::Get());
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&SafeBrowsingClient::CheckUrl,
-                                base::Unretained(client_.get()), url));
+      base::SequencedTaskRunner::GetCurrentDefault());
+  client_->CheckUrl(url);
 }
 
-SafeBrowsingRequest::~SafeBrowsingRequest() {
-  content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
-                                     client_.release());
-}
+SafeBrowsingRequest::~SafeBrowsingRequest() = default;
 
 void SafeBrowsingRequest::OnResultReceived(bool is_url_safe) {
   DCHECK(callback_);

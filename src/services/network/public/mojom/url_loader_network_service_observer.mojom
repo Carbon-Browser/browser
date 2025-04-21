@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,12 @@ import "mojo/public/mojom/base/string16.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "mojo/public/mojom/base/unguessable_token.mojom";
 import "services/network/public/mojom/cookie_partition_key.mojom";
+import "services/network/public/mojom/ip_address.mojom";
+import "services/network/public/mojom/ip_address_space.mojom";
 import "services/network/public/mojom/network_param.mojom";
+import "services/network/public/mojom/optional_bool.mojom";
+import "services/network/public/mojom/shared_storage.mojom";
+import "url/mojom/origin.mojom";
 import "url/mojom/url.mojom";
 
 // Loading info.
@@ -81,7 +86,7 @@ interface AuthChallengeResponder {
 // of authentication and certificate events. This is typically implemented
 // by a trusted process such as the browser process.
 interface URLLoaderNetworkServiceObserver {
-  // Called when an SSL certificate is encountered.
+  // Called when an SSL certificate error is encountered.
   // The callback argument is a net::ERROR value. If it's net::OK, then the
   // request is resumed. Otherwise it's cancelled with the given error.
   OnSSLCertificateError(url.mojom.Url url,
@@ -119,22 +124,40 @@ interface URLLoaderNetworkServiceObserver {
   // frame.
   OnAuthRequired(
       mojo_base.mojom.UnguessableToken? window_id,
-      uint32 request_id,
+      int32 request_id,
       url.mojom.Url url,
       bool first_auth_attempt,
       AuthChallengeInfo auth_info,
       HttpResponseHeaders? head_headers,
       pending_remote<AuthChallengeResponder> auth_challenge_responder);
 
+  // Asks the URL loader observer if the caller has permission to access a
+  // device on the private network.
+  //
+  // `url` is the request's URL.
+  // `ip_address` is the remote IP address from which headers were fetched.
+  // `private_network_device_id` and `private_network_device_name` are the
+  // values of the `Private-Network-Access-ID` and `Private-Network-Access-Name`
+  // headers.
+  //
+  // `permission_granted` is a bool specifying whether the user granted private
+  // network access permission.
+  OnPrivateNetworkAccessPermissionRequired(
+      url.mojom.Url url,
+      network.mojom.IPAddress ip_address,
+      string? private_network_device_id,
+      string? private_network_device_name) => (bool permission_granted);
+
   // Called when the Clear-Site-Data header has been received. The callback
   // should be run after the data is deleted.
   // https://www.w3.org/TR/clear-site-data/
-  // TODO(crbug.com/876931): We might want to move header parsing work to
+  // TODO(crbug.com/41409604): We might want to move header parsing work to
   // Network Service for security concerns (e.g. |header_value| => booleans).
   OnClearSiteData(url.mojom.Url url,
                   string header_value,
                   int32 load_flags,
-                  CookiePartitionKey? cookie_partition_key) => ();
+                  CookiePartitionKey? cookie_partition_key,
+                  bool partitioned_state_allowed_only) => ();
 
   // Called periodically to update the client about progress of the current
   // loads. To avoid flooding the client, it has to ack the update before it can
@@ -149,8 +172,38 @@ interface URLLoaderNetworkServiceObserver {
   OnDataUseUpdate(int32 network_traffic_annotation_id_hash, int64 recv_bytes,
                   int64 sent_bytes);
 
+  // The syntactic parsing of "Shared-Storage-Write" response headers occurs in
+  // the network service for security and privacy; this method then notifies
+  // the browser process or other observer implementers that the raw headers
+  // have been parsed into an array of
+  // `SharedStorageModifierMethodWithOptions`s and an optional `with_lock`
+  // option.
+  // https://github.com/WICG/shared-storage#from-response-headers
+  //
+  // The order of the methods as listed in the header(s) is preserved, so that
+  // the browser process (the main implementer of this API) can guarantee that
+  // it will invoke the corresponding methods in their originally specified
+  // order.
+  //
+  // Note that any structured header list items that are not parsed as valid
+  // `SharedStorageModifierMethodWithOptions`s will simply be omitted. Moreover,
+  // if the header does not parse as a valid structured header list, or if the
+  // parsed list is empty, then this method will not be invoked.
+  //
+  // TODO(crbug.com/40064101): Make the `OnSharedStorageHeaderReceived()` call
+  // synchronous so that we can guarantee that order is preserved between calls
+  // triggered by response headers and Shared Storage calls from the same
+  // renderer process where this request originated.
+  OnSharedStorageHeaderReceived(url.mojom.Origin request_origin,
+                 array<SharedStorageModifierMethodWithOptions> methods_with_options,
+                 string? with_lock) => ();
+
   // Used by the NetworkService to create a copy of this observer.
   // (e.g. when creating an observer for URLLoader from URLLoaderFactory's
   // observer).
   Clone(pending_receiver<URLLoaderNetworkServiceObserver> listener);
+
+  // Called when a WebSocket is connected to a private or local IP address
+  // space.
+  OnWebSocketConnectedToPrivateNetwork(IPAddressSpace ip_address_space);
 };

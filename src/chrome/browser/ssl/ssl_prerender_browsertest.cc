@@ -1,24 +1,32 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
+#include "chrome/browser/preloading/prerender/prerender_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/security_interstitials/content/security_interstitial_page.h"
 #include "components/security_interstitials/content/security_interstitial_tab_helper.h"
+#include "components/security_interstitials/core/controller_client.h"
+#include "content/public/browser/preloading_trigger_type.h"
+#include "content/public/browser/prerender_handle.h"
+#include "content/public/browser/reload_type.h"
 #include "content/public/browser/ssl_host_state_delegate.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/prerender_test_util.h"
+#include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/url_loader_interceptor.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/cert_test_util.h"
@@ -139,8 +147,9 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerender) {
     Profile* profile =
         Profile::FromBrowserContext(web_contents()->GetBrowserContext());
     SSLHostStateDelegate* state = profile->GetSSLHostStateDelegate();
-    ASSERT_FALSE(
-        state->HasAllowException(kPrerenderUrl.host(), web_contents()));
+    ASSERT_FALSE(state->HasAllowException(
+        kPrerenderUrl.host(),
+        web_contents()->GetPrimaryMainFrame()->GetStoragePartition()));
   }
 
   // Trigger a prerender. Unlike the initial navigation, this will hit the
@@ -155,14 +164,12 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerender) {
     // created so it should be available after WaitForRequestStart.
     prerender_helper_.AddPrerenderAsync(kPrerenderUrl);
     ASSERT_TRUE(observer.WaitForRequestStart());
-    ASSERT_NE(prerender_helper_.GetHostForUrl(kPrerenderUrl),
-              RenderFrameHost::kNoFrameTreeNodeId);
+    ASSERT_TRUE(prerender_helper_.GetHostForUrl(kPrerenderUrl));
 
     // The prerender navigation should be canceled as part of the response.
     // Ensure the prerender host is destroyed and no interstitial is showing.
     EXPECT_FALSE(observer.WaitForResponse());
-    EXPECT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl),
-              RenderFrameHost::kNoFrameTreeNodeId);
+    EXPECT_TRUE(prerender_helper_.GetHostForUrl(kPrerenderUrl).is_null());
     EXPECT_FALSE(IsShowingSSLInterstitial(web_contents()));
   }
 }
@@ -172,7 +179,9 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerender) {
 // TODO(bokan): In the future, when prerendering supports cross origin
 // triggering, this test can be more straightforward by using one server for
 // the initial page and another, with bad certs, for the prerendering page.
-IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerenderSW) {
+// TODO(crbug.com/40923072): the test has been flaky across platforms.
+IN_PROC_BROWSER_TEST_F(SSLPrerenderTest,
+                       DISABLED_TestNoInterstitialInPrerenderSW) {
   auto server = CreateExpiredCertServer(GetChromeTestDataDir());
   ASSERT_TRUE(server->Start());
 
@@ -207,8 +216,9 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerenderSW) {
     Profile* profile =
         Profile::FromBrowserContext(web_contents()->GetBrowserContext());
     SSLHostStateDelegate* state = profile->GetSSLHostStateDelegate();
-    ASSERT_FALSE(
-        state->HasAllowException(kPrerenderUrl.host(), web_contents()));
+    ASSERT_FALSE(state->HasAllowException(
+        kPrerenderUrl.host(),
+        web_contents()->GetPrimaryMainFrame()->GetStoragePartition()));
   }
 
   // Trigger a prerender. Unlike the initial navigation, this will hit the
@@ -223,14 +233,12 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest, TestNoInterstitialInPrerenderSW) {
     // created so it should be available after WaitForRequestStart.
     prerender_helper_.AddPrerenderAsync(kPrerenderUrl);
     ASSERT_TRUE(observer.WaitForRequestStart());
-    ASSERT_NE(prerender_helper_.GetHostForUrl(kPrerenderUrl),
-              RenderFrameHost::kNoFrameTreeNodeId);
+    ASSERT_TRUE(prerender_helper_.GetHostForUrl(kPrerenderUrl));
 
     // The prerender navigation should be canceled as part of the response.
     // Ensure the prerender host is destroyed and no interstitial is showing.
     EXPECT_FALSE(observer.WaitForResponse());
-    EXPECT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl),
-              RenderFrameHost::kNoFrameTreeNodeId);
+    EXPECT_TRUE(prerender_helper_.GetHostForUrl(kPrerenderUrl).is_null());
     EXPECT_FALSE(IsShowingSSLInterstitial(web_contents()));
   }
 }
@@ -267,8 +275,9 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest,
     ASSERT_TRUE(NavigateToURL(browser(), kInitialUrl));
 
     // Trigger the prerender.
-    const int kPrerenderHostId = prerender_helper_.AddPrerender(kPrerenderUrl);
-    ASSERT_NE(kPrerenderHostId, RenderFrameHost::kNoFrameTreeNodeId);
+    const content::FrameTreeNodeId kPrerenderHostId =
+        prerender_helper_.AddPrerender(kPrerenderUrl);
+    ASSERT_TRUE(kPrerenderHostId);
     ASSERT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl), kPrerenderHostId);
 
     // Submit a form targeting an insecure URL. The prerender should be
@@ -283,13 +292,100 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest,
     // The prerender navigation should be canceled as part of the response.
     // Ensure the prerender host is destroyed, no interstitial is showing, and
     // we didn't affect the relevant metric.
-    EXPECT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl),
-              RenderFrameHost::kNoFrameTreeNodeId);
+    EXPECT_TRUE(prerender_helper_.GetHostForUrl(kPrerenderUrl).is_null());
     security_interstitials::SecurityInterstitialTabHelper* helper =
         security_interstitials::SecurityInterstitialTabHelper::FromWebContents(
             tab);
     EXPECT_FALSE(helper);
     histograms.ExpectTotalCount(kHistogramName, 0);
+  }
+}
+
+// Prerenders a page that tries to submit an insecure form and checks that this
+// cancels the prerender even if the primary page is proceeding on an insecure
+// form.
+IN_PROC_BROWSER_TEST_F(SSLPrerenderTest,
+                       InsecureFormSubmissionCancelsPrerenderEvenIfProceeding) {
+  base::HistogramTester histograms;
+  const std::string kHistogramName =
+      "Security.MixedForm.InterstitialTriggerState";
+
+  // Histogram should start off empty.
+  histograms.ExpectTotalCount(kHistogramName, 0);
+
+  auto https_server = CreateHTTPSServer(GetChromeTestDataDir());
+  ASSERT_TRUE(https_server->Start());
+
+  // Add a "replace_text=" query param that the test server will use to replace
+  // the string "REPLACE_WITH_HOST_AND_PORT" in the destination page.
+  net::HostPortPair host_port_pair =
+      net::HostPortPair::FromURL(https_server->GetURL("a.test", "/"));
+  std::string replacement_path = GetFilePathWithHostAndPortReplacement(
+      "/ssl/page_displays_insecure_form.html",
+      embedded_test_server()->host_port_pair());
+
+  // Use "a.test" since the default host is 127.0.0.1 and that's considered a
+  // "potentially trustworthy origin" by the throttle so navigation won't
+  // trigger the throttle.
+  const GURL kUrl = https_server->GetURL("a.test", replacement_path);
+
+  // Test steps
+  {
+    ASSERT_TRUE(NavigateToURL(browser(), kUrl));
+
+    // Submit a form targeting an insecure URL.
+    content::TestNavigationObserver nav_observer(web_contents(), 1);
+    ASSERT_TRUE(ExecJs(web_contents(), "submitForm();"));
+    nav_observer.Wait();
+    security_interstitials::SecurityInterstitialTabHelper* helper =
+        security_interstitials::SecurityInterstitialTabHelper::FromWebContents(
+            web_contents());
+    ASSERT_TRUE(helper);
+    EXPECT_TRUE(helper->IsDisplayingInterstitial());
+    histograms.ExpectTotalCount(kHistogramName, 1);
+
+    // Prerender the same insecure form.
+    std::unique_ptr<content::PrerenderHandle> prerender_handle =
+        prerender_helper_.AddEmbedderTriggeredPrerenderAsync(
+            kUrl, content::PreloadingTriggerType::kEmbedder,
+            prerender_utils::kDirectUrlInputMetricSuffix,
+            ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED |
+                                      ui::PAGE_TRANSITION_FROM_ADDRESS_BAR));
+    ASSERT_TRUE(prerender_handle);
+    const content::FrameTreeNodeId kPrerenderHostId =
+        prerender_helper_.GetHostForUrl(kUrl);
+    ASSERT_TRUE(kPrerenderHostId);
+    prerender_helper_.WaitForPrerenderLoadCompletion(kPrerenderHostId);
+
+    // Proceed with the interstitial page in the primary page.
+    content::TestNavigationObserver nav_observer2(web_contents(), 1);
+    helper =
+        security_interstitials::SecurityInterstitialTabHelper::FromWebContents(
+            web_contents());
+    helper->GetBlockingPageForCurrentlyCommittedNavigationForTesting()
+        ->CommandReceived(
+            base::NumberToString(security_interstitials::CMD_PROCEED));
+    nav_observer2.Wait();
+    ASSERT_TRUE(helper);
+    EXPECT_FALSE(helper->IsDisplayingInterstitial());
+
+    // Submit the prerendered form. The prerender should be destroyed.
+    PrerenderHostObserver host_observer(*web_contents(), kPrerenderHostId);
+    ASSERT_TRUE(
+        ExecJs(prerender_helper_.GetPrerenderedMainFrameHost(kPrerenderHostId),
+               "submitForm();"));
+    host_observer.WaitForDestroyed();
+
+    // The prerender navigation should be canceled as part of the response.
+    // Ensure the prerender host is destroyed, no interstitial is showing, and
+    // we didn't affect the relevant metric.
+    EXPECT_TRUE(prerender_helper_.GetHostForUrl(kUrl).is_null());
+    helper =
+        security_interstitials::SecurityInterstitialTabHelper::FromWebContents(
+            web_contents());
+    ASSERT_TRUE(helper);
+    EXPECT_FALSE(helper->IsDisplayingInterstitial());
+    histograms.ExpectTotalCount(kHistogramName, 1);
   }
 }
 
@@ -310,8 +406,9 @@ IN_PROC_BROWSER_TEST_F(SSLPrerenderTest,
     content::TestActivationManager activation_manager(web_contents(),
                                                       kPrerenderUrl);
     SecurityVisibleStateObserver visible_state_observer(*web_contents());
-    const int kPrerenderHostId = prerender_helper_.AddPrerender(kPrerenderUrl);
-    ASSERT_NE(kPrerenderHostId, RenderFrameHost::kNoFrameTreeNodeId);
+    const content::FrameTreeNodeId kPrerenderHostId =
+        prerender_helper_.AddPrerender(kPrerenderUrl);
+    ASSERT_TRUE(kPrerenderHostId);
     ASSERT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl), kPrerenderHostId);
     ASSERT_FALSE(visible_state_observer.is_visible_state_changed());
 

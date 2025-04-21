@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define CONTENT_BROWSER_SERVICE_WORKER_SERVICE_WORKER_LOADER_HELPERS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "content/browser/service_worker/service_worker_version.h"
 #include "content/common/content_export.h"
@@ -21,10 +23,6 @@ class GURL;
 namespace base {
 class TimeDelta;
 }  // namespace base
-
-namespace url {
-class Origin;
-}  // namespace url
 
 namespace blink {
 namespace mojom {
@@ -68,7 +66,7 @@ void CheckVersionStatusBeforeWorkerScriptLoad(
 
 network::ResourceRequest CreateRequestForServiceWorkerScript(
     const GURL& script_url,
-    const url::Origin& origin,
+    const blink::StorageKey& storage_key,
     bool is_main_script,
     blink::mojom::ScriptType worker_script_type,
     const blink::mojom::FetchClientSettingsObject& fetch_client_settings_object,
@@ -81,7 +79,7 @@ network::ResourceRequest CreateRequestForServiceWorkerScript(
 CONTENT_EXPORT bool IsPathRestrictionSatisfied(
     const GURL& scope,
     const GURL& script_url,
-    const std::string* service_worker_allowed_header_value,
+    const std::optional<std::string_view>& service_worker_allowed_header_value,
     std::string* error_message);
 
 // Same as above IsPathRestrictionSatisfied, but without considering
@@ -90,6 +88,9 @@ CONTENT_EXPORT bool IsPathRestrictionSatisfiedWithoutHeader(
     const GURL& scope,
     const GURL& script_url,
     std::string* error_message);
+
+// Returns the set of hash strings of fetch handlers which can be bypassed.
+const base::flat_set<std::string> FetchHandlerBypassedHashStrings();
 
 }  // namespace service_worker_loader_helpers
 

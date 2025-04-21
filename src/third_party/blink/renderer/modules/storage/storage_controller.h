@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_STORAGE_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_STORAGE_CONTROLLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -16,10 +16,6 @@
 #include "third_party/blink/renderer/modules/storage/storage_area.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-
-namespace base {
-class SingleThreadTaskRunner;
-}
 
 namespace blink {
 
@@ -58,14 +54,13 @@ class MODULES_EXPORT StorageController : public mojom::blink::DomStorageClient {
     mojo::Remote<mojom::blink::DomStorage> dom_storage_remote;
     mojo::PendingReceiver<mojom::blink::DomStorageClient> client_receiver;
   };
-  StorageController(DomStorageConnection connection,
-                    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-                    size_t total_cache_limit);
+  StorageController(DomStorageConnection connection, size_t total_cache_limit);
 
   // Creates a MakeGarbageCollected<StorageNamespace> for Session storage, and
   // holds a weak reference for accounting & clearing. If there is already a
   // StorageNamespace created for the given id, it is returned.
-  StorageNamespace* CreateSessionStorageNamespace(const String& namespace_id);
+  StorageNamespace* CreateSessionStorageNamespace(Page& page,
+                                                  const String& namespace_id);
 
   // Returns the total size of all cached areas in namespaces this controller
   // knows of.
@@ -76,19 +71,16 @@ class MODULES_EXPORT StorageController : public mojom::blink::DomStorageClient {
 
   // Methods that delegate to the internal StorageNamespace used for
   // LocalStorage:
-
   scoped_refptr<CachedStorageArea> GetLocalStorageArea(
-      const LocalDOMWindow* local_dom_window,
-      mojo::PendingRemote<mojom::blink::StorageArea> local_storage_area = {});
+      LocalDOMWindow* local_dom_window,
+      mojo::PendingRemote<mojom::blink::StorageArea> local_storage_area = {},
+      StorageNamespace::StorageContext context =
+          StorageNamespace::StorageContext::kStandard);
   void AddLocalStorageInspectorStorageAgent(InspectorDOMStorageAgent* agent);
   void RemoveLocalStorageInspectorStorageAgent(InspectorDOMStorageAgent* agent);
 
   mojom::blink::DomStorage* dom_storage() const {
     return dom_storage_remote_.get();
-  }
-
-  scoped_refptr<base::SingleThreadTaskRunner> TaskRunner() {
-    return task_runner_;
   }
 
  private:
@@ -97,7 +89,6 @@ class MODULES_EXPORT StorageController : public mojom::blink::DomStorageClient {
   // mojom::blink::DomStorageClient:
   void ResetStorageAreaAndNamespaceConnections() override;
 
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   Persistent<HeapHashMap<String, WeakMember<StorageNamespace>>> namespaces_;
   Persistent<StorageNamespace> local_storage_namespace_;
   size_t total_cache_limit_;

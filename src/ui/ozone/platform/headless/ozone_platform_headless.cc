@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/base/cursor/cursor_factory.h"
 #include "ui/base/ime/input_method_minimal.h"
 #include "ui/display/types/native_display_delegate.h"
@@ -28,6 +27,7 @@
 #include "ui/ozone/public/input_controller.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/ozone_switches.h"
+#include "ui/ozone/public/stub_input_controller.h"
 #include "ui/ozone/public/system_input_injector.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
@@ -87,6 +87,7 @@ class OzonePlatformHeadless : public OzonePlatform {
     return std::make_unique<HeadlessWindow>(delegate, window_manager_.get(),
                                             properties.bounds);
   }
+  bool IsWindowCompositingSupported() const override { return true; }
   std::unique_ptr<display::NativeDisplayDelegate> CreateNativeDisplayDelegate()
       override {
     return nullptr;
@@ -96,9 +97,9 @@ class OzonePlatformHeadless : public OzonePlatform {
   }
   void InitScreen(PlatformScreen* screen) override {}
   std::unique_ptr<InputMethod> CreateInputMethod(
-      internal::InputMethodDelegate* delegate,
+      ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget widget) override {
-    return std::make_unique<InputMethodMinimal>(delegate);
+    return std::make_unique<InputMethodMinimal>(ime_key_event_dispatcher);
   }
 
 // Desktop Linux, not CastOS.
@@ -107,7 +108,6 @@ class OzonePlatformHeadless : public OzonePlatform {
     static base::NoDestructor<OzonePlatform::PlatformProperties> properties;
     static bool initialized = false;
     if (!initialized) {
-      properties->uses_external_vulkan_image_factory = true;
       initialized = true;
     }
     return *properties;
@@ -125,7 +125,7 @@ class OzonePlatformHeadless : public OzonePlatform {
         keyboard_layout_engine_.get());
 
     overlay_manager_ = std::make_unique<StubOverlayManager>();
-    input_controller_ = CreateStubInputController();
+    input_controller_ = std::make_unique<StubInputController>();
     cursor_factory_ = std::make_unique<BitmapCursorFactory>();
     gpu_platform_support_host_.reset(CreateStubGpuPlatformSupportHost());
 
@@ -156,8 +156,6 @@ OzonePlatform* CreateOzonePlatformHeadless() {
   base::FilePath location;
   if (cmd->HasSwitch(switches::kOzoneDumpFile))
     location = cmd->GetSwitchValuePath(switches::kOzoneDumpFile);
-  cmd->AppendSwitch(switches::kDisableRunningAsSystemCompositor);
-
   return new OzonePlatformHeadless(location);
 }
 

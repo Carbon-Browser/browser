@@ -1,19 +1,27 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/services/stable_video_decoder_factory_service.h"
 
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "components/viz/common/switches.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
+#include "gpu/config/gpu_preferences.h"
 #include "media/base/media_log.h"
 #include "media/base/media_util.h"
 #include "media/gpu/buildflags.h"
+#include "media/gpu/chromeos/frame_registry.h"
 #include "media/gpu/chromeos/platform_video_frame_pool.h"
+#include "media/gpu/chromeos/registered_frame_converter.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
-#include "media/gpu/chromeos/video_frame_converter.h"
+#include "media/gpu/gpu_video_accelerator_util.h"
+#include "media/gpu/gpu_video_decode_accelerator_helpers.h"
 #include "media/mojo/services/mojo_media_client.h"
 #include "media/mojo/services/mojo_video_decoder_service.h"
 #include "media/mojo/services/stable_video_decoder_service.h"
+#include "media/video/video_decode_accelerator.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace media {
@@ -26,7 +34,11 @@ namespace {
 // like its |gpu_task_runner_| and |media_gpu_channel_manager_| members.
 class MojoMediaClientImpl : public MojoMediaClient {
  public:
-  MojoMediaClientImpl() = default;
+  MojoMediaClientImpl(const gpu::GpuFeatureInfo& gpu_feature_info,
+                      scoped_refptr<FrameRegistry> frame_registry)
+      : gpu_driver_bug_workarounds_(
+            gpu_feature_info.enabled_gpu_driver_bug_workarounds),
+        frame_registry_(std::move(frame_registry)) {}
   MojoMediaClientImpl(const MojoMediaClientImpl&) = delete;
   MojoMediaClientImpl& operator=(const MojoMediaClientImpl&) = delete;
   ~MojoMediaClientImpl() override = default;
@@ -34,12 +46,16 @@ class MojoMediaClientImpl : public MojoMediaClient {
   // MojoMediaClient implementation.
   std::vector<SupportedVideoDecoderConfig> GetSupportedVideoDecoderConfigs()
       final {
-    // TODO(b/195769334): we should pass a meaningful
-    // gpu::GpuDriverBugWorkarounds so that we can restrict the supported
-    // configurations using that facility.
-    absl::optional<std::vector<SupportedVideoDecoderConfig>> configs =
-        VideoDecoderPipeline::GetSupportedConfigs(
-            gpu::GpuDriverBugWorkarounds());
+    std::optional<std::vector<SupportedVideoDecoderConfig>> configs;
+    switch (GetDecoderImplementationType()) {
+      case VideoDecoderType::kVaapi:
+      case VideoDecoderType::kV4L2:
+        configs = VideoDecoderPipeline::GetSupportedConfigs(
+            GetDecoderImplementationType(), gpu_driver_bug_workarounds_);
+        break;
+      default:
+        NOTREACHED();
+    }
     return configs.value_or(std::vector<SupportedVideoDecoderConfig>{});
   }
   VideoDecoderType GetDecoderImplementationType() final {
@@ -55,17 +71,13 @@ class MojoMediaClientImpl : public MojoMediaClient {
 #endif
   }
   std::unique_ptr<VideoDecoder> CreateVideoDecoder(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
       MediaLog* media_log,
       mojom::CommandBufferIdPtr command_buffer_id,
       RequestOverlayInfoCB request_overlay_info_cb,
       const gfx::ColorSpace& target_color_space,
       mojo::PendingRemote<stable::mojom::StableVideoDecoder> oop_video_decoder)
       final {
-    // TODO(b/195769334): some platforms do not support the
-    // VideoDecoderPipeline so we need to handle those (and the rest of the
-    // methods of MojoMediaClientImpl are affected as well).
-
     // For out-of-process video decoding, |command_buffer_id| is not used and
     // should not be supplied.
     DCHECK(!command_buffer_id);
@@ -75,19 +87,33 @@ class MojoMediaClientImpl : public MojoMediaClient {
     std::unique_ptr<MediaLog> log =
         media_log ? media_log->Clone()
                   : std::make_unique<media::NullMediaLog>();
+
+    CHECK_NE(GetDecoderImplementationType(), VideoDecoderType::kVda);
     return VideoDecoderPipeline::Create(
+        gpu_driver_bug_workarounds_,
         /*client_task_runner=*/std::move(task_runner),
         std::make_unique<PlatformVideoFramePool>(),
-        std::make_unique<media::VideoFrameConverter>(), std::move(log),
-        /*oop_video_decoder=*/{});
+        RegisteredFrameConverter::Create(frame_registry_),
+        VideoDecoderPipeline::DefaultPreferredRenderableFourccs(),
+        std::move(log),
+        /*oop_video_decoder=*/{},
+        /*in_video_decoder_process=*/true);
   }
+
+ private:
+  const gpu::GpuDriverBugWorkarounds gpu_driver_bug_workarounds_;
+  const scoped_refptr<FrameRegistry> frame_registry_;
 };
 
 }  // namespace
 
-StableVideoDecoderFactoryService::StableVideoDecoderFactoryService()
+StableVideoDecoderFactoryService::StableVideoDecoderFactoryService(
+    const gpu::GpuFeatureInfo& gpu_feature_info)
     : receiver_(this),
-      mojo_media_client_(std::make_unique<MojoMediaClientImpl>()) {
+      frame_registry_(base::MakeRefCounted<FrameRegistry>()),
+      mojo_media_client_(
+          std::make_unique<MojoMediaClientImpl>(gpu_feature_info,
+                                                frame_registry_)) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   mojo_media_client_->Initialize();
 }
@@ -97,16 +123,19 @@ StableVideoDecoderFactoryService::~StableVideoDecoderFactoryService() {
 }
 
 void StableVideoDecoderFactoryService::BindReceiver(
-    mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver) {
+    mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver,
+    base::OnceClosure disconnect_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // The browser process should guarantee that BindReceiver() is only called
   // once.
   DCHECK(!receiver_.is_bound());
   receiver_.Bind(std::move(receiver));
+  receiver_.set_disconnect_handler(std::move(disconnect_cb));
 }
 
 void StableVideoDecoderFactoryService::CreateStableVideoDecoder(
-    mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver) {
+    mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver,
+    mojo::PendingRemote<stable::mojom::StableVideoDecoderTracker> tracker) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   std::unique_ptr<mojom::VideoDecoder> dst_video_decoder;
@@ -118,9 +147,10 @@ void StableVideoDecoderFactoryService::CreateStableVideoDecoder(
         mojo_media_client_.get(), &cdm_service_context_,
         mojo::PendingRemote<stable::mojom::StableVideoDecoder>());
   }
-  video_decoders_.Add(
-      std::make_unique<StableVideoDecoderService>(std::move(dst_video_decoder)),
-      std::move(receiver));
+  video_decoders_.Add(std::make_unique<StableVideoDecoderService>(
+                          std::move(tracker), std::move(dst_video_decoder),
+                          &cdm_service_context_, frame_registry_),
+                      std::move(receiver));
 }
 
 }  // namespace media

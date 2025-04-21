@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace blink {
 class WebGestureEvent;
 }
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 }
 
@@ -67,7 +67,7 @@ class CONTENT_EXPORT OverscrollControllerAndroid
 
   // Returns true if the effect still needs animation ticks.
   // Note: The effect will detach itself when no further animation is required.
-  bool Animate(base::TimeTicks current_time, cc::Layer* parent_layer);
+  bool Animate(base::TimeTicks current_time, cc::slim::Layer* parent_layer);
 
   // To be called whenever the content frame has been updated.
   void OnFrameMetadataUpdated(float page_scale_factor,
@@ -95,7 +95,7 @@ class CONTENT_EXPORT OverscrollControllerAndroid
 
   void SetNeedsAnimate();
 
-  const raw_ptr<ui::WindowAndroidCompositor> compositor_;
+  const raw_ptr<ui::WindowAndroidCompositor, DanglingUntriaged> compositor_;
   const float dpi_scale_;
 
   bool enabled_;

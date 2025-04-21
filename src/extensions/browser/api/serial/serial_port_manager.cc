@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
@@ -16,6 +16,7 @@
 #include "extensions/browser/api/serial/serial_connection.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
 namespace extensions {
@@ -25,14 +26,14 @@ namespace api {
 namespace {
 
 bool ShouldPauseOnReceiveError(serial::ReceiveError error) {
-  return error == serial::RECEIVE_ERROR_DEVICE_LOST ||
-         error == serial::RECEIVE_ERROR_SYSTEM_ERROR ||
-         error == serial::RECEIVE_ERROR_DISCONNECTED ||
-         error == serial::RECEIVE_ERROR_BREAK ||
-         error == serial::RECEIVE_ERROR_FRAME_ERROR ||
-         error == serial::RECEIVE_ERROR_OVERRUN ||
-         error == serial::RECEIVE_ERROR_BUFFER_OVERFLOW ||
-         error == serial::RECEIVE_ERROR_PARITY_ERROR;
+  return error == serial::ReceiveError::kDeviceLost ||
+         error == serial::ReceiveError::kSystemError ||
+         error == serial::ReceiveError::kDisconnected ||
+         error == serial::ReceiveError::kBreak ||
+         error == serial::ReceiveError::kFrameError ||
+         error == serial::ReceiveError::kOverrun ||
+         error == serial::ReceiveError::kBufferOverflow ||
+         error == serial::ReceiveError::kParityError;
 }
 
 SerialPortManager::Binder& GetBinderOverride() {
@@ -64,14 +65,14 @@ SerialPortManager::SerialPortManager(content::BrowserContext* context)
   connections_ = manager->data_;
 }
 
-SerialPortManager::~SerialPortManager() {}
+SerialPortManager::~SerialPortManager() = default;
 
-SerialPortManager::ReceiveParams::ReceiveParams() {}
+SerialPortManager::ReceiveParams::ReceiveParams() = default;
 
 SerialPortManager::ReceiveParams::ReceiveParams(const ReceiveParams& other) =
     default;
 
-SerialPortManager::ReceiveParams::~ReceiveParams() {}
+SerialPortManager::ReceiveParams::~ReceiveParams() = default;
 
 void SerialPortManager::GetDevices(
     device::mojom::SerialPortManager::GetDevicesCallback callback) {
@@ -92,7 +93,7 @@ void SerialPortManager::OpenPort(
       path, std::move(options), std::move(client), std::move(callback)));
 }
 
-void SerialPortManager::StartConnectionPolling(const std::string& extension_id,
+void SerialPortManager::StartConnectionPolling(const ExtensionId& extension_id,
                                                int connection_id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto* connection = connections_->Get(extension_id, connection_id);
@@ -132,7 +133,7 @@ void SerialPortManager::DispatchReceiveEvent(const ReceiveParams& params,
     DispatchEvent(params, std::move(event));
   }
 
-  if (error != serial::RECEIVE_ERROR_NONE) {
+  if (error != serial::ReceiveError::kNone) {
     if (ShouldPauseOnReceiveError(error)) {
       SerialConnection* connection =
           params.connections->Get(params.extension_id, params.connection_id);
@@ -154,10 +155,13 @@ void SerialPortManager::DispatchReceiveEvent(const ReceiveParams& params,
 void SerialPortManager::DispatchEvent(
     const ReceiveParams& params,
     std::unique_ptr<extensions::Event> event) {
+  if (!ExtensionsBrowserClient::Get()->IsValidContext(
+          params.browser_context_id.get())) {
+    return;
+  }
+
   content::BrowserContext* context = reinterpret_cast<content::BrowserContext*>(
       params.browser_context_id.get());
-  if (!extensions::ExtensionsBrowserClient::Get()->IsValidContext(context))
-    return;
 
   EventRouter* router = EventRouter::Get(context);
   if (router)

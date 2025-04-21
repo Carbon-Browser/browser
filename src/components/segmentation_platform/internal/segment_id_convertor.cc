@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 
 namespace segmentation_platform {
 
-absl::optional<optimization_guide::proto::OptimizationTarget>
+std::optional<optimization_guide::proto::OptimizationTarget>
 SegmentIdToOptimizationTarget(proto::SegmentId segment_id) {
   DCHECK_LT(static_cast<int>(optimization_guide::proto::OptimizationTarget_MAX),
             static_cast<int>(proto::SegmentId::MAX_OPTIMIZATION_TARGET));
   if (static_cast<int>(segment_id) >=
       static_cast<int>(proto::SegmentId::MAX_OPTIMIZATION_TARGET)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return static_cast<optimization_guide::proto::OptimizationTarget>(segment_id);
 }

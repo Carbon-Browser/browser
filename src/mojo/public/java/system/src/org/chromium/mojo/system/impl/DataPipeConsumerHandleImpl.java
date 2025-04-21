@@ -1,18 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.system.impl;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.mojo.system.DataPipe.ConsumerHandle;
 import org.chromium.mojo.system.DataPipe.ReadFlags;
 import org.chromium.mojo.system.ResultAnd;
 
 import java.nio.ByteBuffer;
 
-/**
- * Implementation of {@link ConsumerHandle}.
- */
+/** Implementation of {@link ConsumerHandle}. */
+@NullMarked
 class DataPipeConsumerHandleImpl extends HandleBase implements ConsumerHandle {
     /**
      * @see HandleBase#HandleBase(CoreImpl, long)

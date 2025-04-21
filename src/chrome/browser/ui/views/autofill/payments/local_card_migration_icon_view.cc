@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,9 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 
 namespace autofill {
@@ -29,22 +31,21 @@ LocalCardMigrationIconView::LocalCardMigrationIconView(
     : PageActionIconView(command_updater,
                          IDC_MIGRATE_LOCAL_CREDIT_CARD_FOR_PAGE,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "LocalCardMigration") {
   SetID(VIEW_ID_MIGRATE_LOCAL_CREDIT_CARD_BUTTON);
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillCreditCardUploadFeedback)) {
-    InstallLoadingIndicator();
-  } else {
-    SetUpForInOutAnimation();
-  }
+  SetUpForInOutAnimation();
+  GetViewAccessibility().SetName(
+      l10n_util::GetStringUTF16(IDS_TOOLTIP_MIGRATE_LOCAL_CARD));
 }
 
-LocalCardMigrationIconView::~LocalCardMigrationIconView() {}
+LocalCardMigrationIconView::~LocalCardMigrationIconView() = default;
 
 views::BubbleDialogDelegate* LocalCardMigrationIconView::GetBubble() const {
   ManageMigrationUiController* controller = GetController();
-  if (!controller)
+  if (!controller) {
     return nullptr;
+  }
 
   LocalCardMigrationFlowStep step = controller->GetFlowStep();
   DCHECK_NE(step, LocalCardMigrationFlowStep::UNKNOWN);
@@ -62,8 +63,9 @@ views::BubbleDialogDelegate* LocalCardMigrationIconView::GetBubble() const {
 }
 
 void LocalCardMigrationIconView::UpdateImpl() {
-  if (!GetWebContents())
+  if (!GetWebContents()) {
     return;
+  }
 
   // |controller| may be nullptr due to lazy initialization.
   ManageMigrationUiController* controller = GetController();
@@ -87,32 +89,16 @@ void LocalCardMigrationIconView::UpdateImpl() {
         // Disable the credit card icon so it does not update if user clicks
         // on it.
         SetEnabled(false);
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          SetIsLoading(/*is_loading=*/true);
-        } else {
-          AnimateIn(IDS_AUTOFILL_LOCAL_CARD_MIGRATION_ANIMATION_LABEL);
-        }
+        AnimateIn(IDS_AUTOFILL_LOCAL_CARD_MIGRATION_ANIMATION_LABEL);
         break;
       }
       case LocalCardMigrationFlowStep::MIGRATION_FINISHED: {
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          SetIsLoading(/*is_loading=*/false);
-        } else {
-          UnpauseAnimation();
-        }
+        UnpauseAnimation();
         SetEnabled(true);
         break;
       }
       case LocalCardMigrationFlowStep::MIGRATION_FAILED: {
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          UpdateIconImage();
-          SetIsLoading(/*is_loading=*/false);
-        } else {
-          UnpauseAnimation();
-        }
+        UnpauseAnimation();
         SetEnabled(true);
         break;
       }
@@ -125,8 +111,9 @@ void LocalCardMigrationIconView::UpdateImpl() {
     // glitches.
     // TODO(pbos): Fix this and remove check. Calling SetHighlighted(false) with
     // !GetHighighted() should be a no-op.
-    if (views::InkDrop::Get(this)->GetHighlighted())
+    if (views::InkDrop::Get(this)->GetHighlighted()) {
       SetHighlighted(false);
+    }
     // Handle corner cases where users navigate away or close the tab.
     UnpauseAnimation();
   }
@@ -136,7 +123,7 @@ void LocalCardMigrationIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIcon() const {
-  return kCreditCardIcon;
+  return kCreditCardChromeRefreshIcon;
 }
 
 const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIconBadge() const {
@@ -148,19 +135,11 @@ const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIconBadge() const {
   return gfx::kNoneIcon;
 }
 
-const char* LocalCardMigrationIconView::GetClassName() const {
-  return "LocalCardMigrationIconView";
-}
-
-std::u16string LocalCardMigrationIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_MIGRATE_LOCAL_CARD);
-}
-
 ManageMigrationUiController* LocalCardMigrationIconView::GetController() const {
   content::WebContents* web_contents = GetWebContents();
-  if (!web_contents)
+  if (!web_contents) {
     return nullptr;
+  }
 
   return autofill::ManageMigrationUiController::FromWebContents(web_contents);
 }
@@ -186,5 +165,8 @@ void LocalCardMigrationIconView::AnimationEnded(
   IconLabelBubbleView::AnimationEnded(animation);
   UpdateIconImage();
 }
+
+BEGIN_METADATA(LocalCardMigrationIconView)
+END_METADATA
 
 }  // namespace autofill

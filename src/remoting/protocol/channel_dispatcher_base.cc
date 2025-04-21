@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/protocol/message_channel_factory.h"
 #include "remoting/protocol/message_pipe.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 ChannelDispatcherBase::ChannelDispatcherBase(const std::string& channel_name)
     : channel_name_(channel_name) {}
 
 ChannelDispatcherBase::~ChannelDispatcherBase() {
-  if (channel_factory_)
+  if (channel_factory_) {
     channel_factory_->CancelChannelCreation(channel_name_);
+  }
 }
 
 void ChannelDispatcherBase::Init(MessageChannelFactory* channel_factory,
@@ -62,5 +62,4 @@ void ChannelDispatcherBase::OnMessagePipeClosed() {
   event_handler_->OnChannelClosed(this);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

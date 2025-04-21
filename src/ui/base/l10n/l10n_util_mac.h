@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,21 +14,11 @@
 
 #ifdef __OBJC__
 @class NSString;
-#else
-class NSString;
 #endif
 
 namespace l10n_util {
 
-// Get localized language name using NSLocale Foundation API. If the system
-// API returns null or an empty string, ICU's formatting style of an unknown
-// language will be used which is "xyz (XYZ)" where the input is parsed into
-// language and script by the - token and reformatted as
-// "$lowercase_language ($UPPERCASE_SCRIPT)". If the - token is not found, the
-// lowercase version of |locale| will be returned.
-COMPONENT_EXPORT(UI_BASE)
-std::u16string GetDisplayNameForLocale(const std::string& locale,
-                                       const std::string& display_locale);
+#ifdef __OBJC__
 
 // Remove the Windows-style accelerator marker (for labels, menuitems, etc.)
 // and change "..." into an ellipsis.
@@ -104,6 +94,13 @@ NSString* GetNSStringFWithFixup(int message_id,
 // go/plurals (Google internal).
 COMPONENT_EXPORT(UI_BASE)
 NSString* GetPluralNSStringF(int message_id, int number);
+
+// Same as GetPluralNSStringF, but runs the result through
+// FixUpWindowsStyleLabel before returning it.
+COMPONENT_EXPORT(UI_BASE)
+NSString* GetPluralNSStringFWithFixup(int message_id, int number);
+
+#endif  // __OBJC__
 
 // Support the override of the locale with the value from Cocoa.
 COMPONENT_EXPORT(UI_BASE) void OverrideLocaleWithCocoaLocale();

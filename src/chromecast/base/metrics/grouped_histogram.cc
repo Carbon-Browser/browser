@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <string_view>
+
 #include "base/check_op.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/no_destructor.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -89,7 +90,7 @@ const HistogramArgs kHistogramsToGroup[] = {
 // of the form "<metric-name>.<app-name>".
 class GroupedHistogram : public base::Histogram {
  public:
-  // TODO(crbug.com/1300206): min/max parameters are redundant with "ranges"
+  // TODO(crbug.com/40824087): min/max parameters are redundant with "ranges"
   // and can probably be removed.
   GroupedHistogram(const char* metric_to_override,
                    Sample minimum,
@@ -142,7 +143,7 @@ void PreregisterHistogram(const char* name,
                           GroupedHistogram::Sample maximum,
                           size_t bucket_count,
                           int32_t flags) {
-  base::StringPiece name_piece(name);
+  std::string_view name_piece(name);
 
   DCHECK(base::Histogram::InspectConstructionArguments(
       name_piece, &minimum, &maximum, &bucket_count));

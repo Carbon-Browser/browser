@@ -35,21 +35,27 @@
 #include "third_party/blink/public/mojom/timing/performance_mark_or_measure.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/dom_high_res_time_stamp.h"
+#include "third_party/blink/renderer/core/frame/dom_window.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 
+class ScriptObject;
 class ScriptState;
-class ScriptValue;
 class V8ObjectBuilder;
-class ExecutionContext;
 
 using PerformanceEntryType = unsigned;
 using PerformanceEntryTypeMask = unsigned;
 
-constexpr uint32_t kNavigationIdDefaultValue = 1;
+struct DOMPaintTimingInfo {
+  // https://w3c.github.io/paint-timing/#paint-timing-info-rendering-update-end-time
+  DOMHighResTimeStamp paint_time;
+
+  // https://w3c.github.io/paint-timing/#paint-timing-info-implementation-defined-presentation-time
+  DOMHighResTimeStamp presentation_time;
+};
 
 class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -72,12 +78,19 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
     kLayoutShift = 1 << 10,
     kLargestContentfulPaint = 1 << 11,
     kVisibilityState = 1 << 12,
+    kBackForwardCacheRestoration = 1 << 13,
+    kSoftNavigation = 1 << 14,
+    kLongAnimationFrame = 1 << 15,
+    kScript = 1 << 16,
   };
 
   const AtomicString& name() const { return name_; }
   DOMHighResTimeStamp startTime() const;
-  uint32_t navigationId() const;
-  virtual AtomicString entryType() const = 0;
+  String navigationId() const;
+  // source() will return null if the PerformanceEntry did not originate from a
+  // Window context.
+  DOMWindow* source() const;
+  virtual const AtomicString& entryType() const = 0;
   virtual PerformanceEntryType EntryTypeEnum() const = 0;
   // PerformanceNavigationTiming will override this due to
   // the nature of reporting it early, which means not having a
@@ -85,7 +98,7 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
   // Other classes must NOT override this.
   virtual DOMHighResTimeStamp duration() const;
 
-  ScriptValue toJSONForBinding(ScriptState*) const;
+  ScriptObject toJSONForBinding(ScriptState*) const;
 
   bool IsResource() const { return EntryTypeEnum() == kResource; }
   bool IsMark() const { return EntryTypeEnum() == kMark; }
@@ -93,8 +106,24 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
 
   static bool StartTimeCompareLessThan(PerformanceEntry* a,
                                        PerformanceEntry* b) {
-    if (a->startTime() == b->startTime())
-      return a->index_ < b->index_;
+    if (a->startTime() == b->startTime()) {
+      // The navigation entry is created lazily, and we want it to always be
+      // first for compatibility.
+      // TODO: create NT entry eagerly so that we don't have to do this
+      // https://bugs.chromium.org/p/chromium/issues/detail?id=1432565
+      if (a->EntryTypeEnum() == kNavigation) {
+        return true;
+      } else if (b->EntryTypeEnum() == kNavigation) {
+        return false;
+      } else if (a->EntryTypeEnum() == kPaint) {
+        return true;
+      } else if (b->EntryTypeEnum() == kPaint) {
+        return false;
+      } else {
+        return a->index_ < b->index_;
+      }
+    }
+
     return a->startTime() < b->startTime();
   }
 
@@ -110,15 +139,14 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
     if (entry_type == kInvalid) {
       return true;
     }
-    DEFINE_THREAD_SAFE_STATIC_LOCAL(HashSet<PerformanceEntryType>,
-                                    valid_timeline_entry_types,
-                                    ({kNavigation, kMark, kMeasure, kResource,
-                                      kTaskAttribution, kPaint, kFirstInput}));
-    return valid_timeline_entry_types.Contains(entry_type);
+    constexpr PerformanceEntryTypeMask kTimelineEntryMask =
+        kNavigation | kMark | kMeasure | kResource | kTaskAttribution | kPaint |
+        kFirstInput | kBackForwardCacheRestoration | kSoftNavigation |
+        kLongAnimationFrame | kVisibilityState;
+    return (entry_type & kTimelineEntryMask) != 0;
   }
 
-  static uint32_t GetNavigationId(ScriptState* script_state);
-  static uint32_t GetNavigationId(ExecutionContext* context);
+  static String GetNavigationId(ScriptState* script_state);
 
   // PerformanceMark/Measure override this and it returns Mojo structure pointer
   // which has all members of PerformanceMark/Measure. Common data members are
@@ -127,15 +155,33 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
   virtual mojom::blink::PerformanceMarkOrMeasurePtr
   ToMojoPerformanceMarkOrMeasure();
 
+  bool IsTriggeredBySoftNavigation() const {
+    return is_triggered_by_soft_navigation_;
+  }
+
+  // PaintTimingMixin. It's implemented here for simplicity.
+  // If an interface doesn't have PaintTimingMixin, these functions
+  // would not be exposed by WebIDL.
+  DOMHighResTimeStamp paintTime() const;
+  std::optional<DOMHighResTimeStamp> presentationTime() const;
+
+  void Trace(Visitor*) const override;
+
+  void SetPaintTimingInfo(const DOMPaintTimingInfo& paint_timing_info) {
+    paint_timing_info_ = paint_timing_info;
+  }
+
  protected:
   PerformanceEntry(const AtomicString& name,
                    double start_time,
                    double finish_time,
-                   uint32_t navigation_id);
+                   DOMWindow* source,
+                   bool is_triggered_by_soft_navigation = false);
   PerformanceEntry(double duration,
                    const AtomicString& name,
                    double start_time,
-                   uint32_t navigation_id);
+                   DOMWindow* source,
+                   bool is_triggered_by_soft_navigation = false);
 
   virtual void BuildJSONValue(V8ObjectBuilder&) const;
 
@@ -146,7 +192,13 @@ class CORE_EXPORT PerformanceEntry : public ScriptWrappable {
   const AtomicString name_;
   const double start_time_;
   const int index_;
-  const uint32_t navigation_id_;
+  const String navigation_id_;
+  // source_ will be null if the PerformanceEntry did not originate from a
+  // Window context.
+  const WeakMember<DOMWindow> source_;
+  // For entries implementing PaintTimingMixin.
+  std::optional<DOMPaintTimingInfo> paint_timing_info_;
+  const bool is_triggered_by_soft_navigation_;
 };
 
 }  // namespace blink

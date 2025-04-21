@@ -1,9 +1,11 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_ACCESSIBILITY_CAPTION_BUBBLE_CONTEXT_VIEWS_H_
 #define CHROME_BROWSER_UI_VIEWS_ACCESSIBILITY_CAPTION_BUBBLE_CONTEXT_VIEWS_H_
+
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/accessibility/caption_bubble_context_browser.h"
@@ -13,6 +15,8 @@ class WebContents;
 }
 
 namespace captions {
+
+class CaptionBubbleSessionObserverViews;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Caption Bubble Context for Views
@@ -28,12 +32,20 @@ class CaptionBubbleContextViews : public CaptionBubbleContextBrowser {
       delete;
 
   // CaptionBubbleContextBrowser:
-  absl::optional<gfx::Rect> GetBounds() const override;
+  void GetBounds(GetBoundsCallback callback) const override;
+  const std::string GetSessionId() const override;
   void Activate() override;
   bool IsActivatable() const override;
+  std::unique_ptr<CaptionBubbleSessionObserver>
+  GetCaptionBubbleSessionObserver() override;
+  OpenCaptionSettingsCallback GetOpenCaptionSettingsCallback() override;
 
  private:
-  raw_ptr<content::WebContents> web_contents_;
+  void OpenCaptionSettings();
+
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
+
+  std::unique_ptr<CaptionBubbleSessionObserver> web_contents_observer_;
 };
 
 }  // namespace captions

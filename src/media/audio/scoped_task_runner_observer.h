@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_AUDIO_SCOPED_TASK_RUNNER_OBSERVER_H_
 #define MEDIA_AUDIO_SCOPED_TASK_RUNNER_OBSERVER_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/current_thread.h"
 
 namespace base {

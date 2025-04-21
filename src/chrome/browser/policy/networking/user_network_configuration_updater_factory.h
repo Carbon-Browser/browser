@@ -1,15 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_POLICY_NETWORKING_USER_NETWORK_CONFIGURATION_UPDATER_FACTORY_H_
 #define CHROME_BROWSER_POLICY_NETWORKING_USER_NETWORK_CONFIGURATION_UPDATER_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace content {
@@ -23,7 +23,7 @@ class UserNetworkConfigurationUpdater;
 // Factory to create UserNetworkConfigurationUpdater for the the per-user
 // OpenNetworkConfiguration policy.
 class UserNetworkConfigurationUpdaterFactory
-    : public BrowserContextKeyedServiceFactory {
+    : public ProfileKeyedServiceFactory {
  public:
   // Returns an existing or creates a new UserNetworkConfigurationUpdater for
   // |browser_context|. Will return nullptr if this service isn't allowed for
@@ -40,18 +40,15 @@ class UserNetworkConfigurationUpdaterFactory
       const UserNetworkConfigurationUpdaterFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      UserNetworkConfigurationUpdaterFactory>;
+  friend base::NoDestructor<UserNetworkConfigurationUpdaterFactory>;
 
   UserNetworkConfigurationUpdaterFactory();
   ~UserNetworkConfigurationUpdaterFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

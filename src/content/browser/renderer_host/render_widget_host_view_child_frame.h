@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/input/touch_action.h"
+#include "components/input/child_frame_input_helper.h"
+#include "components/input/event_with_latency_info.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_timing_details_map.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/common/surfaces/surface_info.h"
 #include "components/viz/host/host_frame_sink_client.h"
 #include "content/browser/compositor/image_transport_factory.h"
-#include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/touch_selection_controller_client_manager.h"
@@ -60,7 +61,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
       public RenderFrameMetadataProvider::Observer,
       public viz::HostFrameSinkClient {
  public:
-  // TODO(crbug.com/1182855): Pass multi-screen info from the parent.
+  // TODO(crbug.com/40170974): Pass multi-screen info from the parent.
   static RenderWidgetHostViewChildFrame* Create(
       RenderWidgetHost* widget,
       const display::ScreenInfos& parent_screen_infos);
@@ -97,7 +98,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void SetInsets(const gfx::Insets& insets) override;
   gfx::NativeView GetNativeView() override;
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
-  bool IsMouseLocked() override;
+  bool IsPointerLocked() override;
   void TakeFallbackContentFrom(RenderWidgetHostView* view) override;
 
   // RenderWidgetHostViewBase implementation.
@@ -107,7 +108,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void InitAsPopup(RenderWidgetHostView* parent_host_view,
                    const gfx::Rect& bounds,
                    const gfx::Rect& anchor_rect) override;
-  void UpdateCursor(const WebCursor& cursor) override;
+  void UpdateCursor(const ui::Cursor& cursor) override;
   void UpdateScreenInfo() override;
   void SendInitialPropertiesIfNeeded() override;
   void SetIsLoading(bool is_loading) override;
@@ -119,6 +120,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
                                  const gfx::Rect& bounds) override;
   void ClearKeyboardTriggeredTooltip() override;
   void GestureEventAck(const blink::WebGestureEvent& event,
+                       blink::mojom::InputEventResultSource ack_source,
                        blink::mojom::InputEventResultState ack_result) override;
   // Since the URL of content rendered by this class is not displayed in
   // the URL bar, this method does not need an implementation.
@@ -127,24 +129,27 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
   void DidStopFlinging() override;
-  blink::mojom::PointerLockResult LockMouse(
+  blink::mojom::PointerLockResult LockPointer(
       bool request_unadjusted_movement) override;
-  blink::mojom::PointerLockResult ChangeMouseLock(
+  blink::mojom::PointerLockResult ChangePointerLock(
       bool request_unadjusted_movement) override;
-  void UnlockMouse() override;
+  void UnlockPointer() override;
   const viz::FrameSinkId& GetFrameSinkId() const override;
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   void NotifyHitTestRegionUpdated(const viz::AggregatedHitTestRegion&) override;
   bool ScreenRectIsUnstableFor(const blink::WebInputEvent& event) override;
+  bool ScreenRectIsUnstableForIOv2For(
+      const blink::WebInputEvent& event) override;
   void PreProcessTouchEvent(const blink::WebTouchEvent& event) override;
   viz::FrameSinkId GetRootFrameSinkId() override;
   viz::SurfaceId GetCurrentSurfaceId() const override;
   bool HasSize() const override;
+  double GetCSSZoomFactor() const override;
   gfx::PointF TransformPointToRootCoordSpaceF(
-      const gfx::PointF& point) override;
+      const gfx::PointF& point) const override;
   bool TransformPointToCoordSpaceForView(
       const gfx::PointF& point,
-      RenderWidgetHostViewBase* target_view,
+      input::RenderWidgetHostViewInput* target_view,
       gfx::PointF* transformed_point) override;
   void DidNavigate() override;
   gfx::PointF TransformRootPointToViewCoordSpace(
@@ -155,7 +160,8 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
       blink::mojom::IntrinsicSizingInfoPtr sizing_info) override;
   std::unique_ptr<SyntheticGestureTarget> CreateSyntheticGestureTarget()
       override;
-  bool IsRenderWidgetHostViewChildFrame() override;
+  bool IsRenderWidgetHostViewChildFrame() const override;
+  void InvalidateLocalSurfaceIdAndAllocationGroup() override;
 
 #if BUILDFLAG(IS_MAC)
   // RenderWidgetHostView implementation.
@@ -169,6 +175,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
       const std::string& url,
       const std::vector<std::string>& file_paths,
       blink::mojom::ShareService::ShareCallback callback) override;
+  uint64_t GetNSViewId() const override;
 #endif  // BUILDFLAG(IS_MAC)
 
   blink::mojom::InputEventResultState FilterInputEvent(
@@ -197,17 +204,14 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
     return frame_connector_;
   }
 
-  // Returns the view into which this view is directly embedded. This can
-  // return nullptr when this view's associated child frame is not connected
-  // to the frame tree.
-  virtual RenderWidgetHostViewBase* GetParentView();
+  RenderWidgetHostViewBase* GetParentViewInput() override;
 
   void RegisterFrameSinkId();
   void UnregisterFrameSinkId();
 
   void UpdateViewportIntersection(
       const blink::mojom::ViewportIntersectionState& intersection_state,
-      const absl::optional<blink::VisualProperties>& visual_properties);
+      const std::optional<blink::VisualProperties>& visual_properties);
 
   // TODO(sunxd): Rename SetIsInert to UpdateIsInert.
   void SetIsInert();
@@ -216,6 +220,10 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void UpdateRenderThrottlingStatus();
 
   ui::TextInputType GetTextInputType() const;
+
+  // Retrieves the UTF-16 code unit range containing accessible text in the
+  // view. Returns false if the information cannot be retrieved right now.
+  bool GetTextRange(gfx::Range* range) const;
 
   RenderWidgetHostViewBase* GetRootRenderWidgetHostView() const;
 
@@ -240,15 +248,16 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void ProcessFrameSwappedCallbacks();
 
   // RenderWidgetHostViewBase:
+  void UpdateFrameSinkIdRegistration() override;
   void UpdateBackgroundColor() override;
-  absl::optional<DisplayFeature> GetDisplayFeature() override;
+  std::optional<DisplayFeature> GetDisplayFeature() override;
   void SetDisplayFeatureForTesting(
       const DisplayFeature* display_feature) override;
   void NotifyHostAndDelegateOnWasShown(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) final;
-  void RequestPresentationTimeFromHostOrDelegate(
+  void RequestSuccessfulPresentationTimeFromHostOrDelegate(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) final;
-  void CancelPresentationTimeRequestForHostAndDelegate() final;
+  void CancelSuccessfulPresentationTimeRequestForHostAndDelegate() final;
 
   void StopFlingingIfNecessary(
       const blink::WebGestureEvent& event,
@@ -271,6 +280,11 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
 
   ui::Compositor* GetCompositor() override;
 
+  void SetInputHelperForTesting(
+      std::unique_ptr<input::ChildFrameInputHelper> input_helper) {
+    input_helper_ = std::move(input_helper);
+  }
+
  protected:
   ~RenderWidgetHostViewChildFrame() override;
 
@@ -282,6 +296,9 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
       HiddenOOPIFWillNotGenerateCompositorFramesAfterNavigation);
   FRIEND_TEST_ALL_PREFIXES(SitePerProcessBrowserTest,
                            SubframeVisibleAfterRenderViewBecomesSwappedOut);
+  FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostInputEventRouterTest,
+                           FilteredGestureDoesntInterruptBubbling);
+  friend class RenderWidgetHostViewChildFrameTest;
 
   virtual void FirstSurfaceActivation(const viz::SurfaceInfo& surface_info);
 
@@ -295,28 +312,32 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void OnDidUpdateVisualPropertiesComplete(
       const cc::RenderFrameMetadata& metadata);
 
-  void ProcessTouchpadZoomEventAckInRoot(
-      const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result);
   void ForwardTouchpadZoomEventIfNecessary(
       const blink::WebGestureEvent& event,
       blink::mojom::InputEventResultState ack_result) override;
 
+  // TODO(crbug.com/375388841): Remove these once Aura also uses
+  // TouchSelectionControllerInputObserver. These are not needed on Android
+  // since it uses TouchSelectionControllerInputObserver.
+#if !BUILDFLAG(IS_ANDROID)
+  // Performs gesture ack handling needed for swipe-to-move-cursor gestures.
+  void HandleSwipeToMoveCursorGestureAck(const blink::WebGestureEvent& event);
+
+  // Whether a swipe-to-move-cursor gesture is activated.
+  bool swipe_to_move_cursor_activated_ = false;
+#endif
+
   std::vector<base::OnceClosure> frame_swapped_callbacks_;
+
+  std::unique_ptr<input::ChildFrameInputHelper> input_helper_;
 
   // The surface client ID of the parent RenderWidgetHostView.  0 if none.
   viz::FrameSinkId parent_frame_sink_id_;
-
-  gfx::RectF last_stable_screen_rect_;
-  base::TimeTicks screen_rect_stable_since_;
 
   gfx::Insets insets_;
 
   std::unique_ptr<TouchSelectionControllerClientChildFrame>
       selection_controller_client_;
-
-  // True if there is currently a scroll sequence being bubbled to our parent.
-  bool is_scroll_sequence_bubbling_ = false;
 
   // If a new RWHVCF is created for a cross-origin navigation, the parent
   // will typically not notice and will not transmit a full complement of

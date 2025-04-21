@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,16 +16,12 @@ typedef void (^PolicyDecisionHandler)(
 @protocol CRWWebStatePolicyDecider <NSObject>
 @optional
 
-// Invoked by |WebStatePolicyDeciderBridge::ShouldAllowRequest|.
+// Invoked by `WebStatePolicyDeciderBridge::ShouldAllowRequest`.
 - (void)shouldAllowRequest:(NSURLRequest*)request
                requestInfo:(web::WebStatePolicyDecider::RequestInfo)requestInfo
            decisionHandler:(PolicyDecisionHandler)decisionHandler;
 
-// Invoked by |WebStatePolicyDeciderBridge::ShouldAllowRequest|.
-- (bool)shouldAllowErrorPageToBeDisplayed:(NSURLResponse*)response
-                             forMainFrame:(BOOL)forMainFrame;
-
-// Invoked by |WebStatePolicyDeciderBridge::ShouldAllowResponse|.
+// Invoked by `WebStatePolicyDeciderBridge::ShouldAllowResponse`.
 - (void)
     decidePolicyForNavigationResponse:(NSURLResponse*)response
                          responseInfo:(web::WebStatePolicyDecider::ResponseInfo)
@@ -56,9 +52,6 @@ class WebStatePolicyDeciderBridge : public web::WebStatePolicyDecider {
   void ShouldAllowResponse(NSURLResponse* response,
                            ResponseInfo response_info,
                            PolicyDecisionCallback callback) override;
-
-  bool ShouldAllowErrorPageToBeDisplayed(NSURLResponse* response,
-                                         bool for_main_frame) override;
 
  private:
   // CRWWebStatePolicyDecider which receives forwarded calls.

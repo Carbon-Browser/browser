@@ -1,6 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/web_applications/commands/install_from_info_command.h"
 
 #include <map>
 #include <memory>
@@ -8,36 +10,35 @@
 
 #include "base/run_loop.h"
 #include "base/test/bind.h"
-#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/ui/web_applications/web_app_browsertest_base.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
+#include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
 #include "chrome/browser/web_applications/test/fake_os_integration_manager.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
+#include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/web_app.h"
-#include "chrome/browser/web_applications/web_app_command_manager.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_icon_manager.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
+#include "chrome/browser/web_applications/web_app_install_params.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
-#include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/webapps/browser/install_result_code.h"
 #include "content/public/test/browser_test.h"
-#include "install_from_info_command.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 
+using base::BucketsAre;
+
 namespace web_app {
 
-class InstallFromInfoCommandTest : public WebAppControllerBrowserTest {
+class InstallFromInfoCommandTest : public WebAppBrowserTestBase {
  public:
-  InstallFromInfoCommandTest() {
-    WebAppProvider::SetOsIntegrationManagerFactoryForTesting(
-        [](Profile* profile) -> std::unique_ptr<OsIntegrationManager> {
-          return std::make_unique<FakeOsIntegrationManager>(
-              profile, nullptr, nullptr, nullptr, nullptr);
-        });
-  }
-
-  std::map<SquareSizePx, SkBitmap> ReadIcons(const AppId& app_id,
+  InstallFromInfoCommandTest() = default;
+  std::map<SquareSizePx, SkBitmap> ReadIcons(const webapps::AppId& app_id,
                                              IconPurpose purpose,
                                              const SortedSizesPx& sizes_px) {
     std::map<SquareSizePx, SkBitmap> result;
@@ -55,9 +56,10 @@ class InstallFromInfoCommandTest : public WebAppControllerBrowserTest {
 };
 
 IN_PROC_BROWSER_TEST_F(InstallFromInfoCommandTest, SuccessInstall) {
-  auto info = std::make_unique<WebAppInstallInfo>();
+  base::HistogramTester tester;
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("http://test.com/path"));
   info->title = u"Test name";
-  info->start_url = GURL("http://test.com/path");
 
   const webapps::WebappInstallSource install_source =
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -67,27 +69,31 @@ IN_PROC_BROWSER_TEST_F(InstallFromInfoCommandTest, SuccessInstall) {
 #endif
 
   base::RunLoop loop;
-  AppId result_app_id;
-  provider().command_manager().ScheduleCommand(
-      std::make_unique<InstallFromInfoCommand>(
-          std::move(info), &provider().install_finalizer(),
-          /*overwrite_existing_manifest_fields=*/false, install_source,
-          base::BindLambdaForTesting(
-              [&](const AppId& app_id, webapps::InstallResultCode code) {
-                EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-                result_app_id = app_id;
-                loop.Quit();
-              })));
+  webapps::AppId result_app_id;
+  provider().scheduler().InstallFromInfoWithParams(
+      std::move(info),
+      /*overwrite_existing_manifest_fields=*/false, install_source,
+      base::BindLambdaForTesting(
+          [&](const webapps::AppId& app_id, webapps::InstallResultCode code) {
+            EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
+            result_app_id = app_id;
+            loop.Quit();
+          }),
+      WebAppInstallParams());
   loop.Run();
 
-  EXPECT_TRUE(provider().registrar().IsActivelyInstalled(result_app_id));
-  EXPECT_EQ(provider()
-                .os_integration_manager()
-                .AsTestOsIntegrationManager()
-                ->num_create_shortcuts_calls(),
-            0u);
+  EXPECT_EQ(proto::InstallState::INSTALLED_WITH_OS_INTEGRATION,
+            provider().registrar_unsafe().GetInstallState(result_app_id));
 
-  const WebApp* web_app = provider().registrar().GetAppById(result_app_id);
+  // Ensure histogram is only measured once.
+
+  EXPECT_THAT(tester.GetAllSamples("WebApp.Install.Result"),
+              BucketsAre(base::Bucket(true, 1)));
+  EXPECT_THAT(tester.GetAllSamples("WebApp.Install.Source.Success"),
+              BucketsAre(base::Bucket(install_source, 1)));
+
+  const WebApp* web_app =
+      provider().registrar_unsafe().GetAppById(result_app_id);
   ASSERT_TRUE(web_app);
 
   std::map<SquareSizePx, SkBitmap> icon_bitmaps =
@@ -99,34 +105,37 @@ IN_PROC_BROWSER_TEST_F(InstallFromInfoCommandTest, SuccessInstall) {
 }
 
 IN_PROC_BROWSER_TEST_F(InstallFromInfoCommandTest, InstallWithParams) {
-  auto info = std::make_unique<WebAppInstallInfo>();
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("http://test.com/path"));
   info->title = u"Test name";
-  info->start_url = GURL("http://test.com/path");
 
   WebAppInstallParams install_params;
-  install_params.bypass_os_hooks = false;
   install_params.add_to_applications_menu = true;
   install_params.add_to_desktop = true;
 
   base::RunLoop loop;
-  provider().command_manager().ScheduleCommand(
-      std::make_unique<InstallFromInfoCommand>(
-          std::move(info), &provider().install_finalizer(),
-          /*overwrite_existing_manifest_fields=*/false,
-          webapps::WebappInstallSource::MENU_BROWSER_TAB,
-          base::BindLambdaForTesting(
-              [&](const AppId& app_id, webapps::InstallResultCode code) {
-                EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-                EXPECT_TRUE(provider().registrar().IsActivelyInstalled(app_id));
-                loop.Quit();
-              }),
-          install_params));
+  webapps::AppId result_app_id;
+  provider().scheduler().InstallFromInfoWithParams(
+      std::move(info),
+      /*overwrite_existing_manifest_fields=*/false,
+      webapps::WebappInstallSource::MENU_BROWSER_TAB,
+      base::BindLambdaForTesting(
+          [&](const webapps::AppId& app_id, webapps::InstallResultCode code) {
+            EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
+            EXPECT_EQ(proto::InstallState::INSTALLED_WITH_OS_INTEGRATION,
+                      provider().registrar_unsafe().GetInstallState(app_id));
+            result_app_id = app_id;
+            loop.Quit();
+          }),
+      install_params);
   loop.Run();
-  EXPECT_EQ(provider()
-                .os_integration_manager()
-                .AsTestOsIntegrationManager()
-                ->num_create_shortcuts_calls(),
-            1u);
+  std::optional<proto::WebAppOsIntegrationState> os_state =
+      provider().registrar_unsafe().GetAppCurrentOsIntegrationState(
+          result_app_id);
+  ASSERT_TRUE(os_state.has_value());
+  EXPECT_TRUE(os_state->has_shortcut());
+  EXPECT_EQ(os_state->run_on_os_login().run_on_os_login_mode(),
+            proto::RunOnOsLoginMode::NOT_RUN);
 }
 
 }  // namespace web_app

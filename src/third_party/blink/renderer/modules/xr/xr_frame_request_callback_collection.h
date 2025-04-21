@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,7 @@ class XRFrameRequestCallbackCollection final
  private:
   bool IsValidCallbackId(int id) {
     using Traits = HashTraits<CallbackId>;
-    return !Traits::IsDeletedValue(id) &&
-           !WTF::IsHashTraitsEmptyValue<Traits, CallbackId>(id);
+    return !WTF::IsHashTraitsEmptyOrDeletedValue<Traits, CallbackId>(id);
   }
 
   using CallbackFrameRequestMap =

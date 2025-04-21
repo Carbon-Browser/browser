@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,14 +23,11 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.browser.webapps.WebApkIntentDataProviderBuilder;
 import org.chromium.net.test.EmbeddedTestServer;
 
-/**
- * Tests the {@link CurrentPageVerifier} integration with WebAPK Activity.
- */
+/** Tests the {@link CurrentPageVerifier} integration with WebAPK Activity. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public final class WebApkCurrentPageVerifierTest {
-    @Rule
-    public final WebApkActivityTestRule mActivityTestRule = new WebApkActivityTestRule();
+    @Rule public final WebApkActivityTestRule mActivityTestRule = new WebApkActivityTestRule();
 
     private EmbeddedTestServer mTestServer;
 
@@ -47,12 +44,12 @@ public final class WebApkCurrentPageVerifierTest {
 
     private @VerificationStatus int getCurrentPageVerifierStatus() {
         WebappActivity webappActivity = mActivityTestRule.getActivity();
-        return webappActivity.getComponent().resolveCurrentPageVerifier().getState().status;
+        return webappActivity.getCurrentPageVerifier().getState().status;
     }
 
     /**
-     * Tests that {@link CurrentPageVerifier} verification succeeds if the page is within the
-     * WebAPK scope.
+     * Tests that {@link CurrentPageVerifier} verification succeeds if the page is within the WebAPK
+     * scope.
      */
     @Test
     @LargeTest

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,8 +13,10 @@ component("lorgnette_manager") {
   public_deps = [ ":lorgnette_proto" ]
 
   deps = [
+    "//ash/constants",
     "//base",
     "//chromeos/dbus/common",
+    "//components/device_event_log",
     "//dbus",
   ]
 
@@ -26,11 +28,12 @@ component("lorgnette_manager") {
   ]
 }
 
-source_set("test_support") {
+source_set("unit_tests") {
   testonly = true
   public_deps = [ ":lorgnette_manager" ]
   deps = [
     ":lorgnette_proto",
+    "//ash/constants",
     "//base",
     "//base/test:test_support",
     "//dbus:test_support",

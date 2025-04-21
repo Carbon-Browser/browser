@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ namespace storage {
 
 BucketInitParams BucketInitParams::ForDefaultBucket(
     const blink::StorageKey& storage_key) {
-  BucketInitParams params(storage_key, kDefaultBucketName);
-  params.durability = blink::mojom::BucketDurability::kStrict;
-  return params;
+  return BucketInitParams(storage_key, kDefaultBucketName);
 }
 
 BucketInitParams::BucketInitParams(blink::StorageKey storage_key,

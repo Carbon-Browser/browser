@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
@@ -49,7 +49,6 @@ LayoutObject* FindLayoutObject(const ContainerNode& container) {
   // Because |LayoutView| is derived from |LayoutBlockFlow|, |layout_object_|
   // should not be null.
   NOTREACHED() << container;
-  return nullptr;
 }
 
 }  // namespace
@@ -86,14 +85,27 @@ void CachedTextInputInfo::DidLayoutSubtree(const LayoutObject& layout_object) {
   // <div style="contain:strict; ...">abc</div> reaches here.
   if (!container_)
     return;
-  Node* const node = layout_object.NonPseudoNode();
-  if (!node)
+
+  if (!layout_object_) {
     return;
-  const ContainerNode* const container =
-      RootEditableElementOrTreeScopeRootNodeOf(Position(node, 0));
-  if (container != container_)
-    return;
-  Clear();
+  }
+
+#if DCHECK_IS_ON()
+  // TODO(crbug.com/375143253): To investigate flaky failures.
+  if (layout_object_->is_destroyed_) [[unlikely]] {
+    DCHECK(false) << layout_object_;
+  }
+#endif  // DCHECK_IS_ON()
+
+  if (layout_object_->IsDescendantOf(&layout_object)) {
+    // `<span contenteditable>...</span>` reaches here.
+    return Clear();
+  }
+
+  if (layout_object.IsDescendantOf(layout_object_)) {
+    // CachedTextInputInfoTest.RelayoutBoundary reaches here.
+    return Clear();
+  }
 }
 
 void CachedTextInputInfo::DidUpdateLayout(const LayoutObject& layout_object) {
@@ -135,9 +147,10 @@ void CachedTextInputInfo::EnsureCached(const ContainerNode& container) const {
     unsigned capacity = kInitialCapacity;
     if (auto* block_flow =
             DynamicTo<LayoutBlockFlow>(container.GetLayoutObject())) {
-      if (block_flow->HasNGInlineNodeData()) {
-        if (const auto* mapping = NGInlineNode::GetOffsetMapping(block_flow))
+      if (block_flow->GetInlineNodeData()) {
+        if (const auto* mapping = InlineNode::GetOffsetMapping(block_flow)) {
           capacity = mapping->GetText().length();
+        }
       }
     }
     builder.ReserveCapacity(capacity);
@@ -156,7 +169,7 @@ void CachedTextInputInfo::EnsureCached(const ContainerNode& container) const {
     length += it.GetTextState().length();
   }
 
-  if (!builder.IsEmpty())
+  if (!builder.empty())
     text_ = builder.ToString();
 }
 

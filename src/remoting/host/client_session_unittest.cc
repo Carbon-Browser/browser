@@ -1,27 +1,38 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/client_session.h"
 
 #include <stdint.h>
 
-#include <algorithm>
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/base/constants.h"
+#include "remoting/base/errors.h"
+#include "remoting/base/local_session_policies_provider.h"
+#include "remoting/base/session_policies.h"
 #include "remoting/codec/video_encoder_verbatim.h"
 #include "remoting/host/desktop_environment.h"
 #include "remoting/host/fake_desktop_environment.h"
@@ -30,6 +41,7 @@
 #include "remoting/host/host_extension.h"
 #include "remoting/host/host_extension_session.h"
 #include "remoting/host/host_mock_objects.h"
+#include "remoting/protocol/capability_names.h"
 #include "remoting/protocol/fake_connection_to_client.h"
 #include "remoting/protocol/fake_desktop_capturer.h"
 #include "remoting/protocol/fake_message_pipe.h"
@@ -57,6 +69,8 @@ using protocol::test::EqualsMouseMoveEvent;
 using testing::_;
 using testing::AtLeast;
 using testing::Eq;
+using testing::Not;
+using testing::Return;
 using testing::ReturnRef;
 using testing::StrictMock;
 
@@ -64,11 +78,19 @@ namespace {
 
 constexpr char kTestDataChannelCallbackName[] = "test_channel_name";
 
+// Use large fake screen-ids on 64-bit systems, to detect errors caused by
+// inadvertent casts to 32-bits.
+constexpr bool kUse64BitDisplayId = (sizeof(webrtc::ScreenId) >= 8);
+
+const SessionPolicies kInitialLocalPolicies = {.maximum_session_duration =
+                                                   base::Hours(10)};
+
 // Matches a |protocol::Capabilities| argument against a list of capabilities
 // formatted as a space-separated string.
 MATCHER_P(IncludesCapabilities, expected_capabilities, "") {
-  if (!arg.has_capabilities())
+  if (!arg.has_capabilities()) {
     return false;
+  }
 
   std::vector<std::string> words_args =
       base::SplitString(arg.capabilities(), " ", base::KEEP_WHITESPACE,
@@ -78,12 +100,15 @@ MATCHER_P(IncludesCapabilities, expected_capabilities, "") {
                         base::SPLIT_WANT_NONEMPTY);
 
   for (const auto& word : words_expected) {
-    if (std::find(words_args.begin(), words_args.end(), word) ==
-        words_args.end()) {
+    if (!base::Contains(words_args, word)) {
       return false;
     }
   }
   return true;
+}
+
+MATCHER_P(ScreenIdMatches, expected_id, "") {
+  return arg.screen_id() == expected_id;
 }
 
 protocol::MouseEvent MakeMouseMoveEvent(int x, int y) {
@@ -122,11 +147,13 @@ class ClientSessionTest : public testing::Test {
       protocol::FakeDesktopCapturer::kWidth;  // 800
   static const int kDisplay1Height =
       protocol::FakeDesktopCapturer::kHeight;  // 600
-  static const int64_t kDisplay1Id = 1111111111111111;
+  static const int64_t kDisplay1Id =
+      kUse64BitDisplayId ? 1111111111111111 : 11111111;
   static const int kDisplay2Width = 1024;
   static const int kDisplay2Height = 768;
   static const int kDisplay2YOffset = 35;
-  static const int64_t kDisplay2Id = 2222222222222222;
+  static const int64_t kDisplay2Id =
+      kUse64BitDisplayId ? 2222222222222222 : 22222222;
 
   // Creates the client session from a FakeSession instance.
   void CreateClientSession(std::unique_ptr<protocol::FakeSession> session);
@@ -137,7 +164,7 @@ class ClientSessionTest : public testing::Test {
   // Notifies the client session that the client connection has been
   // authenticated and channels have been connected. This effectively enables
   // the input pipe line and starts video capturing.
-  void ConnectClientSession();
+  void ConnectClientSession(const SessionPolicies* session_policies = nullptr);
 
   // Fakes video size notification from the VideoStream.
   void SendOnVideoSizeChanged(int width, int height, int dpi_x, int dpi_y);
@@ -183,7 +210,8 @@ class ClientSessionTest : public testing::Test {
   int curr_display_;
 
   // Message loop that will process all ClientSession tasks.
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
   // AutoThreadTaskRunner on which |client_session_| will be run.
   scoped_refptr<AutoThreadTaskRunner> task_runner_;
@@ -194,7 +222,14 @@ class ClientSessionTest : public testing::Test {
 
   // HostExtensions to pass when creating the ClientSession. Caller retains
   // ownership of the HostExtensions themselves.
-  std::vector<HostExtension*> extensions_;
+  std::vector<raw_ptr<HostExtension, VectorExperimental>> extensions_;
+
+  // Vectors of events to bind to `client_sessions_`, must outlive it.
+  std::vector<protocol::KeyEvent> key_events_;
+  std::vector<protocol::MouseEvent> mouse_events_;
+  std::vector<protocol::ClipboardEvent> clipboard_events_;
+
+  LocalSessionPoliciesProvider local_session_policies_provider_;
 
   // ClientSession instance under test.
   std::unique_ptr<ClientSession> client_session_;
@@ -206,7 +241,7 @@ class ClientSessionTest : public testing::Test {
   MockClientStub client_stub_;
 
   // ClientSession owns |connection_| but tests need it to inject fake events.
-  raw_ptr<protocol::FakeConnectionToClient> connection_;
+  raw_ptr<protocol::FakeConnectionToClient, DanglingUntriaged> connection_;
 
   std::unique_ptr<FakeDesktopEnvironmentFactory> desktop_environment_factory_;
 
@@ -222,12 +257,18 @@ void ClientSessionTest::SetUp() {
       std::make_unique<FakeDesktopEnvironmentFactory>(
           task_environment_.GetMainThreadTaskRunner());
   desktop_environment_options_ = DesktopEnvironmentOptions::CreateDefault();
+
+  local_session_policies_provider_.set_local_policies(kInitialLocalPolicies);
+
+  // Suppress spammy "uninteresting call" logs.
+  EXPECT_CALL(client_stub_, SetCursorShape(_)).Times(testing::AnyNumber());
 }
 
 void ClientSessionTest::TearDown() {
   if (client_session_) {
-    if (connection_->is_connected())
-      client_session_->DisconnectSession(protocol::OK);
+    if (connection_->is_connected()) {
+      client_session_->DisconnectSession(ErrorCode::OK);
+    }
     client_session_.reset();
     desktop_environment_factory_.reset();
   }
@@ -251,15 +292,18 @@ void ClientSessionTest::CreateClientSession(
 
   client_session_ = std::make_unique<ClientSession>(
       &session_event_handler_, std::move(connection),
-      desktop_environment_factory_.get(), desktop_environment_options_,
-      base::TimeDelta(), nullptr, extensions_);
+      desktop_environment_factory_.get(), desktop_environment_options_, nullptr,
+      extensions_, &local_session_policies_provider_);
 }
 
 void ClientSessionTest::CreateClientSession() {
   CreateClientSession(std::make_unique<protocol::FakeSession>());
 }
 
-void ClientSessionTest::ConnectClientSession() {
+void ClientSessionTest::ConnectClientSession(
+    const SessionPolicies* session_policies) {
+  EXPECT_CALL(session_event_handler_, OnSessionPoliciesReceived(_))
+      .WillOnce(Return(std::nullopt));
   EXPECT_CALL(session_event_handler_, OnSessionAuthenticated(_));
   EXPECT_CALL(session_event_handler_, OnSessionChannelsConnected(_));
 
@@ -267,7 +311,7 @@ void ClientSessionTest::ConnectClientSession() {
   EXPECT_FALSE(connection_->clipboard_stub());
   EXPECT_FALSE(connection_->input_stub());
 
-  client_session_->OnConnectionAuthenticated();
+  client_session_->OnConnectionAuthenticated(session_policies);
 
   EXPECT_TRUE(connection_->clipboard_stub());
   EXPECT_TRUE(connection_->input_stub());
@@ -319,14 +363,18 @@ void ClientSessionTest::NotifyVideoSizeAll() {
       y_max = disp_y_max;
       initialized = true;
     } else {
-      if (disp.x < x_min)
+      if (disp.x < x_min) {
         x_min = disp.x;
-      if (disp_x_max > x_max)
+      }
+      if (disp_x_max > x_max) {
         x_max = disp_x_max;
-      if (disp.y < y_min)
+      }
+      if (disp.y < y_min) {
         y_min = disp.y;
-      if (disp_y_max > y_max)
+      }
+      if (disp_y_max > y_max) {
         y_max = disp_y_max;
+      }
     }
   }
   int width = x_max - x_min;
@@ -439,6 +487,119 @@ webrtc::ScreenId ClientSessionTest::GetSelectedSourceDisplayId() {
   return connection_->last_video_stream()->selected_source();
 }
 
+TEST_F(
+    ClientSessionTest,
+    OnLocalPoliciesChanged_DoesNotDisconnectIfEffectivePoliciesComeFromRemotePolicies) {
+  SessionPolicies remote_policies = {.maximum_session_duration =
+                                         base::Hours(8)};
+  CreateClientSession();
+  ConnectClientSession(&remote_policies);
+
+  EXPECT_TRUE(connection_->is_connected());
+  local_session_policies_provider_.set_local_policies(
+      {.maximum_session_duration = base::Hours(23)});
+  EXPECT_TRUE(connection_->is_connected());
+}
+
+TEST_F(ClientSessionTest,
+       OnLocalPoliciesChanged_DoesNotDisconnectIfEffectivePoliciesNotChanged) {
+  CreateClientSession();
+  ConnectClientSession();
+
+  EXPECT_TRUE(connection_->is_connected());
+  local_session_policies_provider_.set_local_policies(kInitialLocalPolicies);
+  EXPECT_TRUE(connection_->is_connected());
+}
+
+TEST_F(ClientSessionTest,
+       OnLocalPoliciesChanged_DisconnectsIfEffectivePoliciesChanged) {
+  CreateClientSession();
+  ConnectClientSession();
+
+  EXPECT_TRUE(connection_->is_connected());
+  local_session_policies_provider_.set_local_policies(
+      {.maximum_session_duration = base::Hours(23)});
+  EXPECT_FALSE(connection_->is_connected());
+}
+
+TEST_F(ClientSessionTest, DisconnectsAfterMaxSessionDurationIsReached) {
+  CreateClientSession();
+  ConnectClientSession();
+
+  EXPECT_TRUE(connection_->is_connected());
+  // Calling FastForwardBy() would result in a livelock, so we just advance the
+  // clock and run all the scheduled tasks, which includes the max duration
+  // timer.
+  task_environment_.AdvanceClock(
+      *kInitialLocalPolicies.maximum_session_duration + base::Minutes(1));
+  task_environment_.RunUntilIdle();
+  EXPECT_FALSE(connection_->is_connected());
+}
+
+TEST_F(ClientSessionTest, DisconnectsIfOnSessionPoliciesReceivedReturnsError) {
+  EXPECT_CALL(session_event_handler_,
+              OnSessionPoliciesReceived(kInitialLocalPolicies))
+      .WillOnce(Return(ErrorCode::DISALLOWED_BY_POLICY));
+
+  CreateClientSession();
+  client_session_->OnConnectionAuthenticated(nullptr);
+
+  EXPECT_FALSE(connection_->is_connected());
+  EXPECT_EQ(connection_->disconnect_error(), ErrorCode::DISALLOWED_BY_POLICY);
+}
+
+TEST_F(ClientSessionTest,
+       EffectivePoliciesImplicitlyAllowFileTransfer_HasCapability) {
+  local_session_policies_provider_.set_local_policies({});
+  EXPECT_CALL(
+      client_stub_,
+      SetCapabilities(IncludesCapabilities(protocol::kFileTransferCapability)));
+
+  CreateClientSession();
+  ConnectClientSession();
+}
+
+TEST_F(ClientSessionTest,
+       EffectivePoliciesExplicitlyAllowFileTransfer_HasCapability) {
+  local_session_policies_provider_.set_local_policies(
+      {.allow_file_transfer = true});
+  EXPECT_CALL(
+      client_stub_,
+      SetCapabilities(IncludesCapabilities(protocol::kFileTransferCapability)));
+
+  CreateClientSession();
+  ConnectClientSession();
+}
+
+TEST_F(ClientSessionTest,
+       EffectivePoliciesDisallowFileTransfer_DoesNotHaveCapability) {
+  local_session_policies_provider_.set_local_policies(
+      {.allow_file_transfer = false});
+  EXPECT_CALL(client_stub_, SetCapabilities(Not(IncludesCapabilities(
+                                protocol::kFileTransferCapability))));
+
+  CreateClientSession();
+  ConnectClientSession();
+}
+
+TEST_F(ClientSessionTest, ApplyPoliciesFromRemotePolicies) {
+  local_session_policies_provider_.set_local_policies({
+      .allow_file_transfer = true,
+      .allow_uri_forwarding = true,
+  });
+  SessionPolicies remote_policies = {
+      .allow_file_transfer = false,
+      .allow_uri_forwarding = false,
+  };
+  EXPECT_CALL(client_stub_,
+              SetCapabilities(Not(IncludesCapabilities(
+                  std::string() + protocol::kFileTransferCapability + " " +
+                  protocol::kRemoteOpenUrlCapability))));
+
+  CreateClientSession();
+  ConnectClientSession(&remote_policies);
+}
+
 TEST_F(ClientSessionTest, MultiMonMouseMove) {
   CreateClientSession();
   ConnectClientSession();
@@ -448,8 +609,7 @@ TEST_F(ClientSessionTest, MultiMonMouseMove) {
       desktop_environment_factory_->last_desktop_environment()
           ->last_input_injector()
           .get();
-  std::vector<protocol::MouseEvent> mouse_events;
-  input_injector->set_mouse_events(&mouse_events);
+  input_injector->set_mouse_events(&mouse_events_);
 
   // These mouse events are in global (full desktop) coordinates.
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(70, 50));
@@ -473,25 +633,25 @@ TEST_F(ClientSessionTest, MultiMonMouseMove) {
   // Events should clamp to the entire desktop (800+1024, 35+768).
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(2000, 1000));
 
-  client_session_->DisconnectSession(protocol::OK);
+  client_session_->DisconnectSession(ErrorCode::OK);
   client_session_.reset();
 
-  EXPECT_EQ(7U, mouse_events.size());
+  EXPECT_EQ(7U, mouse_events_.size());
   // Full desktop.
-  EXPECT_THAT(mouse_events[0], EqualsMouseMoveEvent(70, 50));
-  EXPECT_THAT(mouse_events[1], EqualsMouseMoveEvent(1000, 650));
+  EXPECT_THAT(mouse_events_[0], EqualsMouseMoveEvent(70, 50));
+  EXPECT_THAT(mouse_events_[1], EqualsMouseMoveEvent(1000, 650));
   // Second display.
-  EXPECT_THAT(mouse_events[2], EqualsMouseMoveEvent(1005 + kDisplay1Width,
-                                                    625 + kDisplay2YOffset));
-  EXPECT_THAT(mouse_events[3],
+  EXPECT_THAT(mouse_events_[2], EqualsMouseMoveEvent(1005 + kDisplay1Width,
+                                                     625 + kDisplay2YOffset));
+  EXPECT_THAT(mouse_events_[3],
               EqualsMouseMoveEvent(kDisplay1Width + kDisplay2Width - 1,
                                    700 + kDisplay2YOffset));
   // First display.
-  EXPECT_THAT(mouse_events[4], EqualsMouseMoveEvent(80, 60));
-  EXPECT_THAT(mouse_events[5],
+  EXPECT_THAT(mouse_events_[4], EqualsMouseMoveEvent(80, 60));
+  EXPECT_THAT(mouse_events_[5],
               EqualsMouseMoveEvent(kDisplay1Width - 1, kDisplay1Height - 1));
   // Full desktop.
-  EXPECT_THAT(mouse_events[6],
+  EXPECT_THAT(mouse_events_[6],
               EqualsMouseMoveEvent(kDisplay1Width + kDisplay2Width - 1,
                                    kDisplay2Height + kDisplay2YOffset - 1));
 }
@@ -505,8 +665,7 @@ TEST_F(ClientSessionTest, MultiMonMouseMove_SameSize) {
       desktop_environment_factory_->last_desktop_environment()
           ->last_input_injector()
           .get();
-  std::vector<protocol::MouseEvent> mouse_events;
-  input_injector->set_mouse_events(&mouse_events);
+  input_injector->set_mouse_events(&mouse_events_);
 
   // These mouse events are in global (full desktop) coordinates.
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(70, 50));
@@ -530,24 +689,24 @@ TEST_F(ClientSessionTest, MultiMonMouseMove_SameSize) {
   // Events should clamp to the entire desktop (800+800, 35+600).
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(2000, 1000));
 
-  client_session_->DisconnectSession(protocol::OK);
+  client_session_->DisconnectSession(ErrorCode::OK);
   client_session_.reset();
 
-  EXPECT_EQ(7U, mouse_events.size());
+  EXPECT_EQ(7U, mouse_events_.size());
   // Full desktop.
-  EXPECT_THAT(mouse_events[0], EqualsMouseMoveEvent(70, 50));
-  EXPECT_THAT(mouse_events[1], EqualsMouseMoveEvent(1000, 550));
+  EXPECT_THAT(mouse_events_[0], EqualsMouseMoveEvent(70, 50));
+  EXPECT_THAT(mouse_events_[1], EqualsMouseMoveEvent(1000, 550));
   // Second display.
-  EXPECT_THAT(mouse_events[2], EqualsMouseMoveEvent(705 + kDisplay1Width,
-                                                    525 + kDisplay2YOffset));
-  EXPECT_THAT(mouse_events[3], EqualsMouseMoveEvent(2 * kDisplay1Width - 1,
-                                                    500 + kDisplay2YOffset));
+  EXPECT_THAT(mouse_events_[2], EqualsMouseMoveEvent(705 + kDisplay1Width,
+                                                     525 + kDisplay2YOffset));
+  EXPECT_THAT(mouse_events_[3], EqualsMouseMoveEvent(2 * kDisplay1Width - 1,
+                                                     500 + kDisplay2YOffset));
   // First display.
-  EXPECT_THAT(mouse_events[4], EqualsMouseMoveEvent(80, 60));
-  EXPECT_THAT(mouse_events[5],
+  EXPECT_THAT(mouse_events_[4], EqualsMouseMoveEvent(80, 60));
+  EXPECT_THAT(mouse_events_[5],
               EqualsMouseMoveEvent(kDisplay1Width - 1, kDisplay1Height - 1));
   // Full desktop.
-  EXPECT_THAT(mouse_events[6],
+  EXPECT_THAT(mouse_events_[6],
               EqualsMouseMoveEvent(2 * kDisplay1Width - 1,
                                    kDisplay1Height + kDisplay2YOffset - 1));
 }
@@ -561,12 +720,9 @@ TEST_F(ClientSessionTest, DisableInputs) {
       desktop_environment_factory_->last_desktop_environment()
           ->last_input_injector()
           .get();
-  std::vector<protocol::KeyEvent> key_events;
-  input_injector->set_key_events(&key_events);
-  std::vector<protocol::MouseEvent> mouse_events;
-  input_injector->set_mouse_events(&mouse_events);
-  std::vector<protocol::ClipboardEvent> clipboard_events;
-  input_injector->set_clipboard_events(&clipboard_events);
+  input_injector->set_key_events(&key_events_);
+  input_injector->set_mouse_events(&mouse_events_);
+  input_injector->set_clipboard_events(&clipboard_events_);
 
   // Inject test events that are expected to be injected.
   connection_->clipboard_stub()->InjectClipboardEvent(MakeClipboardEvent("a"));
@@ -588,23 +744,23 @@ TEST_F(ClientSessionTest, DisableInputs) {
   connection_->input_stub()->InjectKeyEvent(MakeKeyEvent(true, 3));
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(300, 301));
 
-  client_session_->DisconnectSession(protocol::OK);
+  client_session_->DisconnectSession(ErrorCode::OK);
   client_session_.reset();
 
-  EXPECT_EQ(2U, mouse_events.size());
-  EXPECT_THAT(mouse_events[0], EqualsMouseMoveEvent(100, 101));
-  EXPECT_THAT(mouse_events[1], EqualsMouseMoveEvent(300, 301));
+  EXPECT_EQ(2U, mouse_events_.size());
+  EXPECT_THAT(mouse_events_[0], EqualsMouseMoveEvent(100, 101));
+  EXPECT_THAT(mouse_events_[1], EqualsMouseMoveEvent(300, 301));
 
-  EXPECT_EQ(4U, key_events.size());
-  EXPECT_THAT(key_events[0], EqualsKeyEvent(1, true));
-  EXPECT_THAT(key_events[1], EqualsKeyEvent(1, false));
-  EXPECT_THAT(key_events[2], EqualsKeyEvent(3, true));
-  EXPECT_THAT(key_events[3], EqualsKeyEvent(3, false));
+  EXPECT_EQ(4U, key_events_.size());
+  EXPECT_THAT(key_events_[0], EqualsKeyEvent(1, true));
+  EXPECT_THAT(key_events_[1], EqualsKeyEvent(1, false));
+  EXPECT_THAT(key_events_[2], EqualsKeyEvent(3, true));
+  EXPECT_THAT(key_events_[3], EqualsKeyEvent(3, false));
 
-  EXPECT_EQ(2U, clipboard_events.size());
-  EXPECT_THAT(clipboard_events[0],
+  EXPECT_EQ(2U, clipboard_events_.size());
+  EXPECT_THAT(clipboard_events_[0],
               EqualsClipboardEvent(kMimeTypeTextUtf8, "a"));
-  EXPECT_THAT(clipboard_events[1],
+  EXPECT_THAT(clipboard_events_[1],
               EqualsClipboardEvent(kMimeTypeTextUtf8, "c"));
 }
 
@@ -613,17 +769,16 @@ TEST_F(ClientSessionTest, LocalInputTest) {
   ConnectClientSession();
   SetupSingleDisplay();
 
-  std::vector<protocol::MouseEvent> mouse_events;
   desktop_environment_factory_->last_desktop_environment()
       ->last_input_injector()
-      ->set_mouse_events(&mouse_events);
+      ->set_mouse_events(&mouse_events_);
 
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(100, 101));
 
 #if !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_CHROMEOS)
   // The OS echoes the injected event back.
   client_session_->OnLocalPointerMoved(webrtc::DesktopVector(100, 101),
-                                       ui::ET_MOUSE_MOVED);
+                                       ui::EventType::kMouseMoved);
 #endif  // !BUILDFLAG(IS_WIN)
 
   // This one should get throught as well.
@@ -631,15 +786,15 @@ TEST_F(ClientSessionTest, LocalInputTest) {
 
   // Now this is a genuine local event.
   client_session_->OnLocalPointerMoved(webrtc::DesktopVector(100, 101),
-                                       ui::ET_MOUSE_MOVED);
+                                       ui::EventType::kMouseMoved);
 
   // This one should be blocked because of the previous local input event.
   connection_->input_stub()->InjectMouseEvent(MakeMouseMoveEvent(300, 301));
 
   // Verify that we've received correct set of mouse events.
-  ASSERT_EQ(2U, mouse_events.size());
-  EXPECT_THAT(mouse_events[0], EqualsMouseMoveEvent(100, 101));
-  EXPECT_THAT(mouse_events[1], EqualsMouseMoveEvent(200, 201));
+  ASSERT_EQ(2U, mouse_events_.size());
+  EXPECT_THAT(mouse_events_[0], EqualsMouseMoveEvent(100, 101));
+  EXPECT_THAT(mouse_events_[1], EqualsMouseMoveEvent(200, 201));
 
   // Verify that we're still connected.
   EXPECT_TRUE(connection_->is_connected());
@@ -655,7 +810,7 @@ TEST_F(ClientSessionTest, DisconnectOnLocalInputTest) {
   SetupSingleDisplay();
 
   client_session_->OnLocalPointerMoved(webrtc::DesktopVector(100, 101),
-                                       ui::ET_MOUSE_MOVED);
+                                       ui::EventType::kMouseMoved);
   EXPECT_FALSE(connection_->is_connected());
 }
 
@@ -668,10 +823,8 @@ TEST_F(ClientSessionTest, RestoreEventState) {
       desktop_environment_factory_->last_desktop_environment()
           ->last_input_injector()
           .get();
-  std::vector<protocol::KeyEvent> key_events;
-  input_injector->set_key_events(&key_events);
-  std::vector<protocol::MouseEvent> mouse_events;
-  input_injector->set_mouse_events(&mouse_events);
+  input_injector->set_key_events(&key_events_);
+  input_injector->set_mouse_events(&mouse_events_);
 
   connection_->input_stub()->InjectKeyEvent(MakeKeyEvent(true, 1));
   connection_->input_stub()->InjectKeyEvent(MakeKeyEvent(true, 2));
@@ -681,20 +834,20 @@ TEST_F(ClientSessionTest, RestoreEventState) {
   mousedown.set_button_down(true);
   connection_->input_stub()->InjectMouseEvent(mousedown);
 
-  client_session_->DisconnectSession(protocol::OK);
+  client_session_->DisconnectSession(ErrorCode::OK);
   client_session_.reset();
 
-  EXPECT_EQ(2U, mouse_events.size());
-  EXPECT_THAT(mouse_events[0],
+  EXPECT_EQ(2U, mouse_events_.size());
+  EXPECT_THAT(mouse_events_[0],
               EqualsMouseButtonEvent(protocol::MouseEvent::BUTTON_LEFT, true));
-  EXPECT_THAT(mouse_events[1],
+  EXPECT_THAT(mouse_events_[1],
               EqualsMouseButtonEvent(protocol::MouseEvent::BUTTON_LEFT, false));
 
-  EXPECT_EQ(4U, key_events.size());
-  EXPECT_THAT(key_events[0], EqualsKeyEvent(1, true));
-  EXPECT_THAT(key_events[1], EqualsKeyEvent(2, true));
-  EXPECT_THAT(key_events[2], EqualsKeyEvent(1, false));
-  EXPECT_THAT(key_events[3], EqualsKeyEvent(2, false));
+  EXPECT_EQ(4U, key_events_.size());
+  EXPECT_THAT(key_events_[0], EqualsKeyEvent(1, true));
+  EXPECT_THAT(key_events_[1], EqualsKeyEvent(2, true));
+  EXPECT_THAT(key_events_[2], EqualsKeyEvent(1, false));
+  EXPECT_THAT(key_events_[3], EqualsKeyEvent(2, false));
 }
 
 TEST_F(ClientSessionTest, ClampMouseEvents) {
@@ -702,25 +855,32 @@ TEST_F(ClientSessionTest, ClampMouseEvents) {
   ConnectClientSession();
   SetupSingleDisplay();
 
-  std::vector<protocol::MouseEvent> mouse_events;
   desktop_environment_factory_->last_desktop_environment()
       ->last_input_injector()
-      ->set_mouse_events(&mouse_events);
+      ->set_mouse_events(&mouse_events_);
 
-  int input_x[3] = {-999, 100, 999};
-  int expected_x[3] = {0, 100, protocol::FakeDesktopCapturer::kWidth - 1};
-  int input_y[3] = {-999, 50, 999};
-  int expected_y[3] = {0, 50, protocol::FakeDesktopCapturer::kHeight - 1};
+  std::array<int, 3> input_x = {-999, 100, 999};
+  std::array<int, 3> expected_x = {
+      0,
+      100,
+      protocol::FakeDesktopCapturer::kWidth - 1,
+  };
+  std::array<int, 3> input_y = {-999, 50, 999};
+  std::array<int, 3> expected_y = {
+      0,
+      50,
+      protocol::FakeDesktopCapturer::kHeight - 1,
+  };
 
   protocol::MouseEvent expected_event;
   for (int j = 0; j < 3; j++) {
     for (int i = 0; i < 3; i++) {
-      mouse_events.clear();
+      mouse_events_.clear();
       connection_->input_stub()->InjectMouseEvent(
           MakeMouseMoveEvent(input_x[i], input_y[j]));
 
-      EXPECT_EQ(1U, mouse_events.size());
-      EXPECT_THAT(mouse_events[0],
+      EXPECT_EQ(1U, mouse_events_.size());
+      EXPECT_THAT(mouse_events_[0],
                   EqualsMouseMoveEvent(expected_x[i], expected_y[j]));
     }
   }
@@ -778,6 +938,9 @@ TEST_F(ClientSessionTest, Extensions) {
 
   // ext3 was sent a message but not instantiated.
   EXPECT_FALSE(extension3.was_instantiated());
+
+  // Drop references to locals before they go out of scope.
+  extensions_.clear();
 }
 
 TEST_F(ClientSessionTest, DataChannelCallbackIsCalled) {
@@ -827,6 +990,26 @@ TEST_F(ClientSessionTest, ForwardHostSessionOptions2) {
                    ->options()
                    .desktop_capture_options()
                    ->detect_updated_region());
+}
+
+TEST_F(ClientSessionTest, ActiveDisplayMessageSent) {
+  EXPECT_CALL(client_stub_, SetActiveDisplay(ScreenIdMatches(kDisplay1Id)));
+
+  // The ActiveDisplayMonitor only gets created after negotiating this
+  // capability with the client.
+  desktop_environment_factory_->set_capabilities(
+      protocol::kMultiStreamCapability);
+  CreateClientSession();
+  ConnectClientSession();
+
+  protocol::Capabilities client_capabilities;
+  client_capabilities.set_capabilities(protocol::kMultiStreamCapability);
+  client_session_->SetCapabilities(client_capabilities);
+
+  auto monitor = desktop_environment_factory_->last_desktop_environment()
+                     ->last_active_display_monitor();
+  ASSERT_TRUE(monitor);
+  monitor->SetActiveDisplay(static_cast<webrtc::ScreenId>(kDisplay1Id));
 }
 
 // Display selection behaves quite differently if capturing of the full desktop

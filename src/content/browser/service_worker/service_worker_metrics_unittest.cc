@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/service_worker/service_worker_metrics.h"
 
 #include "base/test/metrics/histogram_tester.h"
-#include "content/browser/service_worker/embedded_worker_status.h"
 #include "content/test/test_content_browser_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "components/sync/engine/cycle/nudge_tracker.h"
 #include "components/sync/engine/cycle/status_controller.h"
+#include "components/sync/engine/data_type_registry.h"
 #include "components/sync/engine/events/protocol_event.h"
-#include "components/sync/engine/model_type_registry.h"
-#include "components/sync/protocol/sync_enums.pb.h"
 
 namespace sync_pb {
 class GetUpdatesMessage;
 class ClientToServerMessage;
+enum SyncEnums_GetUpdatesOrigin : int;
 }  // namespace sync_pb
 
 namespace syncer {
@@ -40,6 +41,8 @@ class GetUpdatesDelegate {
   virtual std::unique_ptr<ProtocolEvent> GetNetworkRequestEvent(
       base::Time timestamp,
       const sync_pb::ClientToServerMessage& request) const = 0;
+
+  virtual bool IsNotificationInfoRequired() const = 0;
 };
 
 // Functionality specific to the normal GetUpdate request.
@@ -60,15 +63,17 @@ class NormalGetUpdatesDelegate : public GetUpdatesDelegate {
       base::Time timestamp,
       const sync_pb::ClientToServerMessage& request) const override;
 
+  bool IsNotificationInfoRequired() const override;
+
  private:
-  const NudgeTracker& nudge_tracker_;
+  const raw_ref<const NudgeTracker> nudge_tracker_;
 };
 
 // Functionality specific to the configure GetUpdate request.
 class ConfigureGetUpdatesDelegate : public GetUpdatesDelegate {
  public:
   explicit ConfigureGetUpdatesDelegate(
-      sync_pb::SyncEnums::GetUpdatesOrigin origin);
+      sync_pb::SyncEnums_GetUpdatesOrigin origin);
 
   ConfigureGetUpdatesDelegate(const ConfigureGetUpdatesDelegate&) = delete;
   ConfigureGetUpdatesDelegate& operator=(const ConfigureGetUpdatesDelegate&) =
@@ -84,8 +89,10 @@ class ConfigureGetUpdatesDelegate : public GetUpdatesDelegate {
       base::Time timestamp,
       const sync_pb::ClientToServerMessage& request) const override;
 
+  bool IsNotificationInfoRequired() const override;
+
  private:
-  const sync_pb::SyncEnums::GetUpdatesOrigin origin_;
+  const sync_pb::SyncEnums_GetUpdatesOrigin origin_;
 };
 
 // Functionality specific to the poll GetUpdate request.
@@ -105,6 +112,8 @@ class PollGetUpdatesDelegate : public GetUpdatesDelegate {
   std::unique_ptr<ProtocolEvent> GetNetworkRequestEvent(
       base::Time timestamp,
       const sync_pb::ClientToServerMessage& request) const override;
+
+  bool IsNotificationInfoRequired() const override;
 };
 
 }  // namespace syncer

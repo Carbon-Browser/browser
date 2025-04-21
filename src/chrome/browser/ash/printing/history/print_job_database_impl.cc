@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
 
@@ -64,7 +63,7 @@ void PrintJobDatabaseImpl::SavePrintJob(
     const printing::proto::PrintJobInfo& print_job_info,
     SavePrintJobCallback callback) {
   if (init_status_ == InitStatus::FAILED) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -93,7 +92,7 @@ void PrintJobDatabaseImpl::SavePrintJob(
 void PrintJobDatabaseImpl::DeletePrintJobs(const std::vector<std::string>& ids,
                                            DeletePrintJobsCallback callback) {
   if (init_status_ == InitStatus::FAILED) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -114,9 +113,8 @@ void PrintJobDatabaseImpl::DeletePrintJobs(const std::vector<std::string>& ids,
 }
 
 void PrintJobDatabaseImpl::Clear(DeletePrintJobsCallback callback) {
-  // TODO(crbug/1074444): Maybe try to remove duplicate code in this function.
   if (init_status_ == InitStatus::FAILED) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -143,7 +141,7 @@ void PrintJobDatabaseImpl::Clear(DeletePrintJobsCallback callback) {
 
 void PrintJobDatabaseImpl::GetPrintJobs(GetPrintJobsCallback callback) {
   if (init_status_ == InitStatus::FAILED) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), false,
                        std::vector<printing::proto::PrintJobInfo>()));
@@ -163,7 +161,7 @@ void PrintJobDatabaseImpl::GetPrintJobs(GetPrintJobsCallback callback) {
   for (const auto& pair : cache_)
     entries.push_back(pair.second);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true, std::move(entries)));
 }
 
@@ -190,7 +188,6 @@ void PrintJobDatabaseImpl::OnInitialized(
     case leveldb_proto::Enums::InitStatus::kNotInitialized:
     case leveldb_proto::Enums::InitStatus::kCorrupt:
       NOTREACHED();
-      break;
   }
 }
 
@@ -207,12 +204,12 @@ void PrintJobDatabaseImpl::OnKeysAndEntriesLoaded(
 void PrintJobDatabaseImpl::FinishInitialization(InitializeCallback callback,
                                                 bool success) {
   init_status_ = success ? InitStatus::INITIALIZED : InitStatus::FAILED;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), success));
   // We run deferred callbacks even if initialization failed not to cause
   // possible client-side blocks of next calls to the database.
   while (!deferred_callbacks_.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(deferred_callbacks_.front()));
     deferred_callbacks_.pop();
   }
@@ -224,7 +221,7 @@ void PrintJobDatabaseImpl::OnPrintJobSaved(
     bool success) {
   if (!success)
     cache_.erase(print_job_info.id());
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), success));
 }
 
@@ -235,14 +232,14 @@ void PrintJobDatabaseImpl::OnPrintJobsDeleted(
   if (success)
     for (const std::string& id : ids)
       cache_.erase(id);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), success));
 }
 
 void PrintJobDatabaseImpl::GetPrintJobsFromProtoDatabase(
     GetPrintJobsFromProtoDatabaseCallback callback) {
   if (init_status_ == InitStatus::FAILED) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false, nullptr));
     return;
   }
@@ -264,7 +261,7 @@ void PrintJobDatabaseImpl::OnPrintJobRetrievedFromDatabase(
     GetPrintJobsFromProtoDatabaseCallback callback,
     bool success,
     std::unique_ptr<std::vector<printing::proto::PrintJobInfo>> entries) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), success, std::move(entries)));
 }

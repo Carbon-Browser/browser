@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,34 +10,33 @@
 #include <string>
 #include <vector>
 
+#include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
-#include "base/test/scoped_feature_list.h"
+#include "base/test/scoped_run_loop_timeout.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/sync/test/integration/configuration_refresher.h"
-#include "chrome/browser/sync/test/integration/fake_server_invalidation_sender.h"
+#include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/sync/test/integration/invalidations/fake_server_sync_invalidation_sender.h"
 #include "chrome/common/buildflags.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/sync/base/model_type.h"
+#include "chrome/test/base/platform_browser_test.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/test/fake_server.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
 #include "services/network/test/test_url_loader_factory.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/test/base/android/android_browser_test.h"
+#include "components/gcm_driver/instance_id/scoped_use_fake_instance_id_android.h"
 #else
 #include "chrome/browser/extensions/install_verifier.h"
-#include "chrome/test/base/in_process_browser_test.h"
 #endif
 
 // The E2E tests are designed to run against real backend servers. To identify
@@ -56,6 +55,8 @@
 #define E2E_ONLY(test_name) MACRO_CONCAT(DISABLED_E2ETest, test_name)
 #define E2E_ENABLED(test_name) MACRO_CONCAT(test_name, E2ETest)
 
+class FakeSyncGCMDriver;
+class KeyedService;
 class SyncServiceImplHarness;
 
 namespace arc {
@@ -72,7 +73,6 @@ class FakeServer;
 }  // namespace fake_server
 
 namespace syncer {
-class FCMHandler;
 class SyncServiceImpl;
 }  // namespace syncer
 
@@ -103,7 +103,7 @@ inline constexpr char kSyncPasswordForTest[] = "sync-password-for-test";
 //    username and password are ignored if this is set.
 // Other switches may modify the behavior of helper classes frequently used in
 // sync integration tests, see StatusChangeChecker for example.
-class SyncTest : public PlatformBrowserTest {
+class SyncTest : public PlatformBrowserTest, public ProfileObserver {
  public:
   // The different types of live sync tests that can be implemented.
   enum TestType {
@@ -118,7 +118,6 @@ class SyncTest : public PlatformBrowserTest {
 
   // The type of server we're running against.
   enum ServerType {
-    SERVER_TYPE_UNDECIDED,
     EXTERNAL_LIVE_SERVER,  // A remote server that the test code has no control
                            // over whatsoever; cross your fingers that the
                            // account state is initially clean.
@@ -140,6 +139,9 @@ class SyncTest : public PlatformBrowserTest {
     // (e.g. DeviceInfo fields).
     WAIT_FOR_COMMITS_TO_COMPLETE,
   };
+
+  // Used unless specified otherwise by command line switches.
+  static constexpr char kDefaultUserEmail[] = "user@gmail.com";
 
   // A SyncTest must be associated with a particular test type.
   explicit SyncTest(TestType test_type);
@@ -167,7 +169,7 @@ class SyncTest : public PlatformBrowserTest {
 
   // Returns a list of all profiles including the verifier if available. Callee
   // owns the objects and manages its lifetime.
-  std::vector<Profile*> GetAllProfiles();
+  std::vector<raw_ptr<Profile, VectorExperimental>> GetAllProfiles();
 
 #if !BUILDFLAG(IS_ANDROID)
   // Returns a pointer to a particular browser. Callee owns the object
@@ -186,6 +188,7 @@ class SyncTest : public PlatformBrowserTest {
   // Returns a pointer to a particular sync client. Callee owns the object
   // and manages its lifetime.
   SyncServiceImplHarness* GetClient(int index);
+  const SyncServiceImplHarness* GetClient(int index) const;
 
   // Returns a list of the collection of sync clients.
   std::vector<SyncServiceImplHarness*> GetSyncClients();
@@ -194,7 +197,8 @@ class SyncTest : public PlatformBrowserTest {
   syncer::SyncServiceImpl* GetSyncService(int index) const;
 
   // Returns the set of SyncServiceImpls.
-  std::vector<syncer::SyncServiceImpl*> GetSyncServices();
+  std::vector<raw_ptr<syncer::SyncServiceImpl, VectorExperimental>>
+  GetSyncServices();
 
   // Returns the set of registered UserSelectableTypes.  This is retrieved from
   // the SyncServiceImpl at the given |index|.
@@ -208,14 +212,9 @@ class SyncTest : public PlatformBrowserTest {
   // Default is to return false. Test should override this if they require
   // different behavior.
   // Warning: do not use verifier in new tests.
-  // TODO(crbug.com/1137705): remove verifier profile logic completely, once all
-  // tests are rewritten in a way to not use verifier.
+  // TODO(crbug.com/40152770): remove verifier profile logic completely, once
+  // all tests are rewritten in a way to not use verifier.
   virtual bool UseVerifier();
-
-  // Used to determine whether to use the configuration refresher. It's used to
-  // mitigate test flakiness due to missed invalidations and download updates
-  // after SetupClients().
-  virtual bool UseConfigurationRefresher();
 
   // Initializes sync clients and profiles but does not sync any of them.
   [[nodiscard]] virtual bool SetupClients();
@@ -241,10 +240,7 @@ class SyncTest : public PlatformBrowserTest {
 
   // Blocks until all sync clients have completed their mutual sync cycles.
   // Returns true if a quiescent state was successfully reached.
-  bool AwaitQuiescence();
-
-  // Returns true if we are running tests against external servers.
-  bool UsingExternalServers() const;
+  [[nodiscard]] bool AwaitQuiescence();
 
   // Sets the mock gaia response for when an OAuth2 token is requested.
   // Each call to this method will overwrite responses that were previously set.
@@ -255,32 +251,27 @@ class SyncTest : public PlatformBrowserTest {
   // Triggers a migration for one or more datatypes, and waits
   // for the server to complete it.  This operation is available
   // only if ServerSupportsErrorTriggering() returned true.
-  void TriggerMigrationDoneError(syncer::ModelTypeSet model_types);
+  void TriggerMigrationDoneError(syncer::DataTypeSet data_types);
 
   // Returns the FakeServer being used for the test or null if FakeServer is
   // not being used.
   fake_server::FakeServer* GetFakeServer() const;
 
-  // Triggers a sync for the given |model_types| for the Profile at |index|.
-  void TriggerSyncForModelTypes(int index, syncer::ModelTypeSet model_types);
-
-  // The configuration refresher is triggering refreshes after the configuration
-  // phase is done (during start-up). Call this function before SetupSync() to
-  // avoid its effects.
-  void StopConfigurationRefresher();
+  // Triggers a sync for the given |data_types| for the Profile at |index|.
+  void TriggerSyncForDataTypes(int index, syncer::DataTypeSet data_types);
 
   arc::SyncArcPackageHelper* sync_arc_helper();
 
   std::string GetCacheGuid(size_t profile_index) const;
 
  protected:
-  // Add custom switches needed for running the test.
-  void AddTestSwitches(base::CommandLine* cl);
-
   // BrowserTestBase implementation:
   void SetUpOnMainThread() override;
   void TearDownOnMainThread() override;
   void SetUpInProcessBrowserTestFixture() override;
+
+  // ProfileObserver implementation.
+  void OnProfileWillBeDestroyed(Profile* profile) override;
 
   void OnWillCreateBrowserContextServices(content::BrowserContext* context);
 
@@ -295,38 +286,14 @@ class SyncTest : public PlatformBrowserTest {
   void DisableNotificationsImpl();
   void EnableNotificationsImpl();
 
-  // Helper to ProfileManager::CreateProfileAsync that creates a new profile
-  // used for UI Signin. Blocks until profile is created.
-  static Profile* MakeProfileForUISignin(base::FilePath profile_path);
-
-  // Stops notificatinos being sent to a client.
-  void DisableNotificationsForClient(int index);
-
-  // Sets a decryption passphrase to be used for a client. The passphrase will
-  // be provided to the client during initialization, before Sync starts. It is
-  // an error to provide both a decryption and encryption passphrases for one
-  // client.
-  // TODO(crbug.com/1338480): this and below are overused, most tests can use
-  // SyncUserSettings interface. Avoid usages, reintroduce logic in specific
-  // test that actually need it (if exists) and remove these functions together
-  // with relevant SyncTest SetupSync() code.
-  void SetDecryptionPassphraseForClient(int index,
-                                        const std::string& passphrase);
-
-  // Sets an explicit encryption passphrase to be used for a client. The
-  // passphrase will be set for the client during initialization, before Sync
-  // starts. An encryption passphrase can be also enabled after initialization,
-  // but using this method ensures that Sync is never enabled when there is no
-  // passphrase, which allows tests to check for unencrypted data leaks. It is
-  // an error to provide both a decryption and encryption passphrases for one
-  // client.
-  void SetEncryptionPassphraseForClient(int index,
-                                        const std::string& passphrase);
-
   // Sets up fake responses for kClientLoginUrl, kIssueAuthTokenUrl,
   // kGetUserInfoUrl and kSearchDomainCheckUrl in order to mock out calls to
   // GAIA servers.
   void SetupMockGaiaResponsesForProfile(Profile* profile);
+
+  // Exclude data types from end of test checks in CheckForDataTypeFailures().
+  // Note that this replaces the list of excluded types (if set earlier).
+  void ExcludeDataTypesFromCheckForDataTypeFailures(syncer::DataTypeSet types);
 
   // The FakeServer used in tests with server type IN_PROCESS_FAKE_SERVER.
   std::unique_ptr<fake_server::FakeServer> fake_server_;
@@ -339,18 +306,8 @@ class SyncTest : public PlatformBrowserTest {
   // determined at runtime based on server type.
   bool CreateProfile(int index);
 
-  // Callback for MakeProfileForUISignin() method. It runs the quit_closure once
-  // profile is created successfully.
-  static void CreateProfileCallback(const base::RepeatingClosure& quit_closure,
-                                    Profile* profile,
-                                    Profile::CreateStatus status);
-
-  static std::unique_ptr<KeyedService> CreateProfileInvalidationProvider(
-      std::map<const Profile*, invalidation::FCMNetworkHandler*>*
-          profile_to_fcm_network_handler_map,
-      content::BrowserContext* context);
-
-  std::unique_ptr<KeyedService> CreateSyncInvalidationsService(
+  // Creates a fake GCMProfileService to simulate sync invalidations.
+  std::unique_ptr<KeyedService> CreateGCMProfileService(
       content::BrowserContext* context);
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -371,9 +328,6 @@ class SyncTest : public PlatformBrowserTest {
   // the username on the first line and the password on the second line.
   void ReadPasswordFile();
 
-  // Helper method that starts up a sync test server if required.
-  void SetUpTestServerIfRequired();
-
   // Helper method used to set up fake responses for kClientLoginUrl,
   // kIssueAuthTokenUrl, kGetUserInfoUrl and kSearchDomainCheckUrl in order to
   // mock out calls to GAIA servers.
@@ -384,36 +338,37 @@ class SyncTest : public PlatformBrowserTest {
   // the default URLFetcher creation mechanism.
   void ClearMockGaiaResponses();
 
-  // Decide which sync server implementation to run against based on the type
-  // of test being run and command line args passed in.
-  void DecideServerType();
-
   // Initializes any custom services needed for the |profile| at |index|.
   void InitializeProfile(int index, Profile* profile);
-
-  // Sets up the client-side invalidations infrastructure depending on the
-  // value of |server_type_|.
-  void SetUpInvalidations(int index);
-
-  // Initializes the configuration refresher.
-  void InitializeConfigurationRefresher(int index);
 
   // Internal routine for setting up sync.
   void SetupSyncInternal(SetupSyncMode setup_mode);
 
-  void ClearProfiles();
+  // Used to determine whether ARC_PACKAGE data type needs to be enabled. This
+  // is applicable on ChromeOS-Ash platform only.
+  bool UseArcPackage();
 
   // Waits for all the changes which might be done asynchronously after setting
   // up sync engine. This is used to prevent starting another sync cycle after
   // SetupSync() call which might be unexpected in several tests.
   bool WaitForAsyncChangesToBeCommitted(size_t profile_index) const;
 
+  // Verifies that there are no data type failures for the given |client_index|.
+  // Otherwise, causes test failure. A corresponding client must exist.
+  void CheckForDataTypeFailures(size_t client_index) const;
+
   // Used to differentiate between single-client and two-client tests.
   const TestType test_type_;
+
+  // The kind of server being used, c.f. ServerType.
+  const ServerType server_type_;
 
   // Used to remember when the test fixture was constructed and later understand
   // how long the setup took.
   const base::Time test_construction_time_;
+
+  // Used to catch any timeout within RunLoop and cause test error.
+  base::test::ScopedRunLoopTimeout sync_run_loop_timeout;
 
   // GAIA account used by the test case.
   std::string username_;
@@ -424,14 +379,10 @@ class SyncTest : public PlatformBrowserTest {
   // Locally available plain text file in which GAIA credentials are stored.
   base::FilePath password_file_;
 
-  // Tells us what kind of server we're using (some tests run only on certain
-  // server types).
-  ServerType server_type_;
-
   // The default profile, created before our actual testing |profiles_|. This is
   // needed in a workaround for https://crbug.com/801569, see comments in the
   // .cc file.
-  raw_ptr<Profile> previous_profile_;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> previous_profile_ = nullptr;
 
   // Number of sync clients that will be created by a test.
   int num_clients_;
@@ -439,7 +390,9 @@ class SyncTest : public PlatformBrowserTest {
   // Collection of sync profiles used by a test. A sync profile maintains sync
   // data contained within its own subdirectory under the chrome user data
   // directory. Profiles are owned by the ProfileManager.
-  std::vector<Profile*> profiles_;
+  // TODO(crbug.com/40855871): store |profiles_|, |browsers_| and |clients_| in
+  // one structure.
+  std::vector<raw_ptr<Profile, AcrossTasksDanglingUntriaged>> profiles_;
 
   // List of temporary directories that need to be deleted when the test is
   // completed, used for two-client tests with external server.
@@ -450,7 +403,7 @@ class SyncTest : public PlatformBrowserTest {
   // instance is created for each sync profile. Browser object lifetime is
   // managed by BrowserList, so we don't use a std::vector<std::unique_ptr<>>
   // here.
-  std::vector<Browser*> browsers_;
+  std::vector<raw_ptr<Browser, AcrossTasksDanglingUntriaged>> browsers_;
 
   class ClosedBrowserObserver;
   std::unique_ptr<ClosedBrowserObserver> browser_list_observer_;
@@ -461,26 +414,11 @@ class SyncTest : public PlatformBrowserTest {
   // profile with the server.
   std::vector<std::unique_ptr<SyncServiceImplHarness>> clients_;
 
-  // Mapping from client indexes to encryption passphrases to use for them.
-  std::map<int, std::string> client_encryption_passphrases_;
-
-  // Mapping from client indexes to decryption passphrases to use for them.
-  std::map<int, std::string> client_decryption_passphrases_;
-
-  // Owns the FakeServerInvalidationSender for each profile.
-  std::vector<std::unique_ptr<fake_server::FakeServerInvalidationSender>>
-      fake_server_invalidation_observers_;
-
-  // Maps a profile to the corresponding FCMNetworkHandler. Contains one entry
-  // per profile. It is used to simulate an incoming FCM messages to different
-  // profiles within the FakeServerInvalidationSender.
-  std::map<const Profile*, invalidation::FCMNetworkHandler*>
-      profile_to_fcm_network_handler_map_;
-
-  std::map<const Profile*, syncer::FCMHandler*> profile_to_fcm_handler_map_;
-
-  // Triggers a GetUpdates via refresh after a configuration.
-  std::unique_ptr<ConfigurationRefresher> configuration_refresher_;
+  // Used to deliver invalidations to different profiles within
+  // FakeSyncServerInvalidationSender.
+  std::map<raw_ptr<Profile, AcrossTasksDanglingUntriaged>,
+           raw_ptr<FakeSyncGCMDriver, AcrossTasksDanglingUntriaged>>
+      profile_to_fake_gcm_driver_;
 
   base::CallbackListSubscription create_services_subscription_;
 
@@ -488,14 +426,13 @@ class SyncTest : public PlatformBrowserTest {
   // We don't need a corresponding verifier sync client because the contents
   // of the verifier profile are strictly local, and are not meant to be
   // synced.
-  raw_ptr<Profile> verifier_;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> verifier_ = nullptr;
 
   // Indicates whether to use a new user data dir.
   // Only used for external server tests with two clients.
   bool use_new_user_data_dir_ = false;
 
-  // The feature list to override features for all sync tests.
-  base::test::ScopedFeatureList feature_list_;
+  syncer::DataTypeSet excluded_types_from_check_for_data_type_failures_;
 
 #if !BUILDFLAG(IS_ANDROID)
   // Disable extension install verification.
@@ -505,13 +442,18 @@ class SyncTest : public PlatformBrowserTest {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // A factory-like callback to create a model updater for testing, which will
   // take the place of the real updater in AppListSyncableService for testing.
-  std::unique_ptr<
-      app_list::AppListSyncableService::ScopedModelUpdaterFactoryForTest>
-      model_updater_factory_;
+  std::unique_ptr<base::ScopedClosureRunner> model_updater_factory_scope_;
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+  instance_id::ScopedUseFakeInstanceIDAndroid
+      scoped_use_fake_instance_id_android_;
 #endif
 
   std::unique_ptr<fake_server::FakeServerSyncInvalidationSender>
       fake_server_sync_invalidation_sender_;
 };
+
+syncer::DataTypeSet AllowedTypesInStandaloneTransportMode();
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_SYNC_TEST_H_

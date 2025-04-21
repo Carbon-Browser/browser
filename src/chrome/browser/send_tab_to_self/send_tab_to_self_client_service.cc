@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "chrome/browser/send_tab_to_self/desktop_notification_handler.h"
 #include "chrome/browser/send_tab_to_self/receiving_ui_handler.h"
 #include "chrome/browser/send_tab_to_self/receiving_ui_handler_registry.h"
-#include "chrome/browser/share/share_features.h"
 #include "components/send_tab_to_self/features.h"
 #include "components/send_tab_to_self/send_tab_to_self_model.h"
 
@@ -43,7 +42,7 @@ void SendTabToSelfClientService::Shutdown() {
 }
 
 void SendTabToSelfClientService::SendTabToSelfModelLoaded() {
-  // TODO(crbug.com/949756): Push changes that happened before the model was
+  // TODO(crbug.com/40621767): Push changes that happened before the model was
   // loaded.
 }
 

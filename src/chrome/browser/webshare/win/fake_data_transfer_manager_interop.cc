@@ -1,22 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/webshare/win/fake_data_transfer_manager_interop.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/webshare/win/fake_data_transfer_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace webshare {
-
-// static
-bool FakeDataTransferManagerInterop::IsSupportedEnvironment() {
-  return FakeDataTransferManager::IsSupportedEnvironment();
-}
 
 FakeDataTransferManagerInterop::FakeDataTransferManagerInterop() = default;
 
@@ -72,7 +67,6 @@ IFACEMETHODIMP FakeDataTransferManagerInterop::ShowShareUIForWindow(
       return S_OK;
   }
   NOTREACHED();
-  return E_UNEXPECTED;
 }
 
 base::OnceClosure FakeDataTransferManagerInterop::GetDataRequestedInvoker(

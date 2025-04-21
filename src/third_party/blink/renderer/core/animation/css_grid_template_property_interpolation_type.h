@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "third_party/blink/renderer/core/animation/css_interpolation_type.h"
 
 namespace blink {
+
+class CSSProperty;
 
 class CSSGridTemplatePropertyInterpolationType : public CSSInterpolationType {
  public:
@@ -31,8 +33,10 @@ class CSSGridTemplatePropertyInterpolationType : public CSSInterpolationType {
                  const InterpolationValue& value,
                  double interpolation_fraction) const final;
 
-  static std::unique_ptr<InterpolableValue> CreateInterpolableGridTrackList(
-      const NGGridTrackList& track_list);
+  static InterpolableValue* CreateInterpolableGridTrackList(
+      const NGGridTrackList& track_list,
+      const CSSProperty& property,
+      float zoom);
 
  private:
   InterpolationValue MaybeConvertNeutral(const InterpolationValue& underlying,
@@ -50,4 +54,4 @@ class CSSGridTemplatePropertyInterpolationType : public CSSInterpolationType {
 
 }  // namespace blink
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_CSS_GRID_TRACK_LIST_INTERPOLATION_TYPE_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_CSS_GRID_TEMPLATE_PROPERTY_INTERPOLATION_TYPE_H_

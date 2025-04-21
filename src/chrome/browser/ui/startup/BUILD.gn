@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,4 +12,14 @@ can_test_gcpw_signin_startup = !is_chrome_branded
 buildflag_header("buildflags") {
   header = "buildflags.h"
   flags = [ "CAN_TEST_GCPW_SIGNIN_STARTUP=$can_test_gcpw_signin_startup" ]
+}
+
+# TODO(crbug.com/369883710): modularize all the rest.
+source_set("startup_tab") {
+  sources = [
+    "startup_tab.cc",
+    "startup_tab.h",
+  ]
+
+  public_deps = [ "//url" ]
 }

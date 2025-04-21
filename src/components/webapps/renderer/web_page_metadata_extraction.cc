@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,8 +62,11 @@ mojom::WebPageMetadataPtr ExtractWebPageMetadata(WebLocalFrame* frame) {
     return metadata;
 
   WebElement head = document.Head();
-  if (head.IsNull())
+  if (head.IsNull()) {
     return metadata;
+  }
+
+  metadata->title = document.Title().Utf16();
 
   GURL document_url = document.Url();
   for (WebNode child = head.FirstChild(); !child.IsNull();

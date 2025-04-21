@@ -1,14 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://tab-strip.top-chrome/tab.js';
 import 'chrome://tab-strip.top-chrome/tab_group.js';
 
-import {TabGroupElement} from 'chrome://tab-strip.top-chrome/tab_group.js';
-
+import type {TabGroupElement} from 'chrome://tab-strip.top-chrome/tab_group.js';
 import {TabsApiProxyImpl} from 'chrome://tab-strip.top-chrome/tabs_api_proxy.js';
-
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 
 import {TestTabsApiProxy} from './test_tabs_api_proxy.js';
@@ -23,7 +21,7 @@ suite('TabGroup', () => {
     testTabsApiProxy = new TestTabsApiProxy();
     TabsApiProxyImpl.setInstance(testTabsApiProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     tabGroupElement = document.createElement('tabstrip-tab-group');
     tabGroupElement.dataset['groupId'] = groupId;
     tabGroupElement.appendChild(document.createElement('tabstrip-tab'));

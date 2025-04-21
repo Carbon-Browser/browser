@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,26 +14,37 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
+#include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
 #include "cc/base/container_util.h"
 #include "components/viz/client/client_resource_provider.h"
-#include "components/viz/common/gpu/context_provider.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/context_support.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/common/capabilities.h"
-#include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
+#include "gpu/command_buffer/common/mailbox.h"
 
 using base::trace_event::MemoryAllocatorDump;
 using base::trace_event::MemoryDumpLevelOfDetail;
 
 namespace cc {
+
+ResourcePool::GpuBacking::GpuBacking() = default;
+ResourcePool::GpuBacking::~GpuBacking() = default;
+
+ResourcePool::SoftwareBacking::SoftwareBacking() = default;
+ResourcePool::SoftwareBacking::~SoftwareBacking() = default;
+
 namespace {
 
 // Process-unique number for each resource pool.
@@ -72,24 +83,9 @@ bool ResourceMeetsSizeRequirements(const gfx::Size& requested_size,
 constexpr base::TimeDelta ResourcePool::kDefaultExpirationDelay;
 constexpr base::TimeDelta ResourcePool::kDefaultMaxFlushDelay;
 
-void ResourcePool::GpuBacking::InitOverlayCandidateAndTextureTarget(
-    const viz::ResourceFormat format,
-    const gpu::Capabilities& caps,
-    bool use_gpu_memory_buffer_resources) {
-  overlay_candidate = use_gpu_memory_buffer_resources &&
-                      caps.texture_storage_image &&
-                      IsGpuMemoryBufferFormatSupported(format);
-  if (overlay_candidate) {
-    texture_target = gpu::GetBufferTextureTarget(gfx::BufferUsage::SCANOUT,
-                                                 BufferFormat(format), caps);
-  } else {
-    texture_target = GL_TEXTURE_2D;
-  }
-}
-
 ResourcePool::ResourcePool(
     viz::ClientResourceProvider* resource_provider,
-    viz::ContextProvider* context_provider,
+    viz::RasterContextProvider* context_provider,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     const base::TimeDelta& expiration_delay,
     bool disallow_non_exact_reuse)
@@ -120,14 +116,14 @@ ResourcePool::~ResourcePool() {
 
   SetResourceUsageLimits(0, 0);
   DCHECK_EQ(0u, unused_resources_.size());
-  DCHECK_EQ(0u, in_use_memory_usage_bytes_);
+  DCHECK_EQ(0u, unused_memory_usage_bytes_);
   DCHECK_EQ(0u, total_memory_usage_bytes_);
   DCHECK_EQ(0u, total_resource_count_);
 }
 
 ResourcePool::PoolResource* ResourcePool::ReuseResource(
     const gfx::Size& size,
-    viz::ResourceFormat format,
+    viz::SharedImageFormat format,
     const gfx::ColorSpace& color_space) {
   // Finding resources in |unused_resources_| from MRU to LRU direction, touches
   // LRU resources only if needed, which increases possibility of expiring more
@@ -137,8 +133,9 @@ ResourcePool::PoolResource* ResourcePool::ReuseResource(
     PoolResource* resource = it->get();
     DCHECK(!resource->resource_id());
 
-    if (resource->format() != format)
+    if (resource->format() != format) {
       continue;
+    }
     if (!ResourceMeetsSizeRequirements(size, resource->size(),
                                        disallow_non_exact_reuse_))
       continue;
@@ -148,7 +145,8 @@ ResourcePool::PoolResource* ResourcePool::ReuseResource(
     // Transfer resource to |in_use_resources_|.
     in_use_resources_[resource->unique_id()] = std::move(*it);
     unused_resources_.erase(it);
-    in_use_memory_usage_bytes_ += resource->memory_usage();
+    DCHECK_GE(unused_memory_usage_bytes_, resource->memory_usage());
+    unused_memory_usage_bytes_ -= resource->memory_usage();
     DCHECK_EQ(resource->state(), PoolResource::kUnused);
     resource->set_state(PoolResource::kInUse);
     return resource;
@@ -158,9 +156,9 @@ ResourcePool::PoolResource* ResourcePool::ReuseResource(
 
 ResourcePool::PoolResource* ResourcePool::CreateResource(
     const gfx::Size& size,
-    viz::ResourceFormat format,
+    viz::SharedImageFormat format,
     const gfx::ColorSpace& color_space) {
-  DCHECK(viz::ResourceSizes::VerifySizeInBytes<size_t>(size, format));
+  DCHECK(format.VerifySizeInBytes(size));
 
   auto pool_resource = std::make_unique<PoolResource>(
       this, next_resource_unique_id_++, size, format, color_space);
@@ -178,7 +176,7 @@ ResourcePool::PoolResource* ResourcePool::CreateResource(
 
 ResourcePool::InUsePoolResource ResourcePool::AcquireResource(
     const gfx::Size& size,
-    viz::ResourceFormat format,
+    viz::SharedImageFormat format,
     const gfx::ColorSpace& color_space,
     const std::string& debug_name) {
   PoolResource* resource = ReuseResource(size, format, color_space);
@@ -218,10 +216,12 @@ ResourcePool::TryAcquireResourceForPartialRaster(
   for (auto it = unused_resources_.begin(); it != unused_resources_.end();
        ++it) {
     PoolResource* resource = it->get();
-    if (resource->color_space() != raster_color_space)
-      continue;
 
     if (resource->content_id() == previous_content_id) {
+      // Skip the old resource if color space changed.
+      if (resource->color_space() != raster_color_space)
+        continue;
+
       UpdateResourceContentIdAndInvalidation(resource, new_content_id,
                                              new_invalidated_rect);
 
@@ -263,7 +263,8 @@ ResourcePool::TryAcquireResourceForPartialRaster(
     in_use_resources_[resource->unique_id()] =
         std::move(*iter_resource_to_return);
     unused_resources_.erase(iter_resource_to_return);
-    in_use_memory_usage_bytes_ += resource->memory_usage();
+    DCHECK_GE(unused_memory_usage_bytes_, resource->memory_usage());
+    unused_memory_usage_bytes_ -= resource->memory_usage();
     *total_invalidated_rect = resource->invalidated_rect();
 
     // Clear the invalidated rect and content ID on the resource being returned.
@@ -280,8 +281,8 @@ ResourcePool::TryAcquireResourceForPartialRaster(
 void ResourcePool::OnBackingAllocated(PoolResource* resource) {
   size_t size = resource->memory_usage();
   total_memory_usage_bytes_ += size;
-  if (resource->state() == PoolResource::kInUse)
-    in_use_memory_usage_bytes_ += size;
+  if (resource->state() == PoolResource::kUnused)
+    unused_memory_usage_bytes_ += size;
 }
 
 void ResourcePool::OnResourceReleased(size_t unique_id,
@@ -291,18 +292,15 @@ void ResourcePool::OnResourceReleased(size_t unique_id,
   // while it was still in use by the ResourcePool client. That would prevent
   // the client from being able to use the ResourceId on the InUsePoolResource,
   // which would be problematic!
-  DCHECK(in_use_resources_.find(unique_id) == in_use_resources_.end());
+  DCHECK(!base::Contains(in_use_resources_, unique_id));
 
   // TODO(danakj): Should busy_resources be a map?
-  auto busy_it = std::find_if(
-      busy_resources_.begin(), busy_resources_.end(),
-      [unique_id](const std::unique_ptr<PoolResource>& busy_resource) {
-        return busy_resource->unique_id() == unique_id;
-      });
+  auto busy_it =
+      base::ranges::find(busy_resources_, unique_id, &PoolResource::unique_id);
   // If the resource isn't busy then we made it available for reuse already
   // somehow, even though it was exported to the ResourceProvider, or we evicted
   // a resource that was still in use by the display compositor.
-  DCHECK(busy_it != busy_resources_.end());
+  CHECK(busy_it != busy_resources_.end(), base::NotFatalUntil::M130);
 
   PoolResource* resource = busy_it->get();
   resource->set_state(PoolResource::kUnused);
@@ -319,7 +317,9 @@ void ResourcePool::OnResourceReleased(size_t unique_id,
   busy_resources_.erase(busy_it);
 }
 
-bool ResourcePool::PrepareForExport(const InUsePoolResource& in_use_resource) {
+bool ResourcePool::PrepareForExport(
+    const InUsePoolResource& in_use_resource,
+    viz::TransferableResource::ResourceSource resource_source) {
   PoolResource* resource = in_use_resource.resource_;
   // Exactly one of gpu or software backing should exist.
   DCHECK(resource->gpu_backing() || resource->software_backing());
@@ -327,7 +327,7 @@ bool ResourcePool::PrepareForExport(const InUsePoolResource& in_use_resource) {
   viz::TransferableResource transferable;
   if (resource->gpu_backing()) {
     GpuBacking* gpu_backing = resource->gpu_backing();
-    if (gpu_backing->mailbox.IsZero()) {
+    if (!gpu_backing->shared_image) {
       // This can happen if we failed to allocate a GpuMemoryBuffer. Avoid
       // sending an invalid resource to the parent in that case, and avoid
       // caching/reusing the resource.
@@ -335,19 +335,27 @@ bool ResourcePool::PrepareForExport(const InUsePoolResource& in_use_resource) {
       resource->mark_avoid_reuse();
       return false;
     }
-    transferable = viz::TransferableResource::MakeGL(
-        gpu_backing->mailbox, GL_LINEAR, gpu_backing->texture_target,
-        gpu_backing->mailbox_sync_token, resource->size(),
-        gpu_backing->overlay_candidate);
+    uint32_t texture_target = gpu_backing->shared_image->GetTextureTarget();
+    transferable = viz::TransferableResource::MakeGpu(
+        gpu_backing->shared_image->mailbox(), texture_target,
+        gpu_backing->mailbox_sync_token, resource->size(), resource->format(),
+        gpu_backing->overlay_candidate, resource_source);
     if (gpu_backing->wait_on_fence_required)
       transferable.synchronization_type =
           viz::TransferableResource::SynchronizationType::kGpuCommandsCompleted;
   } else {
-    transferable = viz::TransferableResource::MakeSoftware(
-        resource->software_backing()->shared_bitmap_id, resource->size(),
-        resource->format());
+    SoftwareBacking* software_backing = resource->software_backing();
+    transferable =
+        software_backing->shared_image
+            ? viz::TransferableResource::MakeSoftwareSharedImage(
+                  software_backing->shared_image,
+                  software_backing->mailbox_sync_token, resource->size(),
+                  resource->format(), resource_source)
+            : viz::TransferableResource::MakeSoftwareSharedBitmap(
+                  software_backing->shared_bitmap_id,
+                  software_backing->mailbox_sync_token, resource->size(),
+                  resource->format(), resource_source);
   }
-  transferable.format = resource->format();
   transferable.color_space = resource->color_space();
   resource->set_resource_id(resource_provider_->ImportResource(
       std::move(transferable),
@@ -357,8 +365,14 @@ bool ResourcePool::PrepareForExport(const InUsePoolResource& in_use_resource) {
 }
 
 void ResourcePool::InvalidateResources() {
-  while (!unused_resources_.empty())
+  while (!unused_resources_.empty()) {
+    DCHECK_GE(unused_memory_usage_bytes_,
+              unused_resources_.back()->memory_usage());
+    unused_memory_usage_bytes_ -= unused_resources_.back()->memory_usage();
     DeleteResource(PopBack(&unused_resources_));
+  }
+  DCHECK_EQ(unused_memory_usage_bytes_, 0U);
+
   for (auto& pool_resource : busy_resources_)
     pool_resource->mark_avoid_reuse();
   for (auto& pair : in_use_resources_)
@@ -383,23 +397,15 @@ void ResourcePool::ReleaseResource(InUsePoolResource in_use_resource) {
 
     // Maybe this is a double free - see if the resource exists in our busy
     // list.
-    auto found_busy = std::find_if(
-        busy_resources_.begin(), busy_resources_.end(),
-        [pool_resource](const std::unique_ptr<PoolResource>& busy_resource) {
-          return busy_resource->unique_id() == pool_resource->unique_id();
-        });
-    CHECK(found_busy == busy_resources_.end());
+    CHECK(!base::Contains(busy_resources_, pool_resource->unique_id(),
+                          &PoolResource::unique_id));
 
     // Also check if the resource exists in our unused resources list.
-    auto found_unused = std::find_if(
-        unused_resources_.begin(), unused_resources_.end(),
-        [pool_resource](const std::unique_ptr<PoolResource>& unused_resource) {
-          return unused_resource->unique_id() == pool_resource->unique_id();
-        });
-    CHECK(found_unused == unused_resources_.end());
+    CHECK(!base::Contains(unused_resources_, pool_resource->unique_id(),
+                          &PoolResource::unique_id));
 
-    // Resource doesn't exist in any of our lists. CHECK.
-    CHECK(false);
+    // Resource doesn't exist in any of our lists. NOTREACHED().
+    NOTREACHED();
   }
 
   // Also ensure that the resource wasn't null in our list.
@@ -408,7 +414,6 @@ void ResourcePool::ReleaseResource(InUsePoolResource in_use_resource) {
   CHECK(it->second.get());
 
   pool_resource->set_last_usage(clock_->NowTicks());
-  in_use_memory_usage_bytes_ -= pool_resource->memory_usage();
 
   // Save the ResourceId since the |pool_resource| can be deleted in the next
   // step.
@@ -469,6 +474,9 @@ void ResourcePool::ReduceResourceUsage() {
     // can't be locked for write might also not be truly free-able.
     // We can free the resource here but it doesn't mean that the
     // memory is necessarily returned to the OS.
+    DCHECK_GE(unused_memory_usage_bytes_,
+              unused_resources_.back()->memory_usage());
+    unused_memory_usage_bytes_ -= unused_resources_.back()->memory_usage();
     DeleteResource(PopBack(&unused_resources_));
   }
 }
@@ -482,8 +490,8 @@ bool ResourcePool::ResourceUsageTooHigh() {
 }
 
 void ResourcePool::DeleteResource(std::unique_ptr<PoolResource> resource) {
-  size_t resource_bytes = resource->memory_usage();
-  total_memory_usage_bytes_ -= resource_bytes;
+  DCHECK_GE(total_memory_usage_bytes_, resource->memory_usage());
+  total_memory_usage_bytes_ -= resource->memory_usage();
   --total_resource_count_;
   if (flush_evicted_resources_deadline_ == base::TimeTicks::Max()) {
     flush_evicted_resources_deadline_ =
@@ -505,6 +513,7 @@ void ResourcePool::UpdateResourceContentIdAndInvalidation(
 
 void ResourcePool::DidFinishUsingResource(
     std::unique_ptr<PoolResource> resource) {
+  unused_memory_usage_bytes_ += resource->memory_usage();
   unused_resources_.push_front(std::move(resource));
 }
 
@@ -556,6 +565,9 @@ void ResourcePool::EvictResourcesNotUsedSince(base::TimeTicks time_limit) {
     if (unused_resources_.back()->last_usage() > time_limit)
       return;
 
+    DCHECK_GE(unused_memory_usage_bytes_,
+              unused_resources_.back()->memory_usage());
+    unused_memory_usage_bytes_ -= unused_resources_.back()->memory_usage();
     DeleteResource(PopBack(&unused_resources_));
   }
 }
@@ -573,17 +585,16 @@ base::TimeTicks ResourcePool::GetUsageTimeForLRUResource() const {
 void ResourcePool::FlushEvictedResources() {
   flush_evicted_resources_deadline_ = base::TimeTicks::Max();
   if (context_provider_) {
-    // Flush any ContextGL work as well as any SharedImageInterface work.
-    context_provider_->ContextGL()->OrderingBarrierCHROMIUM();
+    // Flush any raster + shared image work.
     context_provider_->ContextSupport()->FlushPendingWork();
   }
 }
 
 bool ResourcePool::OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
                                 base::trace_event::ProcessMemoryDump* pmd) {
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name =
-        base::StringPrintf("cc/tile_memory/provider_%d", tracing_id_);
+        base::StringPrintf("cc/tile_memory/provider_0x%x", tracing_id_);
     MemoryAllocatorDump* dump = pmd->CreateAllocatorDump(dump_name);
     dump->AddScalar(MemoryAllocatorDump::kNameSize,
                     MemoryAllocatorDump::kUnitsBytes,
@@ -591,15 +602,15 @@ bool ResourcePool::OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
   } else {
     for (const auto& resource : unused_resources_) {
       resource->OnMemoryDump(pmd, tracing_id_, resource_provider_,
-                             true /* is_free */);
+                             true /* is_free */, false /* is_busy */);
     }
     for (const auto& resource : busy_resources_) {
       resource->OnMemoryDump(pmd, tracing_id_, resource_provider_,
-                             false /* is_free */);
+                             false /* is_free */, true /* is_busy */);
     }
     for (const auto& entry : in_use_resources_) {
       entry.second->OnMemoryDump(pmd, tracing_id_, resource_provider_,
-                                 false /* is_free */);
+                                 false /* is_free */, false /* is_busy */);
     }
   }
   return true;
@@ -621,7 +632,7 @@ void ResourcePool::OnMemoryPressure(
 ResourcePool::PoolResource::PoolResource(ResourcePool* resource_pool,
                                          size_t unique_id,
                                          const gfx::Size& size,
-                                         viz::ResourceFormat format,
+                                         viz::SharedImageFormat format,
                                          const gfx::ColorSpace& color_space)
     : resource_pool_(resource_pool),
       unique_id_(unique_id),
@@ -635,7 +646,8 @@ void ResourcePool::PoolResource::OnMemoryDump(
     base::trace_event::ProcessMemoryDump* pmd,
     int tracing_id,
     const viz::ClientResourceProvider* resource_provider,
-    bool is_free) const {
+    bool is_free,
+    bool is_busy) const {
   // Resource IDs are not process-unique, so log with the ResourcePool's unique
   // tracing id.
   const std::string dump_name = base::StringPrintf(
@@ -646,9 +658,9 @@ void ResourcePool::PoolResource::OnMemoryDump(
 
   // The importance value used here needs to be greater than the importance
   // used in other places that use this GUID to inform the system that this is
-  // the root ownership. The gpu processes uses 0, so 2 is sufficient, and was
-  // chosen historically and there is no need to adjust it.
-  const int kImportance = 2;
+  // the root ownership.
+  const int kImportance =
+      static_cast<int>(gpu::TracingImportance::kClientOwner);
   auto* dump_manager = base::trace_event::MemoryDumpManager::GetInstance();
   uint64_t tracing_process_id = dump_manager->GetTracingProcessId();
   if (software_backing_) {
@@ -665,6 +677,8 @@ void ResourcePool::PoolResource::OnMemoryDump(
 
   uint64_t free_size = is_free ? total_bytes : 0u;
   dump->AddScalar("free_size", MemoryAllocatorDump::kUnitsBytes, free_size);
+  uint64_t busy_size = is_busy ? total_bytes : 0u;
+  dump->AddScalar("busy_size", MemoryAllocatorDump::kUnitsBytes, busy_size);
 }
 
 }  // namespace cc

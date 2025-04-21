@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,31 +13,36 @@ class AuthFailure;
 
 class KioskAppLaunchError {
  public:
-  // Enum used for UMA. Do NOT reorder or remove entry. Don't forget to
-  // update histograms.xml when adding new entries.
+  // Enum used for UMA. Do NOT reorder or remove entries.
+  //
+  // When adding new entries remember to update `kMaxValue` and
+  // `KioskLaunchError` in tools/metrics/histograms/enums.xml.
   enum class Error {
-    kNone = 0,                    // No error.
-    kHasPendingLaunch = 1,        // There is a pending launch already.
-    kCryptohomedNotRunning = 2,   // Unable to call cryptohome daemon.
-    kAlreadyMounted = 3,          // Cryptohome is already mounted.
-    kUnableToMount = 4,           // Unable to mount cryptohome.
-    kUnableToRemove = 5,          // Unable to remove cryptohome.
-    kUnableToInstall = 6,         // Unable to install app.
-    kUserCancel = 7,              // Canceled by user.
-    kNotKioskEnabled = 8,         // Not a kiosk enabled app.
-    kUnableToRetrieveHash = 9,    // Unable to retrieve username hash.
-    kPolicyLoadFailed = 10,       // Failed to load policy for kiosk account.
-    kUnableToDownload = 11,       // Unable to download app's crx file.
-    kUnableToLaunch = 12,         // Unable to launch app.
-    kArcAuthFailed = 13,          // Failed to authorise ARC session
-    kExtensionsLoadTimeout = 14,  // Timeout is triggered during loading
+    kNone = 0,                   // No error.
+    kHasPendingLaunch = 1,       // There is a pending launch already.
+    kCryptohomedNotRunning = 2,  // Unable to call cryptohome daemon.
+    kAlreadyMounted = 3,         // Cryptohome is already mounted.
+    kUnableToMount = 4,          // Unable to mount cryptohome.
+    kUnableToRemove = 5,         // Unable to remove cryptohome.
+    kUnableToInstall = 6,        // Unable to install app.
+    kUserCancel = 7,             // Canceled by user.
+    kNotKioskEnabled = 8,        // Not a kiosk enabled app.
+    kUnableToRetrieveHash = 9,   // Unable to retrieve username hash.
+    kPolicyLoadFailed = 10,      // Failed to load policy for kiosk account.
+    kUnableToDownload = 11,      // Unable to download app's crx file.
+    kUnableToLaunch = 12,        // Unable to launch app.
+    // kArcAuthFailed = 13,       // Deprecated
+    kExtensionsLoadTimeout = 14,  // Timeout is triggered during loading.
                                   // force-installed extensions.
     kExtensionsPolicyInvalid =
         15,  // The policy value of ExtensionInstallForcelist is invalid.
-    kMaxValue = kExtensionsPolicyInvalid,  // Max value of errors.
+    kUserNotAllowlisted = 16,  // LoginPerformer disallowed this user.
+    // kLacrosDataMigrationStarted = 17,  // Deprecated
+    // kLacrosBackwardDataMigrationStarted = 18,  // Deprecated
+    kMaxValue = kUserNotAllowlisted,  // Max value of errors.
   };
 
-  // Returns a message for given |error|.
+  // Returns a message for given `error`.
   static std::string GetErrorMessage(Error error);
 
   // Saves a launch error. The error is used on the next Chrome run to report
@@ -60,11 +65,5 @@ class KioskAppLaunchError {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::KioskAppLaunchError;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_LAUNCH_ERROR_H_

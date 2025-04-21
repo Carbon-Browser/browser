@@ -1,16 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.ntp;
 
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.ntp.ForeignSessionHelper.ForeignSession;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
 
-/**
- * Allows Java code to read and modify preferences related to the {@link RecentTabsPage}.
- */
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.recent_tabs.ForeignSessionHelper.ForeignSession;
+
+/** Allows Java code to read and modify preferences related to the {@link RecentTabsPage}. */
 class RecentTabsPagePrefs {
     private long mNativePrefs;
 
@@ -91,8 +91,8 @@ class RecentTabsPagePrefs {
      * @param isCollapsed Whether we want the foreign session to be collapsed.
      */
     void setForeignSessionCollapsed(ForeignSession session, boolean isCollapsed) {
-        RecentTabsPagePrefsJni.get().setForeignSessionCollapsed(
-                mNativePrefs, session.tag, isCollapsed);
+        RecentTabsPagePrefsJni.get()
+                .setForeignSessionCollapsed(mNativePrefs, session.tag, isCollapsed);
     }
 
     /**
@@ -106,16 +106,28 @@ class RecentTabsPagePrefs {
 
     @NativeMethods
     interface Natives {
-        long init(Profile profile);
+        long init(@JniType("Profile*") Profile profile);
+
         void destroy(long nativeRecentTabsPagePrefs);
+
         void setSnapshotDocumentCollapsed(long nativeRecentTabsPagePrefs, boolean isCollapsed);
+
         boolean getSnapshotDocumentCollapsed(long nativeRecentTabsPagePrefs);
+
         void setRecentlyClosedTabsCollapsed(long nativeRecentTabsPagePrefs, boolean isCollapsed);
+
         boolean getRecentlyClosedTabsCollapsed(long nativeRecentTabsPagePrefs);
+
         void setSyncPromoCollapsed(long nativeRecentTabsPagePrefs, boolean isCollapsed);
+
         boolean getSyncPromoCollapsed(long nativeRecentTabsPagePrefs);
+
         void setForeignSessionCollapsed(
-                long nativeRecentTabsPagePrefs, String sessionTag, boolean isCollapsed);
-        boolean getForeignSessionCollapsed(long nativeRecentTabsPagePrefs, String sessionTag);
+                long nativeRecentTabsPagePrefs,
+                @JniType("std::string") String sessionTag,
+                boolean isCollapsed);
+
+        boolean getForeignSessionCollapsed(
+                long nativeRecentTabsPagePrefs, @JniType("std::string") String sessionTag);
     }
 }

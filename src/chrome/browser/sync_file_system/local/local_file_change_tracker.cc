@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 
 #include <stddef.h>
+#include <memory>
 #include <utility>
 
 #include "base/containers/circular_deque.h"
@@ -19,6 +20,7 @@
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_file_util.h"
 #include "storage/browser/file_system/file_system_operation_context.h"
+#include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
 #include "storage/common/file_system/file_system_util.h"
 #include "third_party/leveldatabase/env_chromium.h"
 #include "third_party/leveldatabase/src/include/leveldb/db.h"
@@ -71,7 +73,7 @@ class LocalFileChangeTracker::TrackerDB {
 };
 
 LocalFileChangeTracker::ChangeInfo::ChangeInfo() : change_seq(-1) {}
-LocalFileChangeTracker::ChangeInfo::~ChangeInfo() {}
+LocalFileChangeTracker::ChangeInfo::~ChangeInfo() = default;
 
 // LocalFileChangeTracker ------------------------------------------------------
 
@@ -81,10 +83,9 @@ LocalFileChangeTracker::LocalFileChangeTracker(
     base::SequencedTaskRunner* file_task_runner)
     : initialized_(false),
       file_task_runner_(file_task_runner),
-      tracker_db_(new TrackerDB(base_path, env_override)),
+      tracker_db_(std::make_unique<TrackerDB>(base_path, env_override)),
       current_change_seq_number_(0),
-      num_changes_(0) {
-}
+      num_changes_(0) {}
 
 LocalFileChangeTracker::~LocalFileChangeTracker() {
   DCHECK(file_task_runner_->RunsTasksInCurrentSequence());
@@ -111,6 +112,14 @@ void LocalFileChangeTracker::OnCreateFileFrom(const FileSystemURL& url,
                                               const FileSystemURL& src) {
   RecordChange(url, FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
                                SYNC_FILE_TYPE_FILE));
+}
+
+void LocalFileChangeTracker::OnMoveFileFrom(const FileSystemURL& url,
+                                            const FileSystemURL& src) {
+  RecordChange(url, FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
+                               SYNC_FILE_TYPE_FILE));
+  RecordChange(src,
+               FileChange(FileChange::FILE_CHANGE_DELETE, SYNC_FILE_TYPE_FILE));
 }
 
 void LocalFileChangeTracker::OnRemoveFile(const FileSystemURL& url) {
@@ -279,7 +288,7 @@ SyncStatusCode LocalFileChangeTracker::Initialize(
 void LocalFileChangeTracker::ResetForFileSystem(const GURL& origin,
                                                 storage::FileSystemType type) {
   DCHECK(file_task_runner_->RunsTasksInCurrentSequence());
-  std::unique_ptr<leveldb::WriteBatch> batch(new leveldb::WriteBatch);
+  auto batch = std::make_unique<leveldb::WriteBatch>();
   for (auto iter = changes_.begin(); iter != changes_.end();) {
     storage::FileSystemURL url = iter->first;
     int change_seq = iter->second.change_seq;
@@ -461,7 +470,6 @@ void LocalFileChangeTracker::ResetForURL(const storage::FileSystemURL& url,
   std::string serialized_url;
   if (!SerializeSyncableFileSystemURL(url, &serialized_url)) {
     NOTREACHED() << "Failed to serialize: " << url.DebugString();
-    return;
   }
   batch->Delete(serialized_url);
 }
@@ -503,7 +511,6 @@ SyncStatusCode LocalFileChangeTracker::TrackerDB::Init(
       return Repair(path);
   }
   NOTREACHED();
-  return SYNC_DATABASE_ERROR_FAILED;
 }
 
 SyncStatusCode LocalFileChangeTracker::TrackerDB::Repair(

@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {BrowserProxy, DialogCloseReason} from 'chrome://access-code-cast/browser_proxy.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 declare const chrome: {
@@ -12,15 +11,11 @@ declare const chrome: {
   getVariableValue(variable: string): string,
 };
 
-declare const loadTimeData: {
-  getBoolean(message: string): boolean,
-};
-
 suite('BrowserProxyTest', () => {
   let proxy: BrowserProxy;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     BrowserProxy.setInstance(new BrowserProxy(true));
     proxy = BrowserProxy.getInstance();
   });
@@ -163,17 +158,8 @@ suite('BrowserProxyTest', () => {
   });
 
   test('isQrScanningAvailable returns correct values', async () => {
-    const getBoolean = loadTimeData.getBoolean;
     const proxyBarcodeDetector = proxy.isBarcodeApiAvailable;
     const proxyCamera = proxy.isCameraAvailable;
-
-    const mockGetBooleanEnabled = (message: string) => {
-      return message === 'qrScannerEnabled';
-    };
-
-    const mockGetBooleanDisabled = (message: string) => {
-      return message !== 'qrScannerEnabled';
-    };
 
     const mockIsBarcodeApiAvailableTrue = () => true;
     const mockIsBarcodeApiAvailableFalse = () => false;
@@ -181,13 +167,13 @@ suite('BrowserProxyTest', () => {
     const mockIsCameraAvailableFalse = () => Promise.resolve(false);
 
     // QR scanner feature is enabled
-    loadTimeData.getBoolean = mockGetBooleanEnabled;
+    loadTimeData.overrideValues({'qrScannerEnabled': true});
     proxy.isBarcodeApiAvailable = mockIsBarcodeApiAvailableTrue;
     proxy.isCameraAvailable = mockIsCameraAvailableTrue;
     assertTrue(await proxy.isQrScanningAvailable());
 
     // QR scanner feature is disabled
-    loadTimeData.getBoolean = mockGetBooleanDisabled;
+    loadTimeData.overrideValues({'qrScannerEnabled': false});
     assertFalse(await proxy.isQrScanningAvailable());
 
     proxy.isBarcodeApiAvailable = mockIsBarcodeApiAvailableFalse;
@@ -196,7 +182,6 @@ suite('BrowserProxyTest', () => {
     proxy.isCameraAvailable = mockIsCameraAvailableFalse;
     assertFalse(await proxy.isQrScanningAvailable());
 
-    loadTimeData.getBoolean = getBoolean;
     proxy.isBarcodeApiAvailable = proxyBarcodeDetector;
     proxy.isCameraAvailable = proxyCamera;
   });

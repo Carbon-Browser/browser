@@ -1,17 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_EXO_KEYBOARD_DELEGATE_H_
 #define COMPONENTS_EXO_KEYBOARD_DELEGATE_H_
 
+#include <string_view>
+
+#include "ash/public/mojom/input_device_settings.mojom.h"
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece.h"
+#include "base/containers/flat_set.h"
 #include "base/time/time.h"
 #include "components/exo/key_state.h"
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 }
 
 namespace exo {
@@ -30,7 +33,8 @@ class KeyboardDelegate {
   // Called when keyboard focus enters a new valid target surface.
   virtual void OnKeyboardEnter(
       Surface* surface,
-      const base::flat_map<ui::DomCode, KeyState>& pressed_keys) = 0;
+      const base::flat_map<PhysicalCode, base::flat_set<KeyState>>&
+          pressed_keys) = 0;
 
   // Called when keyboard focus leaves a valid target surface.
   virtual void OnKeyboardLeave(Surface* surface) = 0;
@@ -52,7 +56,7 @@ class KeyboardDelegate {
                                           base::TimeDelta interval) = 0;
 
   // Called when keyboard layout is updated.
-  virtual void OnKeyboardLayoutUpdated(base::StringPiece keymap) = 0;
+  virtual void OnKeyboardLayoutUpdated(std::string_view keymap) = 0;
 };
 
 }  // namespace exo

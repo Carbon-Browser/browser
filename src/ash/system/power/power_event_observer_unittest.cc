@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 
 #include <memory>
 
+#include "ash/display/projecting_observer.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/system/power/power_event_observer_test_api.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
+#include "ash/wallpaper/views/wallpaper_widget_controller.h"
 #include "ash/wm/lock_state_controller.h"
 #include "ash/wm/lock_state_controller_test_api.h"
-#include "ash/wm/test_session_state_animator.h"
+#include "ash/wm/test/test_session_state_animator.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
@@ -25,6 +27,7 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
 
 namespace ash {
 
@@ -40,18 +43,15 @@ class PowerEventObserverTest : public AshTestBase {
   // AshTestBase:
   void SetUp() override {
     AshTestBase::SetUp();
-    observer_ = std::make_unique<PowerEventObserver>();
+    observer_ = Shell::Get()->power_event_observer();
   }
 
-  void TearDown() override {
-    observer_.reset();
-    AshTestBase::TearDown();
-  }
+  void TearDown() override { AshTestBase::TearDown(); }
 
  protected:
   int GetNumVisibleCompositors() {
     int result = 0;
-    for (auto* window : Shell::GetAllRootWindows()) {
+    for (aura::Window* window : Shell::GetAllRootWindows()) {
       if (window->GetHost()->compositor()->IsVisible())
         ++result;
     }
@@ -65,7 +65,7 @@ class PowerEventObserverTest : public AshTestBase {
     return Shell::Get()->session_controller()->IsScreenLocked();
   }
 
-  std::unique_ptr<PowerEventObserver> observer_;
+  raw_ptr<PowerEventObserver, DanglingUntriaged> observer_ = nullptr;
 };
 
 TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
@@ -84,7 +84,7 @@ TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
   // lock screen animations have completed.
   BlockUserSession(BLOCKED_BY_LOCK_SCREEN);
 
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
@@ -92,10 +92,10 @@ TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
   test_api.CompositingDidCommit(compositor);
   observer_->OnLockAnimationsComplete();
 
-  // Verify that CompositingStarted and CompositingEnded observed before
+  // Verify that CompositingStarted and CompositingAckDeprecated observed before
   // CompositingDidCommit are ignored.
   test_api.CompositingStarted(compositor);
-  test_api.CompositingEnded(compositor);
+  test_api.CompositingAckDeprecated(compositor);
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(1, GetNumVisibleCompositors());
 
@@ -109,12 +109,12 @@ TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(1, GetNumVisibleCompositors());
 
-  test_api.CompositingEnded(compositor);
+  test_api.CompositingAckDeprecated(compositor);
   EXPECT_EQ(0, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(0, GetNumVisibleCompositors());
 
   // If the system is already locked, no callback should be requested.
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
   EXPECT_EQ(1, GetNumVisibleCompositors());
   UnblockUserSession();
   BlockUserSession(BLOCKED_BY_LOCK_SCREEN);
@@ -133,7 +133,7 @@ TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
 
   // It also shouldn't request a callback if it isn't instructed to lock the
   // screen.
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
   UnblockUserSession();
   SetShouldLockScreenAutomatically(false);
   EXPECT_EQ(1, GetNumVisibleCompositors());
@@ -149,7 +149,7 @@ TEST_F(PowerEventObserverTest, SetInvisibleBeforeSuspend) {
 
   observer_->SuspendImminent(power_manager::SuspendImminent_Reason_OTHER);
   EXPECT_EQ(0, GetNumVisibleCompositors());
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
 
   // Tests that all the Compositors are marked invisible _after_ the screen lock
   // animations have completed.
@@ -165,11 +165,11 @@ TEST_F(PowerEventObserverTest, SetInvisibleBeforeSuspend) {
   observer_->OnLockAnimationsComplete();
 
   EXPECT_EQ(1, GetNumVisibleCompositors());
-  ASSERT_TRUE(PowerEventObserverTestApi(observer_.get())
+  ASSERT_TRUE(PowerEventObserverTestApi(observer_)
                   .SimulateCompositorsReadyForSuspend());
   EXPECT_EQ(0, GetNumVisibleCompositors());
 
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
   EXPECT_EQ(1, GetNumVisibleCompositors());
 }
 
@@ -181,7 +181,7 @@ TEST_F(PowerEventObserverTest, CanceledSuspend) {
   observer_->SuspendImminent(power_manager::SuspendImminent_Reason_OTHER);
   EXPECT_EQ(1, GetNumVisibleCompositors());
 
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
   BlockUserSession(BLOCKED_BY_LOCK_SCREEN);
   observer_->OnLockAnimationsComplete();
   EXPECT_EQ(1, GetNumVisibleCompositors());
@@ -208,7 +208,7 @@ TEST_F(PowerEventObserverTest, DelayResuspendForLockAnimations) {
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
 
   BlockUserSession(BLOCKED_BY_LOCK_SCREEN);
-  observer_->SuspendDone(base::TimeDelta());
+  observer_->SuspendDoneEx(power_manager::SuspendDone());
   observer_->SuspendImminent(power_manager::SuspendImminent_Reason_OTHER);
 
   // The expected number of suspend readiness callbacks is 2 because the
@@ -221,7 +221,7 @@ TEST_F(PowerEventObserverTest, DelayResuspendForLockAnimations) {
   EXPECT_EQ(2, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(1, GetNumVisibleCompositors());
 
-  ASSERT_TRUE(PowerEventObserverTestApi(observer_.get())
+  ASSERT_TRUE(PowerEventObserverTestApi(observer_)
                   .SimulateCompositorsReadyForSuspend());
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(0, GetNumVisibleCompositors());
@@ -248,7 +248,7 @@ TEST_F(PowerEventObserverTest, DelaySuspendForCompositing_MultiDisplay) {
   ASSERT_EQ(2, GetNumVisibleCompositors());
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
 
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Simulate a commit before lock animations complete, and verify associated
   // compositing ends are ignored.
@@ -256,7 +256,7 @@ TEST_F(PowerEventObserverTest, DelaySuspendForCompositing_MultiDisplay) {
   observer_->OnLockAnimationsComplete();
 
   test_api.CompositingStarted(secondary_compositor);
-  test_api.CompositingEnded(secondary_compositor);
+  test_api.CompositingAckDeprecated(secondary_compositor);
 
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(2, GetNumVisibleCompositors());
@@ -267,7 +267,7 @@ TEST_F(PowerEventObserverTest, DelaySuspendForCompositing_MultiDisplay) {
   test_api.CompositeFrame(secondary_compositor);
 
   // Even though compositing for one display is done, changes to compositor
-  // visibility, and suspend readines state should be delayed until compositing
+  // visibility, and suspend readiness state should be delayed until compositing
   // for the other display finishes.
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(2, GetNumVisibleCompositors());
@@ -278,7 +278,7 @@ TEST_F(PowerEventObserverTest, DelaySuspendForCompositing_MultiDisplay) {
 }
 
 TEST_F(PowerEventObserverTest,
-       DelaySuspendForCompositing_PendingDisplayRemoved) {
+       DISABLED_DelaySuspendForCompositing_PendingDisplayRemoved) {
   SetCanLockScreen(true);
   SetShouldLockScreenAutomatically(true);
 
@@ -297,13 +297,13 @@ TEST_F(PowerEventObserverTest,
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   observer_->OnLockAnimationsComplete();
 
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   test_api.CompositeFrame(primary_compositor);
   test_api.CompositeFrame(primary_compositor);
 
   // Even though compositing for one display is done, changes to compositor
-  // visibility, and suspend readines state should be delayed until compositing
+  // visibility, and suspend readiness state should be delayed until compositing
   // for the other display finishes.
   EXPECT_EQ(1, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(2, GetNumVisibleCompositors());
@@ -414,7 +414,7 @@ TEST_F(PowerEventObserverTest,
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Simulate a single frame getting composited before the wallpaper animation
   // is done - this frame is expected to be ignored by power event observer's
@@ -466,7 +466,7 @@ TEST_F(PowerEventObserverTest, EndWallpaperAnimationOnSuspendWhileLocked) {
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Expect that two compositing cycles are completed before suspend continues,
   // and displays get suspended.
@@ -509,7 +509,7 @@ TEST_F(PowerEventObserverTest, EndWallpaperAnimationOnSuspendWhileLocking) {
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Expect that two compositing cycles are completed before suspend continues,
   // and displays get suspended.
@@ -548,7 +548,7 @@ TEST_F(PowerEventObserverTest, EndWallpaperAnimationAfterLockDueToSuspend) {
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Expect that two compositing cycles are completed before suspend continues,
   // and displays get suspended.
@@ -588,12 +588,12 @@ TEST_F(PowerEventObserverTest, DisplayRemovedDuringWallpaperAnimation) {
   base::RunLoop().RunUntilIdle();
 
   // Start suspend and verify the suspend proceeds when the primary window's
-  // compositors go throug two compositing cycles.
+  // compositors go through two compositing cycles.
   observer_->SuspendImminent(power_manager::SuspendImminent_Reason_OTHER);
 
   ui::Compositor* compositor =
       Shell::GetPrimaryRootWindow()->GetHost()->compositor();
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
 
   // Expect that two compositing cycles are completed before suspend continues,
   // and displays get suspended.
@@ -601,6 +601,86 @@ TEST_F(PowerEventObserverTest, DisplayRemovedDuringWallpaperAnimation) {
   test_api.CompositeFrame(compositor);
   EXPECT_EQ(0, client->num_pending_suspend_readiness_callbacks());
   EXPECT_EQ(0, GetNumVisibleCompositors());
+}
+
+TEST_F(PowerEventObserverTest, LockOnLidClose) {
+  // Screen should not lock if values not set.
+  SetCanLockScreen(false);
+  SetShouldLockScreenAutomatically(false);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+
+  SetCanLockScreen(false);
+  SetShouldLockScreenAutomatically(true);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+
+  SetCanLockScreen(true);
+  SetShouldLockScreenAutomatically(false);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+
+  // Screen should only lock on CLOSED event.
+  SetCanLockScreen(true);
+  SetShouldLockScreenAutomatically(true);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::OPEN,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_TRUE(GetLockedState());
+}
+
+TEST_F(PowerEventObserverTest, LockOnLidCloseWhenDocked) {
+  std::unique_ptr<display::DisplaySnapshot> internal_display =
+      display::FakeDisplaySnapshot::Builder()
+          .SetId(123)
+          .SetNativeMode(gfx::Size(1024, 768))
+          .SetType(display::DISPLAY_CONNECTION_TYPE_INTERNAL)
+          .Build();
+
+  std::unique_ptr<display::DisplaySnapshot> external_display =
+      display::FakeDisplaySnapshot::Builder()
+          .SetId(456)
+          .SetNativeMode(gfx::Size(1024, 768))
+          .SetType(display::DISPLAY_CONNECTION_TYPE_VGA)
+          .Build();
+
+  auto set_docked = [&](bool docked) {
+    std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>> displays(
+        {internal_display.get()});
+    if (docked) {
+      displays.push_back(external_display.get());
+    }
+    Shell::Get()->projecting_observer()->OnDisplayConfigurationChanged(
+        displays);
+  };
+
+  SetCanLockScreen(true);
+  SetShouldLockScreenAutomatically(true);
+
+  // Closing lid should not lock when projecting.
+  set_docked(true);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+
+  // Opening lid, then disconnect display should not lock.
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::OPEN,
+                              base::TimeTicks::Now());
+  set_docked(false);
+  EXPECT_FALSE(GetLockedState());
+
+  // Closing lid while projecting, then removing display should lock.
+  set_docked(true);
+  observer_->LidEventReceived(chromeos::PowerManagerClient::LidState::CLOSED,
+                              base::TimeTicks::Now());
+  EXPECT_FALSE(GetLockedState());
+  set_docked(false);
+  EXPECT_TRUE(GetLockedState());
 }
 
 class LockOnSuspendUsageTest : public PowerEventObserverTest {
@@ -613,7 +693,7 @@ TEST_F(LockOnSuspendUsageTest, LockOnSuspendUsage) {
   SetShouldLockScreenAutomatically(true);
 
   SimulateNewUserFirstLogin("user@gmail.com");
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
   ASSERT_TRUE(test_api.TrackingLockOnSuspendUsage());
 
   base::HistogramTester histogram_tester;
@@ -634,12 +714,19 @@ TEST_F(LockOnSuspendUsageTest, LockOnSuspendUsage) {
               1)));
 }
 
-TEST_F(LockOnSuspendUsageTest, No_ShouldLockScreenAutomatically) {
+// TODO(crbug.com/40898491): Test is failing on "Linux ChromiumOS MSan Tests".
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_No_ShouldLockScreenAutomatically \
+  DISABLED_No_ShouldLockScreenAutomatically
+#else
+#define MAYBE_No_ShouldLockScreenAutomatically No_ShouldLockScreenAutomatically
+#endif
+TEST_F(LockOnSuspendUsageTest, MAYBE_No_ShouldLockScreenAutomatically) {
   SetCanLockScreen(true);
   SetShouldLockScreenAutomatically(false);
 
   SimulateNewUserFirstLogin("user@gmail.com");
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
   ASSERT_TRUE(test_api.TrackingLockOnSuspendUsage());
 
   base::HistogramTester histogram_tester;
@@ -650,7 +737,7 @@ TEST_F(LockOnSuspendUsageTest, No_ShouldLockScreenAutomatically) {
 TEST_F(LockOnSuspendUsageTest, No_CanLockScreen) {
   SetCanLockScreen(false);
   SimulateNewUserFirstLogin("user@gmail.com");
-  PowerEventObserverTestApi test_api(observer_.get());
+  PowerEventObserverTestApi test_api(observer_);
   ASSERT_FALSE(test_api.TrackingLockOnSuspendUsage());
 }
 

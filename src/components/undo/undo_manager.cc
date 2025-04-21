@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -168,8 +168,8 @@ void UndoManager::Undo(
 
   base::AutoReset<bool> incoming_changes(performing_indicator, true);
   std::unique_ptr<UndoGroup> action = std::move(active_undo_group->back());
-  base::AutoReset<UndoGroup*> action_context(&undo_in_progress_action_,
-      action.get());
+  base::AutoReset<raw_ptr<UndoGroup>> action_context(&undo_in_progress_action_,
+                                                     action.get());
   active_undo_group->erase(active_undo_group->begin() +
                            active_undo_group->size() - 1);
 

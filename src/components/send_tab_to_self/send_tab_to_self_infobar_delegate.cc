@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,10 @@ SendTabToSelfInfoBarDelegate::Create(content::WebContents* web_contents,
       new SendTabToSelfInfoBarDelegate(web_contents, entry));
 }
 
-SendTabToSelfInfoBarDelegate::~SendTabToSelfInfoBarDelegate() {}
+SendTabToSelfInfoBarDelegate::~SendTabToSelfInfoBarDelegate() = default;
 
 std::u16string SendTabToSelfInfoBarDelegate::GetInfobarMessage() const {
-  // TODO(crbug.com/944602): Define real string.
+  // TODO(crbug.com/40619532): Define real string.
   NOTIMPLEMENTED();
   return u"Open";
 }
@@ -34,9 +34,9 @@ void SendTabToSelfInfoBarDelegate::OpenTab() {
       WindowOpenDisposition::NEW_FOREGROUND_TAB,
       ui::PageTransition::PAGE_TRANSITION_LINK,
       false /* is_renderer_initiated */);
-  web_contents_->OpenURL(open_url_params);
+  web_contents_->OpenURL(open_url_params, /*navigation_handle_callback=*/{});
 
-  // TODO(crbug.com/944602): Update the model to reflect that an infobar is
+  // TODO(crbug.com/40619532): Update the model to reflect that an infobar is
   // shown.
 }
 

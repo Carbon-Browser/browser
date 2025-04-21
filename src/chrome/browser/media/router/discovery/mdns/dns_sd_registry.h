@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,9 +34,10 @@ class DnsSdRegistry : public DnsSdDelegate {
    public:
     virtual void OnDnsSdEvent(const std::string& service_type,
                               const DnsSdServiceList& services) = 0;
+    virtual void OnDnsSdPermissionRejected() = 0;
 
    protected:
-    virtual ~DnsSdObserver() {}
+    virtual ~DnsSdObserver() = default;
   };
 
   static DnsSdRegistry* GetInstance();
@@ -59,6 +60,8 @@ class DnsSdRegistry : public DnsSdDelegate {
   // DNS-SD-related discovery functionality.
   virtual void RegisterDnsSdListener(const std::string& service_type);
   virtual void UnregisterDnsSdListener(const std::string& service_type);
+
+  void ResetForTest();
 
  protected:
   // Data class for managing all the resources and information related to a
@@ -110,6 +113,7 @@ class DnsSdRegistry : public DnsSdDelegate {
   void ServiceRemoved(const std::string& service_type,
                       const std::string& service_name) override;
   void ServicesFlushed(const std::string& service_type) override;
+  void ServicesPermissionRejected() override;
 
   std::map<std::string, std::unique_ptr<ServiceTypeData>> service_data_map_;
 

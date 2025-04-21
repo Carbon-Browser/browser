@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define CHROMECAST_BROWSER_WEBUI_CAST_WEBUI_MESSAGE_HANDLER_H_
 
 #include <string>
-#include <vector>
+#include <string_view>
 
+#include "base/containers/span.h"
 #include "base/values.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
@@ -26,8 +27,8 @@ class CastWebUIMessageHandler : public content::WebUIMessageHandler {
   void OnJavascriptDisallowed() override;
 
   // Invoke a JS function in the Web UI.
-  void CallJavascriptFunction(const std::string& function,
-                              std::vector<base::Value> args);
+  void CallJavascriptFunction(std::string_view function,
+                              base::span<const base::ValueView> args);
 
  private:
   bool javascript_called_ = false;

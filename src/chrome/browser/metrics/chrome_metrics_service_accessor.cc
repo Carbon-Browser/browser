@@ -1,8 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
+
+#include <string_view>
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -17,9 +19,6 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
 #include "chrome/browser/metrics/per_user_state_manager_chromeos.h"
-// nogncheck needed for Lacros builds since header checker does not understand
-// preprocessor.
-#include "components/metrics/structured/neutrino_logging.h"  // nogncheck
 #endif
 
 namespace {
@@ -59,11 +58,6 @@ bool ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled(
   // false.
   if (!local_state) {
     DLOG(WARNING) << "Local state has not been set and pref cannot be read";
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    metrics::structured::NeutrinoDevicesLog(
-        metrics::structured::NeutrinoDevicesLocation::
-            kIsMetricsAndCrashReportingEnabled);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     return false;
   }
 
@@ -72,8 +66,8 @@ bool ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled(
 
 // static
 bool ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-    base::StringPiece trial_name,
-    base::StringPiece group_name,
+    std::string_view trial_name,
+    std::string_view group_name,
     variations::SyntheticTrialAnnotationMode annotation_mode) {
   return metrics::MetricsServiceAccessor::RegisterSyntheticFieldTrial(
       g_browser_process->metrics_service(), trial_name, group_name,

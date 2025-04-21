@@ -1,19 +1,21 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 static_library("nigori") {
   sources = [
+    "cross_user_sharing_keys.cc",
+    "cross_user_sharing_keys.h",
     "cryptographer_impl.cc",
     "cryptographer_impl.h",
     "keystore_keys_cryptographer.cc",
     "keystore_keys_cryptographer.h",
+    "nigori_data_type_processor.cc",
+    "nigori_data_type_processor.h",
     "nigori_key_bag.cc",
     "nigori_key_bag.h",
     "nigori_local_change_processor.cc",
     "nigori_local_change_processor.h",
-    "nigori_model_type_processor.cc",
-    "nigori_model_type_processor.h",
     "nigori_state.cc",
     "nigori_state.h",
     "nigori_storage.h",
@@ -26,7 +28,7 @@ static_library("nigori") {
     "pending_local_nigori_commit.h",
   ]
 
-  deps = [ "//components/os_crypt" ]
+  deps = [ "//components/os_crypt/sync" ]
 
   public_deps = [
     "//base",

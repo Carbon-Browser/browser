@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 
 #include "ash/public/cpp/update_types.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "chrome/browser/ui/ash/system_tray_client_impl.h"
+#include "base/trace_event/trace_event.h"
+#include "chrome/browser/ui/ash/system/system_tray_client_impl.h"
 #include "chrome/browser/ui/views/relaunch_notification/relaunch_required_timer.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/session_manager_types.h"
@@ -61,8 +62,9 @@ void RelaunchNotificationControllerPlatformImpl::CloseRelaunchNotification() {
 
 void RelaunchNotificationControllerPlatformImpl::SetDeadline(
     base::Time deadline) {
-  if (relaunch_required_timer_)
+  if (relaunch_required_timer_) {
     relaunch_required_timer_->SetDeadline(deadline);
+  }
 }
 
 void RelaunchNotificationControllerPlatformImpl::
@@ -109,6 +111,9 @@ void RelaunchNotificationControllerPlatformImpl::OnPowerStateChanged(
 }
 
 void RelaunchNotificationControllerPlatformImpl::OnSessionStateChanged() {
+  TRACE_EVENT0(
+      "login",
+      "RelaunchNotificationControllerPlatformImpl::OnSessionStateChanged");
   if (CanScheduleReboot() && on_visible_) {
     base::Time new_deadline = std::move(on_visible_).Run();
     SetDeadline(new_deadline);
@@ -123,10 +128,12 @@ bool RelaunchNotificationControllerPlatformImpl::CanScheduleReboot() {
 }
 
 void RelaunchNotificationControllerPlatformImpl::StartObserving() {
-  if (!display_observation_.IsObserving())
+  if (!display_observation_.IsObserving()) {
     display_observation_.Observe(ash::Shell::Get()->display_configurator());
-  if (!session_observation_.IsObserving())
+  }
+  if (!session_observation_.IsObserving()) {
     session_observation_.Observe(session_manager::SessionManager::Get());
+  }
 }
 
 void RelaunchNotificationControllerPlatformImpl::StopObserving() {

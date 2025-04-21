@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ void AccessibilityTest::SetUp() {
 
 AXObjectCacheImpl& AccessibilityTest::GetAXObjectCache() const {
   DCHECK(GetDocument().View());
-  GetDocument().View()->UpdateAllLifecyclePhasesExceptPaint(
-      DocumentUpdateReason::kAccessibility);
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
   auto* ax_object_cache =
       To<AXObjectCacheImpl>(GetDocument().ExistingAXObjectCache());
   DCHECK(ax_object_cache);
@@ -34,28 +33,33 @@ AXObjectCacheImpl& AccessibilityTest::GetAXObjectCache() const {
 }
 
 AXObject* AccessibilityTest::GetAXObject(LayoutObject* layout_object) const {
-  return GetAXObjectCache().GetOrCreate(layout_object);
+  return GetAXObjectCache().Get(layout_object);
 }
 
 AXObject* AccessibilityTest::GetAXObject(const Node& node) const {
-  return GetAXObjectCache().GetOrCreate(&node);
+  return GetAXObjectCache().Get(&node);
 }
 
 AXObject* AccessibilityTest::GetAXRootObject() const {
-  return GetAXObjectCache().GetOrCreate(&GetLayoutView());
+  GetAXObjectCache().UpdateAXForAllDocuments();
+  return GetAXObjectCache().Root();
 }
 
 AXObject* AccessibilityTest::GetAXBodyObject() const {
-  return GetAXObjectCache().GetOrCreate(GetDocument().body());
+  return GetAXObjectCache().Get(GetDocument().body());
 }
 
 AXObject* AccessibilityTest::GetAXFocusedObject() const {
   return GetAXObjectCache().FocusedObject();
 }
 
-AXObject* AccessibilityTest::GetAXObjectByElementId(const char* id) const {
+AXObject* AccessibilityTest::GetAXObjectByElementId(const char* id,
+                                                    PseudoId pseudo_id) const {
   const auto* element = GetElementById(id);
-  return element ? GetAXObjectCache().GetOrCreate(element) : nullptr;
+  if (element && pseudo_id != kPseudoIdNone) {
+    return GetAXObjectCache().Get(element->GetPseudoElement(pseudo_id));
+  }
+  return GetAXObjectCache().Get(element);
 }
 
 std::string AccessibilityTest::PrintAXTree() const {

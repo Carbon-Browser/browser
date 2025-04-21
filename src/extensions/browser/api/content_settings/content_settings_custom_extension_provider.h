@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,17 @@
 
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "components/content_settings/core/browser/content_settings_observable_provider.h"
 #include "extensions/browser/api/content_settings/content_settings_store.h"
+#include "extensions/common/extension_id.h"
 
 namespace content_settings {
 
 // A content settings provider which manages settings defined by extensions.
+//
+// PartitionKey is ignored by this provider because the content settings should
+// apply across partitions.
 class CustomExtensionProvider : public ObservableProvider,
                           public extensions::ContentSettingsStore::Observer {
  public:
@@ -29,22 +33,31 @@ class CustomExtensionProvider : public ObservableProvider,
   // ProviderInterface methods:
   std::unique_ptr<RuleIterator> GetRuleIterator(
       ContentSettingsType content_type,
-      bool incognito) const override;
+      bool incognito,
+      const content_settings::PartitionKey& partition_key) const override;
+  std::unique_ptr<Rule> GetRule(
+      const GURL& primary_url,
+      const GURL& secondary_url,
+      ContentSettingsType content_type,
+      bool off_the_record,
+      const PartitionKey& partition_key) const override;
 
   bool SetWebsiteSetting(
       const ContentSettingsPattern& primary_pattern,
       const ContentSettingsPattern& secondary_pattern,
       ContentSettingsType content_type,
       base::Value&& value,
-      const ContentSettingConstraints& constraint = {}) override;
+      const ContentSettingConstraints& constraints,
+      const content_settings::PartitionKey& partition_key) override;
 
-  void ClearAllContentSettingsRules(ContentSettingsType content_type) override {
-  }
+  void ClearAllContentSettingsRules(
+      ContentSettingsType content_type,
+      const content_settings::PartitionKey& partition_key) override {}
 
   void ShutdownOnUIThread() override;
 
   // extensions::ContentSettingsStore::Observer methods:
-  void OnContentSettingChanged(const std::string& extension_id,
+  void OnContentSettingChanged(const extensions::ExtensionId& extension_id,
                                bool incognito) override;
 
  private:

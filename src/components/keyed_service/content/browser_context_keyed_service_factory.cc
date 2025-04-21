@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,41 +6,46 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "content/public/browser/browser_context.h"
 
+namespace {
+
+// Wraps `factory` as a KeyedServiceFactory::TestingFactory.
+base::OnceCallback<std::unique_ptr<KeyedService>(void*)> WrapFactory(
+    BrowserContextKeyedServiceFactory::TestingFactory factory) {
+  if (!factory) {
+    return {};
+  }
+
+  return base::BindOnce(
+      [](BrowserContextKeyedServiceFactory::TestingFactory factory,
+         void* context) -> std::unique_ptr<KeyedService> {
+        return std::move(factory).Run(
+            static_cast<content::BrowserContext*>(context));
+      },
+      std::move(factory));
+}
+
+}  // namespace
+
 void BrowserContextKeyedServiceFactory::SetTestingFactory(
     content::BrowserContext* context,
     TestingFactory testing_factory) {
-  KeyedServiceFactory::TestingFactory wrapped_factory;
-  if (testing_factory) {
-    wrapped_factory = base::BindRepeating(
-        [](const TestingFactory& testing_factory, void* context) {
-          return testing_factory.Run(
-              static_cast<content::BrowserContext*>(context));
-        },
-        std::move(testing_factory));
-  }
-  KeyedServiceFactory::SetTestingFactory(context, std::move(wrapped_factory));
+  KeyedServiceFactory::SetTestingFactory(
+      context, WrapFactory(std::move(testing_factory)));
 }
 
 KeyedService* BrowserContextKeyedServiceFactory::SetTestingFactoryAndUse(
     content::BrowserContext* context,
     TestingFactory testing_factory) {
-  DCHECK(testing_factory);
   return KeyedServiceFactory::SetTestingFactoryAndUse(
-      context,
-      base::BindRepeating(
-          [](const TestingFactory& testing_factory, void* context) {
-            return testing_factory.Run(
-                static_cast<content::BrowserContext*>(context));
-          },
-          std::move(testing_factory)));
+      context, WrapFactory(std::move(testing_factory)));
 }
 
 BrowserContextKeyedServiceFactory::BrowserContextKeyedServiceFactory(
@@ -89,14 +94,8 @@ void BrowserContextKeyedServiceFactory::BrowserContextDestroyed(
 std::unique_ptr<KeyedService>
 BrowserContextKeyedServiceFactory::BuildServiceInstanceFor(
     void* context) const {
-  // TODO(isherman): The wrapped BuildServiceInstanceFor() should return a
-  // scoped_ptr as well.
-  return base::WrapUnique(
-      BuildServiceInstanceFor(static_cast<content::BrowserContext*>(context)));
-}
-
-bool BrowserContextKeyedServiceFactory::IsOffTheRecord(void* context) const {
-  return static_cast<content::BrowserContext*>(context)->IsOffTheRecord();
+  return BuildServiceInstanceForBrowserContext(
+      static_cast<content::BrowserContext*>(context));
 }
 
 void* BrowserContextKeyedServiceFactory::GetContextToUse(void* context) const {

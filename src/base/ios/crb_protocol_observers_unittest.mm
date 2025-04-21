@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/gtest_mac.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @protocol TestObserver
 
@@ -29,12 +25,12 @@
 @end
 
 // Implements only the required methods in the TestObserver protocol.
-@interface TestPartialObserver : NSObject<TestObserver>
+@interface TestPartialObserver : NSObject <TestObserver>
 @property(nonatomic, readonly) BOOL requiredMethodInvoked;
 @end
 
 // Implements all the methods in the TestObserver protocol.
-@interface TestCompleteObserver : TestPartialObserver<TestObserver>
+@interface TestCompleteObserver : TestPartialObserver <TestObserver>
 @property(nonatomic, readonly) BOOL optionalMethodInvoked;
 @end
 
@@ -48,7 +44,7 @@ namespace {
 
 class CRBProtocolObserversTest : public PlatformTest {
  public:
-  CRBProtocolObserversTest() {}
+  CRBProtocolObserversTest() = default;
 
  protected:
   void SetUp() override {
@@ -288,7 +284,6 @@ TEST_F(CRBProtocolObserversTest, IgnoresDeallocedObservers) {
 
 - (instancetype)init {
   NOTREACHED();
-  return nil;
 }
 
 - (void)mutateByAddingObserver:(id<TestObserver>)observer {

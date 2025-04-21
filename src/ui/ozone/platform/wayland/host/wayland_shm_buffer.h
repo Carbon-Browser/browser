@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class WaylandShmBuffer {
 
   // Returns the underlying raw memory buffer, if it's currently mapped into
   // local address space, otherwise return nullptr
-  uint8_t* GetMemory() const;
+  uint8_t* GetMemory();
 
   // Returns the underlying wl_buffer pointer
   wl_buffer* get() const { return buffer_.get(); }

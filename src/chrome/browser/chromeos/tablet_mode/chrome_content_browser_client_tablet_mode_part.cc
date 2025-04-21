@@ -1,8 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/tablet_mode/chrome_content_browser_client_tablet_mode_part.h"
+
+#include <string_view>
 
 #include "base/feature_list.h"
 #include "chrome/browser/browser_features.h"
@@ -12,7 +14,6 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chromeos/ui/base/tablet_state.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_view_host.h"
@@ -21,9 +22,10 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+#include "ui/display/screen.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/webui/chromeos/system_web_dialog_delegate.h"
+#include "chrome/browser/ui/webui/ash/system_web_dialog/system_web_dialog_delegate.h"
 #include "chrome/common/webui_url_constants.h"
 #include "extensions/common/constants.h"
 #endif
@@ -58,13 +60,14 @@ void OverrideWebkitPrefsForTabletMode(
     content::WebContents* contents,
     blink::web_pref::WebPreferences* web_prefs) {
   // Enable some mobile-like behaviors when in tablet mode on Chrome OS.
-  if (!chromeos::TabletState::Get() ||
-      !chromeos::TabletState::Get()->InTabletMode())
+  if (!display::Screen::GetScreen()->HasScreen() ||
+      !display::Screen::GetScreen()->InTabletMode()) {
     return;
+  }
 
   // Do this only for webcontents displayed in browsers and are not of hosted
   // apps.
-  auto* browser = chrome::FindBrowserWithWebContents(contents);
+  auto* browser = chrome::FindBrowserWithTab(contents);
   if (!browser || browser->is_type_app() || browser->is_type_app_popup())
     return;
 
@@ -86,14 +89,14 @@ void OverrideWebkitPrefsForTabletMode(
 // Takes a URL because the WebContents may not yet be associated with a window,
 // SettingsWindowManager, etc.
 bool UseDefaultFontSize(const GURL& url) {
-  if (chromeos::SystemWebDialogDelegate::HasInstance(url))
+  if (ash::SystemWebDialogDelegate::HasInstance(url))
     return true;
 
   if (url.SchemeIs(content::kChromeUIScheme))
     return chrome::IsSystemWebUIHost(url.host_piece());
 
   if (url.SchemeIs(extensions::kExtensionScheme)) {
-    base::StringPiece extension_id = url.host_piece();
+    std::string_view extension_id = url.host_piece();
     return extension_misc::IsSystemUIApp(extension_id);
   }
   return false;

@@ -1,8 +1,9 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/webui/web_ui_data_source_impl.h"
@@ -10,6 +11,7 @@
 #include "content/test/test_content_client.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 
 namespace content {
 namespace {
@@ -38,13 +40,13 @@ class TestClient : public TestContentClient {
     base::RefCountedStaticMemory* bytes = nullptr;
     if (resource_id == kDummyDefaultResourceId) {
       bytes = new base::RefCountedStaticMemory(
-          kDummyDefaultResource, std::size(kDummyDefaultResource));
+          base::byte_span_with_nul_from_cstring(kDummyDefaultResource));
     } else if (resource_id == kDummyResourceId) {
-      bytes = new base::RefCountedStaticMemory(kDummyResource,
-                                               std::size(kDummyResource));
+      bytes = new base::RefCountedStaticMemory(
+          base::byte_span_with_nul_from_cstring(kDummyResource));
     } else if (resource_id == kDummyJSResourceId) {
-      bytes = new base::RefCountedStaticMemory(kDummyJSResource,
-                                               std::size(kDummyJSResource));
+      bytes = new base::RefCountedStaticMemory(
+          base::byte_span_with_nul_from_cstring(kDummyJSResource));
     }
     return bytes;
   }
@@ -64,8 +66,8 @@ class WebUIDataSourceTest : public testing::Test {
                               WebContents::Getter(), std::move(callback));
   }
 
-  std::string GetMimeType(const std::string& path) const {
-    return source_->GetMimeType(path);
+  std::string GetMimeTypeForPath(const std::string& path) const {
+    return source_->GetMimeType(GURL("https://any-host/" + path));
   }
 
   void HandleRequest(const std::string& path,
@@ -80,14 +82,16 @@ class WebUIDataSourceTest : public testing::Test {
   std::string request_path_;
   TestClient client_;
 
+  void CreateDataSource(std::string source_name) {
+    WebUIDataSourceImpl* source = new WebUIDataSourceImpl(source_name);
+    source->disable_load_time_data_defaults_for_testing();
+    source_ = base::WrapRefCounted(source);
+  }
+
  private:
   void SetUp() override {
     SetContentClient(&client_);
-    WebUIDataSource* source = WebUIDataSourceImpl::Create("host");
-    WebUIDataSourceImpl* source_impl =
-        static_cast<WebUIDataSourceImpl*>(source);
-    source_impl->disable_load_time_data_defaults_for_testing();
-    source_ = base::WrapRefCounted(source_impl);
+    CreateDataSource("host");
   }
 
   BrowserTaskEnvironment task_environment_;
@@ -96,7 +100,7 @@ class WebUIDataSourceTest : public testing::Test {
 
 void EmptyStringsCallback(bool from_js_module,
                           scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find("loadTimeData.data = {"), std::string::npos);
   EXPECT_NE(result.find("};"), std::string::npos);
   bool has_import = result.find("import {loadTimeData}") != std::string::npos;
@@ -114,7 +118,7 @@ TEST_F(WebUIDataSourceTest, EmptyModuleStrings) {
 }
 
 void SomeValuesCallback(scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find("\"flag\":true"), std::string::npos);
   EXPECT_NE(result.find("\"counter\":10"), std::string::npos);
   EXPECT_NE(result.find("\"debt\":-456"), std::string::npos);
@@ -135,13 +139,13 @@ TEST_F(WebUIDataSourceTest, SomeValues) {
 }
 
 void DefaultResourceFoobarCallback(scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyDefaultResource), std::string::npos);
 }
 
 void DefaultResourceStringsCallback(
     scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyDefaultResource), std::string::npos);
 }
 
@@ -153,12 +157,12 @@ TEST_F(WebUIDataSourceTest, DefaultResource) {
 }
 
 void NamedResourceFoobarCallback(scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyResource), std::string::npos);
 }
 
 void NamedResourceStringsCallback(scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyDefaultResource), std::string::npos);
 }
 
@@ -171,7 +175,7 @@ TEST_F(WebUIDataSourceTest, NamedResource) {
 
 void NamedResourceWithQueryStringCallback(
     scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyResource), std::string::npos);
 }
 
@@ -185,7 +189,7 @@ TEST_F(WebUIDataSourceTest, NamedResourceWithQueryString) {
 void NamedResourceWithUrlFragmentCallback(
     scoped_refptr<base::RefCountedMemory> data) {
   EXPECT_NE(data, nullptr);
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyResource), std::string::npos);
 }
 
@@ -197,7 +201,7 @@ TEST_F(WebUIDataSourceTest, NamedResourceWithUrlFragment) {
 
 void WebUIDataSourceTest::RequestFilterQueryStringCallback(
     scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   // Check that the query string is passed to the request filter (and not
   // trimmed).
   EXPECT_EQ("foobar?query?string", request_path_);
@@ -230,49 +234,49 @@ TEST_F(WebUIDataSourceTest, MimeType) {
   const char* wasm = "application/wasm";
   const char* woff2 = "application/font-woff2";
 
-  EXPECT_EQ(GetMimeType(std::string()), html);
-  EXPECT_EQ(GetMimeType("foo"), html);
-  EXPECT_EQ(GetMimeType("foo.html"), html);
-  EXPECT_EQ(GetMimeType(".js"), js);
-  EXPECT_EQ(GetMimeType("foo.js"), js);
-  EXPECT_EQ(GetMimeType("js"), html);
-  EXPECT_EQ(GetMimeType("foojs"), html);
-  EXPECT_EQ(GetMimeType("foo.jsp"), html);
-  EXPECT_EQ(GetMimeType("foocss"), html);
-  EXPECT_EQ(GetMimeType("foo.css"), css);
-  EXPECT_EQ(GetMimeType(".css.foo"), html);
-  EXPECT_EQ(GetMimeType("foopng"), html);
-  EXPECT_EQ(GetMimeType("foo.png"), png);
-  EXPECT_EQ(GetMimeType(".png.foo"), html);
-  EXPECT_EQ(GetMimeType("foo.svg"), svg);
-  EXPECT_EQ(GetMimeType("foo.js.wasm"), wasm);
-  EXPECT_EQ(GetMimeType("foo.out.wasm"), wasm);
-  EXPECT_EQ(GetMimeType(".woff2"), woff2);
-  EXPECT_EQ(GetMimeType("foo.json"), json);
-  EXPECT_EQ(GetMimeType("foo.pdf"), pdf);
-  EXPECT_EQ(GetMimeType("foo.jpg"), jpg);
-  EXPECT_EQ(GetMimeType("foo.mp4"), mp4);
+  EXPECT_EQ(GetMimeTypeForPath(std::string()), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.html"), html);
+  EXPECT_EQ(GetMimeTypeForPath(".js"), js);
+  EXPECT_EQ(GetMimeTypeForPath("foo.js"), js);
+  EXPECT_EQ(GetMimeTypeForPath("js"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foojs"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.jsp"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foocss"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.css"), css);
+  EXPECT_EQ(GetMimeTypeForPath(".css.foo"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foopng"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.png"), png);
+  EXPECT_EQ(GetMimeTypeForPath(".png.foo"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.svg"), svg);
+  EXPECT_EQ(GetMimeTypeForPath("foo.js.wasm"), wasm);
+  EXPECT_EQ(GetMimeTypeForPath("foo.out.wasm"), wasm);
+  EXPECT_EQ(GetMimeTypeForPath(".woff2"), woff2);
+  EXPECT_EQ(GetMimeTypeForPath("foo.json"), json);
+  EXPECT_EQ(GetMimeTypeForPath("foo.pdf"), pdf);
+  EXPECT_EQ(GetMimeTypeForPath("foo.jpg"), jpg);
+  EXPECT_EQ(GetMimeTypeForPath("foo.mp4"), mp4);
 
   // With query strings.
-  EXPECT_EQ(GetMimeType("foo?abc?abc"), html);
-  EXPECT_EQ(GetMimeType("foo.html?abc?abc"), html);
-  EXPECT_EQ(GetMimeType("foo.css?abc?abc"), css);
-  EXPECT_EQ(GetMimeType("foo.js?abc?abc"), js);
-  EXPECT_EQ(GetMimeType("foo.svg?abc?abc"), svg);
+  EXPECT_EQ(GetMimeTypeForPath("foo?abc?abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.html?abc?abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.css?abc?abc"), css);
+  EXPECT_EQ(GetMimeTypeForPath("foo.js?abc?abc"), js);
+  EXPECT_EQ(GetMimeTypeForPath("foo.svg?abc?abc"), svg);
 
   // With URL fragments.
-  EXPECT_EQ(GetMimeType("foo#abc#abc"), html);
-  EXPECT_EQ(GetMimeType("foo.html#abc#abc"), html);
-  EXPECT_EQ(GetMimeType("foo.css#abc#abc"), css);
-  EXPECT_EQ(GetMimeType("foo.js#abc#abc"), js);
-  EXPECT_EQ(GetMimeType("foo.svg#abc#abc"), svg);
+  EXPECT_EQ(GetMimeTypeForPath("foo#abc#abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.html#abc#abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.css#abc#abc"), css);
+  EXPECT_EQ(GetMimeTypeForPath("foo.js#abc#abc"), js);
+  EXPECT_EQ(GetMimeTypeForPath("foo.svg#abc#abc"), svg);
 
   // With query strings and URL fragments.
-  EXPECT_EQ(GetMimeType("foo?abc#abc"), html);
-  EXPECT_EQ(GetMimeType("foo.html?abc#abc"), html);
-  EXPECT_EQ(GetMimeType("foo.css?abc#abc"), css);
-  EXPECT_EQ(GetMimeType("foo.js?abc#abc"), js);
-  EXPECT_EQ(GetMimeType("foo.svg?abc#abc"), svg);
+  EXPECT_EQ(GetMimeTypeForPath("foo?abc#abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.html?abc#abc"), html);
+  EXPECT_EQ(GetMimeTypeForPath("foo.css?abc#abc"), css);
+  EXPECT_EQ(GetMimeTypeForPath("foo.js?abc#abc"), js);
+  EXPECT_EQ(GetMimeTypeForPath("foo.svg?abc#abc"), svg);
 }
 
 TEST_F(WebUIDataSourceTest, ShouldServeMimeTypeAsContentTypeHeader) {
@@ -284,7 +288,7 @@ void InvalidResourceCallback(scoped_refptr<base::RefCountedMemory> data) {
 }
 
 void NamedResourceBarJSCallback(scoped_refptr<base::RefCountedMemory> data) {
-  std::string result(data->front_as<char>(), data->size());
+  std::string result(base::as_string_view(*data));
   EXPECT_NE(result.find(kDummyJSResource), std::string::npos);
 }
 
@@ -307,6 +311,8 @@ TEST_F(WebUIDataSourceTest, NoSetDefaultResource) {
   StartDataRequest("does_not_exist.html",
                    base::BindOnce(&InvalidResourceCallback));
   StartDataRequest("does_not_exist.js",
+                   base::BindOnce(&InvalidResourceCallback));
+  StartDataRequest("does_not_exist.ts",
                    base::BindOnce(&InvalidResourceCallback));
 
   // strings.m.js fails until UseStringsJs is called.
@@ -446,6 +452,14 @@ TEST_F(WebUIDataSourceTest, SetCrossOriginPolicyValues) {
   EXPECT_EQ("", url_data_source->GetCrossOriginEmbedderPolicy());
   source()->OverrideCrossOriginResourcePolicy("same-origin");
   EXPECT_EQ("same-origin", url_data_source->GetCrossOriginResourcePolicy());
+}
+
+TEST_F(WebUIDataSourceTest, GetOrigin) {
+  CreateDataSource("host");
+  EXPECT_EQ(source()->GetOrigin(), url::Origin::Create(GURL("chrome://host")));
+  CreateDataSource("chrome-untrusted://host/");
+  EXPECT_EQ(source()->GetOrigin(),
+            url::Origin::Create(GURL("chrome-untrusted://host")));
 }
 
 }  // namespace content

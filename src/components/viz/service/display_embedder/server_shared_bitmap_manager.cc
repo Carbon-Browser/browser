@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,10 @@ class ServerSharedBitmap : public SharedBitmap {
             static_cast<uint8_t*>(const_cast<void*>(bitmap_data->GetMemory()))),
         bitmap_data_(std::move(bitmap_data)) {}
 
-  ~ServerSharedBitmap() override = default;
+  ~ServerSharedBitmap() override {
+    // Drop unowned reference before destroying `bitmap_data_`.
+    pixels_ = nullptr;
+  }
 
  private:
   scoped_refptr<BitmapData> bitmap_data_;
@@ -107,7 +110,7 @@ ServerSharedBitmapManager::~ServerSharedBitmapManager() {
 
 std::unique_ptr<SharedBitmap> ServerSharedBitmapManager::GetSharedBitmapFromId(
     const gfx::Size& size,
-    ResourceFormat format,
+    SharedImageFormat format,
     const SharedBitmapId& id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto it = handle_map_.find(id);
@@ -192,7 +195,8 @@ bool ServerSharedBitmapManager::OnMemoryDump(
     BitmapData* data = pair.second.get();
 
     std::string dump_str = base::StringPrintf(
-        "sharedbitmap/%s", base::HexEncode(id.name, sizeof(id.name)).c_str());
+        "sharedbitmap/%s",
+        base::HexEncode(base::as_byte_span(id.name)).c_str());
     base::trace_event::MemoryAllocatorDump* dump =
         pmd->CreateAllocatorDump(dump_str);
     if (!dump)

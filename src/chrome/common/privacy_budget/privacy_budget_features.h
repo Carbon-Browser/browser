@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,30 @@ namespace features {
 // IdentifiableSurface::Type is encoded as the decimal representation of the
 // enum value.
 
+// Feature for the Identifiability Study Meta experiment.
+//
+// If the feature is enabled, the meta experiment is activated on a random set
+// of clients according to the selection probability.
+BASE_DECLARE_FEATURE(kIdentifiabilityStudyMetaExperiment);
+
+// Probability with which the meta experiment will be activated on each client.
+//
+// Parameter name: "ActivationProbability"
+// Parameter type: double
+//
+// A value of the parameter outside the interval [0, 1] will be interpreted as
+// the default probability, which depends on the channel and is encoded in
+// chrome/browser/privacy_budget/identifiability_study_state.cc
+extern const base::FeatureParam<double>
+    kIdentifiabilityStudyMetaExperimentActivationProbability;
+
+// Default activation probability for the Identifiability Study Meta Experiment.
+// This is a value outside [0, 1], which will be replaced by the default
+// probability depending on the channel in
+// chrome/browser/privacy_budget/identifiability_study_state.cc
+constexpr double
+    kIdentifiabilityStudyMetaExperimentDefaultActivationProbability = -1;
+
 // Root feature for all identifiability study logic.
 //
 // If the feature is disabled, then this browser instance will not be
@@ -27,7 +51,7 @@ namespace features {
 //
 // Enabling the feature doesn't automatically make this client part of the study
 // either.
-extern const base::Feature kIdentifiabilityStudy;
+BASE_DECLARE_FEATURE(kIdentifiabilityStudy);
 
 // Each time the key study parameters change, the study generation also
 // increments. Reporting the study generation alongside metrics allows the data
@@ -83,17 +107,17 @@ extern const base::FeatureParam<std::string> kIdentifiabilityStudyBlockedTypes;
 // This parameter only affects random sampling of surfaces. Setting this to 0
 // will disable random sampling.
 //
-// * For now, allow (kIdentifiabilityStudyExpectedSurfaceCount or
-// kIdentifiabilityStudyBlocks) and kIdentifiabilityStudyReidSurfaceBlocks to be
-// specified at the same time.
-//
 // Parameter name: "Rho"
 // Parameter type: int
 extern const base::FeatureParam<int> kIdentifiabilityStudyExpectedSurfaceCount;
 
 // Surface types allowed in the random assignment. If the parameter is empty or
-// invalid all types can be sampled. This does not have any effect on meta
-// surfaces (type 7), which are sampled in any case.
+// invalid all types can be sampled.
+
+// This does not have any effect on meta surfaces (type 7), nor on reserved
+// surfaces (type 0), which are sampled in any case. In particular, enabling
+// random sampling and setting this parameter to "0" is a valid way to only
+// enable the meta surfaces experiment.
 //
 // Parameter name: "AllowedRandomTypes"
 // Parameter type: Comma separated list of decimal integers, each of which
@@ -231,10 +255,6 @@ extern const base::FeatureParam<std::string> kIdentifiabilityStudyPerTypeCost;
 // * A non-empty value for this parameter enables assigned block sampling and
 //   disables random sampling.
 //
-// * For now, allow (kIdentifiabilityStudyExpectedSurfaceCount or
-// kIdentifiabilityStudyBlocks) and kIdentifiabilityStudyReidSurfaceBlocks to be
-// specified at the same time.
-//
 // E.g.:
 //   * "1;2;3,4;5;6,7;8;9" : Defines three blocks: {1,2,3}, {4,5,6}, and
 //     {7,8,9}.
@@ -319,107 +339,6 @@ extern const base::FeatureParam<std::string> kIdentifiabilityStudyPerTypeCost;
 // probability higher than this threshold, the study will be deactivated for
 // this client and this client will not report any surface.
 constexpr double kMaxProbabilityPerSurface = 0.5;
-
-// Reid Surface Blocks.
-//
-// Parameter name: "ReidBlocks"
-// Parameter type: Comma separated list of blocks. Each block is a semicolon
-//                 separated list of surfaces. See examples below.
-//
-// Each block is a list of surfaces for which we want to estimate the Reid
-// score. For each block, we will collect and send to the server 1 bit of data.
-//
-// * For now, allow (kIdentifiabilityStudyExpectedSurfaceCount or
-// kIdentifiabilityStudyBlocks) and kIdentifiabilityStudyReidSurfaceBlocks to be
-// specified at the same time.
-//
-// E.g.:
-//   * "1;2;3,4;5;6,7;8;9" : Defines three blocks: {1,2,3}, {4,5,6}, and
-//     {7,8,9}.
-extern const base::FeatureParam<std::string>
-    kIdentifiabilityStudyReidSurfaceBlocks;
-
-// Enable active sampling.
-//
-// Parameter name: "EnableActiveSampling"
-// Parameter type: boolean.
-//
-// Enable active sampling of supported surfaces. Whether the surfaces will
-// actually be reported depends on the other parameters.
-extern const base::FeatureParam<bool> kIdentifiabilityStudyEnableActiveSampling;
-
-// List of font families which will be actively sampled.
-//
-// Parameter name: "ActivelySampledFonts"
-// Parameter type: Comma separated list of font families.
-//
-// The Identifiability Study code will actively sample whether these font
-// families are available or not. Note that whether they will actually be
-// reported or not depends on the other parameters.
-extern const base::FeatureParam<std::string>
-    kIdentifiabilityStudyActivelySampledFonts;
-
-// Ranges for the random salts for the Reid Block hashes.
-//
-// Parameter name: "ReidBlocksSaltsRanges"
-// Parameter type: Comma separated list of salts ranges expressed as integers.
-//
-// If this parameter is specified then it must specify a max salt for each block
-// that is defined using the `ReidBlocks` parameter. The random salt used to
-// calculate the Reid hash should be a number between 0 and this parameter.
-//
-// * All max salts must be non-zero positive integers.
-//
-// * There must be exactly as many Reid salts ranges as there are Reid blocks.
-// If not, disable the Reid estimator feature.
-//
-// E.g.:
-//   * "1000,5000": Assigns max salt number for two Reid Blocks send in
-//   `ReidBlocks` parameter.
-extern const base::FeatureParam<std::string>
-    kIdentifiabilityStudyReidSurfaceBlocksSaltsRanges;
-
-// Number of reported bits for the Reid Block hashes.
-//
-// Parameter name: "ReidBlocksBits"
-// Parameter type: Comma separated list of number of bits represented as
-// integers.
-//
-// If this parameter is specified then it must specify the number of bits that
-// should be reported for each block that is defined using the `ReidBlocks`
-// parameter. The number of bits should be a number between 1 and 32.
-//
-// * All bits must be non-zero positive integers.
-//
-// * There must be exactly as many Reid numbers of bits as there are Reid
-// blocks. If not, disable the Reid estimator feature.
-//
-// E.g.:
-//   * "2,3": Assigns number of bits that should be reported from two Reid
-//   Blocks sent in the `ReidBlocks` parameter.
-extern const base::FeatureParam<std::string>
-    kIdentifiabilityStudyReidSurfaceBlocksBits;
-
-// Probabilities of reporting noise in Reid estimation.
-//
-// Parameter name: "ReidBlocksNoiseProbabilities"
-// Parameter type: Comma separated list of noise probabilities represented as
-// decimals.
-//
-// If this parameter is specified then it must specify the probability of noise
-// that should be reported for each block that is defined using the `ReidBlocks`
-// parameter. The probability should be a decimal between 0 and 1.
-//
-// * All probabilities must be positive decimals between 0 and 1.
-//
-// * There must be exactly as many Reid noise probabilities as there are Reid
-// blocks. If not, disable the Reid estimator feature.
-//
-// E.g.:
-//   * "0.1,0.05": Assigns probabilities of noise that should be reported from
-//   two Reid Blocks sent in the `ReidBlocks` parameter.
-extern const base::FeatureParam<std::string>
-    kIdentifiabilityStudyReidBlocksNoiseProbabilities;
 
 }  // namespace features
 

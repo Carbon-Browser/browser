@@ -38,6 +38,9 @@ class BuilderListTest(unittest.TestCase):
             'some-wpt-bot': {
                 'port_name': 'port-c',
                 'specifiers': ['C', 'Release'],
+                'steps': {
+                    'wpt_tests_suite': {},
+                },
                 'is_try_builder': True,
             },
             'Blink A': {
@@ -59,17 +62,26 @@ class BuilderListTest(unittest.TestCase):
             'Try A': {
                 'port_name': 'port-a',
                 'specifiers': ['A', 'Release'],
+                'steps': {
+                    'blink_web_tests': {},
+                },
                 'is_try_builder': True
             },
             'Try B': {
                 'port_name': 'port-b',
                 'specifiers': ['B', 'Release'],
+                'steps': {
+                    'blink_web_tests': {},
+                },
                 'is_try_builder': True
             },
             'CQ Try A': {
                 'bucket': 'bucket.a',
                 'port_name': 'port-a',
                 'specifiers': ['A', 'Release'],
+                'steps': {
+                    'blink_web_tests': {},
+                },
                 'is_try_builder': True,
                 'is_cq_builder': True
             },
@@ -77,6 +89,9 @@ class BuilderListTest(unittest.TestCase):
                 'bucket': 'bucket.b',
                 'port_name': 'port-b',
                 'specifiers': ['B', 'Release'],
+                'steps': {
+                    'blink_web_tests': {},
+                },
                 'is_try_builder': True,
                 'is_cq_builder': True
             },
@@ -84,27 +99,26 @@ class BuilderListTest(unittest.TestCase):
                 'bucket': 'bucket.c',
                 'port_name': 'port-c',
                 'specifiers': ['c', 'Release'],
+                'steps': {
+                    'blink_web_tests': {},
+                    'high_dpi_blink_web_tests': {
+                        'flag_specific': 'highdpi'
+                    },
+                    'blink_wpt_tests': {},
+                    'high_dpi_blink_wpt_tests': {
+                        'flag_specific': 'highdpi',
+                    },
+                },
                 'is_try_builder': True,
                 'is_cq_builder': True,
                 'main': "luci",
-                'has_webdriver_tests': True
             },
-            'Flag Specific A': {
+            'Flag Specific C': {
                 'port_name': 'port-c',
                 'specifiers': ['C', 'Release'],
                 'steps': {
-                    'high_dpi_blink_web_tests (with patch)': {
+                    'high_dpi_blink_web_tests': {
                         'flag_specific': 'highdpi'
-                    },
-                },
-                "is_try_builder": True
-            },
-            'Flag Specific B': {
-                'port_name': 'port-c',
-                'specifiers': ['C', 'Release'],
-                'steps': {
-                    'layout_ng_disabled_blink_web_tests (with patch)': {
-                        'flag_specific': 'disable-layout-ng',
                     },
                 },
                 "is_try_builder": True
@@ -127,8 +141,7 @@ class BuilderListTest(unittest.TestCase):
             'CQ Try A',
             'CQ Try B',
             'CQ Try C',
-            'Flag Specific A',
-            'Flag Specific B',
+            'Flag Specific C',
             'Try A',
             'Try B',
             'some-wpt-bot',
@@ -143,8 +156,8 @@ class BuilderListTest(unittest.TestCase):
     def test_all_try_builder_names(self):
         builders = self.sample_builder_list()
         self.assertEqual([
-            'CQ Try A', 'CQ Try B', 'CQ Try C', 'Flag Specific A',
-            'Flag Specific B', 'Try A', 'Try B', 'some-wpt-bot'
+            'CQ Try A', 'CQ Try B', 'CQ Try C', 'Flag Specific C', 'Try A',
+            'Try B', 'some-wpt-bot'
         ], builders.all_try_builder_names())
 
     def test_all_cq_try_builder_names(self):
@@ -155,17 +168,29 @@ class BuilderListTest(unittest.TestCase):
 
     def test_all_flag_specific_builder_names(self):
         builders = self.sample_builder_list()
-        self.assertEqual(['Flag Specific A'],
+        self.assertEqual(['CQ Try C', 'Flag Specific C'],
                          builders.all_flag_specific_try_builder_names(
                              flag_specific="highdpi"))
-        self.assertEqual(['Flag Specific A', 'Flag Specific B'],
-                         builders.all_flag_specific_try_builder_names(
-                             flag_specific="*"))
+        self.assertEqual(
+            ['CQ Try C', 'Flag Specific C'],
+            builders.all_flag_specific_try_builder_names(flag_specific="*"))
+
+    def test_builders_for_rebaselining(self):
+        builders = self.sample_builder_list()
+        self.assertEqual(
+            {
+                'Try A', 'Try B', 'Flag Specific C', 'CQ Try A', 'CQ Try B',
+                'CQ Try C', 'some-wpt-bot'
+            }, builders.builders_for_rebaselining())
 
     def test_all_port_names(self):
         builders = self.sample_builder_list()
         self.assertEqual(['port-a', 'port-b', 'port-c'],
                          builders.all_port_names())
+
+    def test_all_flag_specific_options(self):
+        builders = self.sample_builder_list()
+        self.assertEqual({'highdpi'}, builders.all_flag_specific_options())
 
     def test_bucket_for_builder_default_bucket(self):
         builders = self.sample_builder_list()
@@ -183,16 +208,6 @@ class BuilderListTest(unittest.TestCase):
         builders = self.sample_builder_list()
         self.assertEqual('luci', builders.main_for_builder('CQ Try C'))
 
-    def test_has_webdriver_tests_for_builder_default_value(self):
-        builders = self.sample_builder_list()
-        self.assertEqual(None,
-                         builders.has_webdriver_tests_for_builder('Try A'))
-
-    def test_has_webdriver_tests_for_builder_configured_value(self):
-        builders = self.sample_builder_list()
-        self.assertEqual(True,
-                         builders.has_webdriver_tests_for_builder('CQ Try C'))
-
     def test_port_name_for_builder_name(self):
         builders = self.sample_builder_list()
         self.assertEqual('port-b',
@@ -207,9 +222,6 @@ class BuilderListTest(unittest.TestCase):
         builders = self.sample_builder_list()
         self.assertEqual(
             set(), builders.flag_specific_options_for_port_name('port-a'))
-        self.assertEqual(
-            {'highdpi', 'disable-layout-ng'},
-            builders.flag_specific_options_for_port_name('port-c'))
 
     def test_reject_flag_specific_multiple_ports(self):
         with self.assertRaises(ValueError):
@@ -218,7 +230,7 @@ class BuilderListTest(unittest.TestCase):
                     'port_name': 'port-a',
                     'specifiers': ['A', 'Release'],
                     'steps': {
-                        'blink_web_tests (with patch)': {
+                        'blink_web_tests': {
                             'flag_specific': 'highdpi',
                         },
                     },
@@ -228,7 +240,7 @@ class BuilderListTest(unittest.TestCase):
                     'port_name': 'port-b',
                     'specifiers': ['B', 'Release'],
                     'steps': {
-                        'blink_web_tests (with patch)': {
+                        'blink_web_tests': {
                             'flag_specific': 'highdpi',
                         },
                     },
@@ -278,8 +290,3 @@ class BuilderListTest(unittest.TestCase):
         self.assertEqual('B',
                          builders.version_specifier_for_port_name('port-b'))
         self.assertIsNone(builders.version_specifier_for_port_name('port-x'))
-
-    def test_is_wpt_builder(self):
-        builders = self.sample_builder_list()
-        self.assertFalse(builders.is_wpt_builder('Blink A'))
-        self.assertTrue(builders.is_wpt_builder('some-wpt-bot'))

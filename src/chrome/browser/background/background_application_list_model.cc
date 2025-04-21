@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/one_shot_event.h"
 #include "base/strings/string_number_conversions.h"
@@ -30,9 +31,9 @@
 #include "extensions/browser/image_loader.h"
 #include "extensions/browser/permissions_manager.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_icon_set.h"
 #include "extensions/common/extension_resource.h"
 #include "extensions/common/extension_set.h"
+#include "extensions/common/icons/extension_icon_set.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/common/permissions/permission_set.h"
@@ -48,7 +49,6 @@ using extensions::ExtensionRegistry;
 using extensions::ExtensionSet;
 using extensions::PermissionSet;
 using extensions::UnloadedExtensionReason;
-using extensions::UpdatedExtensionPermissionsInfo;
 using extensions::mojom::APIPermissionID;
 
 class ExtensionNameComparator {
@@ -61,8 +61,7 @@ class ExtensionNameComparator {
 
 // Background application representation, private to the
 // BackgroundApplicationListModel class.
-class BackgroundApplicationListModel::Application
-    : public base::SupportsWeakPtr<Application> {
+class BackgroundApplicationListModel::Application final {
  public:
   Application(BackgroundApplicationListModel* model,
               const Extension* an_extension);
@@ -79,6 +78,9 @@ class BackgroundApplicationListModel::Application
   raw_ptr<const Extension> extension_;
   gfx::ImageSkia icon_;
   raw_ptr<BackgroundApplicationListModel> model_;
+
+ private:
+  base::WeakPtrFactory<Application> weak_ptr_factory_{this};
 };
 
 namespace {
@@ -120,11 +122,9 @@ void BackgroundApplicationListModel::Observer::OnApplicationDataChanged() {}
 void BackgroundApplicationListModel::Observer::OnApplicationListChanged(
     const Profile* profile) {}
 
-BackgroundApplicationListModel::Observer::~Observer() {
-}
+BackgroundApplicationListModel::Observer::~Observer() = default;
 
-BackgroundApplicationListModel::Application::~Application() {
-}
+BackgroundApplicationListModel::Application::~Application() = default;
 
 BackgroundApplicationListModel::Application::Application(
     BackgroundApplicationListModel* model,
@@ -142,12 +142,12 @@ void BackgroundApplicationListModel::Application::OnImageLoaded(
 void BackgroundApplicationListModel::Application::RequestIcon(
     extension_misc::ExtensionIcons size) {
   extensions::ExtensionResource resource =
-      extensions::IconsInfo::GetIconResource(
-          extension_, size, ExtensionIconSet::MATCH_BIGGER);
+      extensions::IconsInfo::GetIconResource(extension_, size,
+                                             ExtensionIconSet::Match::kBigger);
   extensions::ImageLoader::Get(model_->profile_)
-      ->LoadImageAsync(
-          extension_, resource, gfx::Size(size, size),
-          base::BindOnce(&Application::OnImageLoaded, AsWeakPtr()));
+      ->LoadImageAsync(extension_, resource, gfx::Size(size, size),
+                       base::BindOnce(&Application::OnImageLoaded,
+                                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 BackgroundApplicationListModel::~BackgroundApplicationListModel() = default;
@@ -231,7 +231,6 @@ int BackgroundApplicationListModel::GetPosition(
     ++position;
   }
   NOTREACHED();
-  return -1;
 }
 
 // static
@@ -363,22 +362,26 @@ void BackgroundApplicationListModel::OnBackgroundContentsServiceDestroying() {
 }
 
 void BackgroundApplicationListModel::OnExtensionPermissionsUpdated(
-    const extensions::UpdatedExtensionPermissionsInfo& info) {
-  if (info.permissions.HasAPIPermission(APIPermissionID::kBackground) ||
+    const extensions::Extension& extension,
+    const extensions::PermissionSet& permissions,
+    extensions::PermissionsManager::UpdateReason reason) {
+  if (permissions.HasAPIPermission(APIPermissionID::kBackground) ||
       (base::FeatureList::IsEnabled(features::kOnConnectNative) &&
-       info.permissions.HasAPIPermission(
-           APIPermissionID::kTransientBackground))) {
-    switch (info.reason) {
-      case UpdatedExtensionPermissionsInfo::ADDED:
-      case UpdatedExtensionPermissionsInfo::REMOVED:
+       permissions.HasAPIPermission(APIPermissionID::kTransientBackground))) {
+    switch (reason) {
+      case extensions::PermissionsManager::UpdateReason::kAdded:
+      case extensions::PermissionsManager::UpdateReason::kRemoved:
         Update();
-        if (IsBackgroundApp(*info.extension, profile_)) {
-          AssociateApplicationData(info.extension);
+        if (IsBackgroundApp(extension, profile_)) {
+          AssociateApplicationData(&extension);
         } else {
-          DissociateApplicationData(info.extension);
+          DissociateApplicationData(&extension);
         }
         break;
-      default:
+      case extensions::PermissionsManager::UpdateReason::kPolicy:
+        // Policy changes are only used for host permissions, so the
+        // "background"
+        // permission would never be present in  permissions .
         NOTREACHED();
     }
   }

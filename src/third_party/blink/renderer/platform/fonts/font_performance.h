@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ class PLATFORM_EXPORT FontPerformance {
     primary_font_ = base::TimeDelta();
     primary_font_in_style_ = base::TimeDelta();
     system_fallback_ = base::TimeDelta();
-    shaping_ = base::TimeDelta();
   }
 
   // The aggregated time spent in |DeterminePrimarySimpleFontData|.
@@ -32,8 +31,9 @@ class PLATFORM_EXPORT FontPerformance {
     return primary_font_in_style_;
   }
   static void AddPrimaryFontTime(base::TimeDelta time) {
-    if (UNLIKELY(!IsMainThread()))
+    if (!IsMainThread()) [[unlikely]] {
       return;
+    }
     if (in_style_)
       primary_font_in_style_ += time;
     else
@@ -43,26 +43,14 @@ class PLATFORM_EXPORT FontPerformance {
   // The aggregated time spent in |FallbackFontForCharacter|.
   static base::TimeDelta SystemFallbackFontTime() { return system_fallback_; }
   static void AddSystemFallbackFontTime(base::TimeDelta time) {
-    if (UNLIKELY(!IsMainThread()))
+    if (!IsMainThread()) [[unlikely]] {
       return;
+    }
     system_fallback_ += time;
-  }
-
-  static void AddShapingTime(base::TimeDelta time) {
-    if (UNLIKELY(!IsMainThread()))
-      return;
-    shaping_ += time;
   }
 
   static void MarkFirstContentfulPaint();
   static void MarkDomContentLoaded();
-
-  struct ShapeTextTimingScope final {
-    ~ShapeTextTimingScope() {
-      FontPerformance::AddShapingTime(shaping_timer.Elapsed());
-    }
-    base::ElapsedTimer shaping_timer;
-  };
 
   class StyleScope {
    public:
@@ -77,7 +65,6 @@ class PLATFORM_EXPORT FontPerformance {
   static base::TimeDelta primary_font_;
   static base::TimeDelta primary_font_in_style_;
   static base::TimeDelta system_fallback_;
-  static base::TimeDelta shaping_;
   static unsigned in_style_;
 };
 

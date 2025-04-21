@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,14 @@
 #include <string>
 #include <utility>
 
-#include "base/containers/cxx20_erase.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/webui/bookmarks/bookmarks_message_handler.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
 #include "chrome/browser/ui/webui/managed_ui_handler.h"
 #include "chrome/browser/ui/webui/metrics_handler.h"
+#include "chrome/browser/ui/webui/page_not_available_for_guest/page_not_available_for_guest_ui.h"
 #include "chrome/browser/ui/webui/plural_string_handler.h"
-#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/bookmarks_resources.h"
 #include "chrome/grit/bookmarks_resources_map.h"
@@ -32,6 +31,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/webui/web_ui_util.h"
+#include "ui/webui/webui_util.h"
 
 namespace {
 
@@ -39,20 +39,19 @@ void AddLocalizedString(content::WebUIDataSource* source,
                         const std::string& message,
                         int id) {
   std::u16string str = l10n_util::GetStringUTF16(id);
-  base::Erase(str, '&');
+  std::erase(str, '&');
   source->AddString(message, str);
 }
 
-content::WebUIDataSource* CreateBookmarksUIHTMLSource(Profile* profile) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIBookmarksHost);
-  webui::SetupWebUIDataSource(
-      source, base::make_span(kBookmarksResources, kBookmarksResourcesSize),
-      IDR_BOOKMARKS_BOOKMARKS_HTML);
+content::WebUIDataSource* CreateAndAddBookmarksUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIBookmarksHost);
+  webui::SetupWebUIDataSource(source, kBookmarksResources,
+                              IDR_BOOKMARKS_BOOKMARKS_HTML);
 
   // Build an Accelerator to describe undo shortcut
   // NOTE: the undo shortcut is also defined in bookmarks/command_manager.js
-  // TODO(crbug/893033): de-duplicate shortcut by moving all shortcut
+  // TODO(crbug.com/40597071): de-duplicate shortcut by moving all shortcut
   // definitions from JS to C++.
   ui::Accelerator undo_accelerator(ui::VKEY_Z, ui::EF_PLATFORM_ACCELERATOR);
   source->AddString("undoDescription", l10n_util::GetStringFUTF16(
@@ -125,20 +124,36 @@ content::WebUIDataSource* CreateBookmarksUIHTMLSource(Profile* profile) {
       {"toastItemDeleted", IDS_BOOKMARK_MANAGER_TOAST_ITEM_DELETED},
       {"undo", IDS_BOOKMARK_BAR_UNDO},
   };
-  for (const auto& str : kStrings)
+  for (const auto& str : kStrings) {
     AddLocalizedString(source, str.name, str.id);
+  }
 
   return source;
 }
 
 }  // namespace
 
+BookmarksUIConfig::BookmarksUIConfig()
+    : WebUIConfig(content::kChromeUIScheme, chrome::kChromeUIBookmarksHost) {}
+
+BookmarksUIConfig::~BookmarksUIConfig() = default;
+
+std::unique_ptr<content::WebUIController>
+BookmarksUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                         const GURL& url) {
+  Profile* profile = Profile::FromWebUI(web_ui);
+  if (profile->IsGuestSession()) {
+    return std::make_unique<PageNotAvailableForGuestUI>(
+        web_ui, chrome::kChromeUIBookmarksHost);
+  }
+  return std::make_unique<BookmarksUI>(web_ui);
+}
+
 BookmarksUI::BookmarksUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   // Set up the chrome://bookmarks/ source.
   Profile* profile = Profile::FromWebUI(web_ui);
-  auto* source = CreateBookmarksUIHTMLSource(profile);
+  auto* source = CreateAndAddBookmarksUIHTMLSource(profile);
   ManagedUIHandler::Initialize(web_ui, source);
-  content::WebUIDataSource::Add(profile, source);
 
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@ const protocolVersion = '1.3';
 
 chrome.test.getConfig(config => chrome.test.runTests([
   async function testParentTargetPermissions() {
-    const {openTab} = await import('/_test_resources/test_util/tabs_util.js');
     const fileFrameURL =
         config.testDataDirectory + '/parent_target_permissions/top_page.html';
     const subframeURL = chrome.runtime.getURL('subframe.html');
-    openTab(fileFrameURL + '?' + subframeURL);
+    chrome.test.openFileUrl(fileFrameURL + '?' + subframeURL);
     await new Promise(resolve => {
       chrome.runtime.onMessage.addListener(message => {
         if (message === 'ready')

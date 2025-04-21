@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,9 @@
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "third_party/skia/include/core/SkSurface.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_surface.h"
@@ -27,12 +30,13 @@ SkiaOutputDeviceWebView::SkiaOutputDeviceWebView(
     gpu::MemoryTracker* memory_tracker,
     DidSwapBufferCompleteCallback did_swap_buffer_complete_callback)
     : SkiaOutputDevice(context_state->gr_context(),
+                       context_state->graphite_context(),
                        memory_tracker,
                        std::move(did_swap_buffer_complete_callback)),
       context_state_(context_state),
       gl_surface_(std::move(gl_surface)) {
   // Always set uses_default_gl_framebuffer to true, since
-  // SkSurfaceCharacterization created for  GL fbo0 is compatible with
+  // GrSurfaceCharacterization created for  GL fbo0 is compatible with
   // SkSurface wrappers non GL fbo0.
   capabilities_.uses_default_gl_framebuffer = true;
   capabilities_.output_surface_origin = gl_surface_->GetOrigin();
@@ -42,44 +46,44 @@ SkiaOutputDeviceWebView::SkiaOutputDeviceWebView(
   DCHECK(context_state_->gr_context());
   DCHECK(context_state_->context());
 
-  capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::RGBA_8888)] =
+  capabilities_.sk_color_type_map[SinglePlaneFormat::kRGBA_8888] =
       kSurfaceColorType;
-  capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::BGRA_8888)] =
+  capabilities_.sk_color_type_map[SinglePlaneFormat::kBGRA_8888] =
       kSurfaceColorType;
 }
 
 SkiaOutputDeviceWebView::~SkiaOutputDeviceWebView() = default;
 
-bool SkiaOutputDeviceWebView::Reshape(
-    const SkSurfaceCharacterization& characterization,
-    const gfx::ColorSpace& color_space,
-    float device_scale_factor,
-    gfx::OverlayTransform transform) {
-  DCHECK_EQ(transform, gfx::OVERLAY_TRANSFORM_NONE);
+bool SkiaOutputDeviceWebView::Reshape(const ReshapeParams& params) {
+  DCHECK_EQ(params.transform, gfx::OVERLAY_TRANSFORM_NONE);
 
-  gfx::Size size = gfx::SkISizeToSize(characterization.dimensions());
-  if (!gl_surface_->Resize(size, device_scale_factor, color_space,
+  gfx::Size size = params.GfxSize();
+  if (!gl_surface_->Resize(size, params.device_scale_factor, params.color_space,
                            /*has_alpha=*/true)) {
     DLOG(ERROR) << "Failed to resize.";
     return false;
   }
 
   size_ = size;
-  sk_color_space_ = characterization.refColorSpace();
+  sk_color_space_ = params.image_info.refColorSpace();
   InitSkiaSurface(gl_surface_->GetBackingFramebufferObject());
   return !!sk_surface_;
 }
 
-void SkiaOutputDeviceWebView::SwapBuffers(BufferPresentedCallback feedback,
-                                          OutputSurfaceFrame frame) {
+void SkiaOutputDeviceWebView::Present(
+    const std::optional<gfx::Rect>& update_rect,
+    BufferPresentedCallback feedback,
+    OutputSurfaceFrame frame) {
+  DCHECK(!update_rect);
   StartSwapBuffers({});
 
   gfx::Size surface_size =
       gfx::Size(sk_surface_->width(), sk_surface_->height());
 
-  FinishSwapBuffers(
-      gfx::SwapCompletionResult(gl_surface_->SwapBuffers(std::move(feedback))),
-      surface_size, std::move(frame));
+  auto data = frame.data;
+  FinishSwapBuffers(gfx::SwapCompletionResult(
+                        gl_surface_->SwapBuffers(std::move(feedback), data)),
+                    surface_size, std::move(frame));
 }
 
 SkSurface* SkiaOutputDeviceWebView::BeginPaint(
@@ -105,15 +109,16 @@ void SkiaOutputDeviceWebView::InitSkiaSurface(unsigned int fbo) {
   framebuffer_info.fFormat = GL_RGBA8;
   SkColorType color_type = kSurfaceColorType;
 
-  GrBackendRenderTarget render_target(size_.width(), size_.height(),
-                                      /*sampleCnt=*/0,
-                                      /*stencilBits=*/0, framebuffer_info);
+  auto render_target =
+      GrBackendRenderTargets::MakeGL(size_.width(), size_.height(),
+                                     /*sampleCnt=*/0,
+                                     /*stencilBits=*/0, framebuffer_info);
   auto origin = (gl_surface_->GetOrigin() == gfx::SurfaceOrigin::kTopLeft)
                     ? kTopLeft_GrSurfaceOrigin
                     : kBottomLeft_GrSurfaceOrigin;
 
-  SkSurfaceProps surface_props{0, kUnknown_SkPixelGeometry};
-  sk_surface_ = SkSurface::MakeFromBackendRenderTarget(
+  SkSurfaceProps surface_props;
+  sk_surface_ = SkSurfaces::WrapBackendRenderTarget(
       context_state_->gr_context(), render_target, origin, color_type,
       sk_color_space_, &surface_props);
 

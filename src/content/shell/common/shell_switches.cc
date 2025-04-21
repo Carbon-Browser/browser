@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 namespace switches {
 
 // Makes Content Shell use the given path for its data directory.
-// NOTE: If changing this value, change the corresponding Java-side value in
-// ContentShellBrowserTestActivity.java#getUserDataDirectoryCommandLineSwitch()
-// to match.
-const char kContentShellDataPath[] = "data-path";
+// NOTE: "user-data-dir" is used to align with Chromedriver's behavior. Please
+// do NOT change this to another value.
+// NOTE: The same value is also used at Java-side in
+// ContentShellBrowserTestActivity.java#getUserDataDirectoryCommandLineSwitch().
+const char kContentShellUserDataDir[] = "user-data-dir";
 
 // The directory breakpad should store minidumps in.
 const char kCrashDumpsDir[] = "crash-dumps-dir";
@@ -30,9 +31,22 @@ const char kContentShellHostWindowSize[] = "content-shell-host-window-size";
 // Hides toolbar from content_shell's host window.
 const char kContentShellHideToolbar[] = "content-shell-hide-toolbar";
 
+// Enables APIs guarded with the [IsolatedContext] IDL attribute for the given
+// comma-separated list of origins.
+const char kIsolatedContextOrigins[] = "isolated-context-origins";
+
+// Use the given address instead of the default loopback for accepting remote
+// debugging connections. Note that the remote debugging protocol does not
+// perform any authentication, so exposing it too widely can be a security
+// risk.
+const char kRemoteDebuggingAddress[] = "remote-debugging-address";
+
 // Runs Content Shell in web test mode, injecting test-only behaviour for
 // blink web tests.
 const char kRunWebTests[] = "run-web-tests";
+
+// Register the provided scheme as a standard scheme.
+const char kTestRegisterStandardScheme[] = "test-register-standard-scheme";
 
 bool IsRunWebTestsSwitchPresent() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(

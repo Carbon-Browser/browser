@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "ash/public/cpp/holding_space/holding_space_controller_observer.h"
 #include "ash/public/cpp/session/session_controller.h"
 #include "base/check.h"
+#include "base/check_is_test.h"
 
 namespace ash {
 
@@ -16,21 +17,37 @@ HoldingSpaceController* g_instance = nullptr;
 
 }  // namespace
 
+// HoldingSpaceController ------------------------------------------------------
+
 HoldingSpaceController::HoldingSpaceController() {
   CHECK(!g_instance);
   g_instance = this;
 
-  SessionController::Get()->AddObserver(this);
+  // `SessionController` may not exist during tests.
+  if (auto* session_controller = SessionController::Get()) {
+    session_controller->AddObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
 }
 
 HoldingSpaceController::~HoldingSpaceController() {
   CHECK_EQ(g_instance, this);
 
+  for (auto& observer : observers_) {
+    observer.OnHoldingSpaceControllerDestroying();
+  }
+
   SetClient(nullptr);
   SetModel(nullptr);
   g_instance = nullptr;
 
-  SessionController::Get()->RemoveObserver(this);
+  // `SessionController` may not exist during tests.
+  if (auto* session_controller = SessionController::Get()) {
+    session_controller->RemoveObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
 }
 
 // static

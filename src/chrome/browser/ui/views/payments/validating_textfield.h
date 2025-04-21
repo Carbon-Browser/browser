@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@
 namespace payments {
 
 class ValidatingTextfield : public views::Textfield {
+  METADATA_HEADER(ValidatingTextfield, views::Textfield)
+
  public:
-  METADATA_HEADER(ValidatingTextfield);
   explicit ValidatingTextfield(std::unique_ptr<ValidationDelegate> delegate);
   ValidatingTextfield(const ValidatingTextfield&) = delete;
   ValidatingTextfield& operator=(const ValidatingTextfield&) = delete;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,11 @@ public class PaymentResponseHelper implements PaymentResponseHelperInterface {
     }
 
     @Override
-    public void generatePaymentResponse(String methodName, String stringifiedDetails,
-            PayerData payerData, PaymentResponseResultCallback resultCallback) {
+    public void generatePaymentResponse(
+            String methodName,
+            String stringifiedDetails,
+            PayerData payerData,
+            PaymentResponseResultCallback resultCallback) {
         mPaymentResponse.methodName = methodName;
         mPaymentResponse.stringifiedDetails = stringifiedDetails;
         // Set up the shipping section of the response when it comes from payment app.

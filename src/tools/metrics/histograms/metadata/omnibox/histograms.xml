@@ -1,5 +1,5 @@
 <!--
-Copyright 2020 The Chromium Authors. All rights reserved.
+Copyright 2020 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -22,15 +22,66 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
+<variants name="NavigationOrSuggestionPrefetch">
+  <variant name="NavigationPrefetch"
+      summary="Recorded for prefetches where Chrome is relatively confident
+               an omnibox navigation is about to occur (i.e. the user
+               selected a search suggestion). These prefetches allow Chrome
+               to kickstart the request without waiting until before unload
+               handlers or other navigation pre-processing mechanisms in
+               Chrome."/>
+  <variant name="SuggestionPrefetch"
+      summary="Recorded for prefetches where an omnibox suggestion from the
+               suggestion server recommends a prefetch of a suggestion
+               results page."/>
+</variants>
+
+<variants name="NavigationPrefetchOnly">
+  <variant name="NavigationPrefetch"
+      summary="Recorded for prefetches where Chrome is relatively confident
+               an omnibox navigation is about to occur (i.e. the user
+               selected a search suggestion). These prefetches allow Chrome
+               to kickstart the request without waiting until before unload
+               handlers or other navigation pre-processing mechanisms in
+               Chrome."/>
+</variants>
+
+<variants name="OmniboxAutocompleteUpdateSlice">
+  <variant name=""
+      summary="This slice measures match changes for all updates, regardless
+               of whether it or the previous update were asynchronous or
+               synchronous. Logged exactly once per update; 0, 1, or multiple
+               times per input. The count here will be the sum of the counts
+               for the other 2 slices."/>
+  <variant name=".Async"
+      summary="This slice measures match changes between the last update for
+               the current input, whether it be asynchronous or synchronous,
+               and the current asynchronous, i.e. non-first, update of the
+               current input. Logged exactly once per asynchronous update; 0,
+               1, or multiple times per input."/>
+  <variant name=".CrossInput"
+      summary="This slice measures match changes between the last update for
+               the previous input, whether it be asynchronous or synchronous,
+               and the synchronous, i.e. first, update of the current input.
+               Logged exactly once per synchronous update; at most once per
+               input."/>
+</variants>
+
 <variants name="OmniboxProviders">
+<!--
+Keep consistent with active providers. Doesn't need to include every provider in
+`AutocompleteProvider::Type`, but should include every provider in
+`AutocompleteProvider::TypeToString()`.
+-->
+
   <variant name="Bookmark"/>
   <variant name="Builtin"/>
+  <variant name="Calculator"/>
   <variant name="Clipboard"/>
-  <variant name="Contact"/>
   <variant name="Document"/>
-  <variant name="ExtensionApp"/>
+  <variant name="FeaturedSearch"/>
   <variant name="HistoryCluster"/>
-  <variant name="HistoryContents"/>
+  <variant name="HistoryEmbeddings"/>
   <variant name="HistoryFuzzy"/>
   <variant name="HistoryQuick"/>
   <variant name="HistoryURL"/>
@@ -47,10 +98,33 @@ chromium-metrics-reviews@google.com.
   <variant name="ZeroSuggest"/>
 </variants>
 
+<variants name="SearchPrefetch">
+  <variant name="SearchPrefetch"
+      summary="Search Prefetch issues results page requests in response to
+               either the suggestion server or the Omnibox client being
+               confident that the user will navigate to a specific search
+               suggestion. These requests are then served instantly to the
+               user when the user navigates to a search suggestion with the
+               same search terms. These requests can have mismatching query
+               params as the Omnibox client updates the search navigation URL
+               as the user types more into the Omnibox. The suggestion server
+               issues prefetch hints along with the suggestion request.
+               Additionally, the Omnibox client decides to prefetch when the
+               user has chosen (or likely chosen) a search suggestion to
+               initiate the search suggestion navigation earlier."/>
+</variants>
+
+<variants name="SuggestionPrefetchOnly">
+  <variant name="SuggestionPrefetch"
+      summary="Recorded for prefetches where an omnibox suggestion from the
+               suggestion server recommends a prefetch of a suggestion
+               results page."/>
+</variants>
+
 <histogram name="Omnibox.AcceptedKeywordSuggestion"
-    enum="OmniboxEnteredKeywordMode2" expires_after="2023-01-15">
+    enum="OmniboxEnteredKeywordMode2" expires_after="2025-05-11">
   <owner>yoangela@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records number of accepted keyword searches enumerated by how the user
     entered the keyword mode. See also Omnibox.EnteredKeywordMode2 for the total
@@ -61,10 +135,111 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Omnibox.ActionInSuggest.UsageByType.{Type}"
+    enum="BooleanUsage" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-mobile-search@google.com</owner>
+  <summary>
+    For action of type &quot;{Type}&quot;, captures whether the user interacted
+    with this action to complete the interaction with the omnibox.
+
+    The histogram is captured only if the action &quot;{Type}&quot; was
+    presented to the user when the interaction with the omnibox completed. The
+    sum of &quot;Used&quot; and &quot;Not Used&quot; indicates the sum of all
+    impressions of a given action.
+
+    Action in Suggest are the Omnibox Action chips attached to a search
+    suggestion.
+  </summary>
+  <token key="Type">
+    <variant name="Call"/>
+    <variant name="Directions"/>
+    <variant name="Reviews"/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.ActionInSuggest.{ShownOrUsed}"
+    enum="ActionInSuggestType" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-mobile-search@google.com</owner>
+  <summary>
+    Counts how often Omnibox Action in Suggest are {ShownOrUsed} and records the
+    type (Omnibox Action in Suggest Type) of every {ShownOrUsed} action.
+
+    Recorded once at the end of the interaction with the Omnibox Suggestions for
+    every Action presented to the user. Not recorded for Suggestions that are
+    annotated with Action in Suggest, where the Action in Suggest row was not
+    shown to the user.
+
+    Action in Suggest are the Omnibox Action chips attached to a search
+    suggestion.
+  </summary>
+  <token key="ShownOrUsed">
+    <variant name="Shown" summary="shown"/>
+    <variant name="Used" summary="used"/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.AnswerAction.UsageByType.{AnswerType}"
+    enum="BooleanUsage" expires_after="2025-05-30">
+  <owner>pnoland@google.com</owner>
+  <owner>chrome-mobile-search@google.com</owner>
+  <summary>
+    For action associated with type &quot;{AnswerType}&quot;, captures whether
+    the user interacted with this action to complete the interaction with the
+    omnibox.
+
+    The histogram is captured only if the action &quot;{AnswerType}&quot; was
+    presented to the user when the interaction with the omnibox completed. The
+    sum of &quot;Used&quot; and &quot;Not Used&quot; indicates the sum of all
+    impressions of a given action.
+
+    Answer Actions are the Omnibox Action chips attached to an answer
+    suggestion.
+  </summary>
+  <token key="AnswerType">
+    <variant name="Currency"/>
+    <variant name="Dictionary"/>
+    <variant name="Finance"/>
+    <variant name="Invalid"/>
+    <variant name="KnowledgeGraph"/>
+    <variant name="Local"/>
+    <variant name="LocalTime"/>
+    <variant name="PlayInstall"/>
+    <variant name="Sports"/>
+    <variant name="Sunrise"/>
+    <variant name="Translation"/>
+    <variant name="Weather"/>
+    <variant name="WhenIs"/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.AnswerAction.{ShownOrUsed}"
+    enum="SuggestionAnswerType" expires_after="2025-05-30">
+  <owner>pnoland@google.com</owner>
+  <owner>chrome-mobile-search@google.com</owner>
+  <summary>
+    Counts how often Omnibox Answer Actions are {ShownOrUsed} and records the
+    type (SuggestionAnswer::AnswerType) of every {ShownOrUsed} action.
+
+    Recorded once at the end of the interaction with the Omnibox Suggestions for
+    every Action presented to the user. Not recorded for Suggestions that are
+    annotated with Answers Actions where the Answer row was not shown to the
+    user.
+
+    Answer Actions are the Omnibox Action chips attached to an answer
+    suggestion.
+  </summary>
+  <token key="ShownOrUsed">
+    <variant name="Shown" summary="shown"/>
+    <variant name="Used" summary="used"/>
+  </token>
+</histogram>
+
 <histogram name="Omnibox.AnswerParseSuccess" enum="BooleanSuccess"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     For each answer received in suggest responses, the number that are
     well-formed and contain all the required elements.
@@ -72,9 +247,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.AnswerParseType" enum="SuggestionAnswerType"
-    expires_after="2022-12-11">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The number of times each omnibox suggestion answer type (e.g., weather,
     sports score) was received and parsed successfully. Can be normalized with
@@ -86,25 +261,12 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.AssistedQueryStats.Length" units="chars"
-    expires_after="2022-08-14">
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Records the length of the aqs= param in the Search Result Page request URLs.
-    Recorded every time a Search Result Page URL is generated in the
-    omnibox/realbox. This happens either when the user selects a suggestion in
-    order to load Search Result Page or when a proactive request is made to
-    prefetch the Search Result Page.
-  </summary>
-</histogram>
-
 <histogram
-    name="Omnibox.AsyncAutocompletionTime.Provider.{Provider}{Completed}"
-    units="ms" expires_after="2022-12-01">
+    name="Omnibox.AsyncAutocompletionTime2.Provider.{Provider}{Completed}"
+    units="ms" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     When the user focuses or types into the omnibox, the dropdown results can be
     updated multiple times per input (i.e. when focused, per char typed,
@@ -163,11 +325,11 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Omnibox.AsyncAutocompletionTime.{Change}{Completed}"
-    units="ms" expires_after="2022-12-01">
+<histogram name="Omnibox.AsyncAutocompletionTime2.{Change}{Completed}"
+    units="ms" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     When the user focuses or types into the omnibox, the dropdown results can be
     updated multiple times per input (i.e. when focused, per char typed,
@@ -245,31 +407,79 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Omnibox.BitmapFetchLatency" units="ms"
-    expires_after="2022-09-11">
-  <obsolete>
-    3/2022; feature launched.
-  </obsolete>
-<!-- Name completed by histogram_suffixes name="Omnibox.BitmapFetchLatencyCacheSplit" -->
-
+<histogram name="Omnibox.AutocompletionTime.UpdateResult{Slice}"
+    units="microseconds" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The time elapsed between the ChromeOmniboxClient requesting a suggestion's
-    image to receiving the image. This includes both uncached and cached
-    requests. See BitmapFetcher.Fetch and BitmapFetcher.Decode for what
-    contributes to uncached images latency; however, the sum of those metrics
-    can be greater than this metric as image prefetching begins before the
-    ChromeOmniboxClient requests an image.
+    The time `AutocompleteController::UpdateResult()` took.
+
+    That method is invoked, and this histogram is recorded: a) Once for the sync
+    autocomplete update that occurs when the omnibox input changes (e.g. the
+    user types a character, pastes text, focuses the omnibox, etc). b) Once for
+    each async autocomplete update that occurs asyncly after the omnibox input
+    changes and the various async providers complete. Usually occurs up to 3
+    times per input change. But can be less if the updates are interrupted (e.g.
+    the popup is closed or input changed again) or include no new suggestions.
+    c) Once when copied matches from the previous autocomplete pass expire. This
+    happens at most once per input change, but may not occur if all providers
+    complete or the input changes prior to the expiration.
+
+    Because this encompasses both sync and async omnibox updates, and the number
+    of async updates per sync update is not fixed, it's not a good
+    representative of how a feature effects user experienced latency. E.g., a
+    feature that makes users type slower will bias this metric towards async
+    updates. Besides, this is only a small segment of the user experienced
+    latency. This is only intended to measure changes in the actual
+    implementation of `UpdateResult()`.
+
+    {Slice}
+
+    This metric uses SCOPED_UMA_HISTOGRAM_TIMER_MICROS so clients without
+    high-resolution clocks will either a) be dropped, b) report 0 for very short
+    times, or c) be recorded as expected (depending on which comments you
+    believe ¯\_(ツ)_/¯).
+  </summary>
+  <token key="Slice">
+    <variant name=""/>
+    <variant name=".DeduplicateMatches"
+        summary="The '.DeduplicateMatches' slice measures the time
+                 `AutocompleteResult::DeduplicateMatches()` took. When ML
+                 ranking is enabled, this can include async calls that aren't
+                 included in the unsliced metric. Otherwise, it's a subset of
+                 both the unsliced metric and the sliced '.SortAndCull'
+                 metric and is called exactly once per `SortAndCull()` call."/>
+    <variant name=".SortAndCull"
+        summary="The '.SortAndCull' slice measures the time
+                 `AutocompleteResult::SortAndCull()` took. Besides being
+                 called from `AutocompleteController::UpdateResult()`, this
+                 is also called asyncly in ML ranking code paths. Therefore,
+                 when ML ranking is enabled, not all '.SortAndCull' times are
+                 included in the unsliced metric. `SortAndCull()` can be
+                 called up to twice per `UpdateResult()`. For all but the
+                 last async update, it's called twice; for the last async
+                 update (which may not occur if interrupted), it's called
+                 once."/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.CalculateVisibleHint.Duration" units="ms"
+    expires_after="2025-05-11">
+  <owner>peilinwang@google.com</owner>
+  <owner>woa-performance-bugs+jank@google.com</owner>
+  <summary>
+    Measures the amount of time it takes to call UrlBar.calculateVisibleHint().
+    Recorded once per call.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.CharTypedToRepaintLatency" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>asvitkine@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records the time taken between a keystroke being typed in the omnibox and
     the text being painted. If there are multiple keystrokes before a paint,
@@ -298,10 +508,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.CharTypedToRepaintLatency.InsertToPresent" units="ms"
-    expires_after="2023-01-01">
-  <owner>asvitkine@chromium.org</owner>
+    expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     A refinement of Omnibox.CharTypedToRepaintLatency metric. It measures the
     time between the first character insertion in a series that happen during a
@@ -310,26 +521,47 @@ chromium-metrics-reviews@google.com.
     it is expected to be more accurate: the baseline CharTypedToRepaintLatency
     uses now() from when the subsequent has-processed notification arrives back
     on the UI thread, which may overestimate user-visible latency.
+
+    Note: Compositor-provided timestamps are taken using presentation time
+    callbacks. Before M110 the callbacks used for this histogram might be called
+    even if the next submitted frame fails to present which means that the
+    character is not really rendered on-screen yet. From M110 onward, this is
+    fixed by using callbacks that are only called after the first following
+    successful presentation, so a slight change might be noticed in the
+    histogram values.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.CharTypedToRepaintLatency.PaintToPresent" units="ms"
-    expires_after="2021-06-30">
-  <owner>asvitkine@chromium.org</owner>
+    expires_after="2025-12-15">
+  <owner>manukh@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records the time between when OnPaint() is called to the time the compositor
     reports pixels were successfully drawn to the screen. This a subset of the
     time reported in Omnibox.CharTypedToRepaintLatency.InsertToPresent.
+
+    Note: Compositor-provided timestamps are taken using presentation time
+    callbacks. Before M110 the callbacks used for this histogram might be called
+    even if the next submitted frame fails to present which means that the
+    character is not really rendered on-screen yet. From M110 onward, this is
+    fixed by using callbacks that are only called after the first following
+    successful presentation, so a slight change might be noticed in the
+    histogram values.
+
+    Warning: this histogram was expired from 2021-06-30 to 2022-12-12; data may
+    be missing.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.CharTypedToRepaintLatency.ToPaint" units="ms"
-    expires_after="2023-01-01">
-  <owner>asvitkine@chromium.org</owner>
+    expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records the time taken between a keystroke being typed in the omnibox and
     the time when we're ready to paint the omnibox. This is a breakdown
@@ -339,18 +571,20 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.ClipboardSuggestionRemovedAge" units="ms"
-    expires_after="2022-09-11">
+    expires_after="2025-11-01">
   <owner>gangwu@chromium.org</owner>
-  <owner>fgorski@chromium.org</owner>
+  <owner>jdonnelly@chromium.org</owner>
   <summary>
     Recorded every time the clipboard suggestion is removed from omnibox
     suggestion list and the system clipboard. The value indicates the estimated
     age of the clipboard.
+
+    Note: recording gap between 2022/09 and 2023/08.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.ClipboardSuggestionShownAge" units="ms"
-    expires_after="2022-11-27">
+    expires_after="2026-02-10">
   <owner>gangwu@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -368,7 +602,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.ClipboardSuggestionShownNumTimes" units="units"
-    expires_after="2022-12-04">
+    expires_after="2026-02-10">
   <owner>gangwu@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -398,7 +632,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.ClipboardSuggestionShownWithCurrentURL"
-    enum="BooleanPresent" expires_after="2022-10-01">
+    enum="BooleanPresent" expires_after="2025-11-01">
   <owner>gangwu@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -419,102 +653,99 @@ chromium-metrics-reviews@google.com.
     compared with the count in the clipboard bucket of the
     Omnibox.SuggestionUsed.Provider histogram to determine the clickthrough rate
     on these suggestions.
+
+    Note: recording gap between 2022/10 and 2023/08.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.CrossInputMatchStability.MatchChange" units="position"
-    expires_after="2022-12-11">
-  <owner>manukh@chromium.org</owner>
-  <owner>tommycli@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
+<histogram name="Omnibox.CompanyEntityImageAblated" enum="Boolean"
+    expires_after="2025-08-04">
+  <owner>jennserrano@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    This tracks how unstable our matches are due to synchronous updates.
-    Synchronous updates usually, though not necessarily, follow asynchronous
-    updates; this measures match instability between the last update for the
-    previous input, whether it be asynchronous or synchronous, and the
-    synchronous, i.e. first, update of the current input.
-
-    Whenever a dropdown position gets synchronously set to a new match that's
-    different from the old match, this histogram logs the index.
-
-    We primarily care about the default match, which is logged at index 0. All
-    indices matter though, so we track the other indices too. When the number of
-    matches changes asynchronously, matches that are removed are considered a
-    &quot;change&quot; and logged here. Matches that are appended are less
-    disruptive to the user, and are not logged.
-
-    This is because this metric is primarily interested in how many times the
-    user could be looking at a match with the intention of selecting it, and
-    then it surprisingly goes away.
-
-    Note that merely adding a new provider will increase these counts. That's
-    intentional. Swapping matches out annoys users, and to avoid this, we should
-    do some things like: caching, update coalescing, update deferral until next
-    keystroke, provider timeouts, etc.
-
-    This metric is designed to be normalized by the True count of
-    Omnibox.Start.WantAsyncMatches, which will yield the number of match changes
-    synchronously per keystroke or other user gesture.
-
-    There's the related Omnibox.MatchStability.AsyncMatchChange2 histogram for
-    tracking match instability for asynchronous updates.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.CrossInputMatchStability.MatchChangedInAnyPosition"
-    enum="BooleanChanged" expires_after="2022-12-11">
-  <owner>manukh@chromium.org</owner>
-  <owner>tommycli@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
-  <summary>
-    This tracks how unstable our matches are due to synchronous updates.
-    Synchronous updates usually, though not necessarily, follow asynchronous
-    updates; this measures match instability between the last update for the
-    previous input, whether it be asynchronous or synchronous, and the
-    synchronous, i.e. first, update of the current input.
-
-    For each synchronous autocomplete update, this histogram logs whether any
-    match in any position has changed. Note: if the only change is new matches
-    appended to the end of the list, that does not count as a change, since it's
-    not very disruptive to the user.
-
-    This metric is designed to be normalized by the True count of
-    Omnibox.Start.WantAsyncMatches, which will yield the number of times any
-    match changes asynchronously per keystroke or other user gesture.
-
-    This histogram can be considered a boolean analogue to
-    Omnibox.CrossInputMatchStability.MatchChange.
-
-    There's the related Omnibox.MatchStability.AsyncMatchChangedInAnyPosition
-    histogram for tracking match instability for asynchronous updates.
+    Records whether any company entity image was ablated. This histogram is
+    logged to once per autocomplete pass when there exists a suggestion of
+    entity type. Recorded after attempting to find matching domains between a
+    historical URL and a company entity website URI.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.CutOrCopyAllText" units="count"
-    expires_after="2022-12-25">
+    expires_after="2025-04-13">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The number of cut or copy commands on all selected text in the omnibox.
     Gathered on desktop platforms (Win, Mac, Linux, Chrome OS).
   </summary>
 </histogram>
 
-<histogram name="Omnibox.DocumentSuggest.Requests"
-    enum="OmniboxDocumentSuggestRequests" expires_after="2022-12-18">
+<histogram name="Omnibox.DocumentSuggest.HttpResponseCode"
+    enum="HttpResponseCode" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>skare@chromium.org</owner>
   <summary>
-    Counts the number of document suggest requests the omnibox sent, were
-    invalidated, and were completed successfully.
+    Counts the number of responses from the document suggestion service,
+    bucketed by the HTTP response code. Recorded once per response received,
+    which is 0 or 1 times per request sent, since some requests are cancelled.
+    At most 1 request is sent per omnibox autocompletion cycle (in other words,
+    per each time the user changes the omnibox input).
+  </summary>
+</histogram>
+
+<histogram
+    name="Omnibox.DocumentSuggest.HttpResponseCode.IsSubjectToEnterprisePolicies.{SigninTribool}"
+    enum="HttpResponseCode" expires_after="2025-06-22">
+  <owner>mahmadi@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Counts the number of responses from the DocumentSuggestionsService and if
+    the user is subject to Enterprise policies bucketed by the HTTP response
+    code. Recorded once per response received, which is at most 1 time per
+    request sent, which is at most 1 time per omnibox autocompletion cycle,
+    i.e., each time the user changes the omnibox input.
+  </summary>
+  <token key="SigninTribool">
+    <variant name="False" summary="False"/>
+    <variant name="True" summary="True"/>
+    <variant name="Unknown" summary="Unknown"/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.DocumentSuggest.ProviderAllowed"
+    enum="DocumentProviderAllowedReason" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
+  <owner>jdonnelly@chromium.org</owner>
+  <summary>
+    Counts the number of times the document provider's `Start` method is called
+    by the AutocompleteController, bucketed by the reason applied for whether or
+    not the provider is allowed to run (in other words, whether the profile and
+    session meets all the requirements to request document suggestions from the
+    server).
+
+    Recorded exactly once per omnibox autocompletion cycle (in other words, per
+    each time the user changes the omnibox input). The reason recorded is the
+    first reason encountered which determines that we should not run the
+    provider. In other words, each bucket is an undercount of whether that
+    reason _could have been used_ to decide not to run the provider. Therefore,
+    interpreting these results requires an understanding the order of the checks
+    in `DocumentProvider::IsDocumentProviderAllowed`.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.DocumentSuggest.Requests"
+    enum="DocumentSuggestRequestEvent" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
+  <owner>jdonnelly@chromium.org</owner>
+  <summary>
+    Counts the number of requests DocumentProvider sent, were invalidated, and
+    were completed successfully.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.RequestTime" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -530,7 +761,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.RequestTime.Interrupted" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -549,7 +780,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.RequestTime.NotInterrupted" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -568,7 +799,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.ResultCount" units="count"
-    expires_after="2022-12-18">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
@@ -580,7 +811,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.TotalTime" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -595,7 +826,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.TotalTime.Interrupted" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -612,7 +843,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.DocumentSuggest.TotalTime.NotInterrupted" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-03-09">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
@@ -629,10 +860,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.EnteredKeywordMode2" enum="OmniboxEnteredKeywordMode2"
-    expires_after="2022-12-11">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The new enumeration of how many times users enter keyword hint mode
     &quot;Search ___ for:&quot; and how. Note that we don't recognize the
@@ -643,10 +874,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.Escape" enum="OmniboxEscapeAction"
-    expires_after="2022-12-11">
+    expires_after="2025-01-05">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     When the omnibox is focused and escape is pressed, the 1st of the following
     occurs:
@@ -654,8 +885,7 @@ chromium-metrics-reviews@google.com.
     1) If there is temporary text (i.e. a non default suggestion is selected),
     it is cleared.
 
-    2) If the popup is open and the `kClosePopupWithEscape` feature is enabled,
-    the popup is closed.
+    2) If the popup is open, the popup is closed.
 
     3) If the popup is open, which is considered as user input in progress, then
     the popup is closed and user input is cleared.
@@ -664,28 +894,21 @@ chromium-metrics-reviews@google.com.
     progress with the popup closed) typically occurs when input was in progress,
     then the omnibox was blurred, and then it was refocused.
 
-    5) If the `kBlurWithEscape` feature is enabled, it is blurred.
-
-    6) Otherwise, omnibox state is unchanged. This doesn't mean the escape did
-    nothing; e.g., it may have stopped a navigation. Some of the cases,
-    including case (6), may also select the omnibox's entire text, but this
-    isn't recorded.
+    5) The omnibox is blurred.
 
     This histogram records which of the above occurred.
 
-    It is recorded every time escape is pressed with the omnibox focused. With
-    the `kBlurWithEscape` feature disabled, pressing escape e.g. 10 times will
-    emit the metric 10 times; but with the feature enabled, it emits at most 4
-    times until the omnibox is blurred.
+    It is recorded every time escape is pressed with the omnibox focused.
+    Pressing escape repeatedly e.g. 10 times will emits at most 4 times until
+    the omnibox is blurred.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.FocusResultedInNavigation" enum="BooleanNavigated"
-    expires_after="2022-12-18">
-  <owner>ender@chromium.org</owner>
+    expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>tommycli@chromium.org</owner>
   <summary>
     This records whether user initiated navigation after focusing the Omnibox
     versus switches focus elsewhere without navigating. This metric includes
@@ -702,21 +925,11 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.FocusToEditTime" units="ms" expires_after="2022-06-30">
-  <owner>jdonnelly@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    The length of time between when a user focused on the omnibox and first
-    modifies the omnibox.
-  </summary>
-</histogram>
-
 <histogram name="Omnibox.FocusToOpenTimeAnyPopupState3" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The length of time between when a user focused on the omnibox and opened an
     omnibox match (which could be what they typed or a suggestion). This is
@@ -729,8 +942,32 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.FuzzyMatchConversion.{SubProvider}" units="counts"
-    expires_after="M115">
+<histogram name="Omnibox.GroupId.ToggledOff" enum="GroupId"
+    expires_after="2025-06-29">
+  <owner>mahmadi@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Counts the number of times a suggestion group ID is prevented form appearing
+    in the results. This is recorded when the user hides a set of grouped
+    suggestions, such as trending zero-suggest, in the omnibox UI using the
+    control in the grouped suggestions' header.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.GroupId.ToggledOn" enum="GroupId"
+    expires_after="2025-04-29">
+  <owner>mahmadi@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Counts the number of times a suggestion group ID is permitted to appear in
+    the results. This is recorded when the user makes a set of previously hidden
+    grouped suggestions, such as trending zero-suggest, visible in the omnibox
+    UI using the control in the grouped suggestions' header.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.HistoryFuzzy.MatchConversion.{SubProvider}"
+    units="counts" expires_after="2025-11-03">
   <owner>orinj@chromium.org</owner>
   <owner>jdonnelly-team@google.com</owner>
   <summary>
@@ -754,23 +991,51 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Omnibox.HoverTime" units="ms" expires_after="2021-10-31">
-  <owner>estark@chromium.org</owner>
-  <owner>carlosil@chromium.org</owner>
+<histogram name="Omnibox.HistoryFuzzy.Precision" enum="Boolean"
+    expires_after="2025-11-03">
+  <owner>orinj@chromium.org</owner>
+  <owner>jdonnelly-team@google.com</owner>
   <summary>
-    The time duration that the user hovers the mouse over the omnibox before
-    exiting the hover or focusing the omnibox. Whenever the user's mouse enters
-    the omnibox, this histogram is recorded when the mouse next exits or the
-    omnibox is focused, whichever comes first. The recorded value is a delta
-    from a timestamp noted when the user's mouse first entered the omnibox.
+    When a fuzzy match was offered at the moment the user opened a match, this
+    measures whether a fuzzy suggestion was taken. This is only recorded when at
+    least one fuzzy match is in the result set, so it is useful to measure total
+    presence and engagement with fuzzy URL suggestions. It can be interpreted as
+    a click through rate for fuzzy match presentation as a whole: given that any
+    fuzzy matches were presented at the moment a match was selected by the user,
+    how often was the selected match a fuzzy URL suggestion?
+
+    Context: Fuzzy match conversion produces modified matches from other
+    synchronous autocomplete providers (sub-providers) using alternative inputs:
+    what the user might have typed, the automatic corrections.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.HistoryFuzzy.SearchDuration" units="ms"
+    expires_after="2025-11-03">
+  <owner>orinj@chromium.org</owner>
+  <owner>jdonnelly-team@google.com</owner>
+  <summary>
+    The time taken by HistoryFuzzyProvider to search for fuzzy input
+    corrections. This is measured if and only if a search is performed, so many
+    input states will not result in recording this metric (for example if the
+    input contains a space, that's taken as a hint that the user may be
+    searching instead of typing a domain name so no fuzzy search is performed).
+    It is useful to distinguish portions of the total time taken by the
+    provider, particularly as separate from sub-provider match gathering, so
+    that if there are any pathological cases in the search algorithm then they
+    will be apparent here.
+
+    Context: Fuzzy match conversion produces modified matches from other
+    synchronous autocomplete providers (sub-providers) using alternative inputs:
+    what the user might have typed, the automatic corrections.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.InputType" enum="OmniboxInputType"
-    expires_after="2022-12-18">
+    expires_after="2025-05-25">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The kind of input the user provided when using the omnibox to go somewhere.
     The type can be misleading. For example if the user typed 'http:/', it gets
@@ -784,11 +1049,22 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Omnibox.IPv4AddressPartsCount" units="count"
+    expires_after="2024-01-14">
+  <owner>gjc@chromium.org</owner>
+  <owner>blink-network-stack@google.com</owner>
+  <summary>
+    The number of IPv4 address parts input by the user. The histogram is used to
+    verify whether shortened IPv4 addresses like 127.1 are still used. This
+    histogram is recorded when the user fully types the URL in the omnibox and
+    the URL uses an IPv4 address or IPv4 embedded IPv6 address as the host.
+  </summary>
+</histogram>
+
 <histogram name="Omnibox.IsPasteAndGo" enum="Boolean"
-    expires_after="2022-05-01">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Whether an omnibox interaction is a paste-and-search/paste-and-go action.
     (This histogram records both of these in the &quot;True&quot; bucket for
@@ -803,30 +1079,11 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.IsPopupOpen" enum="Boolean" expires_after="2022-01-02">
-  <owner>mpearson@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Whether the omnibox popup (a.k.a. dropdown) is open at the time the user
-    used the omnibox to go somewhere. It can be closed if, for instance, the
-    user clicked in the omnibox and hit return to reload the same page. Also,
-    because paste-and-search/paste-and-go actions ignore the current content of
-    the omnibox dropdown (if it is open) when they happen, we pretend the
-    dropdown is closed when logging these.
-
-    In M-74 and earlier, this was only recorded if the user had no incognito
-    windows open. In M-75 and later, it records all omnibox interactions
-    regardless, in order to be consistent with how user actions and histograms
-    are handled.
-  </summary>
-</histogram>
-
 <histogram name="Omnibox.JustDeletedText" enum="Boolean"
-    expires_after="2022-12-18">
+    expires_after="2025-06-22">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Whether the user deleted text immediately before selecting an omnibox
     suggestion. This is usually the result of pressing backspace or delete.
@@ -838,34 +1095,70 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.LocalHistoryPrefixSuggest.SearchTermsExtractedCount"
-    units="counts" expires_after="2022-12-18">
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.KeywordModeUsageByEngineType.{Usage}"
+    enum="OmniboxBuiltinEngineType" expires_after="2025-05-11">
+  <owner>yoangela@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The number of search terms extracted from the database to produce local
-    prefix search suggestions. Emitted when prefix search suggestions are
-    requested as a result of the user typing into the Omnibox or the Realbox on
-    the NTP.
+    Records number of times users use keyword mode enumerated by the type of
+    search engine (whether the engine is &quot;built-in&quot;).
+
+    {Usage}
   </summary>
+  <token key="Usage">
+    <variant name="Accepted"
+        summary="Logged when a user accepts a keyword suggestion while in
+                 keyword mode. Not logged if a user enters keyword mode but
+                 doesn't complete a search. Not logged if a user enters
+                 keyword mode, but selects a URL suggestion or a search
+                 suggestion that is not for the keyword mode search engine."/>
+    <variant name="Activated"
+        summary="Logged each time a search engine's active status is switched
+                 from inactive to active by the user. Not logged if the
+                 search engine is switched to active automatically based on
+                 prior usage."/>
+    <variant name="ActiveOnStartup"
+        summary="Counts the number of search engines that are active at load
+                 time (usually on start up). Only gets logged once each time
+                 the search engines are loaded from the database. If a user
+                 changes the active status of a search engine during the same
+                 browser session, this does not get logged again."/>
+    <variant name="Deactivated"
+        summary="Logged each time a search engine's active status is switched
+                 from active to inactive by the user. Not logged when a new
+                 search engine is added in a default-inactive state."/>
+    <variant name="Entered"
+        summary="Logged each time the user enters keyword mode. If a user
+                 enters, then leaves, then re-enters keyword mode during the
+                 same session (i.e. without selecting a navigation), this is
+                 logged twice. If the user doesn't accept the keyword
+                 suggestion, this is still logged."/>
+    <variant name="InactiveOnStartup"
+        summary="Counts the number of search engines that are inactive at
+                 load time (usually on start up). Only gets logged once each
+                 time the search engines are loaded from the database. If a
+                 user changes the active status of a search engine during the
+                 same browser session, this does not get logged again."/>
+  </token>
 </histogram>
 
-<histogram name="Omnibox.LocalHistoryPrefixSuggest.SearchTermsExtractionTime"
-    units="ms" expires_after="2022-12-18">
+<histogram name="Omnibox.LocalHistoryPrefixSuggest.SearchTermsExtractionTimeV2"
+    units="ms" expires_after="2025-05-11">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The length of time it takes to extract search terms from the database and
-    sort them by recency (if needed) to produce local prefix search suggestions.
-    Emitted when prefix search suggestions are requested as a result of the user
-    typing into the Omnibox or the Realbox on the NTP.
+    The amount of time it takes to extract up to the requested number of search
+    terms from the database for both the default and the keyword providers (if
+    applicable) and sort them by recency to produce local prefix search
+    suggestions. Emitted when prefix search suggestions are requested as a
+    result of the user typing into the Omnibox or the NTP Realbox.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.LocalHistoryZeroSuggest.AsyncDeleteTime" units="ms"
-    expires_after="2022-12-18">
+    expires_after="2024-12-24">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The length of time it takes for the corresponding URLs that would produce a
     deleted match to be queried asynchronously and deleted. Emitted when user
@@ -873,34 +1166,22 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractedCount"
-    units="counts" expires_after="2022-12-18">
+<histogram name="Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractionTimeV2"
+    units="ms" expires_after="2025-04-27">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The number of search terms extracted from the database to produce local
+    The amount of time it takes to extract up to the requested number of search
+    terms from the database and sort them by frecency to produce local
     zero-prefix suggestions. Emitted when zero-prefix suggestions are requested
-    as a result of the user focusing into the Omnibox or the Realbox on the NTP.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractionTime"
-    units="ms" expires_after="2022-12-18">
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    The length of time it takes to extract search terms from the database and
-    sort them by frecency to produce local zero-prefix suggestions. Emitted when
-    zero-prefix suggestions are requested as a result of the user focusing into
-    the Omnibox or the Realbox on the NTP. In M103, this was changed to no
-    longer include the construction of the AutocompleteMatch values.
+    as a result of the user focusing into the Omnibox or the NTP Realbox.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.LocalHistoryZeroSuggest.SyncDeleteTime" units="ms"
-    expires_after="2022-12-18">
+    expires_after="2025-04-27">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The length of time it takes to handle the deletion request for a match and
     to update the list of provider matches synchronously. Emitted when user
@@ -908,84 +1189,148 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.MatchStability.AsyncMatchChange2" units="position"
-    expires_after="2022-12-04">
-  <owner>tommycli@chromium.org</owner>
+<histogram
+    name="Omnibox.MatchStability2.MatchChangeInAnyPosition{OmniboxAutocompleteUpdateSlice}"
+    enum="BooleanChanged" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
-    This tracks how unstable our matches are due to asynchronous updates.
-    Whenever a dropdown position gets asynchronously set to a new match that's
-    different from the old match, this histogram logs the index.
+    This tracks how unstable omnibox matches are.
 
-    We primarily care about the default match, which is logged at index 0. All
-    indices matter though, so we track the other indices too. When the number of
-    matches changes asynchronously, matches that are removed are considered a
-    &quot;change&quot; and logged here. Matches that are appended are less
-    disruptive to the user, and are not logged.
+    Typically, each input change is followed by a single synchronous update, and
+    then approximately 3 asynchronous updates. There may be more or less
+    asynchronous updates depending on which providers are enabled for the
+    particular platform/user, the input (e.g. some providers don't run for
+    0-length inputs), and how quickly the input changes occur (e.g. if the
+    inputs update rapidly, slower async providers won't have time to provide
+    updates before they're aborted by newer inputs).
 
-    This is because this metric is primarily interested in how many times the
-    user could be looking at a match with the intention of selecting it, and
-    then it surprisingly goes away.
+    For each autocomplete update, this histogram logs whether any match position
+    changes. If 1 or more matches changed, logs true once; otherwise false once.
 
-    Note that merely adding a new asynchronous provider will increase these
-    counts. That's intentional. Swapping matches out annoys users, and to avoid
-    this, we should do some things like: caching, update coalescing, update
-    deferral until next keystroke, provider timeouts, etc.
+    When the number of matches changes, matches that are removed are considered
+    a 'change', while matches that are appended are less disruptive to the user
+    and not considered a 'change'. This is because this metric is primarily
+    interested in how many times the user could be looking at a match with the
+    intention of selecting it, and then it surprisingly goes away.
+
+    Note that merely adding a new provider will increase these counts. That's
+    intentional. Swapping matches out annoys users, and to avoid this, we should
+    do some things like: caching, update coalescing, update deferral until next
+    keystroke, provider timeouts, etc.
 
     This metric is designed to be normalized by the True count of
     Omnibox.Start.WantAsyncMatches, which will yield the number of match changes
-    asynchronously per keystroke or other user gesture.
+    per keystroke or other user gesture.
 
-    There's the related Omnibox.CrossInputMatchStability.MatchChange histogram
-    for tracking match instability for synchronous updates.
+    There're the related Omnibox.MatchStability2.InAnyPosition.* slices for
+    tracking match instability for all, asynchronous, and synchronous updates.
+
+    This histogram can be considered a boolean analogue to the
+    Omnibox.MatchStability2.Index.* histogram which tracks which matches
+    changed.
+
+    {OmniboxAutocompleteUpdateSlice}
   </summary>
+  <token key="OmniboxAutocompleteUpdateSlice"
+      variants="OmniboxAutocompleteUpdateSlice"/>
 </histogram>
 
-<histogram name="Omnibox.MatchStability.AsyncMatchChangedInAnyPosition"
-    enum="BooleanChanged" expires_after="2022-12-04">
-  <owner>tommycli@chromium.org</owner>
+<histogram
+    name="Omnibox.MatchStability2.MatchChangeIndex{OmniboxAutocompleteUpdateSlice}"
+    units="position" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <summary>
-    This tracks how unstable our matches are due to asynchronous updates.
+    This tracks how unstable omnibox matches are.
 
-    For each asynchronous autocomplete update, this histogram logs whether any
-    match in any position has changed. Note: if the only change is new matches
-    appended to the end of the list, that does not count as a change, since it's
-    not very disruptive to the user.
+    Typically, each input change is followed by a single synchronous update, and
+    then approximately 3 asynchronous updates. There may be more or less
+    asynchronous updates depending on which providers are enabled for the
+    particular platform/user, the input (e.g. some providers don't run for
+    0-length inputs), and how quickly the input changes occur (e.g. if the
+    inputs update rapidly, slower async providers won't have time to provide
+    updates before they're aborted by newer inputs).
+
+    For each match change, this histogram logs the index of the match change.
+    Match changes occur when any match position changes; i.e. is set to a new
+    match different from the old match in that position, even if the new match
+    was contained in the old matches set. If multiple matches change in a single
+    autocomplete update, logs each. If none change in a single autocomplete
+    update, this histogram is not logged.
+
+    We primarily care about the default match, which is logged at index 0. All
+    indices matter though, so we track the other indices too.
+
+    When the number of matches changes, matches that are removed are considered
+    a 'change', while matches that are appended are less disruptive to the user
+    and not considered a 'change'. This is because this metric is primarily
+    interested in how many times the user could be looking at a match with the
+    intention of selecting it, and then it surprisingly goes away.
+
+    Note that merely adding a new provider will increase these counts. That's
+    intentional. Swapping matches out annoys users, and to avoid this, we should
+    do some things like: caching, update coalescing, update deferral until next
+    keystroke, provider timeouts, etc.
 
     This metric is designed to be normalized by the True count of
-    Omnibox.Start.WantAsyncMatches, which will yield the number of times any
-    match changes asynchronously per keystroke or other user gesture.
+    Omnibox.Start.WantAsyncMatches, which will yield the number of match changes
+    per keystroke or other user gesture.
 
-    This histogram can be considered a boolean analogue to
-    Omnibox.MatchStability.AsyncMatchChange2.
+    There're the related Omnibox.MatchStability2.Index.* slices for tracking
+    match instability for all, asynchronous, and synchronous updates.
 
-    There's the related
-    Omnibox.CrossInputMatchStability.MatchChangedInAnyPosition histogram for
-    tracking match instability for synchronous updates.
+    There's the related Omnibox.MatchStability2.InAnyPosition histogram for
+    tracking whether any match changed per autocomplete update.
+
+    {OmniboxAutocompleteUpdateSlice}
+  </summary>
+  <token key="OmniboxAutocompleteUpdateSlice"
+      variants="OmniboxAutocompleteUpdateSlice"/>
+</histogram>
+
+<histogram name="Omnibox.NumberOfVisibleCharacters" units="characters"
+    expires_after="2025-05-04">
+  <owner>peilinwang@google.com</owner>
+  <owner>woa-performance-bugs+jank@google.com</owner>
+  <summary>
+    Records the number of characters visible in the omnibox. Recorded once per
+    call to UrlBar.calculateVisibleHint().
   </summary>
 </histogram>
 
-<histogram name="Omnibox.NumEvents" enum="UsedOmnibox"
-    expires_after="2023-07-13">
+<histogram name="Omnibox.NumCalculatorMatches" units="count"
+    expires_after="2025-06-22">
+  <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The number of times users used the omnibox to go somewhere.
+    How many calculator matches where shown. Includes matches from both the
+    search and calculator providers.
 
-    In M-74 and earlier, this was only recorded if the user had no incognito
-    windows open. In M-75 and later, it records all omnibox interactions
-    regardless, in order to be consistent with how user actions and histograms
-    are handled.
+    Logged after deduping, so duplicate matches from the search and calc
+    provider won't be double counted.
+
+    Logged after culling, so matches that were generated but not shown are not
+    counted.
+
+    Logged when the last provider calls `OnProviderUpdate()`. So autocomplete
+    calls with `omit_asynchronous_matches` true (i.e. classification calls)
+    won't log this. Likewise, interrupted autocompleted passes (i.e. when the
+    user is typing faster than the slowest async provider) won't log this. The
+    search and calculator providers are on the slow end of async providers; so
+    if they complete, it's likely this will be logged.
+
+    Logged once per input (whose last autocomplete pass completed). Not logged
+    once per autocomplete pass or once per omnibox selection.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.NumTypedTerms" units="terms"
-    expires_after="2022-12-11">
+    expires_after="2025-12-15">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The number of terms in the text the user entered in the omnibox when they
     used the omnibox to go somewhere. Terms are defined by splitting on
@@ -998,40 +1343,20 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.OnDeviceHeadSuggest.AsyncQueryTime" units="ms"
-    expires_after="2021-12-12">
-  <owner>cch@chromium.org</owner>
-  <owner>suggest-2g@google.com</owner>
-  <summary>
-    Time it takes for omnibox on device head provider to fulfill the
-    asynchronous suggest request.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.OnDeviceHeadSuggest.ResultCount" units="count"
-    expires_after="2021-12-12">
-  <owner>cch@chromium.org</owner>
-  <owner>suggest-2g@google.com</owner>
-  <summary>
-    The number of results returned by the on device head model which matches the
-    user input. Note all numbers greater than 5 are recorded in bucket 5.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.PaintTime" units="ms" expires_after="2022-12-04">
-  <owner>asvitkine@chromium.org</owner>
+<histogram name="Omnibox.PaintTime" units="ms" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records the time to paint the omnibox contents. This is a subcomponent of
     Omnibox.CharTypedToRepaintLatency. Implemented on desktop platforms.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.Paste" units="count" expires_after="2022-01-02">
+<histogram name="Omnibox.Paste" units="count" expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The number of paste commands on the text in the omnibox. Reported every time
     a paste command is done.
@@ -1039,10 +1364,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.PedalShown" enum="SuggestionPedalType"
-    expires_after="2022-12-11">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>orinj@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Counts the type (concept ID) of omnibox pedals shown when the user used the
     omnibox to go somewhere.
@@ -1060,10 +1385,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.ProviderTime2.{OmniboxProvider}" units="ms"
-    expires_after="2022-12-25">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The length of time taken by the {OmniboxProvider}Provider's synchronous
     pass.
@@ -1071,21 +1396,22 @@ chromium-metrics-reviews@google.com.
   <token key="OmniboxProvider" variants="OmniboxProviders"/>
 </histogram>
 
-<histogram name="Omnibox.QueryTime2" units="ms" expires_after="2023-01-15">
+<histogram name="Omnibox.QueryTime2" units="ms" expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Time it takes for the omnibox to become responsive to user input after the
-    user has typed N characters. This measures the time it takes to start all
+    user has typed N characters (for 'Omnibox.QueryTime2.N') or any length input
+    (for 'Omnibox.QueryTime2'). This measures the time it takes to start all
     autocomplete providers (but not wait for the asynchronous ones to finish).
   </summary>
 </histogram>
 
 <histogram name="Omnibox.ResumeJourneyShown" units="position"
-    expires_after="2022-12-25">
-  <owner>tommycli@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+    expires_after="2025-06-22">
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Emits the position of any &quot;Resume Journey&quot; omnibox actions shown
     in the popup. The position index is 0-based, so an action shown in the
@@ -1099,23 +1425,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ResumeJourneyShown.ClusterKeywordScore" units="count"
-    expires_after="2022-12-10">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
-  <summary>
-    Emits the score of matched cluster keyword of any &quot;Resume Journey&quot;
-    omnibox actions shown in the popup.
-
-    Note that these are emitted when the user uses the omnibox to go somewhere.
-    When that happens, one keyword type is emitted per action visible in the
-    popup. These are NOT emitted per-keystroke, in order to make this a suitable
-    denominator for Omnibox.SuggestionUsed.ResumeJourney.ClusterKeywordScore.
-  </summary>
-</histogram>
-
 <histogram name="Omnibox.ResumeJourneyShown.ClusterKeywordType"
-    enum="HistoryClusterKeywordType" expires_after="2022-12-10">
+    enum="HistoryClusterKeywordType" expires_after="2024-12-08">
   <owner>junzou@chromium.org</owner>
   <owner>chrome-intelligence-core@google.com</owner>
   <summary>
@@ -1131,27 +1442,11 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ResumeJourneyShown.PageEntityCollection"
-    enum="OptimizationGuidePageEntityCollection" expires_after="2022-12-08">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
-  <summary>
-    Emits the top entity collection of any &quot;Resume Journey&quot; omnibox
-    actions shown in the popup. The collections are high-level verticals the
-    keywords belong to.
-
-    Note that these are emitted when the user uses the omnibox to go somewhere.
-    When that happens, one collection is emitted per action visible in the
-    popup. These are NOT emitted per-keystroke, in order to make this a suitable
-    denominator for Omnibox.SuggestionUsed.ResumeJourney.PageEntityCollection.
-  </summary>
-</histogram>
-
 <histogram name="Omnibox.RichAutocompletion.Triggered"
-    enum="OmniboxRichAutocompletionType" expires_after="2022-12-08">
+    enum="OmniboxRichAutocompletionType" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the number of sessions for which each type of rich autocompletion
     triggered; does not measure the number of times each type of rich
@@ -1178,11 +1473,11 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.RichAutocompletion.Triggered.Any" units="Boolean"
-    expires_after="2022-12-08">
+<histogram name="Omnibox.RichAutocompletion.Triggered.Any" enum="Boolean"
+    expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the number of sessions for which any type of rich autocompletion
     triggered.
@@ -1203,8 +1498,45 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Omnibox.ScrollToTLD.Duration" units="ms"
+    expires_after="2025-03-09">
+  <owner>peilinwang@google.com</owner>
+  <owner>woa-performance-bugs+jank@google.com</owner>
+  <summary>
+    Measures the amount of time it takes to call UrlBar.scrollToTLD(). Logged
+    once per call.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.Search.CtrlEnter.ResolvedAsUrl" enum="Boolean"
+    expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Whenever Ctrl+Enter is used to complete an interaction with the Omnibox,
+    this metric captures whether the keystroke was used to initiate navigation
+    to a website (by affixing &quot;.com&quot;) or execute a search query (if
+    affixing &quot;.com&quot; would not produce a valid URL).
+
+    Recorded each time Ctrl+Enter is used to complete an interaction.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.Search.CtrlEnter.Used" enum="BooleanUsage"
+    expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Whether Ctrl+Enter key combination was used to complete an interaction with
+    the Omnibox.
+
+    Recorded each time user accepts Omnibox text via Keyboard.
+  </summary>
+</histogram>
+
 <histogram name="Omnibox.Search.OffTheRecord" enum="BooleanOffTheRecord"
-    expires_after="2023-02-02">
+    expires_after="2025-09-01">
+  <owner>jdonnelly@chromium.org</owner>
   <owner>roagarwal@chromium.org</owner>
   <owner>chrome-incognito@google.com</owner>
   <summary>
@@ -1215,9 +1547,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SearchboxStats.Length" units="chars"
-    expires_after="2022-08-14">
+    expires_after="2025-06-22">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Records the length of the gs_lcrp= param in the Search Result Page request
     URLs. Recorded every time a Search Result Page URL is generated in the
@@ -1227,343 +1559,163 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SearchEngineType" enum="OmniboxSearchEngineType"
-    expires_after="2022-12-11">
+<histogram name="Omnibox.SearchEngineType{Population}"
+    enum="OmniboxSearchEngineType" expires_after="2025-12-04">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The type of search engine associated with a match opened from the omnibox.
-  </summary>
-</histogram>
 
-<histogram name="Omnibox.SearchPrefetch.ClickToNavigationIntercepted"
-    units="ms" expires_after="2023-05-02">
-  <owner>spelchat@chromium.org</owner>
-  <owner>chrome-brapp-loading@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. Whether a search prefetch request
-    finished with a success status or a status that could be served. Measures
-    the time between the user clicks the Omnibox suggestion and the moment the
-    navigation is intercepted by the Search Prefetch code.
+    {Population}
   </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.FetchResult.SuggestionPrefetch"
-    enum="BooleanSuccess" expires_after="2022-08-07">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. Whether a search prefetch request
-    finished with a success status or a status that could be served. Recorded
-    when prefetch requests receive headers. Recorded for omnibox search
-    prefetches that are started when an omnibox suggestion from the suggestion
-    server recommends a prefetch of a suggestion results page.
-  </summary>
+  <token key="Population">
+    <variant name="" summary="Reported for all users."/>
+    <variant name=".Fallback.DefaultSearchProvider"
+        summary="Reported for users whose default search engine was
+                 pre-populated based on country/distribution channel."/>
+    <variant name=".SetByEnterprisePolicy"
+        summary="Reported for users with search engine set by Enterprise
+                 policy."/>
+    <variant name=".SetByEnterprisePolicy.DefaultSearchProvider"
+        summary="Reported for users with search engine set by the
+                 DefaultSearchProvider* Enterprise policies."/>
+    <variant name=".SetByEnterprisePolicy.EnterpriseSearchAggregatorSettings"
+        summary="Reported for users with search engine set by the
+                 EnterpriseSearchAggregatorSettings policy."/>
+    <variant name=".SetByEnterprisePolicy.SiteSearchSettings"
+        summary="Reported for users with search engine set by the
+                 SiteSearchSettings Enterprise policy."/>
+    <variant name=".SetByExtension"
+        summary="Reported for users with search engine set by an extension."/>
+    <variant name=".SetByExtension.OmniboxAPI"
+        summary="Reported for users with search engine set by an extension
+                 using the chrome.omnibox API."/>
+    <variant name=".SetByExtension.SettingsOverrideDefaultSearchProvider"
+        summary="Reported for users with search engine set by an extension
+                 using the Settings Override API and setting is_default to
+                 true."/>
+    <variant name=".SetByExtension.SettingsOverrideNonDefaultSearchProvider"
+        summary="Reported for users with search engine set by an extension
+                 using the Settings Override API and setting is_default to
+                 false."/>
+    <variant name=".SetByUser.DefaultSearchProvider"
+        summary="Reported for users who selected their default search engine
+                 using chrome://settings or a choice screen."/>
+  </token>
 </histogram>
 
 <histogram
-    name="Omnibox.SearchPrefetch.NavigationInterceptedToForwardingComplete"
-    units="ms" expires_after="2023-05-02">
-  <owner>spelchat@chromium.org</owner>
-  <owner>chrome-brapp-loading@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. Whether a search prefetch request
-    finished with a success status or a status that could be served. Measure the
-    time between the navigation is intercepted by the Search Prefetch code and
-    the moment the Search Prefetch URL loader has finished forwarding the whole
-    response to the navigation URL loader. This time includes finishing fetching
-    the Search response and any queuing delays in the UI thread preventing the
-    Search Prefetch URL loader from forwarding bytes to the navigation code.
-  </summary>
-</histogram>
-
-<histogram
-    name="Omnibox.SearchPrefetch.NavigationURLMatches.NavigationPrefetch"
-    enum="Boolean" expires_after="2023-01-15">
+    name="Omnibox.SearchPrefetch.SearchWhatYouTypedWasAlsoSuggested.{HistoryOrSuggest}"
+    enum="Boolean" expires_after="2023-05-02">
   <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. Whether the prefetch URL and the
-    navigation URL are an exact match including query params in the URL.
-    Recorded upon navigation to a matching search term. Only recorded when the
-    prefetch was issued when Chrome is relatively confident an omnibox
-    navigation is about to occur (i.e. the user selected a search suggestion).
-    These prefetches allow Chrome to kickstart the request without waiting until
-    before unload handlers or other navigation pre-processing mechanisms in
-    Chrome.
+    Records whether a &quot;search what you type&quot; omnibox navigation was
+    also a {HistoryOrSuggest} type. Recorded when the user navigates to a search
+    via typing the full query into the omnibox.
   </summary>
+  <token key="HistoryOrSuggest">
+    <variant name="History" summary="history"/>
+    <variant name="HistoryOrSuggest" summary="history or suggest"/>
+    <variant name="Suggest" summary="suggest"/>
+  </token>
 </histogram>
 
-<histogram
-    name="Omnibox.SearchPrefetch.PrefetchEligibilityReason.NavigationPrefetch"
-    enum="SearchPrefetchEligibilityReason" expires_after="2023-01-15">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The reason that a search prefetch
-    request issued when a user navigates to a suggestion was not eligible to be
-    prefetched (or 'Prefetched' if it was prefetched). Only recorded when the
-    prefetch was issued when Chrome is relatively confident an omnibox
-    navigation is about to occur (i.e. the user selected a search suggestion).
-    These prefetches allow Chrome to kickstart the request without waiting until
-    before unload handlers or other navigation pre-processing mechanisms in
-    Chrome. in Chrome.
-  </summary>
-</histogram>
-
-<histogram
-    name="Omnibox.SearchPrefetch.PrefetchEligibilityReason.SuggestionPrefetch"
-    enum="SearchPrefetchEligibilityReason" expires_after="2023-01-01">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The reason that a search prefetch
-    request from the autocomplete/omnibox suggest pipeline was not eligible to
-    be prefetched (or 'Prefetched' if it was prefetched). Recorded for omnibox
-    search prefetches that are started when an omnibox suggestion from the
-    suggestion server recommends a prefetch of a suggestion results page.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.PrefetchFinalStatus.NavigationPrefetch"
-    enum="SearchPrefetchStatus" expires_after="2023-01-15">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The status of a Search Prefetch
-    request when it is deleted by expiration or by serving the request. Only
-    recorded when the prefetch was issued when Chrome is relatively confident an
-    omnibox navigation is about to occur (i.e. the user selected a search
-    suggestion). These prefetches allow Chrome to kickstart the request without
-    waiting until before unload handlers or other navigation pre-processing
-    mechanisms in Chrome.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.PrefetchFinalStatus.SuggestionPrefetch"
-    enum="SearchPrefetchStatus" expires_after="2022-08-07">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The status of a Search Prefetch
-    request when it is deleted by expiration or by serving the request. Recorded
-    for omnibox search prefetches that are started when an omnibox suggestion
-    from the suggestion server recommends a prefetch of a suggestion results
-    page.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.PrefetchServingReason"
-    enum="SearchPrefetchServingReason" expires_after="2022-12-11">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The reason that a navigation
-    request could or could not serve a search prefetch request. Recorded for all
-    main frame navigations.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.PrefetchServingReason.Prerender"
-    enum="SearchPrefetchServingReason" expires_after="2022-12-11">
+<histogram name="Omnibox.SearchPreload.ForwardingResult.NotServedToPrerender"
+    enum="SearchPreloadForwardingResult" expires_after="2025-05-11">
   <owner>lingqi@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
   <owner>chrome-prerendering@google.com</owner>
   <summary>
-    Records whether a search prerender request uses the prefetched response.
-    SearchPrefetchService records this metric when
-    SearchPrefetchURLLoaderInterceptor attempts to intercept a prerendering main
-    resource request, for prerender main frame navigations with the feature flag
-    of SearchPrefetchUpgradeToPrerender enabled.
-
-    Backgound: A search prerender request should use the prefetched response
-    instead of resending the same request, otherwise it will waste resources.
-    The search suggestion service may suggest to prefetch a result page, and
-    then ask the client to prerender the page. When the client attempts
-    prerender the page, it has received the response associated with the
-    prefetch request (by design), and should serve the prefetched response to
-    the prerender request.
+    Recorded when posting a task to destroy StreamingSearchPrefetchURLLoader.
+    Used to track whether the native forwarding works as expected. Together with
+    Omnibox.SearchPreload.ForwardingResult.WasServedToPrerender, these two
+    metrics are used to monitor whether shareable cache does not break the
+    forwarding logic.
   </summary>
 </histogram>
 
-<histogram
-    name="Omnibox.SearchPrefetch.SearchWhatYouTypedWasAlsoSuggested.History"
-    units="boolean" expires_after="2022-10-30">
+<histogram name="Omnibox.SearchPreload.ForwardingResult.WasServedToPrerender"
+    enum="SearchPreloadForwardingResult" expires_after="2025-05-11">
+  <owner>lingqi@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-prerendering@google.com</owner>
   <summary>
-    Records whether a &quot;search what you type&quot; omnibox navigation was
-    also a search history type. Recorded when the user navigates to a search via
-    typing the full query into the omnibox.
+    Recorded when posting a task to destroy StreamingSearchPrefetchURLLoader.
+    Together with Omnibox.SearchPreload.ForwardingResult.NotServedToPrerender,
+    these two metrics are used to monitor whether shareable cache does not break
+    the forwarding logic.
   </summary>
 </histogram>
 
-<histogram
-    name="Omnibox.SearchPrefetch.SearchWhatYouTypedWasAlsoSuggested.HistoryOrSuggest"
-    units="boolean" expires_after="2022-10-30">
+<histogram name="Omnibox.SearchPreload.ResponseDataReaderFinalStatus.Prerender"
+    enum="SearchPrefetchResponseDataReaderStatus" expires_after="2025-05-11">
+  <owner>lingqi@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-prerendering@google.com</owner>
   <summary>
-    Records whether a &quot;search what you type&quot; omnibox navigation was
-    also a search suggest type or a search history type. Recorded when the user
-    navigates to a search via typing the full query into the omnibox.
+    Tracks whether the StreamingSearchPrefetchURLLoader::ResponseReader can
+    successfully serving to prerender clients. Recorded when a
+    `StreamingSearchPrefetchURLLoader::ResponseReader` is destroyed.
   </summary>
 </histogram>
 
-<histogram
-    name="Omnibox.SearchPrefetch.SearchWhatYouTypedWasAlsoSuggested.Suggest"
-    units="boolean" expires_after="2022-10-30">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Records whether a &quot;search what you type&quot; omnibox navigation was
-    also a search suggest type. Recorded when the user navigates to a search via
-    typing the full query into the omnibox.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchPrefetch.StartTime.NavigationPrefetch"
-    units="ms" expires_after="2022-10-30">
-  <owner>ryansturm@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
-  <summary>
-    Search Prefetch issues results page requests in response to either the
-    suggestion server or the Omnibox client being confident that the user will
-    navigate to a specific search suggestion. These requests are then served
-    instantly to the user when the user navigates to a search suggestion with
-    the same search terms. These requests can have mismatching query params as
-    the Omnibox client updates the search navigation URL as the user types more
-    into the Omnibox. The suggestion server issues prefetch hints along with the
-    suggestion request. Additionally, the Omnibox client decides to prefetch
-    when the user has chosen (or likely chosen) a search suggestion to initiate
-    the search suggestion navigation earlier. The amount of time it takes to
-    start a prefetch request. Only recorded when the prefetch was issued when
-    Chrome is relatively confident an omnibox navigation is about to occur (i.e.
-    the user selected a search suggestion). These prefetches allow Chrome to
-    kickstart the request without waiting until before unload handlers or other
-    navigation pre-processing mechanisms in Chrome.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SearchProviderMatches" units="units"
-    expires_after="2022-09-11">
-  <owner>jdonnelly@chromium.org</owner>
+<histogram name="Omnibox.SearchSuggest.Requests"
+    enum="SearchSuggestRequestEvent" expires_after="2025-06-08">
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>cch@chromium.org</owner>
   <summary>
-    The number of matches returned by SearchProvider. Emitted on every call to
-    SearchProvider::Start(), which effectively means every key stroke in the
-    omnibox.
+    Counts the number of requests SearchProvider sent, were invalidated, and
+    were completed successfully.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SelectedPosition" units="position"
-    expires_after="2023-01-01">
-  <owner>jdonnelly@chromium.org</owner>
-  <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.Shortcuts.NumberOfDuplicatesPerShortcutIterated"
+    units="matches" expires_after="2025-06-08">
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The index of the item that the user selected in the omnibox popup (a.k.a.
-    dropdown) list. 0 means the inline suggestion shown within the omnibox. This
-    is also the same suggestion shown as the top item in the dropdown. The
-    second item in the dropdown will be recorded as bucket 1. The selected
-    position is always set to 0 when the popup is closed at the time of
-    navigation or if the user did a paste-and-search or paste-and-go action.
+    For each autocomplete input, the shortcut provider 1) searches its index for
+    all matching shortcuts, 2) dedupes them, 3) prunes them to 3, 4) and lastly
+    converts them to `AutocompleteMatch`s.
 
-    In M-74 and earlier, this was only recorded if the user had no incognito
-    windows open. In M-75 and later, it records all omnibox interactions
-    regardless, in order to be consistent with how user actions and histograms
-    are handled.
+    This metric records the number of duplicates per shortcut found in step (2).
+
+    See the related `Omnibox.Shortcuts.NumberOfUniqueShortcutsIterated`.
+
+    Recorded once per unique shortcut found each time the shortcut provider is
+    ran with want-async input - i.e. the user editing the omnibox text. But some
+    inputs (e.g. starter pack scopes) won't run the shortcut provider, and some
+    actions (e.g. typing in chrome://omnibox) will also run the shortcut
+    provider.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.Shortcuts.NumberOfUniqueShortcutsIterated"
+    units="matches" expires_after="2025-04-06">
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    For each autocomplete input, the shortcut provider 1) searches its index for
+    all matching shortcuts, 2) dedupes them, 3) prunes them to 3, 4) and lastly
+    converts them to `AutocompleteMatch`s.
+
+    This metric records the number of unique matching shortcuts (i.e. after step
+    2, before step 3).
+
+    See the related `Omnibox.Shortcuts.NumberOfDuplicatesPerShortcutIterated`.
+
+    Recorded once each time the shortcut provider is ran with want-async input -
+    i.e. the user editing the omnibox text. But some inputs (e.g. starter pack
+    scopes) won't run the shortcut provider, and some actions (e.g. typing in
+    chrome://omnibox) will also run the shortcut provider.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.Start.WantAsyncMatches" enum="Boolean"
-    expires_after="2022-12-04">
-  <owner>tommycli@chromium.org</owner>
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <summary>
     Whether asynchronous matches are requested. Recorded every time
@@ -1579,10 +1731,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.AnswerInSuggest"
-    enum="SuggestionAnswerOptionalType" expires_after="2022-12-25">
+    enum="SuggestionAnswerOptionalType" expires_after="2025-06-22">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Counts how often omnibox suggestions are used, and in the case an Answer
     suggestion was selected - records the type of an answer. This histogram is
@@ -1591,8 +1743,29 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Omnibox.SuggestionUsed.ClientSummarizedResultType"
+    enum="ClientSummarizedResultType" expires_after="2025-06-22">
+  <owner>nyquist@chromium.org</owner>
+  <owner>ssid@chromium.org</owner>
+  <owner>chrome-segmentation-platform@google.com</owner>
+  <summary>
+    For each user navigation using the omnibox, logs the selected omnibox result
+    as one of a limited set of result types, based on the autocomplete match.
+
+    As an example, HISTORY_URL and HISTORY_TITLE are both summarized into the
+    Url summarized result type.
+
+    This histogram intended to match the server-side histograms that use
+    OmniboxSummarizedResultType such as Omnibox.SuggestionUsed.SearchVsUrl. This
+    is also calculated on the client side to enable functionality that is based
+    on listening to local metrics at runtime.
+
+    Logged whenever a user navigates using the omnibox.
+  </summary>
+</histogram>
+
 <histogram name="Omnibox.SuggestionUsed.OfferedTabMatch" enum="BooleanOffered"
-    expires_after="2022-12-11">
+    expires_after="2025-05-11">
   <owner>gangwu@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
@@ -1615,10 +1788,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.Pedal" enum="SuggestionPedalType"
-    expires_after="2022-12-11">
+    expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>orinj@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Counts how often omnibox pedals are used and records the type (concept ID)
     of the pedal used.
@@ -1632,9 +1805,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.ResumeJourney" units="position"
-    expires_after="2022-12-25">
-  <owner>tommycli@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+    expires_after="2025-06-22">
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <owner>chrome-journeys@google.com</owner>
   <summary>
     Logs the position of &quot;Resume Journey&quot; omnibox actions actually
     selected by the user. The position index is 0-based, so a selected action in
@@ -1653,30 +1827,10 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestionUsed.ResumeJourney.ClusterKeywordScore"
-    units="count" expires_after="2022-12-10">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
-  <summary>
-    Logs the score of the matched cluster keyword of &quot;Resume Journey&quot;
-    omnibox actions actually selected by the user.
-
-    This can be combined with Omnibox.ResumeJourneyShown.ClusterKeywordScore to
-    compute the precision (or CTR) of the &quot;Resume Journey&quot; omnibox
-    action on a keyword score bucket.
-
-    It's safe to compare the total count of this metric to the total count of
-    Omnibox.ResumeJourneyShown.ClusterKeywordScore because within a single
-    popup, only zero or one &quot;Resume Journey&quot; can be shown. If multiple
-    actions start being shown in the popup, comparing to the total count becomes
-    misleading to interpret as a CTR.
-  </summary>
-</histogram>
-
 <histogram name="Omnibox.SuggestionUsed.ResumeJourney.ClusterKeywordType"
-    enum="HistoryClusterKeywordType" expires_after="2022-12-10">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
+    enum="HistoryClusterKeywordType" expires_after="2024-03-17">
+  <owner>sophiechang@chromium.org</owner>
+  <owner>chrome-journeys@google.com</owner>
   <summary>
     Logs the type of the matched cluster keyword of &quot;Resume Journey&quot;
     omnibox actions actually selected by the user.
@@ -1695,9 +1849,9 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Omnibox.SuggestionUsed.ResumeJourney.ClusterKeywordType.{ClusterKeywordTypeLabel}.CTR"
-    enum="BooleanSelected" expires_after="2022-12-10">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
+    enum="BooleanSelected" expires_after="2023-12-10">
+  <owner>sophiechang@chromium.org</owner>
+  <owner>chrome-journeys@google.com</owner>
   <summary>
     Emitted when the user uses the omnibox to go somewhere AND the &quot;Resume
     Journey&quot; chip triggered by {ClusterKeywordTypeLabel} was offered in any
@@ -1726,131 +1880,9 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Omnibox.SuggestionUsed.ResumeJourney.PageEntityCollection"
-    enum="OptimizationGuidePageEntityCollection" expires_after="2022-12-08">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
-  <summary>
-    Logs the top entity collection of &quot;Resume Journey&quot; omnibox actions
-    actually selected by the user.
-
-    This can be combined with Omnibox.ResumeJourneyShown.PageEntityCollection to
-    compute the precision (or CTR) of the &quot;Resume Journey&quot; omnibox
-    action on a per-collection basis.
-
-    It's safe to compare the total count of this metric to the total count of
-    Omnibox.ResumeJourneyShown.PageEntityCollection because within a single
-    popup, only zero or one &quot;Resume Journey&quot; can be shown. If multiple
-    actions start being shown in the popup, comparing to the total count becomes
-    misleading to interpret as a CTR.
-  </summary>
-</histogram>
-
-<histogram
-    name="Omnibox.SuggestionUsed.ResumeJourney.PageEntityCollection.{CollectionLabel}.CTR"
-    enum="BooleanSelected" expires_after="2022-12-08">
-  <owner>junzou@chromium.org</owner>
-  <owner>chrome-intelligence-core@google.com</owner>
-  <summary>
-    Emitted when the user uses the omnibox to go somewhere AND the &quot;Resume
-    Journey&quot; chip triggered by {CollectionLabel} was offered in any
-    position.
-
-    This metric records &quot;Selected&quot; if the offered action chip was
-    selected, and records &quot;Not Selected&quot; if the offered action chip
-    was not selected.
-
-    Therefore the &quot;Selected&quot; bucket proportion is the CTR of the
-    action chip. Higher is better. The count of this bucket matches the
-    {CollectionLabel} bucket of
-    Omnibox.SuggestionUsed.ResumeJourney.PageEntityCollection.
-
-    The total count of both buckets is how many times we've offered the chip
-    triggered by {CollectionLabel} in total, and matches the {CollectionLabel}
-    bucket of Omnibox.ResumeJourneyShown.PageEntityCollection.
-  </summary>
-  <token key="CollectionLabel">
-    <variant name="Accommodations"/>
-    <variant name="Actors"/>
-    <variant name="Airports"/>
-    <variant name="AnatomicalStructures"/>
-    <variant name="Artworks"/>
-    <variant name="Athletes"/>
-    <variant name="Authors"/>
-    <variant name="BookEditions"/>
-    <variant name="BusinessOperations"/>
-    <variant name="Cars"/>
-    <variant name="CausesOfDeath"/>
-    <variant name="CelestialObjectWithCoordinateSystems"/>
-    <variant name="ChemicalCompounds"/>
-    <variant name="ConsumerProducts"/>
-    <variant name="Cuisines"/>
-    <variant name="CulinaryMeasures"/>
-    <variant name="Currencies"/>
-    <variant name="Diets"/>
-    <variant name="DiseaseOrMedicalConditions"/>
-    <variant name="EducationalInstitutions"/>
-    <variant name="Employers"/>
-    <variant name="Events"/>
-    <variant name="FictionalCharacters"/>
-    <variant name="FilmActors"/>
-    <variant name="Films"/>
-    <variant name="FilmScreeningVenues"/>
-    <variant name="FilmSeries"/>
-    <variant name="Foods"/>
-    <variant name="Garments"/>
-    <variant name="GeoBusinessChain"/>
-    <variant name="GeoEstablishment"/>
-    <variant name="GeoLocality"/>
-    <variant name="GeoNaturalFeature"/>
-    <variant name="GeoPolitical"/>
-    <variant name="Holidays"/>
-    <variant name="HumanLanguages"/>
-    <variant name="JobTitles"/>
-    <variant name="LiterarySeries"/>
-    <variant name="LocalShoppingBuyables"/>
-    <variant name="Materials"/>
-    <variant name="MedicalTreatments"/>
-    <variant name="Models"/>
-    <variant name="MusicalAlbums"/>
-    <variant name="MusicalArtists"/>
-    <variant name="MusicalGenres"/>
-    <variant name="MusicalGroups"/>
-    <variant name="MusicalRecordings"/>
-    <variant name="MusicalReleases"/>
-    <variant name="MusicGroupMembers"/>
-    <variant name="Musicians"/>
-    <variant name="OrganismClassifications"/>
-    <variant name="Organizations"/>
-    <variant name="People"/>
-    <variant name="Periodicals"/>
-    <variant name="Politicians"/>
-    <variant name="RecordingClusters"/>
-    <variant name="Religions"/>
-    <variant name="Restaurants"/>
-    <variant name="RideOfferingServices"/>
-    <variant name="ShoppingCenters"/>
-    <variant name="SocialNetworkServiceWebsites"/>
-    <variant name="Software"/>
-    <variant name="Sports"/>
-    <variant name="SportsTeams"/>
-    <variant name="Structures"/>
-    <variant name="TouristAttractions"/>
-    <variant name="TravelDestinations"/>
-    <variant name="TvActors"/>
-    <variant name="TvEpisodes"/>
-    <variant name="TvPrograms"/>
-    <variant name="Unknown"/>
-    <variant name="Venues"/>
-    <variant name="VideoGames"/>
-    <variant name="Websites"/>
-    <variant name="WrittenWorks"/>
-  </token>
-</histogram>
-
 <histogram name="Omnibox.SuggestionUsed.ResumeJourneyCTR"
-    enum="BooleanSelected" expires_after="2022-12-01">
-  <owner>tommycli@chromium.org</owner>
+    enum="BooleanSelected" expires_after="2025-05-11">
+  <owner>manukh@chromium.org</owner>
   <owner>chrome-journeys@google.com</owner>
   <summary>
     Emitted when the user uses the omnibox to go somewhere AND the &quot;Resume
@@ -1870,10 +1902,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.RichAutocompletion"
-    enum="OmniboxRichAutocompletionType" expires_after="2022-12-08">
+    enum="OmniboxRichAutocompletionType" expires_after="2025-05-11">
   <owner>manukh@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the number of sessions for which each type of rich autocompletion
     was used.
@@ -1893,21 +1925,21 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Omnibox.SuggestionUsed.Search.Experimental.NavigationToFirstMeaningfulPaint"
-    units="ms" expires_after="2022-12-11">
+    units="ms" expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to first meaningful paint. Only
     recorded for a search query suggestion selected from the omnibox.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestionUsed.Search.InputToNavigationStart"
-    units="ms" expires_after="2022-12-01">
+<histogram name="Omnibox.SuggestionUsed.Search.InputToNavigationStart2"
+    units="ms" expires_after="2025-05-11">
   <owner>spelchat@chromium.org</owner>
   <owner>chrome-brapp-loading@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from the user selecting the omnibox suggestion and the
     navigation start time getting ticked. Only recorded for a search query
@@ -1917,10 +1949,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Omnibox.SuggestionUsed.Search.NavigationToFirstContentfulPaint"
-    units="ms" expires_after="2023-01-15">
+    units="ms" expires_after="2025-05-11">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to first contentful paint. Only
     recorded for a search query suggestion selected from the omnibox.
@@ -1928,11 +1960,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Omnibox.SuggestionUsed.Search.NavigationToLargestContentfulPaint2"
-    units="ms" expires_after="2022-11-27">
-  <owner>asamidoi@chromium.org</owner>
+    name="Omnibox.SuggestionUsed.Search.NavigationToLargestContentfulPaint2.1"
+    units="ms" expires_after="2025-06-22">
+  <owner>lingqi@chromium.org</owner>
   <owner>chrome-prerendering@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to largest contentful paint
     (https://github.com/w3c/largest-contentful-paint). Only recorded for a
@@ -1941,11 +1973,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Omnibox.SuggestionUsed.Search.NavigationToLargestContentfulPaint2Above2s"
-    units="ms" expires_after="2023-05-01">
+    name="Omnibox.SuggestionUsed.Search.NavigationToLargestContentfulPaint2.1Above2s"
+    units="ms" expires_after="2025-01-05">
   <owner>spelchat@chromium.org</owner>
   <owner>chrome-brapp-loading@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation to the time the first largest contentful
     paint candidate
@@ -1958,7 +1990,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.SelectedTabMatch"
-    enum="BooleanSelected" expires_after="2022-12-11">
+    enum="BooleanSelected" expires_after="2025-05-11">
   <owner>gangwu@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
@@ -1988,21 +2020,21 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Omnibox.SuggestionUsed.URL.Experimental.NavigationToFirstMeaningfulPaint"
-    units="ms" expires_after="2023-01-01">
+    units="ms" expires_after="2025-06-08">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to first meaningful paint. Only
     recorded for a URL suggestion selected from the omnibox.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestionUsed.URL.InputToNavigationStart" units="ms"
-    expires_after="2022-12-01">
+<histogram name="Omnibox.SuggestionUsed.URL.InputToNavigationStart2" units="ms"
+    expires_after="2025-05-11">
   <owner>spelchat@chromium.org</owner>
   <owner>chrome-brapp-loading@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from the user selecting the omnibox suggestion and the
     navigation start time getting ticked. Only recorded for a URL suggestion
@@ -2011,10 +2043,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestionUsed.URL.NavigationToFirstContentfulPaint"
-    units="ms" expires_after="2022-12-18">
+    units="ms" expires_after="2025-06-15">
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to first contentful paint. Only
     recorded for a URL suggestion selected from the omnibox.
@@ -2022,11 +2054,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Omnibox.SuggestionUsed.URL.NavigationToLargestContentfulPaint2"
-    units="ms" expires_after="2022-11-27">
-  <owner>asamidoi@chromium.org</owner>
+    name="Omnibox.SuggestionUsed.URL.NavigationToLargestContentfulPaint2.1"
+    units="ms" expires_after="2025-06-29">
+  <owner>robertlin@chromium.org</owner>
   <owner>chrome-prerendering@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Measures the time from navigation start to largest contentful paint. Only
     recorded for a URL suggestion selected from the omnibox.
@@ -2034,7 +2066,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestRequest.Failure.GoogleResponseTime" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <owner>cch@chromium.org</owner>
@@ -2046,7 +2078,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestRequest.Success.GoogleResponseTime" units="ms"
-    expires_after="2023-01-15">
+    expires_after="2025-05-11">
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <owner>cch@chromium.org</owner>
@@ -2057,33 +2089,19 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestRequest.Success.PrefetchImagesCount"
-    units="count" expires_after="2022-05-01">
-  <obsolete>
-    3/2022; feature launched.
-  </obsolete>
-  <owner>manukh@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.SuggestRequestsSent" enum="SuggestRequestType"
+    expires_after="2025-06-08">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    The number of images prefetched by the search provider on retrieving a
-    successful search response.
+    Counts the number and type of requests sent by the omnibox to the Suggest
+    backends. These requests are emitted as the user types or in zero-suggest
+    context (user has focused or cleared the omnibox but has not typed in yet).
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestRequests" enum="OmniboxSuggestRequests"
-    expires_after="2023-01-15">
-  <owner>mpearson@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
-  <owner>cch@chromium.org</owner>
-  <summary>
-    Counts about the number of suggest requests the omnibox sent, invalidated,
-    and replies received.
-  </summary>
-</histogram>
-
-<histogram name="Omnibox.SuggestTiles.DeletedTilePosition" units="position"
-    expires_after="2023-06-01">
+<histogram name="Omnibox.SuggestTiles.DeletedTileIndex" units="position"
+    expires_after="2025-09-01">
   <owner>ender@google.com</owner>
   <owner>mahmadi@chromium.org</owner>
   <summary>
@@ -2098,7 +2116,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestTiles.DeletedTileType" enum="SuggestTileType"
-    expires_after="2023-06-01">
+    expires_after="2025-09-01">
   <owner>ender@google.com</owner>
   <owner>mahmadi@chromium.org</owner>
   <summary>
@@ -2111,8 +2129,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.SuggestTiles.SelectedTilePosition" units="position"
-    expires_after="2023-06-01">
+<histogram name="Omnibox.SuggestTiles.SelectedTileIndex" units="position"
+    expires_after="2025-09-01">
   <owner>ender@google.com</owner>
   <owner>mahmadi@chromium.org</owner>
   <summary>
@@ -2127,7 +2145,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.SuggestTiles.SelectedTileType" enum="SuggestTileType"
-    expires_after="2023-06-01">
+    expires_after="2025-09-01">
   <owner>ender@google.com</owner>
   <owner>mahmadi@chromium.org</owner>
   <summary>
@@ -2137,11 +2155,13 @@ chromium-metrics-reviews@google.com.
 
     Recorded every time the user selects the tile to initiate navigation, even
     if the navigation could not be completed (eg. target site did not load).
+
+    Note: possible recording gap between 2023/06 and 2023/08.
   </summary>
 </histogram>
 
 <histogram name="Omnibox.SuggestTiles.TileTypeCount.{SuggestTileType}"
-    units="count" expires_after="2023-06-01">
+    units="count" expires_after="2025-09-01">
   <owner>ender@google.com</owner>
   <owner>mahmadi@chromium.org</owner>
   <summary>
@@ -2149,6 +2169,8 @@ chromium-metrics-reviews@google.com.
 
     Recorded every time the current context is eligible to receive
     MostVisitedTiles, even if there were no tiles of any kind to show.
+
+    Note: possible recording gap between 2023/06 and 2023/08.
   </summary>
   <token key="SuggestTileType">
     <variant name="Search"/>
@@ -2157,11 +2179,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Omnibox.TabMatchTime" units="microseconds"
-    expires_after="2022-12-25">
+    expires_after="2026-02-10">
   <owner>gangwu@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
   <owner>mpearson@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     This histogram reports the amount of time it takes to match one set of
     suggestions against all open tabs. This metric is collected once for every
@@ -2184,52 +2206,118 @@ chromium-metrics-reviews@google.com.
     backspace key).
 
     This histogram only records metrics on machines with high-resolution clocks.
+    (Expired in 2024-04-28. Revived in 2025-01-06.)
   </summary>
 </histogram>
 
-<histogram name="Omnibox.TimeSpentBeforeDismissLens" units="ms"
-    expires_after="2022-06-26">
-  <owner>yusuyoutube@google.com</owner>
-  <owner>benwgold@google.com</owner>
-  <owner>fgorski@chromium.org</owner>
-  <owner>wylieb@chromium.org</owner>
-  <owner>lens-chrome@google.com</owner>
+<histogram name="Omnibox.TemplateUrl.Reconciliation.Type"
+    enum="ReconciliationType" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Logs the elapsed time between the time when user enters the Google Lens and
-    the time when user dismisses Lens and returns to Chrome. Only logged on
-    Android.
+    Captures the type of performed reconciliation (if any).
+
+    Recorded once per Default Search Engine reconciliation event (on start + any
+    time the Default Search Engine is changed).
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ToggleSuggestionGroupId.Off" enum="SuggestionGroupId"
-    expires_after="2023-01-01">
-  <owner>mahmadi@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.TemplateUrl.Reconciliation.{ByVariant}.Result"
+    enum="BooleanSuccess" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Counts the number of times a suggestion group ID is prevented form appearing
-    in the results. This is recorded when the user hides a set of grouped
-    suggestions, such as proactive zero-suggest, in the omnibox UI using the
-    control in the grouped suggestions' header.
+    Captures the outcome of TemplateURL reconciliation whenever reconciliation
+    takes place.
+
+    This histogram captures outcome of reconciliation {ByVariant}.
+  </summary>
+  <token key="ByVariant">
+    <variant name="ByDomainBasedKeyword" summary="by Domain-based Keyword"/>
+    <variant name="ByID" summary="by ID"/>
+    <variant name="ByKeyword" summary="by Keyword"/>
+  </token>
+</histogram>
+
+<histogram name="Omnibox.TemplateUrl.RegulatoryExtension.SearchVariant"
+    enum="RegulatoryExtensionVariant" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the type of regulatory extension used to formulate the Search URL.
+
+    Recorded for all TemplateURLs every time a Search URL is created, regardless
+    of whether extensions are used, or a specific extension type is populated.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ToggleSuggestionGroupId.On" enum="SuggestionGroupId"
-    expires_after="2023-01-15">
-  <owner>mahmadi@google.com</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.TemplateUrl.RegulatoryExtension.SuggestVariant"
+    enum="RegulatoryExtensionVariant" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Counts the number of times a suggestion group ID is permitted to appear in
-    the results. This is recorded when the user makes a set of previously hidden
-    grouped suggestions, such as proactive zero-suggest, visible in the omnibox
-    UI using the control in the grouped suggestions' header.
+    Records the type of regulatory extension used to formulate the Suggest URL.
+
+    Recorded for all TemplateURLs every time a Suggest URL is created,
+    regardless of whether extensions are used, or a specific extension type is
+    populated.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.TemplateUrl.RlzPresent" enum="Boolean"
+    expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>jdonnelly@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    For every TemplateUrl expansion, captures whether Query has an organic
+    nature (RLZ empty) or not (RLZ present).
+
+    Recorded once for every TemplateUrl expansion if the Template URL references
+    the {google:RLZ} parameter.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.TemplateUrl.SearchClientPresent" enum="Boolean"
+    expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>jdonnelly@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    For every TemplateUrl expansion, captures whether Query has an organic
+    nature (Search client empty) or not (Search client present).
+
+    Recorded once for every TemplateUrl expansion if the Template URL references
+    the {google:searchClient} parameter.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.TemplateUrl.UnrecognizedParameter"
+    enum="BooleanPrepopulated" expires_after="2025-09-01">
+  <owner>ender@google.com</owner>
+  <owner>jdonnelly@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    For each TemplateUrl parameter that cannot be expanded, captures the origin
+    of the template url parameter. Prepopulated TemplateUrl definitions come
+    from `prepopulated_engines.json` file, whereas Non-prepopulated definitions
+    may originate from external configuration files linked to region-specific
+    DMA implementations (Android), user-supplied definitions (Desktop), or
+    device configuration (e.g. ADCP, Enterprise policies).
+
+    See go/chrome-android-dma for additional details.
+
+    Recorded once per unexpanded parameter for every TemplateUrl expansion.
+    Values reported by this histogram should be zero for mobile devices,
+    possibly also for Desktop and ChromeOS (unconfirmed).
   </summary>
 </histogram>
 
 <histogram name="Omnibox.URLNavigationScheme" enum="NavigationScheme"
-    expires_after="2023-01-15">
+    expires_after="2025-06-22">
   <owner>mpearson@chromium.org</owner>
   <owner>jdonnelly@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     The scheme of the destination URL for the selected omnibox suggestion. This
     could be a what-you-typed suggestion (if the user fully typed a URL), an
@@ -2245,43 +2333,299 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ZeroSuggest.Eligible.OnFocusV2"
-    enum="ZeroSuggestEligibleOnFocus" expires_after="2022-12-25">
-  <owner>mpearson@chromium.org</owner>
-  <owner>jdonnelly@chromium.org</owner>
+<histogram name="Omnibox.URLScoringModelExecuted.ElapsedTime"
+    units="microseconds" expires_after="2025-06-29">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>yoangela@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Whether the user has settings configured so that the current page URL can be
-    sent to the suggest server to request contextual suggestions. For example,
-    this is only supported for users who have Google as their default search
-    engine (unmodified version of Google), have search suggest enabled, are
-    signed-in and syncing without a custom passphrase, and don't have an
-    incognito window open. There are other criteria too. Recorded on focus in
-    the omnibox if there is default search provider and we've constructed a
-    suggest URL.
+    The amount of time it takes to execute the URL scoring model for all the
+    eligible matches. Emitted when all the providers are done and there is at
+    least one eligible match for model execution.
 
-    Some additional guidelines: if an incognito window is open, all focus events
-    will go into the &quot;generally ineligible&quot; bucket. Likewise, if the
-    current page is a search results page, we don't allow contextual suggestions
-    either so focus events on those pages go in the &quot;generally
-    ineligible&quot; bucket. The difference between &quot;eligible&quot; and
-    &quot;generally eligible but not this time&quot; depends only the properties
-    of the current URL.
+    This histogram only records metrics on machines with high-resolution clocks.
+  </summary>
+</histogram>
 
-    Recorded regardless of whether contextual or non-contextual zero suggest is
-    currently enabled on the user's platform. However, if zero suggest (in all
-    forms) is entirely disabled, the user will be perpetually ineligible.
+<histogram name="Omnibox.URLScoringModelExecuted.Matches" units="counts"
+    expires_after="2025-06-29">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>yoangela@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of matches the URL scoring model was executed for. Emitted when
+    all the providers are done and there is at least one eligible match for
+    model execution.
+  </summary>
+</histogram>
 
-    This histogram captures all scenarios that are generally ineligible for zero
-    suggest suggestions (including incognito mode), and reports eligibility for
-    suggestions even if kOmniboxPopupShortcutIconsInZeroState is enabled
-    (meaning: suggestions are not shown, but current URL is eligible).
+<histogram name="Omnibox.URLScoringModelExecuted.MLScoreCache.CacheHit"
+    enum="BooleanCacheHit" expires_after="2025-06-29">
+  <owner>khalidpeer@chromium.org</owner>
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records whether there was a cache hit when attempting to fetch the ML score
+    associated with a given vector of scoring signals. This will be recorded for
+    each match that is submitted to the ML scoring service. Each omnibox input
+    triggers multiple autocomplete passes with each pass generating multiple
+    autocomplete matches. Therefore, this metric will get logged several times
+    for a single omnibox input.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.URLScoringModelExecuted.MLScoreCoverage"
+    units="% of matches" expires_after="2025-06-29">
+  <owner>khalidpeer@chromium.org</owner>
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the percentage of scoring-eligible autocomplete matches that were
+    assigned non-null scores by the ML scoring model. This will be recorded for
+    each batch that is submitted to the ML scoring service.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.URLScoringModelExecuted.Preprocess.ValidInputSize"
+    enum="Boolean" expires_after="2025-06-29">
+  <owner>khalidpeer@chromium.org</owner>
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    During the execution of `AutocompleteScoringModelExecutor::Preprocess()`,
+    this metric records whether or not the number of input tensors passed in
+    matches the size of the ModelInput.
+
+    This will be recorded once for each suggestion contained in a batch that's
+    submitted to the ML scoring service.
+
+    This will NOT be recorded for any suggestion that already has a non-null
+    scoring result stored in the ML score cache.
+  </summary>
+</histogram>
+
+<!--
+  Keep consistent:
+  - omnibox_event.proto `ScoringSignals`
+  - omnibox_scoring_signals.proto `OmniboxScoringSignals`
+  - autocomplete_scoring_model_handler.cc
+    `AutocompleteScoringModelHandler::ExtractInputFromScoringSignals()`
+  - autocomplete_match.cc `AutocompleteMatch::MergeScoringSignals()`
+  - autocomplete_controller.cc `RecordScoringSignalCoverageForProvider()`
+  - omnibox_metrics_provider.cc `GetScoringSignalsForLogging()`
+  - omnibox.mojom `struct Signals`
+  - omnibox_page_handler.cc `TypeConverter<AutocompleteMatch::ScoringSignals,
+    mojom::SignalsPtr>`
+  - omnibox_page_handler.cc `TypeConverter<mojom::SignalsPtr,
+    AutocompleteMatch::ScoringSignals>`
+  - omnibox_util.ts `signalNames`
+  - omnibox/histograms.xml
+    `Omnibox.URLScoringModelExecuted.ScoringSignalCoverage`
+-->
+
+<histogram
+    name="Omnibox.URLScoringModelExecuted.ScoringSignalCoverage.{ProviderType}.{ScoringSignalType}"
+    enum="BooleanNonNull" expires_after="2025-04-27">
+  <owner>khalidpeer@chromium.org</owner>
+  <owner>manukh@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    For each ML eligible match generated by the autocomplete provider of type
+    {ProviderType}, records the number of null/non-null values logged by client
+    code for the ML scoring signal of type {ScoringSignalType}.
+  </summary>
+  <token key="ScoringSignalType">
+    <variant name="allowed_to_be_default_match"
+        summary="True if url can be default match."/>
+    <variant name="elapsed_time_last_shortcut_visit_sec"
+        summary="Elapsed time since last shortcut visit for this profile on
+                 this device."/>
+    <variant name="elapsed_time_last_visit_secs"
+        summary="Elapsed time since last visit for this profile on this
+                 device."/>
+    <variant name="first_bookmark_title_match_position"
+        summary="Position of the first matched bookmark title term."/>
+    <variant name="first_url_match_position"
+        summary="Position of the first matched URL substring."/>
+    <variant name="has_non_scheme_www_match"
+        summary="Has matches that are not in schemes (e.g., 'https') or
+                 'www'."/>
+    <variant name="host_match_at_word_boundary"
+        summary="One word matches host at a word boundary."/>
+    <variant name="is_answer_suggest"
+        summary="Whether this match is a Search suggestion that contains an
+                 answer."/>
+    <variant name="is_calculator_suggest"
+        summary="Whether this match is a CALCULATOR suggestion."/>
+    <variant name="is_host_only"
+        summary="URL points to the root page of a website, i.e., no query,
+                 path words, or references after '/'."/>
+    <variant name="is_navsuggest"
+        summary="Whether this match is a NAVSUGGEST suggestion."/>
+    <variant name="is_search_suggest_entity"
+        summary="Whether this match is a Search suggestion that describes an
+                 entity."/>
+    <variant name="is_search_suggest_tail"
+        summary="Whether this match is a SEARCH_SUGGEST_TAIL suggestion."/>
+    <variant name="is_verbatim"
+        summary="Whether this match is a verbatim suggestion."/>
+    <variant name="length_of_url" summary="Length of url."/>
+    <variant name="num_bookmarks_of_url"
+        summary="Number of bookmarks for this profile with this URL."/>
+    <variant name="num_input_terms_matched_by_bookmark_title"
+        summary="Number of input terms matched by bookmark title."/>
+    <variant name="num_input_terms_matched_by_title"
+        summary="Number of input terms matched by title."/>
+    <variant name="num_input_terms_matched_by_url"
+        summary="Number of input terms matched by url."/>
+    <variant name="search_suggest_relevance"
+        summary="Server-generated relevance score provided by the remote
+                 Suggest service for this suggestion."/>
+    <variant name="shortcut_visit_count"
+        summary="Number of times the suggestion was visited with the current
+                 input or prefix of it for this profile on this device."/>
+    <variant name="shortest_shortcut_len"
+        summary="Length of the shortest shortcut text."/>
+    <variant name="site_engagement"
+        summary="Site engagement score for the site the URL is on."/>
+    <variant name="total_bookmark_title_match_length"
+        summary="Total length of matched strings in the bookmark title."/>
+    <variant name="total_host_match_length"
+        summary="Total length of the matched host substrings."/>
+    <variant name="total_path_match_length"
+        summary="Total length of the matched substrings in the path at word
+                 boundaries."/>
+    <variant name="total_query_or_ref_match_length"
+        summary="Total length of the matched substrings in the query_or_ref
+                 at word boundaries."/>
+    <variant name="total_title_match_length"
+        summary="Total length of the matched substrings in the page title at
+                 word boundaries."/>
+    <variant name="total_url_match_length"
+        summary="Total length of the matched URL strings."/>
+    <variant name="typed_count"
+        summary="Number of times the URL was navigated to using the Omnibox
+                 for this profile on this device, and all other devices
+                 syncing with this profile."/>
+    <variant name="visit_count"
+        summary="Number of times the URL was visited in general for this
+                 profile on this device."/>
+  </token>
+  <token key="ProviderType" variants="OmniboxProviders"/>
+</histogram>
+
+<histogram name="Omnibox.Views.PopupFirstPaint" units="ms"
+    expires_after="2025-05-11">
+  <owner>tluk@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the number of milliseconds between the views omnibox popup
+    construction and the first time content for the popup is displayed on the
+    screen. This is emitted once each time the omnibox is opened. It is recorded
+    again if the omnibox has closed and later re-opened. It is not emitted more
+    than once for a single opened instance of the ombibox popup.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.WebUI.FirstUpdate" units="ms"
+    expires_after="2025-11-03">
+  <owner>orinj@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the number of milliseconds between the webui omnibox popup
+    construction and its first UpdatePopupAppearance call. This measures how
+    long the popup existed before first use. Since the webui begins the
+    asynchronous process of initialization and remote binding immediately on
+    construction, this metric can be seen as a time budget for handler
+    preparation. See also Omnibox.WebUI.HandlerReadyOnFirstAccess.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.WebUI.HandlerReadyOnFirstAccess" enum="Boolean"
+    expires_after="2025-11-03">
+  <owner>orinj@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the ready state of the webui handler when first accessed. When this
+    is true, the page loaded and the handler was ready on time. When this is
+    false, it indicates that OmniboxPopupPresenter::GetHandler returned nullptr
+    at least once because the page wasn't loaded before the first attempt to
+    communicate via the handler. Recorded once per omnibox popup presenter
+    instantiation, when the webui omnibox popup page handler is first used; so,
+    at most once per browser window.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.ZeroSuggest.AllResults" units="units"
+    expires_after="2025-12-15">
+  <owner>pnoland@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of results (either query or URL) from ZeroSuggest. This is
+    emitted every time ZeroSuggestProvider produces results on omnibox focus or
+    on omnibox input clobber, either from the cache or from the remote response.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.ZeroSuggest.QueryResults" units="units"
+    expires_after="2025-12-15">
+  <owner>pnoland@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of query results returned from ZeroSuggest. This is emitted every
+    time ZeroSuggestProvider produces results on omnibox focus or on omnibox
+    input clobber, either from the cache or from the remote response.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.ZeroSuggest.URLResults" units="units"
+    expires_after="2025-12-15">
+  <owner>pnoland@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of URL results returned from ZeroSuggest. This is emitted every
+    time ZeroSuggestProvider produces results on omnibox focus or on omnibox
+    input clobber, either from the cache or from the remote response.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.ZeroSuggestProvider.CacheMemoryUsage" units="Bytes"
+    expires_after="2025-05-11">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Emitted in ZeroSuggestCacheService, records the estimated dynamically
+    allocated memory usage of the ZeroSuggestProvider cache every time the
+    prefetch or the non-prefetch zero-suggest response is stored in the cache on
+    eligible page load / page switch events and when the user has focused or
+    cleared the omnibox but has not typed in yet, respectively. Note that the
+    max number of responses stored in the cache is always capped. The cache size
+    can build up as more responses are stored. The cache size can also decrease
+    as responses are removed from the cache when suggestions are deleted from
+    the omnibox or when the user clears the browsing data. Hence, due to the
+    dynamic nature of the cache size, this histogram is recorded on every store
+    event as opposed to the cache destructor.
+  </summary>
+</histogram>
+
+<histogram name="Omnibox.ZeroSuggestProvider.Eligibility"
+    enum="ZeroSuggestEligibility" expires_after="2025-05-11">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Logs whether ZeroSuggestProvider is eligible to request and display zero-
+    prefix suggestions, and if not, why not. Emitted for both
+    omit_asynchronous_matches_ true (i.e, Autocomplete classifier) and false
+    inputs (i.e, when the user has typed in, focused the omnibox, or cleared it
+    but has not typed in yet) in ZeroSuggestProvider::Start(). Also emitted on
+    applicable page load/switch events in ZeroSuggestProvider::StartPrefetch().
   </summary>
 </histogram>
 
 <histogram name="Omnibox.ZeroSuggestProvider.{ResultType}.{RequestType}"
-    enum="ZeroSuggestProviderEvent" expires_after="2022-12-11">
+    enum="ZeroSuggestRequestEvent" expires_after="2025-05-11">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
     Enumerates the events in the ZeroSuggestProvider as a result of
     {RequestType} for {ResultType} (i.e., suggestions shown when the user has
@@ -2299,65 +2643,304 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Omnibox.ZeroSuggestRequests.NonPrefetch"
-    enum="OmniboxZeroSuggestRequests" expires_after="2022-12-11">
-  <obsolete>
-    Obsolete as of M105.
-  </obsolete>
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="Omnibox.{SearchPrefetch}.CacheAliasElapsedTimeToFallback"
+    units="ms" expires_after="2025-05-04">
+  <owner>nhiroki@chromium.org</owner>
+  <owner>chrome-prerendering@google.com</owner>
   <summary>
-    Counts the number of non-prefetch zero suggest requests (requests for
-    suggestions when the user has focused but not modified the omnibox) the
-    omnibox sent, requests that were invalidated, responses that were received,
-    the subset of responses that were loaded from HTTP cache, and finally the
-    subset of responses that ended up updating the displayed results.
+    {SearchPrefetch}
+
+    Measures the time between the construction of
+    CacheAliasSearchPrefetchURLLoader and the moment the prefetch fell back from
+    the disk cache to network. This is recorded when the loader starts the
+    fallback in CacheAliasSearchPrefetchURLLoader::RestartDirect().
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+</histogram>
+
+<histogram name="Omnibox.{SearchPrefetch}.CacheAliasFallbackReason"
+    enum="SearchPrefetchCacheAliasFallbackReason" expires_after="2025-05-04">
+  <owner>nhiroki@chromium.org</owner>
+  <owner>chrome-prerendering@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    The reason that a search prefetch request failed to read a response from the
+    disk cache and then fell back to network. This is recorded when
+    CacheAliasSearchPrefetchURLLoader is destructed regardless of whether the
+    fallback happened. When the fallback didn't happen, this records
+    kNoFallback.
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.ClickToNavigationIntercepted.{NavigationPrefetchOnly}"
+    units="ms" expires_after="2023-10-15">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    Measures the time between the user clicks the Omnibox suggestion and the
+    moment the navigation is intercepted by the Search Prefetch code.
+
+    {NavigationPrefetchOnly}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="NavigationPrefetchOnly" variants="NavigationPrefetchOnly"/>
+</histogram>
+
+<histogram name="Omnibox.{SearchPrefetch}.FetchResult.{SuggestionPrefetchOnly}"
+    enum="BooleanSuccess" expires_after="2023-10-15">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    Whether a search prefetch request finished with a success status or a status
+    that could be served. Recorded when prefetch requests receive headers.
+
+    {SuggestionPrefetchOnly}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="SuggestionPrefetchOnly" variants="SuggestionPrefetchOnly"/>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.NavigationInterceptedToForwardingComplete"
+    units="ms" expires_after="2025-05-11">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    Measures the time between the navigation is intercepted by the Search
+    Prefetch code and the moment the Search Prefetch URL loader has finished
+    forwarding the whole response to the navigation URL loader. This time
+    includes finishing fetching the Search response and any queuing delays in
+    the UI thread preventing the Search Prefetch URL loader from forwarding
+    bytes to the navigation code.
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.PrefetchEligibilityReason2.{NavigationOrSuggestionPrefetch}"
+    enum="SearchPrefetchEligibilityReason" expires_after="2025-05-11">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    The reason that a search prefetch request issued when a user navigates to a
+    suggestion was not eligible to be prefetched (or 'Prefetched' if it was
+    prefetched).
+
+    {NavigationOrSuggestionPrefetch}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="NavigationOrSuggestionPrefetch"
+      variants="NavigationOrSuggestionPrefetch"/>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.PrefetchFinalStatus.{NavigationOrSuggestionPrefetch}"
+    enum="SearchPrefetchStatus" expires_after="2025-05-11">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    The status of a Search Prefetch request when it is deleted by expiration or
+    by serving the request.
+
+    {NavigationOrSuggestionPrefetch}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="NavigationOrSuggestionPrefetch"
+      variants="NavigationOrSuggestionPrefetch"/>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.PrefetchServingReason2{PrerenderOrNavigation}"
+    enum="SearchPrefetchServingReason" expires_after="2025-05-11">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>lingqi@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <owner>chrome-prerendering@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    The reason that a navigation request could or could not serve a search
+    prefetch request.
+
+    {PrerenderOrNavigation}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="PrerenderOrNavigation">
+    <variant name="" summary="Recorded for typical navigations."/>
+    <variant name=".Prerender"
+        summary="Recorded for prerender navigations that might consume the
+                 prefetch response."/>
+  </token>
+</histogram>
+
+<histogram
+    name="Omnibox.{SearchPrefetch}.ReceivedServableResponse2.{FallbackOrInitial}.{NavigationOrSuggestionPrefetch}"
+    units="ms" expires_after="2025-05-11">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <owner>chrome-prerendering@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    This histogram records whether an activated (i.e., served) prefetch URL
+    Loader receives a servabled response from the server.
+
+    A servabled reasponse should contain valid headers and body, with any 200
+    response code.
+
+    {FallbackOrInitial}
+
+    {NavigationOrSuggestionPrefetch}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="FallbackOrInitial">
+    <variant name="Fallback"
+        summary="Recorded for the fallback request after the prefetch fails."/>
+    <variant name="Initial"
+        summary="Recorded for the initial prefetch request."/>
+  </token>
+  <token key="NavigationOrSuggestionPrefetch"
+      variants="NavigationOrSuggestionPrefetch"/>
+</histogram>
+
+<histogram name="Omnibox.{SearchPrefetch}.StartTimeV2.{NavigationPrefetchOnly}"
+    units="ms" expires_after="2023-10-15">
+  <owner>ryansturm@chromium.org</owner>
+  <owner>curranmax@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    {SearchPrefetch}
+
+    The amount of time it takes to start a prefetch request.
+
+    {NavigationPrefetchOnly}
+  </summary>
+  <token key="SearchPrefetch" variants="SearchPrefetch"/>
+  <token key="NavigationPrefetchOnly" variants="NavigationPrefetchOnly"/>
+</histogram>
+
+<histogram name="Realbox.CharTypedToRepaintLatency.ToPaint" units="ms"
+    expires_after="2025-05-04">
+  <owner>mahmadi@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    Records the time taken between a keystroke being typed in the NTP realbox
+    and the time when we're ready to render the results in the DOM. If there are
+    multiple keystrokes before the results are rendered, logs the time since the
+    earliest. This is comparable to Omnibox.CharTypedToRepaintLatency.ToPaint as
+    it does not take into account the time the DOM change task spends in the
+    message loop nor its duration.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ZeroSuggestRequests.NonPrefetch.RoundTripTime"
-    units="ms" expires_after="2022-12-11">
-  <obsolete>
-    Obsolete as of M105.
-  </obsolete>
+<histogram name="Realbox.ResultChangedToRepaintLatency.ToPaint" units="ms"
+    expires_after="2025-01-05">
   <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Records the time elapsed between non-prefetch zero suggest requests
-    (requests for suggestions when the user has focused but not modified the
-    omnibox) sent and the responses received; whether or not the response is
-    loaded from HTTP cache.
+    Records the time taken between AutocompleteController::Observer's
+    OnResultChanged is called and the time when we're ready to render the
+    results in the NTP realbox. If there are multiple calls to OnResultChanged
+    before the results are rendered, logs the time since the earliest. This is
+    comparable to Realbox.CharTypedToRepaintLatency.ToPaint but excludes the
+    time taken to send the input to the browser and process it. Similarly this
+    does not take into account the time the DOM change task spends in the
+    message loop nor its duration.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ZeroSuggestRequests.Prefetch"
-    enum="OmniboxZeroSuggestRequests" expires_after="2022-12-11">
-  <obsolete>
-    Obsolete as of M105.
-  </obsolete>
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="ShortcutsProvider.DatabaseSize" units="units"
+    expires_after="2025-06-22">
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Counts the number of prefetch zero suggest requests (requests for
-    suggestions when the user opens a new tab or brings one to foreground) the
-    omnibox sent, requests that were invalidated, responses that were received,
-    the subset of responses that were loaded from HTTP cache, and finally the
-    subset of responses that ended up updating the displayed results.
+    The number of entries in `ShortcutsBackend`'s database. Recorded once on
+    profile load.
+
+    See also ShorcutsProvider.DatabaseSize.FileMB,
+    ShortcutsProvider.DatabaseSize.OldEntries and
+    ShortcutsProvider.OldEntryDeletions.
   </summary>
 </histogram>
 
-<histogram name="Omnibox.ZeroSuggestRequests.Prefetch.RoundTripTime" units="ms"
-    expires_after="2022-12-11">
-  <obsolete>
-    Obsolete as of M105.
-  </obsolete>
-  <owner>mahmadi@chromium.org</owner>
-  <owner>chrome-omnibox-team@google.com</owner>
+<histogram name="ShortcutsProvider.DatabaseSize.OldEntries" units="units"
+    expires_after="2025-06-22">
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
   <summary>
-    Records the time elapsed between prefetch zero suggest requests (requests
-    for suggestions when the user opens a new tab or brings one to foreground)
-    sent and the responses received; whether or not the response is loaded from
-    HTTP cache.
+    The number of entries in `ShortcutsBackend`'s database that are older than
+    90 days. Recorded once on profile load.
+
+    This value is expected to be near 0 as there are two mechanisms to delete
+    old entries. The first is individual deletions due to notificaitons that the
+    associated URL has been deleted from the history system. This mechanism is
+    not 100% reliable, however, since the URL deletions are performed by
+    HistoryService, which may be started up before ShortcutsBackend, which
+    handles the notifications. Therefore the second mechanism is a batch
+    deletion of all entries older than 90 days by ShortcutsBackend on profile
+    load. The count of deletions via the second mechanism is recorded in
+    ShortcutsProvider.OldEntryDeletions.
+
+    See also ShortcutsProvider.DatabaseSize and
+    ShortcutsProvider.DatabaseSize.OldEntriesPercentage.
+  </summary>
+</histogram>
+
+<histogram name="ShortcutsProvider.DatabaseSize.OldEntriesPercentage"
+    units="10ths of a %" expires_after="2025-06-22">
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The percentage of entries in `ShortcutsBackend`'s database that are older
+    than 90 days. Recorded once on profile load.
+
+    See ShortcutsProvider.DatabaseSize.OldEntries for additional details on how
+    and why this is recorded.
+  </summary>
+</histogram>
+
+<histogram name="ShortcutsProvider.OldEntryDeletions.OnHistoryDeletions"
+    units="units" expires_after="2025-06-22">
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of entries in `ShortcutsBackend`'s database that were deleted due
+    to the associated URL being deleted from the history database. Recorded each
+    time an `OnHistoryDeletions` notification from `HistoryService` is received
+    by `ShortcutsBackend`.
+
+    See also ShortcutsProvider.OldEntryDeletions.OnInit.
+  </summary>
+</histogram>
+
+<histogram name="ShortcutsProvider.OldEntryDeletions.OnInit" units="units"
+    expires_after="2025-06-22">
+  <owner>jdonnelly@chromium.org</owner>
+  <owner>chrome-desktop-search@google.com</owner>
+  <summary>
+    The number of entries in `ShortcutsBackend`'s database that were deleted due
+    to being older than 90 days. Recorded once on profile load.
+
+    For each profile load, this is expected to record the same value as
+    ShortcutsProvider.DatabaseSize.OldEntries. If experimental data appears to
+    confirm this, it may not be necessary to maintain both histograms.
+
+    See also ShortcutsProvider.OldEntryDeletions.OnHistoryDeletions.
   </summary>
 </histogram>
 

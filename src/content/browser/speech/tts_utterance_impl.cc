@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,10 @@
 
 namespace content {
 
-namespace {
-
-// Returns true if this event type is one that indicates an utterance
-// is finished and can be destroyed.
 bool IsFinalTtsEventType(TtsEventType event_type) {
   return (event_type == TTS_EVENT_END || event_type == TTS_EVENT_INTERRUPTED ||
           event_type == TTS_EVENT_CANCELLED || event_type == TTS_EVENT_ERROR);
 }
-
-}  // namespace
 
 //
 // UtteranceContinuousParameters
@@ -48,9 +42,10 @@ std::unique_ptr<TtsUtterance> TtsUtterance::Create(WebContents* web_contents) {
 
 // static
 std::unique_ptr<TtsUtterance> TtsUtterance::Create(
-    BrowserContext* browser_context) {
-  DCHECK(browser_context);
-  return std::make_unique<TtsUtteranceImpl>(browser_context, nullptr);
+    BrowserContext* browser_context,
+    bool should_always_be_spoken) {
+  return std::make_unique<TtsUtteranceImpl>(browser_context,
+                                            should_always_be_spoken);
 }
 
 // static
@@ -72,6 +67,12 @@ TtsUtteranceImpl::TtsUtteranceImpl(BrowserContext* browser_context,
   }
 }
 
+TtsUtteranceImpl::TtsUtteranceImpl(BrowserContext* browser_context,
+                                   bool should_always_be_spoken)
+    : TtsUtteranceImpl(browser_context, nullptr) {
+  should_always_be_spoken_ = should_always_be_spoken;
+}
+
 TtsUtteranceImpl::~TtsUtteranceImpl() {
   // It's an error if an Utterance is destructed without being finished,
   // unless |browser_context_| is nullptr because it's a unit test.
@@ -87,13 +88,17 @@ void TtsUtteranceImpl::OnTtsEvent(TtsEventType event_type,
   if (IsFinalTtsEventType(event_type))
     finished_ = true;
 
-  UtteranceEventDelegate* delegate = event_delegate_;
-
-  if (finished_)
-    event_delegate_ = nullptr;
-
-  if (delegate)
-    delegate->OnTtsEvent(this, event_type, char_index, length, error_message);
+  if (event_delegate_) {
+    // If |finished_| is set, we need to reset |event_delegate_| because it
+    // will self destroy on the call to OnTtsEvent.
+    if (finished_) {
+      event_delegate_.ExtractAsDangling()->OnTtsEvent(
+          this, event_type, char_index, length, error_message);
+    } else {
+      event_delegate_->OnTtsEvent(this, event_type, char_index, length,
+                                  error_message);
+    }
+  }
 }
 
 void TtsUtteranceImpl::Finish() {
@@ -220,6 +225,10 @@ bool TtsUtteranceImpl::IsFinished() {
 
 WebContents* TtsUtteranceImpl::GetWebContents() {
   return web_contents_.get();
+}
+
+bool TtsUtteranceImpl::ShouldAlwaysBeSpoken() {
+  return should_always_be_spoken_;
 }
 
 }  // namespace content

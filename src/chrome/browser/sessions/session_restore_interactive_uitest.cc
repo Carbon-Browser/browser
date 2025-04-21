@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,22 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/startup/startup_tab.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/sessions/content/content_test_helper.h"
 #include "content/public/browser/render_widget_host_view.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#include "base/test/scoped_feature_list.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 class SessionRestoreInteractiveTest : public InProcessBrowserTest {
  public:
@@ -62,8 +72,7 @@ class SessionRestoreInteractiveTest : public InProcessBrowserTest {
     // Create a new window, which should trigger session restore.
     chrome::NewEmptyWindow(profile);
 
-    Browser* new_browser =
-        chrome::FindBrowserWithWebContents(tab_waiter.Wait());
+    Browser* new_browser = chrome::FindBrowserWithTab(tab_waiter.Wait());
 
     restore_observer.Wait();
     WaitForTabsToLoad(new_browser);
@@ -74,7 +83,8 @@ class SessionRestoreInteractiveTest : public InProcessBrowserTest {
     return new_browser;
   }
 
-  void QuitMultiWindowBrowserAndRestore(Profile* profile) {
+  void QuitMultiWindowBrowserAndRestore(Profile* profile,
+                                        bool wait_for_tab_loading = true) {
     auto keep_alive = std::make_unique<ScopedKeepAlive>(
         KeepAliveOrigin::SESSION_RESTORE, KeepAliveRestartOption::DISABLED);
     auto profile_keep_alive = std::make_unique<ScopedProfileKeepAlive>(
@@ -103,7 +113,9 @@ class SessionRestoreInteractiveTest : public InProcessBrowserTest {
         SessionRestore::SYNCHRONOUS | SessionRestore::RESTORE_BROWSER, {});
 
     for (Browser* browser : *(BrowserList::GetInstance())) {
-      WaitForTabsToLoad(browser);
+      if (wait_for_tab_loading) {
+        WaitForTabsToLoad(browser);
+      }
       if (browser->window()->IsMinimized()) {
         minimized_window_counter--;
       } else {
@@ -131,7 +143,7 @@ class SessionRestoreInteractiveTest : public InProcessBrowserTest {
 };
 
 // TODO(https://crbug.com/1152160): Enable FocusOnLaunch on Lacros builds.
-// TODO(https://crbug.com/1284590): Flaky on Linux ASAN/TSAN builders.
+// TODO(crbug.com/40814457): Flaky on Linux ASAN/TSAN builders.
 #if BUILDFLAG(IS_CHROMEOS_LACROS) || \
     (BUILDFLAG(IS_LINUX) &&          \
      (defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)))
@@ -147,6 +159,9 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest, MAYBE_FocusOnLaunch) {
   ASSERT_EQ(url1_,
             new_browser->tab_strip_model()->GetActiveWebContents()->GetURL());
 
+  ui_test_utils::BrowserActivationWaiter waiter(new_browser);
+  waiter.WaitForActivation();
+
   // Ensure window has initial focus on launch.
   EXPECT_TRUE(new_browser->tab_strip_model()
                   ->GetActiveWebContents()
@@ -156,8 +171,8 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest, MAYBE_FocusOnLaunch) {
 
 // TODO(https://crbug.com/1152160): Enable RestoreMinimizedWindow on Lacros
 // builds.
-// TODO(crbug.com/1291651): Flaky failures.
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+// TODO(crbug.com/40818881): Flaky failures.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
 #define MAYBE_RestoreMinimizedWindow DISABLED_RestoreMinimizedWindow
 #else
 #define MAYBE_RestoreMinimizedWindow RestoreMinimizedWindow
@@ -167,7 +182,12 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest, MAYBE_FocusOnLaunch) {
 IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
                        MAYBE_RestoreMinimizedWindow) {
   // Minimize the window.
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&ui::BaseWindow::IsMinimized,
+                          base::Unretained(browser()->window())),
+      true);
   browser()->window()->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
 
   // Restart and session restore the tabs.
   Browser* restored = QuitBrowserAndRestore(browser());
@@ -180,24 +200,25 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
   EXPECT_TRUE(restored->window()->IsVisible());
 }
 
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_RestoreMinimizedWindowTwice RestoreMinimizedWindowTwice
-#else
-#define MAYBE_RestoreMinimizedWindowTwice DISABLED_RestoreMinimizedWindowTwice
-#endif
 // Verify that in restoring a browser with a normal and minimized window twice,
 // the minimized window remains minimized. Guards against a regression
 // introduced in the fix for https://crbug.com/1204517. This test fails on
 // Linux and Windows - see https://crbug.com/1213497.
+// Also fails flakily on Mac.
 IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
-                       MAYBE_RestoreMinimizedWindowTwice) {
+                       DISABLED_RestoreMinimizedWindowTwice) {
   Profile* profile = browser()->profile();
 
   // Create a second browser.
   CreateBrowser(browser()->profile());
 
   // Minimize the first browser window.
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&ui::BaseWindow::IsMinimized,
+                          base::Unretained(browser()->window())),
+      true);
   browser()->window()->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
 
   EXPECT_EQ(2u, BrowserList::GetInstance()->size());
 
@@ -207,3 +228,85 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
   // Quit and restore a second time.
   QuitMultiWindowBrowserAndRestore(profile);
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+class SessionRestoreAshInteractiveTest : public SessionRestoreInteractiveTest {
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_{
+      ash::features::kAshSessionRestoreDeferOccludedActiveTabLoad};
+};
+
+// Verify that only the visible active tab gets immediately loaded out of
+// session restore.
+// The test and the optimization only works for ash because the occlusion state
+// is calculated synchronously and is available when `ProcessSessionWindows`
+// finishes.
+IN_PROC_BROWSER_TEST_F(SessionRestoreAshInteractiveTest, MultiWindowTabLoad) {
+  // Make WebContents respect occlusion state.
+  base::CommandLine* cmd = base::CommandLine::ForCurrentProcess();
+  cmd->RemoveSwitch(switches::kDisableBackgroundingOccludedWindowsForTesting);
+
+  Profile* profile = browser()->profile();
+
+  const gfx::Rect bounds(0, 0, 600, 400);
+
+  // Creates 2 browser windows with one fully occludes the other.
+  Browser* browser1 = browser();
+  const GURL kUrlWindow1("data:,window 1");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser1, kUrlWindow1));
+  browser1->window()->SetBounds(bounds);
+
+  ui_test_utils::BrowserChangeObserver new_browser_observer(
+      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  chrome::NewWindow(browser1);
+  Browser* browser2 = new_browser_observer.Wait();
+  browser2->window()->SetBounds(bounds);
+
+  ui_test_utils::WaitUntilBrowserBecomeActive(browser2);
+  const GURL kUrlWindow2("data:,window 2");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser2, kUrlWindow2));
+
+  EXPECT_EQ(
+      content::Visibility::OCCLUDED,
+      browser1->tab_strip_model()->GetActiveWebContents()->GetVisibility());
+  EXPECT_EQ(
+      content::Visibility::VISIBLE,
+      browser2->tab_strip_model()->GetActiveWebContents()->GetVisibility());
+
+  // Quit and restore.
+  QuitMultiWindowBrowserAndRestore(profile, /*wait_for_tab_loading=*/false);
+
+  // Checks that only the active tab in "window 2" starts to load immediately.
+  int load_count = 0;
+  GURL last_loading_tab_url;
+  for (Browser* browser : *(BrowserList::GetInstance())) {
+    for (int i = 0; i < browser->tab_strip_model()->count(); ++i) {
+      content::WebContents* contents =
+          browser->tab_strip_model()->GetWebContentsAt(i);
+      if (contents->IsLoading()) {
+        ++load_count;
+        last_loading_tab_url = contents->GetLastCommittedURL();
+      }
+    }
+  }
+  EXPECT_EQ(1, load_count);
+  EXPECT_EQ(kUrlWindow2, last_loading_tab_url);
+
+  // Waits for "window 1" to finish load.
+  content::WebContents* contents_window1 = nullptr;
+  for (Browser* browser : *(BrowserList::GetInstance())) {
+    for (int i = 0; i < browser->tab_strip_model()->count(); ++i) {
+      content::WebContents* contents =
+          browser->tab_strip_model()->GetWebContentsAt(i);
+      if (contents->GetLastCommittedURL() == kUrlWindow1) {
+        contents_window1 = contents;
+        break;
+      }
+    }
+  }
+  EXPECT_TRUE(content::WaitForLoadStop(contents_window1));
+
+  // "window 1" should be in occluded state after load.
+  EXPECT_EQ(content::Visibility::OCCLUDED, contents_window1->GetVisibility());
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)

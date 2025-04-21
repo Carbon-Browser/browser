@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -17,10 +18,10 @@
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
+#include "extensions/common/extension_features.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/paint_recorder.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/canvas.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/animation/ink_drop.h"
@@ -36,8 +37,6 @@ ToolbarIconContainerView::RoundRectBorder::RoundRectBorder(views::View* parent)
   layer_.SetFillsBoundsOpaquely(false);
   layer_.SetFillsBoundsCompletely(false);
   layer_.SetOpacity(0);
-  layer_.SetAnimator(ui::LayerAnimator::CreateImplicitAnimator());
-  layer_.GetAnimator()->set_tween_type(gfx::Tween::EASE_OUT);
   layer_.SetVisible(true);
 }
 
@@ -53,7 +52,7 @@ void ToolbarIconContainerView::RoundRectBorder::OnPaintLayer(
   flags.setStyle(cc::PaintFlags::kStroke_Style);
   flags.setStrokeWidth(1);
   flags.setColor(
-      parent_->GetColorProvider()->GetColor(kColorToolbarButtonBorder));
+      parent_->GetColorProvider()->GetColor(kColorToolbarIconContainerBorder));
   gfx::RectF rect(gfx::SizeF(layer_.size()));
   rect.Inset(0.5f);  // Pixel edges -> pixel centers.
   canvas->DrawRoundRect(rect, radius, flags);
@@ -110,12 +109,14 @@ class ToolbarIconContainerView::WidgetRestoreObserver
       this};
 };
 
-ToolbarIconContainerView::ToolbarIconContainerView(bool uses_highlight)
+ToolbarIconContainerView::ToolbarIconContainerView(
+    bool uses_highlight,
+    bool use_default_target_layout)
     : uses_highlight_(uses_highlight) {
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
   layer()->SetFillsBoundsCompletely(false);
-  AddLayerBeneathView(border_.layer());
+  AddLayerToRegion(border_.layer(), views::LayerRegion::kBelow);
 
   views::AnimatingLayoutManager* animating_layout =
       SetLayoutManager(std::make_unique<views::AnimatingLayoutManager>());
@@ -123,13 +124,15 @@ ToolbarIconContainerView::ToolbarIconContainerView(bool uses_highlight)
       views::AnimatingLayoutManager::BoundsAnimationMode::kAnimateBothAxes);
   animating_layout->SetDefaultFadeMode(
       views::AnimatingLayoutManager::FadeInOutMode::kSlideFromTrailingEdge);
-  auto* flex_layout = animating_layout->SetTargetLayoutManager(
-      std::make_unique<views::FlexLayout>());
-  flex_layout->SetCollapseMargins(true)
-      .SetIgnoreDefaultMainAxisMargins(true)
-      .SetDefault(
-          views::kMarginsKey,
-          gfx::Insets::VH(0, GetLayoutConstant(TOOLBAR_ELEMENT_PADDING)));
+  if (use_default_target_layout) {
+    auto* flex_layout = animating_layout->SetTargetLayoutManager(
+        std::make_unique<views::FlexLayout>());
+    flex_layout->SetCollapseMargins(true)
+        .SetIgnoreDefaultMainAxisMargins(true)
+        .SetDefault(
+            views::kMarginsKey,
+            gfx::Insets::VH(0, GetLayoutConstant(TOOLBAR_ELEMENT_PADDING)));
+  }
 }
 
 ToolbarIconContainerView::~ToolbarIconContainerView() {
@@ -142,8 +145,9 @@ void ToolbarIconContainerView::AddMainItem(views::View* item) {
   DCHECK(!main_item_);
   main_item_ = item;
   auto* const main_button = views::Button::AsButton(item);
-  if (main_button)
+  if (main_button) {
     ObserveButton(main_button);
+  }
 
   AddChildView(main_item_.get());
 }
@@ -170,42 +174,35 @@ void ToolbarIconContainerView::RemoveObserver(const Observer* obs) {
   observers_.RemoveObserver(obs);
 }
 
-void ToolbarIconContainerView::SetIconColor(SkColor color) {
-  if (icon_color_ == color)
-    return;
-  icon_color_ = color;
-  UpdateAllIcons();
-  OnPropertyChanged(&icon_color_, views::kPropertyEffectsNone);
-}
-
-SkColor ToolbarIconContainerView::GetIconColor() const {
-  return icon_color_.value_or(
-      GetColorProvider()->GetColor(kColorToolbarButtonIcon));
-}
-
 bool ToolbarIconContainerView::GetHighlighted() const {
-  if (!uses_highlight_)
+  if (!uses_highlight_) {
     return false;
+  }
 
-  if (IsMouseHovered() && (!main_item_ || !main_item_->IsMouseHovered()))
+  if (IsMouseHovered() && (!main_item_ || !main_item_->IsMouseHovered())) {
     return true;
+  }
 
   // Focused, pressed or hovered children should trigger the highlight.
   for (const views::View* child : children()) {
-    if (child == main_item_)
+    if (child == main_item_) {
       continue;
-    if (child->HasFocus())
+    }
+    if (child->HasFocus()) {
       return true;
+    }
     const views::Button* button = views::Button::AsButton(child);
-    if (!button)
+    if (!button) {
       continue;
+    }
     if (button->GetState() == views::Button::ButtonState::STATE_PRESSED ||
         button->GetState() == views::Button::ButtonState::STATE_HOVERED) {
       return true;
     }
     // The container should also be highlighted if a dialog is anchored to.
-    if (base::Contains(highlighted_buttons_, button))
+    if (base::Contains(highlighted_buttons_, button)) {
       return true;
+    }
   }
 
   return false;
@@ -261,40 +258,34 @@ void ToolbarIconContainerView::AddedToWidget() {
 }
 
 void ToolbarIconContainerView::UpdateHighlight() {
-  bool showing_before = border_.layer()->GetTargetOpacity() == 1;
-
-  {
-    ui::ScopedLayerAnimationSettings settings(border_.layer()->GetAnimator());
-    border_.layer()->SetOpacity(GetHighlighted() ? 1 : 0);
-  }
-
-  // TODO(crbug.com/1194150): For some reason, the SchedulePaint() calls that
-  // happen initially -- in OnThemeChanged() and OnBoundsChanged() -- do not
-  // result in the layer getting painted for the first time. Calling
-  // SchedulePaint() here works. Without this, the highlight will not appear
-  // until an extension icon is added or removed or the theme is changed.
-  if (!ever_painted_highlight_ && GetHighlighted()) {
-    ever_painted_highlight_ = true;
-    border_.layer()->SchedulePaint(GetLocalBounds());
-  }
-
-  if (showing_before == (border_.layer()->GetTargetOpacity() == 1))
+  // New feature doesn't have a border around the toolbar icons.
+  // TODO(crbug.com/40811196): Remove ToolbarIconContainerView once feature is
+  // rolled out.
+  if (base::FeatureList::IsEnabled(
+          extensions_features::kExtensionsMenuAccessControl)) {
     return;
-  for (Observer& observer : observers_)
-    observer.OnHighlightChanged();
+  }
+
+  bool showing_before = border_.layer()->GetTargetOpacity() == 1;
+  border_.layer()->SetOpacity(GetHighlighted() ? 1 : 0);
+
+  if (showing_before == (border_.layer()->GetTargetOpacity() == 1)) {
+    return;
+  }
+  observers_.Notify(&Observer::OnHighlightChanged);
 }
 
 void ToolbarIconContainerView::OnButtonHighlightedChanged(
     views::Button* button) {
-  if (views::InkDrop::Get(button)->GetHighlighted())
+  if (views::InkDrop::Get(button)->GetHighlighted()) {
     highlighted_buttons_.insert(button);
-  else
+  } else {
     highlighted_buttons_.erase(button);
+  }
 
   UpdateHighlight();
 }
 
-BEGIN_METADATA(ToolbarIconContainerView, views::View)
-ADD_PROPERTY_METADATA(SkColor, IconColor, ui::metadata::SkColorConverter)
+BEGIN_METADATA(ToolbarIconContainerView)
 ADD_READONLY_PROPERTY_METADATA(bool, Highlighted)
 END_METADATA

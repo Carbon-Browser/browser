@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "chrome/browser/ui/views/sad_tab_view.h"
 #include "chrome/browser/ui/views/tab_contents/chrome_web_contents_view_focus_helper.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/drop_data.h"
 #include "ui/views/widget/widget.h"
 
 ChromeWebContentsViewDelegateViews::ChromeWebContentsViewDelegateViews(
@@ -31,12 +32,12 @@ ChromeWebContentsViewDelegateViews::~ChromeWebContentsViewDelegateViews() =
     default;
 
 gfx::NativeWindow ChromeWebContentsViewDelegateViews::GetNativeWindow() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   return browser ? browser->window()->GetNativeWindow() : nullptr;
 }
 
 content::WebDragDestDelegate*
-    ChromeWebContentsViewDelegateViews::GetDragDestDelegate() {
+ChromeWebContentsViewDelegateViews::GetDragDestDelegate() {
   // We install a chrome specific handler to intercept bookmark drags for the
   // bookmark manager/extension API.
   bookmark_handler_ = std::make_unique<WebDragBookmarkHandlerAura>();
@@ -84,8 +85,9 @@ ChromeWebContentsViewDelegateViews::BuildMenu(
 void ChromeWebContentsViewDelegateViews::ShowMenu(
     std::unique_ptr<RenderViewContextMenuBase> menu) {
   context_menu_ = std::move(menu);
-  if (!context_menu_)
+  if (!context_menu_) {
     return;
+  }
 
   context_menu_->Show();
 }
@@ -106,10 +108,10 @@ void ChromeWebContentsViewDelegateViews::ExecuteCommandForTesting(
   context_menu_.reset();
 }
 
-void ChromeWebContentsViewDelegateViews::OnPerformDrop(
+void ChromeWebContentsViewDelegateViews::OnPerformingDrop(
     const content::DropData& drop_data,
     DropCompletionCallback callback) {
-  HandleOnPerformDrop(web_contents_, drop_data, std::move(callback));
+  HandleOnPerformingDrop(web_contents_, drop_data, std::move(callback));
 }
 
 std::unique_ptr<content::WebContentsViewDelegate> CreateWebContentsViewDelegate(

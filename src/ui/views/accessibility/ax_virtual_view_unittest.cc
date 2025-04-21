@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/accessibility/ax_virtual_view.h"
 
+#include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
@@ -15,8 +16,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/platform/ax_platform_for_test.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -30,18 +34,22 @@
 #include "ui/views/win/hwnd_util.h"
 #endif
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
 class TestButton : public Button {
+  METADATA_HEADER(TestButton, Button)
+
  public:
   TestButton() : Button(Button::PressedCallback()) {}
   TestButton(const TestButton&) = delete;
   TestButton& operator=(const TestButton&) = delete;
   ~TestButton() override = default;
 };
+
+BEGIN_METADATA(TestButton)
+END_METADATA
 
 }  // namespace
 
@@ -55,19 +63,22 @@ class AXVirtualViewTest : public ViewsTestBase {
   void SetUp() override {
     ViewsTestBase::SetUp();
 
-    widget_ = new Widget;
-    Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+    widget_ = std::make_unique<Widget>();
+    Widget::InitParams params =
+        CreateParams(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                     Widget::InitParams::TYPE_WINDOW);
     params.bounds = gfx::Rect(0, 0, 200, 200);
     widget_->Init(std::move(params));
-    button_ = new TestButton;
-    button_->SetSize(gfx::Size(20, 20));
-    button_->SetAccessibleName(u"Button");
-    widget_->GetContentsView()->AddChildView(button_.get());
-    virtual_label_ = new AXVirtualView;
-    virtual_label_->GetCustomData().role = ax::mojom::Role::kStaticText;
-    virtual_label_->GetCustomData().SetName("Label");
+    auto button = std::make_unique<TestButton>();
+    button->SetSize(gfx::Size(20, 20));
+    button->GetViewAccessibility().SetName(u"Button");
+    button_ = widget_->GetContentsView()->AddChildView(std::move(button));
+    auto virtual_label = std::make_unique<AXVirtualView>();
+    virtual_label->GetCustomData().role = ax::mojom::Role::kStaticText;
+    virtual_label->GetCustomData().SetNameChecked("Label");
+    virtual_label_ = virtual_label.get();
     button_->GetViewAccessibility().AddVirtualChildView(
-        base::WrapUnique(virtual_label_.get()));
+        std::move(virtual_label));
     widget_->Show();
 
     ViewAccessibility::AccessibilityEventsCallback
@@ -78,7 +89,7 @@ class AXVirtualViewTest : public ViewsTestBase {
                const ui::AXPlatformNodeDelegate* delegate,
                const ax::mojom::Event event_type) {
               DCHECK(accessibility_events);
-              accessibility_events->push_back({delegate, event_type});
+              accessibility_events->emplace_back(delegate, event_type);
             },
             &accessibility_events_);
     button_->GetViewAccessibility().set_accessibility_events_callback(
@@ -86,8 +97,12 @@ class AXVirtualViewTest : public ViewsTestBase {
   }
 
   void TearDown() override {
-    if (!widget_->IsClosed())
+    virtual_label_ = nullptr;
+    button_ = nullptr;
+    if (!widget_->IsClosed()) {
       widget_->Close();
+    }
+    widget_.reset();
     ViewsTestBase::TearDown();
   }
 
@@ -110,16 +125,15 @@ class AXVirtualViewTest : public ViewsTestBase {
     accessibility_events_.clear();
   }
 
-  raw_ptr<Widget> widget_;
-  raw_ptr<Button> button_;
-  // Weak, |button_| owns this.
-  raw_ptr<AXVirtualView> virtual_label_;
+  std::unique_ptr<Widget> widget_;
+  raw_ptr<Button> button_ = nullptr;
+  raw_ptr<AXVirtualView> virtual_label_ = nullptr;
 
  private:
   std::vector<
       std::pair<const ui::AXPlatformNodeDelegate*, const ax::mojom::Event>>
       accessibility_events_;
-  ui::testing::ScopedAxModeSetter ax_mode_setter_;
+  ::ui::ScopedAXModeSetter ax_mode_setter_;
 };
 
 TEST_F(AXVirtualViewTest, AccessibilityRoleAndName) {
@@ -179,10 +193,19 @@ TEST_F(AXVirtualViewTest, VirtualLabelIsChildOfButton) {
             GetButtonAccessibility()->ChildAtIndex(0));
 }
 
+TEST_F(AXVirtualViewTest, VirtualViewsPruned) {
+  auto v_label = std::make_unique<AXVirtualView>();
+  virtual_label_->AddChildView(std::move(v_label));
+  button_->GetViewAccessibility().SetIsLeaf(true);
+  EXPECT_TRUE(virtual_label_->GetData().HasState(ax::mojom::State::kIgnored));
+  EXPECT_TRUE(virtual_label_->children()[0].get()->GetData().HasState(
+      ax::mojom::State::kIgnored));
+}
+
 TEST_F(AXVirtualViewTest, RemoveFromParentView) {
   ASSERT_EQ(1u, GetButtonAccessibility()->GetChildCount());
   std::unique_ptr<AXVirtualView> removed_label =
-      virtual_label_->RemoveFromParentView();
+      std::exchange(virtual_label_, nullptr)->RemoveFromParentView();
   EXPECT_EQ(nullptr, removed_label->GetParent());
   EXPECT_TRUE(GetButtonAccessibility()->virtual_children().empty());
 
@@ -708,7 +731,7 @@ TEST_F(AXVirtualViewTest, TreeNavigationWithIgnoredVirtualViews) {
   // Test for mixed ignored and unignored root nodes.
   AXVirtualView* virtual_label_2 = new AXVirtualView;
   virtual_label_2->GetCustomData().role = ax::mojom::Role::kStaticText;
-  virtual_label_2->GetCustomData().SetName("Label");
+  virtual_label_2->GetCustomData().SetNameChecked("Label");
   button_->GetViewAccessibility().AddVirtualChildView(
       base::WrapUnique(virtual_label_2));
 
@@ -787,5 +810,4 @@ TEST_F(AXVirtualViewTest, GetTargetForEvents) {
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

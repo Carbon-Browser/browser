@@ -1,15 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_INSPECT_SCENARIO_H_
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_INSPECT_SCENARIO_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
+#include "ui/accessibility/platform/inspect/ax_inspect.h"
 
 namespace base {
 class FilePath;
@@ -17,8 +19,6 @@ class FilePath;
 
 namespace ui {
 
-struct AXPropertyFilter;
-struct AXNodeFilter;
 class AXScriptInstruction;
 
 // Describes the test execution flow, which is parsed from a sequence
@@ -36,7 +36,7 @@ class AXScriptInstruction;
 // @BLINK-ALLOW:container*
 // @AURALINUX-ALLOW:live*
 // -->
-class AX_EXPORT AXInspectScenario {
+class COMPONENT_EXPORT(AX_PLATFORM) AXInspectScenario {
  public:
   explicit AXInspectScenario(
       const std::vector<AXPropertyFilter>& default_filters = {});
@@ -67,7 +67,7 @@ class AX_EXPORT AXInspectScenario {
   //                    defining which property gets (or not) into the output,
   //                    useful to not make each test to specify common filters
   //                    all over
-  static absl::optional<AXInspectScenario> From(
+  static std::optional<AXInspectScenario> From(
       const std::string& directive_prefix,
       const base::FilePath& scenario_path,
       const std::vector<AXPropertyFilter>& default_filters = {});
@@ -135,10 +135,10 @@ class AX_EXPORT AXInspectScenario {
 
   // Parses directives from the given line.
   static Directive ParseDirective(const std::string& directive_prefix,
-                                  const std::string& directive);
+                                  std::string_view directive);
 
   // Adds a given directive into a scenario.
-  void ProcessDirective(Directive directive, const std::string& value);
+  void ProcessDirective(Directive directive, std::string_view value);
 };
 
 }  // namespace ui

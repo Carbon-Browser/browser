@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
@@ -75,7 +74,7 @@ void IncompatibleApplicationsHandler::HandleRequestIncompatibleApplicationsList(
       incompatible_applications =
           IncompatibleApplicationsUpdater::GetCachedApplications();
 
-  base::Value application_list(base::Value::Type::LIST);
+  base::Value::List application_list;
 
   for (const auto& application : incompatible_applications) {
     // Set up a registry watcher for each problem application.
@@ -99,17 +98,12 @@ void IncompatibleApplicationsHandler::HandleRequestIncompatibleApplicationsList(
     }
 
     // Also add the application to the list that is passed to the javascript.
-    base::Value dict(base::Value::Type::DICTIONARY);
-    dict.SetKey("name", base::Value(base::WideToUTF8(application.info.name)));
-    dict.SetKey("type",
-                base::Value(application.blocklist_action->message_type()));
-    dict.SetKey("url",
-                base::Value(application.blocklist_action->message_url()));
+    base::Value::Dict dict;
+    dict.Set("name", base::WideToUTF8(application.info.name));
+    dict.Set("type", application.blocklist_action->message_type());
+    dict.Set("url", application.blocklist_action->message_url());
     application_list.Append(std::move(dict));
   }
-
-  UMA_HISTOGRAM_COUNTS_100("IncompatibleApplicationsPage.NumApplications",
-                           incompatible_applications.size());
 
   const base::Value& callback_id = args.front();
   ResolveJavascriptCallback(callback_id, application_list);

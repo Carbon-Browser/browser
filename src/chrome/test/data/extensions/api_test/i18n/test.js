@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,6 @@ var testCallback = chrome.test.testCallback;
 var callbackPass = chrome.test.callbackPass;
 
 chrome.test.getConfig(function(config) {
-
-  var TEST_FILE_URL = "http://localhost:PORT/extensions/test_file.html"
-      .replace(/PORT/, config.testServer.port);
 
   chrome.test.runTests([
     function getAcceptLanguages() {
@@ -44,7 +41,15 @@ chrome.test.getConfig(function(config) {
       chrome.test.succeed();
     },
     function getMessageFromContentScript() {
-      chrome.extension.onRequest.addListener(
+      // Skip this test on Android, which does not yet support chrome.tabs or
+      // tests with content scripts.
+      if (/Android/.test(navigator.userAgent)) {
+        chrome.test.succeed();
+        return;
+      }
+      var TEST_FILE_URL = "http://localhost:PORT/extensions/test_file.html"
+        .replace(/PORT/, config.testServer.port);
+      chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
           chrome.test.assertEq(request, "Number of errors: 19");
         }

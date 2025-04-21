@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ if (debug) {
 function runTests() {
   chrome.test.runTests([
     function test1() {
-      chrome.extension.onRequest.addListener(function(req, sender) {
+      chrome.runtime.onMessage.addListener(function(req, sender) {
         chrome.test.log("got request: " + JSON.stringify(req));
         if (req == "fail") {
           fail();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ MimeHandlerViewFrameContainer::MimeHandlerViewFrameContainer(
           GetSourceFrame()->GetSecurityOrigin().CanAccess(
               blink::WebSecurityOrigin::Create(resource_url))) {}
 
-MimeHandlerViewFrameContainer::~MimeHandlerViewFrameContainer() {}
+MimeHandlerViewFrameContainer::~MimeHandlerViewFrameContainer() = default;
 
 blink::WebLocalFrame* MimeHandlerViewFrameContainer::GetSourceFrame() {
   return container_manager_->render_frame()->GetWebFrame();

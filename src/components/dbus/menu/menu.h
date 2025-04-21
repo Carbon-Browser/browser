@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/dbus/menu/menu_property_list.h"
@@ -28,7 +28,7 @@ class MenuModel;
 class DbusProperties;
 
 // Implements the com.canonical.dbusmenu interface.
-class COMPONENT_EXPORT(DBUS) DbusMenu {
+class COMPONENT_EXPORT(COMPONENTS_DBUS) DbusMenu {
  public:
   using InitializedCallback = base::OnceCallback<void(bool success)>;
   using MenuItemReference = std::pair<ui::MenuModel*, size_t>;
@@ -75,10 +75,10 @@ class COMPONENT_EXPORT(DBUS) DbusMenu {
 
     // The MenuModel corresponding to this MenuItem, or null if this MenuItem is
     // not a submenu.  This can happen for leaf items or an empty root item.
-    const raw_ptr<ui::MenuModel> menu;
+    const raw_ptr<ui::MenuModel, DanglingUntriaged> menu;
     // |containing_menu| will be null for the root item.  If it's null, then
     // |containing_menu_index| is meaningless.
-    const raw_ptr<ui::MenuModel> containing_menu;
+    const raw_ptr<ui::MenuModel, DanglingUntriaged> containing_menu;
     const size_t containing_menu_index;
   };
 
@@ -154,7 +154,7 @@ class COMPONENT_EXPORT(DBUS) DbusMenu {
 
   void SendLayoutChangedSignal(int32_t id);
 
-  raw_ptr<dbus::ExportedObject> menu_ = nullptr;
+  raw_ptr<dbus::ExportedObject, DanglingUntriaged> menu_ = nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/core/testing/mock_clipboard_host.h"
 #include "third_party/blink/renderer/core/testing/scoped_mock_overlay_scrollbars.h"
-#include "third_party/blink/renderer/platform/testing/testing_platform_support_with_mock_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
+#include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 
 namespace base {
@@ -38,23 +39,26 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   class MockClipboardHostProvider {
    public:
     explicit MockClipboardHostProvider(
-        blink::BrowserInterfaceBrokerProxy& interface_broker);
+        const blink::BrowserInterfaceBrokerProxy& interface_broker);
     MockClipboardHostProvider();
     ~MockClipboardHostProvider();
 
     // Installs a mock clipboard in the given interface provider.
     // This is called automatically from the ctor that takes an
     // |interface_broker| argument.
-    void Install(blink::BrowserInterfaceBrokerProxy& interface_broker);
+    void Install(const blink::BrowserInterfaceBrokerProxy& interface_broker);
+
+    MockClipboardHost* clipboard_host() { return &host_; }
 
    private:
     void BindClipboardHost(mojo::ScopedMessagePipeHandle handle);
 
-    blink::BrowserInterfaceBrokerProxy* interface_broker_ = nullptr;
+    const blink::BrowserInterfaceBrokerProxy* interface_broker_ = nullptr;
     MockClipboardHost host_;
   };
 
   PageTestBase();
+  PageTestBase(base::test::TaskEnvironment::TimeSource time_source);
   ~PageTestBase() override;
 
   void EnableCompositing();
@@ -67,7 +71,8 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   void SetUp(gfx::Size);
   void SetupPageWithClients(ChromeClient* = nullptr,
                             LocalFrameClient* = nullptr,
-                            FrameSettingOverrideFunction = nullptr);
+                            FrameSettingOverrideFunction = nullptr,
+                            gfx::Size size = gfx::Size(800, 600));
   // TODO(shanmuga.m@samsung.com): These two function to be unified.
   void SetBodyContent(const std::string&);
   void SetBodyInnerHTML(const String&);
@@ -101,9 +106,16 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   // See external/wpt/css/fonts/ahem/README for more about the 'Ahem' font.
   static void LoadAhem(LocalFrame&);
 
+  // Install the font specified by `font_path` as `family_name` in `frame`.
+  static void LoadFontFromFile(LocalFrame& fame,
+                               String font_path,
+                               const AtomicString& family_name);
+
   static void LoadNoto(LocalFrame&);
 
   static std::string ToSimpleLayoutTree(const LayoutObject& layout_object);
+
+  void SetPreferCompositingToLCDText(bool enable);
 
  protected:
   void LoadAhem();
@@ -117,16 +129,22 @@ class PageTestBase : public testing::Test, public ScopedMockOverlayScrollbars {
   // the source file).
   virtual const base::TickClock* GetTickClock();
 
-  ScopedTestingPlatformSupport<TestingPlatformSupportWithMockScheduler>&
-  platform() {
-    return *platform_;
+  TestingPlatformSupport* platform() {
+    DCHECK(platform_);
+    return platform_->GetTestingPlatformSupport();
   }
 
+  test::TaskEnvironment& task_environment() { return task_environment_; }
+
+  void FastForwardBy(base::TimeDelta);
+  void FastForwardUntilNoTasksRemain();
+  void AdvanceClock(base::TimeDelta);
+
  private:
+  test::TaskEnvironment task_environment_;
   // The order is important: |platform_| must be destroyed after
   // |dummy_page_holder_| is destroyed.
-  std::unique_ptr<
-      ScopedTestingPlatformSupport<TestingPlatformSupportWithMockScheduler>>
+  std::unique_ptr<ScopedTestingPlatformSupport<TestingPlatformSupport>>
       platform_;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
   bool enable_compositing_ = false;

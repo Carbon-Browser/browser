@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,24 +6,25 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_os_info_override_win.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "components/device_signals/core/common/common_types.h"
-#include "components/device_signals/core/common/file_system_service.h"
-#include "components/device_signals/core/common/mock_file_system_service.h"
 #include "components/device_signals/core/common/win/win_types.h"
+#include "components/device_signals/core/system_signals/file_system_service.h"
+#include "components/device_signals/core/system_signals/mock_file_system_service.h"
 #include "components/device_signals/core/system_signals/win/mock_wmi_client.h"
 #include "components/device_signals/core/system_signals/win/mock_wsc_client.h"
 #include "components/device_signals/core/system_signals/win/wmi_client.h"
 #include "components/device_signals/core/system_signals/win/wsc_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using device_signals::MockFileSystemService;
 using device_signals::MockWmiClient;
@@ -58,12 +59,14 @@ class WinSystemSignalsServiceTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_;
   base::HistogramTester histogram_tester_;
-  absl::optional<base::test::ScopedOSInfoOverride> os_info_override_;
+  std::optional<base::test::ScopedOSInfoOverride> os_info_override_;
 
-  MockFileSystemService* file_system_service_;
-  MockWmiClient* wmi_client_;
-  MockWscClient* wsc_client_;
   std::unique_ptr<WinSystemSignalsService> win_system_signals_service_;
+
+  // Owned by win_system_signals_service_.
+  raw_ptr<MockFileSystemService> file_system_service_;
+  raw_ptr<MockWmiClient> wmi_client_;
+  raw_ptr<MockWscClient> wsc_client_;
 };
 
 // Tests that GetFileSystemSignals forwards the signal collection to
@@ -96,10 +99,9 @@ TEST_F(WinSystemSignalsServiceTest, GetFileSystemSignals) {
   EXPECT_EQ(results[0], response[0]);
 }
 
-// Tests that AV products cannot be retrieve on Win Server environments.
+// Tests that AV products cannot be retrieved on Win Server environments.
 TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Server) {
-  std::array<base::test::ScopedOSInfoOverride::Type, 3> server_versions = {
-      base::test::ScopedOSInfoOverride::Type::kWinServer2012R2,
+  std::array<base::test::ScopedOSInfoOverride::Type, 2> server_versions = {
       base::test::ScopedOSInfoOverride::Type::kWinServer2016,
       base::test::ScopedOSInfoOverride::Type::kWinServer2022,
   };
@@ -115,10 +117,9 @@ TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Server) {
   }
 }
 
-// Tests that AV products are retrieved through WSC on Win8 and above.
+// Tests that AV products are retrieved through WSC on Win10 and above.
 TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Wsc_Success) {
-  std::array<base::test::ScopedOSInfoOverride::Type, 5> win_versions = {
-      base::test::ScopedOSInfoOverride::Type::kWin81Pro,
+  std::array<base::test::ScopedOSInfoOverride::Type, 4> win_versions = {
       base::test::ScopedOSInfoOverride::Type::kWin10Pro,
       base::test::ScopedOSInfoOverride::Type::kWin10Pro21H1,
       base::test::ScopedOSInfoOverride::Type::kWin11Home,
@@ -231,106 +232,6 @@ TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Wsc_MixedParsingError) {
       device_signals::WscParsingError::kStateInvalid, 1);
   histogram_tester_.ExpectBucketCount(
       "Enterprise.SystemSignals.Collection.WSC.AntiVirus.ParsingError.Rate",
-      /*error_rate=*/50, 1);
-}
-
-// Tests that AV products are retrieved via WMI on Win7.
-TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Win7_Success) {
-  device_signals::AvProduct fake_av_product;
-  fake_av_product.display_name = "some display name";
-  fake_av_product.product_id = "some product id";
-  fake_av_product.state = device_signals::AvProductState::kOn;
-
-  device_signals::WmiAvProductsResponse fake_response;
-  fake_response.av_products.push_back(fake_av_product);
-
-  EXPECT_CALL(*wmi_client_, GetAntiVirusProducts())
-      .WillOnce(Return(fake_response));
-
-  base::test::TestFuture<const std::vector<device_signals::AvProduct>&> future;
-
-  // Override OS version after initializing `future` to prevent running into
-  // a DCHECK in ScopedWinrtInitializer.
-  os_info_override_.emplace(
-      base::test::ScopedOSInfoOverride::Type::kWin7ProSP1);
-
-  win_system_signals_service_->GetAntiVirusSignals(future.GetCallback());
-
-  const auto& av_products = future.Get();
-  EXPECT_EQ(av_products.size(), fake_response.av_products.size());
-  EXPECT_EQ(av_products[0].product_id, fake_response.av_products[0].product_id);
-
-  histogram_tester_.ExpectUniqueSample(
-      "Enterprise.SystemSignals.Collection.WMI.AntiVirus.ParsingError.Rate",
-      /*error_rate=*/0, 1);
-}
-
-// Tests when a query error occurs when querying AVs from WMI on Win7.
-TEST_F(WinSystemSignalsServiceTest, GetAntiVirusSignals_Win7_QueryError) {
-  device_signals::WmiAvProductsResponse fake_response;
-  fake_response.query_error = base::win::WmiError::kFailedToCreateInstance;
-
-  EXPECT_CALL(*wmi_client_, GetAntiVirusProducts())
-      .WillOnce(Return(fake_response));
-
-  base::test::TestFuture<const std::vector<device_signals::AvProduct>&> future;
-
-  // Override OS version after initializing `future` to prevent running into
-  // a DCHECK in ScopedWinrtInitializer.
-  os_info_override_.emplace(
-      base::test::ScopedOSInfoOverride::Type::kWin7ProSP1);
-
-  win_system_signals_service_->GetAntiVirusSignals(future.GetCallback());
-
-  const auto& av_products = future.Get();
-  EXPECT_TRUE(av_products.empty());
-
-  histogram_tester_.ExpectUniqueSample(
-      "Enterprise.SystemSignals.Collection.WMI.AntiVirus.QueryError",
-      fake_response.query_error.value(), 1);
-}
-
-// Tests when items and parsing error are returned when querying AVs from WMI on
-// Win7.
-TEST_F(WinSystemSignalsServiceTest,
-       GetAntiVirusSignals_Win7_MixedParsingErrors) {
-  device_signals::AvProduct fake_av_product;
-  fake_av_product.display_name = "some display name";
-  fake_av_product.product_id = "some product id";
-  fake_av_product.state = device_signals::AvProductState::kOn;
-
-  // Adding 2 success and 2 failures, so the error rate should be 50%.
-  device_signals::WmiAvProductsResponse fake_response;
-  fake_response.av_products.push_back(fake_av_product);
-  fake_response.av_products.push_back(fake_av_product);
-  fake_response.parsing_errors.push_back(
-      device_signals::WmiParsingError::kFailedToGetName);
-  fake_response.parsing_errors.push_back(
-      device_signals::WmiParsingError::kStateInvalid);
-
-  EXPECT_CALL(*wmi_client_, GetAntiVirusProducts())
-      .WillOnce(Return(fake_response));
-
-  base::test::TestFuture<const std::vector<device_signals::AvProduct>&> future;
-
-  // Override OS version after initializing `future` to prevent running into
-  // a DCHECK in ScopedWinrtInitializer.
-  os_info_override_.emplace(
-      base::test::ScopedOSInfoOverride::Type::kWin7ProSP1);
-
-  win_system_signals_service_->GetAntiVirusSignals(future.GetCallback());
-
-  const auto& av_products = future.Get();
-  EXPECT_EQ(av_products.size(), fake_response.av_products.size());
-
-  histogram_tester_.ExpectBucketCount(
-      "Enterprise.SystemSignals.Collection.WMI.AntiVirus.ParsingError",
-      device_signals::WmiParsingError::kFailedToGetName, 1);
-  histogram_tester_.ExpectBucketCount(
-      "Enterprise.SystemSignals.Collection.WMI.AntiVirus.ParsingError",
-      device_signals::WmiParsingError::kStateInvalid, 1);
-  histogram_tester_.ExpectBucketCount(
-      "Enterprise.SystemSignals.Collection.WMI.AntiVirus.ParsingError.Rate",
       /*error_rate=*/50, 1);
 }
 

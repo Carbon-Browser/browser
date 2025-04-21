@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,21 @@
 #define COMPONENTS_EXO_BUFFER_H_
 
 #include <memory>
+#include <string_view>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_descriptor_watcher_posix.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/exo/protected_native_pixmap_query_delegate.h"
 #include "components/viz/common/resources/transferable_resource.h"
+#include "gpu/ipc/common/surface_handle.h"
 #include "media/media_buildflags.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_memory_buffer.h"
@@ -28,22 +32,33 @@ class FrameSinkResourceManager;
 // This class provides the content for a Surface. The mechanism by which a
 // client provides and updates the contents is the responsibility of the client
 // and not defined as part of this class.
-class Buffer : public base::SupportsWeakPtr<Buffer> {
+class Buffer {
  public:
-  explicit Buffer(std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer);
-  Buffer(std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer,
-         unsigned texture_target,
-         unsigned query_type,
-         bool use_zero_copy,
-         bool is_overlay_candidate,
-         bool y_invert);
   Buffer(const Buffer&) = delete;
   Buffer& operator=(const Buffer&) = delete;
   virtual ~Buffer();
 
-  const gfx::GpuMemoryBuffer* gfx_buffer() const {
-    return gpu_memory_buffer_.get();
-  }
+  // Clients can use this method to create Buffer using GMBHandles. This is
+  // required to move away clients from using GMB directly as a part of
+  // MappableSI work.
+  static std::unique_ptr<Buffer> CreateBufferFromGMBHandle(
+      gfx::GpuMemoryBufferHandle buffer_handle,
+      const gfx::Size& buffer_size,
+      gfx::BufferFormat buffer_format,
+      gfx::BufferUsage buffer_usage,
+      unsigned query_type,
+      bool use_zero_copy,
+      bool is_overlay_candidate,
+      bool y_invert);
+
+  static std::unique_ptr<Buffer> CreateBuffer(
+      gfx::Size buffer_size,
+      gfx::BufferFormat buffer_format,
+      gfx::BufferUsage buffer_usage,
+      std::string_view debug_label,
+      gpu::SurfaceHandle surface_handle,
+      base::WaitableEvent* shutdown_event,
+      bool is_overlay_candidate = false);
 
   // Set the callback to run when the buffer is no longer used by the
   // compositor. The client is free to re-use or destroy this buffer and
@@ -51,6 +66,9 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   void set_release_callback(const base::RepeatingClosure& release_callback) {
     release_callback_ = release_callback;
   }
+
+  // The client does not need release_callback_ to notify buffer usage.
+  void SkipLegacyRelease();
 
   // Returns if this buffer's contents are vertically inverted.
   bool y_invert() const { return y_invert_; }
@@ -65,6 +83,7 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
       std::unique_ptr<gfx::GpuFence> acquire_fence,
       bool secure_output_only,
       viz::TransferableResource* resource,
+      gfx::ColorSpace color_space,
       ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
       PerCommitExplicitReleaseCallback per_commit_explicit_release_callback);
 
@@ -80,8 +99,15 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // Returns the format of the buffer.
   gfx::BufferFormat GetFormat() const;
 
+  // Returns the |gpu_memory_buffer_| pointer to be used as id. It can also be
+  // used as a bool to identify if |gpu_memory_buffer_| is null or not.
+  const void* GetBufferId() const;
+
   // The default color to be used should transferable resource production fail.
   virtual SkColor4f GetColor() const;
+
+  // Creates a SkBitmap object from |gpu_memory_buffer_|.
+  SkBitmap CreateBitmap();
 
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   // Returns true if the underlying buffer is hardware protected. This should
@@ -96,8 +122,29 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
     wait_for_release_delay_ = wait_for_release_delay;
   }
 
+  virtual base::WeakPtr<Buffer> AsWeakPtr();
+
+ protected:
+  // Currently only derived class access this constructor.
+  Buffer();
+
  private:
+  // TODO(vikassoni): Once MappableSI is fully landed, these clients do not need
+  // to access the Buffer constructors. So it should be removed from the friend
+  // list.
+  friend class Display;
+  friend class SharedMemory;
+
   class Texture;
+
+  Buffer(gfx::GpuMemoryBufferHandle gpu_memory_buffer_handle,
+         gfx::BufferFormat buffer_format,
+         gfx::Size size,
+         gfx::BufferUsage buffer_usage,
+         unsigned query_type,
+         bool use_zero_copy,
+         bool is_overlay_candidate,
+         bool y_invert);
 
   struct BufferRelease {
     BufferRelease(
@@ -157,11 +204,12 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   void OnIsProtectedNativePixmapHandle(bool is_protected);
 #endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 
-  // The GPU memory buffer that contains the contents of this buffer.
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
-
-  // Texture target that must be used when creating a texture for buffer.
-  const unsigned texture_target_;
+  // Contains the content of this buffer instead of |gpu_memory_buffer_| when
+  // MappableSI is enabled.
+  gfx::GpuMemoryBufferHandle gpu_memory_buffer_handle_;
+  const gfx::BufferFormat buffer_format_;
+  const gfx::Size size_;
+  gfx::BufferUsage buffer_usage_;
 
   // Query type that must be used when releasing buffer from a texture.
   const unsigned query_type_;
@@ -210,9 +258,13 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // protocol requires us to send regular buffer release events.
   base::flat_map<uint64_t, BufferRelease> buffer_releases_;
 
+  bool legacy_release_skippable_ = false;
+
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   ProtectedBufferState protected_buffer_state_ = ProtectedBufferState::UNKNOWN;
 #endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+
+  base::WeakPtrFactory<Buffer> weak_ptr_factory_{this};
 };
 
 class SolidColorBuffer : public Buffer {
@@ -229,13 +281,18 @@ class SolidColorBuffer : public Buffer {
       std::unique_ptr<gfx::GpuFence> acquire_fence,
       bool secure_output_only,
       viz::TransferableResource* resource,
+      gfx::ColorSpace color_space,
       ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
       PerCommitExplicitReleaseCallback per_commit_explicit_release_callback)
       override;
 
+  base::WeakPtr<Buffer> AsWeakPtr() override;
+
  private:
   SkColor4f color_;
   gfx::Size size_;
+
+  base::WeakPtrFactory<SolidColorBuffer> weak_ptr_factory_{this};
 };
 
 }  // namespace exo

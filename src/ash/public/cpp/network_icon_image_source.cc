@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/public/cpp/network_icon_image_source.h"
 
@@ -34,6 +39,14 @@ SkPath CreateArcPath(gfx::RectF oval, float start_angle, float sweep_angle) {
 }
 
 }  // namespace
+
+//------------------------------------------------------------------------------
+// Badges
+
+Badges::Badges() = default;
+Badges::~Badges() = default;
+Badges::Badges(const Badges&) = default;
+Badges& Badges::operator=(const Badges&) = default;
 
 //------------------------------------------------------------------------------
 // NetworkIconImageSource

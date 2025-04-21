@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/permissions/permission_request_manager_test_api.h"
 
 #include <memory>
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_view.h"
+#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.h"
 #include "chrome/browser/ui/views/permissions/permission_prompt_desktop.h"
 #include "components/permissions/permission_request.h"
 #include "ui/views/widget/widget.h"
@@ -21,12 +21,12 @@ namespace {
 // handle all destruction paths.
 class TestPermissionRequestOwner {
  public:
-  explicit TestPermissionRequestOwner(permissions::RequestType type) {
+  explicit TestPermissionRequestOwner(permissions::RequestType type,
+                                      GURL& origin) {
     const bool user_gesture = true;
-    auto decided = [](ContentSetting, bool) {};
+    auto decided = [](ContentSetting, bool, bool) {};
     request_ = std::make_unique<permissions::PermissionRequest>(
-        GURL("https://example.com"), type, user_gesture,
-        base::BindOnce(decided),
+        origin, type, user_gesture, base::BindRepeating(decided),
         base::BindOnce(&TestPermissionRequestOwner::DeleteThis,
                        base::Unretained(this)));
   }
@@ -59,8 +59,13 @@ void PermissionRequestManagerTestApi::AddSimpleRequest(
     content::RenderFrameHost* source_frame,
     permissions::RequestType type) {
   TestPermissionRequestOwner* request_owner =
-      new TestPermissionRequestOwner(type);
+      new TestPermissionRequestOwner(type, permission_request_origin_);
   manager_->AddRequest(source_frame, request_owner->request());
+}
+
+void PermissionRequestManagerTestApi::SetOrigin(
+    const GURL& permission_request_origin) {
+  permission_request_origin_ = permission_request_origin;
 }
 
 views::Widget* PermissionRequestManagerTestApi::GetPromptWindow() {

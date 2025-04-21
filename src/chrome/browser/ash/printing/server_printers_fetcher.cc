@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/server_printers_fetcher.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/hash/md5.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
@@ -24,7 +26,9 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/cpp/simple_url_loader_stream_consumer.h"
-#include "third_party/libipp/libipp/ipp.h"
+#include "third_party/libipp/libipp/builder.h"
+#include "third_party/libipp/libipp/frame.h"
+#include "third_party/libipp/libipp/parser.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -83,8 +87,8 @@ class ServerPrintersFetcher::PrivateImplementation
         task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
             {base::TaskShutdownBehavior::BLOCK_SHUTDOWN})) {
     DETACH_FROM_SEQUENCE(sequence_checker_);
-    CHECK(base::SequencedTaskRunnerHandle::IsSet());
-    task_runner_for_callback_ = base::SequencedTaskRunnerHandle::Get();
+    CHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    task_runner_for_callback_ = base::SequencedTaskRunner::GetCurrentDefault();
     // Post task to execute.
     task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&PrivateImplementation::SendQuery,
@@ -102,10 +106,11 @@ class ServerPrintersFetcher::PrivateImplementation
   void Delete() { task_runner_->DeleteSoon(FROM_HERE, this); }
 
   // Implementation of network::SimpleURLLoaderStreamConsumer.
-  void OnDataReceived(base::StringPiece part_of_payload,
+  void OnDataReceived(std::string_view part_of_payload,
                       base::OnceClosure resume) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    response_.append(part_of_payload.begin(), part_of_payload.end());
+    response_.insert(response_.end(), part_of_payload.begin(),
+                     part_of_payload.end());
     std::move(resume).Run();
   }
 
@@ -128,16 +133,25 @@ class ServerPrintersFetcher::PrivateImplementation
       return;
     }
     // Try to parse the response.
-    std::vector<uint8_t> data(response_.begin(), response_.end());
-    ipp::Client client;
-    ipp::Response_CUPS_Get_Printers response;
-    if (!client.ReadResponseFrameFrom(data) ||
-        !client.ParseResponseAndSaveTo(&response)) {
+    ipp::SimpleParserLog log;
+    ipp::Frame response = ipp::Parse(response_.data(), response_.size(), log);
+    if (!log.Errors().empty()) {
+      // Errors were detected during parsing.
+      std::string message =
+          "Errors detected when parsing a response from the "
+          "print server " +
+          server_name_ + ". Parser log:";
+      for (const auto& entry : log.Errors()) {
+        message += "\n * " + ipp::ToString(entry);
+      }
+      LOG(WARNING) << message;
+    }
+    if (!log.CriticalErrors().empty()) {
       // Parser has failed. Dump errors to the log.
       std::string message = "Cannot parse response from the print server " +
-                            server_name_ + ". Parser log:";
-      for (const auto& entry : client.GetErrorLog()) {
-        message += "\n * " + entry.message;
+                            server_name_ + ". Critical errors:";
+      for (const auto& entry : log.CriticalErrors()) {
+        message += "\n * " + ipp::ToString(entry);
       }
       LOG(WARNING) << message;
       PRINTER_LOG(ERROR) << "Error when querying the print server "
@@ -148,12 +162,18 @@ class ServerPrintersFetcher::PrivateImplementation
       return;
     }
     // The response parsed successfully. Retrieve the list of printers.
+    ipp::CollsView printer_attrs =
+        response.Groups(ipp::GroupTag::printer_attributes);
     std::vector<PrinterDetector::DetectedPrinter> printers(
-        response.printer_attributes.GetSize());
+        printer_attrs.size());
     for (size_t i = 0; i < printers.size(); ++i) {
-      const std::string& name =
-          response.printer_attributes[i].printer_name.Get().value;
-      InitializePrinter(&(printers[i].printer), name);
+      ipp::Collection::iterator it = printer_attrs[i].GetAttr("printer-name");
+      ipp::StringWithLanguage name;
+      if (it == printer_attrs[i].end() ||
+          it->GetValue(0, name) != ipp::Code::kOK) {
+        name.value = "Unknown Printer " + base::NumberToString(i);
+      }
+      InitializePrinter(&(printers[i].printer), name.value);
     }
     // Call the callback with queried printers.
     PRINTER_LOG(DEBUG) << "The print server " << server_name_ << " returned "
@@ -178,13 +198,12 @@ class ServerPrintersFetcher::PrivateImplementation
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     // Preparation of the IPP frame.
-    ipp::Request_CUPS_Get_Printers request;
-    request.operation_attributes.requested_attributes.Set(
-        {ipp::E_requested_attributes::printer_description});
-    ipp::Client client;
-    client.BuildRequestFrom(&request);
-    std::vector<uint8_t> request_frame;
-    client.WriteRequestFrameTo(&request_frame);
+    ipp::Frame request(ipp::Operation::CUPS_Get_Printers);
+    DCHECK_EQ(ipp::Code::kOK,
+              request.Groups(ipp::GroupTag::operation_attributes)[0].AddAttr(
+                  "requested-attributes", ipp::ValueTag::keyword,
+                  "printer-description"));
+    std::vector<uint8_t> request_frame = ipp::BuildBinaryFrame(request);
 
     // Send request.
     auto resource_request = std::make_unique<network::ResourceRequest>();
@@ -240,7 +259,7 @@ class ServerPrintersFetcher::PrivateImplementation
     printer->set_id(ServerPrinterId(url.GetNormalized()));
   }
 
-  const ServerPrintersFetcher* owner_;
+  raw_ptr<const ServerPrintersFetcher, DanglingUntriaged> owner_;
   const GURL server_url_;
   const std::string server_name_;
 
@@ -248,7 +267,7 @@ class ServerPrintersFetcher::PrivateImplementation
   ServerPrintersFetcher::OnPrintersFetchedCallback callback_;
 
   // Raw payload of the HTTP response.
-  std::string response_;
+  std::vector<uint8_t> response_;
 
   PrintServerQueryResult last_error_ = PrintServerQueryResult::kNoErrors;
 

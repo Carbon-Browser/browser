@@ -1,13 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_WEBGPU_SWAP_BUFFER_PROVIDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_WEBGPU_SWAP_BUFFER_PROVIDER_H_
 
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "cc/layers/texture_layer.h"
 #include "cc/layers/texture_layer_client.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "gpu/command_buffer/client/shared_image_pool.h"
 #include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/dawn_control_client_holder.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_mailbox_texture.h"
@@ -17,6 +23,7 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace blink {
 
@@ -33,23 +40,29 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
     // Called to make the WebGPU/Dawn stop accessing the texture prior to its
     // transfer to the compositor/video frame
     virtual void OnTextureTransferred() = 0;
+    virtual void InitializeLayer(cc::Layer* layer) = 0;
+    virtual void SetNeedsCompositingUpdate() = 0;
   };
 
   WebGPUSwapBufferProvider(
       Client* client,
       scoped_refptr<DawnControlClientHolder> dawn_control_client,
-      WGPUDevice device,
-      WGPUTextureUsage usage,
-      WGPUTextureFormat format);
+      const wgpu::Device& device,
+      wgpu::TextureUsage usage,
+      wgpu::TextureUsage internal_usage,
+      wgpu::TextureFormat format,
+      PredefinedColorSpace color_space,
+      const gfx::HDRMetadata& hdr_metadata);
   ~WebGPUSwapBufferProvider() override;
 
-  viz::ResourceFormat Format() const;
-  const gfx::Size& Size() const;
+  viz::SharedImageFormat Format() const;
+  gfx::Size Size() const;
   cc::Layer* CcLayer();
-  void SetFilterQuality(cc::PaintFlags::FilterQuality);
   void Neuter();
   void DiscardCurrentSwapBuffer();
-  WGPUTexture GetNewTexture(const gfx::Size& size, SkAlphaType alpha_type);
+  scoped_refptr<WebGPUMailboxTexture> GetNewTexture(
+      const wgpu::TextureDescriptor& desc,
+      SkAlphaType alpha_type);
 
   // Copy swapchain's texture to a video frame.
   // This happens at the end of an animation frame. Dawn's access to the
@@ -77,65 +90,54 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
       const gfx::ColorSpace& dst_color_space,
       WebGraphicsContext3DVideoFramePool::FrameReadyCallback callback);
 
-  struct WebGPUMailboxTextureAndSize {
-    scoped_refptr<WebGPUMailboxTexture> mailbox_texture;
-    gfx::Size size;
-
-    WebGPUMailboxTextureAndSize(
-        scoped_refptr<WebGPUMailboxTexture> mailbox_texture,
-        gfx::Size size)
-        : mailbox_texture(std::move(mailbox_texture)), size(size) {}
-  };
-  WebGPUMailboxTextureAndSize GetLastWebGPUMailboxTextureAndSize() const;
+  scoped_refptr<WebGPUMailboxTexture> GetLastWebGPUMailboxTexture() const;
 
   base::WeakPtr<WebGraphicsContext3DProviderWrapper> GetContextProviderWeakPtr()
       const;
 
   // cc::TextureLayerClient implementation.
   bool PrepareTransferableResource(
-      cc::SharedBitmapIdRegistrar* bitmap_registrar,
       viz::TransferableResource* out_resource,
       viz::ReleaseCallback* out_release_callback) override;
+
+  // Gets the appropriate SharedImage usages to add when a SharedImage that will
+  // be used with WebGPU will additionally be sent to the display.
+  gpu::SharedImageUsageSet GetSharedImageUsagesForDisplay();
+
+  // Returns the SharedImage of the current swapbuffer.
+  scoped_refptr<gpu::ClientSharedImage> GetCurrentSharedImage();
+
+  gfx::HDRMetadata GetHDRMetadata() { return hdr_metadata_; }
+
+  // Exports the SharedImage of the current swapbuffer for external usage:
+  // * Ends any ongoing WebGPU access on that SharedImage and populates
+  //   `sync_token` with a token that the external access should wait on before
+  //   accessing the SharedImage.
+  // * Moves the current swapbuffer into `out_release_callback` to ensure that
+  //   WebGPU does not continue to access that SharedImage while that
+  //   SharedImage is being accessed externally.
+  //   `out_release_callback` should be invoked when the SharedImage is
+  //   available for reuse by WebGPU after the external usage finishes.
+  scoped_refptr<gpu::ClientSharedImage> ExportCurrentSharedImage(
+      gpu::SyncToken& sync_token,
+      viz::ReleaseCallback* out_release_callback);
 
   gpu::Mailbox GetCurrentMailboxForTesting() const;
 
  private:
   // Holds resources and synchronization for one of the swapchain images.
-  struct SwapBuffer {
-    SwapBuffer(
-        base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider,
-        gpu::Mailbox mailbox,
-        gpu::SyncToken creation_token,
-        gfx::Size size);
-    SwapBuffer(const SwapBuffer&) = delete;
-    SwapBuffer& operator=(const SwapBuffer&) = delete;
-    ~SwapBuffer();
+  class SwapBuffer : public gpu::ClientImage {
+   public:
+    explicit SwapBuffer(scoped_refptr<gpu::ClientSharedImage> shared_image);
 
-    gfx::Size size;
-    gpu::Mailbox mailbox;
+    scoped_refptr<WebGPUMailboxTexture> mailbox_texture;
 
-    // A weak ptr to the context provider so that the destructor can
-    // destroy shared images.
-    base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider;
-
-    // A token signaled when the previous user of the image is finished using
-    // it. It could be WebGPU, the compositor or the shared image creation.
-    gpu::SyncToken access_finished_token;
+   protected:
+    friend class RefCounted<SwapBuffer>;
+    ~SwapBuffer() override;
   };
 
-  std::tuple<uint32_t, bool> GetTextureTargetAndOverlayCandidacy() const;
-  uint32_t GetTextureTarget() const;
-  bool IsOverlayCandidate() const;
-
-  std::unique_ptr<WebGPUSwapBufferProvider::SwapBuffer> NewOrRecycledSwapBuffer(
-      gpu::SharedImageInterface* sii,
-      base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider,
-      const gfx::Size& size,
-      SkAlphaType alpha_type);
-
-  void RecycleSwapBuffer(std::unique_ptr<SwapBuffer> swap_buffer);
-
-  void MailboxReleased(std::unique_ptr<SwapBuffer> swap_buffer,
+  void MailboxReleased(scoped_refptr<SwapBuffer> swap_buffer,
                        const gpu::SyncToken& sync_token,
                        bool lost_resource);
 
@@ -144,27 +146,26 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
   // components (Compositor/Skia).
   // After this method returns, Dawn won't be able to access the mailbox
   // anymore.
-  void ReleaseWGPUTextureAccessIfNeeded(bool for_transfer);
+  void ReleaseWGPUTextureAccessIfNeeded();
 
   scoped_refptr<DawnControlClientHolder> dawn_control_client_;
-  Client* client_;
-  WGPUDevice device_;
-  WGPUTextureDescriptor texture_desc_;
+  raw_ptr<Client> client_;
+  wgpu::Device device_;
   scoped_refptr<cc::TextureLayer> layer_;
   bool neutered_ = false;
+  const viz::SharedImageFormat shared_image_format_;
+  const wgpu::TextureFormat format_;
+  const wgpu::TextureUsage usage_;
+  const wgpu::TextureUsage internal_usage_;
+  const PredefinedColorSpace color_space_;
+  const gfx::HDRMetadata hdr_metadata_;
+  int max_texture_size_;
 
-  // The maximum number of in-flight swap-buffers waiting to be used for
-  // recycling.
-  static constexpr int kMaxRecycledSwapBuffers = 3;
-
-  WTF::Vector<std::unique_ptr<SwapBuffer>> unused_swap_buffers_;
-  std::unique_ptr<SwapBuffer> last_swap_buffer_;
-
-  uint32_t wire_device_id_ = 0;
-  uint32_t wire_device_generation_ = 0;
-  uint32_t wire_texture_id_ = 0;
-  uint32_t wire_texture_generation_ = 0;
-  std::unique_ptr<SwapBuffer> current_swap_buffer_;
+  // Pool of SwapBuffers which manages creation, release and recycling of
+  // SwapBuffer resources.
+  std::unique_ptr<gpu::SharedImagePool<SwapBuffer>> swap_buffer_pool_;
+  scoped_refptr<SwapBuffer> last_swap_buffer_;
+  scoped_refptr<SwapBuffer> current_swap_buffer_;
 };
 
 }  // namespace blink

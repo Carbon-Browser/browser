@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,10 @@
 #include "ash/detachable_base/detachable_base_pairing_status.h"
 #include "ash/login/login_screen_controller.h"
 #include "ash/login/ui/lock_screen.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
 
 namespace views {
 class LabelButton;
@@ -30,8 +32,7 @@ enum class TrayActionState;
 // Contains the debug UI row (ie, add user, toggle PIN buttons).
 class LockDebugView : public views::View {
  public:
-  LockDebugView(mojom::TrayActionState initial_note_action_state,
-                LockScreen::ScreenType screen_type);
+  LockDebugView(LockScreen::ScreenType screen_type);
 
   LockDebugView(const LockDebugView&) = delete;
   LockDebugView& operator=(const LockDebugView&) = delete;
@@ -39,7 +40,7 @@ class LockDebugView : public views::View {
   ~LockDebugView() override;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
 
   LockContentsView* lock() { return lock_; }
@@ -67,6 +68,10 @@ class LockDebugView : public views::View {
   // as valid.
   void ToggleAuthButtonPressed();
 
+  // Auth panel UI components.
+  void AuthInputRowView();
+  void OnAuthInputRowDebugWidgetClose();
+
   void AddKioskAppButtonPressed();
   void RemoveKioskAppButtonPressed();
   void ToggleDebugDetachableBaseButtonPressed();
@@ -77,6 +82,7 @@ class LockDebugView : public views::View {
   void ToggleWarningBannerButtonPressed();
 
   void ToggleManagedSessionDisclosureButtonPressed();
+  void ShowSecurityCurtainScreenButtonPressed();
 
   // Updates the last used detachable base.
   void UseDetachableBaseButtonPressed(int index);
@@ -101,33 +107,36 @@ class LockDebugView : public views::View {
                                 views::Button::PressedCallback callback,
                                 views::View* container);
 
-  LockContentsView* lock_ = nullptr;
+  raw_ptr<LockContentsView, DanglingUntriaged> lock_ = nullptr;
 
   // Debug container which holds the entire debug UI.
-  views::View* container_ = nullptr;
+  raw_ptr<views::View> container_ = nullptr;
 
   // Container which holds global actions.
-  views::View* global_action_view_container_ = nullptr;
+  raw_ptr<views::View> global_action_view_container_ = nullptr;
 
   // Global add system info button. Reference is needed to dynamically disable.
-  views::LabelButton* global_action_add_system_info_ = nullptr;
+  raw_ptr<views::LabelButton> global_action_add_system_info_ = nullptr;
 
   // Global toggle auth button. Reference is needed to update the string.
-  views::LabelButton* global_action_toggle_auth_ = nullptr;
+  raw_ptr<views::LabelButton> global_action_toggle_auth_ = nullptr;
 
   // Row that contains buttons for debugging detachable base state.
-  views::View* global_action_detachable_base_group_ = nullptr;
+  raw_ptr<views::View> global_action_detachable_base_group_ = nullptr;
 
   // Container which contains rows of buttons, one row associated with one user.
   // Each button in the row has an id which can be used to identify it. The
   // button also has a tag which identifies which user index the button applies
   // to.
-  views::View* per_user_action_view_container_ = nullptr;
+  raw_ptr<views::View> per_user_action_view_container_ = nullptr;
+
+  raw_ptr<views::Widget> auth_input_row_debug_widget_ = nullptr;
 
   // Debug dispatcher and cached data for the UI.
   std::unique_ptr<DebugDataDispatcherTransformer> const debug_data_dispatcher_;
   // Reference to the detachable base model passed to (and owned by) lock_.
-  DebugLoginDetachableBaseModel* debug_detachable_base_model_ = nullptr;
+  raw_ptr<DebugLoginDetachableBaseModel, DanglingUntriaged>
+      debug_detachable_base_model_ = nullptr;
   size_t num_system_info_clicks_ = 0u;
   LoginScreenController::ForceFailAuth force_fail_auth_ =
       LoginScreenController::ForceFailAuth::kOff;

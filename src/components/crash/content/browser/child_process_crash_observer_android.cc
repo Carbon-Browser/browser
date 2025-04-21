@@ -1,16 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/crash/content/browser/child_process_crash_observer_android.h"
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "components/crash/android/jni_headers/ChildProcessCrashObserver_jni.h"
 #include "components/crash/content/browser/crash_metrics_reporter_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/crash/content/browser/jni_headers/ChildProcessCrashObserver_jni.h"
 
 namespace crash_reporter {
 

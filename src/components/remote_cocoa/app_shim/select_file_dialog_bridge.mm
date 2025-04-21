@@ -1,41 +1,48 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/remote_cocoa/app_shim/select_file_dialog_bridge.h"
 
-#include <CoreServices/CoreServices.h>
+#import <AppKit/AppKit.h>
+#import <Foundation/Foundation.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <stddef.h>
 
+#include "base/apple/bridging.h"
+#import "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_util.h"
 #include "base/i18n/case_conversion.h"
-#include "base/mac/foundation_util.h"
 #import "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/hang_watcher.h"
 #include "base/threading/thread_restrictions.h"
-#include "ui/base/l10n/l10n_util_mac.h"
+#import "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 #include "ui/strings/grit/ui_strings.h"
 
 namespace {
 
 const int kFileTypePopupTag = 1234;
 
-CFStringRef CreateUTIFromExtension(const base::FilePath::StringType& ext) {
-  base::ScopedCFTypeRef<CFStringRef> ext_cf(base::SysUTF8ToCFStringRef(ext));
-  return UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
-                                               ext_cf.get(), nullptr);
+// Returns whether the Uniform Type system considers `ext` to be a valid file
+// extension.
+bool IsValidExtension(const base::FilePath::StringType& ext) {
+  UTType* type =
+      [UTType typeWithFilenameExtension:base::SysUTF8ToNSString(ext)];
+  return !!type;
 }
 
 NSString* GetDescriptionFromExtension(const base::FilePath::StringType& ext) {
-  base::ScopedCFTypeRef<CFStringRef> uti(CreateUTIFromExtension(ext));
-  base::ScopedCFTypeRef<CFStringRef> description(
-      UTTypeCopyDescription(uti.get()));
+  UTType* type =
+      [UTType typeWithFilenameExtension:base::SysUTF8ToNSString(ext)];
+  NSString* description = type.localizedDescription;
 
-  if (description && CFStringGetLength(description))
-    return [[base::mac::CFToNSCast(description.get()) retain] autorelease];
+  if (description.length) {
+    return description;
+  }
 
   // In case no description is found, create a description based on the
   // unknown extension type (i.e. if the extension is .qqq, the we create
@@ -45,20 +52,18 @@ NSString* GetDescriptionFromExtension(const base::FilePath::StringType& ext) {
                                  base::i18n::ToUpper(ext_name), ext_name);
 }
 
-base::scoped_nsobject<NSView> CreateAccessoryView() {
-  // The label. Add attributes per-OS to match the labels that macOS uses.
+NSView* CreateAccessoryView() {
+  // The label.
   NSTextField* label =
       [NSTextField labelWithString:l10n_util::GetNSString(
                                        IDS_SAVE_PAGE_FILE_FORMAT_PROMPT_MAC)];
   label.translatesAutoresizingMaskIntoConstraints = NO;
-  if (base::mac::IsAtLeastOS10_14())
-    label.textColor = NSColor.secondaryLabelColor;
-  if (base::mac::IsAtLeastOS11())
-    label.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
+  label.textColor = NSColor.secondaryLabelColor;
+  label.font = [NSFont systemFontOfSize:NSFont.smallSystemFontSize];
 
   // The popup.
-  NSPopUpButton* popup = [[[NSPopUpButton alloc] initWithFrame:NSZeroRect
-                                                     pullsDown:NO] autorelease];
+  NSPopUpButton* popup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect
+                                                    pullsDown:NO];
   popup.translatesAutoresizingMaskIntoConstraints = NO;
   popup.tag = kFileTypePopupTag;
 
@@ -67,16 +72,14 @@ base::scoped_nsobject<NSView> CreateAccessoryView() {
   // the dialog, and the label and popup need to be grouped together as one
   // view to do centering within it, so use a view to group the label and
   // popup.
-  NSView* group = [[[NSView alloc] initWithFrame:NSZeroRect] autorelease];
+  NSView* group = [[NSView alloc] initWithFrame:NSZeroRect];
   group.translatesAutoresizingMaskIntoConstraints = NO;
   [group addSubview:label];
   [group addSubview:popup];
 
   // This top-level view will be forced by the system to have the width of the
   // save dialog.
-  base::scoped_nsobject<NSView> scoped_view(
-      [[NSView alloc] initWithFrame:NSZeroRect]);
-  NSView* view = scoped_view.get();
+  NSView* view = [[NSView alloc] initWithFrame:NSZeroRect];
   view.translatesAutoresizingMaskIntoConstraints = NO;
   [view addSubview:group];
 
@@ -100,14 +103,9 @@ base::scoped_nsobject<NSView> CreateAccessoryView() {
                                                     constant:10]];
 
   // Horizontal and vertical baseline between the label and popup.
-  CGFloat labelPopupPadding;
-  if (base::mac::IsAtLeastOS11())
-    labelPopupPadding = 8;
-  else
-    labelPopupPadding = 5;
   [constraints addObject:[popup.leadingAnchor
                              constraintEqualToAnchor:label.trailingAnchor
-                                            constant:labelPopupPadding]];
+                                            constant:8]];
   [constraints
       addObject:[popup.firstBaselineAnchor
                     constraintEqualToAnchor:label.firstBaselineAnchor]];
@@ -146,10 +144,10 @@ base::scoped_nsobject<NSView> CreateAccessoryView() {
 
   [NSLayoutConstraint activateConstraints:constraints];
 
-  return scoped_view;
+  return view;
 }
 
-NSSavePanel* g_last_created_panel_for_testing = nil;
+NSSavePanel* __weak g_last_created_panel_for_testing = nil;
 
 }  // namespace
 
@@ -162,16 +160,17 @@ NSSavePanel* g_last_created_panel_for_testing = nil;
 @interface ExtensionDropdownHandler : NSObject {
  @private
   // The file dialog to which this target object corresponds. Weak reference
-  // since the dialog_ will stay alive longer than this object.
-  NSSavePanel* _dialog;
+  // since the _dialog will stay alive longer than this object.
+  NSSavePanel* __weak _dialog;
 
-  // An array whose each item corresponds to an array of different extensions in
-  // an extension group.
-  base::scoped_nsobject<NSArray> _fileTypeLists;
+  // An array where each item is an array of different extensions in an
+  // extension group.
+  NSArray<NSArray<NSString*>*>* __strong _fileExtensionLists;
 }
 
 - (instancetype)initWithDialog:(NSSavePanel*)dialog
-                 fileTypeLists:(NSArray*)fileTypeLists;
+            fileExtensionLists:
+                (NSArray<NSArray<NSString*>*>*)fileExtensionLists;
 
 - (void)popupAction:(id)sender;
 @end
@@ -181,9 +180,9 @@ NSSavePanel* g_last_created_panel_for_testing = nil;
 - (BOOL)panel:(id)sender validateURL:(NSURL*)url error:(NSError**)outError {
   // Refuse to accept users closing the dialog with a key repeat, since the key
   // may have been first pressed while the user was looking at insecure content.
-  // See https://crbug.com/637098.
-  if ([[NSApp currentEvent] type] == NSEventTypeKeyDown &&
-      [[NSApp currentEvent] isARepeat]) {
+  // See https://crbug.com/40085079.
+  if (NSApp.currentEvent.type == NSEventTypeKeyDown &&
+      NSApp.currentEvent.ARepeat) {
     return NO;
   }
 
@@ -195,24 +194,59 @@ NSSavePanel* g_last_created_panel_for_testing = nil;
 @implementation ExtensionDropdownHandler
 
 - (instancetype)initWithDialog:(NSSavePanel*)dialog
-                 fileTypeLists:(NSArray*)fileTypeLists {
+            fileExtensionLists:
+                (NSArray<NSArray<NSString*>*>*)fileExtensionLists {
   if ((self = [super init])) {
     _dialog = dialog;
-    _fileTypeLists.reset([fileTypeLists retain]);
+    _fileExtensionLists = fileExtensionLists;
   }
   return self;
 }
 
 - (void)popupAction:(id)sender {
   NSUInteger index = [sender indexOfSelectedItem];
-  if (index < [_fileTypeLists count]) {
+
+  // When provided UTTypes, NSOpenPanel determines whether files are selectable
+  // by conformance, not by strict type matching. For example, with
+  // public.plain-text, not only .txt files will be selectable, but .js, .m3u,
+  // and .csv files will be as well. With public.zip-archive, not only .zip
+  // files will be selectable, but also .jar files and .xlsb files.
+  //
+  // While this can be great for normal viewing/editing apps, this is not
+  // desirable for Chromium, where the web platform requires strict type
+  // matching on the provided extensions, and files that have a conforming file
+  // type by accident of their implementation shouldn't qualify for selection.
+  //
+  // Unfortunately, there's no great way to do strict type matching with
+  // NSOpenPanel. Setting explicit extensions via -allowedFileTypes is
+  // deprecated, and there's no way to specify that strict type equality should
+  // be used for -allowedContentTypes (FB13721802).
+  //
+  // -[NSOpenSavePanelDelegate panel:shouldEnableURL:] could be used to enforce
+  // strict type matching, however its presence on the delegate means that all
+  // files in the file list start off being displayed as disabled, and slowly
+  // become enabled if they qualify. This is non-performant and quite a poor
+  // user experience.
+  //
+  // Therefore, use the deprecated API, because it's the only way to remain
+  // performant while achieving strict type matching.
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  if (index < _fileExtensionLists.count && _fileExtensionLists[index].count) {
     // For save dialogs, this causes the first item in the allowedFileTypes
     // array to be used as the extension for the save panel.
-    [_dialog setAllowedFileTypes:[_fileTypeLists objectAtIndex:index]];
+    _dialog.allowedFileTypes = _fileExtensionLists[index];
   } else {
-    // The user selected "All files" option.
-    [_dialog setAllowedFileTypes:nil];
+    // The user selected "All files" option (or this is the error case where the
+    // page specified literally no valid extensions).
+    //
+    // (API note: nil is "all types" and an empty array is an error, unlike with
+    // -allowedContentTypes, where an empty array is "all types" and nil is an
+    // error.)
+    _dialog.allowedFileTypes = nil;
   }
+#pragma clang diagnostic pop
 }
 
 @end
@@ -223,17 +257,17 @@ using mojom::SelectFileDialogType;
 using mojom::SelectFileTypeInfoPtr;
 
 SelectFileDialogBridge::SelectFileDialogBridge(NSWindow* owning_window)
-    : owning_window_(owning_window, base::scoped_policy::RETAIN),
-      weak_factory_(this) {}
+    : owning_window_(owning_window), weak_factory_(this) {}
 
 SelectFileDialogBridge::~SelectFileDialogBridge() {
   // If we never executed our callback, then the panel never closed. Cancel it
   // now.
-  if (show_callback_)
+  if (show_callback_) {
     [panel_ cancel:panel_];
+  }
 
   // Balance the setDelegate called during Show.
-  [panel_ setDelegate:nil];
+  panel_.delegate = nil;
 }
 
 void SelectFileDialogBridge::Show(
@@ -243,7 +277,7 @@ void SelectFileDialogBridge::Show(
     SelectFileTypeInfoPtr file_types,
     int file_type_index,
     const base::FilePath::StringType& default_extension,
-    PanelEndedCallback initialize_callback) {
+    ShowCallback callback) {
   // Never consider the current WatchHangsInScope as hung. There was most likely
   // one created in ThreadControllerWithMessagePumpImpl::DoWork(). The current
   // hang watching deadline is not valid since the user can take unbounded time
@@ -252,26 +286,27 @@ void SelectFileDialogBridge::Show(
   // reactivate it. You can see the function comments for more details.
   base::HangWatcher::InvalidateActiveExpectations();
 
-  show_callback_ = std::move(initialize_callback);
+  show_callback_ = std::move(callback);
   type_ = type;
   // Note: we need to retain the dialog as |owning_window_| can be null.
-  // (See http://crbug.com/29213 .)
-  if (type_ == SelectFileDialogType::kSaveAsFile)
-    panel_.reset([[NSSavePanel savePanel] retain]);
-  else
-    panel_.reset([[NSOpenPanel openPanel] retain]);
-  NSSavePanel* dialog = panel_.get();
-  g_last_created_panel_for_testing = dialog;
+  // (See https://crbug.com/41052845.)
+  if (type_ == SelectFileDialogType::kSaveAsFile) {
+    panel_ = [NSSavePanel savePanel];
+  } else {
+    panel_ = [NSOpenPanel openPanel];
+  }
+  g_last_created_panel_for_testing = panel_;
 
-  if (!title.empty())
-    [dialog setMessage:base::SysUTF16ToNSString(title)];
+  if (!title.empty()) {
+    panel_.message = base::SysUTF16ToNSString(title);
+  }
 
   NSString* default_dir = nil;
   NSString* default_filename = nil;
   if (!default_path.empty()) {
     // The file dialog is going to do a ton of stats anyway. Not much
     // point in eliminating this one.
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    base::ScopedAllowBlocking allow_blocking;
     if (base::DirectoryExists(default_path)) {
       default_dir = base::SysUTF8ToNSString(default_path.value());
     } else {
@@ -292,70 +327,87 @@ void SelectFileDialogBridge::Show(
           /*is_save_panel=*/type_ == SelectFileDialogType::kSaveAsFile);
     } else {
       // If no type_ info is specified, anything goes.
-      [dialog setAllowsOtherFileTypes:YES];
+      panel_.allowsOtherFileTypes = YES;
     }
   }
 
   if (type_ == SelectFileDialogType::kSaveAsFile) {
     // When file extensions are hidden and removing the extension from
     // the default filename gives one which still has an extension
-    // that OS X recognizes, it will get confused and think the user
+    // that macOS recognizes, it will get confused and think the user
     // is trying to override the default extension. This happens with
     // filenames like "foo.tar.gz" or "ball.of.tar.png". Work around
     // this by never hiding extensions in that case.
     base::FilePath::StringType penultimate_extension =
         default_path.RemoveFinalExtension().FinalExtension();
     if (!penultimate_extension.empty() || keep_extension_visible) {
-      [dialog setExtensionHidden:NO];
+      panel_.extensionHidden = NO;
     } else {
-      [dialog setExtensionHidden:YES];
-      [dialog setCanSelectHiddenExtension:YES];
+      panel_.extensionHidden = YES;
+      panel_.canSelectHiddenExtension = YES;
     }
+
+    // The tag autosetter in macOS is not reliable (see
+    // https://crbug.com/41482996). Explicitly set the `showsTagField` property
+    // as a signal to macOS that we will handle all the file tagging; a
+    // side-effect of setting the property to any value is that it turns off
+    // the tag autosetter.
+    panel_.showsTagField = YES;
   } else {
     // This does not use ObjCCast because the underlying object could be a
-    // non-exported AppKit type (https://crbug.com/995476).
-    NSOpenPanel* open_dialog = static_cast<NSOpenPanel*>(dialog);
+    // non-exported AppKit type (https://crbug.com/41477018).
+    NSOpenPanel* open_dialog = static_cast<NSOpenPanel*>(panel_);
 
-    if (type_ == SelectFileDialogType::kOpenMultiFile)
-      [open_dialog setAllowsMultipleSelection:YES];
-    else
-      [open_dialog setAllowsMultipleSelection:NO];
+    if (type_ == SelectFileDialogType::kOpenMultiFile) {
+      open_dialog.allowsMultipleSelection = YES;
+    } else {
+      open_dialog.allowsMultipleSelection = NO;
+    }
 
     if (type_ == SelectFileDialogType::kFolder ||
         type_ == SelectFileDialogType::kUploadFolder ||
         type_ == SelectFileDialogType::kExistingFolder) {
-      [open_dialog setCanChooseFiles:NO];
-      [open_dialog setCanChooseDirectories:YES];
+      open_dialog.canChooseFiles = NO;
+      open_dialog.canChooseDirectories = YES;
 
-      if (type_ == SelectFileDialogType::kFolder)
-        [open_dialog setCanCreateDirectories:YES];
-      else
-        [open_dialog setCanCreateDirectories:NO];
+      if (type_ == SelectFileDialogType::kFolder) {
+        open_dialog.canCreateDirectories = YES;
+      } else {
+        open_dialog.canCreateDirectories = NO;
+      }
 
       NSString* prompt =
           (type_ == SelectFileDialogType::kUploadFolder)
               ? l10n_util::GetNSString(IDS_SELECT_UPLOAD_FOLDER_BUTTON_TITLE)
               : l10n_util::GetNSString(IDS_SELECT_FOLDER_BUTTON_TITLE);
-      [open_dialog setPrompt:prompt];
+      open_dialog.prompt = prompt;
     } else {
-      [open_dialog setCanChooseFiles:YES];
-      [open_dialog setCanChooseDirectories:NO];
+      open_dialog.canChooseFiles = YES;
+      open_dialog.canChooseDirectories = NO;
     }
 
-    delegate_.reset([[SelectFileDialogDelegate alloc] init]);
-    [open_dialog setDelegate:delegate_.get()];
+    delegate_ = [[SelectFileDialogDelegate alloc] init];
+    open_dialog.delegate = delegate_;
   }
-  if (default_dir)
-    [dialog setDirectoryURL:[NSURL fileURLWithPath:default_dir]];
-  if (default_filename)
-    [dialog setNameFieldStringValue:default_filename];
+  if (default_dir) {
+    panel_.directoryURL = [NSURL fileURLWithPath:default_dir];
+  }
+  if (default_filename) {
+    panel_.nameFieldStringValue = default_filename;
+  }
 
   // Ensure that |callback| (rather than |this|) be retained by the block.
-  auto callback = base::BindRepeating(&SelectFileDialogBridge::OnPanelEnded,
-                                      weak_factory_.GetWeakPtr());
-  [dialog beginSheetModalForWindow:owning_window_
+  auto ended_callback = base::BindRepeating(
+      &SelectFileDialogBridge::OnPanelEnded, weak_factory_.GetWeakPtr());
+
+  NSWindow* sheet_parent = owning_window_;
+  if (NativeWidgetMacNSWindow* sheet_parent_widget_window =
+          base::apple::ObjCCast<NativeWidgetMacNSWindow>(sheet_parent)) {
+    sheet_parent = [sheet_parent_widget_window preferredSheetParent];
+  }
+  [panel_ beginSheetModalForWindow:sheet_parent
                  completionHandler:^(NSInteger result) {
-                   callback.Run(result != NSModalResponseOK);
+                   ended_callback.Run(result != NSModalResponseOK);
                  }];
 }
 
@@ -365,15 +417,15 @@ void SelectFileDialogBridge::SetAccessoryView(
     const base::FilePath::StringType& default_extension,
     bool is_save_panel) {
   DCHECK(file_types);
-  base::scoped_nsobject<NSView> accessory_view = CreateAccessoryView();
-  NSSavePanel* dialog = panel_.get();
+  NSView* accessory_view = CreateAccessoryView();
 
   NSPopUpButton* popup = [accessory_view viewWithTag:kFileTypePopupTag];
   DCHECK(popup);
 
   // Create an array with each item corresponding to an array of different
   // extensions in an extension group.
-  NSMutableArray* file_type_lists = [NSMutableArray array];
+  NSMutableArray<NSArray<NSString*>*>* file_extension_lists =
+      [NSMutableArray array];
   int default_extension_index = -1;
   for (size_t i = 0; i < file_types->extensions.size(); ++i) {
     const std::vector<base::FilePath::StringType>& ext_list =
@@ -394,38 +446,35 @@ void SelectFileDialogBridge::SetAccessoryView(
     DCHECK_NE(0u, [type_description length]);
     [popup addItemWithTitle:type_description];
 
-    // Populate file_type_lists.
-    // Set to store different extensions in the current extension group.
-    NSMutableArray* file_type_array = [NSMutableArray array];
+    // Store different extensions in the current extension group.
+    NSMutableArray<NSString*>* file_extensions_array = [NSMutableArray array];
     for (const base::FilePath::StringType& ext : ext_list) {
-      if (ext == default_extension)
-        default_extension_index = i;
-
-      // Crash reports suggest that CreateUTIFromExtension may return nil. Hence
-      // we nil check before adding to |file_type_set|. See crbug.com/630101 and
-      // rdar://27490414.
-      base::ScopedCFTypeRef<CFStringRef> uti(CreateUTIFromExtension(ext));
-      if (uti) {
-        NSString* uti_ns = base::mac::CFToNSCast(uti.get());
-        if (![file_type_array containsObject:uti_ns])
-          [file_type_array addObject:uti_ns];
+      // If an extension can't be mapped to a UTType (not even a dynamic one)
+      // then attempting to use it with a save panel will cause the save panel
+      // service to fail (see https://crbug.com/40900143).
+      if (!IsValidExtension(ext)) {
+        continue;
       }
 
-      // Always allow the extension itself, in case the UTI doesn't map
-      // back to the original extension correctly. This occurs with dynamic
-      // UTIs on 10.7 and 10.8.
-      // See http://crbug.com/148840, http://openradar.me/12316273
-      base::ScopedCFTypeRef<CFStringRef> ext_cf(
-          base::SysUTF8ToCFStringRef(ext));
-      NSString* ext_ns = base::mac::CFToNSCast(ext_cf.get());
-      if (![file_type_array containsObject:ext_ns])
-        [file_type_array addObject:ext_ns];
+      if (ext == default_extension) {
+        default_extension_index = i;
+      }
+
+      // See -[ExtensionDropdownHandler popupAction:] as to why file extensions
+      // are collected here rather than being converted to UTTypes.
+      // TODO(FB13721802): Use UTTypes when strict type matching can be
+      // specified.
+      NSString* ext_ns = base::SysUTF8ToNSString(ext);
+      if (![file_extensions_array containsObject:ext_ns]) {
+        [file_extensions_array addObject:ext_ns];
+      }
     }
-    [file_type_lists addObject:file_type_array];
+
+    [file_extension_lists addObject:file_extensions_array];
   }
 
   if (file_types->include_all_files || file_types->extensions.empty()) {
-    dialog.allowsOtherFileTypes = YES;
+    panel_.allowsOtherFileTypes = YES;
     // If "all files" is specified for a save panel, allow the user to add an
     // alternate non-suggested extension, but don't add it to the popup. It
     // makes no sense to save as an "all files" file type.
@@ -434,69 +483,99 @@ void SelectFileDialogBridge::SetAccessoryView(
     }
   }
 
-  extension_dropdown_handler_.reset([[ExtensionDropdownHandler alloc]
-      initWithDialog:dialog
-       fileTypeLists:file_type_lists]);
+  extension_dropdown_handler_ =
+      [[ExtensionDropdownHandler alloc] initWithDialog:panel_
+                                    fileExtensionLists:file_extension_lists];
 
   // This establishes a weak reference to handler. Hence we persist it as part
-  // of dialog_data_list_.
-  [popup setTarget:extension_dropdown_handler_];
-  [popup setAction:@selector(popupAction:)];
+  // of `dialog_data_list_`.
+  popup.target = extension_dropdown_handler_;
+  popup.action = @selector(popupAction:);
 
-  // file_type_index uses 1 based indexing.
+  // Note that `file_type_index` uses 1-based indexing.
   if (file_type_index) {
     DCHECK_LE(static_cast<size_t>(file_type_index),
               file_types->extensions.size());
     DCHECK_GE(file_type_index, 1);
     [popup selectItemAtIndex:file_type_index - 1];
-    [extension_dropdown_handler_ popupAction:popup];
   } else if (!default_extension.empty() && default_extension_index != -1) {
     [popup selectItemAtIndex:default_extension_index];
-    [dialog
-        setAllowedFileTypes:@[ base::SysUTF8ToNSString(default_extension) ]];
   } else {
     // Select the first item.
     [popup selectItemAtIndex:0];
-    [extension_dropdown_handler_ popupAction:popup];
   }
+  [extension_dropdown_handler_ popupAction:popup];
 
   // There's no need for a popup unless there are at least two choices.
-  if (popup.numberOfItems >= 2)
-    dialog.accessoryView = accessory_view.get();
+  if (popup.numberOfItems >= 2) {
+    panel_.accessoryView = accessory_view;
+  }
 }
 
 void SelectFileDialogBridge::OnPanelEnded(bool did_cancel) {
-  if (!show_callback_)
+  if (!show_callback_) {
     return;
+  }
 
   int index = 0;
   std::vector<base::FilePath> paths;
+  std::vector<std::string> file_tags;
   if (!did_cancel) {
     if (type_ == SelectFileDialogType::kSaveAsFile) {
-      NSURL* url = [panel_ URL];
-      if ([url isFileURL]) {
-        paths.push_back(base::mac::NSStringToFilePath([url path]));
+      NSURL* url = panel_.URL;
+      if (url.isFileURL) {
+        paths.push_back(base::apple::NSURLToFilePath(url));
       }
 
-      NSView* accessoryView = [panel_ accessoryView];
+      NSView* accessoryView = panel_.accessoryView;
       if (accessoryView) {
         NSPopUpButton* popup = [accessoryView viewWithTag:kFileTypePopupTag];
         if (popup) {
           // File type indexes are 1-based.
-          index = [popup indexOfSelectedItem] + 1;
+          index = popup.indexOfSelectedItem + 1;
         }
       } else {
         index = 1;
       }
+
+      // The tag autosetter was turned off when `showsTagField` was set above.
+      // Retrieve the tags for assignment later.
+      for (NSString* tag in panel_.tagNames) {
+        file_tags.push_back(base::SysNSStringToUTF8(tag));
+      }
     } else {
-      NSArray* urls = [static_cast<NSOpenPanel*>(panel_) URLs];
-      for (NSURL* url in urls)
-        if ([url isFileURL])
-          paths.push_back(base::mac::NSStringToFilePath([url path]));
+      // This does not use ObjCCast because the underlying object could be a
+      // non-exported AppKit type (https://crbug.com/41477018).
+      NSOpenPanel* open_panel = static_cast<NSOpenPanel*>(panel_);
+
+      for (NSURL* url in open_panel.URLs) {
+        if (!url.isFileURL) {
+          continue;
+        }
+        NSString* path = url.path;
+
+        // There is a bug in macOS where, despite a request to disallow file
+        // selection, files/packages are able to be selected. If indeed file
+        // selection was disallowed, drop any files selected.
+        // https://crbug.com/40861123, FB11405008
+        if (!open_panel.canChooseFiles) {
+          BOOL is_directory;
+          BOOL exists =
+              [NSFileManager.defaultManager fileExistsAtPath:path
+                                                 isDirectory:&is_directory];
+          BOOL is_package =
+              [NSWorkspace.sharedWorkspace isFilePackageAtPath:path];
+          if (!exists || !is_directory || is_package) {
+            continue;
+          }
+        }
+
+        paths.push_back(base::apple::NSStringToFilePath(path));
+      }
     }
   }
 
-  std::move(show_callback_).Run(did_cancel, paths, index);
+  std::move(show_callback_).Run(did_cancel, paths, index, file_tags);
 }
 
 // static

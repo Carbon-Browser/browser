@@ -1,6 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <string_view>
 
 #include "base/at_exit.h"
 #include "base/command_line.h"
@@ -8,7 +10,6 @@
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gin/v8_initializer.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
@@ -18,8 +19,6 @@
 #include "v8/include/v8.h"
 
 namespace {
-
-constexpr char kPredictableFlag[] = "--predictable";
 
 class SnapshotPlatform final : public blink::Platform {
  public:
@@ -32,12 +31,32 @@ class SnapshotPlatform final : public blink::Platform {
 // The snapshot file is consumed by Blink.
 //
 // Usage:
-// % v8_context_snapshot_generator --output_file=<filename>
+// % v8_context_snapshot_generator
+//     --snapshot_blob=<filename>
+//     --output_file=<filename>
 int main(int argc, char** argv) {
   base::AtExitManager at_exit;
+
+  const bool kRemoveRecognizedFlags = true;
+  v8::V8::SetFlagsFromCommandLine(&argc, argv, kRemoveRecognizedFlags);
   base::CommandLine::Init(argc, argv);
+
+  // Initialize an empty feature list for gin startup.
+  auto early_access_feature_list = std::make_unique<base::FeatureList>();
+  // This should be called after CommandLine::Init().
+  base::FeatureList::SetInstance(std::move(early_access_feature_list));
 #ifdef V8_USE_EXTERNAL_STARTUP_DATA
-  gin::V8Initializer::LoadV8Snapshot();
+  static constexpr std::string_view kSnapshotBlobFlag("snapshot_blob");
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(kSnapshotBlobFlag)) {
+    base::File file(base::CommandLine::ForCurrentProcess()->GetSwitchValuePath(
+                        kSnapshotBlobFlag),
+                    base::File::FLAG_OPEN | base::File::FLAG_READ);
+    CHECK(file.IsValid());
+    gin::V8Initializer::LoadV8SnapshotFromFile(
+        std::move(file), nullptr, gin::V8SnapshotFileType::kDefault);
+  } else {
+    gin::V8Initializer::LoadV8Snapshot(gin::V8SnapshotFileType::kDefault);
+  }
 #endif
 
   // Set up environment to make Blink and V8 workable.
@@ -46,23 +65,26 @@ int main(int argc, char** argv) {
   mojo::core::Init();
 
   // Set predictable flag in V8 to generate identical snapshot file.
+  static constexpr char kPredictableFlag[] = "--predictable";
   v8::V8::SetFlagsFromString(kPredictableFlag, sizeof(kPredictableFlag) - 1);
 
   // Take a snapshot.
   SnapshotPlatform platform;
   mojo::BinderMap binders;
   blink::CreateMainThreadAndInitialize(&platform, &binders);
-  v8::StartupData blob = blink::WebV8ContextSnapshot::TakeSnapshot();
+  auto* isolate = blink::CreateMainThreadIsolate();
+  v8::StartupData blob = blink::WebV8ContextSnapshot::TakeSnapshot(isolate);
 
   // Save the snapshot as a file. Filename is given in a command line option.
   base::FilePath file_path =
       base::CommandLine::ForCurrentProcess()->GetSwitchValuePath("output_file");
   CHECK(!file_path.empty());
-  int written = base::WriteFile(file_path, blob.data, blob.raw_size);
   int error_code = 0;
-  if (written != blob.raw_size) {
-    fprintf(stderr, "Error: WriteFile of %d snapshot bytes returned %d.\n",
-            blob.raw_size, written);
+  if (!base::WriteFile(file_path,
+                       base::as_bytes(base::span(
+                           blob.data, static_cast<size_t>(blob.raw_size))))) {
+    fprintf(stderr, "Error: WriteFile of %d snapshot has failed.\n",
+            blob.raw_size);
     error_code = 1;
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,21 @@ void DrmOverlayCandidates::RegisterOverlayRequirement(bool requires_overlay) {
   DCHECK(!requires_overlay);
 #endif
   overlay_manager_->RegisterOverlayRequirement(widget_, requires_overlay);
+}
+
+void DrmOverlayCandidates::OnSwapBuffersComplete(gfx::SwapResult swap_result) {
+  overlay_manager_->OnSwapBuffersComplete(swap_result);
+}
+
+void DrmOverlayCandidates::SetSupportedBufferFormats(
+    base::flat_set<gfx::BufferFormat> supported_buffer_formats) {
+  overlay_manager_->SetSupportedBufferFormats(
+      widget_, std::move(supported_buffer_formats));
+}
+
+void DrmOverlayCandidates::NotifyOverlayPromotion(
+    std::vector<gfx::OverlayType> promoted_overlay_types) {
+  overlay_manager_->OnPromotedOverlayTypes(std::move(promoted_overlay_types));
 }
 
 }  // namespace ui

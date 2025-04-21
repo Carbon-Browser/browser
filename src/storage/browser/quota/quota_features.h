@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,7 @@ namespace storage {
 
 namespace features {
 
-COMPONENT_EXPORT(STORAGE_BROWSER)
-extern const base::Feature kStoragePressureEvent;
-
-COMPONENT_EXPORT(STORAGE_BROWSER)
-extern const base::Feature kStorageQuotaSettings;
+COMPONENT_EXPORT(STORAGE_BROWSER) BASE_DECLARE_FEATURE(kStorageQuotaSettings);
 extern const base::FeatureParam<double> kMustRemainAvailableBytes;
 extern const base::FeatureParam<double> kMustRemainAvailableRatio;
 extern const base::FeatureParam<double> kPoolSizeBytes;
@@ -25,8 +21,18 @@ extern const base::FeatureParam<double> kPoolSizeRatio;
 extern const base::FeatureParam<double> kShouldRemainAvailableBytes;
 extern const base::FeatureParam<double> kShouldRemainAvailableRatio;
 
+// Clears quota storage for opaque origins used in prior browsing sessions as
+// they will no longer be reachable. See crbug.com/40281870 for more info.
+// If kEvictStaleQuotaStorage is off this has no impact.
 COMPONENT_EXPORT(STORAGE_BROWSER)
-extern const base::Feature kOnlySendStoragePolicyUpdatesForModifiedOrigins;
+BASE_DECLARE_FEATURE(kEvictOrphanQuotaStorage);
+
+// Clears quota storage last accessed/modified more than 400 days ago.
+// See crbug.com/40281870 for more info.
+COMPONENT_EXPORT(STORAGE_BROWSER)
+BASE_DECLARE_FEATURE(kEvictStaleQuotaStorage);
+
+COMPONENT_EXPORT(STORAGE_BROWSER) BASE_DECLARE_FEATURE(kStaticStorageQuota);
 
 }  // namespace features
 

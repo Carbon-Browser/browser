@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,7 +14,9 @@ def ArgumentParser(*args, **kwargs):
   parser.add_argument('--build-properties', help=argparse.SUPPRESS)
   parser.add_argument('--summary-json', help=argparse.SUPPRESS)
   parser.add_argument('--task-output-dir', help=argparse.SUPPRESS)
-  parser.add_argument('-o', '--output-json', required=True,
+  parser.add_argument('-o',
+                      '--output-json',
+                      required=True,
                       help=argparse.SUPPRESS)
   parser.add_argument('jsons_to_merge', nargs='*', help=argparse.SUPPRESS)
   return parser

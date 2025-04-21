@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/chrome_elf/third_party_dlls/packed_list_file.h"
 
@@ -22,7 +27,7 @@ namespace {
 // No concern about concurrency control in chrome_elf.
 bool g_initialized = false;
 
-// This will hold a packed blacklist module array, read directly from a
+// This will hold a packed blocklist module array, read directly from a
 // data file during InitFromFile().
 PackedListModule* g_bl_module_array = nullptr;
 size_t g_bl_module_array_size = 0;
@@ -103,7 +108,7 @@ ThirdPartyStatus ReadInArray(HANDLE file,
   return ThirdPartyStatus::kSuccess;
 }
 
-// Reads the path to the blacklist file from the registry into |file_path|.
+// Reads the path to the blocklist file from the registry into |file_path|.
 //
 // - Returns false if the value is not found, is not a REG_SZ, or is empty.
 bool GetFilePathFromRegistry(std::wstring* file_path) {
@@ -153,7 +158,7 @@ ThirdPartyStatus OpenDataFile(HANDLE* file_handle) {
   return ThirdPartyStatus::kSuccess;
 }
 
-// Find the packed blacklist file and read in the array.
+// Find the packed blocklist file and read in the array.
 ThirdPartyStatus InitInternal() {
   HANDLE handle = INVALID_HANDLE_VALUE;
   ThirdPartyStatus status = OpenDataFile(&handle);

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,12 +56,6 @@ public class AdvancedMockContext extends InMemorySharedPreferencesContext {
     @Override
     public void unregisterComponentCallbacks(ComponentCallbacks callback) {
         getBaseContext().unregisterComponentCallbacks(callback);
-    }
-
-    public void addSharedPreferences(String name, Map<String, Object> data) {
-        synchronized (mSharedPreferences) {
-            mSharedPreferences.put(name, new InMemorySharedPreferences(data));
-        }
     }
 
     public void setFlag(String key) {

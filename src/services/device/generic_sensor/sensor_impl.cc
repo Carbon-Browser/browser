@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,6 @@ void SensorImpl::OnSensorReadingChanged(mojom::SensorType type) {
 }
 
 void SensorImpl::OnSensorError() {
-  DCHECK(!suspended_);
   if (client_)
     client_->RaiseError();
 }

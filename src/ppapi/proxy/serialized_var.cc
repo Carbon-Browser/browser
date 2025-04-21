@@ -1,11 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ppapi/proxy/serialized_var.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "ipc/ipc_message_utils.h"
 #include "ppapi/c/pp_instance.h"
@@ -66,18 +71,12 @@ SerializedVar::Inner::~Inner() {
 
 PP_Var SerializedVar::Inner::GetVar() {
   DCHECK(serialization_rules_.get());
-
-#if defined(NACL_WIN64)
-  NOTREACHED();
-  return PP_MakeUndefined();
-#else
   if (raw_var_data_.get()) {
     var_ = raw_var_data_->CreatePPVar(instance_);
     raw_var_data_.reset(nullptr);
   }
 
   return var_;
-#endif
 }
 
 void SerializedVar::Inner::SetVar(PP_Var var) {

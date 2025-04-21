@@ -1,16 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.devui.util;
 
-import org.chromium.android_webview.common.crash.CrashInfo;
+import org.chromium.android_webview.nonembedded.crash.CrashInfo;
 
 import java.util.List;
 
-/**
- * An abstract class that collects info about WebView crashes.
- */
+/** An abstract class that collects info about WebView crashes. */
 public abstract class CrashInfoLoader {
     /**
      * Loads all crashes info from source.

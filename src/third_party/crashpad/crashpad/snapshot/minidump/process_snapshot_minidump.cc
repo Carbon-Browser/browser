@@ -1,4 +1,4 @@
-// Copyright 2015 The Crashpad Authors. All rights reserved.
+// Copyright 2015 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,6 @@ crashpad::ProcessID ProcessSnapshotMinidump::ProcessID() const {
 crashpad::ProcessID ProcessSnapshotMinidump::ParentProcessID() const {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
   NOTREACHED();  // https://crashpad.chromium.org/bug/10
-  return 0;
 }
 
 void ProcessSnapshotMinidump::SnapshotTime(timeval* snapshot_time) const {
@@ -209,7 +208,6 @@ std::vector<UnloadedModuleSnapshot> ProcessSnapshotMinidump::UnloadedModules()
     const {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
   NOTREACHED();  // https://crashpad.chromium.org/bug/10
-  return unloaded_modules_;
 }
 
 const ExceptionSnapshot* ProcessSnapshotMinidump::Exception() const {
@@ -230,7 +228,6 @@ std::vector<const MemoryMapRegionSnapshot*> ProcessSnapshotMinidump::MemoryMap()
 std::vector<HandleSnapshot> ProcessSnapshotMinidump::Handles() const {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
   NOTREACHED();  // https://crashpad.chromium.org/bug/10
-  return std::vector<HandleSnapshot>();
 }
 
 std::vector<const MemorySnapshot*> ProcessSnapshotMinidump::ExtraMemory()
@@ -266,7 +263,10 @@ bool ProcessSnapshotMinidump::InitializeCrashpadInfo() {
     return true;
   }
 
-  if (stream_it->second->DataSize < sizeof(crashpad_info_)) {
+  constexpr size_t crashpad_info_min_size =
+      offsetof(decltype(crashpad_info_), reserved);
+  size_t remaining_data_size = stream_it->second->DataSize;
+  if (remaining_data_size < crashpad_info_min_size) {
     LOG(ERROR) << "crashpad_info size mismatch";
     return false;
   }
@@ -275,8 +275,33 @@ bool ProcessSnapshotMinidump::InitializeCrashpadInfo() {
     return false;
   }
 
-  if (!file_reader_->ReadExactly(&crashpad_info_, sizeof(crashpad_info_))) {
+  if (!file_reader_->ReadExactly(&crashpad_info_, crashpad_info_min_size)) {
     return false;
+  }
+  remaining_data_size -= crashpad_info_min_size;
+
+  // Read `reserved` if available.
+  size_t crashpad_reserved_size = sizeof(crashpad_info_.reserved);
+  if (remaining_data_size >= crashpad_reserved_size) {
+    if (!file_reader_->ReadExactly(&crashpad_info_.reserved,
+                                   crashpad_reserved_size)) {
+      return false;
+    }
+    remaining_data_size -= crashpad_reserved_size;
+  } else {
+    crashpad_info_.reserved = 0;
+  }
+
+  // Read `address_mask` if available.
+  size_t crashpad_address_mask_size = sizeof(crashpad_info_.address_mask);
+  if (remaining_data_size >= crashpad_address_mask_size) {
+    if (!file_reader_->ReadExactly(&crashpad_info_.address_mask,
+                                   crashpad_address_mask_size)) {
+      return false;
+    }
+    remaining_data_size -= crashpad_address_mask_size;
+  } else {
+    crashpad_info_.address_mask = 0;
   }
 
   if (crashpad_info_.version != MinidumpCrashpadInfo::kVersion) {
@@ -318,7 +343,7 @@ bool ProcessSnapshotMinidump::InitializeMiscInfo() {
   switch (stream_it->second->DataSize) {
     case sizeof(MINIDUMP_MISC_INFO_5):
     case sizeof(MINIDUMP_MISC_INFO_4):
-#if defined(WCHAR_T_IS_UTF16)
+#if defined(WCHAR_T_IS_16_BIT)
       full_version_ = base::WideToUTF8(info.BuildString);
 #else
       full_version_ = base::UTF16ToUTF8(info.BuildString);

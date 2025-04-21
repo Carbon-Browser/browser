@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,18 @@ class Source {
 };
 
 // Represents a draw call.
-// This is currently only used for drawing rect. But this (or something like
-// this) could potentially be also used for drawing logs etc.
-//
+// This is currently only used for drawing rects and positional text.
+
 class DrawCall {
   constructor(json) {
-    // e.g. {"drawindex":"44","option":{"alpha":"1.000000","color":"#ffffff"}
-    // ,"pos":"0.000000,763.000000","size":"255x5","source_index":"0"}
+    // e.g. {"drawindex":"44", option":{"alpha":"1.000000","color":"#ffffff"}
+    // ,"pos":"0.000000,763.000000","size":"255x5","source_index":"0",
+    // "thread_id":"123456"}
     this.sourceIndex_ = parseInt(json.source_index);
     this.drawIndex_ = parseInt(json.drawindex);
+    this.threadId_ =
+        parseInt(json.thread_id) || DrawFrame.demo_thread.thread_id;
+    this.text = json.text;
     this.size_ = {
       width: json.size[0],
       height: json.size[1],
@@ -43,6 +46,27 @@ class DrawCall {
     if (json.option) {
       this.color_ = json.option.color;
       this.alpha_ = DrawCall.alphaIntToHex(json.option.alpha)
+    }
+    this.buffer_id = json.buff_id || -1;
+    if (json.uv_size && json.uv_pos) {
+      this.uv_size = {
+        width: json.uv_size[0],
+        height: json.uv_size[1],
+      };
+      this.uv_pos = {
+        x: json.uv_pos[0],
+        y: json.uv_pos[1],
+      };
+    }
+    else {
+      this.uv_size = {
+        width: 1.0,
+        height: 1.0,
+      };
+      this.uv_pos = {
+        x: 0.0,
+        y: 0.0,
+      };
     }
   }
 
@@ -60,7 +84,7 @@ class DrawCall {
     return value.toString(16).padStart(2, '0');
   }
 
-  draw(canvas, context, scale, orientationDeg, transformMatrix) {
+  draw(context, buffer_map, threadConfig) {
     let filter = undefined;
     const filters = Filter.enabledInstances();
     // TODO: multiple filters can match the same draw call. For now, let's just
@@ -72,89 +96,52 @@ class DrawCall {
       }
     }
 
-    // No filters match this draw. So skip.
-    if (!filter) return;
-    if (!filter.shouldDraw) return;
+    var color;
+    var alpha;
+    // If thread drawing is overriding filters.
+    if (threadConfig.overrideFilters) {
+      color = threadConfig.threadColor;
+      alpha = threadConfig.threadAlpha;
+    }
+    // Otherwise, follow filter draw options.
+    else {
+      // No filters match this draw. So skip.
+      if (!filter) return;
+      if (!filter.shouldDraw) return;
 
-    var color = (filter && filter.drawColor) ? filter.drawColor : this.color_
-    var alpha = (filter && filter.fillAlpha) ?
-    DrawCall.alphaFloatToHex(parseFloat(filter.fillAlpha) / 100) : this.alpha_;
-
-    const newCallPosAndDimension = this.rotateCall(canvas, orientationDeg,
-                                                      scale, transformMatrix);
+      color = (filter && filter.drawColor) ? filter.drawColor : this.color_
+      alpha = (filter && filter.fillAlpha) ?
+      DrawCall.alphaFloatToHex(parseFloat(filter.fillAlpha) / 100) :
+                                                              this.alpha_;
+    }
 
     if (color && alpha) {
       context.fillStyle = color + alpha;
-      context.fillRect(newCallPosAndDimension[0],
-                        newCallPosAndDimension[1],
-                        newCallPosAndDimension[2],
-                        newCallPosAndDimension[3]);
+      context.fillRect(this.pos_.x,
+                       this.pos_.y,
+                       this.size_.width,
+                       this.size_.height);
     }
 
     context.strokeStyle = color;
-    context.strokeRect(newCallPosAndDimension[0],
-                        newCallPosAndDimension[1],
-                        newCallPosAndDimension[2],
-                        newCallPosAndDimension[3]);
-  }
-
-  // Rotates and flips quads from draw calls
-  rotateCall(canvas, orientationDeg, scale, transformMatrix) {
-    // Swap width and height of quads if 90 or 270 deg rotation occurred
-    const callWidth = (orientationDeg === 90 || orientationDeg === 270) ?
-                        this.size_.height : this.size_.width;
-    const callHeight = (orientationDeg === 90 || orientationDeg === 270) ?
-                        this.size_.width : this.size_.height;
-
-    var translationX = 0;
-    var translationY = 0;
-    // Determine amount of translation depending on orientation.
-    // We want to put the quads back in frame and relocate xy-pos
-    // to top left corner of quads.
-    switch(orientationDeg) {
-      default:
-        break;
-      case 90:
-        // divide canvas width/height by scale
-        // because we want values before scaling
-        translationX = canvas.width/scale - callWidth;
-        break;
-      case 180:
-        translationX = canvas.width/scale - callWidth;
-        translationY = canvas.height/scale - callHeight;
-        break;
-      case 270:
-        translationY = canvas.height/scale - callHeight;
-        break;
-      case FlipEnum.HorizontalFlip.id:
-        translationX = canvas.width/scale - callWidth;
-        break;
-      case FlipEnum.VerticalFlip.id:
-        translationY = canvas.height/scale - callHeight;
-        break;
+    context.strokeRect(this.pos_.x,
+                       this.pos_.y,
+                       this.size_.width,
+                       this.size_.height);
+    var buff_id = this.buffer_id.toString();
+    if(buffer_map[buff_id]) {
+      var buff_width = buffer_map[buff_id].width;
+      var buff_height = buffer_map[buff_id].height;
+      context.drawImage(buffer_map[buff_id],
+                        this.uv_pos.x * buff_width,
+                        this.uv_pos.y * buff_height,
+                        this.uv_size.width * buff_width,
+                        this.uv_size.height * buff_height,
+                        this.pos_.x,
+                        this.pos_.y,
+                        this.size_.width,
+                        this.size_.height);
     }
-
-    var newPosX;
-    var newPosY;
-    // Use rotation/mirroring matrix to get rotated/flipped coords
-    switch (orientationDeg) {
-      default:
-        newPosX = this.pos_.x * transformMatrix[0][0] +
-                  this.pos_.y * transformMatrix[0][1] + translationX;
-        newPosY = this.pos_.x * transformMatrix[1][0] +
-                  this.pos_.y * transformMatrix[1][1] + translationY;
-        break;
-      case FlipEnum.HorizontalFlip.id:
-        newPosX = -this.pos_.x + translationX;
-        newPosY = this.pos_.y;
-        break;
-      case FlipEnum.VerticalFlip.id:
-        newPosX = this.pos_.x;
-        newPosY = -this.pos_.y + translationY;
-        break;
-    }
-    return [newPosX * scale, newPosY * scale,
-            callWidth * scale, callHeight * scale];
   }
 };
 
@@ -165,15 +152,13 @@ class DrawCall {
 class Filter {
   static instances = [];
 
-  constructor(selector, action, index) {
+  constructor(enabled, selector, action, index) {
     this.selector_ = {
       filename: selector.filename,
       func: selector.func,
       anno: selector.anno,
     };
 
-    console.log(selector);
-    console.log(action);
     // XXX: If there are multiple selectors that apply to the same draw, then
     // I guess the newest filter will take effect.
     this.action_ = {
@@ -182,8 +167,7 @@ class Filter {
       alpha: action.alpha,
     };
 
-    // Enabled by default.
-    this.enabled_ = true;
+    this.enabled_ = enabled;
 
     if (index === undefined) {
       Filter.instances.push(this);
@@ -295,4 +279,3 @@ class Filter {
     Connection.sendMessage(message);
   }
 };
-

@@ -1,31 +1,34 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/clients/mojo_audio_decoder.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/cdm_context.h"
 #include "media/base/demuxer_stream.h"
+#include "media/mojo/clients/mojo_media_log_service.h"
 #include "media/mojo/common/media_type_converters.h"
 #include "media/mojo/common/mojo_decoder_buffer_converter.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace media {
 
 MojoAudioDecoder::MojoAudioDecoder(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
+    MediaLog* media_log,
     mojo::PendingRemote<mojom::AudioDecoder> remote_decoder)
     : task_runner_(task_runner),
       pending_remote_decoder_(std::move(remote_decoder)),
       writer_capacity_(
-          GetDefaultDecoderBufferConverterCapacity(DemuxerStream::AUDIO)) {
+          GetDefaultDecoderBufferConverterCapacity(DemuxerStream::AUDIO)),
+      media_log_(media_log) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DVLOG(1) << __func__;
 }
@@ -75,7 +78,7 @@ void MojoAudioDecoder::Initialize(const AudioDecoderConfig& config,
   }
 
   // Fail immediately if the stream is encrypted but |cdm_context| is invalid.
-  absl::optional<base::UnguessableToken> cdm_id;
+  std::optional<base::UnguessableToken> cdm_id;
   if (config.is_encrypted() && cdm_context)
     cdm_id = cdm_context->GetCdmId();
 
@@ -165,7 +168,17 @@ void MojoAudioDecoder::BindRemoteDecoder() {
   remote_decoder_.set_disconnect_handler(base::BindOnce(
       &MojoAudioDecoder::OnConnectionError, base::Unretained(this)));
 
-  remote_decoder_->Construct(client_receiver_.BindNewEndpointAndPassRemote());
+  // Use mojo::MakeSelfOwnedReceiver() for MediaLog so logs may go through even
+  // after MojoAudioDecoder is destructed.
+  mojo::PendingReceiver<mojom::MediaLog> media_log_pending_receiver;
+  auto media_log_pending_remote =
+      media_log_pending_receiver.InitWithNewPipeAndPassRemote();
+  mojo::MakeSelfOwnedReceiver(
+      std::make_unique<MojoMediaLogService>(media_log_->Clone()),
+      std::move(media_log_pending_receiver));
+
+  remote_decoder_->Construct(client_receiver_.BindNewEndpointAndPassRemote(),
+                             std::move(media_log_pending_remote));
 }
 
 void MojoAudioDecoder::OnBufferDecoded(mojom::AudioBufferPtr buffer) {

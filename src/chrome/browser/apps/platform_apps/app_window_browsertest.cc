@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,15 +14,15 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/app_window/app_window_geometry_cache.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
+#include "ui/display/display_switches.h"
 
 using extensions::AppWindowGeometryCache;
 using extensions::ResultCatcher;
@@ -32,7 +32,7 @@ using extensions::ResultCatcher;
 class GeometryCacheChangeHelper : AppWindowGeometryCache::Observer {
  public:
   GeometryCacheChangeHelper(AppWindowGeometryCache* cache,
-                            const std::string& extension_id,
+                            const extensions::ExtensionId& extension_id,
                             const std::string& window_id,
                             const gfx::Rect& bounds)
       : cache_(cache),
@@ -52,11 +52,11 @@ class GeometryCacheChangeHelper : AppWindowGeometryCache::Observer {
       return;
 
     waiting_ = true;
-    content::RunMessageLoop();
+    loop_.Run();
   }
 
-  // Implements the content::NotificationObserver interface.
-  void OnGeometryCacheChanged(const std::string& extension_id,
+  // Implements the AppWindowGeometryCache::Observer interface.
+  void OnGeometryCacheChanged(const extensions::ExtensionId& extension_id,
                               const std::string& window_id,
                               const gfx::Rect& bounds) override {
     if (extension_id != extension_id_ || window_id != window_id_)
@@ -69,22 +69,29 @@ class GeometryCacheChangeHelper : AppWindowGeometryCache::Observer {
       cache_->RemoveObserver(this);
 
       if (waiting_)
-        base::RunLoop::QuitCurrentWhenIdleDeprecated();
+        loop_.QuitWhenIdle();
     }
   }
 
  private:
   raw_ptr<AppWindowGeometryCache> cache_;
-  std::string extension_id_;
+  extensions::ExtensionId extension_id_;
   std::string window_id_;
   gfx::Rect bounds_;
   bool satisfied_;
   bool waiting_;
+  // base::RunLoop used to require kNestableTaskAllowed
+  base::RunLoop loop_{base::RunLoop::Type::kNestableTasksAllowed};
 };
 
 // Helper class for tests related to the Apps Window API (chrome.app.window).
 class AppWindowAPITest : public extensions::PlatformAppBrowserTest {
  protected:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    extensions::PlatformAppBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(::switches::kForceDeviceScaleFactor, "1.0");
+  }
+
   bool RunAppWindowAPITest(const char* testName) {
     if (!BeginAppWindowAPITest(testName))
       return false;
@@ -155,7 +162,7 @@ IN_PROC_BROWSER_TEST_F(AppWindowAPITest, DISABLED_TestMaximize) {
 }
 
 // Flaky on Linux. http://crbug.com/424399.
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
+// TODO(crbug.com/40118868): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_TestMinimize DISABLED_TestMinimize
@@ -221,10 +228,6 @@ IN_PROC_BROWSER_TEST_F(AppWindowAPITest,
   // continue running.
   ExtensionTestMessageListener launched_listener("Launched",
                                                  ReplyBehavior::kWillReply);
-
-  content::WindowedNotificationObserver app_loaded_observer(
-      content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-      content::NotificationService::AllSources());
 
   const extensions::Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("platform_apps").AppendASCII("window_api"));

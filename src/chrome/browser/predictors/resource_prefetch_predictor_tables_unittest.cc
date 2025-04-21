@@ -1,22 +1,23 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/predictors/resource_prefetch_predictor_tables.h"
 
 #include <memory>
 #include <set>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/predictors/loading_test_util.h"
 #include "chrome/browser/predictors/predictor_database.h"
 #include "chrome/browser/predictors/predictors_features.h"
-#include "chrome/browser/predictors/resource_prefetch_predictor_tables.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/sqlite_proto/key_value_table.h"
 #include "content/public/test/browser_task_environment.h"
@@ -44,6 +45,14 @@ class ResourcePrefetchPredictorTablesTest : public testing::Test {
   void GetAllData(RedirectDataMap* host_redirect_data,
                   OriginDataMap* origin_data) const;
 
+  size_t GetTocalCount(std::string_view name) {
+    size_t count = 0u;
+    for (auto bucket : tester_.GetAllSamples(name)) {
+      count += bucket.count;
+    }
+    return count;
+  }
+
  protected:
   void ReopenDatabase();
   void TestGetAllData();
@@ -51,11 +60,14 @@ class ResourcePrefetchPredictorTablesTest : public testing::Test {
   void TestDeleteData();
   void TestDeleteAllData();
 
-  content::BrowserTaskEnvironment task_environment_;
+  content::BrowserTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   TestingProfile profile_;
   std::unique_ptr<PredictorDatabase> db_;
   scoped_refptr<ResourcePrefetchPredictorTables> tables_;
+
+  base::HistogramTester tester_;
 
  private:
   // Initializes the tables, |test_url_data_|, |test_host_data_|,
@@ -97,14 +109,14 @@ class ResourcePrefetchPredictorTablesReopenTest
 };
 
 ResourcePrefetchPredictorTablesTest::ResourcePrefetchPredictorTablesTest()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()),
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       db_(std::make_unique<PredictorDatabase>(&profile_, task_runner_)),
       tables_(db_->resource_prefetch_tables()) {
   content::RunAllTasksUntilIdle();
 }
 
-ResourcePrefetchPredictorTablesTest::~ResourcePrefetchPredictorTablesTest() {
-}
+ResourcePrefetchPredictorTablesTest::~ResourcePrefetchPredictorTablesTest() =
+    default;
 
 void ResourcePrefetchPredictorTablesTest::SetUp() {
   DeleteAllData();
@@ -533,6 +545,32 @@ TEST_F(ResourcePrefetchPredictorTablesTest, DatabaseIsResetWhenIncompatible) {
   GetAllData(&host_redirect_data, &origin_data);
   EXPECT_TRUE(host_redirect_data.empty());
   EXPECT_TRUE(origin_data.empty());
+}
+
+TEST_F(ResourcePrefetchPredictorTablesTest, ReportUMA) {
+  const std::string name = "LoadingPredictor.PredictorDatabaseFileSize";
+  EXPECT_EQ(1u, GetTocalCount(name));
+  int64_t file_size = tester_.GetTotalSum(name);
+  EXPECT_GT(file_size, 0u);
+
+  // Write some data.
+  {
+    OriginData data;
+    data.set_host("a.test");
+    for (int i = 0; i < 300; i++) {
+      InitializeOriginStat(data.add_origins(), "https://cdn.a.test", 10, 1, 0,
+                           12., false, true);
+    }
+    tables_->ExecuteDBTaskOnDBSequence(base::BindOnce(
+        &KeyValueTable<OriginData>::UpdateData,
+        base::Unretained(tables_->origin_table()), data.host(), data));
+  }
+  task_environment_.FastForwardBy(base::Days(1));
+  EXPECT_EQ(2u, GetTocalCount(name));
+  int64_t total_sum2 = tester_.GetTotalSum(name);
+  CHECK_GT(total_sum2, file_size);
+  int64_t file_size2 = total_sum2 - file_size;
+  EXPECT_GT(file_size2, file_size);
 }
 
 TEST_F(ResourcePrefetchPredictorTablesReopenTest, GetAllData) {

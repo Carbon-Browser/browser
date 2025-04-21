@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/supports_user_data.h"
 #include "content/common/content_export.h"
 #include "net/http/http_response_info.h"
 #include "third_party/blink/public/web/web_document_loader.h"
@@ -29,6 +28,13 @@ class CONTENT_EXPORT DocumentState
       blink::WebDocumentLoader* document_loader) {
     return static_cast<DocumentState*>(document_loader->GetExtraData());
   }
+
+  // Clones this. Passed to the document loader of a newly committed empty
+  // document that replaces an existing document. This is done for discard
+  // operations or javascript URL navigations such that the new document loader
+  // behaves simiarly to the previous one. `navigation_state_` is not cloned
+  // as this is specific to the original document.
+  std::unique_ptr<blink::WebDocumentLoader::ExtraData> Clone() override;
 
   // For LoadDataWithBaseURL navigations, |was_load_data_with_base_url_request_|
   // is set to true and |data_url_| is set to the data URL of the navigation.
@@ -55,15 +61,6 @@ class CONTENT_EXPORT DocumentState
     is_overriding_user_agent_ = state;
   }
 
-  // True if we have to reset the scroll and scale state of the page
-  // after the provisional load has been committed.
-  bool must_reset_scroll_and_scale_state() const {
-    return must_reset_scroll_and_scale_state_;
-  }
-  void set_must_reset_scroll_and_scale_state(bool state) {
-    must_reset_scroll_and_scale_state_ = state;
-  }
-
   // This is a fake navigation request id, which we send to the browser process
   // together with metrics. Note that renderer does not actually issue a request
   // for navigation (browser does it instead), but still reports metrics for it.
@@ -79,7 +76,6 @@ class CONTENT_EXPORT DocumentState
   bool was_load_data_with_base_url_request_ = false;
   GURL data_url_;
   bool is_overriding_user_agent_ = false;
-  bool must_reset_scroll_and_scale_state_ = false;
   int request_id_ = -1;
   std::unique_ptr<NavigationState> navigation_state_;
 };

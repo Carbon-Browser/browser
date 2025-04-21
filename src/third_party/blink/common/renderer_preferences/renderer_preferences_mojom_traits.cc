@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,11 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
     return false;
   out->use_subpixel_positioning = data.use_subpixel_positioning();
 
+#if BUILDFLAG(IS_WIN)
+  out->text_contrast = data.text_contrast();
+  out->text_gamma = data.text_gamma();
+#endif  // BUILDFLAG(IS_WIN)
+
   out->focus_ring_color = data.focus_ring_color();
   out->active_selection_bg_color = data.active_selection_bg_color();
   out->active_selection_fg_color = data.active_selection_fg_color();
@@ -41,6 +46,11 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
     return false;
 
   out->use_custom_colors = data.use_custom_colors();
+
+#if BUILDFLAG(IS_CHROMEOS)
+  out->use_overlay_scrollbar = data.use_overlay_scrollbar();
+#endif
+
   out->enable_referrers = data.enable_referrers();
   out->allow_cross_origin_auth_prompt = data.allow_cross_origin_auth_prompt();
   out->enable_do_not_track = data.enable_do_not_track();
@@ -49,20 +59,23 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
   if (!data.ReadWebrtcIpHandlingPolicy(&out->webrtc_ip_handling_policy))
     return false;
 
+  if (!data.ReadWebrtcIpHandlingUrls(&out->webrtc_ip_handling_urls)) {
+    return false;
+  }
+
   out->webrtc_udp_min_port = data.webrtc_udp_min_port();
   out->webrtc_udp_max_port = data.webrtc_udp_max_port();
 
   if (!data.ReadWebrtcLocalIpsAllowedUrls(&out->webrtc_local_ips_allowed_urls))
     return false;
 
-  out->webrtc_allow_legacy_tls_protocols =
-      data.webrtc_allow_legacy_tls_protocols();
-
   if (!data.ReadUserAgentOverride(&out->user_agent_override))
     return false;
 
   if (!data.ReadAcceptLanguages(&out->accept_languages))
     return false;
+
+  out->send_subresource_notification = data.send_subresource_notification();
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   if (!data.ReadSystemFontFamilyName(&out->system_font_family_name))
@@ -99,7 +112,7 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
   out->arrow_bitmap_width_horizontal_scroll_bar_in_dips =
       data.arrow_bitmap_width_horizontal_scroll_bar_in_dips();
 #endif
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   out->selection_clipboard_buffer_available =
       data.selection_clipboard_buffer_available();
 #endif

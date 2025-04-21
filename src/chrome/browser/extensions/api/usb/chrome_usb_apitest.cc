@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #include "base/test/values_test_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
@@ -22,7 +23,6 @@ namespace extensions {
 namespace {
 
 using ::base::test::RunOnceCallback;
-using ::device::mojom::UsbOpenDeviceError;
 using ::testing::_;
 
 constexpr char kManifest[] =
@@ -84,9 +84,11 @@ class ChromeUsbApiTest : public ExtensionBrowserTest {
             kPolicySetting, extension->url().spec().c_str())));
   }
 
-  device::FakeUsbDeviceManager fake_usb_manager_;
-  scoped_refptr<device::FakeUsbDeviceInfo> fake_device_;
+  // `mock_device_`, `fake_device_`, and `fake_usb_manager_` must be declared in
+  // this order to avoid dangling pointers.
   device::MockUsbMojoDevice mock_device_;
+  scoped_refptr<device::FakeUsbDeviceInfo> fake_device_;
+  device::FakeUsbDeviceManager fake_usb_manager_;
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeUsbApiTest, GetDevicesByPolicy) {
@@ -178,7 +180,9 @@ IN_PROC_BROWSER_TEST_F(ChromeUsbApiTest, FindDevicesByPolicy) {
   const Extension* extension = LoadExtension(dir.UnpackedPath());
 
   EXPECT_CALL(mock_device_, Open)
-      .WillOnce(RunOnceCallback<0>(UsbOpenDeviceError::OK));
+      .WillOnce(
+          RunOnceCallback<0>(device::mojom::UsbOpenDeviceResult::NewSuccess(
+              device::mojom::UsbOpenDeviceSuccess::OK)));
 
   // Run the test.
   SetUpPolicy(extension);

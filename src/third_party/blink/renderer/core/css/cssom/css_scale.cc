@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,9 @@ bool IsValidScaleCoord(CSSNumericValue* coord) {
   // constructor to resolve the valid type for 'calc'.
   if (coord && coord->GetType() != CSSStyleValue::StyleValueType::kUnitType) {
     const CSSMathExpressionNode* node = coord->ToCalcExpressionNode();
-    if (!node)
+    if (!node) {
       return false;
+    }
     CSSPrimitiveValue::UnitType resolved_type = node->ResolvedUnitType();
     return (resolved_type == CSSPrimitiveValue::UnitType::kNumber ||
             resolved_type == CSSPrimitiveValue::UnitType::kInteger);
@@ -56,7 +57,6 @@ CSSScale* FromScaleXYZ(const CSSFunctionValue& value) {
       return CSSScale::Create(default_value, default_value, numeric_value);
     default:
       NOTREACHED();
-      return nullptr;
   }
 }
 
@@ -118,7 +118,6 @@ CSSScale* CSSScale::FromCSSValue(const CSSFunctionValue& value) {
       return FromScale3d(value);
     default:
       NOTREACHED();
-      return nullptr;
   }
 }
 
@@ -179,10 +178,11 @@ DOMMatrix* CSSScale::toMatrix(ExceptionState& exception_state) const {
   }
 
   DOMMatrix* matrix = DOMMatrix::Create();
-  if (is2D())
+  if (is2D()) {
     matrix->scaleSelf(x->value(), y->value());
-  else
+  } else {
     matrix->scaleSelf(x->value(), y->value(), z->value());
+  }
 
   return matrix;
 }
@@ -190,8 +190,9 @@ DOMMatrix* CSSScale::toMatrix(ExceptionState& exception_state) const {
 const CSSFunctionValue* CSSScale::ToCSSValue() const {
   const CSSValue* x = x_->ToCSSValue();
   const CSSValue* y = y_->ToCSSValue();
-  if (!x || !y)
+  if (!x || !y) {
     return nullptr;
+  }
 
   CSSFunctionValue* result = MakeGarbageCollected<CSSFunctionValue>(
       is2D() ? CSSValueID::kScale : CSSValueID::kScale3d);
@@ -199,8 +200,9 @@ const CSSFunctionValue* CSSScale::ToCSSValue() const {
   result->Append(*y);
   if (!is2D()) {
     const CSSValue* z = z_->ToCSSValue();
-    if (!z)
+    if (!z) {
       return nullptr;
+    }
     result->Append(*z);
   }
   return result;

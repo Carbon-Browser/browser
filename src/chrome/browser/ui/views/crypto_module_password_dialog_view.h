@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,13 @@
 namespace views {
 class Label;
 class Textfield;
-}
+}  // namespace views
 
 class CryptoModulePasswordDialogView : public views::DialogDelegateView,
                                        public views::TextfieldController {
+  METADATA_HEADER(CryptoModulePasswordDialogView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(CryptoModulePasswordDialogView);
   CryptoModulePasswordDialogView(const std::string& slot_name,
                                  CryptoModulePasswordReason reason,
                                  const std::string& server,
@@ -48,6 +49,8 @@ class CryptoModulePasswordDialogView : public views::DialogDelegateView,
                        const std::u16string& new_contents) override;
   bool HandleKeyEvent(views::Textfield* sender,
                       const ui::KeyEvent& keystroke) override;
+
+  void DialogAcceptedOrCancelled(bool accepted);
 
   // Initialize views and layout.
   void Init(const std::string& server,

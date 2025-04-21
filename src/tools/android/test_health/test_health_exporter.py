@@ -1,5 +1,5 @@
 # Lint as: python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -81,9 +81,14 @@ def _to_java_test_health_dict(java_test_health: JavaTestHealth
         test_dict.update(dict(java_package=java_test_health.java_package))
 
     test_dict.update(
-        dict(disabled_tests_count=java_test_health.disabled_tests_count,
-             disable_if_tests_count=java_test_health.disable_if_tests_count,
-             flaky_tests_count=java_test_health.flaky_tests_count))
+        dict(
+            disabled_tests_count=java_test_health.disabled_tests_count,
+            disable_if_tests_count=java_test_health.disable_if_tests_count,
+            tests_count=java_test_health.tests_count,
+            disabled_tests=java_test_health.disabled_tests,
+            disable_if_tests=java_test_health.disable_if_tests,
+            tags=java_test_health.tags,
+        ))
 
     return test_dict
 

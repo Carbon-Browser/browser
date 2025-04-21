@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,17 @@ import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.widget.FrameLayout;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.components.embedder_support.view.ContentViewRenderView;
+import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Container and generator of ShellViews.
- */
+/** Container and generator of ShellViews. */
 @JNINamespace("content")
 public class ShellManager extends FrameLayout {
 
@@ -27,14 +27,10 @@ public class ShellManager extends FrameLayout {
     private WindowAndroid mWindow;
     private Shell mActiveShell;
 
-    private String mStartupUrl = DEFAULT_SHELL_URL;
-
     // The target for all content rendering.
     private ContentViewRenderView mContentViewRenderView;
 
-    /**
-     * Constructor for inflating via XML.
-     */
+    /** Constructor for inflating via XML. */
     public ShellManager(final Context context, AttributeSet attrs) {
         super(context, attrs);
         ShellManagerJni.get().init(this);
@@ -57,18 +53,9 @@ public class ShellManager extends FrameLayout {
         return mWindow;
     }
 
-    /**
-     * Get the ContentViewRenderView.
-     */
+    /** Get the ContentViewRenderView. */
     public ContentViewRenderView getContentViewRenderView() {
         return mContentViewRenderView;
-    }
-
-    /**
-     * Sets the startup URL for new shell windows.
-     */
-    public void setStartupUrl(String url) {
-        mStartupUrl = url;
     }
 
     /**
@@ -110,13 +97,16 @@ public class ShellManager extends FrameLayout {
 
     private void showShell(Shell shellView) {
         shellView.setContentViewRenderView(mContentViewRenderView);
-        addView(shellView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        addView(
+                shellView,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
         mActiveShell = shellView;
         WebContents webContents = mActiveShell.getWebContents();
         if (webContents != null) {
             mContentViewRenderView.setCurrentWebContents(webContents);
-            webContents.onShow();
+            webContents.updateWebContentsVisibility(Visibility.VISIBLE);
         }
     }
 
@@ -148,6 +138,7 @@ public class ShellManager extends FrameLayout {
     @NativeMethods
     interface Natives {
         void init(Object shellManagerInstance);
+
         void launchShell(String url);
     }
 }

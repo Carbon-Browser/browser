@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include <numeric>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -104,7 +105,9 @@ MessageBoxView::MessageBoxView(const std::u16string& message,
             .SetAllowCharacterBreak(true)
             .SetHorizontalAlignment(alignment)
             .CustomConfigure(base::BindOnce(
-                [](std::vector<Label*>& message_labels, Label* message_label) {
+                [](std::vector<raw_ptr<Label, VectorExperimental>>&
+                       message_labels,
+                   Label* message_label) {
                   message_labels.push_back(message_label);
                 },
                 std::ref(message_labels_))));
@@ -129,7 +132,7 @@ MessageBoxView::MessageBoxView(const std::u16string& message,
               .ClipHeightTo(0, provider->GetDistanceMetric(
                                    DISTANCE_DIALOG_SCROLLABLE_AREA_MAX_HEIGHT))
               .SetContents(std::move(message_contents)),
-          // TODO(crbug.com/1218186): Remove this, this is in place temporarily
+          // TODO(crbug.com/40185544): Remove this, this is in place temporarily
           // to be able to submit accessibility checks, but this focusable View
           // needs to add a name so that the screen reader knows what to
           // announce.
@@ -140,7 +143,7 @@ MessageBoxView::MessageBoxView(const std::u16string& message,
               .SetAccessibleName(message)
               .SetVisible(false)
               .CustomConfigure(base::BindOnce([](Textfield* prompt_field) {
-                prompt_field->GetViewAccessibility().OverrideIsIgnored(true);
+                prompt_field->GetViewAccessibility().SetIsIgnored(true);
               })),
           Builder<Checkbox>()
               .CopyAddressTo(&checkbox_)
@@ -155,8 +158,9 @@ MessageBoxView::MessageBoxView(const std::u16string& message,
 
   // Don't enable text selection if multiple labels are used, since text
   // selection can't span multiple labels.
-  if (message_labels_.size() == 1u)
+  if (message_labels_.size() == 1u) {
     message_labels_[0]->SetSelectable(true);
+  }
 
   ResetLayoutManager();
 }
@@ -183,8 +187,9 @@ bool MessageBoxView::IsCheckBoxSelected() {
 
 void MessageBoxView::SetCheckBoxLabel(const std::u16string& label) {
   DCHECK(checkbox_);
-  if (checkbox_->GetVisible() && checkbox_->GetText() == label)
+  if (checkbox_->GetVisible() && checkbox_->GetText() == label) {
     return;
+  }
 
   checkbox_->SetText(label);
   checkbox_->SetVisible(true);
@@ -193,8 +198,9 @@ void MessageBoxView::SetCheckBoxLabel(const std::u16string& label) {
 
 void MessageBoxView::SetCheckBoxSelected(bool selected) {
   // Only update the checkbox's state after the checkbox is shown.
-  if (!checkbox_->GetVisible())
+  if (!checkbox_->GetVisible()) {
     return;
+  }
   checkbox_->SetChecked(selected);
 }
 
@@ -205,24 +211,27 @@ void MessageBoxView::SetLink(const std::u16string& text,
   DCHECK(link_);
 
   link_->SetCallback(std::move(callback));
-  if (link_->GetVisible() && link_->GetText() == text)
+  if (link_->GetVisible() && link_->GetText() == text) {
     return;
+  }
   link_->SetText(text);
   link_->SetVisible(true);
   ResetLayoutManager();
 }
 
 void MessageBoxView::SetInterRowVerticalSpacing(int spacing) {
-  if (inter_row_vertical_spacing_ == spacing)
+  if (inter_row_vertical_spacing_ == spacing) {
     return;
+  }
 
   inter_row_vertical_spacing_ = spacing;
   ResetLayoutManager();
 }
 
 void MessageBoxView::SetMessageWidth(int width) {
-  if (message_width_ == width)
+  if (message_width_ == width) {
     return;
+  }
 
   message_width_ = width;
   ResetLayoutManager();
@@ -230,26 +239,35 @@ void MessageBoxView::SetMessageWidth(int width) {
 
 void MessageBoxView::SetPromptField(const std::u16string& default_prompt) {
   DCHECK(prompt_field_);
-  if (prompt_field_->GetVisible() && prompt_field_->GetText() == default_prompt)
+  if (prompt_field_->GetVisible() &&
+      prompt_field_->GetText() == default_prompt) {
     return;
+  }
   prompt_field_->SetText(default_prompt);
   prompt_field_->SetVisible(true);
-  prompt_field_->GetViewAccessibility().OverrideIsIgnored(false);
+  prompt_field_->GetViewAccessibility().SetIsIgnored(false);
   // The same text visible in the message box is used as an accessible name for
   // the prompt. To prevent it from being announced twice, we hide the message
   // to ATs.
-  scroll_view_->GetViewAccessibility().OverrideIsLeaf(true);
+  scroll_view_->GetViewAccessibility().SetIsLeaf(true);
   ResetLayoutManager();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // MessageBoxView, View overrides:
 
+gfx::Size MessageBoxView::CalculatePreferredSize(
+    const SizeBounds& available_size) const {
+  return BoxLayoutView::CalculatePreferredSize(
+      SizeBounds(message_width_, available_size.height()));
+}
+
 void MessageBoxView::ViewHierarchyChanged(
     const ViewHierarchyChangedDetails& details) {
   if (details.child == this && details.is_add) {
-    if (prompt_field_ && prompt_field_->GetVisible())
+    if (prompt_field_ && prompt_field_->GetVisible()) {
       prompt_field_->SelectAll(true);
+    }
   }
 }
 
@@ -258,13 +276,15 @@ bool MessageBoxView::AcceleratorPressed(const ui::Accelerator& accelerator) {
   DCHECK(accelerator.key_code() == 'C' && accelerator.IsCtrlDown());
 
   // We must not intercept Ctrl-C when we have a text box and it's focused.
-  if (prompt_field_ && prompt_field_->HasFocus())
+  if (prompt_field_ && prompt_field_->HasFocus()) {
     return false;
+  }
 
   // Don't intercept Ctrl-C if we only use a single message label supporting
   // text selection.
-  if (message_labels_.size() == 1u && message_labels_[0]->GetSelectable())
+  if (message_labels_.size() == 1u && message_labels_[0]->GetSelectable()) {
     return false;
+  }
 
   ui::ScopedClipboardWriter scw(ui::ClipboardBuffer::kCopyPaste);
   scw.WriteText(std::accumulate(message_labels_.cbegin(),
@@ -281,24 +301,26 @@ bool MessageBoxView::AcceleratorPressed(const ui::Accelerator& accelerator) {
 void MessageBoxView::ResetLayoutManager() {
   SetBetweenChildSpacing(inter_row_vertical_spacing_);
   SetMinimumCrossAxisSize(message_width_);
-  scroll_view_->SetPreferredSize(gfx::Size(message_width_, 0));
 
   views::DialogContentType trailing_content_type =
       views::DialogContentType::kText;
-  if (prompt_field_->GetVisible())
+  if (prompt_field_->GetVisible()) {
     trailing_content_type = views::DialogContentType::kControl;
+  }
 
   bool checkbox_is_visible = checkbox_->GetVisible();
-  if (checkbox_is_visible)
+  if (checkbox_is_visible) {
     trailing_content_type = views::DialogContentType::kText;
+  }
 
   // Ignored views are not in the accessibility tree, but their children
   // still can be exposed. Leaf views have no accessible children.
-  checkbox_->GetViewAccessibility().OverrideIsIgnored(!checkbox_is_visible);
-  checkbox_->GetViewAccessibility().OverrideIsLeaf(!checkbox_is_visible);
+  checkbox_->GetViewAccessibility().SetIsIgnored(!checkbox_is_visible);
+  checkbox_->GetViewAccessibility().SetIsLeaf(!checkbox_is_visible);
 
-  if (link_->GetVisible())
+  if (link_->GetVisible()) {
     trailing_content_type = views::DialogContentType::kText;
+  }
 
   const LayoutProvider* provider = LayoutProvider::Get();
   gfx::Insets border_insets = provider->GetDialogInsetsForContentType(
@@ -319,7 +341,7 @@ gfx::Insets MessageBoxView::GetHorizontalInsets(
   return horizontal_insets;
 }
 
-BEGIN_METADATA(MessageBoxView, View)
+BEGIN_METADATA(MessageBoxView)
 END_METADATA
 
 }  // namespace views

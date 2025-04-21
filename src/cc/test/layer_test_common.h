@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,6 @@
 #define CC_TEST_LAYER_TEST_COMMON_H_
 
 #include "cc/layers/layer_collections.h"
-
-#define EXPECT_SET_NEEDS_COMMIT(expect, code_to_test)                 \
-  do {                                                                \
-    EXPECT_CALL(*layer_tree_host_, SetNeedsCommit()).Times((expect)); \
-    code_to_test;                                                     \
-    Mock::VerifyAndClearExpectations(layer_tree_host_.get());         \
-  } while (false)
-
-#define EXPECT_SET_NEEDS_UPDATE(expect, code_to_test)                       \
-  do {                                                                      \
-    EXPECT_CALL(*layer_tree_host_, SetNeedsUpdateLayers()).Times((expect)); \
-    code_to_test;                                                           \
-    Mock::VerifyAndClearExpectations(layer_tree_host_.get());               \
-  } while (false)
 
 namespace gfx {
 class Rect;
@@ -33,6 +19,14 @@ namespace cc {
 
 class LayerTreeHost;
 class LayerTreeImpl;
+class LayerTreeSettings;
+
+// LayerTreeSettings with different combinations of
+// commit_to_active_tree and use_layer_lists.
+LayerTreeSettings CommitToActiveTreeLayerListSettings();
+LayerTreeSettings CommitToActiveTreeLayerTreeSettings();
+LayerTreeSettings CommitToPendingTreeLayerListSettings();
+LayerTreeSettings CommitToPendingTreeLayerTreeSettings();
 
 // In tests that build layer tree and property trees directly at impl-side,
 // before calling LayerTreeImpl::UpdateDrawProperties() or any function calling
@@ -65,6 +59,15 @@ void VerifyQuadsExactlyCoverRect(const viz::QuadList& quads,
 void VerifyQuadsAreOccluded(const viz::QuadList& quads,
                             const gfx::Rect& occluded,
                             size_t* partially_occluded_count);
+
+// For parameterized test suites testing with both CommitToActiveTree (with
+// the bool parameter being true) and !CommitToActiveTree settings.
+#define INSTANTIATE_COMMIT_TO_TREE_TEST_P(name)                           \
+  INSTANTIATE_TEST_SUITE_P(                                               \
+      , name, ::testing::Bool(),                                          \
+      [](const ::testing::TestParamInfo<name::ParamType>& info) {         \
+        return info.param ? "CommitToActiveTree" : "CommitToPendingTree"; \
+      })
 
 }  // namespace cc
 

@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/filters/paint_filter_effect.h"
 
 #include "third_party/blink/renderer/platform/graphics/filters/filter.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 namespace blink {
 
@@ -26,18 +26,19 @@ sk_sp<PaintFilter> PaintFilterEffect::CreateImageFilter() {
                                       : SkImageFilters::Dither::kNo;
   if (shader) {
     // Include the paint's alpha modulation
-    return sk_make_sp<ShaderPaintFilter>(sk_ref_sp(shader), flags_.getAlpha(),
+    return sk_make_sp<ShaderPaintFilter>(sk_ref_sp(shader), flags_.getAlphaf(),
                                          flags_.getFilterQuality(), dither);
   } else {
     // ShaderPaintFilter requires shader to be non-null
     return sk_make_sp<ShaderPaintFilter>(
-        cc::PaintShader::MakeColor(flags_.getColor4f()), 255,
+        cc::PaintShader::MakeColor(flags_.getColor4f()), 1.0f,
         flags_.getFilterQuality(), dither);
   }
 }
 
-WTF::TextStream& PaintFilterEffect::ExternalRepresentation(WTF::TextStream& ts,
-                                                           int indent) const {
+StringBuilder& PaintFilterEffect::ExternalRepresentation(
+    StringBuilder& ts,
+    wtf_size_t indent) const {
   WriteIndent(ts, indent);
   ts << "[PaintFilterEffect]\n";
   return ts;

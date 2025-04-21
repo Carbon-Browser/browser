@@ -1,11 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/web_applications/preinstalled_web_app_config_utils.h"
 
+#include <optional>
+
+#include "base/auto_reset.h"
 #include "base/command_line.h"
 #include "base/logging.h"
+#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -15,15 +19,16 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/common/chrome_paths_lacros.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
 namespace web_app {
 
 namespace {
 
-const base::FilePath* g_config_dir_for_testing = nullptr;
+std::optional<base::FilePath>&
+GetPreinstalledWebAppConfigDirMutableForTesting() {
+  static base::NoDestructor<std::optional<base::FilePath>>
+      g_config_dir_for_testing(std::nullopt);
+  return *g_config_dir_for_testing.get();
+}
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // The sub-directory of the extensions directory in which to scan for external
@@ -32,40 +37,22 @@ const base::FilePath::CharType kWebAppsSubDirectory[] =
     FILE_PATH_LITERAL("web_apps");
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-base::FilePath GetPreinstalledWebAppConfigDirFromDefaultPaths(
-    Profile* profile) {
-  if (g_config_dir_for_testing) {
-    return *g_config_dir_for_testing;
-  }
-
-  base::FilePath web_apps_dir;
-  if (chrome::GetPreinstalledWebAppConfigPath(&web_apps_dir))
-    return web_apps_dir;
-  return base::FilePath();
-}
-
-base::FilePath GetPreinstalledWebAppExtraConfigDirFromDefaultPaths(
-    Profile* profile) {
-  base::FilePath extra_web_apps_dir;
-  if (chrome::GetPreinstalledWebAppExtraConfigPath(&extra_web_apps_dir))
-    return extra_web_apps_dir;
-  return base::FilePath();
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
 }  // namespace
 
-const base::FilePath* GetPreinstalledWebAppConfigDirForTesting() {
-  return g_config_dir_for_testing;
+namespace test {
+
+std::optional<base::FilePath> GetPreinstalledWebAppConfigDirForTesting() {
+  return GetPreinstalledWebAppConfigDirMutableForTesting();
 }
 
-void SetPreinstalledWebAppConfigDirForTesting(
-    const base::FilePath* config_dir) {
-  g_config_dir_for_testing = config_dir;
+base::AutoReset<std::optional<base::FilePath>>
+SetPreinstalledWebAppConfigDirForTesting(const base::FilePath& config_dir) {
+  return {&GetPreinstalledWebAppConfigDirMutableForTesting(),  // IN-TEST
+                         config_dir};
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+}  // namespace test
+
 base::FilePath GetPreinstalledWebAppConfigDirFromCommandLine(Profile* profile) {
   std::string command_line_directory =
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
@@ -79,12 +66,12 @@ base::FilePath GetPreinstalledWebAppConfigDirFromCommandLine(Profile* profile) {
   // which includes OS_CHROMEOS.
 
   // Exclude sign-in and lock screen profiles.
-  if (!ash::ProfileHelper::IsRegularProfile(profile)) {
+  if (!ash::ProfileHelper::IsUserProfile(profile)) {
     return {};
   }
 
-  if (g_config_dir_for_testing) {
-    return *g_config_dir_for_testing;
+  if (test::GetPreinstalledWebAppConfigDirForTesting()) {  // IN-TEST
+    return *test::GetPreinstalledWebAppConfigDirForTesting();  // IN-TEST
   }
 
   // For manual testing, you can change s/STANDALONE/USER/, as writing to
@@ -118,22 +105,13 @@ base::FilePath GetPreinstalledWebAppExtraConfigDirFromCommandLine(
   return base::FilePath();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 base::FilePath GetPreinstalledWebAppConfigDir(Profile* profile) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  return GetPreinstalledWebAppConfigDirFromDefaultPaths(profile);
-#else
   return GetPreinstalledWebAppConfigDirFromCommandLine(profile);
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 }
 
 base::FilePath GetPreinstalledWebAppExtraConfigDir(Profile* profile) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  return GetPreinstalledWebAppExtraConfigDirFromDefaultPaths(profile);
-#else
   return GetPreinstalledWebAppExtraConfigDirFromCommandLine(profile);
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 }
 
 }  // namespace web_app

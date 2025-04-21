@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ using views::Widget;
 
 typedef ChromeViewsTestBase ConfirmBubbleViewsTest;
 
-// TODO(crbug.com/1004633) Disabled on windows due to flake
+// TODO(crbug.com/40099109) Disabled on windows due to flake
 #if BUILDFLAG(IS_WIN)
 #define MAYBE_CreateAndClose DISABLED_CreateAndClose
 #else
@@ -29,8 +29,9 @@ TEST_F(ConfirmBubbleViewsTest, MAYBE_CreateAndClose) {
   SetConstrainedWindowViewsClient(CreateChromeConstrainedWindowViewsClient());
 
   // Create parent widget, as confirm bubble must have an owner.
-  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  Widget::InitParams params =
+      CreateParams(views::Widget::InitParams::CLIENT_OWNS_WIDGET,
+                   Widget::InitParams::TYPE_WINDOW);
   std::unique_ptr<views::Widget> parent_widget(new Widget);
   parent_widget->Init(std::move(params));
   parent_widget->Show();
@@ -38,7 +39,7 @@ TEST_F(ConfirmBubbleViewsTest, MAYBE_CreateAndClose) {
   // Bubble owns the model.
   bool model_deleted = false;
   std::unique_ptr<TestConfirmBubbleModel> model(
-      new TestConfirmBubbleModel(&model_deleted, NULL, NULL, NULL));
+      new TestConfirmBubbleModel(&model_deleted, nullptr, nullptr, nullptr));
   ConfirmBubbleViews* bubble = new ConfirmBubbleViews(std::move(model));
   gfx::NativeWindow parent = parent_widget->GetNativeWindow();
   constrained_window::CreateBrowserModalDialogViews(bubble, parent)->Show();

@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/webcrypto/webcrypto_impl.h"
 
@@ -10,21 +15,21 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/no_destructor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "components/webcrypto/algorithm_dispatch.h"
 #include "components/webcrypto/generate_key_result.h"
 #include "components/webcrypto/status.h"
 #include "third_party/blink/public/platform/web_crypto_key_algorithm.h"
 #include "third_party/blink/public/platform/web_string.h"
+#include "third_party/blink/public/web/web_crypto_histograms.h"
 
 namespace webcrypto {
 
@@ -92,12 +97,10 @@ class CryptoThreadPool {
   base::Thread worker_thread_;
 };
 
-base::LazyInstance<CryptoThreadPool>::Leaky crypto_thread_pool =
-    LAZY_INSTANCE_INITIALIZER;
-
 bool CryptoThreadPool::PostTask(const base::Location& from_here,
                                 base::OnceClosure task) {
-  return crypto_thread_pool.Get().worker_thread_.task_runner()->PostTask(
+  static base::NoDestructor<CryptoThreadPool> crypto_thread_pool;
+  return crypto_thread_pool->worker_thread_.task_runner()->PostTask(
       from_here, std::move(task));
 }
 
@@ -118,15 +121,12 @@ void CompleteWithBufferOrError(const Status& status,
                                blink::WebCryptoResult* result) {
   if (status.IsError()) {
     CompleteWithError(status, result);
+  } else if (buffer.size() > UINT_MAX) {
+    // WebArrayBuffers have a smaller range than std::vector<>, so
+    // theoretically this could overflow.
+    CompleteWithError(Status::ErrorUnexpected(), result);
   } else {
-    if (buffer.size() > UINT_MAX) {
-      // WebArrayBuffers have a smaller range than std::vector<>, so
-      // theoretically this could overflow.
-      CompleteWithError(Status::ErrorUnexpected(), result);
-    } else {
-      result->CompleteWithBuffer(buffer.data(),
-                                 static_cast<unsigned int>(buffer.size()));
-    }
+    result->CompleteWithBuffer(buffer);
   }
 }
 
@@ -172,7 +172,7 @@ struct BaseState {
  protected:
   // Since there is no virtual destructor, must not delete directly as a
   // BaseState.
-  ~BaseState() {}
+  ~BaseState() = default;
 };
 
 struct EncryptState : public BaseState {
@@ -329,7 +329,7 @@ struct UnwrapKeyState : public BaseState {
 struct DeriveBitsState : public BaseState {
   DeriveBitsState(const blink::WebCryptoAlgorithm& algorithm,
                   const blink::WebCryptoKey& base_key,
-                  unsigned int length_bits,
+                  std::optional<unsigned int> length_bits,
                   const blink::WebCryptoResult& result,
                   scoped_refptr<base::SingleThreadTaskRunner> task_runner)
       : BaseState(result, std::move(task_runner)),
@@ -339,7 +339,7 @@ struct DeriveBitsState : public BaseState {
 
   const blink::WebCryptoAlgorithm algorithm;
   const blink::WebCryptoKey base_key;
-  const unsigned int length_bits;
+  const std::optional<unsigned int> length_bits;
 
   std::vector<uint8_t> derived_bytes;
 };
@@ -485,9 +485,7 @@ void DoExportKeyReply(std::unique_ptr<ExportKeyState> state) {
   if (state->status.IsError()) {
     CompleteWithError(state->status, &state->result);
   } else {
-    state->result.CompleteWithJson(
-        reinterpret_cast<const char*>(state->buffer.data()),
-        static_cast<unsigned int>(state->buffer.size()));
+    state->result.CompleteWithJson(base::as_string_view(state->buffer));
   }
 }
 
@@ -583,6 +581,11 @@ void DoUnwrapKey(std::unique_ptr<UnwrapKeyState> passed_state) {
 void DoDeriveBitsReply(std::unique_ptr<DeriveBitsState> state) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                "DoDeriveBitsReply");
+  if (!state->status.IsError()) {
+    HistogramDeriveBitsTruncation(state->result.GetExecutionContext(),
+                                  state->length_bits,
+                                  state->status.warning_type());
+  }
   CompleteWithBufferOrError(state->status, state->derived_bytes,
                             &state->result);
 }
@@ -809,7 +812,7 @@ void WebCryptoImpl::UnwrapKey(
 void WebCryptoImpl::DeriveBits(
     const blink::WebCryptoAlgorithm& algorithm,
     const blink::WebCryptoKey& base_key,
-    unsigned int length_bits,
+    std::optional<unsigned int> length_bits,
     blink::WebCryptoResult result,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
   if (result.Cancelled())
@@ -847,12 +850,10 @@ bool WebCryptoImpl::DeserializeKeyForClone(
     blink::WebCryptoKeyType type,
     bool extractable,
     blink::WebCryptoKeyUsageMask usages,
-    const unsigned char* key_data,
-    unsigned key_data_size,
+    base::span<const unsigned char> key_data,
     blink::WebCryptoKey& key) {
-  return webcrypto::DeserializeKeyForClone(
-      algorithm, type, extractable, usages,
-      base::make_span(key_data, key_data_size), &key);
+  return webcrypto::DeserializeKeyForClone(algorithm, type, extractable, usages,
+                                           key_data, &key);
 }
 
 bool WebCryptoImpl::SerializeKeyForClone(

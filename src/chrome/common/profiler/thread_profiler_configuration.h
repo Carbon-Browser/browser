@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 #define CHROME_COMMON_PROFILER_THREAD_PROFILER_CONFIGURATION_H_
 
 #include <initializer_list>
+#include <optional>
 #include <string>
 
 #include "base/no_destructor.h"
 #include "base/profiler/stack_sampling_profiler.h"
-#include "components/metrics/call_stack_profile_params.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/sampling_profiler/process_type.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace base {
@@ -42,7 +42,7 @@ class ThreadProfilerConfiguration {
 
   // True if the profiler should be started for |thread| in the current process.
   bool IsProfilerEnabledForCurrentProcessAndThread(
-      metrics::CallStackProfileParams::Thread thread) const;
+      sampling_profiler::ProfilerThreadType thread) const;
 
   // Get the synthetic field trial configuration. Returns true if a synthetic
   // field trial should be registered. This should only be called from the
@@ -50,6 +50,10 @@ class ThreadProfilerConfiguration {
   // field trial since it runs before the metrics field trials are initialized.
   bool GetSyntheticFieldTrial(std::string* trial_name,
                               std::string* group_name) const;
+
+  // True if profiler should be enabled for the child process.
+  bool IsProfilerEnabledForChildProcess(
+      sampling_profiler::ProfilerProcessType child_process) const;
 
   // Add a command line switch that instructs the child process to run the
   // profiler. This should only be called from the browser process.
@@ -75,12 +79,24 @@ class ThreadProfilerConfiguration {
 
     // Enabled outside of the experiment.
     kProfileEnabled,
+
+    // Disabled outside of the experiment.
+    kProfileDisabledOutsideOfExperiment,
   };
 
-  // The configuration state for the browser process. If !has_value() profiling
-  // is disabled and no variations state is reported. Otherwise profiling is
-  // enabled based on the VariationGroup and the variation state is reported.
-  using BrowserProcessConfiguration = absl::optional<VariationGroup>;
+  struct BrowserProcessConfiguration {
+    // The configuration state for the browser process. If !has_value()
+    // profiling is disabled and no variations state is reported. Otherwise
+    // profiling is enabled based on the VariationGroup and the variation state
+    // is reported.
+    std::optional<VariationGroup> variation_group;
+
+    // In pick-single-type-of-process-to-sample mode, only a single process
+    // type will be profiled when profiling is enabled. If !has_value(), the
+    // profiling will be enabled for as many processes as possible.
+    std::optional<sampling_profiler::ProfilerProcessType>
+        process_type_to_sample;
+  };
 
   // The configuration state in child processes.
   enum ChildProcessConfiguration {
@@ -96,14 +112,21 @@ class ThreadProfilerConfiguration {
   // one of a set of variations.
   struct Variation {
     VariationGroup group;
-    int weight;
+    double weight;
   };
 
   ThreadProfilerConfiguration();
 
   // True if the profiler is to be enabled for |variation_group|.
   static bool EnableForVariationGroup(
-      absl::optional<VariationGroup> variation_group);
+      std::optional<VariationGroup> variation_group);
+
+  // True if the given process is picked to enable profiling. In pick-single-
+  // type-of-process-to-sample mode, only one type of process is picked to
+  // have profiling enabled so that the user impact can be minimized.
+  static bool IsProcessGloballyEnabled(
+      const ThreadProfilerConfiguration::BrowserProcessConfiguration& config,
+      sampling_profiler::ProfilerProcessType process);
 
   // Randomly chooses a variation from the weighted variations. Weights are
   // expected to sum to 100 as a sanity check.
@@ -120,7 +143,7 @@ class ThreadProfilerConfiguration {
 
   // Generates a configuration for the current process.
   static Configuration GenerateConfiguration(
-      metrics::CallStackProfileParams::Process process,
+      sampling_profiler::ProfilerProcessType process,
       const ThreadProfilerPlatformConfiguration& platform_configuration);
 
   // NOTE: all state in this class must be const and initialized at construction

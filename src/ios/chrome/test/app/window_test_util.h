@@ -1,5 +1,4 @@
-
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +6,6 @@
 #define IOS_CHROME_TEST_APP_WINDOW_TEST_UTIL_H_
 
 #import <Foundation/Foundation.h>
-
-#include "base/compiler_specific.h"
 
 namespace web {
 class WebState;

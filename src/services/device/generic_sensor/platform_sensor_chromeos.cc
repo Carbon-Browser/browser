@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
@@ -26,11 +26,11 @@ PlatformSensorChromeOS::PlatformSensorChromeOS(
     int32_t iio_device_id,
     mojom::SensorType type,
     SensorReadingSharedBuffer* reading_buffer,
-    PlatformSensorProvider* provider,
+    base::WeakPtr<PlatformSensorProvider> provider,
     mojo::ConnectionErrorWithReasonCallback sensor_device_disconnect_callback,
     double scale,
     mojo::Remote<chromeos::sensors::mojom::SensorDevice> sensor_device_remote)
-    : PlatformSensor(type, reading_buffer, provider),
+    : PlatformSensor(type, reading_buffer, std::move(provider)),
       iio_device_id_(iio_device_id),
       sensor_device_disconnect_callback_(
           std::move(sensor_device_disconnect_callback)),
@@ -96,11 +96,6 @@ void PlatformSensorChromeOS::OnSampleUpdated(
     case mojom::SensorType::AMBIENT_LIGHT:
       DCHECK_EQ(channel_indices_.size(), 2u);
       reading.als.value = GetScaledValue(sample.at(channel_indices_[0]));
-      break;
-
-    case mojom::SensorType::PROXIMITY:
-      DCHECK_EQ(channel_indices_.size(), 2u);
-      reading.proximity.value = GetScaledValue(sample.at(channel_indices_[0]));
       break;
 
     case mojom::SensorType::ACCELEROMETER:
@@ -310,7 +305,7 @@ void PlatformSensorChromeOS::SetRequiredChannels() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(required_channel_ids_.empty());  // Should only be called once.
 
-  absl::optional<std::string> axes_prefix = absl::nullopt;
+  std::optional<std::string> axes_prefix = std::nullopt;
   switch (GetType()) {
     case mojom::SensorType::AMBIENT_LIGHT:
       required_channel_ids_.push_back(chromeos::sensors::mojom::kLightChannel);

@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/forced_extensions/force_installed_tracker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
@@ -20,9 +20,9 @@
 #include "extensions/browser/pref_names.h"
 #include "extensions/common/extension_urls.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "ash/components/arc/arc_prefs.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace extensions {
 
@@ -120,7 +120,7 @@ bool ForceInstalledTracker::ProceedIfForcedExtensionsPrefReady() {
          status_ == kWaitingForInstallForcelistPref);
 
   const base::Value::Dict& value =
-      pref_service_->GetValueDict(pref_names::kInstallForceList);
+      pref_service_->GetDict(pref_names::kInstallForceList);
   if (!forced_extensions_pref_ready_ && !value.empty()) {
     forced_extensions_pref_ready_ = true;
     OnForcedExtensionsPrefReady();
@@ -144,16 +144,15 @@ void ForceInstalledTracker::OnForcedExtensionsPrefReady() {
   collector_observation_.Observe(InstallStageTracker::Get(profile_));
 
   const base::Value::Dict& value =
-      pref_service_->GetValueDict(pref_names::kInstallForceList);
+      pref_service_->GetDict(pref_names::kInstallForceList);
 
   // Add each extension to |extensions_|.
   for (auto entry : value) {
     const ExtensionId& extension_id = entry.first;
-    const std::string* update_url = nullptr;
-    if (entry.second.is_dict()) {
-      update_url =
-          entry.second.FindStringKey(ExternalProviderImpl::kExternalUpdateUrl);
-    }
+    const std::string* update_url =
+        entry.second.is_dict() ? entry.second.GetDict().FindString(
+                                     ExternalProviderImpl::kExternalUpdateUrl)
+                               : nullptr;
     bool is_from_store =
         update_url && *update_url == extension_urls::kChromeWebstoreUpdateURL;
 
@@ -232,6 +231,10 @@ bool ForceInstalledTracker::IsReady() const {
   return status_ == kComplete || status_ == kWaitingForInstallForcelistPref;
 }
 
+bool ForceInstalledTracker::IsComplete() const {
+  return status_ == kComplete;
+}
+
 bool ForceInstalledTracker::IsMisconfiguration(
     const InstallStageTracker::InstallationData& installation_data,
     const ExtensionId& id) const {
@@ -249,7 +252,7 @@ bool ForceInstalledTracker::IsMisconfiguration(
     }
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // REPLACED_BY_SYSTEM_APP is a misconfiguration because these apps are legacy
   // apps and are replaced by system apps.
   if (installation_data.failure_reason ==
@@ -265,7 +268,7 @@ bool ForceInstalledTracker::IsMisconfiguration(
           InstallStageTracker::FailureReason::REPLACED_BY_ARC_APP) {
     return true;
   }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   if (installation_data.failure_reason ==
       InstallStageTracker::FailureReason::NOT_PERFORMING_NEW_INSTALL) {
@@ -334,7 +337,7 @@ bool ForceInstalledTracker::IsMisconfiguration(
 
 // static
 bool ForceInstalledTracker::IsExtensionFetchedFromCache(
-    const absl::optional<ExtensionDownloaderDelegate::CacheStatus>& status) {
+    const std::optional<ExtensionDownloaderDelegate::CacheStatus>& status) {
   if (!status)
     return false;
   return status.value() == ExtensionDownloaderDelegate::CacheStatus::

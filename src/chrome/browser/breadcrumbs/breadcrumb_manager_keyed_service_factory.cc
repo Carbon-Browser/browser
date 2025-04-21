@@ -1,13 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/breadcrumbs/breadcrumb_manager_keyed_service_factory.h"
 
 #include "base/no_destructor.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "components/breadcrumbs/core/breadcrumb_manager_keyed_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 
 // static
@@ -20,28 +18,30 @@ BreadcrumbManagerKeyedServiceFactory::GetInstance() {
 // static
 breadcrumbs::BreadcrumbManagerKeyedService*
 BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
-    content::BrowserContext* context,
-    bool create) {
+    content::BrowserContext* context) {
   return static_cast<breadcrumbs::BreadcrumbManagerKeyedService*>(
-      GetInstance()->GetServiceForBrowserContext(context, create));
+      GetInstance()->GetServiceForBrowserContext(context, /*create=*/true));
 }
 
 BreadcrumbManagerKeyedServiceFactory::BreadcrumbManagerKeyedServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "BreadcrumbManagerService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 BreadcrumbManagerKeyedServiceFactory::~BreadcrumbManagerKeyedServiceFactory() =
     default;
 
-KeyedService* BreadcrumbManagerKeyedServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+  BreadcrumbManagerKeyedServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new breadcrumbs::BreadcrumbManagerKeyedService(
+  return std::make_unique<breadcrumbs::BreadcrumbManagerKeyedService>(
       context->IsOffTheRecord());
-}
-
-content::BrowserContext*
-BreadcrumbManagerKeyedServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }

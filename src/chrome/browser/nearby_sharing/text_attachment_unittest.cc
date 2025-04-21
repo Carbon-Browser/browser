@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,8 +68,8 @@ using TextAttachmentTextTitleTest =
 
 TEST_P(TextAttachmentTextTitleTest, TextTitleMatches) {
   TextAttachment attachment(GetParam().type, GetParam().text_body,
-                            /*title=*/absl::nullopt,
-                            /*mime_type=*/absl::nullopt);
+                            /*title=*/std::nullopt,
+                            /*mime_type=*/std::nullopt);
   EXPECT_EQ(GetParam().expected_text_title, attachment.text_title());
 }
 

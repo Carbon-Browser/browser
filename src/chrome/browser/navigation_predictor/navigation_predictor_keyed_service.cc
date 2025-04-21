@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,23 +27,21 @@ void WritePredictionToConsoleLog(
   if (!prediction.web_contents())
     return;
 
-  base::DictionaryValue message;
+  base::Value::Dict message;
 
-  base::ListValue url_list;
+  base::Value::List url_list;
   for (const GURL& url : prediction.sorted_predicted_urls()) {
     url_list.Append(url.spec());
   }
 
-  message.SetKey("predictions", std::move(url_list));
+  message.Set("predictions", std::move(url_list));
   if (prediction.source_document_url()) {
-    message.SetStringKey("source_url",
-                         prediction.source_document_url()->spec());
+    message.Set("source_url", prediction.source_document_url()->spec());
   }
 
   std::string json_body;
   if (!base::JSONWriter::Write(message, &json_body)) {
     NOTREACHED();
-    return;
   }
 
   prediction.web_contents()->GetPrimaryMainFrame()->AddMessageToConsole(
@@ -55,7 +53,7 @@ void WritePredictionToConsoleLog(
 
 NavigationPredictorKeyedService::Prediction::Prediction(
     content::WebContents* web_contents,
-    const absl::optional<GURL>& source_document_url,
+    const std::optional<GURL>& source_document_url,
     PredictionSource prediction_source,
     const std::vector<GURL>& sorted_predicted_urls)
     : web_contents_(web_contents),
@@ -99,7 +97,7 @@ NavigationPredictorKeyedService::Prediction::operator=(
 
 NavigationPredictorKeyedService::Prediction::~Prediction() = default;
 
-const absl::optional<GURL>&
+const std::optional<GURL>&
 NavigationPredictorKeyedService::Prediction::source_document_url() const {
   DCHECK_EQ(PredictionSource::kAnchorElementsParsedFromWebPage,
             prediction_source_);
@@ -150,8 +148,9 @@ void NavigationPredictorKeyedService::OnPredictionUpdated(
 
   last_prediction_ = Prediction(web_contents, document_url, prediction_source,
                                 sorted_predicted_urls);
+
   for (auto& observer : observer_list_) {
-    observer.OnPredictionUpdated(last_prediction_);
+    observer.OnPredictionUpdated(last_prediction_.value());
   }
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -164,7 +163,7 @@ void NavigationPredictorKeyedService::AddObserver(Observer* observer) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   observer_list_.AddObserver(observer);
   if (last_prediction_.has_value()) {
-    observer->OnPredictionUpdated(last_prediction_);
+    observer->OnPredictionUpdated(last_prediction_.value());
   }
 }
 

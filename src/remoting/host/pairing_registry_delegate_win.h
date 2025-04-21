@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,7 @@ const wchar_t kPairingRegistrySecretsKeyName[] = L"secrets";
 // Creator of this object is responsible for passing the registry key handles
 // with appropriate access. |privileged| may be nullptr if read-only access is
 // sufficient. Shared secrets will not be returned in such a case.
-class PairingRegistryDelegateWin
-    : public protocol::PairingRegistry::Delegate {
+class PairingRegistryDelegateWin : public protocol::PairingRegistry::Delegate {
  public:
   PairingRegistryDelegateWin();
 

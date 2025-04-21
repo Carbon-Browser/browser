@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <sstream>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "chrome/browser/ash/net/network_health/network_health_service.h"
+#include "chrome/browser/ash/net/network_health/network_health_manager.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -18,21 +18,25 @@ namespace system_logs {
 
 namespace {
 
-constexpr char kNetworkHealthSnapshotEntry[] = "network-health-snapshot";
 constexpr char kNetworkDiagnosticsEntry[] = "network-diagnostics";
 
 std::string FormatNetworkHealth(
     const chromeos::network_health::mojom::NetworkHealthStatePtr&
         network_health,
-    bool scrub) {
+    bool scrub,
+    bool include_guid_when_not_scrub) {
   std::ostringstream output;
 
   for (const auto& net : network_health->networks) {
     if (scrub) {
-      output << "Name: " << chromeos::NetworkGuidId(net->guid.value_or("N/A"))
+      output << "Name: " << ash::NetworkGuidId(net->guid.value_or("N/A"))
              << "\n";
     } else {
       output << "Name: " << net->name.value_or("N/A") << "\n";
+    }
+
+    if (!scrub && include_guid_when_not_scrub) {
+      output << "GUID: " << net->guid.value_or("N/A") << "\n";
     }
 
     output << "Type: " << net->type << "\n";
@@ -151,6 +155,8 @@ std::string GetProblemsString(
 
 }  // namespace
 
+const char kNetworkHealthSnapshotEntry[] = "network-health-snapshot";
+
 std::string FormatNetworkDiagnosticResults(
     const base::flat_map<
         chromeos::network_diagnostics::mojom::RoutineType,
@@ -162,6 +168,7 @@ std::string FormatNetworkDiagnosticResults(
     output << "Routine: " << result.first << "\n";
     output << "Verdict: " << result.second->verdict << "\n";
     output << "Timestamp: " << result.second->timestamp << "\n";
+    output << "Source: " << result.second->source << "\n";
 
     auto problems = GetProblemsString(result.second->problems);
     if (!problems.empty())
@@ -172,16 +179,19 @@ std::string FormatNetworkDiagnosticResults(
   return output.str();
 }
 
-NetworkHealthSource::NetworkHealthSource(bool scrub)
-    : SystemLogsSource("NetworkHealth"), scrub_(scrub) {
-  ash::network_health::NetworkHealthService::GetInstance()->BindHealthReceiver(
+NetworkHealthSource::NetworkHealthSource(bool scrub,
+                                         bool include_guid_when_not_scrub)
+    : SystemLogsSource("NetworkHealth"),
+      scrub_(scrub),
+      include_guid_when_not_scrub_(include_guid_when_not_scrub) {
+  ash::network_health::NetworkHealthManager::GetInstance()->BindHealthReceiver(
       network_health_service_.BindNewPipeAndPassReceiver());
-  ash::network_health::NetworkHealthService::GetInstance()
+  ash::network_health::NetworkHealthManager::GetInstance()
       ->BindDiagnosticsReceiver(
           network_diagnostics_service_.BindNewPipeAndPassReceiver());
 }
 
-NetworkHealthSource::~NetworkHealthSource() {}
+NetworkHealthSource::~NetworkHealthSource() = default;
 
 void NetworkHealthSource::Fetch(SysLogsSourceCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -197,7 +207,8 @@ void NetworkHealthSource::Fetch(SysLogsSourceCallback callback) {
 
 void NetworkHealthSource::OnNetworkHealthReceived(
     chromeos::network_health::mojom::NetworkHealthStatePtr network_health) {
-  network_health_response_ = FormatNetworkHealth(network_health, scrub_);
+  network_health_response_ =
+      FormatNetworkHealth(network_health, scrub_, include_guid_when_not_scrub_);
   CheckIfDone();
 }
 

@@ -133,7 +133,7 @@ while retaining the same official version number. Therefore, the server sends a
 more precise label with each update payload, which the client reports back in
 subsequent update checks. This value is called a "differential fingerprint".
 
-The sever should send a value determined by the hash of the binary (not, for
+The server should send a value determined by the hash of the binary (not, for
 example, a unique ID). In practice, Google's servers always send "1.hash" where
 "hash" is the SHA256 hash of the update payload.
 
@@ -237,14 +237,16 @@ A request object has the following members:
      *   "fuchsia": Fuchsia.
      *   "linux": Linux.
      *   "mac": macOS.
-     *   "openbsd": OpenBSD. TODO(waffles@chromium.org): Also FreeBSD?
+     *   "openbsd": OpenBSD.
      *   "win": Windows.
  *   `@updater`: A string identifying the client software (e.g. "Omaha",
      "Chrome", "Chrome Extension Updater"). Default: "".
  *   `acceptformat`: A string, formatted as a comma-separated list of strings
      describing the formats of update payloads that this client accepts.
-     Default: "crx3". The following value(s) are supported:
+     Default: "". The following value(s) are supported:
      *   "crx3": The CRX file format, version 3.
+     *   "puff": The [Puffin](https://chromium.googlesource.com/chromium/src.git/+/main/third_party/puffin/README.md)
+         *.puff file format representing a differential Puffin update.
  *   `app`: A list of `app` objects.
  *   `dedup`: A string, must be "cr". This indicates to servers that the client
      intends to use client-regulated counting algorithms rather than any sort of
@@ -303,18 +305,22 @@ is running within. It has the following members:
  *   `platform`: The operating system family that the client is running within
      (e.g. "win", "mac", "linux", "ios", "android"), or "" if unknown. The
      operating system family name should be transmitted in a canonical form.
-     Lowercase with minimal formatting is recommended. Default: "". Known
-     values:
-     *   "android": Android.
-     *   "chromeos": Chrome OS.
-     *   "chromiumos": Chromium OS.
+     Formatting varies across implementations. Default: "". Known values:
+     *   "android" or "Android": Android.
+     *   "chromeos" or "ChromeOS" or "Chrome OS": Chrome OS.
+     *   "chromiumos" or "ChromiumOS" or "Chromium OS": Chromium OS.
      *   "dragonfly": DragonFly BSD.
-     *   "freebsd": FreeBSD.
-     *   "ios": Apple iOS.
-     *   "linux": Linux and its derivatives, except as mentioned below.
-     *   "mac": Apple macOS (formerly Mac OS X) and its derivatives.
-     *   "openbsd": OpenBSD.
-     *   "win": Microsoft Windows and its derivatives.
+     *   "freebsd" or "FreeBSD": FreeBSD.
+     *   "Fuchsia": Fuchsia.
+     *   "ios" or "iOS": Apple iOS.
+     *   "linux" or "Linux": Linux and its derivatives, except as mentioned
+         below.
+     *   "mac" or "Mac OS X": Apple macOS and its derivatives.
+     *   "openbsd" or "OpenBSD": OpenBSD.
+     *   "Solaris": Solaris.
+     *   "win" or "Windows": Microsoft Windows and its derivatives.
+     *   "Unknown": Sent by some clients instead of "" when the platform is not
+         recognized.
  *   `version`: The version number of the operating system, or "" if unknown.
      Default: "".
  *   `sp`: The service pack level of the operating system, or "" if unknown or
@@ -327,6 +333,7 @@ is running within. It has the following members:
      *   "arm64": 64-bit ARM
      *   "x86": x86
      *   "x86_64": x86-64
+     *   "x64": x64
 
 #### `app` Objects (Update Check Request)
 Each managed application is represented by exactly one `app` object. It has the
@@ -345,6 +352,13 @@ following members:
  *   `cohortname`: A human-readable string identifying the semantics behind the
      current cohort. For example, this might be displayed to the user and
      indicate the channel or experimental status. Default: "".
+ *   `release_channel`: The target channel that the app switches to. For
+      example an app can have stable, beta, dev, and canary channels. Note
+      switching to an older channel may have no effect until the older channel
+      catches up with the install. Ex: a machine on today's beta (107.0.5304.62)
+      that is switched to stable will stay on that version until 107 ships to
+      stable. Downgrade can be forced by the use of the `rollback_allowed` in
+      the `updatecheck` node.
  *   `data`: A list of `data` objects.
  *   `disabled`: A list of `disabled` objects.
  *   `enabled`: Indicates whether the application is enabled on the client. As
@@ -353,7 +367,7 @@ following members:
      unknown, or that the concept of enabling/disabling does not exist. "0"
      indicates that the application is disabled. "1" indicates that the app is
      enabled.  Default: "-1".
- *   `fp`: The current [differential fingerprint](#differential-fingerprint) of
+ *   `fp`: The current [differential fingerprint](#differential-updates) of
      the application, or "" if unknown. Default: "".
  *   `iid`: Installation ID is an opaque token that identifies an installation
      flow. The installation ID is a unique identifier embedded into a
@@ -365,17 +379,22 @@ following members:
  *   `installdate`: The approximate date that the application installation took
      place on, or "-2" if unknown or not applicable. Default: "-2". During the
      installation request itself (the first communication to the server), the
-     client should use a special value of "-1". The `response.clock.date` value
-     for that request's response should be stored to use in all subsequent
-     requests. To mitigate privacy risk, clients should fuzz the value to the
-     week granularity by storing X - X % 7, where X is the server-provided date.
-     For offline installs, the client should send -2. Default: -2.
+     client should use a special value of "-1". The
+     `response.daystart.elapsed_days` value for that request's response should
+     be stored to use in all subsequent requests. To mitigate privacy risk,
+     clients should fuzz the value to the week granularity by storing X - X % 7,
+     where X is the server-provided date. For offline installs, the client
+     should send -2. Default: -2.
  *   `installedby`: A string describing the original cause of the installation.
      The string should be drawn from a small set of constant values, to minimize
      entropy and the ability for the client to be fingerprinted. Default: "".
  *   `installsource`: A string describing the immediate cause of this request.
-     Known values include: "" (a normal background update) and "ondemand" (a
-     foreground, user-initiated update). Default: "".
+     Default: "". Known values include:
+      *  "" (a normal background update),
+      *  "ondemand" (a foreground, user-initiated update),
+      *  "taggedmi" (a tagged metainstaller was run),
+      *  "offline" (an offline installer was run),
+      *  "policy" (an install was triggered by group policy),
      The string should be drawn from a small set of constant values, to minimize
      entropy and the ability for the client to be fingerprinted.
  *   `ismachine`: "0" if the application is installed for the user specifically
@@ -478,6 +497,12 @@ object has the following members:
      >*   0: [0, 336) hours ago (0 to < ~2 weeks)
      >*   336: [336, 1344) hours ago (~2 weeks to ~2×28 days)
      >*   1344: at least 1344 hours ago (~2×28 days or more)
+ *   `lastupdatecheckerrorcat`: The numeric error category encountered on
+     the last update check. 0 for success. Default: "0".
+ *   `lastupdatecheckerrorcode`: The numeric error code encountered on the last
+     update check. 0 for success. Default: "0".
+ *   `lastupdatecheckextracode1`: The numeric extra code encountered on the
+     last update check. 0 for success. Default: "0".
  *   `laststarted`: An estimated number of hours since the other updater
      successfully ran (started and exited without crashing). A value of -1
      indicates the last check time is unknown. Default: -1. Clients should
@@ -524,6 +549,8 @@ object in the update check request.
  *   `app`: A list of `app` objects. There is one object for each `app` in the
      request body.
  *   `daystart`: A `daystart` object.
+ *   `systemrequirements`: A `systemrequirements` object. The server will not
+     send this element, but it may be present in offline installer manifests.
  *   `protocol`: The version of the Omaha protocol. Servers responding with this
      protocol must send a value of "3.1".
  *   `server`: A string identifying the server or server family for diagnostic
@@ -537,6 +564,47 @@ server's locale. It has the following members:
      received. The client should generally save this value for use in future
      update checks (for examples, see `request.app.ping.rd` and
      `request.app.installdate`).
+
+#### `systemrequirements` Objects (Update Check Response)
+A `systemrequirements` object contains information about the operating system
+that the application requires to install. It has the following members:
+ *   `platform`: The operating system family that the application requires
+     (e.g. "win", "mac", "linux", "ios", "android"), or "" if not applicable.
+ *   `arch`: Expected host processor architecture that the app is compatible
+     with, or "" if not applicable.
+
+     `arch` can be a single entry, or multiple entries separated with `,`.
+     Entries prefixed with a `-` (negative entries) indicate non-compatible
+     hosts. Non-prefixed entries indicate compatible guests.
+
+     An application is compatible with the current architecture if:
+     * `arch` is empty, or
+     * none of the negative entries within `arch` match the current host
+       architecture exactly, and there are no non-negative entries, or
+     * one of the non-negative entries within `arch` matches the current
+       architecture, or is compatible with the current architecture (i.e., it is
+       a compatible guest for the current host). The latter is determined by
+       `::IsWow64GuestMachineSupported()` on Windows.
+       * If `::IsWow64GuestMachineSupported()` is not available, returns `true`
+         if `arch` is x86.
+
+     Examples:
+     * `arch` == "x86".
+     * `arch` == "x64".
+     * `arch` == "x86,x64,-arm64": installation will fail if the underlying host
+       is arm64.
+ *   `min_os_version`: The minimum required version of the operating system, or
+     "" if not applicable.
+
+     The `min_os_version` is in the format `major.minor.build.patch` for
+     Windows. The `major`, `minor` and `build` are the values returned by the
+     `::GetVersionEx` API. The `patch` is the `UBR` value under the registry
+     path `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion`.
+
+     The `build` and the `patch` components may be omitted if all that is needed
+     is a minimum `major.minor` version. For example, `6.0` will match all OS
+     versions that are at or above that version, regardless of `build` and
+     `patch` numbers.
 
 #### `app` Objects (Update Check Response)
 An app object represents a per-application acknowledgement of the request. If an
@@ -635,7 +703,6 @@ A manifest object contains details about how to fetch and apply an update.
      after successfully applying this update. Compatible servers must send this
      member.
 
-
 #### `packages` Objects (Update Check Response)
 A packages object describes a set of downloadable files. The 3.1 protocol only
 supports a subset of the 3.0 packages, but may be extended in the future to
@@ -650,7 +717,7 @@ of the update. In this version of the protocol, all packages describe CRX files.
 Packages can also come in differential update forms. Clients should attempt a
 differential patch of package first, and fall back to a full package if the
 differential patch fails to apply. A package object has the following members:
- *   `fp`: The [differential fingerprint](#differential-fingerprints) of the
+ *   `fp`: The [differential fingerprint](#differential-updates) of the
      new version of the package.
  *   `size`: The size of the file, in octets.
  *   `sizediff`: The size of the differential file, in octets, if one is
@@ -722,8 +789,8 @@ For `type == "run"`:
 
 ## Downloads
 Download requests occur when an application update is needed, as a result of a
-`response.app.updatecheck.manifest.package` member.  Download requests are HTTP
-GET requests and can use any HTTP implementation.
+`response.app.updatecheck.pipelines.operations.urls` member.  Download requests
+are HTTP GET requests and can use any HTTP implementation.
 
 ### Request Headers
 In addition to the regular HTTP headers, this protocol defines the following
@@ -772,9 +839,7 @@ for the following differences.
 
 A ping-back `app` object cannot contain any of the following members:
  *   `data`
- *   `ad`
- *   `rd`
- *   `ping_freshness`
+ *   `ping`
  *   `updatecheck`
 
 A ping-back `app` additionally contains the following members:
@@ -790,6 +855,7 @@ attmpted as part of this update session. All events have the following members:
      *   3: An update operation.
      *   4: An uninstall operation.
      *   14: A download operation.
+     *   41: An app command completion event.
      *   42: An action operation.
  *   `eventresult`: The outcome of the operation. Default: 0. Known values:
      *   0: error
@@ -797,12 +863,13 @@ attmpted as part of this update session. All events have the following members:
      *   4: cancelled
  *   `errorcat`: An error category, for use in distinguishing between different
      classes of error codes. Default: 0. The following values are known:
-     *   0: No category / unknown.
+     *   0: No category.
      *   1: Errors acquiring the download.
      *   2: Errors during CRX unpacking.
-     *   3: Errors during installation.
+     *   3: Update client errors during installation.
      *   4: Errors within the update service itself.
      *   5: Error during update check.
+     *   7: Application installer errors during installation.
  *   `errorcode`: The error code (if any) of the operation. Default: 0. The
      meaning of an error code may depend on the error category. 0 always means
      "no error" (success).
@@ -814,15 +881,15 @@ attmpted as part of this update session. All events have the following members:
 
 Depending on the event type, additional members may be present:
 
-For `type == 2` events:
- *   `nextfp`: The [differential fingerprint](#differential-fingerprints) that
+For `eventtype == 2` events:
+ *   `nextfp`: The [differential fingerprint](#differential-updates) that
      the client was attempting to update to, regardless of whether that update
      was successful.
  *   `nextversion`: The application version that the client was attempting to
      update to, regardless of whether the update was successful.
 
-For `type == 3` events:
- *   All the members of `type == 2` events.
+For `eventtype == 3` events:
+ *   All the members of `eventtype == 2` events.
  *   `diffresult`: As `eventresult` but specifically for a differential update. A
      client that successfully applies a differential update should send the
      result both here and in `eventresult`. A client that attempts and fails a
@@ -834,28 +901,31 @@ For `type == 3` events:
      `diffresult`.
  *   `diffextracode1`: As `extracode1` but for differential updates. Similar to
      `diffresult`.
- *   `previousfp`: The [differential fingerprint](#differential-fingerprints)
+ *   `previousfp`: The [differential fingerprint](#differential-updates)
      the client had prior to the update, regardless of whether that update
      was successful.
  *   `previousversion`: The application version the client had prior to the
      update, regardless of whether that update was successful.
 
-For `type == 14` events:
+For `eventtype == 14` events:
  *   `download_time_ms`: The time elapsed between the start of the download and
-     the end of the download, in milliseconds. -1 if unavailable or irrelevant.
+     the end of the download, in milliseconds. -1 if unavailable.
      Default: -1.
- *   `downloaded_bytes`: The number of bytes successfully received from the
-     download server. Default: 0.
+ *   `downloaded`: The number of bytes successfully received from the download
+     server. Default: 0.
  *   `downloader`: A string identifying the download algorithm / stack. Known
      values:
      *   "" (empty string): Unknown downloader.
+     *   "nsurlsession_background": MacOS background NSURLSession.
      *   "bits": Microsoft BITS.
      *   "direct": The Chromium network stack.
- *   `expected_bytes`: The number of bytes expected to be downloaded. Default:
-     0.
+ *   `total`: The number of bytes expected to be downloaded. Default: 0.
  *   `url`: The URL from which the download was attempted.
 
-For `type == 42` events:
+For `eventtype == 41` events:
+ *   `appcommandid`: The id of the app command for which the ping is being sent.
+
+For `eventtype == 42` events:
  *   `actiontype`: The type of the action that caused this event.
 
 ### Ping-Back Response Body

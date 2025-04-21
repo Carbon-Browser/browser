@@ -1,13 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // Integration tests for restricted tokens.
 
 #include <stddef.h>
 #include <string>
 
+#include <optional>
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/win/access_token.h"
 #include "base/win/scoped_handle.h"
 #include "sandbox/win/src/sandbox.h"
@@ -15,7 +22,6 @@
 #include "sandbox/win/src/target_services.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -24,63 +30,86 @@ namespace {
 int RunOpenProcessTest(bool unsandboxed,
                        bool lockdown_dacl,
                        DWORD access_mask) {
-  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
+  TestRunner runner(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
                     USER_LOCKDOWN);
-  runner.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_UNTRUSTED);
-  runner.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  auto* config = runner.GetPolicy()->GetConfig();
+  config->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_UNTRUSTED);
+  ResultCode result = config->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  if (result != SBOX_ALL_OK)
+    return SBOX_TEST_FAILED_SETUP;
   if (lockdown_dacl)
-    runner.GetPolicy()->SetLockdownDefaultDacl();
+    config->SetLockdownDefaultDacl();
   runner.SetAsynchronous(true);
   // This spins up a renderer level process, we don't care about the result.
   runner.RunTest(L"IntegrationTestsTest_args 1");
 
-  TestRunner runner2(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
+  TestRunner runner2(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
                      USER_LIMITED);
-  runner2.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner2.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  auto* config2 = runner2.GetPolicy()->GetConfig();
+  config2->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  result = config2->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  if (result != SBOX_ALL_OK)
+    return SBOX_TEST_FAILED_SETUP;
   runner2.SetUnsandboxed(unsandboxed);
   return runner2.RunTest(
-      base::StringPrintf(L"RestrictedTokenTest_openprocess %d 0x%08X",
-                         runner.process_id(), access_mask)
+      base::ASCIIToWide(
+          base::StringPrintf("RestrictedTokenTest_openprocess %lu 0X%08lX",
+                             runner.process_id(), access_mask))
           .c_str());
 }
 
 int RunRestrictedOpenProcessTest(bool unsandboxed,
                                  bool lockdown_dacl,
                                  DWORD access_mask) {
-  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS, USER_LIMITED);
-  runner.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  TestRunner runner(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
+                    USER_LIMITED);
+  auto* config = runner.GetPolicy()->GetConfig();
+  config->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  ResultCode result = config->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  if (result != SBOX_ALL_OK)
+    return SBOX_TEST_FAILED_SETUP;
+
   if (lockdown_dacl) {
-    runner.GetPolicy()->SetLockdownDefaultDacl();
-    runner.GetPolicy()->AddRestrictingRandomSid();
+    config->SetLockdownDefaultDacl();
+    config->AddRestrictingRandomSid();
   }
   runner.SetAsynchronous(true);
   // This spins up a GPU level process, we don't care about the result.
   runner.RunTest(L"IntegrationTestsTest_args 1");
 
-  TestRunner runner2(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
+  TestRunner runner2(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
                      USER_LIMITED);
-  runner2.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner2.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  auto* config2 = runner2.GetPolicy()->GetConfig();
+  config2->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  result = config2->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  if (result != SBOX_ALL_OK)
+    return SBOX_TEST_FAILED_SETUP;
   runner2.SetUnsandboxed(unsandboxed);
   return runner2.RunTest(
-      base::StringPrintf(L"RestrictedTokenTest_openprocess %d 0x%08X",
-                         runner.process_id(), access_mask)
+      base::ASCIIToWide(
+          base::StringPrintf("RestrictedTokenTest_openprocess %lu 0X%08lX",
+                             runner.process_id(), access_mask))
           .c_str());
 }
 
 int RunRestrictedSelfOpenProcessTest(bool add_random_sid, DWORD access_mask) {
-  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS, USER_LIMITED);
-  runner.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner.GetPolicy()->SetLockdownDefaultDacl();
-  if (add_random_sid)
-    runner.GetPolicy()->AddRestrictingRandomSid();
+  TestRunner runner(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
+                    USER_LIMITED);
+  auto* config = runner.GetPolicy()->GetConfig();
+  config->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  ResultCode result = config->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  if (result != SBOX_ALL_OK) {
+    return SBOX_TEST_FAILED_SETUP;
+  }
+  config->SetLockdownDefaultDacl();
+  if (add_random_sid) {
+    config->AddRestrictingRandomSid();
+  }
 
   return runner.RunTest(
-      base::StringPrintf(L"RestrictedTokenTest_currentprocess_dup 0x%08X",
-                         access_mask)
+      base::ASCIIToWide(
+          base::StringPrintf("RestrictedTokenTest_currentprocess_dup 0X%08lX",
+                             access_mask))
           .c_str());
 }
 
@@ -98,8 +127,9 @@ SBOX_TESTS_COMMAND int RestrictedTokenTest_openprocess(int argc,
   DWORD desired_access = wcstoul(argv[1], nullptr, 0);
   base::win::ScopedHandle process_handle(
       ::OpenProcess(desired_access, false, pid));
-  if (process_handle.IsValid())
+  if (process_handle.is_valid()) {
     return SBOX_TEST_SUCCEEDED;
+  }
 
   return SBOX_TEST_DENIED;
 }
@@ -117,7 +147,7 @@ SBOX_TESTS_COMMAND int RestrictedTokenTest_currentprocess_dup(int argc,
     return SBOX_TEST_FIRST_ERROR;
   }
   base::win::ScopedHandle process_handle(dup_handle);
-  if (::DuplicateHandle(::GetCurrentProcess(), process_handle.Get(),
+  if (::DuplicateHandle(::GetCurrentProcess(), process_handle.get(),
                         ::GetCurrentProcess(), &dup_handle, desired_access,
                         FALSE, 0)) {
     ::CloseHandle(dup_handle);
@@ -132,7 +162,7 @@ SBOX_TESTS_COMMAND int RestrictedTokenTest_currentprocess_dup(int argc,
 // Opens a the process token and checks if it's restricted.
 SBOX_TESTS_COMMAND int RestrictedTokenTest_IsRestricted(int argc,
                                                         wchar_t** argv) {
-  absl::optional<base::win::AccessToken> token =
+  std::optional<base::win::AccessToken> token =
       base::win::AccessToken::FromCurrentProcess();
   if (!token)
     return SBOX_TEST_FIRST_ERROR;
@@ -157,7 +187,7 @@ TEST(RestrictedTokenTest, OpenLowPrivilegedProcess) {
 }
 
 TEST(RestrictedTokenTest, CheckNonAdminRestricted) {
-  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
+  TestRunner runner(JobLevel::kUnprotected, USER_RESTRICTED_SAME_ACCESS,
                     USER_RESTRICTED_NON_ADMIN);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED,
             runner.RunTest(L"RestrictedTokenTest_IsRestricted"));

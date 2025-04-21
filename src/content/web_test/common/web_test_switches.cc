@@ -1,12 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/web_test/common/web_test_switches.h"
-
-#include "base/command_line.h"
-#include "base/strings/string_split.h"
-#include "build/build_config.h"
 
 namespace switches {
 
@@ -33,6 +29,13 @@ const char kAlwaysUseComplexText[] = "always-use-complex-text";
 // whether or not reloading a webpage releases web-related objects correctly.
 const char kEnableLeakDetection[] = "enable-leak-detection";
 
+// Specifies the path to a file containing a Chrome DevTools protocol log.
+// Each line in the log file is expected to be a protocol message in the JSON
+// format. The test runner will use this log file to script the backend for any
+// inspector-protocol tests that run. Usually you would want to run a single
+// test using the log to reproduce timeouts or crashes.
+const char kInspectorProtocolLog[] = "inspector-protocol-log";
+
 // Encode binary web test results (images, audio) using base64.
 const char kEncodeBinary[] = "encode-binary";
 
@@ -58,24 +61,5 @@ const char kStableReleaseMode[] = "stable-release-mode";
 // to use the hardware GPU for rendering. This is only followed when
 // kRunWebTests is set.
 const char kDisableHeadlessMode[] = "disable-headless-mode";
-
-#if BUILDFLAG(IS_WIN)
-// Registers additional font files on Windows (for fonts outside the usual
-// %WINDIR%\Fonts location). Multiple files can be used by separating them
-// with a semicolon (;).
-const char kRegisterFontFiles[] = "register-font-files";
-
-std::vector<std::string> GetSideloadFontFiles() {
-  std::vector<std::string> files;
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
-  if (command_line.HasSwitch(switches::kRegisterFontFiles)) {
-    files = base::SplitString(
-        command_line.GetSwitchValueASCII(switches::kRegisterFontFiles), ";",
-        base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  }
-  return files;
-}
-#endif
 
 }  // namespace switches

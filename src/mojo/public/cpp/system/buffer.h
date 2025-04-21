@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ namespace internal {
 
 struct Unmapper {
   void operator()(void* buffer) {
-    MojoResult result = MojoUnmapBuffer(buffer);
+    [[maybe_unused]] MojoResult result = MojoUnmapBuffer(buffer);
     DCHECK_EQ(MOJO_RESULT_OK, result);
   }
 };

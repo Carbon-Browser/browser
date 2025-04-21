@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,7 @@
 
 namespace apps {
 
-COMPONENT_EXPORT(APP_TYPES)
-extern const base::Feature kAppServiceOnAppUpdateWithoutMojom;
-COMPONENT_EXPORT(APP_TYPES)
-extern const base::Feature kAppServicePreferredAppsWithoutMojom;
-COMPONENT_EXPORT(APP_TYPES)
-extern const base::Feature kAppServiceLaunchWithoutMojom;
+COMPONENT_EXPORT(APP_TYPES) BASE_DECLARE_FEATURE(kAppServiceStorage);
 
 }  // namespace apps
 

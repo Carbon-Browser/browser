@@ -1,60 +1,59 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/importer/import_lock_dialog_view.h"
 
-#include "base/bind.h"
-#include "base/location.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "build/build_config.h"
 #include "chrome/browser/importer/importer_lock_dialog.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
-#include "chrome/grit/generated_resources.h"
-#include "chrome/grit/locale_settings.h"
-#include "ui/base/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/views/border.h"
-#include "ui/views/controls/label.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/layout/fill_layout.h"
-#include "ui/views/widget/widget.h"
 
 using base::UserMetricsAction;
 
 namespace importer {
 
 void ShowImportLockDialog(gfx::NativeWindow parent,
-                          base::OnceCallback<void(bool)> callback) {
-  ImportLockDialogView::Show(parent, std::move(callback));
+                          base::OnceCallback<void(bool)> callback,
+                          int importer_lock_title_id,
+                          int importer_lock_text_id) {
+  ImportLockDialogView::Show(parent, std::move(callback),
+                             importer_lock_title_id, importer_lock_text_id);
 }
 
 }  // namespace importer
 
 // static
 void ImportLockDialogView::Show(gfx::NativeWindow parent,
-                                base::OnceCallback<void(bool)> callback) {
+                                base::OnceCallback<void(bool)> callback,
+                                int importer_lock_title_id,
+                                int importer_lock_text_id) {
   views::DialogDelegate::CreateDialogWidget(
-      new ImportLockDialogView(std::move(callback)), nullptr, nullptr)
+      new ImportLockDialogView(std::move(callback), importer_lock_title_id,
+                               importer_lock_text_id),
+      nullptr, nullptr)
       ->Show();
   base::RecordAction(UserMetricsAction("ImportLockDialogView_Shown"));
 }
 
 ImportLockDialogView::ImportLockDialogView(
-    base::OnceCallback<void(bool)> callback)
+    base::OnceCallback<void(bool)> callback,
+    int importer_lock_title_id,
+    int importer_lock_text_id)
     : callback_(std::move(callback)) {
-  SetTitle(IDS_IMPORTER_LOCK_TITLE);
+  SetTitle(importer_lock_title_id);
 
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(IDS_IMPORTER_LOCK_OK));
 
   auto done_callback = [](ImportLockDialogView* dialog, bool accepted) {
     if (dialog->callback_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(dialog->callback_), accepted));
     }
   };
@@ -71,7 +70,7 @@ ImportLockDialogView::ImportLockDialogView(
 
   SetLayoutManager(std::make_unique<views::FillLayout>());
   views::Label* description_label =
-      new views::Label(l10n_util::GetStringUTF16(IDS_IMPORTER_LOCK_TEXT));
+      new views::Label(l10n_util::GetStringUTF16(importer_lock_text_id));
   description_label->SetBorder(views::CreateEmptyBorder(
       ChromeLayoutProvider::Get()->GetDialogInsetsForContentType(
           views::DialogContentType::kText, views::DialogContentType::kText)));
@@ -82,5 +81,5 @@ ImportLockDialogView::ImportLockDialogView(
 
 ImportLockDialogView::~ImportLockDialogView() = default;
 
-BEGIN_METADATA(ImportLockDialogView, views::DialogDelegateView)
+BEGIN_METADATA(ImportLockDialogView)
 END_METADATA

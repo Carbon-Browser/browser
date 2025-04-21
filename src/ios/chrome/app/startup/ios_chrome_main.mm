@@ -1,34 +1,28 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/app/startup/ios_chrome_main.h"
+#import "ios/chrome/app/startup/ios_chrome_main.h"
 
 #import <UIKit/UIKit.h>
 
-#include <vector>
+#import <vector>
 
-#include "base/check.h"
-#include "base/strings/string_piece.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/time/time.h"
-#include "ios/web/public/init/web_main_runner.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/time/time.h"
+#import "base/types/fixed_array.h"
+#import "ios/web/public/init/web_main.h"
 
 namespace {
 base::TimeTicks* g_start_time;
 }  // namespace
 
 IOSChromeMain::IOSChromeMain() {
-  web_main_runner_.reset(web::WebMainRunner::Create());
-
   web::WebMainParams main_params(&main_delegate_);
   NSArray* arguments = [[NSProcessInfo processInfo] arguments];
   main_params.argc = [arguments count];
-  const char* argv[main_params.argc];
+  base::FixedArray<const char*> argv(main_params.argc);
   std::vector<std::string> argv_store;
 
   // Avoid using std::vector::push_back (or any other method that could cause
@@ -42,17 +36,15 @@ IOSChromeMain::IOSChromeMain() {
     argv_store[i] = base::SysNSStringToUTF8([arguments objectAtIndex:i]);
     argv[i] = argv_store[i].c_str();
   }
-  main_params.argv = argv;
+  main_params.argv = argv.data();
 
-  // Chrome registers an AtExitManager in main in order to initialize breakpad
-  // early, so prevent a second registration by WebMainRunner.
+  // Chrome registers an AtExitManager in main in order to initialize the crash
+  // handler early, so prevent a second registration by WebMainRunner.
   main_params.register_exit_manager = false;
-  web_main_runner_->Initialize(std::move(main_params));
+  web_main_ = std::make_unique<web::WebMain>(std::move(main_params));
 }
 
-IOSChromeMain::~IOSChromeMain() {
-  web_main_runner_->ShutDown();
-}
+IOSChromeMain::~IOSChromeMain() {}
 
 // static
 void IOSChromeMain::InitStartTime() {

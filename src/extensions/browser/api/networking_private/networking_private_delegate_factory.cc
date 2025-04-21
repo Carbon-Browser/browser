@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,8 @@
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/extensions_browser_client.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "extensions/browser/api/networking_private/networking_private_chromeos.h"
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "extensions/browser/api/networking_private/networking_private_lacros.h"
 #elif BUILDFLAG(IS_LINUX)
 #include "extensions/browser/api/networking_private/networking_private_linux.h"
 #elif BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
@@ -25,9 +23,11 @@ namespace extensions {
 
 using content::BrowserContext;
 
-NetworkingPrivateDelegateFactory::UIDelegateFactory::UIDelegateFactory() {}
+NetworkingPrivateDelegateFactory::UIDelegateFactory::UIDelegateFactory() =
+    default;
 
-NetworkingPrivateDelegateFactory::UIDelegateFactory::~UIDelegateFactory() {}
+NetworkingPrivateDelegateFactory::UIDelegateFactory::~UIDelegateFactory() =
+    default;
 
 // static
 NetworkingPrivateDelegate*
@@ -46,45 +46,47 @@ NetworkingPrivateDelegateFactory::GetInstance() {
 NetworkingPrivateDelegateFactory::NetworkingPrivateDelegateFactory()
     : BrowserContextKeyedServiceFactory(
           "NetworkingPrivateDelegate",
-          BrowserContextDependencyManager::GetInstance()) {
-}
+          BrowserContextDependencyManager::GetInstance()) {}
 
-NetworkingPrivateDelegateFactory::~NetworkingPrivateDelegateFactory() {
-}
+NetworkingPrivateDelegateFactory::~NetworkingPrivateDelegateFactory() = default;
 
 void NetworkingPrivateDelegateFactory::SetUIDelegateFactory(
     std::unique_ptr<UIDelegateFactory> factory) {
   ui_factory_ = std::move(factory);
 }
 
-KeyedService* NetworkingPrivateDelegateFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NetworkingPrivateDelegateFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* browser_context) const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  NetworkingPrivateDelegate* delegate;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  delegate = new NetworkingPrivateChromeOS(browser_context);
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  delegate = new NetworkingPrivateLacros(browser_context);
+  std::unique_ptr<NetworkingPrivateDelegate> delegate;
+#if BUILDFLAG(IS_CHROMEOS)
+  delegate = std::make_unique<NetworkingPrivateChromeOS>(browser_context);
 #elif BUILDFLAG(IS_LINUX)
-  delegate = new NetworkingPrivateLinux();
+  delegate = std::make_unique<NetworkingPrivateLinux>();
 #elif BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   std::unique_ptr<wifi::WiFiService> wifi_service(wifi::WiFiService::Create());
-  delegate = new NetworkingPrivateServiceClient(std::move(wifi_service));
+  delegate =
+      std::make_unique<NetworkingPrivateServiceClient>(std::move(wifi_service));
 #else
   NOTREACHED();
-  delegate = nullptr;
 #endif
 
-  if (ui_factory_)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
+    BUILDFLAG(IS_MAC)
+  if (ui_factory_) {
     delegate->set_ui_delegate(ui_factory_->CreateDelegate());
+  }
 
   return delegate;
+#endif
 }
 
 BrowserContext* NetworkingPrivateDelegateFactory::GetBrowserContextToUse(
     BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context);
 }
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,11 @@ class X509Certificate;
 #pragma mark - CRWSessionCertificateStorage
 
 namespace web {
+namespace proto {
+class CertificateStorage;
+class CertificatesCacheStorage;
+}  // namespace proto
+
 // Serialization keys used in CRWSessionCertificateStorage's NSCoding
 // implementation.
 extern NSString* const kCertificateSerializationKey;
@@ -39,9 +44,15 @@ size_t GetCertPolicyBytesEncoded();
     NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
+// Convenience initializer that creates an instance from proto representation.
+- (instancetype)initWithProto:(const web::proto::CertificateStorage&)storage;
+
+// Serializes the CRWSessionCertificateStorage into `storage`.
+- (void)serializeToProto:(web::proto::CertificateStorage&)storage;
+
 // The certificate represented by this storage.
 @property(nonatomic, readonly) net::X509Certificate* certificate;
-// The hostname of the page that issued |certificate|.
+// The hostname of the page that issued `certificate`.
 @property(nonatomic, readonly) std::string& host;
 // The allowance chosen for the certificate.
 @property(nonatomic, readonly) net::CertStatus status;
@@ -59,8 +70,16 @@ extern NSString* const kCertificateStoragesKey;
 // A serializable representation of a list of allowed certificates.
 @interface CRWSessionCertificatePolicyCacheStorage : NSObject <NSCoding>
 
+// Convenience initializer that creates an instance from proto representation.
+- (instancetype)initWithProto:
+    (const web::proto::CertificatesCacheStorage&)storage;
+
+// Serializes the CRWSessionCertificatePolicyCacheStorage into `storage`.
+- (void)serializeToProto:(web::proto::CertificatesCacheStorage&)storage;
+
 // The certificate policy storages for this session.
-@property(nonatomic, strong) NSSet* certificateStorages;
+@property(nonatomic, strong)
+    NSSet<CRWSessionCertificateStorage*>* certificateStorages;
 
 @end
 

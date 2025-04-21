@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_TOKEN_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_TOKEN_ELEMENT_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/mathml/mathml_element.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
@@ -28,16 +29,15 @@ class CORE_EXPORT MathMLTokenElement : public MathMLElement {
   void ChildrenChanged(const ChildrenChange&) override;
 
  private:
+  bool IsPresentationAttribute(const QualifiedName&) const final;
+  void CollectStyleForPresentationAttribute(const QualifiedName&,
+                                            const AtomicString&,
+                                            MutableCSSPropertyValueSet*) final;
   TokenContent ParseTokenContent();
-  absl::optional<TokenContent> token_content_;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout legacy) final;
+  std::optional<TokenContent> token_content_;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) final;
 };
 
-template <>
-inline bool IsElementOfType<const MathMLTokenElement>(const Node& node) {
-  return IsA<MathMLTokenElement>(node);
-}
 template <>
 struct DowncastTraits<MathMLTokenElement> {
   static bool AllowFrom(const Node& node) {

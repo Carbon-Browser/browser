@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 // This should be kept in sync with
 // //tools/metrics/histograms/metadata/local/histograms.xml.
@@ -18,7 +17,8 @@ enum class IndexId {
   kHelpApp = 1,
   kHelpAppLauncher = 2,
   kPersonalization = 3,
-  kMaxValue = kPersonalization,
+  kShortcutsApp = 4,
+  kMaxValue = kShortcutsApp,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -77,7 +77,7 @@ struct SearchParams {
   // Relevance score will be calculated as a combination of prefix and fuzzy
   // matching. A Data item is relevant if the overall relevance score is above
   // this threshold. The threshold should be in [0,1].
-  double relevance_threshold = 0.32;
+  double relevance_threshold = 0.64;
   // |prefix_threshold| and |fuzzy_threshold| will be applicable if the backend
   // is kInvertedIndex. When a query term is matched against a Data item, it
   // will be considered relevant if either its prefix score is above
@@ -164,19 +164,6 @@ struct Token {
   std::vector<WeightedPosition> positions;
 };
 
-}  // namespace local_search_service
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-namespace local_search_service {
-using ::chromeos::local_search_service::Backend;
-using ::chromeos::local_search_service::Content;
-using ::chromeos::local_search_service::Data;
-using ::chromeos::local_search_service::IndexId;
-using ::chromeos::local_search_service::ResponseStatus;
-using ::chromeos::local_search_service::Result;
-}  // namespace local_search_service
-}  // namespace ash
+}  // namespace ash::local_search_service
 
 #endif  // CHROMEOS_ASH_COMPONENTS_LOCAL_SEARCH_SERVICE_SHARED_STRUCTS_H_

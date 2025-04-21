@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,22 @@
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "components/page_load_metrics/browser/page_load_metrics_observer_delegate.h"
 #include "components/page_load_metrics/common/page_load_metrics.mojom.h"
+#include "content/public/browser/auction_result.h"
+#include "content/public/browser/frame_tree_node_id.h"
+#include "content/public/browser/navigation_discard_reason.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "net/base/net_errors.h"
 #include "net/cookies/canonical_cookie.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
-#include "third_party/blink/public/common/mobile_metrics/mobile_friendliness.h"
 #include "third_party/blink/public/common/use_counter/use_counter_feature.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
-
 #include "url/gurl.h"
+
+namespace blink {
+struct JavaScriptFrameworkDetectionResult;
+}  // namespace blink
 
 namespace content {
 class NavigationHandle;
@@ -48,7 +54,7 @@ struct ExtraRequestCompleteInfo {
   ExtraRequestCompleteInfo(
       const url::SchemeHostPort& final_url,
       const net::IPEndPoint& remote_endpoint,
-      int frame_tree_node_id,
+      content::FrameTreeNodeId frame_tree_node_id,
       bool was_cached,
       int64_t raw_body_bytes,
       int64_t original_network_content_length,
@@ -71,7 +77,7 @@ struct ExtraRequestCompleteInfo {
   const net::IPEndPoint remote_endpoint;
 
   // The frame tree node id that initiated the request.
-  const int frame_tree_node_id;
+  const content::FrameTreeNodeId frame_tree_node_id;
 
   // True if the resource was loaded from cache.
   const bool was_cached;
@@ -100,11 +106,14 @@ struct ExtraRequestCompleteInfo {
 
 // Information related to failed provisional loads.
 struct FailedProvisionalLoadInfo {
-  FailedProvisionalLoadInfo(base::TimeDelta interval, net::Error error);
+  FailedProvisionalLoadInfo(base::TimeDelta interval,
+                            net::Error error,
+                            content::NavigationDiscardReason discard_reason);
   ~FailedProvisionalLoadInfo();
 
   base::TimeDelta time_to_failed_provisional_load;
   net::Error error;
+  content::NavigationDiscardReason discard_reason;
 };
 
 // Struct for storing per-frame memory update data.
@@ -138,13 +147,23 @@ class PageLoadMetricsObserverInterface {
   // forwarding. Eventually, we may treat all forwarding at the PageLoadTracker
   // layer to deprecate the FORWARD_OBSERVING for simplicity. FORWARD_OBSERVING
   // is available only for OnFencedFramesStart().
+  //
+  // FORWARD_OBSERVING was introduced to migrate existing observers to support
+  // FencedFrames. Some events need to use this policy to correct metrics that
+  // need observer level forwarding, but most metrics can be gathered by
+  // CONTINUE_OBSERVING. You can check PageLoadMetricsForwardObserver's
+  // implementation. If it does nothing, CONTINUE_OBSERVING just works for the
+  // event. We track FORWARD_OBSERVING users in the following sheet. Please
+  // contact toyoshim@chromium.org or kenoss@chromium.org when you need
+  // FORWARD_OBSERVING. We will replace the observer level forwarding with the
+  // tracker level forwarding so that CONTINUE_OBSERVING just works for all
+  // events.
+  // https://docs.google.com/spreadsheets/d/1ftmGPs5Q9iqSUKLJiS_hAU3m41iDXFq9p7zfGODmKGg/edit#gid=0
   enum ObservePolicy {
     CONTINUE_OBSERVING,
     STOP_OBSERVING,
-    FORWARD_OBSERVING,
+    FORWARD_OBSERVING,  // Deprecated. See the detailed comments above.
   };
-
-  using FrameTreeNodeId = int;
 
   PageLoadMetricsObserverInterface();
   virtual ~PageLoadMetricsObserverInterface();
@@ -162,9 +181,15 @@ class PageLoadMetricsObserverInterface {
   // Returns the observer name. It should points a fixed address that is bound
   // to the class as we use the pointer as a key in a map at PageLoadTracker.
   // Should be implemented when the class needs to return FORWARD_OBSERVING.
-  // TODO(https://crbug.com/1301880): Make all inheritances override this method
+  // TODO(crbug.com/40216775): Make all inheritances override this method
   // and make it pure virtual method.
   virtual const char* GetObserverName() const = 0;
+
+  // Gets/Sets the delegate. The delegate must outlive the observer and is
+  // normally set when the observer is first registered for the page load. The
+  // delegate can only be set once.
+  virtual const PageLoadMetricsObserverDelegate& GetDelegate() const = 0;
+  virtual void SetDelegate(PageLoadMetricsObserverDelegate*) = 0;
 
   // The page load started, with the given navigation handle.
   // currently_committed_url contains the URL of the committed page load at the
@@ -191,20 +216,30 @@ class PageLoadMetricsObserverInterface {
   //   affect per-outermost page lifecycle events that are preprocessed in the
   //   PageLoadTracker
   //
-  // TODO(crbug.com/1317494): FencedFrames support is still in progress. Update
+  // TODO(crbug.com/40222513): FencedFrames support is still in progress. Update
   // the above description once we fixed all subclasses.
   virtual ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) = 0;
 
-  // For prerendered pages, OnPrerenderStart is called instead of OnStart. The
-  // default implementation returns STOP_OBSERVING, so that observers that are
-  // not aware of prerender will not see prerendered page loads.
-  // TODO(crbug.com/1190112): Prerender support is still in progress. Observers
-  // may not receive some signals.
+  // For prerendered pages, OnPrerenderStart is called instead of OnStart.
   virtual ObservePolicy OnPrerenderStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) = 0;
+
+  // For primary pages in the preview mode, OnPreviewStart is called instead of
+  // OnStart. The default implementation in PageLoadMetricsObserver returns
+  // STOP_OBSERVING. See b:291867362 to track the project progress.
+  virtual ObservePolicy OnPreviewStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) = 0;
+
+  // Called when the NavigationHandleTiming associated with `navigation_handle`
+  // has been updated. This is called only for main frame navigations. See the
+  // comment at `WebContentsObserver::DidUpdateNavigationHandleTiming()` for
+  // more details.
+  virtual ObservePolicy OnNavigationHandleTimingUpdated(
+      content::NavigationHandle* navigation_handle) = 0;
 
   // OnRedirect is triggered when a page load redirects to another URL.
   // The navigation handle holds relevant data for the navigation, but will
@@ -289,11 +324,16 @@ class PageLoadMetricsObserverInterface {
       content::NavigationHandle* navigation_handle) = 0;
 
   // Called before OnCommit. The observer should return whether it wishes to
-  // observe navigations whose main resource has MIME type |mine_type|. The
+  // observe navigations whose main resource has MIME type |mime_type|. The
   // default is to observe HTML and XHTML only. Note that PageLoadTrackers only
   // track XHTML, HTML, and MHTML (related/multipart).
   virtual ObservePolicy ShouldObserveMimeType(
       const std::string& mime_type) const = 0;
+
+  // Called before OnCommit. The observer should return whether it wishes to
+  // observe navigations for |url|'s scheme. The default is to observe http and
+  // https only.
+  virtual ObservePolicy ShouldObserveScheme(const GURL& url) const = 0;
 
   // The callbacks below are only invoked after a navigation commits, for
   // tracked page loads. Page loads that don't meet the criteria for being
@@ -315,10 +355,7 @@ class PageLoadMetricsObserverInterface {
 
   // The callback is invoked when a soft navigation is detected.
   // See https://bit.ly/soft-navigation for more details.
-  virtual void OnSoftNavigationCountUpdated() = 0;
-
-  virtual void OnMobileFriendlinessUpdate(
-      const blink::MobileFriendliness& mobile_friendliness) = 0;
+  virtual void OnSoftNavigationUpdated(const mojom::SoftNavigationMetrics&) = 0;
 
   // OnInputTimingUpdate is triggered when an updated InputTiming is available
   // at the subframe level. This method may be called multiple times over the
@@ -329,7 +366,14 @@ class PageLoadMetricsObserverInterface {
 
   // OnPageInputTimingUpdate is triggered when an updated InputTiming is
   // available at the page level.
-  virtual void OnPageInputTimingUpdate(uint64_t num_input_events) = 0;
+  virtual void OnPageInputTimingUpdate(uint64_t num_interactions) = 0;
+
+  // OnPageRenderDataChanged is triggered when an updated PageRenderData is
+  // available at the page level. This method may be called multiple times over
+  // the course of the page load.
+  virtual void OnPageRenderDataUpdate(
+      const mojom::FrameRenderDataUpdate& render_data,
+      bool is_main_frame) = 0;
 
   // OnRenderDataUpdate is triggered when an updated PageRenderData is available
   // at the subframe level. This method may be called multiple times over the
@@ -354,9 +398,12 @@ class PageLoadMetricsObserverInterface {
   virtual void OnDomContentLoadedEventStart(
       const mojom::PageLoadTiming& timing) = 0;
   virtual void OnLoadEventStart(const mojom::PageLoadTiming& timing) = 0;
-  virtual void OnFirstLayout(const mojom::PageLoadTiming& timing) = 0;
   virtual void OnParseStart(const mojom::PageLoadTiming& timing) = 0;
   virtual void OnParseStop(const mojom::PageLoadTiming& timing) = 0;
+  virtual void OnConnectStart(const mojom::PageLoadTiming& timing) = 0;
+  virtual void OnConnectEnd(const mojom::PageLoadTiming& timing) = 0;
+  virtual void OnDomainLookupStart(const mojom::PageLoadTiming& timing) = 0;
+  virtual void OnDomainLookupEnd(const mojom::PageLoadTiming& timing) = 0;
 
   // On*PaintInPage(...) are invoked when the first relevant paint in the
   // page, across all frames, is observed.
@@ -394,6 +441,10 @@ class PageLoadMetricsObserverInterface {
   virtual void OnLoadingBehaviorObserved(content::RenderFrameHost* rfh,
                                          int behavior_flags) = 0;
 
+  virtual void OnJavaScriptFrameworksObserved(
+      content::RenderFrameHost* rfh,
+      const blink::JavaScriptFrameworkDetectionResult&) = 0;
+
   // Invoked when new use counter features are observed across all frames.
   virtual void OnFeaturesUsageObserved(
       content::RenderFrameHost* rfh,
@@ -406,7 +457,7 @@ class PageLoadMetricsObserverInterface {
       const base::ReadOnlySharedMemoryRegion& shared_memory) = 0;
 
   // Invoked when there is data use for loading a resource on the page
-  // for a given render frame host. This only contains resources that have had
+  // for a given RenderFrameHost. This only contains resources that have had
   // new data use since the last callback. Resources loaded from the cache only
   // receive a single update. Multiple updates can be received for the same
   // resource if it is loaded in multiple documents.
@@ -429,7 +480,8 @@ class PageLoadMetricsObserverInterface {
   // subframe's position is updated explicitly or inherently (e.g. sticky
   // position while the page is being scrolled).
   //
-  // TODO(crbug/1048175): Expose intersections to observers via shared delegate.
+  // TODO(crbug.com/40117157): Expose intersections to observers via shared
+  // delegate.
   virtual void OnMainFrameIntersectionRectChanged(
       content::RenderFrameHost* rfh,
       const gfx::Rect& main_frame_intersection_rect) = 0;
@@ -439,6 +491,11 @@ class PageLoadMetricsObserverInterface {
   // the viewport dimensions themselves changed. Only invoked on the main frame.
   virtual void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) = 0;
+
+  // Called when an image ad rectangle changed. An empty `image_ad_rect` is used
+  // to signal the removal of the rectangle. Only invoked on the main frame.
+  virtual void OnMainFrameImageAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) = 0;
 
   // Invoked when the UMA metrics subsystem is persisting metrics as the
   // application goes into the background, on platforms where the browser
@@ -456,24 +513,23 @@ class PageLoadMetricsObserverInterface {
   virtual ObservePolicy FlushMetricsOnAppEnterBackground(
       const mojom::PageLoadTiming& timing) = 0;
 
-  // One of OnComplete or OnFailedProvisionalLoad is invoked for tracked page
-  // loads, immediately before the observer is deleted. These callbacks will not
-  // be invoked for page loads that did not meet the criteria for being tracked
-  // at the time the navigation completed. The PageLoadTiming struct contains
-  // timing data. Other useful data collected over the course of the page load
-  // is exposed by the observer delegate API. Most observers should not need
-  // to implement these callbacks, and should implement the On* timing callbacks
-  // instead.
-
-  // OnComplete is invoked for tracked page loads that committed, immediately
-  // before the observer is deleted. Observers that implement OnComplete may
-  // also want to implement FlushMetricsOnAppEnterBackground, to avoid loss of
-  // data if the application is killed while in the background (this happens
-  // frequently on Android).
+  // A destructor of observer is invoked in the following mutually exclusive
+  // paths:
+  //
+  // - (If an ovserver doesn't override OnEnterBackForwardCache) When
+  //   OnEnterBackForwardCache is invoked, it calls OnComplete and returns
+  //   STOP_OBSERVING, then the ovserver is pruned.
+  // - When some callback returned STOP_OBSERVING, the observer is pruned with
+  //   no more callback.
+  // - When PageLoadTracker destructed, OnComplete is invoked just before
+  //   destruction if the load is committed.
+  // - When PageLoadTracker destructed, OnFailedProvisionalLoad is invoked just
+  //   before destruction if the load is not committed.
+  //
+  // Observers that implement OnComplete may also want to implement
+  // FlushMetricsOnAppEnterBackground, to avoid loss of data if the application
+  // is killed while in the background (this happens frequently on Android).
   virtual void OnComplete(const mojom::PageLoadTiming& timing) = 0;
-
-  // OnFailedProvisionalLoad is invoked for tracked page loads that did not
-  // commit, immediately before the observer is deleted.
   virtual void OnFailedProvisionalLoad(
       const FailedProvisionalLoadInfo& failed_provisional_load_info) = 0;
 
@@ -511,19 +567,27 @@ class PageLoadMetricsObserverInterface {
   // to observe deletion of node, OnSubFrameDeleted is more relevant.
   virtual void OnRenderFrameDeleted(
       content::RenderFrameHost* render_frame_host) = 0;
-  virtual void OnSubFrameDeleted(int frame_tree_node_id) = 0;
+  virtual void OnSubFrameDeleted(
+      content::FrameTreeNodeId frame_tree_node_id) = 0;
 
   // Called when a cookie is read for a resource request or by document.cookie.
-  virtual void OnCookiesRead(const GURL& url,
-                             const GURL& first_party_url,
-                             const net::CookieList& cookie_list,
-                             bool blocked_by_policy) = 0;
+  virtual void OnCookiesRead(
+      const GURL& url,
+      const GURL& first_party_url,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides,
+      bool is_partitioned_access) = 0;
 
   // Called when a cookie is set by a header or via document.cookie.
-  virtual void OnCookieChange(const GURL& url,
-                              const GURL& first_party_url,
-                              const net::CanonicalCookie& cookie,
-                              bool blocked_by_policy) = 0;
+  virtual void OnCookieChange(
+      const GURL& url,
+      const GURL& first_party_url,
+      const net::CanonicalCookie& cookie,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides,
+      bool is_partitioned_access) = 0;
 
   // Called when a storage access attempt by the origin |url| to |storage_type|
   // is checked by the content settings manager. |blocked_by_policy| is false
@@ -536,20 +600,41 @@ class PageLoadMetricsObserverInterface {
   // Called when prefetch is likely to occur in this page load.
   virtual void OnPrefetchLikely() = 0;
 
-  // Called when the page tracked was just activated after being loaded inside a
-  // portal.
-  virtual void DidActivatePortal(base::TimeTicks activation_time) = 0;
-
   // Called when the page tracked was just activated after being prerendered.
   // |navigation_handle| is for the activation navigation.
   virtual void DidActivatePrerenderedPage(
       content::NavigationHandle* navigation_handle) = 0;
+
+  // Called when the previewed page is activated for the tab promotion.
+  virtual void DidActivatePreviewedPage(base::TimeTicks activation_time) = 0;
 
   // Called when V8 per-frame memory usage updates are available. Each
   // MemoryUpdate consists of a GlobalRenderFrameHostId and a nonzero int64_t
   // change in bytes used.
   virtual void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates) = 0;
+
+  // Called when a `SharedStorageWorkletHost` is created.
+  virtual void OnSharedStorageWorkletHostCreated() = 0;
+
+  // Called when `sharedStorage.selectURL()` is called for some frame on the
+  // page tracked.
+  virtual void OnSharedStorageSelectURLCalled() = 0;
+
+  // Called when `performance.mark()` is emitted in the main frame except for
+  // the standard UserTiming marks `mark_fully_loaded`, `mark_fully_visible`,
+  // and `mark_interactive` occur. Those are managed in PageLoadTiming
+  // separately and tracked in in a different timing.
+  virtual void OnCustomUserTimingMarkObserved(
+      const std::vector<mojom::CustomUserTimingMarkPtr>& timings) = 0;
+
+  // Called when a Fledge auction completes.
+  virtual void OnAdAuctionComplete(bool is_server_auction,
+                                   bool is_on_device_auction,
+                                   content::AuctionResult result) = 0;
+
+  // Called when the renderer process for the primary main frame is gone.
+  virtual void OnPrimaryPageRenderProcessGone() = 0;
 
  private:
   base::WeakPtrFactory<PageLoadMetricsObserverInterface> weak_factory_{this};

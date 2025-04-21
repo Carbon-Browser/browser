@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -18,6 +18,7 @@ void glAcquireTexturesANGLEFn(GLuint numTextures,
 void glActiveShaderProgramFn(GLuint pipeline, GLuint program) override;
 void glActiveTextureFn(GLenum texture) override;
 void glAttachShaderFn(GLuint program, GLuint shader) override;
+void glBeginPixelLocalStorageANGLEFn(GLsizei n, const GLenum* loadops) override;
 void glBeginQueryFn(GLenum target, GLuint id) override;
 void glBeginTransformFeedbackFn(GLenum primitiveMode) override;
 void glBindAttribLocationFn(GLuint program,
@@ -37,9 +38,6 @@ void glBindFragDataLocationIndexedFn(GLuint program,
                                      GLuint colorNumber,
                                      GLuint index,
                                      const char* name) override;
-void glBindFragmentInputLocationCHROMIUMFn(GLuint program,
-                                           GLint location,
-                                           const char* name) override;
 void glBindFramebufferEXTFn(GLenum target, GLuint framebuffer) override;
 void glBindImageTextureEXTFn(GLuint index,
                              GLuint texture,
@@ -93,6 +91,9 @@ void glBlitFramebufferFn(GLint srcX0,
                          GLint dstY1,
                          GLbitfield mask,
                          GLenum filter) override;
+void glBlobCacheCallbacksANGLEFn(GLSETBLOBPROCANGLE set,
+                                 GLGETBLOBPROCANGLE get,
+                                 const void* userData) override;
 void glBufferDataFn(GLenum target,
                     GLsizeiptr size,
                     const void* data,
@@ -142,9 +143,7 @@ void glClearTexSubImageFn(GLuint texture,
 GLenum glClientWaitSyncFn(GLsync sync,
                           GLbitfield flags,
                           GLuint64 timeout) override;
-GLenum glClientWaitSyncAPPLEFn(GLsync sync,
-                               GLbitfield flags,
-                               GLuint64 timeout) override;
+void glClipControlEXTFn(GLenum origin, GLenum depth) override;
 void glColorMaskFn(GLboolean red,
                    GLboolean green,
                    GLboolean blue,
@@ -287,23 +286,6 @@ void glCopyTextureCHROMIUMFn(GLuint sourceId,
                              GLboolean unpackFlipY,
                              GLboolean unpackPremultiplyAlpha,
                              GLboolean unpackUnmultiplyAlpha) override;
-void glCoverageModulationNVFn(GLenum components) override;
-void glCoverFillPathInstancedNVFn(GLsizei numPaths,
-                                  GLenum pathNameType,
-                                  const void* paths,
-                                  GLuint pathBase,
-                                  GLenum coverMode,
-                                  GLenum transformType,
-                                  const GLfloat* transformValues) override;
-void glCoverFillPathNVFn(GLuint path, GLenum coverMode) override;
-void glCoverStrokePathInstancedNVFn(GLsizei numPaths,
-                                    GLenum pathNameType,
-                                    const void* paths,
-                                    GLuint pathBase,
-                                    GLenum coverMode,
-                                    GLenum transformType,
-                                    const GLfloat* transformValues) override;
-void glCoverStrokePathNVFn(GLuint name, GLenum coverMode) override;
 void glCreateMemoryObjectsEXTFn(GLsizei n, GLuint* memoryObjects) override;
 GLuint glCreateProgramFn(void) override;
 GLuint glCreateShaderFn(GLenum type) override;
@@ -326,12 +308,10 @@ void glDebugMessageInsertFn(GLenum source,
                             GLsizei length,
                             const char* buf) override;
 void glDeleteBuffersARBFn(GLsizei n, const GLuint* buffers) override;
-void glDeleteFencesAPPLEFn(GLsizei n, const GLuint* fences) override;
 void glDeleteFencesNVFn(GLsizei n, const GLuint* fences) override;
 void glDeleteFramebuffersEXTFn(GLsizei n, const GLuint* framebuffers) override;
 void glDeleteMemoryObjectsEXTFn(GLsizei n,
                                 const GLuint* memoryObjects) override;
-void glDeletePathsNVFn(GLuint path, GLsizei range) override;
 void glDeleteProgramFn(GLuint program) override;
 void glDeleteProgramPipelinesFn(GLsizei n, const GLuint* pipelines) override;
 void glDeleteQueriesFn(GLsizei n, const GLuint* ids) override;
@@ -341,7 +321,6 @@ void glDeleteSamplersFn(GLsizei n, const GLuint* samplers) override;
 void glDeleteSemaphoresEXTFn(GLsizei n, const GLuint* semaphores) override;
 void glDeleteShaderFn(GLuint shader) override;
 void glDeleteSyncFn(GLsync sync) override;
-void glDeleteSyncAPPLEFn(GLsync sync) override;
 void glDeleteTexturesFn(GLsizei n, const GLuint* textures) override;
 void glDeleteTransformFeedbacksFn(GLsizei n, const GLuint* ids) override;
 void glDeleteVertexArraysOESFn(GLsizei n, const GLuint* arrays) override;
@@ -407,21 +386,31 @@ void glEGLImageTargetTexture2DOESFn(GLenum target,
 void glEnableFn(GLenum cap) override;
 void glEnableiOESFn(GLenum target, GLuint index) override;
 void glEnableVertexAttribArrayFn(GLuint index) override;
+void glEndPixelLocalStorageANGLEFn(GLsizei n, const GLenum* storeops) override;
 void glEndQueryFn(GLenum target) override;
 void glEndTilingQCOMFn(GLbitfield preserveMask) override;
 void glEndTransformFeedbackFn(void) override;
 GLsync glFenceSyncFn(GLenum condition, GLbitfield flags) override;
-GLsync glFenceSyncAPPLEFn(GLenum condition, GLbitfield flags) override;
 void glFinishFn(void) override;
-void glFinishFenceAPPLEFn(GLuint fence) override;
 void glFinishFenceNVFn(GLuint fence) override;
 void glFlushFn(void) override;
 void glFlushMappedBufferRangeFn(GLenum target,
                                 GLintptr offset,
                                 GLsizeiptr length) override;
+void glFramebufferMemorylessPixelLocalStorageANGLEFn(
+    GLint plane,
+    GLenum internalformat) override;
 void glFramebufferParameteriFn(GLenum target,
                                GLenum pname,
                                GLint param) override;
+void glFramebufferPixelLocalClearValuefvANGLEFn(GLint plane,
+                                                const GLfloat* value) override;
+void glFramebufferPixelLocalClearValueivANGLEFn(GLint plane,
+                                                const GLint* value) override;
+void glFramebufferPixelLocalClearValueuivANGLEFn(GLint plane,
+                                                 const GLuint* value) override;
+void glFramebufferPixelLocalStorageInterruptANGLEFn() override;
+void glFramebufferPixelLocalStorageRestoreANGLEFn() override;
 void glFramebufferRenderbufferEXTFn(GLenum target,
                                     GLenum attachment,
                                     GLenum renderbuffertarget,
@@ -448,13 +437,15 @@ void glFramebufferTextureMultiviewOVRFn(GLenum target,
                                         GLint level,
                                         GLint baseViewIndex,
                                         GLsizei numViews) override;
+void glFramebufferTexturePixelLocalStorageANGLEFn(GLint plane,
+                                                  GLuint backingtexture,
+                                                  GLint level,
+                                                  GLint layer) override;
 void glFrontFaceFn(GLenum mode) override;
 void glGenBuffersARBFn(GLsizei n, GLuint* buffers) override;
 void glGenerateMipmapEXTFn(GLenum target) override;
-void glGenFencesAPPLEFn(GLsizei n, GLuint* fences) override;
 void glGenFencesNVFn(GLsizei n, GLuint* fences) override;
 void glGenFramebuffersEXTFn(GLsizei n, GLuint* framebuffers) override;
-GLuint glGenPathsNVFn(GLsizei range) override;
 GLuint glGenProgramPipelinesFn(GLsizei n, GLuint* pipelines) override;
 void glGenQueriesFn(GLsizei n, GLuint* ids) override;
 void glGenRenderbuffersEXTFn(GLsizei n, GLuint* renderbuffers) override;
@@ -566,6 +557,26 @@ void glGetFramebufferParameterivRobustANGLEFn(GLenum target,
                                               GLsizei bufSize,
                                               GLsizei* length,
                                               GLint* params) override;
+void glGetFramebufferPixelLocalStorageParameterfvANGLEFn(
+    GLint plane,
+    GLenum pname,
+    GLfloat* params) override;
+void glGetFramebufferPixelLocalStorageParameterfvRobustANGLEFn(
+    GLint plane,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLfloat* params) override;
+void glGetFramebufferPixelLocalStorageParameterivANGLEFn(
+    GLint plane,
+    GLenum pname,
+    GLint* params) override;
+void glGetFramebufferPixelLocalStorageParameterivRobustANGLEFn(
+    GLint plane,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLint* params) override;
 GLenum glGetGraphicsResetStatusARBFn(void) override;
 void glGetInteger64i_vFn(GLenum target, GLuint index, GLint64* data) override;
 void glGetInteger64i_vRobustANGLEFn(GLenum target,
@@ -933,10 +944,8 @@ void glInvalidateTextureANGLEFn(GLenum target) override;
 GLboolean glIsBufferFn(GLuint buffer) override;
 GLboolean glIsEnabledFn(GLenum cap) override;
 GLboolean glIsEnablediOESFn(GLenum target, GLuint index) override;
-GLboolean glIsFenceAPPLEFn(GLuint fence) override;
 GLboolean glIsFenceNVFn(GLuint fence) override;
 GLboolean glIsFramebufferEXTFn(GLuint framebuffer) override;
-GLboolean glIsPathNVFn(GLuint path) override;
 GLboolean glIsProgramFn(GLuint program) override;
 GLboolean glIsProgramPipelineFn(GLuint pipeline) override;
 GLboolean glIsQueryFn(GLuint query) override;
@@ -944,7 +953,6 @@ GLboolean glIsRenderbufferEXTFn(GLuint renderbuffer) override;
 GLboolean glIsSamplerFn(GLuint sampler) override;
 GLboolean glIsShaderFn(GLuint shader) override;
 GLboolean glIsSyncFn(GLsync sync) override;
-GLboolean glIsSyncAPPLEFn(GLsync sync) override;
 GLboolean glIsTextureFn(GLuint texture) override;
 GLboolean glIsTransformFeedbackFn(GLuint id) override;
 GLboolean glIsVertexArrayOESFn(GLuint array) override;
@@ -955,8 +963,6 @@ void* glMapBufferRangeFn(GLenum target,
                          GLintptr offset,
                          GLsizeiptr length,
                          GLbitfield access) override;
-void glMatrixLoadfEXTFn(GLenum matrixMode, const GLfloat* m) override;
-void glMatrixLoadIdentityEXTFn(GLenum matrixMode) override;
 void glMaxShaderCompilerThreadsKHRFn(GLuint count) override;
 void glMemoryBarrierByRegionFn(GLbitfield barriers) override;
 void glMemoryBarrierEXTFn(GLbitfield barriers) override;
@@ -1006,20 +1012,16 @@ void glObjectLabelFn(GLenum identifier,
                      const char* label) override;
 void glObjectPtrLabelFn(void* ptr, GLsizei length, const char* label) override;
 void glPatchParameteriFn(GLenum pname, GLint value) override;
-void glPathCommandsNVFn(GLuint path,
-                        GLsizei numCommands,
-                        const GLubyte* commands,
-                        GLsizei numCoords,
-                        GLenum coordType,
-                        const GLvoid* coords) override;
-void glPathParameterfNVFn(GLuint path, GLenum pname, GLfloat value) override;
-void glPathParameteriNVFn(GLuint path, GLenum pname, GLint value) override;
-void glPathStencilFuncNVFn(GLenum func, GLint ref, GLuint mask) override;
 void glPauseTransformFeedbackFn(void) override;
+void glPixelLocalStorageBarrierANGLEFn() override;
 void glPixelStoreiFn(GLenum pname, GLint param) override;
 void glPointParameteriFn(GLenum pname, GLint param) override;
 void glPolygonModeFn(GLenum face, GLenum mode) override;
+void glPolygonModeANGLEFn(GLenum face, GLenum mode) override;
 void glPolygonOffsetFn(GLfloat factor, GLfloat units) override;
+void glPolygonOffsetClampEXTFn(GLfloat factor,
+                               GLfloat units,
+                               GLfloat clamp) override;
 void glPopDebugGroupFn() override;
 void glPopGroupMarkerEXTFn(void) override;
 void glPrimitiveRestartIndexFn(GLuint index) override;
@@ -1028,11 +1030,6 @@ void glProgramBinaryFn(GLuint program,
                        const GLvoid* binary,
                        GLsizei length) override;
 void glProgramParameteriFn(GLuint program, GLenum pname, GLint value) override;
-void glProgramPathFragmentInputGenNVFn(GLuint program,
-                                       GLint location,
-                                       GLenum genMode,
-                                       GLint components,
-                                       const GLfloat* coeffs) override;
 void glProgramUniform1fFn(GLuint program, GLint location, GLfloat v0) override;
 void glProgramUniform1fvFn(GLuint program,
                            GLint location,
@@ -1174,6 +1171,7 @@ void glProgramUniformMatrix4x3fvFn(GLuint program,
                                    GLsizei count,
                                    GLboolean transpose,
                                    const GLfloat* value) override;
+void glProvokingVertexANGLEFn(GLenum provokeMode) override;
 void glPushDebugGroupFn(GLenum source,
                         GLuint id,
                         GLsizei length,
@@ -1265,7 +1263,6 @@ void glSamplerParameterivRobustANGLEFn(GLuint sampler,
                                        GLsizei bufSize,
                                        const GLint* param) override;
 void glScissorFn(GLint x, GLint y, GLsizei width, GLsizei height) override;
-void glSetFenceAPPLEFn(GLuint fence) override;
 void glSetFenceNVFn(GLuint fence, GLenum condition) override;
 void glShaderBinaryFn(GLsizei n,
                       const GLuint* shaders,
@@ -1287,15 +1284,6 @@ void glStartTilingQCOMFn(GLuint x,
                          GLuint width,
                          GLuint height,
                          GLbitfield preserveMask) override;
-void glStencilFillPathInstancedNVFn(GLsizei numPaths,
-                                    GLenum pathNameType,
-                                    const void* paths,
-                                    GLuint pathBase,
-                                    GLenum fillMode,
-                                    GLuint mask,
-                                    GLenum transformType,
-                                    const GLfloat* transformValues) override;
-void glStencilFillPathNVFn(GLuint path, GLenum fillMode, GLuint mask) override;
 void glStencilFuncFn(GLenum func, GLint ref, GLuint mask) override;
 void glStencilFuncSeparateFn(GLenum face,
                              GLenum func,
@@ -1308,46 +1296,6 @@ void glStencilOpSeparateFn(GLenum face,
                            GLenum fail,
                            GLenum zfail,
                            GLenum zpass) override;
-void glStencilStrokePathInstancedNVFn(GLsizei numPaths,
-                                      GLenum pathNameType,
-                                      const void* paths,
-                                      GLuint pathBase,
-                                      GLint ref,
-                                      GLuint mask,
-                                      GLenum transformType,
-                                      const GLfloat* transformValues) override;
-void glStencilStrokePathNVFn(GLuint path,
-                             GLint reference,
-                             GLuint mask) override;
-void glStencilThenCoverFillPathInstancedNVFn(
-    GLsizei numPaths,
-    GLenum pathNameType,
-    const void* paths,
-    GLuint pathBase,
-    GLenum fillMode,
-    GLuint mask,
-    GLenum coverMode,
-    GLenum transformType,
-    const GLfloat* transformValues) override;
-void glStencilThenCoverFillPathNVFn(GLuint path,
-                                    GLenum fillMode,
-                                    GLuint mask,
-                                    GLenum coverMode) override;
-void glStencilThenCoverStrokePathInstancedNVFn(
-    GLsizei numPaths,
-    GLenum pathNameType,
-    const void* paths,
-    GLuint pathBase,
-    GLint ref,
-    GLuint mask,
-    GLenum coverMode,
-    GLenum transformType,
-    const GLfloat* transformValues) override;
-void glStencilThenCoverStrokePathNVFn(GLuint path,
-                                      GLint reference,
-                                      GLuint mask,
-                                      GLenum coverMode) override;
-GLboolean glTestFenceAPPLEFn(GLuint fence) override;
 GLboolean glTestFenceNVFn(GLuint fence) override;
 void glTexBufferFn(GLenum target,
                    GLenum internalformat,
@@ -1642,7 +1590,4 @@ void glWaitSemaphoreEXTFn(GLuint semaphore,
                           const GLuint* textures,
                           const GLenum* srcLayouts) override;
 void glWaitSyncFn(GLsync sync, GLbitfield flags, GLuint64 timeout) override;
-void glWaitSyncAPPLEFn(GLsync sync,
-                       GLbitfield flags,
-                       GLuint64 timeout) override;
 void glWindowRectanglesEXTFn(GLenum mode, GLsizei n, const GLint* box) override;

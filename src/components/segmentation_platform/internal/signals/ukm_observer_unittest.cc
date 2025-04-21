@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,10 +72,11 @@ class UkmObserverTest : public testing::Test {
     SegmentationPlatformService::RegisterLocalStatePrefs(prefs_.registry());
     LocalStateHelper::GetInstance().Initialize(&prefs_);
     ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
-    InitializeUkmObserver(true /*is_ukm_allowed*/);
+    InitializeUkmObserver({ukm::MSBB} /*consent_state*/);
   }
 
   void TearDown() override {
+    ukm_data_manager_.reset();
     ukm_observer_.reset();
     ukm_recorder_.reset();
   }
@@ -93,9 +94,11 @@ class UkmObserverTest : public testing::Test {
     wait_for_record.Run();
   }
 
-  void InitializeUkmObserver(bool is_ukm_allowed) {
+  void InitializeUkmObserver(ukm::UkmConsentState consent_state) {
+    ukm_data_manager_.reset();
+    ukm_observer_.reset();
     ukm_observer_ = std::make_unique<UkmObserver>(ukm_recorder_.get());
-    ukm_observer_->OnUkmAllowedStateChanged(is_ukm_allowed);
+    ukm_observer_->OnUkmAllowedStateChanged(consent_state);
     auto ukm_database = std::make_unique<MockUkmDatabase>();
     ukm_database_ = ukm_database.get();
     ukm_data_manager_ = std::make_unique<UkmDataManagerImpl>();
@@ -113,7 +116,7 @@ class UkmObserverTest : public testing::Test {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<ukm::TestUkmRecorder> ukm_recorder_;
   std::unique_ptr<UkmObserver> ukm_observer_;
-  base::raw_ptr<MockUkmDatabase> ukm_database_;
+  raw_ptr<MockUkmDatabase, DanglingUntriaged> ukm_database_;
   std::unique_ptr<UkmDataManagerImpl> ukm_data_manager_;
   TestingPrefServiceSimple prefs_;
 };
@@ -205,7 +208,7 @@ TEST_F(UkmObserverTest, PauseObservation) {
   observer.StartObserving(config);
 
   EXPECT_CALL(ukm_database(), StoreUkmEntry(_)).Times(0);
-  EXPECT_CALL(ukm_database(), UpdateUrlForUkmSource(_, _, _)).Times(0);
+  EXPECT_CALL(ukm_database(), UpdateUrlForUkmSource(_, _, _, _)).Times(0);
 
   observer.PauseOrResumeObservation(true);
 
@@ -230,10 +233,12 @@ TEST_F(UkmObserverTest, ObservationFromRecorder) {
   const GURL kUrl1("https://www.url1.com");
   base::RunLoop wait_for_source;
   EXPECT_CALL(ukm_database(),
-              UpdateUrlForUkmSource(kSourceId, kUrl1, /*is_validated=*/false))
-      .WillOnce([&wait_for_source](ukm::SourceId, const GURL&, bool) {
-        wait_for_source.QuitClosure().Run();
-      });
+              UpdateUrlForUkmSource(kSourceId, kUrl1, /*is_validated=*/false,
+                                    /*profile_id*/ ""))
+      .WillOnce(
+          [&wait_for_source](ukm::SourceId, const GURL&, bool, std::string) {
+            wait_for_source.QuitClosure().Run();
+          });
   recorder.UpdateSourceURL(kSourceId, {kUrl1});
   wait_for_source.Run();
 
@@ -257,18 +262,18 @@ TEST_F(UkmObserverTest, GetUkmMostRecentAllowedTime) {
   EXPECT_LE(
       local_state_helper.GetPrefTime(kSegmentationUkmMostRecentAllowedTimeKey),
       base::Time::Now());
-  InitializeUkmObserver(false /*is_ukm_allowed*/);
+  InitializeUkmObserver(ukm::UkmConsentState() /*consent_state*/);
   EXPECT_EQ(base::Time::Max(), local_state_helper.GetPrefTime(
                                    kSegmentationUkmMostRecentAllowedTimeKey));
 
-  ukm_observer().OnUkmAllowedStateChanged(true);
+  ukm_observer().OnUkmAllowedStateChanged({ukm::MSBB});
   EXPECT_LE(
       local_state_helper.GetPrefTime(kSegmentationUkmMostRecentAllowedTimeKey),
       base::Time::Now());
 
   // Change the allowed state to false, the start time should now be set to
   // Time::Max().
-  ukm_recorder().OnUkmAllowedStateChanged(false);
+  ukm_recorder().OnUkmAllowedStateChanged(ukm::UkmConsentState());
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(base::Time::Max(), local_state_helper.GetPrefTime(
                                    kSegmentationUkmMostRecentAllowedTimeKey));
@@ -276,7 +281,7 @@ TEST_F(UkmObserverTest, GetUkmMostRecentAllowedTime) {
   // Change the allowed state to true, the new start time should be close to
   // now.
   base::Time now = base::Time::Now();
-  ukm_recorder().OnUkmAllowedStateChanged(true);
+  ukm_recorder().OnUkmAllowedStateChanged({ukm::MSBB});
   base::RunLoop().RunUntilIdle();
   EXPECT_LE(now, local_state_helper.GetPrefTime(
                      kSegmentationUkmMostRecentAllowedTimeKey));

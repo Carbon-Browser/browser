@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@ struct EnumTraits<gl::mojom::GpuPreference, gl::GpuPreference> {
         return gl::mojom::GpuPreference::kHighPerformance;
     }
     NOTREACHED();
-    return gl::mojom::GpuPreference::kDefault;
   }
 
   static bool FromMojom(gl::mojom::GpuPreference input,
@@ -45,7 +44,6 @@ struct EnumTraits<gl::mojom::GpuPreference, gl::GpuPreference> {
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

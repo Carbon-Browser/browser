@@ -16,10 +16,21 @@
  */
 
 #include "components/adblock/core/subscription/test/mock_subscription_service.h"
+#include "gtest/gtest.h"
 
 namespace adblock {
 
 MockSubscriptionService::MockSubscriptionService() = default;
 MockSubscriptionService::~MockSubscriptionService() = default;
+
+void MockSubscriptionService::AddObserver(SubscriptionObserver* observer) {
+  ASSERT_FALSE(observer_) << "Adding observer twice";
+  observer_ = observer;
+}
+
+void MockSubscriptionService::RemoveObserver(SubscriptionObserver* observer) {
+  ASSERT_EQ(observer_, observer) << "Removing unknown observer";
+  observer_ = nullptr;
+}
 
 }  // namespace adblock

@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_DRIVE_METRICS_PROVIDER_H_
 #define COMPONENTS_METRICS_DRIVE_METRICS_PROVIDER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/metrics/metrics_provider.h"
@@ -35,6 +34,15 @@ class DriveMetricsProvider : public metrics::MetricsProvider {
   void ProvideSystemProfileMetrics(
       metrics::SystemProfileProto* system_profile_proto) override;
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class OptionalBoolRecord {
+    kUnknown = 0,
+    kFalse = 1,
+    kTrue = 2,
+    kMaxValue = kTrue,
+  };
+
  private:
   FRIEND_TEST_ALL_PREFIXES(DriveMetricsProviderTest, HasSeekPenalty);
 
@@ -42,8 +50,10 @@ class DriveMetricsProvider : public metrics::MetricsProvider {
   // |has_seek_penalty| is set if |success| is true.
   struct SeekPenaltyResponse {
     SeekPenaltyResponse();
-    bool success;
-    bool has_seek_penalty;
+    std::optional<bool> has_seek_penalty;
+    std::optional<bool> has_seek_penalty_base;
+    std::optional<bool> is_removable;
+    std::optional<bool> is_usb;
   };
 
   struct DriveMetrics {

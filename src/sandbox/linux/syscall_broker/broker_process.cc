@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,22 +18,24 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_metrics.h"
 #include "build/build_config.h"
 #include "sandbox/linux/syscall_broker/broker_channel.h"
 #include "sandbox/linux/syscall_broker/broker_client.h"
+#include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_host.h"
 #include "sandbox/linux/syscall_broker/broker_permission_list.h"
+#include "sandbox/linux/system_headers/linux_syscalls.h"
 
 namespace sandbox {
 
 namespace syscall_broker {
 
-BrokerProcess::BrokerProcess(absl::optional<BrokerSandboxConfig> policy,
+BrokerProcess::BrokerProcess(std::optional<BrokerSandboxConfig> policy,
                              BrokerType broker_type,
                              bool fast_check_in_client,
                              bool quiet_failures_for_tests)
@@ -62,7 +64,9 @@ bool BrokerProcess::ForkSignalBasedBroker(
   BrokerChannel::EndPoint ipc_reader, ipc_writer;
   BrokerChannel::CreatePair(&ipc_reader, &ipc_writer);
 
-  int child_pid = fork();
+  pid_t parent_pid = getpid();
+
+  pid_t child_pid = fork();
   if (child_pid == -1)
     return false;
 
@@ -87,11 +91,11 @@ bool BrokerProcess::ForkSignalBasedBroker(
 
   CHECK(std::move(broker_process_init_callback).Run(*policy_));
 
-  BrokerHost broker_host_signal_based(*policy_, std::move(ipc_reader));
+  BrokerHost broker_host_signal_based(*policy_, std::move(ipc_reader),
+                                      parent_pid);
   broker_host_signal_based.LoopAndHandleRequests();
   _exit(1);
   NOTREACHED();
-  return false;
 }
 
 bool BrokerProcess::Fork(BrokerSideCallback broker_process_init_callback) {
@@ -187,7 +191,9 @@ bool BrokerProcess::IsSyscallBrokerable(int sysno, bool fast_check) const {
       // If rmdir() doesn't exist, unlinkat is used with AT_REMOVEDIR.
       return !fast_check || policy_->allowed_command_set.test(COMMAND_RMDIR) ||
              policy_->allowed_command_set.test(COMMAND_UNLINK);
-
+    case __NR_inotify_add_watch:
+      return !fast_check ||
+             policy_->allowed_command_set.test(COMMAND_INOTIFY_ADD_WATCH);
     default:
       return false;
   }

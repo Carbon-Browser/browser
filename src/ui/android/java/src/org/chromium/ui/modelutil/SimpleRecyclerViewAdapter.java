@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@ import android.util.SparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 
-import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.modelutil.ListObservable.ListObserver;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor.ViewBinder;
 
@@ -22,21 +23,23 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor.ViewBinder;
  * adapter how to display a particular item. Updates to the {@link ListObservable} list provided in
  * the constructor will immediately be reflected in the list.
  */
+@NullMarked
 public class SimpleRecyclerViewAdapter
         extends RecyclerView.Adapter<SimpleRecyclerViewAdapter.ViewHolder>
         implements MVCListAdapter {
     /**
      * A simple {@link ViewHolder} that keeps a view, view binder, and an MCP that relate the two.
      */
-    public class ViewHolder extends RecyclerView.ViewHolder {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
         /** The model change processor currently associated with this view and model. */
-        private PropertyModelChangeProcessor<PropertyModel, View, PropertyKey> mCurrentMcp;
+        private @Nullable PropertyModelChangeProcessor<PropertyModel, View, PropertyKey>
+                mCurrentMcp;
 
         /** The view binder that knows how to apply a model to the view this holder owns. */
         private ViewBinder<PropertyModel, View, PropertyKey> mBinder;
 
         /** A handle to the model currently held by this view holder. */
-        public PropertyModel model;
+        public @Nullable PropertyModel model;
 
         /**
          * @param itemView The view to manage.
@@ -51,16 +54,16 @@ public class SimpleRecyclerViewAdapter
          * Set the model for this view holder to manage.
          * @param model The model that should be bound to the view.
          */
-        void setModel(PropertyModel model) {
+        void setModel(@Nullable PropertyModel model) {
             if (mCurrentMcp != null) mCurrentMcp.destroy();
             this.model = model;
-            if (this.model == null) return;
+            if (model == null) return;
             mCurrentMcp = PropertyModelChangeProcessor.create(model, itemView, mBinder);
         }
     }
 
     /** The data that is shown in the list. */
-    private final ModelList mListData;
+    protected final ModelList mListData;
 
     /** The observer that watches the data for changes. */
     private final ListObserver<Void> mListObserver;
@@ -70,28 +73,32 @@ public class SimpleRecyclerViewAdapter
 
     public SimpleRecyclerViewAdapter(ModelList data) {
         mListData = data;
-        mListObserver = new ListObserver<Void>() {
-            @Override
-            public void onItemRangeInserted(ListObservable source, int index, int count) {
-                notifyItemRangeInserted(index, count);
-            }
+        mListObserver =
+                new ListObserver<Void>() {
+                    @Override
+                    public void onItemRangeInserted(ListObservable source, int index, int count) {
+                        notifyItemRangeInserted(index, count);
+                    }
 
-            @Override
-            public void onItemRangeRemoved(ListObservable source, int index, int count) {
-                notifyItemRangeRemoved(index, count);
-            }
+                    @Override
+                    public void onItemRangeRemoved(ListObservable source, int index, int count) {
+                        notifyItemRangeRemoved(index, count);
+                    }
 
-            @Override
-            public void onItemRangeChanged(
-                    ListObservable<Void> source, int index, int count, @Nullable Void payload) {
-                notifyItemRangeChanged(index, count);
-            }
+                    @Override
+                    public void onItemRangeChanged(
+                            ListObservable<Void> source,
+                            int index,
+                            int count,
+                            @Nullable Void payload) {
+                        notifyItemRangeChanged(index, count);
+                    }
 
-            @Override
-            public void onItemMoved(ListObservable source, int curIndex, int newIndex) {
-                notifyItemMoved(curIndex, newIndex);
-            }
-        };
+                    @Override
+                    public void onItemMoved(ListObservable source, int curIndex, int newIndex) {
+                        notifyItemMoved(curIndex, newIndex);
+                    }
+                };
         mListData.addObserver(mListObserver);
     }
 

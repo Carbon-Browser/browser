@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,14 @@ PaintWorkletInput::PropertyKey::PropertyKey(
     : native_property_type(native_property_type), element_id(element_id) {}
 
 PaintWorkletInput::PropertyKey::PropertyKey(const PropertyKey& other) = default;
+
+PaintWorkletInput::PropertyKey::PropertyKey(PropertyKey&& other) = default;
+
+PaintWorkletInput::PropertyKey& PaintWorkletInput::PropertyKey::operator=(
+    const PropertyKey& other) = default;
+
+PaintWorkletInput::PropertyKey& PaintWorkletInput::PropertyKey::operator=(
+    PropertyKey&& other) = default;
 
 PaintWorkletInput::PropertyKey::~PropertyKey() = default;
 
@@ -58,11 +66,6 @@ PaintWorkletInput::PropertyValue::PropertyValue(float value)
 PaintWorkletInput::PropertyValue::PropertyValue(SkColor4f value)
     : color_value(value) {}
 
-PaintWorkletInput::PropertyValue::PropertyValue(const PropertyValue& other) =
-    default;
-
-PaintWorkletInput::PropertyValue::~PropertyValue() = default;
-
 bool PaintWorkletInput::PropertyValue::has_value() const {
   DCHECK(float_value.has_value() != color_value.has_value() ||
          (!float_value.has_value() && !color_value.has_value()));
@@ -74,8 +77,19 @@ void PaintWorkletInput::PropertyValue::reset() {
   color_value.reset();
 }
 
-bool PaintWorkletInput::KnownToBeOpaque() const {
+bool PaintWorkletInput::NeedsLayer() const {
   return false;
+}
+
+bool PaintWorkletInput::ValueChangeShouldCauseRepaint(
+    const PropertyValue& val1,
+    const PropertyValue& val2) const {
+  return val1.color_value != val2.color_value ||
+         val1.float_value != val2.float_value;
+}
+
+bool PaintWorkletInput::IsPaintWorkletInput() const {
+  return true;
 }
 
 }  // namespace cc

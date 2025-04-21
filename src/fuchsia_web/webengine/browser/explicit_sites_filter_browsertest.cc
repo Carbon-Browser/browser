@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,21 @@
 #include <fuchsia/web/cpp/fidl.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/run_loop.h"
 #include "components/policy/content/safe_search_service.h"
 #include "components/safe_search_api/stub_url_checker.h"
 #include "components/safe_search_api/url_checker.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl_browser_test_base.h"
 #include "fuchsia_web/webengine/browser/web_engine_browser_main_parts.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -35,7 +37,7 @@ constexpr char kCustomExplicitSitesErrorPage[] = R"(<html>
 
 // Creates a Fuchsia memory data from |data|.
 // |data| should be a short string to avoid exceeding Zircon channel limits.
-fuchsia::mem::Data MemDataBytesFromShortString(base::StringPiece data) {
+fuchsia::mem::Data MemDataBytesFromShortString(std::string_view data) {
   return fuchsia::mem::Data::WithBytes(
       std::vector<uint8_t>(data.begin(), data.end()));
 }
@@ -101,8 +103,6 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, FilterDisabled_SiteAllowed) {
 
   SetPageIsNotExplicit();
 
-  fuchsia::web::NavigationControllerPtr controller;
-  frame->GetNavigationController(controller.NewRequest());
   EXPECT_TRUE(LoadUrlAndExpectResponse(frame.GetNavigationController(), {},
                                        GetPage1UrlSpec()));
 
@@ -151,6 +151,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, DefaultErrorPage_SiteBlocked) {
   std::string expected_title = GetPage1UrlSpec().erase(0, 7);
   frame.navigation_listener().RunUntilErrorPageIsLoadedAndTitleEquals(
       expected_title);
+  EXPECT_EQ(frame.navigation_listener().current_state()->error_detail(),
+            fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
 }
 
 IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, CustomErrorPage_SiteAllowed) {
@@ -180,6 +182,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, CustomErrorPage_SiteBlocked) {
 
   frame.navigation_listener().RunUntilErrorPageIsLoadedAndTitleEquals(
       kCustomErrorPageTitle);
+  EXPECT_EQ(frame.navigation_listener().current_state()->error_detail(),
+            fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
 }
 
 IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, FrameHost_SiteAllowed) {
@@ -221,6 +225,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, FrameHost_SiteBlocked) {
 
   frame.navigation_listener().RunUntilErrorPageIsLoadedAndTitleEquals(
       kCustomErrorPageTitle);
+  EXPECT_EQ(frame.navigation_listener().current_state()->error_detail(),
+            fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
 }
 
 IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
@@ -247,6 +253,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
   // deleted. Then, create a new FrameHost connection, which creates a new
   // BrowserContext.
   frame_host1.Unbind();
+  frame1 = {};
+
   fuchsia::web::FrameHostPtr frame_host2 = ConnectToFrameHost();
   ASSERT_EQ(frame_host_impls().size(), 1U);
 
@@ -284,11 +292,15 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
 
   frame1.navigation_listener().RunUntilErrorPageIsLoadedAndTitleEquals(
       kCustomErrorPageTitle);
+  EXPECT_EQ(frame1.navigation_listener().current_state()->error_detail(),
+            fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
 
   // Disconnect first FrameHost, causing the associated BrowserContext to be
   // deleted. Then, create a new FrameHost connection, which creates a new
   // BrowserContext.
   frame_host1.Unbind();
+  frame1 = {};
+
   fuchsia::web::FrameHostPtr frame_host2 = ConnectToFrameHost();
   ASSERT_EQ(frame_host_impls().size(), 1U);
 
@@ -305,4 +317,6 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
 
   frame2.navigation_listener().RunUntilErrorPageIsLoadedAndTitleEquals(
       kCustomErrorPageTitle);
+  EXPECT_EQ(frame2.navigation_listener().current_state()->error_detail(),
+            fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
 }

@@ -1,21 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_layout_util.h"
 
-#include "base/notreached.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/ui/util/ui_util.h"
 
 const int kContentSuggestionsTilesVerticalSpacing = 16;
 const int kContentSuggestionsTilesHorizontalSpacingRegular = 19;
 const int kContentSuggestionsTilesHorizontalSpacingCompact = 5;
 
-const CGSize kContentSuggestionsTileViewSizeSmall = {/*width=*/73, /*height=*/100};
+const CGSize kContentSuggestionsTileViewSizeSmall = {/*width=*/73,
+                                                     /*height=*/100};
 const CGSize kContentSuggestionsTileViewSizeMedium = {/*width=*/73, /*height=*/112};
 const CGSize kContentSuggestionsTileViewSizeLarge = {/*width=*/110, /*height=*/140};
 const CGSize kContentSuggestionsTileViewSizeExtraLarge = {/*width=*/146, /*height=*/150};
@@ -36,12 +34,13 @@ CGFloat ContentSuggestionsTilesHorizontalSpacing(UITraitCollection* trait_collec
 CGSize MostVisitedCellSize(UIContentSizeCategory category) {
   NSComparisonResult result = UIContentSizeCategoryCompareToCategory(
       category, UIContentSizeCategoryAccessibilityMedium);
+  BOOL isSmallestSize =
+      UIContentSizeCategoryCompareToCategory(
+          category, UIContentSizeCategoryExtraLarge) == NSOrderedAscending;
   switch (result) {
     case NSOrderedAscending:
-      return ([category
-                 isEqualToString:UIContentSizeCategoryExtraExtraExtraLarge])
-                 ? kContentSuggestionsTileViewSizeMedium
-                 : kContentSuggestionsTileViewSizeSmall;
+      return isSmallestSize ? kContentSuggestionsTileViewSizeSmall
+                            : kContentSuggestionsTileViewSizeMedium;
     case NSOrderedSame:
       return kContentSuggestionsTileViewSizeLarge;
     case NSOrderedDescending:
@@ -63,7 +62,6 @@ CGFloat CenteredTilesMarginForWidth(UITraitCollection* trait_collection,
     }
   }
   NOTREACHED();
-  return 0;
 }
 
 CGFloat MostVisitedTilesContentHorizontalSpace(

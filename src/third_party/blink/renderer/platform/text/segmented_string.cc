@@ -17,6 +17,11 @@
     Boston, MA 02110-1301, USA.
 */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/text/segmented_string.h"
 
 namespace blink {
@@ -57,6 +62,7 @@ void SegmentedString::Append(const SegmentedSubstring& s) {
     number_of_characters_consumed_prior_to_current_string_ +=
         current_string_.NumberOfCharactersConsumed();
     current_string_ = s;
+    current_char_ = current_string_.GetCurrentChar();
   } else {
     substrings_.push_back(s);
   }
@@ -70,10 +76,13 @@ void SegmentedString::Push(UChar c) {
   // however it will fail if the SegmentedSubstring is empty, or
   // when we prepended some text while consuming a SegmentedSubstring by
   // document.write().
-  if (current_string_.PushIfPossible(c))
+  if (current_string_.PushIfPossible(c)) {
+    current_char_ = current_string_.GetCurrentChar();
     return;
+  }
 
-  Prepend(SegmentedString(String(&c, 1u)), PrependType::kUnconsume);
+  Prepend(SegmentedString(String(base::span_from_ref(c))),
+          PrependType::kUnconsume);
 }
 
 void SegmentedString::Prepend(const SegmentedSubstring& s, PrependType type) {
@@ -95,6 +104,7 @@ void SegmentedString::Prepend(const SegmentedSubstring& s, PrependType type) {
     substrings_.push_front(current_string_);
     current_string_ = s;
   }
+  current_char_ = current_string_.GetCurrentChar();
   empty_ = false;
 }
 
@@ -124,6 +134,25 @@ void SegmentedString::Prepend(const SegmentedString& s, PrependType type) {
   Prepend(s.current_string_, type);
 }
 
+void SegmentedString::Advance(unsigned num_chars,
+                              unsigned num_lines,
+                              int current_column) {
+  SECURITY_DCHECK(num_chars <= length());
+  current_line_ += num_lines;
+  while (num_chars) {
+    num_chars -= current_string_.Advance(num_chars);
+    if (num_chars) {
+      // AdvanceSubstring() assumes one char is remaining.
+      DCHECK_EQ(current_string_.length(), 1);
+      AdvanceSubstring();
+      --num_chars;
+    }
+  }
+  number_of_characters_consumed_prior_to_current_line_ =
+      NumberOfCharactersConsumed() - current_column;
+  current_char_ = empty_ ? '\0' : current_string_.GetCurrentChar();
+}
+
 UChar SegmentedString::AdvanceSubstring() {
   number_of_characters_consumed_prior_to_current_string_ +=
       current_string_.NumberOfCharactersConsumed() + 1;
@@ -134,10 +163,12 @@ UChar SegmentedString::AdvanceSubstring() {
     // string, not as part of "prior to current string."
     number_of_characters_consumed_prior_to_current_string_ -=
         current_string_.NumberOfCharactersConsumed();
+    current_char_ = current_string_.GetCurrentChar();
     return CurrentChar();
   } else {
     current_string_.Clear();
     empty_ = true;
+    current_char_ = '\0';
     return 0;
   }
 }
@@ -152,10 +183,10 @@ String SegmentedString::ToString() const {
   return result.ToString();
 }
 
-void SegmentedString::Advance(unsigned count, UChar* consumed_characters) {
-  SECURITY_DCHECK(count <= length());
-  for (unsigned i = 0; i < count; ++i) {
-    consumed_characters[i] = CurrentChar();
+void SegmentedString::AdvanceAndCollect(base::span<UChar> characters) {
+  CHECK_LE(characters.size(), length());
+  for (size_t i = 0; i < characters.size(); ++i) {
+    characters[i] = CurrentChar();
     Advance();
   }
 }

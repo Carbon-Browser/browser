@@ -1,28 +1,29 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browsing_data/core/counters/autofill_counter.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/browsing_data/core/pref_names.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 
 namespace {
 
-bool IsAutofillSyncEnabled(const syncer::SyncService* sync_service) {
+bool IsAutocompleteSyncActive(const syncer::SyncService* sync_service) {
   return sync_service &&
-         sync_service->GetUserSettings()->IsFirstSetupComplete() &&
-         sync_service->IsSyncFeatureActive() &&
          sync_service->GetActiveDataTypes().Has(syncer::AUTOFILL);
 }
 
@@ -31,24 +32,25 @@ bool IsAutofillSyncEnabled(const syncer::SyncService* sync_service) {
 namespace browsing_data {
 
 AutofillCounter::AutofillCounter(
+    autofill::PersonalDataManager* personal_data_manager,
     scoped_refptr<autofill::AutofillWebDataService> web_data_service,
+    user_annotations::UserAnnotationsService* user_annotations_service,
     syncer::SyncService* sync_service)
-    : web_data_service_(web_data_service),
+    : personal_data_manager_(personal_data_manager),
+      web_data_service_(web_data_service),
+      user_annotations_service_(user_annotations_service),
       sync_tracker_(this, sync_service),
       suggestions_query_(0),
-      credit_cards_query_(0),
-      addresses_query_(0),
-      num_suggestions_(0),
-      num_credit_cards_(0),
-      num_addresses_(0) {}
+      num_suggestions_(0) {}
 
 AutofillCounter::~AutofillCounter() {
   CancelAllRequests();
 }
 
 void AutofillCounter::OnInitialized() {
+  DCHECK(personal_data_manager_);
   DCHECK(web_data_service_);
-  sync_tracker_.OnInitialized(base::BindRepeating(&IsAutofillSyncEnabled));
+  sync_tracker_.OnInitialized(base::BindRepeating(&IsAutocompleteSyncActive));
 }
 
 const char* AutofillCounter::GetPrefName() const {
@@ -73,10 +75,27 @@ void AutofillCounter::Count() {
                              ? GetPeriodEnd()
                              : period_end_for_testing_;
 
+  // Credit cards.
+  num_credit_cards_ = base::ranges::count_if(
+      personal_data_manager_->payments_data_manager().GetLocalCreditCards(),
+      [start, end](const autofill::CreditCard* card) {
+        return (card->modification_date() >= start &&
+                card->modification_date() < end);
+      });
+
+  // Addresses.
+  num_addresses_ = base::ranges::count_if(
+      personal_data_manager_->address_data_manager().GetProfilesByRecordType(
+          autofill::AutofillProfile::RecordType::kLocalOrSyncable),
+      [start, end](const autofill::AutofillProfile* address) {
+        return (address->modification_date() >= start &&
+                address->modification_date() < end);
+      });
+
   CancelAllRequests();
 
   // Count the autocomplete suggestions (also called form elements in Autofill).
-  // Note that |AutofillTable::RemoveFormElementsAddedBetween| only deletes
+  // Note that |AutocompleteTable::RemoveFormElementsAddedBetween| only deletes
   // those whose entire existence (i.e. the interval between creation time
   // and last modified time) lies within the deletion time range. Otherwise,
   // it only decreases the count property, but always to a nonzero value,
@@ -93,121 +112,81 @@ void AutofillCounter::Count() {
   // output, we will consider all entries with the same value as one suggestion,
   // and increment the counter only if all entries with the given value are
   // contained in the interval [start, end).
+  // The `num_suggestion_` is reset to denote that new data is awaited.
+  num_suggestions_.reset();
   suggestions_query_ =
       web_data_service_->GetCountOfValuesContainedBetween(start, end, this);
 
-  // Count the credit cards.
-  credit_cards_query_ = web_data_service_->GetCreditCards(this);
+  num_user_annotations_.reset();
 
-  // Count the addresses.
-  addresses_query_ = web_data_service_->GetAutofillProfiles(this);
+  // Not all platforms support user annotations, for those the service is not
+  // provided and the value is set to 0 immediately.
+  if (user_annotations_service_) {
+    user_annotations_service_->GetCountOfValuesContainedBetween(
+        start, end,
+        base::BindOnce(&AutofillCounter::OnUserAnnotationsServiceResponse,
+                       user_annotations_requirest_weak_factory_.GetWeakPtr()));
+  } else {
+    num_user_annotations_ = 0;
+  }
 }
 
 void AutofillCounter::OnWebDataServiceRequestDone(
     WebDataServiceBase::Handle handle,
     std::unique_ptr<WDTypedResult> result) {
   DCHECK(thread_checker_.CalledOnValidThread());
+  CHECK_EQ(handle, suggestions_query_);
+  suggestions_query_ = 0;
 
   if (!result) {
-    // CancelAllRequests will cancel all queries that are active; the query that
-    // just failed is complete and cannot be canceled so zero it out.
-    if (handle == suggestions_query_) {
-      suggestions_query_ = 0;
-    } else if (handle == credit_cards_query_) {
-      credit_cards_query_ = 0;
-    } else if (handle == addresses_query_) {
-      addresses_query_ = 0;
-    } else {
-      NOTREACHED();
-    }
-
-    CancelAllRequests();
     return;
   }
 
-  const base::Time start = period_start_for_testing_.is_null()
-                               ? GetPeriodStart()
-                               : period_start_for_testing_;
-  const base::Time end = period_end_for_testing_.is_null()
-                             ? GetPeriodEnd()
-                             : period_end_for_testing_;
+  // Autocomplete suggestions.
+  DCHECK_EQ(AUTOFILL_VALUE_RESULT, result->GetType());
+  num_suggestions_ =
+      static_cast<const WDResult<int>*>(result.get())->GetValue();
 
-  if (handle == suggestions_query_) {
-    // Autocomplete suggestions.
-    DCHECK_EQ(AUTOFILL_VALUE_RESULT, result->GetType());
-    num_suggestions_ =
-        static_cast<const WDResult<int>*>(result.get())->GetValue();
-    suggestions_query_ = 0;
+  ReportResultIfReady();
+}
 
-  } else if (handle == credit_cards_query_) {
-    // Credit cards.
-    DCHECK_EQ(AUTOFILL_CREDITCARDS_RESULT, result->GetType());
-    auto credit_cards =
-        static_cast<
-            WDResult<std::vector<std::unique_ptr<autofill::CreditCard>>>*>(
-            result.get())
-            ->GetValue();
+void AutofillCounter::OnUserAnnotationsServiceResponse(
+    int num_user_annotations) {
+  num_user_annotations_ = num_user_annotations;
 
-    num_credit_cards_ = std::count_if(
-        credit_cards.begin(), credit_cards.end(),
-        [start, end](const std::unique_ptr<autofill::CreditCard>& card) {
-          return (card->modification_date() >= start &&
-                  card->modification_date() < end);
-        });
-    credit_cards_query_ = 0;
-
-  } else if (handle == addresses_query_) {
-    // Addresses.
-    DCHECK_EQ(AUTOFILL_PROFILES_RESULT, result->GetType());
-    auto addresses =
-        static_cast<
-            WDResult<std::vector<std::unique_ptr<autofill::AutofillProfile>>>*>(
-            result.get())
-            ->GetValue();
-
-    num_addresses_ = std::count_if(
-        addresses.begin(), addresses.end(),
-        [start,
-         end](const std::unique_ptr<autofill::AutofillProfile>& address) {
-          return (address->modification_date() >= start &&
-                  address->modification_date() < end);
-        });
-    addresses_query_ = 0;
-
-  } else {
-    NOTREACHED() << "No such query: " << handle;
-  }
-
-  // If we still have pending queries, do not report data yet.
-  if (suggestions_query_ || credit_cards_query_ || addresses_query_)
-    return;
-
-  auto reported_result = std::make_unique<AutofillResult>(
-      this, num_suggestions_, num_credit_cards_, num_addresses_,
-      sync_tracker_.IsSyncActive());
-  ReportResult(std::move(reported_result));
+  ReportResultIfReady();
 }
 
 void AutofillCounter::CancelAllRequests() {
   if (suggestions_query_)
     web_data_service_->CancelRequest(suggestions_query_);
-  if (credit_cards_query_)
-    web_data_service_->CancelRequest(credit_cards_query_);
-  if (addresses_query_)
-    web_data_service_->CancelRequest(addresses_query_);
+
+  user_annotations_requirest_weak_factory_.InvalidateWeakPtrs();
+}
+
+void AutofillCounter::ReportResultIfReady() {
+  if (num_suggestions_.has_value() && num_user_annotations_.has_value()) {
+    auto reported_result = std::make_unique<AutofillResult>(
+        this, *num_suggestions_, num_credit_cards_, num_addresses_,
+        *num_user_annotations_, sync_tracker_.IsSyncActive());
+    ReportResult(std::move(reported_result));
+  }
 }
 
 // AutofillCounter::AutofillResult ---------------------------------------------
 
-AutofillCounter::AutofillResult::AutofillResult(const AutofillCounter* source,
-                                                ResultInt num_suggestions,
-                                                ResultInt num_credit_cards,
-                                                ResultInt num_addresses,
-                                                bool autofill_sync_enabled_)
+AutofillCounter::AutofillResult::AutofillResult(
+    const AutofillCounter* source,
+    ResultInt num_suggestions,
+    ResultInt num_credit_cards,
+    ResultInt num_addresses,
+    ResultInt num_user_annotation_entries,
+    bool autofill_sync_enabled_)
     : SyncResult(source, num_suggestions, autofill_sync_enabled_),
       num_credit_cards_(num_credit_cards),
-      num_addresses_(num_addresses) {}
+      num_addresses_(num_addresses),
+      num_user_annotation_entries_(num_user_annotation_entries) {}
 
-AutofillCounter::AutofillResult::~AutofillResult() {}
+AutofillCounter::AutofillResult::~AutofillResult() = default;
 
 }  // namespace browsing_data

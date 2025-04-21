@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/memory_pressure_listener.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -24,22 +24,18 @@ class MemoryPressureListenerTest : public testing::Test {
                                  Unretained(this)));
   }
 
-  void TearDown() override {
-    listener_.reset();
-  }
+  void TearDown() override { listener_.reset(); }
 
  protected:
-  void ExpectNotification(
-      void (*notification_function)(MemoryPressureLevel),
-      MemoryPressureLevel level) {
+  void ExpectNotification(void (*notification_function)(MemoryPressureLevel),
+                          MemoryPressureLevel level) {
     EXPECT_CALL(*this, OnMemoryPressure(level)).Times(1);
     notification_function(level);
     RunLoop().RunUntilIdle();
   }
 
-  void ExpectNoNotification(
-      void (*notification_function)(MemoryPressureLevel),
-      MemoryPressureLevel level) {
+  void ExpectNoNotification(void (*notification_function)(MemoryPressureLevel),
+                            MemoryPressureLevel level) {
     EXPECT_CALL(*this, OnMemoryPressure(testing::_)).Times(0);
     notification_function(level);
     RunLoop().RunUntilIdle();

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,17 @@ const char NavigatorDevicePosture::kSupplementName[] = "NavigatorDevicePosture";
 
 // static
 DevicePosture* NavigatorDevicePosture::devicePosture(Navigator& navigator) {
-  DCHECK(RuntimeEnabledFeatures::DevicePostureEnabled());
+  DCHECK(RuntimeEnabledFeatures::DevicePostureEnabled(
+      navigator.GetExecutionContext()));
 
+  UseCounter::Count(navigator.GetExecutionContext(), WebFeature::kFoldableAPIs);
   NavigatorDevicePosture* supplement =
       Supplement<Navigator>::From<NavigatorDevicePosture>(navigator);
   if (!supplement) {
     supplement = MakeGarbageCollected<NavigatorDevicePosture>(navigator);
     ProvideTo(navigator, supplement);
   }
-  return supplement->posture_;
+  return supplement->posture_.Get();
 }
 
 NavigatorDevicePosture::NavigatorDevicePosture(Navigator& navigator)

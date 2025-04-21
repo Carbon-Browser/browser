@@ -1,30 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/component_updater/timer.h"
 
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "components/component_updater/timer.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-using std::string;
 
 namespace component_updater {
 
 class ComponentUpdaterTimerTest : public testing::Test {
- public:
-  ComponentUpdaterTimerTest()
-      : task_environment_(
-            base::test::SingleThreadTaskEnvironment::MainThreadType::UI) {}
-  ~ComponentUpdaterTimerTest() override = default;
-
  private:
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::SingleThreadTaskEnvironment::MainThreadType::UI};
 };
 
 TEST_F(ComponentUpdaterTimerTest, Start) {
@@ -37,8 +31,9 @@ TEST_F(ComponentUpdaterTimerTest, Start) {
 
     void OnTimerEvent() {
       ++count_;
-      if (count_ >= max_count_)
+      if (count_ >= max_count_) {
         std::move(quit_closure_).Run();
+      }
     }
 
     int count() const { return count_; }

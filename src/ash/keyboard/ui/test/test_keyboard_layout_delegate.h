@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_KEYBOARD_UI_TEST_TEST_KEYBOARD_LAYOUT_DELEGATE_H_
 
 #include "ash/keyboard/ui/keyboard_layout_delegate.h"
+#include "base/memory/raw_ptr.h"
 
 namespace aura {
 class Window;
@@ -32,7 +33,7 @@ class TestKeyboardLayoutDelegate : public KeyboardLayoutDelegate {
   void TransferGestureEventToShelf(const ui::GestureEvent& e) override;
 
  private:
-  aura::Window* root_window_;
+  raw_ptr<aura::Window, DanglingUntriaged> root_window_;
 };
 
 }  // namespace keyboard

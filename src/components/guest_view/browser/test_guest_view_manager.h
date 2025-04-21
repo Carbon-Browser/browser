@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "components/guest_view/browser/guest_view_manager_factory.h"
-#include "content/public/test/test_utils.h"
+#include "components/guest_view/common/guest_view_constants.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/test/browser_test_utils.h"
 
 namespace guest_view {
 
@@ -29,34 +30,33 @@ class TestGuestViewManager : public GuestViewManager {
   ~TestGuestViewManager() override;
 
   void WaitForAllGuestsDeleted();
-
+  void WaitForFirstGuestDeleted();
   void WaitForLastGuestDeleted();
 
-  content::WebContents* WaitForSingleGuestCreated();
-  content::WebContents* WaitForNextGuestCreated();
+  // While the GuestViewBase directly represents a guest view, the
+  // RenderFrameHost version exposes the guest view's main frame for the ease of
+  // testing.
+  GuestViewBase* WaitForSingleGuestViewCreated();
+  content::RenderFrameHost* WaitForSingleGuestRenderFrameHostCreated();
+
+  GuestViewBase* WaitForNextGuestViewCreated();
+  content::RenderFrameHost* WaitForNextGuestRenderFrameHostCreated();
+
   void WaitForNumGuestsCreated(size_t count);
 
   void WaitForSingleViewGarbageCollected();
 
-  content::WebContents* GetLastGuestCreated();
+  GuestViewBase* GetLastGuestViewCreated();
+  content::RenderFrameHost* GetLastGuestRenderFrameHostCreated();
 
-  void WaitUntilAttached(content::WebContents* web_contents);
+  void WaitUntilAttached(GuestViewBase* guest_view);
 
   // Returns the number of guests currently still alive at the time of calling
   // this method.
-  size_t GetNumGuestsActive() const;
+  size_t GetCurrentGuestCount() const;
 
   // Returns the size of the set of removed instance IDs.
   size_t GetNumRemovedInstanceIDs() const;
-
-  template <typename T>
-  void RegisterTestGuestViewType(
-      const GuestViewCreateFunction& create_function) {
-    auto registry_entry = std::make_pair(
-        T::Type,
-        GuestViewData(create_function, base::BindRepeating(&T::CleanUp)));
-    guest_view_registry_.insert(registry_entry);
-  }
 
   // Returns the number of times EmbedderWillBeDestroyed() was called.
   int num_embedder_processes_destroyed() const {
@@ -76,21 +76,31 @@ class TestGuestViewManager : public GuestViewManager {
   // Returns the last guest instance ID removed from the manager.
   int last_instance_id_removed() const { return last_instance_id_removed_; }
 
-  // Returns the list of guests WebContentses that were created by this
-  // manager.
-  void GetGuestWebContentsList(
-      std::vector<content::WebContents*>* guest_web_contents_list);
+  // Returns the list of guests that were created by this manager.
+  void GetGuestRenderFrameHostList(
+      std::vector<content::RenderFrameHost*>* guest_render_frame_host_list);
+
+  void SetWillAttachCallback(
+      base::OnceCallback<void(GuestViewBase*)> callback) {
+    // The callback will be called when the guest view has been created but is
+    // not yet attached to the outer.
+    will_attach_callback_ = std::move(callback);
+  }
 
  private:
   FRIEND_TEST_ALL_PREFIXES(GuestViewManagerTest, AddRemove);
+  FRIEND_TEST_ALL_PREFIXES(GuestViewManagerTest, ReuseIdForRecreatedGuestPage);
 
-  // GuestViewManager override:
-  void AddGuest(int guest_instance_id,
-                content::WebContents* guest_web_contents) override;
-  void RemoveGuest(int guest_instance_id) override;
-  void EmbedderProcessDestroyed(int embedder_process_id) override;
-  void ViewGarbageCollected(int embedder_process_id,
+  // guest_view::GuestViewManager:
+  void AddGuest(GuestViewBase* guest) override;
+  void EmbedderProcessDestroyed(
+      content::ChildProcessId embedder_process_id) override;
+  void ViewGarbageCollected(content::ChildProcessId embedder_process_id,
                             int view_instance_id) override;
+  void AttachGuest(content::ChildProcessId embedder_process_id,
+                   int element_instance_id,
+                   int guest_instance_id,
+                   const base::Value::Dict& attach_params) override;
   void AttachGuest(int embedder_process_id,
                    int element_instance_id,
                    int guest_instance_id,
@@ -101,19 +111,21 @@ class TestGuestViewManager : public GuestViewManager {
   using GuestViewManager::last_instance_id_removed_;
   using GuestViewManager::removed_instance_ids_;
 
-  int num_embedder_processes_destroyed_;
-  size_t num_guests_created_;
-  size_t expected_num_guests_created_;
-  int num_views_garbage_collected_;
-  bool waiting_for_guests_created_;
+  int num_embedder_processes_destroyed_ = 0;
+  size_t num_guests_created_ = 0;
+  size_t expected_num_guests_created_ = 0;
+  int num_views_garbage_collected_ = 0;
 
-  std::vector<std::unique_ptr<content::WebContentsDestroyedWatcher>>
-      guest_web_contents_watchers_;
-  scoped_refptr<content::MessageLoopRunner> created_message_loop_runner_;
-  scoped_refptr<content::MessageLoopRunner> num_created_message_loop_runner_;
-  raw_ptr<GuestViewBase> waiting_for_attach_;
-  scoped_refptr<content::MessageLoopRunner> attached_message_loop_runner_;
-  scoped_refptr<content::MessageLoopRunner> gc_message_loop_runner_;
+  // Tracks the life time of the GuestView's main FrameTreeNode. The main FTN
+  // has the same lifesspan as the GuestView.
+  std::vector<std::unique_ptr<content::FrameDeletedObserver>>
+      guest_view_watchers_;
+  std::unique_ptr<base::RunLoop> created_run_loop_;
+  std::unique_ptr<base::RunLoop> num_created_run_loop_;
+  int instance_waiting_for_attach_ = kInstanceIDNone;
+  std::unique_ptr<base::RunLoop> attached_run_loop_;
+  std::unique_ptr<base::RunLoop> gc_run_loop_;
+  base::OnceCallback<void(GuestViewBase*)> will_attach_callback_;
 };
 
 // Test factory for creating test instances of GuestViewManager.
@@ -127,12 +139,13 @@ class TestGuestViewManagerFactory : public GuestViewManagerFactory {
 
   ~TestGuestViewManagerFactory() override;
 
-  GuestViewManager* CreateGuestViewManager(
+  TestGuestViewManager* GetOrCreateTestGuestViewManager(
+      content::BrowserContext* context,
+      std::unique_ptr<GuestViewManagerDelegate> delegate);
+
+  std::unique_ptr<GuestViewManager> CreateGuestViewManager(
       content::BrowserContext* context,
       std::unique_ptr<GuestViewManagerDelegate> delegate) override;
-
- private:
-  raw_ptr<TestGuestViewManager> test_guest_view_manager_;
 };
 
 }  // namespace guest_view

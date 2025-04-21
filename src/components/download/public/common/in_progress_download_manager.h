@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,7 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
   using StartDownloadItemCallback =
       base::OnceCallback<void(std::unique_ptr<DownloadCreateInfo> info,
                               DownloadItemImpl*,
+                              const base::FilePath&,
                               bool /* should_persist_new_download */)>;
   using DisplayNames = std::unique_ptr<
       std::map<std::string /*content URI*/, base::FilePath /* display name*/>>;
@@ -129,7 +130,8 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
       mojo::ScopedDataPipeConsumerHandle response_body,
       network::mojom::URLLoaderClientEndpointsPtr url_loader_client_endpoints,
       std::unique_ptr<network::PendingSharedURLLoaderFactory>
-          pending_url_loader_factory);
+          pending_url_loader_factory,
+      bool is_transient);
 
   void StartDownload(std::unique_ptr<DownloadCreateInfo> info,
                      std::unique_ptr<InputStream> stream,
@@ -219,9 +221,9 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
       std::unique_ptr<InputStream> input_stream,
       URLLoaderFactoryProvider::URLLoaderFactoryProviderPtr
           url_loader_factory_provider,
-      UrlDownloadHandler* downloader,
+      UrlDownloadHandlerID downloader,
       DownloadUrlParameters::OnStartedCallback callback) override;
-  void OnUrlDownloadStopped(UrlDownloadHandler* downloader) override;
+  void OnUrlDownloadStopped(UrlDownloadHandlerID downloader) override;
   void OnUrlDownloadHandlerCreated(
       UrlDownloadHandler::UniqueUrlDownloadHandlerPtr downloader) override;
 
@@ -242,6 +244,7 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
       DownloadJob::CancelRequestCallback cancel_request_callback,
       std::unique_ptr<DownloadCreateInfo> info,
       DownloadItemImpl* download,
+      const base::FilePath& duplicate_download_file_path,
       bool should_persist_new_download);
 
   // Called when downloads are initialized.
@@ -251,7 +254,7 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
   void NotifyDownloadsInitialized();
 
   // Cancels the given UrlDownloadHandler.
-  void CancelUrlDownload(UrlDownloadHandler* downloader, bool user_cancel);
+  void CancelUrlDownload(UrlDownloadHandlerID downloader, bool user_cancel);
 
   // Active download handlers.
   std::vector<UrlDownloadHandler::UniqueUrlDownloadHandlerPtr>

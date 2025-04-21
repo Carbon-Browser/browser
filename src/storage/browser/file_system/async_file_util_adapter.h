@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) AsyncFileUtilAdapter
                        StatusCallback callback) override;
   void GetFileInfo(std::unique_ptr<FileSystemOperationContext> context,
                    const FileSystemURL& url,
-                   int fields,
+                   GetMetadataFieldSet fields,
                    GetFileInfoCallback callback) override;
   void ReadDirectory(std::unique_ptr<FileSystemOperationContext> context,
                      const FileSystemURL& url,

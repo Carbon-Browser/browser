@@ -1,16 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "mojo/public/cpp/system/simple_watcher.h"
 
 #include <memory>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "mojo/public/c/system/types.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/message_pipe.h"
@@ -53,7 +56,7 @@ TEST_F(SimpleWatcherTest, WatchBasic) {
   bool notified = false;
   base::RunLoop run_loop;
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(MOJO_RESULT_OK,
             b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE,
                             OnReady([&](MojoResult result) {
@@ -77,7 +80,7 @@ TEST_F(SimpleWatcherTest, WatchUnsatisfiable) {
   a.reset();
 
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::MANUAL,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(
       MOJO_RESULT_OK,
       b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE, NotReached()));
@@ -97,13 +100,13 @@ TEST_F(SimpleWatcherTest, WatchFailedPreconditionNoSpam) {
                     OnReady([&](MojoResult result) {
                       EXPECT_FALSE(had_failed_precondition);
                       switch (result) {
-                        case MOJO_RESULT_OK:
-                          const void* begin;
-                          uint32_t num_bytes;
+                        case MOJO_RESULT_OK: {
+                          base::span<const uint8_t> buffer;
                           consumer_handle->BeginReadData(
-                              &begin, &num_bytes, MOJO_READ_DATA_FLAG_NONE);
-                          consumer_handle->EndReadData(num_bytes);
+                              MOJO_READ_DATA_FLAG_NONE, buffer);
+                          consumer_handle->EndReadData(buffer.size());
                           break;
+                        }
                         case MOJO_RESULT_FAILED_PRECONDITION:
                           had_failed_precondition = true;
                           break;
@@ -111,9 +114,11 @@ TEST_F(SimpleWatcherTest, WatchFailedPreconditionNoSpam) {
                     }));
   EXPECT_EQ(MOJO_RESULT_OK, rc);
 
-  uint32_t size = 5;
+  size_t bytes_written = 0;
   EXPECT_EQ(MOJO_RESULT_OK, producer_handle->WriteData(
-                                "hello", &size, MOJO_WRITE_DATA_FLAG_NONE));
+                                base::byte_span_from_cstring("hello"),
+                                MOJO_WRITE_DATA_FLAG_NONE, bytes_written));
+  EXPECT_EQ(bytes_written, 5u);
   base::RunLoop().RunUntilIdle();
   producer_handle.reset();
   base::RunLoop().RunUntilIdle();
@@ -127,7 +132,7 @@ TEST_F(SimpleWatcherTest, WatchInvalidHandle) {
   b.reset();
 
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(
       MOJO_RESULT_INVALID_ARGUMENT,
       b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE, NotReached()));
@@ -140,7 +145,7 @@ TEST_F(SimpleWatcherTest, Cancel) {
 
   base::RunLoop run_loop;
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(
       MOJO_RESULT_OK,
       b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE, NotReached()));
@@ -152,8 +157,8 @@ TEST_F(SimpleWatcherTest, Cancel) {
   EXPECT_EQ(MOJO_RESULT_OK, WriteMessageRaw(a.get(), "hello", 5, nullptr, 0,
                                             MOJO_WRITE_MESSAGE_FLAG_NONE));
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                run_loop.QuitClosure());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -163,7 +168,7 @@ TEST_F(SimpleWatcherTest, CancelOnClose) {
 
   base::RunLoop run_loop;
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(MOJO_RESULT_OK,
             b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE,
                             OnReady([&](MojoResult result) {
@@ -186,7 +191,7 @@ TEST_F(SimpleWatcherTest, CancelOnDestruction) {
   base::RunLoop run_loop;
   {
     SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                            base::SequencedTaskRunnerHandle::Get());
+                            base::SequencedTaskRunner::GetCurrentDefault());
     EXPECT_EQ(
         MOJO_RESULT_OK,
         b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE, NotReached()));
@@ -198,8 +203,8 @@ TEST_F(SimpleWatcherTest, CancelOnDestruction) {
   // This should never trigger the watcher above.
   EXPECT_EQ(MOJO_RESULT_OK, WriteMessageRaw(a.get(), "hello", 5, nullptr, 0,
                                             MOJO_WRITE_MESSAGE_FLAG_NONE));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                run_loop.QuitClosure());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -208,7 +213,7 @@ TEST_F(SimpleWatcherTest, CloseAndCancel) {
   CreateMessagePipe(nullptr, &a, &b);
 
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   EXPECT_EQ(MOJO_RESULT_OK,
             b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE,
                             OnReady([](MojoResult result) { FAIL(); })));
@@ -229,7 +234,7 @@ TEST_F(SimpleWatcherTest, UnarmedCancel) {
   CreateMessagePipe(nullptr, &a, &b);
 
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::MANUAL,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   base::RunLoop loop;
   EXPECT_EQ(MOJO_RESULT_OK,
             b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE,
@@ -253,7 +258,7 @@ TEST_F(SimpleWatcherTest, ManualArming) {
   CreateMessagePipe(nullptr, &a, &b);
 
   SimpleWatcher b_watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::MANUAL,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
   base::RunLoop loop;
   EXPECT_EQ(MOJO_RESULT_OK,
             b_watcher.Watch(b.get(), MOJO_HANDLE_SIGNAL_READABLE,

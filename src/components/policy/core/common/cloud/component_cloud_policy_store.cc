@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
-#include "base/logging.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -22,6 +22,7 @@
 #include "components/policy/core/common/cloud/cloud_policy_validator.h"
 #include "components/policy/core/common/cloud/resource_cache.h"
 #include "components/policy/core/common/external_data_fetcher.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_proto_decoders.h"
 #include "components/policy/proto/chrome_extension_policy.pb.h"
@@ -43,10 +44,6 @@ struct ComponentCloudPolicyStore::DomainConstants {
 };
 
 namespace {
-
-const char kValue[] = "Value";
-const char kLevel[] = "Level";
-const char kRecommended[] = "Recommended";
 
 const ComponentCloudPolicyStore::DomainConstants kDomains[] = {
     {
@@ -79,25 +76,6 @@ const ComponentCloudPolicyStore::DomainConstants* GetDomainConstantsForType(
       return &constants;
   }
   return nullptr;
-}
-
-base::Value::Dict TranslatePolicyMapEntryToJson(const PolicyMap::Entry& entry) {
-  base::Value::Dict result;
-  // This is actually safe because this code just copies the value,
-  // not caring about its type.
-  result.Set(kValue, entry.value_unsafe()->Clone());
-  if (entry.level == POLICY_LEVEL_RECOMMENDED) {
-    result.Set(kLevel, base::StringPiece(kRecommended));
-  }
-  return result;
-}
-
-base::Value::Dict TranslatePolicyMapToJson(const PolicyMap& policy_map) {
-  base::Value::Dict result;
-  for (const auto& [key, entry] : policy_map) {
-    result.Set(key, TranslatePolicyMapEntryToJson(entry));
-  }
-  return result;
 }
 
 }  // namespace
@@ -148,7 +126,7 @@ const std::string& ComponentCloudPolicyStore::GetCachedHash(
 }
 
 void ComponentCloudPolicyStore::SetCredentials(const std::string& username,
-                                               const std::string& gaia_id,
+                                               const GaiaId& gaia_id,
                                                const std::string& dm_token,
                                                const std::string& device_id,
                                                const std::string& public_key,
@@ -179,7 +157,8 @@ void ComponentCloudPolicyStore::Load() {
     // Validate the protobuf.
     auto proto = std::make_unique<em::PolicyFetchResponse>();
     if (!proto->ParseFromString(it->second)) {
-      LOG(ERROR) << "Failed to parse the cached policy fetch response.";
+      LOG_POLICY(ERROR, CBCM_ENROLLMENT)
+          << "Failed to parse the cached policy fetch response.";
       Delete(ns);
       continue;
     }
@@ -189,8 +168,9 @@ void ComponentCloudPolicyStore::Load() {
     if (!ValidatePolicy(ns, std::move(proto), &policy_data, &payload,
                         &policy_error)) {
       // The policy fetch response is corrupted.
-      LOG(ERROR) << "Discarding policy for component " << ns.component_id
-                 << " due to policy validation failure: " << policy_error;
+      LOG_POLICY(ERROR, CBCM_ENROLLMENT)
+          << "Discarding policy for component " << ns.component_id
+          << " due to policy validation failure: " << policy_error;
       Delete(ns);
       continue;
     }
@@ -198,7 +178,8 @@ void ComponentCloudPolicyStore::Load() {
     // The protobuf looks good; load the policy data.
     std::string data;
     if (cache_->Load(domain_constants_->data_cache_key, id, &data).empty()) {
-      LOG(ERROR) << "Failed to load the cached policy data.";
+      LOG_POLICY(ERROR, CBCM_ENROLLMENT)
+          << "Failed to load the cached policy data.";
       Delete(ns);
       continue;
     }
@@ -206,8 +187,9 @@ void ComponentCloudPolicyStore::Load() {
     std::string data_error;
     if (!ValidateData(data, payload.secure_hash(), &policy, &data_error)) {
       // The data for this proto is corrupted.
-      LOG(ERROR) << "Discarding policy for component " << ns.component_id
-                 << " due to data validation failure: " << data_error;
+      LOG_POLICY(ERROR, POLICY_PROCESSING)
+          << "Discarding policy for component " << ns.component_id
+          << " due to data validation failure: " << data_error;
       Delete(ns);
       continue;
     }
@@ -216,7 +198,7 @@ void ComponentCloudPolicyStore::Load() {
     policy_bundle_.Get(ns).Swap(&policy);
     cached_hashes_[ns] = payload.secure_hash();
     stored_policy_times_[ns] =
-        base::Time::FromJavaTime(policy_data.timestamp());
+        base::Time::FromMillisecondsSinceUnixEpoch(policy_data.timestamp());
   }
   delegate_->OnComponentCloudPolicyStoreUpdated();
 }
@@ -236,8 +218,9 @@ bool ComponentCloudPolicyStore::Store(const PolicyNamespace& ns,
   PolicyMap policy;
   std::string error;
   if (!ValidateData(data, secure_hash, &policy, &error)) {
-    LOG(ERROR) << "Discarding policy for component " << ns.component_id
-               << " due to data validation failure: " << error;
+    LOG_POLICY(ERROR, CBCM_ENROLLMENT)
+        << "Discarding policy for component " << ns.component_id
+        << " due to data validation failure: " << error;
     return false;
   }
 
@@ -248,7 +231,8 @@ bool ComponentCloudPolicyStore::Store(const PolicyNamespace& ns,
   // And expose the policy.
   policy_bundle_.Get(ns).Swap(&policy);
   cached_hashes_[ns] = secure_hash;
-  stored_policy_times_[ns] = base::Time::FromJavaTime(policy_data->timestamp());
+  stored_policy_times_[ns] =
+      base::Time::FromMillisecondsSinceUnixEpoch(policy_data->timestamp());
   delegate_->OnComponentCloudPolicyStoreUpdated();
   return true;
 }
@@ -431,8 +415,7 @@ bool ComponentCloudPolicyStore::ParsePolicy(const std::string& data,
   auto value_with_error = base::JSONReader::ReadAndReturnValueWithError(
       data, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
   if (!value_with_error.has_value()) {
-    *error =
-        base::StrCat({"Invalid JSON blob: ", value_with_error.error().message});
+    *error = "Invalid JSON blob: " + value_with_error.error().message;
     return false;
   }
   base::Value json = std::move(*value_with_error);
@@ -441,17 +424,9 @@ bool ComponentCloudPolicyStore::ParsePolicy(const std::string& data,
     return false;
   }
 
-  return ParseComponentPolicy(std::move(json), domain_constants_->scope,
-                              POLICY_SOURCE_CLOUD, policy, error);
-}
-
-ComponentPolicyMap ComponentCloudPolicyStore::GetJsonPolicyMap() {
-  ComponentPolicyMap result;
-  for (const auto& [policy_namespace, policy_map] : policy_bundle_) {
-    result[policy_namespace] =
-        base::Value(TranslatePolicyMapToJson(policy_map));
-  }
-  return result;
+  return ParseComponentPolicy(std::move(json).TakeDict(),
+                              domain_constants_->scope, POLICY_SOURCE_CLOUD,
+                              policy, error);
 }
 
 }  // namespace policy

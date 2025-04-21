@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ StringDataSource::StringDataSource(base::span<const char> data,
   switch (mode) {
     case AsyncWritingMode::STRING_MAY_BE_INVALIDATED_BEFORE_COMPLETION:
       data_ = std::string(data.data(), data.size());
-      data_view_ = base::make_span(data_);
+      data_view_ = base::span(data_);
       break;
     case AsyncWritingMode::STRING_STAYS_VALID_UNTIL_COMPLETION:
       data_view_ = data;
@@ -42,7 +42,6 @@ DataPipeProducer::DataSource::ReadResult StringDataSource::Read(
     result.bytes_read = copyable_size;
   } else {
     NOTREACHED();
-    result.result = MOJO_RESULT_OUT_OF_RANGE;
   }
   return result;
 }

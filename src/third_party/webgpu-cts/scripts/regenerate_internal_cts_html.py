@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2021 The Chromium Authors.  All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,11 +13,9 @@ import subprocess
 import sys
 import logging
 
+
 third_party_dir = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from compile_src import compile_src_for_node
-
 
 def check_or_write_file(filepath, content, check):
     if check:
@@ -32,7 +30,7 @@ def check_or_write_file(filepath, content, check):
 
 def generate_reftest_html(check):
     # Update this to add/remove subdirectories to check.
-    sub_dirs = ['web_platform']
+    sub_dirs = [os.path.join('web_platform', 'reftests')]
 
     for sub_dir in sub_dirs:
         html_search_dir = os.path.join(third_party_dir, 'webgpu-cts', 'src',
@@ -51,8 +49,10 @@ def generate_reftest_html(check):
                                                    html_search_dir)
                     dst_dir = os.path.join(wpt_internal_dir, relative_dir)
                     gen_base_dir = os.path.join(
-                        '/gen/third_party/webgpu-cts/src/webgpu', sub_dir,
-                        relative_dir)
+                        '/gen/third_party/webgpu-cts/src/webgpu', sub_dir)
+                    if relative_dir != '.':
+                        # If we don't do this then tests directly under webplatform/reftests will have ./ in their path
+                        gen_base_dir = os.path.join(gen_base_dir, relative_dir)
                     gen_base_dir = gen_base_dir.replace('\\', '/') + '/'
 
                     try:

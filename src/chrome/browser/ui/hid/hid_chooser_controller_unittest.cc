@@ -1,14 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/ui/hid/hid_chooser_controller.h"
+
+#include <array>
 #include <memory>
 #include <set>
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
@@ -18,7 +21,6 @@
 #include "chrome/browser/hid/hid_chooser_context.h"
 #include "chrome/browser/hid/hid_chooser_context_factory.h"
 #include "chrome/browser/hid/mock_hid_device_observer.h"
-#include "chrome/browser/ui/hid/hid_chooser_controller.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
@@ -26,10 +28,10 @@
 #include "content/public/browser/hid_chooser.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/web_contents_tester.h"
-#include "services/device/hid/test_report_descriptors.h"
-#include "services/device/hid/test_util.h"
-#include "services/device/public/cpp/hid/fake_hid_manager.h"
 #include "services/device/public/cpp/hid/hid_switches.h"
+#include "services/device/public/cpp/test/fake_hid_manager.h"
+#include "services/device/public/cpp/test/hid_test_util.h"
+#include "services/device/public/cpp/test/test_report_descriptors.h"
 #include "services/device/public/mojom/hid.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -43,7 +45,7 @@ namespace {
 
 constexpr char kDefaultTestUrl[] = "https://www.google.com/";
 
-const char* const kTestPhysicalDeviceIds[] = {"1", "2", "3"};
+const auto kTestPhysicalDeviceIds = std::to_array<const char*>({"1", "2", "3"});
 
 constexpr uint16_t kVendorYubico = 0x1050;
 constexpr uint16_t kProductYubicoGnubby = 0x0200;
@@ -220,7 +222,21 @@ TEST_F(HidChooserControllerTest, AddUnknownFidoDevice) {
   EXPECT_EQ(0u, hid_chooser_controller->NumOptions());
 }
 
-TEST_F(HidChooserControllerTest, BlockedFidoDeviceAllowedWithFlag) {
+// Test fixture that disables the HID blocklist. This has to be done during test
+// setup, rather than the test body, to avoid modifications of the (globally
+// shared) CommandLine racing against other threads using it.
+class HidChooserControllerWithoutBlocklistTest
+    : public HidChooserControllerTest {
+ public:
+  HidChooserControllerWithoutBlocklistTest() {
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kDisableHidBlocklist);
+  }
+  ~HidChooserControllerWithoutBlocklistTest() override = default;
+};
+
+TEST_F(HidChooserControllerWithoutBlocklistTest,
+       BlockedFidoDeviceAllowedWithFlag) {
   base::RunLoop device_added_loop;
   EXPECT_CALL(device_observer(), OnDeviceAdded(_))
       .WillOnce(RunClosure(device_added_loop.QuitClosure()));
@@ -229,18 +245,14 @@ TEST_F(HidChooserControllerTest, BlockedFidoDeviceAllowedWithFlag) {
   EXPECT_CALL(view(), OnOptionsInitialized())
       .WillOnce(RunClosure(options_initialized_loop.QuitClosure()));
 
-  // 1. Allow WebHID to access devices on the HID blocklist.
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kDisableHidBlocklist);
-
-  // 2. Connect a device with the FIDO usage page. The device uses
+  // 1. Connect a device with the FIDO usage page. The device uses
   // vendor/product IDs that are blocked by the HID blocklist.
   CreateAndAddFakeHidDevice(kTestPhysicalDeviceIds[0], kVendorYubico,
                             kProductYubicoGnubby, "gnubby", "001",
                             device::mojom::kPageFido, kUsageFidoU2f);
   device_added_loop.Run();
 
-  // 3. Create the HidChooserController. The blocked device should be included.
+  // 2. Create the HidChooserController. The blocked device should be included.
   auto hid_chooser_controller = CreateHidChooserController({});
   options_initialized_loop.Run();
 

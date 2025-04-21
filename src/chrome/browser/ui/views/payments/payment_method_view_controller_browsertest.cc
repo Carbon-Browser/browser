@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/payments/content/payment_request.h"
 #include "components/payments/content/payment_request_state.h"
 #include "components/payments/content/service_worker_payment_app_finder.h"
@@ -17,6 +17,7 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -42,7 +43,7 @@ class PaymentMethodViewControllerTest : public PaymentRequestBrowserTestBase {
     ASSERT_TRUE(gpay_server_.Start());
 
     kylepay_server_.ServeFilesFromSourceDirectory(
-        "components/test/data/payments/kylepay.com/");
+        "components/test/data/payments/kylepay.test/");
     ASSERT_TRUE(kylepay_server_.Start());
     PaymentRequestBrowserTestBase::SetUpOnMainThread();
   }
@@ -51,10 +52,10 @@ class PaymentMethodViewControllerTest : public PaymentRequestBrowserTestBase {
     content::BrowserContext* context =
         GetActiveWebContents()->GetBrowserContext();
     auto downloader = std::make_unique<TestDownloader>(
-        context->GetDefaultStoragePartition()
-            ->GetURLLoaderFactoryForBrowserProcess());
-    downloader->AddTestServerURL("https://kylepay.com/",
-                                 kylepay_server_.GetURL("kylepay.com", "/"));
+        GetCSPCheckerForTests(), context->GetDefaultStoragePartition()
+                                     ->GetURLLoaderFactoryForBrowserProcess());
+    downloader->AddTestServerURL("https://kylepay.test/",
+                                 kylepay_server_.GetURL("kylepay.test", "/"));
     downloader->AddTestServerURL("https://google.com/",
                                  gpay_server_.GetURL("google.com", "/"));
     ServiceWorkerPaymentAppFinder::GetOrCreateForCurrentDocument(
@@ -78,10 +79,10 @@ IN_PROC_BROWSER_TEST_F(PaymentMethodViewControllerTest,
   content::ExecuteScriptAsync(GetActiveWebContents(), R"(
     testPaymentMethods([
       {supportedMethods: 'https://google.com/pay'},
-      {supportedMethods: 'https://kylepay.com/webpay'},
+      {supportedMethods: 'https://kylepay.test/webpay'},
     ]);
   )");
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Confirm that "Add card" button is not shown since "basic-card" is not
   // requested.
@@ -94,9 +95,9 @@ IN_PROC_BROWSER_TEST_F(PaymentMethodViewControllerTest,
 IN_PROC_BROWSER_TEST_F(PaymentMethodViewControllerTest,
                        OneAppSelectedOutOfMany) {
   std::string payment_method_a;
-  InstallPaymentApp("a.com", "/nickpay.com/app.js", &payment_method_a);
+  InstallPaymentApp("a.com", "/nickpay.test/app.js", &payment_method_a);
   std::string payment_method_b;
-  InstallPaymentApp("b.com", "/nickpay.com/app.js", &payment_method_b);
+  InstallPaymentApp("b.com", "/nickpay.test/app.js", &payment_method_b);
 
   NavigateTo("/payment_request_no_shipping_test.html");
 

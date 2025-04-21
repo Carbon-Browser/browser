@@ -19,8 +19,8 @@
 
 #include "components/adblock/core/common/adblock_utils.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
+#include "components/adblock/core/resources/grit/adblock_resources.h"
 #include "components/adblock/core/schema/filter_list_schema_generated.h"
-#include "components/grit/components_resources.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace adblock {

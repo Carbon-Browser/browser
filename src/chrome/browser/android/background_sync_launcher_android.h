@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,8 @@ class BackgroundSyncLauncherAndroid {
 
   static bool ShouldDisableBackgroundSync();
 
-  // TODO(crbug.com/514449): Remove this once the bots have their play services
-  // package updated before every test run.
+  // TODO(crbug.com/40428648): Remove this once the bots have their play
+  // services package updated before every test run.
   static void SetPlayServicesVersionCheckDisabledForTests(bool disabled);
 
   // Fires all pending Background Sync events across all storage partitions

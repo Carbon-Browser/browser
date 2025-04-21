@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_ACCOUNT_CAPABILITIES_FETCHER_FACTORY_ANDROID_H_
 #define COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_ACCOUNT_CAPABILITIES_FETCHER_FACTORY_ANDROID_H_
 
-#include "components/signin/internal/identity_manager/account_capabilities_fetcher_factory.h"
-
 #include <memory>
+
+#include "components/signin/internal/identity_manager/account_capabilities_fetcher_factory.h"
 
 class AccountCapabilitiesFetcher;
 struct CoreAccountInfo;
@@ -30,6 +30,7 @@ class AccountCapabilitiesFetcherFactoryAndroid
   // AccountCapabilitiesFetcherFactory:
   std::unique_ptr<AccountCapabilitiesFetcher> CreateAccountCapabilitiesFetcher(
       const CoreAccountInfo& account_info,
+      AccountCapabilitiesFetcher::FetchPriority fetch_priority,
       AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
       override;
 };

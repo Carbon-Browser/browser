@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -33,16 +33,6 @@ class GnPrepareOut(cr.PrepareOut):
     arch = cr.context.Find('CR_ENVSETUP_ARCH') or ''
     if arch:
       gn_args += ' target_cpu="%s"' % ('x86' if arch == 'ia32' else arch)
-
-    # Detect goma.
-    goma_binaries = cr.Host.SearchPath('gomacc', [
-      '{GOMA_DIR}',
-      '/usr/local/google/code/goma',
-      os.path.expanduser('~/goma')
-    ])
-    if goma_binaries:
-      gn_args += ' use_goma=true'
-      gn_args += ' goma_dir="%s"' % os.path.dirname(goma_binaries[0])
 
     cr.context['GN_ARGS'] = gn_args.strip()
     if cr.context.verbose >= 1:

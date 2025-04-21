@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/exo/vsync_timing_manager.h"
 
-#include "base/containers/cxx20_erase.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include <vector>
+
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 
 namespace exo {
@@ -29,7 +30,7 @@ void VSyncTimingManager::AddObserver(Observer* obs) {
 void VSyncTimingManager::RemoveObserver(Observer* obs) {
   DCHECK(obs);
 
-  base::Erase(observers_, obs);
+  std::erase(observers_, obs);
 
   // There are no more observers so stop receiving IPCs.
   if (observers_.empty())
@@ -38,7 +39,7 @@ void VSyncTimingManager::RemoveObserver(Observer* obs) {
 
 void VSyncTimingManager::OnUpdateVSyncParameters(base::TimeTicks timebase,
                                                  base::TimeDelta interval) {
-  for (auto* observer : observers_) {
+  for (exo::VSyncTimingManager::Observer* observer : observers_) {
     observer->OnUpdateVSyncParameters(timebase, throttled_interval_.is_zero()
                                                     ? interval
                                                     : throttled_interval_);
@@ -85,7 +86,7 @@ void VSyncTimingManager::OnConnectionError() {
   // Try to add a new observer after a short delay. If adding a new observer
   // fails we'll retry again until successful. The delay avoids spamming
   // retries.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&VSyncTimingManager::MaybeInitializeConnection,
                      weak_ptr_factory_.GetWeakPtr()),

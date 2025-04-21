@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ namespace extensions {
 bool CpuInfoProvider::QueryCpuTimePerProcessor(
     std::vector<api::system_cpu::ProcessorInfo>* infos) {
   DCHECK(infos);
-  // TODO(crbug.com/1233555): Integrate with platform APIs, when available.
+  // TODO(crbug.com/42050323): Integrate with platform APIs, when available.
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 }

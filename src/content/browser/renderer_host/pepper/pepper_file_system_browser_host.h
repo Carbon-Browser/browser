@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/renderer_host/pepper/quota_reservation.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
@@ -31,9 +32,8 @@ namespace content {
 class BrowserPpapiHost;
 class PepperFileIOHost;
 
-class CONTENT_EXPORT PepperFileSystemBrowserHost
-    : public ppapi::host::ResourceHost,
-      public base::SupportsWeakPtr<PepperFileSystemBrowserHost> {
+class CONTENT_EXPORT PepperFileSystemBrowserHost final
+    : public ppapi::host::ResourceHost {
  public:
   // Creates a new PepperFileSystemBrowserHost for a file system of a given
   // |type|. The host must be opened before use.
@@ -85,6 +85,10 @@ class CONTENT_EXPORT PepperFileSystemBrowserHost
 
   static scoped_refptr<storage::FileSystemContext>
   GetFileSystemContextFromRenderId(int render_process_id);
+
+  base::WeakPtr<PepperFileSystemBrowserHost> AsWeakPtr() {
+    return weak_factory_.GetWeakPtr();
+  }
 
  private:
   // All interactions with FileSystemContext must occur on the IO thread as
@@ -177,7 +181,8 @@ class CONTENT_EXPORT PepperFileSystemBrowserHost
     // When a PepperFileIOHost calls OpenQuotaFile, we add the id and a
     // non-owning pointer to this map. CloseQuotaFile must be called when before
     // the host is destroyed.
-    typedef std::map<int32_t, PepperFileIOHost*> FileMap;
+    typedef std::map<int32_t, raw_ptr<PepperFileIOHost, CtnExperimental>>
+        FileMap;
     FileMap files_;
 
     // Thread that this object is constructed on.
@@ -224,7 +229,7 @@ class CONTENT_EXPORT PepperFileSystemBrowserHost
   // When a PepperFileIOHost calls OpenQuotaFile, we add the id and a non-owning
   // pointer to this map. CloseQuotaFile must be called when before the host is
   // destroyed.
-  typedef std::map<int32_t, PepperFileIOHost*> FileMap;
+  typedef std::map<int32_t, raw_ptr<PepperFileIOHost, CtnExperimental>> FileMap;
   FileMap files_;
   int64_t reserved_quota_;
   bool reserving_quota_;

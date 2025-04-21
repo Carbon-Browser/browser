@@ -25,10 +25,13 @@
 </body>
 
 <script>
-
 var isDone = false;
 var startTime;
+
+// Ensure test content is generated before page load, so that the test
+// construction is not part of the collected traces.
 var container = document.getElementById('container');
+generateAllContent();
 
 function runTest() {
   if (startTime) {
@@ -39,16 +42,12 @@ function runTest() {
     PerfTestRunner.addRunTestStartMarker();
     startTime = PerfTestRunner.now();
 
-    container.innerHTML = '';
-
-    generateAllContent();
-
-    setTimeout(toggleContentVisibility, 10);
+    toggleContentVisibility();
 
     // Re-run the same test.
     // Wait to allow the asynchronous accessibility code that's
     // covered by traceEventsToMeasure to have a chance to run.
-    setTimeout(runTest, 1500);
+    setTimeout(runTest, 2500);
   }
 }
 
@@ -104,9 +103,14 @@ PerfTestRunner.startMeasureValuesAsync({
   iterationCount: 6,
   tracingCategories: 'accessibility',
   traceEventsToMeasure: [
-    'AXObjectCacheImpl::ChildrenChanged(LayoutObject)',
-    'ProcessDeferredAccessibilityEvents',
-    'RenderAccessibilityImpl::SendPendingAccessibilityEvents'
+    'TotalAccessibilityCleanLayoutLifecycleStages',
+    'ProcessDeferredUpdatesLifecycleStage',
+    'FinalizingTreeLifecycleStage',
+    'SerializeLifecycleStage',
+    'RenderAccessibilityImpl::SendPendingAccessibilityEvents',
+    'BrowserAccessibilityManager::OnAccessibilityEvents',
+    'SerializeLocationChanges',
+    "BrowserAccessibilityManager::OnLocationChanges"
   ]
 });
 </script>

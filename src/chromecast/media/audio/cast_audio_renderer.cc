@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/numerics/ranges.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/media/audio/audio_io_thread.h"
 #include "chromecast/media/audio/audio_output_service/audio_output_service.pb.h"
@@ -22,7 +22,7 @@
 #include "media/base/renderer_client.h"
 #include "media/filters/decrypting_demuxer_stream.h"
 #include "net/base/io_buffer.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 
 #define RUN_ON_MAIN_THREAD(method, ...)                     \
   main_task_runner_->PostTask(                              \
@@ -89,7 +89,7 @@ void CastAudioRenderer::Initialize(::media::DemuxerStream* stream,
   DCHECK(!init_cb_);
   DCHECK(!application_media_info_manager_remote_);
 
-  main_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  main_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   init_cb_ = std::move(init_cb);
 
   demuxer_stream_ = stream;
@@ -200,7 +200,7 @@ void CastAudioRenderer::SetVolume(float volume) {
 }
 
 void CastAudioRenderer::SetLatencyHint(
-    absl::optional<base::TimeDelta> latency_hint) {
+    std::optional<base::TimeDelta> latency_hint) {
   NOTIMPLEMENTED();
 }
 
@@ -208,8 +208,8 @@ void CastAudioRenderer::SetPreservesPitch(bool preverves_pitch) {
   NOTIMPLEMENTED();
 }
 
-void CastAudioRenderer::SetWasPlayedWithUserActivation(
-    bool was_played_with_user_activation) {
+void CastAudioRenderer::SetWasPlayedWithUserActivationAndHighMediaEngagement(
+    bool was_played_with_user_activation_and_high_media_engagement) {
   NOTIMPLEMENTED();
 }
 
@@ -427,8 +427,17 @@ void CastAudioRenderer::FetchNextBuffer() {
 
   DCHECK(!is_pending_demuxer_read_);
   is_pending_demuxer_read_ = true;
-  demuxer_stream_->Read(base::BindOnce(&CastAudioRenderer::OnNewBuffer,
-                                       weak_factory_.GetWeakPtr()));
+  demuxer_stream_->Read(1, base::BindOnce(&CastAudioRenderer::OnNewBuffersRead,
+                                          weak_factory_.GetWeakPtr()));
+}
+
+void CastAudioRenderer::OnNewBuffersRead(
+    ::media::DemuxerStream::Status status,
+    ::media::DemuxerStream::DecoderBufferVector buffers_queue) {
+  CHECK_LE(buffers_queue.size(), 1u)
+      << "CastAudioRenderer only reads a single-buffer.";
+  OnNewBuffer(status,
+              buffers_queue.empty() ? nullptr : std::move(buffers_queue[0]));
 }
 
 void CastAudioRenderer::OnNewBuffer(
@@ -466,11 +475,11 @@ void CastAudioRenderer::OnNewBuffer(
 
   DCHECK_EQ(status, ::media::DemuxerStream::kOk);
 
-  size_t filled_bytes = buffer->end_of_stream() ? 0 : buffer->data_size();
+  size_t filled_bytes = buffer->end_of_stream() ? 0 : buffer->size();
   size_t io_buffer_size =
       audio_output_service::OutputSocket::kAudioMessageHeaderSize +
       filled_bytes;
-  auto io_buffer = base::MakeRefCounted<net::IOBuffer>(io_buffer_size);
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(io_buffer_size);
   if (buffer->end_of_stream()) {
     OnEndOfStream();
     return;
@@ -479,7 +488,7 @@ void CastAudioRenderer::OnNewBuffer(
   last_pushed_timestamp_ = buffer->timestamp() + buffer->duration();
   memcpy(io_buffer->data() +
              audio_output_service::OutputSocket::kAudioMessageHeaderSize,
-         buffer->data(), buffer->data_size());
+         buffer->data(), buffer->size());
 
   output_connection_
       .AsyncCall(&audio_output_service::OutputStreamConnection::SendAudioBuffer)

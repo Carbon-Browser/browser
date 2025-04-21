@@ -1,8 +1,8 @@
-# Copyright (c) 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# TODO(crbug.com/1233050): Until the bug is resolved we need to include
+# TODO(crbug.com/40191347): Until the bug is resolved we need to include
 # gclient_args for the definition of build_with_chromium and build_overrides
 # for client overrides of that flag. The latter should go away.
 import("//build/config/gclient_args.gni")
@@ -26,6 +26,14 @@ declare_args() {
 }
 
 declare_args() {
-  # Set to false to disable EXPENSIVE_DCHECK()s.
-  enable_expensive_dchecks = is_debug || dcheck_always_on
+  # Set to false to disable EXPENSIVE_DCHECK()s or to true to enable them in
+  # official builds. These are generally used for really useful DCHECKs that are
+  # too expensive to be enabled in user-facing official+DCHECK builds.
+  enable_expensive_dchecks =
+      is_debug || (dcheck_always_on && !is_official_build)
 }
+
+assert(!dcheck_is_configurable || (dcheck_always_on || is_debug),
+       "dcheck_is_configurable only makes sense with DCHECKs enabled")
+assert(!enable_expensive_dchecks || (dcheck_always_on || is_debug),
+       "enable_expensive_dchecks only makes sense with DCHECKs enabled")

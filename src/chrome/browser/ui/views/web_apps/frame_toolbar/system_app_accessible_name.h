@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,13 @@
 // An invisible, but accessible label that indicates the system app name. This
 // label can only be focused by accessibility features.
 class SystemAppAccessibleName : public views::Label {
+  METADATA_HEADER(SystemAppAccessibleName, views::Label)
+
  public:
-  METADATA_HEADER(SystemAppAccessibleName);
   explicit SystemAppAccessibleName(const std::u16string& app_name);
   SystemAppAccessibleName(const SystemAppAccessibleName&) = delete;
   SystemAppAccessibleName& operator=(const SystemAppAccessibleName&) = delete;
   ~SystemAppAccessibleName() override;
-
-  // views::View:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
  private:
   std::u16string app_name_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include "ui/views/paint_info.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 SkBitmap PaintViewToBitmap(View* view) {
   SkBitmap bitmap;
@@ -24,5 +23,4 @@ SkBitmap PaintViewToBitmap(View* view) {
   return bitmap;
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

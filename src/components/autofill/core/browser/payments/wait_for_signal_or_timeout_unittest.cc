@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,9 @@
 
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+namespace autofill {
+namespace {
 
 class WaitForSignalOrTimeoutTest : public testing::Test {
  public:
@@ -186,3 +189,6 @@ TEST_F(WaitForSignalOrTimeoutTest, OnEventOrTimeOutCalledTwice) {
   EXPECT_TRUE(wait.IsSignaled());
   EXPECT_FALSE(last_callback_triggered_by_signal_);
 }
+
+}  // namespace
+}  // namespace autofill

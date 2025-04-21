@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,25 @@ package org.chromium.device.power_save_blocker;
 
 import android.view.View;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.WeakHashMap;
 
 @JNINamespace("device")
+@NullMarked
 class PowerSaveBlocker {
     // Counter associated to a view to know how many PowerSaveBlocker are
     // currently registered. Using WeakHashMap to prevent leaks in Android WebView.
-    private static WeakHashMap<View, Integer> sBlockViewCounter = new WeakHashMap<View, Integer>();
+    private static final WeakHashMap<View, Integer> sBlockViewCounter =
+            new WeakHashMap<View, Integer>();
 
     // WeakReference to prevent leaks in Android WebView.
-    private WeakReference<View> mKeepScreenOnView;
+    private @Nullable WeakReference<View> mKeepScreenOnView;
 
     @CalledByNative
     private static PowerSaveBlocker create() {
@@ -38,11 +43,11 @@ class PowerSaveBlocker {
         if (prev_counter == null) {
             sBlockViewCounter.put(view, 1);
         } else {
-            assert prev_counter.intValue() >= 0;
-            sBlockViewCounter.put(view, prev_counter.intValue() + 1);
+            assert prev_counter >= 0;
+            sBlockViewCounter.put(view, prev_counter + 1);
         }
 
-        if (prev_counter == null || prev_counter.intValue() == 0) view.setKeepScreenOn(true);
+        if (prev_counter == null || prev_counter == 0) view.setKeepScreenOn(true);
     }
 
     @CalledByNative
@@ -59,9 +64,9 @@ class PowerSaveBlocker {
 
         Integer prev_counter = sBlockViewCounter.get(view);
         assert prev_counter != null;
-        assert prev_counter.intValue() > 0;
-        sBlockViewCounter.put(view, prev_counter.intValue() - 1);
+        assert prev_counter > 0;
+        sBlockViewCounter.put(view, prev_counter - 1);
 
-        if (prev_counter.intValue() == 1) view.setKeepScreenOn(false);
+        if (prev_counter == 1) view.setKeepScreenOn(false);
     }
 }

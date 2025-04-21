@@ -1,52 +1,58 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager_impl.h"
+
 #include <locale>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "chrome/browser/nearby_sharing/client/fake_nearby_share_client.h"
-#include "chrome/browser/nearby_sharing/common/fake_nearby_share_profile_info_provider.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
 #include "chrome/browser/nearby_sharing/local_device_data/fake_nearby_share_device_data_updater.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_device_data_updater.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_device_data_updater_impl.h"
-#include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager_impl.h"
-#include "chrome/browser/nearby_sharing/proto/device_rpc.pb.h"
-#include "chrome/browser/nearby_sharing/scheduling/fake_nearby_share_scheduler.h"
-#include "chrome/browser/nearby_sharing/scheduling/fake_nearby_share_scheduler_factory.h"
-#include "chrome/browser/nearby_sharing/scheduling/nearby_share_scheduler_factory.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/nearby/common/scheduling/fake_nearby_scheduler.h"
+#include "chromeos/ash/components/nearby/common/scheduling/fake_nearby_scheduler_factory.h"
+#include "chromeos/ash/components/nearby/common/scheduling/nearby_scheduler_factory.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
+#include "components/user_manager/fake_user_manager.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
+#include "third_party/nearby/sharing/proto/device_rpc.pb.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 
 namespace {
 
-const char kFakeDeviceName[] = "My Cool Chromebook";
-const char kFakeEmptyDeviceName[] = "";
-const char kFakeFullName[] = "Barack Obama";
-const char16_t kFakeGivenName[] = u"Barack";
-const char kFakeIconUrl[] = "https://www.google.com";
-const char kFakeIconUrl2[] = "https://www.google.com/2";
-const char kFakeIconToken[] = "token";
-const char kFakeIconToken2[] = "token2";
-const char kFakeInvalidDeviceName[] = "\xC0";
-const char kFakeTooLongDeviceName[] = "this string is 33 bytes in UTF-8!";
-const char16_t kFakeTooLongGivenName[] = u"this is a 33-byte string in utf-8";
-const char kFakeTooLongTruncatedDeviceName[] =
+constexpr char kFakeEmail[] = "test@test";
+constexpr char kFakeDeviceName[] = "My Cool Chromebook";
+constexpr char kFakeEmptyDeviceName[] = "";
+constexpr char kFakeFullName[] = "Barack Obama";
+constexpr char16_t kFakeGivenName[] = u"Barack";
+constexpr char kFakeIconUrl[] = "https://www.google.com";
+constexpr char kFakeIconUrl2[] = "https://www.google.com/2";
+constexpr char kFakeIconToken[] = "token";
+constexpr char kFakeIconToken2[] = "token2";
+constexpr char kFakeInvalidDeviceName[] = "\xC0";
+constexpr char kFakeTooLongDeviceName[] = "this string is 33 bytes in UTF-8!";
+constexpr char16_t kFakeTooLongGivenName[] =
+    u"this is a 33-byte string in utf-8";
+constexpr char kFakeTooLongTruncatedDeviceName[] =
     "this is a 33-...'s Chrome device";
 
-nearbyshare::proto::UpdateDeviceResponse CreateResponse(
-    const absl::optional<std::string>& full_name,
-    const absl::optional<std::string>& icon_url,
-    const absl::optional<std::string>& icon_token) {
-  nearbyshare::proto::UpdateDeviceResponse response;
+nearby::sharing::proto::UpdateDeviceResponse CreateResponse(
+    const std::optional<std::string>& full_name,
+    const std::optional<std::string>& icon_url,
+    const std::optional<std::string>& icon_token) {
+  nearby::sharing::proto::UpdateDeviceResponse response;
   if (full_name)
     response.set_person_name(*full_name);
 
@@ -59,17 +65,17 @@ nearbyshare::proto::UpdateDeviceResponse CreateResponse(
   return response;
 }
 
-std::vector<nearbyshare::proto::Contact> GetFakeContacts() {
-  nearbyshare::proto::Contact contact1;
-  nearbyshare::proto::Contact contact2;
+std::vector<nearby::sharing::proto::Contact> GetFakeContacts() {
+  nearby::sharing::proto::Contact contact1;
+  nearby::sharing::proto::Contact contact2;
   contact1.mutable_identifier()->set_account_name("account1");
   contact2.mutable_identifier()->set_account_name("account2");
   return {std::move(contact1), std::move(contact2)};
 }
 
-std::vector<nearbyshare::proto::PublicCertificate> GetFakeCertificates() {
-  nearbyshare::proto::PublicCertificate cert1;
-  nearbyshare::proto::PublicCertificate cert2;
+std::vector<nearby::sharing::proto::PublicCertificate> GetFakeCertificates() {
+  nearby::sharing::proto::PublicCertificate cert1;
+  nearby::sharing::proto::PublicCertificate cert2;
   cert1.set_secret_id("id1");
   cert2.set_secret_id("id2");
   return {std::move(cert1), std::move(cert2)};
@@ -104,16 +110,35 @@ class NearbyShareLocalDeviceDataManagerImplTest
   ~NearbyShareLocalDeviceDataManagerImplTest() override = default;
 
   void SetUp() override {
+    fake_user_manager_.Reset(std::make_unique<user_manager::FakeUserManager>());
+    user_ = fake_user_manager_->AddUser(AccountId::FromUserEmail(kFakeEmail));
+    fake_user_manager_->UserLoggedIn(
+        user_->GetAccountId(),
+        user_manager::FakeUserManager::GetFakeUsernameHash(
+            user_->GetAccountId()),
+        /*browser_restart=*/false,
+        /*is_child=*/false);
     RegisterNearbySharingPrefs(pref_service_.registry());
-    NearbyShareSchedulerFactory::SetFactoryForTesting(&scheduler_factory_);
+    fake_user_manager_->OnUserProfileCreated(user_->GetAccountId(),
+                                             &pref_service_);
+    ash::nearby::NearbySchedulerFactory::SetFactoryForTesting(
+        &scheduler_factory_);
     NearbyShareDeviceDataUpdaterImpl::Factory::SetFactoryForTesting(
         &updater_factory_);
-    profile_info_provider()->set_given_name(kFakeGivenName);
+    fake_user_manager_->UpdateUserAccountData(
+        user_->GetAccountId(), user_manager::UserManager::UserAccountData(
+                                   /*display_name=*/u"",
+                                   /*given_name=*/kFakeGivenName,
+                                   /*locale=*/""));
   }
 
   void TearDown() override {
-    NearbyShareSchedulerFactory::SetFactoryForTesting(nullptr);
+    manager_.reset();
+    ash::nearby::NearbySchedulerFactory::SetFactoryForTesting(nullptr);
     NearbyShareDeviceDataUpdaterImpl::Factory::SetFactoryForTesting(nullptr);
+    fake_user_manager_->OnUserProfileWillBeDestroyed(user_->GetAccountId());
+    user_ = nullptr;
+    fake_user_manager_.Reset();
   }
 
   // NearbyShareLocalDeviceDataManager::Observer:
@@ -126,7 +151,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
 
   void CreateManager() {
     manager_ = NearbyShareLocalDeviceDataManagerImpl::Factory::Create(
-        &pref_service_, &http_client_factory_, &profile_info_provider_);
+        *user_, &http_client_factory_);
     manager_->AddObserver(this);
     ++num_manager_creations_;
     VerifyInitialization();
@@ -139,7 +164,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
   }
 
   void DownloadDeviceData(
-      const absl::optional<nearbyshare::proto::UpdateDeviceResponse>&
+      const std::optional<nearby::sharing::proto::UpdateDeviceResponse>&
           response) {
     manager_->DownloadDeviceData();
 
@@ -161,17 +186,17 @@ class NearbyShareLocalDeviceDataManagerImplTest
   }
 
   void UploadContacts(
-      const absl::optional<nearbyshare::proto::UpdateDeviceResponse>&
+      const std::optional<nearby::sharing::proto::UpdateDeviceResponse>&
           response) {
-    absl::optional<bool> returned_success;
+    std::optional<bool> returned_success;
     manager_->UploadContacts(
         GetFakeContacts(),
-        base::BindOnce([](absl::optional<bool>* returned_success,
+        base::BindOnce([](std::optional<bool>* returned_success,
                           bool success) { *returned_success = success; },
                        &returned_success));
 
     EXPECT_FALSE(updater()->pending_requests().front().certificates);
-    std::vector<nearbyshare::proto::Contact> expected_fake_contacts =
+    std::vector<nearby::sharing::proto::Contact> expected_fake_contacts =
         GetFakeContacts();
     for (size_t i = 0; i < expected_fake_contacts.size(); ++i) {
       EXPECT_EQ(expected_fake_contacts[i].SerializeAsString(),
@@ -188,17 +213,17 @@ class NearbyShareLocalDeviceDataManagerImplTest
   }
 
   void UploadCertificates(
-      const absl::optional<nearbyshare::proto::UpdateDeviceResponse>&
+      const std::optional<nearby::sharing::proto::UpdateDeviceResponse>&
           response) {
-    absl::optional<bool> returned_success;
+    std::optional<bool> returned_success;
     manager_->UploadCertificates(
         GetFakeCertificates(),
-        base::BindOnce([](absl::optional<bool>* returned_success,
+        base::BindOnce([](std::optional<bool>* returned_success,
                           bool success) { *returned_success = success; },
                        &returned_success));
 
     EXPECT_FALSE(updater()->pending_requests().front().contacts);
-    std::vector<nearbyshare::proto::PublicCertificate>
+    std::vector<nearby::sharing::proto::PublicCertificate>
         expected_fake_certificates = GetFakeCertificates();
     for (size_t i = 0; i < expected_fake_certificates.size(); ++i) {
       EXPECT_EQ(expected_fake_certificates[i].SerializeAsString(),
@@ -215,20 +240,22 @@ class NearbyShareLocalDeviceDataManagerImplTest
   }
 
   NearbyShareLocalDeviceDataManager* manager() { return manager_.get(); }
-  FakeNearbyShareProfileInfoProvider* profile_info_provider() {
-    return &profile_info_provider_;
-  }
   const std::vector<ObserverNotification>& notifications() {
     return notifications_;
   }
   FakeNearbyShareDeviceDataUpdater* updater() {
     return updater_factory_.instances().back();
   }
-  FakeNearbyShareScheduler* device_data_scheduler() {
+  ash::nearby::FakeNearbyScheduler* device_data_scheduler() {
     return scheduler_factory_.pref_name_to_periodic_instance()
         .at(prefs::kNearbySharingSchedulerDownloadDeviceDataPrefName)
         .fake_scheduler;
   }
+
+  user_manager::FakeUserManager& fake_user_manager() {
+    return *fake_user_manager_;
+  }
+  user_manager::User& user() { return *user_; }
 
  private:
   void VerifyInitialization() {
@@ -240,7 +267,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
               updater_factory_.instances().back()->device_id());
 
     // Verify device data scheduler input parameters.
-    FakeNearbyShareSchedulerFactory::PeriodicInstance
+    ash::nearby::FakeNearbySchedulerFactory::PeriodicInstance
         device_data_scheduler_instance =
             scheduler_factory_.pref_name_to_periodic_instance().at(
                 prefs::kNearbySharingSchedulerDownloadDeviceDataPrefName);
@@ -251,12 +278,15 @@ class NearbyShareLocalDeviceDataManagerImplTest
     EXPECT_EQ(&pref_service_, device_data_scheduler_instance.pref_service);
   }
 
+  user_manager::TypedScopedUserManager<user_manager::FakeUserManager>
+      fake_user_manager_;
+  raw_ptr<user_manager::User> user_ = nullptr;
+  sync_preferences::TestingPrefServiceSyncable pref_service_;
+
   size_t num_manager_creations_ = 0;
   std::vector<ObserverNotification> notifications_;
-  sync_preferences::TestingPrefServiceSyncable pref_service_;
   FakeNearbyShareClientFactory http_client_factory_;
-  FakeNearbyShareProfileInfoProvider profile_info_provider_;
-  FakeNearbyShareSchedulerFactory scheduler_factory_;
+  ash::nearby::FakeNearbySchedulerFactory scheduler_factory_;
   FakeNearbyShareDeviceDataUpdaterFactory updater_factory_;
   std::unique_ptr<NearbyShareLocalDeviceDataManager> manager_;
 };
@@ -269,7 +299,7 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DeviceId) {
   std::string id = manager()->GetId();
   EXPECT_EQ(10u, id.size());
   for (const char c : id)
-    EXPECT_TRUE(std::isalnum(c));
+    EXPECT_TRUE(absl::ascii_isalnum(static_cast<unsigned char>(c)));
 
   // The ID is persisted.
   DestroyManager();
@@ -280,14 +310,22 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DeviceId) {
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DefaultDeviceName) {
   CreateManager();
 
-  // If given name is null, only return the device type.
-  profile_info_provider()->set_given_name(absl::nullopt);
+  // If given name is empty, only return the device type.
+  fake_user_manager().UpdateUserAccountData(
+      user().GetAccountId(), user_manager::UserManager::UserAccountData(
+                                 /*display_name=*/u"",
+                                 /*given_name=*/u"",
+                                 /*locale=*/""));
   EXPECT_EQ(base::UTF16ToUTF8(ui::GetChromeOSDeviceName()),
             manager()->GetDeviceName());
 
   // Set given name and expect full default device name of the form
   // "<given name>'s <device type>."
-  profile_info_provider()->set_given_name(kFakeGivenName);
+  fake_user_manager().UpdateUserAccountData(
+      user().GetAccountId(), user_manager::UserManager::UserAccountData(
+                                 /*display_name=*/u"",
+                                 /*given_name=*/kFakeGivenName,
+                                 /*locale=*/""));
   EXPECT_EQ(
       l10n_util::GetStringFUTF8(IDS_NEARBY_DEFAULT_DEVICE_NAME, kFakeGivenName,
                                 ui::GetChromeOSDeviceName()),
@@ -295,7 +333,11 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DefaultDeviceName) {
 
   // Make sure that when we use a given name that is very long we truncate
   // correctly.
-  profile_info_provider()->set_given_name(kFakeTooLongGivenName);
+  fake_user_manager().UpdateUserAccountData(
+      user().GetAccountId(), user_manager::UserManager::UserAccountData(
+                                 /*display_name=*/u"",
+                                 /*given_name=*/kFakeTooLongGivenName,
+                                 /*locale=*/""));
   EXPECT_EQ(kFakeTooLongTruncatedDeviceName, manager()->GetDeviceName());
 }
 
@@ -315,7 +357,6 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, ValidateDeviceName) {
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, SetDeviceName) {
   CreateManager();
 
-  profile_info_provider()->set_given_name(kFakeGivenName);
   std::string expected_default_device_name =
       l10n_util::GetStringFUTF8(IDS_NEARBY_DEFAULT_DEVICE_NAME, kFakeGivenName,
                                 ui::GetChromeOSDeviceName());
@@ -471,11 +512,11 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest,
 
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DownloadDeviceData_Failure) {
   CreateManager();
-  DownloadDeviceData(/*response=*/absl::nullopt);
+  DownloadDeviceData(/*response=*/std::nullopt);
 
   // No full name or icon URL set because response was null.
-  EXPECT_EQ(absl::nullopt, manager()->GetFullName());
-  EXPECT_EQ(absl::nullopt, manager()->GetIconUrl());
+  EXPECT_EQ(std::nullopt, manager()->GetFullName());
+  EXPECT_EQ(std::nullopt, manager()->GetIconUrl());
   EXPECT_TRUE(notifications().empty());
 }
 
@@ -486,7 +527,7 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, UploadContacts_Success) {
 
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, UploadContacts_Failure) {
   CreateManager();
-  UploadContacts(/*response=*/absl::nullopt);
+  UploadContacts(/*response=*/std::nullopt);
 }
 
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, UploadCertificates_Success) {
@@ -497,5 +538,5 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, UploadCertificates_Success) {
 
 TEST_F(NearbyShareLocalDeviceDataManagerImplTest, UploadCertificates_Failure) {
   CreateManager();
-  UploadCertificates(/*response=*/absl::nullopt);
+  UploadCertificates(/*response=*/std::nullopt);
 }

@@ -28,7 +28,6 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="2329392777730037872">Kon nie <ph name="URL" /> op die kliënt se toestel oopmaak nie.</translation>
 <translation id="2359808026110333948">Gaan voort</translation>
 <translation id="2366718077645204424">Kan nie die gasheer bereik nie. Dit is waarskynlik weens die opstelling van die netwerk wat jy gebruik.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Is <ph name="RELATIVE_TIMESTAMP" /> laas aanlyn gesien.</translation>
 <translation id="2504109125669302160">Verleen "Toeganklikheid"-toestemming aan <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Gekoppel aan <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Wil jy hierdie rekenaar deel sodat 'n ander gebruiker dit kan sien en beheer?</translation>
@@ -36,7 +35,6 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="2599300881200251572">Hierdie diens maak inkomende verbindings van Chrome-afstandwerkskermkliënte af moontlik.</translation>
 <translation id="2647232381348739934">Chromoting-diens</translation>
 <translation id="2676780859508944670">Werk tans …</translation>
-<translation id="2692522824157224199">Kopierieg 2022 Google LLC. Alle regte voorbehou.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Kon nie staaf nie. Probeer weer aanmeld.</translation>
 <translation id="2803375539583399270">Voer PIN in</translation>
@@ -54,7 +52,6 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="3423542133075182604">Sekuriteitsleutelafstandproses</translation>
 <translation id="3581045510967524389">Kon nie aan die netwerk koppel nie. Maak asseblief seker of jou toestel aanlyn is.</translation>
 <translation id="3596628256176442606">Hierdie diens maak inkomende verbindings van Chromoting-kliënte af moontlik.</translation>
-<translation id="369442766917958684">Vanlyn.</translation>
 <translation id="3695446226812920698">Vind uit hoe</translation>
 <translation id="3776024066357219166">Jou Chrome-afstandwerkskermsessie is verby.</translation>
 <translation id="3858860766373142691">Naam</translation>
@@ -73,7 +70,6 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> se URL-aanstuurder</translation>
 <translation id="4277736576214464567">Die toegangkode is ongeldig. Probeer asseblief weer.</translation>
 <translation id="4281844954008187215">Diensbepalings</translation>
-<translation id="4372650392690220936">Kopiereg 2022 Die Chromium-outeurs. Alle regte voorbehou.</translation>
 <translation id="4405930547258349619">Kernbiblioteek</translation>
 <translation id="443560535555262820">Maak Toeganklikheid-voorkeure oop</translation>
 <translation id="4450893287417543264">Moenie weer wys nie</translation>
@@ -107,7 +103,6 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Jou werkskerm word tans met <ph name="USER" /> gedeel.</translation>
-<translation id="5750083143895808682">Aangemeld as <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Herkoppel</translation>
 <translation id="5810269635982033450">Skerm werk soos 'n stuurpaneel</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> het toegang versoek om jou skerm te sien en jou sleutelbord en muis te beheer. Druk ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' as jy nie hierdie versoek verwag nie. Anders kan jy ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' kies om die verbinding toe te laat wanneer jy gereed is.</translation>
@@ -154,6 +149,7 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="7693372326588366043">Herlaai die lys gashere</translation>
 <translation id="7714222945760997814">Gee dit aan</translation>
 <translation id="7868137160098754906">Voer asseblief jou PIN in vir die afstandrekenaar.</translation>
+<translation id="7881455334687220899">Kopiereg 2024 Die Chromium-outeurs. Alle regte voorbehou.</translation>
 <translation id="7895403300744144251">Sekuriteitbeleide op die afstandrekenaar laat nie verbindings van jou rekening af toe nie.</translation>
 <translation id="7936528439960309876">Dok regs</translation>
 <translation id="7970576581263377361">Kon nie staaf nie. Meld asseblief weer by Chromium aan.</translation>
@@ -185,6 +181,7 @@ As "<ph name="SERVICE_SCRIPT_NAME" />" reeds gemerk is, moet jy dit ontmerk en d
 <translation id="8747048596626351634">Sessie het omgeval of kon nie begin nie. As ~/.chrome-remote-desktop-session op die afstandrekenaar bestaan, moet jy seker maak dat dit 'n langlopende voorgrondproses begin, soos 'n werkskermomgewing of vensterbestuurder.</translation>
 <translation id="8804164990146287819">Privaatheidbeleid</translation>
 <translation id="8906511416443321782">Mikrofoontoegang word vereis om oudio vas te vang en dit na die Chrome-afstandwerkskermkliënt te stroom.</translation>
+<translation id="9042277333359847053">Kopiereg 2024 Google LLC. Alle regte voorbehou.</translation>
 <translation id="9111855907838866522">Jy is aan jou afstandtoestel gekoppel. Tik met vier vingers op die skerm om die kieslys oop te maak.</translation>
 <translation id="9126115402994542723">Moenie weer vir 'n PIN vra wanneer jy van hierdie toestel af aan hierdie gasheer koppel nie.</translation>
 <translation id="916856682307586697">Begin die verstek-XSession</translation>

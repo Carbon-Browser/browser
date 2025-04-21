@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -31,22 +31,27 @@ const char kCastAppPresentationUrl[] =
     "cast:BE6E4473?clientId=143692175507258981";
 const char kVideo[] = "video";
 const char kBearVP9Video[] = "bear-vp9.webm";
-const char kPlayer[] = "player.html";
 const char kOrigin[] = "http://origin/";
 }  // namespace
 
 namespace media_router {
 
-MediaRouterE2EBrowserTest::MediaRouterE2EBrowserTest()
-    : media_router_(nullptr) {}
+MediaRouterE2EBrowserTest::MediaRouterE2EBrowserTest(
+    UiForBrowserTest test_ui_type)
+    : MediaRouterIntegrationBrowserTest(test_ui_type), media_router_(nullptr) {}
 
-MediaRouterE2EBrowserTest::~MediaRouterE2EBrowserTest() {}
+MediaRouterE2EBrowserTest::~MediaRouterE2EBrowserTest() = default;
 
 void MediaRouterE2EBrowserTest::SetUpOnMainThread() {
   MediaRouterIntegrationBrowserTest::SetUpOnMainThread();
   media_router_ =
       MediaRouterFactory::GetApiForBrowserContext(browser()->profile());
   DCHECK(media_router_);
+// On Mac, cast device discovery isn't started until explicit user gesture.
+// Starting sink discovery now for tests.
+#if BUILDFLAG(IS_MAC)
+  media_router_->OnUserGesture();
+#endif
 }
 
 void MediaRouterE2EBrowserTest::TearDownOnMainThread() {
@@ -54,6 +59,10 @@ void MediaRouterE2EBrowserTest::TearDownOnMainThread() {
   route_id_.clear();
   media_router_ = nullptr;
   MediaRouterIntegrationBrowserTest::TearDownOnMainThread();
+}
+
+bool MediaRouterE2EBrowserTest::RequiresMediaRouteProviders() const {
+  return true;
 }
 
 void MediaRouterE2EBrowserTest::OnRouteResponseReceived(
@@ -91,7 +100,7 @@ void MediaRouterE2EBrowserTest::CreateMediaRoute(
       source.id(), sink.id(), origin, web_contents,
       base::BindOnce(&MediaRouterE2EBrowserTest::OnRouteResponseReceived,
                      base::Unretained(this)),
-      base::TimeDelta(), is_incognito());
+      base::TimeDelta());
 
   // Wait for the route request to be fulfilled (and route to be started).
   ASSERT_TRUE(ConditionalWait(
@@ -117,14 +126,14 @@ void MediaRouterE2EBrowserTest::OpenMediaPage() {
   base::StringPairs query_params;
   query_params.push_back(std::make_pair(kVideo, kBearVP9Video));
   std::string query = media::GetURLQueryString(query_params);
-  GURL gurl =
-      content::GetFileUrlWithQuery(media::GetTestDataFilePath(kPlayer), query);
+  GURL gurl = content::GetFileUrlWithQuery(
+      GetResourceFile(FILE_PATH_LITERAL("player.html")), query);
   ui_test_utils::NavigateToURLBlockUntilNavigationsComplete(browser(), gurl, 1);
 }
 
 // Test cases
 
-IN_PROC_BROWSER_TEST_P(MediaRouterE2EBrowserTest, MANUAL_TabMirroring) {
+IN_PROC_BROWSER_TEST_F(MediaRouterE2EBrowserTest, MANUAL_TabMirroring) {
   EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
   EXPECT_EQ(1, browser()->tab_strip_model()->count());
 
@@ -144,7 +153,7 @@ IN_PROC_BROWSER_TEST_P(MediaRouterE2EBrowserTest, MANUAL_TabMirroring) {
   Wait(base::Seconds(10));
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterE2EBrowserTest, MANUAL_CastApp) {
+IN_PROC_BROWSER_TEST_F(MediaRouterE2EBrowserTest, MANUAL_CastApp) {
   // Wait for 30 seconds to make sure the route is stable.
   CreateMediaRoute(
       MediaSource::ForPresentationUrl(GURL(kCastAppPresentationUrl)),
@@ -155,8 +164,5 @@ IN_PROC_BROWSER_TEST_P(MediaRouterE2EBrowserTest, MANUAL_CastApp) {
   StopMediaRoute();
   Wait(base::Seconds(10));
 }
-
-INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(
-    MediaRouterE2EBrowserTest);
 
 }  // namespace media_router

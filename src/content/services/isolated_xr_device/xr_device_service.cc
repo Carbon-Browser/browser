@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/services/isolated_xr_device/xr_device_service.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "content/services/isolated_xr_device/xr_runtime_provider.h"
 #include "content/services/isolated_xr_device/xr_service_test_hook.h"

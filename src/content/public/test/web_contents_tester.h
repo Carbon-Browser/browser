@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,9 @@ class WebContentsTester {
   static WebContents* CreateTestWebContents(
       const WebContents::CreateParams& params);
 
-  // Simulates the appropriate RenderView (pending if any, current otherwise)
-  // sending a navigate notification for the NavigationController pending entry.
+  // Simulates the appropriate `blink::WebView` (pending if any, current
+  // otherwise) sending a navigate notification for the NavigationController
+  // pending entry.
   virtual void CommitPendingNavigation() = 0;
 
   // Creates a pending navigation to the given URL with the default parameters
@@ -138,6 +139,9 @@ class WebContentsTester {
   // Sets the return value of GetContentsMimeType().
   virtual void SetMainFrameMimeType(const std::string& mime_type) = 0;
 
+  // Sets the main frame size.
+  virtual void SetMainFrameSize(const gfx::Size& frame_size) = 0;
+
   // Change currently audible state for testing. This will cause all relevant
   // notifications to fire as well.
   virtual void SetIsCurrentlyAudible(bool audible) = 0;
@@ -151,24 +155,37 @@ class WebContentsTester {
   // Simulates terminating an load with a network error.
   virtual void TestDidFailLoadWithError(const GURL& url, int error_code) = 0;
 
+  // Simulates the first non-empty paint.
+  virtual void TestDidFirstVisuallyNonEmptyPaint() = 0;
+
   // Returns whether PauseSubresourceLoading was called on this web contents.
   virtual bool GetPauseSubresourceLoadingCalled() = 0;
 
   // Resets the state around PauseSubresourceLoadingCalled.
   virtual void ResetPauseSubresourceLoadingCalled() = 0;
 
+  // Sets the last active time ticks.
+  virtual void SetLastActiveTimeTicks(
+      base::TimeTicks last_active_time_ticks) = 0;
+
   // Sets the last active time.
-  virtual void SetLastActiveTime(base::TimeTicks last_active_time) = 0;
+  virtual void SetLastActiveTime(base::Time last_active_time) = 0;
+
+  // Increments/decrements the number of frames with connected USB devices.
+  virtual void TestIncrementUsbActiveFrameCount() = 0;
+  virtual void TestDecrementUsbActiveFrameCount() = 0;
+
+  // Increments/decrements the number of frames with connected HID devices.
+  virtual void TestIncrementHidActiveFrameCount() = 0;
+  virtual void TestDecrementHidActiveFrameCount() = 0;
+
+  // Increments/decrements the number of frames actively using serial ports.
+  virtual void TestIncrementSerialActiveFrameCount() = 0;
+  virtual void TestDecrementSerialActiveFrameCount() = 0;
 
   // Increments/decrements the number of connected Bluetooth devices.
   virtual void TestIncrementBluetoothConnectedDeviceCount() = 0;
   virtual void TestDecrementBluetoothConnectedDeviceCount() = 0;
-
-  // Used to create portals and retrieve their WebContents.
-  virtual const blink::PortalToken& CreatePortal(
-      std::unique_ptr<WebContents> portal_web_contents) = 0;
-  virtual WebContents* GetPortalContents(
-      const blink::PortalToken& portal_token) = 0;
 
   // Indicates if this WebContents has been frozen via a call to
   // SetPageFrozen().
@@ -177,7 +194,7 @@ class WebContentsTester {
   // Starts prerendering a page with |url|, and returns the root frame tree node
   // id of the page. The page has a pending navigation in the root frame tree
   // node when this method returns.
-  virtual int AddPrerender(const GURL& url) = 0;
+  virtual FrameTreeNodeId AddPrerender(const GURL& url) = 0;
   // Starts prerendering a page, simulates a navigation to |url| in the main
   // frame and returns the main frame of the page after the navigation is
   // complete.
@@ -192,6 +209,17 @@ class WebContentsTester {
   // Returns the time that was set with SetTabSwitchStartTime, or a null
   // TimeTicks if it was never called.
   virtual base::TimeTicks GetTabSwitchStartTime() = 0;
+
+  // Sets the return value for GetPictureInPictureOptions().
+  virtual void SetPictureInPictureOptions(
+      std::optional<blink::mojom::PictureInPictureWindowOptions> options) = 0;
+
+  virtual bool GetOverscrollNavigationEnabled() = 0;
+
+  // Sets return value for GetMediaCaptureRawDeviceIdsOpened(), keyed by `type`.
+  virtual void SetMediaCaptureRawDeviceIdsOpened(
+      blink::mojom::MediaStreamType type,
+      std::vector<std::string> ids) = 0;
 };
 
 }  // namespace content

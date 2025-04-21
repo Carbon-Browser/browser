@@ -66,7 +66,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
     private static final String mCoindarToken = "70277:34tJkQia1LEWXFUTf5N";
 
-    private static final String ARTICLE_IMAGE_URL_BASE = "https://hydrisapps.com/carbon/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
+    private static final String ARTICLE_IMAGE_URL_BASE = "https://carbon.website/carbon/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
 
     private SharedPreferences mPrefs;
 

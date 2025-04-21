@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/base/audio_buffer_queue.h"
 
@@ -169,11 +174,37 @@ TEST(AudioBufferQueueTest, ReadBitstream) {
   // The first audio buffer contains 4 frames.
   std::unique_ptr<AudioBus> bus = AudioBus::Create(channels, buffer.frames());
   EXPECT_EQ(4, buffer.ReadFrames(buffer.frames(), 0, bus.get()));
-  VerifyBitstreamAudioBus(bus.get(), 2, 1, 1);
+  VerifyBitstreamAudioBus(bus.get(), 1, 1);
 
   // The second audio buffer contains 20 frames.
   EXPECT_EQ(20, buffer.ReadFrames(buffer.frames(), 0, bus.get()));
-  VerifyBitstreamAudioBus(bus.get(), 10, 9, 1);
+  VerifyBitstreamAudioBus(bus.get(), 9, 1);
+}
+
+TEST(AudioBufferQueueTest, ReadBitstreamIECDts) {
+  const ChannelLayout channel_layout = CHANNEL_LAYOUT_STEREO;
+  const int channels = ChannelLayoutToChannelCount(channel_layout);
+  AudioBufferQueue buffer;
+  const size_t first_data_size = 4 * sizeof(float) * channels;
+  const size_t second_data_size = 20 * sizeof(float) * channels;
+
+  // Add 4 frames of data.
+  buffer.Append(MakeBitstreamAudioBuffer(kSampleFormatIECDts, channel_layout,
+                                         channels, kSampleRate, 1, 1, 4,
+                                         first_data_size, kNoTimestamp));
+  buffer.Append(MakeBitstreamAudioBuffer(kSampleFormatIECDts, channel_layout,
+                                         channels, kSampleRate, 9, 1, 20,
+                                         second_data_size, kNoTimestamp));
+  EXPECT_EQ(24, buffer.frames());
+
+  // The first audio buffer contains 4 frames.
+  std::unique_ptr<AudioBus> bus = AudioBus::Create(channels, buffer.frames());
+  EXPECT_EQ(4, buffer.ReadFrames(buffer.frames(), 0, bus.get()));
+  VerifyBitstreamIECDtsAudioBus(bus.get(), first_data_size, 1, 1);
+
+  // The second audio buffer contains 20 frames.
+  EXPECT_EQ(20, buffer.ReadFrames(buffer.frames(), 0, bus.get()));
+  VerifyBitstreamIECDtsAudioBus(bus.get(), second_data_size, 9, 1);
 }
 
 TEST(AudioBufferQueueTest, ReadF32) {

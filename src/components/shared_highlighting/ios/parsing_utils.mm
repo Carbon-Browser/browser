@@ -1,17 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "components/shared_highlighting/ios/parsing_utils.h"
 
-#import "base/values.h"
 #import "ios/web/public/ui/crw_web_view_proxy.h"
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kCaretWidth = 4.0;
@@ -20,34 +15,29 @@ const CGFloat kCaretWidth = 4.0;
 namespace shared_highlighting {
 
 BOOL IsValidDictValue(const base::Value* value) {
-  return value && value->is_dict() && !value->DictEmpty();
+  return value && value->is_dict() && !value->GetDict().empty();
 }
 
-absl::optional<CGRect> ParseRect(const base::Value* value) {
-  if (!IsValidDictValue(value)) {
-    return absl::nullopt;
+std::optional<CGRect> ParseRect(const base::Value::Dict* dict) {
+  if (!dict || dict->empty()) {
+    return std::nullopt;
   }
 
-  const base::Value* xValue =
-      value->FindKeyOfType("x", base::Value::Type::DOUBLE);
-  const base::Value* yValue =
-      value->FindKeyOfType("y", base::Value::Type::DOUBLE);
-  const base::Value* widthValue =
-      value->FindKeyOfType("width", base::Value::Type::DOUBLE);
-  const base::Value* heightValue =
-      value->FindKeyOfType("height", base::Value::Type::DOUBLE);
+  std::optional<double> xValue = dict->FindDouble("x");
+  std::optional<double> yValue = dict->FindDouble("y");
+  std::optional<double> widthValue = dict->FindDouble("width");
+  std::optional<double> heightValue = dict->FindDouble("height");
 
   if (!xValue || !yValue || !widthValue || !heightValue) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  return CGRectMake(xValue->GetDouble(), yValue->GetDouble(),
-                    widthValue->GetDouble(), heightValue->GetDouble());
+  return CGRectMake(*xValue, *yValue, *widthValue, *heightValue);
 }
 
-absl::optional<GURL> ParseURL(const std::string* url_value) {
+std::optional<GURL> ParseURL(const std::string* url_value) {
   if (!url_value) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   GURL url(*url_value);
@@ -55,7 +45,7 @@ absl::optional<GURL> ParseURL(const std::string* url_value) {
     return url;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 CGRect ConvertToBrowserRect(CGRect web_view_rect, web::WebState* web_state) {

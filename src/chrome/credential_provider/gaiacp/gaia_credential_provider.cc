@@ -1,14 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chrome/credential_provider/gaiacp/gaia_credential_provider.h"
+
+#include <credentialprovider.h>
+#include <shlguid.h>
 
 #include <iomanip>
 #include <map>
 #include <string>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
@@ -174,9 +183,7 @@ bool BackgroundTokenHandleUpdater::IsAuthEnforcedOnAssociatedUsers() {
     const std::wstring& sid = sid_to_association.first;
     // Checks if the login UI was already refreshed due to
     // auth enforcements on this sid.
-    if (reauth_sids_ != nullptr &&
-        (std::find(reauth_sids_->begin(), reauth_sids_->end(), sid) !=
-         reauth_sids_->end()))
+    if (reauth_sids_ != nullptr && base::Contains(*reauth_sids_, sid))
       continue;
 
     // Return true if the associated user sid has auth enforced.
@@ -311,9 +318,9 @@ void CGaiaCredentialProvider::ProviderConcurrentState::InternalReset() {
   auto_logon_credential_.Reset();
 }
 
-CGaiaCredentialProvider::CGaiaCredentialProvider() {}
+CGaiaCredentialProvider::CGaiaCredentialProvider() = default;
 
-CGaiaCredentialProvider::~CGaiaCredentialProvider() {}
+CGaiaCredentialProvider::~CGaiaCredentialProvider() = default;
 
 HRESULT CGaiaCredentialProvider::FinalConstruct() {
   LOGFN(VERBOSE);

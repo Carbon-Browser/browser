@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ Task::Task(internal::PostedTask posted_task,
   // and it may wrap around to a negative number during the static cast, hence,
   // TaskQueueImpl::DelayedIncomingQueue is especially sensitive to a potential
   // change of |PendingTask::sequence_num|'s type.
-  static_assert(std::is_same<decltype(sequence_num), int>::value, "");
+  static_assert(std::is_same_v<decltype(sequence_num), int>, "");
   sequence_num = static_cast<int>(sequence_order);
   this->is_high_res = resolution == WakeUpResolution::kHigh;
 }
@@ -58,50 +58,57 @@ TaskOrder Task::task_order() const {
 }
 
 void Task::SetHeapHandle(HeapHandle heap_handle) {
-  if (!delayed_task_handle_delegate_)
+  if (!delayed_task_handle_delegate_) {
     return;
+  }
 
   delayed_task_handle_delegate_->SetHeapHandle(heap_handle);
 }
 
 void Task::ClearHeapHandle() {
-  if (!delayed_task_handle_delegate_)
+  if (!delayed_task_handle_delegate_) {
     return;
+  }
   delayed_task_handle_delegate_->ClearHeapHandle();
 }
 
 HeapHandle Task::GetHeapHandle() const {
-  if (!delayed_task_handle_delegate_)
+  if (!delayed_task_handle_delegate_) {
     return HeapHandle::Invalid();
+  }
   return delayed_task_handle_delegate_->GetHeapHandle();
 }
 
 bool Task::IsCanceled() const {
   CHECK(task);
   if (task.IsCancelled()) {
-    DCHECK(!delayed_task_handle_delegate_);
     return true;
   }
 
   return delayed_task_handle_delegate_.WasInvalidated();
 }
 
-void Task::WillRunTask() {
-  if (!delayed_task_handle_delegate_)
-    return;
-
-  delayed_task_handle_delegate_->WillRunTask();
+bool Task::WillRunTask() {
+  if (delayed_task_handle_delegate_.WasInvalidated()) {
+    return false;
+  }
+  if (delayed_task_handle_delegate_) {
+    delayed_task_handle_delegate_->WillRunTask();
+  }
+  return true;
 }
 
 TimeTicks WakeUp::earliest_time() const {
-  if (delay_policy == subtle::DelayPolicy::kFlexiblePreferEarly)
+  if (delay_policy == subtle::DelayPolicy::kFlexiblePreferEarly) {
     return time - leeway;
+  }
   return time;
 }
 
 TimeTicks WakeUp::latest_time() const {
-  if (delay_policy == subtle::DelayPolicy::kFlexibleNoSooner)
+  if (delay_policy == subtle::DelayPolicy::kFlexibleNoSooner) {
     return time + leeway;
+  }
   return time;
 }
 

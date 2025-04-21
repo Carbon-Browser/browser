@@ -20,7 +20,9 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "components/adblock/content/browser/frame_hierarchy_builder.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "components/adblock/content/browser/resource_classification_runner.h"
 #include "components/adblock/core/classifier/resource_classifier.h"
 #include "components/adblock/core/common/sitekey.h"
@@ -42,112 +44,106 @@ class ResourceClassificationRunnerImpl final
   void RemoveObserver(Observer* observer) final;
 
   // Performs a *synchronous* check, this can block the UI for a while!
-  mojom::FilterMatchResult ShouldBlockPopup(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
-      const GURL& opener,
+  FilterMatchResult ShouldBlockPopup(
+      const SubscriptionService::Snapshot& subscription_collections,
       const GURL& popup_url,
       content::RenderFrameHost* render_frame_host) final;
+  void CheckPopupFilterMatch(
+      SubscriptionService::Snapshot subscription_collections,
+      const GURL& popup_url,
+      content::RenderFrameHost& render_frame_host,
+      CheckFilterMatchCallback callback) final;
   void CheckRequestFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
-      int32_t resource_type,
-      int32_t process_id,
-      int32_t render_frame_id,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) final;
-  void CheckRequestFilterMatchForWebSocket(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      ContentType adblock_resource_type,
+      const RequestInitiator& request_initiator,
+      CheckFilterMatchCallback callback) final;
+  // No callback, just notify observers
+  void CheckDocumentAllowlisted(
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
-      content::RenderFrameHost* render_frame_host,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) final;
+      const RequestInitiator& request_initiator) final;
   void CheckResponseFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& response_url,
-      int32_t process_id,
-      int32_t render_frame_id,
+      ContentType adblock_resource_type,
+      const RequestInitiator& request_initiator,
       const scoped_refptr<net::HttpResponseHeaders>& headers,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) final;
+      CheckFilterMatchCallback callback) final;
   void CheckRewriteFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
-      int32_t process_id,
-      int32_t render_frame_id,
+      const RequestInitiator& request_initiator,
       base::OnceCallback<void(const absl::optional<GURL>&)> result) final;
 
  private:
-  void CheckRequestFilterMatchImpl(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
-      const GURL& request_url,
-      ContentType adblock_type,
-      content::GlobalRenderFrameHostId frame_host_id,
-      mojom::AdblockInterface::CheckFilterMatchCallback cb);
-
   struct CheckResourceFilterMatchResult {
-    CheckResourceFilterMatchResult(mojom::FilterMatchResult status,
-                                   const GURL& subscription);
-    ~CheckResourceFilterMatchResult();
-    CheckResourceFilterMatchResult(const CheckResourceFilterMatchResult&);
-    CheckResourceFilterMatchResult& operator=(
-        const CheckResourceFilterMatchResult&);
-    CheckResourceFilterMatchResult(CheckResourceFilterMatchResult&&);
-    CheckResourceFilterMatchResult& operator=(CheckResourceFilterMatchResult&&);
-
-    mojom::FilterMatchResult status;
+    FilterMatchResult status;
     GURL subscription;
+    std::string configuration_name;
   };
 
   static CheckResourceFilterMatchResult CheckRequestFilterMatchInternal(
       const scoped_refptr<ResourceClassifier>& resource_classifier,
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
-      const GURL& request_url,
-      const std::vector<GURL>& frame_hierarchy,
+      SubscriptionService::Snapshot subscription_collections,
+      const GURL request_url,
+      const std::vector<GURL> frame_hierarchy,
       ContentType adblock_resource_type,
-      const SiteKey& sitekey);
+      const SiteKey sitekey);
 
   void OnCheckResourceFilterMatchComplete(
-      const GURL& request_url,
-      const std::vector<GURL>& frame_hierarchy,
+      const GURL request_url,
+      const std::vector<GURL> frame_hierarchy,
       ContentType adblock_resource_type,
+      const RequestInitiator& request_initiator,
+      CheckFilterMatchCallback callback,
+      const CheckResourceFilterMatchResult result);
+
+  void OnCheckPopupFilterMatchComplete(
+      const GURL& popup_url,
+      const std::vector<GURL>& frame_hierarchy,
       content::GlobalRenderFrameHostId render_frame_host_id,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback,
-      const CheckResourceFilterMatchResult& result);
+      absl::optional<CheckFilterMatchCallback> callback,
+      const ResourceClassifier::ClassificationResult& result);
 
   static CheckResourceFilterMatchResult CheckResponseFilterMatchInternal(
-      const scoped_refptr<ResourceClassifier>& resource_classifier,
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      const scoped_refptr<ResourceClassifier> resource_classifier,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL response_url,
       const std::vector<GURL> frame_hierarchy,
       ContentType adblock_resource_type,
       const scoped_refptr<net::HttpResponseHeaders> response_headers);
 
-  void NotifyAdMatched(const GURL& url,
-                       mojom::FilterMatchResult result,
-                       const std::vector<GURL>& parent_frame_urls,
-                       ContentType content_type,
-                       content::RenderFrameHost* render_frame_host,
-                       const GURL& subscription);
+  void NotifyResourceMatched(const GURL& url,
+                             FilterMatchResult result,
+                             const std::vector<GURL>& parent_frame_urls,
+                             ContentType content_type,
+                             const RequestInitiator& request_initiator,
+                             const GURL& subscription,
+                             const std::string& configuration_name);
 
-  void PostFilterMatchCallbackToUI(
-      mojom::AdblockInterface::CheckFilterMatchCallback callback,
-      mojom::FilterMatchResult result);
+  void PostFilterMatchCallbackToUI(CheckFilterMatchCallback callback,
+                                   FilterMatchResult result);
 
   void PostRewriteCallbackToUI(
       base::OnceCallback<void(const absl::optional<GURL>&)> callback,
       absl::optional<GURL> url);
 
-  static absl::optional<GURL> CheckDocumentAllowlisted(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
-      const GURL& request_url);
+  static CheckResourceFilterMatchResult CheckDocumentAllowlistedInternal(
+      const SubscriptionService::Snapshot subscription_collections,
+      const GURL& request_url,
+      const SiteKey sitekey);
 
   void ProcessDocumentAllowlistedResponse(
-      const GURL& request_url,
-      int32_t process_id,
-      int32_t render_frame_id,
-      absl::optional<GURL> allowing_subscription);
+      const GURL request_url,
+      content::GlobalRenderFrameHostId render_frame_host_id,
+      CheckResourceFilterMatchResult result);
 
   SEQUENCE_CHECKER(sequence_checker_);
   scoped_refptr<ResourceClassifier> resource_classifier_;
   std::unique_ptr<FrameHierarchyBuilder> frame_hierarchy_builder_;
-  SitekeyStorage* sitekey_storage_;
+  raw_ptr<SitekeyStorage> sitekey_storage_;
   base::ObserverList<Observer> observers_;
   base::WeakPtrFactory<ResourceClassificationRunnerImpl> weak_ptr_factory_;
 };

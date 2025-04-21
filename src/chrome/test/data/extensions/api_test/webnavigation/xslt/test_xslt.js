@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@ let loadScript = chrome.test.loadScript(scriptUrl);
 
 loadScript.then(async function() {
   debug = true;
-  let getURL = chrome.extension.getURL;
+  let getURL = chrome.runtime.getURL;
   let tab = await promise(chrome.tabs.create, {"url": "about:blank"});
   let config = await promise(chrome.test.getConfig);
   let port = config.testServer.port;

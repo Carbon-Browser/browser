@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/time/time.h"
 #import "ios/web/public/test/http_server/response_provider.h"
 
 namespace web {
@@ -16,27 +17,27 @@ namespace web {
 class DelayedResponseProvider : public ResponseProvider {
  public:
   // Creates a DelayedResponseProvider that delays the response from
-  // |delayed_provider| by |delay| seconds.
+  // `delayed_provider` by `delay`.
   DelayedResponseProvider(
       std::unique_ptr<web::ResponseProvider> delayed_provider,
-      double delay);
+      base::TimeDelta delay);
 
   DelayedResponseProvider(const DelayedResponseProvider&) = delete;
   DelayedResponseProvider& operator=(const DelayedResponseProvider&) = delete;
 
   ~DelayedResponseProvider() override;
 
-  // Forwards to |delayed_provider_|.
+  // Forwards to `delayed_provider_`.
   bool CanHandleRequest(const Request& request) override;
 
   // Creates a test_server::HttpResponse that will delay the read operation
-  // by |delay_| seconds.
+  // by `delay_` seconds.
   std::unique_ptr<net::test_server::HttpResponse> GetEmbeddedTestServerResponse(
       const Request& request) override;
 
  private:
   std::unique_ptr<web::ResponseProvider> delayed_provider_;
-  double delay_;
+  const base::TimeDelta delay_;
 };
 
 }  // namespace web

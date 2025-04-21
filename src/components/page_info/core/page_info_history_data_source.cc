@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/page_info/core/page_info_history_data_source.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/number_formatting.h"
 #include "base/i18n/time_formatting.h"
 #include "base/strings/string_util.h"
@@ -59,8 +59,8 @@ std::u16string PageInfoHistoryDataSource::FormatLastVisitedTimestamp(
 }
 
 void PageInfoHistoryDataSource::GetLastVisitedTimestamp(
-    base::OnceCallback<void(base::Time)> callback) {
-  // TODO(crbug.com/1275042): Use the data source in Android implementation.
+    base::OnceCallback<void(std::optional<base::Time>)> callback) {
+  // TODO(crbug.com/40808038): Use the data source in Android implementation.
   base::Time now = base::Time::Now();
   history_service_->GetLastVisitToHost(
       site_url_.host(), base::Time() /* before_time */, now /* end_time */,
@@ -74,10 +74,10 @@ void PageInfoHistoryDataSource::GetLastVisitedTimestamp(
 void PageInfoHistoryDataSource::OnLastVisitBeforeRecentNavigationsComplete(
     const std::string& host_name,
     base::Time query_start_time,
-    base::OnceCallback<void(base::Time)> callback,
+    base::OnceCallback<void(std::optional<base::Time>)> callback,
     history::HistoryLastVisitResult result) {
   if (!result.success || result.last_visit.is_null()) {
-    std::move(callback).Run(base::Time());
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -94,9 +94,13 @@ void PageInfoHistoryDataSource::OnLastVisitBeforeRecentNavigationsComplete(
 }
 
 void PageInfoHistoryDataSource::OnLastVisitBeforeRecentNavigationsComplete2(
-    base::OnceCallback<void(base::Time)> callback,
+    base::OnceCallback<void(std::optional<base::Time>)> callback,
     history::HistoryLastVisitResult result) {
-  std::move(callback).Run(result.last_visit);
+  // Checks that the result is still valid.
+  CHECK(result.success);
+  base::Time last_visit = result.last_visit;
+  std::move(callback).Run(last_visit.is_null() ? std::nullopt
+                                               : std::optional(last_visit));
 }
 
 }  // namespace page_info

@@ -18,6 +18,16 @@ def handle_headers(frame, request, response):
     for encoded_preload in request.GET.get_list(b"preloads"):
         preload = json.loads(encoded_preload.decode("utf-8"))
         header = "<{}>; rel=preload; as={}".format(preload["url"], preload["as_attr"])
+        if "crossorigin_attr" in preload:
+            crossorigin = preload["crossorigin_attr"]
+            if crossorigin:
+                header += "; crossorigin={}".format(crossorigin)
+            else:
+                header += "; crossorigin"
+        if "fetchpriority_attr" in preload:
+            fetchpriority = preload["fetchpriority_attr"]
+            if fetchpriority:
+                header += "; fetchpriority={}".format(fetchpriority)
         preload_headers.append(header.encode())
 
     # Send a 103 response.
@@ -31,8 +41,9 @@ def handle_headers(frame, request, response):
     time.sleep(0.2)
     response.status = 200
     response.headers[b"content-type"] = "text/html"
-    for header in preload_headers:
-        response.headers.append(b"link", header)
+    if request.GET[b"exclude_preloads_from_ok_response"].decode("utf-8") != "true":
+        for header in preload_headers:
+            response.headers.append(b"link", header)
     response.write_status_headers()
 
 

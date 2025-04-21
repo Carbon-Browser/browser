@@ -1,20 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/paint_preview/renderer/paint_preview_recorder_impl.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
@@ -24,7 +26,6 @@
 #include "components/paint_preview/common/serialized_recording.h"
 #include "components/paint_preview/renderer/paint_preview_recorder_utils.h"
 #include "content/public/renderer/render_frame.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 
@@ -96,7 +97,7 @@ void BuildAndSendResponse(std::unique_ptr<PaintPreviewTracker> tracker,
 void RecordToFileOnThreadPool(sk_sp<const SkPicture> skp,
                               base::File skp_file,
                               std::unique_ptr<PaintPreviewTracker> tracker,
-                              absl::optional<size_t> max_capture_size,
+                              std::optional<size_t> max_capture_size,
                               FinishedRecording out,
                               CapturePaintPreviewCallback callback) {
   TRACE_EVENT0("paint_preview", "RecordToFileOnThreadPool");
@@ -115,7 +116,7 @@ void RecordToFileOnThreadPool(sk_sp<const SkPicture> skp,
 void SerializeFileRecording(sk_sp<const SkPicture> skp,
                             base::File skp_file,
                             std::unique_ptr<PaintPreviewTracker> tracker,
-                            absl::optional<size_t> max_capture_size,
+                            std::optional<size_t> max_capture_size,
                             FinishedRecording out,
                             CapturePaintPreviewCallback callback) {
   base::ThreadPool::PostTask(
@@ -124,20 +125,19 @@ void SerializeFileRecording(sk_sp<const SkPicture> skp,
        base::WithBaseSyncPrimitives()},
       BindOnce(&RecordToFileOnThreadPool, skp, std::move(skp_file),
                std::move(tracker), max_capture_size, std::move(out),
-               base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                                  std::move(callback))));
+               base::BindPostTaskToCurrentDefault(std::move(callback))));
 }
 
 // Handles memory buffer persistence storage.
 void SerializeMemoryBufferRecording(
     sk_sp<const SkPicture> skp,
     std::unique_ptr<PaintPreviewTracker> tracker,
-    absl::optional<size_t> max_capture_size,
+    std::optional<size_t> max_capture_size,
     FinishedRecording out,
     CapturePaintPreviewCallback callback) {
   TRACE_EVENT0("paint_preview", "SerializeMemoryBufferRecording");
   size_t serialized_size = 0;
-  absl::optional<mojo_base::BigBuffer> buffer =
+  std::optional<mojo_base::BigBuffer> buffer =
       RecordToBuffer(skp, tracker.get(), max_capture_size, &serialized_size);
   out.status = buffer.has_value() ? mojom::PaintPreviewStatus::kOk
                                   : mojom::PaintPreviewStatus::kCaptureFailed;
@@ -151,12 +151,12 @@ void SerializeMemoryBufferRecording(
 
 // Finishes the recording process by converting the `recording` to an SkPicture.
 // Serialization is then delegated based on the type of `persistence`.
-void FinishRecordingOnUIThread(sk_sp<const cc::PaintRecord> recording,
+void FinishRecordingOnUIThread(cc::PaintRecord recording,
                                const gfx::Rect& bounds,
                                std::unique_ptr<PaintPreviewTracker> tracker,
                                RecordingPersistence persistence,
                                base::File skp_file,
-                               absl::optional<size_t> max_capture_size,
+                               std::optional<size_t> max_capture_size,
                                mojom::PaintPreviewCaptureResponsePtr response,
                                CapturePaintPreviewCallback callback) {
   TRACE_EVENT0("paint_preview", "FinishRecordingOnUIThread");
@@ -167,15 +167,11 @@ void FinishRecordingOnUIThread(sk_sp<const cc::PaintRecord> recording,
     return;
   }
 
-  TRACE_EVENT_BEGIN0("paint_preview", "PreProcessPaintOpBuffer");
-  PreProcessPaintOpBuffer(recording.get(), tracker.get());
-  TRACE_EVENT_END0("paint_preview", "PreProcessPaintOpBuffer");
-
   // This cannot be done async if the recording contains a GPU accelerated
   // image.
   TRACE_EVENT_BEGIN0("paint_preview", "ConvertToSkPicture");
-  auto skp = PaintRecordToSkPicture(recording, tracker.get(), bounds);
-  recording.reset();
+  auto skp =
+      PaintRecordToSkPicture(std::move(recording), tracker.get(), bounds);
   if (!skp) {
     std::move(callback).Run(mojom::PaintPreviewStatus::kCaptureFailed,
                             std::move(response));
@@ -205,9 +201,10 @@ PaintPreviewRecorderImpl::PaintPreviewRecorderImpl(
       is_painting_preview_(false),
       is_main_frame_(render_frame->IsMainFrame() &&
                      !render_frame->IsInFencedFrameTree()) {
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(&PaintPreviewRecorderImpl::BindPaintPreviewRecorder,
-                          weak_ptr_factory_.GetWeakPtr()));
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<mojom::PaintPreviewRecorder>(base::BindRepeating(
+          &PaintPreviewRecorderImpl::BindPaintPreviewRecorder,
+          weak_ptr_factory_.GetWeakPtr()));
 }
 
 PaintPreviewRecorderImpl::~PaintPreviewRecorderImpl() = default;
@@ -231,13 +228,14 @@ void PaintPreviewRecorderImpl::CapturePaintPreview(
                             std::move(response));
     return;
   }
-  base::AutoReset<bool>(&is_painting_preview_, true);
+  const base::AutoReset<bool> resetter(&is_painting_preview_, true);
   CapturePaintPreviewInternal(params, std::move(response), std::move(callback));
 }
 
 void PaintPreviewRecorderImpl::OnDestruct() {
   paint_preview_recorder_receiver_.reset();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void PaintPreviewRecorderImpl::BindPaintPreviewRecorder(
@@ -336,10 +334,9 @@ void PaintPreviewRecorderImpl::CapturePaintPreviewInternal(
   response->frame_offsets = gfx::Point(bounds.x(), bounds.y());
 
   cc::PaintRecorder recorder;
-  cc::PaintCanvas* canvas =
-      recorder.beginRecording(bounds.width(), bounds.height());
+  cc::PaintCanvas* canvas = recorder.beginRecording();
   canvas->save();
-  canvas->concat(SkMatrix::Translate(-bounds.x(), -bounds.y()));
+  canvas->translate(-bounds.x(), -bounds.y());
   canvas->SetPaintPreviewTracker(tracker.get());
 
   // Use time ticks manually rather than a histogram macro so as to;
@@ -384,10 +381,10 @@ void PaintPreviewRecorderImpl::CapturePaintPreviewInternal(
     return;
   }
 
-  // Convert the special value |0| to |absl::nullopt|.
-  absl::optional<size_t> max_capture_size;
+  // Convert the special value |0| to |std::nullopt|.
+  std::optional<size_t> max_capture_size;
   if (params->max_capture_size == 0) {
-    max_capture_size = absl::nullopt;
+    max_capture_size = std::nullopt;
   } else {
     max_capture_size = params->max_capture_size;
     auto* image_ctx = tracker->GetImageSerializationContext();

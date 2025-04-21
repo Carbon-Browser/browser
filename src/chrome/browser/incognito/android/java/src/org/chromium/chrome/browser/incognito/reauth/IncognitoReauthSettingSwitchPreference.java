@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.annotation.VisibleForTesting;
 import androidx.preference.PreferenceViewHolder;
 
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
@@ -17,9 +18,9 @@ import org.chromium.ui.base.ViewUtils;
 /**
  * A custom switch preference for the Incognito reauth lock setting.
  *
- * TODO(crbug.com/1249473): Espresso's AccessibilityChecks can fail if the clickable text is below
- * 48dp in height which is currently the case for this summary where we add a clickable action. The
- * surface of the clickable action needs to be revisited after discussing with the UX.
+ * <p>TODO(crbug.com/40197623): Espresso's AccessibilityChecks can fail if the clickable text is
+ * below 48dp in height which is currently the case for this summary where we add a clickable
+ * action. The surface of the clickable action needs to be revisited after discussing with the UX.
  */
 public class IncognitoReauthSettingSwitchPreference extends ChromeSwitchPreference {
     /** A boolean to indicate whether the preference should be interactable or not.*/
@@ -74,17 +75,19 @@ public class IncognitoReauthSettingSwitchPreference extends ChromeSwitchPreferen
         if (!mPreferenceInteractable) {
             TextView summary = (TextView) holder.findViewById(android.R.id.summary);
             summary.setEnabled(true);
-            summary.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    mLinkClickDelegate.run();
-                }
-            });
+            summary.setOnClickListener(
+                    new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            mLinkClickDelegate.run();
+                        }
+                    });
         }
     }
 
     @Override
-    protected void onClick() {
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public void onClick() {
         if (mPreferenceInteractable) {
             super.onClick();
         }

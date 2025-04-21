@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-import {IncognitoAvailability} from './constants.js';
+import type {IncognitoAvailability} from './constants.js';
 
 export interface BrowserProxy {
   getIncognitoAvailability(): Promise<IncognitoAvailability>;

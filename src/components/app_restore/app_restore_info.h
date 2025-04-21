@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,9 +61,6 @@ class COMPONENT_EXPORT(APP_RESTORE) AppRestoreInfo {
     virtual void OnWidgetInitialized(views::Widget* widget) {}
 
     // Called when `window` is ready to be parented to a valid desk container.
-    //
-    // For Lacros windows, called when `window` is associated with a Lacros
-    // window id.
     //
     // For ARC app windows, called once a window which was created without an
     // associated task is now associated with a ARC task.

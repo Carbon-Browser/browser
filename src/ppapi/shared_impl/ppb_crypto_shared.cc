@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,11 @@ namespace ppapi {
 
 namespace {
 
+// TODO(tsepez): this should be delcared UNSAFE_BUFFER_USAGE.
 void GetRandomBytes(char* buffer, uint32_t num_bytes) {
-  base::RandBytes(buffer, num_bytes);
+  base::RandBytes(base::as_writable_bytes(
+      // SAFETY: The caller is required to give a valid pointer and size pair.
+      UNSAFE_BUFFERS(base::span(buffer, num_bytes))));
 }
 
 const PPB_Crypto_Dev crypto_interface = {&GetRandomBytes};

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,9 @@ Tab* FakeTabSlotController::tab_at(int index) const {
   return tab_container_->GetTabAtModelIndex(index);
 }
 
-bool FakeTabSlotController::ToggleTabGroupCollapsedState(
+void FakeTabSlotController::ToggleTabGroupCollapsedState(
     const tab_groups::TabGroupId group,
-    ToggleTabGroupCollapsedStateOrigin origin) {
-  return false;
-}
+    ToggleTabGroupCollapsedStateOrigin origin) {}
 
 bool FakeTabSlotController::IsActiveTab(const Tab* tab) const {
   return active_tab_ == tab;
@@ -45,6 +43,16 @@ bool FakeTabSlotController::IsFocusInTabs() const {
   return false;
 }
 
+bool FakeTabSlotController::ShouldCompactLeadingEdge() const {
+  return true;
+}
+
+TabSlotController::Liveness FakeTabSlotController::ContinueDrag(
+    views::View* view,
+    const ui::LocatedEvent& event) {
+  return Liveness::kAlive;
+}
+
 bool FakeTabSlotController::EndDrag(EndDragReason reason) {
   return false;
 }
@@ -57,20 +65,12 @@ const Tab* FakeTabSlotController::GetAdjacentTab(const Tab* tab, int offset) {
   return nullptr;
 }
 
-bool FakeTabSlotController::ShowDomainInHoverCards() const {
-  return true;
-}
-
 bool FakeTabSlotController::HoverCardIsShowingForTab(Tab* tab) {
   return false;
 }
 
 int FakeTabSlotController::GetBackgroundOffset() const {
   return 0;
-}
-
-bool FakeTabSlotController::ShouldPaintAsActiveFrame() const {
-  return true;
 }
 
 int FakeTabSlotController::GetStrokeThickness() const {
@@ -89,25 +89,14 @@ SkColor FakeTabSlotController::GetTabSeparatorColor() const {
   return SK_ColorBLACK;
 }
 
-SkColor FakeTabSlotController::GetTabBackgroundColor(
-    TabActive active,
-    BrowserFrameActiveState active_state) const {
-  return active == TabActive::kActive ? tab_bg_color_active_
-                                      : tab_bg_color_inactive_;
-}
-
 SkColor FakeTabSlotController::GetTabForegroundColor(TabActive active) const {
   return active == TabActive::kActive ? tab_fg_color_active_
                                       : tab_fg_color_inactive_;
 }
 
-absl::optional<int> FakeTabSlotController::GetCustomBackgroundId(
+std::optional<int> FakeTabSlotController::GetCustomBackgroundId(
     BrowserFrameActiveState active_state) const {
-  return absl::nullopt;
-}
-
-gfx::Rect FakeTabSlotController::GetTabAnimationTargetBounds(const Tab* tab) {
-  return tab->bounds();
+  return std::nullopt;
 }
 
 std::u16string FakeTabSlotController::GetAccessibleTabName(
@@ -152,3 +141,27 @@ SkColor FakeTabSlotController::GetPaintedGroupColor(
 const Browser* FakeTabSlotController::GetBrowser() const {
   return nullptr;
 }
+
+int FakeTabSlotController::GetInactiveTabWidth() const {
+  return inactive_tab_width_;
+}
+
+bool FakeTabSlotController::IsFrameCondensed() const {
+  return false;
+}
+
+std::optional<int> FakeTabSlotController::GetModelIndexOf(
+    const TabSlotView* view) const {
+  return std::nullopt;
+}
+
+TabGroup* FakeTabSlotController::GetTabGroup(
+    const tab_groups::TabGroupId& group_id) const {
+  return nullptr;
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
+bool FakeTabSlotController::IsLockedForOnTask() {
+  return on_task_locked_;
+}
+#endif

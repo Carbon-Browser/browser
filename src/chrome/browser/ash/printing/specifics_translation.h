@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define CHROME_BROWSER_ASH_PRINTING_SPECIFICS_TRANSLATION_H_
 
 #include <memory>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "components/sync/protocol/printer_specifics.pb.h"
 
 namespace chromeos {
@@ -37,7 +37,7 @@ void MergePrinterToSpecifics(const chromeos::Printer& printer,
 // Combines |make| and |model| with a space to generate a make and model string.
 // If |model| already represents the make and model, the string is just |model|.
 // This is to prevent strings of the form '<make> <make> <model>'.
-std::string MakeAndModel(base::StringPiece make, base::StringPiece model);
+std::string MakeAndModel(std::string_view make, std::string_view model);
 
 }  // namespace ash
 

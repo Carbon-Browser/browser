@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,13 +49,13 @@ NonPersistentNotificationMetadata::From(const Metadata* metadata) {
 // static
 void NotificationCommon::OpenNotificationSettings(Profile* profile,
                                                   const GURL& origin) {
-// TODO(peter): Use the |origin| to direct the user to a more appropriate
-// settings page to toggle permission.
+  // TODO(peter): Use the |origin| to direct the user to a more appropriate
+  // settings page to toggle permission.
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS_ASH)
-// Android settings are handled through Java. Chrome OS settings are handled
-// through the tray's setting panel.
-NOTREACHED();
+  // Android settings are handled through Java. Chrome OS settings are handled
+  // through the tray's setting panel.
+  NOTREACHED();
 #else
   chrome::ScopedTabbedBrowserDisplayer browser_displayer(profile);
   chrome::ShowContentSettingsExceptions(browser_displayer.browser(),

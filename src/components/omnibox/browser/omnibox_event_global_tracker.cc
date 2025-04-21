@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,6 @@ void OmniboxEventGlobalTracker::OnURLOpened(OmniboxLog* log) {
   on_url_opened_callback_list_.Notify(log);
 }
 
-OmniboxEventGlobalTracker::OmniboxEventGlobalTracker() {}
+OmniboxEventGlobalTracker::OmniboxEventGlobalTracker() = default;
 
-OmniboxEventGlobalTracker::~OmniboxEventGlobalTracker() {}
+OmniboxEventGlobalTracker::~OmniboxEventGlobalTracker() = default;

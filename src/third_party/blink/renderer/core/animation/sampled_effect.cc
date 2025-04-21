@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ bool SampledEffect::WillNeverChange() const {
 
 void SampledEffect::RemoveReplacedInterpolations(
     const HashSet<PropertyHandle>& replaced_properties) {
-  auto* new_end = std::remove_if(
+  auto new_end = std::remove_if(
       interpolations_.begin(), interpolations_.end(),
       [&](const auto& interpolation) {
         return replaced_properties.Contains(interpolation->GetProperty());

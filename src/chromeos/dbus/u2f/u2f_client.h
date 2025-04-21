@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_DBUS_U2F_U2F_CLIENT_H_
 #define CHROMEOS_DBUS_U2F_U2F_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "base/functional/callback.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/u2f/u2f_interface.pb.h"
 
 namespace dbus {
@@ -57,8 +57,8 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_U2F) U2FClient {
   // that requires a power button press to register or sign with a credential is
   // enabled.
   virtual void IsU2FEnabled(
-      const u2f::IsUvpaaRequest& request,
-      DBusMethodCallback<u2f::IsUvpaaResponse> callback) = 0;
+      const u2f::IsU2fEnabledRequest& request,
+      DBusMethodCallback<u2f::IsU2fEnabledResponse> callback) = 0;
 
   // Registers a new credential.
   virtual void MakeCredential(
@@ -118,10 +118,5 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_U2F) U2FClient {
 };
 
 }  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::U2FClient;
-}  // namespace ash
 
 #endif  // CHROMEOS_DBUS_U2F_U2F_CLIENT_H_

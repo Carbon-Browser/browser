@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace storage {
 
-class RemoveOperationDelegate : public RecursiveOperationDelegate {
+class RemoveOperationDelegate final : public RecursiveOperationDelegate {
  public:
   RemoveOperationDelegate(FileSystemContext* file_system_context,
                           const FileSystemURL& url,
@@ -28,6 +28,7 @@ class RemoveOperationDelegate : public RecursiveOperationDelegate {
                         StatusCallback callback) override;
   void PostProcessDirectory(const FileSystemURL& url,
                             StatusCallback callback) override;
+  base::WeakPtr<RecursiveOperationDelegate> AsWeakPtr() override;
 
  private:
   void DidTryRemoveFile(base::File::Error error);

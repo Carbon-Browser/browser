@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "components/optimization_guide/core/model_util.h"
-#include "components/optimization_guide/core/model_validator.h"
 #include "components/optimization_guide/core/optimization_guide_switches.h"
 #include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/core/test_model_info_builder.h"
@@ -47,7 +46,7 @@ class ModelValidatorModelObserverTracker
  public:
   void AddObserverForOptimizationTargetModel(
       proto::OptimizationTarget optimization_target,
-      const absl::optional<proto::Any>& model_metadata,
+      const std::optional<proto::Any>& model_metadata,
       OptimizationTargetModelObserver* observer) override {
     if (optimization_target == proto::OPTIMIZATION_TARGET_MODEL_VALIDATION) {
       EXPECT_FALSE(model_validation_observer_);
@@ -110,7 +109,7 @@ class ModelValidatorExecutorTest : public testing::Test {
 
 TEST_F(ModelValidatorExecutorTest, ValidModel) {
   base::FilePath model_file_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &model_file_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &model_file_path);
   model_file_path = model_file_path.AppendASCII("components")
                         .AppendASCII("test")
                         .AppendASCII("data")
@@ -139,7 +138,7 @@ TEST_F(ModelValidatorExecutorTest, ValidModel) {
       1);
 }
 
-// TODO(crbug.com/1240561): Enable this invalid model handling test once tflite
+// TODO(crbug.com/40194301): Enable this invalid model handling test once tflite
 // error reporter msan failure is fixed.
 TEST_F(ModelValidatorExecutorTest, DISABLED_InvalidModel) {
   base::ScopedTempDir model_dir;

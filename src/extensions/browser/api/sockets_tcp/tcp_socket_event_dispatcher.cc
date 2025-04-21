@@ -1,18 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "extensions/browser/api/sockets_tcp/tcp_socket_event_dispatcher.h"
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/socket/tcp_socket.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/common/extension_id.h"
 #include "net/base/net_errors.h"
 
 namespace {
@@ -55,30 +61,30 @@ TCPSocketEventDispatcher::TCPSocketEventDispatcher(
   sockets_ = manager->data_;
 }
 
-TCPSocketEventDispatcher::~TCPSocketEventDispatcher() {}
+TCPSocketEventDispatcher::~TCPSocketEventDispatcher() = default;
 
-TCPSocketEventDispatcher::ReadParams::ReadParams() {}
+TCPSocketEventDispatcher::ReadParams::ReadParams() = default;
 
 TCPSocketEventDispatcher::ReadParams::ReadParams(const ReadParams& other) =
     default;
 
-TCPSocketEventDispatcher::ReadParams::~ReadParams() {}
+TCPSocketEventDispatcher::ReadParams::~ReadParams() = default;
 
-void TCPSocketEventDispatcher::OnSocketConnect(const std::string& extension_id,
+void TCPSocketEventDispatcher::OnSocketConnect(const ExtensionId& extension_id,
                                                int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
   StartSocketRead(extension_id, socket_id);
 }
 
-void TCPSocketEventDispatcher::OnSocketResume(const std::string& extension_id,
+void TCPSocketEventDispatcher::OnSocketResume(const ExtensionId& extension_id,
                                               int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
   StartSocketRead(extension_id, socket_id);
 }
 
-void TCPSocketEventDispatcher::StartSocketRead(const std::string& extension_id,
+void TCPSocketEventDispatcher::StartSocketRead(const ExtensionId& extension_id,
                                                int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
@@ -106,12 +112,14 @@ void TCPSocketEventDispatcher::StartRead(const ReadParams& params) {
       << "Socket has wrong owner.";
 
   // Don't start another read if the socket has been paused.
-  if (socket->paused())
+  if (socket->paused()) {
     return;
+  }
 
   int buffer_size = socket->buffer_size();
-  if (buffer_size <= 0)
+  if (buffer_size <= 0) {
     buffer_size = kDefaultBufferSize;
+  }
   socket->Read(buffer_size,
                base::BindOnce(&TCPSocketEventDispatcher::ReadCallback, params));
 }
@@ -170,8 +178,9 @@ void TCPSocketEventDispatcher::ReadCallback(
       // "resumes" it.
       ResumableTCPSocket* socket =
           params.sockets->Get(params.extension_id, params.socket_id);
-      if (socket)
+      if (socket) {
         socket->set_paused(true);
+      }
     }
   }
 }
@@ -182,24 +191,36 @@ void TCPSocketEventDispatcher::PostEvent(const ReadParams& params,
   DCHECK_CURRENTLY_ON(params.thread_id);
 
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&DispatchEvent, params.browser_context_id,
-                                params.extension_id, std::move(event)));
+      FROM_HERE,
+      base::BindOnce(&DispatchEvent,
+                     base::UnsafeDanglingUntriaged(params.browser_context_id),
+                     params.extension_id, std::move(event)));
 }
 
 // static
 void TCPSocketEventDispatcher::DispatchEvent(void* browser_context_id,
-                                             const std::string& extension_id,
+                                             const ExtensionId& extension_id,
                                              std::unique_ptr<Event> event) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
+  if (!ExtensionsBrowserClient::Get()->IsValidContext(browser_context_id)) {
+    return;
+  }
+
   content::BrowserContext* context =
       reinterpret_cast<content::BrowserContext*>(browser_context_id);
-  if (!extensions::ExtensionsBrowserClient::Get()->IsValidContext(context))
-    return;
-
-  EventRouter* event_router = EventRouter::Get(context);
-  if (event_router)
-    event_router->DispatchEventToExtension(extension_id, std::move(event));
+  EventRouter* router = EventRouter::Get(context);
+  if (router) {
+#if BUILDFLAG(IS_CHROMEOS)
+    // Terminal app is the only non-extension to use sockets
+    // (crbug.com/1350479).
+    if (extension_id == kCrOSTerminal) {
+      router->DispatchEventToURL(GURL(extension_id), std::move(event));
+      return;
+    }
+#endif
+    router->DispatchEventToExtension(extension_id, std::move(event));
+  }
 }
 
 }  // namespace api

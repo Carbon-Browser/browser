@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,8 @@
 
 namespace {
 
-using base::TimeTicks;
-using blink::CanvasRenderingContext;
-using blink::CanvasResourceProvider;
+using ::base::TimeTicks;
+using ::blink::CanvasRenderingContext;
 
 const char* const kHostTypeName_Canvas = ".Canvas";
 const char* const kHostTypeName_OffscreenCanvas = ".OffscreenCanvas";
@@ -81,7 +80,8 @@ RenderingContextDescriptionCodec::RenderingContextDescriptionCodec(
     return;
 
   key_.set<IsOffscreenField>(context->Host()->IsOffscreenCanvas());
-  key_.set<IsAcceleratedField>(context->IsAccelerated());
+  key_.set<IsAcceleratedField>(context->Host()->GetRasterMode() ==
+                               blink::RasterMode::kGPU);
   key_.set<RenderingAPIField>(
       static_cast<uint32_t>(context->GetRenderingAPI()));
   // The padding field ensures at least one bit is set in the key in order
@@ -118,7 +118,6 @@ const char* RenderingContextDescriptionCodec::GetRenderingAPIName() const {
       return kRenderingAPIName_ImageBitmap;
     default:
       NOTREACHED();
-      return "";
   }
 }
 
@@ -140,8 +139,9 @@ void CanvasPerformanceMonitor::CurrentTaskDrawsToContext(
     // canvases per render task.
     measure_current_task_ = !(task_counter_++ % kSamplingProbabilityInv);
 
-    if (LIKELY(!measure_current_task_))
+    if (!measure_current_task_) [[likely]] {
       return;
+    }
 
     call_type_ = CallType::kOther;
     if (context->Host()) {
@@ -153,12 +153,13 @@ void CanvasPerformanceMonitor::CurrentTaskDrawsToContext(
     // TODO(crbug.com/1206028): Add support for CallType::kUserInput
   }
 
-  if (LIKELY(!measure_current_task_))
+  if (!measure_current_task_) [[likely]] {
     return;
+  }
 
   RenderingContextDescriptionCodec desc(context);
 
-  if (LIKELY(desc.IsValid())) {
+  if (desc.IsValid()) [[likely]] {
     rendering_context_descriptions_.insert(desc.GetKey());
   }
 }
@@ -182,7 +183,7 @@ void CanvasPerformanceMonitor::RecordMetrics(TimeTicks start_time,
   size_t blink_gc_alloc_kb =
       ProcessHeap::TotalAllocatedObjectSize() / kKiloByte;
 
-  while (!rendering_context_descriptions_.IsEmpty()) {
+  while (!rendering_context_descriptions_.empty()) {
     RenderingContextDescriptionCodec desc(
         rendering_context_descriptions_.TakeAny());
 
@@ -290,7 +291,6 @@ void CanvasPerformanceMonitor::RecordMetrics(TimeTicks start_time,
                                  static_cast<int>(blink_gc_alloc_kb));
     }
   }
-
 }
 
 void CanvasPerformanceMonitor::DidProcessTask(TimeTicks start_time,

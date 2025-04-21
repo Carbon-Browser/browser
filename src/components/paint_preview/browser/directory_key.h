@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 #define COMPONENTS_PAINT_PREVIEW_BROWSER_DIRECTORY_KEY_H_
 
 #include <string>
-
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace paint_preview {
 
@@ -15,7 +14,7 @@ namespace paint_preview {
 class DirectoryKey {
  public:
   DirectoryKey() = default;
-  explicit DirectoryKey(base::StringPiece ascii_dirname)
+  explicit DirectoryKey(std::string_view ascii_dirname)
       : ascii_dirname_(ascii_dirname) {}
   ~DirectoryKey() = default;
 

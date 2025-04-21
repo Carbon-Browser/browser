@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/policy/reporting/arc_app_install_event_log_manager.h"
 
@@ -12,6 +17,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_string_value_serializer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/gmock_move_support.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
@@ -24,7 +30,7 @@
 #include "chrome/browser/ash/policy/reporting/install_event_log_util.h"
 #include "chrome/browser/profiles/reporting_util.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "components/policy/core/common/cloud/realtime_reporting_job_configuration.h"
@@ -166,8 +172,7 @@ class ArcAppInstallEventLogManagerTest : public testing::Test {
         log_file_path_(profile_.GetPath().Append(kLogFileName)),
         packages_{std::begin(kPackageNames), std::end(kPackageNames)},
         scoped_fake_statistics_provider_(
-            std::make_unique<
-                chromeos::system::ScopedFakeStatisticsProvider>()) {}
+            std::make_unique<ash::system::ScopedFakeStatisticsProvider>()) {}
 
   // testing::Test:
   void SetUp() override {
@@ -230,17 +235,17 @@ class ArcAppInstallEventLogManagerTest : public testing::Test {
   }
 
   void ExpectUploadAndCaptureCallback(
-      CloudPolicyClient::StatusCallback* callback) {
+      CloudPolicyClient::ResultCallback* callback) {
     events_value_.clear();
     BuildReport();
 
     EXPECT_CALL(cloud_policy_client_,
-                UploadAppInstallReport_(MatchEvents(&events_value_), _))
+                UploadAppInstallReport(MatchEvents(&events_value_), _))
         .WillOnce(MoveArg<1>(callback));
   }
 
-  void ReportUploadSuccess(CloudPolicyClient::StatusCallback callback) {
-    std::move(callback).Run(true /* success */);
+  void ReportUploadSuccess(CloudPolicyClient::ResultCallback callback) {
+    std::move(callback).Run(CloudPolicyClient::Result(DM_STATUS_SUCCESS));
     FlushNonDelayedTasks();
   }
 
@@ -249,10 +254,10 @@ class ArcAppInstallEventLogManagerTest : public testing::Test {
     BuildReport();
 
     EXPECT_CALL(cloud_policy_client_,
-                UploadAppInstallReport_(MatchEvents(&events_value_), _))
-        .WillOnce(Invoke([](base::Value::Dict&,
-                            CloudPolicyClient::StatusCallback& callback) {
-          std::move(callback).Run(true /* success */);
+                UploadAppInstallReport(MatchEvents(&events_value_), _))
+        .WillOnce(Invoke([](base::Value::Dict,
+                            CloudPolicyClient::ResultCallback callback) {
+          std::move(callback).Run(CloudPolicyClient::Result(DM_STATUS_SUCCESS));
         }));
   }
 
@@ -301,13 +306,13 @@ class ArcAppInstallEventLogManagerTest : public testing::Test {
   std::unique_ptr<base::ScopedMockTimeMessageLoopTaskRunner>
       scoped_main_task_runner_;
 
-  base::TestSimpleTaskRunner* log_task_runner_ = nullptr;
-  base::TestMockTimeTaskRunner* main_task_runner_ = nullptr;
+  raw_ptr<base::TestSimpleTaskRunner> log_task_runner_ = nullptr;
+  raw_ptr<base::TestMockTimeTaskRunner> main_task_runner_ = nullptr;
 
   const base::FilePath log_file_path_;
   const std::set<std::string> packages_;
   base::Value::Dict events_value_;
-  std::unique_ptr<chromeos::system::ScopedFakeStatisticsProvider>
+  std::unique_ptr<ash::system::ScopedFakeStatisticsProvider>
       scoped_fake_statistics_provider_;
 
   em::AppInstallReportLogEvent event_;
@@ -588,7 +593,7 @@ TEST_F(ArcAppInstallEventLogManagerTest, RequestUploadAddUpload) {
   FastForwardTo(kExpeditedUploadDelay - kOneMs);
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
 
-  CloudPolicyClient::StatusCallback upload_callback;
+  CloudPolicyClient::ResultCallback upload_callback;
   ExpectUploadAndCaptureCallback(&upload_callback);
   FastForwardTo(kExpeditedUploadDelay);
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
@@ -631,7 +636,7 @@ TEST_F(ArcAppInstallEventLogManagerTest, RequestUploadAddExpeditedUpload) {
   FastForwardTo(kExpeditedUploadDelay - kOneMs);
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
 
-  CloudPolicyClient::StatusCallback upload_callback;
+  CloudPolicyClient::ResultCallback upload_callback;
   ExpectUploadAndCaptureCallback(&upload_callback);
   FastForwardTo(kExpeditedUploadDelay);
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
@@ -682,7 +687,7 @@ TEST_F(ArcAppInstallEventLogManagerTest, RequestExpeditedUploadAddUpload) {
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
   EXPECT_FALSE(base::PathExists(log_file_path_));
 
-  CloudPolicyClient::StatusCallback upload_callback;
+  CloudPolicyClient::ResultCallback upload_callback;
   ExpectUploadAndCaptureCallback(&upload_callback);
   FastForwardTo(offset + kExpeditedUploadDelay);
   Mock::VerifyAndClearExpectations(&cloud_policy_client_);
@@ -730,10 +735,12 @@ TEST_F(ArcAppInstallEventLogManagerTest, Clear) {
   log.Add(kPackageNames[0], event_);
   log.Store();
 
-  base::ListValue list;
+  base::Value::List list;
   list.Append("test");
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsRequested, list);
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsPending, list);
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsRequested,
+                               list.Clone());
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsPending,
+                               list.Clone());
 
   ArcAppInstallEventLogManager::Clear(&log_task_runner_wrapper_, &profile_);
   EXPECT_TRUE(profile_.GetPrefs()
@@ -764,10 +771,12 @@ TEST_F(ArcAppInstallEventLogManagerTest, RunClearRun) {
   FlushNonDelayedTasks();
   VerifyLogFile();
 
-  base::ListValue list;
+  base::Value::List list;
   list.Append("test");
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsRequested, list);
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsPending, list);
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsRequested,
+                               list.Clone());
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsPending,
+                               list.Clone());
 
   ArcAppInstallEventLogManager::Clear(&log_task_runner_wrapper_, &profile_);
   EXPECT_TRUE(profile_.GetPrefs()

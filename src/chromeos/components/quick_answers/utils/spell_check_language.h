@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,12 +52,16 @@ class SpellCheckLanguage : public QuickAnswersStateObserver {
  private:
   void InitializeSpellCheckService();
 
-  void OnSimpleURLLoaderComplete(std::unique_ptr<std::string> response_body);
+  void OnSimpleURLLoaderComplete(base::FilePath response_path);
+
+  void OnDictionaryDirectoryExistsComplete(bool directory_exists);
 
   void OnDictionaryCreated(
       mojo::PendingRemote<mojom::SpellCheckDictionary> dictionary);
 
   void MaybeRetryInitialize();
+
+  void OnFileRemovedForRetry(bool file_removed);
 
   // The reply points for PostTaskAndReplyWithResult.
   void OnPathExistsComplete(bool path_exists);

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,32 @@
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_SIGNIN_REAUTH_UI_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/web_ui_controller.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 
 class SigninReauthViewController;
+class SigninReauthUI;
 
 namespace content {
 class WebUI;
 class WebUIDataSource;
 }  // namespace content
+
+class SigninReauthUIConfig
+    : public content::DefaultWebUIConfig<SigninReauthUI> {
+ public:
+  SigninReauthUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUISigninReauthHost) {}
+
+  // content::WebUIConfig:
+  bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
+};
 
 // WebUI controller for the signin reauth dialog.
 //
@@ -28,8 +44,8 @@ class WebUIDataSource;
 // Currently this dialog is only used for account password storage opt-in that
 // satisfies both of those conditions.
 //
-// Contact chrome-signin@chromium.org if you want to reuse this dialog for other
-// reauth use-cases.
+// Contact chrome-signin-team@google.com if you want to reuse this dialog for
+// other reauth use-cases.
 class SigninReauthUI : public content::WebUIController {
  public:
   explicit SigninReauthUI(content::WebUI* web_ui);
@@ -49,7 +65,7 @@ class SigninReauthUI : public content::WebUIController {
   // of the string to the |ids| in order to later pass it to
   // SigninReauthHandler.
   void AddStringResource(content::WebUIDataSource* source,
-                         base::StringPiece name,
+                         std::string_view name,
                          int ids);
 
   // For consent auditing.

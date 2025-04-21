@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include "chrome/browser/page_load_metrics/observers/from_gws_page_load_metrics_observer.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer_delegate.h"
 #include "components/page_load_metrics/browser/page_load_metrics_util.h"
+#include "components/page_load_metrics/google/browser/google_url_util.h"
 #include "content/public/browser/navigation_handle.h"
 #include "net/http/http_response_headers.h"
+#include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
@@ -27,8 +29,6 @@ const char kHistogramServiceWorkerParseStartForwardBackNoStore[] =
 const char kBackgroundHistogramServiceWorkerParseStart[] =
     "PageLoad.Clients.ServiceWorker2.ParseTiming.NavigationToParseStart."
     "Background";
-const char kHistogramServiceWorkerFirstInputDelay[] =
-    "PageLoad.Clients.ServiceWorker2.InteractiveTiming.FirstInputDelay3";
 const char kHistogramServiceWorkerFirstPaint[] =
     "PageLoad.Clients.ServiceWorker2.PaintTiming.NavigationToFirstPaint";
 const char kHistogramServiceWorkerFirstContentfulPaint[] =
@@ -40,6 +40,17 @@ const char kHistogramServiceWorkerFirstContentfulPaintForwardBack[] =
 const char kHistogramServiceWorkerFirstContentfulPaintForwardBackNoStore[] =
     "PageLoad.Clients.ServiceWorker2.PaintTiming."
     "NavigationToFirstContentfulPaint.LoadType.ForwardBackNavigation.NoStore";
+const char kHistogramServiceWorkerFirstContentfulPaintSkippableFetchHandler[] =
+    "PageLoad.Clients.ServiceWorker2.PaintTiming."
+    "NavigationToFirstContentfulPaint.SkippableFetchHandler";
+const char
+    kHistogramServiceWorkerFirstContentfulPaintNonSkippableFetchHandler[] =
+        "PageLoad.Clients.ServiceWorker2.PaintTiming."
+        "NavigationToFirstContentfulPaint.NonSkippableFetchHandler";
+const char
+    kHistogramServiceWorkerFirstContentfulPaintRaceNetworkRequestEligible[] =
+        "PageLoad.Clients.ServiceWorker2.PaintTiming."
+        "NavigationToFirstContentfulPaint.RaceNetworkRequestEligible";
 const char kBackgroundHistogramServiceWorkerFirstContentfulPaint[] =
     "PageLoad.Clients.ServiceWorker2.PaintTiming."
     "NavigationToFirstContentfulPaint.Background";
@@ -54,6 +65,20 @@ const char kHistogramServiceWorkerLoad[] =
 const char kHistogramServiceWorkerLargestContentfulPaint[] =
     "PageLoad.Clients.ServiceWorker2.PaintTiming."
     "NavigationToLargestContentfulPaint2";
+const char
+    kHistogramServiceWorkerLargestContentfulPaintSkippableFetchHandler[] =
+        "PageLoad.Clients.ServiceWorker2.PaintTiming."
+        "NavigationToLargestContentfulPaint2.SkippableFetchHandler";
+const char
+    kHistogramServiceWorkerLargestContentfulPaintNonSkippableFetchHandler[] =
+        "PageLoad.Clients.ServiceWorker2.PaintTiming."
+        "NavigationToLargestContentfulPaint2.NonSkippableFetchHandler";
+// Record LCP when the page is eligible for RaceNetworkRequest.
+// note: This doesn't mean RaceNetworkRequest is actually dispatched.
+const char
+    kHistogramServiceWorkerLargestContentfulPaintRaceNetworkRequestEligible[] =
+        "PageLoad.Clients.ServiceWorker2.PaintTiming."
+        "NavigationToLargestContentfulPaint2.RaceNetworkRequestEligible";
 
 const char kHistogramServiceWorkerParseStartSearch[] =
     "PageLoad.Clients.ServiceWorker2.ParseTiming.NavigationToParseStart.search";
@@ -90,6 +115,16 @@ const char kHistogramNoServiceWorkerFirstContentfulPaintDocs[] =
     "PageLoad.Clients.NoServiceWorker2.PaintTiming."
     "NavigationToFirstContentfulPaint.docs";
 
+// The naming of the following histogram does not follow typical convention of
+// other histograms. This is because this metrics is ServiceWorker static
+// routing API related, and is intended to be consistent with
+// `ServiceWorker.RouterEvaluator.*` metrics, which are recorded in
+// //chrome/browser/page_load_metrics/observers/
+// service_worker_page_load_metrics_observer.cc. Since we need to record this
+// metrics on complete, we are recording them here.
+const char kHistogramServiceWorkerSubresourceTotalRouterEvaluationTime[] =
+    "ServiceWorker.RouterEvaluator.SubresourceTotalEvaluationTime";
+
 }  // namespace internal
 
 namespace {
@@ -102,9 +137,23 @@ bool IsForwardBackLoad(ui::PageTransition transition) {
   return transition & ui::PAGE_TRANSITION_FORWARD_BACK;
 }
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class ServiceWorkerResourceLoadStatus {
+  kMainResourceFallbackAndSubResourceFallback = 0,
+  kMainResourceFallbackAndSubResourceNotFallback = 1,
+  kMainResourceFallbackAndSubResourceMixed = 2,
+  kMainResourceFallbackAndNoSubResource = 3,
+  kMainResourceNotFallbackAndSubResourceFallback = 4,
+  kMainResourceNotFallbackAndSubResourceNotFallback = 5,
+  kMainResourceNotFallbackAndSubResourceMixed = 6,
+  kMainResourceNotFallbackAndNoSubResource = 7,
+};
+
 }  // namespace
 
-ServiceWorkerPageLoadMetricsObserver::ServiceWorkerPageLoadMetricsObserver() {}
+ServiceWorkerPageLoadMetricsObserver::ServiceWorkerPageLoadMetricsObserver() =
+    default;
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 ServiceWorkerPageLoadMetricsObserver::OnFencedFramesStart(
@@ -112,6 +161,15 @@ ServiceWorkerPageLoadMetricsObserver::OnFencedFramesStart(
     const GURL& currently_committed_url) {
   // All events this class is interested in are preprocessed and forwarded at
   // PageLoadTracker and observer doesn't need to care for forwarding.
+  return STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+ServiceWorkerPageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // As this class are interested in evaluating the performance gain through the
+  // service workers, we don't count in prerendered metrics.
   return STOP_OBSERVING;
 }
 
@@ -202,6 +260,25 @@ void ServiceWorkerPageLoadMetricsObserver::OnFirstContentfulPaintInPage(
         internal::kHistogramServiceWorkerFirstContentfulPaintDocs,
         timing.paint_timing->first_contentful_paint.value());
   }
+
+  if (IsServiceWorkerFetchHandlerSkippable()) {
+    PAGE_LOAD_HISTOGRAM(
+        internal::
+            kHistogramServiceWorkerFirstContentfulPaintSkippableFetchHandler,
+        timing.paint_timing->first_contentful_paint.value());
+  } else {
+    PAGE_LOAD_HISTOGRAM(
+        internal::
+            kHistogramServiceWorkerFirstContentfulPaintNonSkippableFetchHandler,
+        timing.paint_timing->first_contentful_paint.value());
+  }
+
+  if (IsServiceWorkerEligibleForRaceNetworkRequest()) {
+    PAGE_LOAD_HISTOGRAM(
+        internal::
+            kHistogramServiceWorkerFirstContentfulPaintRaceNetworkRequestEligible,
+        timing.paint_timing->first_contentful_paint.value());
+  }
 }
 
 void ServiceWorkerPageLoadMetricsObserver::OnDomContentLoadedEventStart(
@@ -257,12 +334,6 @@ void ServiceWorkerPageLoadMetricsObserver::OnFirstInputInPage(
           timing.interactive_timing->first_input_timestamp, GetDelegate())) {
     return;
   }
-
-  // Copied from the UmaPageLoadMetricsObserver implementation.
-  UMA_HISTOGRAM_CUSTOM_TIMES(
-      internal::kHistogramServiceWorkerFirstInputDelay,
-      timing.interactive_timing->first_input_delay.value(),
-      base::Milliseconds(1), base::Seconds(60), 50);
 }
 
 void ServiceWorkerPageLoadMetricsObserver::OnParseStart(
@@ -334,11 +405,174 @@ void ServiceWorkerPageLoadMetricsObserver::RecordTimingHistograms() {
           all_frames_largest_contentful_paint.Time(), GetDelegate())) {
     PAGE_LOAD_HISTOGRAM(internal::kHistogramServiceWorkerLargestContentfulPaint,
                         all_frames_largest_contentful_paint.Time().value());
+    if (IsServiceWorkerFetchHandlerSkippable()) {
+      PAGE_LOAD_HISTOGRAM(
+          internal::
+              kHistogramServiceWorkerLargestContentfulPaintSkippableFetchHandler,
+          all_frames_largest_contentful_paint.Time().value());
+    } else {
+      PAGE_LOAD_HISTOGRAM(
+          internal::
+              kHistogramServiceWorkerLargestContentfulPaintNonSkippableFetchHandler,
+          all_frames_largest_contentful_paint.Time().value());
+    }
+    if (IsServiceWorkerEligibleForRaceNetworkRequest()) {
+      PAGE_LOAD_HISTOGRAM(
+          internal::
+              kHistogramServiceWorkerLargestContentfulPaintRaceNetworkRequestEligible,
+          all_frames_largest_contentful_paint.Time().value());
+    }
   }
+  RecordSubresourceLoad();
 }
 
 bool ServiceWorkerPageLoadMetricsObserver::IsServiceWorkerControlled() {
   return (GetDelegate().GetMainFrameMetadata().behavior_flags &
           blink::LoadingBehaviorFlag::
               kLoadingBehaviorServiceWorkerControlled) != 0;
+}
+
+bool ServiceWorkerPageLoadMetricsObserver::
+    IsServiceWorkerFetchHandlerSkippable() {
+  DCHECK(IsServiceWorkerControlled());
+  return (GetDelegate().GetMainFrameMetadata().behavior_flags &
+          blink::LoadingBehaviorFlag::
+              kLoadingBehaviorServiceWorkerFetchHandlerSkippable) != 0;
+}
+
+bool ServiceWorkerPageLoadMetricsObserver::
+    IsServiceWorkerEligibleForRaceNetworkRequest() {
+  CHECK(IsServiceWorkerControlled());
+  return (GetDelegate().GetMainFrameMetadata().behavior_flags &
+          blink::LoadingBehaviorFlag::
+              kLoadingBehaviorServiceWorkerRaceNetworkRequest);
+}
+
+void ServiceWorkerPageLoadMetricsObserver::RecordSubresourceLoad() {
+  const auto& optional_metrics = GetDelegate().GetSubresourceLoadMetrics();
+  if (!optional_metrics) {
+    return;
+  }
+  auto metrics = *optional_metrics;
+  // serviceworker's subresource load must always be smaller than
+  // or equals to total subresource loads.
+  if (metrics.number_of_subresource_loads_handled_by_service_worker >
+      metrics.number_of_subresources_loaded) {
+    // If the data is not set or invalid, it should not be worth recording.
+    return;
+  }
+
+  ServiceWorkerResourceLoadStatus status;
+  if (GetDelegate().GetMainFrameMetadata().behavior_flags &
+      blink::LoadingBehaviorFlag::
+          kLoadingBehaviorServiceWorkerMainResourceFetchFallback) {
+    if (metrics.number_of_subresource_loads_handled_by_service_worker == 0) {
+      status = ServiceWorkerResourceLoadStatus::
+          kMainResourceFallbackAndSubResourceFallback;
+    } else if (metrics.number_of_subresources_loaded ==
+               metrics.number_of_subresource_loads_handled_by_service_worker) {
+      if (metrics.number_of_subresources_loaded == 0) {
+        status = ServiceWorkerResourceLoadStatus::
+            kMainResourceFallbackAndSubResourceNotFallback;
+      } else {
+        status = ServiceWorkerResourceLoadStatus::
+            kMainResourceFallbackAndNoSubResource;
+      }
+    } else {
+      status = ServiceWorkerResourceLoadStatus::
+          kMainResourceFallbackAndSubResourceMixed;
+    }
+  } else {
+    if (metrics.number_of_subresource_loads_handled_by_service_worker == 0) {
+      status = ServiceWorkerResourceLoadStatus::
+          kMainResourceNotFallbackAndSubResourceFallback;
+    } else if (metrics.number_of_subresources_loaded ==
+               metrics.number_of_subresource_loads_handled_by_service_worker) {
+      if (metrics.number_of_subresources_loaded == 0) {
+        status = ServiceWorkerResourceLoadStatus::
+            kMainResourceNotFallbackAndSubResourceNotFallback;
+      } else {
+        status = ServiceWorkerResourceLoadStatus::
+            kMainResourceNotFallbackAndNoSubResource;
+      }
+    } else {
+      status = ServiceWorkerResourceLoadStatus::
+          kMainResourceNotFallbackAndSubResourceMixed;
+    }
+  }
+
+  // We calculate the number of fallbacks here.
+  uint32_t number_of_fallback =
+      metrics.number_of_subresources_loaded -
+      metrics.number_of_subresource_loads_handled_by_service_worker;
+  int64_t fallback_ratio = -1;
+  if (metrics.number_of_subresources_loaded > 0) {
+    fallback_ratio =
+        100 * number_of_fallback / metrics.number_of_subresources_loaded;
+  }
+
+  ukm::builders::ServiceWorker_OnLoad builder(
+      GetDelegate().GetPageUkmSourceId());
+  builder.SetMainAndSubResourceLoadLocation(static_cast<int64_t>(status))
+      .SetTotalSubResourceLoad(ukm::GetExponentialBucketMinForCounts1000(
+          metrics.number_of_subresources_loaded))
+      .SetTotalSubResourceFallback(
+          ukm::GetExponentialBucketMinForCounts1000(number_of_fallback))
+      .SetSubResourceFallbackRatio(fallback_ratio);
+  if (metrics.service_worker_subresource_load_metrics) {
+    const auto& sw_metrics = *metrics.service_worker_subresource_load_metrics;
+    builder.SetImageHandled(sw_metrics.image_handled)
+        .SetImageFallback(sw_metrics.image_fallback)
+        .SetCSSStyleSheetHandled(sw_metrics.css_handled)
+        .SetCSSStyleSheetFallback(sw_metrics.css_fallback)
+        .SetScriptHandled(sw_metrics.script_handled)
+        .SetScriptFallback(sw_metrics.script_fallback)
+        .SetFontHandled(sw_metrics.font_handled)
+        .SetFontFallback(sw_metrics.font_fallback)
+        .SetSVGDocumentHandled(sw_metrics.svg_handled)
+        .SetSVGDocumentFallback(sw_metrics.svg_fallback)
+        .SetXSLStyleSheetHandled(sw_metrics.xsl_handled)
+        .SetXSLStyleSheetFallback(sw_metrics.xsl_fallback)
+        .SetLinkPrefetchHandled(sw_metrics.link_prefetch_handled)
+        .SetLinkPrefetchFallback(sw_metrics.link_prefetch_fallback)
+        .SetTextTrackHandled(sw_metrics.text_track_handled)
+        .SetTextTrackFallback(sw_metrics.text_track_fallback)
+        .SetAudioHandled(sw_metrics.audio_handled)
+        .SetAudioFallback(sw_metrics.audio_fallback)
+        .SetVideoHandled(sw_metrics.video_handled)
+        .SetVideoFallback(sw_metrics.video_fallback)
+        .SetManifestHandled(sw_metrics.manifest_handled)
+        .SetManifestFallback(sw_metrics.manifest_fallback)
+        .SetSpeculationRulesHandled(sw_metrics.speculation_rules_handled)
+        .SetSpeculationRulesFallback(sw_metrics.speculation_rules_fallback)
+        .SetDictionaryHandled(sw_metrics.dictionary_handled)
+        .SetDictionaryFallback(sw_metrics.dictionary_fallback)
+        .SetMatchedCacheRouterSourceCount(
+            ukm::GetExponentialBucketMinForCounts1000(
+                sw_metrics.matched_cache_router_source_count))
+        .SetMatchedFetchEventRouterSourceCount(
+            ukm::GetExponentialBucketMinForCounts1000(
+                sw_metrics.matched_fetch_event_router_source_count))
+        .SetMatchedNetworkRouterSourceCount(
+            ukm::GetExponentialBucketMinForCounts1000(
+                sw_metrics.matched_network_router_source_count))
+        .SetMatchedRaceNetworkAndFetchRouterSourceCount(
+            ukm::GetExponentialBucketMinForCounts1000(
+                sw_metrics.matched_race_network_and_fetch_router_source_count));
+
+    if (!sw_metrics.total_router_evaluation_time_for_subresources.is_zero()) {
+      builder.SetTotalRouterEvaluationTime(
+          sw_metrics.total_router_evaluation_time_for_subresources
+              .InMicroseconds());
+      PAGE_LOAD_SHORT_HISTOGRAM(
+          internal::kHistogramServiceWorkerSubresourceTotalRouterEvaluationTime,
+          sw_metrics.total_router_evaluation_time_for_subresources);
+    }
+
+    if (!sw_metrics.total_cache_lookup_time_for_subresources.is_zero()) {
+      builder.SetTotalCacheLookupTime(
+          sw_metrics.total_cache_lookup_time_for_subresources.InMilliseconds());
+    }
+  }
+  builder.Record(ukm::UkmRecorder::Get());
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 bool ManagedState::Matches(const NetworkTypePattern& pattern) const {
   return pattern.MatchesType(type());
@@ -73,13 +73,14 @@ const DeviceState* ManagedState::AsDeviceState() const {
   return nullptr;
 }
 
-bool ManagedState::InitialPropertiesReceived(const base::Value& properties) {
+bool ManagedState::InitialPropertiesReceived(
+    const base::Value::Dict& properties) {
   return false;
 }
 
-void ManagedState::GetStateProperties(base::Value* dictionary) const {
-  dictionary->SetKey(shill::kNameProperty, base::Value(name()));
-  dictionary->SetKey(shill::kTypeProperty, base::Value(type()));
+void ManagedState::GetStateProperties(base::Value::Dict* dictionary) const {
+  dictionary->Set(shill::kNameProperty, name());
+  dictionary->Set(shill::kTypeProperty, type());
 }
 
 bool ManagedState::ManagedStatePropertyChanged(const std::string& key,
@@ -155,4 +156,4 @@ bool ManagedState::GetUInt32Value(const std::string& key,
   return true;
 }
 
-}  // namespace chromeos
+}  // namespace ash

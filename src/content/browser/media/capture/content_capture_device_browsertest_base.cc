@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "content/browser/media/capture/frame_sink_video_capture_device.h"
@@ -147,8 +147,8 @@ void ContentCaptureDeviceBrowserTestBase::
   device_->AllocateAndStartWithReceiver(SnapshotCaptureParams(),
                                         capture_stack()->CreateFrameReceiver());
   RunUntilIdle();
-  EXPECT_TRUE(capture_stack()->started());
-  EXPECT_FALSE(capture_stack()->error_occurred());
+  EXPECT_TRUE(capture_stack()->Started());
+  EXPECT_FALSE(capture_stack()->ErrorOccurred());
   capture_stack()->ExpectNoLogMessages();
 
   WaitForFirstFrame();
@@ -198,11 +198,6 @@ bool ContentCaptureDeviceBrowserTestBase::IsCrossSiteCaptureTest() const {
 }
 
 void ContentCaptureDeviceBrowserTestBase::SetUp() {
-  // IMPORTANT: Do not add the switches::kUseGpuInTests command line flag: It
-  // causes the tests to take 12+ seconds just to spin up a render process on
-  // debug builds. It can also cause test failures in MSAN builds, or exacerbate
-  // OOM situations on highly-loaded machines.
-
   // Screen capture requires readback from compositor output.
   EnablePixelOutput();
 
@@ -217,8 +212,6 @@ void ContentCaptureDeviceBrowserTestBase::SetUp() {
 
 void ContentCaptureDeviceBrowserTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
-  ContentBrowserTest::SetUpCommandLine(command_line);
-
   IsolateAllSitesForTesting(command_line);
 
   // Use a small window size to reduce test running time (since screen captures

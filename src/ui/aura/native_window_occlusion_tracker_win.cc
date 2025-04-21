@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,18 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_util_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/scoped_gdi_object.h"
-#include "base/win/windows_version.h"
 #include "ui/aura/window_occlusion_tracker.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/ui_base_features.h"
@@ -35,7 +32,10 @@ namespace aura {
 namespace {
 
 // ~16 ms = time between frames when frame rate is 60 FPS.
-const base::TimeDelta kUpdateOcclusionDelay = base::Milliseconds(16);
+const base::TimeDelta kUpdateOcclusionDelayMin = base::Milliseconds(16);
+
+// ~100 ms = time between frames when frame rate is 10 FPS.
+const base::TimeDelta kUpdateOcclusionDelayMax = base::Milliseconds(100);
 
 // This global variable can be accessed only on main thread.
 NativeWindowOcclusionTrackerWin* g_tracker = nullptr;
@@ -98,7 +98,6 @@ void NativeWindowOcclusionTrackerWin::Enable(Window* window) {
   DCHECK(window->IsRootWindow());
   if (window->HasObserver(this)) {
     NOTREACHED() << "window shouldn't already be observing occlusion tracker";
-    return;
   }
   // Add this as an observer so that we can be notified
   // when it's no longer true that all windows are minimized, and when the
@@ -168,7 +167,8 @@ NativeWindowOcclusionTrackerWin::NativeWindowOcclusionTrackerWin()
                               base::Unretained(this))),
       power_setting_change_listener_(this) {
   WindowOcclusionCalculator::CreateInstance(
-      update_occlusion_task_runner_, base::SequencedTaskRunnerHandle::Get(),
+      update_occlusion_task_runner_,
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindRepeating(
           &NativeWindowOcclusionTrackerWin::UpdateOcclusionState,
           weak_factory_.GetWeakPtr()));
@@ -254,12 +254,8 @@ bool NativeWindowOcclusionTrackerWin::IsWindowVisibleAndFullyOpaque(
   // not displayed. explorer.exe, in particular has one that's the
   // size of the desktop. It's usually behind Chrome windows in the z-order,
   // but using a remote desktop can move it up in the z-order. So, ignore them.
-  DWORD reason;
-  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &reason,
-                                      sizeof(reason))) &&
-      reason != 0) {
+  if (gfx::IsWindowCloaked(hwnd))
     return false;
-  }
 
   RECT win_rect;
   // Filter out windows that take up zero area. The call to GetWindowRect is one
@@ -273,7 +269,7 @@ bool NativeWindowOcclusionTrackerWin::IsWindowVisibleAndFullyOpaque(
   // Window or the Windows Taskbar
   if (::GetWindowLong(hwnd, GWL_STYLE) & WS_POPUP) {
     std::wstring hwnd_class_name = gfx::GetClassName(hwnd);
-    if (!base::StartsWith(hwnd_class_name, L"Chrome_WidgetWin_") &&
+    if (!hwnd_class_name.starts_with(L"Chrome_WidgetWin_") &&
         hwnd_class_name != L"Shell_TrayWnd") {
       return false;
     }
@@ -369,11 +365,6 @@ void NativeWindowOcclusionTrackerWin::OnSessionChange(
 }
 
 void NativeWindowOcclusionTrackerWin::OnDisplayStateChanged(bool display_on) {
-  static bool screen_power_listener_enabled = base::FeatureList::IsEnabled(
-      features::kScreenPowerListenerForNativeWinOcclusion);
-  if (!screen_power_listener_enabled)
-    return;
-
   if (display_on == display_on_)
     return;
 
@@ -432,10 +423,8 @@ NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
       calculate_occluded_region_(base::FeatureList::IsEnabled(
           features::kApplyNativeOccludedRegionToWindowTracker)),
       update_occlusion_state_callback_(update_occlusion_state_callback) {
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    ::CoCreateInstance(__uuidof(VirtualDesktopManager), nullptr, CLSCTX_ALL,
-                       IID_PPV_ARGS(&virtual_desktop_manager_));
-  }
+  ::CoCreateInstance(__uuidof(VirtualDesktopManager), nullptr, CLSCTX_ALL,
+                     IID_PPV_ARGS(&virtual_desktop_manager_));
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -656,9 +645,14 @@ void NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!occlusion_update_timer_.IsRunning()) {
     occlusion_update_timer_.Start(
-        FROM_HERE, kUpdateOcclusionDelay, this,
+        FROM_HERE, GetUpdateOcclusionDelay(), this,
         &WindowOcclusionCalculator::ComputeNativeWindowOcclusionStatus);
   }
+}
+
+const base::TimeDelta NativeWindowOcclusionTrackerWin::
+    WindowOcclusionCalculator::GetUpdateOcclusionDelay() {
+  return moving_window_ ? kUpdateOcclusionDelayMax : kUpdateOcclusionDelayMin;
 }
 
 void NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
@@ -689,7 +683,7 @@ void NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
   // but Windows prevented it, and the user clicks on the task bar to bring the
   // window forward. See https://crbug.com/1137982. This is the only event I
   // could find that always gets sent in this scenario, and isn't too common.
-  // TODO(crbug.com/1297684): See if we can make handling this event cheaper,
+  // TODO(crbug.com/40215249): See if we can make handling this event cheaper,
   // since we typically don't need it, e.g., by using a longer timer interval
   // for starting the occlusion calculation for this event, to batch subsequent
   // events.
@@ -847,9 +841,8 @@ void NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
   bool calculate_occlusion = true;
   if (::GetWindowLong(hwnd, GWL_STYLE) & WS_POPUP) {
     std::wstring hwnd_class_name = gfx::GetClassName(hwnd);
-    calculate_occlusion =
-        base::StartsWith(hwnd_class_name, L"Chrome_WidgetWin_") ||
-        hwnd_class_name == L"Shell_TrayWnd";
+    calculate_occlusion = hwnd_class_name.starts_with(L"Chrome_WidgetWin_") ||
+                          hwnd_class_name == L"Shell_TrayWnd";
   }
 
   // Detect if either the alt tab view or the task list thumbnail is being
@@ -901,9 +894,11 @@ void NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
       // Ignore move events if it's not a root window that's being moved. If it
       // is a root window, we want to calculate occlusion to support tab
       // dragging to windows that were occluded when the drag was started but
-      // are no longer occluded.
-      if (root_window_hwnds_occlusion_state_.find(hwnd) ==
-          root_window_hwnds_occlusion_state_.end()) {
+      // are no longer occluded.  If there is only one root window, occlusion
+      // calculation is not needed.
+      if ((root_window_hwnds_occlusion_state_.size() <= 1) ||
+          (root_window_hwnds_occlusion_state_.find(hwnd) ==
+           root_window_hwnds_occlusion_state_.end())) {
         return;
       }
     } else {
@@ -949,9 +944,13 @@ bool NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
          (IsWindowOnCurrentVirtualDesktop(hwnd) == true);
 }
 
-absl::optional<bool> NativeWindowOcclusionTrackerWin::
-    WindowOcclusionCalculator::IsWindowOnCurrentVirtualDesktop(HWND hwnd) {
+std::optional<bool> NativeWindowOcclusionTrackerWin::WindowOcclusionCalculator::
+    IsWindowOnCurrentVirtualDesktop(HWND hwnd) {
   if (!virtual_desktop_manager_)
+    return true;
+
+  // If the window is not cloaked, it is not on another desktop.
+  if (!gfx::IsWindowCloaked(hwnd))
     return true;
 
   return gfx::IsWindowOnCurrentVirtualDesktop(hwnd, virtual_desktop_manager_);

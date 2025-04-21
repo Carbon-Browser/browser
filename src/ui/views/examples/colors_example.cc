@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/background.h"
@@ -24,8 +25,7 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/table_layout.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -37,7 +37,7 @@ namespace {
 // |label_string| and the second displaying |color_id| with its color and
 // equivalent components as text.
 void InsertColorRow(View* parent,
-                    base::StringPiece16 label_string,
+                    std::u16string_view label_string,
                     ui::ColorId color_id) {
   auto* label_view = parent->AddChildView(
       std::make_unique<Label>(std::u16string(label_string)));
@@ -68,7 +68,7 @@ void CreateAllColorsView(ScrollView* scroll_view) {
                   TableLayout::ColumnSize::kUsePreferred, 0, 0)
       .AddColumn(LayoutAlignment::kStretch, LayoutAlignment::kStretch, 1.0,
                  TableLayout::ColumnSize::kUsePreferred, 0, 0)
-      .AddRows(70, TableLayout::kFixedSize);
+      .AddRows(71, TableLayout::kFixedSize);
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorWindowBackground));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorDialogBackground));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorDialogForeground));
@@ -77,7 +77,8 @@ void CreateAllColorsView(ScrollView* scroll_view) {
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorFocusableBorderUnfocused));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorButtonForeground));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorButtonForegroundDisabled));
-  InsertColorRow(container, COLOR_LABEL_ARGS(kColorButtonForegroundUnchecked));
+  InsertColorRow(container,
+                 COLOR_LABEL_ARGS(kColorRadioButtonForegroundUnchecked));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorButtonBackgroundProminent));
   InsertColorRow(container,
                  COLOR_LABEL_ARGS(kColorButtonBackgroundProminentFocused));
@@ -156,7 +157,8 @@ void CreateAllColorsView(ScrollView* scroll_view) {
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorThrobber));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorThrobberPreconnect));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorAlertLowSeverity));
-  InsertColorRow(container, COLOR_LABEL_ARGS(kColorAlertMediumSeverity));
+  InsertColorRow(container, COLOR_LABEL_ARGS(kColorAlertMediumSeverityIcon));
+  InsertColorRow(container, COLOR_LABEL_ARGS(kColorAlertMediumSeverityText));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorAlertHighSeverity));
   InsertColorRow(container, COLOR_LABEL_ARGS(kColorIcon));
   // Expands the view to allow for scrolling.
@@ -164,6 +166,8 @@ void CreateAllColorsView(ScrollView* scroll_view) {
 }
 
 class AllColorsScrollView : public ScrollView {
+  METADATA_HEADER(AllColorsScrollView, ScrollView)
+
  public:
   AllColorsScrollView() {
     constexpr int kMaxHeight = 300;
@@ -177,6 +181,9 @@ class AllColorsScrollView : public ScrollView {
   }
 };
 
+BEGIN_METADATA(AllColorsScrollView)
+END_METADATA
+
 }  // namespace
 
 ColorsExample::ColorsExample()
@@ -189,5 +196,4 @@ void ColorsExample::CreateExampleView(View* container) {
   container->AddChildView(std::make_unique<AllColorsScrollView>());
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

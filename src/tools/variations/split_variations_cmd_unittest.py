@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -125,7 +125,8 @@ class SplitVariationsCmdUnittest(unittest.TestCase):
     input_string = (
         '--force-fieldtrials="*Trial2/Enabled/" '
         '--enable-features="FeatureA<FeatureA" '
-        '--disable-features="FeatureC<FeatureC"')
+        '--disable-features="FeatureC<FeatureC" '
+        '--disable-field-trial-config')
     splits = split_variations_cmd.SplitVariationsCmdFromString(input_string)
     self.assertEqual(1, len(splits))
 

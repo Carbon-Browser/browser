@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,20 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/sparse_histogram.h"
+#include "base/not_fatal_until.h"
 #include "base/rand_util.h"
 #include "base/values.h"
 #include "components/domain_reliability/dispatcher.h"
 #include "components/domain_reliability/uploader.h"
 #include "components/domain_reliability/util.h"
+#include "net/base/isolation_info.h"
 #include "net/base/net_errors.h"
+#include "net/base/network_isolation_key.h"
 
 namespace domain_reliability {
 
@@ -107,7 +110,7 @@ void DomainReliabilityContext::CallUploadAllowedCallback() {
   if (beacons_.empty())
     return;
 
-  upload_allowed_callback_.Run(
+  upload_allowed_callback_->Run(
       config().origin,
       base::BindOnce(&DomainReliabilityContext::OnUploadAllowedCallbackComplete,
                      weak_factory_.GetWeakPtr()));
@@ -129,7 +132,7 @@ void DomainReliabilityContext::StartUpload() {
   bool found_beacon_to_upload = false;
   for (const auto& beacon : beacons_) {
     if (beacon->upload_depth <= kMaxUploadDepthToSchedule) {
-      uploading_beacons_network_isolation_key_ = beacon->network_isolation_key;
+      uploading_beacons_isolation_info_ = beacon->isolation_info;
       found_beacon_to_upload = true;
       break;
     }
@@ -152,17 +155,18 @@ void DomainReliabilityContext::StartUpload() {
 
   uploader_->UploadReport(
       report_json, max_upload_depth, collector_url,
-      uploading_beacons_network_isolation_key_,
+      uploading_beacons_isolation_info_,
       base::BindOnce(&DomainReliabilityContext::OnUploadComplete,
                      weak_factory_.GetWeakPtr()));
 }
 
 void DomainReliabilityContext::OnUploadComplete(
     const DomainReliabilityUploader::UploadResult& result) {
-  if (result.is_success())
+  if (result.is_success()) {
     CommitUpload();
-  else
+  } else {
     RollbackUpload();
+  }
   scheduler_.OnUploadComplete(result);
   DCHECK(!upload_time_.is_null());
   last_upload_time_ = upload_time_;
@@ -183,11 +187,11 @@ base::Value DomainReliabilityContext::CreateReport(base::TimeTicks upload_time,
 
   int max_upload_depth = 0;
 
-  base::Value beacons_value(base::Value::Type::LIST);
+  base::Value::List beacons_value;
   for (const auto& beacon : beacons_) {
     // Only include beacons with a matching NetworkIsolationKey in the report.
-    if (beacon->network_isolation_key !=
-        uploading_beacons_network_isolation_key_) {
+    if (beacon->isolation_info.network_isolation_key() !=
+        uploading_beacons_isolation_info_.network_isolation_key()) {
       continue;
     }
 
@@ -201,23 +205,23 @@ base::Value DomainReliabilityContext::CreateReport(base::TimeTicks upload_time,
 
   DCHECK_GT(uploading_beacons_size_, 0u);
 
-  base::Value report_value(base::Value::Type::DICTIONARY);
-  report_value.SetStringKey("reporter", upload_reporter_string_);
-  report_value.SetKey("entries", std::move(beacons_value));
+  base::Value::Dict report_value;
+  report_value.Set("reporter", *upload_reporter_string_);
+  report_value.Set("entries", std::move(beacons_value));
 
   *max_upload_depth_out = max_upload_depth;
-  return report_value;
+  return base::Value(std::move(report_value));
 }
 
 void DomainReliabilityContext::CommitUpload() {
   auto current = beacons_.begin();
   while (uploading_beacons_size_ > 0) {
-    DCHECK(current != beacons_.end());
+    CHECK(current != beacons_.end(), base::NotFatalUntil::M130);
 
     auto last = current;
     ++current;
-    if ((*last)->network_isolation_key ==
-        uploading_beacons_network_isolation_key_) {
+    if ((*last)->isolation_info.network_isolation_key() ==
+        uploading_beacons_isolation_info_.network_isolation_key()) {
       (*last)->outcome = DomainReliabilityBeacon::Outcome::kUploaded;
       beacons_.erase(last);
       --uploading_beacons_size_;
@@ -236,10 +240,10 @@ void DomainReliabilityContext::RemoveOldestBeacon() {
            << "removing oldest beacon";
 
   // If the beacon being removed has a NetworkIsolationKey that matches that of
-  // the current upload, decrement |uploading_beacons_size_|.
+  // the current upload, decrement `uploading_beacons_size_`.
   if (uploading_beacons_size_ > 0 &&
-      beacons_.front()->network_isolation_key ==
-          uploading_beacons_network_isolation_key_) {
+      beacons_.front()->isolation_info.network_isolation_key() ==
+          uploading_beacons_isolation_info_.network_isolation_key()) {
     --uploading_beacons_size_;
   }
 

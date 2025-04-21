@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,12 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 using ::testing::StrictMock;
@@ -88,30 +92,27 @@ void ExtensionTestingProfile::AddExtension(std::string extension_id,
   scoped_refptr<const extensions::Extension> extension =
       extensions::ExtensionBuilder()
           .SetID(extension_id)
-          .SetManifest(extensions::DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", extension_name)
                            .Set("version", version)
                            .Set("manifest_version", 2)
                            .Set("description", description)
-                           .Set("update_url", update_url)
-                           .Build())
+                           .Set("update_url", update_url))
           .Build();
 
   // Install the extension on the faked extension service.
   extension_service_->AddExtension(extension.get());
 
   extension_prefs_->UpdateExtensionPref(
-      extension_id, "install_time",
-      std::make_unique<base::Value>(
-          base::NumberToString(install_time.ToInternalValue())));
-  extension_prefs_->UpdateExtensionPref(
-      extension_id, "state", std::make_unique<base::Value>(state_value));
+      extension_id, "last_update_time",
+      base::Value(base::NumberToString(install_time.ToInternalValue())));
+  extension_prefs_->UpdateExtensionPref(extension_id, "state",
+                                        base::Value(state_value));
 }
 
 void ExtensionTestingProfile::SetInstallSignature(
     extensions::InstallSignature signature) {
-  base::DictionaryValue signature_dict;
-  signature.ToValue(&signature_dict);
+  base::Value::Dict signature_dict = signature.ToDict();
   extension_prefs_->SetInstallSignature(&signature_dict);
 }
 
@@ -130,7 +131,7 @@ class ExtensionDataCollectionTest : public testing::Test {
     SAFE_BROWSING_AND_EXTENDED_REPORTING,
   };
 
-  ExtensionDataCollectionTest() : profile_number_() {}
+  ExtensionDataCollectionTest() = default;
 
   void SetUp() override {
     testing::Test::SetUp();
@@ -138,7 +139,9 @@ class ExtensionDataCollectionTest : public testing::Test {
         TestingBrowserProcess::GetGlobal());
     ASSERT_TRUE(profile_manager_->SetUp());
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    test_user_manager_ = std::make_unique<ash::ScopedTestUserManager>();
+    user_manager_.Reset(std::make_unique<user_manager::UserManagerImpl>(
+        std::make_unique<ash::UserManagerDelegateImpl>(),
+        g_browser_process->local_state(), ash::CrosSettings::Get()));
 #endif
   }
 
@@ -146,7 +149,7 @@ class ExtensionDataCollectionTest : public testing::Test {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // UserManager should be destroyed before TestingBrowserProcess as it
     // uses it in destructor.
-    test_user_manager_.reset();
+    user_manager_.Reset();
     // Finish any pending tasks before deleting the TestingBrowserProcess.
     task_environment_.RunUntilIdle();
 #endif
@@ -188,11 +191,11 @@ class ExtensionDataCollectionTest : public testing::Test {
   std::unique_ptr<TestingProfileManager> profile_manager_;
 
  private:
-  int profile_number_;
+  int profile_number_ = 0;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  std::unique_ptr<ash::ScopedTestUserManager> test_user_manager_;
+  user_manager::ScopedUserManager user_manager_;
 #endif
 };
 
@@ -259,7 +262,8 @@ TEST_F(ExtensionDataCollectionTest, CollectExtensionDataWithExtension) {
 
   ASSERT_EQ(extension_info.id(), extension_id);
   ASSERT_EQ(extension_info.name(), extension_name);
-  ASSERT_EQ(extension_info.install_time_msec(), install_time.ToJavaTime());
+  ASSERT_EQ(extension_info.install_time_msec(),
+            install_time.InMillisecondsSinceUnixEpoch());
   ASSERT_EQ(extension_info.version(), version);
   ASSERT_EQ(extension_info.description(), description);
   ASSERT_EQ(extension_info.update_url(), update_url);
@@ -295,7 +299,8 @@ TEST_F(ExtensionDataCollectionTest, CollectsLastInstalledExtension) {
 
   ASSERT_EQ(extension_info.id(), extension_id);
   ASSERT_EQ(extension_info.name(), extension_name);
-  ASSERT_EQ(extension_info.install_time_msec(), install_time.ToJavaTime());
+  ASSERT_EQ(extension_info.install_time_msec(),
+            install_time.InMillisecondsSinceUnixEpoch());
 }
 
 TEST_F(ExtensionDataCollectionTest, IgnoresExtensionsIfNoExtendedSafeBrowsing) {

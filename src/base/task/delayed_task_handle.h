@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,8 @@ class BASE_EXPORT DelayedTaskHandle {
    public:
     virtual ~Delegate() = default;
 
-    // Returns true if the task handle is valid.
+    // Returns true if the task handle is valid. Canceling or running the task
+    // will mark it as invalid.
     virtual bool IsValid() const = 0;
 
     // Cancels the task. A canceled task, whether removed from the underlying

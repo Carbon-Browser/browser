@@ -1,15 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_FILE_METRICS_PROVIDER_H_
 #define COMPONENTS_METRICS_FILE_METRICS_PROVIDER_H_
 
+#include <stddef.h>
+
 #include <list>
 #include <memory>
+#include <string_view>
+#include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -21,10 +25,6 @@
 
 class PrefRegistrySimple;
 class PrefService;
-
-namespace base {
-class TaskRunner;
-}
 
 namespace metrics {
 
@@ -145,7 +145,7 @@ class FileMetricsProvider : public MetricsProvider,
     Params(const base::FilePath& path,
            SourceType type,
            SourceAssociation association,
-           base::StringPiece prefs_key = base::StringPiece());
+           std::string_view prefs_key = std::string_view());
 
     ~Params();
 
@@ -153,7 +153,7 @@ class FileMetricsProvider : public MetricsProvider,
     const base::FilePath path;
     const SourceType type;
     const SourceAssociation association;
-    const base::StringPiece prefs_key;
+    const std::string_view prefs_key;
 
     // Other parameters that can be set after construction.
     FilterCallback filter;       // Run-time check for what to do with file.
@@ -176,22 +176,21 @@ class FileMetricsProvider : public MetricsProvider,
   // the necessary keys in advance. Set |prefs_key| empty (nullptr will work) if
   // no persistence is required. ACTIVE files shouldn't have a pref key as
   // they update internal state about what has been previously sent.
-  void RegisterSource(const Params& params);
+  // If `metrics_reporting_enabled` is false, the associated file or directory
+  // is deleted (except for ACTIVE files).
+  void RegisterSource(const Params& params, bool metrics_reporting_enabled);
 
   // Registers all necessary preferences for maintaining persistent state
   // about a monitored file across process restarts. The |prefs_key| is
   // typically the filename.
   static void RegisterSourcePrefs(PrefRegistrySimple* prefs,
-                                  const base::StringPiece prefs_key);
+                                  std::string_view prefs_key);
 
   static void RegisterPrefs(PrefRegistrySimple* prefs);
 
-  // Sets the task runner to use for testing.
-  static void SetTaskRunnerForTesting(
-      const scoped_refptr<base::TaskRunner>& task_runner);
-
  private:
   friend class FileMetricsProviderTest;
+  friend class TestFileMetricsProvider;
 
   // The different results that can occur accessing a file.
   enum AccessResult {
@@ -268,18 +267,24 @@ class FileMetricsProvider : public MetricsProvider,
 
   // Checks a list of sources (on a task-runner allowed to do I/O) and merge
   // any data found within them.
-  void CheckAndMergeMetricSourcesOnTaskRunner(SourceInfoList* sources);
+  // Returns a list of histogram sample counts for sources of type
+  // ASSOCIATE_INTERNAL_PROFILE_SAMPLES_COUNTER that were processed.
+  static std::vector<size_t> CheckAndMergeMetricSourcesOnTaskRunner(
+      SourceInfoList* sources);
 
   // Checks a single source and maps it into memory.
   static AccessResult CheckAndMapMetricSource(SourceInfo* source);
 
   // Merges all of the histograms from a |source| to the StatisticsRecorder.
-  static void MergeHistogramDeltasFromSource(SourceInfo* source);
+  // Returns the number of histograms merged.
+  static size_t MergeHistogramDeltasFromSource(SourceInfo* source);
 
-  // Records all histograms from a given source via a snapshot-manager.
+  // Records all histograms from a given source via a snapshot-manager. Only the
+  // histograms that have |required_flags| will be recorded.
   static void RecordHistogramSnapshotsFromSource(
       base::HistogramSnapshotManager* snapshot_manager,
-      SourceInfo* source);
+      SourceInfo* source,
+      base::HistogramBase::Flags required_flags);
 
   // Calls source filter (if any) and returns the desired action.
   static AccessResult HandleFilterSource(SourceInfo* source,
@@ -288,21 +293,24 @@ class FileMetricsProvider : public MetricsProvider,
   // The part of ProvideIndependentMetrics that runs as a background task.
   static bool ProvideIndependentMetricsOnTaskRunner(
       SourceInfo* source,
-      SystemProfileProto* system_profile_proto,
-      base::HistogramSnapshotManager* snapshot_manager);
+      ChromeUserMetricsExtension* uma_proto,
+      base::HistogramSnapshotManager* snapshot_manager,
+      base::OnceClosure serialize_log_callback);
 
-  // Records the metadata of the |source| to perf.
-  void RecordFileMetadataOnTaskRunner(SourceInfo* source);
+  // Collects the metadata of the |source|.
+  // Returns the number of histogram samples from that source.
+  static size_t CollectFileMetadataFromSource(SourceInfo* source);
 
   // Appends the samples count to pref on UI thread.
-  void AppendToSamplesCountPref(size_t samples_count);
+  void AppendToSamplesCountPref(std::vector<size_t> samples_count);
 
   // Creates a task to check all monitored sources for updates.
   void ScheduleSourcesCheck();
 
   // Takes a list of sources checked by an external task and determines what
-  // to do with each.
-  void RecordSourcesChecked(SourceInfoList* checked);
+  // to do with each. Virtual for testing.
+  virtual void RecordSourcesChecked(SourceInfoList* checked,
+                                    std::vector<size_t> samples_counts);
 
   // Schedules the deletion of a file in the background using the task-runner.
   void DeleteFileAsync(const base::FilePath& path);
@@ -314,6 +322,7 @@ class FileMetricsProvider : public MetricsProvider,
   void OnDidCreateMetricsLog() override;
   bool HasIndependentMetrics() override;
   void ProvideIndependentMetrics(
+      base::OnceClosure serialize_log_callback,
       base::OnceCallback<void(bool)> done_callback,
       ChromeUserMetricsExtension* uma_proto,
       base::HistogramSnapshotManager* snapshot_manager) override;
@@ -322,7 +331,8 @@ class FileMetricsProvider : public MetricsProvider,
       base::HistogramSnapshotManager* snapshot_manager) override;
 
   // base::StatisticsRecorder::HistogramProvider:
-  void MergeHistogramDeltas() override;
+  void MergeHistogramDeltas(bool async,
+                            base::OnceClosure done_callback) override;
 
   // The part of ProvideIndependentMetrics that runs after background task.
   void ProvideIndependentMetricsCleanup(
@@ -334,9 +344,6 @@ class FileMetricsProvider : public MetricsProvider,
   // kMetricsBrowserMetricsMetadata and updates the stability prefs accordingly,
   // return true if the pref isn't empty.
   bool SimulateIndependentMetrics();
-
-  // A task-runner capable of performing I/O.
-  scoped_refptr<base::TaskRunner> task_runner_;
 
   // A list of sources not currently active that need to be checked for changes.
   SourceInfoList sources_to_check_;
@@ -354,8 +361,6 @@ class FileMetricsProvider : public MetricsProvider,
 
   // The preferences-service used to store persistent state about sources.
   raw_ptr<PrefService> pref_service_;
-
-  const scoped_refptr<base::TaskRunner> main_task_runner_;
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<FileMetricsProvider> weak_factory_{this};

@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_OFFLINE_PAGES_CORE_ARCHIVE_VALIDATOR_H_
 #define COMPONENTS_OFFLINE_PAGES_CORE_ARCHIVE_VALIDATOR_H_
+
+#include <stdint.h>
 
 #include <memory>
 #include <string>

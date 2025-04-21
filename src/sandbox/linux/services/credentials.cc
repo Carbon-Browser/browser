@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/linux/services/credentials.h"
 
@@ -16,10 +21,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/launch.h"
@@ -78,7 +83,9 @@ bool ChrootToSafeEmptyDir() {
   // /proc/tid directory for the thread (since /proc may not be aware of the
   // PID namespace). With a process, we can just use /proc/self.
   pid_t pid = -1;
-  alignas(16) char stack_buf[PTHREAD_STACK_MIN];
+
+  alignas(16) char stack_buf[PTHREAD_STACK_MIN_CONST];
+
 #if defined(ARCH_CPU_X86_FAMILY) || defined(ARCH_CPU_ARM_FAMILY) || \
     defined(ARCH_CPU_MIPS_FAMILY)
   // The stack grows downward.
@@ -96,13 +103,10 @@ bool ChrootToSafeEmptyDir() {
   // new TLS to avoid corrupting the current process's TLS. On ARCH_CPU_X86,
   // glibc performs syscalls by calling a function pointer in TLS, so we do not
   // attempt this optimization.
-  // TODO(crbug.com/1247458) Broken in MSan builds after LLVM f1bb30a4956f.
+  // TODO(crbug.com/40196869) Broken in MSan builds after LLVM f1bb30a4956f.
   clone_flags |= CLONE_VM | CLONE_VFORK | CLONE_SETTLS;
 
-  // PTHREAD_STACK_MIN can be dynamic in glibc2.34+, so it is not possible to
-  // zeroify tls_buf assigning { 0 }
-  char tls_buf[PTHREAD_STACK_MIN];
-  memset(tls_buf, 0, PTHREAD_STACK_MIN);
+  char tls_buf[PTHREAD_STACK_MIN_CONST] = {};
   tls = tls_buf;
 #endif
 
@@ -137,7 +141,6 @@ int CapabilityToKernelValue(Credentials::Capability cap) {
   }
 
   LOG(FATAL) << "Invalid Capability: " << static_cast<int>(cap);
-  return 0;
 }
 
 }  // namespace.
@@ -199,7 +202,7 @@ bool Credentials::SetCapabilitiesOnCurrentThread(
     const std::vector<Capability>& caps) {
   struct cap_hdr hdr = {};
   hdr.version = _LINUX_CAPABILITY_VERSION_3;
-  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {{}};
+  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {};
 
   // Initially, cap has no capability flags set. Enable the effective and
   // permitted flags only for the requested capabilities.
@@ -231,7 +234,7 @@ bool Credentials::SetCapabilities(int proc_fd,
 bool Credentials::HasAnyCapability() {
   struct cap_hdr hdr = {};
   hdr.version = _LINUX_CAPABILITY_VERSION_3;
-  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {{}};
+  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {};
 
   PCHECK(sys_capget(&hdr, data) == 0);
 
@@ -247,7 +250,7 @@ bool Credentials::HasAnyCapability() {
 bool Credentials::HasCapability(Capability cap) {
   struct cap_hdr hdr = {};
   hdr.version = _LINUX_CAPABILITY_VERSION_3;
-  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {{}};
+  struct cap_data data[_LINUX_CAPABILITY_U32S_3] = {};
 
   PCHECK(sys_capget(&hdr, data) == 0);
 

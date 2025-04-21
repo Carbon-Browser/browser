@@ -32,8 +32,6 @@ filesystem, and can be replaced with a MockFileSystem in tests.
 """
 from __future__ import unicode_literals
 
-import codecs
-import errno
 import glob
 import hashlib
 import logging
@@ -161,7 +159,7 @@ class FileSystem(object):
         return os.getcwd()
 
     def glob(self, path):
-        return glob.glob(path)
+        return glob.iglob(path, recursive=True)
 
     def isabs(self, path):
         return os.path.isabs(path)
@@ -220,13 +218,9 @@ class FileSystem(object):
 
     def maybe_make_directory(self, *path):
         """Creates the specified directory if it doesn't already exist."""
-        try:
-            # os.makedirs() supports UNC paths:
-            # https://docs.python.org/2/library/os.html#os.makedirs
-            os.makedirs(self._path_for_access(self.join(*path)))
-        except OSError as error:
-            if error.errno != errno.EEXIST:
-                raise
+        # os.makedirs() supports UNC paths:
+        # https://docs.python.org/2/library/os.html#os.makedirs
+        os.makedirs(self._path_for_access(self.join(*path)), exist_ok=True)
 
     def move(self, source, destination):
         shutil.move(source, destination)
@@ -270,20 +264,26 @@ class FileSystem(object):
         # Close the OS fd opened by mkstemp as we will reopen the file with an
         # explict encoding.
         os.close(temp_fd)
-        f = codecs.open(temp_name, 'w', 'utf8')
+        f = open(temp_name, 'w', encoding='utf8', newline='')
         return f, temp_name
 
     def open_text_file_for_reading(self, path):
-        # Note: There appears to be an issue with the returned file objects not
-        # being seekable. See:
-        # http://stackoverflow.com/questions/1510188/can-seek-and-tell-work-with-utf-8-encoded-documents-in-python
-        return codecs.open(self._path_for_access(path), 'r', 'utf8')
+        return open(self._path_for_access(path),
+                    'r',
+                    encoding='utf8',
+                    newline='')
 
     def open_text_file_for_writing(self, path):
-        return codecs.open(self._path_for_access(path), 'w', 'utf8')
+        return open(self._path_for_access(path),
+                    'w',
+                    encoding='utf8',
+                    newline='')
 
     def open_text_file_for_appending(self, path):
-        return codecs.open(self._path_for_access(path), 'a', 'utf8')
+        return open(self._path_for_access(path),
+                    'a',
+                    encoding='utf8',
+                    newline='')
 
     def read_text_file(self, path):
         """Returns the contents of the file as a Unicode string.
@@ -334,7 +334,7 @@ class FileSystem(object):
             except exceptions.WindowsError:
                 time.sleep(sleep_interval)
                 retry_timeout_sec -= sleep_interval
-                if retry_timeout_sec < 0 and not retry:
+                if retry_timeout_sec < 0 or not retry:
                     raise
 
     def rmtree(self, path, ignore_errors=True, onerror=None):

@@ -1,9 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "components/browser_ui/photo_picker/android/features.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/browser_ui/photo_picker/android/photo_picker_jni_headers/PhotoPickerFeatures_jni.h"
 
 namespace photo_picker {
@@ -16,17 +22,14 @@ namespace {
 // in other locations in the code base (e.g. content_features.h), and must be
 // replicated in the same order in PhotoPickerFeatures.java.
 const base::Feature* kFeaturesExposedToJava[] = {
-    &kAndroidMediaPickerSupport,
-    &kPhotoPickerVideoSupport,
+    &kAndroidMediaPickerAdoption,
 };
 
 }  // namespace
 
-const base::Feature kAndroidMediaPickerSupport{
-    "AndroidMediaPickerSupport", base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kPhotoPickerVideoSupport{"PhotoPickerVideoSupport",
-                                             base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAndroidMediaPickerAdoption,
+             "MediaPickerAdoption",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 static jlong JNI_PhotoPickerFeatures_GetFeature(JNIEnv* env, jint ordinal) {
   return reinterpret_cast<jlong>(kFeaturesExposedToJava[ordinal]);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class MODULES_EXPORT PaymentMethodChangeEvent final
                                           const PaymentMethodChangeEventInit*);
 
   const String& methodName() const;
-  const ScriptValue methodDetails(ScriptState*) const;
+  const ScriptObject& methodDetails() const;
 
   PaymentMethodChangeEvent(ScriptState*,
                            const AtomicString& type,
@@ -46,7 +46,7 @@ class MODULES_EXPORT PaymentMethodChangeEvent final
 
  private:
   String method_name_;
-  WorldSafeV8Reference<v8::Value> method_details_;
+  const ScriptObject method_details_;
 };
 
 }  // namespace blink

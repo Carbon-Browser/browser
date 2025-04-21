@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,6 @@ class CORE_EXPORT MathMLScriptsElement : public MathMLElement {
   const MathScriptType script_type_;
 };
 
-template <>
-inline bool IsElementOfType<const MathMLScriptsElement>(const Node& node) {
-  return IsA<MathMLScriptsElement>(node);
-}
 template <>
 struct DowncastTraits<MathMLScriptsElement> {
   static bool AllowFrom(const Node& node) {

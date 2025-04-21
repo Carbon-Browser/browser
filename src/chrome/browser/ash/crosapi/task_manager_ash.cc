@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ void TaskManagerAsh::SetRefreshFlags(int64_t refresh_flags) {
 }
 
 void TaskManagerAsh::GetTaskManagerTasks(GetTaskManagerTasksCallback callback) {
-  // TODO(crbug.com/1188426): Although the task manager model supports multiple
+  // TODO(crbug.com/40173304): Although the task manager model supports multiple
   // task manager providers, currently, there will only be one lacros instance
   // running. The task manager logic supports only one provider. We will add
   // support to handle multiple providers in the future when multiple lacros

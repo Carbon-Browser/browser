@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,6 +150,10 @@ function annotateMetadata(metadata) {
     result.mimeType = metadata.mimeType;
   if (metadata.thumbnail !== undefined)
     result.thumbnail = metadata.thumbnail;
+  if(metadata.cloudIdentifier !== undefined)
+    result.cloudIdentifier = metadata.cloudIdentifier;
+  if (metadata.cloudFileInfo !== undefined)
+    result.cloudFileInfo = metadata.cloudFileInfo;
   return result;
 }
 
@@ -273,8 +277,23 @@ bindingUtil.registerEventArgumentMassager(
     });
 
 bindingUtil.registerEventArgumentMassager(
-    'fileSystemProvider.onOpenFileRequested',
-    massageArgumentsDefault);
+    'fileSystemProvider.onOpenFileRequested', function(args, dispatch) {
+      var executionStart = Date.now();
+      var options = args[0];
+      var onSuccessCallback = function(metadata) {
+        fileSystemProviderInternal.openFileRequestedSuccess(
+            options.fileSystemId, options.requestId,
+            Date.now() - executionStart, metadata);
+      };
+      var onErrorCallback = function(error) {
+        if (!verifyErrorForFailure(error))
+          return;
+        fileSystemProviderInternal.operationRequestedError(
+            options.fileSystemId, options.requestId, error,
+            Date.now() - executionStart);
+      };
+      dispatch([options, onSuccessCallback, onErrorCallback]);
+    });
 
 bindingUtil.registerEventArgumentMassager(
     'fileSystemProvider.onCloseFileRequested',
@@ -357,19 +376,18 @@ bindingUtil.registerEventArgumentMassager(
     massageArgumentsDefault);
 
 bindingUtil.registerEventArgumentMassager(
-    'fileSystemProvider.onMountRequested',
-    function(args, dispatch) {
+    'fileSystemProvider.onMountRequested', function(args, dispatch) {
+      var executionStart = Date.now();
+      var requestId = args[0];
       var onSuccessCallback = function() {
-        // chrome.fileManagerPrivate.addProvidedFileSystem doesn't accept
-        // any callbacks, so ignore the callback calls here.
-        // The callbacks exist for consistency with other on*Requested events.
+        fileSystemProviderInternal.respondToMountRequest(
+            requestId, 'OK', Date.now() - executionStart);
       };
       var onErrorCallback = function(error) {
         if (!verifyErrorForFailure(error))
           return;
-        // chrome.fileManagerPrivate.addProvidedFileSystem doesn't accept
-        // any callbacks, so ignore the callback calls here.
-        // The callbacks exist for consistency with other on*Requested events.
+        fileSystemProviderInternal.respondToMountRequest(
+            requestId, error, Date.now() - executionStart);
       }
       dispatch([onSuccessCallback, onErrorCallback]);
     });

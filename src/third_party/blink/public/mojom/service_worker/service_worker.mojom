@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import "mojo/public/mojom/base/time.mojom";
 import "mojo/public/mojom/base/values.mojom";
 import "services/network/public/mojom/cookie_manager.mojom";
 import "services/network/public/mojom/url_loader_factory.mojom";
+import "third_party/blink/public/mojom/associated_interfaces/associated_interfaces.mojom";
 import "third_party/blink/public/mojom/background_fetch/background_fetch.mojom";
 import "third_party/blink/public/mojom/devtools/console_message.mojom";
 import "third_party/blink/public/mojom/fetch/fetch_api_response.mojom";
@@ -27,6 +28,8 @@ import "third_party/blink/public/mojom/service_worker/service_worker_event_statu
 import "third_party/blink/public/mojom/service_worker/service_worker_fetch_response_callback.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_object.mojom";
 import "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom";
+import "third_party/blink/public/mojom/service_worker/service_worker_router_rule.mojom";
+import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 import "url/mojom/origin.mojom";
 import "url/mojom/url.mojom";
 
@@ -111,6 +114,16 @@ interface ServiceWorkerHost {
   // On success, |error| is kNone without |error_msg| set.
   // Otherwise, |error| and |error_msg| describe the failure.
   ClaimClients() => (ServiceWorkerErrorType error, string? error_msg);
+
+  // Corresponds to InstallEvent#addRoutes(). Adds service worker router rules,
+  // which are evaluated before the regular navigation path. i.e. evaluated
+  // before the service worker fetch handler is invoked.
+  //
+  // The callback with |is_parse_error| true indicates that the evaluator faced
+  // a parse error of regex, and could not initialize the router evaluator.
+  // Otherwise, |is_parse_error| is false to indicate that the evaluator is
+  // initialized.
+  AddRoutes(ServiceWorkerRouterRules rules) => (bool is_parse_error);
 };
 
 struct ExtendableMessageEvent {
@@ -186,11 +199,14 @@ interface ServiceWorker {
   // be notified to ReportingObservers registered with the global scope.
   InitializeGlobalScope(
       pending_associated_remote<ServiceWorkerHost> service_worker_host,
+      pending_associated_remote<blink.mojom.AssociatedInterfaceProvider> associated_interfaces_to_browser,
+      pending_associated_receiver<blink.mojom.AssociatedInterfaceProvider> associated_interfaces_from_browser,
       ServiceWorkerRegistrationObjectInfo registration_info,
       ServiceWorkerObjectInfo service_worker_info,
       FetchHandlerExistence fetch_handler_existence,
       pending_receiver<ReportingObserver>? reporting_observer_receiver,
-      AncestorFrameType ancestor_frame_type);
+      AncestorFrameType ancestor_frame_type,
+      blink.mojom.StorageKey storage_key);
 
   // These methods dispatch InstallEvent and ActivateEvent to the
   // ServiceWorkerGlobalScope.
@@ -303,6 +319,13 @@ interface ServiceWorker {
   // Changes the delay until the idle timer requests termination after all
   // events are handled.
   SetIdleDelay(mojo_base.mojom.TimeDelta delay);
+
+  // Resets the members for idle timeouts to cancel the idle callback.
+  AddKeepAlive();
+
+  // Check if the event queue is empty.
+  // Schedules idle timeout callback if there is no ongoing event.
+  ClearKeepAlive();
 
   // Adds a message to DevTools console which is associated with this worker.
   AddMessageToConsole(ConsoleMessageLevel level, string message);

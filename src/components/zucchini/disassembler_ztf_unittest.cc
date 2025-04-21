@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "components/zucchini/buffer_view.h"
 #include "components/zucchini/element_detection.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -41,7 +41,7 @@ but [+00,+10] is valid at least. As is (1,5).
 )";
 
 // Converts a raw string into data.
-std::vector<uint8_t> StrToData(base::StringPiece s) {
+std::vector<uint8_t> StrToData(std::string_view s) {
   return std::vector<uint8_t>(s.begin(), s.end());
 }
 

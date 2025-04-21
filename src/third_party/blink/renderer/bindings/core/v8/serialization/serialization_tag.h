@@ -1,9 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SERIALIZATION_SERIALIZATION_TAG_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SERIALIZATION_SERIALIZATION_TAG_H_
+
+#include <cstdint>
 
 namespace blink {
 
@@ -36,7 +38,7 @@ namespace blink {
 // the contents of these values, they are first given object reference IDs (by
 // GenerateFreshObjectTag/GenerateFreshArrayTag); these reference IDs are then
 // used with ObjectReferenceTag to tie the recursive knot.
-enum SerializationTag {
+enum SerializationTag : uint8_t {
   kMessagePortTag = 'M',  // index:int -> MessagePort. Fills the result with
                           // transferred MessagePort.
   kMojoHandleTag = 'h',   // index:int -> MojoHandle. Fills the result with
@@ -76,11 +78,13 @@ enum SerializationTag {
   kTransformStreamTransferTag = 'm',  // index:uint32_t
   kWritableStreamTransferTag = 'w',   // index:uint32_t
   kMediaStreamTrack =
-      's',             // session_id.high:uint64_t, session_id.low:uint64_t,
-                       // kind:WebCoreString, id:WebCoreString,
-                       // label:WebCoreString, enabled:byte, muted:byte,
-                       // contentHint:Uint32Enum, readyState:Uint32Enum
-  kDOMPointTag = 'Q',  // x:Double, y:Double, z:Double, w:Double
+      's',  // trackImplSubtype:Uint32Enum, session_id.high:uint64_t,
+            // session_id.low:uint64_t, transfer_id.high:uint64_t,
+            // transfer_id.low:uint64_t, kind:WebCoreString, id:WebCoreString,
+            // label:WebCoreString, enabled:byte, muted:byte,
+            // contentHint:Uint32Enum, readyState:Uint32Enum
+            // If trackImplSubtype=BrowserCapture: cropVersion:uint32_t
+  kDOMPointTag = 'Q',          // x:Double, y:Double, z:Double, w:Double
   kDOMPointReadOnlyTag = 'W',  // x:Double, y:Double, z:Double, w:Double
   kDOMRectTag = 'E',          // x:Double, y:Double, width:Double, height:Double
   kDOMRectReadOnlyTag = 'R',  // x:Double, y:Double, width:Double, height:Double
@@ -108,13 +112,15 @@ enum SerializationTag {
                              // pemCertificate:WebCoreString
   kRTCEncodedAudioFrameTag = 'A',  // uint32_t -> transferred audio frame ID
   kRTCEncodedVideoFrameTag = 'V',  // uint32_t -> transferred video frame ID
+  kRTCDataChannel = 'p',  // uint32_t -> transferred webrtc datachannel ID
 
   kAudioDataTag = 'a',          // uint32_t -> transferred audio data
   kVideoFrameTag = 'v',         // uint32_t -> transferred video frame ID
   kEncodedAudioChunkTag = 'y',  // uint32_t -> transferred chunk
   kEncodedVideoChunkTag = 'z',  // uint32_t -> transferred chunk
 
-  kCropTargetTag = 'c',  // crop_id:WebCoreString
+  kCropTargetTag = 'c',         // crop_id:WebCoreString
+  kRestrictionTargetTag = 'D',  // restriction_id:WebCoreString
 
   kMediaSourceHandleTag = 'S',  // uint32_t -> transferred MediaSourceHandle
 
@@ -125,8 +131,16 @@ enum SerializationTag {
   kDeprecatedDetectedFaceTag = 'F',
   kDeprecatedDetectedTextTag = 't',
 
+  kFencedFrameConfigTag = 'C',
+
   kDOMExceptionTag = 'x',  // name:String,message:String,stack:String
-  kVersionTag = 0xFF       // version:uint32_t -> Uses this as the file version.
+  kTrailerOffsetTag =
+      0xFE,  // offset:uint64_t (fixed width, network order) from buffer start
+             // size:uint32_t (fixed width, network order)
+  kVersionTag = 0xFF,  // version:uint32_t -> Uses this as the file version.
+
+  // Tags used in trailers.
+  kTrailerRequiresInterfacesTag = 0xA0,
 };
 
 }  // namespace blink

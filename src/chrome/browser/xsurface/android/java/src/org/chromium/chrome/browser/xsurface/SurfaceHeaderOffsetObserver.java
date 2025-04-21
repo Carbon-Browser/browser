@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.xsurface;
 
 /**
+ * Implemented internally.
+ *
  * Interface to listen to the offset events from the scrollable container of the current Surface.
  * Certain layouts may simulate scrolls by translating views on and offscreen. This interface tracks
  * those changes by providing a vertical offset which represents the delta from the original

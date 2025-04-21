@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ SpellingEngine* CreateNativeSpellingEngine(
   // languages are skipped during the Hunspell check.
   return new HunspellEngine(embedder_provider);
 #elif BUILDFLAG(USE_BROWSER_SPELLCHECKER)
-  return new PlatformSpellingEngine(embedder_provider);
+  return new PlatformSpellingEngine();
 #elif BUILDFLAG(USE_RENDERER_SPELLCHECKER)
   return new HunspellEngine(embedder_provider);
 #else

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include <stdint.h>
 
 #include <cmath>
+#include <string_view>
 
 #include "base/base64.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/unpacked_installer.h"
@@ -40,7 +41,7 @@
 #include "ui/gl/gl_switches.h"
 
 namespace {
-constexpr base::StringPiece kFullPerformanceRunSwitch = "full-performance-run";
+constexpr std::string_view kFullPerformanceRunSwitch = "full-performance-run";
 }  // namespace
 
 TabCapturePerformanceTestBase::TabCapturePerformanceTestBase() = default;
@@ -78,11 +79,14 @@ void TabCapturePerformanceTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
   is_full_performance_run_ = command_line->HasSwitch(kFullPerformanceRunSwitch);
 
+  // MSan and GL do not get along so avoid using the GPU with MSan.
+#if !defined(MEMORY_SANITIZER)
   // Note: The naming "kUseGpuInTests" is very misleading. It actually means
   // "don't use a software OpenGL implementation." Subclasses will either call
   // UseSoftwareCompositing() to use Chrome's software compositor, or else they
   // won't (which means use the default hardware-accelerated compositor).
   command_line->AppendSwitch(switches::kUseGpuInTests);
+#endif
 
   command_line->AppendSwitchASCII(extensions::switches::kAllowlistedExtensionID,
                                   kExtensionId);
@@ -146,13 +150,12 @@ base::Value TabCapturePerformanceTestBase::SendMessageToExtension(
     ContinueBrowserFor(kSendMessageRetryPeriod);
   }
   NOTREACHED();
-  return base::Value();
 }
 
 TabCapturePerformanceTestBase::TraceAnalyzerUniquePtr
 TabCapturePerformanceTestBase::TraceAndObserve(
     const std::string& category_patterns,
-    const std::vector<base::StringPiece>& event_names,
+    const std::vector<std::string_view>& event_names,
     int required_event_count) {
   const base::TimeDelta observation_period = is_full_performance_run_
                                                  ? kFullRunObservationPeriod
@@ -212,8 +215,7 @@ std::string TabCapturePerformanceTestBase::MakeBase64EncodedGZippedString(
     const std::string& input) {
   std::string gzipped_input;
   compression::GzipCompress(input, &gzipped_input);
-  std::string result;
-  base::Base64Encode(gzipped_input, &result);
+  std::string result = base::Base64Encode(gzipped_input);
 
   // Break up the string with newlines to make it easier to handle in the
   // console logs.
@@ -232,7 +234,7 @@ std::string TabCapturePerformanceTestBase::MakeBase64EncodedGZippedString(
 void TabCapturePerformanceTestBase::ContinueBrowserFor(
     base::TimeDelta duration) {
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), duration);
   run_loop.Run();
 }
@@ -240,7 +242,7 @@ void TabCapturePerformanceTestBase::ContinueBrowserFor(
 // static
 void TabCapturePerformanceTestBase::QueryTraceEvents(
     trace_analyzer::TraceAnalyzer* analyzer,
-    base::StringPiece event_name,
+    std::string_view event_name,
     trace_analyzer::TraceEventVector* events) {
   const trace_analyzer::Query kQuery =
       trace_analyzer::Query::EventNameIs(std::string(event_name)) &&

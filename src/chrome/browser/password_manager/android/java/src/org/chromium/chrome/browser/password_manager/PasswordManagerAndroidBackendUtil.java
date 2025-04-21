@@ -1,12 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.password_manager;
 
-import static org.chromium.chrome.browser.password_manager.PasswordManagerHelper.usesUnifiedPasswordManagerUI;
-
 import android.app.PendingIntent;
 
+import androidx.annotation.Nullable;
+
+import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.ResolvableApiException;
 
@@ -38,9 +39,9 @@ class PasswordManagerAndroidBackendUtil {
                     .errorCode;
         }
         if (exception instanceof ApiException) {
-            return CredentialManagerError.API_ERROR;
+            return CredentialManagerError.API_EXCEPTION;
         }
-        return CredentialManagerError.UNCATEGORIZED;
+        return CredentialManagerError.OTHER_API_ERROR;
     }
 
     static int getApiErrorCode(Exception exception) {
@@ -50,9 +51,17 @@ class PasswordManagerAndroidBackendUtil {
         return 0; // '0' means SUCCESS.
     }
 
-    static void handleResolvableApiException(ResolvableApiException exception) {
-        if (!usesUnifiedPasswordManagerUI()) return;
+    static @Nullable Integer getConnectionResultCode(Exception exception) {
+        if (!(exception instanceof ApiException)) return null;
 
+        ConnectionResult connectionResult =
+                ((ApiException) exception).getStatus().getConnectionResult();
+        if (connectionResult == null) return null;
+
+        return connectionResult.getErrorCode();
+    }
+
+    static void handleResolvableApiException(ResolvableApiException exception) {
         // No special resolution for the authentication errors is needed since the user has already
         // been prompted to reauthenticate by Google services and Sync in Chrome.
         if (exception.getStatusCode() == ChromeSyncStatusCode.AUTH_ERROR_RESOLVABLE) return;

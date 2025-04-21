@@ -1,28 +1,32 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/offline_login_screen.h"
 
-#include "ash/components/login/auth/public/key.h"
-#include "ash/components/login/auth/public/user_context.h"
-#include "base/bind.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/screen_manager.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/ui/signin_ui.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/ui/webui/chromeos/login/offline_login_screen_handler.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/ash/login/signin_ui.h"
+#include "chrome/browser/ui/webui/ash/login/offline_login_screen_handler.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/login/auth/public/auth_types.h"
+#include "chromeos/ash/components/login/auth/public/key.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/known_user.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
@@ -39,7 +43,7 @@ constexpr const base::TimeDelta kIdleTimeDelta = base::Minutes(3);
 
 // These values should not be renumbered and numeric values should never
 // be reused. This must be kept in sync with ChromeOSHiddenUserPodsOfflineLogin
-// in tools/metrics/histogram/enums.xml
+// in tools/metrics/histograms/enums.xml
 enum class OfflineLoginEvent {
   kOfflineLoginEnabled = 0,
   kOfflineLoginBlockedByTimeLimit = 1,
@@ -61,17 +65,20 @@ void RecordEvent(OfflineLoginEvent event) {
 
 // static
 std::string OfflineLoginScreen::GetResultString(Result result) {
+  // LINT.IfChange(UsageMetrics)
   switch (result) {
     case Result::BACK:
       return "Back";
     case Result::RELOAD_ONLINE_LOGIN:
       return "ReloadOnlineLogin";
   }
+  // LINT.ThenChange(//tools/metrics/histograms/metadata/oobe/histograms.xml)
 }
 
 OfflineLoginScreen::OfflineLoginScreen(base::WeakPtr<OfflineLoginView> view,
                                        const ScreenExitCallback& exit_callback)
     : BaseScreen(OfflineLoginView::kScreenId, OobeScreenPriority::DEFAULT),
+      auth_factor_editor_(UserDataAuthClient::Get()),
       view_(std::move(view)),
       exit_callback_(exit_callback) {
   network_state_informer_ = base::MakeRefCounted<NetworkStateInformer>();
@@ -81,6 +88,8 @@ OfflineLoginScreen::OfflineLoginScreen(base::WeakPtr<OfflineLoginView> view,
 OfflineLoginScreen::~OfflineLoginScreen() = default;
 
 void OfflineLoginScreen::ShowImpl() {
+  CHECK(session_manager::SessionManager::Get()->session_state() ==
+        session_manager::SessionState::LOGIN_PRIMARY);
   if (!view_)
     return;
 
@@ -105,6 +114,7 @@ void OfflineLoginScreen::ShowImpl() {
 void OfflineLoginScreen::HideImpl() {
   scoped_observer_.reset();
   idle_detector_.reset();
+  authenticate_by_pin_ = false;
   if (view_)
     view_->Hide();
 }
@@ -114,10 +124,10 @@ void OfflineLoginScreen::OnUserAction(const base::Value::List& args) {
   if (action_id == kUserActionCancel) {
     exit_callback_.Run(Result::BACK);
   } else if (action_id == kUserActionEmailSubmitted) {
-    CHECK_EQ(args.size(), 2);
+    CHECK_EQ(args.size(), 2u);
     HandleEmailSubmitted(args[1].GetString());
   } else if (action_id == kUserActionCompleteAuthentication) {
-    CHECK_EQ(args.size(), 3);
+    CHECK_EQ(args.size(), 3u);
     HandleCompleteAuth(args[1].GetString(), args[2].GetString());
   } else {
     BaseScreen::OnUserAction(args);
@@ -131,7 +141,8 @@ void OfflineLoginScreen::HandleTryLoadOnlineLogin() {
 void OfflineLoginScreen::HandleCompleteAuth(const std::string& email,
                                             const std::string& password) {
   const std::string sanitized_email = gaia::SanitizeEmail(email);
-  const AccountId account_id = user_manager::known_user::GetAccountId(
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  const AccountId account_id = known_user.GetAccountId(
       sanitized_email, std::string() /* id */, AccountType::UNKNOWN);
   const user_manager::User* user =
       user_manager::UserManager::Get()->FindUser(account_id);
@@ -147,16 +158,15 @@ void OfflineLoginScreen::HandleCompleteAuth(const std::string& email,
 
   UserContext user_context(*user);
   user_context.SetKey(Key(password));
-  // Save the user's plaintext password for possible authentication to a
-  // network. See https://crbug.com/386606 for details.
-  user_context.SetPasswordKey(Key(password));
-  user_context.SetIsUsingPin(false);
-  if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY) {
-    CHECK(user_context.GetUserType() ==
-          user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY)
-        << "Incorrect Active Directory user type "
-        << user_context.GetUserType();
+  if (!authenticate_by_pin_) {
+    user_context.SetLocalPasswordInput(LocalPasswordInput{password});
+    // Save the user's plaintext password for possible authentication to a
+    // network. See https://crbug.com/386606 for details.
+    user_context.SetPasswordKey(Key(password));
   }
+  user_context.SetIsUsingPin(authenticate_by_pin_);
+  CHECK(account_id.GetAccountType() != AccountType::ACTIVE_DIRECTORY)
+      << "Incorrect Active Directory user type " << user_context.GetUserType();
   user_context.SetIsUsingOAuth(false);
 
   if (ExistingUserController::current_controller()) {
@@ -177,7 +187,7 @@ void OfflineLoginScreen::HandleEmailSubmitted(const std::string& email) {
   user_manager::KnownUser known_user(g_browser_process->local_state());
   const AccountId account_id = known_user.GetAccountId(
       sanitized_email, std::string(), AccountType::UNKNOWN);
-  const absl::optional<base::TimeDelta> offline_signin_interval =
+  const std::optional<base::TimeDelta> offline_signin_interval =
       known_user.GetOfflineSigninLimit(account_id);
 
   // Further checks only if the limit is set.
@@ -198,14 +208,42 @@ void OfflineLoginScreen::HandleEmailSubmitted(const std::string& email) {
 
   const user_manager::User* user =
       user_manager::UserManager::Get()->FindUser(account_id);
-  if (user && user->force_online_signin()) {
-    RecordEvent(OfflineLoginEvent::kOfflineLoginBlockedByInvalidToken);
-    view_->ShowPasswordPage();
+
+  // Shows the password page when no user is found. Error message is shown
+  // after entering the password.
+  if (!user) {
+    RecordEvent(OfflineLoginEvent::kOfflineLoginEnabled);
+    view_->ShowPasswordPage(/*authenticate_by_pin_=*/false);
     return;
   }
 
+  if (user->force_online_signin()) {
+    RecordEvent(OfflineLoginEvent::kOfflineLoginBlockedByInvalidToken);
+    view_->ShowOnlineRequiredDialog();
+    return;
+  }
+
+  auth_factor_editor_.GetAuthFactorsConfiguration(
+      std::make_unique<UserContext>(*user),
+      base::BindOnce(&OfflineLoginScreen::OnGetAuthFactorsConfiguration,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
+
+void OfflineLoginScreen::OnGetAuthFactorsConfiguration(
+    std::unique_ptr<UserContext> user_context,
+    std::optional<AuthenticationError> error) {
+  if (error.has_value()) {
+    LOG(ERROR) << "Failed to get auth factors configuration, code "
+               << error->get_cryptohome_error();
+  } else {
+    const auto& config = user_context->GetAuthFactorsConfiguration();
+    // Allow authentication by PIN if that is the user's only auth factor.
+    authenticate_by_pin_ =
+        !config.HasConfiguredFactor(cryptohome::AuthFactorType::kPassword) &&
+        config.HasConfiguredFactor(cryptohome::AuthFactorType::kPin);
+  }
   RecordEvent(OfflineLoginEvent::kOfflineLoginEnabled);
-  view_->ShowPasswordPage();
+  view_->ShowPasswordPage(authenticate_by_pin_);
 }
 
 void OfflineLoginScreen::StartIdleDetection() {
@@ -234,7 +272,6 @@ void OfflineLoginScreen::UpdateState(NetworkError::ErrorReason reason) {
   NetworkStateInformer::State state = network_state_informer_->state();
   is_network_available_ =
       (state == NetworkStateInformer::ONLINE &&
-       reason != NetworkError::ERROR_REASON_PORTAL_DETECTED &&
        reason != NetworkError::ERROR_REASON_LOADING_TIMEOUT);
 }
 

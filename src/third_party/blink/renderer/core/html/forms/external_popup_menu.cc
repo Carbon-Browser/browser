@@ -32,12 +32,11 @@
 
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/events/current_input_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
@@ -45,8 +44,10 @@
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/web_frame_widget_impl.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
+#include "third_party/blink/renderer/core/html/forms/html_opt_group_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_option_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
+#include "third_party/blink/renderer/core/html/html_hr_element.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
@@ -108,7 +109,7 @@ bool ExternalPopupMenu::ShowInternal() {
   bool allow_multiple_selection;
   GetPopupMenuInfo(*owner_element_, &item_height, &font_size, &selected_item,
                    &menu_items, &right_aligned, &allow_multiple_selection);
-  if (menu_items.IsEmpty())
+  if (menu_items.empty())
     return false;
 
   auto* execution_context = owner_element_->GetExecutionContext();
@@ -191,8 +192,8 @@ void ExternalPopupMenu::UpdateFromElement(UpdateReason reason) {
       needs_update_ = true;
       owner_element_->GetDocument()
           .GetTaskRunner(TaskType::kUserInteraction)
-          ->PostTask(FROM_HERE, WTF::Bind(&ExternalPopupMenu::Update,
-                                          WrapPersistent(this)));
+          ->PostTask(FROM_HERE, WTF::BindOnce(&ExternalPopupMenu::Update,
+                                              WrapPersistent(this)));
       break;
 
     case kByStyleChange:
@@ -239,7 +240,7 @@ void ExternalPopupMenu::DidAcceptIndices(const Vector<int32_t>& indices) {
   HTMLSelectElement* owner_element = owner_element_;
   owner_element->PopupDidHide();
 
-  if (indices.IsEmpty()) {
+  if (indices.empty()) {
     owner_element->SelectOptionByPopup(-1);
   } else if (!owner_element->IsMultiple()) {
     owner_element->SelectOptionByPopup(
@@ -247,7 +248,7 @@ void ExternalPopupMenu::DidAcceptIndices(const Vector<int32_t>& indices) {
   } else {
     Vector<int> list_indices;
     wtf_size_t list_count = base::checked_cast<wtf_size_t>(indices.size());
-    list_indices.ReserveCapacity(list_count);
+    list_indices.reserve(list_count);
     for (wtf_size_t i = 0; i < list_count; ++i)
       list_indices.push_back(ToPopupMenuItemIndex(indices[i], *owner_element));
     owner_element->SelectMultipleOptionsByPopup(list_indices);
@@ -273,10 +274,18 @@ void ExternalPopupMenu::GetPopupMenuInfo(
       owner_element.GetListItems();
   wtf_size_t item_count = list_items.size();
   for (wtf_size_t i = 0; i < item_count; ++i) {
-    if (owner_element.ItemIsDisplayNone(*list_items[i]))
+    if (owner_element.ItemIsDisplayNone(*list_items[i],
+                                        /*ensure_style=*/true)) {
       continue;
+    }
 
     Element& item_element = *list_items[i];
+#if BUILDFLAG(IS_ANDROID)
+    // Separators get rendered as selectable options on android
+    if (IsA<HTMLHRElement>(item_element)) {
+      continue;
+    }
+#endif
     auto popup_item = mojom::blink::MenuItem::New();
     popup_item->label = owner_element.ItemText(item_element);
     popup_item->tool_tip = item_element.title();
@@ -323,8 +332,14 @@ int ExternalPopupMenu::ToPopupMenuItemIndex(int external_popup_menu_item_index,
   int index_tracker = 0;
   const HeapVector<Member<HTMLElement>>& items = owner_element.GetListItems();
   for (wtf_size_t i = 0; i < items.size(); ++i) {
-    if (owner_element.ItemIsDisplayNone(*items[i]))
+    if (owner_element.ItemIsDisplayNone(*items[i], /*ensure_style=*/true))
       continue;
+#if BUILDFLAG(IS_ANDROID)
+    // <hr> elements are not sent to the browser on android
+    if (IsA<HTMLHRElement>(*items[i])) {
+      continue;
+    }
+#endif
     if (index_tracker++ == external_popup_menu_item_index)
       return i;
   }
@@ -340,8 +355,14 @@ int ExternalPopupMenu::ToExternalPopupMenuItemIndex(
   int index_tracker = 0;
   const HeapVector<Member<HTMLElement>>& items = owner_element.GetListItems();
   for (wtf_size_t i = 0; i < items.size(); ++i) {
-    if (owner_element.ItemIsDisplayNone(*items[i]))
+    if (owner_element.ItemIsDisplayNone(*items[i], /*ensure_style=*/true))
       continue;
+#if BUILDFLAG(IS_ANDROID)
+    // <hr> elements are not sent to the browser on android
+    if (IsA<HTMLHRElement>(*items[i])) {
+      continue;
+    }
+#endif
     if (popup_menu_item_index == static_cast<int>(i))
       return index_tracker;
     ++index_tracker;

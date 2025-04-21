@@ -1,10 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/enterprise/reporting/browser_report_generator_android.h"
-
-#include <utility>
 
 #include "base/files/file_path.h"
 #include "base/path_service.h"
@@ -41,11 +39,6 @@ BrowserReportGeneratorAndroid::GetReportedProfiles() {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   for (const auto* entry : profile_manager->GetProfileAttributesStorage()
                                .GetAllProfilesAttributes()) {
-    // Skip off-the-record profile.
-    auto* profile = profile_manager->GetProfile(entry->GetPath());
-    if (profile && profile->IsOffTheRecord())
-      continue;
-
     reportedProfileData.push_back(
         {entry->GetPath().AsUTF8Unsafe(), base::UTF16ToUTF8(entry->GetName())});
   }
@@ -60,13 +53,6 @@ bool BrowserReportGeneratorAndroid::IsExtendedStableChannel() {
 void BrowserReportGeneratorAndroid::GenerateBuildStateInfo(
     em::BrowserReport* report) {
   // Not used on Android because there is no in-app auto-update.
-}
-
-void BrowserReportGeneratorAndroid::GeneratePluginsIfNeeded(
-    ReportCallback callback,
-    std::unique_ptr<em::BrowserReport> report) {
-  // There are no plugins on Android
-  std::move(callback).Run(std::move(report));
 }
 
 }  // namespace enterprise_reporting

@@ -26,6 +26,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 
 #include <memory>
@@ -90,7 +95,7 @@ Referrer SecurityPolicy::GenerateReferrer(
       ReferrerUtils::MojoReferrerPolicyResolveDefault(referrer_policy);
   // Empty (a possible input) and default (the value of `Referrer::NoReferrer`)
   // strings are not equivalent.
-  if (referrer == Referrer::NoReferrer() || referrer.IsEmpty())
+  if (referrer == Referrer::NoReferrer() || referrer.empty())
     return Referrer(Referrer::NoReferrer(), referrer_policy_no_default);
 
   KURL referrer_url = KURL(NullURL(), referrer).UrlStrippedForUseAsReferrer();
@@ -148,7 +153,6 @@ Referrer SecurityPolicy::GenerateReferrer(
       break;
     case network::mojom::ReferrerPolicy::kDefault:
       NOTREACHED();
-      break;
   }
 
   return Referrer(ShouldHideReferrer(url, referrer_url) ? Referrer::NoReferrer()
@@ -267,6 +271,31 @@ bool SecurityPolicy::ReferrerPolicyFromString(
     return true;
   }
   return false;
+}
+
+String SecurityPolicy::ReferrerPolicyAsString(
+    network::mojom::ReferrerPolicy policy) {
+  switch (policy) {
+    case network::mojom::ReferrerPolicy::kAlways:
+      return "unsafe-url";
+    case network::mojom::ReferrerPolicy::kDefault:
+      return "";
+    case network::mojom::ReferrerPolicy::kNoReferrerWhenDowngrade:
+      return "no-referrer-when-downgrade";
+    case network::mojom::ReferrerPolicy::kNever:
+      return "no-referrer";
+    case network::mojom::ReferrerPolicy::kOrigin:
+      return "origin";
+    case network::mojom::ReferrerPolicy::kOriginWhenCrossOrigin:
+      return "origin-when-cross-origin";
+    case network::mojom::ReferrerPolicy::kSameOrigin:
+      return "same-origin";
+    case network::mojom::ReferrerPolicy::kStrictOrigin:
+      return "strict-origin";
+    case network::mojom::ReferrerPolicy::kStrictOriginWhenCrossOrigin:
+      return "strict-origin-when-cross-origin";
+  }
+  NOTREACHED();
 }
 
 namespace {

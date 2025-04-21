@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/vr/databinding/binding.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace vr {
@@ -65,7 +65,7 @@ TEST(Binding, HistoricBinding) {
       VR_BIND_LAMBDA([](TestModel* m) { return m->value; },
                      base::Unretained(&a)),
       VR_BIND_LAMBDA(
-          [](TestView* v, const absl::optional<bool>& last_value,
+          [](TestView* v, const std::optional<bool>& last_value,
              const bool& value) {
             if (last_value)
               v->value = value;

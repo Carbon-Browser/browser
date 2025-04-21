@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 
+#include <string_view>
 #include <utility>
 
 #include "base/files/file_util.h"
@@ -17,16 +18,13 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_restrictions.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "third_party/leveldatabase/env_chromium.h"
 #include "third_party/leveldatabase/src/include/leveldb/iterator.h"
 #include "third_party/leveldatabase/src/include/leveldb/write_batch.h"
-
-using base::StringPiece;
 
 namespace {
 
@@ -42,7 +40,8 @@ LeveldbValueStore::LeveldbValueStore(const std::string& uma_client_name,
     : LazyLevelDb(uma_client_name, db_path) {
   base::trace_event::MemoryDumpManager::GetInstance()
       ->RegisterDumpProviderWithSequencedTaskRunner(
-          this, "LeveldbValueStore", base::SequencedTaskRunnerHandle::Get(),
+          this, "LeveldbValueStore",
+          base::SequencedTaskRunner::GetCurrentDefault(),
           base::trace_event::MemoryDumpProvider::Options());
 }
 
@@ -56,19 +55,16 @@ LeveldbValueStore::~LeveldbValueStore() {
 size_t LeveldbValueStore::GetBytesInUse(const std::string& key) {
   // Let SettingsStorageQuotaEnforcer implement this.
   NOTREACHED() << "Not implemented";
-  return 0;
 }
 
 size_t LeveldbValueStore::GetBytesInUse(const std::vector<std::string>& keys) {
   // Let SettingsStorageQuotaEnforcer implement this.
   NOTREACHED() << "Not implemented";
-  return 0;
 }
 
 size_t LeveldbValueStore::GetBytesInUse() {
   // Let SettingsStorageQuotaEnforcer implement this.
   NOTREACHED() << "Not implemented";
-  return 0;
 }
 
 ValueStore::ReadResult LeveldbValueStore::Get(const std::string& key) {
@@ -84,7 +80,7 @@ ValueStore::ReadResult LeveldbValueStore::Get(
   base::Value::Dict settings;
 
   for (const std::string& key : keys) {
-    absl::optional<base::Value> setting;
+    std::optional<base::Value> setting;
     status.Merge(Read(key, &setting));
     if (!status.ok())
       return ReadResult(std::move(status));
@@ -105,8 +101,8 @@ ValueStore::ReadResult LeveldbValueStore::Get() {
   std::unique_ptr<leveldb::Iterator> it(db()->NewIterator(read_options()));
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     std::string key = it->key().ToString();
-    absl::optional<base::Value> value = base::JSONReader::Read(
-        StringPiece(it->value().data(), it->value().size()));
+    std::optional<base::Value> value = base::JSONReader::Read(
+        std::string_view(it->value().data(), it->value().size()));
     if (!value) {
       return ReadResult(Status(CORRUPTION,
                                Delete(key).ok() ? VALUE_RESTORE_DELETE_SUCCESS
@@ -177,26 +173,19 @@ ValueStore::WriteResult LeveldbValueStore::Remove(
   ValueStoreChangeList changes;
 
   for (const std::string& key : keys) {
-    absl::optional<base::Value> old_value;
+    std::optional<base::Value> old_value;
     status.Merge(Read(key, &old_value));
     if (!status.ok())
       return WriteResult(std::move(status));
 
     if (old_value) {
-      changes.emplace_back(key, std::move(old_value), absl::nullopt);
+      changes.emplace_back(key, std::move(old_value), std::nullopt);
       batch.Delete(key);
     }
   }
 
   leveldb::Status ldb_status;
-  {
-    // Write() uses ConditionVariables to coordinate a batch write for
-    // efficiency. This is an allowed use of base-sync-primitives.
-    // TODO(crbug.com/1330845): The ScopedAllow should happen in leveldb rather
-    // than all the call sites.
-    base::ScopedAllowBaseSyncPrimitives scoped_allow_base_sync_primitives;
-    ldb_status = db()->Write(leveldb::WriteOptions(), &batch);
-  }
+  ldb_status = db()->Write(leveldb::WriteOptions(), &batch);
   if (!ldb_status.ok() && !ldb_status.IsNotFound()) {
     status.Merge(ToValueStoreError(ldb_status));
     return WriteResult(std::move(status));
@@ -214,8 +203,8 @@ ValueStore::WriteResult LeveldbValueStore::Clear() {
   base::Value::Dict& whole_db = read_result.settings();
   while (!whole_db.empty()) {
     std::string next_key = whole_db.begin()->first;
-    absl::optional<base::Value> next_value = whole_db.Extract(next_key);
-    changes.emplace_back(next_key, std::move(*next_value), absl::nullopt);
+    std::optional<base::Value> next_value = whole_db.Extract(next_key);
+    changes.emplace_back(next_key, std::move(*next_value), std::nullopt);
   }
 
   DeleteDbFile();
@@ -263,7 +252,7 @@ ValueStore::Status LeveldbValueStore::AddToBatch(
   bool write_new_value = true;
 
   if (!(options & NO_GENERATE_CHANGES)) {
-    absl::optional<base::Value> old_value;
+    std::optional<base::Value> old_value;
     Status status = Read(key, &old_value);
     if (!status.ok())
       return status;
@@ -286,11 +275,6 @@ ValueStore::Status LeveldbValueStore::AddToBatch(
 }
 
 ValueStore::Status LeveldbValueStore::WriteToDb(leveldb::WriteBatch* batch) {
-  // Write() uses ConditionVariables to coordinate a batch write for efficiency.
-  // This is an allowed use of base-sync-primitives.
-  // TODO(crbug.com/1330845): The ScopedAllow should happen in leveldb rather
-  // than all the call sites.
-  base::ScopedAllowBaseSyncPrimitives scoped_allow_base_sync_primitives;
   return ToValueStoreError(db()->Write(write_options(), batch));
 }
 

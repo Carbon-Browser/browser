@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,8 +14,10 @@ source_set("proxy") {
   configs += [ "//chromeos/ash/components/network:network_config" ]
   deps = [
     "//base",
+    "//chromeos/ash/components/dbus/shill",
     "//chromeos/ash/components/network/onc",
-    "//chromeos/dbus/shill",
+    "//chromeos/ash/components/network/portal_detector",
+    "//chromeos/constants",
     "//components/onc",
     "//components/pref_registry",
     "//components/prefs",
@@ -23,6 +25,10 @@ source_set("proxy") {
     "//components/user_manager",
     "//dbus",
     "//net",
+
+    # TODO(b/354839582): Use targets having headers included from
+    # chromeos/ash/components/network/proxy/proxy_config_handler.cc.
+    "//chromeos/services/network_config/public/mojom",
   ]
   sources = [
     "proxy_config_handler.cc",
@@ -38,14 +44,17 @@ source_set("unit_tests") {
   testonly = true
   deps = [
     "//base",
+    "//chromeos/ash/components/dbus/shill",
     "//chromeos/ash/components/network",
     "//chromeos/ash/components/network:test_support",
-    "//chromeos/dbus/shill",
+    "//chromeos/constants",
     "//components/onc",
     "//components/prefs",
     "//components/prefs:test_support",
     "//components/proxy_config",
     "//components/sync_preferences:test_support",
+    "//content/public/browser",
+    "//content/test:test_support",
     "//net:test_support",
     "//testing/gtest",
   ]

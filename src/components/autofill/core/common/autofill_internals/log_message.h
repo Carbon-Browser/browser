@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@ class LogBuffer;
 // that name prefixed with a k (e.g. kParsedForms) in code search.
 #define AUTOFILL_LOG_MESSAGE_TEMPLATES(T)                                      \
   T(ParsedForms, "Parsed forms:")                                              \
+  T(SendAutofillQuery, "Sending Autofill Query Request:")                      \
+  T(CachedAutofillQuery, "Retrieved Cached Autofill Query Request:")           \
   T(SendAutofillUpload, "Sending Autofill Upload Request:")                    \
   T(LocalHeuristicRegExMatched, "RegEx of local heuristic matched:")           \
   T(LocalHeuristicDidNotFindEnoughFillableFields,                              \
@@ -34,6 +36,8 @@ class LogBuffer;
     "Abort parsing form: Form has no text field.")                             \
   T(FunnelMetrics, "Funnel Metrics")                                           \
   T(KeyMetrics, "Key Metrics")                                                 \
+  T(ImportAddressProfileComplementedCountryCode,                               \
+    "Country code inferred for profile import: ")                              \
   T(ImportAddressProfileFromForm,                                              \
     "FormDataImporter::ImportAddressProfiles for form:  ")                     \
   T(ImportAddressProfileFromFormFailed,                                        \
@@ -41,10 +45,10 @@ class LogBuffer;
   T(ImportAddressProfileFromFormNumberOfImports,                               \
     "Number of imported address profiles: ")                                   \
   T(ImportAddressProfileFromFormSection, "ImportAddressProfileForSection: ")   \
-  T(ImportAddressProfileFromFormCountrySource,                                 \
-    "Source of country for address requirements: ")                            \
   T(ImportAddressProfileFromFormAddressRequirements,                           \
     "Requirements for the address import: ")                                   \
+  T(ImportAddressProfileFromFormRemoveInvalidValue,                            \
+    "Removing value because validation failed: ")                              \
   T(FormSubmissionDetected, "Form submission detected: ")                      \
   T(SendFillingData, "Sending data to fill to renderer: ")                     \
   T(CreditCardUploadEnabled, "Credit card upload is enabled.")                 \
@@ -56,7 +60,10 @@ class LogBuffer;
   T(ProcessingServerData, "Processing server data.")                           \
   T(JavaScriptChangedAutofilledValue,                                          \
     "JavaScript set value of autofilled "                                      \
-    "field: ")
+    "field: ")                                                                 \
+  T(FastCheckout, "Fast Checkout: ")                                           \
+  T(TouchToFill, "Touch To Fill: ")                                            \
+  T(AutofillAi, "Autofill with AI: ")
 
 // Log messages for chrome://autofill-internals.
 

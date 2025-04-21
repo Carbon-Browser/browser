@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,16 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/file_system_provider/abort_callback.h"
+#include "chrome/browser/ash/file_system_provider/operation_request_manager.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_observer.h"
 #include "chrome/browser/ash/file_system_provider/queue.h"
-#include "chrome/browser/ash/file_system_provider/request_manager.h"
 #include "storage/browser/file_system/async_file_util.h"
 #include "storage/browser/file_system/watcher_manager.h"
 #include "url/gurl.h"
@@ -38,10 +39,11 @@ namespace extensions {
 class EventRouter;
 }  // namespace extensions
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class NotificationManagerInterface;
+class RequestDispatcher;
+class ODFSMetrics;
 
 // Automatically calls the |update_callback| after all of the callbacks created
 // with |CreateCallback| are called.
@@ -151,6 +153,9 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
       int64_t offset,
       int length,
       storage::AsyncFileUtil::StatusCallback callback) override;
+  AbortCallback FlushFile(
+      int file_handle,
+      storage::AsyncFileUtil::StatusCallback callback) override;
   AbortCallback AddWatcher(const GURL& origin,
                            const base::FilePath& entry_path,
                            bool recursive,
@@ -163,7 +168,7 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
                      bool recursive,
                      storage::AsyncFileUtil::StatusCallback callback) override;
   const ProvidedFileSystemInfo& GetFileSystemInfo() const override;
-  RequestManager* GetRequestManager() override;
+  OperationRequestManager* GetRequestManager() override;
   Watchers* GetWatchers() override;
   const OpenedFiles& GetOpenedFiles() const override;
   void AddObserver(ProvidedFileSystemObserver* observer) override;
@@ -176,6 +181,7 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
               storage::AsyncFileUtil::StatusCallback callback) override;
   void Configure(storage::AsyncFileUtil::StatusCallback callback) override;
   base::WeakPtr<ProvidedFileSystemInterface> GetWeakPtr() override;
+  std::unique_ptr<ScopedUserInteraction> StartUserInteraction() override;
 
  private:
   // Wrapper for arguments for AddWatcherInQueue, as it's too many of them to
@@ -208,7 +214,7 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
   // Notifies about a notifier even within |watcher_queue_|.
   AbortCallback NotifyInQueue(std::unique_ptr<NotifyInQueueArgs> args);
 
-  // Called when adding a watcher is completed with either success or en error.
+  // Called when adding a watcher is completed with either success or an error.
   void OnAddWatcherInQueueCompleted(
       size_t token,
       const base::FilePath& entry_path,
@@ -217,7 +223,7 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
       storage::AsyncFileUtil::StatusCallback callback,
       base::File::Error result);
 
-  // Called when adding a watcher is completed with either a success or an
+  // Called when removing a watcher is completed with either a success or an
   // error.
   void OnRemoveWatcherInQueueCompleted(
       size_t token,
@@ -237,18 +243,24 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
                            OpenFileMode mode,
                            OpenFileCallback callback,
                            int file_handle,
-                           base::File::Error result);
+                           base::File::Error result,
+                           std::unique_ptr<EntryMetadata> metadata);
 
   // Called when closing a file is completed with either a success or an error.
   void OnCloseFileCompleted(int file_handle,
                             storage::AsyncFileUtil::StatusCallback callback,
                             base::File::Error result);
 
-  Profile* profile_;                       // Not owned.
-  extensions::EventRouter* event_router_;  // Not owned. May be NULL.
+  // Creates `request_manager_`, or replaces it if it exists (in tests).
+  void ConstructRequestManager();
+
+  raw_ptr<Profile> profile_;                       // Not owned.
+  raw_ptr<extensions::EventRouter> event_router_;  // Not owned. May be NULL.
   ProvidedFileSystemInfo file_system_info_;
   std::unique_ptr<NotificationManagerInterface> notification_manager_;
-  std::unique_ptr<RequestManager> request_manager_;
+  std::unique_ptr<RequestDispatcher> request_dispatcher_;
+  std::unique_ptr<ODFSMetrics> odfs_metrics_;
+  std::unique_ptr<OperationRequestManager> request_manager_;
   Watchers watchers_;
   Queue watcher_queue_;
   OpenedFiles opened_files_;
@@ -257,7 +269,6 @@ class ProvidedFileSystem : public ProvidedFileSystemInterface {
   base::WeakPtrFactory<ProvidedFileSystem> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_PROVIDED_FILE_SYSTEM_H_

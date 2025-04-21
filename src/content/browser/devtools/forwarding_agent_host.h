@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class ForwardingAgentHost : public DevToolsAgentHostImpl {
   ~ForwardingAgentHost() override;
 
   // DevToolsAgentHostImpl overrides.
-  bool AttachSession(DevToolsSession* session, bool acquire_wake_lock) override;
+  bool AttachSession(DevToolsSession* session) override;
   void DetachSession(DevToolsSession* session) override;
 
   // DevToolsAgentHost implementation.

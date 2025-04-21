@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "components/nacl/renderer/ppb_nacl_private.h"
 #include "third_party/blink/public/web/web_associated_url_loader_client.h"
 
@@ -50,7 +50,7 @@ class FileDownloader : public blink::WebAssociatedURLLoaderClient {
  private:
   // WebAssociatedURLLoaderClient implementation.
   void DidReceiveResponse(const blink::WebURLResponse& response) override;
-  void DidReceiveData(const char* data, int data_length) override;
+  void DidReceiveData(base::span<const char> data) override;
   void DidFinishLoading() override;
   void DidFail(const blink::WebURLError& error) override;
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -15,6 +15,7 @@
 #include "chrome/browser/ui/managed_ui.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/supervised_user/core/common/pref_names.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 
@@ -78,8 +79,9 @@ void ManagedUIHandler::OnPolicyUpdated(const policy::PolicyNamespace& ns,
 // Manually add/remove observers. ScopedObserver doesn't work with
 // PolicyService::Observer because AddObserver() takes 2 arguments.
 void ManagedUIHandler::AddObservers() {
-  if (has_observers_)
+  if (has_observers_) {
     return;
+  }
 
   has_observers_ = true;
 
@@ -95,8 +97,9 @@ void ManagedUIHandler::AddObservers() {
 }
 
 void ManagedUIHandler::RemoveObservers() {
-  if (!has_observers_)
+  if (!has_observers_) {
     return;
+  }
 
   has_observers_ = false;
 
@@ -111,20 +114,21 @@ void ManagedUIHandler::RemoveObservers() {
 
 base::Value::Dict ManagedUIHandler::GetDataSourceUpdate() const {
   base::Value::Dict update;
-  update.Set("browserManagedByOrg",
-             base::Value(chrome::GetManagedUiWebUILabel(profile_)));
+  update.Set("managedByIcon", chrome::GetManagedUiWebUIIcon(profile_));
+  update.Set("managementPageUrl", chrome::GetManagedUiUrl(profile_).spec());
+  update.Set("browserManagedByOrg", chrome::GetManagedUiWebUILabel(profile_));
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  update.Set("deviceManagedByOrg",
-             base::Value(chrome::GetDeviceManagedUiWebUILabel()));
+  update.Set("deviceManagedByOrg", chrome::GetDeviceManagedUiWebUILabel());
 #endif
-  update.Set("isManaged", base::Value(managed_));
+  update.Set("isManaged", managed_);
   return update;
 }
 
 void ManagedUIHandler::NotifyIfChanged() {
   bool managed = chrome::ShouldDisplayManagedUi(profile_);
-  if (managed == managed_)
+  if (managed == managed_) {
     return;
+  }
   managed_ = managed;
   FireWebUIListener("is-managed-changed", base::Value(managed));
   content::WebUIDataSource::Update(profile_, source_name_,

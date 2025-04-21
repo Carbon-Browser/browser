@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_OUTPUT_SURFACE_FRAME_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "components/viz/service/viz_service_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/ca_layer_result.h"
 #include "ui/gfx/delegated_ink_metadata.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/latency/latency_info.h"
@@ -36,18 +37,16 @@ class VIZ_SERVICE_EXPORT OutputSurfaceFrame {
   // Providing both |sub_buffer_rect| and |content_bounds| is not supported;
   // if neither is present, regular swap is used.
   // Optional rect for partial or empty swap.
-  absl::optional<gfx::Rect> sub_buffer_rect;
+  std::optional<gfx::Rect> sub_buffer_rect;
   // Optional content area for SwapWithBounds. Rectangles may overlap.
   std::vector<gfx::Rect> content_bounds;
   std::vector<ui::LatencyInfo> latency_info;
-  absl::optional<int64_t> choreographer_vsync_id;
-  bool top_controls_visible_height_changed = false;
+  std::optional<int64_t> choreographer_vsync_id;
+  // FrameData for the GLSurface.
+  gfx::FrameData data;
   // Metadata containing information to draw a delegated ink trail using
   // platform APIs.
   std::unique_ptr<gfx::DelegatedInkMetadata> delegated_ink_metadata;
-#if BUILDFLAG(IS_MAC)
-  gfx::CALayerResult ca_layer_error_code = gfx::kCALayerSuccess;
-#endif
 };
 
 }  // namespace viz

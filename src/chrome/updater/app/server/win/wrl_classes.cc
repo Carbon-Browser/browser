@@ -1,17 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <wrl/module.h>
 
-#include "build/branding_buildflags.h"
 #include "chrome/updater/app/server/win/com_classes.h"
 #include "chrome/updater/app/server/win/com_classes_legacy.h"
 
 namespace updater {
 
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wc++98-compat-extra-semi"
 
 // CoCreatableClassWithFactoryEx takes three parameters, `className`, `factory`,
@@ -33,28 +31,34 @@ namespace updater {
 CoCreatableClassWithFactoryEx(UpdaterSystemClass,
                               Microsoft::WRL::SimpleClassFactory<UpdaterImpl>,
                               ActiveSystem);
-
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 CoCreatableClassWithFactoryEx(
     GoogleUpdate3WebSystemClass,
+    Microsoft::WRL::SimpleClassFactory<LegacyOnDemandImpl>,
+    ActiveSystem);
+CoCreatableClassWithFactoryEx(
+    GoogleUpdate3WebServiceClass,
     Microsoft::WRL::SimpleClassFactory<LegacyOnDemandImpl>,
     ActiveSystem);
 CoCreatableClassWithFactoryEx(
     ProcessLauncherClass,
     Microsoft::WRL::SimpleClassFactory<LegacyProcessLauncherImpl>,
     ActiveSystem);
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+CoCreatableClassWithFactoryEx(
+    PolicyStatusSystemClass,
+    Microsoft::WRL::SimpleClassFactory<PolicyStatusImpl>,
+    ActiveSystem);
 
 CoCreatableClassWithFactoryEx(UpdaterUserClass,
                               Microsoft::WRL::SimpleClassFactory<UpdaterImpl>,
                               ActiveUser);
-
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 CoCreatableClassWithFactoryEx(
     GoogleUpdate3WebUserClass,
     Microsoft::WRL::SimpleClassFactory<LegacyOnDemandImpl>,
     ActiveUser);
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+CoCreatableClassWithFactoryEx(
+    PolicyStatusUserClass,
+    Microsoft::WRL::SimpleClassFactory<PolicyStatusImpl>,
+    ActiveUser);
 
 CoCreatableClassWithFactoryEx(
     UpdaterInternalSystemClass,

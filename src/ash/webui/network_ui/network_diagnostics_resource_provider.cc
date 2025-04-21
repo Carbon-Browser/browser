@@ -1,14 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/network_ui/network_diagnostics_resource_provider.h"
 
-#include "ash/constants/ash_features.h"
+#include "ash/webui/grit/ash_webui_common_resources.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/webui/web_ui_util.h"
-#include "ui/resources/grit/webui_generated_resources.h"
 
 namespace ash {
 namespace network_diagnostics {
@@ -141,15 +140,11 @@ struct WebUiResource {
 
 constexpr WebUiResource kResources[] = {
     {"test_canceled.png",
-     IDR_CR_COMPONENTS_CHROMEOS_NETWORK_HEALTH_TEST_CANCELED_PNG},
-    {"test_failed.png",
-     IDR_CR_COMPONENTS_CHROMEOS_NETWORK_HEALTH_TEST_FAILED_PNG},
-    {"test_not_run.png",
-     IDR_CR_COMPONENTS_CHROMEOS_NETWORK_HEALTH_TEST_NOT_RUN_PNG},
-    {"test_passed.png",
-     IDR_CR_COMPONENTS_CHROMEOS_NETWORK_HEALTH_TEST_PASSED_PNG},
-    {"test_warning.png",
-     IDR_CR_COMPONENTS_CHROMEOS_NETWORK_HEALTH_TEST_WARNING_PNG},
+     IDR_ASH_WEBUI_COMMON_NETWORK_HEALTH_TEST_CANCELED_PNG},
+    {"test_failed.png", IDR_ASH_WEBUI_COMMON_NETWORK_HEALTH_TEST_FAILED_PNG},
+    {"test_not_run.png", IDR_ASH_WEBUI_COMMON_NETWORK_HEALTH_TEST_NOT_RUN_PNG},
+    {"test_passed.png", IDR_ASH_WEBUI_COMMON_NETWORK_HEALTH_TEST_PASSED_PNG},
+    {"test_warning.png", IDR_ASH_WEBUI_COMMON_NETWORK_HEALTH_TEST_WARNING_PNG},
 };
 
 struct StringMap {
@@ -161,9 +156,6 @@ struct StringMap {
 
 void AddResources(content::WebUIDataSource* html_source) {
   html_source->AddLocalizedStrings(kLocalizedStrings);
-  html_source->AddBoolean(
-      "enableArcNetworkDiagnostics",
-      ash::features::IsArcNetworkDiagnosticsButtonEnabled());
 
   for (const auto& resource : kResources)
     html_source->AddResourcePath(resource.name, resource.id);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/sync/test/integration/single_client_status_change_checker.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/test/fake_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using fake_server::FakeServer;
@@ -40,7 +40,7 @@ bool UserEventEqualityChecker::IsExitConditionSatisfied(std::ostream* os) {
   *os << "Waiting server side USER_EVENTS to match expected.";
 
   std::vector<SyncEntity> entities =
-      fake_server_->GetSyncEntitiesByModelType(syncer::USER_EVENTS);
+      fake_server_->GetSyncEntitiesByDataType(syncer::USER_EVENTS);
 
   // |entities.size()| is only going to grow, if |entities.size()| ever
   // becomes bigger then all hope is lost of passing, stop now.

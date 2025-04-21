@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,10 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.appcompat.widget.AppCompatTextView;
-import androidx.core.view.ViewCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.io.ByteArrayInputStream;
 import java.security.MessageDigest;
@@ -38,9 +37,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-/**
- * UI component for displaying certificate information.
- */
+/** UI component for displaying certificate information. */
 public class CertificateViewer implements OnItemSelectedListener {
     private static final String X_509 = "X.509";
     private static final int SUBJECTALTERNATIVENAME_DNSNAME_ID = 2;
@@ -78,16 +75,17 @@ public class CertificateViewer implements OnItemSelectedListener {
             addCertificate(derData[i]);
         }
 
-        ArrayAdapter<String> arrayAdapter = new ArrayAdapter<String>(
-                mContext, android.R.layout.simple_spinner_item, mTitles) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                TextView view = (TextView) super.getView(position, convertView, parent);
-                // Add extra padding on the end side to avoid overlapping the dropdown arrow.
-                ViewCompat.setPaddingRelative(view, mPadding, mPadding, mPadding * 2, mPadding);
-                return view;
-            }
-        };
+        ArrayAdapter<String> arrayAdapter =
+                new ArrayAdapter<String>(mContext, android.R.layout.simple_spinner_item, mTitles) {
+                    @Override
+                    public View getView(int position, View convertView, ViewGroup parent) {
+                        TextView view = (TextView) super.getView(position, convertView, parent);
+                        // Add extra padding on the end side to avoid overlapping the dropdown
+                        // arrow.
+                        view.setPaddingRelative(mPadding, mPadding, mPadding * 2, mPadding);
+                        return view;
+                    }
+                };
         arrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
         LinearLayout dialogContainer = new LinearLayout(mContext);
@@ -96,7 +94,7 @@ public class CertificateViewer implements OnItemSelectedListener {
         TextView title = new AppCompatTextView(mContext);
         title.setText(R.string.certtitle);
         title.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
-        ApiCompatibilityUtils.setTextAppearance(title, android.R.style.TextAppearance_Large);
+        title.setTextAppearance(android.R.style.TextAppearance_Large);
         title.setTypeface(title.getTypeface(), Typeface.BOLD);
         title.setPadding(mPadding, mPadding, mPadding, mPadding / 2);
         dialogContainer.addView(title);
@@ -125,8 +123,10 @@ public class CertificateViewer implements OnItemSelectedListener {
 
         mDialog = new Dialog(mContext);
         mDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        mDialog.addContentView(dialogContainer,
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+        mDialog.addContentView(
+                dialogContainer,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.MATCH_PARENT));
         mDialog.show();
     }
@@ -138,13 +138,13 @@ public class CertificateViewer implements OnItemSelectedListener {
             }
             Certificate cert =
                     mCertificateFactory.generateCertificate(new ByteArrayInputStream(derData));
-            addCertificateDetails(cert, getDigest(derData, "SHA-256"), getDigest(derData, "SHA-1"));
+            addCertificateDetails(cert, getDigest(derData, "SHA-256"));
         } catch (CertificateException e) {
             Log.e("CertViewer", "Error parsing certificate" + e.toString());
         }
     }
 
-    private void addCertificateDetails(Certificate cert, byte[] sha256Digest, byte[] sha1Digest) {
+    private void addCertificateDetails(Certificate cert, byte[] sha256Digest) {
         LinearLayout certificateView = new LinearLayout(mContext);
         mViews.add(certificateView);
         certificateView.setOrientation(LinearLayout.VERTICAL);
@@ -155,35 +155,57 @@ public class CertificateViewer implements OnItemSelectedListener {
         mTitles.add(sslCert.getIssuedTo().getCName());
 
         addSectionTitle(certificateView, CertificateViewerJni.get().getCertIssuedToText());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoCommonNameText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoCommonNameText(),
                 sslCert.getIssuedTo().getCName());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoOrganizationText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoOrganizationText(),
                 sslCert.getIssuedTo().getOName());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoOrganizationUnitText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoOrganizationUnitText(),
                 sslCert.getIssuedTo().getUName());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoSerialNumberText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoSerialNumberText(),
                 formatBytes(x509.getSerialNumber().toByteArray(), ':'));
 
         addSectionTitle(certificateView, CertificateViewerJni.get().getCertIssuedByText());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoCommonNameText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoCommonNameText(),
                 sslCert.getIssuedBy().getCName());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoOrganizationText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoOrganizationText(),
                 sslCert.getIssuedBy().getOName());
-        addItem(certificateView, CertificateViewerJni.get().getCertInfoOrganizationUnitText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertInfoOrganizationUnitText(),
                 sslCert.getIssuedBy().getUName());
 
         addSectionTitle(certificateView, CertificateViewerJni.get().getCertValidityText());
         DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM);
-        addItem(certificateView, CertificateViewerJni.get().getCertIssuedOnText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertIssuedOnText(),
                 dateFormat.format(sslCert.getValidNotBeforeDate()));
-        addItem(certificateView, CertificateViewerJni.get().getCertExpiresOnText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertExpiresOnText(),
                 dateFormat.format(sslCert.getValidNotAfterDate()));
 
         addSectionTitle(certificateView, CertificateViewerJni.get().getCertFingerprintsText());
-        addItem(certificateView, CertificateViewerJni.get().getCertSHA256FingerprintText(),
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertSHA256FingerprintText(),
                 formatBytes(sha256Digest, ' '));
-        addItem(certificateView, CertificateViewerJni.get().getCertSHA1FingerprintText(),
-                formatBytes(sha1Digest, ' '));
+        addItem(
+                certificateView,
+                CertificateViewerJni.get().getCertSHA256SPKIFingerprintText(),
+                formatBytes(getDigest(x509.getPublicKey().getEncoded(), "SHA-256"), ' '));
 
         List<String> subjectAltNames = getSubjectAlternativeNames(x509);
         if (!subjectAltNames.isEmpty()) {
@@ -212,7 +234,7 @@ public class CertificateViewer implements OnItemSelectedListener {
         t.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
         t.setPadding(mPadding, mPadding / 2, mPadding, 0);
         t.setText(label);
-        ApiCompatibilityUtils.setTextAppearance(t, R.style.TextAppearance_TextMediumThick_Primary);
+        t.setTextAppearance(R.style.TextAppearance_TextMediumThick_Primary);
         certificateView.addView(t);
         return t;
     }
@@ -222,7 +244,7 @@ public class CertificateViewer implements OnItemSelectedListener {
         t.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
         t.setText(value);
         t.setPadding(mPadding, 0, mPadding, mPadding / 2);
-        ApiCompatibilityUtils.setTextAppearance(t, R.style.TextAppearance_TextMedium_Primary);
+        t.setTextAppearance(R.style.TextAppearance_TextMedium_Primary);
         certificateView.addView(t);
     }
 
@@ -257,14 +279,17 @@ public class CertificateViewer implements OnItemSelectedListener {
         }
         if (subjectAltNameList != null && !subjectAltNameList.isEmpty()) {
             for (List<?> names : subjectAltNameList) {
-                if (names == null || names.size() != 2 || names.get(0) == null
-                        || names.get(0).getClass() != Integer.class || names.get(1) == null
+                if (names == null
+                        || names.size() != 2
+                        || names.get(0) == null
+                        || names.get(0).getClass() != Integer.class
+                        || names.get(1) == null
                         || names.get(1).getClass() != String.class) {
                     continue;
                 }
                 int id = ((Integer) names.get(0)).intValue();
                 if ((id == SUBJECTALTERNATIVENAME_DNSNAME_ID
-                            || id == SUBJECTALTERNATIVENAME_IPADDRESS_ID)) {
+                        || id == SUBJECTALTERNATIVENAME_IPADDRESS_ID)) {
                     result.add(names.get(1).toString());
                 }
             }
@@ -285,18 +310,31 @@ public class CertificateViewer implements OnItemSelectedListener {
     @NativeMethods
     interface Natives {
         String getCertIssuedToText();
+
         String getCertInfoCommonNameText();
+
         String getCertInfoOrganizationText();
+
         String getCertInfoSerialNumberText();
+
         String getCertInfoOrganizationUnitText();
+
         String getCertIssuedByText();
+
         String getCertValidityText();
+
         String getCertIssuedOnText();
+
         String getCertExpiresOnText();
+
         String getCertFingerprintsText();
+
         String getCertSHA256FingerprintText();
-        String getCertSHA1FingerprintText();
+
+        String getCertSHA256SPKIFingerprintText();
+
         String getCertExtensionText();
+
         String getCertSANText();
     }
 }

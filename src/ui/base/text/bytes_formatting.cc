@@ -1,6 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/base/text/bytes_formatting.h"
 
@@ -42,10 +47,7 @@ std::u16string FormatBytesInternal(int64_t bytes,
                                    bool show_units,
                                    const int* const suffix) {
   DCHECK(units >= DATA_UNITS_BYTE && units <= DATA_UNITS_PEBIBYTE);
-  if (bytes < 0) {
-    NOTREACHED() << "Negative bytes value";
-    return std::u16string();
-  }
+  CHECK_GE(bytes, 0);
 
   // Put the quantity in the right units.
   double unit_amount = static_cast<double>(bytes);
@@ -79,10 +81,7 @@ DataUnits GetByteDisplayUnits(int64_t bytes) {
       1LL << 50         // DATA_UNITS_PEBIBYTE,
   };
 
-  if (bytes < 0) {
-    NOTREACHED() << "Negative bytes value";
-    return DATA_UNITS_BYTE;
-  }
+  CHECK_GE(bytes, 0);
 
   int unit_index = std::size(kUnitThresholds);
   while (--unit_index > 0) {

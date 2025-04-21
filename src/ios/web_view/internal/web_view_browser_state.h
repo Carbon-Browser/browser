@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,6 @@
 #include "base/memory/ref_counted.h"
 #include "components/prefs/pref_service.h"
 #include "ios/web/public/browser_state.h"
-
-namespace user_prefs {
-class PrefRegistrySyncable;
-}
 
 namespace web {
 class WebUIIOS;
@@ -57,9 +53,6 @@ class WebViewBrowserState final : public web::BrowserState {
   static WebViewBrowserState* FromWebUIIOS(web::WebUIIOS* web_ui);
 
  private:
-  // Registers the preferences for this BrowserState.
-  void RegisterPrefs(user_prefs::PrefRegistrySyncable* pref_registry);
-
   // The path associated with this BrowserState object.
   base::FilePath path_;
 

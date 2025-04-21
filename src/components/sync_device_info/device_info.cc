@@ -1,17 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync_device_info/device_info.h"
 
-// device_info.h's size can impact build time. Try not to raise this limit
-// unless absolutely necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#pragma clang max_tokens_here 610000
-
+#include <optional>
 #include <utility>
 
-#include "base/values.h"
 #include "components/sync/protocol/device_info_specifics.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 
@@ -26,9 +21,11 @@ bool DeviceInfo::SharingTargetInfo::operator==(
 DeviceInfo::SharingInfo::SharingInfo(
     SharingTargetInfo vapid_target_info,
     SharingTargetInfo sender_id_target_info,
+    std::string chime_representative_target_id,
     std::set<sync_pb::SharingSpecificFields::EnabledFeatures> enabled_features)
     : vapid_target_info(std::move(vapid_target_info)),
       sender_id_target_info(std::move(sender_id_target_info)),
+      chime_representative_target_id(std::move(chime_representative_target_id)),
       enabled_features(std::move(enabled_features)) {}
 
 DeviceInfo::SharingInfo::SharingInfo(const SharingInfo& other) = default;
@@ -43,6 +40,8 @@ DeviceInfo::SharingInfo::~SharingInfo() = default;
 bool DeviceInfo::SharingInfo::operator==(const SharingInfo& other) const {
   return vapid_target_info == other.vapid_target_info &&
          sender_id_target_info == other.sender_id_target_info &&
+         chime_representative_target_id ==
+             other.chime_representative_target_id &&
          enabled_features == other.enabled_features;
 }
 
@@ -72,6 +71,8 @@ DeviceInfo::DeviceInfo(
     const std::string& chrome_version,
     const std::string& sync_user_agent,
     const sync_pb::SyncEnums::DeviceType device_type,
+    const OsType os_type,
+    const FormFactor form_factor,
     const std::string& signin_scoped_device_id,
     const std::string& manufacturer_name,
     const std::string& model_name,
@@ -79,15 +80,19 @@ DeviceInfo::DeviceInfo(
     base::Time last_updated_timestamp,
     base::TimeDelta pulse_interval,
     bool send_tab_to_self_receiving_enabled,
-    const absl::optional<SharingInfo>& sharing_info,
-    const absl::optional<PhoneAsASecurityKeyInfo>& paask_info,
+    sync_pb::SyncEnums_SendTabReceivingType send_tab_to_self_receiving_type,
+    const std::optional<SharingInfo>& sharing_info,
+    const std::optional<PhoneAsASecurityKeyInfo>& paask_info,
     const std::string& fcm_registration_token,
-    const ModelTypeSet& interested_data_types)
+    const DataTypeSet& interested_data_types,
+    std::optional<base::Time> floating_workspace_last_signin_timestamp)
     : guid_(guid),
       client_name_(client_name),
       chrome_version_(chrome_version),
       sync_user_agent_(sync_user_agent),
       device_type_(device_type),
+      os_type_(os_type),
+      form_factor_(form_factor),
       signin_scoped_device_id_(signin_scoped_device_id),
       manufacturer_name_(manufacturer_name),
       model_name_(model_name),
@@ -95,10 +100,13 @@ DeviceInfo::DeviceInfo(
       last_updated_timestamp_(last_updated_timestamp),
       pulse_interval_(pulse_interval),
       send_tab_to_self_receiving_enabled_(send_tab_to_self_receiving_enabled),
+      send_tab_to_self_receiving_type_(send_tab_to_self_receiving_type),
       sharing_info_(sharing_info),
       paask_info_(paask_info),
       fcm_registration_token_(fcm_registration_token),
-      interested_data_types_(interested_data_types) {}
+      interested_data_types_(interested_data_types),
+      floating_workspace_last_signin_timestamp_(
+          floating_workspace_last_signin_timestamp) {}
 
 DeviceInfo::~DeviceInfo() = default;
 
@@ -124,6 +132,14 @@ const std::string& DeviceInfo::public_id() const {
 
 sync_pb::SyncEnums::DeviceType DeviceInfo::device_type() const {
   return device_type_;
+}
+
+DeviceInfo::OsType DeviceInfo::os_type() const {
+  return os_type_;
+}
+
+DeviceInfo::FormFactor DeviceInfo::form_factor() const {
+  return form_factor_;
 }
 
 const std::string& DeviceInfo::signin_scoped_device_id() const {
@@ -154,74 +170,31 @@ bool DeviceInfo::send_tab_to_self_receiving_enabled() const {
   return send_tab_to_self_receiving_enabled_;
 }
 
-const absl::optional<DeviceInfo::SharingInfo>& DeviceInfo::sharing_info()
-    const {
+sync_pb::SyncEnums_SendTabReceivingType
+DeviceInfo::send_tab_to_self_receiving_type() const {
+  return send_tab_to_self_receiving_type_;
+}
+
+const std::optional<DeviceInfo::SharingInfo>& DeviceInfo::sharing_info() const {
   return sharing_info_;
 }
 
-const absl::optional<DeviceInfo::PhoneAsASecurityKeyInfo>&
+const std::optional<DeviceInfo::PhoneAsASecurityKeyInfo>&
 DeviceInfo::paask_info() const {
   return paask_info_;
-}
-
-std::string DeviceInfo::GetOSString() const {
-  switch (device_type_) {
-    case sync_pb::SyncEnums_DeviceType_TYPE_WIN:
-      return "win";
-    case sync_pb::SyncEnums_DeviceType_TYPE_MAC:
-      return "mac";
-    case sync_pb::SyncEnums_DeviceType_TYPE_LINUX:
-      return "linux";
-    case sync_pb::SyncEnums_DeviceType_TYPE_CROS:
-      return "chrome_os";
-    case sync_pb::SyncEnums_DeviceType_TYPE_PHONE:
-    case sync_pb::SyncEnums_DeviceType_TYPE_TABLET:
-      // TODO(lipalani): crbug.com/170375. Add support for ios
-      // phones and tablets.
-      return "android";
-    case sync_pb::SyncEnums_DeviceType_TYPE_UNSET:
-    case sync_pb::SyncEnums_DeviceType_TYPE_OTHER:
-      return "unknown";
-  }
-}
-
-std::string DeviceInfo::GetDeviceTypeString() const {
-  switch (device_type_) {
-    case sync_pb::SyncEnums_DeviceType_TYPE_WIN:
-    case sync_pb::SyncEnums_DeviceType_TYPE_MAC:
-    case sync_pb::SyncEnums_DeviceType_TYPE_LINUX:
-    case sync_pb::SyncEnums_DeviceType_TYPE_CROS:
-      return "desktop_or_laptop";
-    case sync_pb::SyncEnums_DeviceType_TYPE_PHONE:
-      return "phone";
-    case sync_pb::SyncEnums_DeviceType_TYPE_TABLET:
-      return "tablet";
-    case sync_pb::SyncEnums_DeviceType_TYPE_UNSET:
-    case sync_pb::SyncEnums_DeviceType_TYPE_OTHER:
-      return "unknown";
-  }
 }
 
 const std::string& DeviceInfo::fcm_registration_token() const {
   return fcm_registration_token_;
 }
 
-const ModelTypeSet& DeviceInfo::interested_data_types() const {
+const DataTypeSet& DeviceInfo::interested_data_types() const {
   return interested_data_types_;
 }
 
-std::unique_ptr<base::DictionaryValue> DeviceInfo::ToValue() const {
-  std::unique_ptr<base::DictionaryValue> value(new base::DictionaryValue());
-  value->SetString("name", client_name_);
-  value->SetString("id", public_id_);
-  value->SetString("os", GetOSString());
-  value->SetString("type", GetDeviceTypeString());
-  value->SetString("chromeVersion", chrome_version_);
-  value->SetInteger("lastUpdatedTimestamp", last_updated_timestamp().ToTimeT());
-  value->SetBoolean("sendTabToSelfReceivingEnabled",
-                    send_tab_to_self_receiving_enabled());
-  value->SetBoolean("hasSharingInfo", sharing_info().has_value());
-  return value;
+std::optional<base::Time> DeviceInfo::floating_workspace_last_signin_timestamp()
+    const {
+  return floating_workspace_last_signin_timestamp_;
 }
 
 void DeviceInfo::set_public_id(const std::string& id) {
@@ -237,13 +210,19 @@ void DeviceInfo::set_send_tab_to_self_receiving_enabled(bool new_value) {
   send_tab_to_self_receiving_enabled_ = new_value;
 }
 
+void DeviceInfo::set_send_tab_to_self_receiving_type(
+    sync_pb::SyncEnums_SendTabReceivingType new_value) {
+  send_tab_to_self_receiving_type_ = new_value;
+}
+
 void DeviceInfo::set_sharing_info(
-    const absl::optional<SharingInfo>& sharing_info) {
+    const std::optional<SharingInfo>& sharing_info) {
   sharing_info_ = sharing_info;
 }
 
-void DeviceInfo::set_paask_info(PhoneAsASecurityKeyInfo&& paask_info) {
-  paask_info_.emplace(std::forward<PhoneAsASecurityKeyInfo>(paask_info));
+void DeviceInfo::set_paask_info(
+    std::optional<PhoneAsASecurityKeyInfo>&& paask_info) {
+  paask_info_ = std::move(paask_info);
 }
 
 void DeviceInfo::set_client_name(const std::string& client_name) {
@@ -254,8 +233,13 @@ void DeviceInfo::set_fcm_registration_token(const std::string& fcm_token) {
   fcm_registration_token_ = fcm_token;
 }
 
-void DeviceInfo::set_interested_data_types(const ModelTypeSet& data_types) {
+void DeviceInfo::set_interested_data_types(const DataTypeSet& data_types) {
   interested_data_types_ = data_types;
+}
+
+void DeviceInfo::set_floating_workspace_last_signin_timestamp(
+    std::optional<base::Time> time) {
+  floating_workspace_last_signin_timestamp_ = time;
 }
 
 }  // namespace syncer

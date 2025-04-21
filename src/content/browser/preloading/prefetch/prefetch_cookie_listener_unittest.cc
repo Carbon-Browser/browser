@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,9 +39,8 @@ class PrefetchCookieListenerTest : public RenderViewHostTestHarness {
   // Creates a host cookie for the given url, and then adds it to the default
   // partition using |cookie_manager_|.
   bool SetHostCookie(const GURL& url, const std::string& value) {
-    std::unique_ptr<net::CanonicalCookie> cookie(net::CanonicalCookie::Create(
-        url, value, base::Time::Now(), /*server_time=*/absl::nullopt,
-        /*cookie_partition_key=*/absl::nullopt));
+    std::unique_ptr<net::CanonicalCookie> cookie(
+        net::CanonicalCookie::CreateForTesting(url, value, base::Time::Now()));
     EXPECT_TRUE(cookie.get());
     EXPECT_TRUE(cookie->IsHostCookie());
 
@@ -61,7 +60,7 @@ class PrefetchCookieListenerTest : public RenderViewHostTestHarness {
             base::Time::Now() + base::Hours(1), base::Time::Now(),
             /*secure=*/true, /*http_only=*/false,
             net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-            /*same_party=*/false, /*partition_key=*/absl::nullopt, &status));
+            /*partition_key=*/std::nullopt, &status));
     EXPECT_TRUE(cookie.get());
     EXPECT_TRUE(cookie->IsDomainCookie());
     EXPECT_TRUE(status.IsInclude());

@@ -7,27 +7,16 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='scroller'",
+      "name": "LayoutBlockFlow DIV id='scroller'",
       "bounds": [200, 200],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='scroller'",
+      "name": "LayoutBlockFlow DIV id='scroller'",
       "bounds": [185, 185],
       "drawsContent": false,
       "transform": 1
-    },
-    {
-      "name": "LayoutNGBlockFlow DIV id='scroller'",
-      "bounds": [185, 552],
-      "contentsOpaque": true,
-      "backgroundColor": "#0000FF",
-      "invalidations": [
-        [0, 0, 185, 552]
-      ],
-      "transform": 2
     },
     {
       "name": "HorizontalScrollbar",
@@ -43,7 +32,18 @@
       "name": "VerticalScrollbar",
       "position": [185, 0],
       "bounds": [15, 185],
+      "contentsOpaque": true,
       "transform": 1
+    },
+    {
+      "name": "LayoutBlockFlow DIV id='scroller'",
+      "bounds": [185, 552],
+      "contentsOpaque": true,
+      "backgroundColor": "#0000FF",
+      "invalidations": [
+        [0, 0, 185, 552]
+      ],
+      "transform": 2
     }
   ],
   "transforms": [

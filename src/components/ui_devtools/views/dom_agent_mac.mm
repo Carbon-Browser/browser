@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,29 @@
 
 #import <AppKit/AppKit.h>
 
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "components/ui_devtools/views/widget_element.h"
 #include "ui/views/widget/native_widget_mac.h"
 
 namespace ui_devtools {
 
-DOMAgentMac::DOMAgentMac() {}
+DOMAgentMac::DOMAgentMac() = default;
 
 DOMAgentMac::~DOMAgentMac() {
   CHECK(!IsInObserverList());
 }
 
 protocol::Response DOMAgentMac::enable() {
-  views::NativeWidgetMac::SetInitNativeWidgetCallback(base::BindRepeating(
-      &DOMAgentMac::OnNativeWidgetAdded, base::Unretained(this)));
+  init_native_widget_subscription_ =
+      views::NativeWidgetMac::RegisterInitNativeWidgetCallback(
+          base::BindRepeating(&DOMAgentMac::OnNativeWidgetAdded,
+                              base::Unretained(this)));
   return DOMAgent::enable();
 }
 
 protocol::Response DOMAgentMac::disable() {
-  views::NativeWidgetMac::SetInitNativeWidgetCallback(
-      base::RepeatingCallback<void(views::NativeWidgetMac*)>());
+  init_native_widget_subscription_ = {};
   for (views::Widget* widget : roots_)
     widget->RemoveObserver(this);
   roots_.clear();
@@ -46,7 +49,7 @@ std::vector<UIElement*> DOMAgentMac::CreateChildrenForRoot() {
 
 void DOMAgentMac::OnWidgetDestroying(views::Widget* widget) {
   widget->RemoveObserver(this);
-  roots_.erase(std::find(roots_.begin(), roots_.end(), widget), roots_.end());
+  roots_.erase(base::ranges::find(roots_, widget), roots_.end());
 }
 
 void DOMAgentMac::OnNativeWidgetAdded(views::NativeWidgetMac* native_widget) {
@@ -62,15 +65,22 @@ std::unique_ptr<protocol::DOM::Node> DOMAgentMac::BuildTreeForWindow(
     UIElement* window_element_root) {
   // Window elements aren't supported on Mac.
   NOTREACHED();
-  return nullptr;
 }
 
 void DOMAgentMac::InitializeRootsFromOpenWindows() {
-  for (NSWindow* window : [NSApp windows]) {
+  for (NSWindow* window in NSApp.windows) {
     if (views::Widget* widget =
             views::Widget::GetWidgetForNativeWindow(window)) {
-      widget->AddObserver(this);
-      roots_.push_back(widget);
+      // When in immersive fullscreen mode, an overlay widget has two associated
+      // NSWindows:
+      // 1. An invisible one created by Chrome, which serves as an anchor
+      //    for child widgets.
+      // 2. A visible AppKit-owned NSToolbarFullScreenWindow.
+      // We ensures here that a widget is only observed once.
+      if (!widget->HasObserver(this)) {
+        widget->AddObserver(this);
+        roots_.push_back(widget);
+      }
     }
   }
 }

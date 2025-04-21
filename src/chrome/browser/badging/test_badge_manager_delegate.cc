@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "chrome/browser/badging/badge_manager.h"
 #include "chrome/browser/badging/badge_manager_delegate.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/web_applications/web_app_registrar.h"
 
 namespace badging {
 
@@ -22,7 +21,7 @@ void TestBadgeManagerDelegate::SetOnBadgeChanged(
   on_badge_changed_ = on_badge_changed;
 }
 
-void TestBadgeManagerDelegate::OnAppBadgeUpdated(const web_app::AppId& app_id) {
+void TestBadgeManagerDelegate::OnAppBadgeUpdated(const webapps::AppId& app_id) {
   const auto& value = badge_manager()->GetBadgeValue(app_id);
   if (!value)
     cleared_badges_.push_back(app_id);

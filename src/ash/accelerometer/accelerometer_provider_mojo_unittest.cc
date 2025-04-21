@@ -1,6 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/memory/raw_ptr.h"
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/accelerometer/accelerometer_provider_mojo.h"
 
@@ -50,7 +57,7 @@ class FakeObserver : public AccelerometerReader::Observer {
     update_ = update;
   }
 
-  absl::optional<bool> is_supported_;
+  std::optional<bool> is_supported_;
   AccelerometerUpdate update_;
 };
 
@@ -78,8 +85,8 @@ class AccelerometerProviderMojoTest : public ::testing::Test {
 
   void AddDevice(int32_t iio_device_id,
                  chromeos::sensors::mojom::DeviceType type,
-                 absl::optional<std::string> scale,
-                 absl::optional<std::string> location) {
+                 std::optional<std::string> scale,
+                 std::optional<std::string> location) {
     std::set<chromeos::sensors::mojom::DeviceType> types;
     types.emplace(type);
 
@@ -137,7 +144,9 @@ class AccelerometerProviderMojoTest : public ::testing::Test {
 
   FakeObserver observer_;
   std::unique_ptr<chromeos::sensors::FakeSensorHalServer> sensor_hal_server_;
-  std::map<int32_t, chromeos::sensors::FakeSensorDevice*> sensor_devices_;
+  std::map<int32_t,
+           raw_ptr<chromeos::sensors::FakeSensorDevice, CtnExperimental>>
+      sensor_devices_;
 
   scoped_refptr<AccelerometerProviderMojo> provider_;
 
@@ -149,7 +158,7 @@ class AccelerometerProviderMojoTest : public ::testing::Test {
 TEST_F(AccelerometerProviderMojoTest, CheckNoScale) {
   AddLidAccelerometer();
   AddDevice(kFakeBaseAccelerometerId,
-            chromeos::sensors::mojom::DeviceType::ACCEL, absl::nullopt,
+            chromeos::sensors::mojom::DeviceType::ACCEL, std::nullopt,
             kLocationStrings[ACCELEROMETER_SOURCE_ATTACHED_KEYBOARD]);
 
   chromeos::sensors::SensorHalDispatcher::GetInstance()->RegisterServer(
@@ -170,7 +179,7 @@ TEST_F(AccelerometerProviderMojoTest, CheckNoLocation) {
   AddLidAccelerometer();
   AddDevice(kFakeBaseAccelerometerId,
             chromeos::sensors::mojom::DeviceType::ACCEL,
-            base::NumberToString(kFakeScaleValue), absl::nullopt);
+            base::NumberToString(kFakeScaleValue), std::nullopt);
 
   chromeos::sensors::SensorHalDispatcher::GetInstance()->RegisterServer(
       sensor_hal_server_->PassRemote());
@@ -247,7 +256,7 @@ TEST_F(AccelerometerProviderMojoTest, GetSamplesWithLidAngle) {
             base::NumberToString(kFakeScaleValue),
             kLocationStrings[ACCELEROMETER_SOURCE_ATTACHED_KEYBOARD]);
   AddDevice(kFakeLidAngleId, chromeos::sensors::mojom::DeviceType::ANGL,
-            absl::nullopt, absl::nullopt);
+            std::nullopt, std::nullopt);
 
   chromeos::sensors::SensorHalDispatcher::GetInstance()->RegisterServer(
       sensor_hal_server_->PassRemote());
@@ -329,7 +338,7 @@ TEST_F(AccelerometerProviderMojoTest, GetSamplesOfNewDevices) {
 
   // New device: EC Lid Angle Driver.
   AddDevice(kFakeLidAngleId, chromeos::sensors::mojom::DeviceType::ANGL,
-            absl::nullopt, absl::nullopt);
+            std::nullopt, std::nullopt);
 
   TriggerSamples();
 
@@ -387,7 +396,7 @@ TEST_F(AccelerometerProviderMojoTest, NoSamplesFromBaseOnly) {
 
   // New device: EC Lid Angle Driver.
   AddDevice(kFakeLidAngleId, chromeos::sensors::mojom::DeviceType::ANGL,
-            absl::nullopt, absl::nullopt);
+            std::nullopt, std::nullopt);
 
   TriggerSamples();
 
@@ -401,7 +410,7 @@ TEST_F(AccelerometerProviderMojoTest, NoSamplesFromBaseOnly) {
 TEST_F(AccelerometerProviderMojoTest, NoSamplesFromLidAngle) {
   // New device: EC Lid Angle Driver.
   AddDevice(kFakeLidAngleId, chromeos::sensors::mojom::DeviceType::ANGL,
-            absl::nullopt, absl::nullopt);
+            std::nullopt, std::nullopt);
 
   chromeos::sensors::SensorHalDispatcher::GetInstance()->RegisterServer(
       sensor_hal_server_->PassRemote());
@@ -475,8 +484,8 @@ TEST_F(AccelerometerProviderMojoTest, ResetStatesWithNoLidAngle) {
       "Device was removed");
   // Overwrite the base accelerometer in the iioservice.
   AddDevice(kFakeBaseAccelerometerId,
-            chromeos::sensors::mojom::DeviceType::ANGLVEL, absl::nullopt,
-            absl::nullopt);
+            chromeos::sensors::mojom::DeviceType::ANGLVEL, std::nullopt,
+            std::nullopt);
 
   // Wait until the disconnection and the re-initialization are done.
   base::RunLoop().RunUntilIdle();

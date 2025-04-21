@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/components/onc/variable_expander.h"
 
 #include <algorithm>
+#include <string_view>
 
 #include "base/containers/flat_map.h"
 #include "base/strings/strcat.h"
@@ -19,8 +20,8 @@ namespace {
 // Expects ",n" or ",n,m" in |range|. Puts n into |start| and m into |count| if
 // present. Returns true if |range| was well formatted and parsing the numbers
 // succeeded.
-bool ParseRange(base::StringPiece range, size_t* start, size_t* count) {
-  std::vector<base::StringPiece> parts = base::SplitStringPiece(
+bool ParseRange(std::string_view range, size_t* start, size_t* count) {
+  std::vector<std::string_view> parts = base::SplitStringPiece(
       range, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
   DCHECK(!parts.empty());
   if (!parts[0].empty())
@@ -41,9 +42,9 @@ bool ParseRange(base::StringPiece range, size_t* start, size_t* count) {
 //   - ${variable_name,pos,count} -> |replacement.substr(pos,count)|
 // Strictly enforces the format (up to whitespace), e.g.
 // ${variable_name ,  2 , 9  } works, but ${variable_name,2o,9e} doesn't.
-// Returns true if no error occured.
-bool Expand(base::StringPiece variable_name,
-            base::StringPiece replacement,
+// Returns true if no error occurred.
+bool Expand(std::string_view variable_name,
+            std::string_view replacement,
             std::string* str) {
   std::string token = base::StrCat({"${", variable_name});
   size_t token_start = 0;
@@ -71,15 +72,15 @@ bool Expand(base::StringPiece variable_name,
 
     // Full variable, e.g. ${machine_name} or ${machine_name,8,3}.
     DCHECK_GE(range_end, range_start);
-    const base::StringPiece full_token = base::StringPiece(*str).substr(
-        token_start, range_end + 1 - token_start);
+    const std::string_view full_token =
+        std::string_view(*str).substr(token_start, range_end + 1 - token_start);
 
     // Determine if the variable defines a range, e.g. ${machine_name,8,3}.
     size_t replacement_start = 0;
     size_t replacement_count = std::string::npos;
     if (range_end > range_start) {
-      const base::StringPiece range =
-          base::StringPiece(*str).substr(range_start, range_end - range_start);
+      const std::string_view range =
+          std::string_view(*str).substr(range_start, range_end - range_start);
       if (!ParseRange(range, &replacement_start, &replacement_count)) {
         LOG(ERROR) << "Invalid range definition for " << variable_name
                    << " in string '" << *str << "'";
@@ -89,7 +90,7 @@ bool Expand(base::StringPiece variable_name,
       }
     }
 
-    const base::StringPiece replacement_part = replacement.substr(
+    const std::string_view replacement_part = replacement.substr(
         std::min(replacement_start, replacement.size()), replacement_count);
     // Don't use ReplaceSubstringsAfterOffset here, it can lead to a doubling
     // of tokens, see VariableExpanderTest.DoesNotRecurse test.
@@ -127,14 +128,15 @@ bool VariableExpander::ExpandValue(base::Value* value) const {
       break;
     }
 
-    case base::Value::Type::DICTIONARY: {
-      for (const auto child : value->DictItems())
+    case base::Value::Type::DICT: {
+      for (const auto child : value->GetDict()) {
         no_error &= ExpandValue(&child.second);
+      }
       break;
     }
 
     case base::Value::Type::LIST: {
-      for (base::Value& child : value->GetListDeprecated())
+      for (base::Value& child : value->GetList())
         no_error &= ExpandValue(&child);
       break;
     }

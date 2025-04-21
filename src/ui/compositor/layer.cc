@@ -1,22 +1,26 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/compositor/layer.h"
 
-#include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/layers/mirror_layer.h"
 #include "cc/layers/nine_patch_layer.h"
@@ -29,6 +33,7 @@
 #include "cc/trees/layer_tree_settings.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/resources/transferable_resource.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer_animator.h"
@@ -147,7 +152,7 @@ class Layer::SubpixelPositionOffsetCache {
 
     gfx::Vector2dF offset =
         snapped_offset_from_parent - scaled_offset_from_parent;
-    offset.Scale(1.f / device_scale_factor);
+    offset.InvScale(device_scale_factor);
 
     // Store key and value information for the cache.
     offset_ = offset;
@@ -200,11 +205,12 @@ Layer::Layer(LayerType type)
       layer_grayscale_(0.0f),
       layer_inverted_(false),
       layer_blur_sigma_(0.0f),
+      layer_sepia_(0.0f),
+      layer_hue_rotation_(0.0f),
       layer_mask_(nullptr),
       layer_mask_back_link_(nullptr),
       zoom_(1),
       zoom_inset_(0),
-      delegate_(nullptr),
       owner_(nullptr),
       cc_layer_(nullptr),
       device_scale_factor_(1.0f),
@@ -216,14 +222,10 @@ Layer::Layer(LayerType type)
 }
 
 Layer::~Layer() {
-  for (auto& observer : observer_list_)
-    observer.LayerDestroyed(this);
+  observer_list_.Notify(&LayerObserver::LayerDestroyed, this);
 
   // Destroying the animator may cause observers to use the layer. Destroy the
   // animator first so that the layer is still around.
-#if defined(ADDRESS_SANITIZER)
-  destroyed_ = true;
-#endif
   SetAnimator(nullptr);
   if (compositor_)
     compositor_->SetRootLayer(nullptr);
@@ -233,8 +235,9 @@ Layer::~Layer() {
     SetMaskLayer(nullptr);
   if (layer_mask_back_link_)
     layer_mask_back_link_->SetMaskLayer(nullptr);
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->parent_ = nullptr;
+  }
 
   if (content_layer_)
     content_layer_->ClearClient();
@@ -251,18 +254,29 @@ std::unique_ptr<Layer> Layer::Clone() const {
   // Background filters.
   clone->SetBackgroundBlur(background_blur_sigma_);
   clone->SetBackgroundZoom(zoom_, zoom_inset_);
+  clone->SetBackdropFilterQuality(backdrop_filter_quality_);
+  auto backdrop_filter_bounds = cc_layer_->backdrop_filter_bounds();
+  if (backdrop_filter_bounds) {
+    clone->SetBackdropFilterBounds(*backdrop_filter_bounds);
+  }
 
   // Filters.
   clone->SetLayerSaturation(layer_saturation_);
   clone->SetLayerBrightness(GetTargetBrightness());
   clone->SetLayerGrayscale(GetTargetGrayscale());
+  clone->SetLayerSepia(layer_sepia_);
+  clone->SetLayerHueRotation(layer_hue_rotation_);
+  if (layer_custom_color_matrix_) {
+    clone->SetLayerCustomColorMatrix(*layer_custom_color_matrix_);
+  }
   clone->SetLayerInverted(layer_inverted_);
   clone->SetLayerBlur(layer_blur_sigma_);
   if (alpha_shape_)
     clone->SetAlphaShape(std::make_unique<ShapeRects>(*alpha_shape_));
+  clone->SetLayerOffset(layer_offset_);
 
   // cc::Layer state.
-  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+  // TODO(crbug.com/40219248): Remove toSkColor and make all SkColor4f.
   if (surface_layer_) {
     clone->SetShowSurface(surface_layer_->surface_id(), frame_size_in_dip_,
                           surface_layer_->background_color().toSkColor(),
@@ -289,7 +303,7 @@ std::unique_ptr<Layer> Layer::Clone() const {
   clone->SetAcceptEvents(accept_events());
   clone->SetFillsBoundsOpaquely(fills_bounds_opaquely_);
   clone->SetFillsBoundsCompletely(fills_bounds_completely_);
-  clone->SetRoundedCornerRadius(rounded_corner_radii());
+  clone->SetRoundedCornerRadius(GetTargetRoundedCornerRadius());
   clone->SetGradientMask(gradient_mask());
   clone->SetIsFastRoundedCorner(is_fast_rounded_corner());
   clone->SetName(name_);
@@ -304,7 +318,7 @@ std::unique_ptr<Layer> Layer::Mirror() {
   auto mirror = Clone();
   mirrors_.emplace_back(std::make_unique<LayerMirror>(this, mirror.get()));
 
-  if (!transfer_resource_.mailbox_holder.mailbox.IsZero()) {
+  if (!transfer_resource_.is_empty()) {
     // Send an empty release callback because we don't want the resource to be
     // freed up until the original layer releases it.
     mirror->SetTransferableResource(
@@ -412,8 +426,8 @@ void Layer::Remove(Layer* child) {
   if (compositor && compositor->animations_are_enabled())
     child->ResetCompositorForAnimatorsInTree(compositor);
 
-  auto i = std::find(children_.begin(), children_.end(), child);
-  DCHECK(i != children_.end());
+  auto i = base::ranges::find(children_, child);
+  CHECK(i != children_.end(), base::NotFatalUntil::M130);
   children_.erase(i);
   child->parent_ = nullptr;
   child->cc_layer_->RemoveFromParent();
@@ -447,10 +461,7 @@ bool Layer::Contains(const Layer* other) const {
   return false;
 }
 
-void Layer::SetAnimator(LayerAnimator* animator) {
-#if defined(ADDRESS_SANITIZER)
-  CHECK(!destroyed_ || !animator);
-#endif
+void Layer::SetAnimator(scoped_refptr<LayerAnimator> animator) {
   Compositor* compositor = GetCompositor();
 
   if (animator_) {
@@ -460,7 +471,7 @@ void Layer::SetAnimator(LayerAnimator* animator) {
     animator_->SetDelegate(nullptr);
   }
 
-  animator_ = animator;
+  animator_ = std::move(animator);
 
   if (animator_) {
     animator_->SetDelegate(this);
@@ -552,8 +563,23 @@ float Layer::GetCombinedOpacity() const {
   return opacity;
 }
 
+void Layer::SetBackdropFilterBounds(const gfx::RRectF& bounds) {
+  cc_layer_->SetBackdropFilterBounds(bounds);
+}
+
+void Layer::ClearBackdropFilterBounds() {
+  cc_layer_->ClearBackdropFilterBounds();
+}
+
 void Layer::SetBackgroundBlur(float blur_sigma) {
   background_blur_sigma_ = blur_sigma;
+
+  SetLayerBackgroundFilters();
+}
+
+void Layer::SetBackgroundZoom(float zoom, int inset) {
+  zoom_ = zoom;
+  zoom_inset_ = inset;
 
   SetLayerBackgroundFilters();
 }
@@ -593,6 +619,41 @@ float Layer::GetTargetGrayscale() const {
   return layer_grayscale();
 }
 
+void Layer::SetLayerSepia(float amount) {
+  layer_sepia_ = amount;
+  SetLayerFilters();
+}
+
+void Layer::SetLayerHueRotation(float amount) {
+  layer_hue_rotation_ = amount;
+  SetLayerFilters();
+}
+
+void Layer::SetLayerCustomColorMatrix(
+    const cc::FilterOperation::Matrix& matrix) {
+  layer_custom_color_matrix_ =
+      std::make_unique<cc::FilterOperation::Matrix>(matrix);
+  SetLayerFilters();
+}
+
+const cc::FilterOperation::Matrix* Layer::GetLayerCustomColorMatrix() const {
+  return layer_custom_color_matrix_.get();
+}
+
+bool Layer::LayerHasCustomColorMatrix() const {
+  return layer_custom_color_matrix_.get() != nullptr;
+}
+
+void Layer::ClearLayerCustomColorMatrix() {
+  layer_custom_color_matrix_.reset();
+  SetLayerFilters();
+}
+
+void Layer::SetLayerOffset(const gfx::Point& offset) {
+  layer_offset_ = offset;
+  SetLayerFilters();
+}
+
 void Layer::SetLayerInverted(bool inverted) {
   layer_inverted_ = inverted;
   SetLayerFilters();
@@ -603,36 +664,52 @@ void Layer::SetMaskLayer(Layer* layer_mask) {
     return;
   // The provided mask should not have a layer mask itself.
   DCHECK(!layer_mask ||
-         (!layer_mask->layer_mask_layer() && layer_mask->children().empty() &&
-          !layer_mask->layer_mask_back_link_));
+         (!layer_mask->layer_mask_layer() && layer_mask->children().empty()));
   DCHECK(!layer_mask_back_link_);
   DCHECK(!layer_mask || layer_mask->type_ == LAYER_TEXTURED);
   // Masks must be backed by a PictureLayer.
   DCHECK(!layer_mask || layer_mask->content_layer_);
   // We need to de-reference the currently linked object so that no problem
   // arises if the mask layer gets deleted before this object.
-  if (layer_mask_)
+  if (layer_mask_) {
     layer_mask_->layer_mask_back_link_ = nullptr;
+  }
   layer_mask_ = layer_mask;
   cc_layer_->SetMaskLayer(layer_mask ? layer_mask->content_layer_.get()
                                      : nullptr);
   // We need to reference the linked object so that it can properly break the
   // link to us when it gets deleted.
   if (layer_mask) {
+    // A `layer_mask` of this would lead to recursion.
+    CHECK(layer_mask != this);
+
+    // Clears out other reference to `layer_mask` if there is one.
+    if (layer_mask->layer_mask_back_link_) {
+      layer_mask->layer_mask_back_link_->SetMaskLayer(nullptr);
+    }
+
     layer_mask->layer_mask_back_link_ = this;
     layer_mask->OnDeviceScaleFactorChanged(device_scale_factor_);
   }
 }
 
-void Layer::SetBackgroundZoom(float zoom, int inset) {
-  zoom_ = zoom;
-  zoom_inset_ = inset;
-
-  SetLayerBackgroundFilters();
-}
-
 void Layer::SetAlphaShape(std::unique_ptr<ShapeRects> shape) {
+  // Do some brief checks to avoid recomputing occlusion and layer filters.
+  // See crbug.com/1493406.
+  bool changed = true;
+  if (alpha_shape_ == nullptr && shape == nullptr) {
+    changed = false;
+  }
+  if (alpha_shape_ != nullptr && shape != nullptr) {
+    // This doesn't catch the case where the `ShapeRects` are different but the
+    // same if sorted, but we just want to prevent most unnecessary updates.
+    changed = *alpha_shape_ != *shape;
+  }
   alpha_shape_ = std::move(shape);
+
+  if (!changed) {
+    return;
+  }
 
   SetLayerFilters();
 
@@ -642,6 +719,14 @@ void Layer::SetAlphaShape(std::unique_ptr<ShapeRects> shape) {
 
 void Layer::SetLayerFilters() {
   cc::FilterOperations filters;
+  if (layer_custom_color_matrix_) {
+    filters.Append(cc::FilterOperation::CreateColorMatrixFilter(
+        *layer_custom_color_matrix_));
+  }
+  if (layer_hue_rotation_) {
+    filters.Append(
+        cc::FilterOperation::CreateHueRotateFilter(layer_hue_rotation_));
+  }
   if (layer_saturation_) {
     filters.Append(cc::FilterOperation::CreateSaturateFilter(
         layer_saturation_));
@@ -652,6 +737,8 @@ void Layer::SetLayerFilters() {
   }
   if (layer_inverted_)
     filters.Append(cc::FilterOperation::CreateInvertFilter(1.0));
+  if (layer_sepia_)
+    filters.Append(cc::FilterOperation::CreateSepiaFilter(layer_sepia_));
   if (layer_blur_sigma_) {
     filters.Append(cc::FilterOperation::CreateBlurFilter(layer_blur_sigma_,
                                                          SkTileMode::kClamp));
@@ -664,8 +751,13 @@ void Layer::SetLayerFilters() {
         layer_brightness_));
   }
   if (alpha_shape_) {
-    filters.Append(cc::FilterOperation::CreateAlphaThresholdFilter(
-            *alpha_shape_, 0.f, 0.f));
+    filters.Append(
+        cc::FilterOperation::CreateAlphaThresholdFilter(*alpha_shape_));
+  }
+  // An Offset as the last filter operation can almost always be converted to
+  // a translation transform for free within Skia.
+  if (!layer_offset_.IsOrigin()) {
+    filters.Append(cc::FilterOperation::CreateOffsetFilter(layer_offset_));
   }
 
   cc_layer_->SetFilters(filters);
@@ -673,13 +765,20 @@ void Layer::SetLayerFilters() {
 
 void Layer::SetLayerBackgroundFilters() {
   cc::FilterOperations filters;
-  if (zoom_ != 1)
-    filters.Append(cc::FilterOperation::CreateZoomFilter(zoom_, zoom_inset_));
 
   if (background_blur_sigma_) {
     filters.Append(cc::FilterOperation::CreateBlurFilter(background_blur_sigma_,
                                                          SkTileMode::kClamp));
   }
+
+  // The background zoom is applied after the background offset to support
+  // positioning of the background *before* magnifying it. Offsetting after
+  // magnifying is almost equivalent except it can lead to surprising clipping
+  // at the layer bounds.
+  if (zoom_ != 1) {
+    filters.Append(cc::FilterOperation::CreateZoomFilter(zoom_, zoom_inset_));
+  }
+
   cc_layer_->SetBackdropFilters(filters);
 }
 
@@ -708,11 +807,20 @@ bool Layer::GetTargetVisibility() const {
   return visible_;
 }
 
-bool Layer::IsDrawn() const {
+bool Layer::IsVisible() const {
   const Layer* layer = this;
   while (layer && layer->visible_)
     layer = layer->parent_;
   return layer == nullptr;
+}
+
+gfx::RoundedCornersF Layer::GetTargetRoundedCornerRadius() const {
+  if (animator_ &&
+      animator_->IsAnimatingProperty(LayerAnimationElement::ROUNDED_CORNERS)) {
+    return animator_->GetTargetRoundedCorners();
+  }
+
+  return rounded_corner_radii();
 }
 
 void Layer::SetRoundedCornerRadius(const gfx::RoundedCornersF& corner_radii) {
@@ -751,13 +859,34 @@ void Layer::ConvertPointToLayer(const Layer* source,
   if (source == target)
     return;
 
-  const Layer* root_layer = GetRoot(source);
-  CHECK_EQ(root_layer, GetRoot(target));
+  const Layer* source_root_layer = GetRoot(source);
+  const Layer* target_root_layer = GetRoot(target);
+  // TODO(b/319939913): Remove this log when the issue is fixed.
+  if (source_root_layer != target_root_layer) {
+    auto chain_name = [](const Layer* layer) {
+      std::ostringstream out;
+      out << "[";
+      out << layer->name();
+      while (layer->parent()) {
+        layer = layer->parent();
+        out << "]-[" << layer->name();
+      }
+      out << "]";
+      return out.str();
+    };
+    LOG(ERROR) << "Source has different root than tareget: source chain="
+               << chain_name(source) << ", target chain=" << chain_name(target);
+  }
+  CHECK_EQ(source_root_layer, target_root_layer);
 
-  if (source != root_layer)
-    source->ConvertPointForAncestor(root_layer, use_target_transform, point);
-  if (target != root_layer)
-    target->ConvertPointFromAncestor(root_layer, use_target_transform, point);
+  if (source != source_root_layer) {
+    source->ConvertPointForAncestor(source_root_layer, use_target_transform,
+                                    point);
+  }
+  if (target != source_root_layer) {
+    target->ConvertPointFromAncestor(source_root_layer, use_target_transform,
+                                     point);
+  }
 }
 
 void Layer::SetFillsBoundsOpaquely(bool fills_bounds_opaquely) {
@@ -825,7 +954,7 @@ bool Layer::SwitchToLayer(scoped_refptr<cc::Layer> new_layer) {
   surface_layer_ = nullptr;
   mirror_layer_ = nullptr;
 
-  for (auto* child : children_) {
+  for (ui::Layer* child : children_) {
     DCHECK(child->cc_layer_);
     cc_layer_->AddChild(child->cc_layer_.get());
   }
@@ -931,26 +1060,26 @@ void Layer::SetSurfaceSize(gfx::Size surface_size_in_dip) {
   RecomputeDrawsContentAndUVRect();
 }
 
+base::WeakPtr<Layer> Layer::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 bool Layer::ContainsMirrorForTest(Layer* mirror) const {
-  const auto it =
-      std::find_if(mirrors_.begin(), mirrors_.end(),
-                   [mirror](const std::unique_ptr<LayerMirror>& mirror_ptr) {
-                     return mirror_ptr.get()->dest() == mirror;
-                   });
-  return it != mirrors_.end();
+  return base::Contains(mirrors_, mirror, &LayerMirror::dest);
 }
 
 void Layer::SetTransferableResource(const viz::TransferableResource& resource,
                                     viz::ReleaseCallback release_callback,
                                     gfx::Size texture_size_in_dip) {
   DCHECK(type_ == LAYER_TEXTURED || type_ == LAYER_SOLID_COLOR);
-  DCHECK(!resource.mailbox_holder.mailbox.IsZero());
+  DCHECK(!resource.is_empty());
   DCHECK(release_callback);
   DCHECK(!resource.is_software);
   if (!texture_layer_.get()) {
+    // Incoming resource is assumed to have top-left origin which corresponds to
+    // TextureLayer flipped being false.
     scoped_refptr<cc::TextureLayer> new_layer =
         cc::TextureLayer::CreateForMailbox(this);
-    new_layer->SetFlipped(true);
     if (!SwitchToLayer(new_layer))
       return;
 
@@ -984,16 +1113,6 @@ void Layer::SetTextureSize(gfx::Size texture_size_in_dip) {
   texture_layer_->SetNeedsDisplay();
 }
 
-void Layer::SetTextureFlipped(bool flipped) {
-  DCHECK(texture_layer_.get());
-  texture_layer_->SetFlipped(flipped);
-}
-
-bool Layer::TextureFlipped() const {
-  DCHECK(texture_layer_.get());
-  return texture_layer_->flipped();
-}
-
 void Layer::SetShowSurface(const viz::SurfaceId& surface_id,
                            const gfx::Size& frame_size_in_dip,
                            SkColor default_background_color,
@@ -1004,7 +1123,7 @@ void Layer::SetShowSurface(const viz::SurfaceId& surface_id,
   CreateSurfaceLayerIfNecessary();
 
   surface_layer_->SetSurfaceId(surface_id, deadline_policy);
-  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  // TODO(crbug.com/40219248): Remove FromColor and make all SkColor4f.
   surface_layer_->SetBackgroundColor(
       SkColor4f::FromColor(default_background_color));
   surface_layer_->SetSafeOpaqueBackgroundColor(
@@ -1017,6 +1136,29 @@ void Layer::SetShowSurface(const viz::SurfaceId& surface_id,
   for (const auto& mirror : mirrors_) {
     mirror->dest()->SetShowSurface(surface_id, frame_size_in_dip,
                                    default_background_color, deadline_policy,
+                                   stretch_content_to_fill_bounds);
+  }
+}
+
+void Layer::SetShowSurface(const viz::SurfaceId& surface_id,
+                           SkColor default_background_color,
+                           const cc::DeadlinePolicy& deadline_policy,
+                           bool stretch_content_to_fill_bounds) {
+  DCHECK(type_ == LAYER_TEXTURED || type_ == LAYER_SOLID_COLOR);
+  DCHECK(surface_layer_.get());
+
+  // Assumes `frame_size_in_dip_` is already set.
+  // TODO(crbug.com/40285157): with surface sync, it should use on `bounds_`.
+  surface_layer_->SetSurfaceId(surface_id, deadline_policy);
+  surface_layer_->SetBackgroundColor(
+      SkColor4f::FromColor(default_background_color));
+  surface_layer_->SetSafeOpaqueBackgroundColor(
+      SkColor4f::FromColor(default_background_color));
+  surface_layer_->SetStretchContentToFillBounds(stretch_content_to_fill_bounds);
+
+  for (const auto& mirror : mirrors_) {
+    mirror->dest()->SetShowSurface(surface_id, default_background_color,
+                                   deadline_policy,
                                    stretch_content_to_fill_bounds);
   }
 }
@@ -1095,10 +1237,6 @@ void Layer::UpdateNinePatchLayerImage(const gfx::ImageSkia& image) {
   DCHECK(nine_patch_layer_.get());
 
   nine_patch_layer_image_ = image;
-  // TODO(estade): we don't clean up old bitmaps in the UIResourceManager when
-  // the scale factor changes. Currently for the way NinePatchLayers are used,
-  // we don't need/want to, but we should address this in the future if it
-  // becomes an issue.
   nine_patch_layer_->SetBitmap(
       image.GetRepresentation(device_scale_factor_).GetBitmap());
 }
@@ -1126,28 +1264,34 @@ void Layer::UpdateNinePatchOcclusion(const gfx::Rect& occlusion) {
   nine_patch_layer_->SetLayerOcclusion(occlusion);
 }
 
-void Layer::SetColor(SkColor color) { GetAnimator()->SetColor(color); }
+void Layer::SetColor(SkColor color) {
+  GetAnimator()->SetColor(SkColor4f::FromColor(color));
+}
 
 SkColor Layer::GetTargetColor() const {
   if (animator_ && animator_->IsAnimatingProperty(
       LayerAnimationElement::COLOR))
-    return animator_->GetTargetColor();
-  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+    return animator_->GetTargetColor().toSkColor();
+  // TODO(crbug.com/40219248): Remove toSkColor and make all SkColor4f.
   return cc_layer_->background_color().toSkColor();
 }
 
 SkColor Layer::background_color() const {
-  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+  // TODO(crbug.com/40219248): Remove toSkColor and make all SkColor4f.
   return cc_layer_->background_color().toSkColor();
 }
 
 bool Layer::SchedulePaint(const gfx::Rect& invalid_rect) {
-  if (type_ == LAYER_SOLID_COLOR && !texture_layer_)
+  if (type_ == LAYER_NOT_DRAWN ||
+      (type_ == LAYER_SOLID_COLOR && !texture_layer_)) {
     return false;
-  if (type_ == LAYER_NINE_PATCH)
+  }
+  if (type_ == LAYER_NINE_PATCH) {
     return false;
-  if (!delegate_ && transfer_resource_.mailbox_holder.mailbox.IsZero())
+  }
+  if (!delegate_ && transfer_resource_.is_empty()) {
     return false;
+  }
 
   damaged_region_.Union(invalid_rect);
   if (layer_mask_)
@@ -1159,9 +1303,14 @@ bool Layer::SchedulePaint(const gfx::Rect& invalid_rect) {
 }
 
 void Layer::ScheduleDraw() {
+  // Do not schedule draw if this layer does not contribute the content.
+  if (type_ == LAYER_NOT_DRAWN && children_.size() == 0) {
+    return;
+  }
   Compositor* compositor = GetCompositor();
-  if (compositor)
+  if (compositor) {
     compositor->ScheduleDraw();
+  }
 }
 
 void Layer::SendDamagedRects() {
@@ -1172,8 +1321,9 @@ void Layer::SendDamagedRects() {
 
   if (damaged_region_.IsEmpty())
     return;
-  if (!delegate_ && transfer_resource_.mailbox_holder.mailbox.IsZero())
+  if (!delegate_ && transfer_resource_.is_empty()) {
     return;
+  }
   if (content_layer_ && deferred_paint_requests_)
     return;
 
@@ -1198,7 +1348,7 @@ void Layer::CompleteAllAnimations() {
 
 void Layer::StackChildrenAtBottom(
     const std::vector<Layer*>& new_leading_children) {
-  std::vector<Layer*> new_children_order;
+  std::vector<raw_ptr<Layer, VectorExperimental>> new_children_order;
   new_children_order.reserve(children_.size());
 
   cc::LayerList new_cc_children_order;
@@ -1212,7 +1362,8 @@ void Layer::StackChildrenAtBottom(
         scoped_refptr<cc::Layer>(leading_child->cc_layer_.get()));
   }
 
-  base::flat_set<Layer*> reordered_children(new_children_order);
+  base::flat_set<raw_ptr<Layer, VectorExperimental>> reordered_children(
+      new_children_order);
 
   const cc::LayerList& old_cc_children_order = cc_layer_->children();
 
@@ -1231,8 +1382,9 @@ void Layer::SuppressPaint() {
   if (!delegate_)
     return;
   delegate_ = nullptr;
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->SuppressPaint();
+  }
 }
 
 void Layer::OnDeviceScaleFactorChanged(float device_scale_factor) {
@@ -1280,7 +1432,16 @@ void Layer::OnDeviceScaleFactorChanged(float device_scale_factor) {
     delegate_->OnDeviceScaleFactorChanged(old_device_scale_factor,
                                           device_scale_factor);
   }
-  for (auto* child : children_) {
+
+  // We may add or remove children during child->OnDeviceScaleFactorChanged().
+  std::vector<base::WeakPtr<Layer>> weak_children(children_.size());
+  for (ui::Layer* child : children_) {
+    weak_children.push_back(child->weak_ptr_factory_.GetWeakPtr());
+  }
+  for (auto& child : weak_children) {
+    if (!child) {
+      continue;
+    }
     child->OnDeviceScaleFactorChanged(device_scale_factor);
 
     // A child layer may have triggered a delegate or an observer to delete
@@ -1300,7 +1461,6 @@ void Layer::SetDidScrollCallback(
 
 void Layer::SetScrollable(const gfx::Size& container_bounds) {
   cc_layer_->SetScrollable(container_bounds);
-  cc_layer_->SetUserScrollable(true, true);
 }
 
 gfx::PointF Layer::CurrentScrollOffset() const {
@@ -1320,18 +1480,21 @@ void Layer::SetScrollOffset(const gfx::PointF& offset) {
   if (!scrolled_on_impl_side)
     cc_layer_->SetScrollOffset(offset);
 
-  // TODO(crbug.com/1219662): If this layer was also resized since the last
+  // TODO(crbug.com/40772386): If this layer was also resized since the last
   // commit synchronizing |cc_layer_| with the cc::LayerImpl backing
   // |compositor|, the scroll might not be completed.
 }
 
 void Layer::RequestCopyOfOutput(
     std::unique_ptr<viz::CopyOutputRequest> request) {
-  cc_layer_->RequestCopyOfOutput(std::move(request));
-}
+  if (!request->has_result_task_runner()) {
+    CHECK(GetCompositor())
+        << "A copy request must either have a task runner, or be added to the "
+           "layer that has already been added to compositor.";
+    request->set_result_task_runner(GetCompositor()->task_runner());
+  }
 
-gfx::Rect Layer::PaintableRegion() const {
-  return gfx::Rect(size());
+  cc_layer_->RequestCopyOfOutput(std::move(request));
 }
 
 scoped_refptr<cc::DisplayItemList> Layer::PaintContentsToDisplayList() {
@@ -1356,7 +1519,6 @@ scoped_refptr<cc::DisplayItemList> Layer::PaintContentsToDisplayList() {
 bool Layer::FillsBoundsCompletely() const { return fills_bounds_completely_; }
 
 bool Layer::PrepareTransferableResource(
-    cc::SharedBitmapIdRegistrar* bitmap_registar,
     viz::TransferableResource* resource,
     viz::ReleaseCallback* release_callback) {
   if (!transfer_release_callback_)
@@ -1370,8 +1532,9 @@ void Layer::CollectAnimators(
     std::vector<scoped_refptr<LayerAnimator>>* animators) {
   if (animator_ && animator_->is_animating())
     animators->push_back(animator_);
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->CollectAnimators(animators);
+  }
 }
 
 void Layer::StackRelativeTo(Layer* child, Layer* other, bool above) {
@@ -1380,9 +1543,11 @@ void Layer::StackRelativeTo(Layer* child, Layer* other, bool above) {
   DCHECK_EQ(this, other->parent());
 
   const size_t child_i =
-      std::find(children_.begin(), children_.end(), child) - children_.begin();
+      base::ranges::find(children_, child) - children_.begin();
   const size_t other_i =
-      std::find(children_.begin(), children_.end(), other) - children_.begin();
+      base::ranges::find(children_, other) - children_.begin();
+  DCHECK_LT(child_i, children_.size()) << " child not in vector";
+  DCHECK_LT(other_i, children_.size()) << " other not in vector";
   if ((above && child_i == other_i + 1) || (!above && child_i + 1 == other_i))
     return;
 
@@ -1404,9 +1569,7 @@ bool Layer::ConvertPointForAncestor(const Layer* ancestor,
   bool result = use_target_transform
                     ? GetTargetTransformRelativeTo(ancestor, &transform)
                     : GetTransformRelativeTo(ancestor, &transform);
-  auto p = gfx::Point3F(*point);
-  transform.TransformPoint(&p);
-  *point = p.AsPointF();
+  *point = transform.MapPoint(*point);
   return result;
 }
 
@@ -1414,13 +1577,17 @@ bool Layer::ConvertPointFromAncestor(const Layer* ancestor,
                                      bool use_target_transform,
                                      gfx::PointF* point) const {
   gfx::Transform transform;
-  bool result = use_target_transform
-                    ? GetTargetTransformRelativeTo(ancestor, &transform)
-                    : GetTransformRelativeTo(ancestor, &transform);
-  auto p = gfx::Point3F(*point);
-  transform.TransformPointReverse(&p);
-  *point = p.AsPointF();
-  return result;
+  if (!(use_target_transform
+            ? GetTargetTransformRelativeTo(ancestor, &transform)
+            : GetTransformRelativeTo(ancestor, &transform))) {
+    return false;
+  }
+  const std::optional<gfx::PointF> transformed_point =
+      transform.InverseMapPoint(*point);
+  if (!transformed_point.has_value())
+    return false;
+  *point = transformed_point.value();
+  return true;
 }
 
 void Layer::SetBoundsFromAnimation(const gfx::Rect& bounds,
@@ -1447,8 +1614,9 @@ void Layer::SetBoundsFromAnimation(const gfx::Rect& bounds,
   if (bounds.size() == old_bounds.size()) {
     // Don't schedule a draw if we're invisible. We'll schedule one
     // automatically when we get visible.
-    if (IsDrawn())
+    if (IsVisible()) {
       ScheduleDraw();
+    }
   } else {
     // Always schedule a paint, even if we're invisible.
     SchedulePaint(gfx::Rect(bounds.size()));
@@ -1460,8 +1628,9 @@ void Layer::SetBoundsFromAnimation(const gfx::Rect& bounds,
       mirror_dest->SetBounds(bounds);
   }
 
-  for (auto* reflecting_layer : subtree_reflecting_layers_)
+  for (Layer* reflecting_layer : subtree_reflecting_layers_) {
     reflecting_layer->MatchLayerSize(this);
+  }
 }
 
 void Layer::SetTransformFromAnimation(const gfx::Transform& new_transform,
@@ -1516,12 +1685,12 @@ void Layer::SetGrayscaleFromAnimation(float grayscale,
   SetLayerFilters();
 }
 
-void Layer::SetColorFromAnimation(SkColor color, PropertyChangeReason reason) {
+void Layer::SetColorFromAnimation(SkColor4f color,
+                                  PropertyChangeReason reason) {
   DCHECK_EQ(type_, LAYER_SOLID_COLOR);
-  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
-  cc_layer_->SetBackgroundColor(SkColor4f::FromColor(color));
-  cc_layer_->SetSafeOpaqueBackgroundColor(SkColor4f::FromColor(color));
-  SetFillsBoundsOpaquelyWithReason(SkColorGetA(color) == 0xFF, reason);
+  cc_layer_->SetBackgroundColor(color);
+  cc_layer_->SetSafeOpaqueBackgroundColor(color);
+  SetFillsBoundsOpaquelyWithReason(color.isOpaque(), reason);
 }
 
 void Layer::SetClipRectFromAnimation(const gfx::Rect& clip_rect,
@@ -1540,8 +1709,12 @@ void Layer::SetRoundedCornersFromAnimation(
     PropertyChangeReason reason) {
   cc_layer_->SetRoundedCorner(rounded_corners);
 
-  for (const auto& mirror : mirrors_)
-    mirror->dest()->SetRoundedCornersFromAnimation(rounded_corners, reason);
+  for (const auto& mirror : mirrors_) {
+    Layer* mirror_dest = mirror->dest();
+    if (mirror_dest->sync_rounded_corners_with_source_) {
+      mirror_dest->SetRoundedCornersFromAnimation(rounded_corners, reason);
+    }
+  }
 }
 
 void Layer::SetGradientMaskFromAnimation(
@@ -1581,13 +1754,11 @@ float Layer::GetGrayscaleForAnimation() const {
   return layer_grayscale();
 }
 
-SkColor Layer::GetColorForAnimation() const {
+SkColor4f Layer::GetColorForAnimation() const {
   // The NULL check is here since this is invoked regardless of whether we have
   // been configured as LAYER_SOLID_COLOR.
-  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
-  return solid_color_layer_.get()
-             ? solid_color_layer_->background_color().toSkColor()
-             : SK_ColorBLACK;
+  return solid_color_layer_.get() ? solid_color_layer_->background_color()
+                                  : SkColors::kBlack;
 }
 
 gfx::Rect Layer::GetClipRectForAnimation() const {
@@ -1611,14 +1782,6 @@ float Layer::GetDeviceScaleFactor() const {
 LayerAnimatorCollection* Layer::GetLayerAnimatorCollection() {
   Compositor* compositor = GetCompositor();
   return compositor ? compositor->layer_animator_collection() : nullptr;
-}
-
-absl::optional<int> Layer::GetFrameNumber() const {
-  if (const Compositor* compositor = GetCompositor()) {
-    return compositor->activated_frame_count();
-  }
-
-  return absl::nullopt;
 }
 
 float Layer::GetRefreshRate() const {
@@ -1670,6 +1833,8 @@ void Layer::RecomputeDrawsContentAndUVRect() {
       static_cast<float>(size.height()) / frame_size_in_dip_.height());
     texture_layer_->SetUV(uv_top_left, uv_bottom_right);
   } else if (surface_layer_.get()) {
+    // TODO(crbug.com/40285157): with surface sync, size shouldn't rely on
+    // `frame_size_in_dip_` anymore.
     size.SetToMin(frame_size_in_dip_);
   }
   cc_layer_->SetBounds(size);
@@ -1689,8 +1854,9 @@ void Layer::SetCompositorForAnimatorsInTree(Compositor* compositor) {
     animator_->AttachLayerAndTimeline(compositor);
   }
 
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->SetCompositorForAnimatorsInTree(compositor);
+  }
 }
 
 void Layer::ResetCompositorForAnimatorsInTree(Compositor* compositor) {
@@ -1702,17 +1868,16 @@ void Layer::ResetCompositorForAnimatorsInTree(Compositor* compositor) {
     animator_->RemoveFromCollection(collection);
   }
 
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->ResetCompositorForAnimatorsInTree(compositor);
+  }
 }
 
 void Layer::OnMirrorDestroyed(LayerMirror* mirror) {
-  const auto it = std::find_if(mirrors_.begin(), mirrors_.end(),
-      [mirror](const std::unique_ptr<LayerMirror>& mirror_ptr) {
-        return mirror_ptr.get() == mirror;
-      });
+  const auto it =
+      base::ranges::find(mirrors_, mirror, &std::unique_ptr<LayerMirror>::get);
 
-  DCHECK(it != mirrors_.end());
+  CHECK(it != mirrors_.end(), base::NotFatalUntil::M130);
   mirrors_.erase(it);
 }
 
@@ -1750,8 +1915,9 @@ void Layer::GetFlattenedWeakList(
   if (layer_mask_)
     flattened_list->emplace_back(layer_mask_->weak_ptr_factory_.GetWeakPtr());
 
-  for (auto* child : children_)
+  for (ui::Layer* child : children_) {
     child->GetFlattenedWeakList(flattened_list);
+  }
 }
 
 void Layer::SetFillsBoundsOpaquelyWithReason(bool fills_bounds_opaquely,
@@ -1778,8 +1944,8 @@ bool Layer::GetTransformRelativeToImpl(const Layer* ancestor,
     const gfx::Transform& layer_transform =
         is_target_transform ? p->GetTargetTransform() : p->transform();
     if (!layer_transform.IsIdentity())
-      transform->ConcatTransform(layer_transform);
-    transform->ConcatTransform(translation);
+      transform->PostConcat(layer_transform);
+    transform->PostConcat(translation);
   }
   return p == ancestor;
 }

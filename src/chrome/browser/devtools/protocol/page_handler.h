@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,27 +46,31 @@ class PageHandler : public protocol::Page::Backend {
   protocol::Response SetAdBlockingEnabled(bool enabled) override;
   protocol::Response SetSPCTransactionMode(
       const protocol::String& mode) override;
+  protocol::Response SetRPHRegistrationMode(
+      const protocol::String& mode) override;
   void GetInstallabilityErrors(
       std::unique_ptr<GetInstallabilityErrorsCallback> callback) override;
 
   void GetManifestIcons(
       std::unique_ptr<GetManifestIconsCallback> callback) override;
 
-  void PrintToPDF(protocol::Maybe<bool> landscape,
-                  protocol::Maybe<bool> display_header_footer,
-                  protocol::Maybe<bool> print_background,
-                  protocol::Maybe<double> scale,
-                  protocol::Maybe<double> paper_width,
-                  protocol::Maybe<double> paper_height,
-                  protocol::Maybe<double> margin_top,
-                  protocol::Maybe<double> margin_bottom,
-                  protocol::Maybe<double> margin_left,
-                  protocol::Maybe<double> margin_right,
-                  protocol::Maybe<protocol::String> page_ranges,
-                  protocol::Maybe<protocol::String> header_template,
-                  protocol::Maybe<protocol::String> footer_template,
-                  protocol::Maybe<bool> prefer_css_page_size,
-                  protocol::Maybe<protocol::String> transfer_mode,
+  void PrintToPDF(std::optional<bool> landscape,
+                  std::optional<bool> display_header_footer,
+                  std::optional<bool> print_background,
+                  std::optional<double> scale,
+                  std::optional<double> paper_width,
+                  std::optional<double> paper_height,
+                  std::optional<double> margin_top,
+                  std::optional<double> margin_bottom,
+                  std::optional<double> margin_left,
+                  std::optional<double> margin_right,
+                  std::optional<protocol::String> page_ranges,
+                  std::optional<protocol::String> header_template,
+                  std::optional<protocol::String> footer_template,
+                  std::optional<bool> prefer_css_page_size,
+                  std::optional<protocol::String> transfer_mode,
+                  std::optional<bool> generate_tagged_pdf,
+                  std::optional<bool> generate_document_outline,
                   std::unique_ptr<PrintToPDFCallback> callback) override;
 
   void GetAppId(std::unique_ptr<GetAppIdCallback> callback) override;

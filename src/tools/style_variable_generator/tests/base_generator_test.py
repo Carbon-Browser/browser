@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -315,6 +315,18 @@ class BaseGeneratorTest(unittest.TestCase):
                          'rgba(255, 255, 255, 1)')
         self.assertEqual(self.ResolveRGBA('alert_debug'), 'rgba(0, 0, 0, 1)')
         self.assertEqual(self.ResolveRGBA('alert'), 'rgba(255, 255, 255, 1)')
+
+    def testAlias(self):
+        self.generator.AddJSONToModel('''
+        {
+          legacy_mappings: {
+            legacy: "$white",
+          },
+        }
+        ''')
+        self.assertEqual(self.generator.model.legacy_mappings['legacy'],
+                         '$white')
+        self.generator.model.Validate()
 
 
 if __name__ == '__main__':

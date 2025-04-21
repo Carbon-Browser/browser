@@ -17,14 +17,22 @@
     Boston, MA 02110-1301, USA.
 */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_TEXT_SEGMENTED_STRING_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TEXT_SEGMENTED_STRING_H_
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_view.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
 #include "third_party/blink/renderer/platform/wtf/text/unicode.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -116,12 +124,24 @@ class PLATFORM_EXPORT SegmentedSubstring {
     return data_.string8_ptr < data_last_char_;
   }
 
+  // Advances up to `delta` characters, returning how many characters were
+  // advanced. This will not advance past the last character.
+  unsigned Advance(unsigned delta) {
+    DCHECK_NE(0, length());
+    delta = std::min(static_cast<unsigned>(length()) - 1, delta);
+    if (is_8bit_)
+      data_.string8_ptr += delta;
+    else
+      data_.string16_ptr += delta;
+    return delta;
+  }
+
   ALWAYS_INLINE UChar Advance() {
     return is_8bit_ ? *++data_.string8_ptr : *++data_.string16_ptr;
   }
 
-  String CurrentSubString(unsigned len) const {
-    return string_.Substring(offset(), len);
+  StringView CurrentSubString(unsigned len) const {
+    return StringView(string_, offset(), len);
   }
 
   ALWAYS_INLINE int offset() const {
@@ -142,14 +162,16 @@ class PLATFORM_EXPORT SegmentedSubstring {
   }
 
   union {
-    const LChar* string8_ptr;
-    const UChar* string16_ptr;
+    // RAW_PTR_EXCLUSION: #union
+    RAW_PTR_EXCLUSION const LChar* string8_ptr;
+    RAW_PTR_EXCLUSION const UChar* string16_ptr;
   } data_;
-  const LChar* data_start_;
+  raw_ptr<const LChar, AllowPtrArithmetic | DanglingUntriaged> data_start_;
   // |data_last_char_| points to the last character (or nullptr). This is to
   // avoid extra computation in |CanAdvance|, which is in the critical path of
   // HTMLTokenizer.
-  const LChar* data_last_char_;
+  // RAW_PTR_EXCLUSION: End of the buffer already protected by raw_ptr.
+  RAW_PTR_EXCLUSION const LChar* data_last_char_;
   bool do_not_exclude_line_numbers_ = true;
   bool is_8bit_ = true;
   String string_;
@@ -164,7 +186,8 @@ class PLATFORM_EXPORT SegmentedString {
         number_of_characters_consumed_prior_to_current_line_(0),
         current_line_(0),
         closed_(false),
-        empty_(true) {}
+        empty_(true),
+        current_char_('\0') {}
 
   SegmentedString(const String& str)
       : current_string_(str),
@@ -172,7 +195,8 @@ class PLATFORM_EXPORT SegmentedString {
         number_of_characters_consumed_prior_to_current_line_(0),
         current_line_(0),
         closed_(false),
-        empty_(!str.length()) {}
+        empty_(!str.length()),
+        current_char_(empty_ ? '\0' : current_string_.GetCurrentChar()) {}
 
   void Clear();
   void Close();
@@ -216,15 +240,22 @@ class PLATFORM_EXPORT SegmentedString {
     return LookAheadInline(string, kTextCaseASCIIInsensitive);
   }
 
+  // Used to advance by multiple characters. Specifically this advances by
+  // `num_chars` and `num_lines`. This function advances without analyzing the
+  // input string in anyway. As a result, the caller must know `num_lines` and
+  // `current_column`.
+  void Advance(unsigned num_chars, unsigned num_lines, int current_column);
+
   ALWAYS_INLINE UChar Advance() {
-    if (LIKELY(current_string_.CanAdvance())) {
-      return current_string_.Advance();
+    if (current_string_.CanAdvance()) [[likely]] {
+      current_char_ = current_string_.Advance();
+      return current_char_;
     }
     return AdvanceSubstring();
   }
 
   ALWAYS_INLINE void UpdateLineNumber() {
-    if (LIKELY(current_string_.DoNotExcludeLineNumbers())) {
+    if (current_string_.DoNotExcludeLineNumbers()) [[likely]] {
       ++current_line_;
       // Plus 1 because numberOfCharactersConsumed value hasn't incremented yet;
       // it does with length() decrement below.
@@ -235,7 +266,7 @@ class PLATFORM_EXPORT SegmentedString {
 
   ALWAYS_INLINE UChar AdvanceAndUpdateLineNumber() {
     DCHECK_GE(current_string_.length(), 1);
-    if (current_string_.GetCurrentChar() == '\n')
+    if (current_char_ == '\n')
       UpdateLineNumber();
     return Advance();
   }
@@ -263,11 +294,7 @@ class PLATFORM_EXPORT SegmentedString {
     return Advance();
   }
 
-  // Writes the consumed characters into consumedCharacters, which must
-  // have space for at least |count| characters.
-  void Advance(unsigned count, UChar* consumed_characters);
-
-  int NumberOfCharactersConsumed() const {
+  ALWAYS_INLINE int NumberOfCharactersConsumed() const {
     int number_of_pushed_characters = 0;
     return number_of_characters_consumed_prior_to_current_string_ +
            current_string_.NumberOfCharactersConsumed() -
@@ -276,9 +303,7 @@ class PLATFORM_EXPORT SegmentedString {
 
   String ToString() const;
 
-  ALWAYS_INLINE UChar CurrentChar() const {
-    return current_string_.GetCurrentChar();
-  }
+  ALWAYS_INLINE UChar CurrentChar() const { return current_char_; }
 
   // The method is moderately slow, comparing to currentLine method.
   OrdinalNumber CurrentColumn() const;
@@ -296,12 +321,16 @@ class PLATFORM_EXPORT SegmentedString {
 
   UChar AdvanceSubstring();
 
+  // Consume characters into `characters`, which should not be bigger than
+  // `length()`.
+  void AdvanceAndCollect(base::span<UChar> characters);
+
   inline LookAheadResult LookAheadInline(const String& string,
                                          TextCaseSensitivity case_sensitivity) {
     if (string.length() <= static_cast<unsigned>(current_string_.length())) {
-      String current_substring =
+      StringView current_substring =
           current_string_.CurrentSubString(string.length());
-      if (current_substring.StartsWith(string, case_sensitivity))
+      if (string.StartsWith(current_substring, case_sensitivity))
         return kDidMatch;
       return kDidNotMatch;
     }
@@ -313,10 +342,10 @@ class PLATFORM_EXPORT SegmentedString {
     unsigned count = string.length();
     if (count > length())
       return kNotEnoughCharacters;
-    UChar* consumed_characters;
+    base::span<UChar> consumed_characters;
     String consumed_string =
         String::CreateUninitialized(count, consumed_characters);
-    Advance(count, consumed_characters);
+    AdvanceAndCollect(consumed_characters);
     LookAheadResult result = kDidNotMatch;
     if (consumed_string.StartsWith(string, case_sensitivity))
       result = kDidMatch;
@@ -324,7 +353,7 @@ class PLATFORM_EXPORT SegmentedString {
     return result;
   }
 
-  bool IsComposite() const { return !substrings_.IsEmpty(); }
+  bool IsComposite() const { return !substrings_.empty(); }
 
   SegmentedSubstring current_string_;
   int number_of_characters_consumed_prior_to_current_string_;
@@ -333,7 +362,8 @@ class PLATFORM_EXPORT SegmentedString {
   Deque<SegmentedSubstring> substrings_;
   bool closed_;
   bool empty_;
-  const SegmentedString* next_segmented_string_ = nullptr;
+  UChar current_char_;
+  raw_ptr<const SegmentedString> next_segmented_string_ = nullptr;
 };
 
 }  // namespace blink

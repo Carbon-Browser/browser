@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,28 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/values.h"
-#include "components/consent_auditor/pref_names.h"
-#include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/pref_service.h"
-#include "components/prefs/scoped_user_pref_update.h"
-#include "components/sync/model/model_type_sync_bridge.h"
+#include "components/sync/model/data_type_sync_bridge.h"
 #include "components/sync/protocol/user_consent_specifics.pb.h"
 #include "components/sync/protocol/user_consent_types.pb.h"
 
 using ArcPlayTermsOfServiceConsent =
     sync_pb::UserConsentTypes::ArcPlayTermsOfServiceConsent;
-using sync_pb::UserConsentTypes;
 using sync_pb::UserConsentSpecifics;
+using sync_pb::UserConsentTypes;
 
 namespace consent_auditor {
 
 namespace {
-
-constexpr char kLocalConsentDescriptionKey[] = "description";
-constexpr char kLocalConsentConfirmationKey[] = "confirmation";
-constexpr char kLocalConsentVersionKey[] = "version";
-constexpr char kLocalConsentLocaleKey[] = "locale";
 
 std::unique_ptr<sync_pb::UserConsentSpecifics> CreateUserConsentSpecifics(
     const CoreAccountId& account_id,
@@ -47,28 +37,18 @@ std::unique_ptr<sync_pb::UserConsentSpecifics> CreateUserConsentSpecifics(
 }  // namespace
 
 ConsentAuditorImpl::ConsentAuditorImpl(
-    PrefService* pref_service,
     std::unique_ptr<ConsentSyncBridge> consent_sync_bridge,
-    const std::string& app_version,
     const std::string& app_locale,
     base::Clock* clock)
-    : pref_service_(pref_service),
-      consent_sync_bridge_(std::move(consent_sync_bridge)),
-      app_version_(app_version),
+    : consent_sync_bridge_(std::move(consent_sync_bridge)),
       app_locale_(app_locale),
       clock_(clock) {
   DCHECK(consent_sync_bridge_);
-  DCHECK(pref_service_);
 }
 
-ConsentAuditorImpl::~ConsentAuditorImpl() {}
+ConsentAuditorImpl::~ConsentAuditorImpl() = default;
 
 void ConsentAuditorImpl::Shutdown() {}
-
-// static
-void ConsentAuditorImpl::RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  registry->RegisterDictionaryPref(prefs::kLocalConsentsDictionary);
-}
 
 void ConsentAuditorImpl::RecordArcPlayConsent(
     const CoreAccountId& account_id,
@@ -143,40 +123,22 @@ void ConsentAuditorImpl::RecordAccountPasswordsConsent(
   consent_sync_bridge_->RecordConsent(std::move(specifics));
 }
 
-void ConsentAuditorImpl::RecordAutofillAssistantConsent(
+void ConsentAuditorImpl::RecordRecorderSpeakerLabelConsent(
     const CoreAccountId& account_id,
-    const sync_pb::UserConsentTypes::AutofillAssistantConsent& consent) {
+    const sync_pb::UserConsentTypes::RecorderSpeakerLabelConsent& consent) {
   std::unique_ptr<sync_pb::UserConsentSpecifics> specifics =
       CreateUserConsentSpecifics(account_id, app_locale_, clock_);
-  *specifics->mutable_autofill_assistant_consent() = consent;
+  specifics->mutable_recorder_speaker_label_consent()->CopyFrom(consent);
 
   consent_sync_bridge_->RecordConsent(std::move(specifics));
 }
 
-void ConsentAuditorImpl::RecordLocalConsent(
-    const std::string& feature,
-    const std::string& description_text,
-    const std::string& confirmation_text) {
-  DictionaryPrefUpdate consents_update(pref_service_,
-                                       prefs::kLocalConsentsDictionary);
-  base::Value* consents = consents_update.Get();
-  DCHECK(consents);
-
-  base::Value record(base::Value::Type::DICTIONARY);
-  record.SetStringKey(kLocalConsentDescriptionKey, description_text);
-  record.SetStringKey(kLocalConsentConfirmationKey, confirmation_text);
-  record.SetStringKey(kLocalConsentVersionKey, app_version_);
-  record.SetStringKey(kLocalConsentLocaleKey, app_locale_);
-
-  consents->SetKey(feature, std::move(record));
-}
-
-base::WeakPtr<syncer::ModelTypeControllerDelegate>
+base::WeakPtr<syncer::DataTypeControllerDelegate>
 ConsentAuditorImpl::GetControllerDelegate() {
   if (consent_sync_bridge_) {
     return consent_sync_bridge_->GetControllerDelegate();
   }
-  return base::WeakPtr<syncer::ModelTypeControllerDelegate>();
+  return base::WeakPtr<syncer::DataTypeControllerDelegate>();
 }
 
 }  // namespace consent_auditor

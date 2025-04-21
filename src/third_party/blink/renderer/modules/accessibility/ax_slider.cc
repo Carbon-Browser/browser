@@ -38,7 +38,7 @@ namespace blink {
 
 AXSlider::AXSlider(LayoutObject* layout_object,
                    AXObjectCacheImpl& ax_object_cache)
-    : AXLayoutObject(layout_object, ax_object_cache) {}
+    : AXNodeObject(layout_object, ax_object_cache) {}
 
 ax::mojom::blink::Role AXSlider::NativeRoleIgnoringAria() const {
   return ax::mojom::blink::Role::kSlider;
@@ -46,23 +46,33 @@ ax::mojom::blink::Role AXSlider::NativeRoleIgnoringAria() const {
 
 AccessibilityOrientation AXSlider::Orientation() const {
   // Default to horizontal in the unknown case.
-  if (!layout_object_)
+  if (!GetLayoutObject()) {
     return kAccessibilityOrientationHorizontal;
+  }
 
-  const ComputedStyle* style = layout_object_->Style();
+  const ComputedStyle* style = GetLayoutObject()->Style();
   if (!style)
     return kAccessibilityOrientationHorizontal;
 
-  ControlPart style_appearance = style->EffectiveAppearance();
-  switch (style_appearance) {
-    case kSliderThumbHorizontalPart:
-    case kSliderHorizontalPart:
-    case kMediaSliderPart:
+  // If CSS writing-mode is vertical, return kAccessibilityOrientationVertical.
+  if (!style->IsHorizontalWritingMode()) {
+    return kAccessibilityOrientationVertical;
+  }
+
+  // Else, look at the CSS appearance property for slider orientation.
+  switch (style->EffectiveAppearance()) {
+    case AppearanceValue::kSliderThumbHorizontal:
+    case AppearanceValue::kSliderHorizontal:
+    case AppearanceValue::kMediaSlider:
       return kAccessibilityOrientationHorizontal;
 
-    case kSliderThumbVerticalPart:
-    case kSliderVerticalPart:
-    case kMediaVolumeSliderPart:
+    case AppearanceValue::kSliderVertical:
+      return RuntimeEnabledFeatures::
+                     NonStandardAppearanceValueSliderVerticalEnabled()
+                 ? kAccessibilityOrientationVertical
+                 : kAccessibilityOrientationHorizontal;
+    case AppearanceValue::kSliderThumbVertical:
+    case AppearanceValue::kMediaVolumeSlider:
       return kAccessibilityOrientationVertical;
 
     default:
@@ -87,13 +97,13 @@ bool AXSlider::OnNativeSetValueAction(const String& value) {
     return false;
 
   // Ensure the AX node is updated.
-  AXObjectCache().MarkAXObjectDirty(this);
+  AXObjectCache().HandleValueChanged(GetNode());
 
   return true;
 }
 
 HTMLInputElement* AXSlider::GetInputElement() const {
-  return To<HTMLInputElement>(layout_object_->GetNode());
+  return To<HTMLInputElement>(GetNode());
 }
 
 }  // namespace blink

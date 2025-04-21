@@ -1,12 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/client/implementation_base.h"
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -87,8 +92,8 @@ void ImplementationBase::GenSyncToken(GLbyte* sync_token) {
     return;
   }
 
-  uint64_t fence_sync = gpu_control_->GenerateFenceSyncRelease();
-  helper_->InsertFenceSync(fence_sync);
+  uint64_t fence_sync = helper_->InsertFenceSync(
+      [this]() { return gpu_control_->GenerateFenceSyncRelease(); });
   helper_->CommandBufferHelper::OrderingBarrier();
   gpu_control_->EnsureWorkVisible();
 
@@ -106,8 +111,8 @@ void ImplementationBase::GenUnverifiedSyncToken(GLbyte* sync_token) {
     return;
   }
 
-  uint64_t fence_sync = gpu_control_->GenerateFenceSyncRelease();
-  helper_->InsertFenceSync(fence_sync);
+  uint64_t fence_sync = helper_->InsertFenceSync(
+      [this]() { return gpu_control_->GenerateFenceSyncRelease(); });
   helper_->CommandBufferHelper::OrderingBarrier();
 
   // Copy the data over after setting the data to ensure alignment.
@@ -204,12 +209,12 @@ bool ImplementationBase::OnMemoryDump(
           ->GetTracingProcessId();
 
   MemoryAllocatorDump* dump = pmd->CreateAllocatorDump(base::StringPrintf(
-      "gpu/transfer_buffer_memory/buffer_%d", transfer_buffer_->GetShmId()));
+      "gpu/transfer_buffer_memory/buffer_0x%x", transfer_buffer_->GetShmId()));
   dump->AddScalar(MemoryAllocatorDump::kNameSize,
                   MemoryAllocatorDump::kUnitsBytes,
                   transfer_buffer_->GetSize());
 
-  if (args.level_of_detail != MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail != MemoryDumpLevelOfDetail::kBackground) {
     dump->AddScalar("free_size", MemoryAllocatorDump::kUnitsBytes,
                     transfer_buffer_->GetFragmentedFreeSize());
     auto shared_memory_guid = transfer_buffer_->shared_memory_guid();
@@ -256,9 +261,9 @@ gpu::ContextResult ImplementationBase::Initialize(
   return gpu::ContextResult::kSuccess;
 }
 
-void ImplementationBase::WaitForCmd() {
+bool ImplementationBase::WaitForCmd() {
   TRACE_EVENT0("gpu", "ImplementationBase::WaitForCmd");
-  helper_->Finish();
+  return helper_->Finish();
 }
 
 int32_t ImplementationBase::GetResultShmId() {
@@ -301,7 +306,10 @@ bool ImplementationBase::GetBucketContents(uint32_t bucket_id,
         }
         helper_->GetBucketData(bucket_id, offset, buffer.size(),
                                buffer.shm_id(), buffer.offset());
-        WaitForCmd();
+        if (!WaitForCmd()) {
+          data->clear();
+          return false;
+        }
       }
       uint32_t size_to_copy = std::min(size, buffer.size());
       memcpy(&(*data)[offset], buffer.address(), size_to_copy);

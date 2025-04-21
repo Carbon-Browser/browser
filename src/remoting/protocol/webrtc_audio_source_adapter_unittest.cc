@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/protocol/webrtc_audio_source_adapter.h"
 
@@ -19,8 +24,7 @@
 #include "third_party/webrtc/rtc_base/ref_count.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -29,7 +33,7 @@ const int kBytesPerSample = 2;
 const int kChannels = 2;
 constexpr auto kFrameDuration = base::Milliseconds(10);
 
-class FakeAudioSink : public webrtc::AudioTrackSinkInterface{
+class FakeAudioSink : public webrtc::AudioTrackSinkInterface {
  public:
   FakeAudioSink() = default;
   ~FakeAudioSink() override = default;
@@ -75,7 +79,7 @@ class WebrtcAudioSourceAdapterTest : public testing::Test {
 
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<FakeAudioSource> audio_source_;
+  raw_ptr<FakeAudioSource, AcrossTasksDanglingUntriaged> audio_source_;
   scoped_refptr<WebrtcAudioSourceAdapter> audio_source_adapter_;
   FakeAudioSink sink_;
 };
@@ -116,6 +120,4 @@ TEST_F(WebrtcAudioSourceAdapterTest, PartialFrames) {
   }
 }
 
-
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

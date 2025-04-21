@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/services/app_service/public/cpp/icon_info.h"
 
@@ -30,12 +35,12 @@ IconInfo& IconInfo::operator=(const IconInfo&) = default;
 IconInfo& IconInfo::operator=(IconInfo&&) noexcept = default;
 
 base::Value IconInfo::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetStringKey("url", url.spec());
-  root.SetKey("square_size_px",
-              square_size_px ? base::Value(*square_size_px) : base::Value());
-  root.SetStringKey("purpose", kPurposeStrings[static_cast<int>(purpose)]);
-  return root;
+  base::Value::Dict root;
+  root.Set("url", url.spec());
+  root.Set("square_size_px",
+           square_size_px ? base::Value(*square_size_px) : base::Value());
+  root.Set("purpose", kPurposeStrings[static_cast<int>(purpose)]);
+  return base::Value(std::move(root));
 }
 
 bool IconInfo::operator==(const IconInfo& other) const {

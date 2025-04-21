@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,22 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/media_galleries/chromeos/mtp_device_task_helper.h"
 #include "chrome/browser/media_galleries/fileapi/mtp_device_async_delegate.h"
 #include "content/public/browser/browser_thread.h"
 #include "storage/browser/file_system/async_file_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct SnapshotRequestInfo;
 
@@ -67,7 +68,8 @@ class MTPDeviceDelegateImplLinux : public MTPDeviceAsyncDelegate {
   class MTPFileNode;
 
   // Maps file ids to file nodes.
-  typedef std::map<uint32_t, MTPFileNode*> FileIdToMTPFileNodeMap;
+  typedef std::map<uint32_t, raw_ptr<MTPFileNode, CtnExperimental>>
+      FileIdToMTPFileNodeMap;
 
   // Maps file paths to file info.
   typedef std::map<base::FilePath, MTPDeviceTaskHelper::MTPEntry> FileInfoCache;
@@ -455,7 +457,7 @@ class MTPDeviceDelegateImplLinux : public MTPDeviceAsyncDelegate {
   void FillFileCache(const base::FilePath& uncached_path);
 
   // Given a full path, if it exists in the cache, return the id.
-  absl::optional<uint32_t> CachedPathToId(const base::FilePath& path) const;
+  std::optional<uint32_t> CachedPathToId(const base::FilePath& path) const;
 
   // Evict the cache of |id|.
   void EvictCachedPathToId(uint32_t id);

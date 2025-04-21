@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "android_webview/browser/aw_context_permissions_delegate.h"
+#include "android_webview/browser/aw_permission_manager.h"
+#include "android_webview/common/aw_features.h"
+#include "base/functional/bind.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
@@ -20,10 +24,24 @@ class TestMediaAccessPermissionRequest : public MediaAccessPermissionRequest {
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback,
       const blink::MediaStreamDevices& audio_devices,
-      const blink::MediaStreamDevices& video_devices)
-      : MediaAccessPermissionRequest(request, std::move(callback)) {
+      const blink::MediaStreamDevices& video_devices,
+      AwPermissionManager& aw_permission_manager_,
+      bool can_cache_file_url_permissions_)
+      : MediaAccessPermissionRequest(request,
+                                     std::move(callback),
+                                     aw_permission_manager_,
+                                     can_cache_file_url_permissions_) {
     audio_test_devices_ = audio_devices;
     video_test_devices_ = video_devices;
+  }
+};
+
+class MockContextPermissionDelegate : public AwContextPermissionsDelegate {
+ public:
+  MockContextPermissionDelegate() = default;
+  PermissionStatus GetGeolocationPermission(
+      const GURL& requesting_origin) const override {
+    return PermissionStatus::ASK;
   }
 };
 
@@ -57,18 +75,20 @@ class MediaAccessPermissionRequestTest : public testing::Test {
 
     GURL origin("https://www.google.com");
     content::MediaStreamRequest request(
-        0, 0, 0, origin, false, blink::MEDIA_GENERATE_STREAM, audio_id,
-        video_id, blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE,
+        0, 0, 0, url::Origin::Create(origin), false,
+        blink::MEDIA_GENERATE_STREAM, {audio_id}, {video_id},
+        blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE,
         blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
         false /* disable_local_echo */,
-        false /* request_pan_tilt_zoom_permission */);
+        false /* request_pan_tilt_zoom_permission */,
+        false /* captured_surface_control_active */);
 
     std::unique_ptr<TestMediaAccessPermissionRequest> permission_request;
     permission_request = std::make_unique<TestMediaAccessPermissionRequest>(
         request,
         base::BindOnce(&MediaAccessPermissionRequestTest::Callback,
                        base::Unretained(this)),
-        audio_devices, video_devices);
+        audio_devices, video_devices, aw_permission_manager_, false);
     return permission_request;
   }
 
@@ -78,6 +98,9 @@ class MediaAccessPermissionRequestTest : public testing::Test {
   std::string first_video_device_id_;
   blink::MediaStreamDevices devices_;
   blink::mojom::MediaStreamRequestResult result_;
+  MockContextPermissionDelegate mock_permission_delegate_;
+  AwPermissionManager aw_permission_manager_{mock_permission_delegate_};
+  base::test::ScopedFeatureList feature_list_;
 
  private:
   void Callback(const blink::mojom::StreamDevicesSet& stream_devices_set,
@@ -142,6 +165,22 @@ TEST_F(MediaAccessPermissionRequestTest, TestDenyPermissionRequest) {
   request->NotifyRequestResult(false);
   EXPECT_TRUE(devices_.empty());
   EXPECT_EQ(blink::mojom::MediaStreamRequestResult::PERMISSION_DENIED, result_);
+}
+
+TEST_F(MediaAccessPermissionRequestTest,
+       TestGrantedPermissionRequestCachesResult) {
+  url::Origin origin = url::Origin::Create(GURL("https://www.google.com"));
+  EXPECT_FALSE(
+      aw_permission_manager_.ShouldShowEnumerateDevicesAudioLabels(origin));
+  EXPECT_FALSE(
+      aw_permission_manager_.ShouldShowEnumerateDevicesVideoLabels(origin));
+  std::unique_ptr<TestMediaAccessPermissionRequest> request =
+      CreateRequest(audio_device_id_, video_device_id_);
+  request->NotifyRequestResult(true);
+  EXPECT_TRUE(
+      aw_permission_manager_.ShouldShowEnumerateDevicesAudioLabels(origin));
+  EXPECT_TRUE(
+      aw_permission_manager_.ShouldShowEnumerateDevicesVideoLabels(origin));
 }
 
 }  // namespace android_webview

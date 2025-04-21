@@ -1,14 +1,16 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
 import("//content/common/features.gni")
 import("//media/media_options.gni")
 import("//ppapi/buildflags/buildflags.gni")
+import("//sandbox/features.gni")
+import("//services/screen_ai/buildflags/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//third_party/webrtc/webrtc.gni")
 import("//tools/ipc_fuzzer/ipc_fuzzer.gni")
@@ -27,33 +29,31 @@ target(link_target_type, "renderer") {
     "//chromecast/media/audio:*",
     "//content/app:*",
     "//content/public/renderer:renderer_sources",
-    "//content/renderer:audio_decoder_fuzzer",
-    "//content/renderer:content_security_policy_util_fuzzer",
+    "//media/mojo/clients:unit_tests",
   ]
 
   sources = [
-    "accessibility/aom_content_ax_tree.cc",
-    "accessibility/aom_content_ax_tree.h",
+    "accessibility/annotations/ax_annotator.h",
+    "accessibility/annotations/ax_annotators_manager.cc",
+    "accessibility/annotations/ax_annotators_manager.h",
+    "accessibility/annotations/ax_image_annotator.cc",
+    "accessibility/annotations/ax_image_annotator.h",
+    "accessibility/annotations/ax_image_stopwords.cc",
+    "accessibility/annotations/ax_image_stopwords.h",
     "accessibility/ax_action_target_factory.cc",
     "accessibility/ax_action_target_factory.h",
-    "accessibility/ax_image_annotator.cc",
-    "accessibility/ax_image_annotator.h",
-    "accessibility/ax_image_stopwords.cc",
-    "accessibility/ax_image_stopwords.h",
-    "accessibility/ax_tree_distiller.cc",
-    "accessibility/ax_tree_distiller.h",
     "accessibility/ax_tree_snapshotter_impl.cc",
     "accessibility/ax_tree_snapshotter_impl.h",
     "accessibility/blink_ax_action_target.cc",
     "accessibility/blink_ax_action_target.h",
-    "accessibility/blink_ax_tree_source.cc",
-    "accessibility/blink_ax_tree_source.h",
     "accessibility/render_accessibility_impl.cc",
     "accessibility/render_accessibility_impl.h",
     "accessibility/render_accessibility_manager.cc",
     "accessibility/render_accessibility_manager.h",
     "agent_scheduling_group.cc",
     "agent_scheduling_group.h",
+    "background_resource_fetch_assets.cc",
+    "background_resource_fetch_assets.h",
     "browser_exposed_renderer_interfaces.cc",
     "browser_exposed_renderer_interfaces.h",
     "content_security_policy_util.cc",
@@ -66,8 +66,6 @@ target(link_target_type, "renderer") {
     "dom_automation_controller.h",
     "effective_connection_type_helper.cc",
     "effective_connection_type_helper.h",
-    "frame_blame_context.cc",
-    "frame_blame_context.h",
     "frame_owner_properties_converter.cc",
     "frame_owner_properties_converter.h",
     "gpu_benchmarking_extension.cc",
@@ -78,8 +76,6 @@ target(link_target_type, "renderer") {
     "media/audio_decoder.h",
     "media/batching_media_log.cc",
     "media/batching_media_log.h",
-    "media/gpu/gpu_video_accelerator_factories_impl.cc",
-    "media/gpu/gpu_video_accelerator_factories_impl.h",
     "media/inspector_media_event_handler.cc",
     "media/inspector_media_event_handler.h",
     "media/media_factory.cc",
@@ -92,10 +88,10 @@ target(link_target_type, "renderer") {
     "media/render_media_client.h",
     "media/render_media_event_handler.cc",
     "media/render_media_event_handler.h",
+    "media/renderer_web_media_player_delegate.cc",
+    "media/renderer_web_media_player_delegate.h",
     "media/renderer_webaudiodevice_impl.cc",
     "media/renderer_webaudiodevice_impl.h",
-    "media/renderer_webmediaplayer_delegate.cc",
-    "media/renderer_webmediaplayer_delegate.h",
     "mhtml_handle_writer.cc",
     "mhtml_handle_writer.h",
     "mojo/blink_interface_registry_impl.cc",
@@ -110,16 +106,12 @@ target(link_target_type, "renderer") {
     "policy_container_util.h",
     "render_frame_impl.cc",
     "render_frame_impl.h",
-    "render_frame_proxy.cc",
-    "render_frame_proxy.h",
     "render_process.cc",
     "render_process.h",
     "render_process_impl.cc",
     "render_process_impl.h",
     "render_thread_impl.cc",
     "render_thread_impl.h",
-    "render_view_impl.cc",
-    "render_view_impl.h",
     "renderer_blink_platform_impl.cc",
     "renderer_blink_platform_impl.h",
     "renderer_main.cc",
@@ -146,8 +138,6 @@ target(link_target_type, "renderer") {
     "skia_benchmarking_extension.h",
     "stats_collection_controller.cc",
     "stats_collection_controller.h",
-    "top_level_blame_context.cc",
-    "top_level_blame_context.h",
     "v8_value_converter_impl.cc",
     "v8_value_converter_impl.h",
     "variations_render_thread_observer.cc",
@@ -212,8 +202,16 @@ target(link_target_type, "renderer") {
     ]
   }
 
+  if (is_ios) {
+    sources += [ "renderer_main_platform_delegate_ios.mm" ]
+  }
+
   if (is_win) {
-    sources += [ "renderer_main_platform_delegate_win.cc" ]
+    sources += [
+      "font_data/font_data_manager.cc",
+      "font_data/font_data_manager.h",
+      "renderer_main_platform_delegate_win.cc",
+    ]
   }
 
   if (enable_cast_renderer) {
@@ -229,6 +227,7 @@ target(link_target_type, "renderer") {
   public_deps = [
     "//content/common:mojo_bindings",
     "//content/public/common:common_sources",
+    "//content/public/renderer:render_frame_media_playback_options",
     "//ipc",
   ]
 
@@ -236,34 +235,30 @@ target(link_target_type, "renderer") {
     "//base",
     "//base:i18n",
     "//build:chromecast_buildflags",
-    "//build:chromeos_buildflags",
     "//cc",
     "//cc/animation",
     "//cc/mojo_embedder",
     "//cc/mojom",
     "//cc/paint",
-    "//components/cast_streaming/public",
-    "//components/cast_streaming/renderer:resource_provider",
-    "//components/cast_streaming/renderer:wrapping_renderer_factory_selector",
     "//components/discardable_memory/client",
+    "//components/input",
     "//components/metrics",
     "//components/metrics:single_sample_metrics",
-    "//components/services/screen_ai/buildflags",
-    "//components/services/screen_ai/public/mojom",
+    "//components/services/font_data/public/mojom",
+    "//components/startup_metric_utils",
     "//components/url_formatter",
     "//components/variations:variations_mojom",
     "//components/variations/net",
     "//components/viz/client",
     "//components/viz/common",
     "//content:content_resources",
-    "//content:dev_ui_content_resources",
     "//content/child",
     "//content/common",
     "//content/common:buildflags",
+    "//content/common:main_frame_counter",
     "//content/gpu:gpu_sources",
     "//content/public/child:child_sources",
     "//content/services/auction_worklet:auction_worklet",
-    "//content/services/shared_storage_worklet",
     "//crypto",
     "//device/base/synchronization",
     "//device/gamepad/public/cpp:shared_with_blink",
@@ -277,7 +272,6 @@ target(link_target_type, "renderer") {
     "//media:media_buildflags",
     "//media/capture",
     "//media/gpu",
-    "//media/gpu/ipc/client",
     "//media/gpu/ipc/common",
     "//media/midi",
     "//media/midi:mojo",
@@ -300,6 +294,7 @@ target(link_target_type, "renderer") {
     "//services/metrics/public/cpp:ukm_builders",
     "//services/network:network_service",
     "//services/network/public/mojom",
+    "//services/screen_ai/buildflags",
     "//services/service_manager/public/cpp",
     "//services/service_manager/public/mojom",
     "//services/tracing/public/cpp",
@@ -310,7 +305,6 @@ target(link_target_type, "renderer") {
     "//third_party/blink/public:buildflags",
     "//third_party/blink/public/common",
     "//third_party/blink/public/platform/media",
-    "//third_party/blink/public/strings:accessibility_strings",
     "//third_party/boringssl",
     "//third_party/icu",
     "//third_party/libyuv",
@@ -329,6 +323,7 @@ target(link_target_type, "renderer") {
     "//ui/gl",
     "//ui/latency",
     "//ui/native_theme",
+    "//ui/strings:auto_image_annotation_strings_grit",
     "//ui/surface",
     "//url",
     "//v8",
@@ -337,14 +332,25 @@ target(link_target_type, "renderer") {
 
   if (is_android) {
     deps += [
-      "//components/power_scheduler",
-
       # Used by Android WebView only.
       "//components/viz/service",
-      "//third_party/android_ndk:cpu_features",
       "//third_party/ashmem",
+      "//third_party/cpu_features:ndk_compat",
       "//third_party/libphonenumber",
     ]
+
+    if (use_seccomp_bpf) {
+      deps += [ "//sandbox/policy" ]
+    }
+  }
+
+  if (enable_screen_ai_service) {
+    sources += [
+      "accessibility/annotations/ax_main_node_annotator.cc",
+      "accessibility/annotations/ax_main_node_annotator.h",
+    ]
+
+    deps += [ "//services/screen_ai/public/mojom" ]
   }
 
   if (is_linux || is_chromeos) {
@@ -353,11 +359,18 @@ target(link_target_type, "renderer") {
 
   if (is_fuchsia) {
     sources += [ "renderer_main_platform_delegate_fuchsia.cc" ]
+    public_deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.mediacodec:fuchsia.mediacodec_hlcpp" ]
 
     deps += [
-      "//media/fuchsia/cdm/client",
       "//media/fuchsia/video",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
+    ]
+  }
+
+  if (enable_cast_receiver) {
+    deps += [
+      "//components/cast_streaming/common",
+      "//components/cast_streaming/renderer:resource_provider",
     ]
   }
 
@@ -379,25 +392,11 @@ target(link_target_type, "renderer") {
         deps += [ "//chromecast/media/audio:audio_renderer" ]
       }
 
-      deps += [
-        "//media/remoting:remoting_constants",
-        "//media/remoting:remoting_renderer",
-      ]
+      deps += [ "//media/remoting:remoting_renderer" ]
     }
   }
 
-  if (enable_plugins) {
-    sources += [
-      "pepper/pepper_media_stream_audio_track_host.cc",
-      "pepper/pepper_media_stream_audio_track_host.h",
-      "pepper/pepper_media_stream_track_host_base.cc",
-      "pepper/pepper_media_stream_track_host_base.h",
-      "pepper/pepper_media_stream_video_track_host.cc",
-      "pepper/pepper_media_stream_video_track_host.h",
-    ]
-  }
-
-  if (enable_plugins) {
+  if (enable_ppapi) {
     sources += [
       "pepper/audio_helper.cc",
       "pepper/audio_helper.h",
@@ -445,6 +444,12 @@ target(link_target_type, "renderer") {
       "pepper/pepper_in_process_router.h",
       "pepper/pepper_media_device_manager.cc",
       "pepper/pepper_media_device_manager.h",
+      "pepper/pepper_media_stream_audio_track_host.cc",
+      "pepper/pepper_media_stream_audio_track_host.h",
+      "pepper/pepper_media_stream_track_host_base.cc",
+      "pepper/pepper_media_stream_track_host_base.h",
+      "pepper/pepper_media_stream_video_track_host.cc",
+      "pepper/pepper_media_stream_video_track_host.h",
       "pepper/pepper_platform_audio_input.cc",
       "pepper/pepper_platform_audio_input.h",
       "pepper/pepper_platform_audio_output.cc",
@@ -493,8 +498,6 @@ target(link_target_type, "renderer") {
       "pepper/ppb_proxy_impl.h",
       "pepper/ppb_var_deprecated_impl.cc",
       "pepper/ppb_var_deprecated_impl.h",
-      "pepper/ppb_video_decoder_impl.cc",
-      "pepper/ppb_video_decoder_impl.h",
       "pepper/renderer_ppapi_host_impl.cc",
       "pepper/renderer_ppapi_host_impl.h",
       "pepper/renderer_restrict_dispatch_group.h",
@@ -542,6 +545,9 @@ target(link_target_type, "renderer") {
       "media/win/overlay_state_service_provider.cc",
       "media/win/overlay_state_service_provider.h",
     ]
+
+    # For font_data_manager creating FreeType font instances.
+    deps += [ "//third_party:freetype_buildflags" ]
   }
 
   if (is_linux || is_chromeos || is_android) {
@@ -549,10 +555,10 @@ target(link_target_type, "renderer") {
   }
 
   if (is_chromeos) {
-    deps += [ "//chromeos/system:system" ]
-  }
-  if (is_chromeos_ash) {
-    deps += [ "//chromeos:chromeos_export" ]
+    deps += [
+      "//chromeos:chromeos_export",
+      "//chromeos/system",
+    ]
     if (target_cpu == "x64") {
       deps += [ "//chromeos/ash/components/memory/userspace_swap" ]
     }
@@ -570,6 +576,8 @@ target(link_target_type, "renderer") {
 # See comment at the top of //content/BUILD.gn for how this works.
 group("for_content_tests") {
   visibility = [
+    ":audio_decoder_fuzzer",
+    ":content_security_policy_util_fuzzer",
     "//content/test/*",
     "//content/web_test:web_test_renderer_public_deps",
   ]
@@ -580,21 +588,31 @@ group("for_content_tests") {
 }
 
 fuzzer_test("audio_decoder_fuzzer") {
+  # See comment at the top of //content/BUILD.gn for why this is disabled in
+  # component builds.
+  if (is_component_build) {
+    check_includes = false
+  }
+
   sources = [ "media/audio_decoder_fuzzer.cpp" ]
   deps = [
-    "//content/public/renderer:renderer_sources",
-    "//content/renderer:renderer",
+    ":for_content_tests",
     "//content/test:test_support",
   ]
   seed_corpus = "//media/test/data"
 }
 
 fuzzer_test("content_security_policy_util_fuzzer") {
+  # See comment at the top of //content/BUILD.gn for why this is disabled in
+  # component builds.
+  if (is_component_build) {
+    check_includes = false
+  }
+
   sources = [ "content_security_policy_util_fuzzer.cc" ]
   deps = [
+    ":for_content_tests",
     "//base",
-    "//content/public/renderer:renderer_sources",
-    "//content/renderer:renderer",
     "//content/test:test_support",
     "//services/network:network_service",
     "//services/network/public/cpp",

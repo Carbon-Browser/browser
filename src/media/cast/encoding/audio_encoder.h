@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "media/base/audio_bus.h"
 #include "media/cast/cast_environment.h"
@@ -19,6 +19,9 @@ class TimeTicks;
 }
 
 namespace media {
+
+enum class AudioCodec;
+
 namespace cast {
 
 class AudioEncoder {
@@ -32,7 +35,7 @@ class AudioEncoder {
                int num_channels,
                int sampling_rate,
                int bitrate,
-               Codec codec,
+               AudioCodec codec,
                FrameEncodedCallback frame_encoded_callback);
 
   AudioEncoder(const AudioEncoder&) = delete;
@@ -44,7 +47,7 @@ class AudioEncoder {
 
   int GetSamplesPerFrame() const;
   base::TimeDelta GetFrameDuration() const;
-
+  int GetBitrate() const;
   void InsertAudio(std::unique_ptr<AudioBus> audio_bus,
                    base::TimeTicks recorded_time);
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,25 @@
 #include "android_webview/browser/component_updater/registration.h"
 #include "android_webview/browser/lifecycle/aw_contents_lifecycle_notifier.h"
 #include "android_webview/browser/metrics/visibility_metrics_logger.h"
-#include "android_webview/browser_jni_headers/AwBrowserProcess_jni.h"
 #include "android_webview/common/crash_reporter/crash_keys.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/base_paths_posix.h"
 #include "base/path_service.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/component_updater/android/component_loader_policy.h"
 #include "components/crash/core/common/crash_key.h"
+#include "components/embedder_support/origin_trials/origin_trials_settings_storage.h"
+#include "components/os_crypt/async/browser/os_crypt_async.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/process_visibility_util.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/AwBrowserProcess_jni.h"
 
 using content::BrowserThread;
 
@@ -61,7 +68,16 @@ AwBrowserProcess::AwBrowserProcess(
           &AwBrowserProcess::OnLoseForeground, base::Unretained(this)));
 
   app_link_manager_ =
-      absl::make_unique<EnterpriseAuthenticationAppLinkManager>(local_state());
+      std::make_unique<EnterpriseAuthenticationAppLinkManager>(local_state());
+
+  origin_trials_settings_storage_ =
+      std::make_unique<embedder_support::OriginTrialsSettingsStorage>();
+
+  // Initialize OSCryptAsync with no providers. This delegates all encryption
+  // operations to OSCrypt.
+  os_crypt_async_ = std::make_unique<os_crypt_async::OSCryptAsync>(
+      std::vector<
+          std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>>());
 }
 
 AwBrowserProcess::~AwBrowserProcess() {
@@ -75,6 +91,9 @@ void AwBrowserProcess::PreMainMessageLoopRun() {
   pref_change_registrar_.Add(prefs::kAuthServerAllowlist, auth_pref_callback);
   pref_change_registrar_.Add(prefs::kAuthAndroidNegotiateAccountType,
                              auth_pref_callback);
+
+  // Trigger async initialization of OSCrypt key providers.
+  std::ignore = os_crypt_async_->GetInstance(base::DoNothing());
 
   InitSafeBrowsing();
 }
@@ -95,6 +114,7 @@ void AwBrowserProcess::CreateLocalState() {
 void AwBrowserProcess::OnLoseForeground() {
   if (local_state_)
     local_state_->CommitPendingWrite();
+  AwBrowserContext::GetDefault()->GetPrefService()->CommitPendingWrite();
 }
 
 AwBrowserPolicyConnector* AwBrowserProcess::browser_policy_connector() {
@@ -145,7 +165,7 @@ void AwBrowserProcess::CreateSafeBrowsingAllowlistManager() {
 
 safe_browsing::RemoteSafeBrowsingDatabaseManager*
 AwBrowserProcess::GetSafeBrowsingDBManager() {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (!safe_browsing_db_manager_) {
     safe_browsing_db_manager_ =
@@ -155,8 +175,8 @@ AwBrowserProcess::GetSafeBrowsingDBManager() {
   if (!safe_browsing_db_manager_started_) {
     // V4ProtocolConfig is not used. Just create one with empty values..
     safe_browsing::V4ProtocolConfig config("", false, "", "");
-    safe_browsing_db_manager_->StartOnIOThread(
-        GetSafeBrowsingUIManager()->GetURLLoaderFactoryOnIOThread(), config);
+    safe_browsing_db_manager_->StartOnUIThread(
+        GetSafeBrowsingUIManager()->GetURLLoaderFactory(), config);
     safe_browsing_db_manager_started_ = true;
   }
 
@@ -184,6 +204,10 @@ AwBrowserProcess::GetSafeBrowsingAllowlistManager() const {
 
 AwSafeBrowsingUIManager* AwBrowserProcess::GetSafeBrowsingUIManager() const {
   return safe_browsing_ui_manager_.get();
+}
+
+os_crypt_async::OSCryptAsync* AwBrowserProcess::GetOSCryptAsync() const {
+  return os_crypt_async_.get();
 }
 
 // static
@@ -225,6 +249,11 @@ AwBrowserProcess::GetEnterpriseAuthenticationAppLinkManager() {
   return app_link_manager_.get();
 }
 
+embedder_support::OriginTrialsSettingsStorage*
+AwBrowserProcess::GetOriginTrialsSettingsStorage() {
+  return origin_trials_settings_storage_.get();
+}
+
 // static
 void AwBrowserProcess::TriggerMinidumpUploading() {
   Java_AwBrowserProcess_triggerMinidumpUploading(
@@ -239,10 +268,10 @@ ApkType AwBrowserProcess::GetApkType() {
 
 static void JNI_AwBrowserProcess_SetProcessNameCrashKey(
     JNIEnv* env,
-    const base::android::JavaParamRef<jstring>& processName) {
+    std::string& processName) {
   static ::crash_reporter::CrashKeyString<64> crash_key(
       crash_keys::kAppProcessName);
-  crash_key.Set(ConvertJavaStringToUTF8(env, processName));
+  crash_key.Set(processName);
 }
 
 static base::android::ScopedJavaLocalRef<jobjectArray>

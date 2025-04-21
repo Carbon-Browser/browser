@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 namespace ash {
 namespace network_diagnostics {
 
-NetworkDiagnosticsRoutine::NetworkDiagnosticsRoutine() {
+NetworkDiagnosticsRoutine::NetworkDiagnosticsRoutine(
+    chromeos::network_diagnostics::mojom::RoutineCallSource source) {
   result_.verdict =
       chromeos::network_diagnostics::mojom::RoutineVerdict::kNotRun;
+  result_.source = source;
 }
 
 NetworkDiagnosticsRoutine::~NetworkDiagnosticsRoutine() = default;

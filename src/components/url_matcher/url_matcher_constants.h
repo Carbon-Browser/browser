@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,7 @@ URL_MATCHER_EXPORT extern const char kURLEqualsKey[];
 URL_MATCHER_EXPORT extern const char kURLMatchesKey[];
 URL_MATCHER_EXPORT extern const char kURLPrefixKey[];
 URL_MATCHER_EXPORT extern const char kURLSuffixKey[];
+URL_MATCHER_EXPORT extern const char kCidrBlocksKey[];
 
 }  // namespace url_matcher_constants
 }  // namespace url_matcher

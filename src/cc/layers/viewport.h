@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,17 +33,12 @@ struct ScrollNode;
 // we should still scroll using this class.
 class CC_EXPORT Viewport {
  public:
+  using ScrollResult = InputHandler::ViewportScrollResult;
+
   // If the pinch zoom anchor on the first PinchUpdate is within this length
   // of the screen edge, "snap" the zoom to that edge. Experimentally
   // determined.
   static const int kPinchZoomSnapMarginDips = 100;
-
-  // TODO(tdresser): eventually |consumed_delta| should equal
-  // |content_scrolled_delta|. See crbug.com/510045 for details.
-  struct ScrollResult {
-    gfx::Vector2dF consumed_delta;
-    gfx::Vector2dF content_scrolled_delta;
-  };
 
   static std::unique_ptr<Viewport> Create(LayerTreeHostImpl* host_impl);
 
@@ -71,8 +66,8 @@ class CC_EXPORT Viewport {
   // Scrolls the viewport, bubbling the delta between the inner and outer
   // viewport. Only animates either of the two viewports. Returns the amount of
   // delta that was consumed.
-  gfx::Vector2dF ScrollAnimated(const gfx::Vector2dF& delta,
-                                base::TimeDelta delayed_by);
+  ScrollResult ScrollAnimated(const gfx::Vector2dF& delta,
+                              base::TimeDelta delayed_by);
 
   gfx::PointF TotalScrollOffset() const;
 
@@ -104,6 +99,10 @@ class CC_EXPORT Viewport {
   // for scrollbars. This method can be useful for calculating the area of the
   // inner viewport where content is visible.
   gfx::SizeF GetInnerViewportSizeExcludingScrollbars() const;
+
+  // Performs an instant snap if the viewport is a snap container and no scroll
+  // gesture is in progress.
+  void SnapIfNeeded();
 
  private:
   explicit Viewport(LayerTreeHostImpl* host_impl);

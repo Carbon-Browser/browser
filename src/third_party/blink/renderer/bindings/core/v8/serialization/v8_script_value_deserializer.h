@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_color_params.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "v8/include/v8.h"
 
@@ -21,6 +20,7 @@ class DOMRectReadOnly;
 class ExceptionState;
 class File;
 class UnpackedSerializedScriptValue;
+class ScriptState;
 
 // Deserializes V8 values serialized using V8ScriptValueSerializer (or its
 // predecessor, ScriptValueSerializer).
@@ -49,6 +49,9 @@ class CORE_EXPORT V8ScriptValueDeserializer
 
   v8::Local<v8::Value> Deserialize();
 
+  static bool ExecutionContextExposesInterface(ExecutionContext*,
+                                               SerializationTag interface_tag);
+
  protected:
   virtual ScriptWrappable* ReadDOMObject(SerializationTag, ExceptionState&);
 
@@ -68,6 +71,16 @@ class CORE_EXPORT V8ScriptValueDeserializer
   bool ReadDouble(double* value) { return deserializer_.ReadDouble(value); }
   bool ReadRawBytes(size_t size, const void** data) {
     return deserializer_.ReadRawBytes(size, data);
+  }
+  bool ReadRawBytesToSpan(size_t size, base::span<const uint8_t>* out_span) {
+    const void* data = nullptr;
+    if (!deserializer_.ReadRawBytes(size, &data)) {
+      return false;
+    }
+    // SAFETY: ReadRawBytes() ensures `data` and `size` are safe.
+    *out_span = UNSAFE_BUFFERS(
+        base::span(reinterpret_cast<const uint8_t*>(data), size));
+    return true;
   }
   bool ReadUnguessableToken(base::UnguessableToken* token_out);
   bool ReadUTF8String(String* string_out);
@@ -102,9 +115,7 @@ class CORE_EXPORT V8ScriptValueDeserializer
   File* ReadFile();
   File* ReadFileIndex();
 
-  scoped_refptr<BlobDataHandle> GetOrCreateBlobDataHandle(const String& uuid,
-                                                          const String& type,
-                                                          uint64_t size);
+  scoped_refptr<BlobDataHandle> GetBlobDataHandle(const String& uuid);
 
   // v8::ValueDeserializer::Delegate
   v8::MaybeLocal<v8::Object> ReadHostObject(v8::Isolate*) override;
@@ -113,6 +124,7 @@ class CORE_EXPORT V8ScriptValueDeserializer
   v8::MaybeLocal<v8::SharedArrayBuffer> GetSharedArrayBufferFromId(
       v8::Isolate*,
       uint32_t) override;
+  const v8::SharedValueConveyor* GetSharedValueConveyor(v8::Isolate*) override;
 
   ScriptState* script_state_;
   UnpackedSerializedScriptValue* unpacked_value_;

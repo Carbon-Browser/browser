@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define UI_VIEWS_TEST_SCOPED_VIEWS_TEST_HELPER_H_
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/test/test_views_delegate.h"
 #include "ui/views/test/views_test_helper.h"
@@ -26,8 +26,7 @@ class ScopedViewsTestHelper {
   // Initialize with the given TestViewsDelegate instance.
   explicit ScopedViewsTestHelper(
       std::unique_ptr<TestViewsDelegate> test_views_delegate = nullptr,
-      absl::optional<ViewsDelegate::NativeWidgetFactory> factory =
-          absl::nullopt);
+      std::optional<ViewsDelegate::NativeWidgetFactory> factory = std::nullopt);
   ScopedViewsTestHelper(const ScopedViewsTestHelper&) = delete;
   ScopedViewsTestHelper& operator=(const ScopedViewsTestHelper&) = delete;
   ~ScopedViewsTestHelper();
@@ -36,16 +35,27 @@ class ScopedViewsTestHelper {
   // the RootWindow. Everywhere else, null.
   gfx::NativeWindow GetContext();
 
-  // Simulate an OS-level destruction of the native window held by |widget|.
+  // Simulate an OS-level destruction of the native window held by non-desktop
+  // `widget`.
   void SimulateNativeDestroy(Widget* widget);
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+  // Simulate an OS-level destruction of the native window held by desktop
+  // `widget`.
+  void SimulateDesktopNativeDestroy(Widget* widget);
+#endif
 
   TestViewsDelegate* test_views_delegate() {
     return test_views_delegate_.get();
   }
 
  private:
-  std::unique_ptr<ViewsTestHelper> test_helper_ = ViewsTestHelper::Create();
+  // The delegate must outlive the helper. The helper owns objects like
+  // `gpu::RasterInProcessContext` that will spin the run loop on destruction,
+  // and the delegate owns objects like the layout provider that may be accessed
+  // when the run loop spins.
   std::unique_ptr<TestViewsDelegate> test_views_delegate_;
+  std::unique_ptr<ViewsTestHelper> test_helper_ = ViewsTestHelper::Create();
 };
 
 }  // namespace views

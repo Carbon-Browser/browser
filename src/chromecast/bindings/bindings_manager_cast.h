@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define CHROMECAST_BINDINGS_BINDINGS_MANAGER_CAST_H_
 
 #include <list>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromecast/bindings/bindings_manager.h"
 #include "chromecast/bindings/public/mojom/api_bindings.mojom.h"
 #include "components/cast/api_bindings/manager.h"
@@ -33,8 +34,8 @@ class BindingsManagerCast : public BindingsManager,
   mojo::PendingRemote<mojom::ApiBindings> CreateRemote();
 
   // BindingsManager implementation.
-  void AddBinding(base::StringPiece binding_name,
-                  base::StringPiece binding_script) override;
+  void AddBinding(std::string_view binding_name,
+                  std::string_view binding_script) override;
 
  private:
   void OnClientDisconnected();

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,6 @@ namespace {
 
 constexpr char kProjectorToolbarHistogramName[] = "Ash.Projector.Toolbar";
 
-constexpr char kProjectorMarkerColorHistogramName[] =
-    "Ash.Projector.MarkerColor";
-
 constexpr char kProjectorCreationFlowHistogramName[] =
     "Ash.Projector.CreationFlow";
 
@@ -34,6 +31,16 @@ constexpr char kProjectorPendingScreencastBatchIOTaskDurationHistogramName[] =
 constexpr char kProjectorPendingScreencastChangeIntervalHistogramName[] =
     "Ash.Projector.PendingScreencastChangeInterval";
 
+constexpr char
+    kProjectorOnDeviceToServerSpeechRecognitionFallbackReasonHistogramName[] =
+        "Ash.Projector.OnDeviceToServerSpeechRecognitionFallbackReason";
+
+constexpr char kSpeechRecognitionEndStateOnDevice[] =
+    "Ash.Projector.SpeechRecognitionEndState.OnDevice";
+
+constexpr char kSpeechRecognitionEndStateServerBased[] =
+    "Ash.Projector.SpeechRecognitionEndState.ServerBased";
+
 // Appends the proper suffix to |prefix| based on whether the user is in tablet
 // mode or not.
 std::string GetHistogramName(const std::string& prefix) {
@@ -42,16 +49,16 @@ std::string GetHistogramName(const std::string& prefix) {
   return prefix + mode;
 }
 
+inline std::string GetSpeechRecognitionHistogramName(bool is_on_device) {
+  return is_on_device ? kSpeechRecognitionEndStateOnDevice
+                      : kSpeechRecognitionEndStateServerBased;
+}
+
 }  // namespace
 
 void RecordToolbarMetrics(ProjectorToolbar button) {
   base::UmaHistogramEnumeration(
       GetHistogramName(kProjectorToolbarHistogramName), button);
-}
-
-void RecordMarkerColorMetrics(ProjectorMarkerColor color) {
-  base::UmaHistogramEnumeration(
-      GetHistogramName(kProjectorMarkerColorHistogramName), color);
 }
 
 void RecordCreationFlowMetrics(ProjectorCreationFlow step) {
@@ -75,9 +82,11 @@ void RecordCreationFlowError(int message_id) {
     case IDS_ASH_PROJECTOR_FAILURE_MESSAGE_TRANSCRIPTION:
       error = ProjectorCreationFlowError::kTranscriptionError;
       break;
+    case IDS_ASH_PROJECTOR_ABORT_BY_AUDIO_POLICY_TEXT:
+      error = ProjectorCreationFlowError::kSessionAbortedByAudioPolicyDisabled;
+      break;
     default:
       NOTREACHED();
-      break;
   }
   base::UmaHistogramEnumeration(
       GetHistogramName(kProjectorCreationFlowErrorHistogramName), error);
@@ -99,6 +108,20 @@ ASH_EXPORT void RecordPendingScreencastChangeInterval(
   // bucket.
   base::UmaHistogramTimes(
       kProjectorPendingScreencastChangeIntervalHistogramName, interval);
+}
+
+ASH_EXPORT void RecordOnDeviceToServerSpeechRecognitionFallbackReason(
+    OnDeviceToServerSpeechRecognitionFallbackReason reason) {
+  base::UmaHistogramEnumeration(
+      kProjectorOnDeviceToServerSpeechRecognitionFallbackReasonHistogramName,
+      reason);
+}
+
+ASH_EXPORT void RecordSpeechRecognitionEndState(
+    SpeechRecognitionEndState end_state,
+    bool is_on_device) {
+  base::UmaHistogramEnumeration(GetSpeechRecognitionHistogramName(is_on_device),
+                                end_state);
 }
 
 }  // namespace ash

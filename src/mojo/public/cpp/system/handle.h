@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -180,7 +180,7 @@ class Handle {
 
   HandleSignalsState QuerySignalsState() const {
     HandleSignalsState signals_state;
-    MojoResult result = MojoQueryHandleSignalsState(
+    [[maybe_unused]] MojoResult result = MojoQueryHandleSignalsState(
         value_, static_cast<MojoHandleSignalsState*>(&signals_state));
     DCHECK_EQ(MOJO_RESULT_OK, result);
     return signals_state;

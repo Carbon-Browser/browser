@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_MOJOM_PRESENTATION_FEEDBACK_MOJOM_TRAITS_H_
 #define UI_GFX_MOJOM_PRESENTATION_FEEDBACK_MOJOM_TRAITS_H_
+
+#include <cstdint>
 
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -12,7 +14,7 @@
 #include "ui/gfx/mojom/presentation_feedback.mojom-shared.h"
 #include "ui/gfx/presentation_feedback.h"
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include "ui/gfx/mojom/ca_layer_result_mojom_traits.h"
 #endif
 
@@ -53,22 +55,28 @@ struct StructTraits<gfx::mojom::PresentationFeedbackDataView,
     return input.writes_done_timestamp;
   }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   static gfx::CALayerResult ca_layer_error_code(
       const gfx::PresentationFeedback& input) {
     return input.ca_layer_error_code;
   }
 #endif
 
+  static std::optional<int64_t> display_trace_id(
+      const gfx::PresentationFeedback& input) {
+    return input.display_trace_id;
+  }
+
   static bool Read(gfx::mojom::PresentationFeedbackDataView data,
                    gfx::PresentationFeedback* out) {
     out->flags = data.flags();
+    out->display_trace_id = data.display_trace_id();
     return data.ReadTimestamp(&out->timestamp) &&
            data.ReadInterval(&out->interval) &&
            data.ReadAvailableTimestamp(&out->available_timestamp) &&
            data.ReadReadyTimestamp(&out->ready_timestamp) &&
            data.ReadLatchTimestamp(&out->latch_timestamp) &&
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
            data.ReadCaLayerErrorCode(&out->ca_layer_error_code) &&
 #endif
            data.ReadWritesDoneTimestamp(&out->writes_done_timestamp);

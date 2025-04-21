@@ -1,11 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "tools/win/chromeexts/commands/view_command.h"
 
-#include <dbgeng.h>
 #include <windows.h>
+
+#include <dbgeng.h>
 #include <wrl/client.h>
 
 #include <ostream>
@@ -157,7 +158,7 @@ class VirtualViewDebugWrapper : public views::debug::ViewDebugWrapper {
     return buffer;
   }
 
-  absl::optional<intptr_t> GetAddress() override {
+  std::optional<intptr_t> GetAddress() override {
     return view_block_.address();
   }
 
@@ -248,10 +249,9 @@ HRESULT ViewCommand::Execute() {
 
     if (command_line().HasSwitch("r")) {
       DebugOutputBuffer buffer(GetDebugClientAs<IDebugControl>().Get());
-      std::ostream out(&buffer);
       VirtualViewDebugWrapper root(view_block,
                                    GetDebugClientAs<IDebugClient>().Get());
-      PrintViewHierarchy(&out, &root);
+      std::ostream(&buffer) << PrintViewHierarchy(&root);
     } else {
       for (auto val : children_ptrs) {
         Printf("%x ", val);

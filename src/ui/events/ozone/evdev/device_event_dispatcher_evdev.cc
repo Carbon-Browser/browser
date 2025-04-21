@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/ozone/evdev/device_event_dispatcher_evdev.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+#include <optional>
 
 namespace ui {
 
@@ -36,8 +37,8 @@ MouseMoveEventParams::MouseMoveEventParams(int device_id,
       flags(flags),
       location(location),
       ordinal_delta(ordinal_delta
-                        ? absl::optional<gfx::Vector2dF>(*ordinal_delta)
-                        : absl::nullopt),
+                        ? std::optional<gfx::Vector2dF>(*ordinal_delta)
+                        : std::nullopt),
       pointer_details(details),
       timestamp(timestamp) {}
 

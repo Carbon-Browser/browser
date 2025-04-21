@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "content/browser/service_worker/service_worker_consts.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_version.h"
@@ -32,6 +33,15 @@ int64_t ServiceWorkerScriptCacheMap::LookupResourceId(const GURL& url) {
   return found->second->resource_id;
 }
 
+std::optional<std::string> ServiceWorkerScriptCacheMap::LookupSha256Checksum(
+    const GURL& url) {
+  ResourceMap::const_iterator found = resource_map_.find(url);
+  if (found == resource_map_.end()) {
+    return std::nullopt;
+  }
+  return found->second->sha256_checksum;
+}
+
 void ServiceWorkerScriptCacheMap::NotifyStartedCaching(const GURL& url,
                                                        int64_t resource_id) {
   DCHECK_EQ(blink::mojom::kInvalidServiceWorkerResourceId,
@@ -39,17 +49,18 @@ void ServiceWorkerScriptCacheMap::NotifyStartedCaching(const GURL& url,
   DCHECK(owner_->status() == ServiceWorkerVersion::NEW ||
          owner_->status() == ServiceWorkerVersion::INSTALLING)
       << owner_->status();
-  if (!context_)
+  if (!context_) {
     return;  // Our storage has been wiped via DeleteAndStartOver.
-  resource_map_[url] =
-      storage::mojom::ServiceWorkerResourceRecord::New(resource_id, url, -1);
-  context_->registry()->StoreUncommittedResourceId(
-      resource_id, blink::StorageKey(url::Origin::Create(owner_->scope())));
+  }
+  resource_map_[url] = storage::mojom::ServiceWorkerResourceRecord::New(
+      resource_id, url, -1, /*sha256_checksum=*/"");
+  context_->registry()->StoreUncommittedResourceId(resource_id, owner_->key());
 }
 
 void ServiceWorkerScriptCacheMap::NotifyFinishedCaching(
     const GURL& url,
     int64_t size_bytes,
+    const std::string& sha256_checksum,
     net::Error net_error,
     const std::string& status_message) {
   DCHECK_NE(blink::mojom::kInvalidServiceWorkerResourceId,
@@ -72,17 +83,18 @@ void ServiceWorkerScriptCacheMap::NotifyFinishedCaching(
     // |size_bytes| should not be negative when caching finished successfully.
     CHECK_GE(size_bytes, 0);
     resource_map_[url]->size_bytes = size_bytes;
+    resource_map_[url]->sha256_checksum = sha256_checksum;
   }
 }
 
-void ServiceWorkerScriptCacheMap::GetResources(
-    std::vector<storage::mojom::ServiceWorkerResourceRecordPtr>* resources) {
-  DCHECK(resources->empty());
-  for (ResourceMap::const_iterator it = resource_map_.begin();
-       it != resource_map_.end();
-       ++it) {
-    resources->push_back(it->second->Clone());
+std::vector<storage::mojom::ServiceWorkerResourceRecordPtr>
+ServiceWorkerScriptCacheMap::GetResources() const {
+  std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> resources;
+  for (const auto& it : resource_map_) {
+    resources.push_back(it.second->Clone());
   }
+
+  return resources;
 }
 
 void ServiceWorkerScriptCacheMap::SetResources(
@@ -92,6 +104,13 @@ void ServiceWorkerScriptCacheMap::SetResources(
   for (auto it = resources.begin(); it != resources.end(); ++it) {
     resource_map_[(*it)->url] = (*it)->Clone();
   }
+}
+
+void ServiceWorkerScriptCacheMap::UpdateSha256Checksum(
+    const GURL& url,
+    const std::string& sha256_checksum) {
+  DCHECK(base::Contains(resource_map_, url));
+  resource_map_[url]->sha256_checksum = sha256_checksum;
 }
 
 void ServiceWorkerScriptCacheMap::WriteMetadata(
@@ -153,7 +172,7 @@ void ServiceWorkerScriptCacheMap::OnMetadataWritten(
 void ServiceWorkerScriptCacheMap::RunCallback(uint64_t callback_id,
                                               int result) {
   auto it = callbacks_.find(callback_id);
-  DCHECK(it != callbacks_.end());
+  CHECK(it != callbacks_.end(), base::NotFatalUntil::M130);
   std::move(it->second).Run(result);
   callbacks_.erase(it);
 }

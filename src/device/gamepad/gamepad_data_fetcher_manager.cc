@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ void GamepadDataFetcherManager::InitializeProvider(GamepadProvider* provider) {
   DCHECK(!provider_);
 
   provider_ = provider;
-  for (auto* it : factories_) {
+  for (device::GamepadDataFetcherFactory* it : factories_) {
     provider_->AddGamepadDataFetcher(it->CreateDataFetcher());
   }
 }

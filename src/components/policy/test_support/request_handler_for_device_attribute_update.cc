@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ RequestHandlerForDeviceAttributeUpdate::HandleRequest(
   em::DeviceManagementResponse response;
   response.mutable_device_attribute_update_response()->set_result(
       em::DeviceAttributeUpdateResponse::ATTRIBUTE_UPDATE_SUCCESS);
-  return CreateHttpResponse(net::HTTP_OK, response.SerializeAsString());
+  return CreateHttpResponse(net::HTTP_OK, response);
 }
 
 }  // namespace policy

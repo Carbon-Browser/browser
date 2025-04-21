@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include <string_view>
+
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 
 namespace mojo {
@@ -54,6 +55,12 @@ struct MessageHeaderV2 : MessageHeaderV1 {
 };
 static_assert(sizeof(MessageHeaderV2) == 48, "Bad sizeof(MessageHeaderV2)");
 
+struct MessageHeaderV3 : MessageHeaderV2 {
+  MessageHeaderV3();
+  int64_t creation_timeticks_us;
+};
+static_assert(sizeof(MessageHeaderV3) == 56, "Bad sizeof(MessageHeaderV3)");
+
 #pragma pack(pop)
 
 class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) MessageDispatchContext {
@@ -67,7 +74,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) MessageDispatchContext {
 
   static MessageDispatchContext* current();
 
-  base::OnceCallback<void(base::StringPiece)> GetBadMessageCallback();
+  base::OnceCallback<void(std::string_view)> GetBadMessageCallback();
 
  private:
   raw_ptr<MessageDispatchContext> outer_context_;
@@ -77,7 +84,14 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) MessageDispatchContext {
 COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE)
 size_t ComputeSerializedMessageSize(uint32_t flags,
                                     size_t payload_size,
-                                    size_t payload_interface_id_count);
+                                    size_t payload_interface_id_count,
+                                    int64_t creation_timeticks_us);
+
+COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE)
+size_t EstimateSerializedMessageSize(uint32_t message_name,
+                                     size_t payload_size,
+                                     size_t total_size,
+                                     size_t estimated_payload_size);
 
 }  // namespace internal
 }  // namespace mojo

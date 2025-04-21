@@ -1,4 +1,4 @@
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 from __future__ import print_function
 
 import os
-import pipes
+import shlex
 import signal
 import subprocess
 
@@ -124,7 +124,7 @@ class Host(cr.Plugin, cr.Plugin.Type):
 
   @cr.Plugin.activemethod
   def Shell(self, *command):
-    command = ' '.join([pipes.quote(arg) for arg in command])
+    command = ' '.join([shlex.quote(arg) for arg in command])
     return self._Execute([command], shell=True, ignore_interrupt_signal=True)
 
   @cr.Plugin.activemethod

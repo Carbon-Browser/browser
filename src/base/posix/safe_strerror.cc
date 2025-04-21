@@ -1,6 +1,11 @@
-// Copyright (c) 2006-2009 The Chromium Authors. All rights reserved.
+// Copyright 2006-2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/posix/safe_strerror.h"
 
@@ -33,7 +38,7 @@ namespace base {
     char* buf,
     size_t len) {
   // GNU version.
-  char *rc = (*strerror_r_ptr)(err, buf, len);
+  char* rc = (*strerror_r_ptr)(err, buf, len);
   if (rc != buf) {
     // glibc did not use buf and returned a static string instead. Copy it
     // into buf.
@@ -86,16 +91,13 @@ namespace base {
       strerror_error = result;
     }
     // snprintf truncates and always null-terminates.
-    snprintf(buf,
-             len,
-             "Error %d while retrieving error %d",
-             strerror_error,
+    snprintf(buf, len, "Error %d while retrieving error %d", strerror_error,
              err);
   }
   errno = old_errno;
 }
 
-void safe_strerror_r(int err, char *buf, size_t len) {
+void safe_strerror_r(int err, char* buf, size_t len) {
   if (buf == nullptr || len <= 0) {
     return;
   }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,9 +49,7 @@ class TestPageLoadMetricsEmbedder
     return false;
   }
   bool IsExtensionUrl(const GURL& url) override { return false; }
-  bool IsSidePanel(content::WebContents* web_contents) override {
-    return false;
-  }
+  bool IsNonTabWebUI(const GURL& url) override { return false; }
 
   page_load_metrics::PageLoadMetricsMemoryTracker*
   GetMemoryTrackerForBrowserContext(
@@ -61,11 +59,6 @@ class TestPageLoadMetricsEmbedder
 
     return &memory_tracker_;
   }
-
- protected:
-  // page_load_metrics::PageLoadMetricsEmbedderBase:
-  void RegisterEmbedderObservers(
-      page_load_metrics::PageLoadTracker* tracker) override {}
 
  private:
   page_load_metrics::PageLoadMetricsMemoryTracker memory_tracker_;
@@ -176,7 +169,7 @@ class PageLoadMetricsMemoryTrackerTest
 
     content::GlobalRenderFrameHostId global_routing_id =
         render_frame_host->GetGlobalId();
-    int process_id = render_frame_host->GetProcess()->GetID();
+    int process_id = render_frame_host->GetProcess()->GetDeprecatedID();
 
     performance_manager::RenderProcessHostId pm_process_id =
         static_cast<performance_manager::RenderProcessHostId>(process_id);
@@ -198,12 +191,12 @@ class PageLoadMetricsMemoryTrackerTest
   }
 
  protected:
-  raw_ptr<PageLoadMetricsMemoryTracker> tracker_;
+  raw_ptr<PageLoadMetricsMemoryTracker, DanglingUntriaged> tracker_;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
-  raw_ptr<TestMestricsWebContentsObserver> observer_;
-  raw_ptr<TestPageLoadMetricsEmbedder> embedder_interface_;
+  raw_ptr<TestMestricsWebContentsObserver, DanglingUntriaged> observer_;
+  raw_ptr<TestPageLoadMetricsEmbedder, DanglingUntriaged> embedder_interface_;
   PageLoadMetricsTestContentBrowserClient browser_client_;
   raw_ptr<content::ContentBrowserClient> original_browser_client_ = nullptr;
 };

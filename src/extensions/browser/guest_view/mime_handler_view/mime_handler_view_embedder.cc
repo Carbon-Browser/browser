@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@
 namespace extensions {
 
 namespace {
-using EmbedderMap =
-    base::flat_map<int32_t, std::unique_ptr<MimeHandlerViewEmbedder>>;
+using EmbedderMap = base::flat_map<content::FrameTreeNodeId,
+                                   std::unique_ptr<MimeHandlerViewEmbedder>>;
 
 EmbedderMap* GetMimeHandlerViewEmbeddersMap() {
   static base::NoDestructor<EmbedderMap> instance;
@@ -38,7 +38,7 @@ EmbedderMap* GetMimeHandlerViewEmbeddersMap() {
 
 // static
 MimeHandlerViewEmbedder* MimeHandlerViewEmbedder::Get(
-    int32_t frame_tree_node_id) {
+    content::FrameTreeNodeId frame_tree_node_id) {
   const auto& map = *GetMimeHandlerViewEmbeddersMap();
   auto it = map.find(frame_tree_node_id);
   if (it == map.cend())
@@ -47,10 +47,11 @@ MimeHandlerViewEmbedder* MimeHandlerViewEmbedder::Get(
 }
 
 // static
-void MimeHandlerViewEmbedder::Create(int32_t frame_tree_node_id,
-                                     const GURL& resource_url,
-                                     const std::string& stream_id,
-                                     const std::string& internal_id) {
+void MimeHandlerViewEmbedder::Create(
+    content::FrameTreeNodeId frame_tree_node_id,
+    const GURL& resource_url,
+    const std::string& stream_id,
+    const std::string& internal_id) {
   DCHECK(
       !base::Contains(*GetMimeHandlerViewEmbeddersMap(), frame_tree_node_id));
   GetMimeHandlerViewEmbeddersMap()->insert_or_assign(
@@ -59,10 +60,11 @@ void MimeHandlerViewEmbedder::Create(int32_t frame_tree_node_id,
           frame_tree_node_id, resource_url, stream_id, internal_id)));
 }
 
-MimeHandlerViewEmbedder::MimeHandlerViewEmbedder(int32_t frame_tree_node_id,
-                                                 const GURL& resource_url,
-                                                 const std::string& stream_id,
-                                                 const std::string& internal_id)
+MimeHandlerViewEmbedder::MimeHandlerViewEmbedder(
+    content::FrameTreeNodeId frame_tree_node_id,
+    const GURL& resource_url,
+    const std::string& stream_id,
+    const std::string& internal_id)
     : content::WebContentsObserver(
           content::WebContents::FromFrameTreeNodeId(frame_tree_node_id)),
       frame_tree_node_id_(frame_tree_node_id),
@@ -70,7 +72,7 @@ MimeHandlerViewEmbedder::MimeHandlerViewEmbedder(int32_t frame_tree_node_id,
       stream_id_(stream_id),
       internal_id_(internal_id) {}
 
-MimeHandlerViewEmbedder::~MimeHandlerViewEmbedder() {}
+MimeHandlerViewEmbedder::~MimeHandlerViewEmbedder() = default;
 
 void MimeHandlerViewEmbedder::DestroySelf() {
   GetMimeHandlerViewEmbeddersMap()->erase(frame_tree_node_id_);
@@ -149,7 +151,7 @@ void MimeHandlerViewEmbedder::RenderFrameCreated(
     return;
   }
 
-  outer_contents_rfh_ = render_frame_host;
+  placeholder_render_frame_host_for_inner_contents_ = render_frame_host;
 
   // This suggests that a same-origin child frame is created under the
   // RFH associated with |frame_tree_node_id_|. This suggests that the HTML
@@ -164,13 +166,15 @@ void MimeHandlerViewEmbedder::RenderFrameCreated(
                      weak_factory_.GetWeakPtr()));
 }
 
-void MimeHandlerViewEmbedder::FrameDeleted(int frame_tree_node_id) {
+void MimeHandlerViewEmbedder::FrameDeleted(
+    content::FrameTreeNodeId frame_tree_node_id) {
   // TODO(mcnee): RenderFrameDeleted seems like a better fit for the child frame
-  // case (i.e. |outer_contents_rfh_|), though we'd still need FrameDeleted for
-  // |frame_tree_node_id_|.
+  // case (i.e. |placeholder_render_frame_host_for_inner_contents_|), though
+  // we'd still need FrameDeleted for |frame_tree_node_id_|.
   if (frame_tree_node_id == frame_tree_node_id_ ||
-      (outer_contents_rfh_ &&
-       outer_contents_rfh_->GetFrameTreeNodeId() == frame_tree_node_id)) {
+      (placeholder_render_frame_host_for_inner_contents_ &&
+       placeholder_render_frame_host_for_inner_contents_
+               ->GetFrameTreeNodeId() == frame_tree_node_id)) {
     DestroySelf();
   }
 }
@@ -184,13 +188,13 @@ void MimeHandlerViewEmbedder::CreateMimeHandlerViewGuest(
   if (!manager) {
     manager = guest_view::GuestViewManager::CreateWithDelegate(
         browser_context,
-        ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate(
-            browser_context));
+        ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate());
   }
+  CHECK(render_frame_host_);
   base::Value::Dict create_params;
   create_params.Set(mime_handler_view::kStreamId, stream_id_);
-  manager->CreateGuest(
-      MimeHandlerViewGuest::Type, web_contents(), create_params,
+  manager->CreateGuestAndTransferOwnership(
+      MimeHandlerViewGuest::Type, render_frame_host_, nullptr, create_params,
       base::BindOnce(&MimeHandlerViewEmbedder::DidCreateMimeHandlerViewGuest,
                      weak_factory_.GetWeakPtr(),
                      std::move(before_unload_control_remote)));
@@ -199,21 +203,25 @@ void MimeHandlerViewEmbedder::CreateMimeHandlerViewGuest(
 void MimeHandlerViewEmbedder::DidCreateMimeHandlerViewGuest(
     mojo::PendingRemote<mime_handler::BeforeUnloadControl>
         before_unload_control_remote,
-    content::WebContents* guest_web_contents) {
-  auto* guest_view = MimeHandlerViewGuest::FromWebContents(guest_web_contents);
+    std::unique_ptr<guest_view::GuestViewBase> guest) {
+  auto* raw_guest_view = static_cast<MimeHandlerViewGuest*>(guest.release());
+  std::unique_ptr<MimeHandlerViewGuest> guest_view =
+      base::WrapUnique(raw_guest_view);
+
   if (!guest_view)
     return;
   guest_view->SetBeforeUnloadController(
       std::move(before_unload_control_remote));
 
-  DCHECK(outer_contents_rfh_);
+  DCHECK(placeholder_render_frame_host_for_inner_contents_);
   DCHECK(render_frame_host_);
-  DCHECK_EQ(outer_contents_rfh_->GetParent(), render_frame_host_);
-  guest_view->SetEmbedderFrame(render_frame_host_->GetGlobalId());
+  DCHECK_EQ(placeholder_render_frame_host_for_inner_contents_->GetParent(),
+            render_frame_host_);
 
   const int embedder_frame_process_id =
-      render_frame_host_->GetProcess()->GetID();
-  const int element_instance_id = outer_contents_rfh_->GetRoutingID();
+      render_frame_host_->GetProcess()->GetDeprecatedID();
+  const int element_instance_id =
+      placeholder_render_frame_host_for_inner_contents_->GetRoutingID();
   const int guest_instance_id = guest_view->guest_instance_id();
 
   // TODO(ekaramad): This URL is used to communicate with
@@ -232,9 +240,10 @@ void MimeHandlerViewEmbedder::DidCreateMimeHandlerViewGuest(
       !guest_view->maybe_has_frame_container() &&
       !guest_view->GetEmbedderFrame()->GetParentOrOuterDocument();
   MimeHandlerViewAttachHelper::Get(embedder_frame_process_id)
-      ->AttachToOuterWebContents(guest_view, embedder_frame_process_id,
-                                 outer_contents_rfh_, element_instance_id,
-                                 is_full_page /* is_full_page_plugin */);
+      ->AttachToOuterWebContents(
+          std::move(guest_view), embedder_frame_process_id,
+          placeholder_render_frame_host_for_inner_contents_,
+          element_instance_id, is_full_page /* is_full_page_plugin */);
   // MHVE is no longer required.
   DestroySelf();
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,16 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "chrome/browser/ash/authpolicy/data_pipe_utils.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chrome/browser/ash/kerberos/data_pipe_utils.h"
 #include "chrome/browser/ash/kerberos/kerberos_ticket_expiry_notification.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -20,7 +23,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/components/dbus/kerberos/kerberos_client.h"
@@ -40,7 +42,7 @@ namespace {
 // Account keys for the kerberos.accounts pref.
 constexpr char kPrincipal[] = "principal";
 constexpr char kPassword[] = "password";
-constexpr char kRememberPassword[] = "remember_password";
+constexpr char kRememberPasswordFromPolicy[] = "remember_password_from_policy";
 constexpr char kKrb5Conf[] = "krb5conf";
 
 // Principal placeholders for the KerberosAccounts policy.
@@ -55,7 +57,8 @@ constexpr char kDefaultKerberosConfig[] = R"([libdefaults]
   default_tgs_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
   default_tkt_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
   permitted_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96
-  forwardable = true)";
+  forwardable = true
+)";
 
 // Backoff policy used to control managed accounts addition retries.
 const net::BackoffEntry::Policy kBackoffPolicyForManagedAccounts = {
@@ -88,7 +91,7 @@ bool NormalizePrincipalOrPostCallback(
     KerberosCredentialsManager::ResultCallback* callback) {
   if (NormalizePrincipal(principal_name))
     return true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(*callback),
                                 kerberos::ERROR_PARSE_PRINCIPAL_FAILED));
   return false;
@@ -107,9 +110,12 @@ bool Succeeded(kerberos::ErrorType error) {
 
 bool ShouldRetry(kerberos::ErrorType error) {
   // The error types that should trigger a managed accounts addition retry.
+  // ERROR_UNKNOWN_KRB5_ERROR will cover unknown temporary issues preventing the
+  // device from adding a ticket, such as "resource temporarily unavailable".
   return error == kerberos::ERROR_NETWORK_PROBLEM ||
          error == kerberos::ERROR_CONTACTING_KDC_FAILED ||
-         error == kerberos::ERROR_IN_PROGRESS;
+         error == kerberos::ERROR_IN_PROGRESS ||
+         error == kerberos::ERROR_UNKNOWN_KRB5_ERROR;
 }
 
 }  // namespace
@@ -142,7 +148,7 @@ class KerberosAddAccountRunner {
   KerberosAddAccountRunner(KerberosCredentialsManager* manager,
                            std::string normalized_principal,
                            bool is_managed,
-                           const absl::optional<std::string>& password,
+                           const std::optional<std::string>& password,
                            bool remember_password,
                            const std::string& krb5_conf,
                            bool allow_existing,
@@ -274,10 +280,10 @@ class KerberosAddAccountRunner {
   }
 
   // Pointer to the owning manager, not owned.
-  KerberosCredentialsManager* const manager_ = nullptr;
+  const raw_ptr<KerberosCredentialsManager> manager_ = nullptr;
   std::string normalized_principal_;
   bool is_managed_ = false;
-  absl::optional<std::string> password_;
+  std::optional<std::string> password_;
   bool remember_password_ = false;
   std::string krb5_conf_;
   bool allow_existing_ = false;
@@ -313,7 +319,8 @@ KerberosCredentialsManager::KerberosCredentialsManager(PrefService* local_state,
   substitutions[kLoginId] =
       primary_user->GetAccountName(false /* use_display_email */);
   substitutions[kLoginEmail] = primary_user->GetAccountId().GetUserEmail();
-  principal_expander_ = std::make_unique<VariableExpander>(substitutions);
+  principal_expander_ =
+      std::make_unique<chromeos::VariableExpander>(substitutions);
 
   // Connect to a signal that indicates when Kerberos files change.
   kerberos_file_changed_signal_subscription_ =
@@ -383,6 +390,10 @@ void KerberosCredentialsManager::RegisterLocalStatePrefs(
   registry->RegisterBooleanPref(prefs::kKerberosRememberPasswordEnabled, true);
   registry->RegisterBooleanPref(prefs::kKerberosAddAccountsAllowed, true);
   registry->RegisterListPref(prefs::kKerberosAccounts);
+  registry->RegisterStringPref(prefs::kKerberosDomainAutocomplete, "");
+  registry->RegisterBooleanPref(prefs::kKerberosUseCustomPrefilledConfig,
+                                false);
+  registry->RegisterStringPref(prefs::kKerberosCustomPrefilledConfig, "");
 }
 
 void KerberosCredentialsManager::RegisterProfilePrefs(
@@ -437,7 +448,7 @@ void KerberosCredentialsManager::RemoveObserver(Observer* observer) {
 void KerberosCredentialsManager::AddAccountAndAuthenticate(
     std::string principal_name,
     bool is_managed,
-    const absl::optional<std::string>& password,
+    const std::optional<std::string>& password,
     bool remember_password,
     const std::string& krb5_conf,
     bool allow_existing,
@@ -460,24 +471,27 @@ void KerberosCredentialsManager::OnAddAccountRunnerDone(
     kerberos::ErrorType error) {
   // Reset the |runner|. Note that |updated_principal| is passed by value,
   // not by reference, since |runner| owns the reference.
-  auto it = std::find_if(
-      add_account_runners_.begin(), add_account_runners_.end(),
-      [runner](const auto& runner_ptr) { return runner_ptr.get() == runner; });
-  DCHECK(it != add_account_runners_.end());
+  auto it = base::ranges::find(add_account_runners_, runner,
+                               &std::unique_ptr<KerberosAddAccountRunner>::get);
+
+  // Semantically, this `CHECK()` should never trigger. However, it protects
+  // the `erase()` call from semantically incorrect changes to this class.
+  CHECK(it != add_account_runners_.end());
   add_account_runners_.erase(it);
 
   LogError("AddAccountAndAuthenticate", error);
 
   if (Succeeded(error)) {
-    // Set active account. Be sure not to wipe user selection if the
-    // account was added automatically by policy.
-    // TODO(https://crbug.com/948121): Wait until the files have been saved.
-    // This is important when this code is triggered directly through a page
-    // that requires Kerberos auth.
-    if (!is_managed || GetActivePrincipalName().empty())
+    // Set active account. Be sure not to wipe user selection if the account was
+    // added automatically by policy.
+    // TODO(b/259178114): Wait until the files have been saved. This is
+    // important when this code is triggered directly through a page that
+    // requires Kerberos auth.
+    if (!is_managed || GetActivePrincipalName().empty()) {
       SetActivePrincipalName(updated_principal);
-    else if (GetActivePrincipalName() == updated_principal)
+    } else if (GetActivePrincipalName() == updated_principal) {
       GetKerberosFiles();
+    }
   }
 
   // Bring the merry news to the observers, but only if there is no outstanding
@@ -724,11 +738,11 @@ void KerberosCredentialsManager::NotifyEnabledStateChanged() {
 }
 
 const std::string& KerberosCredentialsManager::GetActivePrincipalName() const {
-  // Using Get()->GetString() instead of GetString() directly to prevent a
+  // Using GetValue().GetString() instead of GetString() directly to prevent a
   // string copy.
   return primary_profile_->GetPrefs()
-      ->Get(prefs::kKerberosActivePrincipalName)
-      ->GetString();
+      ->GetValue(prefs::kKerberosActivePrincipalName)
+      .GetString();
 }
 
 void KerberosCredentialsManager::SetActivePrincipalName(
@@ -819,7 +833,7 @@ void KerberosCredentialsManager::UpdateAccountsFromPref(bool is_retry) {
   }
 
   const base::Value::List& accounts =
-      local_state_->GetValueList(prefs::kKerberosAccounts);
+      local_state_->GetList(prefs::kKerberosAccounts);
   if (accounts.empty()) {
     VLOG(1) << "Empty KerberosAccounts policy";
     NotifyRequiresLoginPassword(false);
@@ -835,10 +849,12 @@ void KerberosCredentialsManager::UpdateAccountsFromPref(bool is_retry) {
   bool requires_login_password = false;
   std::vector<std::string> managed_accounts_added;
   for (const auto& account : accounts) {
+    const base::Value::Dict& account_dict = account.GetDict();
+
     // Get the principal. Should always be set.
-    const base::Value* principal_value = account.FindPath(kPrincipal);
-    DCHECK(principal_value);
-    std::string principal = principal_value->GetString();
+    const std::string* principal_string = account_dict.FindString(kPrincipal);
+    DCHECK(principal_string);
+    std::string principal = *principal_string;
     if (!principal_expander_->ExpandString(&principal)) {
       VLOG(1) << "Failed to expand principal '" << principal << "'";
       continue;
@@ -848,27 +864,29 @@ void KerberosCredentialsManager::UpdateAccountsFromPref(bool is_retry) {
       continue;
     }
 
-    // Get the password, default to not set.
-    const std::string* password_str = account.FindStringKey(kPassword);
-    absl::optional<std::string> password;
-    if (password_str)
+    // Get the password, defaults to not set.
+    const std::string* password_str = account_dict.FindString(kPassword);
+    std::optional<std::string> password;
+    if (password_str) {
       password = std::move(*password_str);
+    }
 
     // Keep track of whether any account has the '${PASSWORD}' placeholder.
-    if (password == kLoginPasswordPlaceholder)
+    if (password == kLoginPasswordPlaceholder) {
       requires_login_password = true;
+    }
 
-    // Get the remember password flag, default to false.
+    // Get the "remember password from policy" flag, defaults to true.
     bool remember_password =
-        account.FindBoolKey(kRememberPassword).value_or(false);
+        account.GetDict().FindBool(kRememberPasswordFromPolicy).value_or(true);
 
     // Get Kerberos configuration if given. Otherwise, use default to make sure
     // it overwrites an existing unmanaged account.
     std::string krb5_conf;
-    const base::Value* krb5_conf_value = account.FindPath(kKrb5Conf);
+    const base::Value* krb5_conf_value = account_dict.Find(kKrb5Conf);
     if (krb5_conf_value) {
       // Note: The config is encoded as a list of lines.
-      for (const auto& config_line : krb5_conf_value->GetListDeprecated()) {
+      for (const auto& config_line : krb5_conf_value->GetList()) {
         krb5_conf += config_line.GetString();
         krb5_conf += "\n";
       }
@@ -914,8 +932,6 @@ void KerberosCredentialsManager::NotifyRequiresLoginPassword(
 
 void KerberosCredentialsManager::OnTicketExpiryNotificationClick(
     const std::string& principal_name) {
-  // TODO(https://crbug.com/952245): Right now, the reauth dialog is tied to the
-  // settings. Consider creating a standalone reauth dialog.
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       primary_profile_,
       chromeos::settings::mojom::kKerberosAccountsV2SubpagePath +

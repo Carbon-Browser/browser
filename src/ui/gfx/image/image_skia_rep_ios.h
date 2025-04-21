@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_IMAGE_IMAGE_SKIA_REP_IOS_H_
 #define UI_GFX_IMAGE_IMAGE_SKIA_REP_IOS_H_
 
+#include "base/component_export.h"
 #include "build/build_config.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
@@ -17,7 +17,7 @@ namespace gfx {
 // image (ImageSkia does not automatically scale the image).
 // iOS does not support cc's PaintOpBuffer and instead uses cocoa frameworks
 // image formats.
-class GFX_EXPORT ImageSkiaRep {
+class COMPONENT_EXPORT(GFX) ImageSkiaRep {
  public:
   // Create null bitmap.
   ImageSkiaRep();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,10 +70,10 @@ bool ScrollInputHandler::OnScrollEvent(const ScrollEvent& event,
 
   // Falling back to the main thread should never be required when an explicit
   // ElementId is provided.
-  DCHECK(!result.needs_main_thread_hit_test);
+  DCHECK(!result.main_thread_hit_test_reasons);
 
-  cc::ScrollState scroll_state = CreateScrollState(event, false);
-  input_handler_weak_ptr_->ScrollUpdate(&scroll_state, base::TimeDelta());
+  input_handler_weak_ptr_->ScrollUpdate(CreateScrollState(event, false),
+                                        base::TimeDelta());
   input_handler_weak_ptr_->ScrollEnd(/*should_snap=*/false);
 
   return true;
@@ -101,5 +101,13 @@ void ScrollInputHandler::UpdateRootLayerStateForSynchronousInputHandler(
 void ScrollInputHandler::DeliverInputForBeginFrame(
     const viz::BeginFrameArgs& args) {}
 void ScrollInputHandler::DeliverInputForHighLatencyMode() {}
+void ScrollInputHandler::DeliverInputForDeadline() {}
+void ScrollInputHandler::DidFinishImplFrame() {}
+bool ScrollInputHandler::HasQueuedInput() const {
+  return false;
+}
+void ScrollInputHandler::SetScrollEventDispatchMode(
+    cc::InputHandlerClient::ScrollEventDispatchMode mode,
+    double scroll_deadline_ratio) {}
 
 }  // namespace ui

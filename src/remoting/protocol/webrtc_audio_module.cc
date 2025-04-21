@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -47,7 +45,6 @@ void WebrtcAudioModule::SetAudioTaskRunner(
 
 int32_t WebrtcAudioModule::ActiveAudioLayer(AudioLayer* audio_layer) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::RegisterAudioCallback(
@@ -114,7 +111,6 @@ int32_t WebrtcAudioModule::SetRecordingDevice(WindowsDeviceType device) {
 
 int32_t WebrtcAudioModule::PlayoutIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::InitPlayout() {
@@ -128,7 +124,6 @@ bool WebrtcAudioModule::PlayoutIsInitialized() const {
 
 int32_t WebrtcAudioModule::RecordingIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::InitRecording() {
@@ -196,82 +191,66 @@ bool WebrtcAudioModule::MicrophoneIsInitialized() const {
 
 int32_t WebrtcAudioModule::SpeakerVolumeIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SetSpeakerVolume(uint32_t volume) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SpeakerVolume(uint32_t* volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MaxSpeakerVolume(uint32_t* max_volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MinSpeakerVolume(uint32_t* min_volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MicrophoneVolumeIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SetMicrophoneVolume(uint32_t volume) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MicrophoneVolume(uint32_t* volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MaxMicrophoneVolume(uint32_t* max_volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MinMicrophoneVolume(uint32_t* min_volume) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SpeakerMuteIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SetSpeakerMute(bool enable) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SpeakerMute(bool* enabled) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MicrophoneMuteIsAvailable(bool* available) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::SetMicrophoneMute(bool enable) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::MicrophoneMute(bool* enabled) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::StereoPlayoutIsAvailable(bool* available) const {
@@ -286,7 +265,6 @@ int32_t WebrtcAudioModule::SetStereoPlayout(bool enable) {
 
 int32_t WebrtcAudioModule::StereoPlayout(bool* enabled) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::StereoRecordingIsAvailable(bool* available) const {
@@ -300,7 +278,6 @@ int32_t WebrtcAudioModule::SetStereoRecording(bool enable) {
 
 int32_t WebrtcAudioModule::StereoRecording(bool* enabled) const {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::PlayoutDelay(uint16_t* delay_ms) const {
@@ -322,30 +299,25 @@ bool WebrtcAudioModule::BuiltInNSIsAvailable() const {
 
 int32_t WebrtcAudioModule::EnableBuiltInAEC(bool enable) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::EnableBuiltInAGC(bool enable) {
   NOTREACHED();
-  return -1;
 }
 
 int32_t WebrtcAudioModule::EnableBuiltInNS(bool enable) {
   NOTREACHED();
-  return -1;
 }
 
 #if defined(WEBRTC_IOS)
 int WebrtcAudioModule::GetPlayoutAudioParameters(
     webrtc::AudioParameters* params) const {
   NOTREACHED();
-  return -1;
 }
 
 int WebrtcAudioModule::GetRecordAudioParameters(
     webrtc::AudioParameters* params) const {
   NOTREACHED();
-  return -1;
 }
 #endif  // WEBRTC_IOS
 
@@ -366,8 +338,9 @@ void WebrtcAudioModule::PollFromSource() {
   DCHECK(audio_task_runner_->BelongsToCurrentThread());
 
   base::AutoLock lock(lock_);
-  if (!audio_transport_)
+  if (!audio_transport_) {
     return;
+  }
 
   for (int i = 0; i < kPollInterval.InMilliseconds() / kFrameLengthMs; i++) {
     int64_t elapsed_time_ms = -1;
@@ -379,5 +352,4 @@ void WebrtcAudioModule::PollFromSource() {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

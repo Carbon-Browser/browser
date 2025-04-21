@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,12 @@ class PageTimingSender {
       const mojom::FrameRenderDataUpdate& render_data,
       const mojom::CpuTimingPtr& cpu_timing,
       mojom::InputTimingPtr input_timing_delta,
-      const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
-      uint32_t soft_navigation_count) = 0;
+      const std::optional<blink::SubresourceLoadMetrics>&
+          subresource_load_metrics,
+      const mojom::SoftNavigationMetricsPtr& soft_navigation_metrics) = 0;
   virtual void SetUpSmoothnessReporting(
       base::ReadOnlySharedMemoryRegion shared_memory) = 0;
+  virtual void SendCustomUserTiming(mojom::CustomUserTimingMarkPtr timing) = 0;
 };
 
 }  // namespace page_load_metrics

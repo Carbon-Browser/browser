@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class ContentCredentialManager : public blink::mojom::CredentialManager {
   void Store(const CredentialInfo& credential, StoreCallback callback) override;
   void PreventSilentAccess(PreventSilentAccessCallback callback) override;
   void Get(CredentialMediationRequirement mediation,
-           bool include_passwords,
+           int requested_credential_type_flags,
            const std::vector<GURL>& federations,
            GetCallback callback) override;
 

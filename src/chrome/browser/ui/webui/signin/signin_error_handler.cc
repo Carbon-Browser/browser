@@ -1,25 +1,25 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/signin/signin_error_handler.h"
 
-#include "base/bind.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "content/public/browser/web_ui.h"
 #include "url/gurl.h"
 
-SigninErrorHandler::SigninErrorHandler(Browser* browser, bool is_system_profile)
-    : browser_(browser), is_system_profile_(is_system_profile) {
+SigninErrorHandler::SigninErrorHandler(Browser* browser,
+                                       bool from_profile_picker)
+    : browser_(browser), from_profile_picker_(from_profile_picker) {
   // |browser_| must not be null when this dialog is presented from the
   // profile picker.
-  DCHECK(browser_ || is_system_profile_);
+  DCHECK(browser_ || from_profile_picker_);
   BrowserList::AddObserver(this);
 }
 
@@ -28,8 +28,9 @@ SigninErrorHandler::~SigninErrorHandler() {
 }
 
 void SigninErrorHandler::OnBrowserRemoved(Browser* browser) {
-  if (browser_ == browser)
+  if (browser_ == browser) {
     browser_ = nullptr;
+  }
 }
 
 void SigninErrorHandler::RegisterMessages() {
@@ -40,7 +41,7 @@ void SigninErrorHandler::RegisterMessages() {
       "switchToExistingProfile",
       base::BindRepeating(&SigninErrorHandler::HandleSwitchToExistingProfile,
                           base::Unretained(this)));
-  if (!is_system_profile_) {
+  if (!from_profile_picker_) {
     web_ui()->RegisterMessageCallback(
         "learnMore", base::BindRepeating(&SigninErrorHandler::HandleLearnMore,
                                          base::Unretained(this)));
@@ -53,8 +54,9 @@ void SigninErrorHandler::RegisterMessages() {
 
 void SigninErrorHandler::HandleSwitchToExistingProfile(
     const base::Value::List& args) {
-  if (duplicate_profile_path_.empty())
+  if (duplicate_profile_path_.empty()) {
     return;
+  }
 
   // CloseDialog will eventually destroy this object, so nothing should access
   // its members after this call. However, closing the dialog may steal focus
@@ -73,10 +75,11 @@ void SigninErrorHandler::HandleConfirm(const base::Value::List& args) {
 }
 
 void SigninErrorHandler::HandleLearnMore(const base::Value::List& args) {
-  // "Learn more" only shown when is_system_profile_=false
-  DCHECK(!is_system_profile_);
-  if (!browser_)
+  // "Learn more" only shown when from_profile_picker_=false
+  DCHECK(!from_profile_picker_);
+  if (!browser_) {
     return;
+  }
   CloseDialog();
   signin_ui_util::ShowSigninErrorLearnMorePage(browser_->profile());
 }
@@ -84,24 +87,19 @@ void SigninErrorHandler::HandleLearnMore(const base::Value::List& args) {
 void SigninErrorHandler::HandleInitializedWithSize(
     const base::Value::List& args) {
   AllowJavascript();
-  if (duplicate_profile_path_.empty())
+  if (duplicate_profile_path_.empty()) {
     FireWebUIListener("switch-button-unavailable");
+  }
 
   signin::SetInitializedModalHeight(browser_, web_ui(), args);
 }
 
 void SigninErrorHandler::CloseDialog() {
-  if (is_system_profile_) {
-    CloseProfilePickerForceSigninDialog();
-  } else if (browser_){
+  if (browser_) {
     CloseBrowserModalSigninDialog();
   }
 }
 
 void SigninErrorHandler::CloseBrowserModalSigninDialog() {
   browser_->signin_view_controller()->CloseModalSignin();
-}
-
-void SigninErrorHandler::CloseProfilePickerForceSigninDialog() {
-  ProfilePickerForceSigninDialog::HideDialog();
 }

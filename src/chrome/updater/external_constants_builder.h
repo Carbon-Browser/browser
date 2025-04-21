@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_UPDATER_EXTERNAL_CONSTANTS_BUILDER_H_
 #define CHROME_UPDATER_EXTERNAL_CONSTANTS_BUILDER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -41,14 +42,23 @@ class ExternalConstantsBuilder {
   ExternalConstantsBuilder& SetUpdateURL(const std::vector<std::string>& urls);
   ExternalConstantsBuilder& ClearUpdateURL();
 
+  ExternalConstantsBuilder& SetCrashUploadURL(const std::string& url);
+  ExternalConstantsBuilder& ClearCrashUploadURL();
+
+  ExternalConstantsBuilder& SetDeviceManagementURL(const std::string& url);
+  ExternalConstantsBuilder& ClearDeviceManagementURL();
+
+  ExternalConstantsBuilder& SetAppLogoURL(const std::string& url);
+  ExternalConstantsBuilder& ClearAppLogoURL();
+
   ExternalConstantsBuilder& SetUseCUP(bool use_cup);
   ExternalConstantsBuilder& ClearUseCUP();
 
-  ExternalConstantsBuilder& SetInitialDelay(double initial_delay);
+  ExternalConstantsBuilder& SetInitialDelay(base::TimeDelta initial_delay);
   ExternalConstantsBuilder& ClearInitialDelay();
 
-  ExternalConstantsBuilder& SetServerKeepAliveSeconds(
-      int server_keep_alive_seconds);
+  ExternalConstantsBuilder& SetServerKeepAliveTime(
+      base::TimeDelta server_keep_alive_seconds);
   ExternalConstantsBuilder& ClearServerKeepAliveSeconds();
 
   ExternalConstantsBuilder& SetCrxVerifierFormat(
@@ -60,7 +70,23 @@ class ExternalConstantsBuilder {
   ExternalConstantsBuilder& ClearGroupPolicies();
 
   ExternalConstantsBuilder& SetOverinstallTimeout(
-      const base::TimeDelta& overinstall_timeout);
+      base::TimeDelta overinstall_timeout);
+  ExternalConstantsBuilder& ClearOverinstallTimeout();
+
+  ExternalConstantsBuilder& SetIdleCheckPeriod(
+      base::TimeDelta idle_check_period);
+  ExternalConstantsBuilder& ClearIdleCheckPeriod();
+
+  ExternalConstantsBuilder& SetMachineManaged(
+      std::optional<bool> is_managed_device);
+  ExternalConstantsBuilder& ClearMachineManaged();
+
+  ExternalConstantsBuilder& SetEnableDiffUpdates(bool enable_diffs);
+  ExternalConstantsBuilder& ClearEnableDiffUpdates();
+
+  ExternalConstantsBuilder& SetCecaConnectionTimeout(
+      base::TimeDelta ceca_connection_timeout);
+  ExternalConstantsBuilder& ClearCecaConnectionTimeout();
 
   // Write the external constants overrides file in the default location
   // with the values that have been previously set, replacing any file

@@ -18,18 +18,20 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_PREFS_H_
 #define COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_PREFS_H_
 
+#include <string_view>
+#include <vector>
+
 class PrefRegistrySimple;
 
-namespace adblock::prefs {
+namespace adblock::common::prefs {
 
-extern const char kEnableAdblock[];
-extern const char kEnableAcceptableAds[];
-extern const char kAdblockAllowedDomains[];
-extern const char kAdblockCustomFilters[];
-extern const char kAdblockSubscriptions[];
-extern const char kAdblockCustomSubscriptions[];
+extern const char kEnableAdblockLegacy[];
+extern const char kEnableAcceptableAdsLegacy[];
+extern const char kAdblockAllowedDomainsLegacy[];
+extern const char kAdblockCustomFiltersLegacy[];
+extern const char kAdblockSubscriptionsLegacy[];
+extern const char kAdblockCustomSubscriptionsLegacy[];
 extern const char kAdblockMoreOptionsEnabled[];
-extern const char kAdblockAllowedConnectionType[];
 extern const char kInstallFirstStartSubscriptions[];
 extern const char kSubscriptionSignatures[];
 extern const char kLastUsedSchemaVersion[];
@@ -39,9 +41,15 @@ extern const char kTelemetryLastPingTime[];
 extern const char kTelemetryPreviousLastPingTime[];
 extern const char kTelemetryFirstPingTime[];
 extern const char kTelemetryNextPingTime[];
+extern const char kTelemetryPageViewStats[];
+extern const char kConfigurationsPrefsPath[];
+extern const char kEnableAutoInstalledSubscriptions[];
+extern const char kAutoInstalledSubscriptionsNextUpdateTime[];
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
-}  // namespace adblock::prefs
+std::vector<std::string_view> GetPrefs();
+
+}  // namespace adblock::common::prefs
 
 #endif  // COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_PREFS_H_

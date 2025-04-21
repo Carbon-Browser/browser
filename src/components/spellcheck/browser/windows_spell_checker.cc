@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,19 +12,18 @@
 #include <wrl/client.h>
 
 #include <algorithm>
-#include <codecvt>
 #include <locale>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner_thread_mode.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/threading/scoped_thread_priority.h"
 #include "base/win/com_init_util.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/scoped_co_mem.h"
@@ -111,14 +110,12 @@ class BackgroundHelper {
       const std::string& lang_tag);
 
   // Records metrics about spell check support for the user's Chrome locales.
-  void RecordChromeLocalesStats(const std::vector<std::string> chrome_locales,
-                                SpellCheckHostMetrics* metrics);
+  void RecordChromeLocalesStats(std::vector<std::string> chrome_locales);
 
   // Records metrics about spell check support for the user's enabled spell
   // check locales.
   void RecordSpellcheckLocalesStats(
-      const std::vector<std::string> spellcheck_locales,
-      SpellCheckHostMetrics* metrics);
+      std::vector<std::string> spellcheck_locales);
 
   // Retrieve language tags for registered Windows OS
   // spellcheckers on the system.
@@ -160,8 +157,10 @@ void BackgroundHelper::CreateSpellCheckerFactory() {
   DCHECK(background_task_runner_->RunsTasksInCurrentSequence());
   base::win::AssertComApartmentType(base::win::ComApartmentType::STA);
 
-  if (!spellcheck::WindowsVersionSupportsSpellchecker() ||
-      FAILED(::CoCreateInstance(__uuidof(::SpellCheckerFactory), nullptr,
+  // Mitigate the issues caused by loading DLLs on a background thread
+  // (https://issues.chromium.org/issues/41464781).
+  SCOPED_MAY_LOAD_LIBRARY_AT_BACKGROUND_PRIORITY_REPEATEDLY();
+  if (FAILED(::CoCreateInstance(__uuidof(::SpellCheckerFactory), nullptr,
                                 (CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER),
                                 IID_PPV_ARGS(&spell_checker_factory_)))) {
     spell_checker_factory_ = nullptr;
@@ -240,19 +239,6 @@ std::vector<SpellCheckResult> BackgroundHelper::RequestTextCheckForAllLanguages(
             (action == CORRECTIVE_ACTION_GET_SUGGESTIONS ||
              action == CORRECTIVE_ACTION_REPLACE)) {
           std::vector<std::u16string> suggestions;
-          if (!base::FeatureList::IsEnabled(
-                  spellcheck::kWinRetrieveSuggestionsOnlyOnDemand)) {
-            // Perform the expensive operation of retrieving suggestions for all
-            // misspelled words while performing a text check. If
-            // kWinRetrieveSuggestionsOnlyOnDemand is set, suggestions will
-            // be retrieved on demand when the context menu is brought up with a
-            // misspelled word selected, and the spellcheck results returned by
-            // this method will have empty suggestion lists.
-            FillSuggestionList(it->first,
-                               text.substr(start_index, error_length),
-                               &suggestions);
-          }
-
           result_map[std::tuple<ULONG, ULONG>(start_index, error_length)]
               .push_back(suggestions);
         }
@@ -455,10 +441,8 @@ Microsoft::WRL::ComPtr<ISpellChecker> BackgroundHelper::GetSpellChecker(
 }
 
 void BackgroundHelper::RecordChromeLocalesStats(
-    const std::vector<std::string> chrome_locales,
-    SpellCheckHostMetrics* metrics) {
+    std::vector<std::string> chrome_locales) {
   DCHECK(background_task_runner_->RunsTasksInCurrentSequence());
-  DCHECK(metrics);
 
   if (!IsSpellCheckerFactoryInitialized()) {
     // The native spellchecker creation failed. Do not record any metrics.
@@ -466,14 +450,12 @@ void BackgroundHelper::RecordChromeLocalesStats(
   }
 
   const auto& locales_info = DetermineLocalesSupport(chrome_locales);
-  metrics->RecordAcceptLanguageStats(locales_info);
+  SpellCheckHostMetrics::RecordAcceptLanguageStats(locales_info);
 }
 
 void BackgroundHelper::RecordSpellcheckLocalesStats(
-    const std::vector<std::string> spellcheck_locales,
-    SpellCheckHostMetrics* metrics) {
+    std::vector<std::string> spellcheck_locales) {
   DCHECK(background_task_runner_->RunsTasksInCurrentSequence());
-  DCHECK(metrics);
 
   if (!IsSpellCheckerFactoryInitialized()) {
     // The native spellchecker creation failed. Do not record any metrics.
@@ -481,7 +463,7 @@ void BackgroundHelper::RecordSpellcheckLocalesStats(
   }
 
   const auto& locales_info = DetermineLocalesSupport(spellcheck_locales);
-  metrics->RecordSpellcheckLanguageStats(locales_info);
+  SpellCheckHostMetrics::RecordSpellcheckLanguageStats(locales_info);
 }
 
 }  // namespace windows_spell_checker
@@ -509,8 +491,8 @@ WindowsSpellChecker::~WindowsSpellChecker() {
 void WindowsSpellChecker::CreateSpellChecker(
     const std::string& lang_tag,
     base::OnceCallback<void(bool)> callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &windows_spell_checker::BackgroundHelper::CreateSpellChecker,
           base::Unretained(background_helper_.get()), lang_tag),
@@ -529,8 +511,8 @@ void WindowsSpellChecker::RequestTextCheck(
     int document_tag,
     const std::u16string& text,
     spellcheck_platform::TextCheckCompleteCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&windows_spell_checker::BackgroundHelper::
                          RequestTextCheckForAllLanguages,
                      base::Unretained(background_helper_.get()), document_tag,
@@ -541,8 +523,8 @@ void WindowsSpellChecker::RequestTextCheck(
 void WindowsSpellChecker::GetPerLanguageSuggestions(
     const std::u16string& word,
     spellcheck_platform::GetSuggestionsCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &windows_spell_checker::BackgroundHelper::GetPerLanguageSuggestions,
           base::Unretained(background_helper_.get()), word),
@@ -576,31 +558,29 @@ void WindowsSpellChecker::IgnoreWordForAllLanguages(
 }
 
 void WindowsSpellChecker::RecordChromeLocalesStats(
-    const std::vector<std::string> chrome_locales,
-    SpellCheckHostMetrics* metrics) {
+    std::vector<std::string> chrome_locales) {
   background_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(
           &windows_spell_checker::BackgroundHelper::RecordChromeLocalesStats,
-          base::Unretained(background_helper_.get()), std::move(chrome_locales),
-          metrics));
+          base::Unretained(background_helper_.get()),
+          std::move(chrome_locales)));
 }
 
 void WindowsSpellChecker::RecordSpellcheckLocalesStats(
-    const std::vector<std::string> spellcheck_locales,
-    SpellCheckHostMetrics* metrics) {
+    std::vector<std::string> spellcheck_locales) {
   background_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&windows_spell_checker::BackgroundHelper::
                                     RecordSpellcheckLocalesStats,
                                 base::Unretained(background_helper_.get()),
-                                std::move(spellcheck_locales), metrics));
+                                std::move(spellcheck_locales)));
 }
 
 void WindowsSpellChecker::IsLanguageSupported(
     const std::string& lang_tag,
     base::OnceCallback<void(bool)> callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &windows_spell_checker::BackgroundHelper::IsLanguageSupported,
           base::Unretained(background_helper_.get()), lang_tag),
@@ -609,8 +589,8 @@ void WindowsSpellChecker::IsLanguageSupported(
 
 void WindowsSpellChecker::RetrieveSpellcheckLanguages(
     spellcheck_platform::RetrieveSpellcheckLanguagesCompleteCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &windows_spell_checker::BackgroundHelper::RetrieveSpellcheckLanguages,
           base::Unretained(background_helper_.get())),

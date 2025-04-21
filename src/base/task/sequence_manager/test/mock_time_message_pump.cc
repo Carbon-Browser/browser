@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/test/mock_time_message_pump.h"
 
 #include <algorithm>
+#include <ostream>
 
 #include "base/auto_reset.h"
 #include "base/notreached.h"
@@ -16,13 +17,14 @@ namespace sequence_manager {
 MockTimeMessagePump::MockTimeMessagePump(SimpleTestTickClock* clock)
     : clock_(clock) {}
 
-MockTimeMessagePump::~MockTimeMessagePump() {}
+MockTimeMessagePump::~MockTimeMessagePump() = default;
 
 bool MockTimeMessagePump::MaybeAdvanceTime(TimeTicks target_time) {
   auto now = clock_->NowTicks();
 
-  if (target_time <= now)
+  if (target_time <= now) {
     return true;
+  }
 
   TimeTicks next_now;
 
@@ -47,27 +49,28 @@ void MockTimeMessagePump::Run(Delegate* delegate) {
   for (;;) {
     Delegate::NextWorkInfo info = delegate->DoWork();
 
-    if (!keep_running_ || quit_after_do_some_work_)
+    if (!keep_running_ || quit_after_do_some_work_) {
       break;
+    }
 
-    if (info.is_immediate())
+    if (info.is_immediate()) {
       continue;
+    }
 
-    bool have_immediate_work = delegate->DoIdleWork();
-
-    if (!keep_running_)
+    delegate->DoIdleWork();
+    if (!keep_running_) {
       break;
+    }
 
-    if (have_immediate_work)
+    if (MaybeAdvanceTime(info.delayed_run_time)) {
       continue;
-
-    if (MaybeAdvanceTime(info.delayed_run_time))
-      continue;
+    }
 
     next_wake_up_time_ = info.delayed_run_time;
 
-    if (stop_when_message_pump_is_idle_)
+    if (stop_when_message_pump_is_idle_) {
       return;
+    }
 
     NOTREACHED() << "Pump would go to sleep. Probably not what you wanted, "
                     "consider rewriting your test.";

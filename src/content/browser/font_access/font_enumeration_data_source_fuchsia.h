@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 namespace content {
 
 // Fuchsia implementation of FontEnumerationDataSource.
-// TODO(crbug.com/1265639): Use fuchsia.font API when it provides enumeration.
+// TODO(crbug.com/42050376): Use fuchsia.font API when it provides enumeration.
 class FontEnumerationDataSourceFuchsia : public FontEnumerationDataSource {
  public:
   FontEnumerationDataSourceFuchsia();

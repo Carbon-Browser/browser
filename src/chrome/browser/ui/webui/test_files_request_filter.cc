@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/test_files_request_filter.h"
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
@@ -17,8 +17,9 @@ namespace {
 bool ShouldHandleTestFileRequestCallback(const std::string& path) {
   std::vector<std::string> url_substr =
       base::SplitString(path, "/", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  if (url_substr.size() != 2 || url_substr[0] != "test")
+  if (url_substr.size() != 2 || url_substr[0] != "test") {
     return false;
+  }
 
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::FilePath test_data_dir;
@@ -43,7 +44,7 @@ void HandleTestFileRequestCallback(
       &contents));
 
   base::RefCountedString* ref_contents = new base::RefCountedString();
-  ref_contents->data() = contents;
+  ref_contents->as_string() = contents;
   std::move(callback).Run(ref_contents);
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -75,11 +75,11 @@ class MockDaemonProcess : public DaemonProcess {
               (const std::string&),
               (override));
   MOCK_METHOD(void, SendTerminalDisconnected, (int terminal_id), (override));
+  MOCK_METHOD(void, StartChromotingHostServices, (), (override));
 };
 
 FakeDesktopSession::FakeDesktopSession(DaemonProcess* daemon_process, int id)
-    : DesktopSession(daemon_process, id) {
-}
+    : DesktopSession(daemon_process, id) {}
 
 FakeDesktopSession::~FakeDesktopSession() = default;
 
@@ -127,15 +127,15 @@ class DaemonProcessTest : public testing::Test {
   }
 
  protected:
-  base::test::SingleThreadTaskEnvironment task_environment_{
-      base::test::SingleThreadTaskEnvironment::MainThreadType::IO};
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::MainThreadType::IO};
 
   std::unique_ptr<MockDaemonProcess> daemon_process_;
-  int terminal_id_;
+  int terminal_id_ = 0;
+  base::RunLoop run_loop_;
 };
 
-DaemonProcessTest::DaemonProcessTest() : terminal_id_(0) {
-}
+DaemonProcessTest::DaemonProcessTest() = default;
 
 DaemonProcessTest::~DaemonProcessTest() = default;
 
@@ -157,11 +157,13 @@ void DaemonProcessTest::SetUp() {
   EXPECT_CALL(*daemon_process_, LaunchNetworkProcess())
       .Times(AnyNumber())
       .WillRepeatedly(Invoke(this, &DaemonProcessTest::LaunchNetworkProcess));
+  EXPECT_CALL(*daemon_process_, StartChromotingHostServices())
+      .Times(AnyNumber());
 }
 
 void DaemonProcessTest::TearDown() {
   daemon_process_->Stop();
-  base::RunLoop().Run();
+  run_loop_.Run();
 }
 
 DesktopSession* DaemonProcessTest::DoCreateDesktopSession(int terminal_id) {
@@ -179,7 +181,7 @@ void DaemonProcessTest::DeleteDaemonProcess() {
 
 void DaemonProcessTest::QuitMessageLoop() {
   task_environment_.GetMainThreadTaskRunner()->PostTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
+      FROM_HERE, run_loop_.QuitWhenIdleClosure());
 }
 
 void DaemonProcessTest::StartDaemonProcess() {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class ServiceManager : public Service {
     // May return null if builtin out-of-process services are not supported by
     // the runtime environment.
     //
-    // TODO(https://crbug.com/895615): Process launching should be fully the
+    // TODO(crbug.com/40598251): Process launching should be fully the
     // responsibility of the Service Manager. This exists because much of the
     // Chromium process launching logic today is still buried in the Content
     // layer.
@@ -75,7 +75,7 @@ class ServiceManager : public Service {
     // May return null if service executables are not supported by the runtime
     // environment.
     //
-    // TODO(https://crbug.com/895615): Process launching should be fully the
+    // TODO(crbug.com/40598251): Process launching should be fully the
     // responsibility of the Service Manager. This exists because much of the
     // Chromium process launching logic today is still buried in the Content
     // layer.
@@ -116,7 +116,7 @@ class ServiceManager : public Service {
   // Directly requests that the Service Manager start a new instance for
   // |service_name| if one is not already running.
   //
-  // TODO(https://crbug.com/904240): Remove this method.
+  // TODO(crbug.com/40601935): Remove this method.
   void StartService(const std::string& service_name);
 
   // Creates a service instance for |identity|. This is intended for use by the
@@ -204,7 +204,7 @@ class ServiceManager : public Service {
 
   // Always points to the ServiceManager's own Instance. Note that this
   // ServiceInstance still has an entry in |instances_|.
-  raw_ptr<ServiceInstance> service_manager_instance_;
+  raw_ptr<ServiceInstance, DanglingUntriaged> service_manager_instance_;
 
   mojo::RemoteSet<mojom::ServiceManagerListener> listeners_;
 };

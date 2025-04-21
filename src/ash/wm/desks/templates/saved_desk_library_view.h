@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 #define ASH_WM_DESKS_TEMPLATES_SAVED_DESK_LIBRARY_VIEW_H_
 
 #include <memory>
-#include <string>
 #include <vector>
 
-#include "ash/wm/desks/templates/saved_desk_feedback_button.h"
-#include "base/guid.h"
+#include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
@@ -21,6 +20,7 @@
 
 namespace ash {
 
+class DeskMiniView;
 class DeskTemplate;
 class SavedDeskGridView;
 class SavedDeskItemView;
@@ -32,9 +32,9 @@ class ScrollViewGradientHelper;
 // saved desk features are enabled, it can show one or more `SavedDeskGridView`s
 // that each hold a number of saved desks. It is owned by the `OverviewGrid`.
 class SavedDeskLibraryView : public views::View, public aura::WindowObserver {
- public:
-  METADATA_HEADER(SavedDeskLibraryView);
+  METADATA_HEADER(SavedDeskLibraryView, views::View)
 
+ public:
   SavedDeskLibraryView();
   SavedDeskLibraryView(const SavedDeskLibraryView&) = delete;
   SavedDeskLibraryView& operator=(const SavedDeskLibraryView&) = delete;
@@ -45,79 +45,94 @@ class SavedDeskLibraryView : public views::View, public aura::WindowObserver {
   static std::unique_ptr<views::Widget> CreateSavedDeskLibraryWidget(
       aura::Window* root);
 
-  const std::vector<SavedDeskGridView*>& grid_views() { return grid_views_; }
+  const std::vector<raw_ptr<SavedDeskGridView, VectorExperimental>>&
+  grid_views() const {
+    return grid_views_;
+  }
 
-  FeedbackButton* feedback_button() { return feedback_button_; }
+  // Retrieves the item view for a given saved desk, or nullptr.
+  SavedDeskItemView* GetItemForUUID(const base::Uuid& uuid);
 
-  // Retrieve the item view for a given saved desk, or nullptr.
-  SavedDeskItemView* GetItemForUUID(const base::GUID& uuid);
+  // Updates existing saved desks and adds new saved desks to the grid. Also
+  // sorts entries in alphabetical order. If `order_first_uuid` is valid, the
+  // corresponding entry will be placed first. This will animate the entries to
+  // their final positions if `animate` is true. Currently only allows a maximum
+  // of 6 saved desks to be shown in the grid.
+  void AddOrUpdateEntries(
+      const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+          entries,
+      const base::Uuid& order_first_uuid,
+      bool animate);
 
-  // TODO(dandersson): Look into unifying this and `AddOrUpdateTemplates`.
-  void PopulateGridUI(const std::vector<const DeskTemplate*>& entries,
-                      const gfx::Rect& grid_bounds,
-                      const base::GUID& last_saved_desk_uuid);
+  // Deletes all entries identified by `uuids`. If `delete_animation` is false,
+  // then the respective item views will just disappear instead of fading out.
+  void DeleteEntries(const std::vector<base::Uuid>& uuids,
+                     bool delete_animation);
 
-  void AddOrUpdateTemplates(const std::vector<const DeskTemplate*>& entries,
-                            bool initializing_grid_view,
-                            const base::GUID& last_saved_desk_uuid);
-
-  void DeleteTemplates(const std::vector<std::string>& uuids);
+  // This performs the launch animation for Save & Recall. The `DeskItemView`
+  // identified by `uuid` is animated up into the position of the desk preview
+  // housed in `mini_view`. It then crossfades into the desk preview. The
+  // `DeskItemView` is also removed from the grid.
+  void AnimateDeskLaunch(const base::Uuid& uuid, DeskMiniView* mini_view);
 
  private:
   friend class SavedDeskLibraryEventHandler;
   friend class SavedDeskLibraryViewTestApi;
   friend class SavedDeskLibraryWindowTargeter;
 
-  // Called when the feedback button is pressed. Shows the feedback dialog with
-  // desks templates information.
-  void OnFeedbackButtonPressed();
-
-  bool IsAnimating();
+  bool IsAnimating() const;
 
   // Called from `SavedDeskLibraryWindowTargeter`. Returns true if
   // `screen_location` intersects with an interactive part of the library UI.
-  // This includes saved desk items and the feedback button.
-  bool IntersectsWithUi(const gfx::Point& screen_location);
+  bool IntersectsWithUi(const gfx::Point& screen_location) const;
 
   // If this view is attached to a widget, returns its window (or nullptr).
   aura::Window* GetWidgetWindow();
 
   void OnLocatedEvent(ui::LocatedEvent* event, bool is_touch);
 
+  // This returns the screen space bounds of the desk preview that `mini_view`
+  // holds. It is intended to be called when launching a Save & Recall desk so
+  // that the `SavedDeskItemView` can be animated up to the desk bar view.
+  // It takes animation into consideration and will return the position where
+  // the desk preview will end up, rather than where it currently is.
+  std::optional<gfx::Rect> GetDeskPreviewBoundsForLaunch(
+      const DeskMiniView* mini_view);
+
+  // The grid labels will get hidden if the corresponding grid has no items, or
+  // if landscape/portrait mode was changed.
+  void UpdateGridLabels();
+
   // views::View:
   void AddedToWidget() override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnKeyEvent(ui::KeyEvent* event) override;
-  void OnThemeChanged() override;
 
   // aura::WindowObserver:
   void OnWindowDestroying(aura::Window* window) override;
 
   // Pointers to the grids with saved desks of specific types. These will be set
   // depending on which features are enabled.
-  SavedDeskGridView* desk_template_grid_view_ = nullptr;
-  SavedDeskGridView* save_and_recall_grid_view_ = nullptr;
+  raw_ptr<SavedDeskGridView> desk_template_grid_view_ = nullptr;
+  raw_ptr<SavedDeskGridView> save_and_recall_grid_view_ = nullptr;
+  raw_ptr<SavedDeskGridView> coral_grid_view_ = nullptr;
 
   // Used for scroll functionality of the library page. Owned by views
   // hierarchy.
-  views::ScrollView* scroll_view_ = nullptr;
+  raw_ptr<views::ScrollView> scroll_view_ = nullptr;
 
   // Adds a fade in/out gradient to the top/bottom of `scroll_view_`.
   std::unique_ptr<ScrollViewGradientHelper> scroll_view_gradient_helper_;
 
   // Holds the active ones, for convenience.
-  std::vector<SavedDeskGridView*> grid_views_;
+  std::vector<raw_ptr<SavedDeskGridView, VectorExperimental>> grid_views_;
 
   // Owned by views hierarchy. Section headers above grids. Will match size and
   // order of items in `grid_views_`.
-  std::vector<views::Label*> grid_labels_;
-
-  // Owned by views hierarchy. Temporary button to help users give feedback.
-  // TODO(crbug.com/1289880): Remove this button when it is no longer needed.
-  FeedbackButton* feedback_button_ = nullptr;
+  std::vector<raw_ptr<views::Label, VectorExperimental>> grid_labels_;
 
   // Label that shows up when the library has no items.
-  views::Label* no_items_label_ = nullptr;
+  raw_ptr<views::Label> no_items_label_ = nullptr;
 
   // Handles mouse/touch events on saved desk library widget.
   std::unique_ptr<SavedDeskLibraryEventHandler> event_handler_;

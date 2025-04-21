@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class CredentialManagerDialogController : public PasswordBaseDialogController {
   virtual const FormsVector& GetLocalForms() const = 0;
 
   // Returns a title of the account chooser.
-  virtual std::u16string GetAccoutChooserTitle() const = 0;
+  virtual std::u16string GetAccountChooserTitle() const = 0;
 
   // Whether the account chooser should display the "Sign in" button.
   virtual bool ShouldShowSignInButton() const = 0;

@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_SYSTEM_WEB_APPS_TYPES_SYSTEM_WEB_APP_DATA_H_
 #define CHROME_BROWSER_ASH_SYSTEM_WEB_APPS_TYPES_SYSTEM_WEB_APP_DATA_H_
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/values.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 
 namespace ash {
 

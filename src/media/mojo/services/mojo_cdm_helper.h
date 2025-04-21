@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,8 @@
 #include "media/mojo/services/media_mojo_export.h"
 #include "media/mojo/services/mojo_cdm_file_io.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/metrics/public/cpp/mojo_ukm_recorder.h"
+#include "services/metrics/public/mojom/ukm_interface.mojom.h"
 
 namespace media {
 
@@ -39,6 +41,7 @@ class MEDIA_MOJO_EXPORT MojoCdmHelper final : public CdmAuxiliaryHelper,
   void SetFileReadCB(FileReadCB file_read_cb) final;
   cdm::FileIO* CreateCdmFileIO(cdm::FileIOClient* client) final;
   url::Origin GetCdmOrigin() final;
+  void RecordUkm(const CdmMetricsData& cdm_metrics_data) final;
   cdm::Buffer* CreateCdmBuffer(size_t capacity) final;
   std::unique_ptr<VideoFrameImpl> CreateCdmVideoFrame() final;
   void QueryStatus(QueryStatusCB callback) final;
@@ -51,7 +54,7 @@ class MEDIA_MOJO_EXPORT MojoCdmHelper final : public CdmAuxiliaryHelper,
 #if BUILDFLAG(IS_WIN)
   void GetMediaFoundationCdmData(GetMediaFoundationCdmDataCB callback) final;
   void SetCdmClientToken(const std::vector<uint8_t>& client_token) final;
-  void OnCdmEvent(CdmEvent event) final;
+  void OnCdmEvent(CdmEvent event, HRESULT hresult) final;
 #endif  // BUILDFLAG(IS_WIN)
 
   // MojoCdmFileIO::Delegate implementation.
@@ -59,9 +62,13 @@ class MEDIA_MOJO_EXPORT MojoCdmHelper final : public CdmAuxiliaryHelper,
   void ReportFileReadSize(int file_size_bytes) final;
 
  private:
+  // Retrieves instances necessary to recording Ukm from the frame interface.
+  void RetrieveUkmRecordingObjects();
+
   // All services are created lazily.
   void ConnectToOutputProtection();
   void ConnectToCdmDocumentService();
+  void ConnectToUkmRecorderFactory();
 
   CdmAllocator* GetAllocator();
 
@@ -73,6 +80,10 @@ class MEDIA_MOJO_EXPORT MojoCdmHelper final : public CdmAuxiliaryHelper,
   // destroyed but RenderFrameHostImpl is not.
   mojo::Remote<mojom::OutputProtection> output_protection_;
   mojo::Remote<mojom::CdmDocumentService> cdm_document_service_;
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> ukm_recorder_factory_;
+
+  std::unique_ptr<ukm::MojoUkmRecorder> ukm_recorder_;
+  ukm::SourceId ukm_source_id_ = ukm::kInvalidSourceId;
 
   std::unique_ptr<CdmAllocator> allocator_;
 

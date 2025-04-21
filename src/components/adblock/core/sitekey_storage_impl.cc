@@ -20,16 +20,34 @@
 #include "absl/types/optional.h"
 #include "base/base64.h"
 #include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/trace_event/trace_event.h"
-#include "components/adblock/core/common/adblock_utils.h"
+#include "components/adblock/core/common/adblock_constants.h"
 #include "crypto/openssl_util.h"
 #include "crypto/signature_verifier.h"
+#include "net/http/http_response_headers.h"
 
 namespace adblock {
+namespace {
 
-SitekeyStorageImpl::SitekeyStorageImpl() {
-  crypto::EnsureOpenSSLInit();
+SiteKey GetSitekeyHeader(
+    const scoped_refptr<net::HttpResponseHeaders>& headers) {
+  size_t iterator = 0;
+  std::string name;
+  std::string value;
+  while (headers->EnumerateHeaderLines(&iterator, &name, &value)) {
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (name == adblock::kSiteKeyHeaderKey) {
+      return SiteKey{value};
+    }
+  }
+  return {};
 }
+
+}  // namespace
+
+SitekeyStorageImpl::SitekeyStorageImpl() = default;
 
 SitekeyStorageImpl::~SitekeyStorageImpl() = default;
 
@@ -42,7 +60,7 @@ void SitekeyStorageImpl::ProcessResponseHeaders(
     return;
   }
 
-  auto site_key = adblock::utils::GetSitekeyHeader(headers);
+  auto site_key = GetSitekeyHeader(headers);
   if (site_key.value().empty()) {
     VLOG(1) << "[eyeo] No site key header";
     return;
@@ -118,22 +136,24 @@ bool SitekeyStorageImpl::IsSitekeySignatureValid(
     const std::string& data) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::string signature;
-  if (!base::Base64Decode(signature_b64, &signature)) {
+  if (!base::Base64Decode(signature_b64, &signature,
+                          base::Base64DecodePolicy::kForgiving)) {
     DLOG(WARNING) << "[eyeo] Signature decode failed";
     return false;
   }
 
   std::string public_key;
-  if (!base::Base64Decode(public_key_b64, &public_key)) {
+  if (!base::Base64Decode(public_key_b64, &public_key,
+                          base::Base64DecodePolicy::kForgiving)) {
     DLOG(WARNING) << "[eyeo] Public key decode failed";
     return false;
   }
 
   crypto::SignatureVerifier verifier;
   if (verifier.VerifyInit(crypto::SignatureVerifier::RSA_PKCS1_SHA1,
-                          base::as_bytes(base::make_span(signature)),
-                          base::as_bytes(base::make_span(public_key)))) {
-    verifier.VerifyUpdate(base::as_bytes(base::make_span(data)));
+                          base::as_bytes(base::span(signature)),
+                          base::as_bytes(base::span(public_key)))) {
+    verifier.VerifyUpdate(base::as_bytes(base::span(data)));
     return verifier.VerifyFinal();
   }
 

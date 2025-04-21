@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ InputMethodSurface::InputMethodSurface(InputMethodSurfaceManager* manager,
           surface,
           true /* can_minimize */,
           ash::kShellWindowId_ArcVirtualKeyboardContainer,
-          default_scale_cancellation),
+          default_scale_cancellation,
+          /*supports_floated_state=*/false),
       manager_(manager),
       input_method_bounds_() {
   host_window()->SetName("ExoInputMethodSurface");
@@ -72,7 +73,7 @@ void InputMethodSurface::OnSurfaceCommit() {
 
   gfx::RectF new_bounds_in_dips = gfx::ConvertRectToDips(
       root_surface()->hit_test_region().bounds(), GetScale());
-  // TODO(crbug.com/1131682): We should avoid dropping precision to integers
+  // TODO(crbug.com/40150312): We should avoid dropping precision to integers
   // here if we want to know the true rectangle bounds in DIPs. If not, we
   // should use ToEnclosingRect() if we want to include DIPs that partly overlap
   // the physical pixel bounds, or ToEnclosedRect() if we do not.
@@ -82,16 +83,17 @@ void InputMethodSurface::OnSurfaceCommit() {
     input_method_bounds_ = int_bounds_in_dips;
     manager_->OnTouchableBoundsChanged(this);
 
-    GetViewAccessibility().OverrideBounds(gfx::RectF(input_method_bounds_));
+    GetViewAccessibility().SetBounds(gfx::RectF(input_method_bounds_));
   }
 }
 
-void InputMethodSurface::SetWidgetBounds(const gfx::Rect& bounds) {
+void InputMethodSurface::SetWidgetBounds(const gfx::Rect& bounds,
+                                         bool adjusted_by_server) {
   if (bounds == widget_->GetWindowBoundsInScreen())
     return;
 
   widget_->SetBounds(bounds);
-  UpdateSurfaceBounds();
+  UpdateHostWindowOrigin();
 
   // Bounds change requests will be ignored in client side.
 }

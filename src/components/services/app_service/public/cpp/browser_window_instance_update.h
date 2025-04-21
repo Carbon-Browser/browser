@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@ struct BrowserWindowInstanceUpdate {
   bool is_active = false;
   uint32_t browser_session_id = 0;
   uint32_t restored_browser_session_id = 0;
+  bool is_incognito = false;
+  uint64_t lacros_profile_id = 0;
 };
 
 }  // namespace apps

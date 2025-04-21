@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 // to words within the dictionary.
 class SpellcheckDictionary {
  public:
-  SpellcheckDictionary() {}
+  SpellcheckDictionary() = default;
 
   SpellcheckDictionary(const SpellcheckDictionary&) = delete;
   SpellcheckDictionary& operator=(const SpellcheckDictionary&) = delete;
 
-  virtual ~SpellcheckDictionary() {}
+  virtual ~SpellcheckDictionary() = default;
 
   virtual void Load() = 0;
 

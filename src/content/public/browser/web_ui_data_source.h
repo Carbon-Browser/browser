@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,17 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "content/common/content_export.h"
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace base {
 class RefCountedMemory;
@@ -38,38 +39,35 @@ class WebUIDataSource {
  public:
   virtual ~WebUIDataSource() {}
 
-  // Calls `Create()` and `Add()` to internalize ownership of the
-  // WebUIDataSource instance. Callers just get a raw pointer, which they don't
-  // own. Prefer `CreateAndAdd` in new code.
+  // Creates a WebUIDataSource and adds it to the BrowserContext, which owns it.
+  // Callers just get a raw pointer, which they don't own.
+  // `source_name` is the key for URL lookups, allowing the source to serve
+  // content for URLs that match the patterns:
+  //  - chrome://source_name/*
+  //  - chrome-untrusted://<host>/*
+  //    (source_name is of the form "chrome-untrusted://<host>")
+  //
+  // Though the parent class URLDataSource supports source names like
+  // "your-scheme://" which would serve URLs of the form
+  // "your-scheme://anything", this is explicitly disallowed for
+  // WebUIDataSource for simplicity.
   CONTENT_EXPORT static WebUIDataSource* CreateAndAdd(
       BrowserContext* browser_context,
       const std::string& source_name);
-
-  // Creates a WebUIDataSource instance. Caller takes ownership of returned
-  // pointer. Prefer `CreateAndAdd()` when possible.
-  CONTENT_EXPORT static WebUIDataSource* Create(const std::string& source_name);
-
-  // Adds a WebUI data source to |browser_context|. TODO(dbeam): update this API
-  // to take a std::unique_ptr instead to make it clear that |source| can be
-  // destroyed and references should not be kept by callers. Use |Update()|
-  // if you need to change an existing data source.
-  CONTENT_EXPORT static void Add(BrowserContext* browser_context,
-                                 WebUIDataSource* source);
 
   CONTENT_EXPORT static void Update(BrowserContext* browser_context,
                                     const std::string& source_name,
                                     const base::Value::Dict& update);
 
   // Adds a string keyed to its name to our dictionary.
-  virtual void AddString(base::StringPiece name,
-                         const std::u16string& value) = 0;
+  virtual void AddString(std::string_view name, std::u16string_view value) = 0;
 
   // Adds a string keyed to its name to our dictionary.
-  virtual void AddString(base::StringPiece name, const std::string& value) = 0;
+  virtual void AddString(std::string_view name, std::string_view value) = 0;
 
   // Adds a localized string with resource |ids| keyed to its name to our
   // dictionary.
-  virtual void AddLocalizedString(base::StringPiece name, int ids) = 0;
+  virtual void AddLocalizedString(std::string_view name, int ids) = 0;
 
   // Calls AddLocalizedString() in a for-loop for |strings|. Reduces code size
   // vs. reimplementing the same for-loop.
@@ -81,22 +79,22 @@ class WebUIDataSource {
       const base::Value::Dict& localized_strings) = 0;
 
   // Adds a boolean keyed to its name to our dictionary.
-  virtual void AddBoolean(base::StringPiece name, bool value) = 0;
+  virtual void AddBoolean(std::string_view name, bool value) = 0;
 
   // Adds a signed 32-bit integer keyed to its name to our dictionary. Larger
   // integers may not be exactly representable in JavaScript. See
   // MAX_SAFE_INTEGER in /v8/src/globals.h.
-  virtual void AddInteger(base::StringPiece name, int32_t value) = 0;
+  virtual void AddInteger(std::string_view name, int32_t value) = 0;
 
   // Adds a double keyed to its name  to our dictionary.
-  virtual void AddDouble(base::StringPiece name, double value) = 0;
+  virtual void AddDouble(std::string_view name, double value) = 0;
 
   // Call this to enable a virtual "strings.js" (or "strings.m.js" for modules)
   // URL that provides translations and dynamic data when requested.
   virtual void UseStringsJs() = 0;
 
   // Adds a mapping between a path name and a resource to return.
-  virtual void AddResourcePath(base::StringPiece path, int resource_id) = 0;
+  virtual void AddResourcePath(std::string_view path, int resource_id) = 0;
 
   // Calls AddResourcePath() in a for-loop for |paths|. Reduces code size vs.
   // reimplementing the same for-loop.
@@ -132,19 +130,14 @@ class WebUIDataSource {
       const HandleRequestCallback& handle_request_callback) = 0;
 
   // The following map to methods on URLDataSource. See the documentation there.
-  // NOTE: it's not acceptable to call DisableContentSecurityPolicy for new
-  // pages, see URLDataSource::ShouldAddContentSecurityPolicy and talk to
-  // tsepez.
-
-  // Currently only used by embedders for WebUIs with multiple instances.
-  virtual void DisableReplaceExistingSource() = 0;
-  virtual void DisableContentSecurityPolicy() = 0;
-
   // Overrides the content security policy for a certain directive.
   virtual void OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName directive,
       const std::string& value) = 0;
 
+  // Using OverrideCrossOriginOpenerPolicy will result in the creation of double
+  // WebUIControllers. See https://crbug.com/328741392. Until this bug is fixed,
+  // usage of this API is discouraged.
   // Adds cross origin opener, embedder, and resource policy headers.
   virtual void OverrideCrossOriginOpenerPolicy(const std::string& value) = 0;
   virtual void OverrideCrossOriginEmbedderPolicy(const std::string& value) = 0;
@@ -163,6 +156,17 @@ class WebUIDataSource {
 
   // The |source_name| this WebUIDataSource was created with.
   virtual std::string GetSource() = 0;
+
+  // The origin of URLs served by this data source.
+  //
+  // | source_name_                  | origin                       |
+  // | ----------------------------- | ---------------------------- |
+  // | some-host                     | chrome://some-host           |
+  // | chrome-untrusted://some-host/ | chrome-untrusted://some-host |
+  virtual url::Origin GetOrigin() = 0;
+
+  // Set supported scheme if not one of the default supported schemes.
+  virtual void SetSupportedScheme(std::string_view scheme) = 0;
 };
 
 }  // namespace content

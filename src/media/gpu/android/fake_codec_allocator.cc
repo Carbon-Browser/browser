@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/android/mock_media_codec_bridge.h"
+#include "media/base/subsample_entry.h"
 #include "media/gpu/android/codec_allocator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -44,8 +46,9 @@ void FakeCodecAllocator::ReleaseMediaCodec(
 MockMediaCodecBridge* FakeCodecAllocator::ProvideMockCodecAsync(
     std::unique_ptr<MockMediaCodecBridge> codec) {
   DCHECK(pending_codec_created_cb_);
-  auto mock_codec = codec ? std::move(codec)
-                          : std::make_unique<NiceMock<MockMediaCodecBridge>>();
+  auto mock_codec =
+      codec ? std::move(codec)
+            : MockMediaCodecBridge::CreateMockVideoDecoder(*most_recent_config);
   auto* raw_codec = mock_codec.get();
   most_recent_codec = raw_codec;
   most_recent_codec_destruction_observer =

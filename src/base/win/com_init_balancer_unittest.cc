@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,9 @@ TEST(TestComInitBalancer, BalancedPairsWithComBalancerEnabled) {
   }
 
   // ScopedCOMInitializer has gone out of scope and COM has been uninitialized.
-  EXPECT_DCHECK_DEATH(AssertComInitialized());
+  if (DCHECK_IS_ON()) {
+    EXPECT_NOTREACHED_DEATH(AssertComInitialized());
+  }
 }
 
 TEST(TestComInitBalancer, UnbalancedPairsWithComBalancerEnabled) {
@@ -57,7 +59,9 @@ TEST(TestComInitBalancer, UnbalancedPairsWithComBalancerEnabled) {
   }
 
   // ScopedCOMInitializer has gone out of scope and COM has been uninitialized.
-  EXPECT_DCHECK_DEATH(AssertComInitialized());
+  if (DCHECK_IS_ON()) {
+    EXPECT_NOTREACHED_DEATH(AssertComInitialized());
+  }
 }
 
 TEST(TestComInitBalancer, BalancedPairsWithComBalancerDisabled) {
@@ -75,7 +79,9 @@ TEST(TestComInitBalancer, BalancedPairsWithComBalancerDisabled) {
   }
 
   // ScopedCOMInitializer has gone out of scope and COM has been uninitialized.
-  EXPECT_DCHECK_DEATH(AssertComInitialized());
+  if (DCHECK_IS_ON()) {
+    EXPECT_NOTREACHED_DEATH(AssertComInitialized());
+  }
 }
 
 TEST(TestComInitBalancer, UnbalancedPairsWithComBalancerDisabled) {
@@ -89,7 +95,9 @@ TEST(TestComInitBalancer, UnbalancedPairsWithComBalancerDisabled) {
   ::CoUninitialize();
 
   // Assert COM is not initialized.
-  EXPECT_DCHECK_DEATH(AssertComInitialized());
+  if (DCHECK_IS_ON()) {
+    EXPECT_NOTREACHED_DEATH(AssertComInitialized());
+  }
 
   // Create COM object unsuccessfully.
   ComPtr<IUnknown> shell_link;

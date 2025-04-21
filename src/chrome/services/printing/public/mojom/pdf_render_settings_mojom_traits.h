@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,6 @@ struct EnumTraits<printing::mojom::PdfRenderSettings_Mode,
 #endif
     }
     NOTREACHED() << "Unknown mode " << static_cast<int>(mode);
-    return printing::mojom::PdfRenderSettings_Mode::NORMAL;
   }
 
   static bool FromMojom(printing::mojom::PdfRenderSettings_Mode input,
@@ -67,7 +66,6 @@ struct EnumTraits<printing::mojom::PdfRenderSettings_Mode,
 #endif
     }
     NOTREACHED() << "Unknown mode " << static_cast<int>(input);
-    return false;
   }
 };
 

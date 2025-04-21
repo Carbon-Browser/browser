@@ -1,9 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_TAB_GROUPS_TAB_GROUP_ID_H_
 #define COMPONENTS_TAB_GROUPS_TAB_GROUP_ID_H_
+
+#include <ostream>
 
 #include "base/component_export.h"
 #include "base/token.h"
@@ -42,6 +44,18 @@ class COMPONENT_EXPORT(TAB_GROUPS) TabGroupId {
 
   base::Token token_;
 };
+
+// For use in std::unordered_map.
+struct TabGroupIdHash {
+ public:
+  size_t operator()(const tab_groups::TabGroupId& group_id) const {
+    return base::TokenHash()(group_id.token());
+  }
+};
+
+// Stream operator so TabGroupId objects can be used in logging statements.
+COMPONENT_EXPORT(TAB_GROUPS)
+std::ostream& operator<<(std::ostream& out, const TabGroupId& tab_group_id);
 
 }  // namespace tab_groups
 

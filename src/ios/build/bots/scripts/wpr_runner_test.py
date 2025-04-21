@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Unittests for wpr_runner.py."""
@@ -9,6 +9,7 @@ import logging
 import os
 import subprocess
 import unittest
+from unittest.mock import Mock, call
 
 import iossim_util
 import test_runner
@@ -90,6 +91,78 @@ class WprProxySimulatorTestRunnerTest(test_runner_test.TestCase):
           'out-dir',
       )
 
+  def test_cert_not_found(self):
+    """Ensures CertPathNotFoundError is raised"""
+
+    runner = wpr_runner.WprProxySimulatorTestRunner(
+        'fake-app',
+        'fake-host-app',
+        'fake-iossim',
+        'replay-path',
+        'platform',
+        'os',
+        'wpr-tools-path',
+        'out-dir',
+    )
+
+    class FakeOsPath():
+
+      def __init__(self):
+        self.numCalls = 0
+
+      def __call__(self, a):
+        if self.numCalls == 0:
+          self.numCalls += 1
+          return True
+        self.numCalls += 1
+        return not a.endswith('wpr-tools-path/web_page_replay_go/wpr_cert.pem')
+
+    self.mock(os.path, 'exists', FakeOsPath())
+    self.mock(subprocess, 'check_call', lambda *args: None)
+
+    self.unmock(wpr_runner.WprProxySimulatorTestRunner,
+                'copy_trusted_certificate')
+
+    with self.assertRaises(wpr_runner.CertPathNotFoundError):
+      runner.copy_trusted_certificate('fake-udid')
+
+  def test_copy_cert(self):
+    """Ensures right commands are issued to copy cert"""
+
+    runner = wpr_runner.WprProxySimulatorTestRunner(
+        'fake-app',
+        'fake-host-app',
+        'fake-iossim',
+        'replay-path',
+        'platform',
+        'os',
+        'wpr-tools-path',
+        'out-dir',
+    )
+
+    self.unmock(wpr_runner.WprProxySimulatorTestRunner,
+                'copy_trusted_certificate')
+
+    check_call_mock = Mock()
+
+    self.mock(subprocess, 'check_call', check_call_mock)
+
+    runner.copy_trusted_certificate('UDID')
+
+    calls = [
+        call(['xcrun', 'simctl', 'boot', 'UDID']),
+        call([
+            'xcrun', 'simctl', 'keychain', 'UDID', 'add-root-cert',
+            'wpr-tools-path/web_page_replay_go/wpr_cert.pem'
+        ]),
+        call(['xcrun', 'simctl', 'shutdown', 'UDID'])
+    ]
+
+    check_call_mock.assert_has_calls(calls)
+
+    # ensure subprocess.check_call was only called 3 times
+    self.assertEqual(check_call_mock.call_count, 3)
+
   def test_init(self):
     """Ensures instance is created."""
     tr = wpr_runner.WprProxySimulatorTestRunner(
@@ -169,7 +242,7 @@ class WprProxySimulatorTestRunnerTest(test_runner_test.TestCase):
 
     tr.xctest_path = 'fake.xctest'
     cmd = {'invert': invert, 'test_filter': test_filter}
-    return tr._run(cmd=cmd, shards=1)
+    return tr._run(cmd=cmd, clones=1)
 
   def test_run_no_filter(self):
     """Ensures the _run method can handle passed and failed tests."""

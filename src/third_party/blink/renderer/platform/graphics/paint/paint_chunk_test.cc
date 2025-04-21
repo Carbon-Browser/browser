@@ -1,11 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
 
+#include <optional>
+
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/testing/fake_display_item_client.h"
 
 namespace blink {
@@ -60,8 +62,7 @@ TEST(PaintChunkTest, IdNotMatchesUncacheable) {
 
 TEST(PaintChunkTest, IdNotMatchesJustCreated) {
   auto properties = PropertyTreeState::Root();
-  absl::optional<FakeDisplayItemClient> client;
-  client.emplace();
+  FakeDisplayItemClient* client = MakeGarbageCollected<FakeDisplayItemClient>();
   EXPECT_TRUE(client->IsJustCreated());
   // Invalidation won't change the "just created" status.
   client->Invalidate();
@@ -78,8 +79,7 @@ TEST(PaintChunkTest, IdNotMatchesJustCreated) {
                   .Matches(PaintChunk(0, 1, *client, id, properties)));
 
   // Delete the current object and create a new object at the same address.
-  client = absl::nullopt;
-  client.emplace();
+  client = MakeGarbageCollected<FakeDisplayItemClient>();
   EXPECT_TRUE(client->IsJustCreated());
   EXPECT_FALSE(PaintChunk(0, 1, *client, id, properties)
                    .Matches(PaintChunk(0, 1, *client, id, properties)));

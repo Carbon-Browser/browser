@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/wm/window_util.h"
 #include "base/logging.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/views/bubble/bubble_frame_view.h"
@@ -28,9 +29,9 @@ const int kMinSize = 31;
 const int kShowingDuration = 500;
 
 class ModeIndicatorFrameView : public views::BubbleFrameView {
- public:
-  METADATA_HEADER(ModeIndicatorFrameView);
+  METADATA_HEADER(ModeIndicatorFrameView, views::BubbleFrameView)
 
+ public:
   explicit ModeIndicatorFrameView()
       : views::BubbleFrameView(gfx::Insets(), gfx::Insets()) {}
   ModeIndicatorFrameView(const ModeIndicatorFrameView&) = delete;
@@ -46,7 +47,7 @@ class ModeIndicatorFrameView : public views::BubbleFrameView {
   }
 };
 
-BEGIN_METADATA(ModeIndicatorFrameView, views::BubbleFrameView)
+BEGIN_METADATA(ModeIndicatorFrameView)
 END_METADATA
 
 }  // namespace
@@ -54,13 +55,13 @@ END_METADATA
 ImeModeIndicatorView::ImeModeIndicatorView(const gfx::Rect& cursor_bounds,
                                            const std::u16string& label)
     : cursor_bounds_(cursor_bounds), label_view_(new views::Label(label)) {
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
   SetCanActivate(false);
   set_accept_events(false);
   set_shadow(views::BubbleBorder::STANDARD_SHADOW);
   SetArrow(views::BubbleBorder::TOP_CENTER);
   // Ignore this view for accessibility purposes.
-  SetAccessibleRole(ax::mojom::Role::kNone);
+  SetAccessibleWindowRole(ax::mojom::Role::kNone);
 }
 
 ImeModeIndicatorView::~ImeModeIndicatorView() = default;
@@ -85,15 +86,16 @@ void ImeModeIndicatorView::OnBeforeBubbleWidgetInit(
   }
 }
 
-gfx::Size ImeModeIndicatorView::CalculatePreferredSize() const {
-  gfx::Size size = label_view_->GetPreferredSize();
+gfx::Size ImeModeIndicatorView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  gfx::Size size = label_view_->GetPreferredSize({});
   size.SetToMax(gfx::Size(kMinSize, kMinSize));
   return size;
 }
 
 void ImeModeIndicatorView::Init() {
   SetLayoutManager(std::make_unique<views::FillLayout>());
-  AddChildView(label_view_);
+  AddChildView(label_view_.get());
 
   SetAnchorRect(cursor_bounds_);
 }
@@ -109,7 +111,7 @@ ImeModeIndicatorView::CreateNonClientFrameView(views::Widget* widget) {
   return frame;
 }
 
-BEGIN_METADATA(ImeModeIndicatorView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(ImeModeIndicatorView)
 END_METADATA
 
 }  // namespace ash

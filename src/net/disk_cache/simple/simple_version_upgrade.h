@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 // Hence must be run at cache initialization step.
 
 #include <stdint.h>
+
+#include <type_traits>
 
 #include "net/base/cache_type.h"
 #include "net/base/net_export.h"
@@ -68,7 +70,12 @@ struct NET_EXPORT_PRIVATE FakeIndexData {
   // valid value of 2), and the second was used for an experiment parameter.
   uint32_t zero;
   uint32_t zero2;
+
+  // Avoid implicit padding so `std::has_unique_object_representations_v<>` will
+  // hold.
+  uint32_t unused_padding = 0;
 };
+static_assert(std::has_unique_object_representations_v<FakeIndexData>);
 
 // Exposed for testing.
 NET_EXPORT_PRIVATE bool UpgradeIndexV5V6(BackendFileOperations* file_operations,

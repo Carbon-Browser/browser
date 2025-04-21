@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,9 @@
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/policy_container.mojom-blink.h"
+#include "third_party/blink/public/mojom/frame/remote_frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink.h"
+#include "ui/base/ime/mojom/virtual_keyboard_types.mojom-blink.h"
 
 namespace blink {
 
@@ -42,10 +44,11 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
   void DidContainInsecureFormAction() override;
   void MainDocumentElementAvailable(bool uses_temporary_zoom_level) override;
   void SetNeedsOcclusionTracking(bool needs_tracking) override;
-  void SetVirtualKeyboardOverlayPolicy(bool vk_overlays_content) override;
+  void SetVirtualKeyboardMode(
+      ui::mojom::blink::VirtualKeyboardMode mode) override;
   void VisibilityChanged(mojom::blink::FrameVisibility visibility) override;
-  void DidChangeThemeColor(absl::optional<::SkColor> theme_color) override;
-  void DidChangeBackgroundColor(SkColor background_color,
+  void DidChangeThemeColor(std::optional<::SkColor> theme_color) override;
+  void DidChangeBackgroundColor(const SkColor4f& background_color,
                                 bool color_adjust) override;
   void DidFailLoadWithError(const ::blink::KURL& url,
                             int32_t error_code) override;
@@ -64,20 +67,28 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
   void BubbleLogicalScrollInParentFrame(
       blink::mojom::blink::ScrollDirection direction,
       ui::ScrollGranularity granularity) override;
+  void StartLoadingForAsyncNavigationApiCommit() override {}
   void DidBlockNavigation(const KURL& blocked_url,
-                          const KURL& initiator_url,
                           mojom::NavigationBlockedReason reason) override;
   void DidChangeLoadProgress(double load_progress) override;
   void DidFinishLoad(const KURL& validated_url) override;
   void DispatchLoad() override;
-  void GoToEntryAtOffset(int32_t offset, bool has_user_gesture) override;
-  void NavigateToNavigationApiKey(const WTF::String& key,
-                                  bool has_user_gesture) override {}
+  void GoToEntryAtOffset(
+      int32_t offset,
+      bool has_user_gesture,
+      std::optional<blink::scheduler::TaskAttributionId>) override;
+  void NavigateToNavigationApiKey(
+      const WTF::String& key,
+      bool has_user_gesture,
+      std::optional<blink::scheduler::TaskAttributionId> task_id) override {}
+  void NavigateEventHandlerPresenceChanged(bool present) override {}
   void UpdateTitle(const WTF::String& title,
                    base::i18n::TextDirection title_direction) override;
+  void UpdateAppTitle(const WTF::String& app_title) override;
   void UpdateUserActivationState(
       mojom::blink::UserActivationUpdateType update_type,
       mojom::UserActivationNotificationType notification_type) override;
+  void DidConsumeHistoryUserActivation() override {}
   void HandleAccessibilityFindInPageResult(
       mojom::blink::FindInPageResultAXParamsPtr params) override;
   void HandleAccessibilityFindInPageTermination() override;
@@ -101,6 +112,7 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       WTF::Vector<blink::mojom::blink::FaviconURLPtr> favicon_urls) override;
   void DownloadURL(mojom::blink::DownloadURLParamsPtr params) override;
   void FocusedElementChanged(bool is_editable_element,
+                             bool is_richly_editable_element,
                              const gfx::Rect& bounds_in_frame_widget,
                              blink::mojom::FocusType focus_type) override;
   void TextSelectionChanged(const WTF::String& text,
@@ -134,11 +146,9 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       const blink::FrameToken& child_frame_token,
       mojom::blink::FrameOwnerPropertiesPtr frame_owner_properties) override;
   void DidChangeOpener(
-      const absl::optional<LocalFrameToken>& opener_frame) override;
-  void DidChangeIframeAttributes(
-      const blink::FrameToken& child_frame_token,
-      network::mojom::blink::ContentSecurityPolicyPtr parsed_csp_attribute,
-      bool anonymous) override;
+      const std::optional<LocalFrameToken>& opener_frame) override;
+  void DidChangeIframeAttributes(const blink::FrameToken& child_frame_token,
+                                 mojom::blink::IframeAttributesPtr) override;
   void DidChangeFramePolicy(const blink::FrameToken& child_frame_token,
                             const FramePolicy& frame_policy) override;
   void CapturePaintPreviewOfSubframe(
@@ -157,14 +167,61 @@ class FakeLocalFrameHost : public mojom::blink::LocalFrameHost {
       const WTF::String& source_id,
       const WTF::String& untrusted_stack_trace) override;
   void FrameSizeChanged(const gfx::Size& frame_size) override;
-  void DidUpdatePreferredColorScheme(
-      blink::mojom::PreferredColorScheme preferred_color_scheme) override;
   void DidInferColorScheme(
       blink::mojom::PreferredColorScheme preferred_color_scheme) override;
   void DidChangeSrcDoc(const blink::FrameToken& child_frame_token,
                        const WTF::String& srcdoc_value) override;
   void ReceivedDelegatedCapability(
       blink::mojom::DelegatedCapability delegated_capability) override;
+  void SendFencedFrameReportingBeacon(
+      const WTF::String& event_data,
+      const WTF::String& event_type,
+      const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations,
+      bool cross_origin_exposed) override;
+  void SendFencedFrameReportingBeaconToCustomURL(
+      const blink::KURL& destination_url,
+      bool cross_origin_exposed) override;
+  void SetFencedFrameAutomaticBeaconReportEventData(
+      blink::mojom::AutomaticBeaconType event_type,
+      const WTF::String& event_data,
+      const WTF::Vector<blink::FencedFrame::ReportingDestination>& destinations,
+      bool once,
+      bool cross_origin_exposed) override;
+  void DisableUntrustedNetworkInFencedFrame(
+      DisableUntrustedNetworkInFencedFrameCallback callback) override;
+  void ExemptUrlFromNetworkRevocationForTesting(
+      const blink::KURL& exempted_url,
+      ExemptUrlFromNetworkRevocationForTestingCallback callback) override;
+  void SendLegacyTechEvent(
+      const WTF::String& type,
+      mojom::blink::LegacyTechEventCodeLocationPtr code_location) override;
+  void SendPrivateAggregationRequestsForFencedFrameEvent(
+      const WTF::String& event_type) override;
+  void CreateFencedFrame(
+      mojo::PendingAssociatedReceiver<mojom::blink::FencedFrameOwnerHost>,
+      mojom::blink::RemoteFrameInterfacesFromRendererPtr
+          remote_frame_interfaces,
+      const RemoteFrameToken& frame_token,
+      const base::UnguessableToken& devtools_frame_token) override;
+  void ForwardFencedFrameEventAndUserActivationToEmbedder(
+      const WTF::String& event_type) override;
+  void OnViewTransitionOptInChanged(
+      mojom::blink::ViewTransitionSameOriginOptIn) override {}
+  void StartDragging(const blink::WebDragData& drag_data,
+                     blink::DragOperationsMask operations_allowed,
+                     const SkBitmap& bitmap,
+                     const gfx::Vector2d& cursor_offset_in_dip,
+                     const gfx::Rect& drag_obj_rect_in_dip,
+                     mojom::blink::DragEventSourceInfoPtr event_info) override;
+  void IssueKeepAliveHandle(
+      mojo::PendingReceiver<mojom::blink::NavigationStateKeepAliveHandle>
+          receiver) override;
+  void NotifyStorageAccessed(blink::mojom::StorageTypeAccessed storageType,
+                             bool blocked) override;
+  void RecordWindowProxyUsageMetrics(
+      const blink::FrameToken& target_frame_token,
+      blink::mojom::WindowProxyAccessType access_type) override;
+  void NotifyDocumentInteractive() override;
 
  private:
   void BindFrameHostReceiver(mojo::ScopedInterfaceEndpointHandle handle);

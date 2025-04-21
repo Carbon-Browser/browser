@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/cstring_view.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -34,6 +35,10 @@ bool EvictFileFromSystemCacheWithRetry(const FilePath& file);
 // success.
 bool DieFileDie(const FilePath& file, bool recurse);
 
+// Convenience wrapper for `base::GetTempDir()` that returns the temp dir as a
+// `base::FilePath`.
+FilePath GetTempDirForTesting();
+
 // Creates a a new unique directory and returns the generated path. The
 // directory will be automatically deleted when the test completes. Failure
 // upon creation or deletion will cause a test failure.
@@ -55,6 +60,14 @@ bool EvictFileFromSystemCache(const FilePath& file);
 // Refer to https://msdn.microsoft.com/en-us/library/aa822867.aspx for a list of
 // possible values.
 bool DenyFilePermission(const FilePath& path, DWORD permission);
+
+// Gets the DACL object serialized to security descriptor string
+// for the provided path, or an empty string in case of failure.
+std::wstring GetFileDacl(const FilePath& path);
+
+// Create a file or a directory setting DACL using the given security
+// descriptor.
+bool CreateWithDacl(const FilePath& path, wcstring_view sddl, bool directory);
 #endif  // BUILDFLAG(IS_WIN)
 
 // For testing, make the file unreadable or unwritable.
@@ -74,7 +87,8 @@ class FilePermissionRestorer {
 
  private:
   const FilePath path_;
-  raw_ptr<void> info_;  // The opaque stored permission information.
+  raw_ptr<void, DanglingUntriaged>
+      info_;       // The opaque stored permission information.
   size_t length_;  // The length of the stored permission information.
 };
 

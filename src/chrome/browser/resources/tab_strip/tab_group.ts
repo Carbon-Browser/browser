@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {getTemplate} from './tab_group.html.js';
-import {TabGroupVisualData} from './tab_strip.mojom-webui.js';
-import {TabsApiProxy, TabsApiProxyImpl} from './tabs_api_proxy.js';
+import type {TabGroupVisualData} from './tab_strip.mojom-webui.js';
+import type {TabsApiProxy} from './tabs_api_proxy.js';
+import {TabsApiProxyImpl} from './tabs_api_proxy.js';
 
 export class TabGroupElement extends CustomElement {
   static override get template() {
@@ -23,7 +24,7 @@ export class TabGroupElement extends CustomElement {
 
     this.tabsApi_ = TabsApiProxyImpl.getInstance();
 
-    this.chip_ = this.$<HTMLElement>('#chip')!;
+    this.chip_ = this.getRequiredElement('#chip');
     this.chip_.addEventListener('click', () => this.onClickChip_());
     this.chip_.addEventListener(
         'keydown', e => this.onKeydownChip_(/** @type {!KeyboardEvent} */ (e)));
@@ -44,23 +45,24 @@ export class TabGroupElement extends CustomElement {
   }
 
   getDragImage(): HTMLElement {
-    return this.$<HTMLElement>('#dragImage')!;
+    return this.getRequiredElement('#dragImage');
   }
 
   getDragImageCenter(): HTMLElement {
     // Since the drag handle is #dragHandle, the drag image should be
     // centered relatively to it.
-    return this.$<HTMLElement>('#dragHandle')!;
+    return this.getRequiredElement('#dragHandle');
   }
 
   private onClickChip_() {
-    if (!this.dataset.groupId) {
+    if (!this.dataset['groupId']) {
       return;
     }
 
-    const boundingBox = this.$('#chip')!.getBoundingClientRect();
+    const boundingBox =
+        this.getRequiredElement('#chip').getBoundingClientRect();
     this.tabsApi_.showEditDialogForGroup(
-        this.dataset.groupId, boundingBox.left, boundingBox.top,
+        this.dataset['groupId'], boundingBox.left, boundingBox.top,
         boundingBox.width, boundingBox.height);
   }
 
@@ -97,7 +99,7 @@ export class TabGroupElement extends CustomElement {
   }
 
   updateVisuals(visualData: TabGroupVisualData) {
-    this.$<HTMLElement>('#title')!.innerText = visualData.title;
+    this.getRequiredElement('#title').innerText = visualData.title;
     this.style.setProperty('--tabstrip-tab-group-color-rgb', visualData.color);
     this.style.setProperty(
         '--tabstrip-tab-group-text-color-rgb', visualData.textColor);

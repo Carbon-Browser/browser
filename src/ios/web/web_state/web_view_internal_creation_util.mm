@@ -1,18 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/web_state/web_view_internal_creation_util.h"
 
-#include "base/check_op.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/check_op.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/web/common/features.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/web_state/crw_web_view.h"
 #import "ios/web/web_state/ui/wk_web_view_configuration_provider.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -45,7 +43,8 @@ WKWebView* BuildWKWebView(CGRect frame,
                           WKWebViewConfiguration* configuration,
                           BrowserState* browser_state,
                           UserAgentType user_agent_type,
-                          id<CRWInputViewProvider> input_view_provider) {
+                          id<CRWInputViewProvider> input_view_provider,
+                          id<CRWEditMenuBuilder> edit_menu_builder) {
   VerifyWKWebViewCreationPreConditions(browser_state, configuration);
 
   GetWebClient()->PreWebViewCreation();
@@ -53,6 +52,7 @@ WKWebView* BuildWKWebView(CGRect frame,
   CRWWebView* web_view = [[CRWWebView alloc] initWithFrame:frame
                                              configuration:configuration];
   web_view.inputViewProvider = input_view_provider;
+  web_view.editMenuBuilder = edit_menu_builder;
 
   // Set the user agent type.
   if (user_agent_type != web::UserAgentType::NONE) {
@@ -60,9 +60,14 @@ WKWebView* BuildWKWebView(CGRect frame,
         web::GetWebClient()->GetUserAgent(user_agent_type));
   }
 
-  // By default the web view uses a very sluggish scroll speed. Set it to a more
-  // reasonable value.
-  web_view.scrollView.decelerationRate = UIScrollViewDecelerationRateNormal;
+  if (@available(iOS 16.4, *)) {
+    bool enable_web_inspector =
+        web::GetWebClient()->EnableWebInspector(browser_state);
+    if (enable_web_inspector) {
+      web_view.inspectable = YES;
+    }
+    base::UmaHistogramBoolean("IOS.WebInspector.Enabled", enable_web_inspector);
+  }
 
   return web_view;
 }
@@ -71,7 +76,7 @@ WKWebView* BuildWKWebView(CGRect frame,
                           WKWebViewConfiguration* configuration,
                           BrowserState* browser_state) {
   return BuildWKWebView(frame, configuration, browser_state,
-                        UserAgentType::MOBILE, nil);
+                        UserAgentType::MOBILE, nil, nil);
 }
 
 }  // namespace web

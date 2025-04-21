@@ -1,21 +1,26 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
+#include "content/browser/media/cdm_storage_common.h"
 #include "content/browser/media/media_license_manager.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_renderer_host.h"
 #include "media/cdm/cdm_type.h"
@@ -23,6 +28,7 @@
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
@@ -31,8 +37,6 @@ using media::mojom::CdmFile;
 using media::mojom::CdmStorage;
 
 namespace content {
-using CdmFileId = MediaLicenseManager::CdmFileId;
-using CdmFileIdAndContents = MediaLicenseManager::CdmFileIdAndContents;
 
 namespace {
 
@@ -42,7 +46,8 @@ const char kTestOrigin[] = "http://www.test.com";
 
 // Helper functions to manipulate RenderFrameHosts.
 
-void SimulateNavigation(RenderFrameHost** rfh, const GURL& url) {
+void SimulateNavigation(raw_ptr<RenderFrameHost, DanglingUntriaged>* rfh,
+                        const GURL& url) {
   auto navigation_simulator =
       NavigationSimulator::CreateRendererInitiated(url, *rfh);
   navigation_simulator->Commit();
@@ -55,7 +60,8 @@ class CdmStorageTest : public RenderViewHostTestHarness {
  public:
   CdmStorageTest()
       : RenderViewHostTestHarness(
-            content::BrowserTaskEnvironment::REAL_IO_THREAD) {}
+            content::BrowserTaskEnvironment::REAL_IO_THREAD) {
+  }
 
  protected:
   void SetUp() final {
@@ -64,15 +70,11 @@ class CdmStorageTest : public RenderViewHostTestHarness {
     RenderFrameHostTester::For(rfh_)->InitializeRenderFrameIfNeeded();
     SimulateNavigation(&rfh_, GURL(kTestOrigin));
 
-    auto* media_license_manager =
-        static_cast<StoragePartitionImpl*>(rfh_->GetStoragePartition())
-            ->GetMediaLicenseManager();
-    DCHECK(media_license_manager);
-    media_license_manager->OpenCdmStorage(
-        MediaLicenseManager::BindingContext(
-            blink::StorageKey::CreateFromStringForTesting(kTestOrigin),
-            kTestCdmType),
-        cdm_storage_.BindNewPipeAndPassReceiver());
+      cdm_storage_manager()->OpenCdmStorage(
+          CdmStorageBindingContext(
+              blink::StorageKey::CreateFromStringForTesting(kTestOrigin),
+              kTestCdmType),
+          cdm_storage_.BindNewPipeAndPassReceiver());
   }
 
   // Open the file |name|. Returns true if the file returned is valid, false
@@ -130,38 +132,6 @@ class CdmStorageTest : public RenderViewHostTestHarness {
     return status == CdmFile::Status::kSuccess;
   }
 
-  void WriteFiles(const std::vector<CdmFileIdAndContents>& files) {
-    // Write some data using the old backend.
-    for (const auto& file : files) {
-      mojo::AssociatedRemote<CdmFile> remote;
-      EXPECT_TRUE(Open(file.file.name, remote));
-      ASSERT_TRUE(remote.is_bound());
-      EXPECT_TRUE(Write(remote.get(), file.data));
-    }
-  }
-
-  void ReadFiles(const std::vector<CdmFileIdAndContents>& files) {
-    for (const auto& file : files) {
-      mojo::AssociatedRemote<CdmFile> remote;
-      EXPECT_TRUE(Open(file.file.name, remote));
-      ASSERT_TRUE(remote.is_bound());
-      std::vector<uint8_t> data_read;
-      EXPECT_TRUE(Read(remote.get(), data_read));
-      EXPECT_EQ(file.data, data_read);
-    }
-  }
-
-  void ExpectFilesEmpty(const std::vector<CdmFileIdAndContents>& files) {
-    for (const auto& file : files) {
-      mojo::AssociatedRemote<CdmFile> remote;
-      EXPECT_TRUE(Open(file.file.name, remote));
-      ASSERT_TRUE(remote.is_bound());
-      std::vector<uint8_t> data_read;
-      EXPECT_TRUE(Read(remote.get(), data_read));
-      EXPECT_TRUE(data_read.empty());
-    }
-  }
-
   MediaLicenseManager* media_license_manager() const {
     auto* media_license_manager =
         static_cast<StoragePartitionImpl*>(rfh_->GetStoragePartition())
@@ -170,8 +140,17 @@ class CdmStorageTest : public RenderViewHostTestHarness {
     return media_license_manager;
   }
 
-  RenderFrameHost* rfh_ = nullptr;
+  CdmStorageManager* cdm_storage_manager() const {
+    auto* cdm_storage_manager = static_cast<CdmStorageManager*>(
+        static_cast<StoragePartitionImpl*>(rfh_->GetStoragePartition())
+            ->GetCdmStorageDataModel());
+    DCHECK(cdm_storage_manager);
+    return cdm_storage_manager;
+  }
+
+  raw_ptr<RenderFrameHost, DanglingUntriaged> rfh_ = nullptr;
   mojo::Remote<CdmStorage> cdm_storage_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(CdmStorageTest, InvalidFileName) {
@@ -289,8 +268,7 @@ TEST_F(CdmStorageTest, ParallelRead) {
   ASSERT_TRUE(cdm_file.is_bound());
 
   // Attempts to reads the contents of the previously opened |cdm_file| twice.
-  // We don't really care about the data, just that 1 read succeeds and the
-  // other fails.
+  // We don't really care about the data, just that the first read succeeds.
   base::test::TestFuture<CdmFile::Status, std::vector<uint8_t>> future1;
   base::test::TestFuture<CdmFile::Status, std::vector<uint8_t>> future2;
 
@@ -305,10 +283,11 @@ TEST_F(CdmStorageTest, ParallelRead) {
   CdmFile::Status status1 = future1.Get<0>();
   CdmFile::Status status2 = future2.Get<0>();
 
-  // One call should succeed, one should fail.
-  EXPECT_TRUE((status1 == CdmFile::Status::kSuccess &&
-               status2 == CdmFile::Status::kFailure) ||
-              (status1 == CdmFile::Status::kFailure &&
+  // The first call should succeed. The second call might fail, if its blocked
+  // by our locking system, or might succeed, if the reads are processed faster
+  // than expected.
+  EXPECT_TRUE(status1 == CdmFile::Status::kSuccess &&
+              (status2 == CdmFile::Status::kFailure ||
                status2 == CdmFile::Status::kSuccess))
       << "status 1: " << status1 << ", status2: " << status2;
 }
@@ -320,8 +299,7 @@ TEST_F(CdmStorageTest, ParallelWrite) {
   ASSERT_TRUE(cdm_file.is_bound());
 
   // Attempts to write the contents of the previously opened |cdm_file| twice.
-  // We don't really care about the data, just that 1 write succeeds and the
-  // other fails.
+  // We don't really care about the data, just that the first write succeeds.
   base::test::TestFuture<CdmFile::Status> future1;
   base::test::TestFuture<CdmFile::Status> future2;
 
@@ -334,12 +312,48 @@ TEST_F(CdmStorageTest, ParallelWrite) {
   CdmFile::Status status1 = future1.Get();
   CdmFile::Status status2 = future2.Get();
 
-  // One call should succeed, one should fail.
-  EXPECT_TRUE((status1 == CdmFile::Status::kSuccess &&
-               status2 == CdmFile::Status::kFailure) ||
-              (status1 == CdmFile::Status::kFailure &&
-               status2 == CdmFile::Status::kSuccess))
+  // The first call should succeed. The second call might fail, if its blocked
+  // by our locking system, or might succeed, if the writes are processed
+  // faster than expected.
+  EXPECT_TRUE(status1 == CdmFile::Status::kSuccess &&
+              (status2 == CdmFile::Status::kSuccess ||
+               status2 == CdmFile::Status::kFailure))
       << "status 1: " << status1 << ", status2: " << status2;
+}
+
+TEST_F(CdmStorageTest, VerifyMigrationWorks) {
+  const char kFileName[] = "test_file_name";
+  mojo::AssociatedRemote<CdmFile> cdm_file;
+  EXPECT_TRUE(Open(kFileName, cdm_file));
+  ASSERT_TRUE(cdm_file.is_bound());
+
+  // Write several bytes and read them back.
+  std::vector<uint8_t> kTestData = {'r', 'a', 'n', 'd', 'o', 'm'};
+  EXPECT_TRUE(Write(cdm_file.get(), kTestData));
+
+  std::vector<uint8_t> data_read;
+  EXPECT_TRUE(Read(cdm_file.get(), data_read));
+  EXPECT_EQ(data_read, kTestData);
+
+    base::test::TestFuture<std::optional<std::vector<uint8_t>>> read_future;
+    cdm_storage_manager()->ReadFile(
+        blink::StorageKey::CreateFromStringForTesting(kTestOrigin),
+        kTestCdmType, kFileName, read_future.GetCallback());
+    EXPECT_EQ(read_future.Get(), kTestData);
+
+  // Write nothing.
+  EXPECT_TRUE(Write(cdm_file.get(), std::vector<uint8_t>()));
+
+  // Should still be empty.
+  EXPECT_TRUE(Read(cdm_file.get(), data_read));
+  EXPECT_THAT(data_read, testing::IsEmpty());
+
+    base::test::TestFuture<std::optional<std::vector<uint8_t>>>
+        read_empty_file_future;
+    cdm_storage_manager()->ReadFile(
+        blink::StorageKey::CreateFromStringForTesting(kTestOrigin),
+        kTestCdmType, kFileName, read_empty_file_future.GetCallback());
+    EXPECT_THAT(read_empty_file_future.Get().value(), testing::IsEmpty());
 }
 
 }  // namespace content

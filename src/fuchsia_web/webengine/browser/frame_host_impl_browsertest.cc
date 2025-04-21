@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <lib/sys/cpp/service_directory.h>
 
+#include "base/run_loop.h"
 #include "content/public/test/browser_test.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"

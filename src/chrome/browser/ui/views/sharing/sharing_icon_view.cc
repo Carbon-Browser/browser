@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,15 @@
 
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "components/vector_icons/vector_icons.h"
+#include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
@@ -28,11 +31,15 @@ SharingIconView::SharingIconView(
     : PageActionIconView(/*command_updater=*/nullptr,
                          /*command_id=*/0,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate),
+                         page_action_icon_delegate,
+                         "ClickToCall"),  // Naming corresponds to
+                                          // PageActionIconType.
       get_controller_callback_(std::move(get_controller_callback)),
       get_bubble_callback_(std::move(get_bubble_callback)) {
   SetVisible(false);
   SetUpForInOutAnimation();
+
+  SetAccessibleIsIgnoredIfNeeded();
 }
 
 SharingIconView::~SharingIconView() = default;
@@ -43,8 +50,9 @@ SharingUiController* SharingIconView::GetController() const {
 }
 
 void SharingIconView::StartLoadingAnimation() {
-  if (loading_animation_)
+  if (loading_animation_) {
     return;
+  }
 
   loading_animation_ = true;
   AnimateIn(IDS_BROWSER_SHARING_OMNIBOX_SENDING_LABEL);
@@ -52,8 +60,9 @@ void SharingIconView::StartLoadingAnimation() {
 }
 
 void SharingIconView::StopLoadingAnimation() {
-  if (!loading_animation_)
+  if (!loading_animation_) {
     return;
+  }
 
   loading_animation_ = false;
   UnpauseAnimation();
@@ -62,8 +71,12 @@ void SharingIconView::StopLoadingAnimation() {
 
 void SharingIconView::UpdateImpl() {
   auto* controller = GetController();
-  if (!controller)
+  if (!controller) {
     return;
+  }
+
+  GetViewAccessibility().SetName(
+      controller->GetTextForTooltipAndAccessibleName());
 
   // To ensure that we reset error icon badge.
   if (!GetVisible()) {
@@ -71,10 +84,11 @@ void SharingIconView::UpdateImpl() {
     UpdateIconImage();
   }
 
-  if (controller->is_loading())
+  if (controller->is_loading()) {
     StartLoadingAnimation();
-  else
+  } else {
     StopLoadingAnimation();
+  }
 
   if (last_controller_ != controller) {
     ResetSlideAnimation(/*show=*/false);
@@ -135,8 +149,9 @@ void SharingIconView::UpdateInkDrop(bool activate) {
   auto target_state =
       activate ? views::InkDropState::ACTIVATED : views::InkDropState::HIDDEN;
   if (views::InkDrop::Get(this)->GetInkDrop()->GetTargetInkDropState() !=
-      target_state)
+      target_state) {
     views::InkDrop::Get(this)->AnimateToState(target_state, /*event=*/nullptr);
+  }
 }
 
 bool SharingIconView::IsTriggerableEvent(const ui::Event& event) {
@@ -161,11 +176,18 @@ const gfx::VectorIcon& SharingIconView::GetVectorIcon() const {
   return controller ? controller->GetVectorIcon() : gfx::kNoneIcon;
 }
 
-std::u16string SharingIconView::GetTextForTooltipAndAccessibleName() const {
+void SharingIconView::SetAccessibleIsIgnoredIfNeeded() {
   auto* controller = GetController();
-  return controller ? controller->GetTextForTooltipAndAccessibleName()
-                    : std::u16string();
+  if (controller && !controller->HasAccessibleUi()) {
+    // This should rarely be true. One example where it is true is the
+    // SmsRemoteFetcherUiController: crrev.com/c/2964059 stopped all UI
+    // from being shown and removed the accessible name. Setting the state
+    // to ignored is needed to stop the UI from being shown to assistive
+    // technologies.
+    GetViewAccessibility().SetIsIgnored(true);
+    return;
+  }
 }
 
-BEGIN_METADATA(SharingIconView, PageActionIconView)
+BEGIN_METADATA(SharingIconView)
 END_METADATA

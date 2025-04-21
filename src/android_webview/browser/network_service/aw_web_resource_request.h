@@ -1,15 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ANDROID_WEBVIEW_BROWSER_NETWORK_SERVICE_AW_WEB_RESOURCE_REQUEST_H_
 #define ANDROID_WEBVIEW_BROWSER_NETWORK_SERVICE_AW_WEB_RESOURCE_REQUEST_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 class HttpRequestHeaders;
@@ -62,7 +62,7 @@ struct AwWebResourceRequest final {
   bool has_user_gesture;
   std::vector<std::string> header_names;
   std::vector<std::string> header_values;
-  absl::optional<bool> is_renderer_initiated;
+  std::optional<bool> is_renderer_initiated;
 };
 
 }  // namespace android_webview

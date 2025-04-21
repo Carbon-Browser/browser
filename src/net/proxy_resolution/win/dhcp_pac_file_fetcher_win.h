@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,7 @@ class DhcpPacFileAdapterFetcher;
 class URLRequestContext;
 
 // Windows-specific implementation.
-class NET_EXPORT_PRIVATE DhcpPacFileFetcherWin
-    : public DhcpPacFileFetcher,
-      public base::SupportsWeakPtr<DhcpPacFileFetcherWin> {
+class NET_EXPORT_PRIVATE DhcpPacFileFetcherWin : public DhcpPacFileFetcher {
  public:
   DhcpPacFileFetcherWin() = delete;
 
@@ -199,6 +197,8 @@ class NET_EXPORT_PRIVATE DhcpPacFileFetcherWin
   const scoped_refptr<base::TaskRunner> task_runner_;
 
   THREAD_CHECKER(thread_checker_);
+
+  base::WeakPtrFactory<DhcpPacFileFetcherWin> weak_ptr_factory_{this};
 };
 
 }  // namespace net

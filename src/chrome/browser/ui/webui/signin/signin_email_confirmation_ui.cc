@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,24 +10,31 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/constrained_web_dialog_ui.h"
-#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/signin_resources.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/webui/resource_path.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
+#include "ui/webui/webui_util.h"
+
+bool SigninEmailConfirmationUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  return !profile->IsOffTheRecord();
+}
 
 SigninEmailConfirmationUI::SigninEmailConfirmationUI(content::WebUI* web_ui)
     : ConstrainedWebDialogUI(web_ui) {
   Profile* profile = Profile::FromWebUI(web_ui);
 
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUISigninEmailConfirmationHost);
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUISigninEmailConfirmationHost);
+  webui::EnableTrustedTypesCSP(source);
   source->UseStringsJs();
   source->EnableReplaceI18nInJS();
   source->SetDefaultResource(
@@ -36,6 +43,8 @@ SigninEmailConfirmationUI::SigninEmailConfirmationUI(content::WebUI* web_ui)
   static constexpr webui::ResourcePath kResources[] = {
       {"signin_email_confirmation_app.js",
        IDR_SIGNIN_SIGNIN_EMAIL_CONFIRMATION_SIGNIN_EMAIL_CONFIRMATION_APP_JS},
+      {"signin_email_confirmation_app.css.js",
+       IDR_SIGNIN_SIGNIN_EMAIL_CONFIRMATION_SIGNIN_EMAIL_CONFIRMATION_APP_CSS_JS},
       {"signin_email_confirmation_app.html.js",
        IDR_SIGNIN_SIGNIN_EMAIL_CONFIRMATION_SIGNIN_EMAIL_CONFIRMATION_APP_HTML_JS},
       {"signin_shared.css.js", IDR_SIGNIN_SIGNIN_SHARED_CSS_JS},
@@ -64,11 +73,9 @@ SigninEmailConfirmationUI::SigninEmailConfirmationUI(content::WebUI* web_ui)
   webui::SetLoadTimeDataDefaults(g_browser_process->GetApplicationLocale(),
                                  &strings);
   source->AddLocalizedStrings(strings);
-
-  content::WebUIDataSource::Add(profile, source);
 }
 
-SigninEmailConfirmationUI::~SigninEmailConfirmationUI() {}
+SigninEmailConfirmationUI::~SigninEmailConfirmationUI() = default;
 
 void SigninEmailConfirmationUI::Close() {
   ConstrainedWebDialogDelegate* delegate = GetConstrainedDelegate();

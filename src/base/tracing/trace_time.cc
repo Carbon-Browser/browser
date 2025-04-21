@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,9 @@ int64_t TraceBootTicksNow() {
     BUILDFLAG(IS_FUCHSIA)
   struct timespec ts;
   int res = clock_gettime(CLOCK_BOOTTIME, &ts);
-  if (res != -1)
+  if (res != -1) {
     return static_cast<int64_t>(perfetto::base::FromPosixTimespec(ts).count());
+  }
 #endif
   return TRACE_TIME_TICKS_NOW().since_origin().InNanoseconds();
 }

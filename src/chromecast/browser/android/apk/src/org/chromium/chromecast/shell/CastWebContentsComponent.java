@@ -1,15 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chromecast.shell;
 
+import android.app.ActivityOptions;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PatternMatcher;
 
@@ -17,28 +20,22 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Log;
 import org.chromium.chromecast.base.Controller;
-import org.chromium.chromecast.base.Observers;
-import org.chromium.chromecast.base.Scope;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.ui.display.DisplayAndroidManager;
 
 /**
  * A layer of indirection between CastContentWindowAndroid and CastWebContents(Activity|Service).
  * <p>
- * On builds with DISPLAY_WEB_CONTENTS_IN_SERVICE set to false, it will use CastWebContentsActivity,
- * otherwise, it will use CastWebContentsService.
+ * If running in "headless" mode, it will use CastWebContentsService; otherwise, it will use
+ * CastWebContentsActivity.
  */
 public class CastWebContentsComponent {
     /**
      * Callback interface for when the associated component is closed or the
      * WebContents is detached.
      */
-    public interface OnComponentClosedHandler { void onComponentClosed(); }
-
-    /**
-     * Callback interface invoked to indicate whether a gesture has been handled.
-     */
-    public interface GestureHandledCallback {
-        void invoke(boolean handled);
+    public interface OnComponentClosedHandler {
+        void onComponentClosed();
     }
 
     /**
@@ -46,7 +43,6 @@ public class CastWebContentsComponent {
      */
     public interface SurfaceEventHandler {
         void onVisibilityChange(int visibilityType);
-        void consumeGesture(int gestureType, GestureHandledCallback handledGestureCallback);
     }
 
     /**
@@ -56,13 +52,14 @@ public class CastWebContentsComponent {
         public final Context context;
         public final WebContents webContents;
         public final String appId;
-        public final int visibilityPriority;
+        public final boolean shouldRequestAudioFocus;
 
-        public StartParams(Context context, WebContents webContents, String appId, int priority) {
+        public StartParams(Context context, WebContents webContents, String appId,
+                boolean shouldRequestAudioFocus) {
             this.context = context;
             this.webContents = webContents;
             this.appId = appId;
-            visibilityPriority = priority;
+            this.shouldRequestAudioFocus = shouldRequestAudioFocus;
         }
 
         @Override
@@ -77,8 +74,7 @@ public class CastWebContentsComponent {
 
             StartParams params = (StartParams) other;
             return params.context == this.context && params.webContents == this.webContents
-                    && params.appId.equals(this.appId)
-                    && params.visibilityPriority == this.visibilityPriority;
+                    && params.appId.equals(this.appId);
         }
     }
 
@@ -92,41 +88,37 @@ public class CastWebContentsComponent {
     class ActivityDelegate implements Delegate {
         private static final String TAG = "CastWebContent_AD";
         private boolean mStarted;
-        private Scope mVisibilityScope;
-        private ServiceDelegate mBackgroundService = new ServiceDelegate();
 
         @Override
         public void start(StartParams params) {
             if (mStarted) return; // No-op if already started.
             if (DEBUG) Log.d(TAG, "start: SHOW_WEB_CONTENT in activity");
-            mVisibilityScope = mVisibility.subscribe(Observers.onEnter(visibility -> {
-                if (visibility == CastWebContentsIntentUtils.VISIBITY_TYPE_HIDDEN) {
-                    mBackgroundService.start(params);
-                } else if (visibility == CastWebContentsIntentUtils.VISIBITY_TYPE_FULL_SCREEN) {
-                    mBackgroundService.stop(params.context);
-                }
-            }));
             startCastActivity(params.context, params.webContents, mEnableTouchInput,
-                    mIsRemoteControlMode, mTurnOnScreen);
+                    params.shouldRequestAudioFocus, mTurnOnScreen);
             mStarted = true;
         }
 
         @Override
         public void stop(Context context) {
-            mVisibilityScope.close();
-            mBackgroundService.stop(context);
             sendStopWebContentEvent();
             mStarted = false;
         }
     }
 
     private void startCastActivity(Context context, WebContents webContents, boolean enableTouch,
-            boolean isRemoteControlMode, boolean turnOnScreen) {
-        Intent intent = CastWebContentsIntentUtils.requestStartCastActivity(
-                context, webContents, enableTouch, isRemoteControlMode, turnOnScreen, mSessionId);
-        if (DEBUG) Log.d(TAG, "start activity by intent: " + intent);
+            boolean shouldRequestAudioFocus, boolean turnOnScreen) {
+        Intent intent = CastWebContentsIntentUtils.requestStartCastActivity(context, webContents,
+                enableTouch, shouldRequestAudioFocus, turnOnScreen, mKeepScreenOn, mSessionId);
+        int displayId = DisplayAndroidManager.getDefaultDisplayForContext(context).getDisplayId();
+        if (DEBUG) Log.d(TAG, "start activity by intent: " + intent + " on display: " + displayId);
         sResumeIntent.set(intent);
-        context.startActivity(intent);
+        Bundle bundle = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            bundle = options.toBundle();
+        }
+        context.startActivity(intent, bundle);
     }
 
     private void sendStopWebContentEvent() {
@@ -144,25 +136,25 @@ public class CastWebContentsComponent {
             public void onServiceConnected(ComponentName name, IBinder service) {}
 
             @Override
-            public void onServiceDisconnected(ComponentName name) {}
+            public void onServiceDisconnected(ComponentName name) {
+                if (DEBUG) Log.d(TAG, "onServiceDisconnected");
+
+                if (mComponentClosedHandler != null) mComponentClosedHandler.onComponentClosed();
+            }
         };
-        private boolean mBound;
 
         @Override
         public void start(StartParams params) {
             if (DEBUG) Log.d(TAG, "start");
             Intent intent = CastWebContentsIntentUtils.requestStartCastService(
                     params.context, params.webContents, mSessionId);
-            mBound = params.context.bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+            params.context.bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
         }
 
         @Override
         public void stop(Context context) {
             if (DEBUG) Log.d(TAG, "stop");
-            if (mBound) {
-                context.unbindService(mConnection);
-                mBound = false;
-            }
+            context.unbindService(mConnection);
         }
     }
 
@@ -175,30 +167,37 @@ public class CastWebContentsComponent {
     private final String mSessionId;
     private final SurfaceEventHandler mSurfaceEventHandler;
     private final Controller<WebContents> mHasWebContentsState = new Controller<>();
-    private final Controller<Integer> mVisibility = new Controller<>();
     private Delegate mDelegate;
     private boolean mStarted;
     private boolean mEnableTouchInput;
-    private final boolean mIsRemoteControlMode;
+    private boolean mMediaPlaying;
     private final boolean mTurnOnScreen;
+    private final boolean mKeepScreenOn;
 
-    public CastWebContentsComponent(String sessionId,
+    public CastWebContentsComponent(
+            String sessionId,
             OnComponentClosedHandler onComponentClosedHandler,
-            SurfaceEventHandler surfaceEventHandler, boolean enableTouchInput,
-            boolean isRemoteControlMode, boolean turnOnScreen) {
+            SurfaceEventHandler surfaceEventHandler,
+            boolean enableTouchInput,
+            boolean turnOnScreen,
+            boolean keepScreenOn) {
         if (DEBUG) {
-            Log.d(TAG,
-                    "New CastWebContentsComponent. Instance ID: " + sessionId
-                            + "; enableTouchInput:" + enableTouchInput
-                            + "; isRemoteControlMode:" + isRemoteControlMode);
+            Log.d(
+                    TAG,
+                    "New CastWebContentsComponent: sid=%s, touchInput=%b, turnOnScreen=%b,"
+                            + " keepScreenOn=%b",
+                    sessionId,
+                    enableTouchInput,
+                    turnOnScreen,
+                    keepScreenOn);
         }
 
         mComponentClosedHandler = onComponentClosedHandler;
         mEnableTouchInput = enableTouchInput;
         mSessionId = sessionId;
         mSurfaceEventHandler = surfaceEventHandler;
-        mIsRemoteControlMode = isRemoteControlMode;
         mTurnOnScreen = turnOnScreen;
+        mKeepScreenOn = keepScreenOn;
 
         mHasWebContentsState.subscribe(x -> {
             final IntentFilter filter = new IntentFilter();
@@ -207,10 +206,9 @@ public class CastWebContentsComponent {
             filter.addDataAuthority(instanceUri.getAuthority(), null);
             filter.addDataPath(instanceUri.getPath(), PatternMatcher.PATTERN_LITERAL);
             filter.addAction(CastWebContentsIntentUtils.ACTION_ACTIVITY_STOPPED);
-            filter.addAction(CastWebContentsIntentUtils.ACTION_KEY_EVENT);
             filter.addAction(CastWebContentsIntentUtils.ACTION_ON_VISIBILITY_CHANGE);
-            filter.addAction(CastWebContentsIntentUtils.ACTION_ON_GESTURE);
-            return new LocalBroadcastReceiverScope(filter, this ::onReceiveIntent);
+            filter.addAction(CastWebContentsIntentUtils.ACTION_REQUEST_MEDIA_PLAYING_STATUS);
+            return new LocalBroadcastReceiverScope(filter, this::onReceiveIntent);
         });
     }
 
@@ -220,7 +218,6 @@ public class CastWebContentsComponent {
             if (mComponentClosedHandler != null) mComponentClosedHandler.onComponentClosed();
         } else if (CastWebContentsIntentUtils.isIntentOfVisibilityChange(intent)) {
             int visibilityType = CastWebContentsIntentUtils.getVisibilityType(intent);
-            mVisibility.set(visibilityType);
             if (DEBUG) {
                 Log.d(TAG,
                         "onReceive ACTION_ON_VISIBILITY_CHANGE instance=" + mSessionId
@@ -229,29 +226,12 @@ public class CastWebContentsComponent {
             if (mSurfaceEventHandler != null) {
                 mSurfaceEventHandler.onVisibilityChange(visibilityType);
             }
-        } else if (CastWebContentsIntentUtils.isIntentOfGesturing(intent)) {
-            int gestureType = CastWebContentsIntentUtils.getGestureType(intent);
+        } else if (CastWebContentsIntentUtils.isIntentOfRequestMediaPlayingStatus(intent)) {
             if (DEBUG) {
-                Log.d(TAG,
-                        "onReceive ACTION_ON_GESTURE_CHANGE instance=" + mSessionId
-                                + "; gesture=" + gestureType);
+                Log.d(TAG, "onReceive ACTION_REQUEST_MEDIA_PLAYING_STATUS instance=" + mSessionId);
             }
-            if (mSurfaceEventHandler != null) {
-                mSurfaceEventHandler.consumeGesture(gestureType, (handled) -> {
-                    if (handled) {
-                        if (DEBUG) Log.d(TAG, "send gesture consumed instance=" + mSessionId);
-                        sendIntentSync(CastWebContentsIntentUtils.gestureConsumed(
-                                mSessionId, gestureType, true));
-                    } else {
-                        if (DEBUG) Log.d(TAG, "send gesture NOT consumed instance=" + mSessionId);
-                        sendIntentSync(CastWebContentsIntentUtils.gestureConsumed(
-                                mSessionId, gestureType, false));
-                    }
-                });
-            } else {
-                sendIntentSync(
-                        CastWebContentsIntentUtils.gestureConsumed(mSessionId, gestureType, false));
-            }
+            // Just broadcast current value.
+            setMediaPlaying(mMediaPlaying);
         }
     }
 
@@ -261,7 +241,7 @@ public class CastWebContentsComponent {
     }
 
     public void start(StartParams params, boolean isHeadless) {
-        if (BuildConfig.DISPLAY_WEB_CONTENTS_IN_SERVICE || isHeadless) {
+        if (isHeadless) {
             if (DEBUG) Log.d(TAG, "Creating service delegate...");
             start(params, new ServiceDelegate());
         } else {
@@ -277,7 +257,7 @@ public class CastWebContentsComponent {
             Log.d(TAG,
                     "Starting WebContents with delegate: " + mDelegate.getClass().getSimpleName()
                             + "; Instance ID: " + mSessionId + "; App ID: " + params.appId
-                            + "; Visibility Priority: " + params.visibilityPriority);
+                            + "; shouldRequestAudioFocus: " + params.shouldRequestAudioFocus);
         }
         mHasWebContentsState.set(params.webContents);
         mDelegate.start(params);
@@ -294,23 +274,7 @@ public class CastWebContentsComponent {
         mHasWebContentsState.reset();
         if (DEBUG) Log.d(TAG, "Call delegate to stop");
         mDelegate.stop(context);
-        mDelegate = null;
         mStarted = false;
-    }
-
-    public void requestVisibilityPriority(int visibilityPriority) {
-        if (DEBUG) {
-            Log.d(TAG,
-                    "requestVisibilityPriority: " + mSessionId
-                            + "; Visibility:" + visibilityPriority);
-        }
-        sendIntentSync(CastWebContentsIntentUtils.requestVisibilityPriority(
-                mSessionId, visibilityPriority));
-    }
-
-    public void requestMoveOut() {
-        if (DEBUG) Log.d(TAG, "requestMoveOut: " + mSessionId);
-        sendIntentSync(CastWebContentsIntentUtils.requestMoveOut(mSessionId));
     }
 
     public void enableTouchInput(boolean enabled) {
@@ -319,13 +283,16 @@ public class CastWebContentsComponent {
         sendIntentSync(CastWebContentsIntentUtils.enableTouchInput(mSessionId, enabled));
     }
 
-    public void setHostContext(int interactionId, String conversationId) {
-        if (DEBUG) {
-            Log.d(TAG, "setInteractionid interactionId=%s; conversationID=%s", interactionId,
-                    conversationId);
-        }
-        sendIntentSync(CastWebContentsIntentUtils.setHostContext(
-                mSessionId, interactionId, conversationId));
+    public void setAllowPictureInPicture(boolean allowPictureInPicture) {
+        if (DEBUG) Log.d(TAG, "setAllowPictureInPicture: " + allowPictureInPicture);
+        sendIntentSync(CastWebContentsIntentUtils.allowPictureInPicture(
+                mSessionId, allowPictureInPicture));
+    }
+
+    public void setMediaPlaying(boolean mediaPlaying) {
+        if (DEBUG) Log.d(TAG, "setMediaPlaying: " + mediaPlaying);
+        mMediaPlaying = mediaPlaying;
+        sendIntentSync(CastWebContentsIntentUtils.mediaPlaying(mSessionId, mMediaPlaying));
     }
 
     public static void onComponentClosed(String sessionId) {
@@ -336,15 +303,6 @@ public class CastWebContentsComponent {
     public static void onVisibilityChange(String sessionId, int visibilityType) {
         if (DEBUG) Log.d(TAG, "onVisibilityChange");
         sendIntentSync(CastWebContentsIntentUtils.onVisibilityChange(sessionId, visibilityType));
-    }
-
-    public static void onGesture(String sessionId, int gestureType) {
-        if (DEBUG) Log.d(TAG, "onGesture: " + sessionId + "; gestureType: " + gestureType);
-        sendIntentSync(CastWebContentsIntentUtils.onGesture(sessionId, gestureType));
-    }
-
-    private static boolean sendIntent(Intent in) {
-        return CastWebContentsIntentUtils.getLocalBroadcastManager().sendBroadcast(in);
     }
 
     private static void sendIntentSync(Intent in) {

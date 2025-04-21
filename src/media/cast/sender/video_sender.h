@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "media/capture/video/video_capture_feedback.h"
+#include "media/cast/cast_callbacks.h"
 #include "media/cast/cast_config.h"
-#include "media/cast/cast_sender.h"
 #include "media/cast/common/rtp_time.h"
 #include "media/cast/sender/frame_sender.h"
 
@@ -23,14 +23,13 @@ class Sender;
 }
 
 namespace media {
+class VideoEncoderMetricsProvider;
 class VideoFrame;
-}
+}  // namespace media
 
 namespace media::cast {
 
-class CastTransport;
 class VideoEncoder;
-class VideoFrameFactory;
 
 using PlayoutDelayChangeCB = base::RepeatingCallback<void(base::TimeDelta)>;
 
@@ -42,17 +41,6 @@ using PlayoutDelayChangeCB = base::RepeatingCallback<void(base::TimeDelta)>;
 // timeouts.
 class VideoSender : public FrameSender::Client {
  public:
-  // Old way to instantiate, using a cast transport.
-  // TODO(https://crbug.com/1316434): should be removed once libcast sender is
-  // successfully launched.
-  VideoSender(scoped_refptr<CastEnvironment> cast_environment,
-              const FrameSenderConfig& video_config,
-              StatusChangeCallback status_change_cb,
-              const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
-              CastTransport* const transport_sender,
-              PlayoutDelayChangeCB playout_delay_change_cb,
-              media::VideoCaptureFeedbackCB feedback_callback);
-
   // New way of instantiating using an openscreen::cast::Sender. Since the
   // |Sender| instance is destroyed when renegotiation is complete, |this|
   // is also invalid and should be immediately torn down.
@@ -60,9 +48,12 @@ class VideoSender : public FrameSender::Client {
               const FrameSenderConfig& video_config,
               StatusChangeCallback status_change_cb,
               const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
-              openscreen::cast::Sender* sender,
+              std::unique_ptr<openscreen::cast::Sender> sender,
+              std::unique_ptr<media::VideoEncoderMetricsProvider>
+                  encoder_metrics_provider,
               PlayoutDelayChangeCB playout_delay_change_cb,
-              media::VideoCaptureFeedbackCB feedback_callback);
+              media::VideoCaptureFeedbackCB feedback_cb,
+              FrameSender::GetSuggestedVideoBitrateCB get_bitrate_cb);
 
   VideoSender(const VideoSender&) = delete;
   VideoSender& operator=(const VideoSender&) = delete;
@@ -72,13 +63,8 @@ class VideoSender : public FrameSender::Client {
   // Note: It is not guaranteed that |video_frame| will actually be encoded and
   // sent, if VideoSender detects too many frames in flight.  Therefore, clients
   // should be careful about the rate at which this method is called.
-  void InsertRawVideoFrame(scoped_refptr<media::VideoFrame> video_frame,
-                           const base::TimeTicks& reference_time);
-
-  // Creates a |VideoFrameFactory| object to vend |VideoFrame| object with
-  // encoder affinity (defined as offering some sort of performance benefit). If
-  // the encoder does not have any such capability, returns null.
-  std::unique_ptr<VideoFrameFactory> CreateVideoFrameFactory();
+  virtual void InsertRawVideoFrame(scoped_refptr<media::VideoFrame> video_frame,
+                                   base::TimeTicks reference_time);
 
   void SetTargetPlayoutDelay(base::TimeDelta new_target_playout_delay);
   base::TimeDelta GetTargetPlayoutDelay() const;
@@ -86,24 +72,17 @@ class VideoSender : public FrameSender::Client {
   base::WeakPtr<VideoSender> AsWeakPtr();
 
  protected:
+  // For mocking in unit tests.
+  VideoSender();
+
   // FrameSender::Client overrides.
   int GetNumberOfFramesInEncoder() const final;
   base::TimeDelta GetEncoderBacklogDuration() const final;
 
-  // Exposed as protected for testing.
-  FrameSender* frame_sender_for_testing() { return frame_sender_.get(); }
-
  private:
-  VideoSender(scoped_refptr<CastEnvironment> cast_environment,
-              const FrameSenderConfig& video_config,
-              StatusChangeCallback status_change_cb,
-              const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
-              std::unique_ptr<FrameSender> sender,
-              PlayoutDelayChangeCB playout_delay_change_cb,
-              media::VideoCaptureFeedbackCB feedback_callback);
-
-  // Called by the |video_encoder_| with the next EncodedFrame to send.
+  // Called by the `video_encoder_` with the next EncodedFrame to send.
   void OnEncodedVideoFrame(scoped_refptr<media::VideoFrame> video_frame,
+                           const base::TimeTicks reference_time,
                            std::unique_ptr<SenderEncodedFrame> encoded_frame);
 
   // The backing frame sender implementation.
@@ -135,9 +114,6 @@ class VideoSender : public FrameSender::Client {
   base::TimeDelta min_playout_delay_;
   base::TimeDelta max_playout_delay_;
 
-  // Starting playout delay when streaming animated content.
-  base::TimeDelta animated_playout_delay_;
-
   PlayoutDelayChangeCB playout_delay_change_cb_;
 
   media::VideoCaptureFeedbackCB feedback_cb_;
@@ -152,6 +128,14 @@ class VideoSender : public FrameSender::Client {
   // an explanation of these values.
   double last_reported_encoder_utilization_ = -1.0;
   double last_reported_lossiness_ = -1.0;
+
+  // Used to calculate the percentage of lost frames. We currently report this
+  // metric as the number of frames dropped in the entire session.
+  int number_of_frames_inserted_ = 0;
+  int number_of_frames_dropped_ = 0;
+
+  // Used to throttle metrics reporting of the bitrate.
+  int frames_since_bitrate_reported_ = 0;
 
   // This tracks the time when the request was sent to encoder to encode a key
   // frame on receiving a Pli message. It is used to limit the sender not

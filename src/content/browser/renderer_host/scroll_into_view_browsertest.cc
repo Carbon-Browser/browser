@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -24,6 +25,7 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/mojom/frame/frame.mojom-test-utils.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "ui/events/event_constants.h"
@@ -188,7 +190,6 @@ class ScrollIntoViewBrowserTestBase : public ContentBrowserTest {
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
     IsolateAllSitesForTesting(command_line);
 
     // Need this to control page scale factor via script or check for root
@@ -218,15 +219,16 @@ class ScrollIntoViewBrowserTestBase : public ContentBrowserTest {
       JSON.stringify(document.querySelector($1).getBoundingClientRect());
     )JS",
                                          query));
-    absl::optional<base::Value> value =
+    std::optional<base::Value> value =
         base::JSONReader::Read(result.ExtractString());
     CHECK(value.has_value());
     CHECK(value->is_dict());
 
-    absl::optional<double> x = value->FindDoubleKey("x");
-    absl::optional<double> y = value->FindDoubleKey("y");
-    absl::optional<double> width = value->FindDoubleKey("width");
-    absl::optional<double> height = value->FindDoubleKey("height");
+    const base::Value::Dict& dict = value->GetDict();
+    std::optional<double> x = dict.FindDouble("x");
+    std::optional<double> y = dict.FindDouble("y");
+    std::optional<double> width = dict.FindDouble("width");
+    std::optional<double> height = dict.FindDouble("height");
 
     CHECK(x);
     CHECK(y);
@@ -268,18 +270,19 @@ class ScrollIntoViewBrowserTestBase : public ContentBrowserTest {
         pageTop: visualViewport.pageTop});
     )JS");
 
-    absl::optional<base::Value> value =
+    std::optional<base::Value> value =
         base::JSONReader::Read(result.ExtractString());
     CHECK(value.has_value());
     CHECK(value->is_dict());
 
-    absl::optional<double> offset_left = value->FindDoubleKey("offsetLeft");
-    absl::optional<double> offset_top = value->FindDoubleKey("offsetTop");
-    absl::optional<double> width = value->FindDoubleKey("width");
-    absl::optional<double> height = value->FindDoubleKey("height");
-    absl::optional<double> scale = value->FindDoubleKey("scale");
-    absl::optional<double> page_left = value->FindDoubleKey("pageLeft");
-    absl::optional<double> page_top = value->FindDoubleKey("pageTop");
+    const base::Value::Dict& dict = value->GetDict();
+    std::optional<double> offset_left = dict.FindDouble("offsetLeft");
+    std::optional<double> offset_top = dict.FindDouble("offsetTop");
+    std::optional<double> width = dict.FindDouble("width");
+    std::optional<double> height = dict.FindDouble("height");
+    std::optional<double> scale = dict.FindDouble("scale");
+    std::optional<double> page_left = dict.FindDouble("pageLeft");
+    std::optional<double> page_top = dict.FindDouble("pageTop");
 
     CHECK(offset_left);
     CHECK(offset_top);
@@ -438,24 +441,24 @@ class ScrollIntoViewBrowserTestBase : public ContentBrowserTest {
 
   // Calls `func` with each FrameTreeNode in the page, starting from the root
   // and descending into the inner most frame, traversing frame tree boundaries
-  // such as fenced frames/portals.
+  // such as fenced frames.
   template <typename Function>
   void ForEachFrameFromRootToInnerMost(const Function& func) {
     FrameTreeNode* node = web_contents()->GetPrimaryFrameTree().root();
     while (node) {
       bool is_proxy_for_inner_frame_tree =
-          node->current_frame_host()->inner_tree_main_frame_tree_node_id() !=
-          FrameTreeNode::kFrameTreeNodeInvalidId;
-
+          !node->current_frame_host()
+               ->inner_tree_main_frame_tree_node_id()
+               .is_null();
       // The functor isn't called for the placeholder FrameTreeNode, it'll be
       // called on the inner tree's root.
       if (!is_proxy_for_inner_frame_tree)
         func(node);
 
       if (node->child_count()) {
-        CHECK_EQ(
-            node->current_frame_host()->inner_tree_main_frame_tree_node_id(),
-            FrameTreeNode::kFrameTreeNodeInvalidId);
+        CHECK(node->current_frame_host()
+                  ->inner_tree_main_frame_tree_node_id()
+                  .is_null());
         // These tests never have multiple child frames.
         CHECK_EQ(node->child_count(), 1ul);
         node = node->child_at(0);
@@ -850,35 +853,16 @@ INSTANTIATE_TEST_SUITE_P(/* no prefix */,
                          DescribeFrameType);
 #endif
 
-enum FencedFrameType { kFencedFrameMPArch, kFencedFrameShadowDOM };
-
-[[maybe_unused]] std::string DescribeFencedFrameType(
-    const testing::TestParamInfo<FencedFrameType>& info) {
-  std::string impl_type;
-  switch (info.param) {
-    case kFencedFrameMPArch: {
-      impl_type = "MPArch";
-    } break;
-    case kFencedFrameShadowDOM: {
-      impl_type = "ShadowDOM";
-    } break;
-  }
-  return impl_type;
-}
-
 // Tests scrollIntoView behaviors related to a fenced frame.
 class ScrollIntoViewFencedFrameBrowserTest
-    : public ScrollIntoViewBrowserTestBase,
-      public ::testing::WithParamInterface<FencedFrameType> {
+    : public ScrollIntoViewBrowserTestBase {
  public:
   ScrollIntoViewFencedFrameBrowserTest() {
-    const char* impl_param =
-        GetParam() == kFencedFrameMPArch ? "mparch" : "shadow_dom";
-    feature_list_.InitWithFeaturesAndParameters(
-        {{blink::features::kFencedFrames,
-          {{"implementation_type", impl_param}}},
-         {features::kPrivacySandboxAdsAPIsOverride, {}}},
-        {/* disabled_features */});
+    feature_list_.InitWithFeatures({blink::features::kFencedFrames,
+                                    features::kPrivacySandboxAdsAPIsOverride,
+                                    blink::features::kFencedFramesAPIChanges,
+                                    blink::features::kFencedFramesDefaultMode},
+                                   {/* disabled_features */});
   }
   bool IsForceLocalFrames() const override { return false; }
   bool IsWritingModeLTR() const override { return true; }
@@ -896,25 +880,25 @@ class ScrollIntoViewFencedFrameBrowserTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        SingleFencedFrame) {
   ASSERT_TRUE(SetupTest("siteA{FencedFrame}(siteB)"));
   RunTest();
 }
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        NestedFencedFrames) {
   ASSERT_TRUE(SetupTest("siteA{FencedFrame}(siteB{FencedFrame}(siteC))"));
   RunTest();
 }
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        LocalFrameInFencedFrame) {
   ASSERT_TRUE(SetupTest("siteA{FencedFrame}(siteB(siteB))"));
   RunTest();
 }
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        RemoteFrameInFencedFrame) {
   ASSERT_TRUE(SetupTest("siteA{FencedFrame}(siteB(siteC))"));
 
@@ -941,13 +925,13 @@ IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
   RunTest();
 }
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        FencedFrameInRemoteFrame) {
   ASSERT_TRUE(SetupTest("siteA(siteB{FencedFrame}(siteC))"));
   RunTest();
 }
 
-IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(ScrollIntoViewFencedFrameBrowserTest,
                        ProgrammaticScrollIntoViewDoesntCrossFencedFrame) {
   ASSERT_TRUE(SetupTest("siteA{FencedFrame}(siteB)"));
 
@@ -976,12 +960,6 @@ IN_PROC_BROWSER_TEST_P(ScrollIntoViewFencedFrameBrowserTest,
       .FlushForTesting();
   EXPECT_FALSE(interceptor.HasCalledScrollRectToVisibleInParentFrame());
 }
-
-INSTANTIATE_TEST_SUITE_P(/* no prefix */,
-                         ScrollIntoViewFencedFrameBrowserTest,
-                         testing::Values(kFencedFrameMPArch,
-                                         kFencedFrameShadowDOM),
-                         DescribeFencedFrameType);
 
 }  // namespace
 

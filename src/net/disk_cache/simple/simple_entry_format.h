@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define NET_DISK_CACHE_SIMPLE_SIMPLE_ENTRY_FORMAT_H_
 
 #include <stdint.h>
+
+#include <type_traits>
 
 #include "net/base/net_export.h"
 
@@ -55,7 +57,12 @@ struct NET_EXPORT_PRIVATE SimpleFileHeader {
   uint32_t version;
   uint32_t key_length;
   uint32_t key_hash;
+
+  // Avoid implicit padding so `std::has_unique_object_representations_v<>` will
+  // hold.
+  uint32_t unused_padding = 0;
 };
+static_assert(std::has_unique_object_representations_v<SimpleFileHeader>);
 
 struct NET_EXPORT_PRIVATE SimpleFileEOF {
   enum Flags {

@@ -1,13 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/374320451): Fix and remove.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/services/assistant/audio_decoder/assistant_audio_decoder.h"
 
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "chromeos/ash/services/assistant/audio_decoder/ipc_data_source.h"
 #include "media/base/audio_bus.h"
@@ -15,8 +21,7 @@
 #include "media/filters/audio_file_reader.h"
 #include "media/filters/blocking_url_protocol.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -29,7 +34,7 @@ AssistantAudioDecoder::AssistantAudioDecoder(
     mojo::PendingRemote<mojom::AssistantAudioDecoderClient> client,
     mojo::PendingRemote<mojom::AssistantMediaDataSource> data_source)
     : client_(std::move(client)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       data_source_(std::make_unique<IPCDataSource>(std::move(data_source))),
       media_thread_(std::make_unique<base::Thread>("media_thread")),
       weak_factory_(this) {
@@ -162,5 +167,4 @@ void AssistantAudioDecoder::RunCallbacksAsClosed() {
     std::move(close_callback_).Run();
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

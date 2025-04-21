@@ -1,6 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/metrics/histogram_functions.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/direct_sockets/tcp_writable_stream_wrapper.h"
 
@@ -31,28 +37,6 @@
 
 namespace blink {
 
-TCPWritableStreamWrapper::CachedDataBuffer::CachedDataBuffer(
-    v8::Isolate* isolate,
-    const uint8_t* data,
-    size_t length)
-    : isolate_(isolate), length_(length) {
-  // We use the BufferPartition() allocator here to allow big enough
-  // allocations, and to do proper accounting of the used memory. If
-  // BufferPartition() will ever not be able to provide big enough allocations,
-  // e.g. because bigger ArrayBuffers get supported, then we have to switch to
-  // another allocator, e.g. the ArrayBuffer allocator.
-  buffer_ = std::unique_ptr<uint8_t[], OnFree>(
-      reinterpret_cast<uint8_t*>(WTF::Partitions::BufferPartition()->Alloc(
-          length, "TCPWritableStreamWrapper")));
-  memcpy(buffer_.get(), data, length);
-  isolate_->AdjustAmountOfExternalAllocatedMemory(static_cast<int64_t>(length));
-}
-
-TCPWritableStreamWrapper::CachedDataBuffer::~CachedDataBuffer() {
-  isolate_->AdjustAmountOfExternalAllocatedMemory(
-      -static_cast<int64_t>(length_));
-}
-
 TCPWritableStreamWrapper::TCPWritableStreamWrapper(
     ScriptState* script_state,
     CloseOnceCallback on_close,
@@ -74,10 +58,16 @@ TCPWritableStreamWrapper::TCPWritableStreamWrapper(
       WTF::BindRepeating(&TCPWritableStreamWrapper::OnHandleReset,
                          WrapWeakPersistent(this)));
 
+  ScriptState::Scope scope(script_state);
+
+  auto* sink = WritableStreamWrapper::MakeForwardingUnderlyingSink(this);
+  SetSink(sink);
+
   // Set the CountQueueingStrategy's high water mark as 1 to make the logic of
-  // |WriteOrCacheData| much simpler
-  InitSinkAndWritable(/*sink=*/MakeGarbageCollected<UnderlyingSink>(this),
-                      /*high_water_mark=*/1);
+  // |WriteOrCacheData| much simpler.
+  auto* writable = WritableStream::CreateWithCountQueueingStrategy(
+      script_state, sink, /*high_water_mark=*/1);
+  SetWritable(writable);
 }
 
 bool TCPWritableStreamWrapper::HasPendingWrite() const {
@@ -85,6 +75,7 @@ bool TCPWritableStreamWrapper::HasPendingWrite() const {
 }
 
 void TCPWritableStreamWrapper::Trace(Visitor* visitor) const {
+  visitor->Trace(buffer_source_);
   visitor->Trace(write_promise_resolver_);
   WritableStreamWrapper::Trace(visitor);
 }
@@ -93,7 +84,7 @@ void TCPWritableStreamWrapper::OnHandleReady(MojoResult result,
                                              const mojo::HandleSignalsState&) {
   switch (result) {
     case MOJO_RESULT_OK:
-      WriteCachedData();
+      WriteDataAsynchronously();
       break;
 
     case MOJO_RESULT_FAILED_PRECONDITION:
@@ -119,78 +110,58 @@ void TCPWritableStreamWrapper::OnAbortSignal() {
   }
 }
 
-ScriptPromise TCPWritableStreamWrapper::Write(ScriptValue chunk,
-                                              ExceptionState& exception_state) {
+ScriptPromise<IDLUndefined> TCPWritableStreamWrapper::Write(
+    ScriptValue chunk,
+    ExceptionState& exception_state) {
   // There can only be one call to write() in progress at a time.
   DCHECK(!write_promise_resolver_);
+  DCHECK(!buffer_source_);
   DCHECK_EQ(0u, offset_);
 
   if (!data_pipe_) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNetworkError,
         "The underlying data pipe was disconnected.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  auto* buffer_source = V8BufferSource::Create(
-      GetScriptState()->GetIsolate(), chunk.V8Value(), exception_state);
-  if (exception_state.HadException())
-    return ScriptPromise();
-  DCHECK(buffer_source);
+  buffer_source_ = V8BufferSource::Create(GetScriptState()->GetIsolate(),
+                                          chunk.V8Value(), exception_state);
+  if (exception_state.HadException()) {
+    return EmptyPromise();
+  }
+  DCHECK(buffer_source_);
 
-  DOMArrayPiece array_piece(buffer_source);
-  return WriteOrCacheData({array_piece.Bytes(), array_piece.ByteLength()},
-                          exception_state);
+  write_promise_resolver_ =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+          GetScriptState(), exception_state.GetContext());
+  auto promise = write_promise_resolver_->Promise();
+
+  WriteDataAsynchronously();
+
+  return promise;
 }
 
-// Attempt to write |data|. Cache anything that could not be written
-// synchronously. Arrange for the cached data to be written asynchronously.
-ScriptPromise TCPWritableStreamWrapper::WriteOrCacheData(
-    base::span<const uint8_t> data,
-    ExceptionState& exception_state) {
+void TCPWritableStreamWrapper::WriteDataAsynchronously() {
   DCHECK(data_pipe_);
-  size_t written = WriteDataSynchronously(data);
+  DCHECK(buffer_source_);
 
-  if (written == data.size())
-    return ScriptPromise::CastUndefined(GetScriptState());
-
-  DCHECK_LT(written, data.size());
-
-  DCHECK(!cached_data_);
-  cached_data_ = std::make_unique<CachedDataBuffer>(
-      GetScriptState()->GetIsolate(), data.data() + written,
-      data.size() - written);
-  DCHECK_EQ(offset_, 0u);
-  write_watcher_.ArmOrNotify();
-  write_promise_resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
-      GetScriptState(), exception_state.GetContext());
-  return write_promise_resolver_->Promise();
-}
-
-// Write data previously cached. Arrange for any remaining data to be sent
-// asynchronously. Fulfill |write_promise_resolver_| once all data has been
-// written.
-void TCPWritableStreamWrapper::WriteCachedData() {
-  auto data = base::make_span(static_cast<uint8_t*>(cached_data_->data()),
-                              cached_data_->length())
-                  .subspan(offset_);
-  size_t written = WriteDataSynchronously(data);
-
-  if (written == data.size()) {
-    cached_data_.reset();
-    offset_ = 0;
-    write_promise_resolver_->Resolve();
-    write_promise_resolver_ = nullptr;
+  DOMArrayPiece array_piece(buffer_source_);
+  // From https://webidl.spec.whatwg.org/#dfn-get-buffer-source-copy, if the
+  // buffer source is detached then an empty byte sequence is returned, which
+  // means the write is complete.
+  if (array_piece.IsDetached()) {
+    FinalizeWrite();
     return;
   }
+  size_t written =
+      WriteDataSynchronously(array_piece.ByteSpan().subspan(offset_));
 
-  if (!data_pipe_) {
-    cached_data_.reset();
-    offset_ = 0;
-
+  DCHECK_LE(offset_ + written, array_piece.ByteLength());
+  if (offset_ + written == array_piece.ByteLength()) {
+    FinalizeWrite();
     return;
   }
-
   offset_ += written;
 
   write_watcher_.ArmOrNotify();
@@ -200,19 +171,14 @@ void TCPWritableStreamWrapper::WriteCachedData() {
 // bytes written. May close |data_pipe_| as a side-effect on error.
 size_t TCPWritableStreamWrapper::WriteDataSynchronously(
     base::span<const uint8_t> data) {
-  DCHECK(data_pipe_);
-
-  // This use of saturated cast means that we will fallback to asynchronous
-  // sending if |data| is larger than 4GB. In practice we'd never be able to
-  // send 4GB synchronously anyway.
-  uint32_t num_bytes = base::saturated_cast<uint32_t>(data.size());
-  MojoResult result =
-      data_pipe_->WriteData(data.data(), &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+  size_t actually_written_bytes = 0;
+  MojoResult result = data_pipe_->WriteData(data, MOJO_WRITE_DATA_FLAG_NONE,
+                                            actually_written_bytes);
 
   switch (result) {
     case MOJO_RESULT_OK:
     case MOJO_RESULT_SHOULD_WAIT:
-      return num_bytes;
+      return actually_written_bytes;
 
     case MOJO_RESULT_FAILED_PRECONDITION:
       // Will be handled by |close_watcher_|.
@@ -220,8 +186,14 @@ size_t TCPWritableStreamWrapper::WriteDataSynchronously(
 
     default:
       NOTREACHED();
-      return 0;
   }
+}
+
+void TCPWritableStreamWrapper::FinalizeWrite() {
+  buffer_source_ = nullptr;
+  offset_ = 0;
+  write_promise_resolver_->Resolve();
+  write_promise_resolver_ = nullptr;
 }
 
 void TCPWritableStreamWrapper::CloseStream() {
@@ -245,7 +217,7 @@ void TCPWritableStreamWrapper::CloseStream() {
   }
 
   ResetPipe();
-  std::move(on_close_).Run(/*error=*/false);
+  std::move(on_close_).Run(/*exception=*/ScriptValue());
 }
 
 void TCPWritableStreamWrapper::ErrorStream(int32_t error_code) {
@@ -254,40 +226,45 @@ void TCPWritableStreamWrapper::ErrorStream(int32_t error_code) {
   }
   SetState(State::kAborted);
 
+  // Error codes are negative.
+  base::UmaHistogramSparse("DirectSockets.TCPWritableStreamError", -error_code);
+
   auto message =
       String{"Stream aborted by the remote: " + net::ErrorToString(error_code)};
-  auto* exception = MakeGarbageCollected<DOMException>(
-      DOMExceptionCode::kNetworkError, message);
+
+  auto* script_state = write_promise_resolver_
+                           ? write_promise_resolver_->GetScriptState()
+                           : GetScriptState();
+  // Scope is needed because there's no ScriptState* on the call stack for
+  // ScriptValue.
+  ScriptState::Scope scope{script_state};
+
+  auto exception = ScriptValue(script_state->GetIsolate(),
+                               V8ThrowDOMException::CreateOrDie(
+                                   script_state->GetIsolate(),
+                                   DOMExceptionCode::kNetworkError, message));
 
   // Can be already reset due to HandlePipeClosed() called previously.
   if (data_pipe_) {
     ResetPipe();
   }
 
-  auto* script_state = GetScriptState();
-  DCHECK(script_state->ContextIsValid());
-
-  ScriptState::Scope scope{script_state};
   if (write_promise_resolver_) {
-    write_promise_resolver_->RejectWithDOMException(
-        DOMExceptionCode::kNetworkError, message);
+    write_promise_resolver_->Reject(exception);
     write_promise_resolver_ = nullptr;
   } else {
-    auto* script_state = GetScriptState();
-    Controller()->error(script_state,
-                        ScriptValue::From(script_state, exception));
+    Controller()->error(script_state, exception);
   }
 
-  std::move(on_close_).Run(/*error=*/true);
+  std::move(on_close_).Run(exception);
 }
 
 void TCPWritableStreamWrapper::ResetPipe() {
   write_watcher_.Cancel();
   close_watcher_.Cancel();
   data_pipe_.reset();
-  if (cached_data_) {
-    cached_data_.reset();
-  }
+  buffer_source_ = nullptr;
+  offset_ = 0;
 }
 
 void TCPWritableStreamWrapper::Dispose() {

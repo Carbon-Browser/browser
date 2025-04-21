@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,9 @@
 
 // Invoked when a link in the disclaimer is tapped.
 - (void)didTapURLInDisclaimer:(NSURL*)URL;
+
+// Invoked when the view controller has been dismissed.
+- (void)didDismissViewController;
 
 @end
 

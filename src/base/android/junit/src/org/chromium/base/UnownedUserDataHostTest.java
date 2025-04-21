@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,17 +33,18 @@ public class UnownedUserDataHostTest {
     @Test
     public void testUnpreparedLooper() throws InterruptedException {
         AtomicBoolean illegalStateExceptionThrown = new AtomicBoolean();
-        Thread t = new Thread() {
-            @Override
-            public void run() {
-                try {
-                    // The Looper on this thread is still unprepared, so this should fail.
-                    new UnownedUserDataHost();
-                } catch (IllegalStateException e) {
-                    illegalStateExceptionThrown.set(true);
-                }
-            }
-        };
+        Thread t =
+                new Thread() {
+                    @Override
+                    public void run() {
+                        try {
+                            // The Looper on this thread is still unprepared, so this should fail.
+                            new UnownedUserDataHost();
+                        } catch (IllegalStateException e) {
+                            illegalStateExceptionThrown.set(true);
+                        }
+                    }
+                };
         t.start();
         t.join();
 

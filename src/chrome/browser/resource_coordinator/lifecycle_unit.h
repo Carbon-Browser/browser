@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,12 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/resource_coordinator/decision_details.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom-forward.h"
 #include "content/public/browser/visibility.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 
 namespace resource_coordinator {
 
@@ -70,9 +70,13 @@ class LifecycleUnit {
   // title is available.
   virtual std::u16string GetTitle() const = 0;
 
-  // Returns the last time at which the LifecycleUnit was focused, or
+  // Returns the last time ticks at which the LifecycleUnit was focused, or
   // base::TimeTicks::Max() if the LifecycleUnit is currently focused.
-  virtual base::TimeTicks GetLastFocusedTime() const = 0;
+  virtual base::TimeTicks GetLastFocusedTimeTicks() const = 0;
+
+  // Returns the last time at which the LifecycleUnit was focused, or
+  // base::Time::Max() if the LifecycleUnit is currently focused.
+  virtual base::Time GetLastFocusedTime() const = 0;
 
   // Returns the current visibility of this LifecycleUnit.
   virtual content::Visibility GetVisibility() const = 0;
@@ -140,7 +144,8 @@ class LifecycleUnit {
   // is easier to achieve that if we discard a group of LifecycleUnits that live
   // in the same process(es) than if we discard individual LifecycleUnits.
   // https://crbug.com/775644
-  virtual bool Discard(LifecycleUnitDiscardReason discard_reason) = 0;
+  virtual bool Discard(LifecycleUnitDiscardReason discard_reason,
+                       uint64_t resident_set_size_estimate = 0) = 0;
 
   // Returns the number of times this lifecycle unit has been discarded.
   virtual size_t GetDiscardCount() const = 0;
@@ -152,14 +157,12 @@ class LifecycleUnit {
   // Adds/removes an observer to this LifecycleUnit.
   virtual void AddObserver(LifecycleUnitObserver* observer) = 0;
   virtual void RemoveObserver(LifecycleUnitObserver* observer) = 0;
-
-  // Returns the UKM source ID associated with this LifecycleUnit, if it has
-  // one.
-  virtual ukm::SourceId GetUkmSourceId() const = 0;
 };
 
-using LifecycleUnitSet = base::flat_set<LifecycleUnit*>;
-using LifecycleUnitVector = std::vector<LifecycleUnit*>;
+using LifecycleUnitSet =
+    base::flat_set<raw_ptr<LifecycleUnit, CtnExperimental>>;
+using LifecycleUnitVector =
+    std::vector<raw_ptr<LifecycleUnit, VectorExperimental>>;
 
 }  // namespace resource_coordinator
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,23 +41,17 @@ public class ViewResourceFrameLayout extends OptimizedFrameLayout {
         mResourceAdapter = createResourceAdapter();
     }
 
-    /**
-     * @return A {@link ViewResourceAdapter} instance.  This can be overridden for custom behavior.
-     */
+    /** @return A {@link ViewResourceAdapter} instance.  This can be overridden for custom behavior. */
     protected ViewResourceAdapter createResourceAdapter() {
         return new ViewResourceAdapter(this);
     }
 
-    /**
-     * @return The {@link ViewResourceAdapter} that exposes this {@link View} as a CC resource.
-     */
+    /** @return The {@link ViewResourceAdapter} that exposes this {@link View} as a CC resource. */
     public ViewResourceAdapter getResourceAdapter() {
         return mResourceAdapter;
     }
 
-    /**
-     * @return Whether the control container is ready for capturing snapshots.
-     */
+    /** @return Whether the control container is ready for capturing snapshots. */
     protected boolean isReadyForCapture() {
         return true;
     }

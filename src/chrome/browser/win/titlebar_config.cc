@@ -1,19 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/titlebar_config.h"
 
-#include "base/command_line.h"
-#include "base/win/windows_version.h"
-#include "chrome/common/chrome_switches.h"
+#include "chrome/browser/themes/theme_service.h"
+#include "chrome/browser/themes/theme_service_factory.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/win/mica_titlebar.h"
 
-bool ShouldCustomDrawSystemTitlebar() {
-  // Cache flag lookup.
-  static const bool custom_titlebar_disabled =
-      base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableWindows10CustomTitlebar);
-
-  return !custom_titlebar_disabled &&
-         base::win::GetVersion() >= base::win::Version::WIN10;
+bool ShouldBrowserCustomDrawTitlebar(BrowserView* browser_view) {
+  return !ShouldDefaultThemeUseMicaTitlebar() ||
+         !ThemeServiceFactory::GetForProfile(browser_view->GetProfile())
+              ->UsingSystemTheme() ||
+         (!browser_view->browser()->is_type_normal() &&
+          !browser_view->browser()->is_type_popup() &&
+          !browser_view->browser()->is_type_devtools());
 }

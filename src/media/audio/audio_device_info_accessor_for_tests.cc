@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,12 +35,6 @@ void AudioDeviceInfoAccessorForTests::GetAudioOutputDeviceDescriptions(
     AudioDeviceDescriptions* device_descriptions) {
   DCHECK(audio_manager_->GetTaskRunner()->BelongsToCurrentThread());
   audio_manager_->GetAudioOutputDeviceDescriptions(device_descriptions);
-}
-
-AudioParameters
-AudioDeviceInfoAccessorForTests::GetDefaultOutputStreamParameters() {
-  DCHECK(audio_manager_->GetTaskRunner()->BelongsToCurrentThread());
-  return audio_manager_->GetDefaultOutputStreamParameters();
 }
 
 AudioParameters AudioDeviceInfoAccessorForTests::GetOutputStreamParameters(

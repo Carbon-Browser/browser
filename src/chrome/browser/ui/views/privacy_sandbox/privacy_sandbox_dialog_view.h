@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,10 @@
 
 class Browser;
 
+namespace content {
+class WebContents;
+}
+
 namespace views {
 class WebView;
 }
@@ -19,17 +23,24 @@ class WebView;
 // Implements the PrivacySandboxDialog as a View. The view contains a WebView
 // into which is loaded a WebUI page which renders the actual dialog content.
 class PrivacySandboxDialogView : public views::View {
+  METADATA_HEADER(PrivacySandboxDialogView, views::View)
+
  public:
-  METADATA_HEADER(PrivacySandboxDialogView);
   PrivacySandboxDialogView(Browser* browser,
                            PrivacySandboxService::PromptType dialog_type);
 
   void Close();
 
  private:
+  friend class PrivacySandboxQueueTestHelper;
   void ResizeNativeView(int height);
   void ShowNativeView();
   void OpenPrivacySandboxSettings();
+  void OpenPrivacySandboxAdMeasurementSettings();
+  friend class PrivacySandboxDialogViewPrivacyPolicyBrowserTest;
+  friend class
+      PrivacySandboxDialogViewAdsApiUxEnhancementPrivacyPolicyBrowserTest;
+  content::WebContents* GetWebContentsForTesting();
 
   raw_ptr<views::WebView> web_view_;
   raw_ptr<Browser> browser_;

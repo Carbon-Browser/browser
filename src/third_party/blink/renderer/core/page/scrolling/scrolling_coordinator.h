@@ -31,41 +31,27 @@
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
-#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-
-namespace cc {
-class ScrollbarLayerBase;
-}  // namespace cc
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 
 namespace blink {
+
 class LocalFrame;
 class Page;
 class ScrollableArea;
 
-using MainThreadScrollingReasons = uint32_t;
-using ScrollbarId = uint64_t;
-
-// ScrollingCoordinator is a page-level object that mediates interactions
-// between Blink and the compositor's scroll-related APIs on the composited
-// layer representing the scrollbar.
-//
-// It's responsible for propagating scroll offsets, main-thread scrolling
-// reasons, touch action regions, and non-fast-scrollable regions into the
-// compositor, as well as creating and managing scrollbar layers.
+// ScrollingCoordinator is a page-level object that mediates scroll-related
+// interactions between Blink and the compositor.
 class CORE_EXPORT ScrollingCoordinator final
-    : public GarbageCollected<ScrollingCoordinator>,
-      public CompositorScrollCallbacks {
+    : public GarbageCollected<ScrollingCoordinator> {
  public:
   explicit ScrollingCoordinator(Page*);
   ScrollingCoordinator(const ScrollingCoordinator&) = delete;
   ScrollingCoordinator& operator=(const ScrollingCoordinator&) = delete;
-  ~ScrollingCoordinator() override;
+  ~ScrollingCoordinator();
   void Trace(Visitor*) const;
 
   void WillBeDestroyed();
-
-  void WillDestroyScrollableArea(ScrollableArea*);
 
   // Updates scroll offset in cc scroll tree immediately. We don't wait for
   // a full document lifecycle update to propagate the scroll offset from blink
@@ -83,38 +69,55 @@ class CORE_EXPORT ScrollingCoordinator final
       const CompositorElementId&);
 
   // ScrollCallbacks implementation
-  void DidCompositorScroll(
-      CompositorElementId,
-      const gfx::PointF&,
-      const absl::optional<cc::TargetSnapAreaElementIds>&) override;
-  void DidChangeScrollbarsHidden(CompositorElementId, bool hidden) override;
+  void DidCompositorScroll(CompositorElementId,
+                           const gfx::PointF&,
+                           const std::optional<cc::TargetSnapAreaElementIds>&);
+  void DidChangeScrollbarsHidden(CompositorElementId, bool hidden);
 
-  base::WeakPtr<ScrollingCoordinator> GetWeakPtr() {
+  base::WeakPtr<CompositorScrollCallbacks> GetScrollCallbacks() {
     DCHECK(page_);
-    return weak_ptr_factory_.GetWeakPtr();
+    if (!callbacks_) {
+      callbacks_ = std::make_unique<CallbackProxy>(this);
+    }
+    return callbacks_->GetWeakPtr();
   }
-
-  // For testing purposes only. This ScrollingCoordinator is reused between
-  // web tests, and must be reset for the results to be valid.
-  void Reset(LocalFrame*);
 
  protected:
   Member<Page> page_;
 
  private:
-  void SetScrollbarLayer(ScrollableArea*,
-                         ScrollbarOrientation,
-                         scoped_refptr<cc::ScrollbarLayerBase>);
-  cc::ScrollbarLayerBase* GetScrollbarLayer(ScrollableArea*,
-                                            ScrollbarOrientation);
-  void RemoveScrollbarLayer(ScrollableArea*, ScrollbarOrientation);
+  // This class adapts a base::WeakPtr into a GC-aware weak reference to the
+  // ScrollingCoordinator. The cc::ScrollTree needs a WeakPtr since it lives
+  // outside of Blink, but we cannot safely take a WeakPtr to a GC object
+  // (crbug.com/1485318, crbug.com/1246423). So we hand out a WeakPtr to a
+  // non-GC'ed proxy that holds a WeakPersistent to the ScrollingCoordinator.
+  class CallbackProxy : public CompositorScrollCallbacks {
+   public:
+    explicit CallbackProxy(ScrollingCoordinator* sc)
+        : scrolling_coordinator_(sc) {}
+    base::WeakPtr<CompositorScrollCallbacks> GetWeakPtr() {
+      return weak_ptr_factory_.GetWeakPtr();
+    }
+    void DidCompositorScroll(CompositorElementId element_id,
+                             const gfx::PointF& offset,
+                             const std::optional<cc::TargetSnapAreaElementIds>&
+                                 snap_target_ids) override {
+      if (ScrollingCoordinator* sc = scrolling_coordinator_.Get()) {
+        sc->DidCompositorScroll(element_id, offset, snap_target_ids);
+      }
+    }
+    void DidChangeScrollbarsHidden(CompositorElementId element_id,
+                                   bool hidden) override {
+      if (ScrollingCoordinator* sc = scrolling_coordinator_.Get()) {
+        sc->DidChangeScrollbarsHidden(element_id, hidden);
+      }
+    }
 
-  using ScrollbarMap = HeapHashMap<Member<ScrollableArea>,
-                                   scoped_refptr<cc::ScrollbarLayerBase>>;
-  ScrollbarMap horizontal_scrollbars_;
-  ScrollbarMap vertical_scrollbars_;
-
-  base::WeakPtrFactory<ScrollingCoordinator> weak_ptr_factory_{this};
+   private:
+    base::WeakPtrFactory<CompositorScrollCallbacks> weak_ptr_factory_{this};
+    WeakPersistent<ScrollingCoordinator> scrolling_coordinator_;
+  };
+  std::unique_ptr<CallbackProxy> callbacks_;
 };
 
 }  // namespace blink

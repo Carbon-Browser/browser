@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 #include <map>
 #include <memory>
 
-#include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "components/domain_reliability/beacon.h"
 #include "components/domain_reliability/clear_mode.h"
 #include "components/domain_reliability/config.h"
@@ -23,10 +21,10 @@
 #include "components/domain_reliability/uploader.h"
 #include "components/domain_reliability/util.h"
 #include "net/base/ip_endpoint.h"
+#include "net/base/isolation_info.h"
 #include "net/base/load_timing_info.h"
 #include "net/base/net_error_details.h"
 #include "net/base/network_change_notifier.h"
-#include "net/base/network_isolation_key.h"
 #include "net/http/http_response_info.h"
 #include "net/socket/connection_attempts.h"
 
@@ -53,7 +51,7 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityMonitor
     static bool ShouldReportRequest(const RequestInfo& request);
 
     GURL url;
-    net::NetworkIsolationKey network_isolation_key;
+    net::IsolationInfo isolation_info;
     int net_error;
     net::HttpResponseInfo response_info;
     bool allow_credentials;

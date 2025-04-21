@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 '''Unit tests for grit.format.resource_map'''
 
-from __future__ import print_function
 
 import os
 import sys
@@ -55,7 +54,7 @@ class FormatResourceMapUnittest(unittest.TestCase):
         '''\
 #include <stddef.h>
 #include "ui/base/webui/resource_path.h"
-extern const webui::ResourcePath kTheRcHeader[];
+extern const webui::ResourcePath kTheRcHeader[5];
 extern const size_t kTheRcHeaderSize;''', output)
     output = util.StripBlankLinesAndComments(''.join(
         resource_map.GetFormatter('resource_map_source')(grd, 'en', '.')))
@@ -65,7 +64,7 @@ extern const size_t kTheRcHeaderSize;''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[5] = {
   {"IDC_KLONKMENU", IDC_KLONKMENU},
   {"IDS_FIRSTPRESENT", IDS_FIRSTPRESENT},
   {"IDS_WITHRESOURCEPATH", IDS_WITHRESOURCEPATH},
@@ -81,7 +80,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[5] = {
   {"grit/testdata/klonk.rc", IDC_KLONKMENU},
   {"abc", IDS_FIRSTPRESENT},
   {"new_path/rst_resource", IDS_WITHRESOURCEPATH},
@@ -162,7 +161,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
         '''\
 #include <stddef.h>
 #include "ui/base/webui/resource_path.h"
-extern const webui::ResourcePath kTheRcHeader[];
+extern const webui::ResourcePath kTheRcHeader[4];
 extern const size_t kTheRcHeaderSize;''', output)
     output = util.StripBlankLinesAndComments(''.join(
         resource_map.GetFormatter('resource_map_source')(grd, 'en', '.')))
@@ -172,7 +171,7 @@ extern const size_t kTheRcHeaderSize;''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[4] = {
   {"IDR_KLONKMENU", IDR_KLONKMENU},
   {"IDR_BLOB", IDR_BLOB},
   {"IDR_METEOR", IDR_METEOR},
@@ -187,7 +186,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[4] = {
   {"IDR_KLONKMENU", IDR_KLONKMENU},
   {"IDR_BLOB", IDR_BLOB},
   {"IDR_METEOR", IDR_METEOR},
@@ -238,7 +237,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
         '''\
 #include <stddef.h>
 #include "ui/base/webui/resource_path.h"
-extern const webui::ResourcePath kTheRcHeader[];
+extern const webui::ResourcePath kTheRcHeader[6];
 extern const size_t kTheRcHeaderSize;''', output)
     output = util.StripBlankLinesAndComments(''.join(
         resource_map.GetFormatter('resource_map_source')(grd, 'en', '.')))
@@ -248,7 +247,7 @@ extern const size_t kTheRcHeaderSize;''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[6] = {
   {"IDC_KLONKMENU", IDC_KLONKMENU},
   {"IDS_FIRSTPRESENT", IDS_FIRSTPRESENT},
   {"IDS_THIRDPRESENT", IDS_THIRDPRESENT},
@@ -265,7 +264,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[6] = {
   {"grit/testdata/klonk.rc", IDC_KLONKMENU},
   {"abc", IDS_FIRSTPRESENT},
   {"mno", IDS_THIRDPRESENT},
@@ -308,7 +307,7 @@ const size_t kTheRcHeaderSize = std::size(kTheRcHeader);''', output)
         '''\
 #include <stddef.h>
 #include "ui/base/webui/resource_path.h"
-extern const webui::ResourcePath kTheRcHeader[];
+extern const webui::ResourcePath kTheRcHeader[2];
 extern const size_t kTheRcHeaderSize;''', output)
     output = util.StripBlankLinesAndComments(''.join(
         resource_map.GetFormatter('resource_map_source')(grd, 'en', '.')))
@@ -318,7 +317,7 @@ extern const size_t kTheRcHeaderSize;''', output)
 #include <stddef.h>
 #include <iterator>
 #include "the_rc_header.h"
-const webui::ResourcePath kTheRcHeader[] = {
+const webui::ResourcePath kTheRcHeader[2] = {
   {"IDS_PRODUCT_NAME", IDS_PRODUCT_NAME},
   {"IDS_DEFAULT_TAB_TITLE_TITLE_CASE", IDS_DEFAULT_TAB_TITLE_TITLE_CASE},
 };

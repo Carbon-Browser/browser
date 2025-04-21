@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/time/time.h"
 #include "base/values.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/engine/events/protocol_event.h"
 #include "components/sync/protocol/sync.pb.h"
 
@@ -25,9 +25,9 @@ class NormalGetUpdatesRequestEvent : public ProtocolEvent {
                                const NudgeTracker& nudge_tracker,
                                const sync_pb::ClientToServerMessage& request);
   NormalGetUpdatesRequestEvent(base::Time timestamp,
-                               ModelTypeSet nudged_types,
-                               ModelTypeSet notified_types,
-                               ModelTypeSet refresh_requested_types,
+                               DataTypeSet nudged_types,
+                               DataTypeSet notified_types,
+                               DataTypeSet refresh_requested_types,
                                bool is_retry,
                                sync_pb::ClientToServerMessage request);
 
@@ -43,14 +43,13 @@ class NormalGetUpdatesRequestEvent : public ProtocolEvent {
   base::Time GetTimestamp() const override;
   std::string GetType() const override;
   std::string GetDetails() const override;
-  std::unique_ptr<base::DictionaryValue> GetProtoMessage(
-      bool include_specifics) const override;
+  base::Value::Dict GetProtoMessage(bool include_specifics) const override;
 
   const base::Time timestamp_;
 
-  const ModelTypeSet nudged_types_;
-  const ModelTypeSet notified_types_;
-  const ModelTypeSet refresh_requested_types_;
+  const DataTypeSet nudged_types_;
+  const DataTypeSet notified_types_;
+  const DataTypeSet refresh_requested_types_;
   const bool is_retry_;
 
   const sync_pb::ClientToServerMessage request_;

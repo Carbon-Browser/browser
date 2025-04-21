@@ -32,10 +32,12 @@ corresponding port names and TestExpectations specifiers.
 """
 
 import json
+from typing import Set
 
 from blinkpy.common.path_finder import PathFinder
 
-class BuilderList(object):
+
+class BuilderList:
     def __init__(self, builders_dict):
         """Creates and validates a builders list.
 
@@ -48,7 +50,6 @@ class BuilderList(object):
             "is_try_builder": Whether the builder is a trybot.
             "main": The main name of the builder. It is deprecated, but still required
                 by test-results.appspot.com API."
-            "has_webdriver_tests": Whether webdriver_tests_suite runs on this builder.
 
         Possible refactoring note: Potentially, it might make sense to use
         blinkpy.common.net.results_fetcher.Builder and add port_name and
@@ -62,6 +63,9 @@ class BuilderList(object):
             assert ('android' in specifiers or
                     len(builders_dict[builder]['specifiers']) == 2)
         self._flag_spec_to_port = self._find_ports_for_flag_specific_options()
+
+    def __repr__(self):
+        return 'BuilderList(%s)' % self._builders
 
     def _find_ports_for_flag_specific_options(self):
         flag_spec_to_port = {}
@@ -98,6 +102,13 @@ class BuilderList(object):
 
     def all_flag_specific_try_builder_names(self, flag_specific):
         return self.filter_builders(is_try=True, flag_specific=flag_specific)
+
+    def builders_for_rebaselining(self) -> Set[str]:
+        try_builders = {
+            builder
+            for builder in self.filter_builders(is_try=True)
+        }
+        return try_builders
 
     def all_continuous_builder_names(self):
         return self.filter_builders(is_try=False)
@@ -143,7 +154,10 @@ class BuilderList(object):
         return sorted(builders)
 
     def all_port_names(self):
-        return sorted({b['port_name'] for b in self._builders.values()})
+        port_names = set()
+        for builder_name, builder in self._builders.items():
+            port_names.add(builder['port_name'])
+        return sorted(port_names)
 
     def bucket_for_builder(self, builder_name):
         return self._builders[builder_name].get('bucket', '')
@@ -151,14 +165,14 @@ class BuilderList(object):
     def main_for_builder(self, builder_name):
         return self._builders[builder_name].get('main', '')
 
-    def has_webdriver_tests_for_builder(self, builder_name):
-        return self._builders[builder_name].get('has_webdriver_tests')
-
     def port_name_for_builder_name(self, builder_name):
         return self._builders[builder_name]['port_name']
 
     def port_name_for_flag_specific_option(self, option):
         return self._flag_spec_to_port[option]
+
+    def all_flag_specific_options(self) -> Set[str]:
+        return set(self._flag_spec_to_port)
 
     def specifiers_for_builder(self, builder_name):
         return self._builders[builder_name]['specifiers']
@@ -172,8 +186,9 @@ class BuilderList(object):
     def is_try_server_builder(self, builder_name):
         return self._builders[builder_name].get('is_try_builder', False)
 
-    def is_wpt_builder(self, builder_name):
-        return 'wpt' in builder_name
+    def has_experimental_steps(self, builder_name):
+        steps = self.step_names_for_builder(builder_name)
+        return any(['experimental' in step for step in steps])
 
     def flag_specific_option(self, builder_name, step_name):
         steps = self._steps(builder_name)
@@ -227,7 +242,7 @@ class BuilderList(object):
         """Returns the builder name for a give version and build type.
 
         Args:
-            version: A string with the OS version specifier. e.g. "Trusty", "Win10".
+            version: A string with the OS or OS version specifier. e.g. "Win10".
             build_type: A string with the build type. e.g. "Debug" or "Release".
 
         Returns:

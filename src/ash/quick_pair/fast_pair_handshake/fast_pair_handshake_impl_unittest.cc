@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "ash/quick_pair/common/pair_failure.h"
 #include "ash/quick_pair/common/protocol.h"
 #include "ash/quick_pair/fast_pair_handshake/fake_fast_pair_data_encryptor.h"
@@ -14,15 +15,18 @@
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_data_encryptor_impl.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_gatt_service_client_impl.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_handshake.h"
-#include "ash/services/quick_pair/public/cpp/decrypted_response.h"
-#include "ash/services/quick_pair/public/cpp/fast_pair_message_type.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
+#include "base/test/scoped_feature_list.h"
+#include "chromeos/ash/services/quick_pair/public/cpp/decrypted_response.h"
+#include "chromeos/ash/services/quick_pair/public/cpp/fast_pair_message_type.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
+#include "device/bluetooth/floss/floss_features.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
 #include "device/bluetooth/test/mock_bluetooth_device.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -53,7 +57,7 @@ class FakeFastPairGattServiceClientImplFactory
   std::unique_ptr<FastPairGattServiceClient> CreateInstance(
       device::BluetoothDevice* device,
       scoped_refptr<device::BluetoothAdapter> adapter,
-      base::OnceCallback<void(absl::optional<PairFailure>)>
+      base::OnceCallback<void(std::optional<PairFailure>)>
           on_initialized_callback) override {
     auto fake_fast_pair_gatt_service_client =
         std::make_unique<FakeFastPairGattServiceClient>(
@@ -63,7 +67,8 @@ class FakeFastPairGattServiceClientImplFactory
     return fake_fast_pair_gatt_service_client;
   }
 
-  FakeFastPairGattServiceClient* fake_fast_pair_gatt_service_client_ = nullptr;
+  raw_ptr<FakeFastPairGattServiceClient, DanglingUntriaged>
+      fake_fast_pair_gatt_service_client_ = nullptr;
 };
 
 class FastPairFakeDataEncryptorImplFactory
@@ -90,7 +95,8 @@ class FastPairFakeDataEncryptorImplFactory
   void SetFailedRetrieval() { successful_retrieval_ = false; }
 
  private:
-  FakeFastPairDataEncryptor* data_encryptor_ = nullptr;
+  raw_ptr<FakeFastPairDataEncryptor, DanglingUntriaged> data_encryptor_ =
+      nullptr;
   bool successful_retrieval_ = true;
 };
 
@@ -144,7 +150,7 @@ class FastPairHandshakeImplTest : public testing::Test {
     handshake_ = std::make_unique<FastPairHandshakeImpl>(
         adapter_, device_,
         base::BindLambdaForTesting([this](scoped_refptr<Device> device,
-                                          absl::optional<PairFailure> failure) {
+                                          std::optional<PairFailure> failure) {
           EXPECT_EQ(device_, device);
           failure_ = failure;
         }));
@@ -168,7 +174,7 @@ class FastPairHandshakeImplTest : public testing::Test {
   FakeFastPairGattServiceClientImplFactory gatt_service_client_factory_;
   FastPairFakeDataEncryptorImplFactory data_encryptor_factory_;
   std::unique_ptr<FastPairHandshake> handshake_;
-  absl::optional<PairFailure> failure_ = absl::nullopt;
+  std::optional<PairFailure> failure_ = std::nullopt;
 };
 
 TEST_F(FastPairHandshakeImplTest, GattError) {
@@ -239,7 +245,7 @@ TEST_F(FastPairHandshakeImplTest, ParseResponseError) {
   fake_fast_pair_gatt_service_client()->RunOnGattClientInitializedCallback();
   fake_fast_pair_gatt_service_client()->RunWriteResponseCallback(
       std::vector<uint8_t>());
-  data_encryptor()->response(absl::nullopt);
+  data_encryptor()->response(std::nullopt);
   EXPECT_EQ(failure_.value(),
             PairFailure::kKeybasedPairingResponseDecryptFailure);
   EXPECT_FALSE(handshake_->completed_successfully());
@@ -257,8 +263,8 @@ TEST_F(FastPairHandshakeImplTest, ParseResponseWrongType) {
   histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptTime, 0);
   histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptResult, 0);
   fake_fast_pair_gatt_service_client()->RunOnGattClientInitializedCallback();
-  data_encryptor()->response(absl::make_optional(DecryptedResponse(
-      FastPairMessageType::kProvidersPasskey,
+  data_encryptor()->response(std::make_optional(DecryptedResponse(
+      FastPairMessageType::kKeyBasedPairingExtendedResponse,
       std::array<uint8_t, kDecryptedResponseAddressByteSize>(),
       std::array<uint8_t, kDecryptedResponseSaltByteSize>())));
   fake_fast_pair_gatt_service_client()->RunWriteResponseCallback(
@@ -278,8 +284,33 @@ TEST_F(FastPairHandshakeImplTest, Success) {
   histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptTime, 0);
   histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptResult, 0);
   fake_fast_pair_gatt_service_client()->RunOnGattClientInitializedCallback();
-  data_encryptor()->response(absl::make_optional(DecryptedResponse(
+  data_encryptor()->response(std::make_optional(DecryptedResponse(
       FastPairMessageType::kKeyBasedPairingResponse,
+      std::array<uint8_t, kDecryptedResponseAddressByteSize>(),
+      std::array<uint8_t, kDecryptedResponseSaltByteSize>())));
+  fake_fast_pair_gatt_service_client()->RunWriteResponseCallback(
+      std::vector<uint8_t>());
+  EXPECT_FALSE(failure_.has_value());
+  EXPECT_TRUE(handshake_->completed_successfully());
+  histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptTime, 1);
+  histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptResult, 1);
+  histogram_tester().ExpectTotalCount(kHandshakeResult, 1);
+  histogram_tester().ExpectTotalCount(kHandshakeFailureReason, 0);
+}
+
+TEST_F(FastPairHandshakeImplTest, SuccessWithExtendedResponse) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{features::kFastPairKeyboards,
+                            floss::features::kFlossEnabled},
+      /*disabled_features=*/{});
+  histogram_tester().ExpectTotalCount(kHandshakeResult, 0);
+  histogram_tester().ExpectTotalCount(kHandshakeFailureReason, 0);
+  histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptTime, 0);
+  histogram_tester().ExpectTotalCount(kKeyBasedCharacteristicDecryptResult, 0);
+  fake_fast_pair_gatt_service_client()->RunOnGattClientInitializedCallback();
+  data_encryptor()->response(std::make_optional(DecryptedResponse(
+      FastPairMessageType::kKeyBasedPairingExtendedResponse,
       std::array<uint8_t, kDecryptedResponseAddressByteSize>(),
       std::array<uint8_t, kDecryptedResponseSaltByteSize>())));
   fake_fast_pair_gatt_service_client()->RunWriteResponseCallback(
@@ -298,10 +329,10 @@ TEST_F(FastPairHandshakeImplTest, FailsIfNoDevice) {
 
   auto handshake = std::make_unique<FastPairHandshakeImpl>(
       adapter_, device,
-      base::BindLambdaForTesting([](scoped_refptr<Device> device,
-                                    absl::optional<PairFailure> failure) {
-        EXPECT_EQ(failure, PairFailure::kPairingDeviceLost);
-      }));
+      base::BindLambdaForTesting(
+          [](scoped_refptr<Device> device, std::optional<PairFailure> failure) {
+            EXPECT_EQ(failure, PairFailure::kPairingDeviceLost);
+          }));
 }
 
 }  // namespace quick_pair

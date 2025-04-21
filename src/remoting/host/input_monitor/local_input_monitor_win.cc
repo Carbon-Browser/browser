@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/containers/heap_array.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/sequence_checker.h"
@@ -159,9 +160,9 @@ LRESULT LocalInputMonitorWinImpl::Core::OnInput(HRAWINPUT input_handle) {
   }
 
   // Retrieve the input record itself.
-  std::unique_ptr<uint8_t[]> buffer(new uint8_t[size]);
-  RAWINPUT* input = reinterpret_cast<RAWINPUT*>(buffer.get());
-  result = GetRawInputData(input_handle, RID_INPUT, buffer.get(), &size,
+  auto buffer = base::HeapArray<char>::Uninit(size);
+  RAWINPUT* input = reinterpret_cast<RAWINPUT*>(buffer.data());
+  result = GetRawInputData(input_handle, RID_INPUT, buffer.data(), &size,
                            sizeof(RAWINPUTHEADER));
   if (result == static_cast<UINT>(-1)) {
     PLOG(ERROR) << "GetRawInputData() failed";

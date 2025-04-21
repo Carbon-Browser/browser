@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,12 +50,12 @@ class GlobalWebStateEventTracker : public WebStateObserver {
   GlobalWebStateEventTracker();
   ~GlobalWebStateEventTracker() override;
 
-  // ScopedObserver used to track registration with WebState.
+  // ScopedMultiSourceObservation used to track registration with WebState.
   base::ScopedMultiSourceObservation<WebState, WebStateObserver>
       scoped_observations_{this};
 
   // List of observers currently registered with the tracker.
-  base::ObserverList<GlobalWebStateObserver, true>::Unchecked observer_list_;
+  base::ObserverList<GlobalWebStateObserver, true> observer_list_;
 };
 
 }  // namespace web

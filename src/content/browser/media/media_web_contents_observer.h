@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "content/browser/media/audio_stream_monitor.h"
+#include "content/browser/media/media_devices_util.h"
 #include "content/browser/media/media_power_experiment_manager.h"
 #include "content/browser/media/session/media_session_controllers_manager.h"
 #include "content/common/content_export.h"
@@ -30,7 +32,6 @@
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "ui/android/view_android.h"
@@ -88,13 +89,16 @@ class CONTENT_EXPORT MediaWebContentsObserver
   bool IsPictureInPictureAllowedForFullscreenVideo() const;
 
   // Gets the MediaPlayerId of the fullscreen video if it exists.
-  const absl::optional<MediaPlayerId>& GetFullscreenVideoMediaPlayerId() const;
+  const std::optional<MediaPlayerId>& GetFullscreenVideoMediaPlayerId() const;
 
   // WebContentsObserver implementation.
   void WebContentsDestroyed() override;
   void RenderFrameDeleted(RenderFrameHost* render_frame_host) override;
   void MediaPictureInPictureChanged(bool is_picture_in_picture) override;
   void DidUpdateAudioMutingState(bool muted) override;
+  void DidStartNavigation(NavigationHandle* navigation_handle) override;
+  void RenderFrameHostChanged(RenderFrameHost* old_host,
+                              RenderFrameHost* new_host) override;
 
   // MediaPlayerObserverClient implementation.
   void GetHasPlayedBefore(GetHasPlayedBeforeCallback callback) override;
@@ -163,7 +167,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
     ~MediaPlayerHostImpl() override;
 
     // Used to bind receivers via the BrowserInterfaceBroker.
-    void BindMediaPlayerHostReceiver(
+    void AddMediaPlayerHostReceiver(
         mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerHost>
             receiver);
 
@@ -211,13 +215,20 @@ class CONTENT_EXPORT MediaWebContentsObserver
     void OnAudioOutputSinkChanged(const std::string& hashed_device_id) override;
     void OnUseAudioServiceChanged(bool uses_audio_service) override;
     void OnAudioOutputSinkChangingDisabled() override;
+    void OnRemotePlaybackMetadataChange(
+        media_session::mojom::RemotePlaybackMetadataPtr
+            remote_playback_metadata) override;
+    void OnVideoVisibilityChanged(bool meets_visibility_threshold) override;
 
    private:
     PlayerInfo* GetPlayerInfo();
     void NotifyAudioStreamMonitorIfNeeded();
 
+    void OnReceivedMediaDeviceSalt(
+        const std::string& hashed_device_id,
+        const content::MediaDeviceSaltAndOrigin& salt_and_origin);
     void OnReceivedTranslatedDeviceId(
-        const absl::optional<std::string>& translated_id);
+        const std::optional<std::string>& translated_id);
 
     const MediaPlayerId media_player_id_;
     const raw_ptr<MediaWebContentsObserver> media_web_contents_observer_;
@@ -243,7 +254,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
       base::flat_map<MediaPlayerId,
                      mojo::AssociatedRemote<media::mojom::MediaPlayer>>;
 
-  // Communicates with the MediaSessionControllerManager to find or create (if
+  // Communicates with the MediaSessionControllersManager to find or create (if
   // needed) a MediaSessionController identified by |player_id|, in order to
   // bind its mojo remote for media::mojom::MediaPlayer.
   void OnMediaPlayerAdded(
@@ -268,6 +279,9 @@ class CONTENT_EXPORT MediaWebContentsObserver
   void OnAudioOutputSinkChangedWithRawDeviceId(
       const MediaPlayerId& player_id,
       const std::string& raw_device_id);
+  void OnRemotePlaybackMetadataChange(
+      const MediaPlayerId& player_id,
+      media_session::mojom::RemotePlaybackMetadataPtr remote_playback_metadata);
 
   // Used to notify when the renderer -> browser mojo connection via the
   // interface media::mojom::MediaPlayerObserver gets disconnected.
@@ -304,8 +318,8 @@ class CONTENT_EXPORT MediaWebContentsObserver
   // Tracking variables and associated wake locks for media playback.
   PlayerInfoMap player_info_map_;
   mojo::Remote<device::mojom::WakeLock> audio_wake_lock_;
-  absl::optional<MediaPlayerId> fullscreen_player_;
-  absl::optional<bool> picture_in_picture_allowed_in_fullscreen_;
+  std::optional<MediaPlayerId> fullscreen_player_;
+  std::optional<bool> picture_in_picture_allowed_in_fullscreen_;
   bool has_audio_wake_lock_for_testing_ = false;
 
   std::unique_ptr<MediaSessionControllersManager> session_controllers_manager_;

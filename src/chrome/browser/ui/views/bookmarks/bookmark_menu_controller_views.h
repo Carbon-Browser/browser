@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
 #include "components/bookmarks/browser/bookmark_node_data.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/views/controls/menu/menu_delegate.h"
 
 class BookmarkBarView;
@@ -22,10 +23,6 @@ namespace bookmarks {
 class BookmarkNode;
 }
 
-namespace content {
-class PageNavigator;
-}
-
 namespace ui {
 class OSExchangeData;
 }
@@ -35,7 +32,7 @@ class MenuButton;
 class MenuItemView;
 class MenuRunner;
 class Widget;
-}
+}  // namespace views
 
 // BookmarkMenuController is responsible for showing a menu of bookmarks,
 // each item in the menu represents a bookmark.
@@ -46,13 +43,11 @@ class BookmarkMenuController : public bookmarks::BaseBookmarkModelObserver,
  public:
   // Creates a BookmarkMenuController showing the children of |node| starting
   // at |start_child_index|.
-  BookmarkMenuController(
-      Browser* browser,
-      base::RepeatingCallback<content::PageNavigator*()> get_navigator,
-      views::Widget* parent,
-      const bookmarks::BookmarkNode* node,
-      size_t start_child_index,
-      bool for_drop);
+  BookmarkMenuController(Browser* browser,
+                         views::Widget* parent,
+                         const bookmarks::BookmarkNode* node,
+                         size_t start_child_index,
+                         bool for_drop);
 
   BookmarkMenuController(const BookmarkMenuController&) = delete;
   BookmarkMenuController& operator=(const BookmarkMenuController&) = delete;
@@ -100,7 +95,7 @@ class BookmarkMenuController : public bookmarks::BaseBookmarkModelObserver,
   bool ShowContextMenu(views::MenuItemView* source,
                        int id,
                        const gfx::Point& p,
-                       ui::MenuSourceType source_type) override;
+                       ui::mojom::MenuSourceType source_type) override;
   bool CanDrag(views::MenuItemView* menu) override;
   void WriteDragData(views::MenuItemView* sender,
                      ui::OSExchangeData* data) override;
@@ -127,7 +122,7 @@ class BookmarkMenuController : public bookmarks::BaseBookmarkModelObserver,
   std::unique_ptr<BookmarkMenuDelegate> menu_delegate_;
 
   // The node we're showing the contents of.
-  raw_ptr<const bookmarks::BookmarkNode> node_;
+  raw_ptr<const bookmarks::BookmarkNode, DanglingUntriaged> node_;
 
   // Data for the drop.
   bookmarks::BookmarkNodeData drop_data_;

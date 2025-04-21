@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace {
 class SharedMemoryBufferTrackerHandle : public media::VideoCaptureBufferHandle {
  public:
   explicit SharedMemoryBufferTrackerHandle(
-      const base::WritableSharedMemoryMapping& mapping)
+      base::WritableSharedMemoryMapping& mapping)
       : mapped_size_(mapping.size()),
         data_(mapping.GetMemoryAsSpan<uint8_t>().data()) {}
 
@@ -58,7 +58,7 @@ size_t CalculateRequiredBufferSize(
 namespace media {
 
 SharedMemoryBufferTracker::SharedMemoryBufferTracker(bool strict_pixel_format)
-    : strict_pixel_format_(strict_pixel_format){};
+    : strict_pixel_format_(strict_pixel_format) {}
 
 SharedMemoryBufferTracker::~SharedMemoryBufferTracker() = default;
 
@@ -99,16 +99,13 @@ SharedMemoryBufferTracker::DuplicateAsUnsafeRegion() {
   return region_.Duplicate();
 }
 
-mojo::ScopedSharedBufferHandle
-SharedMemoryBufferTracker::DuplicateAsMojoBuffer() {
-  DCHECK(region_.IsValid());
-  return mojo::WrapUnsafeSharedMemoryRegion(region_.Duplicate());
-}
-
 gfx::GpuMemoryBufferHandle
 SharedMemoryBufferTracker::GetGpuMemoryBufferHandle() {
   NOTREACHED() << "Unsupported operation";
-  return gfx::GpuMemoryBufferHandle();
+}
+
+VideoCaptureBufferType SharedMemoryBufferTracker::GetBufferType() {
+  return VideoCaptureBufferType::kSharedMemory;
 }
 
 uint32_t SharedMemoryBufferTracker::GetMemorySizeInBytes() {

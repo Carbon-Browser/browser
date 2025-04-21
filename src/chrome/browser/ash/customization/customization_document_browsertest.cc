@@ -1,33 +1,38 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/customization/customization_document.h"
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/ash/base/locale_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/l10n_util.h"
+#include "chrome/browser/ui/webui/ash/login/l10n_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
-using ash::locale_util::LanguageSwitchResult;
-using ash::locale_util::SwitchLanguageCallback;
-
 namespace ash {
 
 namespace {
+
+using locale_util::LanguageSwitchResult;
+using locale_util::SwitchLanguageCallback;
 
 class LanguageSwitchedWaiter {
  public:
@@ -209,17 +214,17 @@ class CustomizationVPDTest : public InProcessBrowserTest,
                              public testing::WithParamInterface<const char*> {
  public:
   CustomizationVPDTest()
-      : statistics_provider_(new chromeos::system::FakeStatisticsProvider()) {
+      : statistics_provider_(new system::FakeStatisticsProvider()) {
     // Set the instance returned by GetInstance() for testing.
-    chromeos::system::StatisticsProvider::SetTestProvider(
-        statistics_provider_.get());
+    system::StatisticsProvider::SetTestProvider(statistics_provider_.get());
     statistics_provider_->SetMachineStatistic("initial_locale", GetParam());
     statistics_provider_->SetMachineStatistic("keyboard_layout", "");
+    statistics_provider_->SetVpdStatus(
+        system::StatisticsProvider::VpdStatus::kValid);
   }
 
  private:
-  std::unique_ptr<chromeos::system::FakeStatisticsProvider>
-      statistics_provider_;
+  std::unique_ptr<system::FakeStatisticsProvider> statistics_provider_;
 };
 
 IN_PROC_BROWSER_TEST_P(CustomizationVPDTest, GetUILanguageList) {
@@ -234,14 +239,13 @@ IN_PROC_BROWSER_TEST_P(CustomizationVPDTest, GetUILanguageList) {
       << "Test failed for initial_locale='" << GetParam()
       << "', locales=" << Print(locales);
 
-  std::unique_ptr<base::ListValue> ui_language_list =
-      GetUILanguageList(NULL, "", input_method::InputMethodManager::Get());
-  EXPECT_GE(ui_language_list->GetListDeprecated().size(), locales.size())
+  auto ui_language_list =
+      GetUILanguageList(nullptr, "", input_method::InputMethodManager::Get());
+  EXPECT_GE(ui_language_list.size(), locales.size())
       << "Test failed for initial_locale='" << GetParam() << "'";
 
-  for (size_t i = 0; i < ui_language_list->GetListDeprecated().size(); ++i) {
-    base::Value::Dict* language_info =
-        ui_language_list->GetList()[i].GetIfDict();
+  for (size_t i = 0; i < ui_language_list.size(); ++i) {
+    base::Value::Dict* language_info = ui_language_list[i].GetIfDict();
 
     ASSERT_TRUE(language_info)
         << "Test failed for initial_locale='" << GetParam() << "', i=" << i;

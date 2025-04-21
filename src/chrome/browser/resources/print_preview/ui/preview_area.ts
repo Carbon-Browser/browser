@@ -1,32 +1,48 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+// <if expr="is_chromeos">
+import './printer_setup_info_cros.js';
+// </if>
 import './print_preview_vars.css.js';
-import '../strings.m.js';
+import '/strings.m.js';
 
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {hasKeyModifiers} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {hasKeyModifiers} from 'chrome://resources/js/util.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {DarkModeMixin} from '../dark_mode_mixin.js';
 import {Coordinate2d} from '../data/coordinate2d.js';
-import {Destination} from '../data/destination.js';
-import {CustomMarginsOrientation, Margins, MarginsSetting, MarginsType} from '../data/margins.js';
-import {MeasurementSystem} from '../data/measurement_system.js';
-import {DuplexMode, MediaSizeValue, Ticket} from '../data/model.js';
+// <if expr="not is_chromeos">
+import type {Destination} from '../data/destination.js';
+// </if>
+// <if expr="is_chromeos">
+import type {Destination} from '../data/destination_cros.js';
+// </if>
+import type {Margins, MarginsSetting} from '../data/margins.js';
+import {CustomMarginsOrientation, MarginsType} from '../data/margins.js';
+import type {MeasurementSystem} from '../data/measurement_system.js';
+import type {MediaSizeValue, Settings, Ticket} from '../data/model.js';
+import {DuplexMode} from '../data/model.js';
 import {ScalingType} from '../data/scaling.js';
 import {Size} from '../data/size.js';
 import {Error, State} from '../data/state.js';
-import {NativeLayer, NativeLayerImpl} from '../native_layer.js';
+import type {NativeLayer} from '../native_layer.js';
+import {NativeLayerImpl} from '../native_layer.js';
 import {areRangesEqual} from '../print_preview_utils.js';
 
-import {MARGIN_KEY_MAP, MarginObject, PrintPreviewMarginControlContainerElement} from './margin_control_container.js';
-import {PluginProxy, PluginProxyImpl} from './plugin_proxy.js';
+import type {PrintPreviewMarginControlContainerElement} from './margin_control_container.js';
+import {MARGIN_KEY_MAP} from './margin_control_container.js';
+import type {PluginProxy} from './plugin_proxy.js';
+import {PluginProxyImpl} from './plugin_proxy.js';
 import {getTemplate} from './preview_area.html.js';
+// <if expr="is_chromeos">
+import {PrinterSetupInfoInitiator, PrinterSetupInfoMessageType} from './printer_setup_info_cros.js';
+// </if>
 import {SettingsMixin} from './settings_mixin.js';
 
 export type PreviewTicket = Ticket&{
@@ -49,8 +65,15 @@ export interface PrintPreviewPreviewAreaElement {
   $: {marginControlContainer: PrintPreviewMarginControlContainerElement};
 }
 
+// <if expr="is_chromeos">
+export function shouldShowCrosPrinterSetupError(
+    state: State, error: Error): boolean {
+  return state === State.ERROR && error === Error.INVALID_PRINTER;
+}
+// </if>
+
 const PrintPreviewPreviewAreaElementBase =
-    WebUIListenerMixin(I18nMixin(SettingsMixin(DarkModeMixin(PolymerElement))));
+    WebUiListenerMixin(I18nMixin(SettingsMixin(DarkModeMixin(PolymerElement))));
 
 export class PrintPreviewPreviewAreaElement extends
     PrintPreviewPreviewAreaElementBase {
@@ -102,6 +125,26 @@ export class PrintPreviewPreviewAreaElement extends
         notify: true,
         computed: 'computePreviewLoaded_(documentReady_, pluginLoadComplete_)',
       },
+
+      // <if expr="is_chromeos">
+      printerOffline_: {
+        type: Number,
+        value: PrinterSetupInfoMessageType.PRINTER_OFFLINE,
+        readOnly: true,
+      },
+
+      previewAreaInitiator_: {
+        type: Number,
+        value: PrinterSetupInfoInitiator.PREVIEW_AREA,
+        readOnly: true,
+      },
+      // </if>
+
+      showCrosPrinterSetupInfo_: {
+        type: Boolean,
+        computed: 'computeShowCrosPrinterSetupInfo(state, error)',
+        reflectToAttribute: true,
+      },
     };
   }
 
@@ -125,6 +168,7 @@ export class PrintPreviewPreviewAreaElement extends
   private documentReady_: boolean;
   private previewLoaded_: boolean;
 
+  private showCrosPrinterSetupInfo_: boolean = false;
   private nativeLayer_: NativeLayer|null = null;
   private lastTicket_: PreviewTicket|null = null;
   private inFlightRequestId_: number = -1;
@@ -135,7 +179,7 @@ export class PrintPreviewPreviewAreaElement extends
     super.connectedCallback();
 
     this.nativeLayer_ = NativeLayerImpl.getInstance();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'page-preview-ready', this.onPagePreviewReady_.bind(this));
   }
 
@@ -237,23 +281,23 @@ export class PrintPreviewPreviewAreaElement extends
   /**
    * @return The current preview area message to display.
    */
-  private currentMessage_(): string {
+  private currentMessage_(): TrustedHTML {
     switch (this.previewState) {
       case PreviewAreaState.LOADING:
-        return this.i18n('loading');
+        return this.i18nAdvanced('loading');
       case PreviewAreaState.DISPLAY_PREVIEW:
-        return '';
+        return window.trustedTypes!.emptyHTML;
       // <if expr="is_macosx">
       case PreviewAreaState.OPEN_IN_PREVIEW_LOADING:
       case PreviewAreaState.OPEN_IN_PREVIEW_LOADED:
-        return this.i18n('openingPDFInPreview');
+        return this.i18nAdvanced('openingPDFInPreview');
       // </if>
       case PreviewAreaState.ERROR:
         // The preview area is responsible for displaying all errors except
         // print failed.
         return this.getErrorMessage_();
       default:
-        return '';
+        return window.trustedTypes!.emptyHTML;
     }
   }
 
@@ -530,9 +574,6 @@ export class PrintPreviewPreviewAreaElement extends
 
   private hasTicketChanged_(): boolean {
     if (!this.marginsValid_()) {
-      // Log so that we can try to debug how this occurs. See
-      // https://crbug.com/942211
-      console.warn('Requested preview with invalid margins');
       return false;
     }
 
@@ -565,16 +606,13 @@ export class PrintPreviewPreviewAreaElement extends
 
       // Changed to custom margins from a different margins type.
       if (!this.margins) {
-        // Log so that we can try to debug how this occurs. See
-        // https://crbug.com/942211
-        console.warn('Requested preview with undefined document margins');
         return false;
       }
 
       const customMarginsChanged =
           Object.values(CustomMarginsOrientation).some(side => {
             return this.margins.get(side) !==
-                (customMargins as MarginObject)[MARGIN_KEY_MAP.get(side)!];
+                customMargins[MARGIN_KEY_MAP.get(side)!];
           });
       if (customMarginsChanged) {
         return true;
@@ -611,6 +649,14 @@ export class PrintPreviewPreviewAreaElement extends
     const newValue = this.getSettingValue('mediaSize') as MediaSizeValue;
     if (newValue.height_microns !== lastTicket.mediaSize.height_microns ||
         newValue.width_microns !== lastTicket.mediaSize.width_microns ||
+        newValue.imageable_area_left_microns !==
+            lastTicket.mediaSize.imageable_area_left_microns ||
+        newValue.imageable_area_bottom_microns !==
+            lastTicket.mediaSize.imageable_area_bottom_microns ||
+        newValue.imageable_area_right_microns !==
+            lastTicket.mediaSize.imageable_area_right_microns ||
+        newValue.imageable_area_top_microns !==
+            lastTicket.mediaSize.imageable_area_top_microns ||
         (this.destination.id !== lastTicket.deviceName &&
          this.getSettingValue('margins') === MarginsType.MINIMUM)) {
       return true;
@@ -639,7 +685,7 @@ export class PrintPreviewPreviewAreaElement extends
   }
 
   /** @return Appropriate key for the scaling type setting. */
-  private getScalingSettingKey_(): string {
+  private getScalingSettingKey_(): keyof Settings {
     return this.getSetting('scalingTypePdf').available ? 'scalingTypePdf' :
                                                          'scalingType';
   }
@@ -732,28 +778,43 @@ export class PrintPreviewPreviewAreaElement extends
 
   private onStateOrErrorChange_() {
     if ((this.state === State.ERROR || this.state === State.FATAL_ERROR) &&
-        this.getErrorMessage_() !== '') {
+        this.getErrorMessage_().toString() !== '') {
       this.previewState = PreviewAreaState.ERROR;
     }
   }
 
   /** @return The error message to display in the preview area. */
-  private getErrorMessage_(): string {
+  private getErrorMessage_(): TrustedHTML {
     switch (this.error) {
       case Error.INVALID_PRINTER:
         return this.i18nAdvanced('invalidPrinterSettings', {
           substitutions: [],
           tags: ['BR'],
         });
-      // <if expr="chromeos_ash or chromeos_lacros">
+      // <if expr="is_chromeos">
       case Error.NO_DESTINATIONS:
-        return this.i18n('noDestinationsMessage');
+        return this.i18nAdvanced('noDestinationsMessage');
       // </if>
       case Error.PREVIEW_FAILED:
-        return this.i18n('previewFailed');
+        return this.i18nAdvanced('previewFailed');
       default:
-        return '';
+        return window.trustedTypes!.emptyHTML;
     }
+  }
+
+  /**
+   * Determines if setup info element should be shown instead of the preview
+   * area message. For ChromeOS, setup assistance is shown if the
+   * `INVALID_PRINTER` error has occurred. All other platforms
+   * `computeShowCrosPrinterSetupInfo` will return false.
+   */
+  private computeShowCrosPrinterSetupInfo(): boolean {
+    // <if expr="is_chromeos">
+    return shouldShowCrosPrinterSetupError(this.state, this.error);
+    // </if>
+    // <if expr="not is_chromeos">
+    return false;
+    // </if>
   }
 }
 

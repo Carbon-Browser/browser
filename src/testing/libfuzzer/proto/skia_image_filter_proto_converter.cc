@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // Converts an Input protobuf Message to a string that can be successfully read
 // by SkImageFilter::Deserialize and used as an image filter. The string
@@ -28,7 +33,6 @@
 
 #include "testing/libfuzzer/proto/skia_image_filter_proto_converter.h"
 
-#include <ctype.h>
 #include <stdlib.h>
 
 #include <algorithm>
@@ -42,7 +46,11 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/containers/contains.h"
+#include "base/containers/span.h"
 #include "base/notreached.h"
+#include "base/numerics/byte_conversions.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/protobuf/src/google/protobuf/descriptor.h"
 #include "third_party/protobuf/src/google/protobuf/message.h"
 #include "third_party/protobuf/src/google/protobuf/repeated_field.h"
@@ -279,8 +287,7 @@ Converter::Converter(const Converter& other) {}
 
 std::string Converter::FieldToFlattenableName(
     const std::string& field_name) const {
-  CHECK(kFieldToFlattenableName.find(field_name) !=
-        kFieldToFlattenableName.end());
+  CHECK(base::Contains(kFieldToFlattenableName, field_name));
 
   return kFieldToFlattenableName.at(field_name);
 }
@@ -756,8 +763,7 @@ size_t Converter::PopStartSize() {
 template <typename T>
 void Converter::WriteNum(const T num) {
   if (sizeof(T) > 4) {
-    CHECK(num <= UINT32_MAX);
-    uint32_t four_byte_num = static_cast<uint32_t>(num);
+    auto four_byte_num = base::checked_cast<uint32_t>(num);
     char num_arr[sizeof(four_byte_num)];
     memcpy(num_arr, &four_byte_num, sizeof(four_byte_num));
     for (size_t idx = 0; idx < sizeof(four_byte_num); idx++)
@@ -1238,7 +1244,7 @@ void Converter::Visit(const LayerDrawLooper& layer_draw_looper) {
   WriteNum(layer_draw_looper.layer_infos_size());
   int n = layer_draw_looper.layer_infos_size();
 #ifdef AVOID_MISBEHAVIOR
-  n = 1;  // Only write 1 to avoid timeouts.
+  n = std::min(n, 1);  // Write at most 1 to avoid timeouts.
 #endif
   for (int i = 0; i < n; ++i)
     Visit(layer_draw_looper.layer_infos(i));
@@ -1375,7 +1381,12 @@ void Converter::Visit(const PathRef& path_ref) {
   }
 
   SkRect skrect;
-  skrect.setBoundsCheck(&points[0], points.size());
+  if (!points.empty()) {
+    // Calling `setBoundsCheck()` with an empty array would set `skrect` to the
+    // empty rectangle, which it already is after default construction.
+    skrect.setBoundsCheck(points.data(), points.size());
+  }
+
   WriteNum(skrect.fLeft);
   WriteNum(skrect.fTop);
   WriteNum(skrect.fRight);
@@ -1539,23 +1550,9 @@ void Converter::WriteTagSize(const char (&tag)[4], const size_t size) {
 }
 
 // Writes num as a big endian number.
-template <typename T>
-void Converter::WriteBigEndian(const T num) {
-  CHECK_LE(sizeof(T), static_cast<size_t>(4));
-  uint8_t num_arr[sizeof(T)];
-  memcpy(num_arr, &num, sizeof(T));
-  uint8_t tmp1 = num_arr[0];
-  uint8_t tmp2 = num_arr[3];
-  num_arr[3] = tmp1;
-  num_arr[0] = tmp2;
-
-  tmp1 = num_arr[1];
-  tmp2 = num_arr[2];
-  num_arr[2] = tmp1;
-  num_arr[1] = tmp2;
-
-  for (size_t idx = 0; idx < sizeof(uint32_t); idx++)
-    output_.push_back(num_arr[idx]);
+void Converter::WriteBigEndian(base::StrictNumeric<uint32_t> num) {
+  auto arr = base::numerics::U32ToBigEndian(num);
+  output_.insert(output_.end(), arr.begin(), arr.end());
 }
 
 void Converter::Visit(const ICCColorSpace& icc_color_space) {
@@ -2124,7 +2121,9 @@ void Converter::WriteFields(const Message& msg,
               msg, field_descriptor));
           break;
         }
-        default: { NOTREACHED(); }
+        default: {
+          NOTREACHED();
+        }
       }
       continue;
       // Skip field if it is optional and it is unset.
@@ -2334,9 +2333,7 @@ bool Converter::IsBlacklisted(const std::string& field_name) const {
   // Don't blacklist misbehaving flattenables.
   return false;
 #else
-
-  return kMisbehavedFlattenableBlacklist.find(field_name) !=
-         kMisbehavedFlattenableBlacklist.end();
+  return base::Contains(kMisbehavedFlattenableBlacklist, field_name);
 #endif  // AVOID_MISBEHAVIOR
 }
 }  // namespace skia_image_filter_proto_converter

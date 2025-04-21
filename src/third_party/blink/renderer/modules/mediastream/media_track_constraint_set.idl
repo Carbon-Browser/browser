@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@ dictionary MediaTrackConstraintSet {
     ConstrainBoolean echoCancellation;
     ConstrainBoolean autoGainControl;
     ConstrainBoolean noiseSuppression;
+    ConstrainBoolean voiceIsolation;
     ConstrainDouble latency;
     ConstrainLong channelCount;
     ConstrainDOMString deviceId;
@@ -47,6 +48,18 @@ dictionary MediaTrackConstraintSet {
     (boolean or ConstrainDouble) tilt;
     (boolean or ConstrainDouble) zoom;
     ConstrainBoolean   torch;
+
+    // W3C Media Capture Extensions
+    [RuntimeEnabled=MediaCaptureBackgroundBlur] ConstrainBoolean backgroundBlur;
+    [RuntimeEnabled=MediaCaptureCameraControls] ConstrainBoolean backgroundSegmentationMask;
+    [RuntimeEnabled=MediaCaptureCameraControls] ConstrainBoolean eyeGazeCorrection;
+    [RuntimeEnabled=MediaCaptureCameraControls] ConstrainBoolean faceFraming;
+
+    // Screen Capture API
+    // https://w3c.github.io/mediacapture-screen-share/#extensions-to-mediatrackconstraintset
+    ConstrainDOMString displaySurface;
+    ConstrainBoolean suppressLocalAudioPlayback;
+
     // The "mandatory" and "_optional" members are retained for conformance
     // with https://www.w3.org/TR/2013/WD-mediacapture-streams-20130903/
     object mandatory;

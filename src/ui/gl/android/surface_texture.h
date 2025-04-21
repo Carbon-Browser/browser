@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "ui/gl/gl_export.h"
 
-struct ANativeWindow;
-
 namespace gl {
+
+class ScopedANativeWindow;
 
 // This class serves as a bridge for native code to call java functions inside
 // android SurfaceTexture class.
@@ -44,7 +45,7 @@ class GL_EXPORT SurfaceTexture
 
   // Retrieve the 4x4 texture coordinate transform matrix associated with the
   // texture image set by the most recent call to updateTexImage.
-  void GetTransformMatrix(float mtx[16]);
+  void GetTransformMatrix(base::span<float, 16> mtx);
 
   // Attach the SurfaceTexture to the texture currently bound to
   // GL_TEXTURE_EXTERNAL_OES.
@@ -55,9 +56,7 @@ class GL_EXPORT SurfaceTexture
   void DetachFromGLContext();
 
   // Creates a native render surface for this surface texture.
-  // The caller must release the underlying reference when done with the handle
-  // by calling ANativeWindow_release().
-  ANativeWindow* CreateSurface();
+  ScopedANativeWindow CreateSurface();
 
   // Release the SurfaceTexture back buffers.  The SurfaceTexture is no longer
   // usable after calling this but the front buffer is still valid. Note that

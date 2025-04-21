@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "ash/shell.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 
 namespace system_logs {
 
@@ -48,16 +49,18 @@ void VirtualKeyboardLogSource::Fetch(SysLogsSourceCallback callback) {
         base::NumberToString(touchscreen_count);
     log_data += base::StrCat({"Touchscreen ", touchscreen_count_converted,
                               " Product ID"}) +
-                ": " + base::NumberToString(device.product_id) + "\n";
+                ": " + base::StringPrintf("0x%04x", device.product_id) + "\n";
     log_data += base::StrCat({"Touchscreen ", touchscreen_count_converted,
                               " Vendor ID"}) +
-                ": " + base::NumberToString(device.vendor_id) + "\n";
+                ": " + base::StringPrintf("0x%04x", device.vendor_id) + "\n";
     ++touchscreen_count;
   }
 
   log_data +=
-      "Has Internal Keyboard: " +
-      base::NumberToString(virtual_keyboard_controller->HasInternalKeyboard()) +
+      "Internal Keyboard Name: " +
+      (virtual_keyboard_controller->GetInternalKeyboardName()
+           ? virtual_keyboard_controller->GetInternalKeyboardName().value()
+           : "No Internal Keyboard Detected") +
       "\n";
   log_data += "Is Internal Keyboard Ignored: " +
               base::NumberToString(
@@ -65,18 +68,22 @@ void VirtualKeyboardLogSource::Fetch(SysLogsSourceCallback callback) {
               "\n";
 
   int external_keyboard_count = 1;
-  for (const ui::InputDevice& device :
-       virtual_keyboard_controller->GetExternalKeyboards()) {
+  std::vector<ui::InputDevice> external_keyboards =
+      virtual_keyboard_controller->GetExternalKeyboards();
+  if (external_keyboards.size() == 0) {
+    log_data += "No External Keyboard Detected\n";
+  }
+  for (const ui::InputDevice& device : external_keyboards) {
     const std::string external_keyboard_count_converted =
         base::NumberToString(external_keyboard_count);
     log_data +=
         base::StrCat({"External Keyboard ", external_keyboard_count_converted,
                       " Product ID"}) +
-        ": " + base::NumberToString(device.product_id) + "\n";
+        ": " + base::StringPrintf("0x%04x", device.product_id) + "\n";
     log_data +=
         base::StrCat({"External Keyboard ", external_keyboard_count_converted,
                       " Vendor ID"}) +
-        ": " + base::NumberToString(device.vendor_id) + "\n";
+        ": " + base::StringPrintf("0x%04x", device.vendor_id) + "\n";
     ++external_keyboard_count;
   }
 

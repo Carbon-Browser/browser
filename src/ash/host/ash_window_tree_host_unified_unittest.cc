@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ TEST_F(AshWindowTreeHostUnifiedTest, RotatedMouseMovement) {
   // Verify the old config is removed when display is updated.
   gfx::AcceleratedWidget old_widget1 = widget1;
 
-  // TODO(crbug.com/1297396): Just updating the display rotation doesn't update
+  // TODO(crbug.com/40215149): Just updating the display rotation doesn't update
   // the cursor config, so need to remove and re-add the display for it to
   // re-register a new cursor config. After the bug is fixed, change to just
   // update to the new rotation directly. In that case, the widget id may stay

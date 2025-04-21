@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include <utility>
 
 #include "base/notreached.h"
-#include "base/strings/abseil_string_conversions.h"
 #include "net/http/http_raw_request_headers.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
 
 namespace net {
 
@@ -31,17 +29,8 @@ void MultiplexedHttpStream::SaveSSLInfo() {
   session_->SaveSSLInfo();
 }
 
-void MultiplexedHttpStream::GetSSLCertRequestInfo(
-    SSLCertRequestInfo* cert_request_info) {
-  // A multiplexed stream cannot request client certificates. Client
-  // authentication may only occur during the initial SSL handshake.
-  NOTREACHED();
-}
-
 void MultiplexedHttpStream::Drain(HttpNetworkSession* session) {
   NOTREACHED();
-  Close(false);
-  delete this;
 }
 
 std::unique_ptr<HttpStream> MultiplexedHttpStream::RenewStreamForAuth() {
@@ -61,13 +50,13 @@ void MultiplexedHttpStream::SetRequestHeadersCallback(
 }
 
 void MultiplexedHttpStream::DispatchRequestHeadersCallback(
-    const spdy::Http2HeaderBlock& spdy_headers) {
+    const quiche::HttpHeaderBlock& spdy_headers) {
   if (!request_headers_callback_)
     return;
   HttpRawRequestHeaders raw_headers;
-  for (const auto& entry : spdy_headers)
-    raw_headers.Add(base::StringViewToStringPiece(entry.first),
-                    base::StringViewToStringPiece(entry.second));
+  for (const auto& entry : spdy_headers) {
+    raw_headers.Add(entry.first, entry.second);
+  }
   request_headers_callback_.Run(std::move(raw_headers));
 }
 

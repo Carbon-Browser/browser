@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "components/value_store/value_store_change.h"
 #include "extensions/browser/api/storage/backend_task_runner.h"
 #include "extensions/browser/api/storage/storage_area_namespace.h"
+#include "extensions/common/extension_id.h"
 
 using value_store::ValueStore;
 
@@ -29,14 +30,14 @@ ValueStore::Status ReadOnlyError() {
 }  // namespace
 
 PolicyValueStore::PolicyValueStore(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     SequenceBoundSettingsChangedCallback observer,
     std::unique_ptr<ValueStore> delegate)
     : extension_id_(extension_id),
       observer_(std::move(observer)),
       delegate_(std::move(delegate)) {}
 
-PolicyValueStore::~PolicyValueStore() {}
+PolicyValueStore::~PolicyValueStore() = default;
 
 void PolicyValueStore::SetCurrentPolicy(const policy::PolicyMap& policy) {
   DCHECK(IsOnBackendSequence());
@@ -101,6 +102,7 @@ void PolicyValueStore::SetCurrentPolicy(const policy::PolicyMap& policy) {
 
   if (!changes.empty()) {
     observer_->Run(extension_id_, StorageAreaNamespace::kManaged,
+                   /*session_access_level=*/std::nullopt,
                    value_store::ValueStoreChange::ToValue(std::move(changes)));
   }
 }

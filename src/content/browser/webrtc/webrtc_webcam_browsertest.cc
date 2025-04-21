@@ -1,11 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/webrtc/webrtc_webcam_browsertest.h"
 
+#include <vector>
+
 #include "base/command_line.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -34,7 +35,7 @@ bool IsUseFakeDeviceForMediaStream(const base::CommandLine::StringType& arg) {
 
 void RemoveFakeDeviceFromCommandLine(base::CommandLine* command_line) {
   base::CommandLine::StringVector argv = command_line->argv();
-  base::EraseIf(argv, IsUseFakeDeviceForMediaStream);
+  std::erase_if(argv, IsUseFakeDeviceForMediaStream);
   command_line->InitFromArgv(argv);
 }
 
@@ -81,8 +82,7 @@ IN_PROC_BROWSER_TEST_F(UsingRealWebcam_WebRtcWebcamBrowserTest,
   }
 
   std::string result =
-      EvalJs(shell(), "getUserMediaAndReturnVideoDimensions({video: true})",
-             EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+      EvalJs(shell(), "getUserMediaAndReturnVideoDimensions({video: true})")
           .ExtractString();
 
   if (result == "640x480" || result == "480x640") {

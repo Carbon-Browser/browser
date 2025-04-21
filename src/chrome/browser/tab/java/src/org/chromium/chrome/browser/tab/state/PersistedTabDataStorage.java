@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import org.chromium.base.Callback;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/**
- * Storage for {@link PersistedTabData}
- */
+/** Storage for {@link PersistedTabData} */
 public interface PersistedTabDataStorage {
     /**
      * @param tabId identifier for the {@link Tab}
@@ -26,7 +24,10 @@ public interface PersistedTabDataStorage {
      * @param serializer {@link Serializer} for serialized {@link PersistedTabData}
      * @param onComplete {@link Callback} called after save is completed
      */
-    void save(int tabId, String tabDataId, Serializer<ByteBuffer> serializer,
+    void save(
+            int tabId,
+            String tabDataId,
+            Serializer<ByteBuffer> serializer,
             Callback<Integer> onComplete);
 
     /**

@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/holding_space/holding_space_tray_bubble.h"
 
+#include <map>
 #include <vector>
 
+#include "ash/bubble/bubble_utils.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_metrics.h"
@@ -13,25 +15,35 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
 #include "ash/system/holding_space/holding_space_tray.h"
+#include "ash/system/holding_space/holding_space_ui.h"
 #include "ash/system/holding_space/pinned_files_bubble.h"
 #include "ash/system/holding_space/recent_files_bubble.h"
 #include "ash/system/tray/tray_bubble_wrapper.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_utils.h"
 #include "ash/wm/work_area_insets.h"
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/display/tablet_state.h"
 #include "ui/gfx/animation/slide_animation.h"
+#include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/proposed_layout.h"
+#include "ui/views/view_observer.h"
 
 namespace ash {
 
@@ -86,8 +98,9 @@ class HoldingSpaceTrayBubbleEventHandler : public ui::EventHandler {
  private:
   // ui::EventHandler:
   void OnKeyEvent(ui::KeyEvent* event) override {
-    if (event->type() != ui::ET_KEY_PRESSED)
+    if (event->type() != ui::EventType::kKeyPressed) {
       return;
+    }
 
     // Only handle `event`s that would otherwise escape the `bubble_` window.
     aura::Window* target = static_cast<aura::Window*>(event->target());
@@ -100,8 +113,8 @@ class HoldingSpaceTrayBubbleEventHandler : public ui::EventHandler {
       event->StopPropagation();
   }
 
-  HoldingSpaceTrayBubble* const bubble_;
-  HoldingSpaceViewDelegate* const delegate_;
+  const raw_ptr<HoldingSpaceTrayBubble> bubble_;
+  const raw_ptr<HoldingSpaceViewDelegate> delegate_;
 };
 
 // ChildBubbleContainerLayout --------------------------------------------------
@@ -126,7 +139,7 @@ class ChildBubbleContainerLayout {
   // maximum height restrictions.
   views::ProposedLayout CalculateProposedLayout() const {
     views::ProposedLayout layout;
-    layout.host_size = gfx::Size(kHoldingSpaceBubbleWidth, 0);
+    layout.host_size = gfx::Size(kTrayMenuWidth, 0);
 
     int top = 0;
     for (views::View* child : host_->children()) {
@@ -181,7 +194,7 @@ class ChildBubbleContainerLayout {
       child_layout.child_view->SetBoundsRect(child_layout.bounds);
   }
 
-  views::View* const host_;
+  const raw_ptr<views::View> host_;
   const int child_spacing_;
 
   // Maximum height restriction for the layout. If zero, it is assumed that
@@ -199,6 +212,8 @@ class ChildBubbleContainerLayout {
 class HoldingSpaceTrayBubble::ChildBubbleContainer
     : public views::View,
       public views::AnimationDelegateViews {
+  METADATA_HEADER(ChildBubbleContainer, views::View)
+
  public:
   ChildBubbleContainer()
       : views::AnimationDelegateViews(this),
@@ -211,11 +226,11 @@ class HoldingSpaceTrayBubble::ChildBubbleContainer
   }
 
   // views::View:
-  int GetHeightForWidth(int width) const override {
-    DCHECK_EQ(width, kHoldingSpaceBubbleWidth);
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
     if (current_layout_.host_size.IsEmpty())
       current_layout_ = layout_manager_.CalculateProposedLayout();
-    return current_layout_.host_size.height();
+    return current_layout_.host_size;
   }
 
   void ChildPreferredSizeChanged(views::View* child) override {
@@ -260,14 +275,16 @@ class HoldingSpaceTrayBubble::ChildBubbleContainer
         kAnimationDuration);
     layout_animation_->SetTweenType(gfx::Tween::Type::FAST_OUT_SLOW_IN);
     layout_animation_throughput_tracker_ =
-        GetWidget()->GetCompositor()->RequestNewThroughputTracker();
+        GetWidget()->GetCompositor()->RequestNewCompositorMetricsTracker();
     layout_animation_throughput_tracker_->Start(
-        metrics_util::ForSmoothness(base::BindRepeating(
+        metrics_util::ForSmoothnessV3(base::BindRepeating(
             holding_space_metrics::RecordBubbleResizeAnimationSmoothness)));
     layout_animation_->Show();
   }
 
-  void Layout() override { layout_manager_.ApplyLayout(current_layout_); }
+  void Layout(PassKey) override {
+    layout_manager_.ApplyLayout(current_layout_);
+  }
 
   // views::AnimationDelegateViews:
   void AnimationProgressed(const gfx::Animation* animation) override {
@@ -297,35 +314,43 @@ class HoldingSpaceTrayBubble::ChildBubbleContainer
   mutable views::ProposedLayout target_layout_;   // Layout being animated to.
 
   std::unique_ptr<gfx::SlideAnimation> layout_animation_;
-  absl::optional<ui::ThroughputTracker> layout_animation_throughput_tracker_;
+  std::optional<ui::ThroughputTracker> layout_animation_throughput_tracker_;
 };
+
+BEGIN_METADATA(HoldingSpaceTrayBubble, ChildBubbleContainer)
+END_METADATA
 
 // HoldingSpaceTrayBubble ------------------------------------------------------
 
 HoldingSpaceTrayBubble::HoldingSpaceTrayBubble(
     HoldingSpaceTray* holding_space_tray)
-    : holding_space_tray_(holding_space_tray) {
-  TrayBubbleView::InitParams init_params;
-  init_params.delegate = holding_space_tray->GetWeakPtr();
-  init_params.parent_window = holding_space_tray->GetBubbleWindowContainer();
-  init_params.anchor_view = nullptr;
-  init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
-  init_params.anchor_rect =
-      holding_space_tray->shelf()->GetSystemTrayAnchorRect();
-  init_params.insets = GetTrayBubbleInsets();
-  init_params.shelf_alignment = holding_space_tray->shelf()->alignment();
-  init_params.preferred_width = kHoldingSpaceBubbleWidth;
-  init_params.close_on_deactivate = true;
+    : holding_space_tray_(holding_space_tray) {}
+
+HoldingSpaceTrayBubble::~HoldingSpaceTrayBubble() {
+  bubble_wrapper_->bubble_view()->ResetDelegate();
+
+  // Explicitly reset child bubbles so that they will stop observing the holding
+  // space controller/model while they are asynchronously destroyed.
+  for (HoldingSpaceTrayChildBubble* child_bubble : child_bubbles_) {
+    child_bubble->Reset();
+  }
+}
+
+void HoldingSpaceTrayBubble::Init() {
+  TrayBubbleView::InitParams init_params = CreateInitParamsForTrayBubble(
+      holding_space_tray_, /*anchor_to_shelf_corner=*/true);
   init_params.has_shadow = false;
-  init_params.reroute_event_handler = true;
+  init_params.translucent = false;
   init_params.transparent = true;
 
-  // Create and customize bubble view.
-  TrayBubbleView* bubble_view = new TrayBubbleView(init_params);
-  // Ensure bubble frame does not draw background behind bubble view.
+  // Create top-level bubble.
+  auto bubble_view = std::make_unique<TrayBubbleView>(init_params);
+
+  // Add height restricted container for child bubbles.
   child_bubble_container_ =
       bubble_view->AddChildView(std::make_unique<ChildBubbleContainer>());
-  child_bubble_container_->SetMaxHeight(CalculateMaxHeight());
+  child_bubble_container_->SetMaxHeight(
+      CalculateChildBubbleContainerMaxHeight());
 
   // Add pinned files child bubble.
   child_bubbles_.push_back(child_bubble_container_->AddChildView(
@@ -340,9 +365,8 @@ HoldingSpaceTrayBubble::HoldingSpaceTrayBubble(
     child_bubble->Init();
 
   // Show the bubble.
-  bubble_wrapper_ =
-      std::make_unique<TrayBubbleWrapper>(holding_space_tray, bubble_view);
-
+  bubble_wrapper_ = std::make_unique<TrayBubbleWrapper>(holding_space_tray_);
+  bubble_wrapper_->ShowBubble(std::move(bubble_view));
   event_handler_ =
       std::make_unique<HoldingSpaceTrayBubbleEventHandler>(this, &delegate_);
 
@@ -357,20 +381,10 @@ HoldingSpaceTrayBubble::HoldingSpaceTrayBubble(
 
   // Record visible holding space items.
   std::vector<const HoldingSpaceItem*> visible_items;
-  FindVisibleHoldingSpaceItems(bubble_view, &visible_items);
-  holding_space_metrics::RecordItemCounts(visible_items);
+  FindVisibleHoldingSpaceItems(bubble_wrapper_->bubble_view(), &visible_items);
+  holding_space_metrics::RecordVisibleItemCounts(visible_items);
 
   shelf_observation_.Observe(holding_space_tray_->shelf());
-  tablet_mode_observation_.Observe(Shell::Get()->tablet_mode_controller());
-}
-
-HoldingSpaceTrayBubble::~HoldingSpaceTrayBubble() {
-  bubble_wrapper_->bubble_view()->ResetDelegate();
-
-  // Explicitly reset child bubbles so that they will stop observing the holding
-  // space controller/model while they are asynchronously destroyed.
-  for (HoldingSpaceTrayChildBubble* child_bubble : child_bubbles_)
-    child_bubble->Reset();
 }
 
 void HoldingSpaceTrayBubble::AnchorUpdated() {
@@ -396,7 +410,7 @@ HoldingSpaceTrayBubble::GetHoldingSpaceItemViews() {
   return views;
 }
 
-int HoldingSpaceTrayBubble::CalculateMaxHeight() const {
+int HoldingSpaceTrayBubble::CalculateTopLevelBubbleMaxHeight() const {
   const WorkAreaInsets* work_area = WorkAreaInsets::ForWindow(
       holding_space_tray_->shelf()->GetWindow()->GetRootWindow());
 
@@ -408,19 +422,26 @@ int HoldingSpaceTrayBubble::CalculateMaxHeight() const {
   const int free_space_height_above_anchor =
       bottom - work_area->user_work_area_bounds().y();
 
-  const gfx::Insets insets = GetTrayBubbleInsets();
+  const gfx::Insets insets =
+      GetTrayBubbleInsets(holding_space_tray_->GetBubbleWindowContainer());
   const int bubble_vertical_margin = insets.top() + insets.bottom();
 
   return free_space_height_above_anchor - bubble_vertical_margin;
 }
 
+int HoldingSpaceTrayBubble::CalculateChildBubbleContainerMaxHeight() const {
+  return CalculateTopLevelBubbleMaxHeight() -
+         (header_ ? header_->GetHeightForWidth(kTrayMenuWidth) : 0u);
+}
+
 void HoldingSpaceTrayBubble::UpdateBubbleBounds() {
-  child_bubble_container_->SetMaxHeight(CalculateMaxHeight());
+  child_bubble_container_->SetMaxHeight(
+      CalculateChildBubbleContainerMaxHeight());
   bubble_wrapper_->bubble_view()->ChangeAnchorRect(
       holding_space_tray_->shelf()->GetSystemTrayAnchorRect());
 }
 
-void HoldingSpaceTrayBubble::OnDisplayConfigurationChanged() {
+void HoldingSpaceTrayBubble::OnDidApplyDisplayChanges() {
   UpdateBubbleBounds();
 }
 
@@ -428,11 +449,13 @@ void HoldingSpaceTrayBubble::OnAutoHideStateChanged(ShelfAutoHideState state) {
   UpdateBubbleBounds();
 }
 
-void HoldingSpaceTrayBubble::OnTabletModeStarted() {
-  UpdateBubbleBounds();
-}
+void HoldingSpaceTrayBubble::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  if (display::IsTabletStateChanging(state)) {
+    // Do nothing when the tablet state is still in the process of transition.
+    return;
+  }
 
-void HoldingSpaceTrayBubble::OnTabletModeEnded() {
   UpdateBubbleBounds();
 }
 

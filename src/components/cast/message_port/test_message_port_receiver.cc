@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/cast/message_port/test_message_port_receiver.h"
 
+#include <string_view>
+
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 
 namespace cast_api_bindings {
 
@@ -32,7 +33,7 @@ void TestMessagePortReceiver::RunUntilDisconnected() {
 }
 
 bool TestMessagePortReceiver::OnMessage(
-    base::StringPiece message,
+    std::string_view message,
     std::vector<std::unique_ptr<MessagePort>> ports) {
   buffer_.push_back(std::make_pair(std::string(message), std::move(ports)));
   if (message_count_target_ == buffer_.size()) {

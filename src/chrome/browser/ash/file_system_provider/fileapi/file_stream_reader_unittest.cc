@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/file_system_provider/fileapi/file_stream_reader.h"
 
@@ -11,10 +16,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_math.h"
 #include "base/run_loop.h"
@@ -36,8 +42,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -47,12 +52,12 @@ const ProviderId kProviderId = ProviderId::CreateFromExtensionId(kExtensionId);
 // Logs callbacks invocations on the file stream reader.
 class EventLogger {
  public:
-  EventLogger() {}
+  EventLogger() = default;
 
   EventLogger(const EventLogger&) = delete;
   EventLogger& operator=(const EventLogger&) = delete;
 
-  virtual ~EventLogger() {}
+  virtual ~EventLogger() = default;
 
   void OnRead(int result) { results_.push_back(result); }
   void OnGetLength(int64_t result) { results_.push_back(result); }
@@ -84,8 +89,9 @@ storage::FileSystemURL CreateFileSystemURL(const std::string& mount_point_name,
 
 class FileSystemProviderFileStreamReader : public testing::Test {
  protected:
-  FileSystemProviderFileStreamReader() : profile_(NULL), fake_file_(NULL) {}
-  ~FileSystemProviderFileStreamReader() override {}
+  FileSystemProviderFileStreamReader()
+      : profile_(nullptr), fake_file_(nullptr) {}
+  ~FileSystemProviderFileStreamReader() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
@@ -123,8 +129,8 @@ class FileSystemProviderFileStreamReader : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   base::ScopedTempDir data_dir_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;     // Owned by TestingProfileManager.
-  const FakeEntry* fake_file_;  // Owned by FakePRovidedFileSystem.
+  raw_ptr<TestingProfile> profile_;  // Owned by TestingProfileManager.
+  raw_ptr<const FakeEntry> fake_file_;  // Owned by FakePRovidedFileSystem.
   storage::FileSystemURL file_url_;
   storage::FileSystemURL wrong_file_url_;
 };
@@ -133,9 +139,9 @@ TEST_F(FileSystemProviderFileStreamReader, Read_AllAtOnce) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset,
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
-  scoped_refptr<net::IOBuffer> io_buffer = base::MakeRefCounted<net::IOBuffer>(
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(
       base::checked_cast<size_t>(*fake_file_->metadata->size));
 
   const int result =
@@ -156,9 +162,9 @@ TEST_F(FileSystemProviderFileStreamReader, Read_WrongFile) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, wrong_file_url_, initial_offset,
+  FileStreamReader reader(nullptr, wrong_file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
-  scoped_refptr<net::IOBuffer> io_buffer = base::MakeRefCounted<net::IOBuffer>(
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(
       base::checked_cast<size_t>(*fake_file_->metadata->size));
 
   const int result =
@@ -175,12 +181,11 @@ TEST_F(FileSystemProviderFileStreamReader, Read_InChunks) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset,
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
 
   for (int64_t offset = 0; offset < *fake_file_->metadata->size; ++offset) {
-    scoped_refptr<net::IOBuffer> io_buffer =
-        base::MakeRefCounted<net::IOBuffer>(1);
+    auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(1);
     const int result =
         reader.Read(io_buffer.get(), 1,
                     base::BindOnce(&EventLogger::OnRead, logger.GetWeakPtr()));
@@ -201,10 +206,9 @@ TEST_F(FileSystemProviderFileStreamReader, Read_Slice) {
   ASSERT_GT(*fake_file_->metadata->size, initial_offset);
   ASSERT_LT(0, length);
 
-  FileStreamReader reader(NULL, file_url_, initial_offset,
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
-  scoped_refptr<net::IOBuffer> io_buffer =
-      base::MakeRefCounted<net::IOBuffer>(length);
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(length);
 
   const int result =
       reader.Read(io_buffer.get(), length,
@@ -228,10 +232,9 @@ TEST_F(FileSystemProviderFileStreamReader, Read_Beyond) {
   const int64_t initial_offset = 0;
   const int length = *fake_file_->metadata->size + 1024;
 
-  FileStreamReader reader(NULL, file_url_, initial_offset,
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
-  scoped_refptr<net::IOBuffer> io_buffer =
-      base::MakeRefCounted<net::IOBuffer>(length);
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(length);
 
   const int result =
       reader.Read(io_buffer.get(), length,
@@ -251,9 +254,10 @@ TEST_F(FileSystemProviderFileStreamReader, Read_ModifiedFile) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset, base::Time::Max());
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
+                          base::Time::Max());
 
-  scoped_refptr<net::IOBuffer> io_buffer = base::MakeRefCounted<net::IOBuffer>(
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(
       base::checked_cast<size_t>(*fake_file_->metadata->size));
   const int result =
       reader.Read(io_buffer.get(), *fake_file_->metadata->size,
@@ -270,9 +274,9 @@ TEST_F(FileSystemProviderFileStreamReader, Read_ExpectedModificationTimeNull) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset, base::Time());
+  FileStreamReader reader(nullptr, file_url_, initial_offset, base::Time());
 
-  scoped_refptr<net::IOBuffer> io_buffer = base::MakeRefCounted<net::IOBuffer>(
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(
       base::checked_cast<size_t>(*fake_file_->metadata->size));
   const int result =
       reader.Read(io_buffer.get(), *fake_file_->metadata->size,
@@ -292,7 +296,7 @@ TEST_F(FileSystemProviderFileStreamReader, GetLength) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset,
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
 
   const int result = reader.GetLength(
@@ -309,7 +313,7 @@ TEST_F(FileSystemProviderFileStreamReader, GetLength_WrongFile) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, wrong_file_url_, initial_offset,
+  FileStreamReader reader(nullptr, wrong_file_url_, initial_offset,
                           *fake_file_->metadata->modification_time);
 
   const int result = reader.GetLength(
@@ -325,7 +329,8 @@ TEST_F(FileSystemProviderFileStreamReader, GetLength_ModifiedFile) {
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset, base::Time::Max());
+  FileStreamReader reader(nullptr, file_url_, initial_offset,
+                          base::Time::Max());
 
   const int result = reader.GetLength(
       base::BindOnce(&EventLogger::OnGetLength, logger.GetWeakPtr()));
@@ -341,7 +346,7 @@ TEST_F(FileSystemProviderFileStreamReader,
   EventLogger logger;
 
   const int64_t initial_offset = 0;
-  FileStreamReader reader(NULL, file_url_, initial_offset, base::Time());
+  FileStreamReader reader(nullptr, file_url_, initial_offset, base::Time());
 
   const int result = reader.GetLength(
       base::BindOnce(&EventLogger::OnGetLength, logger.GetWeakPtr()));
@@ -353,5 +358,4 @@ TEST_F(FileSystemProviderFileStreamReader,
   EXPECT_EQ(*fake_file_->metadata->size, logger.results()[0]);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

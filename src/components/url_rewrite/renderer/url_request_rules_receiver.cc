@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ UrlRequestRulesReceiver::UrlRequestRulesReceiver(
   // It is fine to use an unretained pointer to |this| here as the
   // AssociatedInterfaceRegistry, owned by |render_frame| will be torn-down at
   // the same time as |this|.
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<mojom::UrlRequestRulesReceiver>(base::BindRepeating(
           &UrlRequestRulesReceiver::OnUrlRequestRulesReceiverAssociatedReceiver,
           base::Unretained(this)));
 }
@@ -27,9 +27,9 @@ UrlRequestRulesReceiver::~UrlRequestRulesReceiver() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-const scoped_refptr<UrlRequestRewriteRules>&
-UrlRequestRulesReceiver::GetCachedRules() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+scoped_refptr<UrlRequestRewriteRules> UrlRequestRulesReceiver::GetCachedRules()
+    const {
+  base::AutoLock guard(lock_);
   return cached_rules_;
 }
 
@@ -43,6 +43,7 @@ void UrlRequestRulesReceiver::OnUrlRequestRulesReceiverAssociatedReceiver(
 void UrlRequestRulesReceiver::OnRulesUpdated(
     mojom::UrlRequestRewriteRulesPtr rules) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  base::AutoLock guard(lock_);
   cached_rules_ =
       base::MakeRefCounted<UrlRequestRewriteRules>(std::move(rules));
 }

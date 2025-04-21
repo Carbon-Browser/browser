@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,17 @@
 
 #include <string>
 
+#include "base/i18n/time_formatting.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/sessions/app_session_service.h"
+#include "chrome/browser/sessions/app_session_service_factory.h"
+#include "chrome/browser/sessions/session_service_factory.h"
 #include "chrome/browser/sessions/session_service_log.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
@@ -24,12 +27,7 @@ namespace {
 
 // This is for debugging, so it doesn't use local time conversions.
 std::string EventTimeToString(const SessionServiceEvent& event) {
-  base::Time::Exploded time_details;
-  event.time.LocalExplode(&time_details);
-  return base::StringPrintf("%d/%d/%d %d:%02d:%02d", time_details.month,
-                            time_details.day_of_month, time_details.year,
-                            time_details.hour, time_details.minute,
-                            time_details.second);
+  return base::UnlocalizedTimeFormatWithPattern(event.time, "M/d/y H:mm:ss");
 }
 
 std::string EventToString(const SessionServiceEvent& event) {
@@ -55,21 +53,49 @@ std::string EventToString(const SessionServiceEvent& event) {
            base::NumberToString(event.data.exit.is_first_session_service),
            " did_schedule_command=",
            base::NumberToString(event.data.exit.did_schedule_command)});
+
     case SessionServiceEventLogType::kWriteError:
       return base::StrCat(
           {EventTimeToString(event), " write errors (",
            base::NumberToString(event.data.write_error.error_count), ")"});
+
+    case SessionServiceEventLogType::kRestoreCanceled:
+      return base::StrCat({EventTimeToString(event), " restore canceled"});
+
+    case SessionServiceEventLogType::kRestoreInitiated:
+      return base::StrCat(
+          {EventTimeToString(event), " restore initiated sync=",
+           base::NumberToString(event.data.restore_initiated.synchronous),
+           " restore_browser=",
+           base::NumberToString(event.data.restore_initiated.restore_browser)});
   }
 }
 
-std::string GetEventLogAsString(Profile* profile) {
+std::string GetSessionServiceInternalsAsString(Profile* profile) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  std::vector<std::string> results;
-  results.push_back("<pre>");
-  for (const auto& event : GetSessionServiceEvents(profile))
-    results.push_back(EventToString(event));
-  results.push_back("</pre>");
-  return base::JoinString(results, "\n");
+  std::vector<std::string> events;
+  events.push_back("<pre>");
+  for (const auto& event : GetSessionServiceEvents(profile)) {
+    events.push_back(EventToString(event));
+  }
+  events.push_back("</pre>");
+
+  base::Value::Dict internals_output;
+#if DCHECK_IS_ON()
+  internals_output.Set(
+      "AppSessionService",
+      AppSessionServiceFactory::GetForProfile(profile)->ToDebugValue());
+  internals_output.Set(
+      "SessionService",
+      SessionServiceFactory::GetForProfile(profile)->ToDebugValue());
+#else
+  internals_output.Set("",
+                       "Build with DCHECKs enabled to see information here");
+#endif  // DCHECK_IS_ON()
+  return base::StrCat({"<h3>Events:</h3>\n<pre>\n",
+                       base::JoinString(events, "\n"),
+                       "</pre>\n<h3>Service States</h3>\n<pre>\n",
+                       internals_output.DebugString(), "</pre>\n"});
 }
 
 }  // namespace
@@ -87,6 +113,6 @@ void SessionServiceInternalsHandler::HandleWebUIRequestCallback(
     content::WebUIDataSource::GotDataCallback callback) {
   DCHECK(ShouldHandleWebUIRequestCallback(path));
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  std::string result = GetEventLogAsString(profile);
-  std::move(callback).Run(base::RefCountedString::TakeString(&result));
+  std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>(
+      GetSessionServiceInternalsAsString(profile)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ash/quick_pair/message_stream/message_stream.h"
 #include "ash/quick_pair/message_stream/message_stream_lookup.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -64,7 +65,8 @@ class BatteryUpdateMessageHandler : public MessageStreamLookup::Observer,
   void CleanUpMessageStream(const std::string& device_address);
 
   // Map of the classic pairing address to their corresponding MessageStreams.
-  base::flat_map<std::string, MessageStream*> message_streams_;
+  base::flat_map<std::string, raw_ptr<MessageStream, CtnExperimental>>
+      message_streams_;
 
   scoped_refptr<device::BluetoothAdapter> adapter_;
 

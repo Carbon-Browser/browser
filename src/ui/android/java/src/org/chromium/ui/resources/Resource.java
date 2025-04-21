@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,15 @@ package org.chromium.ui.resources;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.resources.statics.NinePatchData;
 
 /**
  * A basic resource interface that all assets must use to be exposed to the CC layer as
  * UIResourceIds.
  */
+@NullMarked
 public interface Resource {
     /**
      * This can only be called in
@@ -44,6 +47,7 @@ public interface Resource {
      * cases, this will be null.
      * @return The nine patch data for the bitmap or null.
      */
+    @Nullable
     NinePatchData getNinePatchData();
 
     /**

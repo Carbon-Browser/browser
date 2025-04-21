@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -271,3 +271,43 @@ export const TutorialBehavior = {
   /** @private */
   onTutorialVisibilityChanged_() {},
 };
+
+export class TutorialBehaviorInterface {
+  constructor() {
+    /** @type {number} */
+    this.activeLessonId;
+    /** @type {number} */
+    this.activeLessonIndex;
+    /** @type {Screen} */
+    this.activeScreen;
+    /** @type {Curriculum} */
+    this.curriculum;
+    /** @type {boolean} */
+    this.isPracticeAreaActive;
+    /** @type {boolean} */
+    this.isVisible;
+    /** @type {Array<!LessonData>} */
+    this.lessonData;
+    /** @type {Array<!MainMenuButtonData>} */
+    this.mainMenuButtonData;
+    /** @type {InteractionMedium} */
+    this.medium;
+    /** @type {number} */
+    this.numLessons;
+    /** @type {number} */
+    this.numLoadedLessons;
+  }
+
+  exit() {}
+  hideAllScreens() {}
+  show() {}
+  showNextLesson() {}
+
+  /** @return {!TutorialLesson} */
+  getCurrentLesson() {}
+  /**
+   * @param {string} titleMsgId
+   * @return {TutorialLesson}
+   */
+  getLessonWithTitle(titleMsgId) {}
+}

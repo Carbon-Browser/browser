@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "chrome/browser/ui/platform_keys_certificate_selector_chromeos.h"
 #include "chrome/browser/ui/views/certificate_selector.h"
 #include "net/cert/x509_certificate.h"
@@ -23,7 +22,7 @@ namespace chromeos {
 
 // A certificate selector dialog that explains to the user that an extension
 // requests access to certificates.
-class PlatformKeysCertificateSelector : public chrome::CertificateSelector {
+class PlatformKeysCertificateSelector : public CertificateSelector {
  public:
   // |callback| must not be null.
   PlatformKeysCertificateSelector(const net::CertificateList& certificates,
@@ -40,7 +39,7 @@ class PlatformKeysCertificateSelector : public chrome::CertificateSelector {
 
   void Init();
 
-  // chrome::CertificateSelector:
+  // CertificateSelector:
   void AcceptCertificate(
       std::unique_ptr<net::ClientCertIdentity> identity) override;
 

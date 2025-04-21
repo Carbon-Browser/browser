@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ OrientationType GetDisplayNaturalOrientation(const display::Display& display) {
   // width > height for ROTATE_90 and ROTATE_270 indicates portrait layout at
   // ROTATE_0 which is the natural orientation.
   display::Display::Rotation rotation = display.rotation();
-  bool is_landscape = display.size().width() > display.size().height();
+  bool is_landscape = display.is_landscape();
   if (rotation == display::Display::ROTATE_90 ||
       rotation == display::Display::ROTATE_270) {
     is_landscape = !is_landscape;
@@ -51,7 +51,6 @@ OrientationType RotationToOrientation(OrientationType natural,
     }
   }
   NOTREACHED();
-  return OrientationType::kAny;
 }
 
 display::Display::Rotation OrientationToRotation(OrientationType natural,
@@ -89,7 +88,6 @@ display::Display::Rotation OrientationToRotation(OrientationType natural,
     }
   }
   NOTREACHED() << static_cast<int>(orientation);
-  return display::Display::ROTATE_0;
 }
 
 bool IsPrimaryOrientation(OrientationType type) {
@@ -109,16 +107,25 @@ bool IsPortraitOrientation(OrientationType type) {
          type == OrientationType::kPortraitSecondary;
 }
 
-bool IsDisplayLayoutHorizontal(const display::Display& display) {
+OrientationType GetDisplayCurrentOrientation(const display::Display& display) {
   DCHECK(display.is_valid());
-  return display.size().width() > display.size().height();
+  const display::Display::Rotation rotation = display.rotation();
+  return RotationToOrientation(GetDisplayNaturalOrientation(display), rotation);
 }
 
 bool IsDisplayLayoutPrimary(const display::Display& display) {
   DCHECK(display.is_valid());
-  const display::Display::Rotation rotation = display.rotation();
-  return IsPrimaryOrientation(
-      RotationToOrientation(GetDisplayNaturalOrientation(display), rotation));
+  return IsPrimaryOrientation(GetDisplayCurrentOrientation(display));
+}
+
+float GetRepresentativeDeviceScaleFactor(
+    const std::vector<display::Display>& displays) {
+  float largest_device_scale_factor = 1.0f;
+  for (const display::Display& display : displays) {
+    largest_device_scale_factor =
+        std::max(largest_device_scale_factor, display.device_scale_factor());
+  }
+  return largest_device_scale_factor;
 }
 
 }  // namespace chromeos

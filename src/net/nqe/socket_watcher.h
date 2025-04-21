@@ -1,13 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_NQE_SOCKET_WATCHER_H_
 #define NET_NQE_SOCKET_WATCHER_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -15,7 +17,6 @@
 #include "net/nqe/network_quality_estimator_util.h"
 #include "net/socket/socket_performance_watcher.h"
 #include "net/socket/socket_performance_watcher_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -25,14 +26,14 @@ class TimeDelta;
 
 namespace net {
 
-class AddressList;
+class IPAddress;
 
 namespace {
 
 typedef base::RepeatingCallback<void(
     SocketPerformanceWatcherFactory::Protocol protocol,
     const base::TimeDelta& rtt,
-    const absl::optional<nqe::internal::IPHash>& host)>
+    const std::optional<nqe::internal::IPHash>& host)>
     OnUpdatedRTTAvailableCallback;
 
 typedef base::RepeatingCallback<bool(base::TimeTicks)> ShouldNotifyRTTCallback;
@@ -47,9 +48,9 @@ class NET_EXPORT_PRIVATE SocketWatcher : public SocketPerformanceWatcher {
   // Creates a SocketWatcher which can be used to watch a socket that uses
   // |protocol| as the transport layer protocol. The socket watcher will call
   // |updated_rtt_observation_callback| on |task_runner| every time a new RTT
-  // observation is available. |address_list| is the list of addresses that
-  // the socket may connect to. |min_notification_interval| is the minimum
-  // interval betweeen consecutive notifications to this socket watcher.
+  // observation is available. |address| is the IPAddress that the socket may
+  // connect to. |min_notification_interval| is the minimum interval between
+  // consecutive notifications to this socket watcher.
   // |allow_rtt_private_address| is true if |updated_rtt_observation_callback|
   // should be called when RTT observation from a socket connected to private
   // address is received. |tick_clock| is guaranteed to be non-null.
@@ -57,7 +58,7 @@ class NET_EXPORT_PRIVATE SocketWatcher : public SocketPerformanceWatcher {
   // |task_runner| by the created socket watchers to check if RTT observation
   // should be taken and notified.
   SocketWatcher(SocketPerformanceWatcherFactory::Protocol protocol,
-                const AddressList& address_list,
+                const IPAddress& address,
                 base::TimeDelta min_notification_interval,
                 bool allow_rtt_private_address,
                 scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -91,6 +92,10 @@ class NET_EXPORT_PRIVATE SocketWatcher : public SocketPerformanceWatcher {
   // Minimum interval betweeen consecutive incoming notifications.
   const base::TimeDelta rtt_notifications_minimum_interval_;
 
+  // True if socket watchers constructed by this factory can use the RTT from
+  // the sockets that are connected to the private addresses.
+  const bool allow_rtt_private_address_;
+
   // True if the RTT observations from this socket can be notified using
   // |updated_rtt_observation_callback_|.
   const bool run_rtt_callback_;
@@ -107,7 +112,7 @@ class NET_EXPORT_PRIVATE SocketWatcher : public SocketPerformanceWatcher {
   bool first_quic_rtt_notification_received_ = false;
 
   // A unique identifier for the remote host that this socket connects to.
-  const absl::optional<IPHash> host_;
+  const std::optional<IPHash> host_;
 };
 
 }  // namespace nqe::internal

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,11 +57,9 @@ struct FileBrowserHandlerInfo : public extensions::Extension::ManifestData {
   ~FileBrowserHandlerInfo() override;
 };
 
-FileBrowserHandlerInfo::FileBrowserHandlerInfo() {
-}
+FileBrowserHandlerInfo::FileBrowserHandlerInfo() = default;
 
-FileBrowserHandlerInfo::~FileBrowserHandlerInfo() {
-}
+FileBrowserHandlerInfo::~FileBrowserHandlerInfo() = default;
 
 }  // namespace
 
@@ -69,8 +67,7 @@ FileBrowserHandler::FileBrowserHandler()
     : file_access_permission_flags_(kPermissionsNotDefined) {
 }
 
-FileBrowserHandler::~FileBrowserHandler() {
-}
+FileBrowserHandler::~FileBrowserHandler() = default;
 
 void FileBrowserHandler::AddPattern(const URLPattern& pattern) {
   url_set_.AddPattern(pattern);
@@ -125,8 +122,9 @@ FileBrowserHandler::List*
 FileBrowserHandler::GetHandlers(const extensions::Extension* extension) {
   FileBrowserHandlerInfo* const info = static_cast<FileBrowserHandlerInfo*>(
       extension->GetManifestData(keys::kFileBrowserHandlers));
-  if (!info)
+  if (!info) {
     return nullptr;
+  }
 
   return &info->file_browser_handlers;
 }
@@ -150,13 +148,13 @@ namespace {
 
 std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
     const std::string& extension_id,
-    const base::DictionaryValue* file_browser_handler,
+    const base::Value::Dict* file_browser_handler,
     std::u16string* error) {
   std::unique_ptr<FileBrowserHandler> result(new FileBrowserHandler());
   result->set_extension_id(extension_id);
 
   const std::string* handler_id =
-      file_browser_handler->FindStringKey(keys::kFileBrowserHandlerId);
+      file_browser_handler->FindString(keys::kFileBrowserHandlerId);
   // Read the file action |id| (mandatory).
   if (!handler_id) {
     *error = errors::kInvalidFileBrowserHandlerId;
@@ -166,7 +164,7 @@ std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
 
   // Read the page action title from |default_title| (mandatory).
   const std::string* title =
-      file_browser_handler->FindStringKey(keys::kActionDefaultTitle);
+      file_browser_handler->FindString(keys::kActionDefaultTitle);
   if (!title) {
     *error = errors::kInvalidActionDefaultTitle;
     return nullptr;
@@ -175,15 +173,13 @@ std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
 
   // Initialize access permissions (optional).
   const base::Value* access_list_value =
-      file_browser_handler->FindKey(keys::kFileAccessList);
+      file_browser_handler->Find(keys::kFileAccessList);
   if (access_list_value) {
-    if (!access_list_value->is_list() ||
-        access_list_value->GetListDeprecated().empty()) {
+    if (!access_list_value->is_list() || access_list_value->GetList().empty()) {
       *error = errors::kInvalidFileAccessList;
       return nullptr;
     }
-    base::Value::ConstListView access_list_view =
-        access_list_value->GetListDeprecated();
+    const base::Value::List& access_list_view = access_list_value->GetList();
     for (size_t i = 0; i < access_list_view.size(); ++i) {
       const std::string* access = access_list_view[i].GetIfString();
       if (!access || result->AddFileAccessPermission(*access)) {
@@ -201,16 +197,14 @@ std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
   // Initialize file filters (mandatory, unless "create" access is specified,
   // in which case is ignored). The list can be empty.
   if (!result->HasCreateAccessPermission()) {
-    const base::Value* file_filters =
-        file_browser_handler->FindListKey(keys::kFileFilters);
-    if (!file_filters) {
+    const base::Value::List* file_filters_list =
+        file_browser_handler->FindList(keys::kFileFilters);
+    if (!file_filters_list) {
       *error = errors::kInvalidFileFiltersList;
       return nullptr;
     }
-    base::Value::ConstListView file_filters_list =
-        file_filters->GetListDeprecated();
-    for (size_t i = 0; i < file_filters_list.size(); ++i) {
-      const std::string* filter_in = file_filters_list[i].GetIfString();
+    for (size_t i = 0; i < file_filters_list->size(); ++i) {
+      const std::string* filter_in = (*file_filters_list)[i].GetIfString();
       if (!filter_in) {
         *error = extensions::ErrorUtils::FormatErrorMessageUTF16(
             errors::kInvalidFileFilterValue, base::NumberToString(i));
@@ -247,7 +241,7 @@ std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
 
   // Read the file browser action |default_icon| (optional).
   if (const base::Value* default_icon_val =
-          file_browser_handler->FindKey(keys::kActionDefaultIcon)) {
+          file_browser_handler->Find(keys::kActionDefaultIcon)) {
     const std::string* default_icon = default_icon_val->GetIfString();
     if (!default_icon || default_icon->empty()) {
       *error = errors::kInvalidActionDefaultIcon;
@@ -261,12 +255,12 @@ std::unique_ptr<FileBrowserHandler> LoadFileBrowserHandler(
 
 // Loads FileBrowserHandlers from |extension_actions| into a list in |result|.
 bool LoadFileBrowserHandlers(const std::string& extension_id,
-                             const base::Value::ConstListView extension_actions,
+                             const base::Value::List& extension_actions,
                              FileBrowserHandler::List* result,
                              std::u16string* error) {
   for (const auto& entry : extension_actions) {
-    const base::DictionaryValue* dict;
-    if (!entry.GetAsDictionary(&dict)) {
+    const base::Value::Dict* dict = entry.GetIfDict();
+    if (!dict) {
       *error = errors::kInvalidFileBrowserHandler16;
       return false;
     }
@@ -303,7 +297,7 @@ bool FileBrowserHandlerParser::Parse(extensions::Extension* extension,
 
   std::unique_ptr<FileBrowserHandlerInfo> info(new FileBrowserHandlerInfo);
   if (!LoadFileBrowserHandlers(extension->id(),
-                               file_browser_handlers_value->GetListDeprecated(),
+                               file_browser_handlers_value->GetList(),
                                &info->file_browser_handlers, error)) {
     return false;  // Failed to parse file browser actions definition.
   }

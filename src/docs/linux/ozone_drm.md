@@ -54,7 +54,7 @@ ozone_platform = "drm"
 use_system_minigbm = false
 target_sysroot = "//build/linux/debian_jessie_amd64-sysroot"
 is_debug = false
-use_goma = true
+use_remoteexec = true
 use_xkbcommon = true
 #use_evdev_gestures = true
 #use_system_libevdev = false
@@ -88,7 +88,7 @@ $ pactl exit
 Run chrome: (Set `CHROMIUM_SRC` to the directory containing your Chrome checkout.)
 
 ```
-$ sudo chvt 8; EGL_PLATFORM=surfaceless $CHROMIUM_SRC/out/Nouveau/chrome --ozone-platform=drm --force-system-compositor-mode --login-profile=user --user-data-dir=$HOME/.config/google-chrome-gbm --use-gl=egl --enable-wayland-server --login-manager --ash-constrain-pointer-to-root --default-tile-width=512 --default-tile-height=512 --system-developer-mode --crosh-command=/bin/bash
+$ sudo chvt 8; EGL_PLATFORM=surfaceless $CHROMIUM_SRC/out/Nouveau/chrome --ozone-platform=drm --enable-running-as-system-compositor --login-profile=user --user-data-dir=$HOME/.config/google-chrome-gbm --use-gl=egl --enable-wayland-server --login-manager --ash-constrain-pointer-to-root --default-tile-width=512 --default-tile-height=512 --system-developer-mode --crosh-command=/bin/bash
 ```
 
 Login to Chrome settings should synchronize.

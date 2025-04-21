@@ -1,13 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/heap_profiling/multi_process/heap_profiling_test_shim.h"
 
 #include "base/android/jni_string.h"
-#include "components/heap_profiling/multi_process/jni_headers/HeapProfilingTestShim_jni.h"
 #include "components/heap_profiling/multi_process/test_driver.h"
 #include "components/services/heap_profiling/public/cpp/settings.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/heap_profiling/multi_process/jni_headers/HeapProfilingTestShim_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
@@ -21,14 +23,12 @@ static jlong JNI_HeapProfilingTestShim_Init(JNIEnv* env,
 HeapProfilingTestShim::HeapProfilingTestShim(JNIEnv* env, jobject obj) {}
 HeapProfilingTestShim::~HeapProfilingTestShim() = default;
 
-void HeapProfilingTestShim::Destroy(JNIEnv* env,
-                                    const JavaParamRef<jobject>& obj) {
+void HeapProfilingTestShim::Destroy(JNIEnv* env) {
   delete this;
 }
 
 jboolean HeapProfilingTestShim::RunTestForMode(
     JNIEnv* env,
-    const base::android::JavaParamRef<jobject>& obj,
     const base::android::JavaParamRef<jstring>& mode,
     jboolean dynamically_start_profiling,
     const base::android::JavaParamRef<jstring>& stack_mode,

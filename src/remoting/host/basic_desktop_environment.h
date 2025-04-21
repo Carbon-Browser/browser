@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "remoting/host/desktop_environment.h"
 #include "remoting/protocol/desktop_capturer.h"
 
@@ -42,21 +40,22 @@ class BasicDesktopEnvironment : public DesktopEnvironment {
   std::unique_ptr<AudioCapturer> CreateAudioCapturer() override;
   std::unique_ptr<InputInjector> CreateInputInjector() override;
   std::unique_ptr<ScreenControls> CreateScreenControls() override;
-  std::unique_ptr<DesktopCapturer> CreateVideoCapturer() override;
+  std::unique_ptr<DesktopCapturer> CreateVideoCapturer(
+      webrtc::ScreenId id) override;
   DesktopDisplayInfoMonitor* GetDisplayInfoMonitor() override;
   std::unique_ptr<webrtc::MouseCursorMonitor> CreateMouseCursorMonitor()
       override;
   std::unique_ptr<KeyboardLayoutMonitor> CreateKeyboardLayoutMonitor(
       base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback)
       override;
+  std::unique_ptr<ActiveDisplayMonitor> CreateActiveDisplayMonitor(
+      base::RepeatingCallback<void(webrtc::ScreenId)> callback) override;
   std::unique_ptr<FileOperations> CreateFileOperations() override;
   std::unique_ptr<UrlForwarderConfigurator> CreateUrlForwarderConfigurator()
       override;
   std::string GetCapabilities() const override;
   void SetCapabilities(const std::string& capabilities) override;
   uint32_t GetDesktopSessionId() const override;
-  std::unique_ptr<DesktopAndCursorConditionalComposer>
-  CreateComposingVideoCapturer() override;
   std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
   CreateRemoteWebAuthnStateChangeNotifier() override;
 

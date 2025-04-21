@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <optional>
+
 #include "base/android/jni_android.h"
-#include "base/base_jni_headers/ThreadUtils_jni.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/threading/platform_thread_internal_posix.h"
 #include "base/threading/thread_id_name_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "base/tasks_jni/ThreadUtils_jni.h"
 
 namespace base {
 
@@ -24,27 +27,29 @@ namespace internal {
 
 // - kRealtimeAudio corresponds to Android's PRIORITY_AUDIO = -16 value.
 // - kDisplay corresponds to Android's PRIORITY_DISPLAY = -4 value.
-// - kBackground corresponds to Android's PRIORITY_BACKGROUND = 10 value and can
-// result in heavy throttling and force the thread onto a little core on
-// big.LITTLE devices.
+// - kBackground corresponds to Android's PRIORITY_BACKGROUND = 10
+//   value. Contrary to the matching Java APi in Android <13, this does not
+//   restrict the thread to (subset of) little cores.
 const ThreadPriorityToNiceValuePairForTest
-    kThreadPriorityToNiceValueMapForTest[4] = {
+    kThreadPriorityToNiceValueMapForTest[7] = {
         {ThreadPriorityForTest::kRealtimeAudio, -16},
         {ThreadPriorityForTest::kDisplay, -4},
         {ThreadPriorityForTest::kNormal, 0},
+        {ThreadPriorityForTest::kResourceEfficient, 0},
+        {ThreadPriorityForTest::kUtility, 1},
         {ThreadPriorityForTest::kBackground, 10},
 };
 
 // - kBackground corresponds to Android's PRIORITY_BACKGROUND = 10 value and can
 // result in heavy throttling and force the thread onto a little core on
 // big.LITTLE devices.
-// - kCompositing and kDisplayCritical corresponds to Android's PRIORITY_DISPLAY
-// = -4 value.
+// - kUtility corresponds to Android's THREAD_PRIORITY_LESS_FAVORABLE = 1 value.
+// - kDisplayCritical corresponds to Android's PRIORITY_DISPLAY = -4 value.
 // - kRealtimeAudio corresponds to Android's PRIORITY_AUDIO = -16 value.
-const ThreadTypeToNiceValuePair kThreadTypeToNiceValueMap[5] = {
-    {ThreadType::kBackground, 10},     {ThreadType::kDefault, 0},
-    {ThreadType::kCompositing, -4},    {ThreadType::kDisplayCritical, -4},
-    {ThreadType::kRealtimeAudio, -16},
+const ThreadTypeToNiceValuePair kThreadTypeToNiceValueMap[7] = {
+    {ThreadType::kBackground, 10},       {ThreadType::kUtility, 1},
+    {ThreadType::kResourceEfficient, 0}, {ThreadType::kDefault, 0},
+    {ThreadType::kDisplayCritical, -4},  {ThreadType::kRealtimeAudio, -16},
 };
 
 bool CanSetThreadTypeToRealtimeAudio() {
@@ -62,46 +67,46 @@ bool SetCurrentThreadTypeForPlatform(ThreadType thread_type,
   }
   // Recent versions of Android (O+) up the priority of the UI thread
   // automatically.
-  if (thread_type == ThreadType::kCompositing &&
+  if (thread_type == ThreadType::kDisplayCritical &&
       pump_type_hint == MessagePumpType::UI &&
       GetCurrentThreadNiceValue() <=
-          ThreadTypeToNiceValue(ThreadType::kCompositing)) {
+          ThreadTypeToNiceValue(ThreadType::kDisplayCritical)) {
     return true;
   }
   return false;
 }
 
-absl::optional<ThreadPriorityForTest>
+std::optional<ThreadPriorityForTest>
 GetCurrentThreadPriorityForPlatformForTest() {
   JNIEnv* env = base::android::AttachCurrentThread();
-  if (Java_ThreadUtils_isThreadPriorityAudio(
-      env, PlatformThread::CurrentId())) {
-    return absl::make_optional(ThreadPriorityForTest::kRealtimeAudio);
+  if (Java_ThreadUtils_isThreadPriorityAudio(env,
+                                             PlatformThread::CurrentId())) {
+    return std::make_optional(ThreadPriorityForTest::kRealtimeAudio);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace internal
 
 void PlatformThread::SetName(const std::string& name) {
-  ThreadIdNameManager::GetInstance()->SetName(name);
+  SetNameCommon(name);
 
   // Like linux, on android we can get the thread names to show up in the
   // debugger by setting the process name for the LWP.
   // We don't want to do this for the main thread because that would rename
   // the process, causing tools like killall to stop working.
-  if (PlatformThread::CurrentId() == getpid())
+  if (PlatformThread::CurrentId() == getpid()) {
     return;
+  }
 
   // Set the name for the LWP (which gets truncated to 15 characters).
   int err = prctl(PR_SET_NAME, name.c_str());
-  if (err < 0 && errno != EPERM)
+  if (err < 0 && errno != EPERM) {
     DPLOG(ERROR) << "prctl(PR_SET_NAME)";
+  }
 }
 
-
-void InitThreading() {
-}
+void InitThreading() {}
 
 void TerminateOnThread() {
   base::android::DetachFromVM();

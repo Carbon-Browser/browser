@@ -1,15 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/test/test_timeouts.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/run_until.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -19,6 +22,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/hit_test_region_observer.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
 #include "extensions/browser/guest_view/mime_handler_view/test_mime_handler_view_guest.h"
@@ -34,9 +38,7 @@ namespace extensions {
 
 class ChromeMimeHandlerViewInteractiveUITest : public ExtensionApiTest {
  public:
-  ChromeMimeHandlerViewInteractiveUITest() {
-    GuestViewManager::set_factory_for_testing(&factory_);
-  }
+  ChromeMimeHandlerViewInteractiveUITest() = default;
 
   ~ChromeMimeHandlerViewInteractiveUITest() override = default;
 
@@ -48,25 +50,10 @@ class ChromeMimeHandlerViewInteractiveUITest : public ExtensionApiTest {
     ASSERT_TRUE(StartEmbeddedTestServer());
   }
 
-  // TODO(paulmeyer): This function is implemented over and over by the
-  // different GuestView test classes. It really needs to be refactored out to
-  // some kind of GuestViewTest base class.
   TestGuestViewManager* GetGuestViewManager() {
-    TestGuestViewManager* manager = static_cast<TestGuestViewManager*>(
-        TestGuestViewManager::FromBrowserContext(browser()->profile()));
-    // TestGuestViewManager::WaitForSingleGuestCreated can and will get called
-    // before a guest is created. Since GuestViewManager is usually not created
-    // until the first guest is created, this means that |manager| will be
-    // nullptr if trying to use the manager to wait for the first guest. Because
-    // of this, the manager must be created here if it does not already exist.
-    if (!manager) {
-      manager = static_cast<TestGuestViewManager*>(
-          GuestViewManager::CreateWithDelegate(
-              browser()->profile(),
-              ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate(
-                  browser()->profile())));
-    }
-    return manager;
+    return factory_.GetOrCreateTestGuestViewManager(
+        browser()->profile(),
+        ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate());
   }
 
   const Extension* LoadTestExtension() {
@@ -83,8 +70,7 @@ class ChromeMimeHandlerViewInteractiveUITest : public ExtensionApiTest {
 
   void RunTestWithUrl(const GURL& url) {
     // Use the testing subclass of MimeHandlerViewGuest.
-    GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-        base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+    TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
 
     const Extension* extension = LoadTestExtension();
     ASSERT_TRUE(extension);
@@ -125,14 +111,14 @@ void WaitForFullscreenAnimation() {
 #endif
   // Wait for Mac OS fullscreen animation.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(delay_in_ms));
   run_loop.Run();
 }
 
 }  // namespace
 
-// TODO(1119576): Flaky under Lacros.
+// TODO(crbug.com/40714227): Flaky under Lacros.
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_EscapeExitsFullscreen DISABLED_EscapeExitsFullscreen
 #else
@@ -141,8 +127,7 @@ void WaitForFullscreenAnimation() {
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewInteractiveUITest,
                        MAYBE_EscapeExitsFullscreen) {
   // Use the testing subclass of MimeHandlerViewGuest.
-  GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-      base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+  TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
 
   const Extension* extension = LoadTestExtension();
   ASSERT_TRUE(extension);
@@ -150,16 +135,18 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewInteractiveUITest,
   ResultCatcher catcher;
 
   // Set observer to watch for fullscreen.
-  FullscreenNotificationObserver fullscreen_waiter(browser());
-
+  ui_test_utils::FullscreenWaiter fullscreen_waiter(browser(),
+                                                    {.tab_fullscreen = true});
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL("/testFullscreenEscape.csv")));
 
   // Make sure we have a guestviewmanager.
   auto* embedder_contents = browser()->tab_strip_model()->GetWebContentsAt(0);
-  auto* guest_contents = GetGuestViewManager()->WaitForSingleGuestCreated();
-  auto* guest_rwh =
-      guest_contents->GetRenderWidgetHostView()->GetRenderWidgetHost();
+  auto* guest_view = GetGuestViewManager()->WaitForSingleGuestViewCreated();
+  ASSERT_TRUE(guest_view);
+
+  auto* guest_rwh = guest_view->GetGuestMainFrame()->GetRenderWidgetHost();
+  ASSERT_TRUE(guest_rwh);
 
   // Wait for fullscreen mode.
   fullscreen_waiter.Wait();
@@ -167,14 +154,15 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewInteractiveUITest,
 
   // Send a touch to focus the guest. We can't directly test that the correct
   // RenderWidgetHost got focus, but the wait seems to work.
-  SimulateMouseClick(guest_contents, 0, blink::WebMouseEvent::Button::kLeft);
-  while (!IsRenderWidgetHostFocused(guest_rwh)) {
-    base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
-  EXPECT_EQ(guest_contents, content::GetFocusedWebContents(embedder_contents));
+  content::WaitForHitTestData(guest_view->GetGuestMainFrame());
+  SimulateMouseClickAt(
+      embedder_contents, 0, blink::WebMouseEvent::Button::kLeft,
+      guest_rwh->GetView()->TransformPointToRootCoordSpace(gfx::Point(7, 7)));
+
+  EXPECT_TRUE(base::test::RunUntil(
+      [&]() { return IsRenderWidgetHostFocused(guest_rwh); }));
+  EXPECT_EQ(embedder_contents->GetFocusedFrame(),
+            guest_view->GetGuestMainFrame());
 
   // Send <esc> to exit fullscreen.
   ASSERT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_ESCAPE, false,

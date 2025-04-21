@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace browsing_data {
 //
 // A Java counterpart will be generated for this enum.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.browsing_data
-enum class ClearBrowsingDataTab { BASIC, ADVANCED, NUM_TYPES };
+enum class ClearBrowsingDataTab { BASIC, ADVANCED, MAX_VALUE = ADVANCED };
 
 }  // namespace browsing_data
 

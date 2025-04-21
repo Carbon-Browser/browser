@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/mac/auth_session_request.h"
 
@@ -10,6 +15,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
@@ -17,12 +23,13 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "content/public/browser/web_contents.h"
-#include "net/base/mac/url_conversions.h"
+#include "net/base/apple/url_conversions.h"
 #include "url/url_canon.h"
 
 namespace {
@@ -86,7 +93,7 @@ class AuthNavigationThrottle : public content::NavigationThrottle {
 }  // namespace
 
 AuthSessionRequest::~AuthSessionRequest() {
-  std::string uuid = base::SysNSStringToUTF8(request_.get().UUID.UUIDString);
+  std::string uuid = base::SysNSStringToUTF8(request_.UUID.UUIDString);
 
   auto iter = GetMap().find(uuid);
   if (iter == GetMap().end())
@@ -104,7 +111,7 @@ void AuthSessionRequest::StartNewAuthSession(
   // Canonicalize the scheme so that it will compare correctly to the GURLs that
   // are visited later. Bail if it is invalid.
   NSString* raw_scheme = request.callbackURLScheme;
-  absl::optional<std::string> canonical_scheme =
+  std::optional<std::string> canonical_scheme =
       CanonicalizeScheme(base::SysNSStringToUTF8(raw_scheme));
   if (!canonical_scheme) {
     error_string =
@@ -166,7 +173,7 @@ void AuthSessionRequest::CancelAuthSession(
 }
 
 // static
-absl::optional<std::string> AuthSessionRequest::CanonicalizeScheme(
+std::optional<std::string> AuthSessionRequest::CanonicalizeScheme(
     std::string scheme) {
   url::RawCanonOutputT<char> canon_output;
   url::Component component;
@@ -174,7 +181,7 @@ absl::optional<std::string> AuthSessionRequest::CanonicalizeScheme(
       scheme.data(), url::Component(0, static_cast<int>(scheme.size())),
       &canon_output, &component);
   if (!result)
-    return absl::nullopt;
+    return std::nullopt;
 
   return std::string(canon_output.data() + component.begin, component.len);
 }
@@ -186,17 +193,15 @@ std::unique_ptr<content::NavigationThrottle> AuthSessionRequest::CreateThrottle(
   switch (handle->GetNavigatingFrameType()) {
     case content::FrameType::kSubframe:
     case content::FrameType::kFencedFrameRoot:
+    case content::FrameType::kGuestMainFrame:
       return nil;
     case content::FrameType::kPrimaryMainFrame:
     case content::FrameType::kPrerenderMainFrame:
       break;
   }
 
-  // base::Unretained is safe because throttles are owned by the
-  // NavigationRequest, which won't outlive the WebContents, whose lifetime this
-  // is tied to.
   auto scheme_found = base::BindOnce(&AuthSessionRequest::SchemeWasNavigatedTo,
-                                     base::Unretained(this));
+                                     weak_factory_.GetWeakPtr());
 
   return std::make_unique<AuthNavigationThrottle>(handle, scheme_,
                                                   std::move(scheme_found));
@@ -210,7 +215,7 @@ AuthSessionRequest::AuthSessionRequest(
     : content::WebContentsObserver(web_contents),
       content::WebContentsUserData<AuthSessionRequest>(*web_contents),
       browser_(browser),
-      request_(request, base::scoped_policy::RETAIN),
+      request_(request),
       scheme_(scheme) {
   std::string uuid = base::SysNSStringToUTF8(request.UUID.UUIDString);
   GetMap()[uuid] = this;
@@ -225,7 +230,7 @@ Browser* AuthSessionRequest::CreateBrowser(
 
   bool ephemeral_sessions_allowed_by_policy =
       IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-      IncognitoModePrefs::Availability::kDisabled;
+      policy::IncognitoModeAvailability::kDisabled;
 
   // As per the documentation for `shouldUseEphemeralSession`: "Whether the
   // request is honored depends on the user’s default web browser." If policy
@@ -295,37 +300,43 @@ void AuthSessionRequest::CancelAuthSession() {
   // macOS has requested that this authentication session be canceled. Close the
   // browser window and call it a day.
 
-  perform_cancellation_callback_ = false;
-
   DestroyWebContents();
   // `DestroyWebContents` triggered the death of this object; perform no more
   // work.
 }
 
 void AuthSessionRequest::SchemeWasNavigatedTo(const GURL& url) {
-  perform_cancellation_callback_ = false;
-
+  // Notify the OS that the authentication was successful, and provide the URL
+  // that was navigated to.
   [request_ completeWithCallbackURL:net::NSURLWithGURL(url)];
 
+  // This is a success, so no cancellation callback is needed.
+  perform_cancellation_callback_ = false;
+
+  // The authentication session is now complete, so close the browser window.
   DestroyWebContents();
   // `DestroyWebContents` triggered the death of this object; perform no more
   // work.
 }
 
 void AuthSessionRequest::WebContentsDestroyed() {
-  // This function can be called through one of three code paths:
+  // This function can be called through one of three code paths: one of a
+  // successful login, and two of cancellation.
   //
-  // 1. The user closed the window, in which case the "user canceled" callback
-  //    must be made.
-  // 2. The user successfully logged in, in which case the closure of the page
-  //    was triggered above in SchemeWasNavigatedTo().
-  // 3. The OS asked for cancellation, in which case the closure of the page was
-  //    triggered above in CancelAuthSession().
+  // Success code path:
   //
-  // In case 2, the success callback was already made; in case 3, no callback
-  // should be made. `perform_cancellation_callback_` is set to false in those
-  // cases. If `perform_cancellation_callback_` is true, then it was never
-  // changed after initialization, and that distinguishes case 1.
+  // - The user successfully logged in, in which case the closure of the page
+  //   was triggered above in `SchemeWasNavigatedTo()`.
+  //
+  // Cancellation code paths:
+  //
+  // - The user closed the window without successfully logging in.
+  // - The OS asked for cancellation, in which case the closure of the page was
+  //   triggered above in `CancelAuthSession()`.
+  //
+  // In both cancellation cases, the OS must receive a cancellation callback.
+  // (This is an undocumented requirement in the case that the OS asked for the
+  // cancellation; see https://crbug.com/1400714.)
 
   if (perform_cancellation_callback_) {
     NSError* error = [NSError
@@ -339,7 +350,7 @@ void AuthSessionRequest::WebContentsDestroyed() {
 WEB_CONTENTS_USER_DATA_KEY_IMPL(AuthSessionRequest);
 
 std::unique_ptr<content::NavigationThrottle> MaybeCreateAuthSessionThrottleFor(
-    content::NavigationHandle* handle) API_AVAILABLE(macos(10.15)) {
+    content::NavigationHandle* handle) {
   AuthSessionRequest* request =
       AuthSessionRequest::FromWebContents(handle->GetWebContents());
   if (!request)

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ namespace sqlite_proto {
 // 4. Now, initialization is finished and the KeyValueData objects can be
 // used (on the main thread) for get/put/delete operations against the database.
 //
-// TODO(crbug.com/1046825): This interface is a bit complex and could do with
+// TODO(crbug.com/40671040): This interface is a bit complex and could do with
 // a refactor.
 class ProtoTableManager : public TableManager {
  public:
@@ -57,6 +57,8 @@ class ProtoTableManager : public TableManager {
   void InitializeOnDbSequence(sql::Database* db,
                               base::span<const std::string> table_names,
                               int schema_version);
+
+  void WillShutdown();
 
  protected:
   ~ProtoTableManager() override;

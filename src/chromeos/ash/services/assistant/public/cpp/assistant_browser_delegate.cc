@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -29,5 +28,4 @@ AssistantBrowserDelegate::~AssistantBrowserDelegate() {
   g_instance = nullptr;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

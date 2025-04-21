@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "components/image_fetcher/core/image_fetcher_metrics_reporter.h"
 #include "net/base/data_url.h"
 #include "net/base/load_flags.h"
@@ -37,7 +38,7 @@ struct ImageDataFetcher::ImageDataFetcherRequest {
                           std::unique_ptr<network::SimpleURLLoader> loader)
       : callback(std::move(callback)), loader(std::move(loader)) {}
 
-  ~ImageDataFetcherRequest() {}
+  ~ImageDataFetcherRequest() = default;
 
   // The callback to run after the image data was fetched. The callback will
   // be run even if the image data could not be fetched successfully.
@@ -57,7 +58,7 @@ ImageDataFetcher::~ImageDataFetcher() {
 }
 
 void ImageDataFetcher::SetImageDownloadLimit(
-    absl::optional<int64_t> max_download_bytes) {
+    std::optional<int64_t> max_download_bytes) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   max_download_bytes_ = max_download_bytes;
 }
@@ -193,7 +194,7 @@ void ImageDataFetcher::FinishRequest(const network::SimpleURLLoader* source,
                                      const std::string& image_data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto request_iter = pending_requests_.find(source);
-  DCHECK(request_iter != pending_requests_.end());
+  CHECK(request_iter != pending_requests_.end(), base::NotFatalUntil::M130);
   auto callback = std::move(request_iter->second->callback);
   pending_requests_.erase(request_iter);
   std::move(callback).Run(image_data, metadata);

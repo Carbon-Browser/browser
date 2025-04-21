@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,12 +28,6 @@ class COMPONENT_EXPORT(UI_BASE_PREDICTION) EmptyFilter : public InputFilter {
 
   // Returns the name of the filter
   const char* GetName() const override;
-
-  // Returns a copy of the filter.
-  InputFilter* Clone() override;
-
-  // Reset the filter to its initial state
-  void Reset() override;
 };
 
 }  // namespace ui

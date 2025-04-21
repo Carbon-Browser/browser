@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,12 @@
 #include "base/syslog_logging.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 #include "components/enterprise/browser/reporting/common_pref_names.h"
-#include "components/enterprise/browser/reporting/real_time_report_generator.h"
-#include "components/enterprise/browser/reporting/real_time_uploader.h"
 #include "components/enterprise/browser/reporting/reporting_delegate_factory.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
+#include "components/policy/core/common/cloud/dm_token.h"
 #include "components/prefs/pref_service.h"
 
 namespace em = enterprise_management;
@@ -34,33 +32,13 @@ const int kMaximumRetry = 10;  // Retry 10 times takes about 15 to 19 hours.
 bool IsBrowserVersionUploaded(ReportScheduler::ReportTrigger trigger) {
   switch (trigger) {
     case ReportScheduler::kTriggerTimer:
+    case ReportScheduler::kTriggerManual:
     case ReportScheduler::kTriggerUpdate:
     case ReportScheduler::kTriggerNewVersion:
       return true;
     case ReportScheduler::kTriggerNone:
-    case ReportScheduler::kTriggerExtensionRequestRealTime:
       return false;
   }
-}
-
-bool IsExtensionRequestUploaded(ReportScheduler::ReportTrigger trigger) {
-  switch (trigger) {
-    case ReportScheduler::kTriggerTimer:
-    case ReportScheduler::kTriggerExtensionRequestRealTime:
-      return true;
-    case ReportScheduler::kTriggerNone:
-    case ReportScheduler::kTriggerUpdate:
-    case ReportScheduler::kTriggerNewVersion:
-      return false;
-  }
-}
-
-void OnExtensionRequestEnqueued(bool success) {
-  // So far, there is nothing handle the enqueue failure as the CBCM status
-  // report will cover all failed requests. However, we may need a retry logic
-  // here if Extension workflow is decoupled from the status report.
-  if (!success)
-    LOG(ERROR) << "Extension request failed to be added to the pipeline.";
 }
 
 }  // namespace
@@ -81,19 +59,13 @@ void ReportScheduler::Delegate::SetReportTriggerCallback(
   trigger_report_callback_ = std::move(callback);
 }
 
-void ReportScheduler::Delegate::SetRealtimeReportTriggerCallback(
-    ReportScheduler::RealtimeReportTriggerCallback callback) {
-  DCHECK(trigger_realtime_report_callback_.is_null());
-  trigger_realtime_report_callback_ = std::move(callback);
-}
-
 ReportScheduler::ReportScheduler(CreateParams params)
     : delegate_(std::move(params.delegate)),
       cloud_policy_client_(params.client),
       report_generator_(std::move(params.report_generator)),
       profile_request_generator_(std::move(params.profile_request_generator)),
-      real_time_report_generator_(
-          std::move(params.real_time_report_generator)) {
+      real_time_report_controller_(
+          std::move(params.real_time_report_controller)) {
   DCHECK(cloud_policy_client_);
   DCHECK(delegate_);
 
@@ -108,10 +80,6 @@ ReportScheduler::ReportScheduler(CreateParams params)
   delegate_->SetReportTriggerCallback(
       base::BindRepeating(&ReportScheduler::GenerateAndUploadReport,
                           weak_ptr_factory_.GetWeakPtr()));
-  delegate_->SetRealtimeReportTriggerCallback(
-      base::BindRepeating(&ReportScheduler::GenerateAndUploadRealtimeReport,
-                          weak_ptr_factory_.GetWeakPtr()));
-
   RegisterPrefObserver();
 }
 
@@ -135,17 +103,31 @@ void ReportScheduler::SetReportUploaderForTesting(
   report_uploader_ = std::move(uploader);
 }
 
-void ReportScheduler::SetExtensionRequestUploaderForTesting(
-    std::unique_ptr<RealTimeUploader> uploader) {
-  extension_request_uploader_ = std::move(uploader);
-}
-
 ReportScheduler::Delegate* ReportScheduler::GetDelegateForTesting() {
   return delegate_.get();
 }
 
 void ReportScheduler::OnDMTokenUpdated() {
   OnReportEnabledPrefChanged();
+  if (real_time_report_controller_) {
+    real_time_report_controller_->OnDMTokenUpdated(GetDMToken());
+  }
+}
+
+void ReportScheduler::UploadFullReport(base::OnceClosure on_report_uploaded) {
+  if (!IsReportingEnabled()) {
+    VLOG(1) << "Reporting is not enabled.";
+    std::move(on_report_uploaded).Run();
+    return;
+  }
+
+  if (on_manual_report_uploaded_) {
+    VLOG(1) << "Another report is uploading.";
+    std::move(on_report_uploaded).Run();
+    return;
+  }
+  on_manual_report_uploaded_ = std::move(on_report_uploaded);
+  GenerateAndUploadReport(kTriggerManual);
 }
 
 void ReportScheduler::RegisterPrefObserver() {
@@ -155,7 +137,7 @@ void ReportScheduler::RegisterPrefObserver() {
       base::BindRepeating(&ReportScheduler::OnReportEnabledPrefChanged,
                           base::Unretained(this)));
   // Trigger first pref check during launch process.
-  OnReportEnabledPrefChanged();
+  OnDMTokenUpdated();
 }
 
 void ReportScheduler::OnReportEnabledPrefChanged() {
@@ -167,7 +149,7 @@ void ReportScheduler::OnReportEnabledPrefChanged() {
   // For Chrome OS, it needn't register the cloud policy client here. The
   // |dm_token| and |client_id| should have already existed after the client is
   // initialized, and will keep valid during whole life-cycle.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   if (!SetupBrowserPolicyClientRegistration()) {
     Stop();
     return;
@@ -184,7 +166,7 @@ void ReportScheduler::OnReportEnabledPrefChanged() {
   }
 
   // Only device report generator support real time partial version report with
-  // DM Server. With longer term, this should use `real_time_report_generator_`
+  // DM Server. With longer term, this should use `real_time_report_controller_`
   // instead.
   if (report_generator_) {
     delegate_->StartWatchingUpdatesIfNeeded(
@@ -192,18 +174,12 @@ void ReportScheduler::OnReportEnabledPrefChanged() {
         delegate_->GetPrefService()->GetTimeDelta(
             kCloudReportingUploadFrequency));
   }
-
-  // Enable real time report if the generator is provided.
-  if (real_time_report_generator_)
-    delegate_->StartWatchingExtensionRequestIfNeeded();
 }
 
 void ReportScheduler::Stop() {
   request_timer_.Stop();
   if (report_generator_)
     delegate_->StopWatchingUpdates();
-  delegate_->StopWatchingExtensionRequest();
-  extension_request_uploader_.reset();
   report_uploader_.reset();
   if (pref_change_registrar_.IsObserved(kCloudReportingUploadFrequency))
     pref_change_registrar_.Remove(kCloudReportingUploadFrequency);
@@ -218,20 +194,17 @@ bool ReportScheduler::SetupBrowserPolicyClientRegistration() {
   if (cloud_policy_client_->is_registered())
     return true;
 
-  policy::DMToken dm_token;
+  auto dm_token = GetDMToken();
   std::string client_id;
   if (profile_request_generator_) {
     // Get token for profile reporting
-    dm_token = delegate_->GetProfileDMToken();
     client_id = delegate_->GetProfileClientId();
   } else {
     // Get token for browser reporting
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-    dm_token = policy::BrowserDMTokenStorage::Get()->RetrieveDMToken();
+#if !BUILDFLAG(IS_CHROMEOS)
     client_id = policy::BrowserDMTokenStorage::Get()->RetrieveClientId();
 #else
     NOTREACHED();
-    return true;
 #endif
   }
   if (!dm_token.is_valid() || client_id.empty()) {
@@ -285,15 +258,6 @@ void ReportScheduler::GenerateAndUploadReport(ReportTrigger trigger) {
   }
 }
 
-void ReportScheduler::GenerateAndUploadRealtimeReport(
-    ReportTrigger trigger,
-    const RealTimeReportGenerator::Data& data) {
-  if (trigger == kTriggerExtensionRequestRealTime) {
-    UploadExtensionRequests(data);
-    return;
-  }
-}
-
 void ReportScheduler::OnReportGenerated(ReportRequestQueue requests) {
   DCHECK_NE(active_trigger_, kTriggerNone);
   if (requests.empty()) {
@@ -328,16 +292,14 @@ void ReportScheduler::OnReportUploaded(ReportUploader::ReportStatus status) {
       if (IsBrowserVersionUploaded(active_trigger_))
         delegate_->OnBrowserVersionUploaded();
 
-      if (IsExtensionRequestUploaded(active_trigger_))
-        delegate_->OnExtensionRequestUploaded();
-
       delegate_->GetPrefService()->SetTime(kLastUploadSucceededTimestamp,
                                            base::Time::Now());
       [[fallthrough]];
     case ReportUploader::kTransientError:
       // Stop retrying and schedule the next report to avoid stale report.
       // Failure count is not reset so retry delay remains.
-      if (active_trigger_ == kTriggerTimer) {
+      if (active_trigger_ == kTriggerTimer ||
+          active_trigger_ == kTriggerManual) {
         const base::Time now = base::Time::Now();
         delegate_->GetPrefService()->SetTime(kLastUploadTimestamp, now);
         if (IsReportingEnabled())
@@ -350,6 +312,17 @@ void ReportScheduler::OnReportUploaded(ReportUploader::ReportStatus status) {
       break;
   }
 
+  if ((active_trigger_ == kTriggerManual || active_trigger_ == kTriggerTimer)) {
+    if (on_manual_report_uploaded_)
+      std::move(on_manual_report_uploaded_).Run();
+
+    // Timer and Manual report are exactly same. If we just uploaded one, skip
+    // the other.
+    if (pending_triggers_ & kTriggerTimer)
+      pending_triggers_ -= kTriggerTimer;
+    if (pending_triggers_ & kTriggerManual)
+      pending_triggers_ -= kTriggerManual;
+  }
   active_trigger_ = kTriggerNone;
   RunPendingTriggers();
 }
@@ -367,6 +340,10 @@ void ReportScheduler::RunPendingTriggers() {
     // Timer-triggered reports contain data of all other report types.
     trigger = kTriggerTimer;
     pending_triggers_ = 0;
+  } else if ((pending_triggers_ & kTriggerManual) != 0) {
+    // Manual-triggered reports also contains all data.
+    trigger = kTriggerManual;
+    pending_triggers_ = 0;
   } else {
     trigger = (pending_triggers_ & kTriggerUpdate) != 0 ? kTriggerUpdate
                                                         : kTriggerNewVersion;
@@ -374,28 +351,6 @@ void ReportScheduler::RunPendingTriggers() {
   }
 
   GenerateAndUploadReport(trigger);
-}
-
-void ReportScheduler::UploadExtensionRequests(
-    const RealTimeReportGenerator::Data& data) {
-  RecordUploadTrigger(kTriggerExtensionRequestRealTime);
-  DCHECK(real_time_report_generator_);
-  VLOG(1) << "Create extension request and add it to the pipeline.";
-  if (!extension_request_uploader_) {
-    extension_request_uploader_ =
-        RealTimeUploader::Create(cloud_policy_client_->dm_token(),
-                                 reporting::Destination::EXTENSIONS_WORKFLOW,
-                                 reporting::Priority::FAST_BATCH);
-  }
-  auto reports = real_time_report_generator_->Generate(
-      RealTimeReportGenerator::ReportType::kExtensionRequest, data);
-
-  for (auto& report : reports) {
-    extension_request_uploader_->Upload(
-        std::move(report), base::BindOnce(&OnExtensionRequestEnqueued));
-  }
-
-  delegate_->OnExtensionRequestUploaded();
 }
 
 // static
@@ -407,9 +362,10 @@ void ReportScheduler::RecordUploadTrigger(ReportTrigger trigger) {
     kTimer = 1,
     kUpdate = 2,
     kNewVersion = 3,
-    kExtensionRequest = 4,  // Deprecated.
-    kExtensionRequestRealTime = 5,
-    kMaxValue = kExtensionRequestRealTime
+    kExtensionRequest = 4,          // Deprecated.
+    kExtensionRequestRealTime = 5,  // Deprecated.
+    kManual = 6,
+    kMaxValue = kManual
   } sample = Sample::kNone;
   switch (trigger) {
     case kTriggerNone:
@@ -417,14 +373,14 @@ void ReportScheduler::RecordUploadTrigger(ReportTrigger trigger) {
     case kTriggerTimer:
       sample = Sample::kTimer;
       break;
+    case kTriggerManual:
+      sample = Sample::kManual;
+      break;
     case kTriggerUpdate:
       sample = Sample::kUpdate;
       break;
     case kTriggerNewVersion:
       sample = Sample::kNewVersion;
-      break;
-    case kTriggerExtensionRequestRealTime:
-      sample = Sample::kExtensionRequestRealTime;
       break;
   }
   base::UmaHistogramEnumeration("Enterprise.CloudReportingUploadTrigger",
@@ -435,16 +391,27 @@ ReportType ReportScheduler::TriggerToReportType(
     ReportScheduler::ReportTrigger trigger) {
   switch (trigger) {
     case ReportScheduler::kTriggerNone:
-    case ReportScheduler::kTriggerExtensionRequestRealTime:
       NOTREACHED();
-      [[fallthrough]];
     case ReportScheduler::kTriggerTimer:
+    case ReportScheduler::kTriggerManual:
       return full_report_type_;
     case ReportScheduler::kTriggerUpdate:
       return ReportType::kBrowserVersion;
     case ReportScheduler::kTriggerNewVersion:
       return ReportType::kBrowserVersion;
   }
+}
+
+policy::DMToken ReportScheduler::GetDMToken() {
+#if BUILDFLAG(IS_CHROMEOS)
+  return policy::DMToken::CreateValidToken(cloud_policy_client_->dm_token());
+#else
+  if (profile_request_generator_) {
+    return delegate_->GetProfileDMToken();
+  } else {
+    return policy::BrowserDMTokenStorage::Get()->RetrieveDMToken();
+  }
+#endif
 }
 
 }  // namespace enterprise_reporting

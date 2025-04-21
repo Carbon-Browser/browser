@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <stdlib.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "components/zucchini/disassembler.h"
 #include "components/zucchini/image_utils.h"
 #include "components/zucchini/type_ztf.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace zucchini {
 
@@ -98,8 +98,8 @@ class ZtfTranslator {
   offset_t LineColToOffset(ztf::LineCol line_col) const;
 
   // Returns the ztf::LineCol for an |offset| if it is valid. Otherwise returns
-  // absl::nullopt.
-  absl::optional<ztf::LineCol> OffsetToLineCol(offset_t offset) const;
+  // std::nullopt.
+  std::optional<ztf::LineCol> OffsetToLineCol(offset_t offset) const;
 
  private:
   // Returns an iterator to the range containing |offset|. Which is represented

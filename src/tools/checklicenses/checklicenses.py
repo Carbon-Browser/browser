@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -125,15 +125,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
     'buildtools/third_party/libc++/trunk/utils/not': ['UNKNOWN'],
     'buildtools/third_party/libc++/trunk/utils/sym_check': ['UNKNOWN'],
     'buildtools/third_party/libc++abi/trunk/test': ['UNKNOWN'],
-    'chrome/common/extensions/docs/examples': [  # http://crbug.com/98092
-        'UNKNOWN',
-    ],
-    # This contains files copied from elsewhere from the tree. Since the copied
-    # directories might have suppressions below (like simplejson), allowlist the
-    # whole directory. This is also not shipped code.
-    'chrome/common/extensions/docs/server2/third_party': [
-        'UNKNOWN',
-    ],
     'native_client': [  # http://crbug.com/98099
         'UNKNOWN',
     ],
@@ -219,7 +210,7 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
     ],
 
     # http://crbug.com/333508
-    'buildtools/clang_format/script': [
+    'third_party/clang-format/script': [
         'UNKNOWN',
     ],
     'third_party/devscripts': [
@@ -484,10 +475,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
         'UNKNOWN',
     ],
 
-    'third_party/minizip': [
-        'UNKNOWN',
-    ],
-
     # BSD License. http://bugzilla.maptools.org/show_bug.cgi?id=2532
     'third_party/pdfium/third_party/libtiff/tif_ojpeg.c': [
         'UNKNOWN',
@@ -540,9 +527,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
     'tools/python/google/__init__.py': [
         'UNKNOWN',
     ],
-    'tools/stats_viewer/Properties/AssemblyInfo.cs': [
-        'UNKNOWN',
-    ],
     'tools/symsrc/pefile.py': [
         'UNKNOWN',
     ],
@@ -582,9 +566,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
 EXCLUDED_PATHS = [
     # Don't check generated files
     re.compile('^out/'),
-
-    # Don't check downloaded goma client binaries
-    re.compile('^build/goma/client/'),
 
     # Don't check sysroot directories
     re.compile('^build/linux/.+-sysroot/'),

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/trace_event/trace_event.h"
@@ -24,8 +24,7 @@
 
 using content::BrowserThread;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Converts net::CompletionOnceCallback to net::Int64CompletionOnceCallback.
 void Int64ToIntCompletionOnceCallback(net::CompletionOnceCallback callback,
@@ -81,7 +80,7 @@ class FileStreamReader::OperationRunner
     // If the file system got unmounted, then abort the reading operation.
     if (!file_system_.get()) {
       content::GetIOThreadTaskRunner({})->PostTask(
-          FROM_HERE, base::BindOnce(callback, 0, false /* has_more */,
+          FROM_HERE, base::BindOnce(callback, 0, /*has_more=*/false,
                                     base::File::FILE_ERROR_ABORT));
       return;
     }
@@ -103,7 +102,7 @@ class FileStreamReader::OperationRunner
     if (!file_system_.get()) {
       content::GetIOThreadTaskRunner({})->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback),
-                                    base::WrapUnique<EntryMetadata>(NULL),
+                                    base::WrapUnique<EntryMetadata>(nullptr),
                                     base::File::FILE_ERROR_ABORT));
       return;
     }
@@ -133,14 +132,15 @@ class FileStreamReader::OperationRunner
       content::BrowserThread::UI>;
   friend class base::DeleteHelper<OperationRunner>;
 
-  virtual ~OperationRunner() {}
+  virtual ~OperationRunner() = default;
 
   // Remembers a file handle for further operations and forwards the result to
   // the IO thread.
   void OnOpenFileCompletedOnUIThread(
       storage::AsyncFileUtil::StatusCallback callback,
       int file_handle,
-      base::File::Error result) {
+      base::File::Error result,
+      std::unique_ptr<EntryMetadata> metadata) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     abort_callback_.Reset();
 
@@ -310,7 +310,6 @@ int FileStreamReader::Read(net::IOBuffer* buffer,
 
     case INITIALIZING:
       NOTREACHED();
-      break;
 
     case INITIALIZED:
       ReadAfterInitialized(
@@ -321,7 +320,6 @@ int FileStreamReader::Read(net::IOBuffer* buffer,
 
     case FAILED:
       NOTREACHED();
-      break;
   }
 
   return net::ERR_IO_PENDING;
@@ -349,7 +347,6 @@ int64_t FileStreamReader::GetLength(net::Int64CompletionOnceCallback callback) {
 
     case INITIALIZING:
       NOTREACHED();
-      break;
 
     case INITIALIZED:
       GetLengthAfterInitialized();
@@ -357,7 +354,6 @@ int64_t FileStreamReader::GetLength(net::Int64CompletionOnceCallback callback) {
 
     case FAILED:
       NOTREACHED();
-      break;
   }
 
   return net::ERR_IO_PENDING;
@@ -450,5 +446,4 @@ void FileStreamReader::OnGetMetadataForGetLengthReceived(
   std::move(get_length_callback_).Run(*metadata->size);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

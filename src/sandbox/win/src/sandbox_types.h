@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SANDBOX_WIN_SRC_SANDBOX_TYPES_H_
 #define SANDBOX_WIN_SRC_SANDBOX_TYPES_H_
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
@@ -162,12 +163,24 @@ enum ResultCode : int {
   SBOX_ERROR_INVALID_READ_SENTINEL_SIZE = 67,
   // The target process sentinel value did not match the sentinel in the broker.
   SBOX_ERROR_MISMATCH_SENTINEL_VALUE = 68,
+  // The process of consolidating the ConfigBase for a policy failed.
+  SBOX_ERROR_FAILED_TO_FREEZE_CONFIG = 69,
+  // Unable to obtain the environment in the broker process.
+  SBOX_ERROR_CANNOT_OBTAIN_ENVIRONMENT = 70,
+  // Unable to initialize the target configuration.
+  SBOX_ERROR_DELEGATE_INITIALIZE_CONFIG = 71,
+  // Failed to disable apphelp in the child's PEB.
+  SBOX_ERROR_DISABLING_APPHELP = 72,
+  // Note: Also update tools/metrics/histograms/enums.xml:LaunchErrorCodes.
   // Placeholder for last item of the enum.
   SBOX_ERROR_LAST
 };
 
 // If the sandbox cannot create a secure environment for the target, the
-// target will be forcibly terminated. These are the process exit codes.
+// target will be forcibly terminated. The sandbox may terminate the broker
+// process during shutdown if continuing would be unsafe. These are the process
+// exit codes. Note: keep up to date with CrashExitCodes enum in
+// tools/metrics/histograms/enums.xml.
 enum TerminationCodes {
   SBOX_FATAL_INTEGRITY = 7006,        // Could not set the integrity level.
   SBOX_FATAL_DROPTOKEN = 7007,        // Could not lower the token.
@@ -177,23 +190,20 @@ enum TerminationCodes {
   SBOX_FATAL_MITIGATION = 7011,       // Could not set the mitigation policy.
   SBOX_FATAL_MEMORY_EXCEEDED = 7012,  // Exceeded the job memory limit.
   SBOX_FATAL_WARMUP = 7013,           // Failed to warmup.
+  SBOX_FATAL_BROKER_SHUTDOWN_HUNG = 7014,  // Broker terminated in shutdown.
   SBOX_FATAL_LAST
 };
 
-#if !defined(SANDBOX_FUZZ_TARGET)
 static_assert(SBOX_FATAL_MEMORY_EXCEEDED ==
                   base::win::kSandboxFatalMemoryExceeded,
               "Value for SBOX_FATAL_MEMORY_EXCEEDED must match base.");
-#endif  // !defined(SANDBOX_FUZZ_TARGET)
 
 class BrokerServices;
 class TargetServices;
 
 // Contains the pointer to a target or broker service.
 struct SandboxInterfaceInfo {
-  // TODO(crbug.com/1298696): Chrome crashes with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<BrokerServices, DegradeToNoOpWhenMTE> broker_services;
+  raw_ptr<BrokerServices> broker_services;
   raw_ptr<TargetServices> target_services;
 };
 
@@ -206,6 +216,13 @@ enum InterceptionType {
   INTERCEPTION_UNLOAD_MODULE,  // Unload the module (don't patch)
   INTERCEPTION_LAST            // Placeholder for last item in the enumeration
 };
+
+// This callback is used for returning a process launch result from
+// StartSandboxedProcess() to the child process launcher helper. The parameters
+// include the new process handle, the Win32 last error code, and the sandbox
+// ResultCode.
+using StartSandboxedProcessCallback =
+    base::OnceCallback<void(base::Process, DWORD, int)>;
 
 }  // namespace sandbox
 

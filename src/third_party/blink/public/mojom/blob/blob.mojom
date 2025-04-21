@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,5 +72,6 @@ interface Blob {
   // ever need to call it directly.
   // This returns the internal UUID of the blob, used by the blob system to
   // identify the blob.
+  // TODO(40529364): remove this.
   GetInternalUUID() => (string uuid);
 };

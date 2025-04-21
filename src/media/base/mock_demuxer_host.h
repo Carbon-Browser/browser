@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -6,7 +6,6 @@
 #define MEDIA_BASE_MOCK_DEMUXER_HOST_H_
 
 #include "media/base/demuxer.h"
-#include "media/base/text_track_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace media {

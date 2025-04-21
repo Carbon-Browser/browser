@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,12 @@
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
-#include "components/policy/android/test_jni_headers/PolicyServiceTestSupporter_jni.h"
 #include "components/policy/core/common/mock_policy_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/policy/android/test_jni_headers/PolicyServiceTestSupporter_jni.h"
+
 using ::testing::Return;
 using ::testing::ReturnRef;
 

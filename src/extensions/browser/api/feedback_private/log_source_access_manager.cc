@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_tick_clock.h"
 #include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/feedback_private/feedback_private_delegate.h"
 #include "extensions/browser/api/feedback_private/log_source_resource.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -62,9 +63,9 @@ void GetLogLinesFromSystemLogsResponse(const SystemLogsResponse& response,
 
 // Redacts the strings in |result|.
 void RedactResults(
-    scoped_refptr<feedback::RedactionToolContainer> redactor_container,
+    scoped_refptr<redaction::RedactionToolContainer> redactor_container,
     ReadLogSourceResult* result) {
-  feedback::RedactionTool* redactor = redactor_container->Get();
+  redaction::RedactionTool* redactor = redactor_container->Get();
   for (std::string& line : result->log_lines)
     line = redactor->Redact(line);
 }
@@ -80,11 +81,11 @@ LogSourceAccessManager::LogSourceAccessManager(content::BrowserContext* context)
           {base::TaskPriority::USER_VISIBLE,
            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})),
       redactor_container_(
-          base::MakeRefCounted<feedback::RedactionToolContainer>(
+          base::MakeRefCounted<redaction::RedactionToolContainer>(
               task_runner_for_redactor_,
               /* first_party_extension_ids= */ nullptr)) {}
 
-LogSourceAccessManager::~LogSourceAccessManager() {}
+LogSourceAccessManager::~LogSourceAccessManager() = default;
 
 // static
 void LogSourceAccessManager::SetMaxNumBurstAccessesForTesting(
@@ -99,7 +100,7 @@ void LogSourceAccessManager::SetRateLimitingTimeoutForTesting(
 }
 
 bool LogSourceAccessManager::FetchFromSource(const ReadLogSourceParams& params,
-                                             const std::string& extension_id,
+                                             const ExtensionId& extension_id,
                                              ReadLogSourceCallback callback) {
   int requested_resource_id =
       params.reader_id ? *params.reader_id : kInvalidResourceId;
@@ -143,7 +144,7 @@ bool LogSourceAccessManager::FetchFromSource(const ReadLogSourceParams& params,
 }
 
 void LogSourceAccessManager::OnFetchComplete(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     ResourceId resource_id,
     bool delete_resource,
     ReadLogSourceCallback callback,
@@ -186,12 +187,12 @@ void LogSourceAccessManager::RemoveHandle(ResourceId id) {
 
 LogSourceAccessManager::SourceAndExtension::SourceAndExtension(
     LogSource source,
-    const std::string& extension_id)
+    const ExtensionId& extension_id)
     : source(source), extension_id(extension_id) {}
 
 LogSourceAccessManager::ResourceId LogSourceAccessManager::CreateResource(
     LogSource source,
-    const std::string& extension_id) {
+    const ExtensionId& extension_id) {
   // Enforce the rules: Do not create too many SingleLogSource objects to read
   // from a source, even if they are from different extensions.
   if (GetNumActiveResourcesForSource(source) >= kMaxReadersPerSource)
@@ -209,8 +210,9 @@ LogSourceAccessManager::ResourceId LogSourceAccessManager::CreateResource(
   if (resource_id == kInvalidResourceId)
     return kInvalidResourceId;
 
-  if (open_handles_.find(resource_id) != open_handles_.end())
+  if (base::Contains(open_handles_, resource_id)) {
     return kInvalidResourceId;
+  }
 
   // Now that |resource_id| has been determined to be valid, release ownership
   // of the LogSourceResource, which is now owned by the API resource manager.

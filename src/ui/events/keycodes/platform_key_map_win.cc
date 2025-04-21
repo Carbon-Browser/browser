@@ -1,6 +1,11 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/events/keycodes/platform_key_map_win.h"
 
@@ -259,13 +264,13 @@ DomKey NonPrintableKeyboardCodeToDomKey(KeyboardCode key_code, HKL layout) {
 
 }  // anonymous namespace
 
-PlatformKeyMap::PlatformKeyMap() {}
+PlatformKeyMap::PlatformKeyMap() = default;
 
 PlatformKeyMap::PlatformKeyMap(HKL layout) {
   UpdateLayout(layout);
 }
 
-PlatformKeyMap::~PlatformKeyMap() {}
+PlatformKeyMap::~PlatformKeyMap() = default;
 
 // static
 PlatformKeyMap* PlatformKeyMap::GetThreadLocalPlatformKeyMap() {

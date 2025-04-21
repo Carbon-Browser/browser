@@ -51,7 +51,7 @@ NodeSet* NodeSet::Create(const NodeSet& other) {
 static inline Node* ParentWithDepth(unsigned depth,
                                     const NodeSetVector& parents) {
   DCHECK_GE(parents.size(), depth + 1);
-  return parents[parents.size() - 1 - depth];
+  return parents[parents.size() - 1 - depth].Get();
 }
 
 static void SortBlock(unsigned from,
@@ -155,7 +155,7 @@ static void SortBlock(unsigned from,
     }
   }
 
-  DCHECK(parent_nodes.IsEmpty());
+  DCHECK(parent_nodes.empty());
 }
 
 void NodeSet::Sort() const {
@@ -249,7 +249,7 @@ void NodeSet::TraversalSort() const {
 }
 
 void NodeSet::Reverse() {
-  if (nodes_.IsEmpty())
+  if (nodes_.empty())
     return;
 
   unsigned from = 0;

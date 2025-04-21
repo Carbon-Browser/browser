@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,7 +97,7 @@ class GeoLanguageProvider {
   void SetGeoLanguages(const std::vector<std::string>& languages);
 
   // Callback for updates from |ip_geolocation_service_|.
-  void OnIpGeolocationResponse(device::mojom::GeopositionPtr geoposition);
+  void OnIpGeolocationResponse(device::mojom::GeopositionResultPtr result);
 
   // List of BCP-47 language code inferred from public-IP geolocation.
   // May be empty. See comment on CurrentGeoLanguages() above.

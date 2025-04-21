@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_CREDENTIAL_PROVIDER_GAIACP_SCOPED_LSA_POLICY_H_
 #define CHROME_CREDENTIAL_PROVIDER_GAIACP_SCOPED_LSA_POLICY_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/win/windows_types.h"
 
 struct _UNICODE_STRING;

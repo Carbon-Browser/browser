@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.chromium.base.Log;
 import org.chromium.payments.mojom.BillingResponseCode;
 import org.chromium.payments.mojom.DigitalGoods.Consume_Response;
 
-/**
- * A converter that deals with the parameters and result for Consume calls.
- */
+/** A converter that deals with the parameters and result for Consume calls. */
 class ConsumeConverter {
     private static final String TAG = "DigitalGoods";
 

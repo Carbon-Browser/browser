@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class DirReaderFallback {
   bool Next() { return false; }
 
   // Return the name of the current directory entry.
-  const char* name() { return nullptr;}
+  const char* name() { return nullptr; }
 
   // Return the file descriptor which is being used.
   int fd() const { return -1; }

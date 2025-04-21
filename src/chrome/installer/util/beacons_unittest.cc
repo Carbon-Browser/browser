@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -248,6 +248,14 @@ INSTANTIATE_TEST_SUITE_P(
     DefaultBrowserBeaconTest,
     testing::Combine(testing::Values(install_static::CANARY_INDEX),
                      testing::Values("user")));
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+// Chrome for Testing is only at user level.
+INSTANTIATE_TEST_SUITE_P(
+    ChromeForTesting,
+    DefaultBrowserBeaconTest,
+    testing::Combine(
+        testing::Values(install_static::GOOGLE_CHROME_FOR_TESTING_INDEX),
+        testing::Values("user")));
 #else   // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 // Chromium supports user and system levels.
 INSTANTIATE_TEST_SUITE_P(

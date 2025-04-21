@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define BASE_THREADING_THREADING_FEATURES_H_
 
 #include "base/base_export.h"
+#include "base/feature_list.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -14,19 +15,18 @@
 
 namespace base {
 
-struct Feature;
-
 #if BUILDFLAG(IS_APPLE)
-extern const BASE_EXPORT Feature kOptimizedRealtimeThreadingMac;
+BASE_EXPORT BASE_DECLARE_FEATURE(kOptimizedRealtimeThreadingMac);
 extern const BASE_EXPORT FeatureParam<bool>
     kOptimizedRealtimeThreadingMacPreemptible;
 extern const BASE_EXPORT FeatureParam<double>
     kOptimizedRealtimeThreadingMacBusy;
 extern const BASE_EXPORT FeatureParam<double>
     kOptimizedRealtimeThreadingMacBusyLimit;
+extern const BASE_EXPORT Feature kUserInteractiveCompositingMac;
 #endif
 
-extern const BASE_EXPORT Feature kEnableHangWatcher;
+BASE_EXPORT BASE_DECLARE_FEATURE(kEnableHangWatcher);
 
 }  // namespace base
 

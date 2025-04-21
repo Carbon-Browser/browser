@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,26 +8,45 @@ import android.net.Uri;
 
 import androidx.annotation.NonNull;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.JniType;
+
+import org.chromium.android_webview.common.Lifetime;
+import org.chromium.content_public.browser.MessagePayload;
 import org.chromium.content_public.browser.MessagePort;
 
 /**
  * Holds the {@link WebMessageListener} instance so that C++ could interact with the {@link
  * WebMessageListener}.
  */
+@Lifetime.Temporary
 @JNINamespace("android_webview")
 public class WebMessageListenerHolder {
-    private WebMessageListener mListener;
+    private final WebMessageListener mListener;
 
     public WebMessageListenerHolder(@NonNull WebMessageListener listener) {
         mListener = listener;
     }
 
     @CalledByNative
-    public void onPostMessage(String message, String sourceOrigin, boolean isMainFrame,
-            MessagePort[] ports, JsReplyProxy replyProxy) {
-        mListener.onPostMessage(message, Uri.parse(sourceOrigin), isMainFrame, replyProxy, ports);
+    public void onPostMessage(
+            MessagePayload payload,
+            @JniType("std::string") String topLevelOrigin,
+            @JniType("std::string") String sourceOrigin,
+            boolean isMainFrame,
+            MessagePort[] ports,
+            JsReplyProxy replyProxy) {
+        AwThreadUtils.postToCurrentLooper(
+                () -> {
+                    mListener.onPostMessage(
+                            payload,
+                            Uri.parse(topLevelOrigin),
+                            Uri.parse(sourceOrigin),
+                            isMainFrame,
+                            replyProxy,
+                            ports);
+                });
     }
 
     public WebMessageListener getListener() {

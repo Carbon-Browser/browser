@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/x/x11_clipboard_helper.h"
 
@@ -41,10 +41,10 @@ void X11ClipboardOzone::RequestClipboardData(
     const std::string& mime_type,
     PlatformClipboard::RequestDataClosure callback) {
   DCHECK(!callback.is_null());
-  auto atoms =
-      mime_type == kMimeTypeText
-          ? helper_->GetTextAtoms()
-          : helper_->GetAtomsForFormat(ClipboardFormatType::GetType(mime_type));
+  auto atoms = mime_type == kMimeTypeText
+                   ? helper_->GetTextAtoms()
+                   : helper_->GetAtomsForFormat(
+                         ClipboardFormatType::CustomPlatformType(mime_type));
   auto selection_data = helper_->Read(buffer, atoms);
   std::move(callback).Run(selection_data.TakeBytes());
 }
@@ -55,7 +55,7 @@ void X11ClipboardOzone::GetAvailableMimeTypes(
   DCHECK(!callback.is_null());
   // This is the only function clients may use to request available formats, so
   // include both standard and platform-specific (atom names) values.
-  // TODO(crbug.com/1165466): Consider adding a way of filtering mime types and
+  // TODO(crbug.com/40054419): Consider adding a way of filtering mime types and
   // querying availability of specific formats, so implementations can optimize
   // it, if possible. E.g: Avoid multiple roundtrips to check if a given format
   // is available. See ClipboardX11::IsFormatAvailable for example.

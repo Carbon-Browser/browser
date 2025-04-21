@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.base.Callback;
 
 import java.util.List;
 
-/**
- * The top level coordinator for the image tiles UI.
- */
+/** The top level coordinator for the image tiles UI. */
 public interface ImageTileCoordinator {
     /** @return A {@link View} representing this coordinator. */
     View getView();
@@ -24,9 +22,7 @@ public interface ImageTileCoordinator {
      */
     void setTiles(List<ImageTile> tiles);
 
-    /**
-     * Refresh tile display. If tiles are scrolled, return them to their original position.
-     */
+    /** Refresh tile display. If tiles are scrolled, return them to their original position. */
     void refreshTiles();
 
     /** A helper interface to support retrieving {@link Bitmap}s asynchronously. */

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
-#include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
+#include "google_apis/gcm/base/gcm_features.h"
 #include "google_apis/gcm/engine/connection_handler_impl.h"
 #include "google_apis/gcm/monitoring/gcm_stats_recorder.h"
 #include "google_apis/gcm/protocol/mcs.pb.h"
@@ -98,12 +99,12 @@ void ConnectionFactoryImpl::Initialize(
 
   network_connection_tracker_->AddNetworkConnectionObserver(this);
   auto type = network::mojom::ConnectionType::CONNECTION_UNKNOWN;
-  network_connection_tracker_->GetConnectionType(
-      &type, base::BindOnce(&ConnectionFactoryImpl::OnConnectionChanged,
-                            weak_ptr_factory_.GetWeakPtr()));
-  waiting_for_network_online_ =
-      type == network::mojom::ConnectionType::CONNECTION_NONE ||
-      type == network::mojom::ConnectionType::CONNECTION_UNKNOWN;
+  if (network_connection_tracker_->GetConnectionType(
+          &type, base::BindOnce(&ConnectionFactoryImpl::OnConnectionChanged,
+                                weak_ptr_factory_.GetWeakPtr()))) {
+    waiting_for_network_online_ =
+        type == network::mojom::ConnectionType::CONNECTION_NONE;
+  }
 }
 
 ConnectionHandler* ConnectionFactoryImpl::GetConnectionHandler() const {
@@ -118,11 +119,13 @@ void ConnectionFactoryImpl::Connect() {
                             weak_ptr_factory_.GetWeakPtr()));
   }
 
-  if (connecting_ || waiting_for_backoff_)
+  if (connecting_ || waiting_for_backoff_) {
     return;  // Connection attempt already in progress or pending.
+  }
 
-  if (IsEndpointReachable())
+  if (IsEndpointReachable()) {
     return;  // Already connected.
+  }
 
   ConnectWithBackoff();
 }
@@ -162,7 +165,11 @@ void ConnectionFactoryImpl::ConnectWithBackoff() {
   // otherwise it's possible to hit a use-after-free in the connection handler.
   // crbug.com/462319
   CloseSocket();
-  ConnectImpl();
+  if (!waiting_for_network_online_ ||
+      !base::FeatureList::IsEnabled(
+          gcm::features::kGCMAvoidConnectionWhenNetworkUnavailable)) {
+    ConnectImpl(/*ignore_connection_failure=*/false);
+  }
 }
 
 bool ConnectionFactoryImpl::IsEndpointReachable() const {
@@ -170,16 +177,21 @@ bool ConnectionFactoryImpl::IsEndpointReachable() const {
 }
 
 std::string ConnectionFactoryImpl::GetConnectionStateString() const {
-  if (IsEndpointReachable())
+  if (IsEndpointReachable()) {
     return "CONNECTED";
-  if (handshake_in_progress_)
+  }
+  if (handshake_in_progress_) {
     return "HANDSHAKE IN PROGRESS";
-  if (connecting_)
+  }
+  if (connecting_) {
     return "CONNECTING";
-  if (waiting_for_backoff_)
+  }
+  if (waiting_for_backoff_) {
     return "WAITING FOR BACKOFF";
-  if (waiting_for_network_online_)
+  }
+  if (waiting_for_network_online_) {
     return "WAITING FOR NETWORK CHANGE";
+  }
   return "NOT CONNECTED";
 }
 
@@ -197,63 +209,58 @@ void ConnectionFactoryImpl::SignalConnectionReset(
     return;
   }
 
-  if (listener_)
+  if (listener_) {
+    DVLOG(1) << "Notifying listener of disconnect due to connection reset.";
     listener_->OnDisconnected();
-
-  UMA_HISTOGRAM_ENUMERATION("GCM.ConnectionResetReason",
-                            reason,
-                            CONNECTION_RESET_COUNT);
-  recorder_->RecordConnectionResetSignaled(reason);
-  if (!last_login_time_.is_null()) {
-    UMA_HISTOGRAM_CUSTOM_TIMES("GCM.ConnectionUpTime",
-                               NowTicks() - last_login_time_, base::Seconds(1),
-                               base::Hours(24), 50);
-    // |last_login_time_| will be reset below, before attempting the new
-    // connection.
   }
+
+  recorder_->RecordConnectionResetSignaled(reason);
 
   // SignalConnectionReset can be called at any time without regard to whether
   // a connection attempt is currently in progress. Only notify the event
   // tracker if there is an event in progress.
   if (event_tracker_.IsEventInProgress()) {
-    if (reason == LOGIN_FAILURE)
+    if (reason == LOGIN_FAILURE) {
       event_tracker_.ConnectionLoginFailed();
+    }
     event_tracker_.EndConnectionAttempt();
   }
 
   CloseSocket();
   DCHECK(!IsEndpointReachable());
 
-  // TODO(zea): if the network is offline, don't attempt to connect.
-  // See crbug.com/396687
+  if (waiting_for_network_online_ &&
+      base::FeatureList::IsEnabled(
+          gcm::features::kGCMAvoidConnectionWhenNetworkUnavailable)) {
+    // Do nothing when there is no network connection.
+    return;
+  }
 
   // Network changes get special treatment as they can trigger a one-off canary
   // request that bypasses backoff (but does nothing if a connection is in
-  // progress). Other connection reset events can be ignored as a connection
-  // is already awaiting backoff expiration.
-  if (waiting_for_backoff_ && reason != NETWORK_CHANGE) {
+  // progress).
+  if (reason == NETWORK_CHANGE) {
+    // Canary attempts bypass backoff without resetting it. These will have no
+    // effect if we're already in the process of connecting. Connection attempt
+    // failure also does not affect backoff delay to avoid piling up delays
+    // within a short period in case of many network changes.
+    ConnectImpl(/*ignore_connection_failure=*/true);
+    return;
+  }
+
+  if (waiting_for_backoff_) {
+    // Other connection reset events can be ignored as a connection is already
+    // awaiting backoff expiration.
     DVLOG(1) << "Backoff expiration pending, ignoring reset.";
     return;
   }
 
-  if (reason == NETWORK_CHANGE) {
-    // Canary attempts bypass backoff without resetting it. These will have no
-    // effect if we're already in the process of connecting.
-    ConnectImpl();
-    return;
-  } else if (handshake_in_progress_) {
-    // Failures prior to handshake completion reuse the existing backoff entry.
-    handshake_in_progress_ = false;
-    backoff_entry_->InformOfRequest(false);
-  } else if (reason == LOGIN_FAILURE ||
-             ShouldRestorePreviousBackoff(last_login_time_, NowTicks())) {
+  if (reason == LOGIN_FAILURE ||
+      ShouldRestorePreviousBackoff(last_login_time_, NowTicks())) {
     // Failures due to login, or within the reset window of a login, restore
     // the backoff entry that was saved off at login completion time.
     backoff_entry_.swap(previous_backoff_);
     backoff_entry_->InformOfRequest(false);
-  } else {
-    // We shouldn't be in backoff in thise case.
-    DCHECK_EQ(0, backoff_entry_->failure_count());
   }
 
   // At this point the last login time has been consumed or deemed irrelevant,
@@ -269,8 +276,9 @@ void ConnectionFactoryImpl::SetConnectionListener(
 }
 
 base::TimeTicks ConnectionFactoryImpl::NextRetryAttempt() const {
-  if (!backoff_entry_)
+  if (!backoff_entry_) {
     return base::TimeTicks();
+  }
   return backoff_entry_->GetReleaseTime();
 }
 
@@ -280,8 +288,7 @@ void ConnectionFactoryImpl::OnConnectionChanged(
     DVLOG(1) << "Network lost, resettion connection.";
     waiting_for_network_online_ = true;
 
-    // Will do nothing due to |waiting_for_network_online_ == true|.
-    // TODO(zea): make the above statement actually true. See crbug.com/396687
+    // Will only close the socket due to no network connection.
     SignalConnectionReset(NETWORK_CHANGE);
     return;
   }
@@ -294,23 +301,23 @@ void ConnectionFactoryImpl::OnConnectionChanged(
 GURL ConnectionFactoryImpl::GetCurrentEndpoint() const {
   // Note that IsEndpointReachable() returns false anytime connecting_ is true,
   // so while connecting this always uses |next_endpoint_|.
-  if (IsEndpointReachable())
+  if (IsEndpointReachable()) {
     return mcs_endpoints_[last_successful_endpoint_];
+  }
   return mcs_endpoints_[next_endpoint_];
 }
 
-void ConnectionFactoryImpl::ConnectImpl() {
+void ConnectionFactoryImpl::ConnectImpl(bool ignore_connection_failure) {
   event_tracker_.StartConnectionAttempt();
-  StartConnection();
+  StartConnection(ignore_connection_failure);
 }
 
-void ConnectionFactoryImpl::StartConnection() {
+void ConnectionFactoryImpl::StartConnection(bool ignore_connection_failure) {
   DCHECK(!IsEndpointReachable());
-  // TODO(zea): Make this a dcheck again. crbug.com/462319
   CHECK(!socket_);
-
-  // TODO(zea): if the network is offline, don't attempt to connect.
-  // See crbug.com/396687
+  CHECK(!waiting_for_network_online_ ||
+        !base::FeatureList::IsEnabled(
+            gcm::features::kGCMAvoidConnectionWhenNetworkUnavailable));
 
   connecting_ = true;
   GURL current_endpoint = GetCurrentEndpoint();
@@ -359,17 +366,17 @@ void ConnectionFactoryImpl::StartConnection() {
   network::mojom::ProxyResolvingSocketOptionsPtr options =
       network::mojom::ProxyResolvingSocketOptions::New();
   options->use_tls = true;
-  // |current_endpoint| is always a Google URL, so this NetworkIsolationKey will
-  // be the same for all callers, and will allow pooling all connections to GCM
-  // in one socket connection, if an H2 or QUIC proxy is in use.
-  auto origin = url::Origin::Create(current_endpoint);
-  net::NetworkIsolationKey network_isolation_key(origin, origin);
+  // |current_endpoint| is always a Google URL, so this NetworkAnonymizationKey
+  // will be the same for all callers, and will allow pooling all connections to
+  // GCM in one socket connection, if an H2 or QUIC proxy is in use.
+  auto site = net::SchemefulSite(current_endpoint);
   socket_factory_->CreateProxyResolvingSocket(
-      current_endpoint, std::move(network_isolation_key), std::move(options),
+      current_endpoint, net::NetworkAnonymizationKey::CreateSameSite(site),
+      std::move(options),
       net::MutableNetworkTrafficAnnotationTag(traffic_annotation),
       socket_.BindNewPipeAndPassReceiver(), mojo::NullRemote() /* observer */,
       base::BindOnce(&ConnectionFactoryImpl::OnConnectDone,
-                     base::Unretained(this)));
+                     base::Unretained(this), ignore_connection_failure));
 }
 
 void ConnectionFactoryImpl::InitHandler(
@@ -408,11 +415,13 @@ base::TimeTicks ConnectionFactoryImpl::NowTicks() {
 }
 
 void ConnectionFactoryImpl::OnConnectDone(
+    bool ignore_connection_failure,
     int result,
-    const absl::optional<net::IPEndPoint>& local_addr,
-    const absl::optional<net::IPEndPoint>& peer_addr,
+    const std::optional<net::IPEndPoint>& local_addr,
+    const std::optional<net::IPEndPoint>& peer_addr,
     mojo::ScopedDataPipeConsumerHandle receive_stream,
     mojo::ScopedDataPipeProducerHandle send_stream) {
+  base::UmaHistogramSparse("GCM.MCSClientConnectionNetworkCode", -result);
   DCHECK_NE(net::ERR_IO_PENDING, result);
   if (!connection_handler_) {
     // If CloseSocket() is called while a connect is pending, this callback will
@@ -423,11 +432,14 @@ void ConnectionFactoryImpl::OnConnectDone(
   }
   if (result != net::OK) {
     LOG(ERROR) << "Failed to connect to MCS endpoint with error " << result;
-    UMA_HISTOGRAM_BOOLEAN("GCM.ConnectionSuccessRate", false);
     recorder_->RecordConnectionFailure(result);
     CloseSocket();
-    backoff_entry_->InformOfRequest(false);
-    base::UmaHistogramSparse("GCM.ConnectionFailureErrorCode", result);
+    if (!ignore_connection_failure ||
+        !base::FeatureList::IsEnabled(
+            gcm::features::kGCMDoNotIncreaseBackoffDelayOnNetworkChange)) {
+      // Do not inform of a failed request when `ignore_connection_failure`.
+      backoff_entry_->InformOfRequest(false);
+    }
 
     event_tracker_.ConnectionAttemptFailed(result);
     event_tracker_.EndConnectionAttempt();
@@ -435,15 +447,14 @@ void ConnectionFactoryImpl::OnConnectDone(
     // If there are other endpoints available, use the next endpoint on the
     // subsequent retry.
     next_endpoint_++;
-    if (next_endpoint_ >= mcs_endpoints_.size())
+    if (next_endpoint_ >= mcs_endpoints_.size()) {
       next_endpoint_ = 0;
+    }
     connecting_ = false;
     Connect();
     return;
   }
 
-  UMA_HISTOGRAM_BOOLEAN("GCM.ConnectionSuccessRate", true);
-  UMA_HISTOGRAM_COUNTS_1M("GCM.ConnectionEndpoint", next_endpoint_);
   recorder_->RecordConnectionSuccess();
 
   // Reset the endpoint back to the default.
@@ -457,17 +468,25 @@ void ConnectionFactoryImpl::OnConnectDone(
   DVLOG(1) << "MCS endpoint socket connection success, starting login.";
   // |peer_addr| is only non-null if result == net::OK and the connection is not
   // through a proxy.
-  if (peer_addr)
+  if (peer_addr) {
     peer_addr_ = peer_addr.value();
+  }
   InitHandler(std::move(receive_stream), std::move(send_stream));
 }
 
 void ConnectionFactoryImpl::ConnectionHandlerCallback(int result) {
+  base::UmaHistogramSparse("GCM.ConnectionHandlerNetCode", -result);
   DCHECK(!connecting_);
   if (result != net::OK) {
     // TODO(zea): Consider how to handle errors that may require some sort of
     // user intervention (login page, etc.).
-    base::UmaHistogramSparse("GCM.ConnectionDisconnectErrorCode", result);
+    LOG(ERROR) << "ConnectionHandler failed with net error: " << result;
+
+    // Failures prior to handshake completion reuse the existing backoff entry.
+    if (handshake_in_progress_) {
+      backoff_entry_->InformOfRequest(false);
+      handshake_in_progress_ = false;
+    }
     SignalConnectionReset(SOCKET_FAILURE);
     return;
   }
@@ -476,25 +495,28 @@ void ConnectionFactoryImpl::ConnectionHandlerCallback(int result) {
   // the client should invoke SignalConnectionReset(LOGIN_FAILURE), which will
   // restore the previous backoff.
   DVLOG(1) << "Handshake complete.";
+  handshake_in_progress_ = false;
   last_login_time_ = NowTicks();
   previous_backoff_.swap(backoff_entry_);
   backoff_entry_->Reset();
-  handshake_in_progress_ = false;
 
   event_tracker_.ConnectionAttemptSucceeded();
 
-  if (listener_)
+  if (listener_) {
     listener_->OnConnected(GetCurrentEndpoint(), peer_addr_);
+  }
 }
 
 void ConnectionFactoryImpl::CloseSocket() {
   // The connection handler needs to be reset, else it'll attempt to keep using
   // the destroyed socket.
-  if (connection_handler_)
+  if (connection_handler_) {
     connection_handler_->Reset();
+  }
 
   socket_.reset();
   peer_addr_ = net::IPEndPoint();
+  handshake_in_progress_ = false;
 }
 
 }  // namespace gcm

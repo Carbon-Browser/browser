@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ARC_NEARBY_SHARE_UI_PROGRESS_BAR_DIALOG_VIEW_H_
 #define CHROME_BROWSER_ASH_ARC_NEARBY_SHARE_UI_PROGRESS_BAR_DIALOG_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/views/layout/box_layout_view.h"
 
 namespace aura {
@@ -37,16 +38,17 @@ class ProgressBarDialogView : public views::BoxLayoutView {
   void UpdateInterpolatedProgressBarValue();
 
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void AddedToWidget() override;
   void OnThemeChanged() override;
 
  private:
   // Progress bar view to show file streaming progress to the user.
-  views::ProgressBar* progress_bar_ = nullptr;
+  raw_ptr<views::ProgressBar, DanglingUntriaged> progress_bar_ = nullptr;
 
   // Message label for the progress bar.
-  views::Label* message_label_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> message_label_ = nullptr;
 
   // Indicates whether multiple files are being shared for UI string.
   const bool is_multiple_files_;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,11 @@
 
 class PrefService;
 
-namespace syncer {
-class SyncService;
-}
-
 namespace password_bubble_experiment {
 
 // Returns the number of times the "Save password" bubble can be dismissed by
 // user before it's not shown automatically.
 int GetSmartBubbleDismissalThreshold();
-
-// Returns true if the user has chosen to sync passwords to Google Account.
-bool HasChosenToSyncPasswords(const syncer::SyncService* sync_service);
 
 // Returns true if first run experience for auto sign-in prompt should be shown.
 bool ShouldShowAutoSignInPromptFirstRunExperience(PrefService* prefs);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,18 @@ class WebMouseWheelEvent;
 namespace ui {
 struct DidOverscrollParams;
 }
+
+// The options that define the context under which mouse events are accepted.
+// Acceptance under a lower option implies acceptance under any higher option,
+// but not vice versa.
+enum AcceptMouseEventsOption {
+  // Accepts mouse events only when the window is active.
+  kAcceptMouseEventsInActiveWindow = 0,
+  // Accepts mouse events when any window of the application is active.
+  kAcceptMouseEventsInActiveApp = 1,
+  // Accepts mouse events regardless of window or application activation.
+  kAcceptMouseEventsAlways = 2,
+};
 
 // This protocol is used as a delegate for the NSView class used in the
 // hierarchy. There are two ways to extend the view:
@@ -66,6 +78,10 @@ struct DidOverscrollParams;
 - (void)resignFirstResponder;
 
 - (void)windowDidBecomeKey;
+
+// By default, only active window accepts mouse events. The content embedder may
+// override this method to override the default behavior.
+- (AcceptMouseEventsOption)acceptsMouseEventsOption;
 @end
 
 #endif  // CONTENT_PUBLIC_BROWSER_RENDER_WIDGET_HOST_VIEW_MAC_DELEGATE_H_

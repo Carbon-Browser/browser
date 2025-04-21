@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
+#include <type_traits>
 
-#include "base/strings/string_piece.h"
 #include "content/common/content_export.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -30,7 +32,7 @@ class WebUI;
 // all existing WebUI pages use this.
 class CONTENT_EXPORT WebUIConfig {
  public:
-  explicit WebUIConfig(base::StringPiece scheme, base::StringPiece host);
+  explicit WebUIConfig(std::string_view scheme, std::string_view host);
   virtual ~WebUIConfig();
   WebUIConfig(const WebUIConfig&) = delete;
   WebUIConfig& operator=(const WebUIConfig&) = delete;
@@ -45,13 +47,18 @@ class CONTENT_EXPORT WebUIConfig {
   // on/off, the WebUI is enabled in incognito, etc. Defaults to true.
   virtual bool IsWebUIEnabled(BrowserContext* browser_context);
 
-  // Returns a WebUIController for the WebUI.
+  // Returns whether the WebUI should be used for the given |url|. Not all
+  // WebUIs should be created for all requests to their host. Defaults to true.
+  virtual bool ShouldHandleURL(const GURL& url);
+
+  // Returns a WebUIController for WebUI and GURL.
   //
   // URLDataSource is usually created in the constructor of WebUIController. The
   // URLDataSource should be the same as the one registered in
   // `RegisterURLDataSource()` or resources will fail to load.
   virtual std::unique_ptr<WebUIController> CreateWebUIController(
-      WebUI* web_ui) = 0;
+      WebUI* web_ui,
+      const GURL& url) = 0;
 
   // This is called when registering or updating a Service Worker.
   //
@@ -70,13 +77,27 @@ class CONTENT_EXPORT WebUIConfig {
 template <typename T>
 class CONTENT_EXPORT DefaultWebUIConfig : public WebUIConfig {
  public:
-  explicit DefaultWebUIConfig(base::StringPiece scheme, base::StringPiece host)
+  explicit DefaultWebUIConfig(std::string_view scheme, std::string_view host)
       : WebUIConfig(scheme, host) {}
   ~DefaultWebUIConfig() override = default;
 
   std::unique_ptr<WebUIController> CreateWebUIController(
-      WebUI* web_ui) override {
-    return std::make_unique<T>(web_ui);
+      WebUI* web_ui,
+      const GURL& url) override {
+    // Disallow dual constructibility.
+    // The controller can be constructed either by T(WebUI*) or
+    // T(WebUI*, const GURL&), ...
+    static_assert(std::is_constructible_v<T, WebUI*> ||
+                  std::is_constructible_v<T, WebUI*, const GURL&>);
+    // ..., but not both.
+    static_assert(!(std::is_constructible_v<T, WebUI*> &&
+                    std::is_constructible_v<T, WebUI*, const GURL&>));
+    if constexpr (std::is_constructible_v<T, WebUI*>) {
+      return std::make_unique<T>(web_ui);
+    }
+    if constexpr (std::is_constructible_v<T, WebUI*, const GURL&>) {
+      return std::make_unique<T>(web_ui, url);
+    }
   }
 };
 

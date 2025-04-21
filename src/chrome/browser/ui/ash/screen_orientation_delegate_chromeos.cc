@@ -1,13 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/screen_orientation_delegate_chromeos.h"
 
 #include "ash/display/screen_orientation_controller.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/shell.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/display/screen.h"
 
 namespace {
 
@@ -60,7 +60,7 @@ void ScreenOrientationDelegateChromeos::Lock(
 
 bool ScreenOrientationDelegateChromeos::ScreenOrientationProviderSupported(
     content::WebContents* web_contents) {
-  return ash::TabletMode::IsInTabletMode();
+  return display::Screen::GetScreen()->InTabletMode();
 }
 
 void ScreenOrientationDelegateChromeos::Unlock(

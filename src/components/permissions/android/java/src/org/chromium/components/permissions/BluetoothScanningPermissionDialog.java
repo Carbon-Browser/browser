@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,11 @@ import android.widget.ProgressBar;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.MathUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.components.omnibox.AutocompleteSchemeClassifier;
 import org.chromium.components.omnibox.OmniboxUrlEmphasizer;
 import org.chromium.content_public.browser.bluetooth_scanning.Event;
@@ -54,9 +55,6 @@ public class BluetoothScanningPermissionDialog {
     private static final int MIN_HEIGHT_DP = (int) (LIST_ROW_HEIGHT_DP * 1.5);
     // The maximum height of the listview in the dialog (in dp).
     private static final int MAX_HEIGHT_DP = (int) (LIST_ROW_HEIGHT_DP * 8.5);
-
-    // The window that owns this dialog.
-    private final WindowAndroid mWindowAndroid;
 
     // Always equal to mWindowAndroid.getActivity().get(), but stored separately to make sure it's
     // not GC'ed.
@@ -90,17 +88,18 @@ public class BluetoothScanningPermissionDialog {
      *
      * @param windowAndroid The window that owns this dialog.
      * @param origin The origin for the site wanting to do Bluetooth scanning.
-     * @param securityLevel The security level of the connection to the site wanting to do
-     *                      Bluetooth scanning. For valid values see
-     *                      SecurityStateModel::SecurityLevel.
+     * @param securityLevel The security level of the connection to the site wanting to do Bluetooth
+     *     scanning. For valid values see SecurityStateModel::SecurityLevel.
      * @param nativeBluetoothScanningPermissionDialogPtr A pointer back to the native part of the
-     *                                                   implementation for this dialog.
+     *     implementation for this dialog.
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
-    public BluetoothScanningPermissionDialog(WindowAndroid windowAndroid, String origin,
-            int securityLevel, BluetoothScanningPromptAndroidDelegate delegate,
+    public BluetoothScanningPermissionDialog(
+            WindowAndroid windowAndroid,
+            String origin,
+            int securityLevel,
+            BluetoothScanningPromptAndroidDelegate delegate,
             long nativeBluetoothScanningPermissionDialogPtr) {
-        mWindowAndroid = windowAndroid;
         mActivity = windowAndroid.getActivity().get();
         assert mActivity != null;
         mContext = windowAndroid.getContext().get();
@@ -114,19 +113,28 @@ public class BluetoothScanningPermissionDialog {
         final boolean useDarkColors = !ColorUtils.inNightMode(mContext);
         AutocompleteSchemeClassifier autocompleteSchemeClassifier =
                 mDelegate.createAutocompleteSchemeClassifier();
-        OmniboxUrlEmphasizer.emphasizeUrl(originSpannableString, mContext,
-                autocompleteSchemeClassifier, securityLevel,
-                /*isInternalPage=*/false, useDarkColors,
-                /*emphasizeScheme=*/true);
+        OmniboxUrlEmphasizer.emphasizeUrl(
+                originSpannableString,
+                mContext,
+                autocompleteSchemeClassifier,
+                securityLevel,
+                useDarkColors,
+                /* emphasizeScheme= */ true);
         autocompleteSchemeClassifier.destroy();
 
         // Construct a full string and replace the |originSpannableString| text with emphasized
         // version.
-        SpannableString title = new SpannableString(
-                mContext.getString(R.string.bluetooth_scanning_prompt_origin, origin));
+        SpannableString title =
+                new SpannableString(
+                        mContext.getString(R.string.bluetooth_scanning_prompt_origin, origin));
         int start = title.toString().indexOf(origin);
-        TextUtils.copySpansFrom(originSpannableString, 0, originSpannableString.length(),
-                Object.class, title, start);
+        TextUtils.copySpansFrom(
+                originSpannableString,
+                0,
+                originSpannableString.length(),
+                Object.class,
+                title,
+                start);
 
         String noneFound =
                 mContext.getString(R.string.bluetooth_scanning_prompt_no_devices_found_prompt);
@@ -135,8 +143,10 @@ public class BluetoothScanningPermissionDialog {
         String allowButtonText =
                 mContext.getString(R.string.bluetooth_scanning_prompt_allow_button_text);
 
-        LinearLayout dialogContainer = (LinearLayout) LayoutInflater.from(mContext).inflate(
-                R.layout.bluetooth_scanning_permission_dialog, null);
+        LinearLayout dialogContainer =
+                (LinearLayout)
+                        LayoutInflater.from(mContext)
+                                .inflate(R.layout.bluetooth_scanning_permission_dialog, null);
 
         TextViewWithClickableSpans dialogTitle =
                 (TextViewWithClickableSpans) dialogContainer.findViewById(R.id.dialog_title);
@@ -150,8 +160,11 @@ public class BluetoothScanningPermissionDialog {
         emptyMessage.setVisibility(View.VISIBLE);
 
         mListView = (ListView) dialogContainer.findViewById(R.id.items);
-        mItemAdapter = new DeviceItemAdapter(mContext, /*itemsSelectable=*/false,
-                R.layout.bluetooth_scanning_permission_dialog_row);
+        mItemAdapter =
+                new DeviceItemAdapter(
+                        mContext,
+                        /* itemsSelectable= */ false,
+                        R.layout.bluetooth_scanning_permission_dialog_row);
         mItemAdapter.setNotifyOnChange(true);
         mListView.setAdapter(mItemAdapter);
         mListView.setEmptyView(emptyMessage);
@@ -163,20 +176,22 @@ public class BluetoothScanningPermissionDialog {
         Button blockButton = (Button) dialogContainer.findViewById(R.id.block);
         blockButton.setText(blockButtonText);
         blockButton.setEnabled(true);
-        blockButton.setOnClickListener(v -> {
-            finishDialog(Event.BLOCK);
-            mDialog.setOnDismissListener(null);
-            mDialog.dismiss();
-        });
+        blockButton.setOnClickListener(
+                v -> {
+                    finishDialog(Event.BLOCK);
+                    mDialog.setOnDismissListener(null);
+                    mDialog.dismiss();
+                });
 
         Button allowButton = (Button) dialogContainer.findViewById(R.id.allow);
         allowButton.setText(allowButtonText);
         allowButton.setEnabled(true);
-        allowButton.setOnClickListener(v -> {
-            finishDialog(Event.ALLOW);
-            mDialog.setOnDismissListener(null);
-            mDialog.dismiss();
-        });
+        allowButton.setOnClickListener(
+                v -> {
+                    finishDialog(Event.ALLOW);
+                    mDialog.setOnDismissListener(null);
+                    mDialog.dismiss();
+                });
 
         mIgnorePendingWindowFocusChangeForClose = false;
 
@@ -188,21 +203,32 @@ public class BluetoothScanningPermissionDialog {
                         // The list is the main element in the dialog and it should grow and
                         // shrink according to the size of the screen available.
                         View listViewContainer = dialogContainer.findViewById(R.id.container);
-                        listViewContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                                LayoutParams.MATCH_PARENT,
-                                getListHeight(mActivity.getWindow().getDecorView().getHeight(),
-                                        mContext.getResources().getDisplayMetrics().density)));
+                        listViewContainer.setLayoutParams(
+                                new LinearLayout.LayoutParams(
+                                        LayoutParams.MATCH_PARENT,
+                                        getListHeight(
+                                                mActivity.getWindow().getDecorView().getHeight(),
+                                                mContext.getResources()
+                                                        .getDisplayMetrics()
+                                                        .density)));
                     }
                 });
     }
 
     @CalledByNative
-    private static BluetoothScanningPermissionDialog create(WindowAndroid windowAndroid,
-            String origin, int securityLevel, BluetoothScanningPromptAndroidDelegate delegate,
+    private static BluetoothScanningPermissionDialog create(
+            WindowAndroid windowAndroid,
+            String origin,
+            int securityLevel,
+            BluetoothScanningPromptAndroidDelegate delegate,
             long nativeBluetoothScanningPermissionDialogPtr) {
         BluetoothScanningPermissionDialog dialog =
-                new BluetoothScanningPermissionDialog(windowAndroid, origin, securityLevel,
-                        delegate, nativeBluetoothScanningPermissionDialogPtr);
+                new BluetoothScanningPermissionDialog(
+                        windowAndroid,
+                        origin,
+                        securityLevel,
+                        delegate,
+                        nativeBluetoothScanningPermissionDialogPtr);
         return dialog;
     }
 
@@ -212,7 +238,8 @@ public class BluetoothScanningPermissionDialog {
         if (TextUtils.isEmpty(deviceName)) {
             deviceName = mContext.getString(R.string.bluetooth_scanning_device_unknown, deviceId);
         }
-        mItemAdapter.addOrUpdate(deviceId, deviceName, /*icon=*/null, /*iconDescription=*/null);
+        mItemAdapter.addOrUpdate(
+                deviceId, deviceName, /* icon= */ null, /* iconDescription= */ null);
         mListView.setVisibility(View.VISIBLE);
     }
 
@@ -233,18 +260,21 @@ public class BluetoothScanningPermissionDialog {
     }
 
     private void showDialogForView(View view) {
-        mDialog = new Dialog(mContext) {
-            @Override
-            public void onWindowFocusChanged(boolean hasFocus) {
-                super.onWindowFocusChanged(hasFocus);
-                if (!mIgnorePendingWindowFocusChangeForClose && !hasFocus) super.dismiss();
-                mIgnorePendingWindowFocusChangeForClose = false;
-            }
-        };
+        mDialog =
+                new Dialog(mContext) {
+                    @Override
+                    public void onWindowFocusChanged(boolean hasFocus) {
+                        super.onWindowFocusChanged(hasFocus);
+                        if (!mIgnorePendingWindowFocusChangeForClose && !hasFocus) super.dismiss();
+                        mIgnorePendingWindowFocusChangeForClose = false;
+                    }
+                };
         mDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         mDialog.setCanceledOnTouchOutside(true);
-        mDialog.addContentView(view,
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+        mDialog.addContentView(
+                view,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.MATCH_PARENT));
         mDialog.setOnCancelListener(dialog -> finishDialog(Event.CANCELED));
 
@@ -268,23 +298,17 @@ public class BluetoothScanningPermissionDialog {
         jni.onDialogFinished(mNativeBluetoothScanningPermissionDialogPtr, resultCode);
     }
 
-    /**
-     * Returns the dialog associated with this class. For use with tests only.
-     */
-    @VisibleForTesting
+    /** Returns the dialog associated with this class. For use with tests only. */
     public Dialog getDialogForTesting() {
         return mDialog;
     }
 
-    /**
-     * Returns the ItemAdapter associated with this class. For use with tests only.
-     */
-    @VisibleForTesting
+    /** Returns the ItemAdapter associated with this class. For use with tests only. */
     public DeviceItemAdapter getItemAdapterForTesting() {
         return mItemAdapter;
     }
 
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
     public interface Natives {
         void onDialogFinished(long nativeBluetoothScanningPromptAndroid, int eventType);

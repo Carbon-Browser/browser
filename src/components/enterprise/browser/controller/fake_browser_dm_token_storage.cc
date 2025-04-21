@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/enterprise/browser/controller/fake_browser_dm_token_storage.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/enterprise/browser/enterprise_switches.h"
 
 namespace policy {
@@ -111,6 +111,10 @@ bool FakeBrowserDMTokenStorage::MockDelegate::InitEnrollmentErrorOption() {
   return enrollment_error_option_;
 }
 
+bool FakeBrowserDMTokenStorage::MockDelegate::CanInitEnrollmentToken() const {
+  return true;
+}
+
 BrowserDMTokenStorage::StoreTask
 FakeBrowserDMTokenStorage::MockDelegate::SaveDMTokenTask(
     const std::string& token,
@@ -128,7 +132,7 @@ FakeBrowserDMTokenStorage::MockDelegate::DeleteDMTokenTask(
 
 scoped_refptr<base::TaskRunner>
 FakeBrowserDMTokenStorage::MockDelegate::SaveDMTokenTaskRunner() {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 }  // namespace policy

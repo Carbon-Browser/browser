@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/animation/animation_host.h"
@@ -35,22 +36,26 @@ class TestCustomMetricsRecorder : public CustomMetricRecorder {
   ~TestCustomMetricsRecorder() override = default;
 
   // CustomMetricRecorder:
-  void ReportPercentDroppedFramesInOneSecoundWindow(
-      double percentage) override {
-    ++percent_dropped_frames_count_;
-    last_percent_dropped_frames_ = percentage;
+  void ReportPercentDroppedFramesInOneSecondWindow2(double percent) override {
+    ++report_count_;
+    last_percent_dropped_frames_ = percent;
+  }
+  void ReportEventLatency(
+      std::vector<EventLatencyTracker::LatencyData> latencies) override {}
+
+  void Reset() {
+    report_count_ = 0u;
+    last_percent_dropped_frames_ = 0;
   }
 
-  int percent_dropped_frames_count() const {
-    return percent_dropped_frames_count_;
-  }
+  int report_count() const { return report_count_; }
 
   double last_percent_dropped_frames() const {
     return last_percent_dropped_frames_;
   }
 
  private:
-  int percent_dropped_frames_count_ = 0;
+  int report_count_ = 0u;
   double last_percent_dropped_frames_ = 0;
 };
 
@@ -269,7 +274,7 @@ class DroppedFrameCounterMainDropsNoSmoothness
   }
 };
 
-// TODO(crbug.com/1115376) Disabled for flakiness.
+// TODO(crbug.com/40144326) Disabled for flakiness.
 // MULTI_THREAD_TEST_F(DroppedFrameCounterMainDropsNoSmoothness);
 
 class DroppedFrameCounterMainDropsSmoothnessTest
@@ -287,7 +292,7 @@ class DroppedFrameCounterMainDropsSmoothnessTest
   }
 };
 
-// TODO(crbug.com/1115376) Disabled for flakiness.
+// TODO(crbug.com/40144326) Disabled for flakiness.
 // MULTI_THREAD_TEST_F(DroppedFrameCounterMainDropsSmoothnessTest);
 
 class DroppedFrameCounterTest : public testing::Test {
@@ -296,7 +301,7 @@ class DroppedFrameCounterTest : public testing::Test {
                                        SmoothnessStrategy::kDefaultStrategy)
       : smoothness_strategy_(smoothness_strategy) {
     dropped_frame_counter_.set_total_counter(&total_frame_counter_);
-    dropped_frame_counter_.OnFcpReceived();
+    dropped_frame_counter_.OnFirstContentfulPaintReceived();
   }
   ~DroppedFrameCounterTest() override = default;
 
@@ -305,7 +310,7 @@ class DroppedFrameCounterTest : public testing::Test {
     for (int i = 0; i < repeat; i++) {
       for (auto is_dropped : frame_states) {
         viz::BeginFrameArgs args_ = SimulateBeginFrameArgs();
-        dropped_frame_counter_.OnBeginFrame(args_, /*is_scroll_active=*/false);
+        dropped_frame_counter_.OnBeginFrame(args_);
         dropped_frame_counter_.OnEndFrame(args_,
                                           CreateStubFrameInfo(is_dropped));
         sequence_number_++;
@@ -328,7 +333,7 @@ class DroppedFrameCounterTest : public testing::Test {
     std::vector<viz::BeginFrameArgs> args(repeat);
     for (int i = 0; i < repeat; i++) {
       args[i] = SimulateBeginFrameArgs();
-      dropped_frame_counter_.OnBeginFrame(args[i], /*is_scroll_active=*/false);
+      dropped_frame_counter_.OnBeginFrame(args[i]);
       sequence_number_++;
       frame_time_ += interval_;
     }
@@ -338,8 +343,8 @@ class DroppedFrameCounterTest : public testing::Test {
   // Simulate a main and impl thread update on the same frame.
   void SimulateForkedFrame(bool main_dropped, bool impl_dropped) {
     viz::BeginFrameArgs args_ = SimulateBeginFrameArgs();
-    dropped_frame_counter_.OnBeginFrame(args_, /*is_scroll_active=*/false);
-    dropped_frame_counter_.OnBeginFrame(args_, /*is_scroll_active=*/false);
+    dropped_frame_counter_.OnBeginFrame(args_);
+    dropped_frame_counter_.OnBeginFrame(args_);
 
     // End the 'main thread' arm of the fork.
     auto main_info = CreateStubFrameInfo(main_dropped);
@@ -585,7 +590,7 @@ TEST_P(SmoothnessStrategyDroppedFrameCounterTest, Percentile95WithIdleFrames) {
 
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(
       kFps % 5 == 0,
       "kFps must be a multiple of 5 because this test depends on it.");
@@ -620,7 +625,7 @@ TEST_P(SmoothnessStrategyDroppedFrameCounterTest,
 
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(
       kFps % 5 == 0,
       "kFps must be a multiple of 5 because this test depends on it.");
@@ -654,7 +659,7 @@ TEST_P(SmoothnessStrategyDroppedFrameCounterTest,
 
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(
       kFps % 5 == 0,
       "kFps must be a multiple of 5 because this test depends on it.");
@@ -695,7 +700,7 @@ TEST_P(SmoothnessStrategyDroppedFrameCounterTest,
 
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   SetInterval(kInterval);
 
   // One good frame
@@ -726,7 +731,7 @@ TEST_P(SmoothnessStrategyDroppedFrameCounterTest,
 TEST_F(DroppedFrameCounterTest, ResetPendingFramesAccountingForPendingFrames) {
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   SetInterval(kInterval);
 
   // First 2 seconds with 20% dropped frames.
@@ -750,7 +755,7 @@ TEST_F(DroppedFrameCounterTest, ResetPendingFramesAccountingForPendingFrames) {
 TEST_F(DroppedFrameCounterTest, Reset) {
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   SetInterval(kInterval);
 
   // First 2 seconds with 20% dropped frames.
@@ -774,7 +779,7 @@ TEST_F(DroppedFrameCounterTest, Reset) {
 TEST_F(DroppedFrameCounterTest, ConsistentSmoothnessRatings) {
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(kFps == 100,
                 "kFps must be 100 because this test depends on it.");
   SetInterval(kInterval);
@@ -785,37 +790,37 @@ TEST_F(DroppedFrameCounterTest, ConsistentSmoothnessRatings) {
 
   // Add 5 seconds with 5% dropped frames. This should be in the second bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence(MakeFrameSequence(1, 20), (kFps / 20) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 100, 0, 0, 0, 0, 0}));
 
   // Add 5 seconds with 10% dropped frames. This should be in the third bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence(MakeFrameSequence(1, 10), (kFps / 10) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 0, 100, 0, 0, 0, 0}));
 
   // Add 5 seconds with 20% dropped frames. This should be in the fourth bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence({false, false, false, false, true}, (kFps / 5) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 0, 0, 100, 0, 0, 0}));
 
   // Add 5 seconds with 40% dropped frames. This should be in the fifth bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence({false, false, false, true, true}, (kFps / 5) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 0, 0, 0, 100, 0, 0}));
 
   // Add 5 seconds with 60% dropped frames. This should be in the sixth bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence({false, false, true, true, true}, (kFps / 5) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 0, 0, 0, 0, 100, 0}));
 
   // Add 5 seconds with 80% dropped frames. This should be in the last bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence({false, true, true, true, true}, (kFps / 5) * 5);
   EXPECT_TRUE(CheckSmoothnessBuckets({0, 0, 0, 0, 0, 0, 100}));
 }
@@ -823,7 +828,7 @@ TEST_F(DroppedFrameCounterTest, ConsistentSmoothnessRatings) {
 TEST_F(DroppedFrameCounterTest, MovingSmoothnessRatings) {
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(kFps == 100,
                 "kFps must be 100 because this test depends on it.");
   SetInterval(kInterval);
@@ -854,7 +859,7 @@ TEST_F(DroppedFrameCounterTest, MovingSmoothnessRatings) {
   // (other than 100%) should be reported once, exactly matching the size of
   // each bucket.
   dropped_frame_counter_.Reset();
-  dropped_frame_counter_.OnFcpReceived();
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
   SimulateFrameSequence({true}, kFps);
   SimulateFrameSequence({false}, kFps);
   EXPECT_TRUE(CheckSmoothnessBuckets({3, 3, 6, 13, 25, 25, 25}));
@@ -867,7 +872,8 @@ TEST_F(DroppedFrameCounterTest, FramesInFlightWhenFcpReceived) {
   // Set that FCP was received after the third frame starts, but before it ends.
   base::TimeTicks time_fcp_sent =
       pending_frames[2].frame_time + pending_frames[2].interval / 2;
-  dropped_frame_counter_.SetTimeFcpReceivedForTesting(time_fcp_sent);
+  dropped_frame_counter_.SetTimeFirstContentfulPaintReceivedForTesting(
+      time_fcp_sent);
 
   // End each of the frames as dropped. The first three should not count for
   // smoothness, only the last two.
@@ -896,7 +902,7 @@ TEST_F(DroppedFrameCounterTest, ForkedCompositorFrameReporter) {
 TEST_F(DroppedFrameCounterTest, WorstSmoothnessTiming) {
   // Set an interval that rounds up nicely with 1 second.
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(
       kFps % 5 == 0,
       "kFps must be a multiple of 5 because this test depends on it.");
@@ -909,8 +915,9 @@ TEST_F(DroppedFrameCounterTest, WorstSmoothnessTiming) {
   const auto& last_frame = pending_frames.back();
   base::TimeTicks time_fcp_sent =
       last_frame.frame_time + last_frame.interval / 2;
-  dropped_frame_counter_.OnFcpReceived();
-  dropped_frame_counter_.SetTimeFcpReceivedForTesting(time_fcp_sent);
+  dropped_frame_counter_.OnFirstContentfulPaintReceived();
+  dropped_frame_counter_.SetTimeFirstContentfulPaintReceivedForTesting(
+      time_fcp_sent);
 
   // End each of the pending frames as dropped. These shouldn't affect any of
   // the metrics.
@@ -942,23 +949,33 @@ TEST_F(DroppedFrameCounterTest, WorstSmoothnessTiming) {
   EXPECT_FLOAT_EQ(MaxPercentDroppedFrameAfter5Sec(), 100);
 }
 
-TEST_F(DroppedFrameCounterTest, ReportForUI) {
+TEST_F(DroppedFrameCounterTest, ReportOnEveryFrameForUI) {
   constexpr auto kInterval = base::Milliseconds(10);
-  constexpr size_t kFps = base::Seconds(1) / kInterval;
+  constexpr int kFps = base::Seconds(1).IntDiv(kInterval);
   static_assert(
       kFps % 5 == 0,
       "kFps must be a multiple of 5 because this test depends on it.");
   SetInterval(kInterval);
 
-  dropped_frame_counter_.EnableReporForUI();
+  dropped_frame_counter_.EnableReportForUI();
   TestCustomMetricsRecorder recorder;
 
   // 4 seconds with 20% dropped frames.
   SimulateFrameSequence({false, false, false, false, true}, (kFps / 5) * 4);
 
-  // Recorded more than 1 samples of 20% dropped frame percentage.
-  EXPECT_GE(recorder.percent_dropped_frames_count(), 1);
-  EXPECT_EQ(recorder.last_percent_dropped_frames(), 20.0f);
+  // Recorded (kFps * 3) samples of 20% dropped frame percentage. Only 3 seconds
+  // of frames reported because there is no reports for the very 1st second.
+  EXPECT_EQ(recorder.report_count(), kFps * 3);
+  EXPECT_FLOAT_EQ(recorder.last_percent_dropped_frames(), 20.0f);
+
+  recorder.Reset();
+
+  // 4 seconds with 0 dropped frames.
+  SimulateFrameSequence({false, false, false, false, false}, (kFps / 5) * 4);
+
+  // Recorded (kFps * 4) samples of 0% dropped frame percentage.
+  EXPECT_EQ(recorder.report_count(), kFps * 4);
+  EXPECT_FLOAT_EQ(recorder.last_percent_dropped_frames(), 0.0f);
 }
 
 }  // namespace

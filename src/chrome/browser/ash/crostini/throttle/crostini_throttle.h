@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "chrome/browser/ash/throttle_service.h"
+#include "chromeos/ash/components/throttle/throttle_service.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -34,11 +34,6 @@ class CrostiniThrottle : public KeyedService, public ash::ThrottleService {
     virtual void SetCpuRestriction(bool) = 0;
   };
 
-  // Returns singleton instance for the given BrowserContext, or nullptr if
-  // the browser |context| is not allowed to use Crostini.
-  static CrostiniThrottle* GetForBrowserContext(
-      content::BrowserContext* context);
-
   explicit CrostiniThrottle(content::BrowserContext* context);
 
   CrostiniThrottle(const CrostiniThrottle&) = delete;
@@ -56,8 +51,6 @@ class CrostiniThrottle : public KeyedService, public ash::ThrottleService {
  private:
   // ash::ThrottleService:
   void ThrottleInstance(bool should_throttle) override;
-  void RecordCpuRestrictionDisabledUMA(const std::string& observer_name,
-                                       base::TimeDelta delta) override {}
 
   std::unique_ptr<Delegate> delegate_;
 };

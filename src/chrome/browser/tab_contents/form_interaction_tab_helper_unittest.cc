@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
-#include "chrome/browser/performance_manager/test_support/page_aggregator.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "components/performance_manager/embedder/performance_manager_registry.h"
-#include "components/performance_manager/performance_manager_impl.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/graph_impl.h"
 #include "components/performance_manager/test_support/mock_graphs.h"
+#include "components/performance_manager/test_support/page_aggregator.h"
 #include "components/performance_manager/test_support/test_harness_helper.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -39,7 +38,7 @@ class FormInteractionTabHelperTest : public ChromeRenderViewHostTestHarness {
     ChromeRenderViewHostTestHarness::SetUp();
     pm_harness_.SetUp();
     performance_manager::testing::CreatePageAggregatorAndPassItToGraph();
-    performance_manager::PerformanceManagerImpl::CallOnGraph(
+    performance_manager::PerformanceManager::CallOnGraph(
         FROM_HERE, base::BindOnce([](performance_manager::Graph* graph) {
           graph->PassToGraph(FormInteractionTabHelper::CreateGraphObserver());
         }));
@@ -73,11 +72,10 @@ class FormInteractionTabHelperTest : public ChromeRenderViewHostTestHarness {
              GetFrameNodeForRenderFrameHost(rfh)]() {
           auto* frame_node =
               performance_manager::FrameNodeImpl::FromNode(node.get());
-          frame_node->SetIsCurrent(true);
           frame_node->SetHadFormInteraction();
           std::move(quit_loop).Run();
         });
-    performance_manager::PerformanceManagerImpl::CallOnGraph(
+    performance_manager::PerformanceManager::CallOnGraph(
         FROM_HERE, std::move(graph_callback));
     run_loop.Run();
   }
@@ -114,12 +112,11 @@ class FormInteractionTabHelperWithChildTest
       public testing::WithParamInterface<ChildFrameType> {
  public:
   FormInteractionTabHelperWithChildTest() {
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams> enabled;
+    std::vector<base::test::FeatureRefAndParams> enabled;
     enabled.push_back(
         {blink::features::kFencedFrames, {{"implementation_type", "mparch"}}});
-    enabled.push_back({blink::features::kInitialNavigationEntry, {}});
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        enabled, std::vector<base::Feature>());
+        enabled, std::vector<base::test::FeatureRef>());
   }
   ~FormInteractionTabHelperWithChildTest() override = default;
 

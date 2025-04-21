@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,21 @@
 #include <vector>
 
 #include "base/android/callback_android.h"
+#include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/unguessable_token.h"
 #include "media/base/android/android_util.h"
 #include "media/base/android/media_drm_bridge.h"
-#include "media/base/android/media_jni_headers/MediaDrmStorageBridge_jni.h"
 #include "media/base/media_drm_key_type.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "media/base/android/media_jni_headers/MediaDrmStorageBridge_jni.h"
+
 using base::android::AttachCurrentThread;
+using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaByteArrayToByteVector;
 using base::android::JavaByteArrayToString;
@@ -34,7 +37,7 @@ using base::android::ToJavaByteArray;
 namespace media {
 
 MediaDrmStorageBridge::MediaDrmStorageBridge()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 MediaDrmStorageBridge::~MediaDrmStorageBridge() = default;
 
@@ -185,8 +188,8 @@ void MediaDrmStorageBridge::OnSessionDataLoaded(
 
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jbyteArray> j_eme_id = ToJavaByteArray(env, session_id);
-  ScopedJavaLocalRef<jbyteArray> j_key_set_id = ToJavaByteArray(
-      env, session_data->key_set_id.data(), session_data->key_set_id.size());
+  ScopedJavaLocalRef<jbyteArray> j_key_set_id =
+      ToJavaByteArray(env, session_data->key_set_id);
   ScopedJavaLocalRef<jstring> j_mime =
       ConvertUTF8ToJavaString(env, session_data->mime_type);
 

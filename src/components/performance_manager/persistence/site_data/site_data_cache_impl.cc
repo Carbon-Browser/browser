@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <set>
 
-#include "base/callback.h"
+#include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "components/performance_manager/persistence/site_data/leveldb_site_data_store.h"
 #include "components/performance_manager/persistence/site_data/site_data_cache_factory.h"
@@ -30,9 +31,12 @@ SiteDataCacheImpl::SiteDataCacheImpl(const std::string& browser_context_id,
   data_store_ = std::make_unique<LevelDBSiteDataStore>(
       browser_context_path.AppendASCII(kDataStoreDBName));
 
-  // Register the debug interface against the browser context.
-  SiteDataCacheFactory::GetInstance()->SetDataCacheInspectorForBrowserContext(
-      this, browser_context_id_);
+  // Register the debug interface against the browser context. The factory
+  // should always exist by the time this is called, since it is created once
+  // there's a browser context with keyed services enabled.
+  auto* factory = SiteDataCacheFactory::GetInstance();
+  CHECK(factory);
+  factory->SetDataCacheInspectorForBrowserContext(this, browser_context_id_);
 }
 
 SiteDataCacheImpl::SiteDataCacheImpl(const std::string& browser_context_id)

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_mojo_create_data_pipe_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_mojo_create_message_pipe_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_mojo_create_shared_buffer_result.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_mojo_scope.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
@@ -51,8 +52,12 @@ MojoCreateDataPipeResult* Mojo::createDataPipe(
     const MojoCreateDataPipeOptions* options_dict) {
   MojoCreateDataPipeResult* result_dict = MojoCreateDataPipeResult::Create();
 
+  // NOTE: CreateDataPipe below validates options, but its inputs are unsigned.
+  // The inputs here may be negative, hence this additional validation.
   if (!options_dict->hasElementNumBytes() ||
-      !options_dict->hasCapacityNumBytes()) {
+      !options_dict->hasCapacityNumBytes() ||
+      options_dict->capacityNumBytes() < 1 ||
+      options_dict->elementNumBytes() < 1) {
     result_dict->setResult(MOJO_RESULT_INVALID_ARGUMENT);
     return result_dict;
   }
@@ -97,7 +102,7 @@ MojoCreateSharedBufferResult* Mojo::createSharedBuffer(unsigned num_bytes) {
 void Mojo::bindInterface(ScriptState* script_state,
                          const String& interface_name,
                          MojoHandle* request_handle,
-                         const String& scope,
+                         const V8MojoScope& scope,
                          ExceptionState& exception_state) {
   std::string name = interface_name.Utf8();
   auto handle =
@@ -108,7 +113,7 @@ void Mojo::bindInterface(ScriptState* script_state,
   // If MojoJS broker is enabled, it must be used to handle bindInterface
   // calls.
   if (context->use_mojo_js_interface_broker()) {
-    if (scope == "context") {
+    if (scope == V8MojoScope::Enum::kContext) {
       context->GetMojoJSInterfaceBroker().GetInterface(name, std::move(handle));
     } else {
       exception_state.ThrowDOMException(
@@ -119,7 +124,7 @@ void Mojo::bindInterface(ScriptState* script_state,
     return;
   }
 
-  if (scope == "process") {
+  if (scope == V8MojoScope::Enum::kProcess) {
     Platform::Current()->GetBrowserInterfaceBroker()->GetInterface(
         mojo::GenericPendingReceiver(name, std::move(handle)));
     return;

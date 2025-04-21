@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/android/browser_gpu_video_accelerator_factories.h"
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/public/browser/android/gpu_video_accelerator_factories_provider.h"
 #include "content/public/common/gpu_stream_constants.h"
@@ -24,38 +24,28 @@ void OnGpuChannelEstablished(
     GpuVideoAcceleratorFactoriesCallback callback,
     scoped_refptr<gpu::GpuChannelHost> gpu_channel_host) {
   gpu::ContextCreationAttribs attributes;
-  attributes.alpha_size = -1;
-  attributes.red_size = 8;
-  attributes.green_size = 8;
-  attributes.blue_size = 8;
-  attributes.stencil_size = 0;
-  attributes.depth_size = 0;
-  attributes.samples = 0;
-  attributes.sample_buffers = 0;
   attributes.bind_generates_resource = false;
   attributes.enable_raster_interface = true;
-
-  gpu::GpuChannelEstablishFactory* factory =
-      BrowserMainLoop::GetInstance()->gpu_channel_establish_factory();
+  attributes.enable_oop_rasterization = true;
+  attributes.enable_gles2_interface = false;
+  attributes.enable_grcontext = false;
 
   int32_t stream_id = kGpuStreamIdDefault;
   gpu::SchedulingPriority stream_priority = kGpuStreamPriorityUI;
 
   constexpr bool automatic_flushes = false;
   constexpr bool support_locking = false;
-  constexpr bool support_grcontext = true;
 
   auto context_provider =
       base::MakeRefCounted<viz::ContextProviderCommandBuffer>(
-          std::move(gpu_channel_host), factory->GetGpuMemoryBufferManager(),
-          stream_id, stream_priority, gpu::kNullSurfaceHandle,
+          std::move(gpu_channel_host), stream_id, stream_priority,
           GURL(std::string("chrome://gpu/"
                            "BrowserGpuVideoAcceleratorFactories::"
                            "CreateGpuVideoAcceleratorFactories")),
-          automatic_flushes, support_locking, support_grcontext,
+          automatic_flushes, support_locking,
           gpu::SharedMemoryLimits::ForMailboxContext(), attributes,
           viz::command_buffer_metrics::ContextType::UNKNOWN);
-  context_provider->BindToCurrentThread();
+  context_provider->BindToCurrentSequence();
 
   auto gpu_factories = std::make_unique<BrowserGpuVideoAcceleratorFactories>(
       std::move(context_provider));
@@ -136,8 +126,8 @@ bool BrowserGpuVideoAcceleratorFactories::IsDecoderSupportKnown() {
 
 void BrowserGpuVideoAcceleratorFactories::NotifyDecoderSupportKnown(
     base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 std::unique_ptr<media::VideoDecoder>
@@ -165,11 +155,6 @@ bool BrowserGpuVideoAcceleratorFactories::
   return false;
 }
 
-unsigned BrowserGpuVideoAcceleratorFactories::ImageTextureTarget(
-    gfx::BufferFormat format) {
-  return -1;
-}
-
 media::GpuVideoAcceleratorFactories::OutputFormat
 BrowserGpuVideoAcceleratorFactories::VideoFrameOutputFormat(
     media::VideoPixelFormat pixel_format) {
@@ -179,13 +164,11 @@ BrowserGpuVideoAcceleratorFactories::VideoFrameOutputFormat(
 gpu::SharedImageInterface*
 BrowserGpuVideoAcceleratorFactories::SharedImageInterface() {
   NOTREACHED();
-  return nullptr;
 }
 
 gpu::GpuMemoryBufferManager*
 BrowserGpuVideoAcceleratorFactories::GpuMemoryBufferManager() {
   NOTREACHED();
-  return nullptr;
 }
 
 base::UnsafeSharedMemoryRegion
@@ -198,10 +181,15 @@ BrowserGpuVideoAcceleratorFactories::GetTaskRunner() {
   return nullptr;
 }
 
-absl::optional<media::VideoEncodeAccelerator::SupportedProfiles>
+std::optional<media::VideoEncodeAccelerator::SupportedProfiles>
 BrowserGpuVideoAcceleratorFactories::
     GetVideoEncodeAcceleratorSupportedProfiles() {
   return media::VideoEncodeAccelerator::SupportedProfiles();
+}
+
+std::optional<media::SupportedVideoDecoderConfigs>
+BrowserGpuVideoAcceleratorFactories::GetSupportedVideoDecoderConfigs() {
+  return std::nullopt;
 }
 
 bool BrowserGpuVideoAcceleratorFactories::IsEncoderSupportKnown() {
@@ -210,13 +198,19 @@ bool BrowserGpuVideoAcceleratorFactories::IsEncoderSupportKnown() {
 
 void BrowserGpuVideoAcceleratorFactories::NotifyEncoderSupportKnown(
     base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 viz::RasterContextProvider*
 BrowserGpuVideoAcceleratorFactories::GetMediaContextProvider() {
   return context_provider_.get();
+}
+
+const gpu::Capabilities*
+BrowserGpuVideoAcceleratorFactories::ContextCapabilities() {
+  return context_provider_ ? &(context_provider_->ContextCapabilities())
+                           : nullptr;
 }
 
 void BrowserGpuVideoAcceleratorFactories::SetRenderingColorSpace(

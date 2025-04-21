@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,14 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "components/paint_preview/browser/paint_preview_base_service.h"
 #include "components/paint_preview/browser/paint_preview_policy.h"
+#include "content/public/browser/frame_tree_node_id.h"
 #include "third_party/re2/src/re2/re2.h"
 
 namespace content {
@@ -42,11 +42,6 @@ class LongScreenshotsTabService
 
   // Define a list of statuses to describe the calling of paint preview and
   // generation of the bitmap.
-  //
-  // When updating this, also update LongScreenshotsMetrics in
-  // /chrome/browser/share/android/java/src/org/chromium/chrome/browser/share/long_screenshots/LongScreenshotsMetrics.java
-  // and SharingLongScreenshotsEvent in enums.xml
-  // and logCaptureResultStatus() in ./bitmap_generation/BitmapGenerator.java
   //
   // A Java counterpart will be generated for this enum.
   // GENERATED_JAVA_ENUM_PACKAGE: (
@@ -74,7 +69,7 @@ class LongScreenshotsTabService
   // clip_height: How wide of a capture relative to clip_y.
   // in_memory: Use in memory capture mode.
   void CaptureTab(int tab_id,
-                  std::unique_ptr<GURL> url,
+                  const GURL& url,
                   content::WebContents* contents,
                   int clip_x,
                   int clip_y,
@@ -107,14 +102,14 @@ class LongScreenshotsTabService
   // (confirming that the contents are alive using the |frame_routing_id|).
   // Calls PaintPreviewBaseService to retrieve the bitmap and write it to file.
   void CaptureTabInternal(int tab_id,
-                          int frame_tree_node_id,
+                          content::FrameTreeNodeId frame_tree_node_id,
                           content::GlobalRenderFrameHostId frame_routing_id,
                           int clip_x,
                           int clip_y,
                           int clip_width,
                           int clip_height,
                           bool in_memory,
-                          const absl::optional<base::FilePath>& file_path);
+                          const std::optional<base::FilePath>& file_path);
 
   void OnCaptured(paint_preview::PaintPreviewBaseService::CaptureStatus status,
                   std::unique_ptr<paint_preview::CaptureResult> result);

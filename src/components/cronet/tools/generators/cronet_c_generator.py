@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -130,11 +130,6 @@ class _NameFormatter(object):
 
 def NamespaceToArray(namespace):
   return namespace.split(".") if namespace else []
-
-
-def GetWtfHashFnNameForEnum(enum):
-  return _NameFormatter(enum, None).Format("_", internal=True,
-                                           flatten_nested_kind=True) + "HashFn"
 
 
 def IsNativeOnlyKind(kind):
@@ -315,7 +310,6 @@ class Generator(generator.Generator):
       "namespace": self.module.namespace,
       "namespaces_as_array": NamespaceToArray(self.module.namespace),
       "structs": self.module.structs,
-      "support_lazy_serialization": self.support_lazy_serialization,
       "unions": self.module.unions,
       "variant": self.variant,
     }
@@ -349,8 +343,6 @@ class Generator(generator.Generator):
       "get_qualified_name_for_kind": self._GetQualifiedNameForKind,
       "has_callbacks": mojom.HasCallbacks,
       "has_sync_methods": mojom.HasSyncMethods,
-      "method_supports_lazy_serialization":
-          self._MethodSupportsLazySerialization,
       "requires_context_for_data_view": RequiresContextForDataView,
       "should_inline": ShouldInlineStruct,
       "should_inline_union": ShouldInlineUnion,
@@ -376,7 +368,6 @@ class Generator(generator.Generator):
       "struct_constructors": self._GetStructConstructors,
       "under_to_camel": generator.ToCamel,
       "unmapped_type_for_serializer": self._GetUnmappedTypeForSerializer,
-      "wtf_hash_fn_name_for_enum": GetWtfHashFnNameForEnum,
     }
     return cpp_filters
 
@@ -526,7 +517,7 @@ class Generator(generator.Generator):
         return False
       if mojom.IsAnyInterfaceKind(kind):
         return False
-      # TODO(crbug.com/735301): Arrays and maps could be made hashable. We just
+      # TODO(crbug.com/41326458): Arrays and maps could be made hashable. We just
       # don't have a use case yet.
       if mojom.IsArrayKind(kind):
         return False
@@ -552,7 +543,7 @@ class Generator(generator.Generator):
 
   def _GetCppWrapperType(self, kind, add_same_module_namespaces=False):
     def _AddOptional(type_name):
-      return "absl::optional<%s>" % type_name
+      return "std::optional<%s>" % type_name
 
     if self._IsTypemappedKind(kind):
       type_name = self._GetNativeTypeName(kind)
@@ -711,13 +702,6 @@ class Generator(generator.Generator):
       return "%s&" % self._GetCppWrapperType(kind,
                                              add_same_module_namespaces=True)
     return self._GetCppWrapperType(kind, add_same_module_namespaces=True)
-
-  def _MethodSupportsLazySerialization(self, method):
-    # TODO(crbug.com/753431,crbug.com/753433): Support lazy serialization for
-    # methods which pass associated handles and InterfacePtrs.
-    return self.support_lazy_serialization and (
-        not mojom.MethodPassesAssociatedKinds(method) and
-        not mojom.MethodPassesInterfaces(method))
 
   def _TranslateConstants(self, token, kind):
     if isinstance(token, mojom.NamedValue):

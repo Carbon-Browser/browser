@@ -141,6 +141,11 @@ could be installed (without user consent) when the user visits a malicious site,
 this would be considered a security bug. Please report any such bugs
 [here][new-security-bug].
 
+### I've found / written an extension that can make the browser unusable once installed (i.e. constantly reload pages, close every new window). Is this a security bug?
+
+No. Annoyance extensions like this are treated similarly to [Denial of Service
+issues][denial-of-service] rather than as security vulnerabilities.
+
 ### What is our stance on unpacked extensions?
 
 Attacks that involve loading an unpacked extension are _typically_ not security
@@ -171,7 +176,7 @@ extensions to access powerful APIs.
 This is not considered a security bug ([example](https://crbug.com/1301966)).
 See above for [our stance on unpacked extensions][unpacked-extensions-stance].
 The addition of access to private APIs does not change this stance, as it is
-still most similar to a phyiscally-local attack or devtools execution in a
+still most similar to a physically-local attack or devtools execution in a
 trusted context (for instance, inspecting a component extension allows access
 to trusted APIs).
 
@@ -427,16 +432,30 @@ extensions, downloading and executing a native binary, or executing custom
 code outside the sandbox should not be possible for an extension with the
 debugger permission.
 
+### What security does the Native Messaging API provide?
+
+The [Native Messaging API](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
+is not a secure communication channel and if required, secure communication
+between the extension and a native app must be established by the extension
+developer with an additional transport layer.
+
+The JSON files contained in the NativeMessagingHosts folder support an
+`allowed_origins` key. Chrome will not allow an extension to communicate with a
+host unless the extension ID is listed here. However, an extension from outside
+of the Chrome Web Store can easily use an arbitrary ID with the [`key`](https://developer.chrome.com/docs/extensions/reference/manifest/key)
+field, and other binaries on a machine could launch the Native Messaging Host
+and communicate with it. Both of these are outside of Chrome's security model
+which [does not consider physically-local attacks to be security bugs][physically-local-attacks].
+
 ### I've found a security bug in an extension. Is this a security bug in Chromium?
 
 This depends on the extension.
 
-**Component Extensions:** Some extensions (called "component extensions") are
-bundled by the Chromium browser and implement core browser functionality. An
-example of this is the CryptoToken extension (used in security key
-authentication). If you find a security bug in a component extension, this _is_
-considered a security bug in Chromium. Please report any such bugs
-[here][new-security-bug].
+**Component Extensions:**
+[Component extensions](https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/component_extensions.md)
+are bundled by the Chromium browser and implement core browser functionality. If
+you find a security bug in a component extension, this _is_ considered a
+security bug in Chromium. Please report any such bugs [here][new-security-bug].
 
 **Google Extensions:** A security bug in an extension developed by Google, but
 not distributed directly with the Chrome browser, would likely not be considered
@@ -460,3 +479,4 @@ information.
 [devtools-execution]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#Does-entering-JavaScript_URLs-in-the-URL-bar-or-running-script-in-the-developer-tools-mean-there_s-an-XSS-vulnerability
 [setting-unpacked-id]: https://developer.chrome.com/docs/extensions/mv3/manifest/key/
 [unpacked-extensions-stance]: https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/security_faq.md#what-is-our-stance-on-unpacked-extensions
+[denial-of-service]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#Are-denial-of-service-issues-considered-security-bugs

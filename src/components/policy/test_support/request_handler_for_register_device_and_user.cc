@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <set>
 #include <string>
 
-#include "base/guid.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
+#include "base/uuid.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/policy/test_support/client_storage.h"
@@ -54,6 +54,9 @@ void AddAllowedPolicyTypes(em::DeviceRegisterRequest::Type type,
     case em::DeviceRegisterRequest::ANDROID_BROWSER:
       allowed_policy_types->insert({dm_protocol::kChromeUserPolicyType});
       break;
+    case em::DeviceRegisterRequest::IOS_BROWSER:
+      allowed_policy_types->insert({dm_protocol::kChromeUserPolicyType});
+      break;
     default:
       NOTREACHED();
   }
@@ -64,8 +67,9 @@ std::unique_ptr<HttpResponse> ValidatePsmFields(
     const PolicyStorage* policy_storage) {
   const PolicyStorage::PsmEntry* psm_entry = policy_storage->GetPsmEntry(
       register_request.brand_code() + "_" + register_request.machine_id());
-  if (!psm_entry)
+  if (!psm_entry) {
     return nullptr;
+  }
 
   if (!register_request.has_psm_execution_result() ||
       !register_request.has_psm_determination_timestamp_ms()) {
@@ -124,8 +128,9 @@ RequestHandlerForRegisterDeviceAndUser::HandleRequest(
   // be obtained from the policy storage.
   // TODO(http://crbug.com/1227123): Add support for authentication.
   std::string google_login;
-  if (!GetGoogleLoginFromRequest(request, &google_login))
+  if (!GetGoogleLoginFromRequest(request, &google_login)) {
     return CreateHttpResponse(net::HTTP_UNAUTHORIZED, "User not authorized.");
+  }
 
   const base::flat_set<std::string>& managed_users =
       policy_storage()->managed_users();
@@ -147,12 +152,14 @@ RequestHandlerForRegisterDeviceAndUser::HandleRequest(
 
   std::unique_ptr<HttpResponse> error_response =
       ValidatePsmFields(register_request, policy_storage());
-  if (error_response)
+  if (error_response) {
     return error_response;
+  }
 
   error_response = ValidateLicenses(register_request, policy_storage());
-  if (error_response)
+  if (error_response) {
     return error_response;
+  }
 
   return RegisterDeviceAndSendResponse(request, register_request, policy_user);
 }
@@ -164,7 +171,7 @@ RequestHandlerForRegisterDeviceAndUser::RegisterDeviceAndSendResponse(
     const std::string& policy_user) {
   std::string device_id =
       KeyValueFromUrl(request.GetURL(), dm_protocol::kParamDeviceID);
-  std::string device_token = base::GUID::GenerateRandomV4().AsLowercaseString();
+  std::string device_token = base::Uuid::GenerateRandomV4().AsLowercaseString();
   std::string machine_name = base::StringPrintf(
       "%s - %s", register_request.machine_model().c_str(), device_id.c_str());
 
@@ -172,8 +179,9 @@ RequestHandlerForRegisterDeviceAndUser::RegisterDeviceAndSendResponse(
   client_info.device_id = device_id;
   client_info.device_token = device_token;
   client_info.machine_name = machine_name;
-  if (!policy_user.empty())
+  if (!policy_user.empty()) {
     client_info.username = policy_user;
+  }
   AddAllowedPolicyTypes(register_request.type(),
                         &client_info.allowed_policy_types);
   client_storage()->RegisterClient(std::move(client_info));
@@ -186,8 +194,7 @@ RequestHandlerForRegisterDeviceAndUser::RegisterDeviceAndSendResponse(
   register_response->set_enrollment_type(
       em::DeviceRegisterResponse::ENTERPRISE);
 
-  return CreateHttpResponse(net::HTTP_OK,
-                            device_management_response.SerializeAsString());
+  return CreateHttpResponse(net::HTTP_OK, device_management_response);
 }
 
 }  // namespace policy

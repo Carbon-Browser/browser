@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,14 +17,14 @@ FakeDeviceNamePolicyHandler::GetDeviceNamePolicy() const {
   return device_name_policy_;
 }
 
-absl::optional<std::string>
+std::optional<std::string>
 FakeDeviceNamePolicyHandler::GetHostnameChosenByAdministrator() const {
   return hostname_;
 }
 
 void FakeDeviceNamePolicyHandler::SetPolicyState(
     DeviceNamePolicy policy,
-    const absl::optional<std::string>& hostname_from_template) {
+    const std::optional<std::string>& hostname_from_template) {
   // Hostname from template should only be relevant for
   // kPolicyHostnameChosenByAdmin policy, hence should be null for any other
   // policies.

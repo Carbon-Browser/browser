@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ class FilePath;
 
 class MediaFileSystemContext {
  public:
-  virtual ~MediaFileSystemContext() {}
+  virtual ~MediaFileSystemContext() = default;
 
   // Register a new media file system for |path| as |fs_name|.
   virtual bool RegisterFileSystem(const std::string& device_id,

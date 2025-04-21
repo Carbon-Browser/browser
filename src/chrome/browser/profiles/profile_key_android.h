@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,6 @@ class ProfileKeyAndroid {
 
   static ProfileKey* FromProfileKeyAndroid(
       const base::android::JavaRef<jobject>& obj);
-
-  static base::android::ScopedJavaLocalRef<jobject>
-  GetLastUsedRegularProfileKey(JNIEnv* env);
 
   // Return the original profile key.
   base::android::ScopedJavaLocalRef<jobject> GetOriginalKey(JNIEnv* env);

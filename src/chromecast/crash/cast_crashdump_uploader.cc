@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 
 #include <sys/stat.h>
 
+#include <optional>
+
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 // TODO(slan): Find a replacement for LibcurlWrapper in Chromium to remove the
 // breakpad dependency.
-#include "third_party/breakpad/breakpad/src/common/linux/libcurl_wrapper.h"
+#include "chromecast/crash/libcurl_wrapper.h"
 
 namespace chromecast {
 namespace {
@@ -37,13 +39,11 @@ CastCrashdumpData::~CastCrashdumpData() {
 }
 
 CastCrashdumpUploader::CastCrashdumpUploader(const CastCrashdumpData& data)
-    : CastCrashdumpUploader(
-          data,
-          std::make_unique<google_breakpad::LibcurlWrapper>()) {}
+    : CastCrashdumpUploader(data, std::make_unique<LibcurlWrapper>()) {}
 
 CastCrashdumpUploader::CastCrashdumpUploader(
     const CastCrashdumpData& data,
-    std::unique_ptr<google_breakpad::LibcurlWrapper> http_layer)
+    std::unique_ptr<LibcurlWrapper> http_layer)
     : http_layer_(std::move(http_layer)), data_(data) {
   DCHECK(http_layer_);
 }
@@ -53,12 +53,13 @@ CastCrashdumpUploader::~CastCrashdumpUploader() {
 
 bool CastCrashdumpUploader::AddAttachment(const std::string& label,
                                           const std::string& filename) {
-  int64_t file_size = 0;
-  if (!base::GetFileSize(base::FilePath(filename), &file_size)) {
+  std::optional<int64_t> file_size =
+      base::GetFileSize(base::FilePath(filename));
+  if (!file_size.has_value()) {
     LOG(WARNING) << "file size of " << filename << " not readable";
     return false;
   }
-  LOG(INFO) << "file size of " << filename << ": " << file_size;
+  LOG(INFO) << "file size of " << filename << ": " << file_size.value();
   attachments_[label] = filename;
   return true;
 }

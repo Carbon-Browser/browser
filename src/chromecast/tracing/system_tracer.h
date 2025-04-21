@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/files/scoped_file.h"
-#include "base/message_loop/message_pump_libevent.h"
+#include "base/functional/callback.h"
 
 namespace chromecast {
 
@@ -35,7 +35,7 @@ class SystemTracer {
       base::RepeatingCallback<void(Status status, std::string trace_data)>;
 
   // Start system tracing for categories in |categories| (comma separated).
-  virtual void StartTracing(base::StringPiece categories,
+  virtual void StartTracing(std::string_view categories,
                             StartTracingCallback callback) = 0;
 
   // Stop system tracing.

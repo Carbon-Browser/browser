@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,21 +42,24 @@ class SK_API SkiaTraceMemoryDumpImpl : public SkTraceMemoryDump {
   ~SkiaTraceMemoryDumpImpl() override;
 
   // SkTraceMemoryDump implementation:
-  void dumpNumericValue(const char* dumpName,
-                        const char* valueName,
+  void dumpNumericValue(const char* dump_name,
+                        const char* value_name,
                         const char* units,
                         uint64_t value) override;
   void dumpStringValue(const char* dump_name,
                        const char* value_name,
                        const char* value) override;
-  void setMemoryBacking(const char* dumpName,
-                        const char* backingType,
-                        const char* backingObjectId) override;
+  void setMemoryBacking(const char* dump_name,
+                        const char* backing_type,
+                        const char* backing_object_id) override;
   void setDiscardableMemoryBacking(
-      const char* dumpName,
-      const SkDiscardableMemory& discardableMemoryObject) override;
+      const char* dump_name,
+      const SkDiscardableMemory& discardable_memory) override;
   LevelOfDetail getRequestedDetails() const override;
   bool shouldDumpWrappedObjects() const override;
+  void dumpWrappedState(const char* dump_name, bool wrapped) override;
+  bool shouldDumpUnbudgetedObjects() const override;
+  void dumpBudgetedState(const char* dump_name, bool budgeted) override;
 
  protected:
   base::trace_event::ProcessMemoryDump* process_memory_dump() {

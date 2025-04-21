@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,14 @@ import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.AccelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import org.chromium.ui.ElidedUrlTextView;
+import org.chromium.ui.interpolators.Interpolators;
 import org.chromium.ui.widget.ChromeImageButton;
 
-/**
- * Represents the url, a sub page header and container for page info content.
- */
+/** Represents the url, a sub page header and container for page info content. */
 public class PageInfoContainer extends FrameLayout {
     public static final float sScale = 0.92f;
     public static final int sOutDuration = 90;
@@ -40,6 +38,7 @@ public class PageInfoContainer extends FrameLayout {
         public Runnable backButtonClickCallback;
         public Runnable closeButtonClickCallback;
     }
+
     private ElidedUrlTextView mExpandedUrlTitle;
     private TextView mTruncatedUrlTitle;
 
@@ -76,6 +75,8 @@ public class PageInfoContainer extends FrameLayout {
         ChromeImageButton closeButton = findViewById(R.id.page_info_close);
         closeButton.setVisibility(params.showCloseButton ? VISIBLE : GONE);
         closeButton.setOnClickListener(v -> params.closeButtonClickCallback.run());
+        View closeButtonLeftPadding = findViewById(R.id.page_info_close_left_padding);
+        closeButtonLeftPadding.setVisibility(params.showCloseButton ? VISIBLE : GONE);
 
         ChromeImageButton backButton = findViewById(R.id.subpage_back_button);
         backButton.setOnClickListener(v -> params.backButtonClickCallback.run());
@@ -86,10 +87,11 @@ public class PageInfoContainer extends FrameLayout {
             view.setOnClickListener(v -> params.urlTitleClickCallback.run());
         }
         if (params.urlTitleLongClickCallback != null) {
-            view.setOnLongClickListener(v -> {
-                params.urlTitleLongClickCallback.run();
-                return true;
-            });
+            view.setOnLongClickListener(
+                    v -> {
+                        params.urlTitleLongClickCallback.run();
+                        return true;
+                    });
         }
     }
 
@@ -97,8 +99,12 @@ public class PageInfoContainer extends FrameLayout {
         boolean showExpanded = mExpandedUrlTitle.getVisibility() != VISIBLE;
         mExpandedUrlTitle.setVisibility(showExpanded ? VISIBLE : GONE);
         mTruncatedUrlTitle.setVisibility(showExpanded ? GONE : VISIBLE);
-        announceForAccessibility(getResources().getString(
-                showExpanded ? R.string.page_info_url_expanded : R.string.page_info_url_truncated));
+        announceForAccessibility(
+                getResources()
+                        .getString(
+                                showExpanded
+                                        ? R.string.page_info_url_expanded
+                                        : R.string.page_info_url_truncated));
     }
 
     public void setFavicon(Drawable favicon) {
@@ -113,36 +119,36 @@ public class PageInfoContainer extends FrameLayout {
             return;
         }
         // Create "fade-through" animation.
-        // TODO(crbug.com/1077766): Animate height change and set correct interpolator.
+        // TODO(crbug.com/40129299): Animate height change and set correct interpolator.
         mWrapper.animate()
                 .setDuration(sOutDuration)
                 .alpha(0)
-                .setInterpolator(new AccelerateInterpolator())
-                .withEndAction(() -> {
-                    replaceContentView(view, subPageTitle);
-                    mWrapper.setScaleX(sScale);
-                    mWrapper.setScaleY(sScale);
-                    mWrapper.setAlpha(0);
-                    mWrapper.animate()
-                            .setDuration(sInDuration)
-                            .scaleX(1)
-                            .scaleY(1)
-                            .alpha(1)
-                            .setInterpolator(new DecelerateInterpolator())
-                            .withEndAction(onPreviousPageRemoved);
-                });
+                .setInterpolator(Interpolators.EMPHASIZED_DECELERATE)
+                .withEndAction(
+                        () -> {
+                            replaceContentView(view, subPageTitle);
+                            mWrapper.setScaleX(sScale);
+                            mWrapper.setScaleY(sScale);
+                            mWrapper.setAlpha(0);
+                            mWrapper.animate()
+                                    .setDuration(sInDuration)
+                                    .scaleX(1)
+                                    .scaleY(1)
+                                    .alpha(1)
+                                    .setInterpolator(Interpolators.EMPHASIZED_DECELERATE)
+                                    .withEndAction(onPreviousPageRemoved);
+                        });
     }
 
-    /**
-     * Replaces the current view with |view| and configures the subpage header.
-     */
+    /** Replaces the current view with |view| and configures the subpage header. */
     private void replaceContentView(View view, CharSequence subPageTitle) {
         mContent.removeAllViews();
         mCurrentView = view;
         mSubpageHeader.setVisibility(subPageTitle != null ? VISIBLE : GONE);
         mSubpageTitle.setText(subPageTitle);
         mContent.addView(view);
-        announceForAccessibility(subPageTitle != null
+        announceForAccessibility(
+                subPageTitle != null
                         ? subPageTitle
                         : getResources().getString(R.string.accessibility_toolbar_btn_site_info));
     }

@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_IOS_FORM_UTIL_TEST_FORM_ACTIVITY_TAB_HELPER_H_
 #define COMPONENTS_AUTOFILL_IOS_FORM_UTIL_TEST_FORM_ACTIVITY_TAB_HELPER_H_
 
-#include <string>
+#import "base/memory/raw_ptr.h"
 
 namespace web {
 class WebFrame;
@@ -16,6 +16,7 @@ namespace autofill {
 
 struct FormActivityParams;
 struct FormRemovalParams;
+class FormData;
 
 class TestFormActivityTabHelper {
  public:
@@ -32,13 +33,11 @@ class TestFormActivityTabHelper {
   void FormRemovalRegistered(web::WebFrame* sender_frame,
                              const FormRemovalParams& params);
   void DocumentSubmitted(web::WebFrame* sender_frame,
-                         const std::string& form_name,
-                         const std::string& form_data,
-                         bool has_user_gesture,
-                         bool form_in_main_frame);
+                         const FormData& form_data,
+                         bool has_user_gesture);
 
  private:
-  web::WebState* web_state_ = nullptr;
+  raw_ptr<web::WebState> web_state_ = nullptr;
 };
 
 }  // namespace autofill

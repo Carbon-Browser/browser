@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
+
+#include "base/ranges/algorithm.h"
 
 namespace storage {
 
@@ -23,6 +25,7 @@ BucketInfo::BucketInfo(BucketId bucket_id,
       persistent(persistent),
       durability(durability) {}
 
+BucketInfo::BucketInfo() = default;
 BucketInfo::~BucketInfo() = default;
 
 BucketInfo::BucketInfo(const BucketInfo&) = default;
@@ -45,9 +48,8 @@ bool operator<(const BucketInfo& lhs, const BucketInfo& rhs) {
 std::set<BucketLocator> COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT)
     BucketInfosToBucketLocators(const std::set<BucketInfo>& bucket_infos) {
   std::set<BucketLocator> result;
-  std::transform(bucket_infos.begin(), bucket_infos.end(),
-                 std::inserter(result, result.begin()),
-                 [](const BucketInfo& info) { return info.ToBucketLocator(); });
+  base::ranges::transform(bucket_infos, std::inserter(result, result.begin()),
+                          &BucketInfo::ToBucketLocator);
   return result;
 }
 

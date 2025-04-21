@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,18 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 
+#include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/values.h"
+#include "cc/base/math_util.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/picture_layer.h"
 #include "cc/trees/draw_property_utils.h"
 #include "cc/trees/layer_tree_host.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace cc {
@@ -29,22 +31,19 @@ const char* kDefaultInvalidationMode = "viewport";
 }  // namespace
 
 InvalidationBenchmark::InvalidationBenchmark(
-    base::Value settings,
+    base::Value::Dict settings,
     MicroBenchmark::DoneCallback callback)
-    : MicroBenchmark(std::move(callback)), seed_(0) {
-  if (!settings.is_dict())
-    return;
-
+    : MicroBenchmark(std::move(callback)) {
   std::string mode_string = kDefaultInvalidationMode;
 
-  auto* mode_string_from_settings = settings.FindStringKey("mode");
+  auto* mode_string_from_settings = settings.FindString("mode");
   if (mode_string_from_settings)
     mode_string = *mode_string_from_settings;
 
   if (mode_string == "fixed_size") {
     mode_ = FIXED_SIZE;
-    auto width = settings.FindIntKey("width");
-    auto height = settings.FindIntKey("height");
+    auto width = settings.FindInt("width");
+    auto height = settings.FindInt("height");
     CHECK(width.has_value()) << "Must provide a width for fixed_size mode.";
     CHECK(height.has_value()) << "Must provide a height for fixed_size mode.";
     width_ = *width;
@@ -56,7 +55,7 @@ InvalidationBenchmark::InvalidationBenchmark(
   } else if (mode_string == "viewport") {
     mode_ = VIEWPORT;
   } else {
-    CHECK(false) << "Invalid mode: " << mode_string
+    NOTREACHED() << "Invalid mode: " << mode_string
                  << ". One of {fixed_size, layer, viewport, random} expected.";
   }
 }
@@ -70,10 +69,8 @@ void InvalidationBenchmark::DidUpdateLayers(LayerTreeHost* layer_tree_host) {
 
 void InvalidationBenchmark::RunOnLayer(PictureLayer* layer) {
   gfx::Rect visible_layer_rect = gfx::Rect(layer->bounds());
-  gfx::Transform from_screen;
-  bool invertible = layer->ScreenSpaceTransform().GetInverse(&from_screen);
-  if (!invertible)
-    from_screen = gfx::Transform();
+  gfx::Transform from_screen =
+      layer->ScreenSpaceTransform().InverseOrIdentity();
   gfx::Rect viewport_rect = MathUtil::ProjectEnclosingClippedRect(
       from_screen, layer->layer_tree_host()->device_viewport_rect());
   visible_layer_rect.Intersect(viewport_rect);
@@ -113,14 +110,12 @@ void InvalidationBenchmark::RunOnLayer(PictureLayer* layer) {
   }
 }
 
-bool InvalidationBenchmark::ProcessMessage(base::Value message) {
-  if (!message.is_dict())
-    return false;
-
-  auto notify_done = message.FindBoolKey("notify_done");
+bool InvalidationBenchmark::ProcessMessage(base::Value::Dict message) {
+  auto notify_done = message.FindBool("notify_done");
   if (notify_done.has_value()) {
-    if (*notify_done)
-      NotifyDone(base::Value());
+    if (notify_done.value()) {
+      NotifyDone(base::Value::Dict());
+    }
     return true;
   }
   return false;

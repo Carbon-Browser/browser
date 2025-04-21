@@ -1,15 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/web_bundle/web_bundle_url_loader_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "components/web_package/web_bundle_builder.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
+#include "mojo/public/cpp/system/functions.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -85,7 +86,7 @@ class TestWebBundleHandle : public mojom::WebBundleHandle {
       mojo::PendingReceiver<mojom::WebBundleHandle> receiver)
       : receiver_(this, std::move(receiver)) {}
 
-  const absl::optional<std::pair<mojom::WebBundleErrorType, std::string>>&
+  const std::optional<std::pair<mojom::WebBundleErrorType, std::string>>&
   last_bundle_error() const {
     return last_bundle_error_;
   }
@@ -114,7 +115,7 @@ class TestWebBundleHandle : public mojom::WebBundleHandle {
 
  private:
   mojo::Receiver<mojom::WebBundleHandle> receiver_;
-  absl::optional<std::pair<mojom::WebBundleErrorType, std::string>>
+  std::optional<std::pair<mojom::WebBundleErrorType, std::string>>
       last_bundle_error_;
   base::OnceClosure quit_closure_for_bundle_error_;
 };
@@ -207,11 +208,11 @@ class WebBundleURLLoaderFactoryTest : public ::testing::Test {
   StartRequestResult StartRequest(const ResourceRequest& request) {
     StartRequestResult result;
     result.client = std::make_unique<network::TestURLLoaderClient>();
-    factory_->StartSubresourceRequest(
+    factory_->StartLoader(WebBundleURLLoaderFactory::CreateURLLoader(
         result.loader.BindNewPipeAndPassReceiver(), request,
         result.client->CreateRemote(),
         mojo::Remote<mojom::TrustedHeaderClient>(), base::Time::Now(),
-        base::TimeTicks::Now());
+        base::TimeTicks::Now(), base::DoNothing()));
     return result;
   }
 
@@ -222,7 +223,7 @@ class WebBundleURLLoaderFactoryTest : public ::testing::Test {
 
   void RunUntilBundleError() { handle_->RunUntilBundleError(); }
 
-  const absl::optional<std::pair<mojom::WebBundleErrorType, std::string>>&
+  const std::optional<std::pair<mojom::WebBundleErrorType, std::string>>&
   last_bundle_error() const {
     return handle_->last_bundle_error();
   }
@@ -255,7 +256,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, Basic) {
 
   EXPECT_EQ(net::OK, request.client->completion_status().error_code);
   EXPECT_FALSE(last_bundle_error().has_value());
-  EXPECT_EQ(request.client->response_head()->web_bundle_url, GURL(kBundleUrl));
+  EXPECT_TRUE(request.client->response_head()->is_web_bundle_inner_response);
   std::string body;
   EXPECT_TRUE(mojo::BlockingCopyToString(
       request.client->response_body_release(), &body));
@@ -263,6 +264,8 @@ TEST_F(WebBundleURLLoaderFactoryTest, Basic) {
   histogram_tester.ExpectUniqueSample(
       "SubresourceWebBundles.LoadResult",
       WebBundleURLLoaderFactory::SubresourceWebBundleLoadResult::kSuccess, 1);
+  histogram_tester.ExpectUniqueSample("SubresourceWebBundles.ResourceCount", 1,
+                                      1);
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, MetadataParseError) {
@@ -432,25 +435,28 @@ TEST_F(WebBundleURLLoaderFactoryTest, StartRequestBeforeReadingBundle) {
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, MultipleRequests) {
+  base::HistogramTester histogram_tester;
   auto request1 = StartRequest(GURL(kResourceUrl), kResourceRequestId);
   auto request2 = StartRequest(GURL(kResourceUrl2), kResourceRequestId2);
 
   std::vector<uint8_t> bundle = CreateLargeBundle();
   // Write the first 10kB of the bundle in which the bundle's metadata and the
   // response for kResourceUrl are included.
-  ASSERT_GT(bundle.size(), 10000U);
-  WriteBundle(base::make_span(bundle).subspan(0, 10000));
+  ASSERT_GT(bundle.size(), 10000u);
+  WriteBundle(base::span(bundle).first<10000>());
   request1.client->RunUntilComplete();
 
   EXPECT_EQ(net::OK, request1.client->completion_status().error_code);
   EXPECT_FALSE(request2.client->has_received_completion());
 
   // Write the rest of the data.
-  WriteBundle(base::make_span(bundle).subspan(10000));
+  WriteBundle(base::span(bundle).subspan<10000>());
   FinishWritingBundle();
   request2.client->RunUntilComplete();
 
   EXPECT_EQ(net::OK, request2.client->completion_status().error_code);
+  histogram_tester.ExpectUniqueSample("SubresourceWebBundles.ResourceCount", 3,
+                                      1);
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, CancelRequest) {
@@ -472,7 +478,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, CancelRequest) {
   // Write the first 10kB of the bundle in which the bundle's metadata, response
   // for kResourceUrl, and response header for kResourceUrl2 are included.
   ASSERT_GT(bundle.size(), 10000U);
-  WriteBundle(base::make_span(bundle).subspan(0, 10000));
+  WriteBundle(base::span(bundle).first<10000>());
 
   // This makes sure the bytes written above are consumed by WebBundle parser.
   request_to_complete1.client->RunUntilComplete();
@@ -484,7 +490,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, CancelRequest) {
   request_to_cancel3.loader.reset();
 
   // Write the rest of the data.
-  WriteBundle(base::make_span(bundle).subspan(10000));
+  WriteBundle(base::span(bundle).subspan<10000>());
   FinishWritingBundle();
   request_to_complete2.client->RunUntilComplete();
   EXPECT_EQ(net::OK,
@@ -535,7 +541,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, CrossOriginJson) {
   ASSERT_TRUE(mojo::BlockingCopyToString(
       request.client->response_body_release(), &body));
   EXPECT_TRUE(body.empty())
-      << "body should be empty because JSON is a CORB-protected resource";
+      << "body should be empty because JSON is a ORB-protected resource";
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, CrossOriginJs) {
@@ -551,7 +557,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, CrossOriginJs) {
   ASSERT_TRUE(mojo::BlockingCopyToString(
       request.client->response_body_release(), &body));
   EXPECT_EQ("const not_secret = 1;", body)
-      << "body should be valid one because JS is not a CORB protected resource";
+      << "body should be valid one because JS is not a ORB protected resource";
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, WrongBundleURL) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace arc {
 
@@ -22,9 +20,17 @@ ArcDocumentsProviderRootMapFactory::GetForBrowserContext(
 }
 
 ArcDocumentsProviderRootMapFactory::ArcDocumentsProviderRootMapFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ArcDocumentsProviderRootMap",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(ArcFileSystemOperationRunner::GetFactory());
 }
 
@@ -34,17 +40,12 @@ ArcDocumentsProviderRootMapFactory::~ArcDocumentsProviderRootMapFactory() =
 // static
 ArcDocumentsProviderRootMapFactory*
 ArcDocumentsProviderRootMapFactory::GetInstance() {
-  return base::Singleton<ArcDocumentsProviderRootMapFactory>::get();
+  static base::NoDestructor<ArcDocumentsProviderRootMapFactory> instance;
+  return instance.get();
 }
 
-content::BrowserContext*
-ArcDocumentsProviderRootMapFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Allow accessing ArcDocumentsProvider files in incognito mode.
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
-}
-
-KeyedService* ArcDocumentsProviderRootMapFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ArcDocumentsProviderRootMapFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   auto* arc_service_manager = ArcServiceManager::Get();
 
@@ -59,7 +60,8 @@ KeyedService* ArcDocumentsProviderRootMapFactory::BuildServiceInstanceFor(
     return nullptr;
   }
 
-  return new ArcDocumentsProviderRootMap(Profile::FromBrowserContext(context));
+  return std::make_unique<ArcDocumentsProviderRootMap>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace arc

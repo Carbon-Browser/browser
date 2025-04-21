@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,10 +38,7 @@ class AURA_EXPORT NativeWindowOcclusionTracker {
  private:
   friend class WindowTreeHostWithReleaseTest;
   friend class WindowTreeHostWithThrottleTest;
-
-#if BUILDFLAG(IS_WIN)
-  static void SetHeadlessCheckEnabled(bool enabled);
-#endif
+  friend class WindowTreeHostWithThrottleAndReleaseTest;
 };
 
 }  // namespace aura

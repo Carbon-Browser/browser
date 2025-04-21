@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "net/base/ip_address.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 using Hostname = std::string;
 using Address = net::IPAddress;
@@ -40,7 +39,6 @@ class HostLocator {
   virtual void FindHosts(FindHostsCallback callback) = 0;
 };
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_DISCOVERY_HOST_LOCATOR_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "base/observer_list.h"
 #include "ui/display/display_list.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/ozone/public/platform_screen.h"
@@ -37,11 +36,8 @@ class HeadlessScreen : public PlatformScreen {
       const gfx::Rect& match_rect) const override;
   void AddObserver(display::DisplayObserver* observer) override;
   void RemoveObserver(display::DisplayObserver* observer) override;
-
  private:
   display::DisplayList display_list_;
-
-  base::ObserverList<display::DisplayObserver> observers_;
 };
 
 }  // namespace ui

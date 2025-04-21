@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,9 +41,6 @@ class CC_DEBUG_EXPORT RenderingStatsInstrumentation {
   void IncrementFrameCount(int64_t count);
   void AddVisibleContentArea(int64_t area);
   void AddApproximatedVisibleContentArea(int64_t area);
-  void AddCheckerboardedVisibleContentArea(int64_t area);
-  void AddCheckerboardedNoRecordingContentArea(int64_t area);
-  void AddCheckerboardedNeedsRasterContentArea(int64_t area);
   void AddDrawDuration(base::TimeDelta draw_duration,
                        base::TimeDelta draw_duration_estimate);
   void AddBeginMainFrameToCommitDuration(

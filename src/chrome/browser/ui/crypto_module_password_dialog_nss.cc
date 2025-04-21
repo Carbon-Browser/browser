@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <pk11pub.h>
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/browser_thread.h"
 
 using content::BrowserThread;
@@ -17,7 +17,7 @@ namespace {
 
 bool ShouldShowDialog(PK11SlotInfo* slot) {
   // The wincx arg is unused since we don't call PK11_SetIsLoggedInFunc.
-  return (PK11_NeedLogin(slot) && !PK11_IsLoggedIn(slot, NULL /* wincx */));
+  return (PK11_NeedLogin(slot) && !PK11_IsLoggedIn(slot, nullptr /* wincx */));
 }
 
 // Basically an asynchronous implementation of NSS's PK11_DoPassword.
@@ -37,13 +37,13 @@ class SlotUnlocker {
   void GotPassword(const std::string& password);
   void Done();
 
-  size_t current_;
+  size_t current_ = 0;
   std::vector<crypto::ScopedPK11Slot> modules_;
   CryptoModulePasswordReason reason_;
   net::HostPortPair server_;
   gfx::NativeWindow parent_;
   base::OnceClosure callback_;
-  PRBool retry_;
+  PRBool retry_ = PR_FALSE;
 };
 
 SlotUnlocker::SlotUnlocker(std::vector<crypto::ScopedPK11Slot> modules,
@@ -51,13 +51,11 @@ SlotUnlocker::SlotUnlocker(std::vector<crypto::ScopedPK11Slot> modules,
                            const net::HostPortPair& server,
                            gfx::NativeWindow parent,
                            base::OnceClosure callback)
-    : current_(0),
-      modules_(std::move(modules)),
+    : modules_(std::move(modules)),
       reason_(reason),
       server_(server),
       parent_(parent),
-      callback_(std::move(callback)),
-      retry_(PR_FALSE) {
+      callback_(std::move(callback)) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 }
 

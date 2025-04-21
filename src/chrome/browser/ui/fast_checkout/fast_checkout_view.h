@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@ class FastCheckoutView {
   // Show the sheet with provided options to the user. After user interaction,
   // either `OnCredentialSelected` or `OnDismiss` gets invoked.
   virtual void Show(
-      base::span<const autofill::AutofillProfile> autofill_profiles,
-      base::span<const autofill::CreditCard> credit_cards) = 0;
+      const std::vector<const autofill::AutofillProfile*>& autofill_profiles,
+      const std::vector<const autofill::CreditCard*>& credit_cards) = 0;
 
   // Factory function for creating the view.
   static std::unique_ptr<FastCheckoutView> Create(

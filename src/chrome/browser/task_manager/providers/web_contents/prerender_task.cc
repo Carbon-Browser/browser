@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ PrerenderTask::PrerenderTask(content::RenderFrameHost* render_frame_host,
 
 PrerenderTask::~PrerenderTask() = default;
 
-const Task* PrerenderTask::GetParentTask() const {
+base::WeakPtr<Task> PrerenderTask::GetParentTask() const {
   return task_provider_->GetTaskOfFrame(web_contents()->GetPrimaryMainFrame());
 }
 

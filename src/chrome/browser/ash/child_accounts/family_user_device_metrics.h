@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CHILD_ACCOUNTS_FAMILY_USER_DEVICE_METRICS_H_
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_FAMILY_USER_DEVICE_METRICS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/child_accounts/family_user_metrics_service.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
@@ -63,7 +64,7 @@ class FamilyUserDeviceMetrics : public session_manager::SessionManagerObserver,
  private:
   void ReportDeviceOwnership();
 
-  const user_manager::UserManager* const user_manager_;
+  const raw_ptr<const user_manager::UserManager> user_manager_;
 
   base::WeakPtrFactory<FamilyUserDeviceMetrics> weak_factory_{this};
 };

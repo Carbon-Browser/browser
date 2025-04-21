@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <vector>
 
 #include "base/component_export.h"
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace apdu {
 
@@ -32,7 +32,7 @@ class COMPONENT_EXPORT(APDU) ApduResponse {
   };
 
   // Create a APDU response from the serialized message.
-  static absl::optional<ApduResponse> CreateFromMessage(
+  static std::optional<ApduResponse> CreateFromMessage(
       base::span<const uint8_t> data);
 
   ApduResponse(std::vector<uint8_t> data, Status response_status);

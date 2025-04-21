@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.system;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.mojo.system.DataPipe.ConsumerHandle;
 import org.chromium.mojo.system.DataPipe.ProducerHandle;
 
@@ -12,6 +13,7 @@ import org.chromium.mojo.system.DataPipe.ProducerHandle;
  * return a handle of the requested type and invalidate this object. No validation is made when the
  * conversion operation is called.
  */
+@NullMarked
 public interface UntypedHandle extends Handle {
 
     /**
@@ -41,5 +43,4 @@ public interface UntypedHandle extends Handle {
      * representation.
      */
     public SharedBufferHandle toSharedBufferHandle();
-
 }

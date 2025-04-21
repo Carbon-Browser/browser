@@ -16,8 +16,8 @@ limitations under the License.
 #define TENSORFLOW_LITE_SUPPORT_METADATA_CC_METADATA_EXTRACTOR_H_
 
 #include "absl/container/flat_hash_map.h"  // from @com_google_absl
-#include "absl/status/status.h"            // from @com_google_absl
-#include "absl/strings/string_view.h"      // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow_lite_support/cc/port/statusor.h"
 #include "tensorflow_lite_support/metadata/metadata_schema_generated.h"
@@ -77,6 +77,10 @@ class ModelMetadataExtractor {
   // file.
   tflite::support::StatusOr<absl::string_view> GetAssociatedFile(
       const std::string& filename) const;
+
+  // Gets the model version from the model metadata.  An error is returned if
+  // either the metadata does not exist or no model version is present in it.
+  tflite::support::StatusOr<std::string> GetModelVersion() const;
 
   // Note: all methods below retrieves metadata of the *first* subgraph as
   // default.

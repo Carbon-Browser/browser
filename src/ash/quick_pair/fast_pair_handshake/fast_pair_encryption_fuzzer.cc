@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_encryption.h"
 
@@ -11,9 +16,9 @@
 
 #include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_key_pair.h"
-#include "ash/services/quick_pair/fast_pair_decryption.h"
 #include "base/check.h"
 #include "base/no_destructor.h"
+#include "chromeos/ash/services/quick_pair/fast_pair_decryption.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 #include "third_party/boringssl/src/include/openssl/bn.h"
 #include "third_party/boringssl/src/include/openssl/ec.h"
@@ -36,42 +41,59 @@ struct Environment {
 
 }  // namespace
 
+namespace ash {
+namespace quick_pair {
+namespace fast_pair_encryption {
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   // Enforce a minimum input size so that we can pass in valid parameters
-  // to EncryptBytes and GenerateKeysWithEcdhKeyAgreement.
-  if (size < 2 * ash::quick_pair::fast_pair_decryption::kBlockByteSize)
+  // to EncryptBytes(), GenerateKeysWithEcdhKeyAgreement(),
+  // GenerateHmacSha256(), and EncryptAdditionalData().
+  size_t min_size = 2 * ash::quick_pair::fast_pair_decryption::kBlockByteSize +
+                    kNonceSizeBytes + kSecretKeySizeBytes;
+  if (size < min_size) {
     return 0;
+  }
 
+  // Generate data needed for testing.
   static base::NoDestructor<Environment> env;
   FuzzedDataProvider fuzzed_data(data, size);
 
   std::vector<uint8_t> aes_key_bytes = fuzzed_data.ConsumeBytes<uint8_t>(
       ash::quick_pair::fast_pair_decryption::kBlockByteSize);
   std::array<uint8_t, ash::quick_pair::fast_pair_decryption::kBlockByteSize>
-      aes_key_arr;
-  std::copy_n(aes_key_bytes.begin(),
-              ash::quick_pair::fast_pair_decryption::kBlockByteSize,
-              aes_key_arr.begin());
+      aes_key_arr{*aes_key_bytes.data()};
 
   std::vector<uint8_t> data_bytes = fuzzed_data.ConsumeBytes<uint8_t>(
       ash::quick_pair::fast_pair_decryption::kBlockByteSize);
   std::array<uint8_t, ash::quick_pair::fast_pair_decryption::kBlockByteSize>
-      data_arr;
-  std::copy_n(data_bytes.begin(),
-              ash::quick_pair::fast_pair_decryption::kBlockByteSize,
-              data_arr.begin());
+      data_arr{*data_bytes.data()};
 
-  ash::quick_pair::fast_pair_encryption::EncryptBytes(aes_key_arr, data_arr);
+  std::vector<uint8_t> secret_key_bytes =
+      fuzzed_data.ConsumeBytes<uint8_t>(kSecretKeySizeBytes);
+  std::array<uint8_t, kSecretKeySizeBytes> secret_key_arr{
+      *secret_key_bytes.data()};
+
+  std::vector<uint8_t> nonce_bytes =
+      fuzzed_data.ConsumeBytes<uint8_t>(kNonceSizeBytes);
+  std::array<uint8_t, kNonceSizeBytes> nonce_arr{*nonce_bytes.data()};
+
+  std::string input_data_string = fuzzed_data.ConsumeRandomLengthString();
+  std::vector<uint8_t> input_data{input_data_string.begin(),
+                                  input_data_string.end()};
+
+  // Test FastPairEncryption functions with generated data.
+  EncryptBytes(aes_key_arr, data_arr);
+  GenerateHmacSha256(secret_key_arr, nonce_arr, input_data);
+  EncryptAdditionalData(secret_key_arr, nonce_arr, input_data);
 
   // In order to fuzz a valid EC_POINT, the fuzz needs to have at least
   // kXSize + kYSize bytes remaining. For simplicity, exit early if there
   // are not exactly as many bytes as required.
-  if (size != 2 * ash::quick_pair::fast_pair_decryption::kBlockByteSize +
-                  kXSize + kYSize) {
+  if (fuzzed_data.remaining_bytes() < kXSize + kYSize) {
     std::string invalid_len_string = fuzzed_data.ConsumeRandomLengthString();
 
-    ash::quick_pair::fast_pair_encryption::GenerateKeysWithEcdhKeyAgreement(
-        invalid_len_string);
+    GenerateKeysWithEcdhKeyAgreement(invalid_len_string);
 
     return 0;
   }
@@ -109,8 +131,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   std::string anti_spoofing_key(buffer.data() + 1, buffer.data() + kKeySize);
   DCHECK(anti_spoofing_key.length() == kKeySize - 1);
 
-  ash::quick_pair::fast_pair_encryption::GenerateKeysWithEcdhKeyAgreement(
-      anti_spoofing_key);
+  GenerateKeysWithEcdhKeyAgreement(anti_spoofing_key);
 
   return 0;
 }
+
+}  // namespace fast_pair_encryption
+}  // namespace quick_pair
+}  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ BluetoothGattCharacteristicServiceProvider::Create(
   }
 #if defined(USE_REAL_DBUS_CLIENTS)
   LOG(FATAL) << "Fake is unavailable if USE_REAL_DBUS_CLIENTS is defined.";
-  return nullptr;
 #else
   return new FakeBluetoothGattCharacteristicServiceProvider(
       object_path, std::move(delegate), uuid, flags, service_path);

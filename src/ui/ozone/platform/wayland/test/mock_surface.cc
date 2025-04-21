@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 
 #include <linux-explicit-synchronization-unstable-v1-client-protocol.h>
 
+#include "base/not_fatal_until.h"
 #include "base/notreached.h"
 #include "ui/ozone/platform/wayland/test/test_region.h"
+#include "ui/ozone/platform/wayland/test/test_wayland_server_thread.h"
 #include "ui/ozone/platform/wayland/test/test_zwp_linux_explicit_synchronization.h"
 
 namespace wl {
@@ -66,6 +68,13 @@ void SetBufferScale(wl_client* client, wl_resource* resource, int32_t scale) {
   mock_surface->set_buffer_scale(scale);
 }
 
+void SetBufferTransform(struct wl_client* client,
+                        struct wl_resource* resource,
+                        int32_t transform) {
+  auto* mock_surface = GetUserDataAs<MockSurface>(resource);
+  mock_surface->SetBufferTransform(transform);
+}
+
 void DamageBuffer(struct wl_client* client,
                   struct wl_resource* resource,
                   int32_t x,
@@ -76,7 +85,7 @@ void DamageBuffer(struct wl_client* client,
 }
 
 void SetAcquireFence(wl_client* client, wl_resource* resource, int32_t fd) {
-  // TODO(crbug.com/1211240): Implement this.
+  // TODO(crbug.com/40182819): Implement this.
   NOTIMPLEMENTED();
 }
 
@@ -94,16 +103,16 @@ void GetRelease(wl_client* client, wl_resource* resource, uint32_t id) {
 }  // namespace
 
 const struct wl_surface_interface kMockSurfaceImpl = {
-    DestroyResource,  // destroy
-    Attach,           // attach
-    Damage,           // damage
-    Frame,            // frame
-    SetOpaqueRegion,  // set_opaque_region
-    SetInputRegion,   // set_input_region
-    Commit,           // commit
-    nullptr,          // set_buffer_transform
-    SetBufferScale,   // set_buffer_scale
-    DamageBuffer,     // damage_buffer
+    DestroyResource,     // destroy
+    Attach,              // attach
+    Damage,              // damage
+    Frame,               // frame
+    SetOpaqueRegion,     // set_opaque_region
+    SetInputRegion,      // set_input_region
+    Commit,              // commit
+    SetBufferTransform,  // set_buffer_transform
+    SetBufferScale,      // set_buffer_scale
+    DamageBuffer,        // damage_buffer
 };
 
 const struct zwp_linux_surface_synchronization_v1_interface
@@ -126,8 +135,6 @@ MockSurface::~MockSurface() {
     wl_resource_destroy(blending_->resource());
   if (prioritized_surface_ && prioritized_surface_->resource())
     wl_resource_destroy(prioritized_surface_->resource());
-  if (augmented_surface_ && augmented_surface_->resource())
-    wl_resource_destroy(augmented_surface_->resource());
 }
 
 MockSurface* MockSurface::FromResource(wl_resource* resource) {
@@ -211,11 +218,11 @@ void MockSurface::ReleaseBufferFenced(wl_resource* buffer,
                                       gfx::GpuFenceHandle release_fence) {
   DCHECK(buffer);
   auto iter = linux_buffer_releases_.find(buffer);
-  DCHECK(iter != linux_buffer_releases_.end());
-  auto* linux_buffer_release = iter->second;
+  CHECK(iter != linux_buffer_releases_.end(), base::NotFatalUntil::M130);
+  auto* linux_buffer_release = iter->second.get();
   if (!release_fence.is_null()) {
-    zwp_linux_buffer_release_v1_send_fenced_release(
-        linux_buffer_release, release_fence.owned_fd.get());
+    zwp_linux_buffer_release_v1_send_fenced_release(linux_buffer_release,
+                                                    release_fence.Peek());
   } else {
     zwp_linux_buffer_release_v1_send_immediate_release(linux_buffer_release);
   }

@@ -1,20 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_CAPABILITY_ACCESS_UPDATE_H_
 #define COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_CAPABILITY_ACCESS_UPDATE_H_
 
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "components/account_id/account_id.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/services/app_service/public/cpp/capability_access.h"
 
 namespace apps {
 
-// Wraps two apps::mojom::CapabilityAccessPtr's, a prior state and a delta on
+// Wraps two apps::CapabilityAccessPtr's, a prior state and a delta on
 // top of that state. The state is conceptually the "sum" of all of the previous
 // deltas, with "addition" or "merging" simply being that the most recent
 // version of each field "wins".
@@ -39,12 +41,11 @@ class COMPONENT_EXPORT(APP_UPDATE) CapabilityAccessUpdate {
  public:
   // Modifies |state| by copying over all of |delta|'s known fields: those
   // fields whose values aren't "unknown". The |state| may not be nullptr.
-  static void Merge(apps::mojom::CapabilityAccess* state,
-                    const apps::mojom::CapabilityAccess* delta);
+  static void Merge(CapabilityAccess* state, const CapabilityAccess* delta);
 
   // At most one of |state| or |delta| may be nullptr.
-  CapabilityAccessUpdate(const apps::mojom::CapabilityAccess* state,
-                         const apps::mojom::CapabilityAccess* delta,
+  CapabilityAccessUpdate(const CapabilityAccess* state,
+                         const CapabilityAccess* delta,
                          const AccountId& account_id);
 
   CapabilityAccessUpdate(const CapabilityAccessUpdate&) = delete;
@@ -56,20 +57,29 @@ class COMPONENT_EXPORT(APP_UPDATE) CapabilityAccessUpdate {
 
   const std::string& AppId() const;
 
-  apps::mojom::OptionalBool Camera() const;
+  std::optional<bool> Camera() const;
   bool CameraChanged() const;
 
-  apps::mojom::OptionalBool Microphone() const;
+  std::optional<bool> Microphone() const;
   bool MicrophoneChanged() const;
 
   const ::AccountId& AccountId() const;
 
- private:
-  raw_ptr<const apps::mojom::CapabilityAccess> state_;
-  raw_ptr<const apps::mojom::CapabilityAccess> delta_;
+  // Returns true if this update is accessing any capability (i.e. Camera() or
+  // Microphone() returns true).
+  bool IsAccessingAnyCapability() const;
 
-  const ::AccountId& account_id_;
+ private:
+  raw_ptr<const CapabilityAccess> state_ = nullptr;
+  raw_ptr<const CapabilityAccess, DanglingUntriaged> delta_ = nullptr;
+
+  const raw_ref<const ::AccountId> account_id_;
 };
+
+// For logging and debug purposes.
+COMPONENT_EXPORT(APP_UPDATE)
+std::ostream& operator<<(std::ostream& out,
+                         const CapabilityAccessUpdate& update);
 
 }  // namespace apps
 

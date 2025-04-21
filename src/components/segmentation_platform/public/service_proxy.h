@@ -1,14 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_SERVICE_PROXY_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_SERVICE_PROXY_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/observer_list_types.h"
+#include "base/time/time.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace segmentation_platform {
@@ -24,21 +26,24 @@ class ServiceProxy {
     SegmentStatus(SegmentId segment_id,
                   const std::string& segment_metadata,
                   const std::string& prediction_result,
+                  base::Time prediction_timestamp,
                   bool can_execute_segment);
     SegmentId segment_id;
     std::string segment_metadata;
     std::string prediction_result;
+    base::Time prediction_timestamp;
     bool can_execute_segment;
   };
 
   // Information about a client to the segmentation platform.
   struct ClientInfo {
-    ClientInfo(const std::string& segmentation_key, SegmentId selected_segment);
+    ClientInfo(const std::string& segmentation_key,
+               std::optional<SegmentId> selected_segment);
     ~ClientInfo();
     ClientInfo(const ClientInfo& other);
 
     std::string segmentation_key;
-    SegmentId selected_segment;
+    std::optional<SegmentId> selected_segment;
     std::vector<SegmentStatus> segment_status;
   };
 

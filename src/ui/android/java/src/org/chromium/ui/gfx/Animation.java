@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,18 @@ package org.chromium.ui.gfx;
 
 import android.provider.Settings;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * Provides utility methods relating to system animation state on the current platform (i.e. Android
  * in this case). See ui/gfx/animation/animation_android.cc.
  */
 @JNINamespace("gfx")
+@NullMarked
 public class Animation {
     @CalledByNative
     private static boolean prefersReducedMotion() {
@@ -22,8 +25,10 @@ public class Animation {
         // users that don't have ANIMATOR_DURATION_SCALE defined.
         final float defaultScale = 1f;
         float durationScale =
-                Settings.Global.getFloat(ContextUtils.getApplicationContext().getContentResolver(),
-                        Settings.Global.ANIMATOR_DURATION_SCALE, defaultScale);
+                Settings.Global.getFloat(
+                        ContextUtils.getApplicationContext().getContentResolver(),
+                        Settings.Global.ANIMATOR_DURATION_SCALE,
+                        defaultScale);
         return durationScale == 0.0;
     }
 }

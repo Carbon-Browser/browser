@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 #include "net/base/net_export.h"
 #include "net/log/net_log_with_source.h"
+#include "url/scheme_host_port.h"
 
 namespace net {
 
-class HostPortPair;
 class HostResolver;
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 class URLRequest;
 
 namespace nqe::internal {
@@ -38,8 +38,8 @@ NET_EXPORT_PRIVATE bool IsRequestForPrivateHost(const URLRequest& request,
 // for testing.
 NET_EXPORT_PRIVATE bool IsPrivateHostForTesting(
     HostResolver* host_resolver,
-    const HostPortPair& host_port_pair,
-    const NetworkIsolationKey& network_isolation_key);
+    url::SchemeHostPort scheme_host_port,
+    const NetworkAnonymizationKey& network_anonymization_key);
 
 }  // namespace nqe::internal
 

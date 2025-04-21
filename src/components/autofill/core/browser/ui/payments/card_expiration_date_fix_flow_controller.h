@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 
@@ -18,7 +18,7 @@ namespace autofill {
 // Only used on mobile.
 class CardExpirationDateFixFlowController {
  public:
-  virtual ~CardExpirationDateFixFlowController() {}
+  virtual ~CardExpirationDateFixFlowController() = default;
 
   // Interaction.
   virtual void OnAccepted(const std::u16string& month,

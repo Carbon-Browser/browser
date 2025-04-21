@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace arc {
+namespace arc::input_overlay {
 
 class TouchIdManagerTest : public testing::Test {
  protected:
   TouchIdManagerTest() = default;
   bool IsTouchIdUsed(int touch_id) {
-    if (touch_id == 0 && TouchIdManager::GetInstance()->touch_ids_ == 1)
+    if (touch_id == 0 && TouchIdManager::GetInstance()->touch_ids_ == 1) {
       return true;
+    }
     return TouchIdManager::GetInstance()->touch_ids_ & (1 << touch_id);
   }
 
@@ -66,4 +67,4 @@ TEST_F(TouchIdManagerTest, TestIdManage) {
   EXPECT_TRUE(IsTouchIDsEqual(0));
 }
 
-}  // namespace arc
+}  // namespace arc::input_overlay

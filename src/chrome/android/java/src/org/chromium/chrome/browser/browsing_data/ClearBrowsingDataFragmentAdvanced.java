@@ -1,15 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browsing_data;
 
 import android.os.Bundle;
+import android.text.TextUtils;
 
 import androidx.preference.Preference;
 
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.chrome.browser.quick_delete.QuickDeleteController;
+import org.chromium.chrome.browser.searchwidget.SearchActivity;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,9 +37,6 @@ public class ClearBrowsingDataFragmentAdvanced extends ClearBrowsingDataFragment
         if (nonGoogleSearchHistoryTextPref != null) {
             getPreferenceScreen().removePreference(nonGoogleSearchHistoryTextPref);
         }
-        // TODO(https://crbug.com/1334920): Change after follow up discussion with privacy team.
-        Preference signOutOfChromeTextPref =
-                findPreference(ClearBrowsingDataFragment.PREF_SIGN_OUT_OF_CHROME_TEXT);
     }
 
     @Override
@@ -45,17 +45,38 @@ public class ClearBrowsingDataFragmentAdvanced extends ClearBrowsingDataFragment
     }
 
     @Override
-    protected List<Integer> getDialogOptions() {
-        return Arrays.asList(DialogOption.CLEAR_HISTORY, DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
-                DialogOption.CLEAR_CACHE, DialogOption.CLEAR_PASSWORDS,
-                DialogOption.CLEAR_FORM_DATA, DialogOption.CLEAR_SITE_SETTINGS);
+    protected List<Integer> getDialogOptions(Bundle fragmentArgs) {
+        String referrer =
+                fragmentArgs.getString(
+                        ClearBrowsingDataFragment.CLEAR_BROWSING_DATA_REFERRER, null);
+
+        if (QuickDeleteController.isQuickDeleteFollowupEnabled()
+                && !TextUtils.equals(referrer, SearchActivity.class.getName())) {
+            return Arrays.asList(
+                    DialogOption.CLEAR_HISTORY,
+                    DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
+                    DialogOption.CLEAR_CACHE,
+                    DialogOption.CLEAR_TABS,
+                    DialogOption.CLEAR_PASSWORDS,
+                    DialogOption.CLEAR_FORM_DATA,
+                    DialogOption.CLEAR_SITE_SETTINGS);
+        }
+        return Arrays.asList(
+                DialogOption.CLEAR_HISTORY,
+                DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
+                DialogOption.CLEAR_CACHE,
+                DialogOption.CLEAR_PASSWORDS,
+                DialogOption.CLEAR_FORM_DATA,
+                DialogOption.CLEAR_SITE_SETTINGS);
     }
 
     @Override
     protected void onClearBrowsingData() {
         super.onClearBrowsingData();
-        RecordHistogram.recordEnumeratedHistogram("History.ClearBrowsingData.UserDeletedFromTab",
-                ClearBrowsingDataTab.ADVANCED, ClearBrowsingDataTab.NUM_TYPES);
+        RecordHistogram.recordEnumeratedHistogram(
+                "History.ClearBrowsingData.UserDeletedFromTab",
+                ClearBrowsingDataTab.ADVANCED,
+                ClearBrowsingDataTab.MAX_VALUE + 1);
         RecordUserAction.record("ClearBrowsingData_AdvancedTab");
     }
 }

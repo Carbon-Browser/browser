@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,12 @@ namespace sync_file_system {
 
 class FileStatusObserver {
  public:
-  FileStatusObserver() {}
+  FileStatusObserver() = default;
 
   FileStatusObserver(const FileStatusObserver&) = delete;
   FileStatusObserver& operator=(const FileStatusObserver&) = delete;
 
-  virtual ~FileStatusObserver() {}
+  virtual ~FileStatusObserver() = default;
 
   virtual void OnFileStatusChanged(const storage::FileSystemURL& url,
                                    SyncFileType file_type,

@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_SIMPLE_THREAD_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_SIMPLE_THREAD_IMPL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/simple_thread.h"
 #include "base/time/time.h"
@@ -35,15 +36,10 @@ class PLATFORM_EXPORT SimpleThreadImpl : public SimpleThread {
   void Run() override;
 
   // Owner of this class.
-  ThreadPoolManager* thread_pool_manager_ = nullptr;
+  raw_ptr<ThreadPoolManager> thread_pool_manager_ = nullptr;
 
   // Time in which the thread is created.
   base::TimeTicks initial_time_;
-
-  // The object pointed to by |thread_manager_| is created and destructed from
-  // the Run function. This is necessary since it has to be constructed from the
-  // thread it should be bound to and destructed from the same thread.
-  ThreadManager* thread_manager_ = nullptr;
 
   // Used by the Run function to only terminate when |this| is destructed, and
   // this is used so that |thread_data_| will live as long as |this|.

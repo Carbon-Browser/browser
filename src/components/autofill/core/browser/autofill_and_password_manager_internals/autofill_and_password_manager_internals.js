@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // <if expr="is_ios">
 import 'chrome://resources/js/ios/web_ui.js';
+
 // </if>
 
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
+import {$} from 'chrome://resources/js/util.js';
 
 // By default this page only records metrics for a given period of time in order
 // to not waste too much memory. This constant defines the default period until
@@ -55,7 +56,7 @@ let autoScrollActive = false;  // True iff autoscroll is currently scrolling.
 let autoScrollTimer = null;    // Timer for resetting |autoScrollActive|.
 
 function needsScrollDown() {
-  const checkbox = document.getElementById('enable-autoscroll');
+  const checkbox = document.getElementById('EnableAutoscroll');
   return autoScrollActive || (isScrolledDown() && checkbox && checkbox.checked);
 }
 
@@ -109,21 +110,28 @@ function getUrlHashParam(key) {
 // - value: name of tag | text content
 // - children (opt): list of child nodes
 // - attributes (opt): dictionary of name/value pairs
-function nodeToDomNode(node) {
+// If a node contains PII data, all its children texts are stripped, unless it
+// is explicit set by the user that PII values can be displayed.
+function nodeToDomNode(node, parentContainsPII = false) {
   if (node.type === 'text') {
-    return document.createTextNode(node.value);
+    const displayPIIEnabled = document.getElementById('DisplayPii').checked;
+    const canDisplayNodeValue = !parentContainsPII || displayPIIEnabled;
+    return document.createTextNode(
+        canDisplayNodeValue ? node.value : 'PII stripped');
   }
   // Else the node is of type 'element'.
   const domNode = document.createElement(node.value);
-  if ('children' in node) {
-    node.children.forEach((child) => {
-      domNode.appendChild(nodeToDomNode(child));
-    });
-  }
   if ('attributes' in node) {
     for (const attribute in node.attributes) {
       domNode.setAttribute(attribute, node.attributes[attribute]);
     }
+  }
+  if ('children' in node) {
+    parentContainsPII |=
+        node.attributes && node.attributes['data-pii'] === 'true';
+    node.children.forEach((child) => {
+      domNode.appendChild(nodeToDomNode(child, parentContainsPII));
+    });
   }
   return domNode;
 }
@@ -174,9 +182,9 @@ function setUpStopRecording() {
   let countdown = undefined;
 
   const currentlyRecordingChkBox =
-      document.getElementById('currently-recording');
+      document.getElementById('CurrentlyRecording');
   const autoStopRecordingChkBox =
-      document.getElementById('automatically-stop-recording');
+      document.getElementById('AutomaticallyStopRecording');
 
   // Formats a number of seconds into a [M]M:SS format.
   const secondsToString = (seconds) => {
@@ -192,7 +200,7 @@ function setUpStopRecording() {
     document.getElementById('stop-recording-time').innerText =
         secondsToString(remainingSeconds);
 
-    if (remainingSeconds == 0) {
+    if (remainingSeconds === 0) {
       recordLogs = false;
       currentlyRecordingChkBox.checked = false;
       resetTimeout();
@@ -242,8 +250,10 @@ function setUpAutofillInternals() {
       captured when all autofill-internals pages are closed.';
   document.getElementById('logging-note-incognito').innerText =
       'Captured autofill logs are not available in Incognito.';
-  setUpLogDisplayConfig();
+  setUpScopeCheckboxes();
+  setUpSettingCheckboxe();
   setUpMarker();
+  setUpSubmittedFormsJSONDataDownload();
   setUpDownload('autofill');
   setUpStopRecording();
 }
@@ -257,11 +267,18 @@ function setUpPasswordManagerInternals() {
       no longer captured when all password-manager-internals pages are closed.';
   document.getElementById('logging-note-incognito').innerText =
       'Captured password manager logs are not available in Incognito.';
+  setUpSettingCheckboxe();
   setUpMarker();
   setUpDownload('password-manager');
   setUpStopRecording();
-  addWebUIListener(
+  // <if expr="is_android">
+  document.getElementById('reset-upm-eviction-fake-button').style.display =
+      'inline';
+  addWebUiListener(
       'enable-reset-upm-eviction-button', enableResetUpmEvictionButton);
+  document.getElementById('reset-account-storage-notice-fake-button')
+      .style.display = 'inline';
+  // </if>
 }
 
 function enableResetCacheButton() {
@@ -269,8 +286,8 @@ function enableResetCacheButton() {
 }
 
 function enableResetUpmEvictionButton(isEnabled) {
-  document.getElementById('reset-upm-eviction-fake-button').style.display =
-      isEnabled ? 'inline' : 'none';
+  document.getElementById('reset-upm-eviction-fake-button').innerText =
+      isEnabled ? 'Reset UPM eviction' : 'Evict from UPM';
 }
 
 function notifyAboutIncognito(isIncognito) {
@@ -350,40 +367,195 @@ function setUpDownload(moduleName) {
   // </if>
 }
 
-// Sets up the top bar with checkboxes to show/hide the different sorts of log
-// event types, a checkbox to enable/disable autoscroll.
-function setUpLogDisplayConfig() {
-  const SCOPES = [
-    'Context',
-    'Parsing',
-    'AbortParsing',
-    'Filling',
-    'Submission',
-    'AutofillServer',
-    'Metrics',
-    'AddressProfileFormImport',
-    'WebsiteModifiedFieldValue',
-  ];
-  const logDiv = document.getElementById('log-entries');
-  const autoScrollInput = document.getElementById('enable-autoscroll');
-  const checkboxPlaceholder = document.getElementById('checkbox-placeholder');
+// Retrieve the top level data about a submitted form:
+// 1. Timestamp
+// 2. Renderer id
+// 3. URL
+//
+// Note that a form is not a html <form /> tag, but a <div> whose
+// scope attribute is "Submission". Such a div contains children information
+// related to a submitted form detected by Autofill.
+function getSubmittedFormTopLevelData(form) {
+  const formTopLevelData = {};
+  const formLevelDataOfInterest = new Set(['Renderer id:', 'URL:']);
+  const childrenTableElements = form.getElementsByTagName('td');
+  for (const childTableElement of childrenTableElements) {
+    if (!formLevelDataOfInterest.has(childTableElement.innerText)) {
+      continue;
+    }
 
-  // Initialize the auto-scroll checkbox.
-  autoScrollInput.checked = getUrlHashParam('autoscroll') !== 'n';
-  autoScrollInput.addEventListener('change', (event) => {
-    setUrlHashParam('autoscroll', autoScrollInput.checked ? 'y' : 'n');
+    formTopLevelData[childTableElement.innerText] =
+        childTableElement.nextSibling.innerText;
+    // If all interested top level entries were found, we can early return.
+    if (Object.keys(formTopLevelData).length === formLevelDataOfInterest.size) {
+      break;
+    }
+  }
+
+  // Include the submission timestamp information.
+  const getSubmissionTimestamp = () => {
+    // Find the substring "timestamp: 123456789";
+    const timestampSection = form.textContent.match(/timestamp: ([0-9]+)/);
+    return timestampSection ? timestampSection[1] : 'Not found';
+  };
+
+  return {timestamp: getSubmissionTimestamp(), ...formTopLevelData};
+}
+
+// Retrieve the field level data about the submitted form.
+function getSubmittedFormFieldsData(form) {
+  // The children are organized inside <td> tags.
+  const childrenTableElements = form.getElementsByTagName('td');
+  // Regex to match "Field: " strings.
+  const fieldRegexPattern = /Field\s[0-9]+:/;
+  // As of the time of writing this CL, only labels and values are interesting
+  // to us.
+  const fieldsOfInterest = new Set(['Label:', 'Value:']);
+
+  const fieldsData = [];
+  for (const childTableElement of childrenTableElements) {
+    if (!fieldRegexPattern.test(childTableElement.innerText)) {
+      continue;
+    }
+
+    // The next sibling contains the actual data name and value we are
+    // interested in.
+    //  <td> Field 1:</td> <- Matched by the regex above.
+    //  <td> <- Next sibling
+    //    <table>
+    //      </table>
+    //        <tr> <- children containing the information we want.
+    //          <td>Label: </td>
+    //          <td>First name</td>
+    //        </tr>
+    //      </table>
+    //    </table>
+    //  </td>
+    const elementRows =
+        childTableElement.nextSibling.getElementsByTagName('tr');
+    const fieldData = {};
+    for (const row of elementRows) {
+      // It is expected two children, in the example above that would be:
+      // <td>Label: </td>
+      // <td>First name</td>
+      if (row.children.length !== 2) {
+        continue;
+      }
+
+      let name = row.children[0].innerText;
+      if (!fieldsOfInterest.has(name)) {
+        continue;
+      }
+
+      // Remove trailing ":"
+      name = name.substring(0, name.length - 1);
+      const value = row.children[1].innerText;
+      fieldData[name] = value;
+    }
+    fieldsData.push(fieldData);
+  }
+  return fieldsData;
+}
+
+function getSubmittedFormData(form) {
+  const formData = getSubmittedFormTopLevelData(form);
+  const formFieldsData = getSubmittedFormFieldsData(form);
+  return {
+    ...formData,
+    fields: formFieldsData,
+  };
+}
+
+// Setup a (fake) download button to download a json file containing information
+// about the submitted forms.
+function setUpSubmittedFormsJSONDataDownload() {
+  const downloadSubmittedFormJSONDataButton =
+      document.getElementById('download-submitted-forms-json-data-fake-button');
+  downloadSubmittedFormJSONDataButton.style.display = 'inline';
+  downloadSubmittedFormJSONDataButton.addEventListener('click', () => {
+    const formsSubmittedSection =
+        document.querySelectorAll('[scope="Submission"]');
+    const parsedFormData = [...formsSubmittedSection].map(
+        submittedForm => getSubmittedFormData(submittedForm));
+    const dataStr = 'data:application/json;charset=utf-8,' +
+        encodeURIComponent(JSON.stringify(parsedFormData, null, 2));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    const dateString = new Date()
+                           .toISOString()
+                           .replace(/T/g, '_')
+                           .replace(/\..+/, '')
+                           .replace(/:/g, '-');
+    const filename = `autofill-internals-submitted-forms-${dateString}.json`;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   });
+  // <if expr="is_ios">
+  // Hide this until downloading a file works on iOS, see
+  // https://bugs.webkit.org/show_bug.cgi?id=167341
+  // https://bugs.chromium.org/p/chromium/issues/detail?id=1252380
+  downloadSubmittedFormJSONData.style = 'display: none';
+  // </if>
+}
+
+// Creates a checkbox for a given JSON struct `info`. Given
+//   {id: "Foo", label: "Bar", uncheckedByDefault: someBool }
+// this creates
+//   <label><input type=checkbox id="Foo"> Bar</label>
+// and returns the <input> element.
+//
+// Whether the checkbox is checked depends on the current URL's hash param or,
+// as a fallback, `info.uncheckedByDefault`.
+//
+// `info.id` is mandatory.
+// `info.label` defaults to `info.id`.
+// `info.uncheckedByDefault` defaults to false.
+function createCheckbox(info) {
+  const input = document.createElement('input');
+  input.setAttribute('type', 'checkbox');
+  input.setAttribute('id', info.id);
+  input.checked = info.uncheckedByDefault ? getUrlHashParam(info.id) === 'y' :
+                                            getUrlHashParam(info.id) !== 'n';
+  input.addEventListener('change', (event) => {
+    setUrlHashParam(info.id, input.checked ? 'y' : 'n');
+  });
+  const label = document.createElement('label');
+  label.appendChild(input);
+  label.appendChild(document.createTextNode(' ' + (info.label || info.id)));
+  return input;
+}
+
+// Sets up the top bar with checkboxes to show/hide the different sorts of log
+// event types.
+function setUpScopeCheckboxes() {
+  const logDiv = document.getElementById('log-entries');
+  const scopesPlaceholder =
+      document.getElementById('scopes-checkbox-placeholder');
 
   // Create and initialize filter checkboxes: remove/add hide-<Scope> class to
   // |logDiv| when (un)checked.
+  const SCOPES = [
+    {id: 'Context'},
+    {id: 'Parsing'},
+    {id: 'AbortParsing'},
+    {id: 'Filling'},
+    {id: 'Submission'},
+    {id: 'AutofillServer'},
+    {id: 'Metrics'},
+    {id: 'AddressProfileFormImport'},
+    {id: 'WebsiteModifiedFieldValue'},
+    {id: 'FastCheckout', uncheckedByDefault: true},
+    {id: 'TouchToFill'},
+    {id: 'AutofillAi'},
+  ];
   for (const scope of SCOPES) {
-    const input = document.createElement('input');
-    input.setAttribute('type', 'checkbox');
-    input.setAttribute('id', `checkbox-${scope}`);
-    input.checked = getUrlHashParam(scope) !== 'n';
+    const input = createCheckbox(scope);
+    scopesPlaceholder.appendChild(input.parentElement);
     function changeHandler() {
-      setUrlHashParam(scope, input.checked ? 'y' : 'n');
-      const cls = `hide-${scope}`;
+      const cls = `hide-${scope.id}`;
       const scrollAfterInsert = needsScrollDown();
       if (!input.checked) {
         logDiv.classList.add(cls);
@@ -396,21 +568,44 @@ function setUpLogDisplayConfig() {
     }
     input.addEventListener('change', changeHandler);
     changeHandler();  // Call once to initialize |logDiv|'s classes.
-    const label = document.createElement('label');
-    label.appendChild(input);
-    label.appendChild(document.createTextNode(' ' + scope));
-    checkboxPlaceholder.appendChild(label);
+  }
+}
+
+// Sets up another bar of checkboxes to configure the page's behavior.
+function setUpSettingCheckboxe() {
+  const logDiv = document.getElementById('log-entries');
+  const settingsPlaceholder =
+      document.getElementById('settings-checkbox-placeholder');
+
+  // Create and initialize the settings checkboxes.
+  const SETTINGS = [
+    {id: 'EnableAutoscroll', label: 'Scroll down'},
+    {id: 'CurrentlyRecording', label: 'Record new events'},
+    {id: 'AutomaticallyStopRecording', label: 'Stop recording in '},
+    {id: 'DisplayPii', label: 'Display PII', uncheckedByDefault: true},
+  ];
+  for (const setting of SETTINGS) {
+    const input = createCheckbox(setting);
+    settingsPlaceholder.appendChild(input.parentElement);
+  }
+  {
+    // Add the timestamp for AutomaticallyStopRecording.
+    const span = document.createElement('span');
+    span.id = 'stop-recording-time';
+    span.innerText = 'M:SS';
+    document.getElementById('AutomaticallyStopRecording')
+        .parentElement.appendChild(span);
   }
 }
 
 document.addEventListener('DOMContentLoaded', function(event) {
-  addWebUIListener('enable-reset-cache-button', enableResetCacheButton);
-  addWebUIListener('notify-about-incognito', notifyAboutIncognito);
-  addWebUIListener('notify-about-variations', notifyAboutVariations);
-  addWebUIListener('notify-reset-done', message => showModalDialog(message));
-  addWebUIListener('add-structured-log', addStructuredLog);
-  addWebUIListener('setup-autofill-internals', setUpAutofillInternals);
-  addWebUIListener(
+  addWebUiListener('enable-reset-cache-button', enableResetCacheButton);
+  addWebUiListener('notify-about-incognito', notifyAboutIncognito);
+  addWebUiListener('notify-about-variations', notifyAboutVariations);
+  addWebUiListener('notify-reset-done', message => showModalDialog(message));
+  addWebUiListener('add-structured-log', addStructuredLog);
+  addWebUiListener('setup-autofill-internals', setUpAutofillInternals);
+  addWebUiListener(
       'setup-password-manager-internals', setUpPasswordManagerInternals);
 
   chrome.send('loaded');
@@ -425,6 +620,11 @@ document.addEventListener('DOMContentLoaded', function(event) {
       document.getElementById('reset-upm-eviction-fake-button');
   resetUpmEvictionButton.addEventListener('click', () => {
     chrome.send('resetUpmEviction');
-    showModalDialog('UPM re-enabled. Please, restart Chrome.');
+  });
+
+  const resetAccountStorageNoticeButton =
+      document.getElementById('reset-account-storage-notice-fake-button');
+  resetAccountStorageNoticeButton.addEventListener('click', () => {
+    chrome.send('resetAccountStorageNotice');
   });
 });

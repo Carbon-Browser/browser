@@ -14,7 +14,7 @@ BEFORE:
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='positionedAndTransformed fixed'",
+      "name": "LayoutBlockFlow (positioned) DIV class='positionedAndTransformed fixed'",
       "position": [0, 100],
       "bounds": [50, 50],
       "contentsOpaque": true,
@@ -24,18 +24,19 @@ BEFORE:
     {
       "name": "HorizontalScrollbar",
       "position": [0, 585],
-      "bounds": [785, 15]
+      "bounds": [785, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 585]
+      "bounds": [15, 585],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
+      "bounds": [15, 15]
     }
   ],
   "transforms": [
@@ -62,7 +63,7 @@ AFTER:
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='positionedAndTransformed fixed'",
+      "name": "LayoutBlockFlow (positioned) DIV class='positionedAndTransformed fixed'",
       "position": [0, 100],
       "bounds": [50, 50],
       "contentsOpaque": true,
@@ -72,18 +73,19 @@ AFTER:
     {
       "name": "HorizontalScrollbar",
       "position": [0, 585],
-      "bounds": [785, 15]
+      "bounds": [785, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 585]
+      "bounds": [15, 585],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
+      "bounds": [15, 15]
     }
   ],
   "transforms": [

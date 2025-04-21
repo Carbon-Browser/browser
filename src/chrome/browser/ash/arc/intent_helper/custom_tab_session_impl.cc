@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "ash/components/arc/intent_helper/custom_tab.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "components/arc/intent_helper/custom_tab.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/aura/window.h"
 
@@ -45,9 +45,8 @@ CustomTabSessionImpl::~CustomTabSessionImpl() {
   auto* tab_strip_model = browser_->tab_strip_model();
   DCHECK(tab_strip_model);
   tab_strip_model->RemoveObserver(this);
-  int index = tab_strip_model->GetIndexOfWebContents(
-      tab_strip_model->GetActiveWebContents());
-  tab_strip_model->DetachAndDeleteWebContentsAt(index);
+  tab_strip_model->DetachAndDeleteWebContentsAt(
+      tab_strip_model->active_index());
 }
 
 void CustomTabSessionImpl::OnOpenInChromeClicked() {

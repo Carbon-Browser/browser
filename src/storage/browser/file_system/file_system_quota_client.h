@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemQuotaClient
 
  private:
   base::SequencedTaskRunner* file_task_runner() const;
+
+  // Gets available FileSystemTypes for a FileSystemContext given a StorageType.
+  std::vector<FileSystemType> GetFileSystemTypes(
+      blink::mojom::StorageType) const;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

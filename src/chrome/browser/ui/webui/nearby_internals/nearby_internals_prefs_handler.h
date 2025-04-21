@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_NEARBY_INTERNALS_PREFS_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_NEARBY_INTERNALS_PREFS_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_ui_message_handler.h"
@@ -32,7 +33,7 @@ class NearbyInternalsPrefsHandler : public content::WebUIMessageHandler {
   // back into a state of before they have touched the feature.
   void HandleClearNearbyPrefs(const base::Value::List& args);
 
-  PrefService* pref_service_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   base::WeakPtrFactory<NearbyInternalsPrefsHandler> weak_ptr_factory_{this};
 };

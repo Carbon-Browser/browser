@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define CONTENT_BROWSER_MEDIA_AUDIO_LOOPBACK_STREAM_BROKER_H_
 
 #include <cstdint>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/media/audio_muting_session.h"
-#include "content/browser/media/audio_stream_broker.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/audio_stream_broker.h"
 #include "media/base/audio_parameters.h"
 #include "media/mojo/mojom/audio_data_pipe.mojom.h"
 #include "media/mojo/mojom/audio_input_stream.mojom.h"
@@ -19,13 +20,12 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace audio {
+namespace media {
 namespace mojom {
 class AudioStreamFactory;
 }
-}  // namespace audio
+}  // namespace media
 
 namespace content {
 
@@ -64,7 +64,7 @@ class CONTENT_EXPORT AudioLoopbackStreamBroker final
 
  private:
   void StreamCreated(mojo::PendingRemote<media::mojom::AudioInputStream> stream,
-                     media::mojom::ReadOnlyAudioDataPipePtr data_pipe);
+                     media::mojom::ReadWriteAudioDataPipePtr data_pipe);
   void Cleanup();
 
   // Owner of the output streams to be looped back.
@@ -77,7 +77,7 @@ class CONTENT_EXPORT AudioLoopbackStreamBroker final
 
   // Constructed only if the loopback source playback should be muted while the
   // loopback stream is running.
-  absl::optional<AudioMutingSession> muter_;
+  std::optional<AudioMutingSession> muter_;
 
   mojo::Remote<blink::mojom::RendererAudioInputStreamFactoryClient>
       renderer_factory_client_;

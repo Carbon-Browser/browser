@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,40 +13,37 @@
 #include "base/process/process.h"
 #include "chrome/test/chromedriver/chrome/chrome_impl.h"
 #include "chrome/test/chromedriver/chrome/scoped_temp_dir_with_retry.h"
-#include "chrome/test/chromedriver/net/sync_websocket_factory.h"
 
 namespace base {
 class TimeDelta;
 }
 
 class DevToolsClient;
-class DevToolsHttpClient;
 class Status;
-class WebView;
-struct DeviceMetrics;
 
 class ChromeDesktopImpl : public ChromeImpl {
  public:
-  ChromeDesktopImpl(std::unique_ptr<DevToolsHttpClient> http_client,
+  ChromeDesktopImpl(BrowserInfo browser_info,
+                    std::set<WebViewInfo::Type> window_types,
                     std::unique_ptr<DevToolsClient> websocket_client,
                     std::vector<std::unique_ptr<DevToolsEventListener>>
                         devtools_event_listeners,
-                    std::unique_ptr<DeviceMetrics> device_metrics,
-                    SyncWebSocketFactory socket_factory,
+                    std::optional<MobileDevice> mobile_device,
                     std::string page_load_strategy,
                     base::Process process,
                     const base::CommandLine& command,
                     base::ScopedTempDir* user_data_dir,
                     base::ScopedTempDir* extension_dir,
-                    bool network_emulation_enabled);
+                    bool network_emulation_enabled,
+                    bool autoaccept_beforeunload,
+                    bool enable_extension_targets);
   ~ChromeDesktopImpl() override;
 
-  // Waits for a page with the given URL to appear and finish loading.
-  // Returns an error if the timeout is exceeded.
-  Status WaitForPageToLoad(const std::string& url,
-                           const base::TimeDelta& timeout,
-                           std::unique_ptr<WebView>* web_view,
-                           bool w3c_compliant);
+  // Waits for an extension's page with the given URL to appear and finish
+  // loading. Returns an error if the timeout is exceeded.
+  Status WaitForExtensionPageToLoad(const std::string& url,
+                                    const base::TimeDelta& timeout,
+                                    bool w3c_compliant);
 
   // Overridden from Chrome:
   Status GetAsDesktop(ChromeDesktopImpl** desktop) override;

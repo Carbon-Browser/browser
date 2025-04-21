@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class Json3OutputTest(unittest.TestCase):
     self.assertNotIn('shard', test_result)
     self.assertEqual(results['num_failures_by_type'], {'PASS': 1})
 
-  # TODO(crbug.com/983993): Remove this test when all stories have
+  # TODO(crbug.com/40636038): Remove this test when all stories have
   # url-friendly names without special characters.
   def testUrlAsStoryName(self):
     results = self.Convert([

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,7 @@ class TestChildLauncher {
   // test's main broker node. Returns the PID of the new child process. This
   // call either succeeds or crashes, so the return PID will always be valid.
   pid_t Launch(std::string_view node_name,
+               std::string_view feature_set,
                reference_drivers::FileDescriptor socket);
 };
 

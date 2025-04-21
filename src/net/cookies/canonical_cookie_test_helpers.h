@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,12 @@ MATCHER_P2(MatchesCookieNameValue, name, value, "") {
   const CanonicalCookie& cookie = arg;
   return testing::ExplainMatchResult(name, cookie.Name(), result_listener) &&
          testing::ExplainMatchResult(value, cookie.Value(), result_listener);
+}
+
+MATCHER_P2(MatchesCookieWithNameSourceType, name, source_type, "") {
+  return testing::ExplainMatchResult(name, arg.Name(), result_listener) &&
+         testing::ExplainMatchResult(source_type, arg.SourceType(),
+                                     result_listener);
 }
 
 MATCHER_P(MatchesCookieAccessWithName, name, "") {
@@ -82,11 +88,11 @@ MATCHER(IsInclude, "") {
   return testing::ExplainMatchResult(true, status.IsInclude(), result_listener);
 }
 
-// Helper for checking that status.HasDowngradeWarning() == true.
-MATCHER(HasDowngradeWarning, "") {
+// Helper for checking that status.HasSchemefulDowngradeWarning() == true.
+MATCHER(HasSchemefulDowngradeWarning, "") {
   CookieInclusionStatus status = arg;
-  return testing::ExplainMatchResult(true, status.HasDowngradeWarning(),
-                                     result_listener);
+  return testing::ExplainMatchResult(
+      true, status.HasSchemefulDowngradeWarning(), result_listener);
 }
 
 // Helper for checking that status.HasWarningReason(reason) == true.
@@ -100,6 +106,13 @@ MATCHER_P(HasWarningReason, reason, "") {
 MATCHER_P(HasExclusionReason, reason, "") {
   CookieInclusionStatus status = arg;
   return testing::ExplainMatchResult(true, status.HasExclusionReason(reason),
+                                     result_listener);
+}
+
+// Helper for checking that status.exemption_reason() == reason.
+MATCHER_P(HasExactlyExemptionReason, reason, "") {
+  CookieInclusionStatus status = arg;
+  return testing::ExplainMatchResult(true, status.exemption_reason() == reason,
                                      result_listener);
 }
 

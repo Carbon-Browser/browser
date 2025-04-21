@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,6 +66,10 @@ const CastDecryptConfig* CastDecoderBufferImpl::decrypt_config() const {
 
 bool CastDecoderBufferImpl::end_of_stream() const {
   return data_ == nullptr;
+}
+
+bool CastDecoderBufferImpl::is_key_frame() const {
+  return false;
 }
 
 }  // namespace media

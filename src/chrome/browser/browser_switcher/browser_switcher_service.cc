@@ -1,18 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/browser_switcher/browser_switcher_service.h"
 
-#include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "base/syslog_logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/browser_switcher/alternative_browser_driver.h"
 #include "chrome/browser/browser_switcher/browser_switcher_prefs.h"
 #include "chrome/browser/browser_switcher/browser_switcher_sitelist.h"
@@ -27,7 +27,6 @@
 #include "net/base/load_flags.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace browser_switcher {
 
@@ -112,7 +111,7 @@ XmlDownloader::XmlDownloader(Profile* profile,
 
   for (auto& source : sources_) {
     if (!source.url.is_valid())
-      DoneParsing(&source, ParsedXml({}, {}, absl::nullopt));
+      DoneParsing(&source, ParsedXml({}, {}, std::nullopt));
   }
 
   // Fetch in 1 minute.
@@ -122,9 +121,9 @@ XmlDownloader::XmlDownloader(Profile* profile,
 XmlDownloader::~XmlDownloader() = default;
 
 bool XmlDownloader::HasValidSources() const {
-  return std::any_of(
-      sources_.begin(), sources_.end(),
-      [](const RulesetSource& source) { return source.url.is_valid(); });
+  return base::ranges::any_of(sources_, [](const RulesetSource& source) {
+    return source.url.is_valid();
+  });
 }
 
 base::Time XmlDownloader::last_refresh_time() const {
@@ -221,7 +220,7 @@ void XmlDownloader::ScheduleRefresh(base::TimeDelta delay) {
     return;
 
   // Refresh in 30 minutes, so the sitelists are never too stale.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&XmlDownloader::Refresh, weak_ptr_factory_.GetWeakPtr()),
       delay);
@@ -356,8 +355,7 @@ void BrowserSwitcherService::OnBrowserSwitcherPrefsChanged(
   // Record |BrowserSwitcher.AlternativeBrowser| when the
   // |BrowserSwitcherEnabled| or |AlternativeBrowserPath| policies change.
   bool should_record_metrics =
-      changed_prefs.end() !=
-      base::ranges::find_if(changed_prefs, [](const std::string& pref) {
+      base::ranges::any_of(changed_prefs, [](const std::string& pref) {
         return pref == prefs::kEnabled ||
                pref == prefs::kAlternativeBrowserPath;
       });

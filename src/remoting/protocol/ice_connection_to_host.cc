@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/audio_decode_scheduler.h"
 #include "remoting/protocol/audio_reader.h"
@@ -25,8 +26,7 @@
 #include "remoting/protocol/transport_context.h"
 #include "remoting/protocol/video_renderer.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 IceConnectionToHost::IceConnectionToHost() = default;
 
@@ -50,11 +50,16 @@ void IceConnectionToHost::Connect(
 
   event_callback_ = event_callback;
 
-  SetState(CONNECTING, OK);
+  SetState(CONNECTING, ErrorCode::OK);
 }
 
 void IceConnectionToHost::Disconnect(ErrorCode error) {
   session_->Close(error);
+}
+
+void IceConnectionToHost::ApplyNetworkSettings(
+    const NetworkSettings& settings) {
+  transport_->ApplyNetworkSettings(settings);
 }
 
 const SessionConfig& IceConnectionToHost::config() {
@@ -109,7 +114,7 @@ void IceConnectionToHost::OnSessionStateChange(Session::State state) {
       break;
 
     case Session::AUTHENTICATED:
-      SetState(AUTHENTICATED, OK);
+      SetState(AUTHENTICATED, ErrorCode::OK);
 
       // Setup control channel.
       control_dispatcher_ = std::make_unique<ClientControlDispatcher>();
@@ -144,7 +149,7 @@ void IceConnectionToHost::OnSessionStateChange(Session::State state) {
 
     case Session::CLOSED:
       CloseChannels();
-      SetState(CLOSED, OK);
+      SetState(CLOSED, ErrorCode::OK);
       break;
 
     case Session::FAILED:
@@ -157,8 +162,9 @@ void IceConnectionToHost::OnSessionStateChange(Session::State state) {
       // versions may not be in sync. It should be easy to do after we
       // are finished moving the client plugin to NaCl.
       CloseChannels();
-      if (state_ == CONNECTED && session_->error() == SIGNALING_TIMEOUT) {
-        SetState(CLOSED, OK);
+      if (state_ == CONNECTED &&
+          session_->error() == ErrorCode::SIGNALING_TIMEOUT) {
+        SetState(CLOSED, ErrorCode::OK);
       } else {
         SetState(FAILED, session_->error());
       }
@@ -183,7 +189,7 @@ void IceConnectionToHost::OnChannelInitialized(
 
 void IceConnectionToHost::OnChannelClosed(
     ChannelDispatcherBase* channel_dispatcher) {
-  session_->Close(OK);
+  session_->Close(ErrorCode::OK);
 }
 
 void IceConnectionToHost::OnVideoChannelStatus(bool active) {
@@ -195,23 +201,27 @@ ConnectionToHost::State IceConnectionToHost::state() const {
 }
 
 void IceConnectionToHost::NotifyIfChannelsReady() {
-  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected())
+  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected()) {
     return;
-  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected())
+  }
+  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected()) {
     return;
-  if (!video_dispatcher_.get() || !video_dispatcher_->is_connected())
+  }
+  if (!video_dispatcher_.get() || !video_dispatcher_->is_connected()) {
     return;
+  }
   if ((!audio_reader_.get() || !audio_reader_->is_connected()) &&
       session_->config().is_audio_enabled()) {
     return;
   }
-  if (state_ != AUTHENTICATED)
+  if (state_ != AUTHENTICATED) {
     return;
+  }
 
   // Start forwarding clipboard and input events.
   clipboard_forwarder_.set_clipboard_stub(control_dispatcher_.get());
   event_forwarder_.set_input_stub(event_dispatcher_.get());
-  SetState(CONNECTED, OK);
+  SetState(CONNECTED, ErrorCode::OK);
 }
 
 void IceConnectionToHost::CloseChannels() {
@@ -226,7 +236,7 @@ void IceConnectionToHost::CloseChannels() {
 void IceConnectionToHost::SetState(State state, ErrorCode error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // |error| should be specified only when |state| is set to FAILED.
-  DCHECK(state == FAILED || error == OK);
+  DCHECK(state == FAILED || error == ErrorCode::OK);
 
   if (state != state_) {
     state_ = state;
@@ -235,5 +245,4 @@ void IceConnectionToHost::SetState(State state, ErrorCode error) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

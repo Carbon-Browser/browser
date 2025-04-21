@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -49,24 +51,28 @@ void SessionAbortedDialog::Show(const std::string& user_email) {
   }
 }
 
-gfx::Size SessionAbortedDialog::CalculatePreferredSize() const {
+gfx::Size SessionAbortedDialog::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   return gfx::Size(
       kDefaultWidth,
       GetLayoutManager()->GetPreferredHeightForWidth(this, kDefaultWidth));
 }
 
 SessionAbortedDialog::SessionAbortedDialog() {
-  SetModalType(ui::MODAL_TYPE_SYSTEM);
+  SetModalType(ui::mojom::ModalType::kSystem);
   SetTitle(
       l10n_util::GetStringUTF16(IDS_ASH_MULTIPROFILES_SESSION_ABORT_HEADLINE));
   SetShowCloseButton(false);
 
-  SetButtons(ui::DIALOG_BUTTON_OK);
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk));
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(
                      IDS_ASH_MULTIPROFILES_SESSION_ABORT_BUTTON_LABEL));
   SetAcceptCallback(base::BindOnce(
       []() { Shell::Get()->session_controller()->RequestSignOut(); }));
+  // Prevent dismissing dialog via keyboard accelerator.
+  SetCancelCallbackWithClose(
+      base::BindRepeating([]() -> bool { return false; }));
 }
 
 SessionAbortedDialog::~SessionAbortedDialog() = default;

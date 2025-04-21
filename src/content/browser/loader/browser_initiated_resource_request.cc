@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ void UpdateAdditionalHeadersForBrowserInitiatedRequest(
     headers->SetHeaderIfMissing(blink::kDoNotTrackHeader, "1");
   }
 
-  // TODO(crbug.com/1315612): WARNING: This bypasses the permissions policy.
+  // TODO(crbug.com/40833603): WARNING: This bypasses the permissions policy.
   // Unfortunately, workers lack a permissions policy and to derive proper hints
   // https://github.com/w3c/webappsec-permissions-policy/issues/207.
   // Save-Data was previously included in hints for workers, thus we cannot

@@ -1,14 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/credential_provider_extension/ui/credential_list_header_view.h"
 
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation CredentialListHeaderView
 
@@ -17,7 +13,7 @@
 }
 
 - (instancetype)initWithReuseIdentifier:(NSString*)reuseIdentifier {
-  if (self = [super initWithReuseIdentifier:reuseIdentifier]) {
+  if ((self = [super initWithReuseIdentifier:reuseIdentifier])) {
     _headerTextLabel = [[UILabel alloc] init];
     _headerTextLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _headerTextLabel.numberOfLines = 0;

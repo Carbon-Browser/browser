@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ class PlayerCompositorDelegateAndroid : public PlayerCompositorDelegate {
   // j_error_callback will be called.
   jint RequestBitmap(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& j_frame_guid,
+      std::optional<base::UnguessableToken>& frame_guid,
       const base::android::JavaParamRef<jobject>& j_bitmap_callback,
       const base::android::JavaParamRef<jobject>& j_error_callback,
       jfloat j_scale_factor,
@@ -62,7 +62,7 @@ class PlayerCompositorDelegateAndroid : public PlayerCompositorDelegate {
   // Called from Java on touch event on a frame.
   base::android::ScopedJavaLocalRef<jstring> OnClick(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& j_frame_guid,
+      std::optional<base::UnguessableToken>& frame_guid,
       jint j_x,
       jint j_y);
 

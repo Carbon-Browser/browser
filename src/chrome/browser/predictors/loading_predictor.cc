@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,27 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/predictors/lcp_critical_path_predictor/lcp_critical_path_predictor_util.h"
+#include "chrome/browser/predictors/lcp_critical_path_predictor/prewarm_http_disk_cache_manager.h"
 #include "chrome/browser/predictors/loading_data_collector.h"
 #include "chrome/browser/predictors/loading_stats_collector.h"
 #include "chrome/browser/predictors/predictors_features.h"
+#include "chrome/browser/predictors/predictors_traffic_annotations.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor.h"
 #include "content/public/browser/browser_thread.h"
-#include "net/base/network_isolation_key.h"
+#include "content/public/browser/service_worker_context.h"
+#include "content/public/browser/storage_partition.h"
+#include "content/public/common/origin_util.h"
+#include "net/base/network_anonymization_key.h"
+#include "services/network/public/cpp/network_quality_tracker.h"
+#include "services/network/public/cpp/request_destination.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -24,11 +37,15 @@
 
 namespace features {
 
-// Don't preconnect on weak signal to save power.
-const base::Feature kNoPreconnectToSearchOnWeakSignal{
-    "NoPreconnectToSearchOnWeakSignal", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kNoNavigationPreconnectOnWeakSignal{
-    "NoNavigationPreconnectOnWeakSignal", base::FEATURE_DISABLED_BY_DEFAULT};
+// If enabled, suppresses LoadingPredictor (https://crbug.com/350519234)
+BASE_FEATURE(kSuppressesLoadingPredictorOnSlowNetwork,
+             "SuppressesLoadingPredictorOnSlowNetwork",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<base::TimeDelta>
+    kSuppressesLoadingPredictorOnSlowNetworkThreshold{
+        &kSuppressesLoadingPredictorOnSlowNetwork, "slow_network_threshold",
+        base::Milliseconds(208)};
 
 }  // namespace features
 
@@ -56,32 +73,56 @@ bool AddInitialUrlToPreconnectPrediction(const GURL& initial_url,
   } else if (!initial_origin.opaque() &&
              (initial_origin.scheme() == url::kHttpScheme ||
               initial_origin.scheme() == url::kHttpsScheme)) {
-    prediction->requests.emplace(
-        prediction->requests.begin(), initial_origin, kMinSockets,
-        net::NetworkIsolationKey(initial_origin, initial_origin));
+    prediction->requests.emplace(prediction->requests.begin(), initial_origin,
+                                 kMinSockets,
+                                 net::NetworkAnonymizationKey::CreateSameSite(
+                                     net::SchemefulSite(initial_origin)));
   }
 
   return !prediction->requests.empty();
 }
 
-bool IsPreconnectExpensive() {
-#if BUILDFLAG(IS_ANDROID)
-  // Preconnecting is expensive while on battery power and cellular data and
-  // the radio signal is weak.
-  if ((base::PowerMonitor::IsInitialized() &&
-       !base::PowerMonitor::IsOnBatteryPower()) ||
-      (base::android::RadioUtils::GetConnectionType() !=
-       base::android::RadioConnectionType::kCell)) {
-    return false;
+void MaybeWarmUpServiceWorker(const GURL& url, Profile* profile) {
+  static const bool kEnabled =
+      base::FeatureList::IsEnabled(
+          blink::features::kSpeculativeServiceWorkerWarmUp) &&
+      base::GetFieldTrialParamByFeatureAsBool(
+          blink::features::kSpeculativeServiceWorkerWarmUp,
+          "sw_warm_up_from_loading_predictor", true);
+  if (!kEnabled) {
+    return;
   }
 
-  absl::optional<base::android::RadioSignalLevel> maybe_level =
-      base::android::RadioUtils::GetCellSignalLevel();
-  return maybe_level.has_value() &&
-         *maybe_level <= base::android::RadioSignalLevel::kModerate;
-#else
-  return false;
-#endif
+  if (!profile) {
+    return;
+  }
+
+  content::StoragePartition* storage_partition =
+      profile->GetDefaultStoragePartition();
+
+  if (!storage_partition) {
+    return;
+  }
+
+  content::ServiceWorkerContext* service_worker_context =
+      storage_partition->GetServiceWorkerContext();
+
+  if (!service_worker_context) {
+    return;
+  }
+
+  if (!content::OriginCanAccessServiceWorkers(url)) {
+    return;
+  }
+
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(url));
+
+  if (!service_worker_context->MaybeHasRegistrationForStorageKey(key)) {
+    return;
+  }
+
+  service_worker_context->WarmUpServiceWorker(url, key, base::DoNothing());
 }
 
 }  // namespace
@@ -105,41 +146,85 @@ LoadingPredictor::~LoadingPredictor() {
 }
 
 bool LoadingPredictor::PrepareForPageLoad(
+    const std::optional<url::Origin>& initiator_origin,
     const GURL& url,
     HintOrigin origin,
     bool preconnectable,
-    absl::optional<PreconnectPrediction> preconnect_prediction) {
+    std::optional<PreconnectPrediction> preconnect_prediction) {
   if (shutdown_)
     return true;
 
+  TRACE_EVENT("loading", "LoadingPredictor::PrepareForPageLoad");
+
+  // Suppresses network activities.
+  static const bool kSuppressesLoadingPredictorOnSlowNetworkIsEnabled =
+      base::FeatureList::IsEnabled(
+          features::kSuppressesLoadingPredictorOnSlowNetwork);
+  static const base::TimeDelta kSlowNetworkThreshold =
+      features::kSuppressesLoadingPredictorOnSlowNetworkThreshold.Get();
+  if (kSuppressesLoadingPredictorOnSlowNetworkIsEnabled && g_browser_process &&
+      g_browser_process->network_quality_tracker()) {
+    const bool is_slow_network =
+        g_browser_process->network_quality_tracker()->GetHttpRTT() >
+        kSlowNetworkThreshold;
+    base::UmaHistogramBoolean("LoadingPredictor.IsSlowNetwork",
+                              is_slow_network);
+    if (is_slow_network) {
+      return true;
+    }
+  }
+
+  // Prewarm disk cache before preconnecting network.
+  MaybePrewarmResources(initiator_origin, url);
+
+  MaybeWarmUpServiceWorker(url, profile_);
+
   if (origin == HintOrigin::OMNIBOX) {
     // Omnibox hints are lightweight and need a special treatment.
-    HandleOmniboxHint(url, preconnectable);
+    HandleHintByOrigin(url, preconnectable, /*only_allow_https=*/false,
+                       omnibox_preconnect_data_);
+    return true;
+  }
+
+  if (origin == HintOrigin::BOOKMARK_BAR) {
+    // Bookmark hints are lightweight and need a special treatment.
+    HandleHintByOrigin(url, /*preconnectable=*/true, /*only_allow_https=*/true,
+                       bookmark_bar_preconnect_data_);
+    return true;
+  }
+
+  if (origin == HintOrigin::NEW_TAB_PAGE) {
+    // New Tab Page hints are lightweight and need a special treatment.
+    HandleHintByOrigin(url, /*preconnectable=*/true, /*only_allow_https=*/true,
+                       new_tab_page_preconnect_data_);
     return true;
   }
 
   PreconnectPrediction prediction;
   bool has_local_preconnect_prediction = false;
-  if (features::ShouldUseLocalPredictions()) {
-    has_local_preconnect_prediction =
-        resource_prefetch_predictor_->PredictPreconnectOrigins(url,
-                                                               &prediction);
-  }
-  if (active_hints_.find(url) != active_hints_.end() &&
-      has_local_preconnect_prediction && !preconnect_prediction) {
-    // We are currently preconnecting using the local preconnect prediction. Do
-    // not proceed further.
-    return true;
-  }
-
-  if (preconnect_prediction) {
-    // Overwrite the prediction if we were provided with a non-empty one.
+  if (origin == HintOrigin::OPTIMIZATION_GUIDE) {
+    CHECK(preconnect_prediction);
     prediction = *preconnect_prediction;
   } else {
+    CHECK(!preconnect_prediction);
+    if (features::ShouldUseLocalPredictions()) {
+      has_local_preconnect_prediction =
+          resource_prefetch_predictor_->PredictPreconnectOrigins(url,
+                                                                 &prediction);
+    }
+    if (active_hints_.find(url) != active_hints_.end() &&
+        has_local_preconnect_prediction) {
+      // We are currently preconnecting using the local preconnect prediction.
+      // Do not proceed further.
+      return true;
+    }
     // Try to preconnect to the |url| even if the predictor has no
     // prediction.
     AddInitialUrlToPreconnectPrediction(url, &prediction);
   }
+
+  resource_prefetch_predictor()->GetPreconnectAndPrefetchRequest(
+      initiator_origin, url, prediction);
 
   // Return early if we do not have any requests.
   if (prediction.requests.empty() && prediction.prefetch_requests.empty())
@@ -148,7 +233,7 @@ bool LoadingPredictor::PrepareForPageLoad(
   ++total_hints_activated_;
   active_hints_.emplace(url, base::TimeTicks::Now());
   if (IsPreconnectAllowed(profile_))
-    MaybeAddPreconnect(url, std::move(prediction), origin);
+    MaybeAddPreconnect(url, std::move(prediction));
   return has_local_preconnect_prediction || preconnect_prediction;
 }
 
@@ -175,9 +260,7 @@ ResourcePrefetchPredictor* LoadingPredictor::resource_prefetch_predictor() {
 }
 
 PreconnectManager* LoadingPredictor::preconnect_manager() {
-  if (shutdown_ || !IsPreconnectFeatureEnabled())
-    return nullptr;
-
+  CHECK(!shutdown_);
   if (!preconnect_manager_) {
     preconnect_manager_ =
         std::make_unique<PreconnectManager>(GetWeakPtr(), profile_);
@@ -187,11 +270,10 @@ PreconnectManager* LoadingPredictor::preconnect_manager() {
 }
 
 PrefetchManager* LoadingPredictor::prefetch_manager() {
-  if (!base::FeatureList::IsEnabled(features::kLoadingPredictorPrefetch))
-    return nullptr;
-
-  if (shutdown_ || !IsPreconnectFeatureEnabled())
-    return nullptr;
+  CHECK(
+      base::FeatureList::IsEnabled(features::kLoadingPredictorPrefetch) ||
+      base::FeatureList::IsEnabled(blink::features::kLCPPPrefetchSubresource));
+  CHECK(!shutdown_);
 
   if (!prefetch_manager_) {
     prefetch_manager_ =
@@ -204,15 +286,20 @@ PrefetchManager* LoadingPredictor::prefetch_manager() {
 void LoadingPredictor::Shutdown() {
   DCHECK(!shutdown_);
   resource_prefetch_predictor_->Shutdown();
+  preconnect_manager_.reset();
   shutdown_ = true;
 }
 
-bool LoadingPredictor::OnNavigationStarted(NavigationId navigation_id,
-                                           ukm::SourceId ukm_source_id,
-                                           const GURL& main_frame_url,
-                                           base::TimeTicks creation_time) {
+bool LoadingPredictor::OnNavigationStarted(
+    NavigationId navigation_id,
+    ukm::SourceId ukm_source_id,
+    const std::optional<url::Origin>& initiator_origin,
+    const GURL& main_frame_url,
+    base::TimeTicks creation_time) {
   if (shutdown_)
     return true;
+
+  TRACE_EVENT("loading", "LoadingPredictor::OnNavigationStarted");
 
   loading_data_collector()->RecordStartNavigation(
       navigation_id, ukm_source_id, main_frame_url, creation_time);
@@ -220,7 +307,8 @@ bool LoadingPredictor::OnNavigationStarted(NavigationId navigation_id,
   active_navigations_.emplace(navigation_id,
                               NavigationInfo{main_frame_url, creation_time});
   active_urls_to_navigations_[main_frame_url].insert(navigation_id);
-  return PrepareForPageLoad(main_frame_url, HintOrigin::NAVIGATION);
+  return PrepareForPageLoad(initiator_origin, main_frame_url,
+                            HintOrigin::NAVIGATION);
 }
 
 void LoadingPredictor::OnNavigationFinished(NavigationId navigation_id,
@@ -231,7 +319,7 @@ void LoadingPredictor::OnNavigationFinished(NavigationId navigation_id,
     return;
 
   loading_data_collector()->RecordFinishNavigation(
-      navigation_id, old_main_frame_url, new_main_frame_url, is_error_page);
+      navigation_id, new_main_frame_url, is_error_page);
   if (active_urls_to_navigations_.find(old_main_frame_url) !=
       active_urls_to_navigations_.end()) {
     active_urls_to_navigations_[old_main_frame_url].erase(navigation_id);
@@ -285,18 +373,13 @@ void LoadingPredictor::CleanupAbandonedHintsAndNavigations(
 }
 
 void LoadingPredictor::MaybeAddPreconnect(const GURL& url,
-                                          PreconnectPrediction prediction,
-                                          HintOrigin origin) {
-  DCHECK(!shutdown_);
+                                          PreconnectPrediction prediction) {
+  CHECK(!shutdown_);
   if (!prediction.prefetch_requests.empty()) {
-    DCHECK(base::FeatureList::IsEnabled(features::kLoadingPredictorPrefetch));
+    CHECK(base::FeatureList::IsEnabled(features::kLoadingPredictorPrefetch) ||
+          base::FeatureList::IsEnabled(
+              blink::features::kLCPPPrefetchSubresource));
     prefetch_manager()->Start(url, std::move(prediction.prefetch_requests));
-  }
-
-  if (base::FeatureList::IsEnabled(
-          features::kNoNavigationPreconnectOnWeakSignal) &&
-      IsPreconnectExpensive()) {
-    return;
   }
 
   if (!prediction.requests.empty())
@@ -311,30 +394,54 @@ void LoadingPredictor::MaybeRemovePreconnect(const GURL& url) {
     prefetch_manager_->Stop(url);
 }
 
-void LoadingPredictor::HandleOmniboxHint(const GURL& url, bool preconnectable) {
-  if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_))
-    return;
+bool LoadingPredictor::HandleHintByOrigin(const GURL& url,
+                                          bool preconnectable,
+                                          bool only_allow_https,
+                                          PreconnectData& preconnect_data) {
+  if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_) ||
+      (only_allow_https && url.scheme() != url::kHttpsScheme)) {
+    return false;
+  }
 
-  url::Origin origin = url::Origin::Create(url);
-  bool is_new_origin = origin != last_omnibox_origin_;
-  last_omnibox_origin_ = origin;
-  net::NetworkIsolationKey network_isolation_key(origin, origin);
+  const url::Origin origin = url::Origin::Create(url);
+  // When constructing an Origin from a GURL results in an opaque origin, the
+  // resulting origin is guaranteed to be unique; trying to create another
+  // origin from the same URL will result in a different unique opaque origin,
+  // so any preconnect attempt would never be used anyway.
+  if (origin.opaque()) {
+    return false;
+  }
+
+  // Tracking whether this is a new origin request. If so, then
+  // preconnect/presolve immediately. If the origins are the same, then
+  // preconnect/presolve after a given threshold.
+  const bool is_new_origin = origin != preconnect_data.last_origin_;
+  preconnect_data.last_origin_ = origin;
+  const net::SchemefulSite site = net::SchemefulSite(origin);
+  const auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(site);
   base::TimeTicks now = base::TimeTicks::Now();
   if (preconnectable) {
-    if (is_new_origin || now - last_omnibox_preconnect_time_ >=
+    if (is_new_origin || now - preconnect_data.last_preconnect_time_ >=
                              kMinDelayBetweenPreconnectRequests) {
-      last_omnibox_preconnect_time_ = now;
-      preconnect_manager()->StartPreconnectUrl(url, true,
-                                               network_isolation_key);
+      preconnect_data.last_preconnect_time_ = now;
+      preconnect_manager()->StartPreconnectUrl(
+          url, true, network_anonymization_key,
+          kLoadingPredictorPreconnectTrafficAnnotation);
     }
-    return;
+    return true;
   }
 
-  if (is_new_origin || now - last_omnibox_preresolve_time_ >=
+  if (is_new_origin || now - preconnect_data.last_preresolve_time_ >=
                            kMinDelayBetweenPreresolveRequests) {
-    last_omnibox_preresolve_time_ = now;
-    preconnect_manager()->StartPreresolveHost(url, network_isolation_key);
+    preconnect_data.last_preresolve_time_ = now;
+    preconnect_manager()->StartPreresolveHost(
+        url, network_anonymization_key,
+        kLoadingPredictorPreconnectTrafficAnnotation);
+    return true;
   }
+
+  return false;
 }
 
 void LoadingPredictor::PreconnectInitiated(const GURL& url,
@@ -387,18 +494,51 @@ void LoadingPredictor::PrefetchFinished(std::unique_ptr<PrefetchStats> stats) {
 void LoadingPredictor::PreconnectURLIfAllowed(
     const GURL& url,
     bool allow_credentials,
-    const net::NetworkIsolationKey& network_isolation_key) {
+    const net::NetworkAnonymizationKey& network_anonymization_key,
+    const net::NetworkTrafficAnnotationTag& traffic_annotation) {
   if (!url.is_valid() || !url.has_host() || !IsPreconnectAllowed(profile_))
     return;
 
-  if (base::FeatureList::IsEnabled(
-          features::kNoPreconnectToSearchOnWeakSignal) &&
-      IsPreconnectExpensive()) {
+  preconnect_manager()->StartPreconnectUrl(
+      url, allow_credentials, network_anonymization_key, traffic_annotation);
+}
+
+void LoadingPredictor::MaybePrewarmResources(
+    const std::optional<url::Origin>& initiator_origin,
+    const GURL& top_frame_main_resource_url) {
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kHttpDiskCachePrewarming)) {
     return;
   }
 
-  preconnect_manager()->StartPreconnectUrl(url, allow_credentials,
-                                           network_isolation_key);
+  if (shutdown_) {
+    return;
+  }
+
+  TRACE_EVENT("loading", "LoadingPredictor::MaybePrewarmResources");
+
+  if (!top_frame_main_resource_url.is_valid() ||
+      !top_frame_main_resource_url.SchemeIsHTTPOrHTTPS()) {
+    return;
+  }
+
+  std::optional<LcppStat> lcpp_stat =
+      resource_prefetch_predictor()->GetLcppStat(initiator_origin,
+                                                 top_frame_main_resource_url);
+
+  if (!lcpp_stat || !IsValidLcppStat(*lcpp_stat)) {
+    return;
+  }
+
+  if (!prewarm_http_disk_cache_manager_) {
+    prewarm_http_disk_cache_manager_ =
+        std::make_unique<PrewarmHttpDiskCacheManager>(
+            profile_->GetDefaultStoragePartition()
+                ->GetURLLoaderFactoryForBrowserProcess());
+  }
+
+  prewarm_http_disk_cache_manager_->MaybePrewarmResources(
+      top_frame_main_resource_url, PredictFetchedSubresourceUrls(*lcpp_stat));
 }
 
 }  // namespace predictors

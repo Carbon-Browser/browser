@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,15 +48,14 @@ class ErrorBadge : public GlobalError {
   static int GetMenuItemCommandID();
 
  private:
-  raw_ptr<WarningBadgeService> badge_service_;
+  raw_ptr<WarningBadgeService, DanglingUntriaged> badge_service_;
 };
 
 ErrorBadge::ErrorBadge(WarningBadgeService* badge_service)
     : badge_service_(badge_service) {
 }
 
-ErrorBadge::~ErrorBadge() {
-}
+ErrorBadge::~ErrorBadge() = default;
 
 bool ErrorBadge::HasMenuItem() {
   return true;
@@ -91,7 +90,7 @@ void ErrorBadge::ShowBubbleView(Browser* browser) {
 }
 
 GlobalErrorBubbleViewBase* ErrorBadge::GetBubbleView() {
-  return NULL;
+  return nullptr;
 }
 
 // static

@@ -1,17 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/device_signals/core/system_signals/win/wsc_client_impl.h"
 
-#include <iwscapi.h>
 #include <windows.h>
+
+#include <iwscapi.h>
 #include <wrl/client.h>
 #include <wscapi.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -19,7 +20,6 @@
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_variant.h"
 #include "base/win/windows_version.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using Microsoft::WRL::ComPtr;
 

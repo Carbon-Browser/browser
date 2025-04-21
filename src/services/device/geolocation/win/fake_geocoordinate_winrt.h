@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include <wrl/client.h>
 #include <wrl/implements.h>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <memory>
+#include <optional>
 
 namespace device {
 
@@ -20,17 +21,50 @@ struct FakeGeocoordinateData {
   DOUBLE latitude = 0;
   DOUBLE longitude = 0;
   DOUBLE accuracy = 0;
-  absl::optional<DOUBLE> altitude;
-  absl::optional<DOUBLE> altitude_accuracy;
-  absl::optional<DOUBLE> heading;
-  absl::optional<DOUBLE> speed;
+  std::optional<DOUBLE> altitude;
+  std::optional<DOUBLE> altitude_accuracy;
+  std::optional<DOUBLE> heading;
+  std::optional<DOUBLE> speed;
+  std::optional<ABI::Windows::Devices::Geolocation::AltitudeReferenceSystem>
+      altitude_reference_system;
+};
+
+class FakeGeopoint
+    : public Microsoft::WRL::RuntimeClass<
+          Microsoft::WRL::RuntimeClassFlags<
+              Microsoft::WRL::WinRt | Microsoft::WRL::InhibitRoOriginateError>,
+          ABI::Windows::Devices::Geolocation::IGeopoint,
+          ABI::Windows::Devices::Geolocation::IGeoshape> {
+ public:
+  explicit FakeGeopoint(const FakeGeocoordinateData& position_data);
+  FakeGeopoint(const FakeGeopoint&) = delete;
+  FakeGeopoint(FakeGeopoint&&) = delete;
+  FakeGeopoint& operator=(const FakeGeopoint&) = delete;
+  FakeGeopoint& operator=(FakeGeopoint&&) = delete;
+  ~FakeGeopoint() override;
+
+  // IGeopoint implementation:
+  IFACEMETHODIMP get_Position(
+      ABI::Windows::Devices::Geolocation::BasicGeoposition* value) override;
+
+  // IGeoshape implementation:
+  IFACEMETHODIMP get_GeoshapeType(
+      ABI::Windows::Devices::Geolocation::GeoshapeType* value) override;
+  IFACEMETHODIMP get_SpatialReferenceId(UINT32* value) override;
+  IFACEMETHODIMP get_AltitudeReferenceSystem(
+      ABI::Windows::Devices::Geolocation::AltitudeReferenceSystem* value)
+      override;
+
+ private:
+  const FakeGeocoordinateData position_data_;
 };
 
 class FakeGeocoordinate
     : public Microsoft::WRL::RuntimeClass<
           Microsoft::WRL::RuntimeClassFlags<
               Microsoft::WRL::WinRt | Microsoft::WRL::InhibitRoOriginateError>,
-          ABI::Windows::Devices::Geolocation::IGeocoordinate> {
+          ABI::Windows::Devices::Geolocation::IGeocoordinate,
+          ABI::Windows::Devices::Geolocation::IGeocoordinateWithPoint> {
  public:
   explicit FakeGeocoordinate(
       std::unique_ptr<FakeGeocoordinateData> position_data);
@@ -39,6 +73,8 @@ class FakeGeocoordinate
   FakeGeocoordinate& operator=(const FakeGeocoordinate&) = delete;
 
   ~FakeGeocoordinate() override;
+  IFACEMETHODIMP get_Point(
+      ABI::Windows::Devices::Geolocation::IGeopoint** point) override;
   IFACEMETHODIMP get_Latitude(DOUBLE* value) override;
   IFACEMETHODIMP get_Longitude(DOUBLE* value) override;
   IFACEMETHODIMP get_Altitude(

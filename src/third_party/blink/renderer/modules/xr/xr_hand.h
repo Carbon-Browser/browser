@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,22 +7,20 @@
 
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sync_iterator_xr_hand.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 
+class V8XRHandJoint;
 class XRInputSource;
 class XRJointSpace;
 
-class XRHand : public ScriptWrappable,
-               public PairIterable<String,
-                                   IDLString,
-                                   Member<XRJointSpace>,
-                                   XRJointSpace> {
+class XRHand : public ScriptWrappable, public PairSyncIterable<XRHand> {
   DEFINE_WRAPPERTYPEINFO();
 
-  static const unsigned kNumJoints =
+  static constexpr unsigned kNumJoints =
       static_cast<unsigned>(device::mojom::blink::XRHandJoint::kMaxValue) + 1u;
 
  public:
@@ -30,9 +28,9 @@ class XRHand : public ScriptWrappable,
                   XRInputSource* input_source);
   ~XRHand() override = default;
 
-  size_t size() const { return joints_.size(); }
+  size_t size() const { return joints_->size(); }
 
-  XRJointSpace* get(const String& key);
+  XRJointSpace* get(const V8XRHandJoint& key) const;
 
   void updateFromHandTrackingData(
       const device::mojom::blink::XRHandTrackingData* state,
@@ -43,9 +41,10 @@ class XRHand : public ScriptWrappable,
   void Trace(Visitor*) const override;
 
  private:
-  IterationSource* StartIteration(ScriptState*, ExceptionState&) override;
+  IterationSource* CreateIterationSource(ScriptState*,
+                                         ExceptionState&) override;
 
-  HeapVector<Member<XRJointSpace>> joints_;
+  Member<HeapVector<Member<XRJointSpace>>> joints_;
   bool has_missing_poses_ = true;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@ import android.content.Intent;
 import android.content.IntentSender;
 import android.content.IntentSender.SendIntentException;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.base.IntentRequestTracker.Delegate;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Chrome's implementation of the delegate of a IntentRequestTracker.
- */
+/** Chrome's implementation of the delegate of a IntentRequestTracker. */
+@NullMarked
 public class ActivityIntentRequestTrackerDelegate implements Delegate {
     // Just create one ImmutableWeakReference object to avoid gc churn.
     private final ImmutableWeakReference<Activity> mActivityWeakRefHolder;
@@ -31,7 +32,7 @@ public class ActivityIntentRequestTrackerDelegate implements Delegate {
     }
 
     @Override
-    public boolean startActivityForResult(Intent intent, int requestCode) {
+    public boolean startActivityForResult(@Nullable Intent intent, int requestCode) {
         Activity activity = mActivityWeakRefHolder.get();
         if (activity == null) return false;
         try {

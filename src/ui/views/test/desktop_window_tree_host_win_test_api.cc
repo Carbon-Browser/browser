@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,14 @@ HWNDMessageHandler* DesktopWindowTreeHostWinTestApi::GetHwndMessageHandler() {
 void DesktopWindowTreeHostWinTestApi::SetMockCursorPositionForTesting(
     const gfx::Point& position) {
   GetHwndMessageHandler()->mock_cursor_position_ = position;
+}
+
+LRESULT DesktopWindowTreeHostWinTestApi::SimulatePenEventForTesting(
+    UINT message,
+    UINT32 pointer_id,
+    POINTER_PEN_INFO pointer_pen_info) {
+  return host_->message_handler_->HandlePointerEventTypePen(message, pointer_id,
+                                                            pointer_pen_info);
 }
 
 }  // namespace test

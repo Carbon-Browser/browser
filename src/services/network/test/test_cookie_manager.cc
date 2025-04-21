@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_inclusion_status.h"
 
@@ -22,14 +22,17 @@ void TestCookieManager::SetCanonicalCookie(
     const net::CookieOptions& cookie_options,
     SetCanonicalCookieCallback callback) {
   if (callback) {
-    std::move(callback).Run(net::CookieAccessResult(net::CookieInclusionStatus(
-        net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR)));
+    std::move(callback).Run(net::CookieAccessResult(
+        net::CookieInclusionStatus::
+            MakeFromReasonsForTesting(/*exclusions=*/
+                                      {net::CookieInclusionStatus::
+                                           EXCLUDE_UNKNOWN_ERROR})));
   }
 }
 
 void TestCookieManager::AddCookieChangeListener(
     const GURL& url,
-    const absl::optional<std::string>& name,
+    const std::optional<std::string>& name,
     mojo::PendingRemote<network::mojom::CookieChangeListener> listener) {
   mojo::Remote<network::mojom::CookieChangeListener> listener_remote(
       std::move(listener));

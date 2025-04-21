@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event_watcher.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -40,6 +39,7 @@ class WaitableEvent;
 
 namespace content {
 class BrowserContext;
+class StoragePartition;
 }
 
 namespace webrtc_event_logging {
@@ -70,6 +70,7 @@ class ChromeBrowsingDataRemoverDelegate
   GetOriginTypeMatcher() override;
   bool MayRemoveDownloadHistory() override;
   std::vector<std::string> GetDomainsForDeferredCookieDeletion(
+      content::StoragePartition* storage_partition,
       uint64_t remove_mask) override;
   void RemoveEmbedderData(
       const base::Time& delete_begin,
@@ -99,60 +100,60 @@ class ChromeBrowsingDataRemoverDelegate
 
   // For debugging purposes. Please add new deletion tasks at the end.
   // This enum is recorded in a histogram, so don't change or reuse ids.
-  // Entries must also be added to ChromeBrowsingDataRemoverTasks in enums.xml
-  // and History.ClearBrowsingData.Duration.ChromeTask.{Task}
-  // in histograms/metadata/history/histograms.xml.
+  // LINT.IfChange(TracingDataType)
   enum class TracingDataType {
     kSynchronous = 1,
     kHistory = 2,
-    kHostNameResolution = 3,
+    // kHostNameResolution = 3, deprecated
     kNaclCache = 4,
     kPnaclCache = 5,
     kAutofillData = 6,
     kAutofillOrigins = 7,
-    kPluginData = 8,
+    // kPluginData = 8, deprecated
     // kFlashLsoHelper = 9, deprecated
     kDomainReliability = 10,
-    kNetworkPredictor = 11,
+    // kNetworkPredictor = 11, deprecated
     kWebrtcLogs = 12,
     kVideoDecodeHistory = 13,
     kCookies = 14,
     kPasswords = 15,
     kHttpAuthCache = 16,
-    kDisableAutoSignin = 17,
+    // See also kDisableAutoSigninForAccountPasswords.
+    kDisableAutoSigninForProfilePasswords = 17,
     kPasswordsStatistics = 18,
-    kKeywordsModel = 19,
+    // kKeywordsModel = 19, deprecated
     kReportingCache = 20,
     kNetworkErrorLogging = 21,
-    kFlashDeauthorization = 22,
+    // kFlashDeauthorization = 22, deprecated
     kOfflinePages = 23,
     // kPrecache = 24, deprecated
-    kExploreSites = 25,
-    kLegacyStrikes = 26,
+    // kExploreSites = 25, deprecated
+    // kLegacyStrikes = 26, deprecated
     kWebrtcEventLogs = 27,
     kCdmLicenses = 28,
     kHostCache = 29,
     kTpmAttestationKeys = 30,
-    kStrikes = 31,
+    // kStrikes = 31, deprecated
     // kLeakedCredentials = 32, deprecated
-    kFieldInfo = 33,
-    kCompromisedCredentials = 34,
+    // kFieldInfo = 33, deprecated
+    // kCompromisedCredentials = 34, deprecated
     kUserDataSnapshot = 35,
-    kMediaFeeds = 36,
+    // kMediaFeeds = 36, deprecated
     kAccountPasswords = 37,
     kAccountPasswordsSynced = 38,
-    kAccountCompromisedCredentials = 39,
+    // kAccountCompromisedCredentials = 39, deprecated
     kFaviconCacheExpiration = 40,
     kSecurePaymentConfirmationCredentials = 41,
     kWebAppHistory = 42,
     kWebAuthnCredentials = 43,
     kWebrtcVideoPerfHistory = 44,
+    kMediaDeviceSalts = 45,
+    // See also kDisableAutoSigninForProfilePasswords.
+    kDisableAutoSigninForAccountPasswords = 46,
 
-    // Please update ChromeBrowsingDataRemoverTasks in enums.xml and
-    // History.ClearBrowsingData.Duration.ChromeTask.{Task}
-    // in histograms/metadata/history/histograms.xml when adding entries!
-    kMaxValue = kWebrtcVideoPerfHistory,
+    kMaxValue = kDisableAutoSigninForAccountPasswords,
   };
+  // LINT.ThenChange(//tools/metrics/histograms/metadata/history/enums.xml:ChromeBrowsingDataRemoverTasks)
 
   // Returns the suffix for the
   // History.ClearBrowsingData.Duration.ChromeTask.{Task} histogram
@@ -203,6 +204,10 @@ class ChromeBrowsingDataRemoverDelegate
 
   std::unique_ptr<device::fido::PlatformCredentialStore> MakeCredentialStore();
 
+  // See `deferred_disable_passwords_auto_signin_cb_`.
+  void DisablePasswordsAutoSignin(
+      const base::RepeatingCallback<bool(const GURL&)>& url_filter);
+
   // The profile for which the data will be deleted.
   raw_ptr<Profile> profile_;
 
@@ -240,7 +245,23 @@ class ChromeBrowsingDataRemoverDelegate
   std::unique_ptr<WebappRegistry> webapp_registry_;
 #endif
 
-  bool should_clear_password_account_storage_settings_ = false;
+#if !BUILDFLAG(IS_ANDROID)
+  // On desktop, some per-account sync settings must be cleared when cookies are
+  // deleted. This flag is used to defer the process until after sync uploads
+  // deletions of any other data.
+  bool should_clear_sync_account_settings_ = false;
+#endif
+
+  // PasswordStore::DisableAutoSignInForOrigins() is required when wiping
+  // DATA_TYPE_COOKIES, but that must be deferred until any password deletions
+  // have completed, to avoid resurrecting passwords (c.f. crbug.com/325323180).
+  // This field serves that: it'll be executed in OnTasksComplete() when all
+  // other tasks are done. Executing it adds to `pending_sub_tasks_` again.
+  // OnBrowsingDataRemoverDone() is only called after the (async) auto-signin
+  // disabling has completed.
+  // This field is similar to `should_clear_sync_account_settings_` above,
+  // except that clearing settings is synchronous, disabling auto sign-in isn't.
+  base::OnceClosure deferred_disable_passwords_auto_signin_cb_;
 
   std::unique_ptr<device::fido::PlatformCredentialStore> credential_store_;
 

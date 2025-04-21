@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ struct ShareAttempt {
 
   ShareAttempt(const ShareAttempt&);
 
-  // TODO(https://crbug.com/1326249): It would be nice if this wasn't here.
+  // TODO(crbug.com/40840434): It would be nice if this wasn't here.
   base::WeakPtr<content::WebContents> web_contents;
   const std::u16string title;
   const GURL url;

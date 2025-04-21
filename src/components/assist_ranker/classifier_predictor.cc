@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/assist_ranker/example_preprocessing.h"
 #include "components/assist_ranker/nn_classifier.h"
 #include "components/assist_ranker/proto/ranker_model.pb.h"
@@ -22,7 +22,7 @@ namespace assist_ranker {
 
 ClassifierPredictor::ClassifierPredictor(const PredictorConfig& config)
     : BasePredictor(config) {}
-ClassifierPredictor::~ClassifierPredictor() {}
+ClassifierPredictor::~ClassifierPredictor() = default;
 
 // static
 std::unique_ptr<ClassifierPredictor> ClassifierPredictor::Create(
@@ -94,11 +94,11 @@ bool ClassifierPredictor::Predict(RankerExample example,
 RankerModelStatus ClassifierPredictor::ValidateModel(const RankerModel& model) {
   if (model.proto().model_case() != RankerModelProto::kNnClassifier) {
     DVLOG(0) << "Model is incompatible.";
-    return RankerModelStatus::INCOMPATIBLE;
+    return RankerModelStatus::kIncompatible;
   }
   return nn_classifier::Validate(model.proto().nn_classifier())
-             ? RankerModelStatus::OK
-             : RankerModelStatus::INCOMPATIBLE;
+             ? RankerModelStatus::kOk
+             : RankerModelStatus::kIncompatible;
 }
 
 bool ClassifierPredictor::Initialize() {

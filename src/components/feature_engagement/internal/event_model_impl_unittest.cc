@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/feature_engagement/internal/editable_configuration.h"
 #include "components/feature_engagement/internal/in_memory_event_store.h"
 #include "components/feature_engagement/internal/never_event_storage_validator.h"
@@ -163,7 +163,7 @@ class EventModelImplTest : public ::testing::Test {
 
  protected:
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle handle_;
 
   std::unique_ptr<EventModelImpl> model_;
   raw_ptr<TestInMemoryEventStore> store_;
@@ -174,7 +174,7 @@ class EventModelImplTest : public ::testing::Test {
 
 class LoadFailingEventModelImplTest : public EventModelImplTest {
  public:
-  LoadFailingEventModelImplTest() {}
+  LoadFailingEventModelImplTest() = default;
 
   std::unique_ptr<TestInMemoryEventStore> CreateStore() override {
     return std::make_unique<TestInMemoryEventStore>(
@@ -558,6 +558,28 @@ TEST_F(LoadFailingEventModelImplTest, FailedInitializeInformsCaller) {
   EXPECT_FALSE(model_->IsReady());
   EXPECT_TRUE(got_initialize_callback_);
   EXPECT_FALSE(initialize_callback_result_);
+}
+
+TEST_F(EventModelImplTest, ClearEvents) {
+  model_->Initialize(
+      base::BindOnce(&EventModelImplTest::OnModelInitializationFinished,
+                     base::Unretained(this)),
+      1000u);
+  task_runner_->RunUntilIdle();
+  EXPECT_TRUE(model_->IsReady());
+
+  EXPECT_NE(nullptr, model_->GetEvent("foo"));
+  EXPECT_NE(0U, model_->GetEventCount("foo", 5U, 5U));
+  EXPECT_NE(nullptr, model_->GetEvent("bar"));
+  EXPECT_NE(0U, model_->GetEventCount("bar", 5U, 5U));
+
+  model_->ClearEvent("foo");
+
+  // ClearEvent() does not remove the event, but clears all the instances.
+  EXPECT_NE(nullptr, model_->GetEvent("foo"));
+  EXPECT_EQ(0U, model_->GetEventCount("foo", 5U, 5U));
+  EXPECT_NE(nullptr, model_->GetEvent("bar"));
+  EXPECT_NE(0U, model_->GetEventCount("bar", 5U, 5U));
 }
 
 }  // namespace feature_engagement

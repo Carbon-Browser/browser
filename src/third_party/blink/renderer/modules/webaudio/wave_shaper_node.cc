@@ -96,7 +96,7 @@ void WaveShaperNode::SetCurveImpl(const float* curve_data,
   // This is to synchronize with the changes made in
   // AudioBasicProcessorNode::CheckNumberOfChannelsForInput() where we can
   // Initialize() and Uninitialize(), changing the number of kernels.
-  BaseAudioContext::GraphAutoLocker context_locker(context());
+  DeferredTaskHandler::GraphAutoLocker context_locker(context());
 
   GetWaveShaperProcessor()->SetCurve(curve_data, length);
 }
@@ -133,40 +133,43 @@ NotShared<DOMFloat32Array> WaveShaperNode::curve() {
   return result;
 }
 
-void WaveShaperNode::setOversample(const String& type) {
+void WaveShaperNode::setOversample(const V8OverSampleType& type) {
   DCHECK(IsMainThread());
 
   // This is to synchronize with the changes made in
   // AudioBasicProcessorNode::checkNumberOfChannelsForInput() where we can
   // initialize() and uninitialize().
-  BaseAudioContext::GraphAutoLocker context_locker(context());
+  DeferredTaskHandler::GraphAutoLocker context_locker(context());
 
-  if (type == "none") {
-    GetWaveShaperProcessor()->SetOversample(
-        WaveShaperProcessor::kOverSampleNone);
-  } else if (type == "2x") {
-    GetWaveShaperProcessor()->SetOversample(WaveShaperProcessor::kOverSample2x);
-  } else if (type == "4x") {
-    GetWaveShaperProcessor()->SetOversample(WaveShaperProcessor::kOverSample4x);
-  } else {
-    NOTREACHED();
+  switch (type.AsEnum()) {
+    case V8OverSampleType::Enum::kNone:
+      GetWaveShaperProcessor()->SetOversample(
+          WaveShaperProcessor::kOverSampleNone);
+      return;
+    case V8OverSampleType::Enum::k2X:
+      GetWaveShaperProcessor()->SetOversample(
+          WaveShaperProcessor::kOverSample2x);
+      return;
+    case V8OverSampleType::Enum::k4X:
+      GetWaveShaperProcessor()->SetOversample(
+          WaveShaperProcessor::kOverSample4x);
+      return;
   }
+  NOTREACHED();
 }
 
-String WaveShaperNode::oversample() const {
+V8OverSampleType WaveShaperNode::oversample() const {
   switch (const_cast<WaveShaperNode*>(this)
               ->GetWaveShaperProcessor()
               ->Oversample()) {
     case WaveShaperProcessor::kOverSampleNone:
-      return "none";
+      return V8OverSampleType(V8OverSampleType::Enum::kNone);
     case WaveShaperProcessor::kOverSample2x:
-      return "2x";
+      return V8OverSampleType(V8OverSampleType::Enum::k2X);
     case WaveShaperProcessor::kOverSample4x:
-      return "4x";
-    default:
-      NOTREACHED();
-      return "none";
+      return V8OverSampleType(V8OverSampleType::Enum::k4X);
   }
+  NOTREACHED();
 }
 
 void WaveShaperNode::ReportDidCreate() {

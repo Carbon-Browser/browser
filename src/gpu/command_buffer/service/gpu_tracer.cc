@@ -1,18 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/service/gpu_tracer.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
@@ -181,7 +185,8 @@ GPUTracer::GPUTracer(DecoderContext* decoder, bool context_is_gl)
     disjoint_time_ = gpu_timing_client_->GetCurrentCPUTime();
   } else {
     can_trace_dev_ = false;
-    // TODO(crbug.com/1018725): GPUTiming should support backends other than GL.
+    // TODO(crbug.com/40655549): GPUTiming should support backends other than
+    // GL.
     gpu_timing_client_ = nullptr;
   }
   outputter_ = decoder_->outputter();
@@ -331,7 +336,10 @@ void GPUTracer::ProcessTraces() {
     }
   }
 
-  DCHECK(GL_NO_ERROR == glGetError());
+  // When `can_trace_dev_` is false, there might be no current context and
+  // calling `glGetError()` might lead to a crash. To avoid that, skip calling
+  // the function in that case.
+  DCHECK(!can_trace_dev_ || GL_NO_ERROR == glGetError());
 }
 
 bool GPUTracer::IsTracing() {

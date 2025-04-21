@@ -7,7 +7,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import static org.chromium.chrome.browser.preferences.ChromePreferenceKeys.UI_THEME_SETTING;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.night_mode.ThemeType;
 import androidx.recyclerview.widget.RecyclerView;
 import android.app.Activity;
@@ -22,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.content.Intent;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 
 public class MiradaActivity extends ChromeBaseAppCompatActivity implements MiradaActivityInterface {
 
@@ -45,7 +47,7 @@ public class MiradaActivity extends ChromeBaseAppCompatActivity implements Mirad
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        isLightTheme = SharedPreferencesManager.getInstance().readInt("ui_theme_setting", ThemeType.DARK) == ThemeType.LIGHT;
+        isLightTheme = ChromeSharedPreferences.getInstance().readInt(UI_THEME_SETTING, ThemeType.DARK) == ThemeType.LIGHT;
         setContentView(R.layout.mirada_activity);
 
         final String textColor = isLightTheme ? colorLightText : colorDarkText;

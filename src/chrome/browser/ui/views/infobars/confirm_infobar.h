@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,23 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/infobars/infobar_view.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
-
-class ElevationIconSetter;
+#include "ui/base/interaction/element_identifier.h"
 
 namespace views {
 class Label;
 class MdTextButton;
-}
+}  // namespace views
 
 // An infobar that shows a message, up to two optional buttons, and an optional,
 // right-aligned link.  This is commonly used to do things like:
-// "Would you like to do X?  [Yes]  [No]               _Learn More_ [x]"
+// "Would you like to do X?  [Yes]  [No]    _Learn More_ [x]"
 class ConfirmInfoBar : public InfoBarView {
+  METADATA_HEADER(ConfirmInfoBar, InfoBarView)
+
  public:
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kOkButtonElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kCancelButtonElementId);
+
   explicit ConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate> delegate);
 
   ConfirmInfoBar(const ConfirmInfoBar&) = delete;
@@ -29,11 +33,13 @@ class ConfirmInfoBar : public InfoBarView {
   ~ConfirmInfoBar() override;
 
   // InfoBarView:
-  void Layout() override;
+  void Layout(PassKey) override;
 
   ConfirmInfoBarDelegate* GetDelegate();
 
   views::MdTextButton* ok_button_for_testing() { return ok_button_; }
+
+  int target_height_for_testing() const { return target_height(); }
 
  protected:
   // InfoBarView:
@@ -43,15 +49,14 @@ class ConfirmInfoBar : public InfoBarView {
   void OkButtonPressed();
   void CancelButtonPressed();
 
-  // Returns the width of all content other than the label and link.  Layout()
-  // uses this to determine how much space the label and link can take.
+  // Returns the width of all content other than the label and link.
+  // Layout uses this to determine how much space the label and link can take.
   int NonLabelWidth() const;
 
   raw_ptr<views::Label> label_ = nullptr;
   raw_ptr<views::MdTextButton> ok_button_ = nullptr;
   raw_ptr<views::MdTextButton> cancel_button_ = nullptr;
   raw_ptr<views::Link> link_ = nullptr;
-  std::unique_ptr<ElevationIconSetter> elevation_icon_setter_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_INFOBARS_CONFIRM_INFOBAR_H_

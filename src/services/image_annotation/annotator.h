@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 #include <utility>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "components/manta/anchovy/anchovy_provider.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -101,6 +103,7 @@ class Annotator : public mojom::Annotator {
             int batch_size,
             double min_ocr_confidence,
             scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+            std::unique_ptr<manta::AnchovyProvider> anchovy_provider,
             std::unique_ptr<Client> client);
 
   Annotator(const Annotator&) = delete;
@@ -223,16 +226,25 @@ class Annotator : public mojom::Annotator {
   void OnServerResponseReceived(const std::set<RequestKey>& request_keys,
                                 UrlLoaderList::iterator server_request_it,
                                 std::unique_ptr<std::string> json_response);
+  // Called once a response comes back from anchovy_provider_.
+  void OnMantaResponseReceived(const RequestKey& request_key,
+                               base::Time request_time,
+                               base::Value::Dict dict,
+                               manta::MantaStatus status);
 
   // Called when the data decoder service provides parsed JSON data for a server
   // response.
   void OnResponseJsonParsed(const std::set<RequestKey>& request_keys,
-                            absl::optional<base::Value> json_data,
-                            const absl::optional<std::string>& error);
+                            std::optional<base::Value> json_data,
+                            const std::optional<std::string>& error);
 
   // Adds the given results to the cache (if successful) and notifies clients.
   void ProcessResults(
       const std::set<RequestKey>& request_keys,
+      const std::map<std::string, mojom::AnnotateImageResultPtr>& results);
+
+  void ProcessResult(
+      const RequestKey& request_key,
       const std::map<std::string, mojom::AnnotateImageResultPtr>& results);
 
   std::string ComputePreferredLanguage(const std::string& page_lang) const;
@@ -245,14 +257,14 @@ class Annotator : public mojom::Annotator {
       const std::unique_ptr<std::string> json_response);
 
   // Parse the JSON from the reply with server languages.
-  void OnServerLangsResponseJsonParsed(
-      absl::optional<base::Value> json_data,
-      const absl::optional<std::string>& error);
+  void OnServerLangsResponseJsonParsed(std::optional<base::Value> json_data,
+                                       const std::optional<std::string>& error);
 
+  const std::unique_ptr<manta::AnchovyProvider> anchovy_provider_;
   const std::unique_ptr<Client> client_;
 
   // Maps from request key to previously-obtained annotation results.
-  // TODO(crbug.com/916420): periodically clear entries from this cache.
+  // TODO(crbug.com/41432508): periodically clear entries from this cache.
   std::map<RequestKey, mojom::AnnotateImageResultPtr> cached_results_;
 
   // Maps from request key to its list of request infos (i.e. info of clients
@@ -268,7 +280,9 @@ class Annotator : public mojom::Annotator {
   // Note that separate local processing will be scheduled for two requests that
   // share a source ID but differ in language. This is suboptimal; in future we
   // could share local processing among all relevant requests.
-  std::map<RequestKey, mojo::Remote<mojom::ImageProcessor>*> local_processors_;
+  std::map<RequestKey,
+           raw_ptr<mojo::Remote<mojom::ImageProcessor>, CtnExperimental>>
+      local_processors_;
 
   // A list of currently-ongoing HTTP requests to the image annotation server.
   UrlLoaderList ongoing_server_requests_;

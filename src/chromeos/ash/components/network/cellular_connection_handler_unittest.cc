@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "ash/constants/ash_features.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
@@ -24,7 +25,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 const char kTestCellularDevicePath[] = "cellular_path";
@@ -70,8 +71,13 @@ std::string CreateTestEid(int euicc_num) {
 }  // namespace
 
 class CellularConnectionHandlerTest : public testing::Test {
+ public:
+  CellularConnectionHandlerTest(const CellularConnectionHandlerTest&) = delete;
+  CellularConnectionHandlerTest& operator=(
+      const CellularConnectionHandlerTest&) = delete;
+
  protected:
-  CellularConnectionHandlerTest()
+  explicit CellularConnectionHandlerTest()
       : helper_(/*use_default_devices_and_services=*/false) {}
   ~CellularConnectionHandlerTest() override = default;
 
@@ -114,6 +120,13 @@ class CellularConnectionHandlerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
+  void SetCellularServiceConnected(int profile_num) {
+    helper_.service_test()->SetServiceProperty(
+        CreateTestServicePath(profile_num), shill::kStateProperty,
+        base::Value(shill::kStateOnline));
+    base::RunLoop().RunUntilIdle();
+  }
+
   void ExpectServiceConnectable(int profile_num) {
     const NetworkState* network_state =
         helper_.network_state_handler()->GetNetworkState(
@@ -126,6 +139,13 @@ class CellularConnectionHandlerTest : public testing::Test {
         CreateTestServicePath(profile_num), shill::kConnectableProperty,
         base::Value(true));
     base::RunLoop().RunUntilIdle();
+  }
+
+  void SetSimLocked(int profile_num) {
+    helper_.device_test()->SetSimLocked(kTestCellularDevicePath, true);
+    helper_.device_test()->SetDeviceProperty(
+        kTestCellularDevicePath, shill::kIccidProperty,
+        base::Value(CreateTestIccid(1)), true);
   }
 
   void SetServiceEid(int profile_num, int euicc_num) {
@@ -177,8 +197,8 @@ class CellularConnectionHandlerTest : public testing::Test {
     helper_.hermes_euicc_test()->AddCarrierProfile(
         dbus::ObjectPath(CreateTestProfilePath(profile_num)),
         dbus::ObjectPath(CreateTestEuiccPath(euicc_num)), iccid,
-        CreateTestName(profile_num), "service_provider", "activation_code",
-        CreateTestServicePath(profile_num), state,
+        CreateTestName(profile_num), "nickname", "service_provider",
+        "activation_code", CreateTestServicePath(profile_num), state,
         hermes::profile::ProfileClass::kOperational, add_profile_behavior);
 
     if (!add_service) {
@@ -194,8 +214,10 @@ class CellularConnectionHandlerTest : public testing::Test {
   }
 
   void ExpectSuccess(const std::string& expected_service_path,
-                     base::RunLoop* run_loop) {
+                     base::RunLoop* run_loop,
+                     bool auto_connected) {
     expected_service_path_ = expected_service_path;
+    expected_auto_connected_ = auto_connected;
     on_success_callback_ = run_loop->QuitClosure();
   }
 
@@ -236,8 +258,9 @@ class CellularConnectionHandlerTest : public testing::Test {
   }
 
  private:
-  void OnSuccess(const std::string& service_path) {
+  void OnSuccess(const std::string& service_path, bool auto_connected) {
     EXPECT_EQ(expected_service_path_, service_path);
+    EXPECT_EQ(expected_auto_connected_, auto_connected);
     std::move(on_success_callback_).Run();
   }
 
@@ -260,6 +283,7 @@ class CellularConnectionHandlerTest : public testing::Test {
   base::OnceClosure on_success_callback_;
   base::OnceClosure on_failure_callback_;
   std::string expected_service_path_;
+  bool expected_auto_connected_;
   std::string expected_error_name_;
 };
 
@@ -283,7 +307,8 @@ TEST_F(CellularConnectionHandlerTest, ServiceAlreadyConnectable) {
   SetServiceConnectable(/*profile_num=*/1);
 
   base::RunLoop run_loop;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/false);
   CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
   run_loop.Run();
 
@@ -397,7 +422,7 @@ TEST_F(CellularConnectionHandlerTest, TimeoutWaitingForConnectable_PSim) {
                    kTimeoutWaitingForConnectable);
 }
 
-TEST_F(CellularConnectionHandlerTest, Success) {
+TEST_F(CellularConnectionHandlerTest, Success_AutoConnected) {
   AddCellularDevice();
   AddEuicc(/*euicc_num=*/1);
   AddProfile(/*profile_num=*/1, /*euicc_num=*/1);
@@ -405,7 +430,29 @@ TEST_F(CellularConnectionHandlerTest, Success) {
   SetServiceIccid(/*profile_num=*/1);
 
   base::RunLoop run_loop;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/true);
+  CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
+  // Simulate the cellular network get connected after 10 seconds.
+  AdvanceClock(base::Seconds(10));
+  SetCellularServiceConnected(/*profile_num=*/1);
+  run_loop.Run();
+
+  ExpectServiceConnectable(/*profile_num=*/1);
+  ExpectResult(
+      CellularConnectionHandler::PrepareCellularConnectionResult::kSuccess);
+}
+
+TEST_F(CellularConnectionHandlerTest, Success_TimeoutAutoConnected) {
+  AddCellularDevice();
+  AddEuicc(/*euicc_num=*/1);
+  AddProfile(/*profile_num=*/1, /*euicc_num=*/1);
+  SetServiceEid(/*profile_num=*/1, /*euicc_num=*/1);
+  SetServiceIccid(/*profile_num=*/1);
+
+  base::RunLoop run_loop;
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/false);
   CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
   run_loop.Run();
 
@@ -425,7 +472,8 @@ TEST_F(CellularConnectionHandlerTest, Success_AlreadyEnabled) {
   SetServiceIccid(/*profile_num=*/1);
 
   base::RunLoop run_loop;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/false);
   CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
   SetServiceConnectable(/*profile_num=*/1);
   run_loop.Run();
@@ -433,6 +481,26 @@ TEST_F(CellularConnectionHandlerTest, Success_AlreadyEnabled) {
   ExpectServiceConnectable(/*profile_num=*/1);
   ExpectResult(
       CellularConnectionHandler::PrepareCellularConnectionResult::kSuccess);
+}
+
+TEST_F(CellularConnectionHandlerTest, Failed_SimLocked) {
+  AddCellularDevice();
+  AddEuicc(/*euicc_num=*/1);
+  AddProfile(/*profile_num=*/1,
+             /*euicc_num=*/1,
+             /*add_service=*/true);
+  SetServiceEid(/*profile_num=*/1, /*euicc_num=*/1);
+  SetServiceIccid(/*profile_num=*/1);
+
+  base::RunLoop run_loop;
+  ExpectFailure(CreateTestServicePath(/*profile_num=*/1),
+                NetworkConnectionHandler::kErrorSimPinPukLocked, &run_loop);
+  CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
+  SetSimLocked(/*profile_num=*/1);
+  run_loop.Run();
+
+  ExpectResult(
+      CellularConnectionHandler::PrepareCellularConnectionResult::kSimLocked);
 }
 
 TEST_F(CellularConnectionHandlerTest, ConnectToStub) {
@@ -445,7 +513,8 @@ TEST_F(CellularConnectionHandlerTest, ConnectToStub) {
   base::RunLoop run_loop;
   // Expect that by the end, we will connect to a "real" (i.e., non-stub)
   // service path.
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/false);
   CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
   base::RunLoop().RunUntilIdle();
 
@@ -473,7 +542,8 @@ TEST_F(CellularConnectionHandlerTest, MultipleRequests) {
   SetServiceIccid(/*profile_num=*/2);
 
   base::RunLoop run_loop1;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop1);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop1,
+                /*auto_connected=*/false);
 
   // Start both operations.
   CallPrepareExistingCellularNetworkForConnection(/*profile_num=*/1);
@@ -484,7 +554,8 @@ TEST_F(CellularConnectionHandlerTest, MultipleRequests) {
   ExpectServiceConnectable(/*profile_num=*/1);
 
   base::RunLoop run_loop2;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/2), &run_loop2);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/2), &run_loop2,
+                /*auto_connected=*/false);
 
   // Verify that the second service becomes connectable.
   run_loop2.Run();
@@ -501,9 +572,10 @@ TEST_F(CellularConnectionHandlerTest, NewProfile) {
   AddProfile(/*profile_num=*/1, /*euicc_num=*/1);
 
   base::RunLoop run_loop;
-  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop);
-  CallPrepareNewlyInstalledCellularNetworkForConnection(/*euicc_num=*/1,
-                                                        /*profile_num=*/1);
+  ExpectSuccess(CreateTestServicePath(/*profile_num=*/1), &run_loop,
+                /*auto_connected=*/false);
+  CallPrepareNewlyInstalledCellularNetworkForConnection(/*profile_num=*/1,
+                                                        /*euicc_num=*/1);
 
   // Verify that service corresponding to new profile becomes
   // connectable.
@@ -513,4 +585,4 @@ TEST_F(CellularConnectionHandlerTest, NewProfile) {
       CellularConnectionHandler::PrepareCellularConnectionResult::kSuccess);
 }
 
-}  // namespace chromeos
+}  // namespace ash

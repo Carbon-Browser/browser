@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,7 +13,9 @@
 
 #include <algorithm>
 #include <memory>
+#include <numeric>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/check_op.h"
@@ -22,6 +24,7 @@
 #include "base/i18n/char_iterator.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -113,16 +116,11 @@ bool GetDefaultWhitespaceElision(bool elide_in_middle,
 
 }  // namespace
 
-// U+2026 in utf8
-const char kEllipsis[] = "\xE2\x80\xA6";
-const char16_t kEllipsisUTF16[] = {0x2026, 0};
-const char16_t kForwardSlash = '/';
-
 StringSlicer::StringSlicer(const std::u16string& text,
                            const std::u16string& ellipsis,
                            bool elide_in_middle,
                            bool elide_at_beginning,
-                           absl::optional<bool> elide_whitespace)
+                           std::optional<bool> elide_whitespace)
     : text_(text),
       ellipsis_(ellipsis),
       elide_in_middle_(elide_in_middle),
@@ -136,7 +134,7 @@ StringSlicer::StringSlicer(const std::u16string& text,
 std::u16string StringSlicer::CutString(size_t length,
                                        bool insert_ellipsis) const {
   const std::u16string ellipsis_text =
-      insert_ellipsis ? ellipsis_ : std::u16string();
+      insert_ellipsis ? *ellipsis_ : std::u16string();
 
   // For visual consistency, when eliding at either end of the string, excess
   // space should be trimmed from the text to return "Foo bar..." instead of
@@ -144,13 +142,13 @@ std::u16string StringSlicer::CutString(size_t length,
 
   if (elide_at_beginning_) {
     return ellipsis_text +
-           text_.substr(FindValidBoundaryAfter(text_, text_.length() - length,
-                                               elide_whitespace_));
+           text_->substr(FindValidBoundaryAfter(
+               *text_, text_->length() - length, elide_whitespace_));
   }
 
   if (!elide_in_middle_) {
-    return text_.substr(
-               0, FindValidBoundaryBefore(text_, length, elide_whitespace_)) +
+    return text_->substr(
+               0, FindValidBoundaryBefore(*text_, length, elide_whitespace_)) +
            ellipsis_text;
   }
 
@@ -162,11 +160,11 @@ std::u16string StringSlicer::CutString(size_t length,
   // less line up; eliminating space would make the text look more ragged.
   const size_t half_length = length / 2;
   const size_t prefix_length =
-      FindValidBoundaryBefore(text_, length - half_length, elide_whitespace_);
+      FindValidBoundaryBefore(*text_, length - half_length, elide_whitespace_);
   const size_t suffix_start = FindValidBoundaryAfter(
-      text_, text_.length() - half_length, elide_whitespace_);
-  return text_.substr(0, prefix_length) + ellipsis_text +
-         text_.substr(suffix_start);
+      *text_, text_->length() - half_length, elide_whitespace_);
+  return text_->substr(0, prefix_length) + ellipsis_text +
+         text_->substr(suffix_start);
 }
 
 std::u16string ElideFilename(const base::FilePath& filename,
@@ -257,7 +255,7 @@ std::u16string ElideText(const std::u16string& text,
   size_t hi = text.length() - 1;
   size_t guess;
   std::u16string cut;
-  for (guess = (lo + hi) / 2; lo <= hi; guess = (lo + hi) / 2) {
+  for (guess = std::midpoint(lo, hi); lo <= hi; guess = std::midpoint(lo, hi)) {
     // We check the width of the whole desired string at once to ensure we
     // handle kerning/ligatures/etc. correctly.
     // TODO(skanuj) : Handle directionality of ellipsis based on adjacent
@@ -348,7 +346,7 @@ class RectangleString {
   // AddString() may be called multiple times to concatenate together
   // multiple strings into the region (the current caller doesn't do
   // this, however).
-  void AddString(const std::u16string& input);
+  void AddString(std::u16string_view input);
 
   // Perform any deferred output processing.  Must be called after the
   // last AddString() call has occurred.
@@ -357,15 +355,15 @@ class RectangleString {
  private:
   // Add a line to the rectangular region at the current position,
   // either by itself or by breaking it into words.
-  void AddLine(const std::u16string& line);
+  void AddLine(std::u16string_view line);
 
   // Add a word to the rectangular region at the current position,
   // either by itself or by breaking it into characters.
-  void AddWord(const std::u16string& word);
+  void AddWord(std::u16string_view word);
 
   // Add text to the output string if the rectangular boundaries
   // have not been exceeded, advancing the current position.
-  void Append(const std::u16string& string);
+  void Append(std::u16string_view string);
 
   // Set the current position to the beginning of the next line.  If
   // |output| is true, add a newline to the output string if the rectangular
@@ -400,7 +398,7 @@ class RectangleString {
   raw_ptr<std::u16string> output_;
 };
 
-void RectangleString::AddString(const std::u16string& input) {
+void RectangleString::AddString(std::u16string_view input) {
   base::i18n::BreakIterator lines(input,
                                   base::i18n::BreakIterator::BREAK_NEWLINE);
   if (lines.Init()) {
@@ -419,7 +417,7 @@ bool RectangleString::Finalize() {
   return false;
 }
 
-void RectangleString::AddLine(const std::u16string& line) {
+void RectangleString::AddLine(std::u16string_view line) {
   if (line.length() < max_cols_) {
     Append(line);
   } else {
@@ -437,7 +435,7 @@ void RectangleString::AddLine(const std::u16string& line) {
   current_col_ = 0;
 }
 
-void RectangleString::AddWord(const std::u16string& word) {
+void RectangleString::AddWord(std::u16string_view word) {
   if (word.length() < max_cols_) {
     // Word can be made to fit, no need to fragment it.
     if (current_col_ + word.length() >= max_cols_)
@@ -463,7 +461,7 @@ void RectangleString::AddWord(const std::u16string& word) {
   }
 }
 
-void RectangleString::Append(const std::u16string& string) {
+void RectangleString::Append(std::u16string_view string) {
   if (current_row_ < max_rows_)
     output_->append(string);
   else
@@ -544,7 +542,7 @@ class RectangleText {
   bool NewLine();
 
   // The font list used for measuring text width.
-  const FontList& font_list_;
+  const raw_ref<const FontList> font_list_;
 
   // The height of each line of text.
   const int line_height_;
@@ -589,14 +587,14 @@ void RectangleText::AddString(const std::u16string& input) {
                                   base::i18n::BreakIterator::BREAK_NEWLINE);
   if (lines.Init()) {
     while (!insufficient_height_ && lines.Advance()) {
-      std::u16string line = lines.GetString();
+      std::u16string_view line = lines.GetString();
       // The BREAK_NEWLINE iterator will keep the trailing newline character,
       // except in the case of the last line, which may not have one.  Remove
       // the newline character, if it exists.
       last_line_ended_in_lf_ = !line.empty() && line.back() == '\n';
       if (last_line_ended_in_lf_)
-        line.resize(line.length() - 1);
-      AddLine(line);
+        line.remove_suffix(1);
+      AddLine(std::u16string(line));
     }
   } else {
     NOTREACHED() << "BreakIterator (lines) init failed";
@@ -619,7 +617,7 @@ int RectangleText::Finalize() {
 }
 
 void RectangleText::AddLine(const std::u16string& line) {
-  const float line_width = GetStringWidthF(line, font_list_);
+  const float line_width = GetStringWidthF(line, *font_list_);
   if (line_width <= available_pixel_width_) {
     AddToCurrentLineWithWidth(line, line_width);
   } else {
@@ -630,8 +628,8 @@ void RectangleText::AddLine(const std::u16string& line) {
     if (words.Init()) {
       while (words.Advance()) {
         const bool truncate = !current_line_.empty();
-        const std::u16string& word = words.GetString();
-        const int lines_added = AddWord(word);
+        const std::u16string_view word = words.GetString();
+        const int lines_added = AddWord(std::u16string(word));
         if (lines_added) {
           if (truncate) {
             // Trim trailing whitespace from the line that was added.
@@ -661,7 +659,7 @@ int RectangleText::WrapWord(const std::u16string& word) {
   bool first_fragment = true;
   while (!insufficient_height_ && !text.empty()) {
     std::u16string fragment =
-        ElideText(text, font_list_, available_pixel_width_, TRUNCATE);
+        ElideText(text, *font_list_, available_pixel_width_, TRUNCATE);
     // At least one character has to be added at every line, even if the
     // available space is too small.
     if (fragment.empty())
@@ -696,7 +694,7 @@ int RectangleText::AddWordOverflow(const std::u16string& word) {
     const ElideBehavior elide_behavior =
         (wrap_behavior_ == ELIDE_LONG_WORDS ? ELIDE_TAIL : TRUNCATE);
     const std::u16string elided_word =
-        ElideText(word, font_list_, available_pixel_width_, elide_behavior);
+        ElideText(word, *font_list_, available_pixel_width_, elide_behavior);
     AddToCurrentLine(elided_word);
     insufficient_width_ = true;
   }
@@ -708,7 +706,7 @@ int RectangleText::AddWord(const std::u16string& word) {
   int lines_added = 0;
   std::u16string trimmed;
   base::TrimWhitespace(word, base::TRIM_TRAILING, &trimmed);
-  const float trimmed_width = GetStringWidthF(trimmed, font_list_);
+  const float trimmed_width = GetStringWidthF(trimmed, *font_list_);
   if (trimmed_width <= available_pixel_width_) {
     // Word can be made to fit, no need to fragment it.
     if ((current_width_ + trimmed_width > available_pixel_width_) && NewLine())
@@ -723,7 +721,7 @@ int RectangleText::AddWord(const std::u16string& word) {
 }
 
 void RectangleText::AddToCurrentLine(const std::u16string& text) {
-  AddToCurrentLineWithWidth(text, GetStringWidthF(text, font_list_));
+  AddToCurrentLineWithWidth(text, GetStringWidthF(text, *font_list_));
 }
 
 void RectangleText::AddToCurrentLineWithWidth(const std::u16string& text,

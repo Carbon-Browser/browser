@@ -1,22 +1,24 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_AGGREGATION_SERVICE_AGGREGATABLE_REPORT_SCHEDULER_H_
 #define CONTENT_BROWSER_AGGREGATION_SERVICE_AGGREGATABLE_REPORT_SCHEDULER_H_
 
+#include <optional>
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "content/browser/aggregation_service/aggregation_service_storage.h"
 #include "content/browser/aggregation_service/report_scheduler_timer.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
+class ElapsedTimer;
 class Time;
 }  // namespace base
 
@@ -37,6 +39,19 @@ class AggregationServiceStorageContext;
 // clock time goes backward).
 class CONTENT_EXPORT AggregatableReportScheduler {
  public:
+  // Add uniform random noise in the range of [0, 1 minutes] to the report time
+  // when the browser comes back online. Aligned with
+  // `AttributionStorageDelegateImpl::GetOfflineReportDelayConfig()`.
+  static constexpr base::TimeDelta kOfflineReportTimeMinimumDelay =
+      base::Minutes(0);
+  static constexpr base::TimeDelta kOfflineReportTimeMaximumDelay =
+      base::Minutes(1);
+
+  // Configuration for retrying to send reports that failed to send
+  static constexpr int kMaxRetries = 2;
+  static constexpr base::TimeDelta kInitialRetryDelay = base::Minutes(5);
+  static constexpr int kRetryDelayFactor = 3;
+
   AggregatableReportScheduler(
       AggregationServiceStorageContext* storage_context,
       base::RepeatingCallback<
@@ -63,11 +78,14 @@ class CONTENT_EXPORT AggregatableReportScheduler {
 
   // Notifies that the request to assemble and send the report with `request_id`
   // completed unsuccessfully. There must be an in-progress request stored with
-  // that `request_id`.
-  virtual void NotifyInProgressRequestFailed(
-      AggregationServiceStorage::RequestId request_id);
-
-  // TODO(crbug.com/1340042): Implement offline and startup handling
+  // that `request_id`.`failed_attemps_before_sending` is the number of times
+  // that this request previously failed. ie. not counting the failure being
+  // notified on.
+  // Returns true when the request will be scheduled to be retried.
+  // Returns false when the request is dropped. ie. it wont be retried.
+  virtual bool NotifyInProgressRequestFailed(
+      AggregationServiceStorage::RequestId request_id,
+      int previous_failed_attempts);
 
  private:
   class TimerDelegate : public ReportSchedulerTimer::Delegate {
@@ -84,7 +102,7 @@ class CONTENT_EXPORT AggregatableReportScheduler {
     TimerDelegate& operator=(TimerDelegate&&) = delete;
 
     // Notifies that we no longer need to track `request_id` as in-progress.
-    void NotifyRequestCompleted(
+    void NotifySendAttemptCompleted(
         AggregationServiceStorage::RequestId request_id);
 
     base::WeakPtr<AggregatableReportScheduler::TimerDelegate> GetWeakPtr() {
@@ -93,13 +111,15 @@ class CONTENT_EXPORT AggregatableReportScheduler {
 
    private:
     // ReportSchedulerTimer::Delegate:
-    void GetNextReportTime(base::OnceCallback<void(absl::optional<base::Time>)>,
+    void GetNextReportTime(base::OnceCallback<void(std::optional<base::Time>)>,
                            base::Time now) override;
-    void OnReportingTimeReached(base::Time now) override;
+    void OnReportingTimeReached(base::Time now,
+                                base::Time timer_desired_run_time) override;
     void AdjustOfflineReportTimes(
-        base::OnceCallback<void(absl::optional<base::Time>)>) override;
+        base::OnceCallback<void(std::optional<base::Time>)>) override;
 
     void OnRequestsReturnedFromStorage(
+        base::ElapsedTimer task_timer,
         std::vector<AggregationServiceStorage::RequestAndId> requests_and_ids);
 
     // Using a raw reference is safe because `storage_context_` is guaranteed to
@@ -120,17 +140,28 @@ class CONTENT_EXPORT AggregatableReportScheduler {
     // the typical size.
     std::set<AggregationServiceStorage::RequestId> in_progress_requests_;
 
+    // Set iff the private aggregation developer mode is enabled.
+    bool should_not_delay_reports_;
+
     base::WeakPtrFactory<AggregatableReportScheduler::TimerDelegate>
         weak_ptr_factory_{this};
   };
+
+  // Returns how long to wait before attempting to send a report that has
+  // previously failed to be sent failed_send_attempts times. Returns
+  // `std::nullopt` to indicate that no more attempts should be made.
+  // Otherwise, the return value must be positive. `failed_send_attempts`
+  // must be positive.
+  static std::optional<base::TimeDelta> GetFailedReportDelay(
+      int failed_send_attempts);
 
   // Using a raw reference is safe because `storage_context_` is guaranteed to
   // outlive `this`.
   raw_ref<AggregationServiceStorageContext> storage_context_;
 
-  // Using a raw reference is safe because it's owned by `timer_`. Do not use
-  // once destruction has begun as `timer_` is destroyed before this reference.
-  raw_ref<TimerDelegate> timer_delegate_;
+  // Using a raw pointer is safe because it's owned by `timer_`. Will be cleared
+  // in the destructor to avoid a dangling pointer.
+  raw_ptr<TimerDelegate> timer_delegate_;
 
   ReportSchedulerTimer timer_;
 };

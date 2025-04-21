@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,9 @@
 
 #include <utility>
 
+#include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -54,11 +57,11 @@ MediaStreamRendererFactory::MediaStreamRendererFactory() {}
 
 MediaStreamRendererFactory::~MediaStreamRendererFactory() {}
 
-scoped_refptr<WebMediaStreamVideoRenderer>
+scoped_refptr<MediaStreamVideoRenderer>
 MediaStreamRendererFactory::GetVideoRenderer(
     const WebMediaStream& web_stream,
-    const WebMediaStreamVideoRenderer::RepaintCB& repaint_cb,
-    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+    const MediaStreamVideoRenderer::RepaintCB& repaint_cb,
+    scoped_refptr<base::SequencedTaskRunner> video_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner) {
   DCHECK(!web_stream.IsNull());
 
@@ -67,18 +70,18 @@ MediaStreamRendererFactory::GetVideoRenderer(
 
   MediaStreamDescriptor& descriptor = *web_stream;
   auto video_components = descriptor.VideoComponents();
-  if (video_components.IsEmpty() ||
+  if (video_components.empty() ||
       !MediaStreamVideoTrack::GetTrack(
           WebMediaStreamTrack(video_components[0].Get()))) {
     return nullptr;
   }
 
-  return new MediaStreamVideoRendererSink(video_components[0].Get(), repaint_cb,
-                                          std::move(io_task_runner),
-                                          std::move(main_render_task_runner));
+  return base::MakeRefCounted<MediaStreamVideoRendererSink>(
+      video_components[0].Get(), repaint_cb, std::move(video_task_runner),
+      std::move(main_render_task_runner));
 }
 
-scoped_refptr<WebMediaStreamAudioRenderer>
+scoped_refptr<MediaStreamAudioRenderer>
 MediaStreamRendererFactory::GetAudioRenderer(
     const WebMediaStream& web_stream,
     WebLocalFrame* web_frame,
@@ -91,13 +94,13 @@ MediaStreamRendererFactory::GetAudioRenderer(
 
   MediaStreamDescriptor& descriptor = *web_stream;
   auto audio_components = descriptor.AudioComponents();
-  if (audio_components.IsEmpty()) {
+  if (audio_components.empty()) {
     // The stream contains no audio tracks. Log error message if the stream
     // contains no video tracks either. Without this extra check, video-only
     // streams would generate error messages at this stage and we want to
     // avoid that.
     auto video_tracks = descriptor.VideoComponents();
-    if (video_tracks.IsEmpty()) {
+    if (video_tracks.empty()) {
       SendLogMessage(String::Format(
           "%s => (ERROR: no audio tracks in media stream)", __func__));
     }
@@ -133,10 +136,9 @@ MediaStreamRendererFactory::GetAudioRenderer(
         "%s => (creating TrackAudioRenderer for %s audio track)", __func__,
         audio_track->is_local_track() ? "local" : "remote"));
 
-    return new TrackAudioRenderer(audio_components[0].Get(), *frame,
-                                  /*session_id=*/base::UnguessableToken(),
-                                  String(device_id),
-                                  std::move(on_render_error_callback));
+    return base::MakeRefCounted<TrackAudioRenderer>(
+        audio_components[0].Get(), *frame, String(device_id),
+        std::move(on_render_error_callback));
   }
 
   // Get the AudioDevice associated with the frame where this track was created,
@@ -169,10 +171,10 @@ MediaStreamRendererFactory::GetAudioRenderer(
         "%s => (creating new WebRtcAudioRenderer for remote stream)",
         __func__));
 
-    renderer = new WebRtcAudioRenderer(
+    renderer = base::MakeRefCounted<WebRtcAudioRenderer>(
         PeerConnectionDependencyFactory::From(*frame->DomWindow())
             .GetWebRtcSignalingTaskRunner(),
-        web_stream, web_frame,
+        web_stream, *web_frame,
 
         GetSessionIdForWebRtcAudioRenderer(*frame->DomWindow()),
         String(device_id), std::move(on_render_error_callback));

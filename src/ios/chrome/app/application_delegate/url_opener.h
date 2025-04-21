@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/app/application_delegate/app_state_observer.h"
+#import "ios/chrome/app/profile/profile_init_stage.h"
 
-@class AppState;
 @protocol ConnectionInformation;
 class PrefService;
 @protocol StartupInformation;
@@ -28,15 +27,15 @@ class PrefService;
     connectionInformation:(id<ConnectionInformation>)connectionInformation
        startupInformation:(id<StartupInformation>)startupInformation
               prefService:(PrefService*)prefService
-                initStage:(InitStage)initStage;
+                initStage:(ProfileInitStage)initStage;
 
 // Handles open URL at application startup.
 + (void)handleLaunchOptions:(URLOpenerParams*)options
                   tabOpener:(id<TabOpening>)tabOpener
       connectionInformation:(id<ConnectionInformation>)connectionInformation
          startupInformation:(id<StartupInformation>)startupInformation
-                   appState:(AppState*)appState
-                prefService:(PrefService*)prefService;
+                prefService:(PrefService*)prefService
+                  initStage:(ProfileInitStage)initStage;
 @end
 
 #endif  // IOS_CHROME_APP_APPLICATION_DELEGATE_URL_OPENER_H_

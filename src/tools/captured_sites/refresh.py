@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Refreshes existing WPR archive files from live Autofill Server
@@ -28,7 +28,7 @@ import signal
 import sys
 import subprocess
 
-_BASE_FOLDER = 'chrome/test/data/autofill/captured_sites'
+_BASE_FOLDER = 'chrome/test/data/autofill/captured_sites/artifacts'
 _TELEMETRY_BIN_FOLDER = ('third_party/catapult/telemetry/telemetry/bin/'
                          'linux/x86_64/')
 _TRIMMED_FOLDER = os.path.join(_BASE_FOLDER, 'trimmed')
@@ -97,7 +97,7 @@ class Refresh():
     """Update .test file expectations to reflect the changes in the newly merged
     Server Predictions"""
     cmd = '...'
-    #TODO(crbug.com/1300642)
+    #TODO(crbug.com/40216356)
     print('Not Implemented')
 
 

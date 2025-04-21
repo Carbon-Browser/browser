@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/payments/payment_manager.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -19,9 +19,9 @@ namespace blink {
 PaymentInstruments* PaymentManager::instruments() {
   if (!instruments_) {
     instruments_ = MakeGarbageCollected<PaymentInstruments>(
-        manager_, registration_->GetExecutionContext());
+        *this, registration_->GetExecutionContext());
   }
-  return instruments_;
+  return instruments_.Get();
 }
 
 const String& PaymentManager::userHint() {
@@ -33,14 +33,14 @@ void PaymentManager::setUserHint(const String& user_hint) {
   manager_->SetUserHint(user_hint_);
 }
 
-ScriptPromise PaymentManager::enableDelegations(
+ScriptPromise<IDLBoolean> PaymentManager::enableDelegations(
     ScriptState* script_state,
     const Vector<V8PaymentDelegation>& delegations,
     ExceptionState& exception_state) {
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Cannot enable payment delegations");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   if (enable_delegations_resolver_) {
@@ -48,7 +48,7 @@ ScriptPromise PaymentManager::enableDelegations(
         DOMExceptionCode::kInvalidStateError,
         "Cannot call enableDelegations() again until the previous "
         "enableDelegations() is finished");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   using MojoPaymentDelegation = payments::mojom::blink::PaymentDelegation;
@@ -76,10 +76,11 @@ ScriptPromise PaymentManager::enableDelegations(
 
   manager_->EnableDelegations(
       std::move(mojo_delegations),
-      WTF::Bind(&PaymentManager::OnEnableDelegationsResponse,
-                WrapPersistent(this)));
+      WTF::BindOnce(&PaymentManager::OnEnableDelegationsResponse,
+                    WrapPersistent(this)));
   enable_delegations_resolver_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+      MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(
+          script_state, exception_state.GetContext());
   return enable_delegations_resolver_->Promise();
 }
 
@@ -103,7 +104,7 @@ PaymentManager::PaymentManager(ServiceWorkerRegistration* registration)
             context->GetTaskRunner(TaskType::kUserInteraction)));
   }
 
-  manager_.set_disconnect_handler(WTF::Bind(
+  manager_.set_disconnect_handler(WTF::BindOnce(
       &PaymentManager::OnServiceConnectionError, WrapWeakPersistent(this)));
   manager_->Init(registration_->GetExecutionContext()->Url(),
                  registration_->scope());

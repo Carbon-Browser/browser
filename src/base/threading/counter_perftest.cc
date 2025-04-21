@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #include <string>
 
 #include "base/barrier_closure.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
@@ -100,8 +100,9 @@ class IncrementThread : public SimpleThread {
   // SimpleThread:
   void Run() override {
     start_event_->Wait();
-    for (uint64_t i = 0; i < kNumIterations; ++i)
+    for (uint64_t i = 0; i < kNumIterations; ++i) {
       counter_->Increment();
+    }
     std::move(done_closure_).Run();
   }
 
@@ -138,8 +139,9 @@ void RunIncrementPerfTest(const std::string& story_name, int num_threads) {
       kMetricOperationThroughput,
       kNumIterations / (end_time - start_time).InMillisecondsF());
 
-  for (auto& thread : threads)
+  for (auto& thread : threads) {
     thread->Join();
+  }
 }
 
 }  // namespace

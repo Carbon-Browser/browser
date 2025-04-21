@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/component_export.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
+#include "base/values.h"
 #include "storage/browser/file_system/mount_points.h"
 #include "storage/common/file_system/file_system_mount_option.h"
 #include "storage/common/file_system/file_system_types.h"
@@ -43,6 +44,11 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ExternalMountPoints
  public:
   static ExternalMountPoints* GetSystemInstance();
   static scoped_refptr<ExternalMountPoints> CreateRefCounted();
+
+  static void GetDebugJSONForKey(
+      std::string_view key,
+      base::OnceCallback<void(std::pair<std::string_view, base::Value>)>
+          callback);
 
   ExternalMountPoints(const ExternalMountPoints&) = delete;
   ExternalMountPoints& operator=(const ExternalMountPoints&) = delete;

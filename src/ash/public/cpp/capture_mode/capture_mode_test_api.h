@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 #define ASH_PUBLIC_CPP_CAPTURE_MODE_CAPTURE_MODE_TEST_API_H_
 
 #include "ash/ash_export.h"
-#include "base/callback_forward.h"
+#include "ash/capture_mode/capture_mode_behavior.h"
+#include "ash/capture_mode/capture_mode_types.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 
 namespace aura {
@@ -22,10 +25,14 @@ namespace media {
 class VideoFrame;
 }  // namespace media
 
+namespace views {
+class Widget;
+}  // namespace views
+
 namespace ash {
 
 class CaptureModeController;
-class RecordingOverlayController;
+class AnnotationsOverlayController;
 
 // Exposes a very limited API for browser tests, and possible autotest private
 // APIs to interact with the capture mode feature.
@@ -37,12 +44,18 @@ class ASH_EXPORT CaptureModeTestApi {
   ~CaptureModeTestApi() = default;
 
   // APIs to start capture mode from the three possible sources (fullscreen,
-  // window, or region). If |for_video| is true, a video will be recorded from
+  // window, or region). If `for_video` is true, a video will be recorded from
   // the chosen source once capture begins, otherwise an image will be
   // captured.
   void StartForFullscreen(bool for_video);
   void StartForWindow(bool for_video);
   void StartForRegion(bool for_video);
+
+  // API to set the capture mode source with given `source`.
+  void SetCaptureModeSource(CaptureModeSource source);
+
+  // Sets the `recording_type` to use for video captures.
+  void SetRecordingType(RecordingType recording_type);
 
   // Returns true if a capture mode session is currently active.
   bool IsSessionActive() const;
@@ -71,6 +84,16 @@ class ASH_EXPORT CaptureModeTestApi {
   // Returns true if the 3-second countdown animation is in progress.
   bool IsInCountDownAnimation() const;
 
+  // Sets a callback that will be triggered once the video recording is started.
+  void SetOnVideoRecordingStartedCallback(base::OnceClosure callback);
+
+  // Sets a callback that will be triggered once the image is captured and
+  // encoded as JPEG bytes.
+  using OnImageCapturedForSearchCallback =
+      base::OnceCallback<void(PerformCaptureType capture_type)>;
+  void SetOnImageCapturedForSearchCallback(
+      OnImageCapturedForSearchCallback callback);
+
   // Stops the video recording. Can only be called if a video recording was
   // in progress.
   void StopVideoRecording();
@@ -95,9 +118,13 @@ class ASH_EXPORT CaptureModeTestApi {
   // finished.
   void SetOnVideoRecordCountdownFinishedCallback(base::OnceClosure callback);
 
-  // Sets whether or not audio will be recorded when capturing a video. Should
-  // only be called before recording starts, otherwise it has no effect.
-  void SetAudioRecordingEnabled(bool enabled);
+  // Sets the audio recording mode when capturing a video. Should only be called
+  // before recording starts, otherwise it has no effect.
+  void SetAudioRecordingMode(AudioRecordingMode mode);
+
+  // Returns the effective mode of audio recording which takes into account the
+  // `AudioCaptureAllowed` policy.
+  AudioRecordingMode GetEffectiveAudioRecordingMode() const;
 
   // Flushes the recording service pipe synchronously. Can only be called while
   // recording is in progress.
@@ -108,9 +135,9 @@ class ASH_EXPORT CaptureModeTestApi {
   void ResetRecordingServiceRemote();
   void ResetRecordingServiceClientReceiver();
 
-  // Returns the |RecordingOverlayController| which hosts the overlay widget.
+  // Returns the `AnnotationsOverlayController` which hosts the overlay widget.
   // Can only be called while recording is in progress for a Projector session.
-  RecordingOverlayController* GetRecordingOverlayController();
+  AnnotationsOverlayController* GetAnnotationsOverlayController();
 
   // Simulates the flow taken by users to open the folder selection dialog from
   // the settings menu, and waits until this dialog gets added.
@@ -138,12 +165,17 @@ class ASH_EXPORT CaptureModeTestApi {
       base::OnceCallback<void(scoped_refptr<media::VideoFrame>)>;
   void SetOnCameraVideoFrameRendered(CameraVideoFrameCallback callback);
 
+  // Returns the camera preview widget if exists and nullptr otherwise.
+  views::Widget* GetCameraPreviewWidget();
+
+  CaptureModeBehavior* GetBehavior(BehaviorType behavior_type);
+
  private:
   // Sets the capture mode type to a video capture if |for_video| is true, or
   // image capture otherwise.
   void SetType(bool for_video);
 
-  CaptureModeController* const controller_;
+  const raw_ptr<CaptureModeController> controller_;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -141,8 +141,8 @@ TEST(CoalescedTasksTest, PrepareAndFinalizeCallbacks) {
   CoalescedTasks::PrepareRunTaskCallback prepare_callback = base::BindRepeating(
       [](std::vector<std::string>* run_tasks) {
         run_tasks->emplace_back("prepare");
-        return absl::optional<base::TimeTicks>(base::TimeTicks() +
-                                               base::Milliseconds(1337));
+        return std::optional<base::TimeTicks>(base::TimeTicks() +
+                                              base::Milliseconds(1337));
       },
       base::Unretained(&run_tasks));
   MockFunction<void()> task_callback;
@@ -152,7 +152,7 @@ TEST(CoalescedTasksTest, PrepareAndFinalizeCallbacks) {
   CoalescedTasks::FinalizeRunTaskCallback finalize_callback =
       base::BindRepeating(
           [](std::vector<std::string>* run_tasks,
-             absl::optional<base::TimeTicks> ticks) {
+             std::optional<base::TimeTicks> ticks) {
             run_tasks->emplace_back("finalize");
             // Ticks should be the same value that `prepare_callback` returned.
             EXPECT_TRUE(ticks.has_value());

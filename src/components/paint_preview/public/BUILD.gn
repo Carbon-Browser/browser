@@ -1,8 +1,10 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-assert(!is_ios, "Paint Previews are not supported on iOS.")
+import("//build/config/features.gni")
+
+assert(use_blink, "Paint Previews are only supported for blink.")
 
 source_set("public") {
   sources = [

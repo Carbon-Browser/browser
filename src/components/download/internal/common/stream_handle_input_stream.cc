@@ -1,11 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/download/public/common/stream_handle_input_stream.h"
 
-#include "base/bind.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/numerics/safe_conversions.h"
 #include "components/download/public/common/download_interrupt_reasons_utils.h"
+#include "components/download/public/common/download_stats.h"
 #include "components/download/public/common/download_utils.h"
 #include "mojo/public/c/system/types.h"
 
@@ -66,11 +69,10 @@ InputStream::StreamState StreamHandleInputStream::Read(
   if (!handle_watcher_)
     return InputStream::EMPTY;
 
-  static int bytes_to_read = GetDownloadFileBufferSize();
-  *length = bytes_to_read;
-  *data = base::MakeRefCounted<net::IOBuffer>(bytes_to_read);
+  static size_t bytes_to_read = GetDownloadFileBufferSize();
+  *data = base::MakeRefCounted<net::IOBufferWithSize>(bytes_to_read);
   MojoResult mojo_result = stream_handle_->stream->ReadData(
-      (*data)->data(), (uint32_t*)length, MOJO_READ_DATA_FLAG_NONE);
+      MOJO_READ_DATA_FLAG_NONE, (*data)->span(), *length);
   // TODO(qinmin): figure out when COMPLETE should be returned.
   switch (mojo_result) {
     case MOJO_RESULT_OK:
@@ -86,7 +88,7 @@ InputStream::StreamState StreamHandleInputStream::Read(
     case MOJO_RESULT_INVALID_ARGUMENT:
     case MOJO_RESULT_OUT_OF_RANGE:
     case MOJO_RESULT_BUSY:
-      NOTREACHED();
+      RecordInputStreamReadError(mojo_result);
       return InputStream::COMPLETE;
   }
   return InputStream::EMPTY;

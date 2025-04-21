@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/not_fatal_until.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
 #include "base/task/sequenced_task_runner.h"
 #include "build/branding_buildflags.h"
@@ -265,7 +266,7 @@ void ModuleDatabase::OnModuleAddedToBlocklist(const base::FilePath& module_path,
       ModuleInfoKey(module_path, module_size, module_time_date_stamp));
 
   // Only known modules should be added to the blocklist.
-  DCHECK(iter != modules_.end());
+  CHECK(iter != modules_.end(), base::NotFatalUntil::M130);
 
   iter->second.module_properties |= ModuleInfoData::kPropertyAddedToBlocklist;
 }
@@ -292,11 +293,21 @@ void ModuleDatabase::RemoveObserver(ModuleDatabaseObserver* observer) {
   observer_list_.RemoveObserver(observer);
 }
 
-void ModuleDatabase::ForceStartInspection() {
-  module_inspector_.ForceStartInspection();
+void ModuleDatabase::StartInspection() {
+  module_inspector_.StartInspection();
 }
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+// static
+ModuleDatabase* ModuleDatabase::GetInstanceForTesting(
+    std::unique_ptr<InstalledApplications> installed_applications) {
+  CHECK(g_module_database->third_party_conflicts_manager_);
+  g_module_database->third_party_conflicts_manager_
+      ->SetInstalledApplicationsForTesting(  // IN-TEST
+          std::move(installed_applications));
+  return GetInstance();
+}
+
 // static
 void ModuleDatabase::RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   // Register the pref used to disable the Incompatible Applications warning and
@@ -427,6 +438,8 @@ void ModuleDatabase::MaybeInitializeThirdPartyConflictsManager(
 
   if (IncompatibleApplicationsUpdater::IsWarningEnabled() ||
       ModuleBlocklistCacheUpdater::IsBlockingEnabled()) {
+    StartInspection();
+
     third_party_conflicts_manager_ =
         std::make_unique<ThirdPartyConflictsManager>(this);
 

@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/webengine/browser/theme_manager.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom.h"
@@ -17,9 +17,6 @@ namespace {
 using blink::mojom::PreferredColorScheme;
 using fuchsia::settings::ThemeType;
 
-constexpr PreferredColorScheme kFallbackColorScheme =
-    PreferredColorScheme::kLight;
-
 PreferredColorScheme ThemeTypeToBlinkScheme(ThemeType type) {
   switch (type) {
     case ThemeType::LIGHT:
@@ -28,7 +25,6 @@ PreferredColorScheme ThemeTypeToBlinkScheme(ThemeType type) {
       return PreferredColorScheme::kDark;
     default:
       NOTREACHED();
-      return kFallbackColorScheme;
   }
 }
 
@@ -137,7 +133,7 @@ void ThemeManager::OnWatchResultReceived(
        settings.theme().theme_type() == ThemeType::LIGHT)) {
     system_theme_ = settings.theme().theme_type();
   } else {
-    system_theme_ = absl::nullopt;
+    system_theme_ = std::nullopt;
   }
 
   web_contents_->OnWebPreferencesChanged();

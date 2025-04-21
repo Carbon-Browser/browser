@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/importer/importer_progress_observer.h"
 #include "chrome/browser/importer/profile_writer.h"
 #include "chrome/common/importer/importer_data_types.h"
@@ -23,9 +24,13 @@ class ExternalProcessImporterClient;
 class FirefoxProfileLock;
 class Profile;
 
+namespace bookmarks {
+class BookmarkModel;
+}  // namespace bookmarks
+
 namespace importer {
 struct SourceProfile;
-}
+}  // namespace importer
 
 // This class manages the import process. It creates the in-process half of the
 // importer bridge and the external process importer client.
@@ -86,9 +91,8 @@ class ExternalProcessImporterHost
   virtual void LaunchImportIfReady();
 
   // bookmarks::BaseBookmarkModelObserver:
-  void BookmarkModelLoaded(bookmarks::BookmarkModel* model,
-                           bool ids_reassigned) override;
-  void BookmarkModelBeingDeleted(bookmarks::BookmarkModel* model) override;
+  void BookmarkModelLoaded(bool ids_reassigned) override;
+  void BookmarkModelBeingDeleted() override;
   void BookmarkModelChanged() override;
 
   // Called when TemplateURLService has been loaded.
@@ -124,7 +128,7 @@ class ExternalProcessImporterHost
   gfx::NativeWindow parent_window_;
 
   // The observer that we need to notify about changes in the import process.
-  raw_ptr<importer::ImporterProgressObserver> observer_;
+  raw_ptr<importer::ImporterProgressObserver, DanglingUntriaged> observer_;
 
   // Firefox profile lock.
   std::unique_ptr<FirefoxProfileLock> firefox_lock_;
@@ -132,14 +136,14 @@ class ExternalProcessImporterHost
   // Profile we're importing from.
   raw_ptr<Profile> profile_;
 
-  // True if we're waiting for the model to finish loading.
-  bool waiting_for_bookmarkbar_model_;
+  // Set if we're waiting for the model to finish loading, and represents
+  // the BookmarkModel instance we are waiting for.
+  base::ScopedObservation<bookmarks::BookmarkModel,
+                          bookmarks::BaseBookmarkModelObserver>
+      bookmark_model_observation_for_loading_{this};
 
   // Non-empty when waiting for the TemplateURLService to finish loading.
   base::CallbackListSubscription template_service_subscription_;
-
-  // Have we installed a listener on the bookmark model?
-  bool installed_bookmark_observer_;
 
   // True if source profile is readable.
   bool is_source_readable_;
@@ -148,7 +152,7 @@ class ExternalProcessImporterHost
   scoped_refptr<ProfileWriter> writer_;
 
   // Used to pass notifications from the browser side to the external process.
-  raw_ptr<ExternalProcessImporterClient> client_;
+  raw_ptr<ExternalProcessImporterClient, DanglingUntriaged> client_;
 
   // Information about a profile needed for importing.
   importer::SourceProfile source_profile_;

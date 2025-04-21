@@ -1,16 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chromeos/process_proxy/process_proxy_registry.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/common/switches.h"
 
@@ -70,8 +70,8 @@ class CatProcess {
 
     chromeos::ProcessProxyRegistry::GetTaskRunner()->PostTask(
         FROM_HERE, base::BindLambdaForTesting([&]() {
-          chromeos::ProcessProxyRegistry::Get()->SendInput(this->process_id_,
-                                                           data);
+          chromeos::ProcessProxyRegistry::Get()->SendInput(
+              this->process_id_, data, base::DoNothing());
         }));
 
     run_loop.Run();
@@ -117,10 +117,10 @@ IN_PROC_BROWSER_TEST_F(ExtensionTerminalPrivateApiTest, TerminalTest) {
   CatProcess cat_process;
   ASSERT_TRUE(cat_process.ok());
 
-  const std::string page_url =
+  const std::string extension_url =
       "test.html?foreign_id=" + cat_process.process_id();
   EXPECT_TRUE(RunExtensionTest("terminal/component_extension",
-                               {.page_url = page_url.c_str()}))
+                               {.extension_url = extension_url.c_str()}))
       << message_;
 
   // Double check that test.html cannot write to the cat process here;

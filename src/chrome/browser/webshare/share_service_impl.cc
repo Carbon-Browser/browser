@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 
 #include "base/feature_list.h"
 #include "base/files/safe_base_name.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/bad_message.h"
@@ -21,6 +21,7 @@
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/browser/webshare/mac/sharing_service_operation.h"
@@ -122,7 +123,7 @@ bool ShareServiceImpl::IsDangerousFilename(const base::FilePath& path) {
 }
 
 // static
-bool ShareServiceImpl::IsDangerousMimeType(base::StringPiece content_type) {
+bool ShareServiceImpl::IsDangerousMimeType(std::string_view content_type) {
   constexpr std::array<const char*, 28> kPermitted = {
       "application/pdf",
       "audio/flac",
@@ -167,6 +168,13 @@ void ShareServiceImpl::Share(const std::string& title,
                              std::vector<blink::mojom::SharedFilePtr> files,
                              ShareCallback callback) {
   UMA_HISTOGRAM_ENUMERATION(kWebShareApiCountMetric, WebShareMethod::kShare);
+
+  if (!render_frame_host().IsFeatureEnabled(
+          blink::mojom::PermissionsPolicyFeature::kWebShare)) {
+    std::move(callback).Run(blink::mojom::ShareError::PERMISSION_DENIED);
+    ReportBadMessageAndDeleteThis("Feature policy blocks Web Share");
+    return;
+  }
 
   content::WebContents* const web_contents =
       content::WebContents::FromRenderFrameHost(&render_frame_host());
@@ -274,16 +282,27 @@ void ShareServiceImpl::OnSafeBrowsingResultReceived(
          blink::mojom::ShareError result) { std::move(callback).Run(result); },
       std::move(sharing_service_operation), std::move(callback)));
 #elif BUILDFLAG(IS_WIN)
+  // Drop fullscreen mode so the Share UI can be easily clicked away from,
+  // without clicking back into the web contents
+  base::ScopedClosureRunner fullscreen_block =
+      web_contents->ForSecurityDropFullscreen(
+          /*display_id=*/display::kInvalidDisplayId);
+
   auto share_operation = std::make_unique<webshare::ShareOperation>(
-      title, text, share_url, std::move(files), web_contents);
+      title, text, share_url, web_contents);
   auto* const share_operation_ptr = share_operation.get();
-  share_operation_ptr->Run(base::BindOnce(
-      [](std::unique_ptr<webshare::ShareOperation> share_operation,
-         ShareCallback callback,
-         blink::mojom::ShareError result) { std::move(callback).Run(result); },
-      std::move(share_operation), std::move(callback)));
+  share_operation_ptr->Run(
+      std::move(files),
+      base::BindOnce(
+          [](std::unique_ptr<webshare::ShareOperation> share_operation,
+             base::ScopedClosureRunner fullscreen_block, ShareCallback callback,
+             blink::mojom::ShareError result) {
+            fullscreen_block.RunAndReset();
+            std::move(callback).Run(result);
+          },
+          std::move(share_operation), std::move(fullscreen_block),
+          std::move(callback)));
 #else
   NOTREACHED();
-  std::move(callback).Run(blink::mojom::ShareError::INTERNAL_ERROR);
 #endif
 }

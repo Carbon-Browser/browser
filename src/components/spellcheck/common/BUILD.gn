@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -48,6 +48,9 @@ mojom("interfaces") {
 
   enabled_features = []
   if (use_browser_spellchecker) {
+    if (enable_spelling_service) {
+      enabled_features += [ "USE_BROWSER_SPELLCHECKER_AND_SPELLING_SERVICE" ]
+    }
     enabled_features += [ "USE_BROWSER_SPELLCHECKER" ]
   }
 

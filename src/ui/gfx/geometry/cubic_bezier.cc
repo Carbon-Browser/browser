@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/354829279): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/gfx/geometry/cubic_bezier.h"
 
@@ -9,7 +14,6 @@
 #include <limits>
 
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 
 namespace gfx {
 
@@ -22,7 +26,7 @@ const int kMaxNewtonIterations = 4;
 static const double kBezierEpsilon = 1e-7;
 
 double CubicBezier::ToFinite(double value) {
-  // TODO(crbug.com/1275541): We can clamp this in numeric operation helper
+  // TODO(crbug.com/40808348): We can clamp this in numeric operation helper
   // function like ClampedNumeric.
   if (std::isinf(value)) {
     if (value > 0)
@@ -241,11 +245,11 @@ double CubicBezier::Solve(double x) const {
 }
 
 double CubicBezier::SlopeWithEpsilon(double x, double epsilon) const {
-  x = base::clamp(x, 0.0, 1.0);
+  x = std::clamp(x, 0.0, 1.0);
   double t = SolveCurveX(x, epsilon);
   double dx = SampleCurveDerivativeX(t);
   double dy = SampleCurveDerivativeY(t);
-  // TODO(crbug.com/1275534): We should clamp NaN to a proper value.
+  // TODO(crbug.com/40207101): We should clamp NaN to a proper value.
   // Please see the issue for detail.
   if (!dx && !dy)
     return 0;

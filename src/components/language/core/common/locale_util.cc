@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,22 @@
 
 #include <stddef.h>
 
-#include <algorithm>
+#include <string_view>
 
+#include "base/ranges/algorithm.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace language {
 
-std::pair<base::StringPiece, base::StringPiece> SplitIntoMainAndTail(
-    base::StringPiece locale) {
-  size_t hyphen_pos = static_cast<size_t>(
-      std::find(locale.begin(), locale.end(), '-') - locale.begin());
+std::pair<std::string_view, std::string_view> SplitIntoMainAndTail(
+    std::string_view locale) {
+  size_t hyphen_pos =
+      static_cast<size_t>(base::ranges::find(locale, '-') - locale.begin());
   return std::make_pair(locale.substr(0U, hyphen_pos),
                         locale.substr(hyphen_pos));
 }
 
-base::StringPiece ExtractBaseLanguage(base::StringPiece language_code) {
+std::string_view ExtractBaseLanguage(std::string_view language_code) {
   return SplitIntoMainAndTail(language_code).first;
 }
 

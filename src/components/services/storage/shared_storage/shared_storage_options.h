@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,14 @@ struct SharedStorageOptions {
 
   SharedStorageOptions(int max_page_size,
                        int max_cache_size,
-                       int max_entries_per_origin,
-                       int max_string_length,
+                       int max_bytes_per_origin,
                        int max_init_tries,
                        int max_iterator_batch_size,
                        int bit_budget,
                        base::TimeDelta budget_interval,
-                       base::TimeDelta stale_origin_purge_initial_interval,
-                       base::TimeDelta stale_origin_purge_recurring_interval,
-                       base::TimeDelta origin_staleness_threshold);
+                       base::TimeDelta stale_purge_initial_interval,
+                       base::TimeDelta stale_purge_recurring_interval,
+                       base::TimeDelta staleness_threshold);
 
   // Creates a pointer to a smaller bundle of just the constants that need to
   // be forwarded to `AsyncSharedStorageDatabase` and `SharedStorageDatabase`.
@@ -43,11 +42,8 @@ struct SharedStorageOptions {
   // Maximum size of the database cache, in pages.
   const int max_cache_size;
 
-  // Maximum number of entries allowed per origin.
-  const int max_entries_per_origin;
-
-  // Maximum allowed string length for each script key or script value.
-  const int max_string_length;
+  // Maximum number of total bytes in database entries allowed per origin.
+  const int max_bytes_per_origin;
 
   // Maximum number of times that `SharedStorageDatabase` will try to
   // initialize the SQL database.
@@ -65,15 +61,15 @@ struct SharedStorageOptions {
   const base::TimeDelta budget_interval;
 
   // Initial interval at which stale origins are purged.
-  const base::TimeDelta stale_origin_purge_initial_interval;
+  const base::TimeDelta stale_purge_initial_interval;
 
   // Recurring interval at which stale origins are purged. May differ from
   // the initial interval.
-  const base::TimeDelta stale_origin_purge_recurring_interval;
+  const base::TimeDelta stale_purge_recurring_interval;
 
   // Length of time between origin creation and origin expiration. When an
   // origin's data is older than this threshold, it will be auto-purged.
-  const base::TimeDelta origin_staleness_threshold;
+  const base::TimeDelta staleness_threshold;
 };
 
 // Bundles Finch-configurable constants for the `AsyncSharedStorageDatabase`
@@ -86,13 +82,12 @@ struct SharedStorageOptions {
 struct SharedStorageDatabaseOptions {
   SharedStorageDatabaseOptions(int max_page_size,
                                int max_cache_size,
-                               int max_entries_per_origin,
-                               int max_string_length,
+                               int max_bytes_per_origin,
                                int max_init_tries,
                                int max_iterator_batch_size,
                                int bit_budget,
                                base::TimeDelta budget_interval,
-                               base::TimeDelta origin_staleness_threshold);
+                               base::TimeDelta staleness_threshold);
 
   // Maximum size of a database page, in bytes. Must be a power of 2 between
   // 512 and 65536 inclusive.
@@ -101,11 +96,8 @@ struct SharedStorageDatabaseOptions {
   // Maximum size of the database cache, in pages.
   const int max_cache_size;
 
-  // Maximum number of entries allowed per origin.
-  const int max_entries_per_origin;
-
-  // Maximum allowed string length for each script key or script value.
-  const int max_string_length;
+  // Maximum number of total bytes in database entries allowed per origin.
+  const int max_bytes_per_origin;
 
   // Maximum number of times that `SharedStorageDatabase` will try to
   // initialize the SQL database.
@@ -124,7 +116,7 @@ struct SharedStorageDatabaseOptions {
 
   // Length of time between origin creation and origin expiration. When an
   // origin's data is older than this threshold, it will be auto-purged.
-  const base::TimeDelta origin_staleness_threshold;
+  const base::TimeDelta staleness_threshold;
 };
 
 }  // namespace storage

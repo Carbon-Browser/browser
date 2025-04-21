@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 #define CHROME_BROWSER_MEDIA_ANDROID_CDM_MEDIA_DRM_ORIGIN_ID_MANAGER_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "base/types/pass_key.h"
 #include "base/unguessable_token.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "media/base/media_drm_storage.h"
@@ -45,10 +47,15 @@ class MediaDrmOriginIdManager : public KeyedService {
   using ProvisionedOriginIdCB =
       base::OnceCallback<void(GetOriginIdStatus status,
                               const MediaDrmOriginId& origin_id)>;
-  using ProvisioningResultCB = base::RepeatingCallback<bool()>;
+  using ProvisioningResultCB = base::RepeatingCallback<MediaDrmOriginId()>;
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
+  // MediaDrmOriginIdManager should only be created by
+  // MediaDrmOriginIdManagerFactory.
+  explicit MediaDrmOriginIdManager(
+      PrefService* pref_service,
+      base::PassKey<MediaDrmOriginIdManagerFactory>);
   // Destructor must be public as it's used in std::unique_ptr<>.
   ~MediaDrmOriginIdManager() override;
 
@@ -58,7 +65,7 @@ class MediaDrmOriginIdManager : public KeyedService {
   // Asynchronously returns a preprovisioned origin ID using |callback|, if one
   // is available. If none are available, an un-provisioned origin ID is
   // returned.
-  // TODO(crbug.com/917527): Return an empty origin ID once callers
+  // TODO(crbug.com/41433110): Return an empty origin ID once callers
   // can handle it.
   void GetOriginId(ProvisionedOriginIdCB callback);
 
@@ -71,19 +78,21 @@ class MediaDrmOriginIdManager : public KeyedService {
   class NetworkObserver;
   friend class MediaDrmOriginIdManagerFactory;
 
-  // MediaDrmOriginIdManager should only be created by
-  // MediaDrmOriginIdManagerFactory.
-  explicit MediaDrmOriginIdManager(PrefService* pref_service);
+  // Complete the pre-provisioning steps.
+  void ResumePreProvisionIfNecessary(
+      bool is_per_application_provisioning_supported);
 
-  // Asynchronously call StartProvisioning().
-  void StartProvisioningAsync();
-
-  // Pre-provision one origin ID, calling OriginIdProvisioned() when done.
-  void StartProvisioning();
+  // Asynchronously call StartProvisioning() on a sequence using different
+  // priorities, depending on |run_in_background|.
+  void StartProvisioningAsync(bool run_in_background);
 
   // Called when provisioning of |origin_id| is done. The provisioning of
-  // |origin_id| was successful if |success| is true.
-  void OriginIdProvisioned(bool success, const MediaDrmOriginId& origin_id);
+  // |origin_id| was successful if |origin_id| is not nullopt.
+  void OriginIdProvisioned(const MediaDrmOriginId& origin_id);
+
+  // Check if per application provisioning is supported or not. Uses
+  // `is_per_application_provisioning_supported_`, and if not set, sets it.
+  bool IsPerApplicationProvisioningSupported();
 
   // If called, record the current number of pre-provisioned origin IDs to UMA.
   void RecordCountOfPreprovisionedOriginIds();
@@ -96,6 +105,10 @@ class MediaDrmOriginIdManager : public KeyedService {
   // True if this class is currently pre-provisioning origin IDs,
   // false otherwise.
   bool is_provisioning_ = false;
+
+  // True if per-application provisioning is supported. If nullopt, then
+  // support has not yet been determined.
+  std::optional<bool> is_per_application_provisioning_supported_;
 
   // When testing don't call MediaDrm to provision the origin ID, just call
   // this CB and use the value returned to indicate if provisioning succeeded or

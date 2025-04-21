@@ -1,11 +1,8 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Presubmit for android_webview/tools."""
-
-USE_PYTHON3 = True
-
 
 def _GetPythonUnitTests(input_api, output_api):
   return input_api.canned_checks.GetUnitTestsRecursively(
@@ -13,8 +10,7 @@ def _GetPythonUnitTests(input_api, output_api):
       output_api,
       input_api.PresubmitLocalPath(),
       files_to_check=['.*_test\\.py$'],
-      files_to_skip=[],
-      run_on_python2=False)
+      files_to_skip=[])
 
 
 def CommonChecks(input_api, output_api):

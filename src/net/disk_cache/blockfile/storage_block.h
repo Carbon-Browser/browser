@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,12 +95,13 @@ class StorageBlock : public FileBlock {
   uint32_t CalculateHash() const;
 
   raw_ptr<T> data_ = nullptr;
-  raw_ptr<MappedFile> file_;
+  // DanglingUntriaged is largely needed for when this class is owned by an
+  // EntryImpl that is deleted after the Backend.
+  raw_ptr<MappedFile, AcrossTasksDanglingUntriaged> file_;
   Addr address_;
   bool modified_ = false;
   // Is data_ owned by this object or shared with someone else.
   bool own_data_ = false;
-  bool extended_ = false;  // Used to store an entry of more than one block.
 };
 
 }  // namespace disk_cache

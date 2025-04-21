@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_METRICS_PERSISTENT_HISTOGRAM_STORAGE_H_
 #define BASE_METRICS_PERSISTENT_HISTOGRAM_STORAGE_H_
 
+#include <string_view>
+
 #include "base/base_export.h"
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
 
 namespace base {
 
@@ -31,7 +32,7 @@ class BASE_EXPORT PersistentHistogramStorage {
   // persisted. The string must be ASCII.
   // |storage_dir_management| specifies if this instance reuses an existing
   // storage directory, or is responsible for creating one.
-  PersistentHistogramStorage(StringPiece allocator_name,
+  PersistentHistogramStorage(std::string_view allocator_name,
                              StorageDirManagement storage_dir_management);
 
   PersistentHistogramStorage(const PersistentHistogramStorage&) = delete;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_SERVICES_SHARING_NEARBY_PLATFORM_BLUETOOTH_CLASSIC_MEDIUM_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/timer/timer.h"
@@ -14,12 +15,9 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/nearby/src/internal/platform/implementation/bluetooth_classic.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // Concrete BluetoothClassicMedium implementation.
 // api::BluetoothClassicMedium is a synchronous interface, so this
@@ -45,7 +43,15 @@ class BluetoothClassicMedium : public api::BluetoothClassicMedium,
   std::unique_ptr<api::BluetoothServerSocket> ListenForService(
       const std::string& service_name,
       const std::string& service_uuid) override;
+  std::unique_ptr<api::BluetoothPairing> CreatePairing(
+      api::BluetoothDevice& remote_device) override;
   BluetoothDevice* GetRemoteDevice(const std::string& mac_address) override;
+  void AddObserver(Observer* observer) override {
+    // TODO(b/269521993): Implement.
+  }
+  void RemoveObserver(Observer* observer) override {
+    // TODO(b/269521993): Implement.
+  }
 
  private:
   // bluetooth::mojom::AdapterObserver:
@@ -66,7 +72,7 @@ class BluetoothClassicMedium : public api::BluetoothClassicMedium,
   mojo::Receiver<bluetooth::mojom::AdapterObserver> adapter_observer_{this};
 
   // These properties are only set while discovery is active.
-  absl::optional<DiscoveryCallback> discovery_callback_;
+  std::optional<DiscoveryCallback> discovery_callback_;
   mojo::Remote<bluetooth::mojom::DiscoverySession> discovery_session_;
 
   // This is a mapping of MAC addresses to discovered Bluetooth devices.
@@ -78,8 +84,6 @@ class BluetoothClassicMedium : public api::BluetoothClassicMedium,
   base::RepeatingTimer stale_bluetooth_device_timer_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_BLUETOOTH_CLASSIC_MEDIUM_H_

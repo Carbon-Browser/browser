@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -173,7 +173,7 @@ void OnCookiesAndExcludedReceived(
 }  // namespace
 
 CookieManagerImpl::CookieManagerImpl(
-    GetNetworkContextCallback get_network_context)
+    network::NetworkContextGetter get_network_context)
     : get_network_context_(std::move(get_network_context)) {}
 
 CookieManagerImpl::~CookieManagerImpl() = default;
@@ -189,7 +189,7 @@ void CookieManagerImpl::ObserveCookieChanges(
                           std::move(changes));
 
   if (url) {
-    absl::optional<std::string> maybe_name;
+    std::optional<std::string> maybe_name;
     if (name)
       maybe_name = *name;
     cookie_manager_->AddCookieChangeListener(GURL(*url), maybe_name,
@@ -220,7 +220,7 @@ void CookieManagerImpl::GetCookieList(
           GURL(*url), options, net::CookiePartitionKeyCollection::Todo(),
           base::BindOnce(&OnCookiesAndExcludedReceived, std::move(iterator)));
     } else {
-      // TODO(858853): Support filtering by name.
+      // TODO(crbug.com/42050622): Support filtering by name.
       iterator.Close(ZX_ERR_NOT_SUPPORTED);
     }
   }

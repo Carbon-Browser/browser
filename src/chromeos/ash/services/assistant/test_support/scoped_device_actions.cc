@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include <utility>
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 void ScopedDeviceActions::GetScreenBrightnessLevel(
     GetScreenBrightnessLevelCallback callback) {
@@ -23,5 +22,4 @@ AppStatus ScopedDeviceActions::GetAndroidAppStatus(
   return AppStatus::kAvailable;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

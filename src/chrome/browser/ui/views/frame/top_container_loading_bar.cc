@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,15 +55,17 @@ void LoadingBarView::Show(double loading_progress) {
 }
 
 void LoadingBarView::FinishLoading() {
-  if (!is_shown_when_not_animating_)
+  if (!is_shown_when_not_animating_) {
     return;
+  }
   SetLoadingProgress(1.0);
   is_shown_when_not_animating_ = false;
 }
 
 void LoadingBarView::SetLoadingProgress(double loading_progress) {
-  if (loading_progress <= target_loading_progress_)
+  if (loading_progress <= target_loading_progress_) {
     return;
+  }
   start_loading_progress_ = GetDisplayedLoadingProgress();
   target_loading_progress_ = loading_progress;
   animation_.SetCurrentValue(0.0);
@@ -93,7 +95,7 @@ void LoadingBarView::AnimationProgressed(const gfx::Animation* animation) {
   SchedulePaint();
 }
 
-BEGIN_METADATA(LoadingBarView, views::View)
+BEGIN_METADATA(LoadingBarView)
 END_METADATA
 
 TopContainerLoadingBar::TopContainerLoadingBar(Browser* browser)
@@ -169,6 +171,6 @@ void TopContainerLoadingBar::LoadProgressChanged(double progress) {
   UpdateLoadingProgress();
 }
 
-BEGIN_METADATA(TopContainerLoadingBar, LoadingBarView)
+BEGIN_METADATA(TopContainerLoadingBar)
 ADD_READONLY_PROPERTY_METADATA(double, LoadingProgress)
 END_METADATA

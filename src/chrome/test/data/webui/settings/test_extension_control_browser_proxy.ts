@@ -1,8 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ExtensionControlBrowserProxy} from 'chrome://settings/settings.js';
+import type {ExtensionControlBrowserProxy} from 'chrome://settings/settings.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestExtensionControlBrowserProxy extends TestBrowserProxy

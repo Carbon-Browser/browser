@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,7 @@ TEST_F(StickyKeysOverlayTest, OverlayNotDestroyedAfterDisplayRemoved) {
             overlay.GetModifierKeyState(ui::EF_SHIFT_DOWN));
 }
 
-// Additional sticky key overlay tests that depend on ui::EventRewriterChromeOS
+// Additional sticky key overlay tests that depend on ui::EventRewriterAsh
 // are now in chrome/browser/ash/events/event_rewriter_unittest.cc .
 
 }  // namespace ash

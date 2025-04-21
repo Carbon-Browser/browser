@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -130,11 +130,7 @@ class TemplateWriter(object):
     '''Checks if the given policy is internal only'''
     return self.GetPolicyFeature(policy, 'internal_only', False)
 
-  def IsPolicyOrItemSupportedOnPlatform(self,
-                                        item,
-                                        platform,
-                                        product=None,
-                                        management=None):
+  def IsPolicyOrItemSupportedOnPlatform(self, item, platform, product=None):
     '''Checks if |item| is supported on |product| for |platform|. If
     |product| is not specified, only the platform support is checked.
     If |management| is specified, also checks for support for Chrome OS
@@ -146,12 +142,7 @@ class TemplateWriter(object):
         'win', 'mac', 'linux', 'chrome_os', 'android'.
       product: Optional product to check; one of
         'chrome', 'chrome_frame', 'chrome_os', 'webview'.
-      management: Optional Chrome OS management type to check; one of
-        'active_directory', 'google_cloud'.
     '''
-    if management and not self.IsCrOSManagementSupported(item, management):
-      return False
-
     for supported_on in item['supported_on']:
       if (platform == supported_on['platform']
           and (not product or product in supported_on['product'])
@@ -178,19 +169,6 @@ class TemplateWriter(object):
     '''
     return (self.IsPolicyOrItemSupportedOnPlatform(policy, 'win', product)
             or self.IsPolicyOrItemSupportedOnPlatform(policy, 'win7', product))
-
-  def IsCrOSManagementSupported(self, policy, management):
-    '''Checks whether |policy| supports the Chrome OS |management| type.
-
-    Args:
-      policy: The dictionary of the policy.
-      management: Chrome OS management type to check; one of
-        'active_directory', 'google_cloud'.
-    '''
-    # By default, i.e. if supported_chrome_os_management is not set, all
-    # management types are supported.
-    return management in policy.get('supported_chrome_os_management',
-                                    ['active_directory', 'google_cloud'])
 
   def IsVersionSupported(self, policy, supported_on):
     '''Checks whether the policy is supported on current version'''
@@ -290,18 +268,24 @@ class TemplateWriter(object):
         child_policies = list(self._GetPoliciesForWriter(policy))
         child_recommended_policies = list(
             filter(self.CanBeRecommended, child_policies))
+        # Only write nonempty groups.
         if child_policies:
-          # Only write nonempty groups.
-          self.BeginPolicyGroup(policy)
+          # Miscellaneous should not be considered a group.
+          treat_as_group = policy['name'] != 'Miscellaneous'
+          if treat_as_group:
+            self.BeginPolicyGroup(policy)
           for child_policy in child_policies:
             # Nesting of groups is currently not supported.
             self.WritePolicy(child_policy)
-          self.EndPolicyGroup()
+          if treat_as_group:
+            self.EndPolicyGroup()
         if child_recommended_policies:
-          self.BeginRecommendedPolicyGroup(policy)
+          if treat_as_group:
+            self.BeginRecommendedPolicyGroup(policy)
           for child_policy in child_recommended_policies:
             self.WriteRecommendedPolicy(child_policy)
-          self.EndRecommendedPolicyGroup()
+          if treat_as_group:
+            self.EndRecommendedPolicyGroup()
       elif self.IsPolicySupported(policy):
         self.WritePolicy(policy)
         if self.CanBeRecommended(policy):

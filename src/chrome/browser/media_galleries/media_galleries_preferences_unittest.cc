@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,12 @@
 #include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 using base::ASCIIToUTF16;
@@ -65,7 +69,7 @@ class MockGalleryChangeObserver
   MockGalleryChangeObserver& operator=(const MockGalleryChangeObserver&) =
       delete;
 
-  ~MockGalleryChangeObserver() override {}
+  ~MockGalleryChangeObserver() override = default;
 
   int notifications() const { return notifications_;}
 
@@ -121,7 +125,7 @@ class MediaGalleriesPreferencesTest : public testing::Test {
   MediaGalleriesPreferencesTest& operator=(
       const MediaGalleriesPreferencesTest&) = delete;
 
-  ~MediaGalleriesPreferencesTest() override {}
+  ~MediaGalleriesPreferencesTest() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(TestStorageMonitor::CreateAndInstall());
@@ -189,18 +193,18 @@ class MediaGalleriesPreferencesTest : public testing::Test {
 
   void RemovePersistedDefaultGalleryValues() {
     PrefService* prefs = profile_->GetPrefs();
-    std::unique_ptr<ListPrefUpdate> update(
-        new ListPrefUpdate(prefs, prefs::kMediaGalleriesRememberedGalleries));
-    base::Value* list = update->Get();
+    std::unique_ptr<ScopedListPrefUpdate> update =
+        std::make_unique<ScopedListPrefUpdate>(
+            prefs, prefs::kMediaGalleriesRememberedGalleries);
+    base::Value::List& list = update->Get();
 
-    for (auto& entry : list->GetListDeprecated()) {
-      base::DictionaryValue* dict;
-
-      if (entry.GetAsDictionary(&dict)) {
+    for (auto& entry : list) {
+      if (entry.is_dict()) {
+        base::Value::Dict& dict = entry.GetDict();
         // Setting the prefs version to 2 which is the version before
         // default_gallery_type was added.
-        dict->SetInteger(kMediaGalleriesPrefsVersionKey, 2);
-        dict->RemoveKey(kMediaGalleriesDefaultGalleryTypeKey);
+        dict.Set(kMediaGalleriesPrefsVersionKey, 2);
+        dict.Remove(kMediaGalleriesDefaultGalleryTypeKey);
       }
     }
     update.reset();
@@ -371,7 +375,11 @@ class MediaGalleriesPreferencesTest : public testing::Test {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  ash::ScopedTestUserManager test_user_manager_;
+  user_manager::ScopedUserManager user_manager_{
+      std::make_unique<user_manager::UserManagerImpl>(
+          std::make_unique<ash::UserManagerDelegateImpl>(),
+          g_browser_process->local_state(),
+          ash::CrosSettings::Get())};
 #endif
 
   TestStorageMonitor monitor_;
@@ -468,13 +476,13 @@ TEST_F(MediaGalleriesPreferencesTest, GalleryManagement) {
 
   // Lookup some galleries.
   EXPECT_TRUE(gallery_prefs()->LookUpGalleryByPath(
-      MakeMediaGalleriesTestingPath("new_auto"), NULL));
+      MakeMediaGalleriesTestingPath("new_auto"), nullptr));
   EXPECT_TRUE(gallery_prefs()->LookUpGalleryByPath(
-      MakeMediaGalleriesTestingPath("new_user"), NULL));
+      MakeMediaGalleriesTestingPath("new_user"), nullptr));
   EXPECT_TRUE(gallery_prefs()->LookUpGalleryByPath(
-      MakeMediaGalleriesTestingPath("new_scan"), NULL));
+      MakeMediaGalleriesTestingPath("new_scan"), nullptr));
   EXPECT_FALSE(gallery_prefs()->LookUpGalleryByPath(
-      MakeMediaGalleriesTestingPath("other"), NULL));
+      MakeMediaGalleriesTestingPath("other"), nullptr));
 
   // Check that we always get the gallery info.
   MediaGalleryPrefInfo gallery_info;

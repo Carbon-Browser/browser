@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,10 @@
 namespace syncer {
 
 // Enumerate the main sources that can turn off sync. This enum is used to
-// back a UMA histogram and should be treated as append-only.
+// back a UMA histogram. These values are persisted to logs. Entries should not
+// be renumbered and numeric values should never be reused. Keep in sync with
+// SyncStopSource in tools/metrics/histograms/metadata/sync/enums.xml.
+// LINT.IfChange(SyncStopSource)
 enum StopSource {
   // Deprecated: PROFILE_DESTRUCTION = 0,
   SIGN_OUT = 1,              // The user signed out of Chrome.
@@ -18,6 +21,7 @@ enum StopSource {
   // Deprecated: ANDROID_MASTER_SYNC = 5,
   STOP_SOURCE_LIMIT = 6,
 };
+// LINT.ThenChange(/tools/metrics/histograms/metadata/sync/enums.xml:SyncStopSource)
 
 }  // namespace syncer
 

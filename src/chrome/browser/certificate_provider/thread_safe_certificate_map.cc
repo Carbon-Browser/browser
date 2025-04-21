@@ -1,16 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/certificate_provider/thread_safe_certificate_map.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece.h"
 #include "base/synchronization/lock.h"
-#include "chrome/browser/certificate_provider/certificate_info.h"
+#include "chromeos/components/certificate_provider/certificate_info.h"
 #include "net/base/hash_value.h"
 #include "net/cert/asn1_util.h"
 #include "net/cert/x509_certificate.h"
@@ -21,7 +21,7 @@ namespace certificate_provider {
 namespace {
 
 std::string GetSubjectPublicKeyInfo(const net::X509Certificate& certificate) {
-  base::StringPiece spki_bytes;
+  std::string_view spki_bytes;
   if (!net::asn1::ExtractSPKIFromDERCert(
           net::x509_util::CryptoBufferAsStringPiece(certificate.cert_buffer()),
           &spki_bytes)) {
@@ -32,9 +32,9 @@ std::string GetSubjectPublicKeyInfo(const net::X509Certificate& certificate) {
 
 }  // namespace
 
-ThreadSafeCertificateMap::ThreadSafeCertificateMap() {}
+ThreadSafeCertificateMap::ThreadSafeCertificateMap() = default;
 
-ThreadSafeCertificateMap::~ThreadSafeCertificateMap() {}
+ThreadSafeCertificateMap::~ThreadSafeCertificateMap() = default;
 
 void ThreadSafeCertificateMap::UpdateCertificatesForExtension(
     const std::string& extension_id,

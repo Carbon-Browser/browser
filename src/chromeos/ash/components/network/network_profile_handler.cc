@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,26 @@
 
 #include <stddef.h>
 
-#include <algorithm>
-
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_profile_client.h"
 #include "chromeos/ash/components/network/network_profile_observer.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/dbus/shill/shill_profile_client.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
-bool ConvertListValueToStringVector(
-    const base::Value::ConstListView string_list,
-    std::vector<std::string>* result) {
+bool ConvertListValueToStringVector(const base::Value::List& string_list,
+                                    std::vector<std::string>* result) {
   for (const base::Value& i : string_list) {
     const std::string* str = i.GetIfString();
     if (!str)
@@ -53,20 +52,6 @@ void LogError(const std::string& name,
              << " dbus-error-msg=" << dbus_error_message;
 }
 
-class ProfilePathEquals {
- public:
-  explicit ProfilePathEquals(const std::string& path)
-      : path_(path) {
-  }
-
-  bool operator()(const NetworkProfile& profile) {
-    return profile.path == path_;
-  }
-
- private:
-  std::string path_;
-};
-
 }  // namespace
 
 // static
@@ -87,13 +72,13 @@ bool NetworkProfileHandler::HasObserver(NetworkProfileObserver* observer) {
 }
 
 void NetworkProfileHandler::GetManagerPropertiesCallback(
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties) {
     LOG(ERROR) << "Error when requesting manager properties.";
     return;
   }
 
-  const base::Value* profiles = properties->FindKey(shill::kProfilesProperty);
+  const base::Value* profiles = properties->Find(shill::kProfilesProperty);
   if (!profiles) {
     LOG(ERROR) << "Manager properties returned from Shill don't contain "
                << "the field " << shill::kProfilesProperty;
@@ -110,8 +95,8 @@ void NetworkProfileHandler::OnPropertyChanged(const std::string& name,
   DCHECK(value.is_list());
 
   std::vector<std::string> new_profile_paths;
-  bool result = ConvertListValueToStringVector(value.GetListDeprecated(),
-                                               &new_profile_paths);
+  bool result =
+      ConvertListValueToStringVector(value.GetList(), &new_profile_paths);
   DCHECK(result);
 
   VLOG(2) << "Profiles: " << profiles_.size();
@@ -119,9 +104,7 @@ void NetworkProfileHandler::OnPropertyChanged(const std::string& name,
   std::vector<std::string> removed_profile_paths;
   for (ProfileList::const_iterator it = profiles_.begin();
        it != profiles_.end(); ++it) {
-    if (std::find(new_profile_paths.begin(),
-                  new_profile_paths.end(),
-                  it->path) == new_profile_paths.end()) {
+    if (!base::Contains(new_profile_paths, it->path)) {
       removed_profile_paths.push_back(it->path);
     }
   }
@@ -150,7 +133,7 @@ void NetworkProfileHandler::OnPropertyChanged(const std::string& name,
 
 void NetworkProfileHandler::GetProfilePropertiesCallback(
     const std::string& profile_path,
-    base::Value properties) {
+    base::Value::Dict properties) {
   if (pending_profile_creations_.erase(profile_path) == 0) {
     VLOG(1) << "Ignore received properties, profile was removed.";
     return;
@@ -159,8 +142,7 @@ void NetworkProfileHandler::GetProfilePropertiesCallback(
     VLOG(1) << "Ignore received properties, profile is already created.";
     return;
   }
-  const std::string* userhash =
-      properties.FindStringKey(shill::kUserHashProperty);
+  const std::string* userhash = properties.FindString(shill::kUserHashProperty);
 
   AddProfile(NetworkProfile(profile_path, userhash ? *userhash : ""));
 }
@@ -168,52 +150,53 @@ void NetworkProfileHandler::GetProfilePropertiesCallback(
 void NetworkProfileHandler::AddProfile(const NetworkProfile& profile) {
   VLOG(2) << "Adding profile " << profile.ToDebugString() << ".";
   profiles_.push_back(profile);
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnProfileAdded(profiles_.back());
+  }
 }
 
 void NetworkProfileHandler::RemoveProfile(const std::string& profile_path) {
   VLOG(2) << "Removing profile for path " << profile_path << ".";
-  ProfileList::iterator found = std::find_if(profiles_.begin(), profiles_.end(),
-                                             ProfilePathEquals(profile_path));
-  if (found == profiles_.end())
+  ProfileList::iterator found =
+      base::ranges::find(profiles_, profile_path, &NetworkProfile::path);
+  if (found == profiles_.end()) {
     return;
+  }
   NetworkProfile profile = *found;
   profiles_.erase(found);
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnProfileRemoved(profile);
+  }
 }
 
 const NetworkProfile* NetworkProfileHandler::GetProfileForPath(
     const std::string& profile_path) const {
   ProfileList::const_iterator found =
-      std::find_if(profiles_.begin(), profiles_.end(),
-                   ProfilePathEquals(profile_path));
+      base::ranges::find(profiles_, profile_path, &NetworkProfile::path);
 
-  if (found == profiles_.end())
-    return NULL;
+  if (found == profiles_.end()) {
+    return nullptr;
+  }
   return &*found;
 }
 
 const NetworkProfile* NetworkProfileHandler::GetProfileForUserhash(
     const std::string& userhash) const {
-  for (NetworkProfileHandler::ProfileList::const_iterator it =
-           profiles_.begin();
-       it != profiles_.end(); ++it) {
-    if (it->userhash == userhash)
-      return &*it;
+  for (const auto& profile : profiles_) {
+    if (profile.userhash == userhash) {
+      return &profile;
+    }
   }
-  return NULL;
+  return nullptr;
 }
 
 const NetworkProfile* NetworkProfileHandler::GetDefaultUserProfile() const {
-  for (NetworkProfileHandler::ProfileList::const_iterator it =
-           profiles_.begin();
-       it != profiles_.end(); ++it) {
-    if (!it->userhash.empty())
-      return &*it;
+  for (const auto& profile : profiles_) {
+    if (!profile.userhash.empty()) {
+      return &profile;
+    }
   }
-  return NULL;
+  return nullptr;
 }
 
 void NetworkProfileHandler::GetAlwaysOnVpnConfiguration(
@@ -229,13 +212,12 @@ void NetworkProfileHandler::GetAlwaysOnVpnConfiguration(
 
 void NetworkProfileHandler::GetAlwaysOnVpnConfigurationCallback(
     base::OnceCallback<void(std::string, std::string)> callback,
-    base::Value properties) {
+    base::Value::Dict properties) {
   // A profile always contains the mode.
-  std::string* mode =
-      properties.FindStringKey(shill::kAlwaysOnVpnModeProperty);
+  std::string* mode = properties.FindString(shill::kAlwaysOnVpnModeProperty);
   DCHECK(mode);
   std::string* service =
-      properties.FindStringKey(shill::kAlwaysOnVpnServiceProperty);
+      properties.FindString(shill::kAlwaysOnVpnServiceProperty);
   std::move(callback).Run(*mode, service ? *service : std::string());
 }
 
@@ -282,4 +264,4 @@ NetworkProfileHandler::InitializeForTesting() {
   return base::WrapUnique(handler);
 }
 
-}  // namespace chromeos
+}  // namespace ash

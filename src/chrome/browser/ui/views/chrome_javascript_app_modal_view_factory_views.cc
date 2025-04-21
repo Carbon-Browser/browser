@@ -1,11 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/javascript_dialogs/chrome_javascript_app_modal_dialog_view_factory.h"
+#include <memory>
 
 #include "build/build_config.h"
 #include "chrome/browser/ui/blocked_content/popunder_preventer.h"
+#include "chrome/browser/ui/javascript_dialogs/chrome_app_modal_dialog_manager_delegate.h"
+#include "chrome/browser/ui/javascript_dialogs/chrome_javascript_app_modal_dialog_view_factory.h"
 #include "chrome/browser/ui/views/javascript_app_modal_event_blocker.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/javascript_dialogs/app_modal_dialog_controller.h"
@@ -17,7 +19,7 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/base/ui_base_features.h"
 #include "ui/ozone/public/ozone_platform.h"
 #endif
@@ -29,7 +31,7 @@
 namespace {
 
 bool UseEventBlocker() {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   return ui::OzonePlatform::GetInstance()
       ->GetPlatformProperties()
       .app_modal_dialogs_use_event_blocker;
@@ -115,4 +117,9 @@ void InstallChromeJavaScriptAppModalDialogViewFactory() {
   javascript_dialogs::AppModalDialogManager::GetInstance()
       ->SetNativeDialogFactory(
           base::BindRepeating(&CreateViewsJavaScriptDialog));
+}
+
+void SetChromeAppModalDialogManagerDelegate() {
+  javascript_dialogs::AppModalDialogManager::GetInstance()->SetDelegate(
+      std::make_unique<ChromeAppModalDialogManagerDelegate>());
 }

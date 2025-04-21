@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,10 +54,5 @@ class LockToSingleUserServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::LockToSingleUserServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_LOCK_TO_SINGLE_USER_SERVICE_PROVIDER_H_

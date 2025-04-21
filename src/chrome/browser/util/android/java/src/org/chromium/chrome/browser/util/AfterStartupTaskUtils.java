@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.util;
-import org.chromium.base.annotations.NativeMethods;
 
-/**
- * JNI call glue for AfterStartupTaskUtils in C++.
- */
+import org.jni_zero.NativeMethods;
+
+/** JNI call glue for AfterStartupTaskUtils in C++. */
 public final class AfterStartupTaskUtils {
     private AfterStartupTaskUtils() {}
 

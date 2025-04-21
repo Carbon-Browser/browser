@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2016 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,18 +8,19 @@
 
 import contextlib
 import hashlib
+import io
 import os
 import shutil
 import sys
 import tempfile
 import unittest
-import six
 
 REPOSITORY_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..', '..'))
 
 sys.path.append(os.path.join(REPOSITORY_ROOT, 'components'))
 from cronet.tools import api_static_checks  # pylint: disable=wrong-import-position
+from cronet.tools import update_api  # pylint: disable=wrong-import-position
 
 # pylint: disable=useless-object-inheritance
 
@@ -51,7 +52,7 @@ CHECK_API_VERSION_PREFIX = (
 
 
 API_FILENAME = './android/api.txt'
-INTERFACE_API_VERSION_FILENAME = './android/interface_api_version.txt'
+API_VERSION_FILENAME = './android/api_version.txt'
 
 
 @contextlib.contextmanager
@@ -60,7 +61,7 @@ def capture_output():
 
   oldout,olderr = sys.stdout, sys.stderr
   try:
-    out=[six.StringIO(), six.StringIO()]
+    out = [io.StringIO(), io.StringIO()]
     sys.stdout,sys.stderr = out
     yield out
   finally:
@@ -75,9 +76,8 @@ class ApiStaticCheckUnitTest(unittest.TestCase):
     self.temp_dir = tempfile.mkdtemp(dir=self.exe_path)
     os.chdir(self.temp_dir)
     os.mkdir('android')
-    with open(INTERFACE_API_VERSION_FILENAME, 'w') \
-         as interface_api_version_file:
-      interface_api_version_file.write('0')
+    with open(API_VERSION_FILENAME, 'w') as api_version_file:
+      api_version_file.write('0')
     with open(API_FILENAME, 'w') as api_file:
       api_file.write('}\nStamp: 7d9d25f71cb8a5aba86202540a20d405\n')
     shutil.copytree(os.path.dirname(__file__), 'tools')
@@ -142,9 +142,8 @@ class ApiStaticCheckUnitTest(unittest.TestCase):
         (self.make_jar(java, 'Api'), OUT_FILENAME))
     with open(API_FILENAME, 'r') as api_file:
       api = api_file.read()
-    with open(INTERFACE_API_VERSION_FILENAME, 'r') \
-         as interface_api_version_file:
-      interface_api_version = interface_api_version_file.read()
+    with open(API_VERSION_FILENAME, 'r') as api_version_file:
+      api_version = api_version_file.read()
     with open(OUT_FILENAME, 'r') as out_file:
       output = out_file.read()
 
@@ -156,7 +155,41 @@ class ApiStaticCheckUnitTest(unittest.TestCase):
     api_hash.update(api.encode('utf-8'))
     self.assertEqual(api_stamp, 'Stamp: %s' % api_hash.hexdigest())
 
-    return [return_code == 0, output, api, interface_api_version]
+    return [return_code == 0, output, api, api_version]
+
+  def test_split_by_class_sort(self):
+    expected = [
+        [
+            'public class Api {',
+            'public Api();',
+            'public void a();',
+            'public void b();',
+            '}',
+        ],
+        [
+            'public class zee {',
+            'public abstract int z();',
+            'public void x();',
+            'public void y();',
+            'public zee();',
+            '}',
+        ],
+    ]
+    input = """Compiled from Api.java
+public class Api {
+public void b();
+public Api();
+public void a();
+}
+Compiled from zee.java
+public class zee {
+public void x();
+public zee();
+public void y();
+public abstract int z();
+}
+"""
+    self.assertEqual(update_api._split_by_class(input.splitlines()), expected)
 
 
   def test_update_api_success(self):

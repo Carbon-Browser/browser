@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_LOCATION_ANDROID_LOCATION_SETTINGS_H_
 #define COMPONENTS_LOCATION_ANDROID_LOCATION_SETTINGS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/location/android/location_settings_dialog_context.h"
 #include "components/location/android/location_settings_dialog_outcome.h"
 
@@ -19,8 +19,11 @@ class LocationSettings {
  public:
   virtual ~LocationSettings() = default;
 
-  // Returns true if Chrome has location permission.
+  // Returns true if Chrome has any permission to access location.
   virtual bool HasAndroidLocationPermission() = 0;
+
+  // Returns true if Chrome has permission to access precise location.
+  virtual bool HasAndroidFineLocationPermission() = 0;
 
   // Returns true if Chrome can prompt to get location permission.
   virtual bool CanPromptForAndroidLocationPermission(

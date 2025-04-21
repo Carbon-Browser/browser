@@ -1,16 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 let instance: WindowProxy|null = null;
-
-declare global {
-  interface Window {
-    // https://github.com/microsoft/TypeScript/issues/40807
-    requestIdleCallback(callback: () => void, options?: {timeout: number}):
-        void;
-  }
-}
 
 /** Abstracts some builtin JS functions to mock them in tests. */
 export class WindowProxy {
@@ -57,7 +49,7 @@ export class WindowProxy {
   /** Returns promise that resolves when lazy rendering should be started. */
   waitForLazyRender(): Promise<void> {
     return new Promise<void>(resolve => {
-      window.requestIdleCallback(resolve, {timeout: 500});
+      requestIdleCallback(() => resolve(), {timeout: 500});
     });
   }
 
@@ -69,5 +61,9 @@ export class WindowProxy {
   /** Returns `window.location.href` wrapped in a URL object. */
   get url(): URL {
     return new URL(window.location.href);
+  }
+
+  get onLine(): boolean {
+    return window.navigator.onLine;
   }
 }

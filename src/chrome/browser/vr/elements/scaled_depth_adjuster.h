@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ class VR_UI_EXPORT ScaledDepthAdjuster : public UiElement {
   gfx::Transform LocalTransform() const override;
   gfx::Transform GetTargetLocalTransform() const override;
   bool OnBeginFrame(const gfx::Transform& head_pose) override;
-  void OnSetType() override;
 
 #ifndef NDEBUG
   void DumpGeometry(std::ostringstream* os) const override;

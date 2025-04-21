@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,14 +71,10 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
         mPaymentUiService = paymentUiService;
         mJourneyLogger = Mockito.mock(JourneyLogger.class);
         mWebContents = Mockito.mock(WebContents.class);
-        Mockito.doReturn(JUnitTestGURLs.getGURL(JUnitTestGURLs.URL_1))
-                .when(mWebContents)
-                .getLastCommittedUrl();
+        Mockito.doReturn(JUnitTestGURLs.URL_1).when(mWebContents).getLastCommittedUrl();
         mRenderFrameHost = Mockito.mock(RenderFrameHost.class);
         // subframe
-        Mockito.doReturn(JUnitTestGURLs.getGURL(JUnitTestGURLs.URL_2))
-                .when(mRenderFrameHost)
-                .getLastCommittedURL();
+        Mockito.doReturn(JUnitTestGURLs.URL_2).when(mRenderFrameHost).getLastCommittedURL();
         Origin origin = Mockito.mock(Origin.class);
         Mockito.doReturn(origin).when(mRenderFrameHost).getLastCommittedOrigin();
         mMethodData = new PaymentMethodData[1];
@@ -104,10 +100,11 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
         Mockito.doReturn(methodDataMap).when(mSpec).getMethodData();
         Mockito.doReturn(mOptions).when(mSpec).getPaymentOptions();
 
-        PaymentRequest request = new MojoPaymentRequestGateKeeper(
-                (client, onClosed)
-                        -> new PaymentRequestService(
-                                mRenderFrameHost, client, onClosed, this, () -> null));
+        PaymentRequest request =
+                new MojoPaymentRequestGateKeeper(
+                        (client, onClosed) ->
+                                new PaymentRequestService(
+                                        mRenderFrameHost, client, onClosed, this, () -> null));
         request.init(mClient, mMethodData, mDetails, mOptions);
         return request;
     }
@@ -125,11 +122,6 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
     public PaymentRequestParamsBuilder setJourneyLogger(JourneyLogger journeyLogger) {
         mJourneyLogger = journeyLogger;
         return this;
-    }
-
-    @Override
-    public boolean skipUiForBasicCard() {
-        return false;
     }
 
     @Override
@@ -171,7 +163,7 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
     }
 
     @Override
-    public JourneyLogger createJourneyLogger(boolean isIncognito, WebContents webContents) {
+    public JourneyLogger createJourneyLogger(WebContents webContents) {
         return mJourneyLogger;
     }
 
@@ -196,15 +188,22 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
     }
 
     @Override
-    public PaymentRequestSpec createPaymentRequestSpec(PaymentOptions options,
-            PaymentDetails details, Collection<PaymentMethodData> methodData, String appLocale) {
+    public PaymentRequestSpec createPaymentRequestSpec(
+            PaymentOptions options,
+            PaymentDetails details,
+            Collection<PaymentMethodData> methodData,
+            String appLocale) {
         return mSpec;
     }
 
     @Override
-    public PaymentUiService createPaymentUiService(PaymentUiService.Delegate delegate,
-            PaymentRequestParams params, WebContents webContents, boolean isOffTheRecord,
-            JourneyLogger journeyLogger, String topLevelOrigin) {
+    public PaymentUiService createPaymentUiService(
+            PaymentUiService.Delegate delegate,
+            PaymentRequestParams params,
+            WebContents webContents,
+            boolean isOffTheRecord,
+            JourneyLogger journeyLogger,
+            String topLevelOrigin) {
         return mPaymentUiService;
     }
 
@@ -237,16 +236,6 @@ public class PaymentRequestParamsBuilder implements ChromePaymentRequestService.
     @Override
     public PaymentAppFactoryInterface createAndroidPaymentAppFactory() {
         return null;
-    }
-
-    @Override
-    public PaymentAppFactoryInterface createAutofillPaymentAppFactory() {
-        return null;
-    }
-
-    @Override
-    public boolean canMakeAutofillPayment(Map<String, PaymentMethodData> methodData) {
-        return false;
     }
 
     @Override

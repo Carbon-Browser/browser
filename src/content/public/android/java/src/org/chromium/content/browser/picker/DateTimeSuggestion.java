@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@ package org.chromium.content.browser.picker;
 
 import android.text.TextUtils;
 
+import org.chromium.build.annotations.NullMarked;
+
 /**
  * Date/time suggestion container used to store information for each suggestion that will be shown
  * in the suggestion list dialog. Keep in sync with date_time_suggestion.h.
  */
+@NullMarked
 public class DateTimeSuggestion {
     private final double mValue;
     private final String mLocalizedValue;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -149,17 +149,6 @@ void udev_monitor_unref(udev_monitor* udev_monitor) {
 
 udev* udev_new() {
   return UdevLoader::Get()->udev_new();
-}
-
-void udev_set_log_fn(
-    struct udev* udev,
-    void (*log_fn)(struct udev* udev, int priority, const char* file, int line,
-                   const char* fn, const char* format, va_list args)) {
-  return UdevLoader::Get()->udev_set_log_fn(udev, log_fn);
-}
-
-void udev_set_log_priority(struct udev* udev, int priority) {
-  return UdevLoader::Get()->udev_set_log_priority(udev, priority);
 }
 
 void udev_unref(udev* udev) {

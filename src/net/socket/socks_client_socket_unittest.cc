@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,14 +52,14 @@ class SOCKSClientSocketTest : public PlatformTest, public WithTaskEnvironment {
   void SetUp() override;
 
  protected:
+  std::unique_ptr<MockHostResolver> host_resolver_;
+  std::unique_ptr<SocketDataProvider> data_;
   std::unique_ptr<SOCKSClientSocket> user_sock_;
   AddressList address_list_;
   // Filled in by BuildMockSocket() and owned by its return value
   // (which |user_sock| is set to).
   raw_ptr<StreamSocket> tcp_sock_;
   TestCompletionCallback callback_;
-  std::unique_ptr<MockHostResolver> host_resolver_;
-  std::unique_ptr<SocketDataProvider> data_;
 };
 
 SOCKSClientSocketTest::SOCKSClientSocketTest()
@@ -93,9 +93,9 @@ std::unique_ptr<SOCKSClientSocket> SOCKSClientSocketTest::BuildMockSocket(
   // non-owning pointer to it.
   tcp_sock_ = socket.get();
   return std::make_unique<SOCKSClientSocket>(
-      std::move(socket), HostPortPair(hostname, port), NetworkIsolationKey(),
-      DEFAULT_PRIORITY, host_resolver, SecureDnsPolicy::kAllow,
-      TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::move(socket), HostPortPair(hostname, port),
+      NetworkAnonymizationKey(), DEFAULT_PRIORITY, host_resolver,
+      SecureDnsPolicy::kAllow, TRAFFIC_ANNOTATION_FOR_TESTS);
 }
 
 // Tests a complete handshake and the disconnection.
@@ -137,8 +137,7 @@ TEST_F(SOCKSClientSocketTest, CompleteHandshake) {
     EXPECT_TRUE(
         LogContainsEndEvent(entries, -1, NetLogEventType::SOCKS_CONNECT));
 
-    scoped_refptr<IOBuffer> buffer =
-        base::MakeRefCounted<IOBuffer>(payload_write.size());
+    auto buffer = base::MakeRefCounted<IOBufferWithSize>(payload_write.size());
     memcpy(buffer->data(), payload_write.data(), payload_write.size());
     rv = user_sock_->Write(buffer.get(), payload_write.size(),
                            callback_.callback(), TRAFFIC_ANNOTATION_FOR_TESTS);
@@ -146,7 +145,7 @@ TEST_F(SOCKSClientSocketTest, CompleteHandshake) {
     rv = callback_.WaitForResult();
     EXPECT_EQ(static_cast<int>(payload_write.size()), rv);
 
-    buffer = base::MakeRefCounted<IOBuffer>(payload_read.size());
+    buffer = base::MakeRefCounted<IOBufferWithSize>(payload_read.size());
     if (use_read_if_ready) {
       rv = user_sock_->ReadIfReady(buffer.get(), payload_read.size(),
                                    callback_.callback());
@@ -192,7 +191,7 @@ TEST_F(SOCKSClientSocketTest, CancelPendingReadIfReady) {
   EXPECT_THAT(rv, IsOk());
   EXPECT_TRUE(user_sock_->IsConnected());
 
-  auto buffer = base::MakeRefCounted<IOBuffer>(payload_read.size());
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(payload_read.size());
   rv = user_sock_->ReadIfReady(buffer.get(), payload_read.size(),
                                callback_.callback());
   EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
@@ -396,6 +395,10 @@ TEST_F(SOCKSClientSocketTest, DisconnectWhileHostResolveInProgress) {
 
   EXPECT_FALSE(user_sock_->IsConnected());
   EXPECT_FALSE(user_sock_->IsConnectedAndIdle());
+
+  // Need to delete `user_sock_` before the HostResolver it references.
+  tcp_sock_ = nullptr;
+  user_sock_.reset();
 }
 
 // Tries to connect to an IPv6 IP.  Should fail, as SOCKS4 does not support
@@ -422,6 +425,10 @@ TEST_F(SOCKSClientSocketTest, NoIPv6RealResolver) {
 
   EXPECT_EQ(ERR_NAME_NOT_RESOLVED,
             callback_.GetResult(user_sock_->Connect(callback_.callback())));
+
+  // Need to delete `user_sock_` before the HostResolver it references.
+  tcp_sock_ = nullptr;
+  user_sock_.reset();
 }
 
 TEST_F(SOCKSClientSocketTest, Tag) {
@@ -437,7 +444,7 @@ TEST_F(SOCKSClientSocketTest, Tag) {
   MockHostResolver host_resolver;
   SOCKSClientSocket socket(
       std::move(tagging_sock), HostPortPair("localhost", 80),
-      NetworkIsolationKey(), DEFAULT_PRIORITY, &host_resolver,
+      NetworkAnonymizationKey(), DEFAULT_PRIORITY, &host_resolver,
       SecureDnsPolicy::kAllow, TRAFFIC_ANNOTATION_FOR_TESTS);
 
   EXPECT_EQ(tagging_sock_ptr->tag(), SocketTag());
@@ -454,11 +461,12 @@ TEST_F(SOCKSClientSocketTest, SetSecureDnsPolicy) {
     StaticSocketDataProvider data;
     MockHostResolver host_resolver;
     host_resolver.rules()->AddRule("doh.test", "127.0.0.1");
-    SOCKSClientSocket socket(
-        std::make_unique<MockTCPClientSocket>(address_list_, NetLog::Get(),
-                                              &data),
-        HostPortPair("doh.test", 80), NetworkIsolationKey(), DEFAULT_PRIORITY,
-        &host_resolver, secure_dns_policy, TRAFFIC_ANNOTATION_FOR_TESTS);
+    SOCKSClientSocket socket(std::make_unique<MockTCPClientSocket>(
+                                 address_list_, NetLog::Get(), &data),
+                             HostPortPair("doh.test", 80),
+                             NetworkAnonymizationKey(), DEFAULT_PRIORITY,
+                             &host_resolver, secure_dns_policy,
+                             TRAFFIC_ANNOTATION_FOR_TESTS);
 
     EXPECT_EQ(ERR_IO_PENDING, socket.Connect(callback_.callback()));
     EXPECT_EQ(secure_dns_policy, host_resolver.last_secure_dns_policy());

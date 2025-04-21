@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,15 @@ class ExtensionIdltestApiTest : public extensions::ExtensionApiTest {
  public:
   // Set the channel to "trunk" since idltest is restricted to trunk.
   ExtensionIdltestApiTest() : trunk_(version_info::Channel::UNKNOWN) {}
-  ~ExtensionIdltestApiTest() override {}
+  ~ExtensionIdltestApiTest() override = default;
 
  private:
   extensions::ScopedCurrentChannel trunk_;
 };
 
 IN_PROC_BROWSER_TEST_F(ExtensionIdltestApiTest, IdlCompiler) {
-  EXPECT_TRUE(
-      RunExtensionTest("idltest/binary_data", {.page_url = "binary.html"}));
-  EXPECT_TRUE(
-      RunExtensionTest("idltest/nocompile", {.page_url = "nocompile.html"}));
+  EXPECT_TRUE(RunExtensionTest("idltest/binary_data",
+                               {.extension_url = "binary.html"}));
+  EXPECT_TRUE(RunExtensionTest("idltest/nocompile",
+                               {.extension_url = "nocompile.html"}));
 }

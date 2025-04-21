@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ ChromeRendererPepperHostFactory::ChromeRendererPepperHostFactory(
     content::RendererPpapiHost* host)
     : host_(host) {}
 
-ChromeRendererPepperHostFactory::~ChromeRendererPepperHostFactory() {}
+ChromeRendererPepperHostFactory::~ChromeRendererPepperHostFactory() = default;
 
 std::unique_ptr<ResourceHost>
 ChromeRendererPepperHostFactory::CreateResourceHost(

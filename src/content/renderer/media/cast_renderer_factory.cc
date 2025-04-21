@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromecast/media/audio/cast_audio_renderer.h"
 #include "media/base/decoder_factory.h"
 #include "media/renderers/renderer_impl.h"
 #include "media/renderers/video_renderer_impl.h"
 #include "media/video/gpu_memory_buffer_video_frame_pool.h"
 #include "media/video/gpu_video_accelerator_factories.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 
 namespace content {
 
@@ -43,7 +44,7 @@ std::unique_ptr<media::Renderer> CastRendererFactory::CreateRenderer(
   auto audio_renderer = std::make_unique<chromecast::media::CastAudioRenderer>(
       media_task_runner, media_log_, interface_broker_);
 
-  // VideoRenderer construction logic is copied from DefaultRendererFactory.
+  // VideoRenderer construction logic is copied from RendererImplFactory.
   media::GpuVideoAcceleratorFactories* gpu_factories = nullptr;
   if (get_gpu_factories_cb_)
     gpu_factories = get_gpu_factories_cb_.Run();

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@ import androidx.annotation.Nullable;
 import org.chromium.base.ActivityState;
 import org.chromium.components.messages.MessageScopeChange.ChangeType;
 import org.chromium.content_public.browser.NavigationHandle;
+import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.ui.base.WindowAndroid;
@@ -25,15 +26,15 @@ import java.util.Objects;
  * to notify queue manager of proper scope changes of {@link MessageScopeType#WINDOW}.
  */
 class ScopeChangeController {
-    /**
-     * A delegate which can handle the scope change.
-     */
+    /** A delegate which can handle the scope change. */
     public interface Delegate {
         void onScopeChange(MessageScopeChange change);
     }
 
     interface ScopeObserver {
         void destroy();
+
+        boolean isActive();
     }
 
     private final Delegate mDelegate;
@@ -50,9 +51,10 @@ class ScopeChangeController {
      */
     void firstMessageEnqueued(ScopeKey scopeKey) {
         assert !mObservers.containsKey(scopeKey) : "This scope key has already been observed.";
-        ScopeObserver observer = scopeKey.scopeType == MessageScopeType.WINDOW
-                ? new WindowScopeObserver(mDelegate, scopeKey)
-                : new NavigationWebContentsScopeObserver(mDelegate, scopeKey);
+        ScopeObserver observer =
+                scopeKey.scopeType == MessageScopeType.WINDOW
+                        ? new WindowScopeObserver(mDelegate, scopeKey)
+                        : new NavigationWebContentsScopeObserver(mDelegate, scopeKey);
         mObservers.put(scopeKey, observer);
     }
 
@@ -65,50 +67,58 @@ class ScopeChangeController {
         observer.destroy();
     }
 
+    boolean isActive(ScopeKey scopeKey) {
+        if (!mObservers.containsKey(scopeKey)) return false;
+        var scopeObserver = mObservers.get(scopeKey);
+        return scopeObserver.isActive();
+    }
+
     /**
      * This handles both navigation type and webContents type. Only navigation type
      * will destroy scopes on page navigation.
      */
-    static class NavigationWebContentsScopeObserver
-            extends WebContentsObserver implements ScopeObserver {
+    static class NavigationWebContentsScopeObserver extends WebContentsObserver
+            implements ScopeObserver {
         private final Delegate mDelegate;
         private final ScopeKey mScopeKey;
-        // TODO(crbug.com/1340572): Replace GURL with Origin.
+        // TODO(crbug.com/40230391): Replace GURL with Origin.
         private GURL mLastVisitedUrl;
+        private boolean mIsActive;
 
         public NavigationWebContentsScopeObserver(Delegate delegate, ScopeKey scopeKey) {
             super(scopeKey.webContents);
             mDelegate = delegate;
             mScopeKey = scopeKey;
             WebContents webContents = scopeKey.webContents;
-            int changeType = webContents != null && webContents.getFocusedFrame() != null
-                    ? ChangeType.ACTIVE
-                    : ChangeType.INACTIVE;
+            int changeType =
+                    webContents != null && webContents.getVisibility() == Visibility.VISIBLE
+                            ? ChangeType.ACTIVE
+                            : ChangeType.INACTIVE;
             mDelegate.onScopeChange(
                     new MessageScopeChange(mScopeKey.scopeType, scopeKey, changeType));
+            mIsActive = changeType == ChangeType.ACTIVE;
         }
 
         @Override
-        public void onWebContentsFocused() {
+        public void onVisibilityChanged(@Visibility int visibility) {
+            mIsActive = visibility == Visibility.VISIBLE;
             mDelegate.onScopeChange(
-                    new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.ACTIVE));
+                    new MessageScopeChange(
+                            mScopeKey.scopeType,
+                            mScopeKey,
+                            mIsActive ? ChangeType.ACTIVE : ChangeType.INACTIVE));
         }
 
         @Override
-        public void onWebContentsLostFocus() {
-            mDelegate.onScopeChange(
-                    new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.INACTIVE));
-        }
-
-        @Override
-        public void didFinishNavigation(NavigationHandle navigationHandle) {
+        public void didFinishNavigationInPrimaryMainFrame(NavigationHandle navigationHandle) {
             if (mScopeKey.scopeType != MessageScopeType.NAVIGATION
                     && mScopeKey.scopeType != MessageScopeType.ORIGIN) {
                 return;
             }
 
-            if (!navigationHandle.isInPrimaryMainFrame() || navigationHandle.isSameDocument()
-                    || !navigationHandle.hasCommitted() || navigationHandle.isReload()) {
+            if (navigationHandle.isSameDocument()
+                    || !navigationHandle.hasCommitted()
+                    || navigationHandle.isReload()) {
                 return;
             }
 
@@ -120,7 +130,6 @@ class ScopeChangeController {
                 }
                 mLastVisitedUrl = navigationHandle.getUrl();
             }
-
             destroy();
         }
 
@@ -130,13 +139,19 @@ class ScopeChangeController {
             // #destroy will remove the observers.
             mDelegate.onScopeChange(
                     new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.DESTROY));
+            mIsActive = false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return mIsActive;
         }
 
         @Override
         public void onTopLevelNativeWindowChanged(@Nullable WindowAndroid windowAndroid) {
             super.onTopLevelNativeWindowChanged(windowAndroid);
             // Dismiss the message if it is moved to another window.
-            // TODO(crbug.com/1205392): This is a temporary solution; remove this when
+            // TODO(crbug.com/40764577): This is a temporary solution; remove this when
             // tab-reparent is fully supported.
             destroy();
         }
@@ -152,42 +167,54 @@ class ScopeChangeController {
     static class WindowScopeObserver implements ScopeObserver, ActivityStateObserver {
         private final Delegate mDelegate;
         private final ScopeKey mScopeKey;
+        private boolean mIsActive;
 
         public WindowScopeObserver(Delegate delegate, ScopeKey scopeKey) {
             mDelegate = delegate;
             mScopeKey = scopeKey;
-            assert scopeKey.scopeType
-                    == MessageScopeType.WINDOW
-                : "WindowScopeObserver should only monitor window scope events.";
+            assert scopeKey.scopeType == MessageScopeType.WINDOW
+                    : "WindowScopeObserver should only monitor window scope events.";
             WindowAndroid windowAndroid = scopeKey.windowAndroid;
             windowAndroid.addActivityStateObserver(this);
-            mDelegate.onScopeChange(new MessageScopeChange(scopeKey.scopeType, scopeKey,
+            @ChangeType
+            int changeType =
                     windowAndroid.getActivityState() == ActivityState.RESUMED
                             ? ChangeType.ACTIVE
-                            : ChangeType.INACTIVE));
+                            : ChangeType.INACTIVE;
+            mDelegate.onScopeChange(
+                    new MessageScopeChange(scopeKey.scopeType, scopeKey, changeType));
+            mIsActive = changeType == ChangeType.ACTIVE;
         }
 
         @Override
         public void onActivityPaused() {
             mDelegate.onScopeChange(
                     new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.INACTIVE));
+            mIsActive = false;
         }
 
         @Override
         public void onActivityResumed() {
             mDelegate.onScopeChange(
                     new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.ACTIVE));
+            mIsActive = true;
         }
 
         @Override
         public void onActivityDestroyed() {
             mDelegate.onScopeChange(
                     new MessageScopeChange(mScopeKey.scopeType, mScopeKey, ChangeType.DESTROY));
+            mIsActive = false;
         }
 
         @Override
         public void destroy() {
             mScopeKey.windowAndroid.removeActivityStateObserver(this);
+        }
+
+        @Override
+        public boolean isActive() {
+            return mIsActive;
         }
     }
 }

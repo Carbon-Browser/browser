@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,21 @@
 
 namespace ui {
 
-std::string OptionalSkColorToString(const absl::optional<SkColor>& color) {
+std::string OptionalSkColorToString(const std::optional<SkColor>& color) {
   if (!color)
     return std::string();
   return color_utils::SkColorToRgbaString(*color);
 }
 
-int64_t OptionalSkColorToJavaColor(const absl::optional<SkColor>& skcolor) {
+int64_t OptionalSkColorToJavaColor(const std::optional<SkColor>& skcolor) {
   if (!skcolor)
     return kInvalidJavaColor;
   return static_cast<int32_t>(*skcolor);
 }
 
-absl::optional<SkColor> JavaColorToOptionalSkColor(int64_t java_color) {
+std::optional<SkColor> JavaColorToOptionalSkColor(int64_t java_color) {
   if (java_color == kInvalidJavaColor)
-    return absl::nullopt;
+    return std::nullopt;
   DCHECK(base::IsValueInRangeForNumericType<int32_t>(java_color));
   return static_cast<SkColor>(java_color);
 }

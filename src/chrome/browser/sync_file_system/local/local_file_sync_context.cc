@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/browser/sync_file_system/file_change.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 #include "chrome/browser/sync_file_system/local/local_origin_change_observer.h"
@@ -97,12 +96,13 @@ void LocalFileSyncContext::MaybeInitializeFileSystemContext(
       base::BindOnce(
           &LocalFileSyncContext::InitializeFileSystemContextOnIOThread, this,
           source_url, base::RetainedRef(file_system_context));
+  const blink::StorageKey storage_key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(source_url));
   io_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&storage::SandboxFileSystemBackendDelegate::OpenFileSystem,
                      base::Unretained(file_system_context->sandbox_delegate()),
-                     blink::StorageKey(url::Origin::Create(source_url)),
-                     /*bucket_locator=*/absl::nullopt,
+                     storage::BucketLocator::ForDefaultBucket(storage_key),
                      storage::kFileSystemTypeSyncable,
                      storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
                      std::move(open_filesystem_callback), GURL()));
@@ -122,8 +122,8 @@ void LocalFileSyncContext::GetFileForLocalSync(
   DCHECK(file_system_context);
   DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
 
-  base::PostTaskAndReplyWithResult(
-      file_system_context->default_file_task_runner(), FROM_HERE,
+  file_system_context->default_file_task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&LocalFileSyncContext::GetNextURLsForSyncOnFileThread,
                      this, base::RetainedRef(file_system_context)),
       base::BindOnce(&LocalFileSyncContext::TryPrepareForLocalSync, this,
@@ -307,7 +307,6 @@ void LocalFileSyncContext::ApplyRemoteChange(
       return;
   }
   NOTREACHED();
-  std::move(callback).Run(SYNC_STATUS_FAILED);
 }
 
 void LocalFileSyncContext::HandleRemoteDelete(
@@ -461,9 +460,9 @@ void LocalFileSyncContext::GetFileMetadata(
       file_system_context, url);
   file_system_context->operation_runner()->GetMetadata(
       url_for_sync,
-      FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-          FileSystemOperation::GET_METADATA_FIELD_SIZE |
-          FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+       storage::FileSystemOperation::GetMetadataField::kSize,
+       storage::FileSystemOperation::GetMetadataField::kLastModified},
       base::BindOnce(&LocalFileSyncContext::DidGetFileMetadata, this,
                      std::move(callback)));
 }
@@ -578,8 +577,7 @@ void LocalFileSyncContext::OnWriteEnabled(const FileSystemURL& url) {
   // Nothing to do for now.
 }
 
-LocalFileSyncContext::~LocalFileSyncContext() {
-}
+LocalFileSyncContext::~LocalFileSyncContext() = default;
 
 void LocalFileSyncContext::ScheduleNotifyChangesUpdatedOnIOThread(
     base::OnceClosure callback) {
@@ -655,8 +653,8 @@ void LocalFileSyncContext::InitializeFileSystemContextOnIOThread(
     std::set<GURL>* origins_with_changes = new std::set<GURL>;
     std::unique_ptr<LocalFileChangeTracker>* tracker_ptr(
         new std::unique_ptr<LocalFileChangeTracker>);
-    base::PostTaskAndReplyWithResult(
-        file_system_context->default_file_task_runner(), FROM_HERE,
+    file_system_context->default_file_task_runner()->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(
             &LocalFileSyncContext::InitializeChangeTrackerOnFileThread, this,
             tracker_ptr, base::RetainedRef(file_system_context),

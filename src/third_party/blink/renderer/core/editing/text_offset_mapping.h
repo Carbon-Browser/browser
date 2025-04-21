@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,11 +79,11 @@ class CORE_EXPORT TextOffsetMapping final {
     // The block-in-inline in |block_flow_| before |first_|, e.g.
     //  <span><div>...</div>abc</span>
     //  LayoutInline {SPAN}
-    //    LayoutNGBlockFlow (anonymous) <= block-in-inline
-    //      LayoutNGBlockFlow {DIV}
+    //    LayoutBlockFlow (anonymous) <= block-in-inline
+    //      LayoutBlockFlow {DIV}
     //        ...
-    //      LayoutNGBlockFlow (anonymous)
-    //        LayoutNGText "abc"
+    //      LayoutBlockFlow (anonymous)
+    //        LayoutText "abc"
     const LayoutObject* block_in_inline_before_ = nullptr;
     const LayoutObject* first_ = nullptr;
     const LayoutObject* last_ = nullptr;
@@ -96,11 +96,16 @@ class CORE_EXPORT TextOffsetMapping final {
     STACK_ALLOCATED();
 
    public:
-    class CORE_EXPORT Iterator
-        : public std::iterator<std::input_iterator_tag, InlineContents> {
+    class CORE_EXPORT Iterator {
       STACK_ALLOCATED();
 
      public:
+      using iterator_category = std::input_iterator_tag;
+      using value_type = InlineContents;
+      using difference_type = std::ptrdiff_t;
+      using pointer = InlineContents*;
+      using reference = InlineContents&;
+
       explicit Iterator(const InlineContents& current) : current_(current) {}
       Iterator() = default;
 
@@ -133,11 +138,16 @@ class CORE_EXPORT TextOffsetMapping final {
     STACK_ALLOCATED();
 
    public:
-    class CORE_EXPORT Iterator
-        : public std::iterator<std::forward_iterator_tag, InlineContents> {
+    class CORE_EXPORT Iterator {
       STACK_ALLOCATED();
 
      public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = InlineContents;
+      using difference_type = std::ptrdiff_t;
+      using pointer = InlineContents*;
+      using reference = InlineContents&;
+
       explicit Iterator(const InlineContents& current) : current_(current) {}
       Iterator() = default;
 

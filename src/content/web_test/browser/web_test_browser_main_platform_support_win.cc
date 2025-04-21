@@ -1,11 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "content/web_test/browser/web_test_browser_main_platform_support.h"
 
-#include <stddef.h>
 #include <windows.h>
+
+#include <stddef.h>
 
 #include <iostream>
 #include <list>
@@ -17,6 +23,7 @@
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "content/browser/renderer_host/dwrite_font_proxy_impl_win.h"
 #include "content/shell/common/shell_switches.h"
 #include "ui/gfx/win/direct_write.h"
 
@@ -32,11 +39,7 @@ void SetupFonts() {
   base::FilePath font_path =
       base_path.Append(FILE_PATH_LITERAL("/test_fonts/Ahem.ttf"));
 
-  const char kRegisterFontFiles[] = "register-font-files";
-  // DirectWrite sandbox registration.
-  base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
-  command_line.AppendSwitchASCII(kRegisterFontFiles,
-                                 base::WideToUTF8(font_path.value()));
+  DWriteFontProxyImpl::SideLoadFontForTesting(font_path);
 }
 
 }  // namespace

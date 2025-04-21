@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@ namespace gfx {
 
 // Queries Fontconfig for rendering settings and updates |params_out| and
 // |family_out| (if non-nullptr). Returns false on failure.
-GFX_EXPORT bool QueryFontconfig(const FontRenderParamsQuery& query,
-                                FontRenderParams* params_out,
-                                std::string* family_out);
+COMPONENT_EXPORT(GFX)
+bool QueryFontconfig(const FontRenderParamsQuery& query,
+                     FontRenderParams* params_out,
+                     std::string* family_out);
 
 }  // namespace gfx
 

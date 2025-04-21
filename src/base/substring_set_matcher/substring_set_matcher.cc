@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/substring_set_matcher/substring_set_matcher.h"
 
@@ -11,6 +16,7 @@
 
 #ifdef __SSE2__
 #include <immintrin.h>
+
 #include "base/bits.h"
 #endif
 
@@ -35,8 +41,9 @@ std::vector<const MatcherStringPattern*> GetVectorOfPointers(
   std::vector<const MatcherStringPattern*> pattern_pointers;
   pattern_pointers.reserve(patterns.size());
 
-  for (const MatcherStringPattern& pattern : patterns)
+  for (const MatcherStringPattern& pattern : patterns) {
     pattern_pointers.push_back(&pattern);
+  }
 
   return pattern_pointers;
 }
@@ -88,6 +95,7 @@ bool SubstringSetMatcher::Build(
   return true;
 }
 
+SubstringSetMatcher::SubstringSetMatcher() = default;
 SubstringSetMatcher::~SubstringSetMatcher() = default;
 
 bool SubstringSetMatcher::Match(
@@ -175,8 +183,9 @@ SubstringSetMatcher::NodeID SubstringSetMatcher::GetTreeSize(
   DCHECK(std::is_sorted(patterns.begin(), patterns.end(), ComparePatterns));
 
   base::CheckedNumeric<NodeID> result = 1u;  // 1 for the root node.
-  if (patterns.empty())
+  if (patterns.empty()) {
     return result.ValueOrDie();
+  }
 
   auto last = patterns.begin();
   auto current = last + 1;
@@ -212,8 +221,9 @@ void SubstringSetMatcher::BuildAhoCorasickTree(
   tree_.emplace_back();
 
   // Build the initial trie for all the patterns.
-  for (const MatcherStringPattern* pattern : patterns)
+  for (const MatcherStringPattern* pattern : patterns) {
     InsertPatternIntoAhoCorasickTree(pattern);
+  }
 
   CreateFailureAndOutputEdges();
 }
@@ -230,8 +240,9 @@ void SubstringSetMatcher::InsertPatternIntoAhoCorasickTree(
   // Follow existing paths for as long as possible.
   while (i != text_end) {
     NodeID child = current_node->GetEdge(static_cast<unsigned char>(*i));
-    if (child == kInvalidNodeID)
+    if (child == kInvalidNodeID) {
       break;
+    }
     current_node = &tree_[child];
     ++i;
   }
@@ -330,8 +341,9 @@ void SubstringSetMatcher::AccumulateMatchesForNode(
     // Fast reject.
     return;
   }
-  if (node->IsEndOfPattern())
+  if (node->IsEndOfPattern()) {
     matches->insert(node->GetMatchID());
+  }
 
   NodeID node_id = node->output_link();
   while (node_id != kInvalidNodeID) {
@@ -405,8 +417,9 @@ SubstringSetMatcher::AhoCorasickNode::GetEdgeNoInline(uint32_t label) const {
 #else
   for (unsigned edge_idx = 0; edge_idx < num_edges(); ++edge_idx) {
     const AhoCorasickEdge& edge = edges_.edges[edge_idx];
-    if (edge.label == label)
+    if (edge.label == label) {
       return edge.node_id;
+    }
   }
 #endif
   return kInvalidNodeID;
@@ -440,16 +453,14 @@ void SubstringSetMatcher::AhoCorasickNode::SetEdge(uint32_t label,
   }
 
   if (num_free_edges_ == 0) {
-    // We are out of space, so double our capacity. This can either be
-    // because we are converting from inline to heap storage, or because
-    // we are increasing the size of our heap storage.
+    // We are out of space, so double our capacity (unless that would cause
+    // num_free_edges_ to overflow). This can either be because we are
+    // converting from inline to heap storage, or because we are increasing the
+    // size of our heap storage.
     unsigned old_capacity =
         edges_capacity_ == 0 ? kNumInlineEdges : edges_capacity_;
-    unsigned new_capacity = old_capacity * 2;
+    unsigned new_capacity = std::min(old_capacity * 2, kEmptyLabel + 1);
     DCHECK_EQ(0u, new_capacity % 4);
-    // TODO(pkasting): The header claims this condition holds, but I don't
-    // understand why.  If you do, please comment.
-    DCHECK_LE(new_capacity, kEmptyLabel + 1);
     AhoCorasickEdge* new_edges = new AhoCorasickEdge[new_capacity];
     memcpy(new_edges, edges(), sizeof(AhoCorasickEdge) * old_capacity);
     for (unsigned edge_idx = old_capacity; edge_idx < new_capacity;
@@ -485,8 +496,8 @@ size_t SubstringSetMatcher::AhoCorasickNode::EstimateMemoryUsage() const {
   if (edges_capacity_ == 0) {
     return 0;
   } else {
-    return base::trace_event::EstimateMemoryUsage(edges_.edges,
-                                                  edges_capacity_);
+    return base::trace_event::EstimateMemoryUsage(
+        base::span<const AhoCorasickEdge>(edges_.edges, edges_capacity_));
   }
 }
 

@@ -18,16 +18,15 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "tensorflow/lite/core/shims/cc/shims_test_util.h"
+#include "tensorflow/lite/test_util.h"
 #include "tensorflow_lite_support/cc/port/gmock.h"
 #include "tensorflow_lite_support/cc/port/gtest.h"
 #include "tensorflow_lite_support/cc/port/status_matchers.h"
 #include "tensorflow_lite_support/cc/task/core/task_utils.h"
 #include "tensorflow_lite_support/cc/task/text/proto/retrieval.pb.h"
+#include "tensorflow_lite_support/cc/task/text/utils/text_op_resolver.h"
 #include "tensorflow_lite_support/cc/test/message_matchers.h"
 #include "tensorflow_lite_support/cc/test/test_utils.h"
-#include "tensorflow_lite_support/examples/task/text/desktop/universal_sentence_encoder_qa_op_resolver.h"
-
 namespace tflite {
 namespace task {
 namespace text {
@@ -73,16 +72,17 @@ constexpr char kInputProto[] = R"(
 const size_t kExpectedTop[] = {0, 2, 1};
 const float kExpectedScores[] = {14.9595, 7.2148, 8.8094};
 
-class UniversalSentenceEncoderQATest : public tflite_shims::testing::Test {
+class UniversalSentenceEncoderQATest : public tflite::testing::Test {
  public:
   UniversalSentenceEncoderQATest() {
     // Load model file, and create qa client.
-    const auto filename = JoinPath("./" /*test src dir*/, kTestUseQaModelDir);
+    const auto filename =
+        JoinPath("./" /*test src dir*/, kTestUseQaModelDir);
     RetrievalOptions options;
     options.mutable_base_options()->mutable_model_file()->set_file_name(
         filename);
     auto status = UniversalSentenceEncoderQA::CreateFromOption(
-        options, CreateQACustomOpResolver());
+        options, CreateTextOpResolver());
     if (status.ok()) {
       qa_client_ = std::move(status.value());
     }
@@ -95,7 +95,7 @@ class UniversalSentenceEncoderQATest : public tflite_shims::testing::Test {
 TEST_F(UniversalSentenceEncoderQATest, TestEncodeQuery) {
   ASSERT_TRUE(qa_client_ != nullptr);
   SUPPORT_ASSERT_OK_AND_ASSIGN(const auto encoded_question,
-                               qa_client_->EncodeQuery(kQuery));
+                       qa_client_->EncodeQuery(kQuery));
   EXPECT_EQ(UniversalSentenceEncoderQA::kFinalEmbeddingSize,
             encoded_question.value_float_size());
 
@@ -106,7 +106,7 @@ TEST_F(UniversalSentenceEncoderQATest, TestEncodeQuery) {
 TEST_F(UniversalSentenceEncoderQATest, TestEncodeResponse) {
   ASSERT_TRUE(qa_client_ != nullptr);
   SUPPORT_ASSERT_OK_AND_ASSIGN(const auto encoded_response,
-                               qa_client_->EncodeResponse(kResponse, kContext));
+                       qa_client_->EncodeResponse(kResponse, kContext));
   EXPECT_EQ(UniversalSentenceEncoderQA::kFinalEmbeddingSize,
             encoded_response.value_float_size());
 
@@ -207,14 +207,13 @@ TEST_F(UniversalSentenceEncoderQATest, TestRetrieveWithEncoding) {
   ASSERT_TRUE(qa_client_ != nullptr);
   RetrievalInput input;
   input.set_query_text(kQueryComp);
-  SUPPORT_ASSERT_OK_AND_ASSIGN(const auto& query,
-                               qa_client_->EncodeQuery(kQueryComp));
+  SUPPORT_ASSERT_OK_AND_ASSIGN(const auto& query, qa_client_->EncodeQuery(kQueryComp));
   SUPPORT_ASSERT_OK_AND_ASSIGN(const auto& resp0,
-                               qa_client_->EncodeResponse(kResponseComp0, ""));
+                       qa_client_->EncodeResponse(kResponseComp0, ""));
   SUPPORT_ASSERT_OK_AND_ASSIGN(const auto& resp1,
-                               qa_client_->EncodeResponse(kResponseComp1, ""));
+                       qa_client_->EncodeResponse(kResponseComp1, ""));
   SUPPORT_ASSERT_OK_AND_ASSIGN(const auto& resp2,
-                               qa_client_->EncodeResponse(kResponseComp2, ""));
+                       qa_client_->EncodeResponse(kResponseComp2, ""));
   *input.mutable_responses()->Add()->mutable_text_encoding() = resp0;
   *input.mutable_responses()->Add()->mutable_text_encoding() = resp1;
   *input.mutable_responses()->Add()->mutable_text_encoding() = resp2;

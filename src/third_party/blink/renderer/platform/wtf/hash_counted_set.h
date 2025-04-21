@@ -24,6 +24,7 @@
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+#include "third_party/blink/renderer/platform/wtf/type_traits.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace WTF {
@@ -32,19 +33,13 @@ namespace WTF {
 // the set. The iterators have fields ->key and ->value that return the set
 // members and their counts, respectively.
 template <typename Value,
-          typename HashFunctions = typename DefaultHash<Value>::Hash,
           typename Traits = HashTraits<Value>,
           typename Allocator = PartitionAllocator>
 class HashCountedSet {
   USE_ALLOCATOR(HashCountedSet, Allocator);
 
  private:
-  typedef HashMap<Value,
-                  unsigned,
-                  HashFunctions,
-                  Traits,
-                  HashTraits<unsigned>,
-                  Allocator>
+  typedef HashMap<Value, unsigned, Traits, HashTraits<unsigned>, Allocator>
       ImplType;
 
  public:
@@ -54,22 +49,16 @@ class HashCountedSet {
   typedef typename ImplType::const_iterator const_iterator;
   typedef typename ImplType::AddResult AddResult;
 
-  HashCountedSet() {
-    static_assert(Allocator::kIsGarbageCollected ||
-                      !IsPointerToGarbageCollectedType<Value>::value,
-                  "Cannot put raw pointers to garbage-collected classes into "
-                  "an off-heap HashCountedSet. Use "
-                  "HeapHashCountedSet<Member<T>> instead.");
-  }
+  HashCountedSet() = default;
 
-  HashCountedSet(const HashCountedSet&) = delete;
-  HashCountedSet& operator=(const HashCountedSet&) = delete;
+  HashCountedSet(const HashCountedSet&) = default;
+  HashCountedSet& operator=(const HashCountedSet&) = default;
 
   void swap(HashCountedSet& other) { impl_.swap(other.impl_); }
 
   unsigned size() const { return impl_.size(); }
   unsigned Capacity() const { return impl_.capacity(); }
-  bool IsEmpty() const { return impl_.IsEmpty(); }
+  bool empty() const { return impl_.empty(); }
 
   // Iterators iterate over pairs of values (called key) and counts (called
   // value).
@@ -107,9 +96,9 @@ class HashCountedSet {
 
   Vector<Value> AsVector() const;
 
-  template <typename VisitorDispatcher, typename A = Allocator>
-  std::enable_if_t<A::kIsGarbageCollected> Trace(
-      VisitorDispatcher visitor) const {
+  void Trace(auto visitor) const
+    requires Allocator::kIsGarbageCollected
+  {
     impl_.Trace(visitor);
   }
 
@@ -120,25 +109,37 @@ class HashCountedSet {
 
  private:
   ImplType impl_;
+
+  struct TypeConstraints {
+    constexpr TypeConstraints() {
+      static_assert(!IsStackAllocatedTypeV<Value>);
+      static_assert(Allocator::kIsGarbageCollected ||
+                        !IsPointerToGarbageCollectedType<Value>,
+                    "Cannot put raw pointers to garbage-collected classes into "
+                    "an off-heap HashCountedSet. Use "
+                    "HeapHashCountedSet<Member<T>> instead.");
+    }
+  };
+  NO_UNIQUE_ADDRESS TypeConstraints type_constraints_;
 };
 
-template <typename T, typename U, typename V, typename W>
-inline typename HashCountedSet<T, U, V, W>::AddResult
-HashCountedSet<T, U, V, W>::insert(const ValueType& value, unsigned count) {
+template <typename T, typename U, typename V>
+inline typename HashCountedSet<T, U, V>::AddResult
+HashCountedSet<T, U, V>::insert(const ValueType& value, unsigned count) {
   DCHECK_GT(count, 0u);
   AddResult result = impl_.insert(value, 0);
   result.stored_value->value += count;
   return result;
 }
 
-template <typename T, typename U, typename V, typename W>
-inline typename HashCountedSet<T, U, V, W>::AddResult
-HashCountedSet<T, U, V, W>::insert(const ValueType& value) {
+template <typename T, typename U, typename V>
+inline typename HashCountedSet<T, U, V>::AddResult
+HashCountedSet<T, U, V>::insert(const ValueType& value) {
   return insert(value, 1u);
 }
 
-template <typename T, typename U, typename V, typename W>
-inline bool HashCountedSet<T, U, V, W>::erase(iterator it) {
+template <typename T, typename U, typename V>
+inline bool HashCountedSet<T, U, V>::erase(iterator it) {
   if (it == end())
     return false;
 
@@ -154,8 +155,8 @@ inline bool HashCountedSet<T, U, V, W>::erase(iterator it) {
   return true;
 }
 
-template <typename T, typename U, typename V, typename W>
-inline void HashCountedSet<T, U, V, W>::RemoveAll(iterator it) {
+template <typename T, typename U, typename V>
+inline void HashCountedSet<T, U, V>::RemoveAll(iterator it) {
   if (it == end())
     return;
 
@@ -163,12 +164,11 @@ inline void HashCountedSet<T, U, V, W>::RemoveAll(iterator it) {
 }
 
 template <typename Value,
-          typename HashFunctions,
           typename Traits,
           typename Allocator,
           typename VectorType>
 inline void CopyToVector(
-    const HashCountedSet<Value, HashFunctions, Traits, Allocator>& collection,
+    const HashCountedSet<Value, Traits, Allocator>& collection,
     VectorType& vector) {
   {
     // Disallow GC across resize allocation, see crbug.com/568173
@@ -182,8 +182,8 @@ inline void CopyToVector(
     vector[i] = (*it).key;
 }
 
-template <typename T, typename U, typename V, typename W>
-inline Vector<T> HashCountedSet<T, U, V, W>::AsVector() const {
+template <typename T, typename U, typename V>
+inline Vector<T> HashCountedSet<T, U, V>::AsVector() const {
   Vector<T> vector;
   CopyToVector(*this, vector);
   return vector;

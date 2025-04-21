@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ChildUntrustedPageReceiver, ParentTrustedPageRemote} from '/ash/webui/sample_system_web_app_ui/mojom/sample_system_web_app_shared_ui.mojom-webui.js';
-import {UntrustedPageInterfacesFactory} from '/ash/webui/sample_system_web_app_ui/mojom/sample_system_web_app_untrusted_ui.mojom-webui.js';
+import {ChildUntrustedPageReceiver, ParentTrustedPageRemote} from './sample_system_web_app_shared_ui.mojom-webui.js';
+import {UntrustedPageInterfacesFactory} from './sample_system_web_app_untrusted_ui.mojom-webui.js';
 
 export const PARENT_PAGE_ORIGIN = 'chrome://sample-system-web-app';
 

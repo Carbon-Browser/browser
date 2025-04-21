@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ TEST(DigitallySignedTraitsTest, OutOfBoundsEnumsRejected) {
   original.signature_data.assign(32, '\x01');
 
   net::ct::DigitallySigned copied;
-  EXPECT_DCHECK_DEATH(
+  EXPECT_NOTREACHED_DEATH(
       mojo::test::SerializeAndDeserialize<mojom::DigitallySigned>(original,
                                                                   copied));
 }

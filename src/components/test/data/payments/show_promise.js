@@ -1,27 +1,25 @@
 /*
- * Copyright 2018 The Chromium Authors. All rights reserved.
+ * Copyright 2018 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* global PaymentRequest:false */
-/* eslint-disable valid-jsdoc */
-
 /**
  * Initializes the payment request object.
+ * @return {PaymentRequest} - The newly initialized object.
  */
 function buildPaymentRequest() {
   if (!window.PaymentRequest) {
     throw new Error('Payment Request API not available.');
   }
 
-  var supportedInstruments = [
+  const supportedInstruments = [
     {
       supportedMethods: 'basic-card',
     },
   ];
 
-  var details = {
+  const details = {
     total: {
       label: 'Donation',
       amount: {
@@ -38,7 +36,7 @@ function buildPaymentRequest() {
 /**
  * Calls PaymentRequest.show() without a promise.
  */
-function buyWithNoPromise() { // eslint-disable-line no-unused-vars
+function buyWithNoPromise() {
   try {
     request = buildPaymentRequest();
     print('The final donation amount is USD $1.00.');
@@ -63,16 +61,16 @@ function buyWithNoPromise() { // eslint-disable-line no-unused-vars
 /**
  * Calls PaymentRequest.show() with a promise that resolves.
  */
-function buyWithResolvingPromise() { // eslint-disable-line no-unused-vars
+function buyWithResolvingPromise() {
   try {
-    var request = buildPaymentRequest();
+    const request = buildPaymentRequest();
     print('The initial donation amount is USD $1.00.');
     request
         .show(new Promise(function(resolve) {
           print('Calculating the final donation amount...');
           window.setTimeout(function() {
             print('Final donation amount is USD $0.99.');
-            var details = {
+            const details = {
               total: {
                 label: 'Donation',
                 amount: {
@@ -99,9 +97,9 @@ function buyWithResolvingPromise() { // eslint-disable-line no-unused-vars
 /**
  * Calls PaymentRequest.show() with a promise that rejects.
  */
-function buyWithRejectingPromise() { // eslint-disable-line no-unused-vars
+function buyWithRejectingPromise() {
   try {
-    var request = buildPaymentRequest();
+    const request = buildPaymentRequest();
     print('The initial donation amount is USD $1.00.');
     request
         .show(new Promise(function(resolve, reject) {

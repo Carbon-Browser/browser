@@ -1,10 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/installer/util/self_cleaning_temp_dir.h"
 
 #include <windows.h>
+
 #include <stdint.h>
 #include <wincrypt.h>
 
@@ -29,7 +30,7 @@ std::string GetRandomFilename() {
   EXPECT_NE(FALSE, CryptReleaseContext(crypt_ctx, 0));
 
   // Hexify the value.
-  std::string result(base::HexEncode(&data[0], std::size(data)));
+  std::string result = base::HexEncode(data);
   EXPECT_EQ(8u, result.size());
 
   // Replace the first digit with the letter 'R' (for "random", get it?).
@@ -164,9 +165,8 @@ TEST_F(SelfCleaningTempDirTest, LeaveUsedOnDestroy) {
     EXPECT_EQ(parent_temp_dir.Append(L"Three"), temp_dir.path());
     EXPECT_TRUE(base::DirectoryExists(temp_dir.path()));
     // Drop a file somewhere.
-    EXPECT_EQ(static_cast<int>(std::size(kHiHon) - 1),
-              base::WriteFile(parent_temp_dir.AppendASCII(GetRandomFilename()),
-                              kHiHon, std::size(kHiHon) - 1));
+    EXPECT_TRUE(base::WriteFile(
+        parent_temp_dir.AppendASCII(GetRandomFilename()), kHiHon));
   }
   EXPECT_FALSE(base::DirectoryExists(parent_temp_dir.Append(L"Three")));
   EXPECT_TRUE(base::DirectoryExists(parent_temp_dir));

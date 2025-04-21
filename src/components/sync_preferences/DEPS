@@ -1,5 +1,6 @@
 include_rules = [
   "+ash/constants",
+  "+components/metrics/demographics",
   "+components/policy/core/browser",
   "+components/policy/core/common",
   "+components/pref_registry",
@@ -12,3 +13,27 @@ include_rules = [
   "-content",
   "-ios",
 ]
+specific_include_rules = {
+  "common_syncable_prefs_database\.cc": [
+    "+components/autofill",
+    "+components/bookmarks",
+    "+components/browsing_data",
+    "+components/commerce",
+    "+components/content_settings",
+    "+components/dom_distiller",
+    "+components/language",
+    "+components/metrics",
+    "+components/ntp_tiles",
+    "+components/omnibox",
+    "+components/password_manager",
+    "+components/payments",
+    "+components/plus_addresses",
+    "+components/safe_browsing",
+    "+components/saved_tab_groups/public",
+    "+components/search_engines",
+    "+components/sharing_message",
+    "+components/translate",
+    "+components/variations",
+    "+components/sharing_message",
+  ]
+}

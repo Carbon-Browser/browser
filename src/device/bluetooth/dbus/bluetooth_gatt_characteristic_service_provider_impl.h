@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/platform_thread.h"
 #include "dbus/bus.h"
@@ -117,7 +117,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothGattCharacteristicServiceProviderImpl
   void OnReadValue(
       dbus::MethodCall* method_call,
       dbus::ExportedObject::ResponseSender response_sender,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
 
   // Called by the Delegate in response to a method to call to write the value

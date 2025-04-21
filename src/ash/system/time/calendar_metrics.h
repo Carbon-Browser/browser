@@ -1,11 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_TIME_CALENDAR_METRICS_H_
 #define ASH_SYSTEM_TIME_CALENDAR_METRICS_H_
 
+#include <cstddef>
 #include <string>
+
+#include "google_apis/common/api_error_codes.h"
 
 namespace ui {
 class AnimationThroughputReporter;
@@ -14,6 +17,7 @@ class Event;
 
 namespace base {
 class TimeDelta;
+class TimeTicks;
 }  // namespace base
 
 namespace views {
@@ -85,7 +89,11 @@ void RecordMonthArrowButtonActivated(bool up, const ui::Event& event);
 
 void RecordEventListItemActivated(const ui::Event& event);
 
+void RecordEventListForTodayActivated();
+
 void RecordMonthDwellTime(const base::TimeDelta& dwell_time);
+
+void RecordResetToTodayPressed();
 
 void RecordScrollSource(CalendarViewScrollSource source);
 
@@ -95,6 +103,55 @@ ui::AnimationThroughputReporter CreateAnimationReporter(
 
 void RecordCalendarKeyboardNavigation(
     const CalendarKeyboardNavigationSource key_source);
+
+void RecordEventListItemInUpNextLaunched(const ui::Event& event);
+
+void RecordUpNextEventCount(const int event_count);
+
+void RecordJoinButtonPressedFromEventListView(const ui::Event& event);
+
+void RecordJoinButtonPressedFromUpNextView(const ui::Event& event);
+
+void RecordEventListEventCount(const int event_count);
+
+void RecordEventsDisplayedToUser();
+
+void RecordScrollEventInUpNext();
+
+void RecordCalendarLaunchedFromEmptyEventList();
+
+void RecordEventListClosed();
+
+void RecordSettingsButtonPressed();
+
+void RecordCalendarListFetchDuration(const base::TimeDelta fetch_duration);
+
+void RecordCalendarListFetchErrorCode(google_apis::ApiErrorCode error);
+
+void RecordCalendarListFetchTimeout(bool fetch_timed_out);
+
+void RecordEventListFetchDuration(const base::TimeDelta fetch_duration);
+
+void RecordEventListFetchErrorCode(google_apis::ApiErrorCode error);
+
+void RecordEventListFetchTimeout(bool fetch_timed_out);
+
+void RecordEventListFetchesTotalDuration(const base::TimeDelta fetch_duration);
+
+void RecordSingleMonthSizeInBytes(size_t single_month_cache_size);
+
+void RecordTotalEventsCacheSizeInMonths(unsigned int events_cache_size);
+
+void RecordTotalSelectedCalendars(unsigned int selected_calendars);
+
+void RecordTimeToSeeTodaysEventDots(const base::TimeDelta time_elapsed,
+                                    bool multi_calendar_enabled);
+
+void RecordTimeToSeeTodaysPrimaryCalendarEventDots(
+    const base::TimeTicks time_elapsed);
+
+void RecordTimeToSeeTodaysMultiCalendarEventDots(
+    const base::TimeTicks time_elapsed);
 
 }  // namespace calendar_metrics
 

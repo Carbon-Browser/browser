@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,18 @@
 #include "chromeos/ash/components/local_search_service/shared_structs.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
+
 constexpr double kDefaultWeight = 1.0;
+
 }  // namespace
 
 TEST(ContentExtractionUtilsTest, ConsolidateTokenTest) {
   {
     const std::u16string text(
-        u"Check duplicate. Duplicate is #@$%^&@#$%#@$^@#$ bad");
+        u"Check duplicate. Duplicate is ##$%^&##$%##$^##$ bad");
     const auto tokens = ConsolidateToken(
         ExtractContent("3rd test", text, kDefaultWeight, "en"));
     EXPECT_EQ(tokens.size(), 3u);
@@ -88,7 +89,7 @@ TEST(ContentExtractionUtilsTest, ExtractContentTest) {
     EXPECT_EQ(tokens[1].positions[0].position.length, 7u);
   }
   {
-    const std::u16string text(u"@#$%@^你好!!!");
+    const std::u16string text(u"##$%#^你好!!!");
     const auto tokens = ExtractContent("2nd test", text, kDefaultWeight, "zh");
     EXPECT_EQ(tokens.size(), 1u);
 
@@ -132,5 +133,4 @@ TEST(ContentExtractionUtilsTest, NormalizerTest) {
       u"day la mot trinh duyet tuyet voi va muotma");
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

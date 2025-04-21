@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,15 @@
 #include <string>
 
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/utility/wm_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/ui/ash/ash_util.h"
 #include "chrome/grit/generated_resources.h"
 #include "extensions/common/extension.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -29,6 +29,7 @@
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/text_utils.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
@@ -63,10 +64,10 @@ void CreateAndShowWidget(views::WidgetDelegateView* delegate,
   gfx::Size view_size = delegate->GetPreferredSize();
   gfx::Rect bounds((display_size.width() - view_size.width()) / 2,
                    -view_size.height(), view_size.width(), view_size.height());
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET,
+      views::Widget::InitParams::TYPE_POPUP);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
-  params.ownership = views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET;
   params.accept_events = false;
   params.z_order = ui::ZOrderLevel::kFloatingUIElement;
   params.delegate = delegate;
@@ -101,8 +102,10 @@ void CreateAndShowWidget(views::WidgetDelegateView* delegate,
 class IdleAppNameNotificationDelegateView
     : public views::WidgetDelegateView,
       public ui::ImplicitAnimationObserver {
+  METADATA_HEADER(IdleAppNameNotificationDelegateView,
+                  views::WidgetDelegateView)
+
  public:
-  METADATA_HEADER(IdleAppNameNotificationDelegateView);
   // An idle message which will get shown from the caller and hides itself after
   // a time, calling |owner->CloseMessage| to inform the owner that it got
   // destroyed. The |app_name| is a string which gets used as message and
@@ -118,7 +121,6 @@ class IdleAppNameNotificationDelegateView
     // Add the application name label to the message.
     AddLabel(app_name, rb->GetFontList(ui::ResourceBundle::BoldFont),
              error ? kErrorTextColor : kTextColor);
-    spoken_text_ = app_name;
     SetLayoutManager(std::make_unique<views::FillLayout>());
 
     // Set a timer which will trigger to remove the message after the given
@@ -126,6 +128,9 @@ class IdleAppNameNotificationDelegateView
     hide_timer_.Start(FROM_HERE,
                       base::Milliseconds(message_visibility_time_in_ms), this,
                       &IdleAppNameNotificationDelegateView::RemoveMessage);
+
+    GetViewAccessibility().SetRole(ax::mojom::Role::kAlert);
+    GetViewAccessibility().SetName(app_name);
   }
 
   IdleAppNameNotificationDelegateView(
@@ -148,7 +153,7 @@ class IdleAppNameNotificationDelegateView
     // Inform our owner that we are going away.
     if (owner_) {
       IdleAppNameNotificationView* owner = owner_;
-      owner_ = NULL;
+      owner_ = nullptr;
       owner->CloseMessage();
     }
     // Close the owning widget - if required.
@@ -177,11 +182,6 @@ class IdleAppNameNotificationDelegateView
     views::WidgetDelegateView::OnPaint(canvas);
   }
 
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-    node_data->SetName(spoken_text_);
-    node_data->role = ax::mojom::Role::kAlert;
-  }
-
   // ImplicitAnimationObserver overrides
   void OnImplicitAnimationsCompleted() override { Close(); }
 
@@ -204,10 +204,7 @@ class IdleAppNameNotificationDelegateView
 
   // The owner of this message which needs to get notified when the message
   // closes.
-  IdleAppNameNotificationView* owner_;
-
-  // The spoken text.
-  std::u16string spoken_text_;
+  raw_ptr<IdleAppNameNotificationView> owner_;
 
   // True if the widget got already closed.
   bool widget_closed_;
@@ -217,7 +214,7 @@ IdleAppNameNotificationView::IdleAppNameNotificationView(
     int message_visibility_time_in_ms,
     int animation_time_ms,
     const extensions::Extension* extension)
-    : view_(NULL) {
+    : view_(nullptr) {
   ShowMessage(message_visibility_time_in_ms, animation_time_ms, extension);
 }
 
@@ -228,20 +225,18 @@ IdleAppNameNotificationView::~IdleAppNameNotificationView() {
 void IdleAppNameNotificationView::CloseMessage() {
   if (view_) {
     IdleAppNameNotificationDelegateView* view = view_;
-    view_ = NULL;
+    view_ = nullptr;
     view->Close();
   }
 }
 
 bool IdleAppNameNotificationView::IsVisible() {
-  return view_ != NULL;
+  return view_ != nullptr;
 }
 
 std::u16string IdleAppNameNotificationView::GetShownTextForTest() {
-  ui::AXNodeData node_data;
   DCHECK(view_);
-  view_->GetAccessibleNodeData(&node_data);
-  return node_data.GetString16Attribute(ax::mojom::StringAttribute::kName);
+  return view_->GetViewAccessibility().GetCachedName();
 }
 
 void IdleAppNameNotificationView::ShowMessage(
@@ -269,7 +264,7 @@ void IdleAppNameNotificationView::ShowMessage(
   CreateAndShowWidget(view_, animation_time_ms);
 }
 
-BEGIN_METADATA(IdleAppNameNotificationDelegateView, views::WidgetDelegateView)
+BEGIN_METADATA(IdleAppNameNotificationDelegateView)
 END_METADATA
 
 }  // namespace ash

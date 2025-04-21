@@ -1,37 +1,36 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module arc.mojom;
 
-import "ash/components/arc/mojom/accessibility_helper.mojom";
+import "services/accessibility/android/public/mojom/accessibility_helper.mojom";
 import "ash/components/arc/mojom/adbd.mojom";
 import "ash/components/arc/mojom/appfuse.mojom";
 import "ash/components/arc/mojom/app.mojom";
 import "ash/components/arc/mojom/app_permissions.mojom";
+import "ash/components/arc/mojom/arc_wifi.mojom";
 import "ash/components/arc/mojom/audio.mojom";
 import "ash/components/arc/mojom/auth.mojom";
 import "ash/components/arc/mojom/backup_settings.mojom";
 import "ash/components/arc/mojom/bluetooth.mojom";
 import "ash/components/arc/mojom/boot_phase_monitor.mojom";
 import "ash/components/arc/mojom/camera.mojom";
-import "ash/components/arc/mojom/cert_store.mojom";
-import "ash/components/arc/mojom/clipboard.mojom";
+import "ash/components/arc/mojom/chrome_feature_flags.mojom";
 import "ash/components/arc/mojom/compatibility_mode.mojom";
 import "ash/components/arc/mojom/crash_collector.mojom";
-import "ash/components/arc/mojom/dark_theme.mojom";
+import "ash/components/arc/mojom/crosh.mojom";
 import "ash/components/arc/mojom/digital_goods.mojom";
-import "ash/components/arc/mojom/disk_quota.mojom";
+import "ash/components/arc/mojom/disk_space.mojom";
 import "ash/components/arc/mojom/enterprise_reporting.mojom";
+import "ash/components/arc/mojom/error_notification.mojom";
 import "ash/components/arc/mojom/file_system.mojom";
 import "ash/components/arc/mojom/iio_sensor.mojom";
 import "ash/components/arc/mojom/ime.mojom";
 import "ash/components/arc/mojom/input_method_manager.mojom";
 import "ash/components/arc/mojom/intent_helper.mojom";
-import "ash/components/arc/mojom/keyboard_shortcut.mojom";
 import "ash/components/arc/mojom/keymaster.mojom";
-import "ash/components/arc/mojom/kiosk.mojom";
-import "ash/components/arc/mojom/lock_screen.mojom";
+import "ash/components/arc/mojom/keymint.mojom";
 import "ash/components/arc/mojom/media_session.mojom";
 import "ash/components/arc/mojom/memory.mojom";
 import "ash/components/arc/mojom/metrics.mojom";
@@ -41,19 +40,16 @@ import "ash/components/arc/mojom/net.mojom";
 import "ash/components/arc/mojom/notifications.mojom";
 import "ash/components/arc/mojom/obb_mounter.mojom";
 import "ash/components/arc/mojom/oemcrypto.mojom";
-import "ash/components/arc/mojom/payment_app.mojom";
+import "ash/components/arc/mojom/on_device_safety.mojom";
 import "ash/components/arc/mojom/pip.mojom";
 import "ash/components/arc/mojom/policy.mojom";
 import "ash/components/arc/mojom/power.mojom";
 import "ash/components/arc/mojom/print_spooler.mojom";
 import "ash/components/arc/mojom/privacy_items.mojom";
 import "ash/components/arc/mojom/process.mojom";
-import "ash/components/arc/mojom/property.mojom";
-import "ash/components/arc/mojom/rotation_lock.mojom";
 import "ash/components/arc/mojom/screen_capture.mojom";
-import "ash/components/arc/mojom/sensor.mojom";
 import "ash/components/arc/mojom/sharesheet.mojom";
-import "ash/components/arc/mojom/storage_manager.mojom";
+import "ash/components/arc/mojom/system_state.mojom";
 import "ash/components/arc/mojom/system_ui.mojom";
 import "ash/components/arc/mojom/timer.mojom";
 import "ash/components/arc/mojom/tracing.mojom";
@@ -64,10 +60,13 @@ import "ash/components/arc/mojom/volume_mounter.mojom";
 import "ash/components/arc/mojom/wake_lock.mojom";
 import "ash/components/arc/mojom/wallpaper.mojom";
 import "ash/components/arc/mojom/webapk.mojom";
+import "chromeos/components/payments/mojom/payment_app.mojom";
 
-// Next MinVersion: 63
-// Deprecated method IDs: 101, 105, 121, 132
-// Next method ID: 168
+// Next MinVersion: 70
+// Deprecated method IDs: 101, 105, 109, 118, 121, 126, 132, 134, 136, 137, 147,
+//                        153, 154, 160, 165
+// Next method ID: 175
+[Uuid="1defbc6a-5e24-46bd-9117-3b2f106d7e7a"]
 interface ArcBridgeHost {
   // Keep the entries alphabetical. In order to do so without breaking
   // compatibility with the ARC instance, explicitly assign each interface a
@@ -75,7 +74,8 @@ interface ArcBridgeHost {
 
   // Notifies Chrome that the AccessibilityHelperInstance interface is ready.
   [MinVersion=21] OnAccessibilityHelperInstanceReady@127(
-      pending_remote<AccessibilityHelperInstance> instance_remote);
+      pending_remote<ax.android.mojom.AccessibilityHelperInstance>
+      instance_remote);
 
   // Notifies Chrome that the AdbdMonitorInstance interface is ready.
   [MinVersion=53] OnAdbdMonitorInstanceReady@158(
@@ -91,6 +91,14 @@ interface ArcBridgeHost {
   // Notifies Chrome that the AppfuseInstance interface is ready.
   [MinVersion=40] OnAppfuseInstanceReady@145(
       pending_remote<AppfuseInstance> instance_remote);
+
+  // Notifies Chrome that the ArcShellExecutionInstance interface is ready.
+  [MinVersion=69] OnArcShellExecutionInstanceReady@174(
+      pending_remote<ArcShellExecutionInstance> instance_remote);
+
+  // Notifies Chrome that the ArcWifiInstance interface is ready.
+  [MinVersion=66] OnArcWifiInstanceReady@171(
+      pending_remote<ArcWifiInstance> instance_remote);
 
   // Notifies Chrome that the AudioInstance interface is ready.
   [MinVersion=8] OnAudioInstanceReady@115(
@@ -116,13 +124,9 @@ interface ArcBridgeHost {
   [MinVersion=46] OnCameraInstanceReady@151(
       pending_remote<CameraInstance> instance_remote);
 
-  // Notifies Chrome that the CertStoreInstance interface is ready.
-  [MinVersion=31] OnCertStoreInstanceReady@136(
-      pending_remote<CertStoreInstance> instance_remote);
-
-  // Notifies Chrome that the ClipboardInstance interface is ready.
-  [MinVersion=2] OnClipboardInstanceReady@109(
-      pending_remote<ClipboardInstance> instance_remote);
+  // Notifies Chrome that the ChromeFeatureFlagsInstance interface is ready.
+  [MinVersion=65] OnChromeFeatureFlagsInstanceReady@170(
+      pending_remote<ChromeFeatureFlagsInstance> instance_remote);
 
   // Notifies Chrome that the CompatibilityModeInstance interface is ready.
   [MinVersion=56] OnCompatibilityModeInstanceReady@161(
@@ -132,21 +136,25 @@ interface ArcBridgeHost {
   [MinVersion=7] OnCrashCollectorInstanceReady@112(
       pending_remote<CrashCollectorInstance> instance_remote);
 
-  // Notifies Chrome that the DarkThemeInstance interface is ready.
-  [MinVersion=55] OnDarkThemeInstanceReady@160(
-      pending_remote<DarkThemeInstance> instance_remote);
+  // Notifies Chrome that the OnDeviceSafetyInstance interface is ready.
+  [MinVersion=68] OnOnDeviceSafetyInstanceReady@173(
+     pending_remote<OnDeviceSafetyInstance> instance_remote);
 
   // Notifies Chrome that the DigitalGoodsInstance interface is ready.
   [MinVersion=51] OnDigitalGoodsInstanceReady@156(
       pending_remote<DigitalGoodsInstance> instance_remote);
 
-  // Notifies Chrome that the DiskQuotaInstance interface is ready.
-  [MinVersion=39] OnDiskQuotaInstanceReady@144(
-      pending_remote<DiskQuotaInstance> instance_remote);
+  // Notifies Chrome that the DiskSpaceInstance interface is ready.
+  [MinVersion=39] OnDiskSpaceInstanceReady@144(
+      pending_remote<DiskSpaceInstance> instance_remote);
 
   // Notifies Chrome that the EnterpriseReportingInstance interface is ready.
   [MinVersion=15] OnEnterpriseReportingInstanceReady@122(
       pending_remote<EnterpriseReportingInstance> instance_remote);
+
+  // Notifies Chrome that the ErrorNotificationInstance interface is ready.
+  [MinVersion=67] OnErrorNotificationInstanceReady@172(
+      pending_remote<ErrorNotificationInstance> instance_remote);
 
   // Notifies Chrome that the FileSystemInstance interface is ready.
   [MinVersion=13] OnFileSystemInstanceReady@119(
@@ -168,21 +176,13 @@ interface ArcBridgeHost {
   [MinVersion=4] OnIntentHelperInstanceReady@111(
       pending_remote<IntentHelperInstance> instance_remote);
 
-  // Notifies Chrome that the KeyboardShortcutInstance interface is ready.
-  [MinVersion=60] OnKeyboardShortcutInstanceReady@165(
-      pending_remote<KeyboardShortcutInstance> instance_remote);
-
   // Notifies Chrome that the KeymasterInstance interface is ready.
   [MinVersion=47] OnKeymasterInstanceReady@152(
       pending_remote<KeymasterInstance> instance_remote);
 
-  // Notifies Chrome that the KioskInstance interface is ready.
-  [MinVersion=20] OnKioskInstanceReady@126(
-      pending_remote<KioskInstance> instance_remote);
-
-  // Notifies Chrome that the LockScreenInstance interface is ready.
-  [MinVersion=29] OnLockScreenInstanceReady@134(
-      pending_remote<LockScreenInstance> instance_remote);
+  // Notifies Chrome that the KeyMintInstance interface is ready.
+  [MinVersion=63] OnKeyMintInstanceReady@168(
+      pending_remote<keymint.KeyMintInstance> instance_remote);
 
   // Notifies Chrome that the MediaSessionInstance interface is ready.
   [MinVersion=43] OnMediaSessionInstanceReady@148(
@@ -222,7 +222,8 @@ interface ArcBridgeHost {
 
   // Notifies Chrome that the PaymentAppInstance interface is ready.
   [MinVersion=50] OnPaymentAppInstanceReady@155(
-      pending_remote<PaymentAppInstance> instance_remote);
+      pending_remote<chromeos.payments.mojom.PaymentAppInstance>
+      instance_remote);
 
   // Notifies Chrome that the PipInstance interface is ready.
   [MinVersion=41] OnPipInstanceReady@146(
@@ -246,33 +247,17 @@ interface ArcBridgeHost {
   // Notifies Chrome that the ProcessInstance interface is ready.
   OnProcessInstanceReady@104(pending_remote<ProcessInstance> instance_remote);
 
-  // Notifies Chrome that the PropertyInstance interface is ready.
-  [MinVersion=42] OnPropertyInstanceReady@147(
-      pending_remote<PropertyInstance> instance_remote);
-
-  // Notifies Chrome that the RotationLockInstance interface is ready.
-  [MinVersion=32] OnRotationLockInstanceReady@137(
-      pending_remote<RotationLockInstance> instance_remote);
-
   // Notifies Chrome that the ScreenCaptureInstance interface is ready.
   [MinVersion=35] OnScreenCaptureInstanceReady@140(
       pending_remote<ScreenCaptureInstance> instance_remote);
-
-  // Notifies Chrome that the SensorInstance interface is ready.
-  [MinVersion=49] OnSensorInstanceReady@154(
-      pending_remote<SensorInstance> instance_ptr);
 
   // Notifies Chrome that the SharesheetInstance interface is ready.
   [MinVersion=52] OnSharesheetInstanceReady@157(
       pending_remote<SharesheetInstance> instance_remote);
 
-  // Notifies Chrome that the SmartCardManagerInstance interface is ready.
-  [MinVersion=48] OnSmartCardManagerInstanceReady@153(
-      pending_remote<SmartCardManagerInstance> instance_remote);
-
-  // Notifies Chrome that the StorageManagerInstance interface is ready.
-  [MinVersion=12] OnStorageManagerInstanceReady@118(
-      pending_remote<StorageManagerInstance> instance_remote);
+  // Notifies Chrome that the SystemStateInstance interface is ready.
+  [MinVersion=64] OnSystemStateInstanceReady@169(
+      pending_remote<SystemStateInstance> instance_remote);
 
   // Notifies Chrome that the SystemUiInstance interface is ready.
   [MinVersion=62] OnSystemUiInstanceReady@167(

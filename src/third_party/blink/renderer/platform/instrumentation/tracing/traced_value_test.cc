@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 namespace blink {
 
-absl::optional<base::Value> ParseTracedValue(
+std::optional<base::Value> ParseTracedValue(
     std::unique_ptr<TracedValueJSON> value) {
   return base::JSONReader::Read(value->ToJSON().Utf8());
 }
@@ -24,15 +24,16 @@ TEST(TracedValueTest, FlatDictionary) {
   value->SetBooleanWithCopiedName("bool", true);
   value->SetStringWithCopiedName("string", "string");
 
-  absl::optional<base::Value> parsed = ParseTracedValue(std::move(value));
+  std::optional<base::Value> parsed = ParseTracedValue(std::move(value));
   ASSERT_TRUE(parsed->is_dict());
-  absl::optional<int> int_value = parsed->FindIntKey("int");
+  const base::Value::Dict& dict = parsed->GetDict();
+  std::optional<int> int_value = dict.FindInt("int");
   ASSERT_TRUE(int_value.has_value());
   EXPECT_EQ(2014, *int_value);
-  absl::optional<double> double_value = parsed->FindDoubleKey("double");
+  std::optional<double> double_value = dict.FindDouble("double");
   ASSERT_TRUE(double_value.has_value());
   EXPECT_EQ(0.0, *double_value);
-  std::string* string_value = parsed->FindStringKey("string");
+  const std::string* string_value = dict.FindString("string");
   ASSERT_NE(nullptr, string_value);
   EXPECT_EQ("string", *string_value);
 }
@@ -58,42 +59,41 @@ TEST(TracedValueTest, Hierarchy) {
   value->EndArray();
   value->SetStringWithCopiedName("s0", "foo");
 
-  absl::optional<base::Value> parsed = ParseTracedValue(std::move(value));
+  std::optional<base::Value> parsed = ParseTracedValue(std::move(value));
   ASSERT_TRUE(parsed->is_dict());
-  absl::optional<int> i0 = parsed->FindIntKey("i0");
+  const base::Value::Dict& dict = parsed->GetDict();
+  std::optional<int> i0 = dict.FindInt("i0");
   ASSERT_TRUE(i0.has_value());
   EXPECT_EQ(2014, *i0);
-  absl::optional<int> i1 = parsed->FindIntPath("dict1.i1");
+  std::optional<int> i1 = dict.FindIntByDottedPath("dict1.i1");
   ASSERT_TRUE(i1.has_value());
   EXPECT_EQ(2014, *i1);
-  absl::optional<bool> b2 = parsed->FindBoolPath("dict1.dict2.b2");
+  std::optional<bool> b2 = dict.FindBoolByDottedPath("dict1.dict2.b2");
   ASSERT_TRUE(b2.has_value());
   EXPECT_FALSE(*b2);
-  std::string* s1 = parsed->FindStringPath("dict1.s1");
+  const std::string* s1 = dict.FindStringByDottedPath("dict1.s1");
   ASSERT_NE(nullptr, s1);
   EXPECT_EQ("foo", *s1);
-  absl::optional<double> d0 = parsed->FindDoubleKey("d0");
+  std::optional<double> d0 = dict.FindDouble("d0");
   ASSERT_TRUE(d0.has_value());
   EXPECT_EQ(0.0, *d0);
-  absl::optional<bool> b0 = parsed->FindBoolKey("b0");
+  std::optional<bool> b0 = dict.FindBool("b0");
   ASSERT_TRUE(b0.has_value());
   EXPECT_TRUE(*b0);
-  base::Value* a1_value = parsed->FindListKey("a1");
-  ASSERT_NE(nullptr, a1_value);
-  ASSERT_TRUE(a1_value->is_list());
-  base::Value::ListView a1 = a1_value->GetListDeprecated();
-  absl::optional<int> a1i0 = a1[0].GetIfInt();
+  const base::Value::List* a1 = dict.FindList("a1");
+  ASSERT_NE(nullptr, a1);
+  std::optional<int> a1i0 = (*a1)[0].GetIfInt();
   ASSERT_TRUE(a1i0.has_value());
   EXPECT_EQ(1, *a1i0);
-  absl::optional<bool> a1b1 = a1[1].GetIfBool();
+  std::optional<bool> a1b1 = (*a1)[1].GetIfBool();
   ASSERT_TRUE(a1b1.has_value());
   EXPECT_TRUE(*a1b1);
-  const base::Value& a1d2 = a1[2];
+  const base::Value& a1d2 = (*a1)[2];
   ASSERT_TRUE(a1d2.is_dict());
-  absl::optional<int> i2 = a1d2.FindIntKey("i2");
+  std::optional<int> i2 = a1d2.GetDict().FindInt("i2");
   ASSERT_TRUE(i2.has_value());
   EXPECT_EQ(3, *i2);
-  std::string* s0 = parsed->FindStringKey("s0");
+  const std::string* s0 = dict.FindString("s0");
   ASSERT_NE(nullptr, s0);
   EXPECT_EQ("foo", *s0);
 }
@@ -106,21 +106,22 @@ TEST(TracedValueTest, Escape) {
   value->SetStringWithCopiedName("s3\\", "value3");
   value->SetStringWithCopiedName("\"s4\"", "value4");
 
-  absl::optional<base::Value> parsed = ParseTracedValue(std::move(value));
+  std::optional<base::Value> parsed = ParseTracedValue(std::move(value));
   ASSERT_TRUE(parsed->is_dict());
-  std::string* s0 = parsed->FindStringKey("s0");
+  const base::Value::Dict& dict = parsed->GetDict();
+  const std::string* s0 = dict.FindString("s0");
   ASSERT_NE(nullptr, s0);
   EXPECT_EQ("value0\\", *s0);
-  std::string* s1 = parsed->FindStringKey("s1");
+  const std::string* s1 = dict.FindString("s1");
   ASSERT_NE(nullptr, s1);
   EXPECT_EQ("value\n1", *s1);
-  std::string* s2 = parsed->FindStringKey("s2");
+  const std::string* s2 = dict.FindString("s2");
   ASSERT_NE(nullptr, s2);
   EXPECT_EQ("\"value2\"", *s2);
-  std::string* s3 = parsed->FindStringKey("s3\\");
+  const std::string* s3 = dict.FindString("s3\\");
   ASSERT_NE(nullptr, s3);
   EXPECT_EQ("value3", *s3);
-  std::string* s4 = parsed->FindStringKey("\"s4\"");
+  const std::string* s4 = dict.FindString("\"s4\"");
   ASSERT_NE(nullptr, s4);
   EXPECT_EQ("value4", *s4);
 }
@@ -141,25 +142,26 @@ TEST(TracedValueTest, NonCopiedNames) {
   value->PushInteger(2);
   value->EndArray();
 
-  absl::optional<base::Value> parsed = ParseTracedValue(std::move(value));
+  std::optional<base::Value> parsed = ParseTracedValue(std::move(value));
   ASSERT_TRUE(parsed->is_dict());
-  absl::optional<int> int_value = parsed->FindIntKey(int_str);
+  const base::Value::Dict& dict = parsed->GetDict();
+  std::optional<int> int_value = dict.FindInt(int_str);
   ASSERT_TRUE(int_value.has_value());
   EXPECT_EQ(2014, *int_value);
-  absl::optional<double> double_value = parsed->FindDoubleKey(double_str);
+  std::optional<double> double_value = dict.FindDouble(double_str);
   ASSERT_TRUE(double_value.has_value());
   EXPECT_EQ(0.0, *double_value);
-  absl::optional<bool> bool_value = parsed->FindBoolKey(bool_str);
+  std::optional<bool> bool_value = dict.FindBool(bool_str);
   ASSERT_TRUE(bool_value.has_value());
   EXPECT_TRUE(*bool_value);
-  std::string* string_value = parsed->FindStringKey(string_str);
+  const std::string* string_value = dict.FindString(string_str);
   ASSERT_NE(nullptr, string_value);
   EXPECT_EQ("string", *string_value);
-  base::Value* a1_value = parsed->FindListKey(array_str);
-  ASSERT_TRUE(a1_value->is_list());
-  base::Value::ListView a1 = a1_value->GetListDeprecated();
-  absl::optional<int> el0 = a1[0].GetIfInt();
-  absl::optional<int> el1 = a1[1].GetIfInt();
+  const base::Value::List* a1 = dict.FindList(array_str);
+  ASSERT_TRUE(a1);
+  ASSERT_FALSE(a1->empty());
+  std::optional<int> el0 = (*a1)[0].GetIfInt();
+  std::optional<int> el1 = (*a1)[1].GetIfInt();
   ASSERT_TRUE(el0.has_value());
   ASSERT_TRUE(el1.has_value());
   EXPECT_EQ(1, *el0);

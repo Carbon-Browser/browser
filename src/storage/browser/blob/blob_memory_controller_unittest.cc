@@ -1,25 +1,29 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "storage/browser/blob/blob_memory_controller.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
+
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/system/sys_info.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/test/with_feature_override.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_data_item.h"
 #include "storage/browser/blob/shareable_blob_data_item.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace storage {
 
@@ -29,7 +33,6 @@ using base::TestSimpleTaskRunner;
 using ItemState = ShareableBlobDataItem::State;
 using QuotaAllocationTask = BlobMemoryController::QuotaAllocationTask;
 
-const std::string kBlobStorageDirectory = "blob_storage";
 const size_t kTestBlobStorageIPCThresholdBytes = 20;
 const size_t kTestBlobStorageMaxSharedMemoryBytes = 50;
 const size_t kTestBlobStorageMaxBlobMemorySize = 500;
@@ -49,14 +52,9 @@ int64_t FakeDiskSpaceMethod(const base::FilePath& path) {
   return sFakeDiskSpace;
 }
 
-class BlobMemoryControllerTest : public base::test::WithFeatureOverride,
-                                 public testing::Test {
+class BlobMemoryControllerTest : public testing::Test {
  protected:
-  BlobMemoryControllerTest()
-      : base::test::WithFeatureOverride(
-            BlobMemoryController::
-                kInhibitBlobMemoryControllerMemoryPressureResponse) {}
-
+  BlobMemoryControllerTest() = default;
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     disallow_blocking_.emplace();
@@ -171,10 +169,10 @@ class BlobMemoryControllerTest : public base::test::WithFeatureOverride,
 
   base::test::TaskEnvironment task_environment_;
 
-  absl::optional<base::ScopedDisallowBlocking> disallow_blocking_;
+  std::optional<base::ScopedDisallowBlocking> disallow_blocking_;
 };
 
-TEST_P(BlobMemoryControllerTest, Strategy) {
+TEST_F(BlobMemoryControllerTest, Strategy) {
   {
     BlobMemoryController controller(temp_dir_.GetPath(), nullptr);
     SetTestMemoryLimits(&controller);
@@ -232,7 +230,7 @@ TEST_P(BlobMemoryControllerTest, Strategy) {
   }
 }
 
-TEST_P(BlobMemoryControllerTest, GrantMemory) {
+TEST_F(BlobMemoryControllerTest, GrantMemory) {
   const std::string kId = "id";
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
@@ -255,7 +253,7 @@ TEST_P(BlobMemoryControllerTest, GrantMemory) {
   EXPECT_TRUE(HasMemoryAllocation(items[0].get()));
 }
 
-TEST_P(BlobMemoryControllerTest, SimpleMemoryRequest) {
+TEST_F(BlobMemoryControllerTest, SimpleMemoryRequest) {
   const std::string kId = "id";
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
@@ -281,7 +279,7 @@ TEST_P(BlobMemoryControllerTest, SimpleMemoryRequest) {
   EXPECT_EQ(0u, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, PageToDisk) {
+TEST_F(BlobMemoryControllerTest, PageToDisk) {
   const std::string kId = "id";
   const std::string kId2 = "id2";
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
@@ -327,8 +325,7 @@ TEST_P(BlobMemoryControllerTest, PageToDisk) {
   EXPECT_FALSE(file_runner_->HasPendingTask());
 
   // Add our original item as populated so it's paged to disk.
-  future_data.Populate(base::as_bytes(
-      base::make_span(kData, kTestBlobStorageMaxBlobMemorySize)));
+  future_data.Populate(base::as_byte_span(kData));
   items[0]->set_state(ItemState::POPULATED_WITH_QUOTA);
   controller.NotifyMemoryItemsUsed(items);
 
@@ -353,7 +350,7 @@ TEST_P(BlobMemoryControllerTest, PageToDisk) {
   EXPECT_EQ(0u, controller.disk_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, NoDiskTooLarge) {
+TEST_F(BlobMemoryControllerTest, NoDiskTooLarge) {
   BlobMemoryController controller(temp_dir_.GetPath(), nullptr);
   SetTestMemoryLimits(&controller);
 
@@ -362,14 +359,14 @@ TEST_P(BlobMemoryControllerTest, NoDiskTooLarge) {
                                           1));
 }
 
-TEST_P(BlobMemoryControllerTest, TooLargeForDisk) {
+TEST_F(BlobMemoryControllerTest, TooLargeForDisk) {
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
 
   EXPECT_FALSE(controller.CanReserveQuota(kTestBlobStorageMaxDiskSpace + 1));
 }
 
-TEST_P(BlobMemoryControllerTest, CancelMemoryRequest) {
+TEST_F(BlobMemoryControllerTest, CancelMemoryRequest) {
   const std::string kId = "id";
   const std::string kId2 = "id2";
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
@@ -403,8 +400,7 @@ TEST_P(BlobMemoryControllerTest, CancelMemoryRequest) {
   EXPECT_EQ(0u, controller.disk_usage());
 
   // Add our original item as populated so we start paging to disk.
-  future_data.Populate(base::as_bytes(
-      base::make_span(kData, kTestBlobStorageMaxBlobMemorySize)));
+  future_data.Populate(base::as_byte_span(kData));
   items[0]->set_state(ItemState::POPULATED_WITH_QUOTA);
   controller.NotifyMemoryItemsUsed(items);
 
@@ -429,7 +425,7 @@ TEST_P(BlobMemoryControllerTest, CancelMemoryRequest) {
   EXPECT_EQ(0u, controller.disk_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, FileRequest) {
+TEST_F(BlobMemoryControllerTest, FileRequest) {
   const std::string kId = "id";
   const size_t kBlobSize = kTestBlobStorageMaxBlobMemorySize + 1;
 
@@ -486,7 +482,7 @@ TEST_P(BlobMemoryControllerTest, FileRequest) {
   EXPECT_EQ(0u, controller.disk_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, CancelFileRequest) {
+TEST_F(BlobMemoryControllerTest, CancelFileRequest) {
   const std::string kId = "id";
   const size_t kBlobSize = kTestBlobStorageMaxBlobMemorySize + 1;
 
@@ -519,7 +515,7 @@ TEST_P(BlobMemoryControllerTest, CancelFileRequest) {
   base::RunLoop().RunUntilIdle();
 }
 
-TEST_P(BlobMemoryControllerTest, MultipleFilesPaged) {
+TEST_F(BlobMemoryControllerTest, MultipleFilesPaged) {
   const std::string kId1 = "id";
   const size_t kSize1 = kTestBlobStorageMaxFileSizeBytes;
   char kData1[kSize1];
@@ -579,9 +575,9 @@ TEST_P(BlobMemoryControllerTest, MultipleFilesPaged) {
   EXPECT_FALSE(file_runner_->HasPendingTask());
 
   // Add our original item as populated so it's paged to disk.
-  future_data1.Populate(base::as_bytes(base::make_span(kData1, kSize1)));
+  future_data1.Populate(base::as_byte_span(kData1));
   items1[0]->set_state(ItemState::POPULATED_WITH_QUOTA);
-  future_data2.Populate(base::as_bytes(base::make_span(kData2, kSize2)));
+  future_data2.Populate(base::as_byte_span(kData2));
   items2[0]->set_state(ItemState::POPULATED_WITH_QUOTA);
 
   std::vector<scoped_refptr<ShareableBlobDataItem>> both_items = {items1[0],
@@ -612,7 +608,7 @@ TEST_P(BlobMemoryControllerTest, MultipleFilesPaged) {
   EXPECT_EQ(0u, controller.disk_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, FullEviction) {
+TEST_F(BlobMemoryControllerTest, FullEviction) {
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
   AssertEnoughDiskSpace();
@@ -667,7 +663,7 @@ TEST_P(BlobMemoryControllerTest, FullEviction) {
   EXPECT_TRUE(memory_quota_result_);
 }
 
-TEST_P(BlobMemoryControllerTest, PagingStopsWhenFull) {
+TEST_F(BlobMemoryControllerTest, PagingStopsWhenFull) {
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
   AssertEnoughDiskSpace();
@@ -793,9 +789,9 @@ TEST_P(BlobMemoryControllerTest, PagingStopsWhenFull) {
   EXPECT_EQ(Strategy::TOO_LARGE, controller.DetermineStrategy(1u, 1ull));
 }
 
-TEST_P(BlobMemoryControllerTest, DisableDiskWithFileAndMemoryPending) {
+TEST_F(BlobMemoryControllerTest, DisableDiskWithFileAndMemoryPending) {
   const std::string kFirstMemoryId = "id";
-  const uint64_t kFirstMemorySize = kTestBlobStorageMaxBlobMemorySize;
+  const size_t kFirstMemorySize = kTestBlobStorageMaxBlobMemorySize;
   const std::string kSecondMemoryId = "id2";
   const uint64_t kSecondMemorySize = 1;
   const std::string kFileId = "id2";
@@ -831,8 +827,7 @@ TEST_P(BlobMemoryControllerTest, DisableDiskWithFileAndMemoryPending) {
   EXPECT_EQ(0u, controller.disk_usage());
 
   // Add our original item as populated so we start paging it to disk.
-  future_data.Populate(
-      base::as_bytes(base::make_span(kDataMemoryData, kFirstMemorySize)));
+  future_data.Populate(base::as_byte_span(kDataMemoryData));
   items[0]->set_state(ItemState::POPULATED_WITH_QUOTA);
   controller.NotifyMemoryItemsUsed(items);
 
@@ -878,7 +873,7 @@ TEST_P(BlobMemoryControllerTest, DisableDiskWithFileAndMemoryPending) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceTooSmallForItem) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceTooSmallForItem) {
   const std::string kFileId = "id2";
   const uint64_t kFileBlobSize = kTestBlobStorageMaxBlobMemorySize;
 
@@ -912,7 +907,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceTooSmallForItem) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceHitMinAvailable) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceHitMinAvailable) {
   const std::string kFileId = "id2";
   const uint64_t kFileBlobSize = kTestBlobStorageMaxBlobMemorySize;
 
@@ -954,7 +949,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceHitMinAvailable) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceBeforeMinAvailable) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceBeforeMinAvailable) {
   const std::string kFileId = "id2";
 
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
@@ -995,7 +990,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceBeforeMinAvailable) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceNearMinAvailable) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceNearMinAvailable) {
   const std::string kFileId = "id2";
 
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
@@ -1037,7 +1032,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceNearMinAvailable) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceResetAfterIncrease) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceResetAfterIncrease) {
   const std::string kFileId = "id2";
   const uint64_t kFileBlobSize = kTestBlobStorageMaxBlobMemorySize;
 
@@ -1105,7 +1100,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceResetAfterIncrease) {
   EXPECT_EQ(0ull, controller.memory_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, DiskSpaceUnknown) {
+TEST_F(BlobMemoryControllerTest, DiskSpaceUnknown) {
   const std::string kFileId = "id2";
   const uint64_t kFileBlobSize = kTestBlobStorageMaxBlobMemorySize;
 
@@ -1134,7 +1129,7 @@ TEST_P(BlobMemoryControllerTest, DiskSpaceUnknown) {
   EXPECT_FALSE(controller.limits().IsDiskSpaceConstrained());
 }
 
-TEST_P(BlobMemoryControllerTest, OnMemoryPressure) {
+TEST_F(BlobMemoryControllerTest, OnMemoryPressure) {
   BlobMemoryController controller(temp_dir_.GetPath(), file_runner_);
   SetTestMemoryLimits(&controller);
   AssertEnoughDiskSpace();
@@ -1161,36 +1156,24 @@ TEST_P(BlobMemoryControllerTest, OnMemoryPressure) {
   EXPECT_FALSE(file_runner_->HasPendingTask());
   EXPECT_EQ(size_to_load, controller.memory_usage());
 
-  const size_t memory_usage_before_eviction = controller.memory_usage();
-  const size_t disk_usage_before_eviction = controller.disk_usage();
-
   controller.OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel::
           MEMORY_PRESSURE_LEVEL_MODERATE);
 
-  // Tasks are only posted if the memory pressure response is active.
-  const bool memory_pressure_response_active = !base::FeatureList::IsEnabled(
-      BlobMemoryController::kInhibitBlobMemoryControllerMemoryPressureResponse);
-  EXPECT_EQ(file_runner_->HasPendingTask(), memory_pressure_response_active);
+  EXPECT_TRUE(file_runner_->HasPendingTask());
 
-  if (memory_pressure_response_active) {
-    RunFileThreadTasks();
+  RunFileThreadTasks();
 
-    base::RunLoop().RunUntilIdle();
+  base::RunLoop().RunUntilIdle();
 
-    // 2 page files of size |kTestBlobStorageMaxBlobMemorySize *
-    // kTestMaxBlobInMemorySpaceUnderPressureRatio| should be evicted with 1
-    // byte left in-memory.
-    EXPECT_EQ(1u, controller.memory_usage());
-    EXPECT_EQ(size_to_load - 1, controller.disk_usage());
-  } else {
-    // No intervention means the memory usage and disk usage is unchanged.
-    EXPECT_EQ(memory_usage_before_eviction, controller.memory_usage());
-    EXPECT_EQ(disk_usage_before_eviction, controller.disk_usage());
-  }
+  // 2 page files of size |kTestBlobStorageMaxBlobMemorySize *
+  // kTestMaxBlobInMemorySpaceUnderPressureRatio| should be evicted with 1
+  // byte left in-memory.
+  EXPECT_EQ(1u, controller.memory_usage());
+  EXPECT_EQ(size_to_load - 1, controller.disk_usage());
 }
 
-TEST_P(BlobMemoryControllerTest, LowMemoryDevice) {
+TEST_F(BlobMemoryControllerTest, LowMemoryDevice) {
   BlobMemoryController controller(temp_dir_.GetPath(), nullptr);
   // Make 1% of physical memory size just less than min_page_file_size
   controller.set_amount_of_physical_memory_for_testing(
@@ -1200,7 +1183,5 @@ TEST_P(BlobMemoryControllerTest, LowMemoryDevice) {
   loop.Run();
   EXPECT_TRUE(controller.limits().IsValid());
 }
-
-INSTANTIATE_FEATURE_OVERRIDE_TEST_SUITE(BlobMemoryControllerTest);
 
 }  // namespace storage

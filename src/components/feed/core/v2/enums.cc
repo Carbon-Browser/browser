@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/enums.h"
 
 #include <ostream>
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace feed {
 
@@ -36,6 +36,12 @@ std::ostream& operator<<(std::ostream& out, NetworkRequestType value) {
       return out << "kQueryBackgroundFeed";
     case NetworkRequestType::kQueryNextPage:
       return out << "kQueryNextPage";
+    case NetworkRequestType::kSingleWebFeedListContents:
+      return out << "kSingleWebFeedListContents";
+    case NetworkRequestType::kQueryWebFeed:
+      return out << "kQueryWebFeed";
+    case NetworkRequestType::kSupervisedFeed:
+      return out << "kSupervisedFeed";
   }
 #endif
   return out << (static_cast<int>(value));
@@ -108,6 +114,8 @@ std::ostream& operator<<(std::ostream& out, LoadStreamStatus value) {
       return out << "kNetworkFetchTimedOut";
     case LoadStreamStatus::kLoadNotAllowedDisabled:
       return out << "kLoadNotAllowedDisabled";
+    case LoadStreamStatus::kLoadNotAllowedDisabledByDse:
+      return out << "kLoadNotAllowedDisabledByDse";
   }
 #else
   return out << (static_cast<int>(value));
@@ -150,6 +158,7 @@ bool IsLoadingSuccessfulAndFresh(LoadStreamStatus status) {
     case LoadStreamStatus::kAccountTokenFetchTimedOut:
     case LoadStreamStatus::kNetworkFetchTimedOut:
     case LoadStreamStatus::kLoadNotAllowedDisabled:
+    case LoadStreamStatus::kLoadNotAllowedDisabledByDse:
       return false;
   }
 }
@@ -221,7 +230,7 @@ std::ostream& operator<<(std::ostream& out, WebFeedRefreshStatus value) {
   }
 }
 
-base::StringPiece ToString(UserSettingsOnStart v) {
+std::string_view ToString(UserSettingsOnStart v) {
   switch (v) {
     case UserSettingsOnStart::kFeedNotEnabledByPolicy:
       return "FeedNotEnabledByPolicy";
@@ -243,6 +252,8 @@ base::StringPiece ToString(UserSettingsOnStart v) {
       return "SignedInNoRecentData";
     case UserSettingsOnStart::kFeedNotEnabled:
       return "FeedNotEnabled";
+    case UserSettingsOnStart::kFeedNotEnabledByDse:
+      return "FeedNotEnabledByDse";
   }
   return "Unknown";
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -58,7 +58,7 @@ TEST_F(PromotionHintAggregatorImplTest, SomePromotableFramesArePromotable) {
     ASSERT_FALSE(SendFrame(true));
   ASSERT_TRUE(SendFrame(true));
 
-  // Waiting a while should't cause un-promotion.
+  // Waiting a while shouldn't cause un-promotion.
   ASSERT_TRUE(SendFrame(true, base::Milliseconds(10000)));
   ASSERT_TRUE(SendFrame(true, base::Milliseconds(10000)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@ class DependencyNode {
 
  protected:
   // This is intended to be used by the subclasses, not directly.
-  DependencyNode() {}
-  ~DependencyNode() {}
+  DependencyNode() = default;
+  ~DependencyNode() = default;
 };
 
 #endif  // COMPONENTS_KEYED_SERVICE_CORE_DEPENDENCY_NODE_H_

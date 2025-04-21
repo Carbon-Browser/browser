@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,10 +39,6 @@ class ASH_EXPORT EnterpriseDomainModel {
 
   const std::string& enterprise_domain_manager() const {
     return device_enterprise_info_.enterprise_domain_manager;
-  }
-
-  bool active_directory_managed() const {
-    return device_enterprise_info_.active_directory_managed;
   }
 
   ManagementDeviceMode management_device_mode() const {

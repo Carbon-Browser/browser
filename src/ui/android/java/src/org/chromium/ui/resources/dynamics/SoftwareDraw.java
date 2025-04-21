@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,13 @@ import android.view.View;
 
 import org.chromium.base.Callback;
 import org.chromium.base.TraceEvent;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 /** Simple bitmap capture approach simply calling {@link View#draw(Canvas)}. */
+@NullMarked
 public class SoftwareDraw implements ViewResourceAdapter.CaptureMechanism {
-    private Bitmap mBitmap;
+    private @Nullable Bitmap mBitmap;
 
     @Override
     public boolean shouldRemoveResourceOnNullBitmap() {
@@ -31,8 +34,12 @@ public class SoftwareDraw implements ViewResourceAdapter.CaptureMechanism {
     }
 
     @Override
-    public boolean startBitmapCapture(View view, Rect dirtyRect, float scale,
-            CaptureObserver observer, Callback<Bitmap> onBitmapCapture) {
+    public boolean startBitmapCapture(
+            View view,
+            Rect dirtyRect,
+            float scale,
+            CaptureObserver observer,
+            Callback<Bitmap> onBitmapCapture) {
         try (TraceEvent e = TraceEvent.scoped("SoftwareDraw:syncCaptureBitmap")) {
             int scaledWidth = (int) (view.getWidth() * scale);
             int scaledHeight = (int) (view.getHeight() * scale);
@@ -55,7 +62,7 @@ public class SoftwareDraw implements ViewResourceAdapter.CaptureMechanism {
             if (!isEmpty) {
                 Canvas canvas = new Canvas(mBitmap);
                 CaptureUtils.captureCommon(
-                        canvas, view, dirtyRect, scale, /*drawWhileDetached*/ true, observer);
+                        canvas, view, dirtyRect, scale, /* drawWhileDetached= */ true, observer);
             } else {
                 assert mBitmap.getWidth() == 1 && mBitmap.getHeight() == 1;
                 mBitmap.setPixel(0, 0, Color.TRANSPARENT);

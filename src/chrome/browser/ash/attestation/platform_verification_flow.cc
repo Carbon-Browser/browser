@@ -1,39 +1,36 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/attestation/platform_verification_flow.h"
 
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <utility>
 
-#include "ash/components/attestation/attestation_flow.h"
-#include "ash/components/attestation/attestation_flow_adaptive.h"
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/attestation/attestation_ca_client.h"
 #include "chrome/browser/ash/attestation/certificate_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
-#include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/attestation/attestation_flow.h"
+#include "chromeos/ash/components/attestation/attestation_flow_adaptive.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/attestation/attestation.pb.h"
 #include "chromeos/ash/components/dbus/attestation/attestation_client.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
-#include "chromeos/dbus/attestation/attestation.pb.h"
+#include "chromeos/ash/components/dbus/constants/attestation_constants.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "components/content_settings/core/browser/host_content_settings_map.h"
-#include "components/content_settings/core/common/content_settings_pattern.h"
-#include "components/content_settings/core/common/content_settings_types.h"
-#include "components/permissions/permission_manager.h"
-#include "components/permissions/permission_result.h"
-#include "components/permissions/permission_util.h"
 #include "components/user_manager/user.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
@@ -41,17 +38,15 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
-#include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
+#include "media/base/media_switches.h"
+
+namespace ash::attestation {
 
 namespace {
-
-using ash::attestation::PlatformVerificationFlow;
 
 const int kTimeoutInSeconds = 8;
 const char kAttestationResultHistogram[] =
     "ChromeOS.PlatformVerification.Result2";
-const char kAttestationAvailableHistogram[] =
-    "ChromeOS.PlatformVerification.Available";
 constexpr base::TimeDelta kOpportunisticRenewalThreshold = base::Days(30);
 
 // A helper to call a ChallengeCallback with an error result.
@@ -62,25 +57,27 @@ void ReportError(PlatformVerificationFlow::ChallengeCallback callback,
   std::move(callback).Run(error, std::string(), std::string(), std::string());
 }
 
-}  // namespace
+std::string GetKeyName(std::string_view request_origin) {
+  return base::StrCat(
+      {ash::attestation::kContentProtectionKeyPrefix, request_origin});
+}
 
-namespace ash {
-namespace attestation {
+}  // namespace
 
 // A default implementation of the Delegate interface.
 class DefaultDelegate : public PlatformVerificationFlow::Delegate {
  public:
-  DefaultDelegate() {}
+  DefaultDelegate() = default;
 
   DefaultDelegate(const DefaultDelegate&) = delete;
   DefaultDelegate& operator=(const DefaultDelegate&) = delete;
 
-  ~DefaultDelegate() override {}
+  ~DefaultDelegate() override = default;
 
   bool IsInSupportedMode() override {
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
     return !command_line->HasSwitch(chromeos::switches::kSystemDevMode) ||
-           command_line->HasSwitch(switches::kAllowRAInDevMode);
+           command_line->HasSwitch(::switches::kAllowRAInDevMode);
   }
 };
 
@@ -100,9 +97,9 @@ PlatformVerificationFlow::ChallengeContext::ChallengeContext(
 PlatformVerificationFlow::ChallengeContext::~ChallengeContext() = default;
 
 PlatformVerificationFlow::PlatformVerificationFlow()
-    : attestation_flow_(NULL),
+    : attestation_flow_(nullptr),
       attestation_client_(AttestationClient::Get()),
-      delegate_(NULL),
+      delegate_(nullptr),
       timeout_delay_(base::Seconds(kTimeoutInSeconds)) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   std::unique_ptr<ServerProxy> attestation_ca_client(new AttestationCAClient());
@@ -213,7 +210,6 @@ void PlatformVerificationFlow::OnAttestationPrepared(
   }
   const bool attestation_prepared =
       AttestationClient::IsAttestationPrepared(reply);
-  UMA_HISTOGRAM_BOOLEAN(kAttestationAvailableHistogram, attestation_prepared);
 
   if (!attestation_prepared) {
     // This device is not currently able to use attestation features.
@@ -235,13 +231,19 @@ void PlatformVerificationFlow::GetCertificate(
       &PlatformVerificationFlow::OnCertificateTimeout, this, context);
   timer->Start(FROM_HERE, timeout_delay_, std::move(timeout_callback));
 
+  const std::string key_name =
+      GetKeyName(/*request_origin=*/context->data.service_id);
   AttestationFlow::CertificateCallback certificate_callback =
       base::BindOnce(&PlatformVerificationFlow::OnCertificateReady, this,
                      context, context->data.account_id, std::move(timer));
   attestation_flow_->GetCertificate(
-      PROFILE_CONTENT_PROTECTION_CERTIFICATE, context->data.account_id,
-      context->data.service_id, force_new_key, std::string() /*key_name*/,
-      std::move(certificate_callback));
+      /*certificate_profile=*/PROFILE_CONTENT_PROTECTION_CERTIFICATE,
+      /*account_id=*/context->data.account_id,
+      /*request_origin=*/context->data.service_id,
+      /*force_new_key=*/force_new_key,
+      /*key_crypto_type=*/::attestation::KEY_TYPE_RSA,
+      /*key_name=*/key_name, /*profile_specific_data=*/std::nullopt,
+      /*callback=*/std::move(certificate_callback));
 }
 
 void PlatformVerificationFlow::OnCertificateReady(
@@ -305,7 +307,7 @@ void PlatformVerificationFlow::OnChallengeReady(
     ReportError(std::move(context).callback, INTERNAL_ERROR);
     return;
   }
-  chromeos::attestation::SignedData signed_data_pb;
+  SignedData signed_data_pb;
   if (reply.challenge_response().empty() ||
       !signed_data_pb.ParseFromString(reply.challenge_response())) {
     LOG(ERROR) << "PlatformVerificationFlow: Failed to parse response data.";
@@ -320,16 +322,20 @@ void PlatformVerificationFlow::OnChallengeReady(
   if (is_expiring_soon && renewals_in_progress_.count(certificate_chain) == 0) {
     renewals_in_progress_.insert(certificate_chain);
     // Fire off a certificate request so next time we'll have a new one.
+    const std::string key_name =
+        GetKeyName(/*request_origin=*/context.service_id);
     AttestationFlow::CertificateCallback renew_callback =
         base::BindOnce(&PlatformVerificationFlow::RenewCertificateCallback,
                        this, std::move(certificate_chain));
     attestation_flow_->GetCertificate(
-        PROFILE_CONTENT_PROTECTION_CERTIFICATE, context.account_id,
-        context.service_id,
-        true,           // force_new_key
-        std::string(),  // key_name, empty means a default one will be
-                        // generated.
-        std::move(renew_callback));
+        /*certificate_profile=*/PROFILE_CONTENT_PROTECTION_CERTIFICATE,
+        /*account_id=*/context.account_id,
+        /*request_origin=*/context.service_id,
+        /*force_new_key=*/true,  // force_new_key
+        /*key_crypto_type=*/::attestation::KEY_TYPE_RSA,
+        /*key_name=*/key_name,
+        /*profile_specific_data=*/std::nullopt,
+        /*callback=*/std::move(renew_callback));
   }
 }
 
@@ -369,5 +375,4 @@ void PlatformVerificationFlow::RenewCertificateCallback(
   VLOG(1) << "Certificate successfully renewed.";
 }
 
-}  // namespace attestation
-}  // namespace ash
+}  // namespace ash::attestation

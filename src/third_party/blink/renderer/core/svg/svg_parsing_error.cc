@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,9 +63,7 @@ std::pair<const char*, const char*> MessageForStatus(SVGParseStatus status) {
       return std::make_pair("Invalid value, ", ".");
     default:
       NOTREACHED();
-      break;
   }
-  return std::make_pair("", "");
 }
 
 bool DisableLocus(SVGParseStatus status) {

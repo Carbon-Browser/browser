@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "ash/public/cpp/test/shell_test_api.h"
 #include "ash/wm/native_cursor_manager_ash.h"
-#include "ui/display/display.h"
 
 namespace ash {
 

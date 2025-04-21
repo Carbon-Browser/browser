@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,6 @@ void LogProfileMetricsCounts(const Counts& counts) {
                              counts.signedin);
     UMA_HISTOGRAM_COUNTS_100("Profile.NumberOfActiveProfiles", counts.active);
     UMA_HISTOGRAM_COUNTS_100("Profile.NumberOfUnusedProfiles", counts.unused);
-    UMA_HISTOGRAM_ENUMERATION("Profile.ColorsUniqueness",
-                              counts.colors_uniqueness);
   }
 }
 

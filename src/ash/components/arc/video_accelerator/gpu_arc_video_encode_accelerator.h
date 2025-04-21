@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,6 @@ class GpuArcVideoEncodeAccelerator
  private:
   using VideoPixelFormat = media::VideoPixelFormat;
   using VideoCodecProfile = media::VideoCodecProfile;
-  using Error = media::VideoEncodeAccelerator::Error;
 
   // VideoEncodeAccelerator::Client implementation.
   void RequireBitstreamBuffers(unsigned int input_count,
@@ -49,7 +48,7 @@ class GpuArcVideoEncodeAccelerator
   void BitstreamBufferReady(
       int32_t bitstream_buffer_id,
       const media::BitstreamBufferMetadata& metadata) override;
-  void NotifyError(Error error) override;
+  void NotifyErrorStatus(const media::EncoderStatus& status) override;
 
   // ::arc::mojom::VideoEncodeAccelerator implementation.
   void GetSupportedProfiles(GetSupportedProfilesCallback callback) override;

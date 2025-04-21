@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,11 +45,6 @@ class DiagnosticsController {
   // Clears any results that have accumulated. After calling this, do not call
   // GetResults until after Run is called again.
   void ClearResults();
-
-  // Records UMA statistics indicating that a regular Chrome startup happened,
-  // with no diagnostics or recovery being run.  This is necessary to provide a
-  // denominator for the diagnostics metrics.
-  void RecordRegularStartup();
 
  private:
   friend struct base::DefaultSingletonTraits<DiagnosticsController>;

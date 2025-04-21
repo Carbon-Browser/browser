@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/workers/worklet_module_responses_map.h"
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
@@ -30,7 +32,7 @@ void WorkletModuleResponsesMap::Entry::AddClient(
 // "fetch a worklet script" algorithm:
 // https://drafts.css-houdini.org/worklets/#fetch-a-worklet-script
 void WorkletModuleResponsesMap::Entry::SetParams(
-    const absl::optional<ModuleScriptCreationParams>& params) {
+    const std::optional<ModuleScriptCreationParams>& params) {
   DCHECK_EQ(state_, State::kFetching);
 
   if (params) {
@@ -77,8 +79,8 @@ bool WorkletModuleResponsesMap::GetEntry(
   DCHECK_NE(module_type, ModuleType::kInvalid);
   if (!is_available_ || !IsValidURL(url)) {
     client_task_runner->PostTask(
-        FROM_HERE, WTF::Bind(&ModuleScriptFetcher::Client::OnFailed,
-                             WrapPersistent(client)));
+        FROM_HERE, WTF::BindOnce(&ModuleScriptFetcher::Client::OnFailed,
+                                 WrapPersistent(client)));
     return true;
   }
 
@@ -97,14 +99,15 @@ bool WorkletModuleResponsesMap::GetEntry(
         // complete this algorithm with that entry's value, and abort these
         // steps."
         client_task_runner->PostTask(
-            FROM_HERE, WTF::Bind(&ModuleScriptFetcher::Client::OnFetched,
-                                 WrapPersistent(client), entry->GetParams()));
+            FROM_HERE,
+            WTF::BindOnce(&ModuleScriptFetcher::Client::OnFetched,
+                          WrapPersistent(client), entry->GetParams()));
         return true;
       case Entry::State::kFailed:
         // Module fetching failed before. Abort following steps.
         client_task_runner->PostTask(
-            FROM_HERE, WTF::Bind(&ModuleScriptFetcher::Client::OnFailed,
-                                 WrapPersistent(client)));
+            FROM_HERE, WTF::BindOnce(&ModuleScriptFetcher::Client::OnFailed,
+                                     WrapPersistent(client)));
         return true;
     }
     NOTREACHED();
@@ -125,7 +128,7 @@ bool WorkletModuleResponsesMap::GetEntry(
 void WorkletModuleResponsesMap::SetEntryParams(
     const KURL& url,
     ModuleType module_type,
-    const absl::optional<ModuleScriptCreationParams>& params) {
+    const std::optional<ModuleScriptCreationParams>& params) {
   base::AutoLock locker(lock_);
   if (!is_available_)
     return;
@@ -142,7 +145,7 @@ void WorkletModuleResponsesMap::Dispose() {
   for (auto& it : entries_) {
     switch (it.value->GetState()) {
       case Entry::State::kFetching:
-        it.value->SetParams(absl::nullopt);
+        it.value->SetParams(std::nullopt);
         break;
       case Entry::State::kFetched:
       case Entry::State::kFailed:

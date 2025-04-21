@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,9 @@ class PageActionIconContainer {
 // Implements a default icon container for page action icons.
 class PageActionIconContainerView : public views::BoxLayoutView,
                                     public PageActionIconContainer {
+  METADATA_HEADER(PageActionIconContainerView, views::BoxLayoutView)
+
  public:
-  METADATA_HEADER(PageActionIconContainerView);
   explicit PageActionIconContainerView(const PageActionIconParams& params);
   PageActionIconContainerView(const PageActionIconContainerView&) = delete;
   PageActionIconContainerView& operator=(const PageActionIconContainerView&) =

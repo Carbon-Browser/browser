@@ -1,13 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONNECTION_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONNECTION_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_binary_type.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_state_observer.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
@@ -30,11 +32,12 @@ enum class FileErrorCode;
 class PresentationController;
 class PresentationReceiver;
 class PresentationRequest;
-class ScriptPromiseResolver;
+class ScriptPromiseResolverBase;
+class V8PresentationConnectionState;
 class WebString;
 
 class MODULES_EXPORT PresentationConnection
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextLifecycleStateObserver,
       public mojom::blink::PresentationConnection {
   DEFINE_WRAPPERTYPEINFO();
@@ -50,7 +53,7 @@ class MODULES_EXPORT PresentationConnection
 
   const String& id() const { return id_; }
   const String& url() const { return url_; }
-  const WTF::AtomicString& state() const;
+  V8PresentationConnectionState state() const;
 
   void send(const String& message, ExceptionState&);
   void send(DOMArrayBuffer*, ExceptionState&);
@@ -64,8 +67,8 @@ class MODULES_EXPORT PresentationConnection
   // connected to.
   void terminate();
 
-  String binaryType() const;
-  void setBinaryType(const String&);
+  V8BinaryType binaryType() const;
+  void setBinaryType(const V8BinaryType&);
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(message, kMessage)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(connect, kConnect)
@@ -124,8 +127,6 @@ class MODULES_EXPORT PresentationConnection
     kMessageTypeBlob,
   };
 
-  enum BinaryType { kBinaryTypeBlob, kBinaryTypeArrayBuffer };
-
   class Message;
 
   // Implemented by controller/receiver subclasses to perform additional
@@ -143,7 +144,7 @@ class MODULES_EXPORT PresentationConnection
   void SendMessageToTargetConnection(
       mojom::blink::PresentationConnectionMessagePtr);
   void DidReceiveTextMessage(const WebString&);
-  void DidReceiveBinaryMessage(const uint8_t*, uint32_t length);
+  void DidReceiveBinaryMessage(base::span<const uint8_t>);
 
   // Closes the PresentationConnection with the given reason and notifies the
   // target connection.
@@ -156,7 +157,7 @@ class MODULES_EXPORT PresentationConnection
   Member<BlobLoader> blob_loader_;
   HeapDeque<Member<Message>> messages_;
 
-  BinaryType binary_type_;
+  V8BinaryType::Enum binary_type_ = V8BinaryType::Enum::kArraybuffer;
 
   scoped_refptr<base::SingleThreadTaskRunner> file_reading_task_runner_;
 };
@@ -168,7 +169,7 @@ class MODULES_EXPORT ControllerPresentationConnection final
  public:
   // For CallbackPromiseAdapter.
   static ControllerPresentationConnection* Take(
-      ScriptPromiseResolver*,
+      ScriptPromiseResolverBase*,
       const mojom::blink::PresentationInfo&,
       PresentationRequest*);
   static ControllerPresentationConnection* Take(

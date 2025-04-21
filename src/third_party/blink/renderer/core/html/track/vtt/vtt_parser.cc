@@ -104,18 +104,18 @@ VTTParser::VTTParser(VTTParserClient* client, Document& document)
 }
 
 void VTTParser::GetNewCues(HeapVector<Member<TextTrackCue>>& output_cues) {
-  DCHECK(output_cues.IsEmpty());
+  DCHECK(output_cues.empty());
   output_cues.swap(cue_list_);
 }
 
 void VTTParser::GetNewStyleSheets(
     HeapVector<Member<CSSStyleSheet>>& output_sheets) {
-  DCHECK(output_sheets.IsEmpty());
+  DCHECK(output_sheets.empty());
   output_sheets.swap(style_sheets_);
 }
 
-void VTTParser::ParseBytes(const char* data, size_t length) {
-  String text_data = decoder_->Decode(data, length);
+void VTTParser::ParseBytes(base::span<const char> data) {
+  String text_data = decoder_->Decode(data);
   line_reader_.Append(text_data);
   Parse();
 }
@@ -168,7 +168,7 @@ void VTTParser::Parse() {
       case kId:
         // Steps 17 - 20 - Allow any number of line terminators, then initialize
         // new cue values.
-        if (line.IsEmpty())
+        if (line.empty())
           break;
 
         // Step 21 - Cue creation (start a new cue).
@@ -181,7 +181,7 @@ void VTTParser::Parse() {
 
       case kTimingsAndSettings:
         // Steps 26 - 27 - Discard current cue if the line is empty.
-        if (line.IsEmpty()) {
+        if (line.empty()) {
           state_ = kId;
           break;
         }
@@ -242,11 +242,10 @@ VTTParser::ParseState VTTParser::CollectRegionSettings(const String& line) {
 }
 
 VTTParser::ParseState VTTParser::CollectStyleSheet(const String& line) {
-  if (line.IsEmpty() || line.Contains("-->")) {
+  if (line.empty() || line.Contains("-->")) {
     auto* parser_context = MakeGarbageCollected<CSSParserContext>(
         *document_, NullURL(), true /* origin_clean */, Referrer(),
-        UTF8Encoding(), CSSParserContext::kLiveProfile,
-        ResourceFetchRestriction::kOnlyDataUrls);
+        UTF8Encoding(), ResourceFetchRestriction::kOnlyDataUrls);
     auto* style_sheet_contents =
         MakeGarbageCollected<StyleSheetContents>(parser_context);
     CSSParser::ParseSheet(
@@ -261,7 +260,7 @@ VTTParser::ParseState VTTParser::CollectStyleSheet(const String& line) {
     return CheckAndRecoverCue(line);
   }
 
-  if (!current_content_.IsEmpty())
+  if (!current_content_.empty())
     current_content_.Append('\n');
   current_content_.Append(line);
 
@@ -291,7 +290,7 @@ VTTParser::ParseState VTTParser::CollectWebVTTBlock(const String& line) {
   // Handle cue block.
   ParseState state = CheckAndRecoverCue(line);
   if (state != kHeader) {
-    if (!previous_line_.IsEmpty() && !previous_line_.Contains("-->"))
+    if (!previous_line_.empty() && !previous_line_.Contains("-->"))
       current_id_ = AtomicString(previous_line_);
 
     return state;
@@ -299,7 +298,7 @@ VTTParser::ParseState VTTParser::CollectWebVTTBlock(const String& line) {
 
   // store previous line for cue id.
   // length is more than 1 line clear previous_line_ and ignore line.
-  if (previous_line_.IsEmpty())
+  if (previous_line_.empty())
     previous_line_ = line;
   else
     previous_line_ = g_empty_string;
@@ -323,17 +322,17 @@ bool VTTParser::CheckAndCreateRegion(const String& line) {
   // (tab) characters expected other than these characters it is invalid.
   if (line.StartsWith("REGION") && StringView(line, kRegionIdentifierLength)
                                        .IsAllSpecialCharacters<IsASpace>()) {
-    current_region_ = VTTRegion::Create();
+    current_region_ = VTTRegion::Create(*document_);
     return true;
   }
   return false;
 }
 
 bool VTTParser::CheckAndStoreRegion(const String& line) {
-  if (!line.IsEmpty() && !line.Contains("-->"))
+  if (!line.empty() && !line.Contains("-->"))
     return false;
 
-  if (!current_region_->id().IsEmpty())
+  if (!current_region_->id().empty())
     region_map_.Set(current_region_->id(), current_region_);
   current_region_ = nullptr;
   return true;
@@ -383,7 +382,7 @@ VTTParser::ParseState VTTParser::CollectTimingsAndSettings(const String& line) {
 
 VTTParser::ParseState VTTParser::CollectCueText(const String& line) {
   // Step 34.
-  if (line.IsEmpty()) {
+  if (line.empty()) {
     CreateNewCue();
     return kId;
   }
@@ -395,7 +394,7 @@ VTTParser::ParseState VTTParser::CollectCueText(const String& line) {
     // Step 41 - New iteration of the cue loop.
     return RecoverCue(line);
   }
-  if (!current_content_.IsEmpty())
+  if (!current_content_.empty())
     current_content_.Append('\n');
   current_content_.Append(line);
 
@@ -411,7 +410,7 @@ VTTParser::ParseState VTTParser::RecoverCue(const String& line) {
 }
 
 VTTParser::ParseState VTTParser::IgnoreBadCue(const String& line) {
-  if (line.IsEmpty())
+  if (line.empty())
     return kId;
   if (line.Contains("-->"))
     return RecoverCue(line);
@@ -446,7 +445,7 @@ DocumentFragment* VTTTreeBuilder::BuildFromString(const String& cue_text) {
 
   DocumentFragment* fragment = DocumentFragment::Create(GetDocument());
 
-  if (cue_text.IsEmpty()) {
+  if (cue_text.empty()) {
     fragment->ParserAppendChild(Text::Create(GetDocument(), ""));
     return fragment;
   }
@@ -515,7 +514,7 @@ bool VTTParser::CollectTimeStamp(VTTScanner& input, double& time_stamp) {
   // Steps 5 - 7 - Collect a sequence of characters that are 0-9.
   // If not 2 characters or value is greater than 59, interpret as hours.
   unsigned value1;
-  unsigned value1_digits = input.ScanDigits(value1);
+  const size_t value1_digits = input.ScanDigits(value1);
   if (!value1_digits)
     return false;
   if (value1_digits != 2 || value1 > 59)
@@ -552,34 +551,34 @@ bool VTTParser::CollectTimeStamp(VTTScanner& input, double& time_stamp) {
   return true;
 }
 
-static VTTNodeType TokenToNodeType(VTTToken& token) {
+static VttNodeType TokenToNodeType(VTTToken& token) {
   switch (token.GetName().length()) {
     case 1:
       if (token.GetName()[0] == 'c')
-        return kVTTNodeTypeClass;
+        return VttNodeType::kClass;
       if (token.GetName()[0] == 'v')
-        return kVTTNodeTypeVoice;
+        return VttNodeType::kVoice;
       if (token.GetName()[0] == 'b')
-        return kVTTNodeTypeBold;
+        return VttNodeType::kBold;
       if (token.GetName()[0] == 'i')
-        return kVTTNodeTypeItalic;
+        return VttNodeType::kItalic;
       if (token.GetName()[0] == 'u')
-        return kVTTNodeTypeUnderline;
+        return VttNodeType::kUnderline;
       break;
     case 2:
       if (token.GetName()[0] == 'r' && token.GetName()[1] == 't')
-        return kVTTNodeTypeRubyText;
+        return VttNodeType::kRubyText;
       break;
     case 4:
       if (token.GetName()[0] == 'r' && token.GetName()[1] == 'u' &&
           token.GetName()[2] == 'b' && token.GetName()[3] == 'y')
-        return kVTTNodeTypeRuby;
+        return VttNodeType::kRuby;
       if (token.GetName()[0] == 'l' && token.GetName()[1] == 'a' &&
           token.GetName()[2] == 'n' && token.GetName()[3] == 'g')
-        return kVTTNodeTypeLanguage;
+        return VttNodeType::kLanguage;
       break;
   }
-  return kVTTNodeTypeNone;
+  return VttNodeType::kNone;
 }
 
 void VTTTreeBuilder::ConstructTreeFromToken(Document& document) {
@@ -592,42 +591,46 @@ void VTTTreeBuilder::ConstructTreeFromToken(Document& document) {
       break;
     }
     case VTTTokenTypes::kStartTag: {
-      VTTNodeType node_type = TokenToNodeType(token_);
-      if (node_type == kVTTNodeTypeNone)
+      VttNodeType node_type = TokenToNodeType(token_);
+      if (node_type == VttNodeType::kNone) {
         break;
+      }
 
       auto* curr_vtt_element = DynamicTo<VTTElement>(current_node_);
-      VTTNodeType current_type = curr_vtt_element
-                                     ? curr_vtt_element->WebVTTNodeType()
-                                     : kVTTNodeTypeNone;
+      VttNodeType current_type = curr_vtt_element
+                                     ? curr_vtt_element->GetVttNodeType()
+                                     : VttNodeType::kNone;
       // <rt> is only allowed if the current node is <ruby>.
-      if (node_type == kVTTNodeTypeRubyText && current_type != kVTTNodeTypeRuby)
+      if (node_type == VttNodeType::kRubyText &&
+          current_type != VttNodeType::kRuby) {
         break;
+      }
 
       auto* child = MakeGarbageCollected<VTTElement>(node_type, &document);
       child->SetTrack(track_);
 
-      if (!token_.Classes().IsEmpty())
+      if (!token_.Classes().empty())
         child->setAttribute(html_names::kClassAttr, token_.Classes());
 
-      if (node_type == kVTTNodeTypeVoice) {
+      if (node_type == VttNodeType::kVoice) {
         child->setAttribute(VTTElement::VoiceAttributeName(),
                             token_.Annotation());
-      } else if (node_type == kVTTNodeTypeLanguage) {
+      } else if (node_type == VttNodeType::kLanguage) {
         language_stack_.push_back(token_.Annotation());
         child->setAttribute(VTTElement::LangAttributeName(),
                             language_stack_.back());
       }
-      if (!language_stack_.IsEmpty())
+      if (!language_stack_.empty())
         child->SetLanguage(language_stack_.back());
       current_node_->ParserAppendChild(child);
       current_node_ = child;
       break;
     }
     case VTTTokenTypes::kEndTag: {
-      VTTNodeType node_type = TokenToNodeType(token_);
-      if (node_type == kVTTNodeTypeNone)
+      VttNodeType node_type = TokenToNodeType(token_);
+      if (node_type == VttNodeType::kNone) {
         break;
+      }
 
       // The only non-VTTElement would be the DocumentFragment root. (Text
       // nodes and PIs will never appear as current_node_.)
@@ -635,20 +638,21 @@ void VTTTreeBuilder::ConstructTreeFromToken(Document& document) {
       if (!curr_vtt_element)
         break;
 
-      VTTNodeType current_type = curr_vtt_element->WebVTTNodeType();
+      VttNodeType current_type = curr_vtt_element->GetVttNodeType();
       bool matches_current = node_type == current_type;
       if (!matches_current) {
         // </ruby> auto-closes <rt>.
-        if (current_type == kVTTNodeTypeRubyText &&
-            node_type == kVTTNodeTypeRuby) {
+        if (current_type == VttNodeType::kRubyText &&
+            node_type == VttNodeType::kRuby) {
           if (current_node_->parentNode())
             current_node_ = current_node_->parentNode();
         } else {
           break;
         }
       }
-      if (node_type == kVTTNodeTypeLanguage)
+      if (node_type == VttNodeType::kLanguage) {
         language_stack_.pop_back();
+      }
       if (current_node_->parentNode())
         current_node_ = current_node_->parentNode();
       break;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ struct VR_BASE_EXPORT CameraModel {
   EyeType eye_type;
   gfx::Rect viewport;
   gfx::Transform view_matrix;
-  gfx::Transform proj_matrix;
   gfx::Transform view_proj_matrix;
 };
 

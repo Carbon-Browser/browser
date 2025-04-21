@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,10 @@ const char* LayerTreeHostPixelResourceTest::GetRendererSuffix() const {
     case viz::RendererType::kSkiaGL:
       return "skia_gl";
     case viz::RendererType::kSkiaVk:
-    case viz::RendererType::kSkiaDawn:
       return "skia_vk";
+    case viz::RendererType::kSkiaGraphiteDawn:
+    case viz::RendererType::kSkiaGraphiteMetal:
+      return "skia_graphite";
     case viz::RendererType::kSoftware:
       return "sw";
   }
@@ -46,27 +48,30 @@ LayerTreeHostPixelResourceTest::CreateRasterBufferProvider(
 
   LayerTreeFrameSink* layer_tree_frame_sink =
       host_impl->layer_tree_frame_sink();
-  viz::ContextProvider* compositor_context_provider =
+  viz::RasterContextProvider* compositor_context_provider =
       layer_tree_frame_sink->context_provider();
   viz::RasterContextProvider* worker_context_provider =
       layer_tree_frame_sink->worker_context_provider();
-  gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager =
-      layer_tree_frame_sink->gpu_memory_buffer_manager();
   int max_bytes_per_copy_operation = 1024 * 1024;
   int max_staging_buffer_usage_in_bytes = 32 * 1024 * 1024;
 
-  viz::ResourceFormat gpu_raster_format;
-  viz::ResourceFormat sw_raster_format;
+  RasterCapabilities raster_caps;
   if (compositor_context_provider) {
     if (host_impl->settings().use_rgba_4444) {
-      gpu_raster_format = sw_raster_format = viz::RGBA_4444;
+      raster_caps.tile_format = viz::SinglePlaneFormat::kRGBA_4444;
     } else {
-      gpu_raster_format = viz::PlatformColor::BestSupportedRenderBufferFormat(
-          compositor_context_provider->ContextCapabilities());
-      sw_raster_format = viz::PlatformColor::BestSupportedTextureFormat(
-          compositor_context_provider->ContextCapabilities());
+      if (raster_type() == TestRasterType::kGpu) {
+        raster_caps.tile_format =
+            viz::PlatformColor::BestSupportedRenderBufferFormat(
+                compositor_context_provider->ContextCapabilities());
+      } else {
+        raster_caps.tile_format =
+            viz::PlatformColor::BestSupportedTextureFormat(
+                compositor_context_provider->ContextCapabilities());
+      }
     }
   }
+
   switch (raster_type()) {
     case TestRasterType::kBitmap:
       EXPECT_FALSE(compositor_context_provider);
@@ -78,18 +83,17 @@ LayerTreeHostPixelResourceTest::CreateRasterBufferProvider(
       EXPECT_TRUE(compositor_context_provider);
       EXPECT_TRUE(worker_context_provider);
       EXPECT_FALSE(use_software_renderer());
+
+      raster_caps.use_gpu_rasterization = true;
       return std::make_unique<GpuRasterBufferProvider>(
-          compositor_context_provider, worker_context_provider, false,
-          gpu_raster_format, gfx::Size(), true,
-          host_impl->GetRasterQueryQueueForTesting());
+          compositor_context_provider, worker_context_provider, raster_caps,
+          gfx::Size(), true, host_impl->GetRasterQueryQueueForTesting());
     case TestRasterType::kZeroCopy:
       EXPECT_TRUE(compositor_context_provider);
-      EXPECT_TRUE(gpu_memory_buffer_manager);
       EXPECT_FALSE(use_software_renderer());
 
       return std::make_unique<ZeroCopyRasterBufferProvider>(
-          gpu_memory_buffer_manager, compositor_context_provider,
-          sw_raster_format);
+          compositor_context_provider, raster_caps);
     case TestRasterType::kOneCopy:
       EXPECT_TRUE(compositor_context_provider);
       EXPECT_TRUE(worker_context_provider);
@@ -97,8 +101,8 @@ LayerTreeHostPixelResourceTest::CreateRasterBufferProvider(
 
       return std::make_unique<OneCopyRasterBufferProvider>(
           task_runner, compositor_context_provider, worker_context_provider,
-          gpu_memory_buffer_manager, max_bytes_per_copy_operation, false, false,
-          max_staging_buffer_usage_in_bytes, sw_raster_format);
+          max_bytes_per_copy_operation, false,
+          max_staging_buffer_usage_in_bytes, raster_caps);
   }
 }
 

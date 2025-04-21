@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/reporting/storage/storage_uploader_interface.h"
 
@@ -10,7 +15,7 @@ UploaderInterface::UploaderInterface() = default;
 UploaderInterface::~UploaderInterface() = default;
 
 // static
-base::StringPiece UploaderInterface::ReasonToString(UploadReason reason) {
+std::string_view UploaderInterface::ReasonToString(UploadReason reason) {
   static const char*
       reason_to_string[static_cast<uint32_t>(UploadReason::MAX_REASON)] = {
           "UNKNOWN",         "MANUAL",        "KEY_DELIVERY",     "PERIODIC",

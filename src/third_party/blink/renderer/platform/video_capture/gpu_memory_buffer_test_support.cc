@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,14 +59,19 @@ FakeGpuMemoryBufferSupport::CreateGpuMemoryBufferImplFromHandle(
 
 TestingPlatformSupportForGpuMemoryBuffer::
     TestingPlatformSupportForGpuMemoryBuffer()
-    : sii_(new viz::TestSharedImageInterface),
+    : sii_(base::MakeRefCounted<gpu::TestSharedImageInterface>()),
       gpu_factories_(new media::MockGpuVideoAcceleratorFactories(sii_.get())),
       media_thread_("TestingMediaThread") {
+  // Ensure that any mappable SharedImages created via this testing platform
+  // create fake GMBs internally.
+  sii_->UseTestGMBInSharedImageCreationWithBufferUsage();
   gpu_factories_->SetVideoFrameOutputFormat(
-      media::GpuVideoAcceleratorFactories::OutputFormat::NV12_SINGLE_GMB);
+      media::GpuVideoAcceleratorFactories::OutputFormat::NV12);
   media_thread_.Start();
   ON_CALL(*gpu_factories_, GetTaskRunner())
       .WillByDefault(Return(media_thread_.task_runner()));
+  ON_CALL(*gpu_factories_, ContextCapabilities())
+      .WillByDefault(testing::Invoke([&]() { return capabilities_; }));
 }
 
 TestingPlatformSupportForGpuMemoryBuffer::
@@ -77,6 +82,16 @@ TestingPlatformSupportForGpuMemoryBuffer::
 media::GpuVideoAcceleratorFactories*
 TestingPlatformSupportForGpuMemoryBuffer::GetGpuFactories() {
   return gpu_factories_.get();
+}
+
+void TestingPlatformSupportForGpuMemoryBuffer::SetGpuCapabilities(
+    gpu::Capabilities* capabilities) {
+  capabilities_ = capabilities;
+}
+
+void TestingPlatformSupportForGpuMemoryBuffer::SetSharedImageCapabilities(
+    const gpu::SharedImageCapabilities& shared_image_capabilities) {
+  sii_->SetCapabilities(shared_image_capabilities);
 }
 
 }  // namespace blink

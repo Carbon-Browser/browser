@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_QUICK_PAIR_COMMON_MOCK_QUICK_PAIR_BROWSER_DELEGATE_H_
 #define ASH_QUICK_PAIR_COMMON_MOCK_QUICK_PAIR_BROWSER_DELEGATE_H_
+
+#include <string>
 
 #include "ash/quick_pair/common/quick_pair_browser_delegate.h"
 #include "base/component_export.h"
@@ -44,6 +46,15 @@ class MockQuickPairBrowserDelegate : public QuickPairBrowserDelegate {
               RequestService,
               (mojo::PendingReceiver<mojom::QuickPairService>),
               (override));
+  MOCK_METHOD(bool,
+              CompanionAppInstalled,
+              (const std::string& app_id),
+              (override));
+  MOCK_METHOD(void,
+              LaunchCompanionApp,
+              (const std::string& app_id),
+              (override));
+  MOCK_METHOD(void, OpenPlayStorePage, (GURL play_store_uri), (override));
 };
 
 }  // namespace quick_pair

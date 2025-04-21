@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,6 @@
 
 #include "base/logging.h"
 #include "base/memory/page_size.h"
-#include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/memory_dump_request_args.h"
@@ -22,16 +20,15 @@
 #include "gpu/command_buffer/common/cmd_buffer_common.h"
 #include "gpu/command_buffer/common/command_buffer_shared.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
+#include "gpu/config/gpu_finch_features.h"
 
 #if BUILDFLAG(IS_MAC)
 #include <mach/mach_vm.h>
+#include <mach/vm_purgable.h>
 #include <mach/vm_statistics.h>
 
 #include "base/no_destructor.h"
 #include "base/process/process_metrics.h"
-#include "base/trace_event/memory_dump_manager.h"
-#include "base/trace_event/memory_dump_provider.h"
-#include "base/trace_event/memory_dump_request_args.h"
 #include "base/trace_event/process_memory_dump.h"
 #endif
 
@@ -64,6 +61,8 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
   size_t surface_resident_size = 0;
   size_t surface_swapped_out_size = 0;
   size_t surface_dirty_size = 0;
+  size_t surface_nonpurgeable_size = 0;
+  size_t surface_purgeable_size = 0;
 
   // And IOAccelerator. Per vm_statistics.h in XNU, this is used to
   // "differentiate memory needed by GPU drivers and frameworks from generic
@@ -72,6 +71,8 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
   size_t accelerator_resident_size = 0;
   size_t accelerator_swapped_out_size = 0;
   size_t accelerator_dirty_size = 0;
+  size_t accelerator_nonpurgeable_size = 0;
+  size_t accelerator_purgeable_size = 0;
 
   task_t task = mach_task_self();
   mach_vm_address_t address = 0;
@@ -115,6 +116,17 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
     if (ret != KERN_SUCCESS)
       return false;
 
+    if (info.user_tag != VM_MEMORY_IOSURFACE &&
+        info.user_tag != VM_MEMORY_IOACCELERATOR) {
+      continue;
+    }
+
+    int purgeable_state = 0;
+    ret = mach_vm_purgable_control(task, address, VM_PURGABLE_GET_STATE,
+                                   &purgeable_state);
+
+    purgeable_state = purgeable_state & VM_PURGABLE_STATE_MASK;
+
     switch (info.user_tag) {
       case VM_MEMORY_IOSURFACE:
         surface_virtual_size += size;
@@ -122,6 +134,12 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
         surface_swapped_out_size +=
             info.pages_swapped_out * base::GetPageSize();
         surface_dirty_size += info.pages_dirtied * base::GetPageSize();
+        if (purgeable_state == VM_PURGABLE_VOLATILE ||
+            purgeable_state == VM_PURGABLE_EMPTY) {
+          surface_purgeable_size += size;
+        } else {
+          surface_nonpurgeable_size += size;
+        }
         break;
       case VM_MEMORY_IOACCELERATOR:
         accelerator_virtual_size += size;
@@ -129,6 +147,12 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
         accelerator_swapped_out_size +=
             info.pages_swapped_out * base::GetPageSize();
         accelerator_dirty_size += info.pages_dirtied * base::GetPageSize();
+        if (purgeable_state == VM_PURGABLE_VOLATILE ||
+            purgeable_state == VM_PURGABLE_EMPTY) {
+          accelerator_purgeable_size += size;
+        } else {
+          accelerator_nonpurgeable_size += size;
+        }
         break;
     }
   }
@@ -148,6 +172,8 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
   // Note: not using "dirty_size", as it doesn't contain the swapped out part.
   dump->AddScalar("resident_swapped", "bytes",
                   surface_resident_size + surface_swapped_out_size);
+  dump->AddScalar("nonpurgeable_size", "bytes", surface_nonpurgeable_size);
+  dump->AddScalar("purgeable_size", "bytes", surface_purgeable_size);
 
   // Ditto for IOAccelerator.
   dump = pmd->CreateAllocatorDump("ioaccelerator");
@@ -158,11 +184,24 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
   dump->AddScalar("size", "bytes", accelerator_virtual_size);
   dump->AddScalar("resident_swapped", "bytes",
                   accelerator_resident_size + accelerator_swapped_out_size);
+  dump->AddScalar("nonpurgeable_size", "bytes", accelerator_nonpurgeable_size);
+  dump->AddScalar("purgeable_size", "bytes", accelerator_purgeable_size);
 
   return true;
 }
 }  // namespace
 #endif
+
+// Context switching leads to a render pass break in ANGLE/Vulkan. The command
+// buffer has a 20-command limit before it forces a context switch. This
+// experiment tests a 100-command limit.
+int GetCommandBufferSliceSize() {
+  static int slice_size =
+      (base::FeatureList::IsEnabled(features::kIncreasedCmdBufferParseSlice)
+           ? CommandBufferService::kParseCommandsSliceLarge
+           : CommandBufferService::kParseCommandsSliceSmall);
+  return slice_size;
+}
 
 CommandBufferService::CommandBufferService(CommandBufferServiceClient* client,
                                            MemoryTracker* memory_tracker)
@@ -210,13 +249,20 @@ void CommandBufferService::Flush(int32_t put_offset,
   }
 
   handler->BeginDecoding();
+
+  // BeginDecoding can cause context loss due to resuming shared image access.
+  if (state_.error != error::kNoError) {
+    handler->EndDecoding();
+    return;
+  }
+
   int end = put_offset_ < state_.get_offset ? num_entries_ : put_offset_;
   while (put_offset_ != state_.get_offset) {
     int num_entries = end - state_.get_offset;
     int entries_processed = 0;
-    error::Error error =
-        handler->DoCommands(kParseCommandsSlice, buffer_ + state_.get_offset,
-                            num_entries, &entries_processed);
+    error::Error error = handler->DoCommands(GetCommandBufferSliceSize(),
+                                             buffer_ + state_.get_offset,
+                                             num_entries, &entries_processed);
 
     state_.get_offset += entries_processed;
     DCHECK_LE(state_.get_offset, num_entries_);
@@ -252,11 +298,11 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
   ++state_.set_get_buffer_count;
 
   // If the buffer is invalid we handle it gracefully.
-  // This means ring_buffer_ can be nullptr.
-  ring_buffer_ = GetTransferBuffer(transfer_buffer_id);
-  if (ring_buffer_) {
-    uint32_t size = ring_buffer_->size();
-    volatile void* memory = ring_buffer_->memory();
+  // This means `transfer_buffer` can be nullptr.
+  auto transfer_buffer = GetTransferBuffer(transfer_buffer_id);
+  if (transfer_buffer) {
+    uint32_t size = transfer_buffer->size();
+    volatile void* memory = transfer_buffer->memory();
     // check proper alignments.
     DCHECK_EQ(
         0u, (reinterpret_cast<intptr_t>(memory)) % alignof(CommandBufferEntry));
@@ -268,7 +314,7 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
     num_entries_ = 0;
     buffer_ = nullptr;
   }
-
+  ring_buffer_ = std::move(transfer_buffer);
   UpdateState();
 }
 
@@ -294,12 +340,15 @@ void CommandBufferService::SetReleaseCount(uint64_t release_count) {
   UpdateState();
 }
 
-scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(uint32_t size,
-                                                                 int32_t* id) {
+scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(
+    uint32_t size,
+    int32_t* id,
+    uint32_t alignment) {
   *id = GetNextBufferId();
-  auto result = CreateTransferBufferWithId(size, *id);
-  if (!result)
+  auto result = CreateTransferBufferWithId(size, *id, alignment);
+  if (!result) {
     *id = -1;
+  }
   return result;
 }
 
@@ -320,8 +369,9 @@ bool CommandBufferService::RegisterTransferBuffer(
 
 scoped_refptr<Buffer> CommandBufferService::CreateTransferBufferWithId(
     uint32_t size,
-    int32_t id) {
-  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size);
+    int32_t id,
+    uint32_t alignment) {
+  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size, alignment);
   if (!RegisterTransferBuffer(id, buffer)) {
     SetParseError(gpu::error::kOutOfBounds);
     return nullptr;
@@ -345,6 +395,11 @@ void CommandBufferService::SetParseError(error::Error error) {
 void CommandBufferService::SetContextLostReason(
     error::ContextLostReason reason) {
   state_.context_lost_reason = reason;
+}
+
+bool CommandBufferService::ShouldYield() {
+  return client_->OnCommandBatchProcessed() ==
+         CommandBufferServiceClient::kPauseExecution;
 }
 
 void CommandBufferService::SetScheduled(bool scheduled) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,7 +124,7 @@ void InspectorResourceContentLoader::Start() {
 
     ResourceFetcher* fetcher = document->Fetcher();
 
-    scoped_refptr<const DOMWrapperWorld> world =
+    const DOMWrapperWorld* world =
         document->GetExecutionContext()->GetCurrentWorld();
     if (!ShouldSkipFetchingUrl(resource_request.Url())) {
       urls_to_fetch.insert(resource_request.Url().GetString());
@@ -224,7 +224,7 @@ void InspectorResourceContentLoader::Cancel(int client_id) {
 }
 
 InspectorResourceContentLoader::~InspectorResourceContentLoader() {
-  DCHECK(resources_.IsEmpty());
+  DCHECK(resources_.empty());
 }
 
 void InspectorResourceContentLoader::Trace(Visitor* visitor) const {
@@ -242,7 +242,7 @@ void InspectorResourceContentLoader::DidCommitLoadForLocalFrame(
 Resource* InspectorResourceContentLoader::ResourceForURL(const KURL& url) {
   for (const auto& resource : resources_) {
     if (resource->Url() == url)
-      return resource;
+      return resource.Get();
   }
   return nullptr;
 }

@@ -49,10 +49,10 @@ class CORE_EXPORT SharedWorkerGlobalScope final : public WorkerGlobalScope {
  public:
   SharedWorkerGlobalScope(
       std::unique_ptr<GlobalScopeCreationParams> creation_params,
-      bool is_constructor_origin_secure,
       SharedWorkerThread* thread,
       base::TimeTicks time_origin,
-      const SharedWorkerToken& token);
+      const SharedWorkerToken& token,
+      bool require_cross_site_request_for_cookies);
 
   ~SharedWorkerGlobalScope() override;
 
@@ -97,28 +97,20 @@ class CORE_EXPORT SharedWorkerGlobalScope final : public WorkerGlobalScope {
   const SharedWorkerToken& GetSharedWorkerToken() const { return token_; }
   WorkerToken GetWorkerToken() const final { return token_; }
   bool CrossOriginIsolatedCapability() const final;
-  bool IsolatedApplicationCapability() const final;
+  bool IsIsolatedContext() const final;
   ExecutionContextToken GetExecutionContextToken() const final {
     return token_;
   }
 
+  // If true, then all requests made must have an empty site_for_cookies to
+  // ensure only SameSite=None cookies can be attached to the request.
+  // For context on usage see:
+  // https://privacycg.github.io/saa-non-cookie-storage/shared-workers.html
+  bool DoesRequireCrossSiteRequestForCookies() const {
+    return require_cross_site_request_for_cookies_;
+  }
+
  private:
-  // TODO(https://crbug.com/780031): Remove this indirection once
-  // `starter_secure_context` is simply passed through to `WorkerGlobalScope`.
-  struct ParsedCreationParams {
-    std::unique_ptr<GlobalScopeCreationParams> creation_params;
-    bool starter_secure_context = false;
-  };
-
-  static ParsedCreationParams ParseCreationParams(
-      std::unique_ptr<GlobalScopeCreationParams> creation_params,
-      bool is_constructor_origin_secure);
-
-  SharedWorkerGlobalScope(ParsedCreationParams parsed_creation_params,
-                          SharedWorkerThread* thread,
-                          base::TimeTicks time_origin,
-                          const SharedWorkerToken& token);
-
   void DidReceiveResponseForClassicScript(
       WorkerClassicScriptLoader* classic_script_loader);
   void DidFetchClassicScript(WorkerClassicScriptLoader* classic_script_loader,
@@ -127,6 +119,8 @@ class CORE_EXPORT SharedWorkerGlobalScope final : public WorkerGlobalScope {
   void ExceptionThrown(ErrorEvent*) override;
 
   const SharedWorkerToken token_;
+
+  const bool require_cross_site_request_for_cookies_;
 };
 
 template <>

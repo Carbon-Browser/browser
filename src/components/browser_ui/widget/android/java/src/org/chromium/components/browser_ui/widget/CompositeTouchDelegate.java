@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,7 @@ import java.util.List;
 public class CompositeTouchDelegate extends TouchDelegate {
     private final List<TouchDelegate> mDelegates = new ArrayList<>();
 
-    /**
-     * @param view Used to get the context.
-     */
+    /** @param view Used to get the context. */
     public CompositeTouchDelegate(View view) {
         super(new Rect(), view);
     }

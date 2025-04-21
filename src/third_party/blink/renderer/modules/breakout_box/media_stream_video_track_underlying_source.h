@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_sink.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_transferring_optimizer.h"
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue_underlying_source.h"
@@ -51,7 +52,6 @@ class MODULES_EXPORT MediaStreamVideoTrackUnderlyingSource
   FRIEND_TEST_ALL_PREFIXES(MediaStreamVideoTrackUnderlyingSourceTest,
                            FrameLimiter);
 
-  scoped_refptr<base::SequencedTaskRunner> GetIOTaskRunner();
   static std::string GetDeviceIdForMonitoring(const MediaStreamDevice& device);
   static wtf_size_t GetFramePoolSize(const MediaStreamDevice& device);
 
@@ -59,12 +59,12 @@ class MODULES_EXPORT MediaStreamVideoTrackUnderlyingSource
   bool StartFrameDelivery() override;
   void StopFrameDelivery() override;
 
-  void OnSourceTransferStarted(scoped_refptr<base::SequencedTaskRunner>,
-                               TransferredVideoFrameQueueUnderlyingSource*);
+  void OnSourceTransferStarted(
+      scoped_refptr<base::SequencedTaskRunner>,
+      CrossThreadPersistent<TransferredVideoFrameQueueUnderlyingSource>);
 
   void OnFrameFromTrack(
       scoped_refptr<media::VideoFrame> media_frame,
-      std::vector<scoped_refptr<media::VideoFrame>> scaled_media_frames,
       base::TimeTicks estimated_capture_time);
 
   // Only used to prevent the gargabe collector from reclaiming the media

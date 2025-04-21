@@ -1,4 +1,4 @@
-// Copyright 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,12 @@ std::unique_ptr<LayerImpl> VideoLayer::CreateLayerImpl(
     LayerTreeImpl* tree_impl) const {
   return VideoLayerImpl::Create(tree_impl, id(), provider_.Read(*this),
                                 transform_);
+}
+
+bool VideoLayer::RequiresSetNeedsDisplayOnHdrHeadroomChange() const {
+  // TODO(crbug.com/40065199): Only return true if the contents of the
+  // video are HDR.
+  return true;
 }
 
 bool VideoLayer::Update() {

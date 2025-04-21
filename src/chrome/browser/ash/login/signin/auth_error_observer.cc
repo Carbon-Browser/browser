@@ -1,22 +1,21 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/signin/auth_error_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "chrome/browser/ash/login/reauth_stats.h"
 #include "chrome/browser/ash/login/signin/signin_error_notifier.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/signin_error_controller_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "components/user_manager/user_manager.h"
 
 namespace ash {
@@ -79,9 +78,11 @@ void AuthErrorObserver::HandleAuthError(
       ProfileHelper::Get()->GetUserByProfile(profile_);
   DCHECK(user->HasGaiaAccount());
 
-  if (auth_error.IsPersistentError()) {
+  if (auth_error.IsPersistentError() && !auth_error.IsScopePersistentError()) {
     // Invalidate OAuth2 refresh token to force Gaia sign-in flow. This is
-    // needed because sign-out/sign-in solution is suggested to the user.
+    // needed because sign-out/sign-in solution is suggested to the user. Do
+    // this only for persistent errors which are not caused because of a service
+    // requesting an invalid scope.
     LOG(WARNING) << "Invalidate OAuth token because of an auth error: "
                  << auth_error.ToString();
     const AccountId& account_id = user->GetAccountId();
@@ -91,7 +92,7 @@ void AuthErrorObserver::HandleAuthError(
 
     user_manager::UserManager::Get()->SaveUserOAuthStatus(
         account_id, user_manager::User::OAUTH2_TOKEN_STATUS_INVALID);
-    RecordReauthReason(account_id, ReauthReason::SYNC_FAILED);
+    RecordReauthReason(account_id, ReauthReason::kSyncFailed);
   } else if (auth_error.state() == GoogleServiceAuthError::NONE) {
     if (user->oauth_token_status() ==
         user_manager::User::OAUTH2_TOKEN_STATUS_INVALID) {

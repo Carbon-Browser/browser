@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace crosapi {
 
@@ -42,16 +41,25 @@ KeystoreServiceFactoryAsh* KeystoreServiceFactoryAsh::GetInstance() {
 }
 
 KeystoreServiceFactoryAsh::KeystoreServiceFactoryAsh()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "KeystoreServiceFactoryAsh",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ash::platform_keys::PlatformKeysServiceFactory::GetInstance());
   DependsOn(ash::platform_keys::KeyPermissionsServiceFactory::GetInstance());
 }
 
-KeyedService* KeystoreServiceFactoryAsh::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+KeystoreServiceFactoryAsh::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new KeystoreServiceAsh(context);
+  return std::make_unique<KeystoreServiceAsh>(context);
 }
 
 }  // namespace crosapi

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/containers/flat_set.h"
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -24,7 +25,7 @@
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 
 namespace ui {
 class Accelerator;
@@ -67,12 +68,13 @@ class DbusAppmenu : public AvatarMenuObserver,
 
   // Creates a whole menu defined with |commands| and titled with the string
   // |string_id|. Then appends it to |root_menu_|.
-  ui::SimpleMenuModel* BuildStaticMenu(int string_id,
-                                       const DbusAppmenuCommand* commands);
+  ui::SimpleMenuModel* BuildStaticMenu(
+      int string_id,
+      base::span<const DbusAppmenuCommand> commands);
 
   // Creates a HistoryItem from the data in |entry|.
   std::unique_ptr<HistoryItem> HistoryItemForTab(
-      const sessions::TabRestoreService::Tab& entry);
+      const sessions::tab_restore::Tab& entry);
 
   // Creates a menu item form |item| and inserts it in |menu| at |index|.
   void AddHistoryItemToMenu(std::unique_ptr<HistoryItem> item,
@@ -86,8 +88,7 @@ class DbusAppmenu : public AvatarMenuObserver,
       SessionID id,
       std::u16string title,
       int index,
-      const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>&
-          tabs);
+      const std::vector<std::unique_ptr<sessions::tab_restore::Tab>>& tabs);
 
   // Sends a message off to History for data.
   void GetTopSitesData();

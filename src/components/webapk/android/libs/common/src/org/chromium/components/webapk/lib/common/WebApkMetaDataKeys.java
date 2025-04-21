@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.webapk.lib.common;
 
-/**
- * <meta-data> keys for WebAPK Android Manifest.
- */
+import org.chromium.build.annotations.NullMarked;
+
+/** <meta-data> keys for WebAPK Android Manifest. */
+@NullMarked
 public final class WebApkMetaDataKeys {
     public static final String SHELL_APK_VERSION = "org.chromium.webapk.shell_apk.shellApkVersion";
     public static final String RUNTIME_HOST = "org.chromium.webapk.shell_apk.runtimeHost";
@@ -17,11 +18,15 @@ public final class WebApkMetaDataKeys {
             "org.chromium.webapk.shell_apk.loggedIntentUrlParam";
     public static final String NAME = "org.chromium.webapk.shell_apk.name";
     public static final String SHORT_NAME = "org.chromium.webapk.shell_apk.shortName";
+    public static final String HAS_CUSTOM_NAME = "org.chromium.webapk.shell_apk.hasCustomName";
     public static final String SCOPE = "org.chromium.webapk.shell_apk.scope";
     public static final String DISPLAY_MODE = "org.chromium.webapk.shell_apk.displayMode";
     public static final String ORIENTATION = "org.chromium.webapk.shell_apk.orientation";
     public static final String THEME_COLOR = "org.chromium.webapk.shell_apk.themeColor";
     public static final String BACKGROUND_COLOR = "org.chromium.webapk.shell_apk.backgroundColor";
+    public static final String DARK_THEME_COLOR = "org.chromium.webapk.shell_apk.darkThemeColor";
+    public static final String DARK_BACKGROUND_COLOR =
+            "org.chromium.webapk.shell_apk.darkBackgroundColor";
     public static final String DEFAULT_BACKGROUND_COLOR_ID =
             "org.chromium.webapk.shell_apk.defaultBackgroundColorId";
     public static final String ICON_ID = "org.chromium.webapk.shell_apk.iconId";

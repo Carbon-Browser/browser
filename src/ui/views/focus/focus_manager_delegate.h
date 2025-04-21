@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,11 @@ class VIEWS_EXPORT FocusManagerDelegate {
   // target, and so on.
   // Returns true if an accelerator was activated.
   virtual bool ProcessAccelerator(const ui::Accelerator& accelerator) = 0;
+
+  // Return true to enable arrow key focus traversal, which allows a user to
+  // traverse a Widget's views using up/down and left/right arrow keys in
+  // addition to TAB.
+  virtual bool IsArrowKeyTraversalEnabled() = 0;
 };
 
 }  // namespace views

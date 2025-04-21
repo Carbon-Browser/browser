@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,11 @@ package permissions;
 
 // Features that depend on the site that triggered the permission request.
 // Currently empty but added proactively for future versions.
-message SiteFeatures {}
+message SiteFeatures {
+  // This field must be an origin-only URL with a `http` or `https` scheme
+  // Example of valid value: `https://example.org`.
+  optional string origin = 1;
+}
 
 // Statistical features about client's interactions with permission prompts.
 // These features are computed on all permission actions that happened before
@@ -56,6 +60,8 @@ message ClientFeatures {
   // prompt was shown.
   optional Gesture gesture = 3;
 
+  // Similar to the above declared `Gesture` enum but is used only for on-device
+  // model.
   enum GestureEnum {
     GESTURE_V2 = 0;
     GESTURE_UNSPECIFIED_V2 = 1;
@@ -63,6 +69,8 @@ message ClientFeatures {
 
   optional GestureEnum gesture_enum = 4;
 
+  // Similar to the above declared `Platform` enum but is used only for
+  // on-device model.
   enum PlatformEnum {
     PLATFORM_MOBILE_V2 = 0;
     PLATFORM_DESKTOP_V2 = 1;
@@ -70,6 +78,15 @@ message ClientFeatures {
   }
 
   optional PlatformEnum platform_enum = 5;
+
+  // Message containing the experiment config for the client request.
+  message ExperimentConfig {
+    // Optional. If set, the experiment id used to generate the predictions.
+    optional int32 experiment_id = 1;
+  }
+
+  // Optional. The client experiment config.
+  optional ExperimentConfig experiment_config = 6;
 }
 
 // Features related to a specific permission type.

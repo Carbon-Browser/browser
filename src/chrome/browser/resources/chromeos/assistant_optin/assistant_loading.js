@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,22 @@
  * Event 'reload' will be fired when the user click the retry button.
  */
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
+import '../components/buttons/oobe_text_button.js';
+import '../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../components/dialogs/oobe_adaptive_dialog.js';
+import '../components/dialogs/oobe_content_dialog.js';
+import './assistant_icons.html.js';
+import './assistant_common_styles.css.js';
+
+import {afterNextRender, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {MultiStepMixin} from '../components/mixins/multi_step_mixin.js';
+import {OobeI18nMixin} from '../components/mixins/oobe_i18n_mixin.js';
+
+import {getTemplate} from './assistant_loading.html.js';
+import {BrowserProxyImpl} from './browser_proxy.js';
 
 const AssistantLoadingUIState = {
   LOADING: 'loading',
@@ -21,8 +36,7 @@ const AssistantLoadingUIState = {
  * @constructor
  * @extends {PolymerElement}
  */
-const AssistantLoadingBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, MultiStepBehavior], Polymer.Element);
+const AssistantLoadingBase = MultiStepMixin(OobeI18nMixin(PolymerElement));
 
 /**
  * @polymer
@@ -32,7 +46,9 @@ class AssistantLoading extends AssistantLoadingBase {
     return 'assistant-loading';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return getTemplate();
+  }
 
   static get properties() {
     return {
@@ -48,8 +64,6 @@ class AssistantLoading extends AssistantLoadingBase {
 
   constructor() {
     super();
-
-    this.UI_STEPS = AssistantLoadingUIState;
 
     /**
      * Whether an error occurs while the page is loading.
@@ -72,8 +86,13 @@ class AssistantLoading extends AssistantLoadingBase {
      */
     this.loadingTimeout_ = null;
 
-    /** @private {?assistant.BrowserProxy} */
-    this.browserProxy_ = assistant.BrowserProxyImpl.getInstance();
+    /** @private {?BrowserProxy} */
+    this.browserProxy_ = BrowserProxyImpl.getInstance();
+  }
+
+  /** @override */
+  UI_STEPS() {
+    return AssistantLoadingUIState;
   }
 
   defaultUIStep() {
@@ -153,8 +172,7 @@ class AssistantLoading extends AssistantLoadingBase {
    */
   onShow() {
     this.reloadPage();
-    Polymer.RenderStatus.afterNextRender(
-        this, () => this.$['loading-dialog'].focus());
+    afterNextRender(this, () => this.$['loading-dialog'].focus());
   }
 }
 

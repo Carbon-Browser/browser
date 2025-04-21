@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,8 +50,7 @@ RequestHandlerForDeviceInitialEnrollmentState::HandleRequest(
           .mutable_device_initial_enrollment_state_response();
   state_response->set_initial_enrollment_mode(state->initial_enrollment_mode);
   state_response->set_management_domain(state->management_domain);
-  return CreateHttpResponse(net::HTTP_OK,
-                            device_management_response.SerializeAsString());
+  return CreateHttpResponse(net::HTTP_OK, device_management_response);
 }
 
 }  // namespace policy

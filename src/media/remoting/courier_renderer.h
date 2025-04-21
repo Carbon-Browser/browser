@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 #define MEDIA_REMOTING_COURIER_RENDERER_H_
 
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -24,9 +26,8 @@
 #include "media/remoting/metrics.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openscreen/src/cast/streaming/public/rpc_messenger.h"
 #include "third_party/openscreen/src/cast/streaming/remoting.pb.h"
-#include "third_party/openscreen/src/cast/streaming/rpc_messenger.h"
 #include "third_party/openscreen/src/util/weak_ptr.h"
 
 namespace media {
@@ -47,7 +48,7 @@ class CourierRenderer final : public Renderer {
   // The whole class except for constructor and GetMediaTime() runs on
   // |media_task_runner|. The constructor and GetMediaTime() run on render main
   // thread.
-  CourierRenderer(scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+  CourierRenderer(scoped_refptr<base::SequencedTaskRunner> media_task_runner,
                   const base::WeakPtr<RendererController>& controller,
                   VideoRendererSink* video_renderer_sink);
 
@@ -61,7 +62,7 @@ class CourierRenderer final : public Renderer {
   // static in order to post task to media thread in order to avoid threading
   // race condition.
   static void OnDataPipeCreatedOnMainThread(
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       base::WeakPtr<CourierRenderer> self,
       openscreen::WeakPtr<openscreen::cast::RpcMessenger> rpc_messenger,
       mojo::PendingRemote<mojom::RemotingDataStreamSender> audio,
@@ -73,7 +74,7 @@ class CourierRenderer final : public Renderer {
   // static in order to post task to media thread in order to avoid threading
   // race condition.
   static void OnMessageReceivedOnMainThread(
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       base::WeakPtr<CourierRenderer> self,
       std::unique_ptr<openscreen::cast::RpcMessage> message);
 
@@ -82,12 +83,13 @@ class CourierRenderer final : public Renderer {
   void Initialize(MediaResource* media_resource,
                   RendererClient* client,
                   PipelineStatusCallback init_cb) final;
-  void SetLatencyHint(absl::optional<base::TimeDelta> latency_hint) final;
+  void SetLatencyHint(std::optional<base::TimeDelta> latency_hint) final;
   void Flush(base::OnceClosure flush_cb) final;
   void StartPlayingFrom(base::TimeDelta time) final;
   void SetPlaybackRate(double playback_rate) final;
   void SetVolume(float volume) final;
   base::TimeDelta GetMediaTime() final;
+  RendererType GetRendererType() final;
 
  private:
   friend class CourierRendererTest;
@@ -161,12 +163,16 @@ class CourierRenderer final : public Renderer {
   // though the playback might be delayed or paused.
   bool IsWaitingForDataFromDemuxers() const;
 
-  // Helper to deregister the renderer from the RPC messenger.
+  // Helpers to register/deregister the renderer with the RPC messenger. These
+  // must be called on the media thread to dereference the weak pointer to
+  // this, which if contains a valid RPC messenger pointer will result in a
+  // jump to the main thread.
+  void RegisterForRpcMessaging();
   void DeregisterFromRpcMessaging();
 
   State state_;
   const scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
-  const scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
 
   // Current renderer playback time information.
   base::TimeDelta current_media_time_;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -138,6 +138,15 @@ TEST(HistogramFunctionsTest, Times) {
   // Check the value by picking any overflow time.
   tester.ExpectTimeBucketCount(histogram, Seconds(11), 2);
   tester.ExpectTotalCount(histogram, 4);
+}
+
+TEST(HistogramFunctionsTest, ScopedTimes) {
+  std::string histogram("Testing.UMA.HistogramScopedTimes");
+  HistogramTester tester;
+  { ScopedUmaHistogramTimer scoped_uma_histogram_timer(histogram); }
+  tester.ExpectTotalCount(histogram, 1);
+  { ScopedUmaHistogramTimer scoped_uma_histogram_timer(histogram); }
+  tester.ExpectTotalCount(histogram, 2);
 }
 
 TEST(HistogramFunctionsTest, Sparse_SupportsLargeRange) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@
 //     (e.g. an optional "Options" structure as many functions here have).
 //
 #pragma pack(push, 8)
-struct MojoSystemThunks64 {
+struct MojoSystemThunks2 {
   uint32_t size;  // Should be set to sizeof(MojoSystemThunks).
 
   MojoResult (*Initialize)(const struct MojoInitializeOptions* options);
@@ -233,9 +233,14 @@ struct MojoSystemThunks64 {
   MojoResult (*SetDefaultProcessErrorHandler)(
       MojoDefaultProcessErrorHandler handler,
       const struct MojoSetDefaultProcessErrorHandlerOptions* options);
+
+  // Core ABI version 4 additions begin here.
+  MojoResult (*ReserveMessageCapacity)(MojoMessageHandle message,
+                                       uint32_t payload_buffer_size,
+                                       uint32_t* buffer_size);
 };
 
-// Hacks: This is a copy of the ABI from before it was switched to 64-bit
+// Hacks: This is a copy of the ABI from before it was switched to pointer-sized
 // MojoHandle values. It can be removed once the Chrome OS IME service is
 // longer consuming it.
 typedef uint32_t MojoHandle32;
@@ -436,17 +441,28 @@ struct MojoSystemThunks {
   MojoResult (*SetDefaultProcessErrorHandler)(
       MojoDefaultProcessErrorHandler handler,
       const struct MojoSetDefaultProcessErrorHandlerOptions* options);
+  MojoResult (*ReserveMessageCapacity)(MojoMessageHandle message,
+                                       uint32_t payload_buffer_size,
+                                       uint32_t* buffer_size);
 };
 #pragma pack(pop)
 
 typedef struct MojoSystemThunks MojoSystemThunks32;
 
-MOJO_SYSTEM_EXPORT const struct MojoSystemThunks64*
-MojoEmbedderGetSystemThunks64();
+#ifdef __cplusplus
+extern "C" {
+#endif  // __cplusplus
+
+MOJO_SYSTEM_EXPORT const struct MojoSystemThunks2*
+MojoEmbedderGetSystemThunks2();
 
 MOJO_SYSTEM_EXPORT const MojoSystemThunks32* MojoEmbedderGetSystemThunks32();
 
 MOJO_SYSTEM_EXPORT void MojoEmbedderSetSystemThunks(
-    const struct MojoSystemThunks64* system_thunks);
+    const struct MojoSystemThunks2* system_thunks);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif  // __cplusplus
 
 #endif  // MOJO_PUBLIC_C_SYSTEM_THUNKS_H_

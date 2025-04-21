@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -19,7 +20,6 @@
 #include "content/public/browser/presentation_service_delegate.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom.h"
 
 namespace content {
@@ -55,7 +55,7 @@ namespace media_router {
 //
 //   manager->RegisterLocalPresentationController(
 //       presentation_info,
-//       std::move(controller_connection_remote,
+//       std::move(controller_connection_remote),
 //       std::move(receiver_connection_receiver));
 //
 // Invoked on receiver's PresentationServiceImpl when controller connection is
@@ -110,6 +110,9 @@ namespace media_router {
 // thread.
 class LocalPresentationManager : public KeyedService {
  public:
+  // Used by
+  // LocalPresentationManagerFactory::BuildServiceInstanceForBrowserContext.
+  LocalPresentationManager();
   LocalPresentationManager(const LocalPresentationManager&) = delete;
   LocalPresentationManager& operator=(const LocalPresentationManager&) = delete;
 
@@ -215,8 +218,9 @@ class LocalPresentationManager : public KeyedService {
     bool IsValid() const;
 
     const blink::mojom::PresentationInfo presentation_info_;
-    absl::optional<MediaRoute> route_;
-    raw_ptr<content::WebContents> receiver_web_contents_ = nullptr;
+    std::optional<MediaRoute> route_;
+    raw_ptr<content::WebContents, DanglingUntriaged> receiver_web_contents_ =
+        nullptr;
 
     // Callback to invoke whenever a receiver connection is available.
     content::ReceiverConnectionAvailableCallback receiver_callback_;
@@ -250,14 +254,10 @@ class LocalPresentationManager : public KeyedService {
   };
 
  private:
-  friend class LocalPresentationManagerFactory;
   friend class LocalPresentationManagerTest;
   friend class MockLocalPresentationManager;
-  FRIEND_TEST_ALL_PREFIXES(PresentationServiceDelegateImplTest,
+  FRIEND_TEST_ALL_PREFIXES(ControllerPresentationServiceDelegateImplTest,
                            ConnectToLocalPresentation);
-
-  // Used by LocalPresentationManagerFactory::GetOrCreateForBrowserContext.
-  LocalPresentationManager();
 
   using LocalPresentationMap =
       std::map<std::string, std::unique_ptr<LocalPresentation>>;

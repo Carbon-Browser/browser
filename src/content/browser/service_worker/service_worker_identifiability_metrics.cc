@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include "services/metrics/public/cpp/delegating_ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
+#include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
+#include "third_party/blink/public/common/privacy_budget/identifiability_study_worker_client_added.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -67,7 +69,7 @@ void ServiceWorkerIdentifiabilityMetrics::OnClientIsExecutionReady(
   // Don't track dedicated workers as they simply inherit the source id of their
   // parents.
   if (type == blink::mojom::ServiceWorkerClientType::kDedicatedWorker) {
-    // TODO(crbug.com/1138622): Re-enable once dedicated worker source ids are
+    // TODO(crbug.com/40153087): Re-enable once dedicated worker source ids are
     // propagated. Also include dedicated workers in the valid source id DCHECK.
     // DCHECK(base::Contains(client_source_ids_by_origin_, client_origin) &&
     //        base::Contains(client_source_ids_by_origin_[client_origin],
@@ -114,6 +116,13 @@ void ServiceWorkerIdentifiabilityMetrics::EmitClientAddedEvent(
         .SetClientSourceId(client_ukm_source_id)
         .SetWorkerType(static_cast<int64_t>(WorkerType::kServiceWorker))
         .Record(ukm_recorder);
+
+    if (blink::IdentifiabilityStudySettings::Get()->IsActive()) {
+      blink::IdentifiabilityStudyWorkerClientAdded(version_ukm_source_id)
+          .SetClientSourceId(client_ukm_source_id)
+          .SetWorkerType(blink::IdentifiableSurface::WorkerType::kServiceWorker)
+          .Record(ukm_recorder);
+    }
   }
 }
 

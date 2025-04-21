@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -46,7 +46,7 @@ loadScript.then(() => {chrome.test.runTests([
         colorName = 'black';
         expectedColor = '0,0,0,255';
       }
-      var url = chrome.extension.getURL('/common/' + colorName + '.html');
+      var url = chrome.runtime.getURL('/common/' + colorName + '.html');
       createWindow(
           [url],
           kWindowRect,

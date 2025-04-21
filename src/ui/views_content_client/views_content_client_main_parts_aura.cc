@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@
 
 #include <utility>
 
-#include "build/chromeos_buildflags.h"
-
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 #include "ui/wm/core/wm_state.h"
 #endif
 
@@ -24,7 +22,7 @@ ViewsContentClientMainPartsAura::~ViewsContentClientMainPartsAura() {
 void ViewsContentClientMainPartsAura::ToolkitInitialized() {
   ViewsContentClientMainParts::ToolkitInitialized();
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   wm_state_ = std::make_unique<::wm::WMState>();
 #endif
 }

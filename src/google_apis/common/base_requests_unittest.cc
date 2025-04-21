@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -102,7 +102,7 @@ class BaseRequestsTest : public testing::Test {
     network::mojom::URLLoaderFactoryParamsPtr params =
         network::mojom::URLLoaderFactoryParams::New();
     params->process_id = network::mojom::kBrowserProcessId;
-    params->is_corb_enabled = false;
+    params->is_orb_enabled = false;
     network_context_->CreateURLLoaderFactory(
         url_loader_factory_.BindNewPipeAndPassReceiver(), std::move(params));
     test_shared_loader_factory_ =
@@ -156,13 +156,13 @@ class BaseRequestsTest : public testing::Test {
 TEST_F(BaseRequestsTest, ParseValidJson) {
   std::unique_ptr<base::Value> json(ParseJson(kValidJsonString));
 
-  base::DictionaryValue* root_dict = nullptr;
   ASSERT_TRUE(json);
-  ASSERT_TRUE(json->GetAsDictionary(&root_dict));
+  base::Value::Dict* root_dict = json->GetIfDict();
+  ASSERT_TRUE(root_dict);
 
-  int int_value = 0;
-  ASSERT_TRUE(root_dict->GetInteger("test", &int_value));
-  EXPECT_EQ(123, int_value);
+  std::optional<int> int_value = root_dict->FindInt("test");
+  ASSERT_TRUE(int_value.has_value());
+  EXPECT_EQ(123, *int_value);
 }
 
 TEST_F(BaseRequestsTest, ParseInvalidJson) {
@@ -196,6 +196,14 @@ TEST_F(BaseRequestsTest, UrlFetchRequestBaseResponseCodeOverride) {
 
   // HTTP_FORBIDDEN (403) is overridden by the error reason.
   EXPECT_EQ(HTTP_SERVICE_UNAVAILABLE, error);
+}
+
+TEST(BaseRequestsHttpRequestMethodEnumTest, ConvertsToString) {
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kGet), "GET");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPost), "POST");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPut), "PUT");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kPatch), "PATCH");
+  EXPECT_EQ(HttpRequestMethodToString(HttpRequestMethod::kDelete), "DELETE");
 }
 
 }  // namespace google_apis

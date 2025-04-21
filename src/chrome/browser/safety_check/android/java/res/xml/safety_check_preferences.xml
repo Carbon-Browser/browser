@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2020 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
@@ -20,9 +22,15 @@
         app:allowDividerBelow="false" />
     <!-- Passwords -->
     <org.chromium.chrome.browser.safety_check.SafetyCheckElementPreference
-        android:key="passwords"
+        android:key="passwords_account"
         android:title="@string/safety_check_passwords_title"
-        android:icon="@drawable/ic_vpn_key_grey"
+        android:icon="@drawable/ic_password_manager_key"
+        app:iconTint="@macro/default_icon_color"
+        app:allowDividerBelow="false" />
+    <org.chromium.chrome.browser.safety_check.SafetyCheckElementPreference
+        android:key="passwords_local"
+        android:title="@string/safety_check_passwords_title"
+        android:icon="@drawable/ic_password_manager_key"
         app:iconTint="@macro/default_icon_color"
         app:allowDividerBelow="false" />
     <!-- Safe Browsing -->

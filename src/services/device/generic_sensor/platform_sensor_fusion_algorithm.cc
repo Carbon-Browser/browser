@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace device {
 
 PlatformSensorFusionAlgorithm::PlatformSensorFusionAlgorithm(
     mojom::SensorType fused_type,
-    const std::vector<mojom::SensorType>& source_types)
+    const base::flat_set<mojom::SensorType>& source_types)
     : fused_type_(fused_type), source_types_(source_types) {
   DCHECK(!source_types_.empty());
 }

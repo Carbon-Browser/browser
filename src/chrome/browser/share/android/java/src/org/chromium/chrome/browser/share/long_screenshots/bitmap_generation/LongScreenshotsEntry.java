@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,10 +36,17 @@ public class LongScreenshotsEntry {
     private EntryListener mEntryListener;
     private Callback<Integer> mMemoryTracker;
 
-    @IntDef({EntryStatus.UNKNOWN, EntryStatus.INSUFFICIENT_MEMORY, EntryStatus.GENERATION_ERROR,
-            EntryStatus.BITMAP_GENERATED, EntryStatus.CAPTURE_COMPLETE,
-            EntryStatus.CAPTURE_IN_PROGRESS, EntryStatus.BITMAP_GENERATION_IN_PROGRESS,
-            EntryStatus.BOUNDS_ABOVE_CAPTURE, EntryStatus.BOUNDS_BELOW_CAPTURE})
+    @IntDef({
+        EntryStatus.UNKNOWN,
+        EntryStatus.INSUFFICIENT_MEMORY,
+        EntryStatus.GENERATION_ERROR,
+        EntryStatus.BITMAP_GENERATED,
+        EntryStatus.CAPTURE_COMPLETE,
+        EntryStatus.CAPTURE_IN_PROGRESS,
+        EntryStatus.BITMAP_GENERATION_IN_PROGRESS,
+        EntryStatus.BOUNDS_ABOVE_CAPTURE,
+        EntryStatus.BOUNDS_BELOW_CAPTURE
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface EntryStatus {
         int UNKNOWN = 0;

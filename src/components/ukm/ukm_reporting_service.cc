@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "components/ukm/ukm_reporting_service.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/command_line.h"
 #include "base/metrics/field_trial_params.h"
@@ -15,6 +16,8 @@
 #include "build/build_config.h"
 #include "components/metrics/metrics_service_client.h"
 #include "components/metrics/metrics_switches.h"
+#include "components/metrics/server_urls.h"
+#include "components/metrics/unsent_log_store.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/ukm/ukm_pref_names.h"
 #include "components/ukm/ukm_service.h"
@@ -28,12 +31,6 @@
 namespace ukm {
 
 namespace {
-
-// The UKM server's URL.
-constexpr char kDefaultServerUrl[] = "https://clients4.google.com/ukm";
-
-// The UKM server's MIME type.
-constexpr char kMimeType[] = "application/vnd.chrome.ukm";
 
 // The number of UKM logs that will be stored in UnsentLogStore before logs
 // start being dropped.
@@ -52,21 +49,17 @@ constexpr int kMinUnsentLogBytes = 300000;
 constexpr size_t kMaxLogRetransmitSize = 100 * 1024;
 
 GURL GetServerUrl() {
-#ifndef NDEBUG
-  // Only allow overriding the server URL through the command line in debug
-  // builds. This is to prevent, for example, rerouting metrics due to malware.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(metrics::switches::kUkmServerUrl)) {
     return GURL(
         command_line->GetSwitchValueASCII(metrics::switches::kUkmServerUrl));
   }
-#endif  // NDEBUG
 
   std::string server_url =
       base::GetFieldTrialParamValueByFeature(kUkmFeature, "ServerUrl");
   if (!server_url.empty())
     return GURL(server_url);
-  return GURL(kDefaultServerUrl);
+  return metrics::GetUkmServerUrl();
 }
 
 }  // namespace
@@ -80,17 +73,23 @@ void UkmReportingService::RegisterPrefs(PrefRegistrySimple* registry) {
 
 UkmReportingService::UkmReportingService(metrics::MetricsServiceClient* client,
                                          PrefService* local_state)
-    : ReportingService(client, local_state, kMaxLogRetransmitSize),
+    : ReportingService(client,
+                       local_state,
+                       kMaxLogRetransmitSize,
+                       /*logs_event_manager=*/nullptr),
       unsent_log_store_(std::make_unique<ukm::UnsentLogStoreMetricsImpl>(),
                         local_state,
                         prefs::kUkmUnsentLogStore,
                         nullptr,
-                        kMinUnsentLogCount,
-                        kMinUnsentLogBytes,
-                        kMaxLogRetransmitSize,
-                        client->GetUploadSigningKey()) {}
+                        metrics::UnsentLogStore::UnsentLogStoreLimits{
+                            .min_log_count = kMinUnsentLogCount,
+                            .min_queue_size_bytes = kMinUnsentLogBytes,
+                            .max_log_size_bytes = kMaxLogRetransmitSize,
+                        },
+                        client->GetUploadSigningKey(),
+                        /*logs_event_manager=*/nullptr) {}
 
-UkmReportingService::~UkmReportingService() {}
+UkmReportingService::~UkmReportingService() = default;
 
 metrics::LogStore* UkmReportingService::log_store() {
   return &unsent_log_store_;
@@ -104,8 +103,8 @@ GURL UkmReportingService::GetInsecureUploadUrl() const {
   return GURL();
 }
 
-base::StringPiece UkmReportingService::upload_mime_type() const {
-  return kMimeType;
+std::string_view UkmReportingService::upload_mime_type() const {
+  return metrics::kUkmMimeType;
 }
 
 metrics::MetricsLogUploader::MetricServiceType

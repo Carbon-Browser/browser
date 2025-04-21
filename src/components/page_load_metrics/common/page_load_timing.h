@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,11 @@ namespace page_load_metrics {
 
 // Initialize an empty PageLoadTiming with initialized empty sub-members.
 mojom::PageLoadTimingPtr CreatePageLoadTiming();
+mojom::LargestContentfulPaintTimingPtr CreateLargestContentfulPaintTiming();
+mojom::SoftNavigationMetricsPtr CreateSoftNavigationMetrics();
 
 bool IsEmpty(const mojom::DocumentTiming& timing);
+bool IsEmpty(const mojom::DomainLookupTiming& timing);
 bool IsEmpty(const mojom::PaintTiming& timing);
 bool IsEmpty(const mojom::ParseTiming& timing);
 bool IsEmpty(const mojom::PageLoadTiming& timing);

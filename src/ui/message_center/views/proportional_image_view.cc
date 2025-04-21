@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,12 @@ void ProportionalImageView::OnPaint(gfx::Canvas* canvas) {
 
   if (apply_rounded_corners_) {
     SkPath path;
-    const SkScalar corner_radius =
-        SkIntToScalar(message_center::kImageCornerRadius);
+    SkScalar corner_radius = SkIntToScalar(message_center::kImageCornerRadius);
+
+#if BUILDFLAG(IS_CHROMEOS)
+    corner_radius = SkIntToScalar(message_center::kJellyImageCornerRadius);
+#endif
+
     const SkScalar kRadius[8] = {corner_radius, corner_radius, corner_radius,
                                  corner_radius, corner_radius, corner_radius,
                                  corner_radius, corner_radius};
@@ -75,7 +79,7 @@ gfx::Size ProportionalImageView::GetImageDrawingSize() {
   return GetImageSizeForContainerSize(max_size, image_.Size());
 }
 
-BEGIN_METADATA(ProportionalImageView, views::View)
+BEGIN_METADATA(ProportionalImageView)
 END_METADATA
 
 }  // namespace message_center

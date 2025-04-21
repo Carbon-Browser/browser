@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,10 +45,10 @@ class ImageProcessorClient {
   // validation, writing to file) on each video frame produced by the
   // ImageProcessor.
   static std::unique_ptr<ImageProcessorClient> Create(
+      std::optional<ImageProcessor::CreateBackendCB> create_backend_cb,
       const ImageProcessor::PortConfig& input_config,
       const ImageProcessor::PortConfig& output_config,
       size_t num_buffers,
-      VideoRotation relative_rotation,
       std::vector<std::unique_ptr<VideoFrameProcessor>> frame_processors);
 
   ImageProcessorClient(const ImageProcessorClient&) = delete;
@@ -85,17 +85,19 @@ class ImageProcessorClient {
 
   // Create ImageProcessor with |input_config|, |output_config| and
   // |num_buffers|.
-  bool CreateImageProcessor(const ImageProcessor::PortConfig& input_config,
-                            const ImageProcessor::PortConfig& output_config,
-                            size_t num_buffers,
-                            VideoRotation relative_rotation);
+  bool CreateImageProcessor(
+      std::optional<ImageProcessor::CreateBackendCB> create_backend_cb,
+      const ImageProcessor::PortConfig& input_config,
+      const ImageProcessor::PortConfig& output_config,
+      size_t num_buffers);
 
   // Create |image_processor_| on |my_thread_|.
-  void CreateImageProcessorTask(const ImageProcessor::PortConfig& input_config,
-                                const ImageProcessor::PortConfig& output_config,
-                                size_t num_buffers,
-                                VideoRotation relative_rotation,
-                                base::WaitableEvent* done);
+  void CreateImageProcessorTask(
+      std::optional<ImageProcessor::CreateBackendCB> create_backend_cb,
+      const ImageProcessor::PortConfig& input_config,
+      const ImageProcessor::PortConfig& output_config,
+      size_t num_buffers,
+      base::WaitableEvent* done);
 
   // Call ImageProcessor::Process() on |my_thread_|.
   void ProcessTask(scoped_refptr<VideoFrame> input_frame,

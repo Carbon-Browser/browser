@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -175,7 +175,8 @@ class BLINK_COMMON_EXPORT WatchTimeReporter : base::PowerStateObserver {
   // We only observe power source changes. We don't need to observe suspend and
   // resume events because we report watch time in terms of elapsed media time
   // and not in terms of elapsed real time.
-  void OnPowerStateChange(bool on_battery_power) override;
+  void OnBatteryPowerStatusChange(base::PowerStateObserver::BatteryPowerStatus
+                                      battery_power_status) override;
 
   void OnNativeControlsChanged(bool has_native_controls);
   void OnDisplayTypeChanged(DisplayType display_type);

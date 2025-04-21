@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,12 @@
 namespace blink {
 
 class ExecutionContext;
-class ScriptPromiseResolver;
+class ScriptPromiseResolverBase;
+class V8PermissionState;
 
 // Expose the status of a given permission type for the current
 // ExecutionContext.
-class PermissionStatus final : public EventTargetWithInlineData,
+class PermissionStatus final : public EventTarget,
                                public ActiveScriptWrappable<PermissionStatus>,
                                public ExecutionContextLifecycleStateObserver,
                                public PermissionStatusListener::Observer {
@@ -32,7 +33,7 @@ class PermissionStatus final : public EventTargetWithInlineData,
 
  public:
   static PermissionStatus* Take(PermissionStatusListener*,
-                                ScriptPromiseResolver*);
+                                ScriptPromiseResolverBase*);
 
   PermissionStatus(PermissionStatusListener*, ExecutionContext*);
   ~PermissionStatus() override;
@@ -40,6 +41,13 @@ class PermissionStatus final : public EventTargetWithInlineData,
   // EventTarget implementation.
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
+  // Called when an event listener has been successfully added.
+  void AddedEventListener(const AtomicString& event_type,
+                          RegisteredEventListener&) override;
+
+  // Called when an event listener has been successfully removed.
+  void RemovedEventListener(const AtomicString& event_type,
+                            const RegisteredEventListener&) override;
 
   // ScriptWrappable implementation.
   bool HasPendingActivity() const final;
@@ -51,7 +59,7 @@ class PermissionStatus final : public EventTargetWithInlineData,
   // PermissionStatusListener::Observer
   void OnPermissionStatusChange(MojoPermissionStatus) override;
 
-  String state() const;
+  V8PermissionState state() const;
 
   String name() const;
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,11 @@ bool ChromeSafeBrowsingTabObserverDelegate::DoesSafeBrowsingServiceExist() {
 std::unique_ptr<ClientSideDetectionHost>
 ChromeSafeBrowsingTabObserverDelegate::CreateClientSideDetectionHost(
     content::WebContents* web_contents) {
+#if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
   return ChromeClientSideDetectionHostDelegate::CreateHost(web_contents);
+#else
+  return nullptr;
+#endif
 }
 
 }  // namespace safe_browsing

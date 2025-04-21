@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace {
 
 void TestProcessAccess(RunnerGenerator runner_gen, DWORD target) {
   const wchar_t *kCommandTemplate = L"OpenProcessCmd %d %d";
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
   std::unique_ptr<sandbox::TestRunner> runner = nullptr;
 
   // Test all the scary process permissions.
@@ -158,8 +158,11 @@ TEST(ValidationSuite, TestRegistry) {
 
 std::unique_ptr<TestRunner> DesktopRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->GetPolicy()->SetAlternateDesktop(true);
-  runner->GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  EXPECT_EQ(SBOX_ALL_OK, runner->broker()->CreateAlternateDesktop(
+                             Desktop::kAlternateWinstation));
+  runner->GetPolicy()->GetConfig()->SetDesktop(Desktop::kAlternateWinstation);
+  EXPECT_EQ(SBOX_ALL_OK, runner->GetPolicy()->GetConfig()->SetIntegrityLevel(
+                             INTEGRITY_LEVEL_LOW));
   return runner;
 }
 
@@ -181,11 +184,18 @@ TEST(ValidationSuite, TestAlternateDesktop) {
             runner_no_policy.RunTest(L"EnumAlternateWinsta NULL"));
 
   TestRunner runner;
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
   runner.SetTimeout(3600000);
-  runner.GetPolicy()->SetAlternateDesktop(true);
-  runner.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  std::wstring desktop_name = runner.GetPolicy()->GetAlternateDesktop();
+  EXPECT_EQ(SBOX_ALL_OK, runner.broker()->CreateAlternateDesktop(
+                             Desktop::kAlternateWinstation));
+  runner.GetPolicy()->GetConfig()->SetDesktop(Desktop::kAlternateWinstation);
+  EXPECT_EQ(SBOX_ALL_OK, runner.GetPolicy()->GetConfig()->SetIntegrityLevel(
+                             INTEGRITY_LEVEL_LOW));
+  // Ensure the desktop is created.
+  EXPECT_EQ(SBOX_ALL_OK, runner.broker()->CreateAlternateDesktop(
+                             Desktop::kAlternateWinstation));
+  std::wstring desktop_name =
+      runner.broker()->GetDesktopName(Desktop::kAlternateWinstation);
   desktop_name = desktop_name.substr(desktop_name.find('\\') + 1);
   wsprintf(command, L"OpenAlternateDesktop %lS", desktop_name.c_str());
   EXPECT_EQ(SBOX_TEST_DENIED, runner.RunTest(command));
@@ -193,8 +203,11 @@ TEST(ValidationSuite, TestAlternateDesktop) {
 
 std::unique_ptr<TestRunner> AlternateDesktopLocalWinstationRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->GetPolicy()->SetAlternateDesktop(false);
-  runner->GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  EXPECT_EQ(SBOX_ALL_OK, runner->broker()->CreateAlternateDesktop(
+                             Desktop::kAlternateDesktop));
+  runner->GetPolicy()->GetConfig()->SetDesktop(Desktop::kAlternateDesktop);
+  EXPECT_EQ(SBOX_ALL_OK, runner->GetPolicy()->GetConfig()->SetIntegrityLevel(
+                             INTEGRITY_LEVEL_LOW));
   return runner;
 }
 
@@ -210,15 +223,16 @@ TEST(ValidationSuite, TestAlternateDesktopLocalWinstation) {
 
 // Tests if the windows are correctly protected by the sandbox.
 TEST(ValidationSuite, TestWindows) {
-  // Due to a bug in Windows on builds based on the 19041 branch (20H1, 20H2 and
-  // 21H1) this test will fail on these versions. See crbug.com/1057656.
+  // Due to a bug in Windows on builds based on the 19041 branch (20H1, 20H2,
+  // 21H1 and 22H2) this test will fail on these versions. See
+  // crbug.com/1057656.
   base::win::OSInfo* os_info = base::win::OSInfo::GetInstance();
   if (os_info->version_number().build >= 19041 &&
-      os_info->version_number().build <= 19043) {
-    return;
+      os_info->version_number().build <= 19045) {
+    GTEST_SKIP() << "Skipping test for Win10 19041 branch, crbug.com/1057656.";
   }
 
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
 
   TestRunner runner_getshellwindow;
   wsprintf(command, L"ValidWindow %Id",
@@ -247,9 +261,10 @@ TEST(ValidationSuite, TestProcessDenyLockdown) {
 
 std::unique_ptr<TestRunner> ProcessDenyLowIntegrityRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  runner->GetPolicy()->SetTokenLevel(USER_RESTRICTED_SAME_ACCESS,
-                                     USER_INTERACTIVE);
+  EXPECT_EQ(SBOX_ALL_OK, runner->GetPolicy()->GetConfig()->SetIntegrityLevel(
+                             INTEGRITY_LEVEL_LOW));
+  EXPECT_EQ(SBOX_ALL_OK, runner->GetPolicy()->GetConfig()->SetTokenLevel(
+                             USER_RESTRICTED_SAME_ACCESS, USER_INTERACTIVE));
   return runner;
 }
 
@@ -258,7 +273,8 @@ std::unique_ptr<TestRunner> ProcessDenyLowIntegrityRunner() {
 TEST(ValidationSuite, TestProcessDenyLowIntegrity) {
   TestRunner target;
   target.SetAsynchronous(true);
-  target.GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_LOW);
+  target.GetPolicy()->GetConfig()->SetDelayedIntegrityLevel(
+      INTEGRITY_LEVEL_LOW);
 
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, target.RunTest(L"SleepCmd 30000"));
 
@@ -267,9 +283,10 @@ TEST(ValidationSuite, TestProcessDenyLowIntegrity) {
 
 std::unique_ptr<TestRunner> ProcessDenyBelowLowIntegrityRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->GetPolicy()->SetDelayedIntegrityLevel(INTEGRITY_LEVEL_UNTRUSTED);
-  runner->GetPolicy()->SetTokenLevel(USER_RESTRICTED_SAME_ACCESS,
-                                     USER_INTERACTIVE);
+  runner->GetPolicy()->GetConfig()->SetDelayedIntegrityLevel(
+      INTEGRITY_LEVEL_UNTRUSTED);
+  EXPECT_EQ(SBOX_ALL_OK, runner->GetPolicy()->GetConfig()->SetTokenLevel(
+                             USER_RESTRICTED_SAME_ACCESS, USER_INTERACTIVE));
   return runner;
 }
 
@@ -277,9 +294,10 @@ std::unique_ptr<TestRunner> ProcessDenyBelowLowIntegrityRunner() {
 TEST(ValidationSuite, TestProcessDenyBelowLowIntegrity) {
   TestRunner target;
   target.SetAsynchronous(true);
-  target.GetPolicy()->SetIntegrityLevel(INTEGRITY_LEVEL_LOW);
-  target.GetPolicy()->SetTokenLevel(USER_RESTRICTED_SAME_ACCESS,
-                                    USER_INTERACTIVE);
+  EXPECT_EQ(SBOX_ALL_OK, target.GetPolicy()->GetConfig()->SetIntegrityLevel(
+                             INTEGRITY_LEVEL_LOW));
+  EXPECT_EQ(SBOX_ALL_OK, target.GetPolicy()->GetConfig()->SetTokenLevel(
+                             USER_RESTRICTED_SAME_ACCESS, USER_INTERACTIVE));
 
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, target.RunTest(L"SleepCmd 30000"));
 
@@ -289,7 +307,7 @@ TEST(ValidationSuite, TestProcessDenyBelowLowIntegrity) {
 // Tests if the threads are correctly protected by the sandbox.
 TEST(ValidationSuite, TestThread) {
   TestRunner runner;
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
 
   wsprintf(command, L"OpenThreadCmd %d", ::GetCurrentThreadId());
   EXPECT_EQ(SBOX_TEST_DENIED, runner.RunTest(command));
@@ -298,18 +316,18 @@ TEST(ValidationSuite, TestThread) {
 // Tests if an over-limit allocation will be denied.
 TEST(ValidationSuite, TestMemoryLimit) {
   TestRunner runner;
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
   const int kAllocationSize = 256 * 1024 * 1024;
 
   wsprintf(command, L"AllocateCmd %d", kAllocationSize);
-  runner.GetPolicy()->SetJobMemoryLimit(kAllocationSize);
+  runner.GetPolicy()->GetConfig()->SetJobMemoryLimit(kAllocationSize);
   EXPECT_EQ(SBOX_FATAL_MEMORY_EXCEEDED, runner.RunTest(command));
 }
 
 // Tests a large allocation will succeed absent limits.
 TEST(ValidationSuite, TestMemoryNoLimit) {
   TestRunner runner;
-  wchar_t command[1024] = {0};
+  wchar_t command[1024] = {};
   const int kAllocationSize = 256 * 1024 * 1024;
 
   wsprintf(command, L"AllocateCmd %d", kAllocationSize);

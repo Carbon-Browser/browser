@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // Tests for the QueryTracker.
 
@@ -62,8 +67,8 @@ TEST_F(QuerySyncManagerTest, Basic) {
   for (size_t ii = 0; ii < std::size(infos); ++ii) {
     EXPECT_TRUE(sync_manager_->Alloc(&infos[ii]));
     ASSERT_TRUE(infos[ii].sync != nullptr);
-    EXPECT_EQ(0, infos[ii].sync->process_count);
-    EXPECT_EQ(0u, infos[ii].sync->result);
+    EXPECT_EQ(0, base::subtle::Atomic32{infos[ii].sync->process_count});
+    EXPECT_EQ(0u, uint64_t{infos[ii].sync->result});
     EXPECT_EQ(0, infos[ii].submit_count);
   }
 
@@ -453,5 +458,3 @@ TEST_F(QueryTrackerTest, ManyQueries) {
 
 }  // namespace gles2
 }  // namespace gpu
-
-

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@
 // Access API. Shows different icons for read access to directories and write
 // access to files or directories.
 class FileSystemAccessIconView : public PageActionIconView {
+  METADATA_HEADER(FileSystemAccessIconView, PageActionIconView)
+
  public:
-  METADATA_HEADER(FileSystemAccessIconView);
   FileSystemAccessIconView(
       IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
       PageActionIconView::Delegate* page_action_icon_delegate);
@@ -23,7 +24,6 @@ class FileSystemAccessIconView : public PageActionIconView {
   // PageActionIconView:
   views::BubbleDialogDelegate* GetBubble() const override;
   void UpdateImpl() override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
   void OnExecuting(ExecuteSource execute_source) override;
   const gfx::VectorIcon& GetVectorIcon() const override;
 

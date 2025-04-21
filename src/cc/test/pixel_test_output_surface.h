@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,11 +26,13 @@ class PixelTestOutputSurface : public viz::OutputSurface {
   void DiscardBackbuffer() override;
   void Reshape(const ReshapeParams& params) override;
   void SwapBuffers(viz::OutputSurfaceFrame frame) override;
-  bool IsDisplayedAsOverlayPlane() const override;
   void SetUpdateVSyncParametersCallback(
       viz::UpdateVSyncParametersCallback callback) override;
   void SetDisplayTransformHint(gfx::OverlayTransform transform) override {}
   gfx::OverlayTransform GetDisplayTransform() override;
+  void ReadbackForTesting(
+      base::OnceCallback<void(std::unique_ptr<viz::CopyOutputResult>)> callback)
+      override;
 
  private:
   void SwapBuffersCallback();

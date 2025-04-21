@@ -1,16 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/run_loop.h"
@@ -19,7 +24,6 @@
 #include "base/test/test_file_util.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/download/public/common/download_path_reservation_tracker.h"
 #include "components/download/public/common/mock_download_item.h"
 #include "net/base/filename_util.h"
@@ -124,19 +128,16 @@ DownloadPathReservationTrackerTest::CreateDownloadItem(int32_t id) {
       .WillRepeatedly(Return(DownloadItem::IN_PROGRESS));
   EXPECT_CALL(*item, GetURL()).WillRepeatedly(ReturnRefOfCopy(GURL()));
 
-  base::Time::Exploded exploded_reference_time;
-  exploded_reference_time.year = 2019;
-  exploded_reference_time.month = 1;
-  exploded_reference_time.day_of_month = 23;
-  exploded_reference_time.day_of_week = 3;
-  exploded_reference_time.hour = 16;
-  exploded_reference_time.minute = 35;
-  exploded_reference_time.second = 30;
-  exploded_reference_time.millisecond = 20;
-
+  static constexpr base::Time::Exploded kReferenceTime = {.year = 2019,
+                                                          .month = 1,
+                                                          .day_of_week = 3,
+                                                          .day_of_month = 23,
+                                                          .hour = 16,
+                                                          .minute = 35,
+                                                          .second = 30,
+                                                          .millisecond = 20};
   base::Time test_time;
-  EXPECT_TRUE(
-      base::Time::FromLocalExploded(exploded_reference_time, &test_time));
+  EXPECT_TRUE(base::Time::FromLocalExploded(kReferenceTime, &test_time));
 
   EXPECT_CALL(*item, GetStartTime()).WillRepeatedly(Return(test_time));
   return item;
@@ -215,7 +216,7 @@ void DownloadPathReservationTrackerTest::CreateReservation(
   if (result != PathValidationResult::PATH_NOT_WRITABLE)
     EXPECT_TRUE(IsPathInUse(path));
   EXPECT_EQ(expected_result, result);
-  EXPECT_EQ(expected_reserved_path.value(), reserved_path.value());
+  EXPECT_EQ(expected_reserved_path, reserved_path);
 }
 
 }  // namespace
@@ -288,17 +289,15 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictingFiles) {
 #endif  // BUILDFLAG(IS_ANDROID)
   if (!use_download_collection) {
     // Create a file at |path|, and a .crdownload file at |path1|.
-    ASSERT_EQ(0, base::WriteFile(path, "", 0));
-    ASSERT_EQ(
-        0, base::WriteFile(
-               base::FilePath(path1.value() + FILE_PATH_LITERAL(".crdownload")),
-               "", 0));
+    ASSERT_TRUE(base::WriteFile(path, ""));
+    ASSERT_TRUE(base::WriteFile(
+        base::FilePath(path1.value() + FILE_PATH_LITERAL(".crdownload")), ""));
   }
 
   ASSERT_TRUE(IsPathInUse(path));
 
   CreateReservation(item.get(), path, DownloadPathReservationTracker::UNIQUIFY,
-                    PathValidationResult::SUCCESS, path1);
+                    PathValidationResult::SUCCESS_RESOLVED_CONFLICT, path1);
 
   SetDownloadItemState(item.get(), DownloadItem::COMPLETE);
   item.reset();
@@ -322,7 +321,7 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictingFiles_Overwrite) {
 #endif  // BUILDFLAG(IS_ANDROID)
   if (!use_download_collection) {
     // Create a file at |path|.
-    ASSERT_EQ(0, base::WriteFile(path, "", 0));
+    ASSERT_TRUE(base::WriteFile(path, ""));
   }
   ASSERT_TRUE(IsPathInUse(path));
 
@@ -348,7 +347,7 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictWithSource) {
   }
 #endif  // BUILDFLAG(IS_ANDROID)
   if (!use_download_collection) {
-    ASSERT_EQ(0, base::WriteFile(path, "", 0));
+    ASSERT_TRUE(base::WriteFile(path, ""));
   }
   ASSERT_TRUE(IsPathInUse(path));
   EXPECT_CALL(*item, GetURL())
@@ -379,9 +378,9 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictingReservations) {
     // Requesting a reservation for the same path with uniquification results in
     // a uniquified path.
     std::unique_ptr<MockDownloadItem> item2 = CreateDownloadItem(2);
-    CreateReservation(item2.get(), path,
-                      DownloadPathReservationTracker::UNIQUIFY,
-                      PathValidationResult::SUCCESS, uniquified_path);
+    CreateReservation(
+        item2.get(), path, DownloadPathReservationTracker::UNIQUIFY,
+        PathValidationResult::SUCCESS_RESOLVED_CONFLICT, uniquified_path);
     SetDownloadItemState(item2.get(), DownloadItem::COMPLETE);
   }
   RunUntilIdle();
@@ -392,9 +391,9 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictingReservations) {
     // Since the previous download item was removed, requesting a reservation
     // for the same path should result in the same uniquified path.
     std::unique_ptr<MockDownloadItem> item2 = CreateDownloadItem(2);
-    CreateReservation(item2.get(), path,
-                      DownloadPathReservationTracker::UNIQUIFY,
-                      PathValidationResult::SUCCESS, uniquified_path);
+    CreateReservation(
+        item2.get(), path, DownloadPathReservationTracker::UNIQUIFY,
+        PathValidationResult::SUCCESS_RESOLVED_CONFLICT, uniquified_path);
     SetDownloadItemState(item2.get(), DownloadItem::COMPLETE);
   }
   RunUntilIdle();
@@ -451,7 +450,7 @@ TEST_F(DownloadPathReservationTrackerTest, ConflictingCaseReservations) {
 
   CreateReservation(
       item2.get(), path_Foo, DownloadPathReservationTracker::UNIQUIFY,
-      PathValidationResult::SUCCESS,
+      PathValidationResult::SUCCESS_RESOLVED_CONFLICT,
       GetPathInDownloadsDirectory(FILE_PATH_LITERAL("Foo (1).txt")));
 
   SetDownloadItemState(item1.get(), DownloadItem::COMPLETE);
@@ -477,8 +476,11 @@ TEST_F(DownloadPathReservationTrackerTest, UnresolvedConflicts) {
        i++) {
     SCOPED_TRACE(testing::Message() << "i = " << i);
     base::FilePath expected_path;
+    PathValidationResult expected_result =
+        PathValidationResult::SUCCESS_RESOLVED_CONFLICT;
     if (i == 0) {
       expected_path = path;
+      expected_result = PathValidationResult::SUCCESS;
     } else if (i > 0 && i <= DownloadPathReservationTracker::kMaxUniqueFiles) {
       expected_path =
           path.InsertBeforeExtensionASCII(base::StringPrintf(" (%d)", i));
@@ -490,8 +492,8 @@ TEST_F(DownloadPathReservationTrackerTest, UnresolvedConflicts) {
     EXPECT_FALSE(IsPathInUse(expected_path));
 
     CreateReservation(items[i].get(), path,
-                      DownloadPathReservationTracker::UNIQUIFY,
-                      PathValidationResult::SUCCESS, expected_path);
+                      DownloadPathReservationTracker::UNIQUIFY, expected_result,
+                      expected_path);
   }
   // The next reservation for |path| will fail to be unique.
   std::unique_ptr<MockDownloadItem> download_item =
@@ -506,7 +508,7 @@ TEST_F(DownloadPathReservationTrackerTest, UnresolvedConflicts) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314073): Re-enable when UnwriteableDirectory works on
+// TODO(crbug.com/40221275): Re-enable when UnwriteableDirectory works on
 // Fuchsia.
 #define MAYBE_UnwriteableDirectory DISABLED_UnwriteableDirectory
 #else
@@ -622,7 +624,7 @@ TEST_F(DownloadPathReservationTrackerTest, UpdatesToTargetPath) {
 
 // Tests for long name truncation. On other platforms automatic truncation
 // is not performed (yet).
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS)
 
 TEST_F(DownloadPathReservationTrackerTest, BasicTruncation) {
   int real_max_length =
@@ -681,8 +683,8 @@ TEST_F(DownloadPathReservationTrackerTest, TruncationConflict) {
   // "aaa...aaaaaaa.txt" (truncated path) and
   // "aaa...aaa (1).txt" (truncated and first uniquification try) exists.
   // "aaa...aaa (2).txt" should be used.
-  ASSERT_EQ(0, base::WriteFile(path0, "", 0));
-  ASSERT_EQ(0, base::WriteFile(path1, "", 0));
+  ASSERT_TRUE(base::WriteFile(path0, ""));
+  ASSERT_TRUE(base::WriteFile(path1, ""));
 
   base::FilePath reserved_path;
   PathValidationResult result = PathValidationResult::NAME_TOO_LONG;
@@ -692,7 +694,7 @@ TEST_F(DownloadPathReservationTrackerTest, TruncationConflict) {
   CallGetReservedPath(item.get(), path, create_directory, conflict_action,
                       &reserved_path, &result);
   EXPECT_TRUE(IsPathInUse(reserved_path));
-  EXPECT_EQ(PathValidationResult::SUCCESS, result);
+  EXPECT_EQ(PathValidationResult::SUCCESS_RESOLVED_CONFLICT, result);
   EXPECT_EQ(path2, reserved_path);
   SetDownloadItemState(item.get(), DownloadItem::COMPLETE);
 }

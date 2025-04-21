@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.compositor.overlays.strip;
 
 import androidx.test.filters.SmallTest;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,7 +16,6 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.TabUsageTracker;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
@@ -39,12 +37,9 @@ import java.util.concurrent.TimeoutException;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TabUsageTrackerTest {
-    @Mock
-    TabModelSelector mTabModelSelector;
-    @Mock
-    ActivityLifecycleDispatcher mDispatcher;
-    @Mock
-    TabModel mTabModel;
+    @Mock TabModelSelector mTabModelSelector;
+    @Mock ActivityLifecycleDispatcher mDispatcher;
+    @Mock TabModel mTabModel;
 
     private static final int INITIAL_TAB_COUNT = 0;
     private static final String NUMBER_OF_TABS_USED = "Android.ActivityStop.NumberOfTabsUsed";
@@ -67,11 +62,6 @@ public class TabUsageTrackerTest {
         mTabUsageTracker = new TabUsageTracker(mDispatcher, mTabModelSelector);
     }
 
-    @After
-    public void tearDown() {
-        UmaRecorderHolder.resetForTesting();
-    }
-
     @Test
     @SmallTest
     public void testOnStop_RecordsHistogram_NoInitialTabs() {
@@ -83,8 +73,10 @@ public class TabUsageTrackerTest {
         // Act: Create 2 tabs, select 1 tab and call onStop.
         TabModelSelectorTabModelObserver observer =
                 mTabUsageTracker.getTabModelSelectorTabModelObserverForTests();
-        observer.didAddTab(tab1, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND);
-        observer.didAddTab(tab2, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND);
+        observer.didAddTab(
+                tab1, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND, false);
+        observer.didAddTab(
+                tab2, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND, false);
         observer.didSelectTab(tab1, TabLaunchType.FROM_CHROME_UI, 0);
 
         mTabUsageTracker.onStopWithNative();
@@ -104,13 +96,14 @@ public class TabUsageTrackerTest {
         Tab selectedTab = getMockedTab(3);
         // Start with 5 existing tabs and 1 selected tab.
         Mockito.when(mTabModelSelector.getTotalTabCount()).thenReturn(5);
-        Mockito.when(mTabModel.getTabAt(Mockito.anyInt())).thenReturn(selectedTab);
+        Mockito.when(mTabModelSelector.getCurrentTab()).thenReturn(selectedTab);
         mTabUsageTracker.onResumeWithNative();
 
         // Act: Create 1 tab, select 1 tab and call onStop.
         TabModelSelectorTabModelObserver observer =
                 mTabUsageTracker.getTabModelSelectorTabModelObserverForTests();
-        observer.didAddTab(tab1, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND);
+        observer.didAddTab(
+                tab1, TabLaunchType.FROM_CHROME_UI, TabCreationState.LIVE_IN_FOREGROUND, false);
         observer.didSelectTab(tab1, TabLaunchType.FROM_CHROME_UI, 3);
 
         mTabUsageTracker.onStopWithNative();

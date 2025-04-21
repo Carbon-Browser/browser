@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,18 @@
 #define UI_DISPLAY_TYPES_DISPLAY_CONSTANTS_H_
 
 #include <stdint.h>
+
 #include <array>
 
+#include "base/containers/enum_set.h"
+#include "base/containers/flat_map.h"
+#include "ui/display/types/display_types_export.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
 namespace display {
+
+// 1 inch in mm.
+constexpr float kInchInMm = 25.4f;
 
 // Display ID that represents an invalid display. Often used as a default value
 // before display IDs are known.
@@ -25,6 +32,11 @@ constexpr int64_t kUnifiedDisplayId = -10;
 
 // Invalid year of manufacture of the display.
 constexpr int32_t kInvalidYearOfManufacture = -1;
+
+// Used to determine if the two scale factor values are considered the same.
+// TODO(crbug.com/40255259): Remove this once the scale factor precision
+// issue is fixed for ARC.
+constexpr float kDeviceScaleFactorErrorTolerance = 0.01f;
 
 // The minimum HDR headroom for an HDR capable display. On macOS, when a
 // display's brightness is set to maximum, it can report that there is no
@@ -117,12 +129,6 @@ enum PrivacyScreenState {
   kPrivacyScreenStateLast = kNotSupported,
 };
 
-// The requested state for refresh rate throttling.
-enum RefreshRateThrottleState {
-  kRefreshRateThrottleEnabled,
-  kRefreshRateThrottleDisabled,
-};
-
 // Whether a configuration should be seamless or full. Full configuration may
 // result in visible artifacts such as blanking to achieve the specified
 // configuration. Seamless configuration requests will fail if the system cannot
@@ -134,14 +140,29 @@ enum ConfigurationType {
 
 // A flag to allow ui/display and ozone to adjust the behavior of display
 // configurations.
-enum ModesetFlag {
+enum class ModesetFlag {
   // At least one of kTestModeset and kCommitModeset must be set.
-  kTestModeset = 1 << 0,
-  kCommitModeset = 1 << 1,
+  kTestModeset,
+  kCommitModeset,
   // When |kSeamlessModeset| is set, the commit (or test) will succeed only if
   // the submitted configuration can be completed without visual artifacts such
   // as blanking.
-  kSeamlessModeset = 1 << 2,
+  kSeamlessModeset,
+
+  kMinValue = kTestModeset,
+  kMaxValue = kSeamlessModeset,
+};
+
+// A bitmask of flags as defined in display::ModesetFlag.
+using ModesetFlags =
+    base::EnumSet<ModesetFlag, ModesetFlag::kMinValue, ModesetFlag::kMaxValue>;
+
+// Enum of possible states for variable refresh rates pertaining to a display.
+enum class VariableRefreshRateState {
+  kVrrDisabled = 0,
+  kVrrEnabled = 1,
+  kVrrNotCapable = 2,
+  kVrrLast = kVrrNotCapable,
 };
 
 // Defines the float values closest to repeating decimal scale factors.
@@ -185,7 +206,8 @@ constexpr std::array<ZoomListBucket, 8> kZoomListBuckets{{
 // zoom values that includes a zoom level to go to the native resolution of the
 // display. Ensure that the list of DSFs are in sync with the list of default
 // device scale factors in display_change_observer.cc.
-constexpr std::array<ZoomListBucketDsf, 8> kZoomListBucketsForDsf{{
+constexpr std::array<ZoomListBucketDsf, 9> kZoomListBucketsForDsf{{
+    {1.2f, {0.7f, 0.8f, 1.0f / 1.2f, 0.9f, 0.95f, 1.0f, 1.1f, 1.2f, 1.3f}},
     {1.25f, {0.7f, 1.f / 1.25f, 0.85f, 0.9f, 0.95f, 1.f, 1.1f, 1.2f, 1.3f}},
     {1.6f, {1.f / 1.6f, 0.7f, 0.75f, 0.8f, 0.85f, 0.9f, 1.f, 1.15f, 1.3f}},
     {kDsf_1_777,
@@ -287,6 +309,16 @@ constexpr struct Data {
 
     // clang-format on
 };
+
+// A map of DRM formats and modifiers that are supported by the hardware planes
+// of the display.
+// See third_party/libdrm/src/include/drm/drm_fourcc.h for the canonical list of
+// formats and modifiers
+using DrmFormatsAndModifiers = base::flat_map<uint32_t, std::vector<uint64_t>>;
+
+// Converts the display connection type from enum to string.
+DISPLAY_TYPES_EXPORT std::string DisplayConnectionTypeString(
+    DisplayConnectionType type);
 
 }  // namespace display
 

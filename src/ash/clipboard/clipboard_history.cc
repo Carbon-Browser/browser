@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <deque>
 
-#include "ash/clipboard/clipboard_history_metrics.h"
 #include "ash/clipboard/clipboard_history_util.h"
 #include "ash/clipboard/scoped_clipboard_history_pause_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/token.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_buffer.h"
@@ -22,7 +22,7 @@
 
 namespace ash {
 
-using PauseBehavior = ClipboardHistoryUtil::PauseBehavior;
+using PauseBehavior = clipboard_history_util::PauseBehavior;
 
 ClipboardHistory::ClipboardHistory() {
   ui::ClipboardMonitor::GetInstance()->AddObserver(this);
@@ -44,8 +44,13 @@ const std::list<ClipboardHistoryItem>& ClipboardHistory::GetItems() const {
   return history_list_;
 }
 
+std::list<ClipboardHistoryItem>& ClipboardHistory::GetItems() {
+  return history_list_;
+}
+
 void ClipboardHistory::Clear() {
   history_list_ = std::list<ClipboardHistoryItem>();
+  SyncClipboardToClipboardHistory();
   for (auto& observer : observers_)
     observer.OnClipboardHistoryCleared();
 }
@@ -55,8 +60,7 @@ bool ClipboardHistory::IsEmpty() const {
 }
 
 void ClipboardHistory::RemoveItemForId(const base::UnguessableToken& id) {
-  auto iter = std::find_if(history_list_.cbegin(), history_list_.cend(),
-                           [&id](const auto& item) { return item.id() == id; });
+  auto iter = base::ranges::find(history_list_, id, &ClipboardHistoryItem::id);
 
   // It is possible that the item specified by `id` has been removed. For
   // example, `history_list_` has reached its maximum capacity. while the
@@ -74,7 +78,7 @@ void ClipboardHistory::RemoveItemForId(const base::UnguessableToken& id) {
 }
 
 void ClipboardHistory::OnClipboardDataChanged() {
-  if (!ClipboardHistoryUtil::IsEnabledInCurrentMode())
+  if (!clipboard_history_util::IsEnabledInCurrentMode())
     return;
 
   if (!pauses_.empty() &&
@@ -107,7 +111,7 @@ void ClipboardHistory::OnClipboardDataChanged() {
   // address bar in the browser. First a short form of the URL is copied,
   // followed immediately by the long-form URL.
   commit_data_weak_factory_.InvalidateWeakPtrs();
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ClipboardHistory::MaybeCommitData,
                      commit_data_weak_factory_.GetWeakPtr(), *clipboard_data,
@@ -124,7 +128,7 @@ void ClipboardHistory::OnClipboardDataChanged() {
     // debounce multiple operations through the async web clipboard API. See
     // https://crbug.com/1167403.
     clipboard_histogram_weak_factory_.InvalidateWeakPtrs();
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&ClipboardHistory::OnClipboardOperation,
                        clipboard_histogram_weak_factory_.GetWeakPtr(),
@@ -143,7 +147,7 @@ void ClipboardHistory::OnClipboardDataRead() {
   // debounce multiple operations through the async web clipboard API. See
   // https://crbug.com/1167403.
   clipboard_histogram_weak_factory_.InvalidateWeakPtrs();
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ClipboardHistory::OnClipboardOperation,
                      clipboard_histogram_weak_factory_.GetWeakPtr(),
@@ -155,9 +159,9 @@ void ClipboardHistory::OnClipboardOperation(bool copy) {
   for (auto& observer : observers_)
     observer.OnOperationConfirmed(copy);
 
+  using Operation = clipboard_history_util::Operation;
   base::UmaHistogramEnumeration("Ash.ClipboardHistory.Operation",
-                                copy ? ClipboardHistoryOperation::kCopy
-                                     : ClipboardHistoryOperation::kPaste);
+                                copy ? Operation::kCopy : Operation::kPaste);
 
   if (copy) {
     consecutive_copies_++;
@@ -209,22 +213,24 @@ void ClipboardHistory::SyncClipboardToClipboardHistory() {
 
 void ClipboardHistory::MaybeCommitData(ui::ClipboardData data,
                                        bool is_reorder_on_paste) {
-  if (!ClipboardHistoryUtil::IsSupported(data))
+  if (!clipboard_history_util::IsSupported(data))
     return;
 
   auto iter =
-      std::find_if(history_list_.cbegin(), history_list_.cend(),
-                   [&data](const auto& item) { return item.data() == data; });
+      base::ranges::find(history_list_, data, &ClipboardHistoryItem::data);
   bool is_duplicate = iter != history_list_.cend();
   if (is_duplicate) {
-    // If `data` already exists in `history_list_` then move it to the front
-    // instead of creating a new one because creating a new one will result in a
-    // new unique identifier.
+    // If `data` already exists in `history_list_` then move its corresponding
+    // item to the front of the list instead of creating a new item, because
+    // creating a new item will result in a new unique identifier. Replace the
+    // item's underlying clipboard data for consistency with the clipboard's
+    // current state.
+    iter->ReplaceEquivalentData(std::move(data));
     history_list_.splice(history_list_.begin(), history_list_, iter);
-    base::UmaHistogramEnumeration("Ash.ClipboardHistory.ReorderType",
-                                  is_reorder_on_paste
-                                      ? ClipboardHistoryReorderType::kOnPaste
-                                      : ClipboardHistoryReorderType::kOnCopy);
+    using ReorderType = clipboard_history_util::ReorderType;
+    base::UmaHistogramEnumeration(
+        "Ash.ClipboardHistory.ReorderType",
+        is_reorder_on_paste ? ReorderType::kOnPaste : ReorderType::kOnCopy);
   } else {
     DCHECK(!is_reorder_on_paste);
     history_list_.emplace_front(std::move(data));
@@ -233,7 +239,7 @@ void ClipboardHistory::MaybeCommitData(ui::ClipboardData data,
   for (auto& observer : observers_)
     observer.OnClipboardHistoryItemAdded(history_list_.front(), is_duplicate);
 
-  if (history_list_.size() > ClipboardHistoryUtil::kMaxClipboardItemsShared) {
+  if (history_list_.size() > clipboard_history_util::kMaxClipboardItems) {
     auto removed = std::move(history_list_.back());
     history_list_.pop_back();
     for (auto& observer : observers_)
@@ -247,10 +253,7 @@ const base::Token& ClipboardHistory::Pause(PauseBehavior pause_behavior) {
 }
 
 void ClipboardHistory::Resume(const base::Token& pause_id) {
-  auto pause_it = std::find_if(pauses_.begin(), pauses_.end(),
-                               [&pause_id](const auto& pause_info) {
-                                 return pause_info.pause_id == pause_id;
-                               });
+  auto pause_it = base::ranges::find(pauses_, pause_id, &PauseInfo::pause_id);
   DCHECK(pause_it != pauses_.end());
   pauses_.erase(pause_it);
 }

@@ -1,14 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.about_settings;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
 
-/**
- * Bridge providing access to native data about Chrome application and OS.
- */
+/** Bridge providing access to native data about Chrome application and OS. */
 public class AboutSettingsBridge {
     /**
      * @return Chrome application name and version number.
@@ -26,7 +25,10 @@ public class AboutSettingsBridge {
 
     @NativeMethods
     interface Natives {
+        @JniType("std::string")
         String getApplicationVersion();
+
+        @JniType("std::string")
         String getOSVersion();
     }
 }

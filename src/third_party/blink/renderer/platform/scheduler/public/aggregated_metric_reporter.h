@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -80,7 +81,7 @@ class AggregatedMetricReporter {
 
   std::array<ValueType, static_cast<size_t>(TaskClass::kCount)>
       unreported_values_ = {};
-  base::HistogramBase* value_per_type_histogram_;
+  raw_ptr<base::HistogramBase> value_per_type_histogram_;
   AggregatorFuncPtr aggregator_;
 
   THREAD_CHECKER(thread_checker_);

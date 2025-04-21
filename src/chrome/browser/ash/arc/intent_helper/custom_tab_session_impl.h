@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
@@ -59,7 +60,7 @@ class CustomTabSessionImpl : public arc::mojom::CustomTabSession,
 
   // The browser object provides windowing and command controller for the
   // custom tab.
-  Browser* browser_;
+  raw_ptr<Browser> browser_;
 
   // The custom tab object.
   std::unique_ptr<arc::CustomTab> custom_tab_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@ arc::mojom::ClockId EnumTraits<arc::mojom::ClockId, clockid_t>::ToMojom(
       return arc::mojom::ClockId::BOOTTIME_ALARM;
   }
   NOTREACHED();
-  return arc::mojom::ClockId::BOOTTIME_ALARM;
 }
 
 // static
@@ -34,7 +33,6 @@ bool EnumTraits<arc::mojom::ClockId, clockid_t>::FromMojom(
       return true;
   }
   NOTREACHED();
-  return false;
 }
 
 }  // namespace mojo

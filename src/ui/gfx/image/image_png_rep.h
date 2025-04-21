@@ -1,19 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_IMAGE_IMAGE_PNG_REP_H_
 #define UI_GFX_IMAGE_IMAGE_PNG_REP_H_
 
+#include "base/component_export.h"
 #include "base/memory/ref_counted_memory.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 class Size;
 
 // An ImagePNGRep represents a bitmap's png encoded data and the scale factor it
 // was intended for.
-struct GFX_EXPORT ImagePNGRep {
+struct COMPONENT_EXPORT(GFX) ImagePNGRep {
  public:
   ImagePNGRep();
   ImagePNGRep(const scoped_refptr<base::RefCountedMemory>& data,

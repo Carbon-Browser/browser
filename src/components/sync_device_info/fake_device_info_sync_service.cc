@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@ namespace syncer {
 
 FakeDeviceInfoSyncService::FakeDeviceInfoSyncService(
     bool skip_engine_connection)
-    : fake_model_type_controller_delegate_(ModelType::DEVICE_INFO) {
+    : fake_data_type_controller_delegate_(DataType::DEVICE_INFO) {
   if (skip_engine_connection) {
-    fake_model_type_controller_delegate_
+    fake_data_type_controller_delegate_
         .EnableSkipEngineConnectionForActivationResponse();
   }
 }
@@ -26,9 +26,9 @@ FakeDeviceInfoTracker* FakeDeviceInfoSyncService::GetDeviceInfoTracker() {
   return &fake_device_info_tracker_;
 }
 
-base::WeakPtr<ModelTypeControllerDelegate>
+base::WeakPtr<DataTypeControllerDelegate>
 FakeDeviceInfoSyncService::GetControllerDelegate() {
-  return fake_model_type_controller_delegate_.GetWeakPtr();
+  return fake_data_type_controller_delegate_.GetWeakPtr();
 }
 
 void FakeDeviceInfoSyncService::RefreshLocalDeviceInfo() {

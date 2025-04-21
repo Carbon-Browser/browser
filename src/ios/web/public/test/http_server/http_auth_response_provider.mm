@@ -1,17 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/test/http_server/http_auth_response_provider.h"
 
-#include "base/base64.h"
-#include "base/strings/stringprintf.h"
-#include "net/http/http_request_headers.h"
-#include "net/http/http_response_headers.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/base64.h"
+#import "base/strings/stringprintf.h"
+#import "net/http/http_request_headers.h"
+#import "net/http/http_response_headers.h"
 
 namespace web {
 
@@ -44,12 +40,12 @@ void HttpAuthResponseProvider::GetResponseHeadersAndBody(
 
 bool HttpAuthResponseProvider::HeadersHaveValidCredentials(
     const net::HttpRequestHeaders& headers) {
-  std::string header;
-  if (headers.GetHeader(net::HttpRequestHeaders::kAuthorization, &header)) {
+  std::optional<std::string> header =
+      headers.GetHeader(net::HttpRequestHeaders::kAuthorization);
+  if (header) {
     std::string auth =
         base::StringPrintf("%s:%s", username_.c_str(), password_.c_str());
-    std::string encoded_auth;
-    base::Base64Encode(auth, &encoded_auth);
+    std::string encoded_auth = base::Base64Encode(auth);
     return header == base::StringPrintf("Basic %s", encoded_auth.c_str());
   }
   return false;

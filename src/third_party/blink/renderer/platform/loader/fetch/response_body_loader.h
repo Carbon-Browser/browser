@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "third_party/blink/public/mojom/navigation/renderer_eviction_reason.mojom-blink-forward.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/loader/fetch/bytes_consumer.h"
@@ -141,12 +140,12 @@ class PLATFORM_EXPORT ResponseBodyLoader final
   void OnStateChange() override;
   String DebugName() const override { return "ResponseBodyLoader"; }
 
+  const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   Member<Buffer> body_buffer_;
   Member<BytesConsumer> bytes_consumer_;
   Member<DelegatingBytesConsumer> delegating_bytes_consumer_;
   const Member<ResponseBodyLoaderClient> client_;
   WeakMember<BackForwardCacheLoaderHelper> back_forward_cache_loader_helper_;
-  const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   LoaderFreezeMode suspended_state_ = LoaderFreezeMode::kNone;
   bool started_ = false;
   bool aborted_ = false;

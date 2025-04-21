@@ -1,20 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/dom_storage/session_storage_namespace_impl.h"
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
 #include "components/services/storage/dom_storage/async_dom_storage_database.h"
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "components/services/storage/dom_storage/session_storage_data_map.h"
@@ -42,8 +42,8 @@ MATCHER(OKStatus, "Equality matcher for type OK leveldb::Status") {
 
 class MockListener : public SessionStorageDataMap::Listener {
  public:
-  MockListener() {}
-  ~MockListener() override {}
+  MockListener() = default;
+  ~MockListener() override = default;
   MOCK_METHOD2(OnDataMapCreation,
                void(const std::vector<uint8_t>& map_id,
                     SessionStorageDataMap* map));
@@ -56,8 +56,9 @@ class SessionStorageNamespaceImplTest
       public SessionStorageNamespaceImpl::Delegate {
  public:
   SessionStorageNamespaceImplTest()
-      : test_namespace_id1_(base::GenerateGUID()),
-        test_namespace_id2_(base::GenerateGUID()) {}
+      : test_namespace_id1_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
+        test_namespace_id2_(
+            base::Uuid::GenerateRandomV4().AsLowercaseString()) {}
   ~SessionStorageNamespaceImplTest() override = default;
 
   void RunBatch(std::vector<AsyncDomStorageDatabase::BatchDatabaseTask> tasks) {
@@ -72,7 +73,7 @@ class SessionStorageNamespaceImplTest
     // Create a database that already has a namespace saved.
     base::RunLoop loop;
     database_ = AsyncDomStorageDatabase::OpenInMemory(
-        absl::nullopt, "SessionStorageNamespaceImplTest",
+        std::nullopt, "SessionStorageNamespaceImplTest",
         base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}),
         base::BindLambdaForTesting([&](leveldb::Status) { loop.Quit(); }));
     loop.Run();
@@ -227,7 +228,7 @@ TEST_F(SessionStorageNamespaceImplTest, MetadataLoadWithMapOperations) {
       .Times(1)
       .WillOnce(testing::Invoke([&](auto error) { commit_loop.Quit(); }));
   test::PutSync(leveldb_1.get(), StdStringToUint8Vector("key2"),
-                StdStringToUint8Vector("data2"), absl::nullopt, "");
+                StdStringToUint8Vector("data2"), std::nullopt, "");
   commit_loop.Run();
 
   std::vector<blink::mojom::KeyValuePtr> data;
@@ -283,7 +284,7 @@ TEST_F(SessionStorageNamespaceImplTest, CloneBeforeBind) {
               OnDataMapCreation(StdStringToUint8Vector("1"), testing::_))
       .Times(1);
   test::PutSync(leveldb_2.get(), StdStringToUint8Vector("key2"),
-                StdStringToUint8Vector("data2"), absl::nullopt, "");
+                StdStringToUint8Vector("data2"), std::nullopt, "");
   commit_loop.Run();
 
   std::vector<blink::mojom::KeyValuePtr> data;
@@ -348,7 +349,7 @@ TEST_F(SessionStorageNamespaceImplTest, CloneAfterBind) {
       .Times(1)
       .WillOnce(testing::Invoke([&](auto error) { commit_loop.Quit(); }));
   test::PutSync(leveldb_n2_o2.get(), StdStringToUint8Vector("key2"),
-                StdStringToUint8Vector("data2"), absl::nullopt, "");
+                StdStringToUint8Vector("data2"), std::nullopt, "");
   commit_loop.Run();
 
   std::vector<blink::mojom::KeyValuePtr> data;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 
 namespace blink {
@@ -43,13 +44,13 @@ class TextInputController {
   void DoCommand(const std::string& text);
   void ExtendSelectionAndDelete(int before, int after);
   void DeleteSurroundingText(int before, int after);
-  void SetMarkedText(const std::string& text, int start, int length);
-  void SetMarkedTextFromExistingText(int start, int end);
+  void SetMarkedText(const std::string& text, uint32_t start, uint32_t length);
+  void SetMarkedTextFromExistingText(uint32_t start, uint32_t end);
   bool HasMarkedText();
   std::vector<int> MarkedRange();
   std::vector<int> SelectedRange();
-  std::vector<int> FirstRectForCharacterRange(unsigned location,
-                                              unsigned length);
+  std::vector<int> FirstRectForCharacterRange(uint32_t location,
+                                              uint32_t length);
   void SetComposition(const std::string& text,
                       int replacement_range_start,
                       int replacement_range_end);
@@ -60,7 +61,7 @@ class TextInputController {
   // accepting IME. Could return nullptr if no such frame exists.
   blink::WebInputMethodController* GetInputMethodController();
 
-  WebFrameTestProxy* const web_frame_test_proxy_;
+  const raw_ptr<WebFrameTestProxy> web_frame_test_proxy_;
 
   base::WeakPtrFactory<TextInputController> weak_factory_{this};
 };

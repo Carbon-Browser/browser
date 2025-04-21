@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 #define BASE_TEST_LAUNCHER_TEST_RESULT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -83,14 +83,19 @@ struct TestResult {
   // See more in gtest_links.h.
   void AddLink(const std::string& name, const std::string& url);
 
+  // Add tag in the xml output.
+  // See more in gtest_tags.h.
+  void AddTag(const std::string& name, const std::string& value);
+
+  // Add property in the xml output.
+  void AddProperty(const std::string& name, const std::string& value);
+
   // Returns true if the test has completed (i.e. the test binary exited
   // normally, possibly with an exit code indicating failure, but didn't crash
   // or time out in the middle of the test).
   bool completed() const {
-    return status == TEST_SUCCESS ||
-        status == TEST_FAILURE ||
-        status == TEST_FAILURE_ON_EXIT ||
-        status == TEST_EXCESSIVE_OUTPUT;
+    return status == TEST_SUCCESS || status == TEST_FAILURE ||
+           status == TEST_FAILURE_ON_EXIT || status == TEST_EXCESSIVE_OUTPUT;
   }
 
   // Full name of the test (e.g. "A.B").
@@ -100,17 +105,17 @@ struct TestResult {
 
   // Start time of child test process, the field is optional the test could be
   // NOT_RUN.
-  absl::optional<base::Time> timestamp;
+  std::optional<base::Time> timestamp;
 
   // Thread id of the runner that launching the child process, which is also
   // recorded in TestLauncherTracer.
-  absl::optional<base::PlatformThreadId> thread_id;
+  std::optional<base::PlatformThreadId> thread_id;
 
   // The process num of child process launched it's recorded as event name in
   // TestLauncherTracer.
   // It's used instead of process id to distinguish processes that process id
   // might be reused by OS.
-  absl::optional<int> process_num;
+  std::optional<int> process_num;
 
   // Time it took to run the test.
   base::TimeDelta elapsed_time;
@@ -123,6 +128,12 @@ struct TestResult {
 
   // The key is link name.
   std::map<std::string, std::string> links;
+
+  // The key is property name.
+  std::map<std::string, std::string> properties;
+
+  // The key is tag name.
+  std::map<std::string, std::vector<std::string>> tags;
 };
 
 }  // namespace base

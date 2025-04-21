@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/strings/string_util.h"
+#include "base/strings/span_printf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -38,8 +39,12 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -77,25 +82,23 @@ T GetCallbackResult(
 // A pref store that can have its read_error property changed for testing.
 class TestingPrefStoreWithCustomReadError : public TestingPrefStore {
  public:
-  TestingPrefStoreWithCustomReadError()
-      : read_error_(PersistentPrefStore::PREF_READ_ERROR_NO_FILE) {
-    // By default the profile is "new" (NO_FILE means that the profile
-    // wasn't found on disk, so it was created).
-  }
   PrefReadError GetReadError() const override { return read_error_; }
   bool IsInitializationComplete() const override { return true; }
   void set_read_error(PrefReadError read_error) { read_error_ = read_error; }
 
  private:
-  ~TestingPrefStoreWithCustomReadError() override {}
-  PrefReadError read_error_;
+  ~TestingPrefStoreWithCustomReadError() override = default;
+
+  // By default the profile is "new" (NO_FILE means that the profile wasn't
+  // found on disk, so it was created).
+  PrefReadError read_error_ = PersistentPrefStore::PREF_READ_ERROR_NO_FILE;
 };
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #if BUILDFLAG(IS_WIN)
 const base::FilePath::CharType kExtensionFilePath[] =
     FILE_PATH_LITERAL("c:\\foo");
-#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_POSIX)
 const base::FilePath::CharType kExtensionFilePath[] = FILE_PATH_LITERAL("/oo");
 #endif
 
@@ -103,10 +106,10 @@ static scoped_refptr<extensions::Extension> CreateExtension(
     const std::string& name,
     const std::string& id,
     extensions::mojom::ManifestLocation location) {
-  base::DictionaryValue manifest;
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1.0.0.0");
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
+  base::Value::Dict manifest;
+  manifest.SetByDottedPath(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.SetByDottedPath(extensions::manifest_keys::kManifestVersion, 2);
+  manifest.SetByDottedPath(extensions::manifest_keys::kName, name);
   std::string error;
   scoped_refptr<extensions::Extension> extension =
       extensions::Extension::Create(
@@ -134,10 +137,10 @@ class ProfileSigninConfirmationHelperTest : public testing::Test {
         new sync_preferences::TestingPrefServiceSyncable(
             /*managed_prefs=*/new TestingPrefStore(),
             /*supervised_user_prefs=*/new TestingPrefStore(),
-            /*extension_prefs=*/new TestingPrefStore(),
-            /*standalone_browser_prefs=*/new TestingPrefStore(), user_prefs_,
+            /*extension_prefs=*/new TestingPrefStore(), user_prefs_,
             /*recommended_prefs=*/new TestingPrefStore(),
-            new user_prefs::PrefRegistrySyncable(), new PrefNotifierImpl());
+            new user_prefs::PrefRegistrySyncable(),
+            std::make_unique<PrefNotifierImpl>());
     RegisterUserProfilePrefs(pref_service->registry());
     builder.SetPrefService(
         base::WrapUnique<sync_preferences::PrefServiceSyncable>(pref_service));
@@ -163,6 +166,7 @@ class ProfileSigninConfirmationHelperTest : public testing::Test {
   void TearDown() override {
     // TestExtensionSystem uses DeleteSoon, so we need to delete the profile
     // and then run the message queue to clean up.
+    model_ = nullptr;
     profile_.reset();
     base::RunLoop().RunUntilIdle();
   }
@@ -171,12 +175,16 @@ class ProfileSigninConfirmationHelperTest : public testing::Test {
   base::ScopedTempDir profile_dir_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<TestingPrefStoreWithCustomReadError> user_prefs_;
+  scoped_refptr<TestingPrefStoreWithCustomReadError> user_prefs_;
   raw_ptr<BookmarkModel> model_;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  ash::ScopedTestUserManager test_user_manager_;
+  user_manager::ScopedUserManager user_manager_{
+      std::make_unique<user_manager::UserManagerImpl>(
+          std::make_unique<ash::UserManagerDelegateImpl>(),
+          g_browser_process->local_state(),
+          ash::CrosSettings::Get())};
 #endif
 };
 
@@ -238,10 +246,10 @@ TEST_F(ProfileSigninConfirmationHelperTest,
   profile_->SetIsNewProfile(true);
   char buf[18];
   for (int i = 0; i < 10; i++) {
-    base::snprintf(buf, std::size(buf), "http://foo.com/%d", i);
-    history->AddPage(GURL(std::string(buf)), base::Time::Now(), nullptr, 1,
-                     GURL(), history::RedirectList(), ui::PAGE_TRANSITION_LINK,
-                     history::SOURCE_BROWSED, false, false);
+    base::SpanPrintf(buf, "http://foo.com/%d", i);
+    history->AddPage(GURL(std::string(buf)), base::Time::Now(),
+                     /*context_id=*/{}, 1, GURL(), history::RedirectList(),
+                     ui::PAGE_TRANSITION_LINK, history::SOURCE_BROWSED, false);
   }
   EXPECT_TRUE(GetCallbackResult(
       base::BindOnce(&ui::CheckShouldPromptForNewProfile, profile_.get())));
@@ -256,9 +264,9 @@ TEST_F(ProfileSigninConfirmationHelperTest,
 
   // Profile is new but has a typed URL.
   profile_->SetIsNewProfile(true);
-  history->AddPage(GURL("http://example.com"), base::Time::Now(), nullptr, 1,
-                   GURL(), history::RedirectList(), ui::PAGE_TRANSITION_TYPED,
-                   history::SOURCE_BROWSED, false, false);
+  history->AddPage(GURL("http://example.com"), base::Time::Now(),
+                   /*context_id=*/{}, 1, GURL(), history::RedirectList(),
+                   ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED, false);
   EXPECT_TRUE(GetCallbackResult(
       base::BindOnce(&ui::CheckShouldPromptForNewProfile, profile_.get())));
 }

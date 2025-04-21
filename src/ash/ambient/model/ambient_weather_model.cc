@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,7 @@ void AmbientWeatherModel::UpdateWeatherInfo(
   temperature_fahrenheit_ = temperature_fahrenheit;
   show_celsius_ = show_celsius;
 
-  if (!weather_condition_icon.isNull())
-    NotifyWeatherInfoUpdated();
+  NotifyWeatherInfoUpdated();
 }
 
 float AmbientWeatherModel::GetTemperatureInCelsius() const {

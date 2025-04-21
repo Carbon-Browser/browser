@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,14 @@
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
 #include "chrome/browser/metrics/chrome_metrics_services_manager_client.h"
 #include "chrome/browser/metrics/metrics_reporting_state.h"
+#include "chrome/test/base/platform_browser_test.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics_services_manager/metrics_services_manager.h"
 #include "content/public/test/browser_test.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/test/base/android/android_browser_test.h"
-#else
-#include "chrome/test/base/in_process_browser_test.h"
-#endif  // BUILDFLAG(IS_ANDROID)
-
 #if BUILDFLAG(IS_WIN)
-#include "chrome/browser/metrics/testing/metrics_reporting_pref_helper.h"
+#include "base/test/test_reg_util_win.h"
 #endif  // BUILDFLAG(IS_WIN)
 
 namespace {
@@ -39,8 +34,10 @@ bool ChangeMetricsReporting(bool enabled) {
   bool value_after_change;
   base::RunLoop run_loop;
   ChangeMetricsReportingStateWithReply(
-      enabled, base::BindOnce(OnMetricsReportingStateChanged,
-                              &value_after_change, run_loop.QuitClosure()));
+      enabled,
+      base::BindOnce(OnMetricsReportingStateChanged, &value_after_change,
+                     run_loop.QuitClosure()),
+      ChangeMetricsReportingStateCalledFrom::kUiSettings);
   run_loop.Run();
   return value_after_change;
 }
@@ -59,6 +56,17 @@ class SampledOutClientIdSavedBrowserTest : public PlatformBrowserTest {
   ~SampledOutClientIdSavedBrowserTest() override = default;
 
   void SetUp() override {
+#if BUILDFLAG(IS_WIN)
+    // Override HKCU to prevent writing to real keys. On Windows, the metrics
+    // reporting consent is stored in the registry, and it is used to determine
+    // the metrics reporting state when it is unset (e.g. during tests, which
+    // start with fresh user data dirs). Otherwise, this may cause flakiness
+    // since tests will sometimes start with metrics reporting enabled and
+    // sometimes disabled.
+    ASSERT_NO_FATAL_FAILURE(
+        override_manager_.OverrideRegistry(HKEY_CURRENT_USER));
+#endif  // BUILDFLAG(IS_WIN)
+
     // Because metrics reporting is disabled in non-Chrome-branded builds,
     // IsMetricsReportingEnabled() always returns false. Enable it here for
     // test consistency between Chromium and Chrome builds, otherwise
@@ -82,20 +90,6 @@ class SampledOutClientIdSavedBrowserTest : public PlatformBrowserTest {
     PlatformBrowserTest::SetUp();
   }
 
-// TODO(crbug/1334765): Remove this Windows-only hook once other tests that
-// modify the Windows Registry are fixed to not leak into other tests.
-#if BUILDFLAG(IS_WIN)
-  // InProcessBrowserTest overrides:
-  bool SetUpUserDataDirectory() override {
-    // Manually set the metrics reporting pref to false so that we do not use
-    // the default value, which may be true due to the registry being modified
-    // by other tests.
-    base::FilePath local_state_path =
-        metrics::SetUpUserDataDirectoryForTesting(false);
-    return !local_state_path.empty();
-  }
-#endif  // BUILDFLAG(IS_WIN)
-
   metrics::MetricsService* metrics_service() {
     return g_browser_process->GetMetricsServicesManager()->GetMetricsService();
   }
@@ -103,6 +97,10 @@ class SampledOutClientIdSavedBrowserTest : public PlatformBrowserTest {
   PrefService* local_state() { return g_browser_process->local_state(); }
 
  private:
+#if BUILDFLAG(IS_WIN)
+  registry_util::RegistryOverrideManager override_manager_;
+#endif  // BUILDFLAG(IS_WIN)
+
   base::test::ScopedFeatureList feature_list_;
 };
 
@@ -118,7 +116,7 @@ IN_PROC_BROWSER_TEST_F(SampledOutClientIdSavedBrowserTest, ClientIdSaved) {
   ASSERT_TRUE(metrics_service()->GetClientId().empty());
   ASSERT_TRUE(
       local_state()->GetString(metrics::prefs::kMetricsClientID).empty());
-  // TODO(crbug.com/1325166): Re-enable this test
+  // TODO(crbug.com/40225372): Re-enable this test
 
 #if BUILDFLAG(IS_ANDROID)
   // On Android Chrome, since we have not yet consented to metrics reporting,
@@ -128,7 +126,8 @@ IN_PROC_BROWSER_TEST_F(SampledOutClientIdSavedBrowserTest, ClientIdSaved) {
 #endif  // BUILDFLAG(IS_ANDROID)
 
   // Verify that we are considered sampled out.
-  EXPECT_FALSE(ChromeMetricsServicesManagerClient::IsClientInSample());
+  EXPECT_FALSE(
+      ChromeMetricsServicesManagerClient::IsClientInSampleForMetrics());
 
   // Enable metrics reporting, and verify that it was successful.
   ASSERT_TRUE(ChangeMetricsReporting(true));
@@ -136,7 +135,8 @@ IN_PROC_BROWSER_TEST_F(SampledOutClientIdSavedBrowserTest, ClientIdSaved) {
       local_state()->GetBoolean(metrics::prefs::kMetricsReportingEnabled));
 
   // Verify that we are still considered sampled out.
-  EXPECT_FALSE(ChromeMetricsServicesManagerClient::IsClientInSample());
+  EXPECT_FALSE(
+      ChromeMetricsServicesManagerClient::IsClientInSampleForMetrics());
 
   // Verify that we are neither recording nor uploading metrics. This also
   // verifies that we are sampled out according to the metrics code, since

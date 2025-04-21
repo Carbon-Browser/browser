@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,9 @@ using blink::WebVector;
 WTF::Vector<gfx::Size> ParseSizes(const WTF::String& sizes) {
   WebVector<gfx::Size> parsed_sizes = blink::WebIconSizesParser::ParseIconSizes(
       WebString::FromASCII(sizes.Ascii()));
-  WTF::HashSet<std::pair<int, int>, WTF::PairHash<int, int>,
-               WTF::PairHashTraits<WTF::UnsignedWithZeroKeyHashTraits<int>,
-                                   WTF::UnsignedWithZeroKeyHashTraits<int>>>
+  WTF::HashSet<std::pair<int, int>,
+               PairHashTraits<IntWithZeroKeyHashTraits<int>,
+                              IntWithZeroKeyHashTraits<int>>>
       unique_sizes;
 
   WTF::Vector<gfx::Size> results;
@@ -82,7 +82,7 @@ WTF::Vector<Purpose> ParsePurpose(const WTF::String& purpose) {
 }
 
 WTF::String ParseType(const WTF::String& type) {
-  if (type.IsNull() || type.IsEmpty())
+  if (type.IsNull() || type.empty())
     return "";
 
   if (!blink::IsSupportedMimeType(type.Ascii())) {

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 #define BASE_TASK_THREAD_POOL_TEST_UTILS_H_
 
 #include <atomic>
-#include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/post_job.h"
@@ -21,9 +20,9 @@
 #include "base/task/thread_pool/task_tracker.h"
 #include "base/task/thread_pool/thread_group.h"
 #include "base/task/thread_pool/worker_thread_observer.h"
-#include "base/thread_annotations.h"
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace base {
 namespace internal {
@@ -50,7 +49,7 @@ class MockWorkerThreadObserver : public WorkerThreadObserver {
 
  private:
   CheckedLock lock_;
-  std::unique_ptr<ConditionVariable> on_main_exit_cv_ GUARDED_BY(lock_);
+  ConditionVariable on_main_exit_cv_ GUARDED_BY(lock_);
   int allowed_calls_on_main_exit_ GUARDED_BY(lock_) = 0;
 };
 
@@ -86,7 +85,7 @@ class MockPooledTaskRunnerDelegate : public PooledTaskRunnerDelegate {
 class MockJobTask : public base::RefCountedThreadSafe<MockJobTask> {
  public:
   // Gives |worker_task| to requesting workers |num_tasks_to_run| times.
-  MockJobTask(base::RepeatingCallback<void(JobDelegate*)> worker_task,
+  MockJobTask(RepeatingCallback<void(JobDelegate*)> worker_task,
               size_t num_tasks_to_run);
 
   // Gives |worker_task| to a single requesting worker.
@@ -97,9 +96,7 @@ class MockJobTask : public base::RefCountedThreadSafe<MockJobTask> {
 
   // Updates the remaining number of time |worker_task| runs to
   // |num_tasks_to_run|.
-  void SetNumTasksToRun(size_t num_tasks_to_run) {
-    remaining_num_tasks_to_run_ = num_tasks_to_run;
-  }
+  void SetNumTasksToRun(size_t num_tasks_to_run);
 
   size_t GetMaxConcurrency(size_t worker_count) const;
   void Run(JobDelegate* delegate);
@@ -114,17 +111,8 @@ class MockJobTask : public base::RefCountedThreadSafe<MockJobTask> {
 
   ~MockJobTask();
 
-  base::RepeatingCallback<void(JobDelegate*)> worker_task_;
+  absl::variant<OnceClosure, RepeatingCallback<void(JobDelegate*)>> task_;
   std::atomic_size_t remaining_num_tasks_to_run_;
-};
-
-// An enumeration of possible thread pool types. Used to parametrize relevant
-// thread_pool tests.
-enum class GroupType {
-  GENERIC,
-#if HAS_NATIVE_THREAD_POOL()
-  NATIVE,
-#endif
 };
 
 // Creates a Sequence with given |traits| and pushes |task| to it. If a
@@ -133,7 +121,7 @@ enum class GroupType {
 scoped_refptr<Sequence> CreateSequenceWithTask(
     Task task,
     const TaskTraits& traits,
-    scoped_refptr<TaskRunner> task_runner = nullptr,
+    scoped_refptr<SequencedTaskRunner> task_runner = nullptr,
     TaskSourceExecutionMode execution_mode =
         TaskSourceExecutionMode::kParallel);
 

@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/filter/gzip_header.h"
 
@@ -27,9 +32,9 @@ void GZipHeader::Reset() {
   extra_length_ = 0;
 }
 
-GZipHeader::Status GZipHeader::ReadMore(const char* inbuf, int inbuf_len,
+GZipHeader::Status GZipHeader::ReadMore(const char* inbuf,
+                                        size_t inbuf_len,
                                         const char** header_end) {
-  DCHECK_GE(inbuf_len, 0);
   const uint8_t* pos = reinterpret_cast<const uint8_t*>(inbuf);
   const uint8_t* const end = pos + inbuf_len;
 

@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/metrics/variations/google_groups_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/android/hats/hats_service_android.h"
 #include "chrome/browser/ui/hats/hats_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/ui/hats/hats_service_desktop.h"
 
 // static
 HatsService* HatsServiceFactory::GetForProfile(Profile* profile,
@@ -19,24 +21,32 @@ HatsService* HatsServiceFactory::GetForProfile(Profile* profile,
 
 // static
 HatsServiceFactory* HatsServiceFactory::GetInstance() {
-  return base::Singleton<HatsServiceFactory>::get();
+  static base::NoDestructor<HatsServiceFactory> instance;
+  return instance.get();
 }
 
 HatsServiceFactory::HatsServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "HatsService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
+  DependsOn(GoogleGroupsManagerFactory::GetInstance());
 }
 
-KeyedService* HatsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+HatsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-
-  return (profile->IsOffTheRecord() || profile->IsGuestSession() ||
-          profile->IsSystemProfile())
-             ? nullptr
-             : new HatsService(profile);
+#if BUILDFLAG(IS_ANDROID)
+  return std::make_unique<HatsServiceAndroid>(profile);
+#else
+  return std::make_unique<HatsServiceDesktop>(profile);
+#endif
 }
 
 HatsServiceFactory::~HatsServiceFactory() = default;

@@ -19,7 +19,7 @@ To create this simple dialog, you would need to add the following files:
 `login_bubble_dialog_example.h`
 
 ``` cpp
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
 `login_bubble_dialog_example.cc`
 
 ``` cpp
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -212,7 +212,7 @@ LoginBubbleDialogView::LoginBubbleDialogView(
     : BubbleDialogDelegateView(anchor_view, anchor_position) {
   ...
   SetTitle(l10n_util::GetStringUTF16(IDS_LOGIN_DIALOG_TITLE));
-  SetButtonLabel(ui::DIALOG_BUTTON_OK, l10n_util::GetStringUTF16(
+  SetButtonLabel(ui::mojom::DialogButton::kOk, l10n_util::GetStringUTF16(
       IDS_STARTER_DIALOG_OK_BUTTON_LABEL));
   ...
   username_ = AddFormRow(this, l10n_util::GetStringUTF16(
@@ -264,7 +264,7 @@ class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
 
 
 ``` cpp
-#include "base/bind.h"
+#include "base/functional/bind.h"
 ...
 // static
 void LoginBubbleDialogView::Show(View* anchor_view,
@@ -346,7 +346,7 @@ views::Textfield* AddFormRow(LoginBubbleDialogView* bubble,
 void LoginBubbleDialogView::ContentsChanged(
     views::Textfield* sender,
     const std::u16string& new_contents) {
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, !username_->GetText().empty() &&
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, !username_->GetText().empty() &&
                                              !password_->GetText().empty());
   DialogModelChanged();
 }
@@ -357,7 +357,7 @@ LoginBubbleDialogView::LoginBubbleDialogView(
     LoginBubbleDialogController* controller)
     : BubbleDialogDelegateView(anchor_view, anchor_position),
       controller_(controller) {
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, false);
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, false);
   ...
   username_ = AddFormRow(
       this,
@@ -379,7 +379,7 @@ The final code should resemble the following:
 
 
 ```
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -430,7 +430,7 @@ class LoginBubbleDialogView : public BubbleDialogDelegateView,
 
 
 ```
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -439,7 +439,7 @@ class LoginBubbleDialogView : public BubbleDialogDelegateView,
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
@@ -481,7 +481,7 @@ LoginBubbleDialogView::~LoginBubbleDialogView() = default;
 void LoginBubbleDialogView::ContentsChanged(
     Textfield* sender,
     const std::u16string& new_contents) {
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, !username_->GetText().empty() &&
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, !username_->GetText().empty() &&
                                              !password_->GetText().empty());
   DialogModelChanged();
 }
@@ -491,7 +491,7 @@ LoginBubbleDialogView::LoginBubbleDialogView(
     BubbleBorder::Arrow anchor_position,
     OnSubmitCallback accept_callback)
     : BubbleDialogDelegateView(anchor_view, anchor_position) {
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, false);
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, false);
 
   const auto on_submit = [](const LoginBubbleDialogView* bubble_view,
                             OnSubmitCallback accept_callback) {
@@ -504,7 +504,7 @@ LoginBubbleDialogView::LoginBubbleDialogView(
 
   SetTitle(l10n_util::GetStringUTF16(IDS_EXAMPLE_LOGIN_DIALOG_TITLE));
   SetButtonLabel(
-      ui::DIALOG_BUTTON_OK,
+      ui::mojom::DialogButton::kOk,
       l10n_util::GetStringUTF16(IDS_EXAMPLE_LOGIN_DIALOG_OK_BUTTON_LABEL));
 
   const LayoutProvider* provider = LayoutProvider::Get();

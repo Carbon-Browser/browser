@@ -1,13 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/extensions/activity_log/activity_database.h"
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -19,11 +24,11 @@
 #include "chrome/common/chrome_switches.h"
 #include "sql/error_delegate_util.h"
 #include "sql/init_status.h"
+#include "sql/sqlite_result_code_values.h"
 #include "sql/transaction.h"
-#include "third_party/sqlite/sqlite3.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/backup_util.h"
+#include "base/apple/backup_util.h"
 #endif
 
 namespace extensions {
@@ -39,14 +44,15 @@ static const int kSizeThresholdForFlush = 200;
 
 ActivityDatabase::ActivityDatabase(ActivityDatabase::Delegate* delegate)
     : delegate_(delegate),
-      db_({
-          .exclusive_locking = true,
-          .page_size = 4096,
-          .cache_size = 32,
-          // TODO(pwnall): Add a meta table and remove this option.
-          .mmap_alt_status_discouraged = true,
-          .enable_views_discouraged = true,  // Required by mmap_alt_status.
-      }),
+      db_(
+          {
+              .page_size = 4096,
+              .cache_size = 32,
+              // TODO(pwnall): Add a meta table and remove this option.
+              .mmap_alt_status_discouraged = true,
+              .enable_views_discouraged = true,  // Required by mmap_alt_status.
+          },
+          /*tag=*/"Activity"),
       valid_db_(false),
       batch_mode_(true),
       already_closed_(false),
@@ -70,7 +76,6 @@ void ActivityDatabase::Init(const base::FilePath& db_name) {
     return;
   did_init_ = true;
   DCHECK(GetActivityLogTaskRunner()->RunsTasksInCurrentSequence());
-  db_.set_histogram_tag("Activity");
   db_.set_error_callback(base::BindRepeating(
       &ActivityDatabase::DatabaseErrorCallback, base::Unretained(this)));
 
@@ -87,7 +92,7 @@ void ActivityDatabase::Init(const base::FilePath& db_name) {
 
 #if BUILDFLAG(IS_MAC)
   // Exclude the database from backups.
-  base::mac::SetBackupExclusion(db_name);
+  base::apple::SetBackupExclusion(db_name);
 #endif
 
   if (!delegate_->InitDatabase(&db_))
@@ -151,9 +156,8 @@ sql::Database* ActivityDatabase::GetSqlConnection() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (valid_db_) {
     return &db_;
-  } else {
-    return NULL;
   }
+  return nullptr;
 }
 
 void ActivityDatabase::Close() {
@@ -177,7 +181,7 @@ void ActivityDatabase::HardFailureClose() {
   valid_db_ = false;
   timer_.Stop();
   db_.reset_error_callback();
-  db_.RazeAndClose();
+  db_.RazeAndPoison();
   delegate_->OnDatabaseFailure();
   already_closed_ = true;
 }
@@ -194,7 +198,7 @@ void ActivityDatabase::DatabaseErrorCallback(int error, sql::Statement* stmt) {
   if (sql::IsErrorCatastrophic(error)) {
     LOG(ERROR) << "Killing the ActivityDatabase due to catastrophic error.";
     HardFailureClose();
-  } else if (error != SQLITE_BUSY) {
+  } else if (error != static_cast<int>(sql::SqliteResultCode::kBusy)) {
     // We ignore SQLITE_BUSY errors because they are presumably transient.
     LOG(ERROR) << "Closing the ActivityDatabase due to error.";
     SoftFailureClose();
@@ -216,13 +220,13 @@ void ActivityDatabase::SetTimerForTesting(int ms) {
 
 // static
 bool ActivityDatabase::InitializeTable(sql::Database* db,
-                                       const char* table_name,
+                                       base::cstring_view table_name,
                                        const char* const content_fields[],
                                        const char* const field_types[],
                                        const int num_content_fields) {
   if (!db->DoesTableExist(table_name)) {
     std::string table_creator =
-        base::StringPrintf("CREATE TABLE %s (", table_name);
+        base::StringPrintf("CREATE TABLE %s (", table_name.c_str());
     for (int i = 0; i < num_content_fields; i++) {
       table_creator += base::StringPrintf("%s%s %s",
                                           i == 0 ? "" : ", ",
@@ -230,20 +234,20 @@ bool ActivityDatabase::InitializeTable(sql::Database* db,
                                           field_types[i]);
     }
     table_creator += ")";
-    if (!db->Execute(table_creator.c_str()))
-      return false;
-  } else {
-    // In case we ever want to add new fields, this initializes them to be
-    // empty strings.
-    for (int i = 0; i < num_content_fields; i++) {
-      if (!db->DoesColumnExist(table_name, content_fields[i])) {
-        std::string table_updater = base::StringPrintf(
-            "ALTER TABLE %s ADD COLUMN %s %s; ",
-             table_name,
-             content_fields[i],
-             field_types[i]);
-        if (!db->Execute(table_updater.c_str()))
-          return false;
+    return db->Execute(table_creator);
+  }
+
+  // In case we ever want to add new fields, this initializes them to be
+  // empty strings.
+  for (int i = 0; i < num_content_fields; i++) {
+    if (!db->DoesColumnExist(
+            table_name,
+            base::cstring_view(content_fields[i], strlen(content_fields[i])))) {
+      std::string table_updater = base::StringPrintf(
+          "ALTER TABLE %s ADD COLUMN %s %s; ", table_name.c_str(),
+          content_fields[i], field_types[i]);
+      if (!db->Execute(table_updater)) {
+        return false;
       }
     }
   }

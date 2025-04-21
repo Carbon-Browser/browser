@@ -1,14 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_GEOMETRY_MAPPER_TRANSFORM_CACHE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_GEOMETRY_MAPPER_TRANSFORM_CACHE_H_
 
+#include <optional>
+
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
 namespace blink {
@@ -18,13 +22,21 @@ class TransformPaintPropertyNode;
 // A GeometryMapperTransformCache hangs off a TransformPaintPropertyNode.
 // It stores useful intermediate results such as screen matrix for geometry
 // queries.
-class PLATFORM_EXPORT GeometryMapperTransformCache {
-  USING_FAST_MALLOC(GeometryMapperTransformCache);
+class PLATFORM_EXPORT GeometryMapperTransformCache
+    : public GarbageCollected<GeometryMapperTransformCache> {
  public:
   GeometryMapperTransformCache() = default;
   GeometryMapperTransformCache(const GeometryMapperTransformCache&) = delete;
   GeometryMapperTransformCache& operator=(const GeometryMapperTransformCache&) =
       delete;
+
+  void Trace(Visitor* visitor) const {
+    visitor->Trace(root_of_2d_translation_);
+    visitor->Trace(plane_root_transform_);
+    visitor->Trace(nearest_scroll_translation_);
+    visitor->Trace(scroll_translation_state_);
+    visitor->Trace(nearest_directly_composited_ancestor_);
+  }
 
   static void ClearCache();
   bool IsValid() const;
@@ -49,81 +61,102 @@ class PLATFORM_EXPORT GeometryMapperTransformCache {
 
   // These getters must be called after UpdateScreenTransform() when screen
   // transform data is really needed.
-  const TransformationMatrix& to_screen() const {
-    DCHECK(screen_transform_);
+  const gfx::Transform& to_screen() const {
+    DCHECK(screen_transform_updated_);
     return screen_transform_->to_screen;
   }
-  const TransformationMatrix& projection_from_screen() const {
-    DCHECK(screen_transform_);
+  const gfx::Transform& projection_from_screen() const {
+    DCHECK(screen_transform_updated_);
     return screen_transform_->projection_from_screen;
   }
   bool projection_from_screen_is_valid() const {
-#if DCHECK_IS_ON()
-    CheckScreenTransformUpdated();
-#endif
-    return LIKELY(!screen_transform_) ||
-           screen_transform_->projection_from_screen_is_valid;
+    DCHECK(screen_transform_updated_);
+    if (!screen_transform_) [[likely]] {
+      return true;
+    }
+    return screen_transform_->projection_from_screen_is_valid;
   }
-  void ApplyToScreen(TransformationMatrix& m) const {
-    if (UNLIKELY(screen_transform_))
-      m.Multiply(to_screen());
-    else
+  void ApplyToScreen(gfx::Transform& m) const {
+    DCHECK(screen_transform_updated_);
+    if (screen_transform_) [[unlikely]] {
+      m.PreConcat(to_screen());
+    } else {
       ApplyToPlaneRoot(m);
+    }
   }
-  void ApplyProjectionFromScreen(TransformationMatrix& m) const {
-    if (UNLIKELY(screen_transform_))
-      m.Multiply(projection_from_screen());
-    else
+  void ApplyProjectionFromScreen(gfx::Transform& m) const {
+    DCHECK(screen_transform_updated_);
+    if (screen_transform_) [[unlikely]] {
+      m.PreConcat(projection_from_screen());
+    } else {
       ApplyFromPlaneRoot(m);
+    }
   }
   bool has_animation_to_screen() const {
-#if DCHECK_IS_ON()
-    CheckScreenTransformUpdated();
-#endif
-    return UNLIKELY(screen_transform_) ? screen_transform_->has_animation
-                                       : has_animation_to_plane_root();
+    DCHECK(screen_transform_updated_);
+    if (screen_transform_) [[unlikely]] {
+      return screen_transform_->has_animation;
+    }
+    return has_animation_to_plane_root();
   }
 
-  const TransformationMatrix& to_plane_root() const {
+  const gfx::Transform& to_plane_root() const {
     DCHECK(plane_root_transform_);
     return plane_root_transform_->to_plane_root;
   }
-  const TransformationMatrix& from_plane_root() const {
+  const gfx::Transform& from_plane_root() const {
     DCHECK(plane_root_transform_);
     return plane_root_transform_->from_plane_root;
   }
-  void ApplyToPlaneRoot(TransformationMatrix& m) const {
-    if (UNLIKELY(plane_root_transform_)) {
-      m.Multiply(to_plane_root());
+  void ApplyToPlaneRoot(gfx::Transform& m) const {
+    if (plane_root_transform_) [[unlikely]] {
+      m.PreConcat(to_plane_root());
     } else {
       m.Translate(to_2d_translation_root_.x(), to_2d_translation_root_.y());
     }
   }
-  void ApplyFromPlaneRoot(TransformationMatrix& m) const {
-    if (UNLIKELY(plane_root_transform_)) {
-      m.Multiply(from_plane_root());
+  void ApplyFromPlaneRoot(gfx::Transform& m) const {
+    if (plane_root_transform_) [[unlikely]] {
+      m.PreConcat(from_plane_root());
     } else {
       m.Translate(-to_2d_translation_root_.x(), -to_2d_translation_root_.y());
     }
   }
   const TransformPaintPropertyNode* plane_root() const {
-    return UNLIKELY(plane_root_transform_) ? plane_root_transform_->plane_root
-                                           : root_of_2d_translation();
+    if (plane_root_transform_) [[unlikely]] {
+      return plane_root_transform_->plane_root.Get();
+    }
+    return root_of_2d_translation();
   }
   bool has_animation_to_plane_root() const {
-    return UNLIKELY(plane_root_transform_) &&
-           plane_root_transform_->has_animation;
+    if (plane_root_transform_) [[unlikely]] {
+      return plane_root_transform_->has_animation;
+    }
+    return false;
   }
 
-  bool has_fixed() const { return has_fixed_; }
-  bool has_sticky() const { return has_sticky_; }
+  bool has_sticky_or_anchor_position() const {
+    return has_sticky_or_anchor_position_;
+  }
+
+  bool is_backface_hidden() const { return is_backface_hidden_; }
+
+  const TransformPaintPropertyNode& nearest_scroll_translation() const {
+    DCHECK(nearest_scroll_translation_);
+    return *nearest_scroll_translation_;
+  }
+  const TransformPaintPropertyNode& scroll_translation_state() const {
+    DCHECK(scroll_translation_state_);
+    return *scroll_translation_state_;
+  }
+
+  const TransformPaintPropertyNode* nearest_directly_composited_ancestor()
+      const {
+    return nearest_directly_composited_ancestor_;
+  }
 
  private:
   friend class GeometryMapperTransformCacheTest;
-
-#if DCHECK_IS_ON()
-  void CheckScreenTransformUpdated() const;
-#endif
 
   void Update(const TransformPaintPropertyNode&);
 
@@ -135,7 +168,7 @@ class PLATFORM_EXPORT GeometryMapperTransformCache {
   // The parent of the root of consecutive identity or 2d translations from the
   // transform node, or the root of the tree if the whole path from the
   // transform node to the root contains identity or 2d translations only.
-  const TransformPaintPropertyNode* root_of_2d_translation_;
+  Member<const TransformPaintPropertyNode> root_of_2d_translation_;
 
   // The cached values here can be categorized in two logical groups:
   //
@@ -193,26 +226,36 @@ class PLATFORM_EXPORT GeometryMapperTransformCache {
   //     = flatten(parent.to_screen) * local
   //     = flatten(parent.plane_root.to_screen) * parent.to_plane_root * local
   //     = flatten(plane_root.to_screen) * to_plane_root
-  struct PlaneRootTransform {
-    TransformationMatrix to_plane_root;
-    TransformationMatrix from_plane_root;
-    const TransformPaintPropertyNode* plane_root = nullptr;
+  struct PlaneRootTransform : public GarbageCollected<PlaneRootTransform> {
+    gfx::Transform to_plane_root;
+    gfx::Transform from_plane_root;
+    Member<const TransformPaintPropertyNode> plane_root;
     bool has_animation = false;
+
+    void Trace(Visitor* visitor) const { visitor->Trace(plane_root); }
   };
-  std::unique_ptr<PlaneRootTransform> plane_root_transform_;
+  Member<PlaneRootTransform> plane_root_transform_;
 
   struct ScreenTransform {
-    TransformationMatrix to_screen;
-    TransformationMatrix projection_from_screen;
+    gfx::Transform to_screen;
+    gfx::Transform projection_from_screen;
     bool projection_from_screen_is_valid = false;
     bool has_animation = false;
   };
-  std::unique_ptr<ScreenTransform> screen_transform_;
+  std::optional<ScreenTransform> screen_transform_;
 
-  // Whether or not there is a fixed position transform to the root.
-  bool has_fixed_ = false;
-  // Whether or not there is a sticky translation to the root.
-  bool has_sticky_ = false;
+  Member<const TransformPaintPropertyNode> nearest_scroll_translation_;
+  Member<const TransformPaintPropertyNode> scroll_translation_state_;
+  Member<const TransformPaintPropertyNode>
+      nearest_directly_composited_ancestor_;
+
+  // Whether or not there is a sticky or anchor position scroll translation to
+  // the root.
+  bool has_sticky_or_anchor_position_ = false;
+
+  bool is_backface_hidden_ = false;
+
+  bool screen_transform_updated_ = false;
 
   unsigned cache_generation_ = s_global_generation - 1;
 };

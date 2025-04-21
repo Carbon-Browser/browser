@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "chrome/browser/ui/cocoa/browser_window_command_handler.h"
 
+#import "base/apple/foundation_util.h"
 #include "base/check.h"
-#import "base/mac/foundation_util.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -22,18 +22,22 @@
 namespace {
 
 void SetToggleState(bool toggled, id item) {
-  NSMenuItem* menuItem = base::mac::ObjCCast<NSMenuItem>(item);
-  NSButton* buttonItem = base::mac::ObjCCast<NSButton>(item);
+  NSMenuItem* menuItem = base::apple::ObjCCast<NSMenuItem>(item);
+  NSButton* buttonItem = base::apple::ObjCCast<NSButton>(item);
   if (menuItem) {
-    NSInteger old_state = [menuItem state];
-    NSInteger new_state = toggled ? NSOnState : NSOffState;
-    if (old_state != new_state)
+    NSControlStateValue old_state = [menuItem state];
+    NSControlStateValue new_state =
+        toggled ? NSControlStateValueOn : NSControlStateValueOff;
+    if (old_state != new_state) {
       [menuItem setState:new_state];
+    }
   } else if (buttonItem) {
-    NSInteger old_state = [buttonItem state];
-    NSInteger new_state = toggled ? NSOnState : NSOffState;
-    if (old_state != new_state)
+    NSControlStateValue old_state = [buttonItem state];
+    NSControlStateValue new_state =
+        toggled ? NSControlStateValueOn : NSControlStateValueOff;
+    if (old_state != new_state) {
       [buttonItem setState:new_state];
+    }
   }
 }
 
@@ -47,8 +51,9 @@ remote_cocoa::NativeWidgetNSWindowBridge* FindBridgeForSender(
     id sender,
     NSWindow* window) {
   NSWindow* targetWindow = window;
-  if ([sender respondsToSelector:@selector(window)])
+  if ([sender respondsToSelector:@selector(window)]) {
     targetWindow = [sender window];
+  }
   auto* bridge = remote_cocoa::NativeWidgetNSWindowBridge::GetFromNativeWindow(
       targetWindow);
   DCHECK(bridge);
@@ -67,11 +72,6 @@ remote_cocoa::NativeWidgetNSWindowBridge* FindBridgeForSender(
     // selectors must be handled by the default -[NSWindow
     // validateUserInterfaceItem:window:].
     NOTREACHED();
-    // By default, interface items are enabled if the object in the responder
-    // chain that implements the action does not implement
-    // -validateUserInterfaceItem. Since we only care about -commandDispatch,
-    // return YES for all other actions.
-    return YES;
   }
 
   auto* bridge =
@@ -79,21 +79,26 @@ remote_cocoa::NativeWidgetNSWindowBridge* FindBridgeForSender(
   DCHECK(bridge);
 
   remote_cocoa::mojom::ValidateUserInterfaceItemResultPtr result;
-  if (!bridge->host()->ValidateUserInterfaceItem([item tag], &result))
+  if (!bridge->host()->ValidateUserInterfaceItem([item tag], &result)) {
     return NO;
+  }
 
-  if (result->set_toggle_state)
+  if (result->set_toggle_state) {
     SetToggleState(result->new_toggle_state, item);
+  }
 
-  if (NSMenuItem* menuItem = base::mac::ObjCCast<NSMenuItem>(item)) {
-    if (result->disable_if_has_no_key_equivalent)
+  if (NSMenuItem* menuItem = base::apple::ObjCCast<NSMenuItem>(item)) {
+    if (result->disable_if_has_no_key_equivalent) {
       result->enable &= !![[menuItem keyEquivalent] length];
+    }
 
-    if (result->set_hidden_state)
+    if (result->set_hidden_state) {
       [menuItem setHidden:result->new_hidden_state];
+    }
 
-    if (result->new_title)
+    if (result->new_title) {
       [menuItem setTitle:base::SysUTF16ToNSString(*result->new_title)];
+    }
   }
 
   return result->enable;
@@ -106,7 +111,7 @@ remote_cocoa::NativeWidgetNSWindowBridge* FindBridgeForSender(
   FindBridgeForSender(sender, window)
       ->host()
       ->ExecuteCommand(command, WindowOpenDisposition::CURRENT_TAB,
-                       false /* is_before_first_responder */, &was_executed);
+                       /*is_before_first_responder=*/false, &was_executed);
   DCHECK(was_executed);
 }
 
@@ -141,7 +146,7 @@ remote_cocoa::NativeWidgetNSWindowBridge* FindBridgeForSender(
       ->ExecuteCommand(command,
                        ui::WindowOpenDispositionFromNSEventWithFlags(
                            [NSApp currentEvent], modifierFlags),
-                       false /* is_before_first_responder */, &was_executed);
+                       /*is_before_first_responder=*/false, &was_executed);
   DCHECK(was_executed);
 }
 

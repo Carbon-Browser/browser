@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "chrome/browser/extensions/install_observer.h"
 #include "chrome/browser/extensions/install_tracker.h"
 #include "chrome/browser/sync/test/integration/status_change_checker.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "components/sync/model/string_ordinal.h"
+#include "components/webapps/common/web_app_id.h"
 #include "extensions/browser/extension_prefs_observer.h"
 #include "extensions/browser/extension_registry_observer.h"
 
@@ -48,7 +49,8 @@ std::string InstallHostedAppForAllProfiles(int index);
 
 // Installs the web app for the given WebAppInstallInfo and profile. This does
 // not download icons or run OS integration installs.
-web_app::AppId InstallWebApp(Profile* profile, const WebAppInstallInfo& info);
+webapps::AppId InstallWebApp(Profile* profile,
+                             std::unique_ptr<web_app::WebAppInstallInfo> info);
 
 // Uninstalls the app for the given index from |profile|. Assumes that it was
 // previously installed.
@@ -57,9 +59,6 @@ void UninstallApp(Profile* profile, int index);
 // Installs all pending synced apps for |profile|, including waiting for the
 // App Service to settle.
 void InstallAppsPendingForSync(Profile* profile);
-
-// Waits for the App Service state for |profile| to settle.
-void WaitForAppService(Profile* profile);
 
 // Enables the app for the given index on |profile|.
 void EnableApp(Profile* profile, int index);
@@ -112,7 +111,8 @@ void FixNTPOrdinalCollisions(Profile* profile);
 
 // Flushes pending changes and verifies that the profiles have no pending
 // installs or uninstalls afterwards.
-bool AwaitWebAppQuiescence(std::vector<Profile*> profiles);
+bool AwaitWebAppQuiescence(
+    std::vector<raw_ptr<Profile, VectorExperimental>> profiles);
 }  // namespace apps_helper
 
 // An app specific version of StatusChangeChecker which checks the exit
@@ -156,16 +156,14 @@ class AppsStatusChangeChecker : public StatusChangeChecker,
                                bool state) override;
 
   // Implementation of extensions::InstallObserver.
-  void OnAppsReordered(
-      const absl::optional<std::string>& extension_id) override;
+  void OnAppsReordered(content::BrowserContext* context,
+                       const std::optional<std::string>& extension_id) override;
 
  protected:
-  std::vector<Profile*> profiles_;
+  std::vector<raw_ptr<Profile, VectorExperimental>> profiles_;
 
  private:
   void InstallSyncedApps(Profile* profile);
-
-  content::NotificationRegistrar registrar_;
 
   base::ScopedMultiSourceObservation<extensions::InstallTracker,
                                      extensions::InstallObserver>

@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/offline_items_collection/offline_content_aggregator_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile_key.h"
 #include "components/keyed_service/core/simple_dependency_manager.h"
@@ -13,7 +13,8 @@
 // static
 OfflineContentAggregatorFactory*
 OfflineContentAggregatorFactory::GetInstance() {
-  return base::Singleton<OfflineContentAggregatorFactory>::get();
+  static base::NoDestructor<OfflineContentAggregatorFactory> instance;
+  return instance.get();
 }
 
 // static

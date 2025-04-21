@@ -1,35 +1,44 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/examples/checkbox_example.h"
 
-#include <memory>
-
-#include "base/bind.h"
-#include "base/strings/utf_string_conversions.h"
+#include "base/functional/bind.h"
+#include "base/strings/stringprintf.h"
 #include "ui/views/controls/button/checkbox.h"
-#include "ui/views/controls/button/radio_button.h"
 #include "ui/views/examples/examples_window.h"
-#include "ui/views/layout/fill_layout.h"
+#include "ui/views/layout/flex_layout_view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 CheckboxExample::CheckboxExample() : ExampleBase("Checkbox") {}
 
 CheckboxExample::~CheckboxExample() = default;
 
 void CheckboxExample::CreateExampleView(View* container) {
-  container->SetLayoutManager(std::make_unique<FillLayout>());
-  container->AddChildView(
-      views::Builder<Checkbox>()
-          .SetText(u"Checkbox")
-          .SetCallback(base::BindRepeating(
-              [](int* count) { PrintStatus("Pressed! count: %d", ++(*count)); },
-              &count_))
-          .Build());
+  Builder<View>(container)
+      .SetUseDefaultFillLayout(true)
+      .AddChild(
+          Builder<FlexLayoutView>()
+              .SetOrientation(LayoutOrientation::kVertical)
+              .SetMainAxisAlignment(views::LayoutAlignment::kCenter)
+              .AddChildren(Builder<Checkbox>()
+                               .SetText(u"Checkbox")
+                               .SetCallback(base::BindRepeating(
+                                   [](int* count) {
+                                     PrintStatus(base::StringPrintf(
+                                         "Pressed! count: %d", ++(*count)));
+                                   },
+                                   &count_)),
+                           Builder<Checkbox>()
+                               .SetText(u"Disabled Unchecked")
+                               .SetState(Button::STATE_DISABLED),
+                           Builder<Checkbox>()
+                               .SetText(u"Disabled Checked")
+                               .SetChecked(true)
+                               .SetState(Button::STATE_DISABLED)))
+      .BuildChildren();
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

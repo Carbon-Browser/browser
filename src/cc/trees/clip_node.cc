@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,9 @@
 
 namespace cc {
 
-ClipNode::ClipNode()
-    : id(kInvalidPropertyNodeId),
-      parent_id(kInvalidPropertyNodeId),
-      pixel_moving_filter_id(kInvalidPropertyNodeId),
-      transform_id(kInvalidPropertyNodeId) {}
-
+ClipNode::ClipNode() = default;
 ClipNode::ClipNode(const ClipNode& other) = default;
-
 ClipNode& ClipNode::operator=(const ClipNode& other) = default;
-
 ClipNode::~ClipNode() = default;
 
 bool ClipNode::AppliesLocalClip() const {

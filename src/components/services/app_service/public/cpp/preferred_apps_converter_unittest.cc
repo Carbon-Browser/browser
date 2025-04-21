@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/preferred_apps_converter.h"
 
 #include "base/json/json_reader.h"
+#include "base/values.h"
 #include "components/services/app_service/public/cpp/intent_filter_util.h"
 #include "components/services/app_service/public/cpp/intent_test_util.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
@@ -32,39 +33,42 @@ TEST_F(PreferredAppsConverterTest, ConvertSimpleEntry) {
       apps::ConvertPreferredAppsToValue(preferred_apps.GetReference());
 
   auto* converted_preferred_apps =
-      converted_value.FindKey(apps::kPreferredAppsKey);
+      converted_value.GetDict().Find(apps::kPreferredAppsKey);
   // Check that each entry is correct.
-  ASSERT_EQ(1u, converted_preferred_apps->GetListDeprecated().size());
-  auto& entry = converted_preferred_apps->GetListDeprecated()[0];
-  EXPECT_EQ(kAppId1, *entry.FindStringKey(apps::kAppIdKey));
+  ASSERT_EQ(1u, converted_preferred_apps->GetList().size());
+  const base::Value& entry_val = converted_preferred_apps->GetList()[0];
+  const base::Value::Dict& entry = entry_val.GetDict();
+  EXPECT_EQ(kAppId1, *entry.FindString(apps::kAppIdKey));
 
-  auto* converted_intent_filter = entry.FindKey(apps::kIntentFilterKey);
-  ASSERT_EQ(intent_filter->conditions.size(),
-            converted_intent_filter->GetListDeprecated().size());
+  const base::Value::List* converted_intent_filter =
+      entry.FindList(apps::kIntentFilterKey);
+  ASSERT_EQ(intent_filter->conditions.size(), converted_intent_filter->size());
 
   for (size_t i = 0; i < intent_filter->conditions.size(); i++) {
     auto& condition = intent_filter->conditions[i];
-    auto& converted_condition = converted_intent_filter->GetListDeprecated()[i];
+    const base::Value::Dict& converted_condition =
+        (*converted_intent_filter)[i].GetDict();
     auto& condition_values = condition->condition_values;
-    auto converted_condition_values =
-        converted_condition.FindKey(apps::kConditionValuesKey)
-            ->GetListDeprecated();
+    const base::Value::List* converted_condition_values =
+        converted_condition.FindList(apps_util::kConditionValuesKey);
 
     EXPECT_EQ(static_cast<int>(condition->condition_type),
-              converted_condition.FindIntKey(apps::kConditionTypeKey));
-    ASSERT_EQ(1u, converted_condition_values.size());
+              converted_condition.FindInt(apps_util::kConditionTypeKey));
+    ASSERT_EQ(1u, converted_condition_values->size());
     EXPECT_EQ(condition_values[0]->value,
-              *converted_condition_values[0].FindStringKey(apps::kValueKey));
+              *(*converted_condition_values)[0].GetDict().FindString(
+                  apps_util::kValueKey));
     EXPECT_EQ(static_cast<int>(condition_values[0]->match_type),
-              converted_condition_values[0].FindIntKey(apps::kMatchTypeKey));
+              (*converted_condition_values)[0].GetDict().FindInt(
+                  apps_util::kMatchTypeKey));
   }
 
   preferred_apps.Init();
-  EXPECT_EQ(absl::nullopt, preferred_apps.FindPreferredAppForUrl(filter_url));
+  EXPECT_EQ(std::nullopt, preferred_apps.FindPreferredAppForUrl(filter_url));
   preferred_apps.Init(apps::ParseValueToPreferredApps(converted_value));
   EXPECT_EQ(kAppId1, preferred_apps.FindPreferredAppForUrl(filter_url));
   GURL url_wrong_host = GURL("https://www.hahaha.com/");
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             preferred_apps.FindPreferredAppForUrl(url_wrong_host));
 }
 
@@ -84,20 +88,20 @@ TEST_F(PreferredAppsConverterTest, ConvertUpgradedSimpleEntryJson) {
       "   \"intent_filter\": [ {"
       "      \"condition_type\": 3,"
       "      \"condition_values\": [ {"
-      "         \"match_type\": 0,"
+      "         \"match_type\": 1,"
       "         \"value\": \"view\""
       "      } ]"
       "   }, {"
       "      \"condition_type\": 0,"
       "      \"condition_values\": [ {"
-      "         \"match_type\": 0,"
+      "         \"match_type\": 1,"
       "         \"value\": \"https\""
       "      } ]"
       "   }, {"
       "      \"condition_type\": 1,"
       "      \"condition_values\": [ {"
-      "         \"match_type\": 0,"
-      "         \"value\": \"www.google.com\""
+      "         \"match_type\": 1,"
+      "         \"value\": \"www.google.com:443\""
       "      } ]"
       "   }, {"
       "      \"condition_type\": 2,"
@@ -108,10 +112,14 @@ TEST_F(PreferredAppsConverterTest, ConvertUpgradedSimpleEntryJson) {
       "   } ]"
       "} ],"
       "\"version\": 1}";
-  absl::optional<base::Value> expected_output =
+  std::optional<base::Value> expected_output =
       base::JSONReader::Read(expected_output_string);
   ASSERT_TRUE(expected_output);
   EXPECT_EQ(expected_output.value(), converted_value);
+
+  // Make sure this round trips.
+  EXPECT_TRUE(IsEqual(apps::ParseValueToPreferredApps(converted_value),
+                      preferred_apps.GetReference()));
 }
 
 // Test parse simple entry from json string (old format).
@@ -138,13 +146,14 @@ TEST_F(PreferredAppsConverterTest, ParseSimpleEntryJson) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_string);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_string);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_FALSE(apps::IsUpgradedForSharing(test_value.value()));
 
   GURL filter_url = GURL("https://www.google.com/abc");
-  auto intent_filter = apps_util::MakeIntentFilterForUrlScope(filter_url);
+  auto intent_filter = apps_util::MakeIntentFilterForUrlScope(
+      filter_url, /*omit_port_for_testing=*/true);
   intent_filter->conditions.erase(intent_filter->conditions.begin());
   apps::PreferredAppsList preferred_apps;
   preferred_apps.Init();
@@ -174,7 +183,7 @@ TEST_F(PreferredAppsConverterTest, ParseUpgradedSimpleEntryJson) {
       "      \"condition_type\": 1,"
       "      \"condition_values\": [ {"
       "         \"match_type\": 0,"
-      "         \"value\": \"www.google.com\""
+      "         \"value\": \"www.google.com:443\""
       "      } ]"
       "   }, {"
       "      \"condition_type\": 2,"
@@ -185,7 +194,7 @@ TEST_F(PreferredAppsConverterTest, ParseUpgradedSimpleEntryJson) {
       "   } ]"
       "} ],"
       "\"version\": 1}";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_string);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_string);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(apps::IsUpgradedForSharing(test_value.value()));
@@ -199,6 +208,51 @@ TEST_F(PreferredAppsConverterTest, ParseUpgradedSimpleEntryJson) {
   auto& expected_entry = preferred_apps.GetReference();
 
   EXPECT_TRUE(IsEqual(expected_entry, parsed_entry));
+}
+
+// Test parsing an entry from before URL scopes had port numbers.
+TEST_F(PreferredAppsConverterTest, ParseEmptyPortEntryJson) {
+  const char test_string[] =
+      "{\"preferred_apps\": [ {\"app_id\": \"abcdefg\","
+      "   \"intent_filter\": [ {"
+      "      \"condition_type\": 3,"
+      "      \"condition_values\": [ {"
+      "         \"match_type\": 0,"
+      "         \"value\": \"view\""
+      "      } ]"
+      "   }, {"
+      "      \"condition_type\": 0,"
+      "      \"condition_values\": [ {"
+      "         \"match_type\": 0,"
+      "         \"value\": \"https\""
+      "      } ]"
+      "   }, {"
+      "      \"condition_type\": 1,"
+      "      \"condition_values\": [ {"
+      "         \"match_type\": 0,"
+      "         \"value\": \"www.google.com\""
+      "      } ]"
+      "   }, {"
+      "      \"condition_type\": 2,"
+      "      \"condition_values\": [ {"
+      "         \"match_type\": 2,"
+      "         \"value\": \"/abc\""
+      "      } ]"
+      "   } ]"
+      "} ],"
+      "\"version\": 1}";
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_string);
+  ASSERT_TRUE(test_value);
+  auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
+
+  apps::PreferredAppsList preferred_apps_list;
+  preferred_apps_list.Init();
+  preferred_apps_list.AddPreferredApp(
+      kAppId1,
+      apps_util::MakeIntentFilterForUrlScope(GURL("https://www.google.com/abc"),
+                                             /*omit_port_for_testing=*/true));
+
+  EXPECT_TRUE(IsEqual(parsed_entry, preferred_apps_list.GetReference()));
 }
 
 TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidAppId) {
@@ -225,7 +279,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidAppId) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -283,7 +337,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidIntentFilter) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -323,7 +377,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidConditionType) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -381,7 +435,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidValues) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -436,7 +490,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidMatchType) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -494,7 +548,7 @@ TEST_F(PreferredAppsConverterTest, ParseJsonWithInvalidValue) {
       "      } ]"
       "   } ]"
       "} ]";
-  absl::optional<base::Value> test_value = base::JSONReader::Read(test_key);
+  std::optional<base::Value> test_value = base::JSONReader::Read(test_key);
   ASSERT_TRUE(test_value);
   auto parsed_entry = apps::ParseValueToPreferredApps(test_value.value());
   EXPECT_TRUE(parsed_entry.empty());
@@ -547,23 +601,4 @@ TEST_F(PreferredAppsConverterTest, UpgradePreferredApp) {
   apps::UpgradePreferredApps(old_preferred_apps_value);
   EXPECT_TRUE(
       IsEqual(old_preferred_apps_value, new_preferred_apps.GetReference()));
-}
-
-// TODO(crbug.com/1253250): Remove after migrating to non-mojo AppService.
-TEST_F(PreferredAppsConverterTest, ReplacedAppPreferencesMojomConvert) {
-  std::string app_id("abcdefg");
-  GURL filter_url = GURL("https://www.google.com/abc");
-
-  auto intent_filter = apps_util::MakeIntentFilterForUrlScope(filter_url);
-
-  apps::ReplacedAppPreferences replaced_app_preferences;
-  replaced_app_preferences[app_id].push_back(std::move(intent_filter));
-
-  apps::ReplacedAppPreferences new_replaced_app_preferences =
-      apps::ConvertMojomReplacedAppPreferencesToReplacedAppPreferences(
-          apps::ConvertReplacedAppPreferencesToMojomReplacedAppPreferences(
-              replaced_app_preferences));
-  ASSERT_EQ(1u, new_replaced_app_preferences.size());
-  EXPECT_TRUE(apps::IsEqual(replaced_app_preferences[app_id],
-                            new_replaced_app_preferences[app_id]));
 }

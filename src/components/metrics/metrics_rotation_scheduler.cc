@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ MetricsRotationScheduler::MetricsRotationScheduler(
       waiting_for_init_task_complete_(false),
       upload_interval_callback_(upload_interval_callback) {}
 
-MetricsRotationScheduler::~MetricsRotationScheduler() {}
+MetricsRotationScheduler::~MetricsRotationScheduler() = default;
 
 void MetricsRotationScheduler::InitTaskComplete() {
   DCHECK(!init_task_complete_);

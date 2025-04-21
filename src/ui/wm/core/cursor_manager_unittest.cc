@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,10 +48,8 @@ class TestingCursorManager : public wm::NativeCursorManager {
 class CursorManagerTest : public aura::test::AuraTestBase {
  protected:
   CursorManagerTest()
-      : delegate_(new TestingCursorManager),
-        cursor_manager_(base::WrapUnique(delegate_.get())) {}
+      : cursor_manager_(std::make_unique<TestingCursorManager>()) {}
 
-  raw_ptr<TestingCursorManager> delegate_;
   wm::CursorManager cursor_manager_;
 };
 
@@ -358,7 +356,26 @@ TEST_F(CursorManagerTest, TestCursorClientObserver) {
   EXPECT_FALSE(observer_a.is_cursor_visible());
 }
 
-// This test validates that the cursor visiblity state is restored when a
+#if BUILDFLAG(IS_WIN)
+TEST_F(CursorManagerTest, SystemCursorVisibilityTest) {
+  // System cursor visibility uses LockCursor()/UnlockCursor() to implement its
+  // behaviour. Make sure this does not crash when
+  // CommitSystemCursorVisibility(true) is called firstly. See
+  // crbug.com/380703583.
+  EXPECT_TRUE(cursor_manager_.IsCursorVisible());
+  cursor_manager_.HideCursor();
+  cursor_manager_.UpdateSystemCursorVisibilityForTest(true);
+  cursor_manager_.ShowCursor();
+  // If the system cursor is invisible, ShowCursor() should not make the
+  // cursor visible.
+  cursor_manager_.UpdateSystemCursorVisibilityForTest(false);
+  cursor_manager_.ShowCursor();
+  EXPECT_FALSE(cursor_manager_.IsCursorVisible());
+  EXPECT_TRUE(cursor_manager_.IsCursorLocked());
+}
+#endif
+
+// This test validates that the cursor visibility state is restored when a
 // CursorManager instance is destroyed and recreated.
 TEST(CursorManagerCreateDestroyTest, VisibilityTest) {
   // This block ensures that the cursor is hidden when the CursorManager

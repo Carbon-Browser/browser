@@ -1,12 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.unittest;
 
+import org.jni_zero.CalledByNative;
+
 import org.chromium.android_webview.AwContentsClientBridge;
 import org.chromium.android_webview.ClientCertLookupTable;
-import org.chromium.base.annotations.CalledByNative;
 
 class MockAwContentsClientBridge extends AwContentsClientBridge {
 
@@ -18,8 +19,12 @@ class MockAwContentsClientBridge extends AwContentsClientBridge {
     }
 
     @Override
-    protected void selectClientCertificate(final int id, final String[] keyTypes,
-            byte[][] encodedPrincipals, final String host, final int port) {
+    protected void selectClientCertificate(
+            final int id,
+            final String[] keyTypes,
+            byte[][] encodedPrincipals,
+            final String host,
+            final int port) {
         mId = id;
         mKeyTypes = keyTypes;
     }
@@ -41,6 +46,6 @@ class MockAwContentsClientBridge extends AwContentsClientBridge {
 
     @CalledByNative
     private byte[][] createTestCertChain() {
-        return new byte[][]{{1}};
+        return new byte[][] {{1}};
     }
 }

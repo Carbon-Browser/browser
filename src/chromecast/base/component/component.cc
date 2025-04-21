@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <utility>
 
 #include "base/atomicops.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace chromecast {
 
@@ -28,7 +28,7 @@ class DependencyCount : public base::RefCountedThreadSafe<DependencyCount> {
  public:
   explicit DependencyCount(ComponentBase* component)
       : component_(component),
-        task_runner_(base::ThreadTaskRunnerHandle::Get()),
+        task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
         dep_count_(0),
         disabling_(false) {
     DCHECK(component_);
@@ -158,7 +158,7 @@ class DependencyCount : public base::RefCountedThreadSafe<DependencyCount> {
     component_->DependencyCountDisableComplete();
   }
 
-  ComponentBase* component_;
+  raw_ptr<ComponentBase> component_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   AtomicWord dep_count_;
   bool disabling_;
@@ -250,7 +250,7 @@ ScopedReferenceBase::~ScopedReferenceBase() {
 }  // namespace subtle
 
 ComponentBase::ComponentBase()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       state_(kStateDisabled),
       async_call_in_progress_(false),
       pending_dependency_count_(0),

@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """
@@ -10,7 +10,7 @@ be modified or renamed to support side-by-side channel installs.
 
 import os.path
 
-from . import commands, parts
+from signing import commands, parts
 
 _CF_BUNDLE_DISPLAY_NAME = 'CFBundleDisplayName'
 _CF_BUNDLE_EXE = 'CFBundleExecutable'

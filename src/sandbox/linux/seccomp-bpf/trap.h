@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include <map>
 
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "sandbox/linux/bpf_dsl/trap_registry.h"
 #include "sandbox/linux/system_headers/linux_signal.h"
 #include "sandbox/sandbox_export.h"
@@ -32,8 +32,7 @@ class SANDBOX_EXPORT Trap : public bpf_dsl::TrapRegistry {
   Trap(const Trap&) = delete;
   Trap& operator=(const Trap&) = delete;
 
-  uint16_t Add(TrapFnc fnc, const void* aux, bool safe) override;
-
+  uint16_t Add(const Handler& handler) override;
   bool EnableUnsafeTraps() override;
 
   // Registry returns the trap registry used by Trap's SIGSYS handler,
@@ -45,15 +44,7 @@ class SANDBOX_EXPORT Trap : public bpf_dsl::TrapRegistry {
   static bool SandboxDebuggingAllowedByUser();
 
  private:
-  struct TrapKey {
-    TrapKey() : fnc(nullptr), aux(nullptr), safe(false) {}
-    TrapKey(TrapFnc f, const void* a, bool s) : fnc(f), aux(a), safe(s) {}
-    TrapFnc fnc;
-    const void* aux;
-    bool safe;
-    bool operator<(const TrapKey&) const;
-  };
-  typedef std::map<TrapKey, uint16_t> TrapIds;
+  using HandlerToIdMap = std::map<TrapRegistry::Handler, uint16_t>;
 
   // Our constructor is private. A shared global instance is created
   // automatically as needed.
@@ -69,17 +60,23 @@ class SANDBOX_EXPORT Trap : public bpf_dsl::TrapRegistry {
   // dumps.
   void SigSys(int nr, LinuxSigInfo* info, ucontext_t* ctx)
       __attribute__((noinline));
+
   // We have a global singleton that handles all of our SIGSYS traps. This
   // variable must never be deallocated after it has been set up initially, as
   // there is no way to reset in-kernel BPF filters that generate SIGSYS
   // events.
   static Trap* global_trap_;
 
-  TrapIds trap_ids_;            // Maps from TrapKeys to numeric ids
-  raw_ptr<TrapKey> trap_array_;  // Array of TrapKeys indexed by ids
-  size_t trap_array_size_;      // Currently used size of array
-  size_t trap_array_capacity_;  // Currently allocated capacity of array
-  bool has_unsafe_traps_;       // Whether unsafe traps have been enabled
+  HandlerToIdMap trap_ids_;  // Maps from Handlers to numeric ids
+
+  // Array of handlers indexed by ids.
+  //
+  // RAW_PTR_EXCLUSION: An owning pointer, and needs to be safe for signal
+  // handlers.
+  RAW_PTR_EXCLUSION TrapRegistry::Handler* trap_array_ = nullptr;
+  size_t trap_array_size_ = 0;      // Currently used size of array
+  size_t trap_array_capacity_ = 0;  // Currently allocated capacity of array
+  bool has_unsafe_traps_ = false;   // Whether unsafe traps have been enabled
 };
 
 }  // namespace sandbox

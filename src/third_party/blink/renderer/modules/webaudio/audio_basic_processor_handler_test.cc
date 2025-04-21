@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/modules/webaudio/offline_audio_context.h"
 #include "third_party/blink/renderer/platform/audio/audio_processor.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -63,6 +64,7 @@ class MockProcessorNode final : public AudioNode {
 };
 
 TEST(AudioBasicProcessorHandlerTest, ProcessorFinalization) {
+  test::TaskEnvironment task_environment;
   auto page = std::make_unique<DummyPageHolder>();
   OfflineAudioContext* context = OfflineAudioContext::Create(
       page->GetFrame().DomWindow(), 2, 1, 48000, ASSERT_NO_EXCEPTION);
@@ -71,7 +73,7 @@ TEST(AudioBasicProcessorHandlerTest, ProcessorFinalization) {
       static_cast<AudioBasicProcessorHandler&>(node->Handler());
   EXPECT_TRUE(handler.Processor());
   EXPECT_TRUE(handler.Processor()->IsInitialized());
-  BaseAudioContext::GraphAutoLocker locker(context);
+  DeferredTaskHandler::GraphAutoLocker locker(context);
   handler.Dispose();
   // The AudioProcessor should live after dispose() and should not be
   // finalized because an audio thread is using it.

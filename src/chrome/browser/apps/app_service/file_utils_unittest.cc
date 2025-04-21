@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -53,8 +54,8 @@ class FileUtilsTest : public ::testing::Test {
     ASSERT_TRUE(
         storage::ExternalMountPoints::GetSystemInstance()->RevokeFileSystem(
             mount_name_));
-    profile_manager_->DeleteAllTestingProfiles();
     profile_ = nullptr;
+    profile_manager_->DeleteAllTestingProfiles();
     profile_manager_.reset();
   }
 
@@ -71,7 +72,7 @@ class FileUtilsTest : public ::testing::Test {
   // system type.
   storage::FileSystemURL ToTestFileSystemURL(const std::string& path) {
     return storage::FileSystemURL::CreateForTest(
-        blink::StorageKey(GetFileManagerOrigin()),
+        blink::StorageKey::CreateFirstParty(GetFileManagerOrigin()),
         storage::FileSystemType::kFileSystemTypeTest, base::FilePath(path));
   }
 
@@ -90,7 +91,7 @@ class FileUtilsTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
   base::ScopedTempDir scoped_temp_dir_;
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile> profile_ = nullptr;
 };
 
 TEST_F(FileUtilsTest, GetFileSystemURL) {
@@ -122,7 +123,7 @@ TEST_F(FileUtilsTest, GetFileSystemUrls) {
   url_list = GetFileSystemUrls(GetProfile(), fp_list);
   // Given a list of absolute file paths, return a list of filesystem:// URLs
   // that use the kFileSystemTypeExternal type with Files Manager's origin.
-  // TODO(crbug/1203961): The use of Files Manager origin in these URLs is
+  // TODO(crbug.com/40763788): The use of Files Manager origin in these URLs is
   // probably incorrect and should be revisited.
   EXPECT_THAT(
       url_list,

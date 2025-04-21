@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,8 @@ class FlatlandSysmemNativePixmap : public gfx::NativePixmap {
  public:
   FlatlandSysmemNativePixmap(
       scoped_refptr<FlatlandSysmemBufferCollection> collection,
-      gfx::NativePixmapHandle handle);
+      gfx::NativePixmapHandle handle,
+      gfx::Size size);
 
   FlatlandSysmemNativePixmap(const FlatlandSysmemNativePixmap&) = delete;
   FlatlandSysmemNativePixmap& operator=(const FlatlandSysmemNativePixmap&) =
@@ -36,16 +37,15 @@ class FlatlandSysmemNativePixmap : public gfx::NativePixmap {
                             const gfx::OverlayPlaneData& overlay_plane_data,
                             std::vector<gfx::GpuFence> acquire_fences,
                             std::vector<gfx::GpuFence> release_fences) override;
-  gfx::NativePixmapHandle ExportHandle() override;
+  gfx::NativePixmapHandle ExportHandle() const override;
 
   FlatlandSysmemBufferCollection* sysmem_buffer_collection() const {
     return collection_.get();
   }
   const gfx::NativePixmapHandle& PeekHandle() const;
 
-  // Returns true if overlay planes are supported and ScheduleOverlayPlane() can
-  // be called.
-  bool SupportsOverlayPlane(gfx::AcceleratedWidget widget) const;
+  // Returns true if overlay planes are supported.
+  bool SupportsOverlayPlane() const;
 
  private:
   ~FlatlandSysmemNativePixmap() override;
@@ -53,6 +53,8 @@ class FlatlandSysmemNativePixmap : public gfx::NativePixmap {
   // Keep reference to the collection to make sure it outlives the pixmap.
   scoped_refptr<FlatlandSysmemBufferCollection> collection_;
   gfx::NativePixmapHandle handle_;
+
+  gfx::Size size_;
 };
 
 }  // namespace ui

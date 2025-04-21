@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,16 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/smart_bubble_stats_store.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/smart_bubble_stats_store.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
@@ -80,8 +81,9 @@ PasswordForm HttpPasswordStoreMigrator::MigrateHttpFormToHttps(
   }
   // If |action| is not HTTPS then it's most likely obsolete. Otherwise, it
   // may still be valid.
-  if (!http_form.action.SchemeIs(url::kHttpsScheme))
+  if (!http_form.action.SchemeIs(url::kHttpsScheme)) {
     https_form.action = https_form.url;
+  }
   https_form.form_data = autofill::FormData();
   https_form.generation_upload_status =
       PasswordForm::GenerationUploadStatus::kNoSignalSent;
@@ -95,8 +97,9 @@ void HttpPasswordStoreMigrator::OnGetPasswordStoreResults(
   results_ = std::move(results);
   got_password_store_results_ = true;
 
-  if (got_hsts_query_result_)
+  if (got_hsts_query_result_) {
     ProcessPasswordStoreResults();
+  }
 }
 
 void HttpPasswordStoreMigrator::OnHSTSQueryResult(HSTSResult is_hsts) {
@@ -107,18 +110,21 @@ void HttpPasswordStoreMigrator::OnHSTSQueryResult(HSTSResult is_hsts) {
 
   if (is_hsts == HSTSResult::kYes) {
     SmartBubbleStatsStore* stats_store = store_->GetSmartBubbleStatsStore();
-    if (stats_store)
+    if (stats_store) {
       stats_store->RemoveSiteStats(http_origin_domain_.GetURL());
+    }
   }
 
-  if (got_password_store_results_)
+  if (got_password_store_results_) {
     ProcessPasswordStoreResults();
+  }
 }
 
 void HttpPasswordStoreMigrator::ProcessPasswordStoreResults() {
-  // Android and PSL matches are ignored.
-  base::EraseIf(results_, [](const std::unique_ptr<PasswordForm>& form) {
-    return form->is_affiliation_based_match || form->is_public_suffix_match;
+  // Ignore PSL, affiliated, grouped and other matches.
+  std::erase_if(results_, [](const std::unique_ptr<PasswordForm>& form) {
+    return password_manager_util::GetMatchType(*form) !=
+           password_manager_util::GetLoginMatchType::kExact;
   });
 
   // Add the new credentials to the password store. The HTTP forms are
@@ -128,21 +134,23 @@ void HttpPasswordStoreMigrator::ProcessPasswordStoreResults() {
         HttpPasswordStoreMigrator::MigrateHttpFormToHttps(*form);
     store_->AddLogin(new_form);
 
-    if (mode_ == HttpPasswordMigrationMode::kMove)
-      store_->RemoveLogin(*form);
+    if (mode_ == HttpPasswordMigrationMode::kMove) {
+      store_->RemoveLogin(FROM_HERE, *form);
+    }
     *form = std::move(new_form);
   }
 
   // Only log data if there was at least one migrated password.
   if (!results_.empty()) {
-    base::UmaHistogramCounts100("PasswordManager.HttpPasswordMigrationCount",
+    base::UmaHistogramCounts100("PasswordManager.HttpPasswordMigrationCount2",
                                 results_.size());
-    base::UmaHistogramEnumeration("PasswordManager.HttpPasswordMigrationMode",
+    base::UmaHistogramEnumeration("PasswordManager.HttpPasswordMigrationMode2",
                                   mode_);
   }
 
-  if (consumer_)
+  if (consumer_) {
     consumer_->ProcessMigratedForms(std::move(results_));
+  }
 }
 
 }  // namespace password_manager

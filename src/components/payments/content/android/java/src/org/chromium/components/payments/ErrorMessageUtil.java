@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@ package org.chromium.components.payments;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import java.util.Set;
 
@@ -20,8 +20,8 @@ public class ErrorMessageUtil {
      * @return The web-developer facing error message.
      */
     public static String getNotSupportedErrorMessage(Set<String> methods) {
-        return ErrorMessageUtilJni.get().getNotSupportedErrorMessage(
-                methods.toArray(new String[methods.size()]));
+        return ErrorMessageUtilJni.get()
+                .getNotSupportedErrorMessage(methods.toArray(new String[methods.size()]));
     }
 
     /**

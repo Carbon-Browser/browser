@@ -1,17 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {recordLoadDuration, recordOccurence, recordPerdecage} from '../metrics_utils.js';
+import {NewTabPageProxy} from '../new_tab_page_proxy.js';
 import {WindowProxy} from '../window_proxy.js';
 
-import {Module, ModuleHeight} from './module_descriptor.js';
+import type {ModuleDescriptor} from './module_descriptor.js';
 import {getTemplate} from './module_wrapper.html.js';
 
 /** @fileoverview Element that implements the common module UI. */
+
+export interface ModuleInstance {
+  element: HTMLElement;
+  descriptor: ModuleDescriptor;
+}
 
 export interface ModuleWrapperElement {
   $: {
@@ -38,25 +44,35 @@ export class ModuleWrapperElement extends PolymerElement {
     };
   }
 
-  module: Module;
+  module: ModuleInstance;
 
-  private onModuleChange_(_newValue: Module, oldValue?: Module) {
+  private onModuleChange_(
+      _newValue: ModuleInstance, oldValue?: ModuleInstance) {
     assert(!oldValue);
     this.$.moduleElement.appendChild(this.module.element);
-    if (this.module.descriptor.height !== ModuleHeight.DYNAMIC) {
-      this.style.height = `${this.module.descriptor.height}px`;
-    }
 
     // Log at most one usage per module per NTP page load. This is possible,
     // if a user opens a link in a new tab.
-    this.module.element.addEventListener('usage', () => {
+    this.$.moduleElement.addEventListener('usage', (e: Event) => {
+      e.stopPropagation();
+      NewTabPageProxy.getInstance().handler.onModuleUsed(
+          this.module.descriptor.id);
+
       recordOccurence('NewTabPage.Modules.Usage');
       recordOccurence(`NewTabPage.Modules.Usage.${this.module.descriptor.id}`);
     }, {once: true});
 
+    // Dispatch at most one interaction event for a module's `More Actions` menu
+    // button clicks.
+    this.$.moduleElement.addEventListener('menu-button-click', (e: Event) => {
+      e.stopPropagation();
+      NewTabPageProxy.getInstance().handler.onModuleUsed(
+          this.module.descriptor.id);
+    }, {once: true});
+
     // Log module's id when module's info button is clicked.
     this.module.element.addEventListener('info-button-click', () => {
-      chrome.metricsPrivate.recordSparseHashable(
+      chrome.metricsPrivate.recordSparseValueWithPersistentHash(
           'NewTabPage.Modules.InfoButtonClicked', this.module.descriptor.id);
     }, {once: true});
 
@@ -80,7 +96,10 @@ export class ModuleWrapperElement extends PolymerElement {
       intersectionPerdecage =
           Math.floor(Math.max(intersectionPerdecage, intersectionRatio * 10));
     }, {threshold: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]});
-    window.addEventListener('unload', () => {
+    // Use `pagehide` rather than `unload` because unload is being deprecated.
+    // `pagehide` fires with the same timing and is safe to use since NTP never
+    // enters back/forward-cache.
+    window.addEventListener('pagehide', () => {
       recordPerdecage(
           'NewTabPage.Modules.ImpressionRatio', intersectionPerdecage);
       recordPerdecage(
@@ -99,7 +118,7 @@ export class ModuleWrapperElement extends PolymerElement {
 
     // Track whether the user hovered on the module.
     this.addEventListener('mouseover', () => {
-      chrome.metricsPrivate.recordSparseHashable(
+      chrome.metricsPrivate.recordSparseValueWithPersistentHash(
           'NewTabPage.Modules.Hover', this.module.descriptor.id);
     }, {
       capture: true,  // So that modules cannot swallow event.

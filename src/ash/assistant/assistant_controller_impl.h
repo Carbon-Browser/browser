@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "ash/assistant/assistant_alarm_timer_controller_impl.h"
 #include "ash/assistant/assistant_interaction_controller_impl.h"
 #include "ash/assistant/assistant_notification_controller_impl.h"
-#include "ash/assistant/assistant_screen_context_controller_impl.h"
 #include "ash/assistant/assistant_setup_controller.h"
 #include "ash/assistant/assistant_state_controller.h"
 #include "ash/assistant/assistant_suggestions_controller_impl.h"
@@ -23,17 +22,19 @@
 #include "ash/assistant/assistant_view_delegate_impl.h"
 #include "ash/assistant/assistant_web_ui_controller.h"
 #include "ash/assistant/ui/assistant_view_delegate.h"
-#include "ash/components/audio/cras_audio_handler.h"
 #include "ash/public/cpp/assistant/assistant_interface_binder.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
 #include "ash/public/cpp/image_downloader.h"
 #include "ash/public/cpp/style/color_mode_observer.h"
 #include "ash/public/mojom/assistant_volume_control.mojom.h"
+#include "ash/shell_observer.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "components/prefs/pref_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -55,7 +56,8 @@ class ASH_EXPORT AssistantControllerImpl
       public CrasAudioHandler::AudioObserver,
       public AccessibilityObserver,
       public AssistantInterfaceBinder,
-      public ColorModeObserver {
+      public ColorModeObserver,
+      public ShellObserver {
  public:
   AssistantControllerImpl();
 
@@ -81,7 +83,7 @@ class ASH_EXPORT AssistantControllerImpl
   void OpenAssistantSettings() override;
   void OpenUrl(const GURL& url, bool in_background, bool from_server) override;
   base::WeakPtr<ash::AssistantController> GetWeakPtr() override;
-  void SetAssistant(chromeos::assistant::Assistant* assistant) override;
+  void SetAssistant(assistant::Assistant* assistant) override;
   void StartSpeakerIdEnrollmentFlow() override;
   void SendAssistantFeedback(bool assistant_debug_info_allowed,
                              const std::string& feedback_description,
@@ -108,16 +110,15 @@ class ASH_EXPORT AssistantControllerImpl
   // ColorModeObserver:
   void OnColorModeChanged(bool dark_mode_enabled) override;
 
+  // ShellObserver:
+  void OnShellDestroying() override;
+
   AssistantAlarmTimerControllerImpl* alarm_timer_controller() {
     return &assistant_alarm_timer_controller_;
   }
 
   AssistantNotificationControllerImpl* notification_controller() {
     return &assistant_notification_controller_;
-  }
-
-  AssistantScreenContextControllerImpl* screen_context_controller() {
-    return &assistant_screen_context_controller_;
   }
 
   AssistantSetupController* setup_controller() {
@@ -140,8 +141,7 @@ class ASH_EXPORT AssistantControllerImpl
   void NotifyUrlOpened(const GURL& url, bool from_server);
 
   // AssistantStateObserver:
-  void OnAssistantStatusChanged(
-      chromeos::assistant::AssistantStatus status) override;
+  void OnAssistantStatusChanged(assistant::AssistantStatus status) override;
   void OnLockedFullScreenStateChanged(bool enabled) override;
 
   // AssistantInterfaceBinder implementation:
@@ -158,14 +158,13 @@ class ASH_EXPORT AssistantControllerImpl
 
   // |assistant_| can be nullptr if libassistant creation is not yet completed,
   // i.e. it cannot take a request.
-  chromeos::assistant::Assistant* assistant_ = nullptr;
+  raw_ptr<assistant::Assistant> assistant_ = nullptr;
 
   // Assistant sub-controllers.
   AssistantAlarmTimerControllerImpl assistant_alarm_timer_controller_{this};
   AssistantInteractionControllerImpl assistant_interaction_controller_{this};
   AssistantNotificationControllerImpl assistant_notification_controller_;
   AssistantStateController assistant_state_controller_;
-  AssistantScreenContextControllerImpl assistant_screen_context_controller_;
   AssistantSetupController assistant_setup_controller_{this};
   AssistantSuggestionsControllerImpl assistant_suggestions_controller_;
   AssistantUiControllerImpl assistant_ui_controller_{this};

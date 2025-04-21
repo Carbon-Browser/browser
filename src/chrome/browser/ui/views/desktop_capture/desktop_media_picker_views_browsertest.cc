@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
@@ -17,17 +17,18 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/window/dialog_delegate.h"
 
 class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
  public:
-  DesktopMediaPickerViewsBrowserTest() {}
+  DesktopMediaPickerViewsBrowserTest() = default;
 
   DesktopMediaPickerViewsBrowserTest(
       const DesktopMediaPickerViewsBrowserTest&) = delete;
@@ -44,15 +45,18 @@ class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
     if (override_source_lists_.empty()) {
       sources = CreateDefaultSourceLists();
     } else {
-      for (auto& source : override_source_lists_)
+      for (auto& source : override_source_lists_) {
         sources.push_back(std::move(source));
+      }
     }
 
     std::vector<FakeDesktopMediaList*> source_lists;
-    for (const auto& source : sources)
+    for (const auto& source : sources) {
       source_lists.push_back(static_cast<FakeDesktopMediaList*>(source.get()));
+    }
 
-    DesktopMediaPicker::Params picker_params;
+    DesktopMediaPicker::Params picker_params{
+        DesktopMediaPicker::Params::RequestSource::kUnknown};
     picker_params.web_contents = web_contents;
     picker_params.context = native_window;
     picker_params.app_name = u"app_name";
@@ -61,8 +65,9 @@ class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
     picker_->Show(picker_params, std::move(sources),
                   DesktopMediaPicker::DoneCallback());
 
-    if (after_show_callback_)
+    if (after_show_callback_) {
       std::move(after_show_callback_).Run(source_lists);
+    }
   }
 
  protected:
@@ -93,15 +98,7 @@ class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
 
 // Invokes a dialog that allows the user to select what view of their desktop
 // they would like to share.
-// TODO(crbug.com/1238879): Test is flaky on Win.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_InvokeUi_default DISABLED_InvokeUi_default
-#else
-#define MAYBE_InvokeUi_default InvokeUi_default
-#endif
-
-IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
-                       MAYBE_InvokeUi_default) {
+IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest, InvokeUi_default) {
   after_show_callback_ =
       base::BindOnce([](const std::vector<FakeDesktopMediaList*>& sources) {
         sources[0]->AddSource(0);
@@ -126,14 +123,7 @@ IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
 
 // Show the picker UI with only one source type: TYPE_WEB_CONTENTS, aka the
 // tab picker.
-// crbug.com/1261820: flaky on Win
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_InvokeUi_tabs DISABLED_InvokeUi_tabs
-#else
-#define MAYBE_InvokeUi_tabs InvokeUi_tabs
-#endif
-IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
-                       MAYBE_InvokeUi_tabs) {
+IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest, InvokeUi_tabs) {
   after_show_callback_ =
       base::BindOnce([](const std::vector<FakeDesktopMediaList*>& sources) {
         sources[0]->AddSource(0);
@@ -156,7 +146,7 @@ IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
   EXPECT_EQ(dialog->GetOkButton(),
             dialog->DialogDelegate::GetInitiallyFocusedView());
   EXPECT_FALSE(picker_->GetDialogViewForTesting()->IsDialogButtonEnabled(
-      ui::DIALOG_BUTTON_OK));
+      ui::mojom::DialogButton::kOk));
 }
 
 // Validate that the dialog title changes to match the source type when there's

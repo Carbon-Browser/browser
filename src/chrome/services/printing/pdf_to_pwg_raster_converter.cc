@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,7 +77,6 @@ base::ReadOnlySharedMemoryRegion RenderPdfPagesToPwgRaster(
     switch (bitmap_settings.duplex_mode) {
       case mojom::DuplexMode::kUnknownDuplexMode:
         NOTREACHED();
-        break;
       case mojom::DuplexMode::kSimplex:
         // Already defaults to false/false.
         break;
@@ -134,7 +133,7 @@ base::ReadOnlySharedMemoryRegion RenderPdfPagesToPwgRaster(
 
 PdfToPwgRasterConverter::PdfToPwgRasterConverter() = default;
 
-PdfToPwgRasterConverter::~PdfToPwgRasterConverter() {}
+PdfToPwgRasterConverter::~PdfToPwgRasterConverter() = default;
 
 void PdfToPwgRasterConverter::Convert(
     base::ReadOnlySharedMemoryRegion pdf_region,
@@ -145,6 +144,10 @@ void PdfToPwgRasterConverter::Convert(
   base::ReadOnlySharedMemoryRegion region = RenderPdfPagesToPwgRaster(
       std::move(pdf_region), pdf_settings, pwg_raster_settings, &page_count);
   std::move(callback).Run(std::move(region), page_count);
+}
+
+void PdfToPwgRasterConverter::SetUseSkiaRendererPolicy(bool use_skia) {
+  chrome_pdf::SetUseSkiaRendererPolicy(use_skia);
 }
 
 }  // namespace printing

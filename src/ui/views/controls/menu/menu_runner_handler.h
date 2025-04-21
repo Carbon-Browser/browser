@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "ui/base/ui_base_types.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 
 namespace gfx {
 class Rect;
@@ -28,7 +28,7 @@ class VIEWS_EXPORT MenuRunnerHandler {
                          MenuButtonController* button_controller,
                          const gfx::Rect& bounds,
                          MenuAnchorPosition anchor,
-                         ui::MenuSourceType source_type,
+                         ui::mojom::MenuSourceType source_type,
                          int32_t types) = 0;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video/video_capture_device_client.h"
 #include "media/capture/video/video_capture_device_descriptor.h"
-#include "media/capture/video/video_capture_system.h"
+#include "services/video_effects/public/mojom/video_effects_processor.mojom-forward.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 
 namespace media {
@@ -26,6 +26,7 @@ class FakeVideoCaptureDeviceFactory;
 namespace content {
 
 struct DesktopMediaID;
+class NativeScreenCapturePicker;
 
 // Implementation of BuildableVideoCaptureDevice that creates capture devices
 // in the same process as it is being operated on, which must be the Browser
@@ -35,16 +36,19 @@ class InProcessVideoCaptureDeviceLauncher : public VideoCaptureDeviceLauncher {
  public:
   InProcessVideoCaptureDeviceLauncher(
       scoped_refptr<base::SingleThreadTaskRunner> device_task_runner,
-      media::VideoCaptureSystem* video_capture_system);
+      NativeScreenCapturePicker* picker);
   ~InProcessVideoCaptureDeviceLauncher() override;
 
-  void LaunchDeviceAsync(const std::string& device_id,
-                         blink::mojom::MediaStreamType stream_type,
-                         const media::VideoCaptureParams& params,
-                         base::WeakPtr<media::VideoFrameReceiver> receiver,
-                         base::OnceClosure connection_lost_cb,
-                         Callbacks* callbacks,
-                         base::OnceClosure done_cb) override;
+  void LaunchDeviceAsync(
+      const std::string& device_id,
+      blink::mojom::MediaStreamType stream_type,
+      const media::VideoCaptureParams& params,
+      base::WeakPtr<media::VideoFrameReceiver> receiver,
+      base::OnceClosure connection_lost_cb,
+      Callbacks* callbacks,
+      base::OnceClosure done_cb,
+      mojo::PendingRemote<video_effects::mojom::VideoEffectsProcessor>
+          video_effects_processor) override;
 
   void AbortLaunch() override;
 
@@ -67,12 +71,6 @@ class InProcessVideoCaptureDeviceLauncher : public VideoCaptureDeviceLauncher {
   void OnDeviceStarted(Callbacks* callbacks,
                        base::OnceClosure done_cb,
                        std::unique_ptr<media::VideoCaptureDevice> device);
-
-  void DoStartDeviceCaptureOnDeviceThread(
-      const std::string& device_id,
-      const media::VideoCaptureParams& params,
-      std::unique_ptr<media::VideoCaptureDeviceClient> client,
-      ReceiveDeviceCallback result_callback);
 
   void DoStartTabCaptureOnDeviceThread(
       const std::string& device_id,
@@ -111,9 +109,9 @@ class InProcessVideoCaptureDeviceLauncher : public VideoCaptureDeviceLauncher {
       std::vector<media::VideoCaptureDeviceInfo> devices_info);
 
   const scoped_refptr<base::SingleThreadTaskRunner> device_task_runner_;
-  const raw_ptr<media::VideoCaptureSystem> video_capture_system_;
   State state_;
   std::unique_ptr<media::FakeVideoCaptureDeviceFactory> fake_device_factory_;
+  raw_ptr<NativeScreenCapturePicker> native_screen_capture_picker_;
 };
 
 }  // namespace content

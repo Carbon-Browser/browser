@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,31 +7,33 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/notifications/passphrase_textfield.h"
 #include "chrome/browser/ui/browser_dialogs.h"
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/events/event.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/flex_layout.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/layout/table_layout_view.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
@@ -39,9 +41,9 @@
 namespace {
 
 class ErrorLabelView : public views::Label {
- public:
-  METADATA_HEADER(ErrorLabelView);
+  METADATA_HEADER(ErrorLabelView, views::Label)
 
+ public:
   explicit ErrorLabelView(bool show_error_label)
       : Label(l10n_util::GetStringUTF16(
             IDS_SYSTEM_PROXY_AUTH_DIALOG_ERROR_LABEL)) {
@@ -59,7 +61,7 @@ class ErrorLabelView : public views::Label {
   }
 };
 
-BEGIN_METADATA(ErrorLabelView, views::Label)
+BEGIN_METADATA(ErrorLabelView)
 END_METADATA
 
 }  // namespace
@@ -111,7 +113,7 @@ void RequestSystemProxyCredentialsView::Init() {
   SetBorder(views::CreateEmptyBorder(provider->GetDialogInsetsForContentType(
       views::DialogContentType::kText, views::DialogContentType::kText)));
   SetButtonLabel(
-      ui::DIALOG_BUTTON_OK,
+      ui::mojom::DialogButton::kOk,
       l10n_util::GetStringUTF16(IDS_SYSTEM_PROXY_AUTH_DIALOG_OK_BUTTON));
 
   SetLayoutManager(std::make_unique<views::FlexLayout>())
@@ -159,7 +161,7 @@ void RequestSystemProxyCredentialsView::Init() {
   username_textfield_ =
       auth_container->AddChildView(std::make_unique<views::Textfield>());
   username_textfield_->SetEnabled(true);
-  username_textfield_->SetAssociatedLabel(username_label);
+  username_textfield_->GetViewAccessibility().SetName(*username_label);
 
   const int related_vertical_spacing =
       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
@@ -173,7 +175,7 @@ void RequestSystemProxyCredentialsView::Init() {
   password_textfield_ = auth_container->AddChildView(
       std::make_unique<chromeos::PassphraseTextfield>());
   password_textfield_->SetEnabled(true);
-  password_textfield_->SetAssociatedLabel(password_label);
+  password_textfield_->GetViewAccessibility().SetName(*password_label);
   auth_container->AddPaddingRow(views::TableLayout::kFixedSize,
                                 related_vertical_spacing);
 
@@ -193,7 +195,7 @@ void RequestSystemProxyCredentialsView::Init() {
   error_container->SetFlexForView(error_label_, 1);
 }
 
-BEGIN_METADATA(RequestSystemProxyCredentialsView, views::DialogDelegateView)
+BEGIN_METADATA(RequestSystemProxyCredentialsView)
 ADD_READONLY_PROPERTY_METADATA(std::string, ProxyServer)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, Username)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, Password)

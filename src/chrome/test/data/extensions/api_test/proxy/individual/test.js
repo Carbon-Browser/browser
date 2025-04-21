@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,12 @@ function expect(expected, message) {
 }
 
 var httpProxy = {
-  scheme: "quic",
   host: "1.1.1.1"
 };
 var httpProxyExpected = {
-  scheme: "quic",
+  scheme: "http",
   host: "1.1.1.1",
-  port: 443
+  port: 80
 };
 var httpsProxy = {
   host: "2.2.2.2"

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "net/base/io_buffer.h"
 #include "net/base/load_flags.h"
@@ -88,7 +88,7 @@ void ChromeMetadataSource::Download(const std::string& key,
           policy_exception_justification: "Not implemented."
         })");
   auto resource_request = std::make_unique<network::ResourceRequest>();
-  resource_request->url = resource;
+  resource_request->url = std::move(resource);
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   std::unique_ptr<network::SimpleURLLoader> loader =
       network::SimpleURLLoader::Create(std::move(resource_request),

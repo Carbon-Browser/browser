@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,69 +9,19 @@
 #include <sys/wait.h>
 
 #include "base/mac/os_crash_dumps.h"
-#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chrome {
+class ExceptionProcessorTest : public testing::Test {
+ public:
+  ExceptionProcessorTest() {
+    features_.InitWithFeatures({kForceCrashOnExceptions}, {});
+  }
 
-// Generate an NSException with the given name.
-NSException* ExceptionNamed(NSString* name) {
-  return [NSException exceptionWithName:name
-                                 reason:@"No reason given"
-                               userInfo:nil];
-}
-
-// Helper to keep binning expectations readible.
-size_t BinForExceptionNamed(NSString* name) {
-  return BinForException(ExceptionNamed(name));
-}
-
-TEST(ExceptionProcessorTest, ExceptionBinning) {
-  // These exceptions must be in this order.
-  EXPECT_EQ(BinForExceptionNamed(NSGenericException), 0U);
-  EXPECT_EQ(BinForExceptionNamed(NSRangeException), 1U);
-  EXPECT_EQ(BinForExceptionNamed(NSInvalidArgumentException), 2U);
-  EXPECT_EQ(BinForExceptionNamed(NSMallocException), 3U);
-
-  // Random other exceptions map to |kUnknownNSException|.
-  EXPECT_EQ(BinForExceptionNamed(@"CustomName"), kUnknownNSException);
-  EXPECT_EQ(BinForExceptionNamed(@"Custom Name"), kUnknownNSException);
-  EXPECT_EQ(BinForExceptionNamed(@""), kUnknownNSException);
-  EXPECT_EQ(BinForException(nil), kUnknownNSException);
-}
-
-TEST(ExceptionProcessorTest, RecordException) {
-  base::HistogramTester tester;
-
-  // Record some known exceptions.
-  RecordExceptionWithUma(ExceptionNamed(NSGenericException));
-  RecordExceptionWithUma(ExceptionNamed(NSGenericException));
-  RecordExceptionWithUma(ExceptionNamed(NSGenericException));
-  RecordExceptionWithUma(ExceptionNamed(NSGenericException));
-  RecordExceptionWithUma(ExceptionNamed(NSRangeException));
-  RecordExceptionWithUma(ExceptionNamed(NSInvalidArgumentException));
-  RecordExceptionWithUma(ExceptionNamed(NSInvalidArgumentException));
-  RecordExceptionWithUma(ExceptionNamed(NSInvalidArgumentException));
-  RecordExceptionWithUma(ExceptionNamed(NSMallocException));
-  RecordExceptionWithUma(ExceptionNamed(NSMallocException));
-
-  // Record some unknown exceptions.
-  RecordExceptionWithUma(ExceptionNamed(@"CustomName"));
-  RecordExceptionWithUma(ExceptionNamed(@"Custom Name"));
-  RecordExceptionWithUma(ExceptionNamed(@""));
-  RecordExceptionWithUma(nil);
-
-  // We should have exactly the right number of exceptions.
-  const char kHistogramName[] = "OSX.NSException";
-  tester.ExpectBucketCount(kHistogramName, 0, 4);
-  tester.ExpectBucketCount(kHistogramName, 1, 1);
-  tester.ExpectBucketCount(kHistogramName, 2, 3);
-  tester.ExpectBucketCount(kHistogramName, 3, 2);
-
-  // The unknown exceptions should end up in the overflow bucket.
-  tester.ExpectBucketCount(kHistogramName, kUnknownNSException, 4);
-}
+ protected:
+  base::test::ScopedFeatureList features_;
+};
 
 void RaiseExceptionInRunLoop() {
   CFRunLoopRef run_loop = CFRunLoopGetCurrent();
@@ -87,7 +37,7 @@ void RaiseExceptionInRunLoop() {
 
 void ThrowExceptionInRunLoop() {
   base::mac::DisableOSCrashDumps();
-  chrome::InstallObjcExceptionPreprocessor();
+  InstallObjcExceptionPreprocessor();
 
   RaiseExceptionInRunLoop();
 
@@ -97,8 +47,8 @@ void ThrowExceptionInRunLoop() {
 
 // Tests that when the preprocessor is installed, exceptions thrown from
 // a runloop callout are made fatal, so that the stack trace is useful.
-TEST(ExceptionProcessorTest, ThrowExceptionInRunLoop) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST_F(ExceptionProcessorTest, ThrowExceptionInRunLoop) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowExceptionInRunLoop(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -106,7 +56,7 @@ TEST(ExceptionProcessorTest, ThrowExceptionInRunLoop) {
 
 void ThrowAndCatchExceptionInRunLoop() {
   base::mac::DisableOSCrashDumps();
-  chrome::InstallObjcExceptionPreprocessor();
+  InstallObjcExceptionPreprocessor();
 
   CFRunLoopRef run_loop = CFRunLoopGetCurrent();
   CFRunLoopPerformBlock(run_loop, kCFRunLoopCommonModes, ^{
@@ -127,8 +77,8 @@ void ThrowAndCatchExceptionInRunLoop() {
 }
 
 // Tests that exceptions can still be caught when the preprocessor is enabled.
-TEST(ExceptionProcessorTest, ThrowAndCatchExceptionInRunLoop) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST_F(ExceptionProcessorTest, ThrowAndCatchExceptionInRunLoop) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_EXIT(ThrowAndCatchExceptionInRunLoop(),
               [](int exit_code) -> bool {
                 return WEXITSTATUS(exit_code) == 0;
@@ -138,7 +88,7 @@ TEST(ExceptionProcessorTest, ThrowAndCatchExceptionInRunLoop) {
 
 void ThrowExceptionFromSelector() {
   base::mac::DisableOSCrashDumps();
-  chrome::InstallObjcExceptionPreprocessor();
+  InstallObjcExceptionPreprocessor();
 
   NSException* exception = [NSException exceptionWithName:@"ThrowFromSelector"
                                                    reason:@""
@@ -153,8 +103,8 @@ void ThrowExceptionFromSelector() {
   exit(1);
 }
 
-TEST(ExceptionProcessorTest, ThrowExceptionFromSelector) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST_F(ExceptionProcessorTest, ThrowExceptionFromSelector) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowExceptionFromSelector(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -162,7 +112,7 @@ TEST(ExceptionProcessorTest, ThrowExceptionFromSelector) {
 
 void ThrowInNotificationObserver() {
   base::mac::DisableOSCrashDumps();
-  chrome::InstallObjcExceptionPreprocessor();
+  InstallObjcExceptionPreprocessor();
 
   NSNotification* notification =
       [NSNotification notificationWithName:@"TestExceptionInObserver"
@@ -188,8 +138,8 @@ void ThrowInNotificationObserver() {
   exit(1);
 }
 
-TEST(ExceptionProcessorTest, ThrowInNotificationObserver) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST_F(ExceptionProcessorTest, ThrowInNotificationObserver) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowInNotificationObserver(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -197,7 +147,7 @@ TEST(ExceptionProcessorTest, ThrowInNotificationObserver) {
 
 void ThrowExceptionInRunLoopWithoutProcessor() {
   base::mac::DisableOSCrashDumps();
-  chrome::UninstallObjcExceptionPreprocessor();
+  UninstallObjcExceptionPreprocessor();
 
   @try {
     RaiseExceptionInRunLoop();
@@ -210,14 +160,21 @@ void ThrowExceptionInRunLoopWithoutProcessor() {
   exit(1);
 }
 
+// Under LSAN this dies from leaking the run loop instead of how we expect it to
+// die, so the exit code is wrong.
+#if defined(LEAK_SANITIZER)
+#define MAYBE_ThrowExceptionInRunLoopWithoutProcessor \
+  DISABLED_ThrowExceptionInRunLoopWithoutProcessor
+#else
+#define MAYBE_ThrowExceptionInRunLoopWithoutProcessor \
+  ThrowExceptionInRunLoopWithoutProcessor
+#endif
 // Tests basic exception handling when the preprocessor is disabled.
-TEST(ExceptionProcessorTest, ThrowExceptionInRunLoopWithoutProcessor) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST_F(ExceptionProcessorTest, MAYBE_ThrowExceptionInRunLoopWithoutProcessor) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_EXIT(ThrowExceptionInRunLoopWithoutProcessor(),
               [](int exit_code) -> bool {
                 return WEXITSTATUS(exit_code) == 0;
               },
               ".*TEST PASS.*");
 }
-
-}  // namespace chrome

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ bool TsSectionPmt::ParsePsiSection(BitReader* bit_reader) {
   RCHECK(program_info_length < 1024);
 
   // Read the program info descriptor.
-  // TODO(damienv): check wether any of the descriptors could be useful.
+  // TODO(damienv): check whether any of the descriptors could be useful.
   // Defined in section 2.6 of ISO-13818.
   RCHECK(bit_reader->SkipBits(8 * program_info_length));
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,14 @@
 namespace printing {
 
 // Margins for a page setup.
-class COMPONENT_EXPORT(PRINTING) PageMargins {
+class COMPONENT_EXPORT(PRINTING_SETTINGS) PageMargins {
  public:
   PageMargins();
   PageMargins(int header, int footer, int left, int right, int top, int bottom);
 
-  void Clear();
+  bool operator==(const PageMargins& other) const;
 
-  // Equality operator.
-  bool Equals(const PageMargins& rhs) const;
+  void Clear();
 
   // Vertical space for the overlay from the top of the sheet.
   int header;
@@ -34,7 +33,7 @@ class COMPONENT_EXPORT(PRINTING) PageMargins {
 
 // Settings that define the size and printable areas of a page. Unit is
 // unspecified.
-class COMPONENT_EXPORT(PRINTING) PageSetup {
+class COMPONENT_EXPORT(PRINTING_SETTINGS) PageSetup {
  public:
   PageSetup();
   PageSetup(const gfx::Size& physical_size,
@@ -45,14 +44,13 @@ class COMPONENT_EXPORT(PRINTING) PageSetup {
   PageSetup(const PageSetup& other);
   ~PageSetup();
 
+  bool operator==(const PageSetup& other) const;
+
   // Gets a symmetrical printable area.
   static gfx::Rect GetSymmetricalPrintableArea(const gfx::Size& page_size,
                                                const gfx::Rect& printable_area);
 
   void Clear();
-
-  // Equality operator.
-  bool Equals(const PageSetup& rhs) const;
 
   void Init(const gfx::Size& physical_size,
             const gfx::Rect& printable_area,

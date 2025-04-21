@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright (C) 2012 Google Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,15 +37,8 @@ For example, to run a test http/tests/websocket/binary-type.html which depends
 on WebSocket, you can navigate to:
     http://127.0.0.1:8000/websocket/close-unref-websocket.html
 """
-import sys
-import optparse
 
 from blinkpy.web_tests.servers import cli_wrapper
 from blinkpy.web_tests.servers import pywebsocket
 
-option, args = cli_wrapper.parse_python_server_options()
-cli_wrapper.main(
-    pywebsocket.PyWebSocket,
-    argv=args,
-    description=__doc__,
-    python_executable=option.python_executable)
+cli_wrapper.main(pywebsocket.PyWebSocket, description=__doc__)

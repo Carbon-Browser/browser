@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ onload = async function() {
   let tab = await promise(chrome.tabs.create, {"url": "about:blank"});
   let config = await promise(chrome.test.getConfig);
   let port = config.testServer.port;
-  let getURL = chrome.extension.getURL;
+  let getURL = chrome.runtime.getURL;
 
   let INITIAL_URL = getURL("initial.html");
   let SAME_SITE_URL = getURL("empty.html");

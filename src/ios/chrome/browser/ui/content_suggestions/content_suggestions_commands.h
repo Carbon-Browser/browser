@@ -1,27 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COMMANDS_H_
 #define IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COMMANDS_H_
 
-@class CollectionViewItem;
-@class QuerySuggestionConfig;
-
-// Commands protocol allowing the ContentSuggestions ViewControllers to interact
-// with the coordinator layer, and from there to the rest of the application.
+// Commands related to Content Suggestions.
 @protocol ContentSuggestionsCommands
 
-// Opens the Most Visited associated with this `item` at the `mostVisitedItem`.
-- (void)openMostVisitedItem:(CollectionViewItem*)item
-                    atIndex:(NSInteger)mostVisitedIndex;
-// Handles the actions tapping the "Return to Recent Tab" item that returns the
-// user to the last opened tab.
-- (void)openMostRecentTab;
-// Handles the actions following a tap on the promo.
-- (void)handlePromoTapped;
-// Handles the actions following a tap on a trending query.
-- (void)loadSuggestedQuery:(QuerySuggestionConfig*)config;
+// Show the "See More" Set Up List view, which shows all items in the list.
+// If `expanded` is YES, the view will use the "large" detent by default,
+// otherwise the "medium" detent will be used.
+- (void)showSetUpListSeeMoreMenuExpanded:(BOOL)expanded;
 
 @end
 

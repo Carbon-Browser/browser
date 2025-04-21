@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,12 @@ struct SingleLookupResponse {
   SingleLookupResponse& operator=(SingleLookupResponse&& other);
   ~SingleLookupResponse();
 
+  friend bool operator==(const SingleLookupResponse& lhs,
+                         const SingleLookupResponse& rhs) = default;
+
   std::vector<std::string> encrypted_leak_match_prefixes;
   std::string reencrypted_lookup_hash;
 };
-
-bool operator==(const SingleLookupResponse& lhs,
-                const SingleLookupResponse& rhs);
 
 }  // namespace password_manager
 

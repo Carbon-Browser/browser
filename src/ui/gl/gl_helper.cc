@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "base/check_op.h"
 #include "ui/gl/gl_context.h"
-#include "ui/gl/gl_version_info.h"
 #include "ui/gl/scoped_binders.h"
 
 namespace gl {
@@ -94,11 +93,6 @@ void GLHelper::DrawQuad(GLuint vertex_buffer) {
   ScopedColorMask color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-}
-
-// static
-bool GLHelper::ShouldTestsUseVAOs() {
-  return GLContext::GetCurrent()->GetVersionInfo()->is_desktop_core_profile;
 }
 
 }  // namespace gl

@@ -1,34 +1,34 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "services/network/mdns_responder.h"
 
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <optional>
 #include <queue>
 #include <string>
 #include <utility>
 
-#include "services/network/mdns_responder.h"
-
-#include "base/big_endian.h"
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/sys_byteorder.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "base/uuid.h"
 #include "net/base/address_family.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/dns_response.h"
 #include "net/dns/dns_util.h"
 #include "net/dns/mdns_client.h"
@@ -39,7 +39,6 @@
 #include "net/socket/datagram_server_socket.h"
 #include "net/socket/udp_server_socket.h"
 #include "services/network/public/cpp/features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // TODO(qingsi): Several features to implement:
 //
@@ -104,13 +103,15 @@ const char kTxtversLine[] = "\x9txtvers=1";
 // shared resource record set, should be delayed uniformly and randomly in the
 // range of 20-120 ms. This delay is applied in addition to the scheduled delay
 // by rate limiting.
-const base::TimeDelta kMinRandDelayForSharedResult = base::Milliseconds(20);
-const base::TimeDelta kMaxRandDelayForSharedResult = base::Milliseconds(120);
+constexpr auto kMinRandDelayForSharedResult = base::Milliseconds(20);
+constexpr auto kMaxRandDelayForSharedResult = base::Milliseconds(120);
 
 class RandomUuidNameGenerator
     : public network::MdnsResponderManager::NameGenerator {
  public:
-  std::string CreateName() override { return base::GenerateGUID(); }
+  std::string CreateName() override {
+    return base::Uuid::GenerateRandomV4().AsLowercaseString();
+  }
 };
 
 bool QueryTypeAndAddressFamilyAreCompatible(uint16_t qtype,
@@ -294,10 +295,6 @@ bool IsProbeQuery(const net::DnsQuery& query) {
   return query.qtype() == net::dns_protocol::kTypeANY;
 }
 
-void ReportServiceError(MdnsResponderServiceError error) {
-  UMA_HISTOGRAM_ENUMERATION("NetworkService.MdnsResponder.ServiceError", error);
-}
-
 struct PendingPacket {
   PendingPacket(scoped_refptr<net::IOBufferWithSize> buf,
                 scoped_refptr<MdnsResponseSendOption> option,
@@ -314,15 +311,6 @@ struct PendingPacket {
   scoped_refptr<MdnsResponseSendOption> option;
   base::TimeTicks send_ready_time;
 };
-
-// Returns a random TimeDelta between |min| and |max| following the uniform
-// distribution.
-base::TimeDelta GetRandTimeDelta(const base::TimeDelta& min,
-                                 const base::TimeDelta& max) {
-  DCHECK_LE(min, max);
-  return base::Microseconds(
-      base::RandInt(min.InMicroseconds(), max.InMicroseconds()));
-}
 
 }  // namespace
 
@@ -351,7 +339,7 @@ scoped_refptr<net::IOBufferWithSize> CreateResolutionResponse(
   // Section 18.1. In mDNS responses, ID MUST be set to zero.
   net::DnsResponse response(0 /* id */, true /* is_authoritative */, answers,
                             {} /* authority_records */, additional_records,
-                            absl::nullopt /* query */);
+                            std::nullopt /* query */);
   DCHECK(response.io_buffer() != nullptr);
   auto buf =
       base::MakeRefCounted<net::IOBufferWithSize>(response.io_buffer_size());
@@ -369,7 +357,7 @@ scoped_refptr<net::IOBufferWithSize> CreateNegativeResponse(
                                    kDefaultTtlForRecordWithHostname);
   net::DnsResponse response(0 /* id */, true /* is_authoritative */,
                             nsec_records, {} /* authority_records */,
-                            additional_records, absl::nullopt /* query */);
+                            additional_records, std::nullopt /* query */);
   DCHECK(response.io_buffer() != nullptr);
   auto buf =
       base::MakeRefCounted<net::IOBufferWithSize>(response.io_buffer_size());
@@ -385,10 +373,13 @@ CreateResponseToMdnsNameGeneratorServiceQuery(
       1, CreateTxtRecordWithNames(ttl, kMdnsNameGeneratorServiceInstanceName,
                                   mdns_names));
 
-  net::DnsResponse response(0 /* id */, true /* is_authoritative */, answers,
-                            {} /* authority_records */,
-                            {} /* additional_records */,
-                            absl::nullopt /* query */);
+  net::DnsResponse response(/*id=*/0, /*is_authoritative=*/true, answers,
+                            /*authority_records=*/{},
+                            /*additional_records=*/{},
+                            /*query=*/std::nullopt,
+                            /*rcode=*/net::dns_protocol::kRcodeNOERROR,
+                            /*validate_records=*/true,
+                            /*validate_names_as_internet_hostnames=*/false);
   DCHECK(response.io_buffer() != nullptr);
   auto buf =
       base::MakeRefCounted<net::IOBufferWithSize>(response.io_buffer_size());
@@ -602,13 +593,11 @@ class MdnsResponderManager::SocketHandler::ResponseScheduler {
         return RateLimitScheme::NO_LIMIT;
       case MdnsResponseSendOption::ResponseClass::UNSPECIFIED:
         NOTREACHED();
-        return RateLimitScheme::PER_RESPONSE;
     }
   }
   // Returns null if the computed delay exceeds kMaxScheduledDelay and the next
   // available time is not updated.
-  absl::optional<base::TimeDelta>
-  ComputeResponseDelayAndUpdateNextAvailableTime(
+  std::optional<base::TimeDelta> ComputeResponseDelayAndUpdateNextAvailableTime(
       RateLimitScheme rate_limit_scheme,
       const MdnsResponseSendOption& option);
 
@@ -674,7 +663,7 @@ bool MdnsResponderManager::SocketHandler::ResponseScheduler::ScheduleNextSend(
   }
 
   auto rate_limit_scheme = GetRateLimitSchemeForClass(option->klass);
-  absl::optional<base::TimeDelta> delay;
+  std::optional<base::TimeDelta> delay;
   if (rate_limit_scheme == RateLimitScheme::NO_LIMIT) {
     // Skip the scheduling for this response. Currently the zero delay is only
     // used for negative responses generated by the responder itself. Responses
@@ -699,14 +688,14 @@ bool MdnsResponderManager::SocketHandler::ResponseScheduler::ScheduleNextSend(
   return true;
 }
 
-absl::optional<base::TimeDelta> MdnsResponderManager::SocketHandler::
+std::optional<base::TimeDelta> MdnsResponderManager::SocketHandler::
     ResponseScheduler::ComputeResponseDelayAndUpdateNextAvailableTime(
         RateLimitScheme rate_limit_scheme,
         const MdnsResponseSendOption& option) {
   auto now = tick_clock_->NowTicks();
   const auto extra_delay_for_shared_result =
-      option.shared_result ? GetRandTimeDelta(kMinRandDelayForSharedResult,
-                                              kMaxRandDelayForSharedResult)
+      option.shared_result ? base::RandTimeDelta(kMinRandDelayForSharedResult,
+                                                 kMaxRandDelayForSharedResult)
                            : base::TimeDelta();
 
   // RFC 6762 requires the rate limiting applied on a per-record basis. When a
@@ -723,7 +712,7 @@ absl::optional<base::TimeDelta> MdnsResponderManager::SocketHandler::
         extra_delay_for_shared_result;
 
     if (delay > kMaxScheduledDelay)
-      return absl::nullopt;
+      return std::nullopt;
 
     next_available_time_per_resp_sched_ =
         now + delay + kMinIntervalBetweenMdnsResponses;
@@ -762,7 +751,7 @@ absl::optional<base::TimeDelta> MdnsResponderManager::SocketHandler::
       extra_delay_for_shared_result;
 
   if (delay > kMaxScheduledDelay)
-    return absl::nullopt;
+    return std::nullopt;
 
   for (const auto& name : option.names_for_rate_limit) {
     next_available_time_for_name_[name] =
@@ -887,7 +876,6 @@ void MdnsResponderManager::StartIfNeeded() {
     start_result_ = SocketHandlerStartResult::ALL_FAILURE;
     throttled_start_end_ = tick_clock_->NowTicks() + kManagerStartThrottleDelay;
     LOG(ERROR) << "mDNS responder manager failed to start.";
-    ReportServiceError(MdnsResponderServiceError::kFailToStartManager);
     return;
   }
 
@@ -905,7 +893,6 @@ void MdnsResponderManager::CreateMdnsResponder(
   if (start_result_ == SocketHandlerStartResult::UNSPECIFIED ||
       start_result_ == SocketHandlerStartResult::ALL_FAILURE) {
     LOG(ERROR) << "The mDNS responder manager is not started yet.";
-    ReportServiceError(MdnsResponderServiceError::kFailToCreateResponder);
     receiver = mojo::NullReceiver();
     return;
   }
@@ -932,7 +919,7 @@ bool MdnsResponderManager::Send(scoped_refptr<net::IOBufferWithSize> buf,
 
 void MdnsResponderManager::OnMojoConnectionError(MdnsResponder* responder) {
   auto it = responders_.find(responder);
-  DCHECK(it != responders_.end());
+  CHECK(it != responders_.end(), base::NotFatalUntil::M130);
   responders_.erase(it);
 }
 
@@ -989,8 +976,8 @@ void MdnsResponderManager::OnMdnsQueryReceived(
   // responder only provides APIs to create address records, and hence limited
   // to handle only such records. Once we have expanded the API surface to
   // include the service publishing, the handling logic should be unified.
-  const absl::optional<std::string> qname =
-      net::DnsDomainToString(query.qname());
+  const std::optional<std::string> qname =
+      net::dns_names_util::NetworkToDottedName(query.qname());
   if (base::FeatureList::IsEnabled(
           features::kMdnsResponderGeneratedNameListing)) {
     if (should_respond_to_generator_service_query_ && qname &&
@@ -1012,14 +999,13 @@ void MdnsResponderManager::OnSocketHandlerReadError(uint16_t socket_handler_id,
   // We should not remove the socket handler for a non-fatal error.
   DCHECK(IsFatalError(result));
   auto it = socket_handler_by_id_.find(socket_handler_id);
-  DCHECK(it != socket_handler_by_id_.end());
+  CHECK(it != socket_handler_by_id_.end(), base::NotFatalUntil::M130);
   // It is safe to remove the handler in error since the handler has exited the
   // read loop and is done with |OnRead|.
   socket_handler_by_id_.erase(it);
   if (socket_handler_by_id_.empty()) {
     LOG(ERROR)
         << "All socket handlers failed. Restarting the mDNS responder manager.";
-    ReportServiceError(MdnsResponderServiceError::kFatalSocketHandlerError);
     start_result_ = MdnsResponderManager::SocketHandlerStartResult::UNSPECIFIED;
     DCHECK(throttled_start_end_.is_null());
     StartIfNeeded();
@@ -1188,7 +1174,6 @@ void MdnsResponder::CreateNameForAddress(
   DCHECK(address.IsValid() || address.empty());
   if (!address.IsValid()) {
     LOG(ERROR) << "Invalid IP address to create a name for";
-    ReportServiceError(MdnsResponderServiceError::kInvalidIpToRegisterName);
     receiver_.reset();
     manager_->OnMojoConnectionError(this);
     return;
@@ -1258,8 +1243,8 @@ void MdnsResponder::RemoveNameForAddress(
 void MdnsResponder::OnMdnsQueryReceived(const net::DnsQuery& query,
                                         uint16_t recv_socket_handler_id) {
   // Currently we only support a single question in DnsQuery.
-  absl::optional<std::string> dotted_name_to_resolve =
-      net::DnsDomainToString(query.qname());
+  std::optional<std::string> dotted_name_to_resolve =
+      net::dns_names_util::NetworkToDottedName(query.qname());
   if (!dotted_name_to_resolve)
     return;
   auto it = name_addr_map_.find(dotted_name_to_resolve.value());
@@ -1312,7 +1297,6 @@ bool MdnsResponder::HasConflictWithExternalResolution(
   }
 
   LOG(ERROR) << "Received conflicting resolution for name: " << name;
-  ReportServiceError(MdnsResponderServiceError::kConflictingNameResolution);
   return true;
 }
 

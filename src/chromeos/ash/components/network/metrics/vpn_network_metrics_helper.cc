@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 // The buckets of the histogram that captures the metrics of the configuration
@@ -47,7 +47,7 @@ const char* GetBucketForVpnProviderType(const std::string& vpn_provider_type) {
   } else if (vpn_provider_type == shill::kProviderWireGuard) {
     return kVpnConfigurationSourceBucketWireGuard;
   }
-  NOTREACHED();
+  DUMP_WILL_BE_NOTREACHED();
   return kVpnConfigurationSourceBucketUnknown;
 }
 
@@ -66,9 +66,9 @@ void VpnNetworkMetricsHelper::Init(
 void VpnNetworkMetricsHelper::OnConfigurationCreated(
     const std::string& service_path,
     const std::string& guid) {
-  const NetworkState* network_state = chromeos::NetworkHandler::Get()
-                                          ->network_state_handler()
-                                          ->GetNetworkStateFromGuid(guid);
+  const NetworkState* network_state =
+      NetworkHandler::Get()->network_state_handler()->GetNetworkStateFromGuid(
+          guid);
 
   if (!network_state || network_state->GetNetworkTechnologyType() !=
                             NetworkState::NetworkTechnologyType::kVPN) {
@@ -87,4 +87,4 @@ void VpnNetworkMetricsHelper::OnConfigurationCreated(
           : VPNConfigurationSource::kConfiguredManually);
 }
 
-}  // namespace chromeos
+}  // namespace ash

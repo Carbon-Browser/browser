@@ -1,21 +1,30 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ui/ozone/platform/drm/gpu/drm_display.h"
 
+#include <xf86drm.h>
 #include <xf86drmMode.h>
+
+#include <algorithm>
 #include <memory>
 
-#include "base/cxx17_backports.h"
+#include "base/containers/flat_set.h"
 #include "base/logging.h"
 #include "base/trace_event/trace_event.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/display/display_features.h"
+#include "ui/display/types/display_color_management.h"
 #include "ui/display/types/display_snapshot.h"
-#include "ui/display/types/gamma_ramp_rgb_entry.h"
 #include "ui/gfx/color_space.h"
 #include "ui/ozone/platform/drm/common/drm_util.h"
+#include "ui/ozone/platform/drm/common/hardware_display_controller_info.h"
+#include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/screen_manager.h"
 
@@ -29,18 +38,6 @@ std::vector<drmModeModeInfo> GetDrmModeVector(drmModeConnector* connector) {
     modes.push_back(connector->modes[i]);
 
   return modes;
-}
-
-void FillPowerFunctionValues(std::vector<display::GammaRampRGBEntry>* table,
-                             size_t table_size,
-                             float max_value,
-                             float exponent) {
-  for (size_t i = 0; i < table_size; i++) {
-    const uint16_t v = max_value * std::numeric_limits<uint16_t>::max() *
-                       pow((static_cast<float>(i) + 1) / table_size, exponent);
-    struct display::GammaRampRGBEntry gamma_entry = {v, v, v};
-    table->push_back(gamma_entry);
-  }
 }
 
 }  // namespace
@@ -139,45 +136,170 @@ DrmDisplay::PrivacyScreenProperty::GetWritePrivacyScreenProperty() const {
   return privacy_screen_legacy_.get();
 }
 
-DrmDisplay::DrmDisplay(const scoped_refptr<DrmDevice>& drm)
-    : drm_(drm), current_color_space_(gfx::ColorSpace::CreateSRGB()) {}
+DrmDisplay::CrtcConnectorPair::CrtcConnectorPair(
+    uint32_t crtc_id,
+    ScopedDrmConnectorPtr drm_connector,
+    std::optional<gfx::Point> tile_location)
+    : crtc_id(crtc_id),
+      connector(std::move(drm_connector)),
+      tile_location(tile_location) {
+  CHECK(connector != nullptr);
+}
+
+DrmDisplay::CrtcConnectorPair::CrtcConnectorPair(
+    DrmDisplay::CrtcConnectorPair&& other) noexcept = default;
+DrmDisplay::CrtcConnectorPair& DrmDisplay::CrtcConnectorPair::operator=(
+    DrmDisplay::CrtcConnectorPair&& other) noexcept = default;
+
+DrmDisplay::CrtcConnectorPair::~CrtcConnectorPair() = default;
+
+DrmDisplay::CrtcConnectorPair CreateCrtcConnectorPair(
+    HardwareDisplayControllerInfo& info) {
+  std::optional<gfx::Point> tile_location = std::nullopt;
+  if (info.tile_property().has_value()) {
+    tile_location = info.tile_property()->location;
+  }
+
+  return DrmDisplay::CrtcConnectorPair(info.crtc()->crtc_id,
+                                       info.ReleaseConnector(), tile_location);
+}
+
+std::vector<DrmDisplay::CrtcConnectorPair> CreateCrtcConnectorPairs(
+    HardwareDisplayControllerInfo* info) {
+  CHECK(info != nullptr);
+
+  std::vector<DrmDisplay::CrtcConnectorPair> crtc_connector_pairs;
+  // If the display is tiled, then |info| is always the primary info.
+  crtc_connector_pairs.push_back(CreateCrtcConnectorPair(*info));
+
+  for (auto& tile_info : info->nonprimary_tile_infos()) {
+    crtc_connector_pairs.push_back(CreateCrtcConnectorPair(*tile_info));
+  }
+
+  return crtc_connector_pairs;
+}
+
+DrmDisplay::DrmDisplay(const scoped_refptr<DrmDevice>& drm,
+                       HardwareDisplayControllerInfo* info,
+                       const display::DisplaySnapshot& display_snapshot)
+    : display_id_(display_snapshot.display_id()),
+      base_connector_id_(display_snapshot.base_connector_id()),
+      drm_(drm),
+      crtc_connector_pairs_(CreateCrtcConnectorPairs(info)),
+      primary_crtc_connector_pair_(crtc_connector_pairs_.front()) {
+  modes_ = GetDrmModeVector(primary_crtc_connector_pair_->connector.get());
+  origin_ = display_snapshot.origin();
+  hdr_static_metadata_ = display_snapshot.hdr_static_metadata();
+  privacy_screen_property_ = std::make_unique<PrivacyScreenProperty>(
+      drm_, primary_crtc_connector_pair_->connector.get());
+  tile_property_ = info->tile_property();
+
+  SkColorSpacePrimaries output_primaries =
+      display_snapshot.color_info().edid_primaries;
+#if BUILDFLAG(IS_CHROMEOS)
+  // Do not allow display_snapshot and connector property state to go out of
+  // sync. HDR capability is determined in
+  // gfx::DisplayUtil::GetColorSpaceFromEdid
+  if (display_snapshot.color_space() == gfx::ColorSpace::CreateHDR10()) {
+    output_primaries = SkNamedPrimaries::kRec2020;
+    SetColorspaceProperty(display_snapshot.color_space());
+    SetHdrOutputMetadata(display_snapshot.color_space());
+  } else {
+    SetColorspaceProperty(gfx::ColorSpace::CreateSRGB());
+    ClearHdrOutputMetadata();
+  }
+#endif
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drm_->plane_manager()->SetOutputColorSpace(crtc_connector_pair.crtc_id,
+                                               output_primaries);
+  }
+
+  vsync_rate_min_from_edid_ = info->edid_parser().has_value()
+                                  ? info->edid_parser()->vsync_rate_min()
+                                  : std::nullopt;
+}
 
 DrmDisplay::~DrmDisplay() = default;
 
-uint32_t DrmDisplay::connector() const {
-  DCHECK(connector_);
-  return connector_->connector_id;
+uint32_t DrmDisplay::GetPrimaryConnectorId() const {
+  DCHECK(primary_crtc_connector_pair_->connector);
+  return primary_crtc_connector_pair_->connector->connector_id;
 }
 
-std::unique_ptr<display::DisplaySnapshot> DrmDisplay::Update(
-    HardwareDisplayControllerInfo* info,
-    uint8_t device_index) {
-  std::unique_ptr<display::DisplaySnapshot> params = CreateDisplaySnapshot(
-      info, drm_->get_fd(), drm_->device_path(), device_index, origin_);
-  base_connector_id_ = params->base_connector_id();
-  crtc_ = info->crtc()->crtc_id;
-  // TODO(crbug.com/1119499): consider taking ownership of |info->connector()|
-  connector_ = ScopedDrmConnectorPtr(
-      drm_->GetConnector(info->connector()->connector_id));
-  if (!connector_) {
-    PLOG(ERROR) << "Failed to get connector "
-                << info->connector()->connector_id;
-    return nullptr;
+const std::vector<DrmDisplay::CrtcConnectorPair>&
+DrmDisplay::crtc_connector_pairs() const {
+  return crtc_connector_pairs_;
+}
+
+bool DrmDisplay::ReplaceCrtcs(
+    const base::flat_map<uint32_t /*current_crtc*/, uint32_t /*new_crtc*/>&
+        current_to_new_crtc_ids) {
+  std::vector<CrtcConnectorPair*> target_crtc_connector_pairs;
+  // Check that there are no overlaps in new CRTC IDs
+  base::flat_set<uint32_t> new_crtc_ids;
+  for (auto [current_crtc_id, new_crtc_id] : current_to_new_crtc_ids) {
+    std::pair<base::flat_set<uint32_t>::iterator, bool> insert_it =
+        new_crtc_ids.insert(new_crtc_id);
+    // Fail out if insertion failed due to existing key (duplication).
+    if (!insert_it.second) {
+      return false;
+    }
+
+    // Find CrtcConnectorPair corresponding to |current_crtc_id|.
+    CrtcConnectorPair* target_crtc_connector_pair = nullptr;
+    for (auto& crtc_connector_pair : crtc_connector_pairs_) {
+      if (crtc_connector_pair.crtc_id == current_crtc_id) {
+        target_crtc_connector_pair = &crtc_connector_pair;
+        break;
+      }
+    }
+    if (!target_crtc_connector_pair) {
+      return false;
+    }
+    target_crtc_connector_pairs.push_back(target_crtc_connector_pair);
   }
 
-  display_id_ = params->display_id();
-  modes_ = GetDrmModeVector(info->connector());
-  is_hdr_capable_ =
-      params->bits_per_channel() > 8 && params->color_space().IsHDR();
-  privacy_screen_property_ =
-      std::make_unique<PrivacyScreenProperty>(drm(), connector_.get());
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  is_hdr_capable_ =
-      is_hdr_capable_ &&
-      base::FeatureList::IsEnabled(display::features::kUseHDRTransferFunction);
+  // Ensure that all CrtcConnectorPairs are getting replaced.
+  if (target_crtc_connector_pairs.size() != crtc_connector_pairs_.size()) {
+    return false;
+  }
+
+  for (auto& crtc_connector_pair : target_crtc_connector_pairs) {
+    crtc_connector_pair->crtc_id =
+        current_to_new_crtc_ids.at(crtc_connector_pair->crtc_id);
+  }
+
+  return true;
+}
+
+bool DrmDisplay::SetHdcpKeyProp(const std::string& key) {
+  DCHECK(primary_crtc_connector_pair_->connector);
+
+  TRACE_EVENT1("drm", "DrmDisplay::SetHdcpKeyProp", "connector",
+               primary_crtc_connector_pair_->connector->connector_id);
+
+  // The HDCP key is secret, we want to create it as write only so the user
+  // space can't read it back. (i.e. through `modetest`)
+  ScopedDrmPropertyBlob key_blob;
+  // TODO(markyacoub): the flag requires being merged to libdrm then backported
+  // to CrOS. Remove the #if once that happens.
+#if defined(DRM_MODE_CREATE_BLOB_WRITE_ONLY)
+  key_blob = drm_->CreatePropertyBlobWithFlags(key.data(), key.size(),
+                                               DRM_MODE_CREATE_BLOB_WRITE_ONLY);
 #endif
 
-  return params;
+  if (!key_blob) {
+    LOG(ERROR) << "Failed to create HDCP Key property blob";
+    return false;
+  }
+
+  ScopedDrmPropertyPtr hdcp_key_property(drm_->GetProperty(
+      primary_crtc_connector_pair_->connector.get(), kContentProtectionKey));
+  DCHECK(hdcp_key_property);
+
+  return drm_->SetProperty(
+      primary_crtc_connector_pair_->connector->connector_id,
+      hdcp_key_property->prop_id, key_blob->id());
 }
 
 // When reading DRM state always check that it's still valid. Any sort of events
@@ -185,23 +307,23 @@ std::unique_ptr<display::DisplaySnapshot> DrmDisplay::Update(
 bool DrmDisplay::GetHDCPState(
     display::HDCPState* hdcp_state,
     display::ContentProtectionMethod* protection_method) {
-  if (!connector_)
-    return false;
+  DCHECK(primary_crtc_connector_pair_->connector);
 
   TRACE_EVENT1("drm", "DrmDisplay::GetHDCPState", "connector",
-               connector_->connector_id);
-  ScopedDrmPropertyPtr hdcp_property(
-      drm_->GetProperty(connector_.get(), kContentProtection));
+               primary_crtc_connector_pair_->connector->connector_id);
+  ScopedDrmPropertyPtr hdcp_property(drm_->GetProperty(
+      primary_crtc_connector_pair_->connector.get(), kContentProtection));
   if (!hdcp_property) {
     PLOG(INFO) << "'" << kContentProtection << "' property doesn't exist.";
     return false;
   }
 
   ScopedDrmObjectPropertyPtr property_values(drm_->GetObjectProperties(
-      connector_->connector_id, DRM_MODE_OBJECT_CONNECTOR));
+      primary_crtc_connector_pair_->connector->connector_id,
+      DRM_MODE_OBJECT_CONNECTOR));
   if (!property_values) {
     PLOG(INFO) << "Properties no longer valid for connector "
-               << connector_->connector_id << ".";
+               << primary_crtc_connector_pair_->connector->connector_id << ".";
     return false;
   }
 
@@ -222,8 +344,8 @@ bool DrmDisplay::GetHDCPState(
     return true;
   }
 
-  ScopedDrmPropertyPtr content_type_property(
-      drm_->GetProperty(connector_.get(), kHdcpContentType));
+  ScopedDrmPropertyPtr content_type_property(drm_->GetProperty(
+      primary_crtc_connector_pair_->connector.get(), kHdcpContentType));
   if (!content_type_property) {
     // This won't exist if the driver doesn't support HDCP 2.2, so default it in
     // that case.
@@ -249,13 +371,11 @@ bool DrmDisplay::GetHDCPState(
 bool DrmDisplay::SetHDCPState(
     display::HDCPState state,
     display::ContentProtectionMethod protection_method) {
-  if (!connector_) {
-    return false;
-  }
+  DCHECK(primary_crtc_connector_pair_->connector);
 
   if (protection_method != display::CONTENT_PROTECTION_METHOD_NONE) {
-    ScopedDrmPropertyPtr content_type_property(
-        drm_->GetProperty(connector_.get(), kHdcpContentType));
+    ScopedDrmPropertyPtr content_type_property(drm_->GetProperty(
+        primary_crtc_connector_pair_->connector.get(), kHdcpContentType));
     if (!content_type_property) {
       // If the driver doesn't support HDCP 2.2, this won't exist.
       if (protection_method & display::CONTENT_PROTECTION_METHOD_HDCP_TYPE_1) {
@@ -265,90 +385,285 @@ bool DrmDisplay::SetHDCPState(
         return false;
       }
       VLOG(3) << "HDCP Content Type not supported, default to Type 0";
-    } else if (!drm_->SetProperty(connector_->connector_id,
-                                  content_type_property->prop_id,
-                                  GetDrmValueForInternalType(
-                                      protection_method, *content_type_property,
-                                      kHdcpContentTypeStates))) {
-      // Failed setting HDCP Content Type.
-      return false;
+    } else {
+      if (!drm_->SetProperty(
+              primary_crtc_connector_pair_->connector->connector_id,
+              content_type_property->prop_id,
+              GetDrmValueForInternalType(protection_method,
+                                         *content_type_property,
+                                         kHdcpContentTypeStates))) {
+        // Failed setting HDCP Content Type.
+        return false;
+      }
     }
   }
 
-  ScopedDrmPropertyPtr hdcp_property(
-      drm_->GetProperty(connector_.get(), kContentProtection));
+  ScopedDrmPropertyPtr hdcp_property(drm_->GetProperty(
+      primary_crtc_connector_pair_->connector.get(), kContentProtection));
   if (!hdcp_property) {
     PLOG(INFO) << "'" << kContentProtection << "' property doesn't exist.";
     return false;
   }
 
   return drm_->SetProperty(
-      connector_->connector_id, hdcp_property->prop_id,
+      primary_crtc_connector_pair_->connector->connector_id,
+      hdcp_property->prop_id,
       GetDrmValueForInternalType(state, *hdcp_property,
                                  kContentProtectionStates));
 }
 
-void DrmDisplay::SetColorMatrix(const std::vector<float>& color_matrix) {
-  if (!drm_->plane_manager()->SetColorMatrix(crtc_, color_matrix)) {
-    LOG(ERROR) << "Failed to set color matrix for display: crtc_id = " << crtc_;
+void DrmDisplay::SetColorTemperatureAdjustment(
+    const display::ColorTemperatureAdjustment& cta) {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drm_->plane_manager()->SetColorTemperatureAdjustment(
+        crtc_connector_pair.crtc_id, cta);
+  }
+}
+
+void DrmDisplay::SetColorCalibration(
+    const display::ColorCalibration& calibration) {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drm_->plane_manager()->SetColorCalibration(crtc_connector_pair.crtc_id,
+                                               calibration);
+  }
+}
+
+void DrmDisplay::SetGammaAdjustment(
+    const display::GammaAdjustment& adjustment) {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drm_->plane_manager()->SetGammaAdjustment(crtc_connector_pair.crtc_id,
+                                              adjustment);
   }
 }
 
 void DrmDisplay::SetBackgroundColor(const uint64_t background_color) {
-  drm_->plane_manager()->SetBackgroundColor(crtc_, background_color);
-}
-
-void DrmDisplay::SetGammaCorrection(
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
-  // When both |degamma_lut| and |gamma_lut| are empty they are interpreted as
-  // "linear/pass-thru" [1]. If the display |is_hdr_capable_| we have to make
-  // sure the |current_color_space_| is considered properly.
-  // [1]
-  // https://www.kernel.org/doc/html/v4.19/gpu/drm-kms.html#color-management-properties
-  if (degamma_lut.empty() && gamma_lut.empty() && is_hdr_capable_)
-    SetColorSpace(current_color_space_);
-  else
-    CommitGammaCorrection(degamma_lut, gamma_lut);
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drm_->plane_manager()->SetBackgroundColor(crtc_connector_pair.crtc_id,
+                                              background_color);
+  }
 }
 
 bool DrmDisplay::SetPrivacyScreen(bool enabled) {
   return privacy_screen_property_->SetPrivacyScreenProperty(enabled);
 }
 
-void DrmDisplay::SetColorSpace(const gfx::ColorSpace& color_space) {
-  // There's only something to do if the display supports HDR.
-  if (!is_hdr_capable_)
-    return;
-  current_color_space_ = color_space;
-
-  // When |color_space| is HDR we can simply leave the gamma tables empty, which
-  // is interpreted as "linear/pass-thru", see [1]. However when we have an SDR
-  // |color_space|, we need to write a scaled down |gamma| function to prevent
-  // the mode change brightness to be visible.
-  std::vector<display::GammaRampRGBEntry> degamma;
-  std::vector<display::GammaRampRGBEntry> gamma;
-  if (current_color_space_.IsHDR())
-    return CommitGammaCorrection(degamma, gamma);
-
-  // TODO(mcasas) This should be the inverse value of DisplayChangeObservers's
-  // FillDisplayColorSpaces's kHDRLevel, move to a common place.
-  // TODO(b/165822222): adjust this level based on the display brightness.
-  constexpr float kSDRLevel = 0.85;
-  // TODO(mcasas): Retrieve this from the |drm_| HardwareDisplayPlaneManager.
-  constexpr size_t kNumGammaSamples = 64ul;
-  // Only using kSDRLevel of the available values shifts the contrast ratio, we
-  // restore it via a smaller local gamma correction using this exponent.
-  constexpr float kExponent = 1.2;
-  FillPowerFunctionValues(&gamma, kNumGammaSamples, kSDRLevel, kExponent);
-  CommitGammaCorrection(degamma, gamma);
+gfx::HDRStaticMetadata::Eotf DrmDisplay::GetEotf(
+    const gfx::ColorSpace::TransferID transfer_id) {
+  switch (transfer_id) {
+    case gfx::ColorSpace::TransferID::SRGB:
+      return gfx::HDRStaticMetadata::Eotf::kGammaSdrRange;
+    case gfx::ColorSpace::TransferID::PQ:
+      return gfx::HDRStaticMetadata::Eotf::kPq;
+    case gfx::ColorSpace::TransferID::HLG:
+      return gfx::HDRStaticMetadata::Eotf::kHlg;
+    case gfx::ColorSpace::TransferID::SRGB_HDR:
+    case gfx::ColorSpace::TransferID::LINEAR_HDR:
+    case gfx::ColorSpace::TransferID::CUSTOM_HDR:
+    case gfx::ColorSpace::TransferID::SCRGB_LINEAR_80_NITS:
+      return gfx::HDRStaticMetadata::Eotf::kGammaHdrRange;
+    default:
+      NOTREACHED();
+  }
 }
 
-void DrmDisplay::CommitGammaCorrection(
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
-  if (!drm_->plane_manager()->SetGammaCorrection(crtc_, degamma_lut, gamma_lut))
-    LOG(ERROR) << "Failed to set gamma tables for display: crtc_id = " << crtc_;
+bool DrmDisplay::ClearHdrOutputMetadata() {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    DCHECK(crtc_connector_pair.connector);
+
+    ScopedDrmPropertyPtr hdr_output_metadata_property(drm_->GetProperty(
+        crtc_connector_pair.connector.get(), kHdrOutputMetadata));
+    if (!hdr_output_metadata_property) {
+      PLOG(INFO) << "'" << kHdrOutputMetadata
+                 << "' property doesn't exist for connector "
+                 << crtc_connector_pair.connector->connector_id;
+      return false;
+    }
+
+    if (hdr_output_metadata_property->count_blobs == 0) {
+      // HDR metadata property was never set
+      return true;
+    }
+
+    // TODO(b/342617770): Atomically set connector properties across all
+    // connectors owned by DrmDisplay to prevent scenarios where SetProperty()
+    // succeeds for a subset of the connectors and creates inconsistencies.
+    if (!drm_->SetProperty(crtc_connector_pair.connector->connector_id,
+                           hdr_output_metadata_property->prop_id, 0)) {
+      PLOG(INFO) << "Cannot set '" << kHdrOutputMetadata
+                 << "' property on connector "
+                 << crtc_connector_pair.connector->connector_id;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool DrmDisplay::SetHdrOutputMetadata(const gfx::ColorSpace color_space) {
+  DCHECK(hdr_static_metadata_.has_value());
+  DCHECK(color_space.IsValid());
+
+  ScopedDrmHdrOutputMetadataPtr hdr_output_metadata(
+      static_cast<drm_hdr_output_metadata*>(
+          drmMalloc(sizeof(drm_hdr_output_metadata))));
+  hdr_output_metadata->metadata_type = 0;
+  hdr_output_metadata->hdmi_metadata_type1.metadata_type = 0;
+
+  gfx::HDRStaticMetadata::Eotf eotf = GetEotf(color_space.GetTransferID());
+  DCHECK(hdr_static_metadata_->IsEotfSupported(eotf));
+  hdr_output_metadata->hdmi_metadata_type1.eotf = static_cast<uint8_t>(eotf);
+
+  hdr_output_metadata->hdmi_metadata_type1.max_cll = 0;
+  hdr_output_metadata->hdmi_metadata_type1.max_fall =
+      hdr_static_metadata_->max_avg;
+  // This value is coded as an unsigned 16-bit value in units of 1 cd/m2,
+  // where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
+  hdr_output_metadata->hdmi_metadata_type1.max_display_mastering_luminance =
+      hdr_static_metadata_->max;
+  // This value is coded as an unsigned 16-bit value in units of 0.0001 cd/m2,
+  // where 0x0001 represents 0.0001 cd/m2 and 0xFFFF represents 6.5535 cd/m2.
+  hdr_output_metadata->hdmi_metadata_type1.min_display_mastering_luminance =
+      hdr_static_metadata_->min * 10000.0;
+
+  SkColorSpacePrimaries primaries = color_space.GetPrimaries();
+  constexpr int kPrimariesFixedPoint = 50000;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[0].x =
+      primaries.fRX * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[0].y =
+      primaries.fRY * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[1].x =
+      primaries.fGX * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[1].y =
+      primaries.fGY * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[2].x =
+      primaries.fBX * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.display_primaries[2].y =
+      primaries.fBY * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.white_point.x =
+      primaries.fWX * kPrimariesFixedPoint;
+  hdr_output_metadata->hdmi_metadata_type1.white_point.y =
+      primaries.fWY * kPrimariesFixedPoint;
+
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    DCHECK(crtc_connector_pair.connector);
+
+    ScopedDrmPropertyBlob hdr_output_metadata_property_blob =
+        drm_->CreatePropertyBlob(hdr_output_metadata.get(),
+                                 sizeof(drm_hdr_output_metadata));
+    if (!hdr_output_metadata_property_blob) {
+      PLOG(INFO) << "Cannot create '" << kHdrOutputMetadata
+                 << "' property blob.";
+      return false;
+    }
+
+    ScopedDrmPropertyPtr hdr_output_metadata_property(drm_->GetProperty(
+        crtc_connector_pair.connector.get(), kHdrOutputMetadata));
+    if (!hdr_output_metadata_property) {
+      PLOG(INFO) << "'" << kHdrOutputMetadata
+                 << "' property doesn't exist for connector "
+                 << crtc_connector_pair.connector->connector_id;
+      return false;
+    }
+
+    // TODO(b/342617770): Atomically set connector properties across all
+    // connectors owned by DrmDisplay to prevent scenarios where SetProperty()
+    // succeeds for a subset of the connectors and creates inconsistencies.
+    if (!hdr_output_metadata_property->prop_id ||
+        !drm_->SetProperty(crtc_connector_pair.connector->connector_id,
+                           hdr_output_metadata_property->prop_id,
+                           hdr_output_metadata_property_blob->id())) {
+      PLOG(ERROR) << "Cannot set '" << kHdrOutputMetadata << "' property.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool DrmDisplay::SetColorspaceProperty(const gfx::ColorSpace color_space) {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    DCHECK(crtc_connector_pair.connector);
+
+    // Check whether the DRM device supports the colorspace property
+    ScopedDrmPropertyPtr color_space_property(
+        drm_->GetProperty(crtc_connector_pair.connector.get(), kColorSpace));
+    if (!color_space_property || !color_space_property->prop_id) {
+      PLOG(INFO) << "Couldn't query supported color spaces by the DRM device";
+      return false;
+    }
+
+    // Get the current color space used by the DRM connector
+    uint64_t prop_value;
+    if (!GetConnectorPropertyValue(crtc_connector_pair.connector.get(),
+                                   color_space_property->prop_id,
+                                   &prop_value)) {
+      PLOG(INFO) << "Couldn't retrieve connector's color space configuration";
+      return false;
+    }
+
+    const uint64_t enum_value_for_colorspace =
+        GetEnumValueForName(*drm_, color_space_property->prop_id,
+                            GetNameForColorspace(color_space));
+    if (prop_value == enum_value_for_colorspace) {
+      // The connector color space is already set to the desired value
+      return true;
+    }
+
+    // TODO(b/342617770): Atomically set connector properties across all
+    // connectors owned by DrmDisplay to prevent scenarios where SetProperty()
+    // succeeds for a subset of the connectors and creates inconsistencies.
+    if (!drm_->SetProperty(crtc_connector_pair.connector->connector_id,
+                           color_space_property->prop_id,
+                           enum_value_for_colorspace)) {
+      PLOG(ERROR) << "Cannot set '" << GetNameForColorspace(color_space)
+                  << "' to '" << kColorSpace << "' property for connector "
+                  << crtc_connector_pair.connector->connector_id;
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DrmDisplay::IsVrrCapable() const {
+  const bool is_vsync_rate_min_positive =
+      vsync_rate_min_from_edid_.has_value() && *vsync_rate_min_from_edid_ > 0;
+  if (!is_vsync_rate_min_positive) {
+    return false;
+  }
+
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    drmModeConnector* connector = crtc_connector_pair.connector.get();
+    if (!connector || !ui::IsVrrCapable(*drm_, connector)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::optional<TileProperty> DrmDisplay::GetTileProperty() const {
+  return tile_property_;
+}
+
+const DrmDisplay::CrtcConnectorPair*
+DrmDisplay::GetCrtcConnectorPairForConnectorId(uint32_t connector_id) const {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    DCHECK(crtc_connector_pair.connector);
+
+    if (crtc_connector_pair.connector->connector_id == connector_id) {
+      return &crtc_connector_pair;
+    }
+  }
+  return nullptr;
+}
+
+bool DrmDisplay::ContainsCrtc(uint32_t crtc_id) const {
+  for (const auto& crtc_connector_pair : crtc_connector_pairs_) {
+    if (crtc_connector_pair.crtc_id == crtc_id) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace ui

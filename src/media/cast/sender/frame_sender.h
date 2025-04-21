@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,12 @@
 #include <stdint.h>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
-#include "media/cast/net/cast_transport.h"
-#include "media/cast/net/rtcp/rtcp_defines.h"
-#include "media/cast/sender/congestion_control.h"
+#include "media/cast/constants.h"
 
 namespace openscreen::cast {
 class Sender;
@@ -25,7 +23,6 @@ namespace media::cast {
 
 struct SenderEncodedFrame;
 class CastEnvironment;
-class CastTransport;
 
 // This is the pure virtual interface for an object that sends encoded frames
 // to a receiver.
@@ -50,21 +47,18 @@ class FrameSender {
     virtual void OnFrameCanceled(FrameId frame_id) {}
   };
 
-  // Method of creating a frame sender using a cast transport.
-  // TODO(https://crbug.com/1316434): should be removed once libcast sender is
-  // successfully launched.
-  static std::unique_ptr<FrameSender> Create(
-      scoped_refptr<CastEnvironment> cast_environment,
-      const FrameSenderConfig& config,
-      CastTransport* const transport_sender,
-      Client& client);
+  // NOTE: currently only used by the VideoSender.
+  // TODO(https://crbug.com/1316434): cleanup bitrate calculations when libcast
+  // has successfully launched.
+  using GetSuggestedVideoBitrateCB = base::RepeatingCallback<int()>;
 
   // Method of creating a frame sender using an openscreen::cast::Sender.
   static std::unique_ptr<FrameSender> Create(
       scoped_refptr<CastEnvironment> cast_environment,
       const FrameSenderConfig& config,
-      openscreen::cast::Sender* sender,
-      Client& client);
+      std::unique_ptr<openscreen::cast::Sender> sender,
+      Client& client,
+      GetSuggestedVideoBitrateCB get_bitrate_cb = GetSuggestedVideoBitrateCB());
 
   FrameSender();
   FrameSender(FrameSender&&) = delete;
@@ -85,18 +79,21 @@ class FrameSender {
   // indication event.
   virtual bool NeedsKeyFrame() const = 0;
 
-  // Called by the encoder with the next encoded frame to send.
-  virtual void EnqueueFrame(
+  // Called by the encoder with the next encoded frame to send. Returns
+  // kNotDropped if successfully enqueued.
+  virtual CastStreamingFrameDropReason EnqueueFrame(
       std::unique_ptr<SenderEncodedFrame> encoded_frame) = 0;
 
-  // Returns true if too many frames would be in-flight by encoding and sending
-  // the next frame having the given |frame_duration|.
+  // Returns the reason the frame should be dropped, or kNotDropped if it should
+  // not be dropped. This method should be called exactly once for each frame,
+  // as its result may be used to calculate updates to the suggested bitrate.
   //
   // Callers are recommended to compute the frame duration based on the
   // difference between the next and last frames' reference times, or the period
   // between frames of the configured max frame rate if the reference times are
   // unavailable.
-  virtual bool ShouldDropNextFrame(base::TimeDelta frame_duration) const = 0;
+  virtual CastStreamingFrameDropReason ShouldDropNextFrame(
+      base::TimeDelta frame_duration) = 0;
 
   // Returns the RTP timestamp on the frame associated with |frame_id|.
   // In practice this should be implemented as a ring buffer using the lower
@@ -126,17 +123,8 @@ class FrameSender {
   // When the last frame was sent.
   virtual base::TimeTicks LastSendTime() const = 0;
 
-  // The latest acknowledged frame ID.
-  virtual FrameId LatestAckedFrameId() const = 0;
-
-  // RTCP client-specific methods.
-  // TODO(https://crbug.com/1318499): these assume we are using an RTCP client,
-  // which is not true when this implementation is backed by an
-  // OpenscreenFrameSender. These methods should be removed and tests updated to
-  // use a different mechanism.
-  virtual void OnReceivedCastFeedback(const RtcpCastMessage& cast_feedback) = 0;
-  virtual void OnReceivedPli() = 0;
-  virtual void OnMeasuredRoundTripTime(base::TimeDelta rtt) = 0;
+  // The last acknowledged frame ID.
+  virtual FrameId LastAckedFrameId() const = 0;
 };
 
 }  // namespace media::cast

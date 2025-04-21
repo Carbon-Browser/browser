@@ -1,13 +1,12 @@
 include_rules = [
   "+apps",
-  "+ash/components/audio",
-  "+ash/components/disks",
   "+chromeos",
   "+components/keep_alive_registry",
   "+components/keyed_service",
   "+components/nacl/browser",
   "+components/nacl/common",
   "+components/network_session_configurator/common",
+  "+components/origin_trials",
   "+components/pref_registry",
   "+components/sessions",
   "+components/update_client",
@@ -37,6 +36,8 @@ include_rules = [
   "+services/network/public/mojom/url_loader.mojom.h",
   "+storage/browser/quota",
   "+third_party/skia/include",
+  "+third_party/blink/public/mojom/page/draggable_region.mojom-forward.h",
+  "+third_party/blink/public/mojom/page/draggable_region.mojom.h",
 
   # Additional UI dependencies for app_shell.
   "+ui/aura",

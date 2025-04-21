@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,10 @@ namespace prefs {
 // Boolean indicating whether the initial omnibox "Send" animation was shown
 // once for this profile.
 extern const char kInitialSendAnimationShown[];
+
+// Stores the url of the most recent tab received on iOS from one of the user's
+// other devices.
+extern const char kIOSSendTabToSelfLastReceivedTabURLPref[];
 
 }  // namespace prefs
 }  // namespace send_tab_to_self

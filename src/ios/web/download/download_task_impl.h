@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -35,10 +36,11 @@ class WebState;
 // behaviour between the different concrete sub-classes.
 class DownloadTaskImpl : public DownloadTask {
  public:
-  // Constructs a new DownloadTaskImpl objects. |web_state|, |identifier| and
-  // |delegate| must be valid.
+  // Constructs a new DownloadTaskImpl objects. `web_state` and `identifier`
+  // must be valid.
   DownloadTaskImpl(WebState* web_state,
                    const GURL& original_url,
+                   NSString* originating_host,
                    NSString* http_method,
                    const std::string& content_disposition,
                    int64_t total_bytes,
@@ -55,6 +57,7 @@ class DownloadTaskImpl : public DownloadTask {
   void Cancel() final;
   NSString* GetIdentifier() const final;
   const GURL& GetOriginalUrl() const final;
+  NSString* GetOriginatingHost() const final;
   NSString* GetHttpMethod() const final;
   bool IsDone() const final;
   int GetErrorCode() const final;
@@ -104,11 +107,12 @@ class DownloadTaskImpl : public DownloadTask {
   SEQUENCE_CHECKER(sequence_checker_);
 
   // A list of observers. Weak references.
-  base::ObserverList<DownloadTaskObserver, true>::Unchecked observers_;
+  base::ObserverList<DownloadTaskObserver, true> observers_;
 
   // Back up corresponding public methods of DownloadTask interface.
   State state_ = State::kNotStarted;
   GURL original_url_;
+  NSString* originating_host_;
   NSString* http_method_ = nil;
   int http_code_ = -1;
   int64_t total_bytes_ = -1;
@@ -120,7 +124,7 @@ class DownloadTaskImpl : public DownloadTask {
   NSString* identifier_ = nil;
   bool has_performed_background_download_ = false;
   DownloadResult download_result_;
-  WebState* web_state_ = nullptr;
+  raw_ptr<WebState> web_state_ = nullptr;
 
   base::FilePath path_;
   bool owns_file_ = false;

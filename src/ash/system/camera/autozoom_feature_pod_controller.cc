@@ -1,84 +1,97 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/camera/autozoom_feature_pod_controller.h"
 
+#include "ash/constants/quick_settings_catalogs.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/camera/autozoom_controller_impl.h"
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/feature_tile.h"
+#include "ash/system/unified/quick_settings_metrics_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/accessibility/view_accessibility.h"
 
 namespace ash {
+namespace {
+
+bool IsButtonVisible() {
+  return Shell::Get()->autozoom_controller()->IsAutozoomControlEnabled() &&
+         Shell::Get()->session_controller()->ShouldEnableSettings();
+}
+
+}  // namespace
 
 AutozoomFeaturePodController::AutozoomFeaturePodController() {
-  auto* camera_hal_dispatcher = media::CameraHalDispatcherImpl::GetInstance();
-  if (camera_hal_dispatcher) {
-    camera_hal_dispatcher->AddActiveClientObserver(this);
-  }
+  Shell::Get()->autozoom_controller()->AddObserver(this);
 }
 
 AutozoomFeaturePodController::~AutozoomFeaturePodController() {
-  auto* camera_hal_dispatcher = media::CameraHalDispatcherImpl::GetInstance();
-  if (camera_hal_dispatcher) {
-    camera_hal_dispatcher->RemoveActiveClientObserver(this);
-  }
+  Shell::Get()->autozoom_controller()->RemoveObserver(this);
 }
 
-FeaturePodButton* AutozoomFeaturePodController::CreateButton() {
-  DCHECK(!button_);
-  button_ = new FeaturePodButton(this);
-  button_->SetVectorIcon(kUnifiedMenuAutozoomIcon);
+std::unique_ptr<FeatureTile> AutozoomFeaturePodController::CreateTile(
+    bool compact) {
+  DCHECK(!tile_);
+  auto tile = std::make_unique<FeatureTile>(
+      base::BindRepeating(&AutozoomFeaturePodController::OnIconPressed,
+                          weak_factory_.GetWeakPtr()));
+  tile_ = tile.get();
+  tile_->SetVectorIcon(kUnifiedMenuAutozoomIcon);
 
-  button_->SetLabel(
+  tile_->SetLabel(
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_AUTOZOOM_BUTTON_LABEL));
   auto description = l10n_util::GetStringUTF16(
       IDS_ASH_STATUS_TRAY_AUTOZOOM_TOGGLE_ACCESSIBILITY_DESCRIPTION);
-  button_->icon_button()->GetViewAccessibility().OverrideDescription(
-      description);
-  button_->label_button()->GetViewAccessibility().OverrideDescription(
-      description);
-  UpdateButton();
-  return button_;
+  tile_->GetViewAccessibility().SetDescription(description);
+  // `UpdateButton` will update visibility.
+  tile_->SetVisible(false);
+  UpdateButton(Shell::Get()->autozoom_controller()->GetState());
+  return tile;
 }
 
-SystemTrayItemUmaType AutozoomFeaturePodController::GetUmaType() const {
-  return SystemTrayItemUmaType::UMA_AUTOZOOM;
-}
-
-void AutozoomFeaturePodController::OnToggled() {
-  Shell::Get()->autozoom_controller()->Toggle();
-  UpdateButton();
-}
-
-void AutozoomFeaturePodController::OnLabelPressed() {
-  if (!button_->GetEnabled())
-    return;
-  OnToggled();
+QsFeatureCatalogName AutozoomFeaturePodController::GetCatalogName() {
+  return QsFeatureCatalogName::kAutozoom;
 }
 
 void AutozoomFeaturePodController::OnIconPressed() {
-  OnToggled();
+  TrackToggleUMA(
+      /*target_toggle_state=*/Shell::Get()->autozoom_controller()->GetState() !=
+      cros::mojom::CameraAutoFramingState::ON_SINGLE);
+  Shell::Get()->autozoom_controller()->Toggle();
 }
 
-void AutozoomFeaturePodController::UpdateButtonVisibility() {
-  if (!button_)
+void AutozoomFeaturePodController::UpdateTileVisibility() {
+  if (!tile_) {
     return;
-
-  button_->SetVisible(
-      Shell::Get()->session_controller()->ShouldEnableSettings() &&
-      active_camera_client_count_ > 0);
+  }
+  const bool visible = IsButtonVisible();
+  if (!tile_->GetVisible() && visible) {
+    TrackVisibilityUMA();
+  }
+  tile_->SetVisible(visible);
 }
 
-void AutozoomFeaturePodController::UpdateButton() {
-  auto state = Shell::Get()->autozoom_controller()->GetState();
+void AutozoomFeaturePodController::OnAutozoomStateChanged(
+    cros::mojom::CameraAutoFramingState state) {
+  UpdateButton(state);
+}
 
-  button_->SetToggled(state != cros::mojom::CameraAutoFramingState::OFF);
-  UpdateButtonVisibility();
+void AutozoomFeaturePodController::OnAutozoomControlEnabledChanged(
+    bool enabled) {
+  UpdateTileVisibility();
+}
+
+void AutozoomFeaturePodController::UpdateButton(
+    cros::mojom::CameraAutoFramingState state) {
+  if (!tile_) {
+    return;
+  }
+  tile_->SetToggled(state != cros::mojom::CameraAutoFramingState::OFF);
+  UpdateTileVisibility();
 
   std::u16string tooltip_state;
   std::u16string button_label;
@@ -99,21 +112,9 @@ void AutozoomFeaturePodController::UpdateButton() {
       break;
   }
 
-  button_->SetSubLabel(button_label);
-  button_->SetIconAndLabelTooltips(l10n_util::GetStringFUTF16(
+  tile_->SetSubLabel(button_label);
+  tile_->SetTooltipText(l10n_util::GetStringFUTF16(
       IDS_ASH_STATUS_TRAY_AUTOZOOM_TOGGLE_TOOLTIP, tooltip_state));
-}
-
-void AutozoomFeaturePodController::OnActiveClientChange(
-    cros::mojom::CameraClientType type,
-    bool is_active) {
-  if (is_active) {
-    active_camera_client_count_++;
-  } else {
-    active_camera_client_count_--;
-  }
-
-  UpdateButtonVisibility();
 }
 
 }  // namespace ash

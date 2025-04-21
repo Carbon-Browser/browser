@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/gestures/back_gesture/back_gesture_metrics.h"
 
-#include "ash/constants/app_types.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/shell.h"
 #include "ash/wm/overview/overview_controller.h"
@@ -12,7 +11,8 @@
 #include "ash/wm/splitview/split_view_divider.h"
 #include "ash/wm/window_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "ui/aura/client/aura_constants.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 
 namespace ash {
 
@@ -36,8 +36,8 @@ BackGestureStartScenarioType GetStartScenarioType(
                : BackGestureStartScenarioType::kNonSnappedWindow;
   }
 
-  const auto* left_window = split_view_controller->left_window();
-  const auto* right_window = split_view_controller->right_window();
+  const auto* left_window = split_view_controller->primary_window();
+  const auto* right_window = split_view_controller->secondary_window();
   const bool is_primary = IsCurrentScreenOrientationPrimary();
   const auto* physical_left_or_top_window =
       is_primary ? left_window : right_window;
@@ -148,13 +148,16 @@ BackGestureUnderneathWindowType GetUnderneathWindowType(
 
   const auto* window = window_util::GetTopWindow();
   DCHECK(window);
-  const int app_type = window->GetProperty(aura::client::kAppType);
-  if (app_type == static_cast<int>(AppType::BROWSER))
+  const chromeos::AppType app_type = window->GetProperty(chromeos::kAppTypeKey);
+  if (app_type == chromeos::AppType::BROWSER) {
     return BackGestureUnderneathWindowType::kBrowser;
-  if (app_type == static_cast<int>(AppType::CHROME_APP))
+  }
+  if (app_type == chromeos::AppType::CHROME_APP) {
     return BackGestureUnderneathWindowType::kChromeApp;
-  if (app_type == static_cast<int>(AppType::ARC_APP))
+  }
+  if (app_type == chromeos::AppType::ARC_APP) {
     return BackGestureUnderneathWindowType::kArcApp;
+  }
   return BackGestureUnderneathWindowType::kOthers;
 }
 

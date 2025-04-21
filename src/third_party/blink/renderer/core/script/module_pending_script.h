@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class ModulePendingScriptTreeClient final : public ModuleTreeClient {
 
   void SetPendingScript(ModulePendingScript* client);
 
-  ModuleScript* GetModuleScript() const { return module_script_; }
+  ModuleScript* GetModuleScript() const { return module_script_.Get(); }
 
   void Trace(Visitor*) const override;
 
@@ -47,7 +47,8 @@ class CORE_EXPORT ModulePendingScript : public PendingScript {
  public:
   ModulePendingScript(ScriptElementBase*,
                       ModulePendingScriptTreeClient*,
-                      bool is_external);
+                      bool is_external,
+                      scheduler::TaskAttributionInfo* parent_task);
   ~ModulePendingScript() override;
 
   void NotifyModuleTreeLoadFinished();
@@ -63,7 +64,7 @@ class CORE_EXPORT ModulePendingScript : public PendingScript {
   mojom::blink::ScriptType GetScriptType() const override {
     return mojom::blink::ScriptType::kModule;
   }
-  Script* GetSource(const KURL& document_url) const override;
+  Script* GetSource() const override;
   bool IsReady() const override { return ready_; }
   bool IsExternal() const override { return is_external_; }
   bool WasCanceled() const override { return false; }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/storage/cached_storage_area.h"
 #include "third_party/blink/renderer/modules/storage/storage_namespace.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
@@ -42,38 +42,31 @@ StorageController::DomStorageConnection GetDomStorageConnection() {
 
 // static
 StorageController* StorageController::GetInstance() {
-  DEFINE_STATIC_LOCAL(
-      StorageController, gCachedStorageAreaController,
-      (GetDomStorageConnection(),
-       Thread::MainThread()->Scheduler()->DeprecatedDefaultTaskRunner(),
-       base::SysInfo::IsLowEndDevice()
-           ? kStorageControllerTotalCacheLimitInBytesLowEnd
-           : kStorageControllerTotalCacheLimitInBytes));
+  DEFINE_STATIC_LOCAL(StorageController, gCachedStorageAreaController,
+                      (GetDomStorageConnection(),
+                       base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()
+                           ? kStorageControllerTotalCacheLimitInBytesLowEnd
+                           : kStorageControllerTotalCacheLimitInBytes));
   return &gCachedStorageAreaController;
 }
 
 // static
 bool StorageController::CanAccessStorageArea(LocalFrame* frame,
                                              StorageArea::StorageType type) {
-  if (auto* settings_client = frame->GetContentSettingsClient()) {
-    switch (type) {
-      case StorageArea::StorageType::kLocalStorage:
-        return settings_client->AllowStorageAccessSync(
-            WebContentSettingsClient::StorageType::kLocalStorage);
-      case StorageArea::StorageType::kSessionStorage:
-        return settings_client->AllowStorageAccessSync(
-            WebContentSettingsClient::StorageType::kSessionStorage);
-    }
+  switch (type) {
+    case StorageArea::StorageType::kLocalStorage:
+      return frame->AllowStorageAccessSyncAndNotify(
+          WebContentSettingsClient::StorageType::kLocalStorage);
+    case StorageArea::StorageType::kSessionStorage:
+      return frame->AllowStorageAccessSyncAndNotify(
+          WebContentSettingsClient::StorageType::kSessionStorage);
   }
   return true;
 }
 
-StorageController::StorageController(
-    DomStorageConnection connection,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-    size_t total_cache_limit)
-    : task_runner_(std::move(task_runner)),
-      namespaces_(MakeGarbageCollected<
+StorageController::StorageController(DomStorageConnection connection,
+                                     size_t total_cache_limit)
+    : namespaces_(MakeGarbageCollected<
                   HeapHashMap<String, WeakMember<StorageNamespace>>>()),
       total_cache_limit_(total_cache_limit),
       dom_storage_remote_(std::move(connection.dom_storage_remote)) {
@@ -83,6 +76,7 @@ StorageController::StorageController(
 }
 
 StorageNamespace* StorageController::CreateSessionStorageNamespace(
+    Page& page,
     const String& namespace_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // There is an edge case where a user closes a tab that has other tabs in the
@@ -90,9 +84,9 @@ StorageNamespace* StorageController::CreateSessionStorageNamespace(
   // around.
   auto it = namespaces_->find(namespace_id);
   if (it != namespaces_->end())
-    return it->value;
+    return it->value.Get();
   StorageNamespace* ns =
-      MakeGarbageCollected<StorageNamespace>(this, namespace_id);
+      MakeGarbageCollected<StorageNamespace>(page, this, namespace_id);
   namespaces_->insert(namespace_id, ns);
   return ns;
 }
@@ -118,12 +112,13 @@ void StorageController::ClearAreasIfNeeded() {
 }
 
 scoped_refptr<CachedStorageArea> StorageController::GetLocalStorageArea(
-    const LocalDOMWindow* local_dom_window,
-    mojo::PendingRemote<mojom::blink::StorageArea> local_storage_area) {
+    LocalDOMWindow* local_dom_window,
+    mojo::PendingRemote<mojom::blink::StorageArea> local_storage_area,
+    StorageNamespace::StorageContext context) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   EnsureLocalStorageNamespaceCreated();
-  return local_storage_namespace_->GetCachedArea(local_dom_window,
-                                                 std::move(local_storage_area));
+  return local_storage_namespace_->GetCachedArea(
+      local_dom_window, std::move(local_storage_area), context);
 }
 
 void StorageController::AddLocalStorageInspectorStorageAgent(

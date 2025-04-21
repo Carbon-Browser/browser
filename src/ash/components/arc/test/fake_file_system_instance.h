@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,9 +97,6 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
     // Whether this file is seekable or not.
     Seekable seekable;
 
-    // Override of |content| length in bytes.
-    absl::optional<int64_t> size_override;
-
     // The thumbnail of a file, which can be read by OpenThumbnail().
     std::string thumbnail_content;
 
@@ -107,17 +104,10 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
          const std::string& content,
          const std::string& mime_type,
          Seekable seekable);
-    File(const std::string& url,
-         const std::string& content,
-         const std::string& mime_type,
-         Seekable seekable,
-         int64_t size_override);
     File(const File& that);
     ~File();
 
-    size_t size() const {
-      return size_override ? *size_override : content.size();
-    }
+    size_t size() const { return content.size(); }
   };
 
   // Specification of a fake document available to documents provider based
@@ -142,7 +132,7 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
     int64_t size;
 
     // Last modified time in milliseconds from the UNIX epoch.
-    // TODO(crbug.com/672737): Use base::Time once the corresponding field
+    // TODO(crbug.com/40497368): Use base::Time once the corresponding field
     // in file_system.mojom stops using uint64.
     uint64_t last_modified;
 
@@ -365,13 +355,10 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
   void RequestFileRemovalScan(
       const std::vector<std::string>& directory_paths) override;
   void ReindexDirectory(const std::string& directory_path) override;
-  void DEPRECATED_OpenUrlsWithPermission(
-      mojom::OpenUrlsRequestPtr request,
-      DEPRECATED_OpenUrlsWithPermissionCallback callback) override;
   void OpenUrlsWithPermissionAndWindowInfo(
       mojom::OpenUrlsRequestPtr request,
       mojom::WindowInfoPtr window_info,
-      DEPRECATED_OpenUrlsWithPermissionCallback callback) override;
+      OpenUrlsWithPermissionAndWindowInfoCallback callback) override;
 
  private:
   // A pair of an authority and a document ID which identifies the location

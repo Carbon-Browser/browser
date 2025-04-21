@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/media/cma/backend/proxy/cma_backend_proxy.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "chromecast/media/api/cma_backend.h"
 #include "chromecast/media/api/decoder_buffer_base.h"
@@ -41,7 +41,6 @@ class MockMultizoneAudioDecoderProxy : public MultizoneAudioDecoderProxy {
   MOCK_METHOD0(GetRenderingDelay, RenderingDelay());
   MOCK_METHOD1(GetStatistics, void(Statistics*));
   MOCK_METHOD0(RequiresDecryption, bool());
-  MOCK_METHOD1(SetObserver, void(Observer*));
 
  private:
   // Used only for the ctor parameter.

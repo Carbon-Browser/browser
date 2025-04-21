@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
@@ -17,13 +17,12 @@
 #include "chrome/browser/ash/borealis/testing/callback_factory.h"
 #include "chrome/browser/ash/guest_os/dbus_test_helper.h"
 #include "chrome/browser/ash/guest_os/guest_os_stability_monitor.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -32,14 +31,14 @@ namespace borealis {
 namespace {
 
 MATCHER(IsSuccessResult, "") {
-  return arg && arg.Value()->vm_name() == "test_vm_name";
+  return arg.has_value() && arg.value()->vm_name() == "test_vm_name";
 }
 
 MATCHER(IsFailureResult, "") {
-  return !arg &&
-         arg.Error().error() ==
+  return !arg.has_value() &&
+         arg.error().error() ==
              borealis::BorealisStartupResult::kStartVmFailed &&
-         arg.Error().description() == "Something went wrong!";
+         arg.error().description() == "Something went wrong!";
 }
 
 class MockTask : public BorealisTask {
@@ -154,9 +153,9 @@ TEST_F(BorealisContextManagerTest, NoTasksImpliesSuccess) {
   EXPECT_CALL(callback_expectation, Call(testing::_))
       .WillOnce(
           testing::Invoke([](BorealisContextManager::ContextOrFailure result) {
-            EXPECT_TRUE(result);
+            EXPECT_TRUE(result.has_value());
             // Even with no tasks, the context will give the VM a name.
-            EXPECT_EQ(result.Value()->vm_name(), "borealis");
+            EXPECT_EQ(result.value()->vm_name(), "borealis");
           }));
   context_manager.StartBorealis(callback_expectation.BindOnce());
   task_environment_.RunUntilIdle();
@@ -280,8 +279,8 @@ TEST_F(BorealisContextManagerTest, ShutDownCancelsRequestsAndTerminatesVm) {
   EXPECT_CALL(callback_expectation, Call(testing::_))
       .WillOnce(
           testing::Invoke([](BorealisContextManager::ContextOrFailure result) {
-            EXPECT_FALSE(result);
-            EXPECT_EQ(result.Error().error(),
+            EXPECT_FALSE(result.has_value());
+            EXPECT_EQ(result.error().error(),
                       BorealisStartupResult::kCancelled);
           }));
 
@@ -318,7 +317,7 @@ TEST_F(BorealisContextManagerTest, FailureToShutdownReportsError) {
   task_environment_.RunUntilIdle();
   ASSERT_TRUE(context_manager.IsRunning());
 
-  vm_tools::concierge::StopVmResponse response;
+  vm_tools::concierge::SuccessFailureResponse response;
   response.set_success(false);
   response.set_failure_reason("expected failure");
   ash::FakeConciergeClient* fake_concierge_client =

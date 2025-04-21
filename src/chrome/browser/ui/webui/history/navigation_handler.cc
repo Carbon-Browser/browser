@@ -1,22 +1,23 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/history/navigation_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/base/window_open_disposition_utils.h"
 
 namespace webui {
 
-NavigationHandler::NavigationHandler() {}
+NavigationHandler::NavigationHandler() = default;
 
-NavigationHandler::~NavigationHandler() {}
+NavigationHandler::~NavigationHandler() = default;
 
 void NavigationHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
@@ -43,7 +44,8 @@ void NavigationHandler::HandleNavigateToUrl(const base::Value::List& list) {
                                   : WindowOpenDisposition::CURRENT_TAB);
   web_ui()->GetWebContents()->OpenURL(
       content::OpenURLParams(GURL(url_string), content::Referrer(), disposition,
-                             ui::PAGE_TRANSITION_LINK, false));
+                             ui::PAGE_TRANSITION_LINK, false),
+      /*navigation_handle_callback=*/{});
 
   // This may delete us!
 }

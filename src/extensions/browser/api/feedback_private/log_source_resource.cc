@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/feedback_private/log_source_resource.h"
 
 #include "base/lazy_instance.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -21,7 +22,7 @@ ApiResourceManager<LogSourceResource>::GetFactoryInstance() {
 }
 
 LogSourceResource::LogSourceResource(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     std::unique_ptr<system_logs::SystemLogsSource> source)
     : ApiResource(extension_id), source_(source.release()) {}
 

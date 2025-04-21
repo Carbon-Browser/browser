@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 #define COMPONENTS_LEVELDB_PROTO_INTERNAL_SHARED_PROTO_DATABASE_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
 #include "base/sequence_checker.h"
 #include "base/types/strong_alias.h"
 #include "components/leveldb_proto/internal/leveldb_database.h"
 #include "components/leveldb_proto/internal/proto/shared_db_metadata.pb.h"
 #include "components/leveldb_proto/internal/unique_proto_database.h"
 #include "components/leveldb_proto/public/shared_proto_database_client_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace leveldb_proto {
 
@@ -44,8 +44,8 @@ class COMPONENT_EXPORT(LEVELDB_PROTO) SharedProtoDatabaseClient
   static KeyPrefix PrefixForDatabase(ProtoDbType db_type);
 
   static bool HasPrefix(const PhysicalKey& key, const KeyPrefix& prefix);
-  static absl::optional<LogicalKey> StripPrefix(const PhysicalKey& key,
-                                                const KeyPrefix& prefix);
+  static std::optional<LogicalKey> StripPrefix(const PhysicalKey& key,
+                                               const KeyPrefix& prefix);
 
   static std::unique_ptr<KeyVector> PrefixStrings(
       std::unique_ptr<KeyVector> strings,

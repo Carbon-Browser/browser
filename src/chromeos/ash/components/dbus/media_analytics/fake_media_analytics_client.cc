@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -39,7 +39,7 @@ bool FakeMediaAnalyticsClient::FireMediaPerceptionEvent(
     const mri::MediaPerception& media_perception) {
   if (!process_running_)
     return false;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeMediaAnalyticsClient::OnMediaPerception,
                      weak_ptr_factory_.GetWeakPtr(), media_perception));
@@ -60,12 +60,12 @@ void FakeMediaAnalyticsClient::RemoveObserver(Observer* observer) {
 }
 
 void FakeMediaAnalyticsClient::GetState(
-    DBusMethodCallback<mri::State> callback) {
+    chromeos::DBusMethodCallback<mri::State> callback) {
   if (!process_running_) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeMediaAnalyticsClient::OnState,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -73,9 +73,9 @@ void FakeMediaAnalyticsClient::GetState(
 
 void FakeMediaAnalyticsClient::SetState(
     const mri::State& state,
-    DBusMethodCallback<mri::State> callback) {
+    chromeos::DBusMethodCallback<mri::State> callback) {
   if (!process_running_) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   DCHECK(state.has_status()) << "Trying to set state without status.";
@@ -85,7 +85,7 @@ void FakeMediaAnalyticsClient::SetState(
       << "Trying set state to something other than RUNNING, SUSPENDED or "
          "RESTARTING.";
   current_state_ = state;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeMediaAnalyticsClient::OnState,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -101,18 +101,18 @@ void FakeMediaAnalyticsClient::SetStateSuspended() {
 }
 
 void FakeMediaAnalyticsClient::OnState(
-    DBusMethodCallback<mri::State> callback) {
+    chromeos::DBusMethodCallback<mri::State> callback) {
   std::move(callback).Run(current_state_);
 }
 
 void FakeMediaAnalyticsClient::GetDiagnostics(
-    DBusMethodCallback<mri::Diagnostics> callback) {
+    chromeos::DBusMethodCallback<mri::Diagnostics> callback) {
   if (!process_running_) {
     LOG(ERROR) << "Fake media analytics process not running.";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeMediaAnalyticsClient::OnGetDiagnostics,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
@@ -120,14 +120,14 @@ void FakeMediaAnalyticsClient::GetDiagnostics(
 
 void FakeMediaAnalyticsClient::BootstrapMojoConnection(
     base::ScopedFD file_descriptor,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   // Fake that the mojo connection has been successfully established.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeMediaAnalyticsClient::OnGetDiagnostics(
-    DBusMethodCallback<mri::Diagnostics> callback) {
+    chromeos::DBusMethodCallback<mri::Diagnostics> callback) {
   std::move(callback).Run(diagnostics_);
 }
 

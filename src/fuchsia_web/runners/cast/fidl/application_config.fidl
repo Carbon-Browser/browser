@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// TODO(crbug.com/1227712): Migrate syntax and remove this.
 library chromium.cast;
 
 using fuchsia.diagnostics;
 using fuchsia.media;
 using fuchsia.ui.gfx;
 using fuchsia.web;
+using zx;
 
 /// Describes the configuration under which a Cast application should run.
 type ApplicationConfig = resource table {
@@ -22,7 +22,8 @@ type ApplicationConfig = resource table {
     /// implementation.
     3: web_url string;
 
-    4: reserved;
+    // Removed in https://crrev.com/c/1793791.
+    // 4: bool touch_enabled_policy;
 
     // If true, enable remote debugging for this application.
     // if false or unset, remote debugging is disabled for this application.
@@ -44,20 +45,27 @@ type ApplicationConfig = resource table {
     /// The initial minimum severity of `console` logs that will be logged to the
     /// [`fuchsia.logger/LogSink`] configured for this application. If not set, no
     /// messages will be logged.
-    // TODO(crbug.com/1088094): Deprecate once there is another mechanism.
+    // TODO(crbug.com/42050112): Deprecate once there is another mechanism.
     10: initial_min_console_log_severity fuchsia.diagnostics.Severity;
 
     /// The usage for [`fuchsia.media/AudioRenderer`] created by the app. If not
     /// specified, then audio will be played through
     /// [`fuchsia.media/AudioConsumer`].
     11: audio_renderer_usage fuchsia.media.AudioRenderUsage;
+
+    /// Optionally specifies an amount of time to grant to the Cast activity's
+    /// web content to perform teardown tasks, in addition to the time permitted
+    /// for the component to stop. Setting this value therefore allows the
+    /// application's web content to out-live the component itself, for up to
+    /// the specified duration.
+    12: shutdown_delay zx.Duration;
 };
 
 /// Service interface for working with application configurations.
 @discoverable
-protocol ApplicationConfigManager {
+closed protocol ApplicationConfigManager {
     /// Returns the ApplicationConfig for the specified application Id.
-    GetConfig(struct {
+    strict GetConfig(struct {
         id string;
     }) -> (resource struct {
         config ApplicationConfig;

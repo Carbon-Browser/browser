@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ int AppShellTestLauncherDelegate::RunTestSuite(int argc, char** argv) {
 
 std::string
 AppShellTestLauncherDelegate::GetUserDataDirectoryCommandLineSwitch() {
-  return switches::kContentShellDataPath;
+  return switches::kContentShellUserDataDir;
 }
 
 content::ContentMainDelegate*

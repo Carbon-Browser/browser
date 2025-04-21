@@ -1,19 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.library_loader;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.CommandLine;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.SysUtils;
 import org.chromium.base.TraceEvent;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
+import org.chromium.build.annotations.NullMarked;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -23,13 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * See also base/android/library_loader/library_prefetcher_hooks.cc, which contains
  * the native counterpart to this class.
  */
-@MainDex
+@NullMarked
 @JNINamespace("base::android")
 public class LibraryPrefetcher {
 
     private static final String TAG = "LibraryPrefetcher";
-    // One-way switch that becomes true once
-    // {@link asyncPrefetchLibrariesToMemory} has been called.
+    // One-way switch that becomes true once {@link asyncPrefetchLibrariesToMemory} has been called.
     private static final AtomicBoolean sPrefetchLibraryHasBeenCalled = new AtomicBoolean();
 
     /**
@@ -56,24 +55,27 @@ public class LibraryPrefetcher {
             return;
         }
 
-        PostTask.postTask(TaskTraits.USER_BLOCKING, () -> {
-            int percentage = LibraryPrefetcherJni.get().percentageOfResidentNativeLibraryCode();
-            try (TraceEvent e =
-                            TraceEvent.scoped("LibraryPrefetcher.asyncPrefetchLibrariesToMemory",
+        PostTask.postTask(
+                TaskTraits.USER_BLOCKING,
+                () -> {
+                    int percentage =
+                            LibraryPrefetcherJni.get().percentageOfResidentNativeLibraryCode();
+                    try (TraceEvent e =
+                            TraceEvent.scoped(
+                                    "LibraryPrefetcher.asyncPrefetchLibrariesToMemory",
                                     Integer.toString(percentage))) {
-                // Arbitrary percentage threshold. If most of the native library is already
-                // resident (likely with monochrome), don't bother creating a prefetch process.
-                boolean prefetch = coldStart && percentage < 90;
-                if (prefetch) LibraryPrefetcherJni.get().forkAndPrefetchNativeLibrary();
-                if (percentage != -1) {
-                    String histogram = "LibraryLoader.PercentageOfResidentCodeBeforePrefetch"
-                            + (coldStart ? ".ColdStartup" : ".WarmStartup");
-                    RecordHistogram.recordPercentageHistogram(histogram, percentage);
-                }
-            }
-            // Removes a dead flag, don't remove the removal code before M77 at least.
-            ContextUtils.getAppSharedPreferences().edit().remove("dont_prefetch_libraries").apply();
-        });
+                        // Arbitrary percentage threshold. If most of the native library is already
+                        // resident (likely with monochrome), don't bother creating a prefetch
+                        // process.
+                        boolean prefetch = coldStart && percentage < 90;
+                        if (prefetch) LibraryPrefetcherJni.get().forkAndPrefetchNativeLibrary();
+                    }
+                    // Removes a dead flag, don't remove the removal code before M77 at least.
+                    ContextUtils.getAppSharedPreferences()
+                            .edit()
+                            .remove("dont_prefetch_libraries")
+                            .apply();
+                });
     }
 
     @NativeMethods

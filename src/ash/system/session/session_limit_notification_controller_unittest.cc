@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -183,7 +183,7 @@ TEST_F(SessionLimitNotificationControllerLoginTest,
   EXPECT_FALSE(GetNotification());
 
   // Notification is shown after login.
-  CreateUserSessions(1);
+  SimulateUserLogin(kDefaultUserEmail);
   EXPECT_TRUE(GetNotification());
 
   RemoveNotification();
@@ -196,7 +196,7 @@ TEST_F(SessionLimitNotificationControllerLoginTest,
 
   // Notification should be absent.
   UpdateSessionLengthLimitInMin(kNotificationThresholdInMinutes + 10);
-  CreateUserSessions(1);
+  SimulateUserLogin(kDefaultUserEmail);
   EXPECT_FALSE(GetNotification());
 
   RemoveNotification();

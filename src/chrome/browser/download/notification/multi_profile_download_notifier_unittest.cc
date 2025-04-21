@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -86,10 +87,8 @@ class MultiProfileDownloadNotifierTest : public BrowserWithTestWindowTest {
     BrowserWithTestWindowTest::SetUp();
   }
 
-  TestingProfile* CreateProfile() override {
-    const std::string kProfileName = "profile";
-    TestingProfile* profile =
-        profile_manager()->CreateTestingProfile(kProfileName);
+  TestingProfile* CreateProfile(const std::string& profile_name) override {
+    auto* profile = BrowserWithTestWindowTest::CreateProfile(profile_name);
     SetUpDownloadManager(profile);
     return profile;
   }
@@ -122,7 +121,7 @@ class MultiProfileDownloadNotifierTest : public BrowserWithTestWindowTest {
   }
 
   testing::NiceMock<MockNotifierClient> client_;
-  testing::NiceMock<MockDownloadManager>* manager_;
+  raw_ptr<testing::NiceMock<MockDownloadManager>, DanglingUntriaged> manager_;
   testing::NiceMock<download::MockDownloadItem> item_;
   std::unique_ptr<MultiProfileDownloadNotifier> notifier_;
 };
@@ -238,7 +237,9 @@ TEST_P(MultiProfileDownloadNotifierManagerInitializationTest,
 
   ON_CALL(*manager(), GetAllDownloads)
       .WillByDefault(
-          [&downloads](std::vector<download::DownloadItem*>* download_ptrs) {
+          [&downloads](
+              std::vector<raw_ptr<download::DownloadItem, VectorExperimental>>*
+                  download_ptrs) {
             for (auto& download : downloads)
               download_ptrs->push_back(download.get());
           });

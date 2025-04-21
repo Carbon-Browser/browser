@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class FakeDesktopMediaPicker;
 // Used in tests to supply fake picker.
 class FakeDesktopMediaPickerFactory : public DesktopMediaPickerFactory {
  public:
-  // TODO(crbug.com/1179665): Make this less error prone - use WithX() methods.
+  // TODO(crbug.com/40169647): Make this less error prone - use WithX() methods.
   struct TestFlags {
     bool expect_screens = false;
     bool expect_windows = false;
@@ -46,8 +46,10 @@ class FakeDesktopMediaPickerFactory : public DesktopMediaPickerFactory {
   //  |test_flags| are expected to outlive the factory.
   void SetTestFlags(TestFlags* test_flags, int tests_count);
   FakeDesktopMediaPicker* picker() const { return picker_; }
+  bool IsWebContentsExcluded() const { return is_web_contents_excluded_; }
   // DesktopMediaPickerFactory implementation
-  std::unique_ptr<DesktopMediaPicker> CreatePicker() override;
+  std::unique_ptr<DesktopMediaPicker> CreatePicker(
+      const content::MediaStreamRequest* request) override;
   std::vector<std::unique_ptr<DesktopMediaList>> CreateMediaList(
       const std::vector<DesktopMediaList::Type>& types,
       content::WebContents* web_contents,
@@ -55,10 +57,12 @@ class FakeDesktopMediaPickerFactory : public DesktopMediaPickerFactory {
       override;
 
  private:
-  raw_ptr<FakeDesktopMediaPicker> picker_;
-  raw_ptr<TestFlags> test_flags_;
+  raw_ptr<FakeDesktopMediaPicker, AcrossTasksDanglingUntriaged> picker_;
+  raw_ptr<TestFlags, AcrossTasksDanglingUntriaged | AllowPtrArithmetic>
+      test_flags_;
   int tests_count_;
   int current_test_;
+  bool is_web_contents_excluded_ = false;
 };
 
 class FakeDesktopMediaPicker : public DesktopMediaPicker {

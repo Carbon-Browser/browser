@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "content/public/browser/web_contents_observer.h"
 
 namespace content {
@@ -83,6 +84,7 @@ class JavascriptTestObserver : public WebContentsObserver {
   raw_ptr<TestMessageHandler> handler_;
   bool running_;
   bool finished_;
+  base::RunLoop loop_{base::RunLoop::Type::kNestableTasksAllowed};
 };
 
 }  // namespace content

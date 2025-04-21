@@ -1,15 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_TRUST_TOKENS_TRUST_TOKEN_STORE_H_
 #define SERVICES_NETWORK_TRUST_TOKENS_TRUST_TOKEN_STORE_H_
 
+#include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "services/network/public/mojom/network_context.mojom.h"
@@ -18,7 +21,6 @@
 #include "services/network/trust_tokens/suitable_trust_token_origin.h"
 #include "services/network/trust_tokens/trust_token_persister.h"
 #include "services/network/trust_tokens/types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 
@@ -87,22 +89,17 @@ class TrustTokenStore {
   // of, for instance, corruption or clock skew).
   //
   // |issuer| must not be opaque.
-  [[nodiscard]] virtual absl::optional<base::TimeDelta> TimeSinceLastIssuance(
+  [[nodiscard]] virtual std::optional<base::TimeDelta> TimeSinceLastIssuance(
       const SuitableTrustTokenOrigin& issuer);
 
-  // Updates the given (issuer, top-level) origin pair's last redemption time
-  // to now.
-  virtual void RecordRedemption(const SuitableTrustTokenOrigin& issuer,
-                                const SuitableTrustTokenOrigin& top_level);
-
   // Returns the time elapsed since the last redemption recorded by
-  // RecordRedemption for issuer |issuer| and top level |top_level|,
+  // SetRedemptionRecord for issuer |issuer| and top level |top_level|,
   // or nullopt in the following two cases:
   // 1. there was no prior redemption for the (issuer,
   // top-level origin) pair.
   // 2. the time since the last redepmption is negative (because
   // of, for instance, corruption or clock skew).
-  [[nodiscard]] virtual absl::optional<base::TimeDelta> TimeSinceLastRedemption(
+  [[nodiscard]] virtual std::optional<base::TimeDelta> TimeSinceLastRedemption(
       const SuitableTrustTokenOrigin& issuer,
       const SuitableTrustTokenOrigin& top_level);
 
@@ -115,7 +112,7 @@ class TrustTokenStore {
   // of issuers allowed to be associated with a given top-level origin, returns
   // false. Otherwise, associates |issuer| with |top_level| and returns true.
   //
-  // TODO(crbug.com/1060716): As part of adding solid support for multiple
+  // TODO(crbug.com/40679190): As part of adding solid support for multiple
   // issuers, it'd be good to make these associations expire after some
   // reasonably long amount of time, so that top-level origins can change their
   // minds about their associated issuers.
@@ -149,7 +146,7 @@ class TrustTokenStore {
   // tokens issued against non-current keys.
   virtual void AddTokens(const SuitableTrustTokenOrigin& issuer,
                          base::span<const std::string> token_bodies,
-                         base::StringPiece issuing_key);
+                         std::string_view issuing_key);
 
   // Returns the number of tokens stored for |issuer|.
   [[nodiscard]] virtual int CountTokens(const SuitableTrustTokenOrigin& issuer);
@@ -177,11 +174,14 @@ class TrustTokenStore {
                                    const SuitableTrustTokenOrigin& top_level,
                                    const TrustTokenRedemptionRecord& record);
 
+  // Return redemption records per issuer/toplevel origin
+  [[nodiscard]] virtual IssuerRedemptionRecordMap GetRedemptionRecords();
+
   // Attempts to retrieve the stored RR for the given pair of (issuer,
   // top-level) origins.
   // - If the pair has a current (i.e., non-expired) RR, returns that RR.
   // - Otherwise, returns nullopt.
-  [[nodiscard]] virtual absl::optional<TrustTokenRedemptionRecord>
+  [[nodiscard]] virtual std::optional<TrustTokenRedemptionRecord>
   RetrieveNonstaleRedemptionRecord(const SuitableTrustTokenOrigin& issuer,
                                    const SuitableTrustTokenOrigin& top_level);
 
@@ -205,11 +205,18 @@ class TrustTokenStore {
   [[nodiscard]] virtual bool ClearDataForFilter(
       mojom::ClearDataFilterPtr filter);
 
+  [[nodiscard]] virtual bool ClearDataForPredicate(
+      base::RepeatingCallback<bool(const std::string&)> predicate);
+
   // Deletes all stored tokens issued by |issuer| but leaves other stored
   // data, including the issuer's Redemption Records (RRs), intact.
   // Returns whether any data was deleted.
   [[nodiscard]] virtual bool DeleteStoredTrustTokens(
       const SuitableTrustTokenOrigin& issuer);
+
+  [[nodiscard]] bool IsRedemptionLimitHit(
+      const SuitableTrustTokenOrigin& issuer,
+      const SuitableTrustTokenOrigin& top_level) const;
 
  private:
   std::unique_ptr<TrustTokenPersister> persister_;

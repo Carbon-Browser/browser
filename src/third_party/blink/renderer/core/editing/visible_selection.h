@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/editing/editing_strategy.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/editing/position.h"
+#include "third_party/blink/renderer/core/editing/selection_adjuster.h"
 #include "third_party/blink/renderer/core/editing/text_affinity.h"
 #include "third_party/blink/renderer/core/editing/text_granularity.h"
 #include "third_party/blink/renderer/core/editing/visible_units.h"
@@ -54,15 +55,15 @@ class VisibleSelectionTemplate {
   TextAffinity Affinity() const { return affinity_; }
 
   SelectionTemplate<Strategy> AsSelection() const;
-  PositionTemplate<Strategy> Base() const { return base_; }
-  PositionTemplate<Strategy> Extent() const { return extent_; }
+  PositionTemplate<Strategy> Anchor() const { return anchor_; }
+  PositionTemplate<Strategy> Focus() const { return focus_; }
   PositionTemplate<Strategy> Start() const;
   PositionTemplate<Strategy> End() const;
 
   VisiblePositionTemplate<Strategy> VisibleStart() const;
   VisiblePositionTemplate<Strategy> VisibleEnd() const;
-  VisiblePositionTemplate<Strategy> VisibleBase() const;
-  VisiblePositionTemplate<Strategy> VisibleExtent() const;
+  VisiblePositionTemplate<Strategy> VisibleAnchor() const;
+  VisiblePositionTemplate<Strategy> VisibleFocus() const;
 
   bool operator==(const VisibleSelectionTemplate&) const;
   bool operator!=(const VisibleSelectionTemplate& other) const {
@@ -73,8 +74,8 @@ class VisibleSelectionTemplate {
   bool IsCaret() const;
   bool IsRange() const;
 
-  // True if base() <= extent().
-  bool IsBaseFirst() const { return base_is_first_; }
+  // True if Anchor() <= Focus().
+  bool IsAnchorFirst() const { return anchor_is_first_; }
 
   // TODO(yosin) Most callers probably don't want these functions, but
   // are using them for historical reasons. |toNormalizedEphemeralRange()|
@@ -103,14 +104,14 @@ class VisibleSelectionTemplate {
   // currently invalid, will be valid once the changes are undone.
 
   // Where the first click happened
-  PositionTemplate<Strategy> base_;
+  PositionTemplate<Strategy> anchor_;
   // Where the end click happened
-  PositionTemplate<Strategy> extent_;
+  PositionTemplate<Strategy> focus_;
 
   TextAffinity affinity_;  // the upstream/downstream affinity of the caret
 
   // these are cached, can be recalculated by validate()
-  bool base_is_first_ : 1;        // True if base is before the extent
+  bool anchor_is_first_ : 1;  // True if anchor is before the focus
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT
@@ -126,11 +127,15 @@ CORE_EXPORT VisibleSelection CreateVisibleSelection(const SelectionInDOMTree&);
 CORE_EXPORT VisibleSelectionInFlatTree
 CreateVisibleSelection(const SelectionInFlatTree&);
 
-CORE_EXPORT SelectionInDOMTree ExpandWithGranularity(const SelectionInDOMTree&,
-                                                     TextGranularity);
+CORE_EXPORT SelectionInDOMTree
+ExpandWithGranularity(const SelectionInDOMTree&,
+                      TextGranularity,
+                      const WordInclusion& = WordInclusion::kDefault);
 
 CORE_EXPORT SelectionInFlatTree
-ExpandWithGranularity(const SelectionInFlatTree&, TextGranularity);
+ExpandWithGranularity(const SelectionInFlatTree&,
+                      TextGranularity,
+                      const WordInclusion& = WordInclusion::kDefault);
 
 // We don't yet support multi-range selections, so we only ever have one range
 // to return.

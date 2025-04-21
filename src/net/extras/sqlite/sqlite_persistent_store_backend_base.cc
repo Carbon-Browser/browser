@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,46 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros_local.h"
+#include "base/strings/strcat.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "sql/database.h"
+#include "base/timer/elapsed_timer.h"
 #include "sql/error_delegate_util.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+#endif  // BUILDFLAG(IS_WIN)
 
 namespace net {
 
 SQLitePersistentStoreBackendBase::SQLitePersistentStoreBackendBase(
     const base::FilePath& path,
-    std::string histogram_tag,
+    sql::Database::Tag histogram_tag,
     const int current_version_number,
     const int compatible_version_number,
     scoped_refptr<base::SequencedTaskRunner> background_task_runner,
-    scoped_refptr<base::SequencedTaskRunner> client_task_runner)
+    scoped_refptr<base::SequencedTaskRunner> client_task_runner,
+    bool enable_exclusive_access)
     : path_(path),
-      histogram_tag_(std::move(histogram_tag)),
+      histogram_tag_(histogram_tag),
       current_version_number_(current_version_number),
       compatible_version_number_(compatible_version_number),
       background_task_runner_(std::move(background_task_runner)),
-      client_task_runner_(std::move(client_task_runner)) {}
+      client_task_runner_(std::move(client_task_runner)),
+      enable_exclusive_access_(enable_exclusive_access) {}
 
 SQLitePersistentStoreBackendBase::~SQLitePersistentStoreBackendBase() {
-  DCHECK(!db_.get()) << "Close should already have been called.";
+  // If `db_` hasn't been reset by the time this destructor is called,
+  // a use-after-free could occur if the `db_` error callback is ever
+  // invoked. To guard against this, crash if `db_` hasn't been reset
+  // so that this use-after-free doesn't happen and so that we'll be
+  // alerted to the fact that a closer look at this code is needed.
+  CHECK(!db_.get()) << "Close should already have been called.";
 }
 
 void SQLitePersistentStoreBackendBase::Flush(base::OnceClosure callback) {
@@ -73,14 +84,20 @@ bool SQLitePersistentStoreBackendBase::InitializeDatabase() {
     return db_ != nullptr;
   }
 
+  base::ElapsedTimer timer;
+
   const base::FilePath dir = path_.DirName();
   if (!base::PathExists(dir) && !base::CreateDirectory(dir)) {
-    RecordPathDoesNotExistProblem();
     return false;
   }
 
-  db_ = std::make_unique<sql::Database>();
-  db_->set_histogram_tag(histogram_tag_);
+  // TODO(crbug.com/40262972): Remove explicit_locking = false. This currently
+  // needs to be set to false because of several failing MigrationTests.
+  db_ = std::make_unique<sql::Database>(
+      sql::DatabaseOptions{
+          .exclusive_locking = false,
+          .exclusive_database_file_lock = enable_exclusive_access_},
+      histogram_tag_);
 
   // base::Unretained is safe because |this| owns (and therefore outlives) the
   // sql::Database held by |db_|.
@@ -88,37 +105,55 @@ bool SQLitePersistentStoreBackendBase::InitializeDatabase() {
       &SQLitePersistentStoreBackendBase::DatabaseErrorCallback,
       base::Unretained(this)));
 
-  bool new_db = !base::PathExists(path_);
+  bool has_been_preloaded = false;
+  // It is not possible to preload a database opened with exclusive access,
+  // because the file cannot be opened again to preload it. In this case,
+  // preload before opening the database.
+  if (enable_exclusive_access_) {
+    has_been_preloaded = true;
+
+    // Can only attempt to preload before Open if the file exists.
+    if (base::PathExists(path_)) {
+      // See comments in Database::Preload for explanation of these values.
+      constexpr int kPreReadSize = 128 * 1024 * 1024;  // 128 MB
+      // TODO(crbug.com/40904059): Consider moving preload behind a database
+      // option.
+      base::PreReadFile(path_, /*is_executable=*/false, /*sequential=*/false,
+                        kPreReadSize);
+    }
+  }
 
   if (!db_->Open(path_)) {
-    DLOG(ERROR) << "Unable to open " << histogram_tag_ << " DB.";
+    DLOG(ERROR) << "Unable to open " << histogram_tag_.value << " DB.";
     RecordOpenDBProblem();
     Reset();
     return false;
   }
-  db_->Preload();
+
+  // Only attempt a preload if the database hasn't already been preloaded above.
+  if (!has_been_preloaded) {
+    db_->Preload();
+  }
 
   if (!MigrateDatabaseSchema() || !CreateDatabaseSchema()) {
-    DLOG(ERROR) << "Unable to update or initialize " << histogram_tag_
+    DLOG(ERROR) << "Unable to update or initialize " << histogram_tag_.value
                 << " DB tables.";
     RecordDBMigrationProblem();
     Reset();
     return false;
   }
 
+  base::UmaHistogramCustomTimes(
+      base::StrCat({histogram_tag_.value, ".TimeInitializeDB"}),
+      timer.Elapsed(), base::Milliseconds(1), base::Minutes(1), 50);
+
   initialized_ = DoInitializeDatabase();
 
   if (!initialized_) {
-    DLOG(ERROR) << "Unable to initialize " << histogram_tag_ << " DB.";
+    DLOG(ERROR) << "Unable to initialize " << histogram_tag_.value << " DB.";
     RecordOpenDBProblem();
     Reset();
     return false;
-  }
-
-  if (new_db) {
-    RecordNewDBFile();
-  } else {
-    RecordDBLoaded();
   }
 
   return true;
@@ -173,26 +208,28 @@ bool SQLitePersistentStoreBackendBase::MigrateDatabaseSchema() {
   }
 
   if (meta_table_.GetCompatibleVersionNumber() > current_version_number_) {
-    LOG(WARNING) << histogram_tag_ << " database is too new.";
+    LOG(WARNING) << histogram_tag_.value << " database is too new.";
     return false;
   }
 
   // |cur_version| is the version that the database ends up at, after all the
   // database upgrade statements.
-  absl::optional<int> cur_version = DoMigrateDatabaseSchema();
+  std::optional<int> cur_version = DoMigrateDatabaseSchema();
   if (!cur_version.has_value())
     return false;
 
   // Metatable is corrupted. Try to recover.
   if (cur_version.value() < current_version_number_) {
     meta_table_.Reset();
-    db_ = std::make_unique<sql::Database>();
+    db_ = std::make_unique<sql::Database>(histogram_tag_);
     bool recovered = sql::Database::Delete(path_) && db()->Open(path_) &&
                      meta_table_.Init(db(), current_version_number_,
                                       compatible_version_number_);
-    LOCAL_HISTOGRAM_BOOLEAN("Net.SQLite.CorruptMetaTableRecovered", recovered);
+    base::UmaHistogramBoolean(
+        base::StrCat({histogram_tag_.value, ".CorruptMetaTableRecovered"}),
+        recovered);
     if (!recovered) {
-      NOTREACHED() << "Unable to reset the " << histogram_tag_ << " DB.";
+      DLOG(ERROR) << "Unable to recover the " << histogram_tag_.value << " DB.";
       meta_table_.Reset();
       db_.reset();
       return false;
@@ -235,10 +272,21 @@ void SQLitePersistentStoreBackendBase::DatabaseErrorCallback(
 
   corruption_detected_ = true;
 
+  if (!initialized_) {
+    sql::UmaHistogramSqliteResult(
+        base::StrCat({histogram_tag_.value, ".ErrorInitializeDB"}), error);
+
+#if BUILDFLAG(IS_WIN)
+    base::UmaHistogramSparse(
+        base::StrCat({histogram_tag_.value, ".WinGetLastErrorInitializeDB"}),
+        ::GetLastError());
+#endif  // BUILDFLAG(IS_WIN)
+  }
+
   // Don't just do the close/delete here, as we are being called by |db| and
   // that seems dangerous.
-  // TODO(shess): Consider just calling RazeAndClose() immediately.
-  // db_ may not be safe to reset at this point, but RazeAndClose()
+  // TODO(shess): Consider just calling RazeAndPoison() immediately.
+  // db_ may not be safe to reset at this point, but RazeAndPoison()
   // would cause the stack to unwind safely with errors.
   PostBackgroundTask(
       FROM_HERE,
@@ -251,8 +299,7 @@ void SQLitePersistentStoreBackendBase::KillDatabase() {
   if (db_) {
     // This Backend will now be in-memory only. In a future run we will recreate
     // the database. Hopefully things go better then!
-    bool success = db_->RazeAndClose();
-    base::UmaHistogramBoolean(histogram_tag_ + ".KillDatabaseResult", success);
+    db_->RazeAndPoison();
     meta_table_.Reset();
     db_.reset();
   }

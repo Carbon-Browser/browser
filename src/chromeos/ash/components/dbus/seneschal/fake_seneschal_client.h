@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,12 +25,14 @@ class COMPONENT_EXPORT(SENESCHAL) FakeSeneschalClient : public SeneschalClient {
   void RemoveObserver(Observer* observer) override;
   void WaitForServiceToBeAvailable(
       dbus::ObjectProxy::WaitForServiceToBeAvailableCallback callback) override;
-  void SharePath(const vm_tools::seneschal::SharePathRequest& request,
-                 DBusMethodCallback<vm_tools::seneschal::SharePathResponse>
-                     callback) override;
-  void UnsharePath(const vm_tools::seneschal::UnsharePathRequest& request,
-                   DBusMethodCallback<vm_tools::seneschal::UnsharePathResponse>
-                       callback) override;
+  void SharePath(
+      const vm_tools::seneschal::SharePathRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::seneschal::SharePathResponse>
+          callback) override;
+  void UnsharePath(
+      const vm_tools::seneschal::UnsharePathRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::seneschal::UnsharePathResponse>
+          callback) override;
 
   bool share_path_called() const { return share_path_called_; }
   bool unshare_path_called() const { return unshare_path_called_; }

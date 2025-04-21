@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ TEST_F(ZcrRemoteShellTest, GetWorkAreaInsetsInPixel) {
             secondary_insets.ToString());
 
   // Stable Insets
-  auto widget = CreateTestWidget();
+  auto widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   widget->SetFullscreen(true);
   display = display::Screen::GetScreen()->GetPrimaryDisplay();
   ASSERT_EQ(display.bounds(), display.work_area());

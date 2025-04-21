@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,7 +108,8 @@ struct HistoryURLProviderParams {
                            const AutocompleteMatch& what_you_typed_match,
                            const TemplateURL* default_search_provider,
                            const SearchTermsData* search_terms_data,
-                           bool allow_deleting_browser_history);
+                           bool allow_deleting_browser_history,
+                           const TemplateURL* starter_pack_engine);
   ~HistoryURLProviderParams();
   HistoryURLProviderParams(const HistoryURLProviderParams&) = delete;
   HistoryURLProviderParams& operator=(const HistoryURLProviderParams&) = delete;
@@ -187,6 +188,8 @@ struct HistoryURLProviderParams {
   // True if the user is allowed to delete browser history. Stored here because
   // we aren't allowed to read user preferences from the History sequence.
   const bool allow_deleting_browser_history;
+
+  raw_ptr<const TemplateURL> starter_pack_engine;
 };
 
 // This class is an autocomplete provider and is also a pseudo-internal
@@ -214,24 +217,8 @@ class HistoryURLProvider : public HistoryProvider {
   // See base/trace_event/memory_usage_estimator.h for more info.
   size_t EstimateMemoryUsage() const override;
 
-  // Runs the history query on the history thread, called by the history
-  // system. The history database MAY BE NULL in which case it is not
-  // available and we should return no data. Also schedules returning the
-  // results to the main thread
-  void ExecuteWithDB(HistoryURLProviderParams* params,
-                     history::HistoryBackend* backend,
-                     history::URLDatabase* db);
-
  private:
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest, HUPScoringExperiment);
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest, DoTrimHttpScheme);
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest,
-                           DontTrimHttpSchemeIfInputHasScheme);
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest,
-                           DontTrimHttpSchemeIfInputMatchesInScheme);
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest,
-                           DontTrimHttpsSchemeIfInputMatchesInScheme);
-  FRIEND_TEST_ALL_PREFIXES(HistoryURLProviderTest, DoTrimHttpsScheme);
+  friend class HistoryURLProviderPublic;
 
   enum MatchType {
     NORMAL,
@@ -255,6 +242,14 @@ class HistoryURLProvider : public HistoryProvider {
   static ACMatchClassifications ClassifyDescription(
       const std::u16string& input_text,
       const std::u16string& description);
+
+  // Runs the history query on the history thread, called by the history
+  // system. The history database MAY BE NULL in which case it is not
+  // available and we should return no data. Also schedules returning the
+  // results to the main thread
+  void ExecuteWithDB(HistoryURLProviderParams* params,
+                     history::HistoryBackend* backend,
+                     history::URLDatabase* db);
 
   // Actually runs the autocomplete job on the given database, which is
   // guaranteed not to be NULL.  Used by both autocomplete passes, and therefore
@@ -332,11 +327,13 @@ class HistoryURLProvider : public HistoryProvider {
   // Converts a specified `match_number` from params.matches into an
   // autocomplete match for display.  If experimental scoring is enabled, the
   // final relevance score might be different from the given `relevance`.
+  // Populates scoring signals in ACMatch if enabled.
   // NOTE: This function should only be called on the UI thread.
   AutocompleteMatch HistoryMatchToACMatch(
       const HistoryURLProviderParams& params,
       size_t match_number,
-      int relevance);
+      int relevance,
+      bool populate_scoring_signals = false);
 
   // Params for the current query.  The provider should not free this directly;
   // instead, it is passed as a parameter through the history backend, and the

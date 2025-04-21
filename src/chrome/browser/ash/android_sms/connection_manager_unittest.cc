@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "ash/services/multidevice_setup/public/cpp/fake_multidevice_setup_client.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/android_sms/android_sms_urls.h"
 #include "chrome/browser/ash/android_sms/fake_android_sms_app_manager.h"
 #include "chrome/browser/ash/android_sms/fake_connection_establisher.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/fake_multidevice_setup_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/fake_service_worker_context.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -60,11 +61,10 @@ class ConnectionManagerTest : public testing::Test {
         return old_url_service_worker_;
 
       NOTREACHED();
-      return nullptr;
     }
 
-    content::FakeServiceWorkerContext* new_url_service_worker_;
-    content::FakeServiceWorkerContext* old_url_service_worker_;
+    raw_ptr<content::FakeServiceWorkerContext> new_url_service_worker_;
+    raw_ptr<content::FakeServiceWorkerContext> old_url_service_worker_;
   };
 
   enum class PwaState { kEnabledWithNewUrl, kEnabledWithOldUrl, kDisabled };
@@ -155,7 +155,7 @@ class ConnectionManagerTest : public testing::Test {
 
   void SetPwaState(PwaState pwa_state) {
     if (pwa_state == PwaState::kDisabled) {
-      fake_android_sms_app_manager_->SetInstalledAppUrl(absl::nullopt);
+      fake_android_sms_app_manager_->SetInstalledAppUrl(std::nullopt);
       fake_multidevice_setup_client_->SetFeatureState(
           multidevice_setup::mojom::Feature::kMessages,
           multidevice_setup::mojom::FeatureState::kDisabledByUser);
@@ -189,8 +189,10 @@ class ConnectionManagerTest : public testing::Test {
   std::unique_ptr<multidevice_setup::FakeMultiDeviceSetupClient>
       fake_multidevice_setup_client_;
   std::unique_ptr<FakeAndroidSmsAppManager> fake_android_sms_app_manager_;
-  FakeConnectionEstablisher* fake_connection_establisher_;
-  TestServiceWorkerProvider* test_service_worker_provider_;
+  raw_ptr<FakeConnectionEstablisher, DanglingUntriaged>
+      fake_connection_establisher_;
+  raw_ptr<TestServiceWorkerProvider, DanglingUntriaged>
+      test_service_worker_provider_;
 
   std::unique_ptr<ConnectionManager> connection_manager_;
 };

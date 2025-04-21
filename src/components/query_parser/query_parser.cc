@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,7 @@ QueryNodeWord::QueryNodeWord(const std::u16string& word,
                              MatchingAlgorithm matching_algorithm)
     : word_(word), literal_(false), matching_algorithm_(matching_algorithm) {}
 
-QueryNodeWord::~QueryNodeWord() {}
+QueryNodeWord::~QueryNodeWord() = default;
 
 int QueryNodeWord::AppendToSQLiteQuery(std::u16string* query) const {
   query->append(word_);
@@ -180,7 +180,7 @@ class QueryNodeList : public QueryNode {
   QueryNodeVector children_;
 };
 
-QueryNodeList::QueryNodeList() {}
+QueryNodeList::QueryNodeList() = default;
 
 QueryNodeList::~QueryNodeList() {
 }
@@ -215,18 +215,15 @@ bool QueryNodeList::IsWord() const {
 
 bool QueryNodeList::Matches(const std::u16string& word, bool exact) const {
   NOTREACHED();
-  return false;
 }
 
 bool QueryNodeList::HasMatchIn(const QueryWordVector& words,
                                Snippet::MatchPositions* match_positions) const {
   NOTREACHED();
-  return false;
 }
 
 bool QueryNodeList::HasMatchIn(const QueryWordVector& words, bool exact) const {
   NOTREACHED();
-  return false;
 }
 
 void QueryNodeList::AppendWords(std::vector<std::u16string>* words) const {
@@ -266,9 +263,9 @@ class QueryNodePhrase : public QueryNodeList {
                   const QueryWord** last_word) const;
 };
 
-QueryNodePhrase::QueryNodePhrase() {}
+QueryNodePhrase::QueryNodePhrase() = default;
 
-QueryNodePhrase::~QueryNodePhrase() {}
+QueryNodePhrase::~QueryNodePhrase() = default;
 
 int QueryNodePhrase::AppendToSQLiteQuery(std::u16string* query) const {
   query->push_back(L'"');
@@ -431,8 +428,8 @@ bool QueryParser::ParseQueryImpl(const std::u16string& query,
     // is not necessarily a word, but could also be a sequence of punctuation
     // or whitespace.
     if (iter.IsWord()) {
-      std::unique_ptr<QueryNodeWord> word_node =
-          std::make_unique<QueryNodeWord>(iter.GetString(), matching_algorithm);
+      auto word_node = std::make_unique<QueryNodeWord>(
+          std::u16string(iter.GetString()), matching_algorithm);
       if (in_quotes)
         word_node->set_literal(true);
       query_stack.back()->AddChild(std::move(word_node));
@@ -473,10 +470,10 @@ void QueryParser::ExtractQueryWords(const std::u16string& text,
     // is not necessarily a word, but could also be a sequence of punctuation
     // or whitespace.
     if (iter.IsWord()) {
-      std::u16string word = iter.GetString();
+      std::u16string_view word = iter.GetString();
       if (!word.empty()) {
         words->push_back(QueryWord());
-        words->back().word = word;
+        words->back().word = std::u16string(word);
         words->back().position = iter.prev();
      }
     }

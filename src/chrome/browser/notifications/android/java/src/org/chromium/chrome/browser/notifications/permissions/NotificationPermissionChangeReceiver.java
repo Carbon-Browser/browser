@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 
 import org.chromium.chrome.browser.notifications.NotificationUmaTracker;
+import org.chromium.components.browser_ui.notifications.NotificationProxyUtils;
 
 /**
  * A {@link android.content.BroadcastReceiver} that detects when our App level notifications are
@@ -26,8 +27,9 @@ public class NotificationPermissionChangeReceiver extends BroadcastReceiver {
                 && intent.hasExtra(NotificationManager.EXTRA_BLOCKED_STATE)) {
             boolean blockedState =
                     intent.getBooleanExtra(NotificationManager.EXTRA_BLOCKED_STATE, false);
-            NotificationUmaTracker.getInstance().onNotificationPermissionSettingChange(
-                    blockedState);
+            NotificationProxyUtils.setNotificationEnabled(!blockedState);
+            NotificationUmaTracker.getInstance()
+                    .onNotificationPermissionSettingChange(blockedState);
         }
     }
 }

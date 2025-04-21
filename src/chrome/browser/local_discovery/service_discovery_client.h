@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "net/base/address_family.h"
 #include "net/base/host_port_pair.h"
@@ -50,7 +50,8 @@ class ServiceWatcher {
     UPDATE_CHANGED,
     UPDATE_REMOVED,
     UPDATE_INVALIDATED,
-    UPDATE_TYPE_LAST = UPDATE_INVALIDATED
+    UPDATE_PERMISSION_REJECTED,
+    UPDATE_TYPE_LAST = UPDATE_PERMISSION_REJECTED
   };
 
   // Called when a service has been added or removed for a certain service name.
@@ -58,7 +59,7 @@ class ServiceWatcher {
       base::RepeatingCallback<void(UpdateType, const std::string&)>;
 
   // Listening will automatically stop when the destructor is called.
-  virtual ~ServiceWatcher() {}
+  virtual ~ServiceWatcher() = default;
 
   // Start the service type watcher.
   virtual void Start() = 0;
@@ -87,7 +88,7 @@ class ServiceResolver {
       ResolveCompleteCallback;
 
   // Listening will automatically stop when the destructor is called.
-  virtual ~ServiceResolver() {}
+  virtual ~ServiceResolver() = default;
 
   // Start the service reader.
   virtual void StartResolving() = 0;
@@ -102,14 +103,14 @@ class LocalDomainResolver {
                                   const net::IPAddress& /*address_ipv6*/)>
       IPAddressCallback;
 
-  virtual ~LocalDomainResolver() {}
+  virtual ~LocalDomainResolver() = default;
 
   virtual void Start() = 0;
 };
 
 class ServiceDiscoveryClient {
  public:
-  virtual ~ServiceDiscoveryClient() {}
+  virtual ~ServiceDiscoveryClient() = default;
 
   // Create a service watcher object listening for DNS-SD service announcements
   // on service type |service_type|.

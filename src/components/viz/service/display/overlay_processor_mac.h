@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ namespace viz {
 class VIZ_SERVICE_EXPORT OverlayProcessorMac
     : public OverlayProcessorInterface {
  public:
-  using CandidateList = CALayerOverlayList;
+  using CandidateList = OverlayCandidateList;
 
   OverlayProcessorMac();
   // For testing.
@@ -40,7 +40,6 @@ class VIZ_SERVICE_EXPORT OverlayProcessorMac
   bool IsOverlaySupported() const override;
   gfx::Rect GetPreviousFrameOverlaysBoundingRect() const override;
   gfx::Rect GetAndResetOverlayDamage() override;
-  void SetIsVideoCaptureEnabled(bool enabled) override;
 
   // Returns true if the platform supports hw overlays and surface occluding
   // damage rect needs to be computed since it will be used by overlay
@@ -63,11 +62,11 @@ class VIZ_SERVICE_EXPORT OverlayProcessorMac
 
   // For Mac, if we successfully generated a candidate list for CALayerOverlay,
   // we no longer need the |output_surface_plane|. This function takes a pointer
-  // to the absl::optional instance so the instance can be reset.
+  // to the std::optional instance so the instance can be reset.
   // TODO(weiliangc): Internalize the |output_surface_plane| inside the overlay
   // processor.
   void AdjustOutputSurfaceOverlay(
-      absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
+      std::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
 
   gfx::CALayerResult GetCALayerErrorCode() const override;
 

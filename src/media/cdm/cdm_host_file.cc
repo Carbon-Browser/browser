@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ std::unique_ptr<CdmHostFile> CdmHostFile::Create(
            << sig_file_path.MaybeAsASCII();
 
   // Preread file at |file_path| for better performance.
-  std::ignore = PreReadFile(file_path, /*is_executable=*/false);
+  std::ignore =
+      PreReadFile(file_path, /*is_executable=*/false, /*sequential=*/false);
 
   return std::unique_ptr<CdmHostFile>(
       new CdmHostFile(file_path, std::move(file), std::move(sig_file)));

@@ -1,12 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/parser/atomic_html_token.h"
 
 namespace blink {
-
-bool g_use_html_attribute_name_lookup = true;
 
 bool AtomicHTMLToken::UsesName() const {
   return type_ == HTMLToken::kStartTag || type_ == HTMLToken::kEndTag ||
@@ -30,6 +28,7 @@ const char* ToString(HTMLToken::TokenType type) {
     DEFINE_STRINGIFY(kComment);
     DEFINE_STRINGIFY(kCharacter);
     DEFINE_STRINGIFY(kEndOfFile);
+    DEFINE_STRINGIFY(kDOMPart);
 #undef DEFINE_STRINGIFY
   }
   return "<unknown>";
@@ -44,7 +43,7 @@ void AtomicHTMLToken::Show() const {
         printf(" selfclosing");
       [[fallthrough]];
     case HTMLToken::DOCTYPE:
-      printf(" name \"%s\"", name_.GetString().Utf8().c_str());
+      printf(" name \"%s\"", GetName().GetString().Utf8().c_str());
       break;
     case HTMLToken::kComment:
     case HTMLToken::kCharacter:

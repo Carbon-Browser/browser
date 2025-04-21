@@ -42,6 +42,9 @@
 
 #include "darwin_usb.h"
 
+/* Both kIOMasterPortDefault or kIOMainPortDefault are synonyms for 0. */
+static const mach_port_t darwin_default_master_port = 0;
+
 /* async event thread */
 static pthread_mutex_t libusb_darwin_at_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  libusb_darwin_at_cond = PTHREAD_COND_INITIALIZER;
@@ -162,7 +165,7 @@ static int ep_to_pipeRef(struct libusb_device_handle *dev_handle, uint8_t ep, ui
   for (iface = 0 ; iface < USB_MAXINTERFACES ; iface++) {
     cInterface = &priv->interfaces[iface];
 
-    if (dev_handle->claimed_interfaces & (1 << iface)) {
+    if (dev_handle->claimed_interfaces & (1U << iface)) {
       for (i = 0 ; i < cInterface->num_endpoints ; i++) {
         if (cInterface->endpoint_addrs[i] == ep) {
           *pipep = i + 1;
@@ -207,7 +210,7 @@ static int usb_setup_device_iterator (io_iterator_t *deviceIterator, UInt32 loca
     /* else we can still proceed as long as the caller accounts for the possibility of other devices in the iterator */
   }
 
-  return IOServiceGetMatchingServices(kIOMasterPortDefault, matchingDict, deviceIterator);
+  return IOServiceGetMatchingServices(darwin_default_master_port, matchingDict, deviceIterator);
 }
 
 /* Returns 1 on success, 0 on failure. */
@@ -336,7 +339,7 @@ static void *darwin_event_thread_main (void *arg0) {
   CFRetain (runloop);
 
   /* add the notification port to the run loop */
-  libusb_notification_port     = IONotificationPortCreate (kIOMasterPortDefault);
+  libusb_notification_port     = IONotificationPortCreate (darwin_default_master_port);
   libusb_notification_cfsource = IONotificationPortGetRunLoopSource (libusb_notification_port);
   CFRunLoopAddSource(runloop, libusb_notification_cfsource, kCFRunLoopDefaultMode);
 
@@ -662,7 +665,7 @@ static int darwin_cache_device_descriptor (struct libusb_context *ctx, struct da
       (void)(*device)->GetUSBDeviceInformation (device, &info);
 
       /* note that the device was suspended */
-      if (info & (1 << kUSBInformationDeviceIsSuspendedBit) || 0 == info)
+      if (info & (1U << kUSBInformationDeviceIsSuspendedBit) || 0 == info)
         try_unsuspend = 1;
 #endif
 
@@ -992,7 +995,7 @@ static void darwin_close (struct libusb_device_handle *dev_handle) {
 
   /* make sure all interfaces are released */
   for (i = 0 ; i < USB_MAXINTERFACES ; i++)
-    if (dev_handle->claimed_interfaces & (1 << i))
+    if (dev_handle->claimed_interfaces & (1U << i))
       libusb_release_interface (dev_handle, i);
 
   if (0 == dpriv->open_count) {
@@ -1039,7 +1042,7 @@ static int darwin_set_configuration(struct libusb_device_handle *dev_handle, int
   /* Setting configuration will invalidate the interface, so we need
      to reclaim it. First, dispose of existing interfaces, if any. */
   for (i = 0 ; i < USB_MAXINTERFACES ; i++)
-    if (dev_handle->claimed_interfaces & (1 << i))
+    if (dev_handle->claimed_interfaces & (1U << i))
       darwin_release_interface (dev_handle, i);
 
   kresult = (*(dpriv->device))->SetConfiguration (dpriv->device, config);
@@ -1048,7 +1051,7 @@ static int darwin_set_configuration(struct libusb_device_handle *dev_handle, int
 
   /* Reclaim any interfaces. */
   for (i = 0 ; i < USB_MAXINTERFACES ; i++)
-    if (dev_handle->claimed_interfaces & (1 << i))
+    if (dev_handle->claimed_interfaces & (1U << i))
       darwin_claim_interface (dev_handle, i);
 
   dpriv->active_config = config;

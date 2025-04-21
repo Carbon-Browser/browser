@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ namespace printing {
 class COMPONENT_EXPORT(PRINTING) PrintingContextNoSystemDialog
     : public PrintingContext {
  public:
-  explicit PrintingContextNoSystemDialog(Delegate* delegate);
+  PrintingContextNoSystemDialog(Delegate* delegate,
+                                ProcessBehavior process_behavior);
   PrintingContextNoSystemDialog(const PrintingContextNoSystemDialog&) = delete;
   PrintingContextNoSystemDialog& operator=(
       const PrintingContextNoSystemDialog&) = delete;

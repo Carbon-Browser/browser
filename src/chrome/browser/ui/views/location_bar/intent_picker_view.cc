@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/location_bar/intent_picker_view.h"
 
-#include "chrome/browser/apps/intent_helper/intent_picker_helpers.h"
+#include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils.h"
 #include "chrome/browser/ui/browser.h"
@@ -13,9 +13,9 @@
 #include "chrome/browser/ui/views/intent_picker_bubble_view.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/views/accessibility/view_accessibility.h"
 
 namespace content {
 class WebContents;
@@ -28,8 +28,12 @@ IntentPickerView::IntentPickerView(
     : PageActionIconView(nullptr,
                          0,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate),
-      browser_(browser) {}
+                         page_action_icon_delegate,
+                         "IntentPicker"),
+      browser_(browser) {
+  GetViewAccessibility().SetName(
+      l10n_util::GetStringUTF16(IDS_TOOLTIP_INTENT_PICKER_ICON));
+}
 
 IntentPickerView::~IntentPickerView() = default;
 
@@ -38,16 +42,21 @@ void IntentPickerView::UpdateImpl() {
 
   SetVisible(GetShowIcon());
 
-  if (was_visible && !GetVisible())
+  if (was_visible && !GetVisible()) {
     IntentPickerBubbleView::CloseCurrentBubble();
+  }
 }
 
 void IntentPickerView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {
   DCHECK(GetShowIcon());
   content::WebContents* web_contents = GetWebContents();
+  CHECK(web_contents);
   const GURL& url = chrome::GetURLToBookmark(web_contents);
-  apps::ShowIntentPickerOrLaunchApp(web_contents, url);
+  IntentPickerTabHelper* intent_picker_tab_helper =
+      IntentPickerTabHelper::FromWebContents(web_contents);
+  CHECK(intent_picker_tab_helper);
+  intent_picker_tab_helper->ShowIntentPickerBubbleOrLaunchApp(url);
 }
 
 views::BubbleDialogDelegate* IntentPickerView::GetBubble() const {
@@ -55,12 +64,14 @@ views::BubbleDialogDelegate* IntentPickerView::GetBubble() const {
 }
 
 bool IntentPickerView::GetShowIcon() const {
-  if (browser_->profile()->IsOffTheRecord())
+  if (browser_->profile()->IsOffTheRecord()) {
     return false;
+  }
 
   content::WebContents* web_contents = GetWebContents();
-  if (!web_contents)
+  if (!web_contents) {
     return false;
+  }
 
   IntentPickerTabHelper* tab_helper =
       IntentPickerTabHelper::FromWebContents(web_contents);
@@ -68,13 +79,9 @@ bool IntentPickerView::GetShowIcon() const {
 }
 
 const gfx::VectorIcon& IntentPickerView::GetVectorIcon() const {
-  return vector_icons::kOpenInNewIcon;
+  return kOpenInNewChromeRefreshIcon;
 }
 
-std::u16string IntentPickerView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_INTENT_PICKER_ICON);
-}
-
-BEGIN_METADATA(IntentPickerView, PageActionIconView)
+BEGIN_METADATA(IntentPickerView)
 ADD_READONLY_PROPERTY_METADATA(bool, ShowIcon)
 END_METADATA

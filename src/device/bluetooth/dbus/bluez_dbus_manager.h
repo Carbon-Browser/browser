@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/dbus/bluetooth_dbus_client_bundle.h"
@@ -169,6 +168,7 @@ class DEVICE_BLUETOOTH_EXPORT BluezDBusManager {
   void OnObjectManagerSupported(dbus::Response* response);
   void OnObjectManagerNotSupported(dbus::ErrorResponse* response);
 
+  void OnFlossManagerServiceAvailable(bool is_available);
   void OnFlossObjectManagerSupported(dbus::Response* response);
   void OnFlossObjectManagerNotSupported(dbus::ErrorResponse* response);
 

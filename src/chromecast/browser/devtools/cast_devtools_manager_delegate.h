@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,8 @@ class CastDevToolsManagerDelegate : public content::DevToolsManagerDelegate {
   bool HasEnabledWebContents() const;
 
   // content::DevToolsManagerDelegate implementation.
-  content::DevToolsAgentHost::List RemoteDebuggingTargets() override;
+  content::DevToolsAgentHost::List RemoteDebuggingTargets(
+      TargetType target_type) override;
   std::string GetDiscoveryPageHTML() override;
 
  private:

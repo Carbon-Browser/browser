@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "mojo/public/cpp/bindings/optional_as_pointer.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -53,11 +53,10 @@ EnumTraits<viz::mojom::CopyOutputResultFormat, viz::CopyOutputResult::Format>::
     case viz::CopyOutputResult::Format::RGBA:
       return viz::mojom::CopyOutputResultFormat::RGBA;
     case viz::CopyOutputResult::Format::I420_PLANES:
-    case viz::CopyOutputResult::Format::NV12_PLANES:
+    case viz::CopyOutputResult::Format::NV12:
       break;  // Not intended for transport across service boundaries.
   }
   NOTREACHED();
-  return viz::mojom::CopyOutputResultFormat::RGBA;
 }
 
 // static
@@ -126,19 +125,19 @@ const gfx::Rect& StructTraits<viz::mojom::CopyOutputResultDataView,
 }
 
 // static
-absl::optional<viz::CopyOutputResult::ScopedSkBitmap>
+std::optional<viz::CopyOutputResult::ScopedSkBitmap>
 StructTraits<viz::mojom::CopyOutputResultDataView,
              std::unique_ptr<viz::CopyOutputResult>>::
     bitmap(const std::unique_ptr<viz::CopyOutputResult>& result) {
   if (result->destination() !=
       viz::CopyOutputResult::Destination::kSystemMemory)
-    return absl::nullopt;
+    return std::nullopt;
   auto scoped_bitmap = result->ScopedAccessSkBitmap();
   if (!scoped_bitmap.bitmap().readyToDraw()) {
     // During shutdown or switching to background on Android, Chrome will
     // release GPU context, it will release mapped GPU memory which is used
     // in SkBitmap, in that case, a null bitmap will be sent.
-    return absl::nullopt;
+    return std::nullopt;
   }
   return scoped_bitmap;
 }
@@ -154,29 +153,9 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
     return nullptr;
   }
 
-  // Only RGBA can travel across process boundaries, in which case there will be
-  // only one plane that is relevant in the |result|:
+  // Only RGBA can travel across process boundaries.
   DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return mojo::MakeOptionalAsPointer(
-      &result->GetTextureResult()->planes[0].mailbox);
-}
-
-// static
-mojo::OptionalAsPointer<const gpu::SyncToken>
-StructTraits<viz::mojom::CopyOutputResultDataView,
-             std::unique_ptr<viz::CopyOutputResult>>::
-    sync_token(const std::unique_ptr<viz::CopyOutputResult>& result) {
-  if (result->destination() !=
-          viz::CopyOutputResult::Destination::kNativeTextures ||
-      result->IsEmpty()) {
-    return nullptr;
-  }
-
-  // Only RGBA can travel across process boundaries, in which case there will be
-  // only one plane that is relevant in the |result|:
-  DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return mojo::MakeOptionalAsPointer(
-      &result->GetTextureResult()->planes[0].sync_token);
+  return mojo::OptionalAsPointer(&result->GetTextureResult()->mailbox);
 }
 
 // static
@@ -189,7 +168,7 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
       result->IsEmpty()) {
     return nullptr;
   }
-  return mojo::MakeOptionalAsPointer(&result->GetTextureResult()->color_space);
+  return mojo::OptionalAsPointer(&result->GetTextureResult()->color_space);
 }
 
 // static
@@ -246,7 +225,7 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
     case viz::CopyOutputResult::Format::RGBA:
       switch (destination) {
         case viz::CopyOutputResult::Destination::kSystemMemory: {
-          absl::optional<SkBitmap> bitmap_opt;
+          std::optional<SkBitmap> bitmap_opt;
           if (!data.ReadBitmap(&bitmap_opt))
             return false;
           if (!bitmap_opt) {
@@ -267,13 +246,10 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
         }
 
         case viz::CopyOutputResult::Destination::kNativeTextures: {
-          absl::optional<gpu::Mailbox> mailbox;
+          std::optional<gpu::Mailbox> mailbox;
           if (!data.ReadMailbox(&mailbox) || !mailbox)
             return false;
-          absl::optional<gpu::SyncToken> sync_token;
-          if (!data.ReadSyncToken(&sync_token) || !sync_token)
-            return false;
-          absl::optional<gfx::ColorSpace> color_space;
+          std::optional<gfx::ColorSpace> color_space;
           if (!data.ReadColorSpace(&color_space) || !color_space)
             return false;
 
@@ -298,20 +274,18 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
 
           *out_p = std::make_unique<viz::CopyOutputTextureResult>(
               viz::CopyOutputResult::Format::RGBA, rect,
-              viz::CopyOutputResult::TextureResult(*mailbox, *sync_token,
-                                                   *color_space),
+              viz::CopyOutputResult::TextureResult(*mailbox, *color_space),
               std::move(release_callbacks));
           return true;
         }
       }
 
     case viz::CopyOutputResult::Format::I420_PLANES:
-    case viz::CopyOutputResult::Format::NV12_PLANES:
+    case viz::CopyOutputResult::Format::NV12:
       break;  // Not intended for transport across service boundaries.
   }
 
   NOTREACHED();
-  return false;
 }
 
 }  // namespace mojo

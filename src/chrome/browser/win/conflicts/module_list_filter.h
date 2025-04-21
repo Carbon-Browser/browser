@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define CHROME_BROWSER_WIN_CONFLICTS_MODULE_LIST_FILTER_H_
 
 #include <memory>
+#include <string_view>
 
 #include "base/memory/ref_counted.h"
-#include "base/strings/string_piece.h"
 #include "chrome/browser/win/conflicts/proto/module_list.pb.h"
 
 struct ModuleInfoKey;
@@ -36,8 +36,8 @@ class ModuleListFilter : public base::RefCountedThreadSafe<ModuleListFilter> {
   // should it be blocked from loading into the process.
   //
   // Marked virtual to allow mocking.
-  virtual bool IsAllowlisted(base::StringPiece module_basename_hash,
-                             base::StringPiece module_code_id_hash) const;
+  virtual bool IsAllowlisted(std::string_view module_basename_hash,
+                             std::string_view module_code_id_hash) const;
 
   // Returns true if the module is allowlisted.
   //

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/strings/stringprintf.h"
 #include "chromecast/cast_core/grpc/cancellable_reactor.h"
 #include "chromecast/cast_core/grpc/grpc_server.h"
 #include "chromecast/cast_core/grpc/grpc_server_reactor.h"
@@ -48,7 +47,7 @@ class GrpcServerStreamingHandler : public GrpcHandler {
 
     using OnRequestCallback = base::RepeatingCallback<void(TRequest, Reactor*)>;
     using WritesAvailableCallback =
-        base::RepeatingCallback<void(GrpcStatusOr<Reactor*>)>;
+        base::RepeatingCallback<void(grpc::Status, Reactor*)>;
 
     template <typename... Args>
     explicit Reactor(OnRequestCallback on_request_callback, Args&&... args)
@@ -88,19 +87,22 @@ class GrpcServerStreamingHandler : public GrpcHandler {
                << ", status=" << GrpcStatusToString(status);
       DCHECK(!buffer)
           << "Server streaming call can only be finished with a status";
+      if (!status.ok() && writes_available_callback_) {
+        // A signal that the caller has aborted the streaming session.
+        writes_available_callback_.Run(status, nullptr);
+      }
       Finish(status);
     }
 
     void OnResponseDone(const grpc::Status& status) override {
       DCHECK(writes_available_callback_)
           << "Writes available callback must be set";
-      writes_available_callback_.Run(status.ok() ? GrpcStatusOr<Reactor*>(this)
-                                                 : status);
+      writes_available_callback_.Run(status, status.ok() ? this : nullptr);
     }
 
     void OnRequestDone(GrpcStatusOr<TRequest> request) override {
       if (!request.ok()) {
-        Finish(request.status());
+        FinishWriting(nullptr, request.status());
         return;
       }
 

@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/device/usb/usb_device_impl.h"
 
@@ -9,13 +14,12 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
 #include "services/device/usb/usb_context.h"
@@ -59,7 +63,8 @@ void UsbDeviceImpl::Open(OpenCallback callback) {
   blocking_task_runner->PostTask(
       FROM_HERE,
       base::BindOnce(&UsbDeviceImpl::OpenOnBlockingThread, this,
-                     std::move(callback), base::ThreadTaskRunnerHandle::Get(),
+                     std::move(callback),
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
                      blocking_task_runner));
 }
 
@@ -77,8 +82,9 @@ void UsbDeviceImpl::ReadAllConfigurations() {
         continue;
       }
 
-      if (!usb_descriptor.Parse(base::make_span(buffer, rv)))
+      if (!usb_descriptor.Parse(base::span(buffer, static_cast<size_t>(rv)))) {
         USB_LOG(EVENT) << "Config descriptor index " << i << " was corrupt.";
+      }
       free(buffer);
     }
 
@@ -113,8 +119,8 @@ void UsbDeviceImpl::OpenOnBlockingThread(
   libusb_device_handle* handle = nullptr;
   const int rv = libusb_open(platform_device(), &handle);
   if (LIBUSB_SUCCESS == rv) {
-    ScopedLibusbDeviceHandle scoped_handle(handle,
-                                           platform_device_.GetContext());
+    ScopedLibusbDeviceHandle scoped_handle(
+        handle, platform_device_.GetContext(), platform_device_);
     task_runner->PostTask(
         FROM_HERE,
         base::BindOnce(&UsbDeviceImpl::Opened, this, std::move(scoped_handle),

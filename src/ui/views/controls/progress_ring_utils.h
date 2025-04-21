@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 namespace views {
 
 // Helper function that draws a progress ring on `canvas`. The progress ring
-// consists a background full ring and a partial ring that indicates the
-// progress. `start_angle` and `sweep_angle` are used to indicate the current
-// progress of the ring.
+// consists of a partial ring that indicates the progress, and the rest of the
+// ring is stroked with a background color. `start_angle` and `sweep_angle` are
+// used to indicate the current progress of the ring.
 VIEWS_EXPORT void DrawProgressRing(gfx::Canvas* canvas,
                                    const SkRect& bounds,
                                    SkColor background_color,
@@ -23,8 +23,9 @@ VIEWS_EXPORT void DrawProgressRing(gfx::Canvas* canvas,
                                    SkScalar sweep_angle);
 
 // Helper function that draws a spinning ring on `canvas`. The spinning ring
-// consists a background full ring and three arches distributed evenly on the
-// ring. `start_angle` is used to indicate the start angle of the first arch.
+// consists of three arches distributed evenly on the ring, with spaces in
+// between stroked with a background color. `start_angle` is used to indicate
+// the start angle of the first arch.
 VIEWS_EXPORT void DrawSpinningRing(gfx::Canvas* canvas,
                                    const SkRect& bounds,
                                    SkColor background_color,

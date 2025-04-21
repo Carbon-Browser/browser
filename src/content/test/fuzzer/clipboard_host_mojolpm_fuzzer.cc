@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/renderer_host/clipboard_host_impl.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/test/fuzzer/clipboard_host_mojolpm_fuzzer.pb.h"
@@ -67,9 +69,7 @@ class ClipboardHostTestcase
   void AddClipboardHost(uint32_t id, base::OnceClosure done_closure);
 
   content::mojolpm::RenderViewHostTestHarnessAdapter test_adapter_;
-  content::TestRenderFrameHost* render_frame_host_ = nullptr;
-
-  SEQUENCE_CHECKER(sequence_checker_);
+  raw_ptr<content::TestRenderFrameHost> render_frame_host_ = nullptr;
 };
 
 ClipboardHostTestcase::ClipboardHostTestcase(const ProtoTestcase& testcase)
@@ -83,7 +83,7 @@ ClipboardHostTestcase::~ClipboardHostTestcase() {
 
 void ClipboardHostTestcase::RunAction(const ProtoAction& action,
                                       base::OnceClosure run_closure) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(this->sequence_checker_);
   const auto ThreadId_UI =
       content::fuzzing::clipboard_host::proto::RunThreadAction_ThreadId_UI;
   const auto ThreadId_IO =
@@ -119,7 +119,7 @@ void ClipboardHostTestcase::RunAction(const ProtoAction& action,
 }
 
 void ClipboardHostTestcase::SetUp(base::OnceClosure done_closure) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(this->sequence_checker_);
 
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
@@ -137,7 +137,7 @@ void ClipboardHostTestcase::SetUpOnUIThread(base::OnceClosure done_closure) {
 }
 
 void ClipboardHostTestcase::TearDown(base::OnceClosure done_closure) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(this->sequence_checker_);
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&ClipboardHostTestcase::TearDownOnUIThread,
@@ -164,7 +164,7 @@ static void AddClipboardHostInstance(
 
 void ClipboardHostTestcase::AddClipboardHost(uint32_t id,
                                              base::OnceClosure run_closure) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(this->sequence_checker_);
   mojo::Remote<blink::mojom::ClipboardHost> remote;
   auto receiver = remote.BindNewPipeAndPassReceiver();
   content::GetUIThreadTaskRunner({})->PostTaskAndReply(

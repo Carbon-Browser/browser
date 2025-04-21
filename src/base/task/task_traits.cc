@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ const char* TaskPriorityToString(TaskPriority task_priority) {
       return "USER_BLOCKING";
   }
   NOTREACHED();
-  return "";
 }
 
 const char* TaskShutdownBehaviorToString(
@@ -36,7 +35,6 @@ const char* TaskShutdownBehaviorToString(
       return "BLOCK_SHUTDOWN";
   }
   NOTREACHED();
-  return "";
 }
 
 std::ostream& operator<<(std::ostream& os, const TaskPriority& task_priority) {

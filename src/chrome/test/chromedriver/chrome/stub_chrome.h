@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,33 +23,38 @@ class StubChrome : public Chrome {
   Status GetAsDesktop(ChromeDesktopImpl** desktop) override;
   const BrowserInfo* GetBrowserInfo() const override;
   bool HasCrashedWebView() override;
+  int GetWebViewCount() const override;
   Status GetWebViewIdForFirstTab(std::string* web_view_id,
                                  bool w3c_compliant) override;
-  Status GetWebViewIds(std::list<std::string>* web_view_ids,
-                       bool w3c_compliant) override;
+  Status GetTopLevelWebViewIds(std::list<std::string>* tab_view_ids,
+                               bool w3c_compliant) override;
   Status GetWebViewById(const std::string& id, WebView** web_view) override;
+  Status GetActivePageByWebViewId(const std::string& id,
+                                  WebView** web_view,
+                                  bool wait_for_page) override;
   Status NewWindow(const std::string& target_id,
                    WindowType type,
+                   bool is_background,
+                   bool w3c_compliant,
                    std::string* window_handle) override;
   Status GetWindowRect(const std::string& id, WindowRect* rect) override;
   Status SetWindowRect(const std::string& target_id,
-                       const base::DictionaryValue& params) override;
+                       const base::Value::Dict& params) override;
   Status MaximizeWindow(const std::string& target_id) override;
   Status MinimizeWindow(const std::string& target_id) override;
   Status FullScreenWindow(const std::string& target_id) override;
   Status CloseWebView(const std::string& id) override;
   Status ActivateWebView(const std::string& id) override;
   Status SetAcceptInsecureCerts() override;
-  Status SetPermission(
-      std::unique_ptr<base::DictionaryValue> permission_descriptor,
-      Chrome::PermissionState desired_state,
-      bool one_realm,
-      WebView* current_view) override;
+  Status SetPermission(std::unique_ptr<base::Value::Dict> permission_descriptor,
+                       Chrome::PermissionState desired_state,
+                       WebView* current_view) override;
   std::string GetOperatingSystemName() override;
   bool IsMobileEmulationEnabled() const override;
   bool HasTouchScreen() const override;
   std::string page_load_strategy() const override;
   Status Quit() override;
+  DevToolsClient* Client() const override;
 
  private:
   BrowserInfo browser_info_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 #include "base/observer_list.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_controller_observer.h"
-#include "components/autofill/core/browser/autofill_client.h"
+#include "components/autofill/core/browser/foundations/autofill_client.h"
 #include "components/autofill/core/browser/payments/legal_message_line.h"
+#include "components/autofill/core/browser/payments/payments_autofill_client.h"
 #include "components/autofill/core/browser/ui/payments/local_card_migration_dialog_controller.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -40,7 +41,7 @@ class LocalCardMigrationDialogControllerImpl
       const LegalMessageLines& legal_message_lines,
       const std::string& user_email,
       const std::vector<MigratableCreditCard>& migratable_credit_cards,
-      AutofillClient::LocalCardMigrationCallback
+      payments::PaymentsAutofillClient::LocalCardMigrationCallback
           start_migrating_cards_callback);
 
   // When migration is finished, update the credit card icon. Also passes
@@ -48,7 +49,8 @@ class LocalCardMigrationDialogControllerImpl
   void UpdateCreditCardIcon(
       const std::u16string& tip_message,
       const std::vector<MigratableCreditCard>& migratable_credit_cards,
-      AutofillClient::MigrationDeleteCardCallback delete_local_card_callback);
+      payments::PaymentsAutofillClient::MigrationDeleteCardCallback
+          delete_local_card_callback);
 
   // If the user clicks on the credit card icon in the omnibox, we show the
   // feedback dialog containing the uploading results of the cards that the
@@ -61,6 +63,7 @@ class LocalCardMigrationDialogControllerImpl
   void ShowErrorDialog();
 
   void AddObserver(LocalCardMigrationControllerObserver* observer);
+  void RemoveObserver(LocalCardMigrationControllerObserver* observer);
 
   // LocalCardMigrationDialogController:
   LocalCardMigrationDialogState GetViewState() const override;
@@ -110,12 +113,14 @@ class LocalCardMigrationDialogControllerImpl
 
   // Invoked when the save button is clicked. Will return a vector containing
   // GUIDs of cards that the user selected to upload.
-  AutofillClient::LocalCardMigrationCallback start_migrating_cards_callback_;
+  payments::PaymentsAutofillClient::LocalCardMigrationCallback
+      start_migrating_cards_callback_;
 
   // Invoked when the trash can button in the action-requied dialog is clicked.
   // Will pass a string of GUID of the card the user selected to delete from
   // local storage to LocalCardMigrationManager.
-  AutofillClient::MigrationDeleteCardCallback delete_local_card_callback_;
+  payments::PaymentsAutofillClient::MigrationDeleteCardCallback
+      delete_local_card_callback_;
 
   // Local copy of the MigratableCreditCards vector passed from
   // LocalCardMigrationManager. Used in constructing the
@@ -135,8 +140,7 @@ class LocalCardMigrationDialogControllerImpl
 
   // Contains observer listening to user's interactions with the dialog. The
   // observer is responsible for setting flow step upon these interactions.
-  base::ObserverList<LocalCardMigrationControllerObserver>::Unchecked
-      observer_list_;
+  base::ObserverList<LocalCardMigrationControllerObserver> observer_list_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

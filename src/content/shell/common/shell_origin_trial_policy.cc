@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/shell/common/shell_origin_trial_policy.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "base/feature_list.h"
 #include "content/public/common/content_features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"

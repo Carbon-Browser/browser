@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,20 @@
 #define CHROME_BROWSER_PUSH_MESSAGING_PUSH_MESSAGING_FEATURES_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 
 namespace features {
 
 // Feature flag to disallow creation of push messages with GCM Sender IDs.
-extern const base::Feature kPushMessagingDisallowSenderIDs;
+BASE_DECLARE_FEATURE(kPushMessagingDisallowSenderIDs);
 
 // Feature flag to enable push subscription with expiration times specified in
 // /chrome/browser/push_messaging/push_messaging_constants.h
-extern const base::Feature kPushSubscriptionWithExpirationTime;
+BASE_DECLARE_FEATURE(kPushSubscriptionWithExpirationTime);
 
-#if BUILDFLAG(IS_ANDROID)
-// Feature flag to revoke site-level Notifications permissions and FCM
-// registration.
-extern const base::Feature kRevokeNotificationsPermissionIfDisabledOnAppLevel;
-
-// Name of the variation parameter that represents the grace period that will be
-// applied before site-level Notifications permissions will be revoked and FCM
-// unsubscribed. The default value is 3.
-extern const char kNotificationRevocationGracePeriodInDays[];
-#endif
+// Feature flag to control which environment |kPushMessagingGcmEndpoint|
+// corresponds to.
+BASE_DECLARE_FEATURE(kPushMessagingGcmEndpointEnvironment);
 
 }  // namespace features
 

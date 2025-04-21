@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,9 @@ function testModifyHeadersOnRedirect(useExtraHeaders) {
   });
 
   var extraInfo = ['requestHeaders', 'blocking'];
-  if (useExtraHeaders)
+  if (useExtraHeaders) {
     extraInfo.push('extraHeaders');
+  }
   chrome.webRequest.onBeforeSendHeaders.addListener(listener,
       {urls: [finalURL]}, extraInfo);
 

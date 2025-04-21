@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 namespace views {
 class Button;
 class View;
-}
+}  // namespace views
 
 class Browser;
 
@@ -20,10 +20,10 @@ namespace bubble_anchor_util {
 
 struct AnchorConfiguration {
   // The bubble anchor view.
-  raw_ptr<views::View> anchor_view = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> anchor_view = nullptr;
 
   // The view to be highlighted, or null if it should not be used.
-  raw_ptr<views::Button> highlighted_button = nullptr;
+  raw_ptr<views::Button, DanglingUntriaged> highlighted_button = nullptr;
 
   // The arrow position for the bubble.
   views::BubbleBorder::Arrow bubble_arrow = views::BubbleBorder::TOP_LEFT;
@@ -31,8 +31,9 @@ struct AnchorConfiguration {
 
 // Returns the anchor configuration for bubbles that are aligned to the page
 // info bubble.
-AnchorConfiguration GetPageInfoAnchorConfiguration(Browser* browser,
-                                                   Anchor = kLocationBar);
+AnchorConfiguration GetPageInfoAnchorConfiguration(
+    Browser* browser,
+    Anchor = Anchor::kLocationBar);
 
 // Returns the anchor configuration for the permission bubble.
 AnchorConfiguration GetPermissionPromptBubbleAnchorConfiguration(

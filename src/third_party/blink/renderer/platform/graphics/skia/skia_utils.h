@@ -54,7 +54,6 @@
 #include "third_party/skia/include/core/SkScalar.h"
 
 namespace blink {
-class LayoutRect;
 
 /**** constants ****/
 
@@ -86,8 +85,6 @@ bool PLATFORM_EXPORT
 ApproximatelyEqualSkColorSpaces(sk_sp<SkColorSpace> src_color_space,
                                 sk_sp<SkColorSpace> dst_color_space);
 
-SkRect PLATFORM_EXPORT LayoutRectToSkRect(const blink::LayoutRect& rect);
-
 // Skia has problems when passed infinite, etc floats, filter them to 0.
 inline SkScalar WebCoreFloatToSkScalar(float f) {
   return SkFloatToScalar(std::isfinite(f) ? f : 0);
@@ -113,9 +110,7 @@ inline WindRule SkFillTypeToWindRule(SkPathFillType fill_type) {
       return static_cast<WindRule>(fill_type);
     default:
       NOTREACHED();
-      break;
   }
-  return RULE_NONZERO;
 }
 
 inline SkPoint FloatPointToSkPoint(const gfx::PointF& point) {
@@ -124,8 +119,7 @@ inline SkPoint FloatPointToSkPoint(const gfx::PointF& point) {
 }
 
 SkMatrix PLATFORM_EXPORT AffineTransformToSkMatrix(const AffineTransform&);
-SkMatrix PLATFORM_EXPORT
-TransformationMatrixToSkMatrix(const TransformationMatrix&);
+SkM44 PLATFORM_EXPORT AffineTransformToSkM44(const AffineTransform&);
 
 bool NearlyIntegral(float value);
 
@@ -151,11 +145,11 @@ inline float BlurRadiusToStdDev(float radius) {
 
 void PLATFORM_EXPORT DrawPlatformFocusRing(const SkRRect&,
                                            cc::PaintCanvas*,
-                                           SkColor,
+                                           SkColor4f,
                                            float width);
 void PLATFORM_EXPORT DrawPlatformFocusRing(const SkPath&,
                                            cc::PaintCanvas*,
-                                           SkColor,
+                                           SkColor4f,
                                            float width,
                                            float corner_radius);
 

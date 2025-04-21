@@ -1,8 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -81,16 +82,17 @@ class ProxyResolvingSocketTestBase {
     std::string received_contents;
     while (received_contents.size() < num_bytes) {
       base::RunLoop().RunUntilIdle();
-      std::vector<char> buffer(num_bytes);
-      uint32_t read_size =
-          static_cast<uint32_t>(num_bytes - received_contents.size());
-      MojoResult result = handle->get().ReadData(buffer.data(), &read_size,
-                                                 MOJO_READ_DATA_FLAG_NONE);
+      std::string buffer(num_bytes - received_contents.size(), '\0');
+      size_t actually_read_bytes = 0;
+      MojoResult result = handle->get().ReadData(
+          MOJO_READ_DATA_FLAG_NONE, base::as_writable_byte_span(buffer),
+          actually_read_bytes);
       if (result == MOJO_RESULT_SHOULD_WAIT)
         continue;
       if (result != MOJO_RESULT_OK)
         return received_contents;
-      received_contents.append(buffer.data(), read_size);
+      received_contents.append(
+          std::string_view(buffer).substr(0, actually_read_bytes));
     }
     return received_contents;
   }
@@ -109,12 +111,12 @@ class ProxyResolvingSocketTestBase {
     options->use_tls = use_tls_;
     options->fake_tls_handshake = fake_tls_handshake_;
     factory_remote_->CreateProxyResolvingSocket(
-        url, net::NetworkIsolationKey(), std::move(options),
+        url, net::NetworkAnonymizationKey(), std::move(options),
         net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
         std::move(receiver), std::move(socket_observer),
         base::BindLambdaForTesting(
-            [&](int result, const absl::optional<net::IPEndPoint>& local_addr,
-                const absl::optional<net::IPEndPoint>& peer_addr,
+            [&](int result, const std::optional<net::IPEndPoint>& local_addr,
+                const std::optional<net::IPEndPoint>& peer_addr,
                 mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
                 mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
               net_error = result;
@@ -267,23 +269,21 @@ TEST_P(ProxyResolvingSocketTest, ConnectError) {
 TEST_P(ProxyResolvingSocketTest, BasicReadWrite) {
   Init("DIRECT");
   mojo::PendingRemote<mojom::ProxyResolvingSocket> socket;
-  const char kTestMsg[] = "abcdefghij";
-  const size_t kMsgSize = strlen(kTestMsg);
-  const int kNumIterations = 3;
+  constexpr std::string_view kTestMsg = "abcdefghij";
+  constexpr size_t kMsgSize = kTestMsg.size();
+  constexpr int kNumIterations = 3;
   std::vector<net::MockRead> reads;
   std::vector<net::MockWrite> writes;
   int sequence_number = 0;
   for (int j = 0; j < kNumIterations; ++j) {
     for (size_t i = 0; i < kMsgSize; ++i) {
-      reads.push_back(
-          net::MockRead(net::ASYNC, &kTestMsg[i], 1, sequence_number++));
+      reads.emplace_back(net::ASYNC, &kTestMsg[i], 1, sequence_number++);
     }
     if (j == kNumIterations - 1) {
-      reads.push_back(net::MockRead(net::ASYNC, net::OK, sequence_number++));
+      reads.emplace_back(net::ASYNC, net::OK, sequence_number++);
     }
     for (size_t i = 0; i < kMsgSize; ++i) {
-      writes.push_back(
-          net::MockWrite(net::ASYNC, &kTestMsg[i], 1, sequence_number++));
+      writes.emplace_back(net::ASYNC, &kTestMsg[i], 1, sequence_number++);
     }
   }
   net::StaticSocketDataProvider data_provider(reads, writes);
@@ -306,10 +306,11 @@ TEST_P(ProxyResolvingSocketTest, BasicReadWrite) {
     EXPECT_EQ(kTestMsg, Read(&client_socket_receive_handle, kMsgSize));
     // Write multiple times.
     for (size_t i = 0; i < kMsgSize; ++i) {
-      uint32_t num_bytes = 1;
+      size_t actually_written_bytes = 0;
       EXPECT_EQ(MOJO_RESULT_OK,
                 client_socket_send_handle->WriteData(
-                    &kTestMsg[i], &num_bytes, MOJO_WRITE_DATA_FLAG_NONE));
+                    base::as_byte_span(kTestMsg).subspan(i, 1u),
+                    MOJO_WRITE_DATA_FLAG_NONE, actually_written_bytes));
       // Flush the 1 byte write.
       base::RunLoop().RunUntilIdle();
     }
@@ -340,9 +341,9 @@ TEST_F(ProxyResolvingSocketMojoTest, ConnectWithFakeTLSHandshake) {
   Init("DIRECT");
   set_fake_tls_handshake(true);
 
-  base::StringPiece client_hello =
+  std::string_view client_hello =
       webrtc::FakeSSLClientSocket::GetSslClientHello();
-  base::StringPiece server_hello =
+  std::string_view server_hello =
       webrtc::FakeSSLClientSocket::GetSslServerHello();
   std::vector<net::MockRead> reads = {
       net::MockRead(net::ASYNC, server_hello.data(), server_hello.length(), 1),
@@ -387,13 +388,13 @@ TEST_F(ProxyResolvingSocketMojoTest, SocketDestroyedBeforeConnectCompletes) {
   base::RunLoop run_loop;
   int net_error = net::OK;
   factory()->CreateProxyResolvingSocket(
-      kDestination, net::NetworkIsolationKey(), nullptr,
+      kDestination, net::NetworkAnonymizationKey(), nullptr,
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
       socket.InitWithNewPipeAndPassReceiver(),
       mojo::NullRemote() /* observer */,
       base::BindLambdaForTesting(
-          [&](int result, const absl::optional<net::IPEndPoint>& local_addr,
-              const absl::optional<net::IPEndPoint>& peer_addr,
+          [&](int result, const std::optional<net::IPEndPoint>& local_addr,
+              const std::optional<net::IPEndPoint>& peer_addr,
               mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
               mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
             net_error = result;

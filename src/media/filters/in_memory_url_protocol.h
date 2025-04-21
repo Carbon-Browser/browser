@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "media/filters/ffmpeg_glue.h"
 
 namespace media {
@@ -36,7 +37,7 @@ class MEDIA_EXPORT InMemoryUrlProtocol : public FFmpegURLProtocol {
   bool IsStreaming() override;
 
  private:
-  const uint8_t* data_;
+  raw_ptr<const uint8_t, AllowPtrArithmetic | DanglingUntriaged> data_;
   int64_t size_;
   int64_t position_;
   bool streaming_;

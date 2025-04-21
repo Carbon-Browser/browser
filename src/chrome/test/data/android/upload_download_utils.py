@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -57,7 +57,7 @@ def download(directory, filter, scenario, gcs_bucket):
                   '%d: %s', scenario, directory, e.returncode, e.output)
 
 
-# TODO(crbug/1096656): Remove this after root cause is found.
+# TODO(crbug.com/40700852): Remove this after root cause is found.
 def verify_file_exists(directory, filter):
   """Verifies that some file exists in the directory."""
   for _, _, file_list in os.walk(directory):
@@ -136,5 +136,3 @@ def _get_files_to_upload(directory, filter):
             continue
     files_to_upload.append(file_path)
   return files_to_upload
-
-

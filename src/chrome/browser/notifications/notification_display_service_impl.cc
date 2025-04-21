@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
@@ -27,12 +27,12 @@
 #include "extensions/buildflags/buildflags.h"
 #include "ui/message_center/public/cpp/notification.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "chrome/browser/extensions/api/notifications/extension_notification_handler.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
-    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA)
+    BUILDFLAG(IS_WIN)
 #include "chrome/browser/send_tab_to_self/desktop_notification_handler.h"
 #include "chrome/browser/sharing/sharing_notification_handler.h"
 #endif
@@ -46,14 +46,6 @@
 #include "chrome/browser/notifications/muted_notification_handler.h"
 #include "chrome/browser/notifications/screen_capture_notification_blocker.h"
 #endif
-
-namespace {
-
-void OperationCompleted() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-}
-
-}  // namespace
 
 // static
 NotificationDisplayServiceImpl* NotificationDisplayServiceImpl::GetForProfile(
@@ -95,7 +87,7 @@ NotificationDisplayServiceImpl::NotificationDisplayServiceImpl(Profile* profile)
         std::make_unique<safe_browsing::TailoredSecurityNotificationHandler>());
 #endif
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
     AddNotificationHandler(
         NotificationHandler::Type::EXTENSION,
         std::make_unique<extensions::ExtensionNotificationHandler>());
@@ -142,30 +134,28 @@ void NotificationDisplayServiceImpl::ProcessNotificationOperation(
     NotificationHandler::Type notification_type,
     const GURL& origin,
     const std::string& notification_id,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
-    const absl::optional<bool>& by_user) {
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
+    const std::optional<bool>& by_user,
+    base::OnceClosure on_completed_cb) {
   NotificationHandler* handler = GetNotificationHandler(notification_type);
   DCHECK(handler);
   if (!handler) {
     LOG(ERROR) << "Unable to find a handler for "
                << static_cast<int>(notification_type);
+    std::move(on_completed_cb).Run();
     return;
   }
-
-  // TODO(crbug.com/766854): Plumb this through from the notification platform
-  // bridges so they can report completion of the operation as needed.
-  base::OnceClosure completed_closure = base::BindOnce(&OperationCompleted);
 
   switch (operation) {
     case NotificationOperation::kClick:
       handler->OnClick(profile_, origin, notification_id, action_index, reply,
-                       std::move(completed_closure));
+                       std::move(on_completed_cb));
       break;
     case NotificationOperation::kClose:
       DCHECK(by_user.has_value());
       handler->OnClose(profile_, origin, notification_id, by_user.value(),
-                       std::move(completed_closure));
+                       std::move(on_completed_cb));
       for (auto& observer : observers_)
         observer.OnNotificationClosed(notification_id);
       break;
@@ -261,7 +251,24 @@ void NotificationDisplayServiceImpl::GetDisplayed(
 
   bridge_delegator_->GetDisplayed(
       base::BindOnce(&NotificationDisplayServiceImpl::OnGetDisplayed,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
+                     weak_factory_.GetWeakPtr(), /*origin=*/std::nullopt,
+                     std::move(callback)));
+}
+
+void NotificationDisplayServiceImpl::GetDisplayedForOrigin(
+    const GURL& origin,
+    DisplayedNotificationsCallback callback) {
+  if (!bridge_delegator_initialized_) {
+    actions_.push(base::BindOnce(
+        &NotificationDisplayServiceImpl::GetDisplayedForOrigin,
+        weak_factory_.GetWeakPtr(), origin, std::move(callback)));
+    return;
+  }
+
+  bridge_delegator_->GetDisplayedForOrigin(
+      origin,
+      base::BindOnce(&NotificationDisplayServiceImpl::OnGetDisplayed,
+                     weak_factory_.GetWeakPtr(), origin, std::move(callback)));
 }
 
 void NotificationDisplayServiceImpl::AddObserver(Observer* observer) {
@@ -279,22 +286,24 @@ void NotificationDisplayServiceImpl::ProfileLoadedCallback(
     NotificationHandler::Type notification_type,
     const GURL& origin,
     const std::string& notification_id,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
-    const absl::optional<bool>& by_user,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
+    const std::optional<bool>& by_user,
+    base::OnceClosure on_completed_cb,
     Profile* profile) {
   base::UmaHistogramBoolean("Notifications.LoadProfileResult",
                             profile != nullptr);
   if (!profile) {
     LOG(WARNING) << "Profile not loaded correctly";
+    std::move(on_completed_cb).Run();
     return;
   }
 
   NotificationDisplayServiceImpl* display_service =
       NotificationDisplayServiceImpl::GetForProfile(profile);
-  display_service->ProcessNotificationOperation(operation, notification_type,
-                                                origin, notification_id,
-                                                action_index, reply, by_user);
+  display_service->ProcessNotificationOperation(
+      operation, notification_type, origin, notification_id, action_index,
+      reply, by_user, std::move(on_completed_cb));
 }
 
 void NotificationDisplayServiceImpl::SetBlockersForTesting(
@@ -329,12 +338,16 @@ void NotificationDisplayServiceImpl::OnNotificationPlatformBridgeReady() {
 }
 
 void NotificationDisplayServiceImpl::OnGetDisplayed(
+    std::optional<GURL> origin,
     DisplayedNotificationsCallback callback,
     std::set<std::string> notification_ids,
     bool supports_synchronization) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::set<std::string> queued = notification_queue_.GetQueuedNotificationIds();
+  std::set<std::string> queued =
+      origin.has_value()
+          ? notification_queue_.GetQueuedNotificationIdsForOrigin(*origin)
+          : notification_queue_.GetQueuedNotificationIds();
   notification_ids.insert(queued.begin(), queued.end());
 
   std::move(callback).Run(std::move(notification_ids),

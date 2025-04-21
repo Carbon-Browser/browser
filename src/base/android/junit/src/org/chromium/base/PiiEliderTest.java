@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * junit tests for {@link PiiElider}.
- */
+/** junit tests for {@link PiiElider}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PiiEliderTest {
@@ -75,32 +73,23 @@ public class PiiEliderTest {
     }
 
     @Test
-    public void testElideUrl8() {
-        String original = "exception at org.chromium.chrome.browser.compositor.scene_layer."
-                + "TabListSceneLayer.nativeUpdateLayer(Native Method)";
-        assertEquals(original, PiiElider.elideUrl(original));
-    }
-
-    @Test
-    public void testElideUrl9() {
-        String original = "I/dalvikvm( 5083): at org.chromium.chrome.browser.compositor."
-                + "scene_layer.TabListSceneLayer.nativeUpdateLayer(Native Method)";
-        assertEquals(original, PiiElider.elideUrl(original));
-    }
-
-    @Test
     public void testElideUrl10() {
-        String original = "Caused by: java.lang.ClassNotFoundException: Didn't find class "
-                + "\"org.chromium.components.browser_ui.widget.SurfaceColorOvalView\"";
+        String original =
+                "Caused by: java.lang.ClassNotFoundException: Didn't find class "
+                        + "\"org.chromium.components.browser_ui.widget.SurfaceColorOvalView\"";
         assertEquals(original, PiiElider.elideUrl(original));
     }
 
     @Test
     public void testElideUrl11() {
-        String original = "java.lang.RuntimeException: Unable to start activity "
-                + "ComponentInfo{com.chrome.dev/org.chromium.chrome.browser.ChromeTabbedActivity}: "
-                + "android.view.InflateException: Binary XML file line #20 in "
-                + "com.chrome.dev:layout/0_resource_name_obfuscated:";
+        String original =
+                """
+                java.lang.RuntimeException: Unable to start activity
+                ComponentInfo{com.chrome.dev/org.chromium.chrome.browser.ChromeTabbedActivity}:
+                android.view.InflateException: Binary XML file line #20 in
+                com.chrome.dev:layout/0_resource_name_obfuscated:
+                """
+                        .replaceAll("\n", " ");
         assertEquals(original, PiiElider.elideUrl(original));
     }
 
@@ -114,6 +103,29 @@ public class PiiEliderTest {
     @Test
     public void testDontElideFileSuffixes() {
         String original = "chromium_android_linker.so";
+        assertEquals(original, PiiElider.elideUrl(original));
+    }
+
+    @Test
+    public void testDontElideFilePaths() {
+        String original =
+                """
+            dlopen failed: library "/data/app/com.chrome.dev-Lo4Mduh0dhPARVPBiAM_ag==/Chrome.apk!/\
+            lib/arm64-v8a/libelements.so" not found""";
+        assertEquals(original, PiiElider.elideUrl(original));
+    }
+
+    @Test
+    public void testDontElideChromeApkName() {
+        String original = "at Z94.e(chromium-TrichromeChromeGoogle6432.aab-canary-651000033:14)";
+        assertEquals(original, PiiElider.elideUrl(original));
+    }
+
+    @Test
+    public void testDontElideAndroidPermission() {
+        String original =
+                "java.lang.SecurityException: get package info: Neither user 1210041 nor current"
+                        + " process has android.permission.READ_LOGS";
         assertEquals(original, PiiElider.elideUrl(original));
     }
 
@@ -147,21 +159,27 @@ public class PiiEliderTest {
 
     @Test
     public void testElideUrlInStacktrace() {
-        String original = "java.lang.RuntimeException: Outer Exception crbug.com/12345\n"
-                + "  at org.chromium.base.PiiElider.sanitizeStacktrace (PiiElider.java:120)\n"
-                + "Caused by: java.lang.NullPointerException: Inner Exception shorturl.com/bxyj5";
-        String expected = "java.lang.RuntimeException: Outer Exception HTTP://WEBADDRESS.ELIDED\n"
-                + "  at org.chromium.base.PiiElider.sanitizeStacktrace (PiiElider.java:120)\n"
-                + "Caused by: java.lang.NullPointerException: Inner Exception "
-                + "HTTP://WEBADDRESS.ELIDED";
+        String original =
+                "java.lang.RuntimeException: Outer Exception crbug.com/12345\n"
+                    + "\tat org.chromium.base.PiiElider.sanitizeStacktrace (PiiElider.java:120)\n"
+                    + "Caused by: java.lang.NullPointerException: Inner Exception\n"
+                    + " shorturl.com/bxyj5";
+        String expected =
+                "java.lang.RuntimeException: Outer Exception HTTP://WEBADDRESS.ELIDED\n"
+                    + "\tat org.chromium.base.PiiElider.sanitizeStacktrace (PiiElider.java:120)\n"
+                    + "Caused by: java.lang.NullPointerException: Inner Exception\n"
+                    + " HTTP://WEBADDRESS.ELIDED";
         assertEquals(expected, PiiElider.sanitizeStacktrace(original));
     }
 
     @Test
     public void testDoesNotElideMethodNameInStacktrace() {
-        String original = "java.lang.NullPointerException: Attempt to invoke virtual method 'int "
-                + "org.robolectric.internal.AndroidSandbox.getBackStackEntryCount()' on a null "
-                + "object reference";
+        String original =
+                """
+                java.lang.NullPointerException: Attempt to invoke virtual method 'int \
+                org.robolectric.internal.AndroidSandbox.getBackStackEntryCount()' on a null \
+                object reference
+                \tat ...""";
         assertEquals(original, PiiElider.sanitizeStacktrace(original));
     }
 }

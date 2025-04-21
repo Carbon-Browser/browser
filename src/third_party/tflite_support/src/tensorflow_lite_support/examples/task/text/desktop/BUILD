@@ -1,5 +1,3 @@
-load("@org_tensorflow//tensorflow/lite/core/shims:cc_library_with_tflite.bzl", "cc_library_with_tflite")
-
 package(
     default_visibility = [
         "//tensorflow_lite_support:internal",
@@ -18,12 +16,12 @@ cc_binary(
     name = "bert_question_answerer_demo",
     srcs = ["bert_question_answerer_demo.cc"],
     deps = [
+        "//tensorflow_lite_support/cc/port:statusor",
+        "//tensorflow_lite_support/cc/task/text:bert_question_answerer",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "//tensorflow_lite_support/cc/port:statusor",
-        "//tensorflow_lite_support/cc/task/text:bert_question_answerer",
     ] + select({
         "//tensorflow_lite_support/examples/task:darwinn_portable": [
             "//tensorflow_lite_support/acceleration/configuration:edgetpu_coral_plugin",
@@ -43,13 +41,13 @@ cc_binary(
     name = "bert_nl_classifier_demo",
     srcs = ["bert_nl_classifier_demo.cc"],
     deps = [
+        "//tensorflow_lite_support/cc/port:statusor",
+        "//tensorflow_lite_support/cc/task/core:category",
+        "//tensorflow_lite_support/cc/task/text:bert_nl_classifier",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "//tensorflow_lite_support/cc/port:statusor",
-        "//tensorflow_lite_support/cc/task/core:category",
-        "//tensorflow_lite_support/cc/task/text:bert_nl_classifier",
     ] + select({
         "//tensorflow_lite_support/examples/task:darwinn_portable": [
             "//tensorflow_lite_support/acceleration/configuration:edgetpu_coral_plugin",
@@ -71,13 +69,13 @@ cc_binary(
     name = "nl_classifier_demo",
     srcs = ["nl_classifier_demo.cc"],
     deps = [
+        "//tensorflow_lite_support/cc/port:statusor",
+        "//tensorflow_lite_support/cc/task/core:category",
+        "//tensorflow_lite_support/cc/task/text/nlclassifier:nl_classifier",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "//tensorflow_lite_support/cc/port:statusor",
-        "//tensorflow_lite_support/cc/task/core:category",
-        "//tensorflow_lite_support/cc/task/text/nlclassifier:nl_classifier",
     ] + select({
         "//tensorflow_lite_support/examples/task:darwinn_portable": [
             "//tensorflow_lite_support/acceleration/configuration:edgetpu_coral_plugin",
@@ -85,22 +83,6 @@ cc_binary(
         "//conditions:default": [
         ],
     }),
-)
-
-cc_library_with_tflite(
-    name = "universal_sentence_encoder_qa_op_resolver",
-    srcs = ["universal_sentence_encoder_qa_op_resolver.cc"],
-    hdrs = ["universal_sentence_encoder_qa_op_resolver.h"],
-    tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
-    ],
-    deps = [
-        "//tensorflow_lite_support/custom_ops/kernel/ragged:ragged_tensor_to_tensor_tflite",  # fixdeps: keep
-        "//tensorflow_lite_support/custom_ops/kernel/sentencepiece:sentencepiece_tokenizer_tflite",  # fixdeps: keep
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/strings",
-        "@org_tensorflow//tensorflow/lite:op_resolver",
-    ],
 )
 
 # Example usage:
@@ -114,8 +96,8 @@ cc_binary(
         "universal_sentence_encoder_qa_demo.cc",
     ],
     deps = [
-        ":universal_sentence_encoder_qa_op_resolver",
         "//tensorflow_lite_support/cc/task/text:universal_sentence_encoder_qa",
+        "//tensorflow_lite_support/cc/task/text/utils:text_op_resolver",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
@@ -134,7 +116,6 @@ cc_binary(
     name = "text_searcher_demo",
     srcs = ["text_searcher_demo.cc"],
     deps = [
-        ":universal_sentence_encoder_qa_op_resolver",
         "//tensorflow_lite_support/cc/port:configuration_proto_inc",
         "//tensorflow_lite_support/cc/port:status_macros",
         "//tensorflow_lite_support/cc/task/core/proto:base_options_cc_proto",
@@ -144,6 +125,7 @@ cc_binary(
         "//tensorflow_lite_support/cc/task/processor/proto:search_result_cc_proto",
         "//tensorflow_lite_support/cc/task/text:text_searcher",
         "//tensorflow_lite_support/cc/task/text/proto:text_searcher_options_cc_proto",
+        "//tensorflow_lite_support/cc/task/text/utils:text_op_resolver",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
@@ -162,13 +144,13 @@ cc_binary(
     name = "text_embedder_demo",
     srcs = ["text_embedder_demo.cc"],
     deps = [
-        ":universal_sentence_encoder_qa_op_resolver",
         "//tensorflow_lite_support/cc/port:configuration_proto_inc",
         "//tensorflow_lite_support/cc/port:status_macros",
         "//tensorflow_lite_support/cc/task/core/proto:base_options_cc_proto",
         "//tensorflow_lite_support/cc/task/processor/proto:embedding_cc_proto",
         "//tensorflow_lite_support/cc/task/text:text_embedder",
         "//tensorflow_lite_support/cc/task/text/proto:text_embedder_options_cc_proto",
+        "//tensorflow_lite_support/cc/task/text/utils:text_op_resolver",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",

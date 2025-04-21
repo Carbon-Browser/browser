@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,17 +15,22 @@
 #include "ash/public/cpp/session/session_controller.h"
 #include "ash/public/cpp/session/session_types.h"
 #include "ash/session/session_activation_observer_holder.h"
-#include "base/callback.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/sequence_checker.h"
 #include "base/time/time.h"
 
 class AccountId;
+class PrefRegistrySimple;
 class PrefService;
 
 namespace ash {
 
 class FullscreenController;
+class ScopedScreenLockBlocker;
 class SessionControllerClient;
 class SessionObserver;
 class TestSessionControllerClient;
@@ -44,11 +49,16 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
 
   ~SessionControllerImpl() override;
 
+  // Registers syncable user profile prefs with the specified `registry`.
+  static void RegisterUserProfilePrefs(PrefRegistrySimple* registry);
+
   base::TimeDelta session_length_limit() const { return session_length_limit_; }
   base::Time session_start_time() const { return session_start_time_; }
-  bool session_state_change_in_progress() const {
-    return session_state_change_in_progress_;
-  }
+
+  // Returns the ash notion of login status.
+  // NOTE: Prefer GetSessionState() in new code because the concept of
+  // SessionState more closes matches the state in chrome.
+  LoginStatus login_status() const { return login_status_; }
 
   // Returns the number of signed in users. If 0 is returned, there is either
   // no session in progress or no active user.
@@ -60,6 +70,10 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
 
   // Gets the policy of adding a user session to ash.
   AddUserSessionPolicy GetAddUserPolicy() const;
+
+  // Returns true if the active user account is under any policy management.
+  // NOTE: This function should only be called if the active account exists.
+  bool IsActiveAccountManaged() const;
 
   // Returns |true| if the session has been fully started for the active user.
   // When a user becomes active, the profile and browser UI are not immediately
@@ -115,12 +129,15 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // Returns true if the current user is a child account.
   bool IsUserChild() const;
 
+  // Returns true if the current user is a guest account.
+  bool IsUserGuest() const;
+
   // Returns true if the current user is a public account.
   bool IsUserPublicAccount() const;
 
   // Returns the type of the current user, or empty if there is no current user
   // logged in.
-  absl::optional<user_manager::UserType> GetUserType() const;
+  std::optional<user_manager::UserType> GetUserType() const;
 
   // Returns true if the current user is the primary user in a multi-profile
   // scenario. This always return true if there is only one user logged in.
@@ -130,9 +147,6 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // device (i.e. first time login on the device).
   bool IsUserFirstLogin() const;
 
-  // Returns true if the device is enterprise managed.
-  bool IsEnterpriseManaged() const;
-
   // Returns true if should display managed icon for current session,
   // and false otherwise.
   bool ShouldDisplayManagedUI() const;
@@ -140,15 +154,19 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // Locks the screen. The locking happens asynchronously.
   void LockScreen();
 
+  // Hides the lock screen.
+  void HideLockScreen();
+
   // Requests signing out all users, ending the current session.
-  // NOTE: This should only be called from LockStateController, other callers
-  // should use LockStateController::RequestSignOut() instead.
   void RequestSignOut();
+
+  // Requests a system restart to apply an OS update.
+  void RequestRestartForUpdate();
 
   // Attempts to restart the chrome browser.
   void AttemptRestartChrome();
 
-  // Switches to another active user with |account_id| (if that user has
+  // Switches to another active user with `account_id` (if that user has
   // already signed in).
   void SwitchActiveUser(const AccountId& account_id);
 
@@ -163,8 +181,15 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // incognito profile in chrome and is valid until the browser exits.
   PrefService* GetSigninScreenPrefService() const;
 
-  // Returns the PrefService for |account_id| or null if one does not exist.
+  // Returns the PrefService for `account_id` or null if one does not exist.
   PrefService* GetUserPrefServiceForUser(const AccountId& account_id) const;
+
+  // Returns the profile path for `account_id` or empty if one does not exist.
+  base::FilePath GetProfilePath(const AccountId& account_id) const;
+
+  // Returns a tuple of whether
+  // <IsVcBackgroundSupported, IsVcBackgroundAllowedByEnterprise>.
+  std::tuple<bool, bool> IsEligibleForSeaPen(const AccountId& account_id) const;
 
   // Returns the PrefService for the primary user or null if no user is signed
   // in or the PrefService connection hasn't been established.
@@ -178,12 +203,11 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // the active user profile prefs. Returns null early during startup.
   PrefService* GetActivePrefService() const;
 
-  // Returns the ash notion of login status.
-  // NOTE: Prefer GetSessionState() in new code because the concept of
-  // SessionState more closes matches the state in chrome.
-  LoginStatus login_status() const { return login_status_; }
+  // Returns an object of `ScopedScreenLockBlocker`.
+  // `CanLockScreen()` returns false while there is one or more living object.
+  std::unique_ptr<ScopedScreenLockBlocker> GetScopedScreenLockBlocker();
 
-  // SessionController
+  // SessionController:
   void SetClient(SessionControllerClient* client) override;
   void SetSessionInfo(const SessionInfo& info) override;
   void UpdateUserSession(const UserSession& user_session) override;
@@ -212,12 +236,20 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   void AddObserver(SessionObserver* observer) override;
   void RemoveObserver(SessionObserver* observer) override;
   bool IsScreenLocked() const override;
+  std::optional<int> GetExistingUsersCount() const override;
+  void NotifyFirstSessionReady() override;
+  void NotifyUserToBeRemoved(const AccountId& account_id) override;
 
   // Test helpers.
   void ClearUserSessionsForTest();
 
  private:
   friend class TestSessionControllerClient;
+
+  // Provides the implementation of `ScopedScreenLockBlocker`.
+  // Defined as a private class of `SessionControllerImpl` so that it can call
+  // `RemoveScopedScreenLockBlocker()` in its dtor.
+  class ScopedScreenLockBlockerImpl;
 
   // Marks the session as a demo session for Demo Mode.
   void SetIsDemoSession();
@@ -256,8 +288,11 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
   // window, tries to activate one.
   void EnsureActiveWindowAfterUnblockingUserSession();
 
+  // Called when an object of `ScopedScreenLockBlockerImpl` is destroyed.
+  void RemoveScopedScreenLockBlocker();
+
   // Client interface to session manager code (chrome).
-  SessionControllerClient* client_ = nullptr;
+  raw_ptr<SessionControllerClient> client_ = nullptr;
 
   // Cached session info.
   bool can_lock_ = false;
@@ -311,12 +346,13 @@ class ASH_EXPORT SessionControllerImpl : public SessionController {
 
   bool signin_screen_prefs_obtained_ = false;
 
-  PrefService* last_active_user_prefs_ = nullptr;
+  raw_ptr<PrefService> last_active_user_prefs_ = nullptr;
 
   std::unique_ptr<FullscreenController> fullscreen_controller_;
 
-  // Indicate if the session state is being changed.
-  bool session_state_change_in_progress_ = false;
+  int scoped_screen_lock_blocker_count_ = 0;
+
+  SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<SessionControllerImpl> weak_ptr_factory_{this};
 };

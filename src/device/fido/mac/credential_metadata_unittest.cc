@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,8 @@
 #include "components/cbor/writer.h"
 #include "device/fido/public_key_credential_user_entity.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "url/gurl.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 namespace {
 
 bool MetadataEq(const CredentialMetadata& lhs, const CredentialMetadata& rhs) {
@@ -22,32 +19,31 @@ bool MetadataEq(const CredentialMetadata& lhs, const CredentialMetadata& rhs) {
          lhs.is_resident == rhs.is_resident;
 }
 
-base::span<const uint8_t> to_bytes(base::StringPiece in) {
-  return base::make_span(reinterpret_cast<const uint8_t*>(in.data()),
-                         in.size());
-}
-
 class CredentialMetadataTest : public ::testing::Test {
  protected:
   CredentialMetadata DefaultUser() {
-    return CredentialMetadata(CredentialMetadata::Version::kV2, default_id_,
+    return CredentialMetadata(CredentialMetadata::CurrentVersion(), default_id_,
                               "user", "user@acme.com",
-                              /*is_resident=*/false);
+                              /*is_resident=*/false,
+                              CredentialMetadata::SignCounter::kZero);
   }
 
-  std::vector<uint8_t> SealCredentialId(CredentialMetadata user) {
-    return device::fido::mac::SealCredentialId(key_, rp_id_, std::move(user));
+  std::vector<uint8_t> SealCredentialMetadata(CredentialMetadata user) {
+    return device::fido::mac::SealCredentialMetadata(key_, rp_id_,
+                                                     std::move(user));
   }
 
-  CredentialMetadata UnsealCredentialId(
+  CredentialMetadata UnsealCredentialMetadata(base::span<const uint8_t> in) {
+    return *device::fido::mac::UnsealMetadataFromApplicationTag(key_, rp_id_,
+                                                                in);
+  }
+
+  CredentialMetadata UnsealLegacyCredentialId(
       base::span<const uint8_t> credential_id) {
-    return *device::fido::mac::UnsealCredentialId(key_, rp_id_, credential_id);
+    return *device::fido::mac::UnsealMetadataFromLegacyCredentialId(
+        key_, rp_id_, credential_id);
   }
 
-  std::string EncodeRpIdAndUserId(base::StringPiece user_id) {
-    return device::fido::mac::EncodeRpIdAndUserId(key_, rp_id_,
-                                                  to_bytes(user_id));
-  }
   std::string EncodeRpId() {
     return device::fido::mac::EncodeRpId(key_, rp_id_);
   }
@@ -62,62 +58,70 @@ class CredentialMetadataTest : public ::testing::Test {
   std::string wrong_key_ = "SUPERsecretsupersecretsupersecre";
 };
 
-TEST_F(CredentialMetadataTest, CredentialId) {
-  std::vector<uint8_t> id = SealCredentialId(DefaultUser());
-  EXPECT_EQ(id.size(), 54u);
-  EXPECT_TRUE(MetadataEq(UnsealCredentialId(id), DefaultUser()));
+TEST_F(CredentialMetadataTest, CredentialMetadata) {
+  for (auto version :
+       {CredentialMetadata::Version::kV3, CredentialMetadata::Version::kV4}) {
+    auto metadata = DefaultUser();
+    metadata.version = version;
+    std::vector<uint8_t> sealed = SealCredentialMetadata(metadata);
+    EXPECT_EQ(sealed.size(), 55u);
+    EXPECT_TRUE(MetadataEq(UnsealCredentialMetadata(sealed), metadata));
+  }
 }
 
-TEST_F(CredentialMetadataTest, LegacyCredentialId) {
+TEST_F(CredentialMetadataTest, LegacyCredentialIds) {
   for (auto version :
-       {CredentialMetadata::Version::kV0, CredentialMetadata::Version::kV1}) {
+       {CredentialMetadata::Version::kV0, CredentialMetadata::Version::kV1,
+        CredentialMetadata::Version::kV2}) {
+    SCOPED_TRACE(testing::Message() << "version=" << int(version));
     auto user = DefaultUser();
-    bool is_resident = version == CredentialMetadata::Version::kV1;
+    bool is_resident = version > CredentialMetadata::Version::kV0;
     std::vector<uint8_t> id = SealLegacyCredentialIdForTestingOnly(
         version, key_, rp_id_, user.user_id, user.user_name,
         user.user_display_name, is_resident);
-    EXPECT_EQ(id[0], static_cast<uint8_t>(version));
-    EXPECT_EQ(id.size(),
-              version == CredentialMetadata::Version::kV0 ? 54u : 55u);
+    switch (version) {
+      case CredentialMetadata::Version::kV0:
+        EXPECT_EQ(id[0], static_cast<uint8_t>(version));
+        EXPECT_EQ(id.size(), 54u);
+        break;
+      case CredentialMetadata::Version::kV1:
+        EXPECT_EQ(id[0], static_cast<uint8_t>(version));
+        EXPECT_EQ(id.size(), 55u);
+        break;
+      case CredentialMetadata::Version::kV2:
+        EXPECT_EQ(id.size(), 54u);
+        break;
+      default:
+        NOTREACHED();
+    }
     CredentialMetadata expected = DefaultUser();
     expected.version = version;
     expected.is_resident = is_resident;
-    EXPECT_TRUE(MetadataEq(UnsealCredentialId(id), expected));
+    expected.sign_counter_type =
+        version < CredentialMetadata::Version::kV2
+            ? CredentialMetadata::SignCounter::kTimestamp
+            : CredentialMetadata::SignCounter::kZero;
+    EXPECT_TRUE(MetadataEq(UnsealLegacyCredentialId(id), expected));
   }
 }
 
-TEST_F(CredentialMetadataTest, CredentialId_IsRandom) {
-  EXPECT_NE(SealCredentialId(DefaultUser()), SealCredentialId(DefaultUser()));
-}
-
-TEST_F(CredentialMetadataTest, CredentialId_FailDecode) {
-  const auto id = SealCredentialId(DefaultUser());
-  // Flipping a bit in nonce, or ciphertext will fail credential decryption.
+TEST_F(CredentialMetadataTest, CredentialMetadata_FailDecode) {
+  const auto id = SealCredentialMetadata(DefaultUser());
+  // Flipping a bit in nonce, or ciphertext will fail metadata decryption.
   for (size_t i = 0; i < id.size(); i++) {
     std::vector<uint8_t> new_id(id);
     new_id[i] = new_id[i] ^ 0x01;
-    EXPECT_FALSE(device::fido::mac::UnsealCredentialId(key_, rp_id_, new_id));
+    EXPECT_FALSE(device::fido::mac::UnsealMetadataFromApplicationTag(
+        key_, rp_id_, new_id));
   }
 }
 
-TEST_F(CredentialMetadataTest, CredentialId_InvalidRp) {
-  std::vector<uint8_t> id = SealCredentialId(DefaultUser());
+TEST_F(CredentialMetadataTest, CredentialMetadata_InvalidRp) {
+  std::vector<uint8_t> id = SealCredentialMetadata(DefaultUser());
   // The credential id is authenticated with the RP, thus decryption under a
   // different RP fails.
-  EXPECT_FALSE(device::fido::mac::UnsealCredentialId(key_, "notacme.com", id));
-}
-
-TEST_F(CredentialMetadataTest, EncodeRpIdAndUserId) {
-  EXPECT_EQ(64u, EncodeRpIdAndUserId("user@acme.com").size());
-
-  EXPECT_EQ(EncodeRpIdAndUserId("user"), EncodeRpIdAndUserId("user"));
-  EXPECT_NE(EncodeRpIdAndUserId("userA"), EncodeRpIdAndUserId("userB"));
-  EXPECT_NE(EncodeRpIdAndUserId("user"),
-            device::fido::mac::EncodeRpIdAndUserId(key_, "notacme.com",
-                                                   to_bytes("user")));
-  EXPECT_NE(EncodeRpIdAndUserId("user"),
-            device::fido::mac::EncodeRpIdAndUserId(wrong_key_, rp_id_,
-                                                   to_bytes("user")));
+  EXPECT_FALSE(device::fido::mac::UnsealMetadataFromApplicationTag(
+      key_, "notacme.com", id));
 }
 
 TEST_F(CredentialMetadataTest, EncodeRpId) {
@@ -143,15 +147,17 @@ TEST_F(CredentialMetadataTest, Truncation) {
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456";
   constexpr char truncated[] =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012…";
-  auto credential_id = SealCredentialId(CredentialMetadata(
-      CredentialMetadata::Version::kV2, {1}, len71, len71, false));
-  CredentialMetadata metadata = UnsealCredentialId(credential_id);
+  auto credential_id = SealCredentialMetadata(CredentialMetadata(
+      CredentialMetadata::CurrentVersion(), {1}, len71, len71,
+      /*is_resident=*/false, CredentialMetadata::SignCounter::kZero));
+  CredentialMetadata metadata = UnsealCredentialMetadata(credential_id);
   EXPECT_EQ(metadata.user_name, truncated);
   EXPECT_EQ(metadata.user_display_name, truncated);
 
-  credential_id = SealCredentialId(CredentialMetadata(
-      CredentialMetadata::Version::kV2, {1}, len70, len70, false));
-  metadata = UnsealCredentialId(credential_id);
+  credential_id = SealCredentialMetadata(CredentialMetadata(
+      CredentialMetadata::CurrentVersion(), {1}, len70, len70,
+      /*is_resident=*/false, CredentialMetadata::SignCounter::kZero));
+  metadata = UnsealCredentialMetadata(credential_id);
   EXPECT_EQ(metadata.user_name, len70);
   EXPECT_EQ(metadata.user_display_name, len70);
 }
@@ -169,7 +175,6 @@ TEST(CredentialMetadata, FromPublicKeyCredentialUserEntity) {
   PublicKeyCredentialUserEntity in(user_id);
   in.name = "username";
   in.display_name = "display name";
-  in.icon_url = GURL("http://rp.foo/user.png");
   CredentialMetadata out =
       CredentialMetadata::FromPublicKeyCredentialUserEntity(
           std::move(in), /*is_resident=*/false);
@@ -177,21 +182,19 @@ TEST(CredentialMetadata, FromPublicKeyCredentialUserEntity) {
   EXPECT_EQ("username", out.user_name);
   EXPECT_EQ("display name", out.user_display_name);
   EXPECT_FALSE(out.is_resident);
+  EXPECT_EQ(out.sign_counter_type, CredentialMetadata::SignCounter::kZero);
 }
 
 TEST(CredentialMetadata, ToPublicKeyCredentialUserEntity) {
   std::vector<uint8_t> user_id = {{1, 2, 3}};
-  CredentialMetadata in(CredentialMetadata::Version::kV2, user_id, "username",
-                        "display name",
-                        /*is_resident=*/false);
+  CredentialMetadata in(
+      CredentialMetadata::CurrentVersion(), user_id, "username", "display name",
+      /*is_resident=*/false, CredentialMetadata::SignCounter::kZero);
   PublicKeyCredentialUserEntity out = in.ToPublicKeyCredentialUserEntity();
   EXPECT_EQ(user_id, out.id);
   EXPECT_EQ("username", out.name.value());
   EXPECT_EQ("display name", out.display_name.value());
-  EXPECT_FALSE(out.icon_url.has_value());
 }
 
 }  // namespace
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -28,7 +27,7 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/password_manager/core/browser/password_manager_test_utils.h"
-#include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/query_parser/query_parser.h"
@@ -58,22 +57,20 @@ class TestProfileWriter : public ProfileWriter {
  public:
   explicit TestProfileWriter(Profile* profile) : ProfileWriter(profile) {}
  protected:
-  ~TestProfileWriter() override {}
+  ~TestProfileWriter() override = default;
 };
 
 class ProfileWriterTest : public testing::Test {
  public:
-  ProfileWriterTest() {}
+  ProfileWriterTest() = default;
 
   ProfileWriterTest(const ProfileWriterTest&) = delete;
   ProfileWriterTest& operator=(const ProfileWriterTest&) = delete;
 
-  ~ProfileWriterTest() override {}
+  ~ProfileWriterTest() override = default;
 
   void SetUp() override {
-    DCHECK(profile_dir_.CreateUniqueTempDir());
     TestingProfile::Builder profile_builder;
-    profile_builder.SetPath(profile_dir_.GetPath());
     profile_builder.AddTestingFactory(
         BookmarkModelFactory::GetInstance(),
         BookmarkModelFactory::GetDefaultFactory());
@@ -82,9 +79,7 @@ class ProfileWriterTest : public testing::Test {
         HistoryServiceFactory::GetDefaultFactory());
     profile_ = profile_builder.Build();
 
-    DCHECK(second_profile_dir_.CreateUniqueTempDir());
     TestingProfile::Builder second_profile_builder;
-    second_profile_builder.SetPath(second_profile_dir_.GetPath());
     second_profile_builder.AddTestingFactory(
         BookmarkModelFactory::GetInstance(),
         BookmarkModelFactory::GetDefaultFactory());
@@ -181,12 +176,6 @@ class ProfileWriterTest : public testing::Test {
     bookmarks_.push_back(entry);
   }
 
-  // Profile directories that outlive |task_environment_| are needed because
-  // CreateHistoryService/CreateBookmarkModel use the directory to host
-  // databases. See https://crbug.com/546640 for more details.
-  base::ScopedTempDir profile_dir_;
-  base::ScopedTempDir second_profile_dir_;
-
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<TestingProfile> profile_;
@@ -210,12 +199,10 @@ TEST_F(ProfileWriterTest, CheckBookmarksWithMultiProfile) {
       new TestProfileWriter(profile()));
   profile_writer->AddBookmarks(bookmarks_, u"Imported from Firefox");
 
-  std::vector<UrlAndTitle> url_record1;
-  bookmark_model1->GetBookmarks(&url_record1);
+  std::vector<UrlAndTitle> url_record1 = bookmark_model1->GetUniqueUrls();
   EXPECT_EQ(2u, url_record1.size());
 
-  std::vector<UrlAndTitle> url_record2;
-  bookmark_model2->GetBookmarks(&url_record2);
+  std::vector<UrlAndTitle> url_record2 = bookmark_model2->GetUniqueUrls();
   EXPECT_EQ(1u, url_record2.size());
 }
 
@@ -229,8 +216,7 @@ TEST_F(ProfileWriterTest, CheckBookmarksAfterWritingDataTwice) {
   scoped_refptr<TestProfileWriter> profile_writer(
       new TestProfileWriter(profile()));
   profile_writer->AddBookmarks(bookmarks_, u"Imported from Firefox");
-  std::vector<UrlAndTitle> bookmarks_record;
-  bookmark_model->GetBookmarks(&bookmarks_record);
+  std::vector<UrlAndTitle> bookmarks_record = bookmark_model->GetUniqueUrls();
   EXPECT_EQ(2u, bookmarks_record.size());
 
   VerifyBookmarksCount(bookmarks_record, bookmark_model, 1);
@@ -279,8 +265,6 @@ TEST_F(ProfileWriterTest, AddKeywords) {
   // keyword.
   keywords.push_back(CreateTemplateURL("key1", "http://key1_1.com", "n1_1"));
   keywords.push_back(CreateTemplateURL("key2", "http://key2.com", "n2"));
-  // This entry will not be added since the keyword contains spaces.
-  keywords.push_back(CreateTemplateURL("key 3", "http://key3.com", "n3"));
 
   auto profile_writer = base::MakeRefCounted<TestProfileWriter>(profile());
   profile_writer->AddKeywords(std::move(keywords), false);

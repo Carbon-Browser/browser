@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_status.h"
@@ -25,19 +25,17 @@ namespace sync_file_system {
 
 // This class must run only on IO thread.
 // Owned by LocalFileSyncContext.
-class SyncableFileOperationRunner
-    : public base::SupportsWeakPtr<SyncableFileOperationRunner>,
-      public LocalFileSyncStatus::Observer {
+class SyncableFileOperationRunner final : public LocalFileSyncStatus::Observer {
  public:
   // Represents an operation task (which usually wraps one FileSystemOperation).
   class Task {
    public:
-    Task() {}
+    Task() = default;
 
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    virtual ~Task() {}
+    virtual ~Task() = default;
 
     // Only one of Run() or Cancel() is called.
     virtual void Run() = 0;
@@ -90,6 +88,10 @@ class SyncableFileOperationRunner
 
   int64_t num_inflight_tasks() const { return num_inflight_tasks_; }
 
+  base::WeakPtr<SyncableFileOperationRunner> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   // Returns true if we should start more tasks.
   bool ShouldStartMoreTasks() const;
@@ -100,7 +102,8 @@ class SyncableFileOperationRunner
   std::list<std::unique_ptr<Task>> pending_tasks_;
 
   const int64_t max_inflight_tasks_;
-  int64_t num_inflight_tasks_;
+  int64_t num_inflight_tasks_ = 0;
+  base::WeakPtrFactory<SyncableFileOperationRunner> weak_ptr_factory_{this};
 };
 
 }  // namespace sync_file_system

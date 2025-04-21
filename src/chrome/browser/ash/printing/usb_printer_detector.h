@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 
 namespace ash {
 
+class SessionController;
+
 // Observes device::UsbService for addition of USB printers, and implements the
 // PrinterDetector interface to export this to print system consumers.
 class UsbPrinterDetector : public PrinterDetector {
@@ -21,7 +23,8 @@ class UsbPrinterDetector : public PrinterDetector {
   static std::unique_ptr<UsbPrinterDetector> Create();
 
   static std::unique_ptr<UsbPrinterDetector> CreateForTesting(
-      mojo::PendingRemote<device::mojom::UsbDeviceManager> usb_manager);
+      mojo::PendingRemote<device::mojom::UsbDeviceManager> usb_manager,
+      ash::SessionController* session_controller);
 
   UsbPrinterDetector(const UsbPrinterDetector&) = delete;
   UsbPrinterDetector& operator=(const UsbPrinterDetector&) = delete;

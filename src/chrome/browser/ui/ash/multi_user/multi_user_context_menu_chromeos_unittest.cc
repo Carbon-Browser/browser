@@ -1,6 +1,8 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ui/ash/multi_user/multi_user_context_menu.h"
 
 #include <memory>
 
@@ -10,10 +12,10 @@
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ui/ash/multi_user/multi_profile_support.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_context_menu.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
 #include "components/account_id/account_id.h"
@@ -28,7 +30,7 @@ class MultiUserContextMenuChromeOSTest : public ChromeAshTestBase {
  public:
   MultiUserContextMenuChromeOSTest()
       : fake_user_manager_(new FakeChromeUserManager),
-        user_manager_enabler_(base::WrapUnique(fake_user_manager_)) {}
+        user_manager_enabler_(base::WrapUnique(fake_user_manager_.get())) {}
 
   MultiUserContextMenuChromeOSTest(const MultiUserContextMenuChromeOSTest&) =
       delete;
@@ -58,10 +60,11 @@ class MultiUserContextMenuChromeOSTest : public ChromeAshTestBase {
 
  private:
   // A window which can be used for testing.
-  aura::Window* window_;
+  raw_ptr<aura::Window, DanglingUntriaged> window_;
 
   // Owned by |user_manager_enabler_|.
-  FakeChromeUserManager* fake_user_manager_ = nullptr;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> fake_user_manager_ =
+      nullptr;
   user_manager::ScopedUserManager user_manager_enabler_;
 };
 

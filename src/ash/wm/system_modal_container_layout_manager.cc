@@ -1,11 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/system_modal_container_layout_manager.h"
 
 #include <cmath>
-#include <memory>
 
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/shell_window_ids.h"
@@ -15,8 +14,12 @@
 #include "ash/wm/window_dimmer.h"
 #include "ash/wm/window_util.h"
 #include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
+#include "ui/display/display.h"
+#include "ui/display/screen.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/window_util.h"
 
@@ -27,7 +30,7 @@ namespace {
 // of the container to be kept centered upon resizing operations.
 const int kCenterPixelDelta = 32;
 
-ui::ModalType GetModalType(aura::Window* window) {
+ui::mojom::ModalType GetModalType(aura::Window* window) {
   return window->GetProperty(aura::client::kModalKey);
 }
 
@@ -39,17 +42,15 @@ bool HasTransientAncestor(const aura::Window* window,
   return transient_parent ? HasTransientAncestor(transient_parent, ancestor)
                           : false;
 }
-}
+
+}  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // SystemModalContainerLayoutManager, public:
 
 SystemModalContainerLayoutManager::SystemModalContainerLayoutManager(
     aura::Window* container)
-    : container_(container) {
-  Shelf* shelf = RootWindowController::ForWindow(container_)->shelf();
-  shelf_observation_.Observe(shelf);
-}
+    : container_(container) {}
 
 SystemModalContainerLayoutManager::~SystemModalContainerLayoutManager() {
   auto* keyboard_controller = keyboard::KeyboardUIController::Get();
@@ -63,8 +64,9 @@ SystemModalContainerLayoutManager::~SystemModalContainerLayoutManager() {
 void SystemModalContainerLayoutManager::OnChildWindowVisibilityChanged(
     aura::Window* window,
     bool visible) {
-  if (GetModalType(window) != ui::MODAL_TYPE_SYSTEM)
+  if (GetModalType(window) != ui::mojom::ModalType::kSystem) {
     return;
+  }
 
   if (window->IsVisible()) {
     DCHECK(!base::Contains(modal_windows_, window));
@@ -86,22 +88,21 @@ void SystemModalContainerLayoutManager::OnWindowAddedToLayout(
   DCHECK(container_->GetId() != kShellWindowId_LockSystemModalContainer ||
          Shell::Get()->session_controller()->IsUserSessionBlocked());
   // Since this is for SystemModal, there is no good reason to add windows
-  // other than MODAL_TYPE_NONE or MODAL_TYPE_SYSTEM. DCHECK to avoid simple
-  // mistake.
-  DCHECK_NE(GetModalType(child), ui::MODAL_TYPE_CHILD);
-  DCHECK_NE(GetModalType(child), ui::MODAL_TYPE_WINDOW);
+  // other than ModalType::kNone or ModalType::kSystem. DCHECK to avoid
+  // mistakes.
+  DCHECK_NE(GetModalType(child), ui::mojom::ModalType::kChild);
+  DCHECK_NE(GetModalType(child), ui::mojom::ModalType::kWindow);
 
   child->AddObserver(this);
-  if (GetModalType(child) == ui::MODAL_TYPE_SYSTEM && child->IsVisible())
+  if (GetModalType(child) == ui::mojom::ModalType::kSystem &&
+      child->IsVisible()) {
     AddModalWindow(child);
+  }
 }
 
 void SystemModalContainerLayoutManager::OnWillRemoveWindowFromLayout(
     aura::Window* child) {
-  child->RemoveObserver(this);
-  windows_to_center_.erase(child);
-  if (GetModalType(child) == ui::MODAL_TYPE_SYSTEM)
-    RemoveModalWindow(child);
+  StopObservingWindow(child);
 }
 
 void SystemModalContainerLayoutManager::SetChildBounds(
@@ -124,7 +125,8 @@ void SystemModalContainerLayoutManager::OnWindowPropertyChanged(
   if (key != aura::client::kModalKey || !window->IsVisible())
     return;
 
-  if (window->GetProperty(aura::client::kModalKey) == ui::MODAL_TYPE_SYSTEM) {
+  if (window->GetProperty(aura::client::kModalKey) ==
+      ui::mojom::ModalType::kSystem) {
     if (base::Contains(modal_windows_, window))
       return;
     AddModalWindow(window);
@@ -132,6 +134,11 @@ void SystemModalContainerLayoutManager::OnWindowPropertyChanged(
     if (RemoveModalWindow(window))
       OnModalWindowRemoved(window);
   }
+}
+
+void SystemModalContainerLayoutManager::OnWindowDestroying(
+    aura::Window* window) {
+  StopObservingWindow(window);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -194,13 +201,18 @@ bool SystemModalContainerLayoutManager::IsModalBackground(
          layout_manager->window_dimmer_->window() == window;
 }
 
-// This is invoked when the work area changes.
-//  * SystemModalContainerLayoutManager windows depend on
-//    changes to the accessibility panel insets, which are
-//    stored and handled globally via ShelfLayoutManager.
-void SystemModalContainerLayoutManager::WillChangeVisibilityState(
-    ShelfVisibilityState new_state) {
-  PositionDialogsAfterWorkAreaResize();
+void SystemModalContainerLayoutManager::OnDisplayMetricsChanged(
+    const display::Display& display,
+    uint32_t changed_metrics) {
+  if (display::Screen::GetScreen()->GetDisplayNearestWindow(container_).id() !=
+      display.id()) {
+    return;
+  }
+
+  if (changed_metrics & (display::DisplayObserver::DISPLAY_METRIC_BOUNDS |
+                         display::DisplayObserver::DISPLAY_METRIC_WORK_AREA)) {
+    PositionDialogsAfterWorkAreaResize();
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -231,7 +243,7 @@ void SystemModalContainerLayoutManager::AddModalWindow(aura::Window* window) {
 
 bool SystemModalContainerLayoutManager::RemoveModalWindow(
     aura::Window* window) {
-  auto it = std::find(modal_windows_.begin(), modal_windows_.end(), window);
+  auto it = base::ranges::find(modal_windows_, window);
   if (it == modal_windows_.end())
     return false;
   modal_windows_.erase(it);
@@ -242,16 +254,22 @@ void SystemModalContainerLayoutManager::OnModalWindowRemoved(
     aura::Window* removed) {
   aura::Window::Windows root_windows = Shell::GetAllRootWindows();
   for (aura::Window* root_window : root_windows) {
-    if (RootWindowController::ForWindow(root_window)
-            ->GetSystemModalLayoutManager(removed)
-            ->ActivateNextModalWindow()) {
+    // system modal layout manager can be nullptr in some cases.
+    auto* system_modal_layout_manager =
+        RootWindowController::ForWindow(root_window)
+            ->GetSystemModalLayoutManager(removed);
+    if (system_modal_layout_manager &&
+        system_modal_layout_manager->ActivateNextModalWindow()) {
       return;
     }
   }
   for (aura::Window* root_window : root_windows) {
-    RootWindowController::ForWindow(root_window)
-        ->GetSystemModalLayoutManager(removed)
-        ->DestroyModalBackground();
+    auto* system_modal_layout_manager =
+        RootWindowController::ForWindow(root_window)
+            ->GetSystemModalLayoutManager(removed);
+    if (system_modal_layout_manager) {
+      system_modal_layout_manager->DestroyModalBackground();
+    }
   }
 }
 
@@ -320,6 +338,16 @@ bool SystemModalContainerLayoutManager::IsBoundsCentered(
   return std::abs(window_center.x() - container_center.x()) <
              kCenterPixelDelta &&
          std::abs(window_center.y() - container_center.y()) < kCenterPixelDelta;
+}
+
+void SystemModalContainerLayoutManager::StopObservingWindow(
+    aura::Window* window) {
+  window->RemoveObserver(this);
+  windows_to_center_.erase(window);
+  if (GetModalType(window) == ui::mojom::ModalType::kSystem &&
+      RemoveModalWindow(window)) {
+    OnModalWindowRemoved(window);
+  }
 }
 
 }  // namespace ash

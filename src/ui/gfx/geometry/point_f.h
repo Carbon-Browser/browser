@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <tuple>
 
+#include "base/component_export.h"
 #include "build/build_config.h"
-#include "ui/gfx/geometry/geometry_export.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
@@ -18,10 +18,13 @@
 struct CGPoint;
 #endif
 
+namespace perfetto {
+class TracedValue;
+}
 namespace gfx {
 
 // A floating version of gfx::Point.
-class GEOMETRY_EXPORT PointF {
+class COMPONENT_EXPORT(GEOMETRY) PointF {
  public:
   constexpr PointF() : x_(0.f), y_(0.f) {}
   constexpr PointF(float x, float y) : x_(x), y_(y) {}
@@ -84,6 +87,15 @@ class GEOMETRY_EXPORT PointF {
     SetPoint(x() * x_scale, y() * y_scale);
   }
 
+  // Scales the point by the inverse of the given scale.
+  void InvScale(float inv_scale) { InvScale(inv_scale, inv_scale); }
+
+  // Scales each component by the inverse of the given scales.
+  void InvScale(float inv_x_scale, float inv_y_scale) {
+    x_ /= inv_x_scale;
+    y_ /= inv_y_scale;
+  }
+
   void Transpose() {
     using std::swap;
     swap(x_, y_);
@@ -96,6 +108,9 @@ class GEOMETRY_EXPORT PointF {
 
   // Returns a string representation of point.
   std::string ToString() const;
+
+  // Write a represtation of this object into a trace event argument.
+  void WriteIntoTrace(perfetto::TracedValue) const;
 
  private:
   float x_;
@@ -130,9 +145,8 @@ inline PointF PointAtOffsetFromOrigin(const Vector2dF& offset_from_origin) {
   return PointF(offset_from_origin.x(), offset_from_origin.y());
 }
 
-GEOMETRY_EXPORT PointF ScalePoint(const PointF& p,
-                                  float x_scale,
-                                  float y_scale);
+COMPONENT_EXPORT(GEOMETRY)
+PointF ScalePoint(const PointF& p, float x_scale, float y_scale);
 
 inline PointF ScalePoint(const PointF& p, float scale) {
   return ScalePoint(p, scale, scale);

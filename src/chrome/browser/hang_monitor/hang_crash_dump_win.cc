@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,7 @@ static const int kGenerateDumpTimeoutMS = 10000;
 
 void CrashDumpHungChildProcess(base::ProcessHandle handle) {
   HANDLE remote_thread = InjectDumpForHungInput_ExportThunk(handle);
-  DCHECK(remote_thread) << "Failed creating remote thread: error "
-                        << GetLastError();
+  DPCHECK(remote_thread) << "Failed creating remote thread";
   if (remote_thread) {
     WaitForSingleObject(remote_thread, kGenerateDumpTimeoutMS);
     CloseHandle(remote_thread);

@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/core/html/html_br_element.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/html/html_li_element.h"
+#include "third_party/blink/renderer/core/html/html_span_element.h"
 #include "third_party/blink/renderer/core/html/html_ulist_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -153,8 +154,9 @@ void InsertListCommand::DoApply(EditingState* editing_state) {
       visible_selection.End().IsOrphan())
     return;
 
-  if (!RootEditableElementOf(EndingSelection().Base()))
+  if (!RootEditableElementOf(EndingSelection().Anchor())) {
     return;
+  }
 
   VisiblePosition visible_end = visible_selection.VisibleEnd();
   VisiblePosition visible_start = visible_selection.VisibleStart();
@@ -175,150 +177,155 @@ void InsertListCommand::DoApply(EditingState* editing_state) {
     if (new_end.IsNotNull())
       builder.Extend(new_end.DeepEquivalent());
     SetEndingSelection(SelectionForUndoStep::From(builder.Build()));
-    if (!RootEditableElementOf(EndingSelection().Base()))
+    if (!RootEditableElementOf(EndingSelection().Anchor())) {
       return;
+    }
   }
 
   const HTMLQualifiedName& list_tag =
       (type_ == kOrderedList) ? html_names::kOlTag : html_names::kUlTag;
-  if (EndingVisibleSelection().IsRange()) {
-    bool force_list_creation = false;
-    VisibleSelection selection =
-        SelectionForParagraphIteration(EndingVisibleSelection());
-    DCHECK(selection.IsRange());
-
-    VisiblePosition visible_start_of_selection = selection.VisibleStart();
-    VisiblePosition visible_end_of_selection = selection.VisibleEnd();
-    PositionWithAffinity start_of_selection =
-        visible_start_of_selection.ToPositionWithAffinity();
-    PositionWithAffinity end_of_selection =
-        visible_end_of_selection.ToPositionWithAffinity();
-    Position start_of_last_paragraph =
-        StartOfParagraph(visible_end_of_selection, kCanSkipOverEditingBoundary)
-            .DeepEquivalent();
-
-    Range* current_selection =
+  if (!EndingVisibleSelection().IsRange()) {
+    Range* const range =
         CreateRange(FirstEphemeralRangeOf(EndingVisibleSelection()));
-    ContainerNode* scope_for_start_of_selection = nullptr;
-    ContainerNode* scope_for_end_of_selection = nullptr;
-    // FIXME: This is an inefficient way to keep selection alive because
-    // indexForVisiblePosition walks from the beginning of the document to the
-    // visibleEndOfSelection everytime this code is executed. But not using
-    // index is hard because there are so many ways we can lose selection inside
-    // doApplyForSingleParagraph.
-    int index_for_start_of_selection = IndexForVisiblePosition(
-        visible_start_of_selection, scope_for_start_of_selection);
-    int index_for_end_of_selection = IndexForVisiblePosition(
-        visible_end_of_selection, scope_for_end_of_selection);
-
-    if (!StartOfParagraph(visible_start_of_selection,
-                          kCanSkipOverEditingBoundary)
-             .DeepEquivalent()
-             .IsEquivalent(start_of_last_paragraph)) {
-      force_list_creation =
-          !SelectionHasListOfType(selection.Start(), selection.End(), list_tag);
-
-      VisiblePosition start_of_current_paragraph = visible_start_of_selection;
-      while (InSameTreeAndOrdered(start_of_current_paragraph.DeepEquivalent(),
-                                  start_of_last_paragraph) &&
-             !InSameParagraph(start_of_current_paragraph,
-                              CreateVisiblePosition(start_of_last_paragraph),
-                              kCanCrossEditingBoundary)) {
-        // doApply() may operate on and remove the last paragraph of the
-        // selection from the document if it's in the same list item as
-        // startOfCurrentParagraph. Return early to avoid an infinite loop and
-        // because there is no more work to be done.
-        // FIXME(<rdar://problem/5983974>): The endingSelection() may be
-        // incorrect here.  Compute the new location of visibleEndOfSelection
-        // and use it as the end of the new selection.
-        if (!start_of_last_paragraph.IsConnected())
-          return;
-        SetEndingSelection(SelectionForUndoStep::From(
-            SelectionInDOMTree::Builder()
-                .Collapse(start_of_current_paragraph.DeepEquivalent())
-                .Build()));
-
-        // Save and restore visibleEndOfSelection and startOfLastParagraph when
-        // necessary since moveParagraph and movePragraphWithClones can remove
-        // nodes.
-        bool single_paragraph_result = DoApplyForSingleParagraph(
-            force_list_creation, list_tag, *current_selection, editing_state);
-        if (editing_state->IsAborted())
-          return;
-        if (!single_paragraph_result)
-          break;
-
-        GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
-
-        // Make |visibleEndOfSelection| valid again.
-        if (!end_of_selection.IsConnected() ||
-            !start_of_last_paragraph.IsConnected()) {
-          visible_end_of_selection = VisiblePositionForIndex(
-              index_for_end_of_selection, scope_for_end_of_selection);
-          end_of_selection = visible_end_of_selection.ToPositionWithAffinity();
-          // If visibleEndOfSelection is null, then some contents have been
-          // deleted from the document. This should never happen and if it did,
-          // exit early immediately because we've lost the loop invariant.
-          DCHECK(visible_end_of_selection.IsNotNull());
-          if (visible_end_of_selection.IsNull() ||
-              !RootEditableElementOf(visible_end_of_selection.DeepEquivalent()))
-            return;
-          start_of_last_paragraph =
-              StartOfParagraph(visible_end_of_selection,
-                               kCanSkipOverEditingBoundary)
-                  .DeepEquivalent();
-        } else {
-          visible_end_of_selection = CreateVisiblePosition(end_of_selection);
-        }
-
-        start_of_current_paragraph =
-            StartOfNextParagraph(EndingVisibleSelection().VisibleStart());
-      }
-      SetEndingSelection(SelectionForUndoStep::From(
-          SelectionInDOMTree::Builder()
-              .Collapse(visible_end_of_selection.DeepEquivalent())
-              .Build()));
-    }
-    DoApplyForSingleParagraph(force_list_creation, list_tag, *current_selection,
-                              editing_state);
-    if (editing_state->IsAborted())
-      return;
-
-    GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
-
-    // Fetch the end of the selection, for the reason mentioned above.
-    if (!end_of_selection.IsConnected()) {
-      visible_end_of_selection = VisiblePositionForIndex(
-          index_for_end_of_selection, scope_for_end_of_selection);
-      if (visible_end_of_selection.IsNull())
-        return;
-    } else {
-      visible_end_of_selection = CreateVisiblePosition(end_of_selection);
-    }
-
-    if (!start_of_selection.IsConnected()) {
-      visible_start_of_selection = VisiblePositionForIndex(
-          index_for_start_of_selection, scope_for_start_of_selection);
-      if (visible_start_of_selection.IsNull())
-        return;
-    } else {
-      visible_start_of_selection = CreateVisiblePosition(start_of_selection);
-    }
-
-    SetEndingSelection(SelectionForUndoStep::From(
-        SelectionInDOMTree::Builder()
-            .SetAffinity(visible_start_of_selection.Affinity())
-            .SetBaseAndExtentDeprecated(
-                visible_start_of_selection.DeepEquivalent(),
-                visible_end_of_selection.DeepEquivalent())
-            .Build()));
+    DCHECK(range);
+    DoApplyForSingleParagraph(false, list_tag, *range, editing_state);
     return;
   }
 
-  Range* const range =
+  VisibleSelection selection =
+      SelectionForParagraphIteration(EndingVisibleSelection());
+  if (!selection.IsRange()) {
+    Range* const range = CreateRange(FirstEphemeralRangeOf(selection));
+    DCHECK(range);
+    DoApplyForSingleParagraph(false, list_tag, *range, editing_state);
+    return;
+  }
+
+  DCHECK(selection.IsRange());
+  VisiblePosition visible_start_of_selection = selection.VisibleStart();
+  VisiblePosition visible_end_of_selection = selection.VisibleEnd();
+  PositionWithAffinity start_of_selection =
+      visible_start_of_selection.ToPositionWithAffinity();
+  PositionWithAffinity end_of_selection =
+      visible_end_of_selection.ToPositionWithAffinity();
+  Position start_of_last_paragraph =
+      StartOfParagraph(visible_end_of_selection, kCanSkipOverEditingBoundary)
+          .DeepEquivalent();
+  bool force_list_creation = false;
+
+  Range* current_selection =
       CreateRange(FirstEphemeralRangeOf(EndingVisibleSelection()));
-  DCHECK(range);
-  DoApplyForSingleParagraph(false, list_tag, *range, editing_state);
+  ContainerNode* scope_for_start_of_selection = nullptr;
+  ContainerNode* scope_for_end_of_selection = nullptr;
+  // FIXME: This is an inefficient way to keep selection alive because
+  // indexForVisiblePosition walks from the beginning of the document to the
+  // visibleEndOfSelection every time this code is executed. But not using
+  // index is hard because there are so many ways we can lose selection inside
+  // doApplyForSingleParagraph.
+  int index_for_start_of_selection = IndexForVisiblePosition(
+      visible_start_of_selection, scope_for_start_of_selection);
+  int index_for_end_of_selection = IndexForVisiblePosition(
+      visible_end_of_selection, scope_for_end_of_selection);
+
+  if (!StartOfParagraph(visible_start_of_selection, kCanSkipOverEditingBoundary)
+           .DeepEquivalent()
+           .IsEquivalent(start_of_last_paragraph)) {
+    force_list_creation =
+        !SelectionHasListOfType(selection.Start(), selection.End(), list_tag);
+
+    VisiblePosition start_of_current_paragraph = visible_start_of_selection;
+    while (InSameTreeAndOrdered(start_of_current_paragraph.DeepEquivalent(),
+                                start_of_last_paragraph) &&
+           !InSameParagraph(start_of_current_paragraph,
+                            CreateVisiblePosition(start_of_last_paragraph),
+                            kCanCrossEditingBoundary)) {
+      // doApply() may operate on and remove the last paragraph of the
+      // selection from the document if it's in the same list item as
+      // startOfCurrentParagraph. Return early to avoid an infinite loop and
+      // because there is no more work to be done.
+      // FIXME(<rdar://problem/5983974>): The endingSelection() may be
+      // incorrect here.  Compute the new location of visibleEndOfSelection
+      // and use it as the end of the new selection.
+      if (!start_of_last_paragraph.IsConnected())
+        return;
+      SetEndingSelection(SelectionForUndoStep::From(
+          SelectionInDOMTree::Builder()
+              .Collapse(start_of_current_paragraph.DeepEquivalent())
+              .Build()));
+
+      // Save and restore visibleEndOfSelection and startOfLastParagraph when
+      // necessary since moveParagraph and movePragraphWithClones can remove
+      // nodes.
+      bool single_paragraph_result = DoApplyForSingleParagraph(
+          force_list_creation, list_tag, *current_selection, editing_state);
+      if (editing_state->IsAborted())
+        return;
+      if (!single_paragraph_result)
+        break;
+
+      GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
+
+      // Make |visibleEndOfSelection| valid again.
+      if (!end_of_selection.IsConnected() ||
+          !start_of_last_paragraph.IsConnected()) {
+        visible_end_of_selection = VisiblePositionForIndex(
+            index_for_end_of_selection, scope_for_end_of_selection);
+        end_of_selection = visible_end_of_selection.ToPositionWithAffinity();
+        // If visibleEndOfSelection is null, then some contents have been
+        // deleted from the document. This should never happen and if it did,
+        // exit early immediately because we've lost the loop invariant.
+        DCHECK(visible_end_of_selection.IsNotNull());
+        if (visible_end_of_selection.IsNull() ||
+            !RootEditableElementOf(visible_end_of_selection.DeepEquivalent()))
+          return;
+        start_of_last_paragraph = StartOfParagraph(visible_end_of_selection,
+                                                   kCanSkipOverEditingBoundary)
+                                      .DeepEquivalent();
+      } else {
+        visible_end_of_selection = CreateVisiblePosition(end_of_selection);
+      }
+
+      start_of_current_paragraph =
+          StartOfNextParagraph(EndingVisibleSelection().VisibleStart());
+    }
+    SetEndingSelection(SelectionForUndoStep::From(
+        SelectionInDOMTree::Builder()
+            .Collapse(visible_end_of_selection.DeepEquivalent())
+            .Build()));
+  }
+  DoApplyForSingleParagraph(force_list_creation, list_tag, *current_selection,
+                            editing_state);
+  if (editing_state->IsAborted())
+    return;
+
+  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
+
+  // Fetch the end of the selection, for the reason mentioned above.
+  if (!end_of_selection.IsConnected()) {
+    visible_end_of_selection = VisiblePositionForIndex(
+        index_for_end_of_selection, scope_for_end_of_selection);
+    if (visible_end_of_selection.IsNull())
+      return;
+  } else {
+    visible_end_of_selection = CreateVisiblePosition(end_of_selection);
+  }
+
+  if (!start_of_selection.IsConnected()) {
+    visible_start_of_selection = VisiblePositionForIndex(
+        index_for_start_of_selection, scope_for_start_of_selection);
+    if (visible_start_of_selection.IsNull())
+      return;
+  } else {
+    visible_start_of_selection = CreateVisiblePosition(start_of_selection);
+  }
+
+  SetEndingSelection(SelectionForUndoStep::From(
+      SelectionInDOMTree::Builder()
+          .SetAffinity(visible_start_of_selection.Affinity())
+          .SetBaseAndExtentDeprecated(
+              visible_start_of_selection.DeepEquivalent(),
+              visible_end_of_selection.DeepEquivalent())
+          .Build()));
 }
 
 InputEvent::InputType InsertListCommand::GetInputType() const {
@@ -546,9 +553,15 @@ void InsertListCommand::UnlistifyParagraph(
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
 
   VisiblePosition insertion_point = VisiblePosition::BeforeNode(*placeholder);
-  MoveParagraphs(CreateVisiblePosition(start), CreateVisiblePosition(end),
-                 insertion_point, editing_state, kPreserveSelection,
-                 kPreserveStyle, list_child_node);
+  VisiblePosition visible_start = CreateVisiblePosition(start);
+  ABORT_EDITING_COMMAND_IF(visible_start.IsNull());
+  VisiblePosition visible_end = CreateVisiblePosition(end);
+  ABORT_EDITING_COMMAND_IF(visible_end.IsNull());
+  DCHECK_LE(start, end);
+  if (visible_end.DeepEquivalent() < visible_start.DeepEquivalent())
+    visible_end = visible_start;
+  MoveParagraphs(visible_start, visible_end, insertion_point, editing_state,
+                 kPreserveSelection, kPreserveStyle, list_child_node);
 }
 
 static HTMLElement* AdjacentEnclosingList(const VisiblePosition& pos,
@@ -586,11 +599,11 @@ void InsertListCommand::ListifyParagraph(const VisiblePosition& original_start,
 
   // If original_start is of type kOffsetInAnchor, then the offset can become
   // invalid when inserting the <li>. So use a RelocatablePosition.
-  absl::optional<RelocatablePosition> relocatable_original_start(
+  RelocatablePosition* relocatable_original_start =
       original_start.DeepEquivalent().IsOffsetInAnchor()
-          ? absl::optional<RelocatablePosition>(
-                RelocatablePosition(original_start.DeepEquivalent()))
-          : absl::nullopt);
+          ? MakeGarbageCollected<RelocatablePosition>(
+                original_start.DeepEquivalent())
+          : nullptr;
 
   // Check for adjoining lists.
   HTMLElement* const previous_list = AdjacentEnclosingList(
@@ -722,11 +735,11 @@ void InsertListCommand::MoveParagraphOverPositionIntoEmptyListItem(
   // enclosing block node so we can get the "outer" block node without crossing
   // block boundaries as that function only breaks when the loop hits the
   // editable boundary or the parent element has an inline style(as we pass
-  // |IsInline| to it).
+  // |IsInlineElement| to it).
   Node* const constraining_ancestor =
       EnclosingBlock(start.DeepEquivalent().AnchorNode());
   Node* const outer_block = HighestEnclosingNodeOfType(
-      start.DeepEquivalent(), &IsInline, kCannotCrossEditingBoundary,
+      start.DeepEquivalent(), &IsInlineElement, kCannotCrossEditingBoundary,
       constraining_ancestor);
   MoveParagraphWithClones(
       start, end, list_item_element,

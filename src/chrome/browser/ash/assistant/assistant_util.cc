@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,9 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -23,7 +25,7 @@
 
 namespace {
 
-using chromeos::assistant::AssistantAllowedState;
+using ::ash::assistant::AssistantAllowedState;
 
 bool g_override_is_google_device = false;
 
@@ -37,7 +39,7 @@ bool HasPrimaryAccount(const Profile* profile) {
 }
 
 bool IsGoogleDevice() {
-  return g_override_is_google_device || chromeos::IsGoogleBrandedDevice();
+  return g_override_is_google_device || ash::IsGoogleBrandedDevice();
 }
 
 const user_manager::User* GetUser(const Profile* profile) {
@@ -52,29 +54,21 @@ bool IsAssistantAllowedForUserType(const Profile* profile) {
 AssistantAllowedState GetErrorForUserType(const Profile* profile) {
   DCHECK(!IsAssistantAllowedForUserType(profile));
   switch (GetUser(profile)->GetType()) {
-    case user_manager::USER_TYPE_PUBLIC_ACCOUNT:
+    case user_manager::UserType::kPublicAccount:
       return AssistantAllowedState::DISALLOWED_BY_PUBLIC_SESSION;
 
-    case user_manager::USER_TYPE_KIOSK_APP:
-    case user_manager::USER_TYPE_ARC_KIOSK_APP:
-    case user_manager::USER_TYPE_WEB_KIOSK_APP:
+    case user_manager::UserType::kKioskApp:
+    case user_manager::UserType::kWebKioskApp:
+    case user_manager::UserType::kKioskIWA:
       return AssistantAllowedState::DISALLOWED_BY_KIOSK_MODE;
 
-    case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
+    case user_manager::UserType::kGuest:
       return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
 
-    case user_manager::USER_TYPE_GUEST:
-      return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
-
-    case user_manager::USER_TYPE_REGULAR:
-    case user_manager::USER_TYPE_CHILD:
+    case user_manager::UserType::kRegular:
+    case user_manager::UserType::kChild:
       // This method should only be called for disallowed user types.
       NOTREACHED();
-      return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
-
-    case user_manager::NUM_USER_TYPES:
-      NOTREACHED();
-      return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
   }
 }
 
@@ -111,7 +105,7 @@ bool IsAssistantAllowedForLocale(const Profile* profile) {
 
 bool IsAssistantDisabledByPolicy(const Profile* profile) {
   return profile->GetPrefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantDisabledByPolicy);
+      ash::assistant::prefs::kAssistantDisabledByPolicy);
 }
 
 bool IsEmailDomainSupported(const Profile* profile) {
@@ -132,6 +126,15 @@ bool HasDedicatedAssistantKey() {
 namespace assistant {
 
 AssistantAllowedState IsAssistantAllowedForProfile(const Profile* profile) {
+  if (ash::assistant::features::IsNewEntryPointEnabled()) {
+    return AssistantAllowedState::DISALLOWED_BY_NEW_ENTRY_POINT;
+  }
+
+  // Disabled because the libassistant.so is not available.
+  if (!ash::assistant::features::IsLibAssistantDLCEnabled()) {
+    return AssistantAllowedState::DISALLOWED_BY_NO_BINARY;
+  }
+
   // Primary account might be missing during unittests.
   if (!HasPrimaryAccount(profile))
     return AssistantAllowedState::DISALLOWED_BY_NONPRIMARY_USER;

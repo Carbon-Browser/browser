@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <ostream>
 
-#include "ash/components/phonehub/multidevice_feature_access_manager.h"
 #include "ash/webui/eche_app_ui/apps_access_setup_operation.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
+#include "chromeos/ash/components/phonehub/multidevice_feature_access_manager.h"
 
 namespace ash {
 namespace eche_app {
@@ -27,8 +28,11 @@ using AccessStatus =
 class AppsAccessManager {
  public:
   // Note: Numerical values should not be changed, they are persisted to logs
-  // and should not be renumbered or re-used. See
-  // tools/metrics/histograms/enums.xml.
+  // and should not be renumbered or re-used. Keep in sync with the
+  // OnboardingUserActionMetric UMA enum defined in
+  // //tools/metrics/histograms/enums.xml.
+  //
+  // LINT.IfChange(OnboardingUserActionMetric)
   enum class OnboardingUserActionMetric {
     // Initial state.
     kUserActionUnknown = 0,
@@ -58,8 +62,12 @@ class AppsAccessManager {
     // The permission request is canceled when the device is disconnected.
     kFailedConnection = 8,
 
-    kMaxValue = kFailedConnection
+    // The permission request is delivered to phone's Exo package.
+    kAckByExo = 9,
+
+    kMaxValue = kAckByExo
   };
+  // LINT.ThenChange(//tools/metrics/histograms/enums.xml:OnboardingUserActionMetric)
 
   class Observer : public base::CheckedObserver {
    public:
@@ -98,7 +106,8 @@ class AppsAccessManager {
   void OnSetupOperationDeleted(int operation_id);
 
   int next_operation_id_ = 0;
-  base::flat_map<int, AppsAccessSetupOperation*> id_to_operation_map_;
+  base::flat_map<int, raw_ptr<AppsAccessSetupOperation, CtnExperimental>>
+      id_to_operation_map_;
   base::ObserverList<Observer> observer_list_;
   base::WeakPtrFactory<AppsAccessManager> weak_ptr_factory_{this};
 };

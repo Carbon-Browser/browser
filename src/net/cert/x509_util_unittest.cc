@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 
+#include "base/memory/raw_span.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "crypto/rsa_private_key.h"
@@ -33,8 +34,8 @@ TEST(X509UtilTest, CreateKeyAndSelfSigned) {
 
   ASSERT_TRUE(private_key.get());
 
-  scoped_refptr<X509Certificate> cert(X509Certificate::CreateFromBytes(
-      base::as_bytes(base::make_span(der_cert))));
+  scoped_refptr<X509Certificate> cert(
+      X509Certificate::CreateFromBytes(base::as_byte_span(der_cert)));
   ASSERT_TRUE(cert.get());
 
   EXPECT_EQ("subject", cert->subject().common_name);
@@ -142,8 +143,8 @@ TEST(X509UtilTest, CreateSelfSigned) {
       private_key->key(), x509_util::DIGEST_SHA256, "CN=subject", 1,
       base::Time::Now(), base::Time::Now() + base::Days(1), {}, &der_cert));
 
-  scoped_refptr<X509Certificate> cert = X509Certificate::CreateFromBytes(
-      base::as_bytes(base::make_span(der_cert)));
+  scoped_refptr<X509Certificate> cert =
+      X509Certificate::CreateFromBytes(base::as_byte_span(der_cert));
   ASSERT_TRUE(cert.get());
 
   EXPECT_EQ("subject", cert->subject().GetDisplayName());
@@ -724,7 +725,7 @@ TEST(X509UtilTest, SignatureVerifierInitWithCertificate) {
   struct Test {
     const char* cert;
     crypto::SignatureVerifier::SignatureAlgorithm algorithm;
-    base::span<const uint8_t> signature;
+    base::raw_span<const uint8_t> signature;
     bool ok;
   } kTests[] = {
       // The certificate must support the digitalSignature key usage.
@@ -788,18 +789,18 @@ TEST(X509UtilTest, SignatureVerifierInitWithCertificate) {
   }
 }
 
-TEST(X509UtilTest, HasSHA1Signature) {
+TEST(X509UtilTest, HasRsaPkcs1Sha1Signature) {
   base::FilePath certs_dir = GetTestCertsDirectory();
 
   scoped_refptr<X509Certificate> sha1_leaf =
       ImportCertFromFile(certs_dir, "sha1_leaf.pem");
   ASSERT_TRUE(sha1_leaf);
-  EXPECT_TRUE(HasSHA1Signature(sha1_leaf->cert_buffer()));
+  EXPECT_TRUE(HasRsaPkcs1Sha1Signature(sha1_leaf->cert_buffer()));
 
   scoped_refptr<X509Certificate> ok_cert =
       ImportCertFromFile(certs_dir, "ok_cert.pem");
   ASSERT_TRUE(ok_cert);
-  EXPECT_FALSE(HasSHA1Signature(ok_cert->cert_buffer()));
+  EXPECT_FALSE(HasRsaPkcs1Sha1Signature(ok_cert->cert_buffer()));
 }
 
 }  // namespace net::x509_util

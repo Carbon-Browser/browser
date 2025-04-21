@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ class CORE_EXPORT PendingImportMap final
 
   PendingImportMap(ScriptElementBase&,
                    ImportMap*,
-                   absl::optional<ImportMapError> error_to_rethrow,
+                   std::optional<ImportMapError> error_to_rethrow,
                    const ExecutionContext& original_context);
   PendingImportMap(const PendingImportMap&) = delete;
   PendingImportMap& operator=(const PendingImportMap&) = delete;
@@ -60,7 +60,7 @@ class CORE_EXPORT PendingImportMap final
   Member<ImportMap> import_map_;
 
   // https://wicg.github.io/import-maps/#import-map-parse-result-error-to-rethrow
-  absl::optional<ImportMapError> error_to_rethrow_;
+  std::optional<ImportMapError> error_to_rethrow_;
 
   // https://wicg.github.io/import-maps/#import-map-parse-result-settings-object
   // The context at the time when PrepareScript() is executed.

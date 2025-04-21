@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <iostream>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "content/public/browser/font_list_async.h"
@@ -105,7 +105,7 @@ void FontIndexer::FontListHasLoaded(base::Value::List list) {
     const base::Value::List& font = i.GetList();
 
     std::string non_localized_name = font[0].GetString();
-    PrintAllFontsWithName(non_localized_name.c_str());
+    PrintAllFontsWithName(WTF::AtomicString(non_localized_name.c_str()));
   }
 
   has_font_list_loaded_ = true;
@@ -116,7 +116,7 @@ void FontIndexer::FontListHasLoaded(base::Value::List list) {
 bool FontIndexer::DoesFontHaveDigest(WTF::AtomicString name,
                                      blink::FontDescription font_description,
                                      int64_t digest) {
-  scoped_refptr<blink::SimpleFontData> font_data =
+  const blink::SimpleFontData* font_data =
       font_cache_->GetFontData(font_description, name);
   DCHECK(font_data);
   return blink::FontGlobalContext::Get()
@@ -170,7 +170,7 @@ void FontIndexer::PrintAllFontsWithName(WTF::AtomicString name) {
   // exists and for later comparison.
   int64_t default_font_digest;
   {
-    scoped_refptr<blink::SimpleFontData> font_data =
+    const blink::SimpleFontData* font_data =
         font_cache_->GetFontData(blink::FontDescription(), name);
     default_font_digest =
         font_data ? blink::FontGlobalContext::Get()
@@ -231,7 +231,7 @@ void FontIndexer::PrintAllFontsWithName(WTF::AtomicString name) {
       for (auto slope_pair : slopes) {
         font_description.SetStyle(slope_pair.first);
 
-        if (scoped_refptr<blink::SimpleFontData> font_data =
+        if (const blink::SimpleFontData* font_data =
                 font_cache_->GetFontData(font_description, name)) {
           uint64_t typeface_digest =
               blink::FontGlobalContext::Get()

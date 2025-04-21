@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/xr/service/xr_device_service.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "content/public/browser/gpu_client.h"
@@ -30,8 +30,7 @@ class XRDeviceServiceHostImpl : public device::mojom::XRDeviceServiceHost {
   // BindGpu is called from the XR process to establish a connection to the GPU
   // process.
   void BindGpu(::mojo::PendingReceiver<::viz::mojom::Gpu> receiver) override {
-    gpu_client_ =
-        content::CreateGpuClient(std::move(receiver), base::DoNothing());
+    gpu_client_ = content::CreateGpuClient(std::move(receiver));
   }
 
  private:

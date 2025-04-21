@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,28 +11,28 @@
  *   <settings-dropdown-menu pref="{{prefs.foo}}">
  *   </settings-dropdown-menu>
  */
-import '//resources/cr_elements/md_select_css.m.js';
-import '//resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import '../settings_shared.css.js';
-import '../settings_vars.css.js';
+import '//resources/cr_elements/cr_shared_vars.css.js';
+import '//resources/cr_elements/md_select.css.js';
+import '/shared/settings/controls/cr_policy_pref_indicator.js';
 
-import {assert} from '//resources/js/assert_ts.js';
+import {assert} from '//resources/js/assert.js';
 import {microTask, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {CrPolicyPrefMixin} from '/shared/settings/controls/cr_policy_pref_mixin.js';
+import {PrefControlMixin} from '/shared/settings/controls/pref_control_mixin.js';
+import {prefToString, stringToPrefValue} from '/shared/settings/prefs/pref_util.js';
 
-import {prefToString, stringToPrefValue} from '../prefs/pref_util.js';
-
-import {CrPolicyPrefMixin} from './cr_policy_pref_mixin.js';
-import {PrefControlMixin} from './pref_control_mixin.js';
 import {getTemplate} from './settings_dropdown_menu.html.js';
 
 /**
- * The |name| is shown in the gui.  The |value| us use to set or compare with
- * the preference value.
+ * |name| is shown in the UI. |value| is used to set or compare with the
+ * preference value. |hidden| specifies whether to hide this option from the
+ * user.
  */
-type DropdownMenuOption = {
-  name: string,
-  value: number|string,
-};
+interface DropdownMenuOption {
+  name: string;
+  value: number|string;
+  hidden?: boolean;
+}
 
 export type DropdownMenuOptionList = DropdownMenuOption[];
 
@@ -79,6 +79,16 @@ export class SettingsDropdownMenuElement extends
       },
 
       /**
+       * If true, do not automatically set the preference value. This allows the
+       * container to confirm the change first then call either sendPrefChange
+       * or resetToPrefValue accordingly.
+       */
+      noSetPref: {
+        type: Boolean,
+        value: false,
+      },
+
+      /**
        * The value of the "custom" item.
        */
       notFoundValue: {
@@ -101,6 +111,7 @@ export class SettingsDropdownMenuElement extends
   menuOptions: DropdownMenuOptionList;
   disabled: boolean;
   prefKey: string|null;
+  noSetPref: boolean;
   notFoundValue: string;
   label: string;
 
@@ -108,17 +119,11 @@ export class SettingsDropdownMenuElement extends
     this.$.dropdownMenu.focus();
   }
 
-  /**
-   * Pass the selection change to the pref value.
-   */
-  private onChange_() {
-    const selected = this.$.dropdownMenu.value;
-
-    if (selected === this.notFoundValue) {
-      return;
-    }
-
+  /** Update the pref to the current selected value. */
+  sendPrefChange() {
     assert(this.pref);
+
+    const selected = this.$.dropdownMenu.value;
     if (this.prefKey) {
       this.set(`pref.value.${this.prefKey}`, selected);
     } else {
@@ -126,6 +131,27 @@ export class SettingsDropdownMenuElement extends
       if (prefValue !== undefined) {
         this.set('pref.value', prefValue);
       }
+    }
+  }
+
+  /**
+   * Allow access to the selected value without having to go through the shadow
+   * dom.
+   */
+  getSelectedValue() {
+    return this.$.dropdownMenu.value;
+  }
+
+  /**
+   * Pass the selection change to the pref value.
+   */
+  private onChange_() {
+    if (this.$.dropdownMenu.value === this.notFoundValue) {
+      return;
+    }
+
+    if (!this.noSetPref) {
+      this.sendPrefChange();
     }
 
     // settings-control-change only fires when the selection is changed to

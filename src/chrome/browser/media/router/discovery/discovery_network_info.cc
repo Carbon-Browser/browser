@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 namespace media_router {
 
-DiscoveryNetworkInfo::DiscoveryNetworkInfo() {}
+DiscoveryNetworkInfo::DiscoveryNetworkInfo() = default;
 
 DiscoveryNetworkInfo::DiscoveryNetworkInfo(const std::string& name,
                                            const std::string& network_id)
     : name(name), network_id(network_id) {}
 
-DiscoveryNetworkInfo::~DiscoveryNetworkInfo() {}
+DiscoveryNetworkInfo::~DiscoveryNetworkInfo() = default;
 
 DiscoveryNetworkInfo::DiscoveryNetworkInfo(const DiscoveryNetworkInfo&) =
     default;

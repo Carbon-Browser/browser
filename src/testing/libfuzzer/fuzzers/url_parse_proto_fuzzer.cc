@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,10 @@
 #include "base/at_exit.h"
 #include "base/i18n/icu_util.h"
 #include "url/gurl.h"
+
+// clang-format off
+#include "base/strings/string_number_conversions.h"
+// clang-format on
 
 // Includes *not* copied from url_parse_fuzzer.cc
 // Contains DEFINE_BINARY_PROTO_FUZZER, a macro we use to define our target
@@ -85,7 +89,7 @@ std::string protobuf_to_string(const url_proto::Url& url) {
     // that it is preceded by the host and then ":".
     if (url.has_port())
       // Convert url.port() from an unsigned 32 bit int before appending it.
-      url_string += ":" + std::to_string(url.port());
+      url_string += ":" + base::NumberToString(url.port());
   }
 
   // Append the path segments to the url, with each segment separated by

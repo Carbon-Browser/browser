@@ -1,15 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "ui/views/controls/label.h"
 
@@ -30,7 +30,7 @@ using PaymentRequestProfileListTest = PaymentRequestBrowserTestBase;
 
 IN_PROC_BROWSER_TEST_F(PaymentRequestProfileListTest, PrioritizeCompleteness) {
   std::string payment_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &payment_method_name);
 
   NavigateTo("/payment_request_free_shipping_test.html");
@@ -45,8 +45,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestProfileListTest, PrioritizeCompleteness) {
 
   // In the Personal Data Manager, the partial address is more frecent.
   autofill::PersonalDataManager* personal_data_manager = GetDataManager();
-  std::vector<autofill::AutofillProfile*> profiles =
-      personal_data_manager->GetProfilesToSuggest();
+  std::vector<const autofill::AutofillProfile*> profiles =
+      personal_data_manager->address_data_manager().GetProfilesToSuggest();
   ASSERT_EQ(2UL, profiles.size());
   EXPECT_EQ(partial, *profiles[0]);
   EXPECT_EQ(complete, *profiles[1]);

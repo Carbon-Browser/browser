@@ -35,38 +35,40 @@ _log = logging.getLogger(__name__)
 
 
 class MacPort(base.Port):
-    SUPPORTED_VERSIONS = ('mac10.13', 'mac10.14', 'mac10.15', 'mac11',
-                          'mac11-arm64', 'mac12', 'mac12-arm64')
+    SUPPORTED_VERSIONS = ('mac11', 'mac11-arm64', 'mac12', 'mac12-arm64',
+                          'mac13', 'mac13-arm64', 'mac14', 'mac14-arm64',
+                          'mac15', 'mac15-arm64')
     port_name = 'mac'
 
     FALLBACK_PATHS = {}
 
-    FALLBACK_PATHS['mac12'] = ['mac']
+    FALLBACK_PATHS['mac15'] = ['mac']
+    FALLBACK_PATHS['mac15-arm64'] = ['mac-mac15-arm64'
+                                     ] + FALLBACK_PATHS['mac15']
+    FALLBACK_PATHS['mac14'] = ['mac-mac14'] + FALLBACK_PATHS['mac15']
+    FALLBACK_PATHS['mac14-arm64'] = ['mac-mac14-arm64'
+                                     ] + FALLBACK_PATHS['mac14']
+    FALLBACK_PATHS['mac13'] = ['mac-mac13'] + FALLBACK_PATHS['mac14']
+    FALLBACK_PATHS['mac13-arm64'] = ['mac-mac13-arm64'
+                                     ] + FALLBACK_PATHS['mac13']
+    FALLBACK_PATHS['mac12'] = ['mac-mac12'] + FALLBACK_PATHS['mac13']
     FALLBACK_PATHS['mac12-arm64'] = ['mac-mac12-arm64'
                                      ] + FALLBACK_PATHS['mac12']
     FALLBACK_PATHS['mac11'] = ['mac-mac11'] + FALLBACK_PATHS['mac12']
     FALLBACK_PATHS['mac11-arm64'] = ['mac-mac11-arm64'
                                      ] + FALLBACK_PATHS['mac11']
-    FALLBACK_PATHS['mac10.15'] = ['mac-mac10.15'] + FALLBACK_PATHS['mac11']
-    FALLBACK_PATHS['mac10.14'] = ['mac-mac10.14'] + FALLBACK_PATHS['mac10.15']
-    FALLBACK_PATHS['mac10.13'] = ['mac-mac10.13'] + FALLBACK_PATHS['mac10.14']
 
     CONTENT_SHELL_NAME = 'Content Shell'
+    CHROME_NAME = 'Chromium'
+    # `//headless:headless_shell` is built as a plain executable, not as an
+    # `.app` bundle, so there's no need to override `HEADLESS_SHELL_NAME` here.
 
     BUILD_REQUIREMENTS_URL = 'https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md'
 
     @classmethod
     def determine_full_port_name(cls, host, options, port_name):
         if port_name.endswith('mac'):
-            parts = [port_name]
-            # TODO(crbug.com/1126062): Workaround for Big sur using 10.16 version,
-            # use mac11 instead. This must be done before macOS 12 capability
-            # for this script.
-            if host.platform.os_version == 'mac10.16':
-                version = 'mac11'
-            else:
-                version = host.platform.os_version
-            parts.append(version)
+            parts = [port_name, host.platform.os_version]
             # Maybe add an architecture suffix.
             # In this context, 'arm64' refers to Apple M1.
             # No suffix is appended for Intel-based ports.
@@ -118,16 +120,15 @@ class MacPort(base.Port):
         config_file_basename = 'apache2-httpd-%s-php7.conf' % (self._apache_version(),)
         return self._filesystem.join(self.apache_config_directory(), config_file_basename)
 
-    def default_smoke_test_only(self):
-        # only run platform specific tests on older mac versions
-        return self._version in {'mac10.13', 'mac10.14'}
+    def path_to_driver(self, target=None):
+        if self.driver_name() == self.HEADLESS_SHELL_NAME:
+            return super().path_to_driver(target)
+        return self.build_path(self.driver_name() + '.app',
+                               'Contents',
+                               'MacOS',
+                               self.driver_name(),
+                               target=target)
 
     def path_to_smoke_tests_file(self):
-        return self._filesystem.join(self.web_tests_dir(), 'SmokeTests',
-                                     'Mac.txt')
-
-    def _path_to_driver(self, target=None):
-        return self._build_path_with_target(target,
-                                            self.driver_name() + '.app',
-                                            'Contents', 'MacOS',
-                                            self.driver_name())
+        return self._filesystem.join(self.web_tests_dir(), 'TestLists',
+                                     'MacOld.txt')

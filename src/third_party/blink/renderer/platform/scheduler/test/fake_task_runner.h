@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FAKE_TASK_RUNNER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FAKE_TASK_RUNNER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/tick_clock.h"
@@ -42,6 +42,8 @@ class FakeTaskRunner : public base::SingleThreadTaskRunner {
   Deque<PendingTask> TakePendingTasksForTesting();
 
  protected:
+  ~FakeTaskRunner() override;
+
   bool PostDelayedTask(const base::Location& location,
                        base::OnceClosure task,
                        base::TimeDelta delay) override;
@@ -55,8 +57,6 @@ class FakeTaskRunner : public base::SingleThreadTaskRunner {
                                   base::TimeDelta delay) override;
 
  private:
-  ~FakeTaskRunner() override;
-
   class Data;
   class BaseTaskRunner;
   scoped_refptr<Data> data_;

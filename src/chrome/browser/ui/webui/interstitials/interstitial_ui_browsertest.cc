@@ -1,17 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -21,8 +22,20 @@
 
 class InterstitialUITest : public InProcessBrowserTest {
  public:
-   InterstitialUITest() {}
-   ~InterstitialUITest() override {}
+  InterstitialUITest() = default;
+  ~InterstitialUITest() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    InProcessBrowserTest::SetUpCommandLine(command_line);
+
+#if BUILDFLAG(IS_CHROMEOS)
+    // These tests use chrome:// URLs and are written on the assumption devtools
+    // are always available, so guarantee that assumption holds. Tests that
+    // check if devtools can be disabled should use a test fixture without the
+    // kForceDevToolsAvailable switch set.
+    command_line->AppendSwitch(switches::kForceDevToolsAvailable);
+#endif
+  }
 
  protected:
   // Tests interstitial displayed at url to verify that it has the given
@@ -34,9 +47,8 @@ class InterstitialUITest : public InProcessBrowserTest {
                         const std::string& page_title,
                         const std::u16string& body_text) {
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-    EXPECT_EQ(
-      base::ASCIIToUTF16(page_title),
-      browser()->tab_strip_model()->GetActiveWebContents()->GetTitle());
+    EXPECT_EQ(base::ASCIIToUTF16(page_title),
+              browser()->tab_strip_model()->GetActiveWebContents()->GetTitle());
 
     // Should also be able to open and close devtools.
     DevToolsWindow* window =
@@ -44,8 +56,9 @@ class InterstitialUITest : public InProcessBrowserTest {
     EXPECT_TRUE(window);
     DevToolsWindowTesting::CloseDevToolsWindowSync(window);
 
-    if (body_text.empty())
+    if (body_text.empty()) {
       return;
+    }
 
     content::WebContents* contents =
         browser()->tab_strip_model()->GetActiveWebContents();
@@ -56,8 +69,7 @@ class InterstitialUITest : public InProcessBrowserTest {
   }
 
   // Convenience function to test interstitial pages without provided body_text.
-  void TestInterstitial(GURL url,
-                        const std::string& page_title) {
+  void TestInterstitial(GURL url, const std::string& page_title) {
     TestInterstitial(url, page_title, std::u16string());
   }
 
@@ -71,16 +83,12 @@ class InterstitialUITest : public InProcessBrowserTest {
 };
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, HomePage) {
-  TestInterstitial(
-      GURL("chrome://interstitials"),
-      "Interstitials");
+  TestInterstitial(GURL("chrome://interstitials"), "Interstitials");
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, InvalidURLShouldOpenHomePage) {
   // Invalid path should open the main page:
-  TestInterstitial(
-      GURL("chrome://interstitials/--invalid--"),
-      "Interstitials");
+  TestInterstitial(GURL("chrome://interstitials/--invalid--"), "Interstitials");
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest,
@@ -113,19 +121,29 @@ IN_PROC_BROWSER_TEST_F(InterstitialUITest, CTInterstitial) {
                    u"NET::ERR_CERTIFICATE_TRANSPARENCY_REQUIRED");
 }
 
+IN_PROC_BROWSER_TEST_F(InterstitialUITest, EnterpriseBlockInterstitial) {
+  TestInterstitial(GURL("chrome://interstitials/enterprise-block"),
+                   "Blocked by Admin", IDS_ENTERPRISE_BLOCK_HEADING);
+}
+
+IN_PROC_BROWSER_TEST_F(InterstitialUITest, EnterpriseWarnInterstitial) {
+  TestInterstitial(GURL("chrome://interstitials/enterprise-warn"),
+                   "Admin warning", IDS_ENTERPRISE_WARN_HEADING);
+}
+
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, MalwareInterstitial) {
   TestInterstitial(GURL("chrome://interstitials/safebrowsing?type=malware"),
-                   "Security error", IDS_MALWARE_V3_HEADING);
+                   "Security error", IDS_SAFEBROWSING_HEADING);
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, PhishingInterstitial) {
   TestInterstitial(GURL("chrome://interstitials/safebrowsing?type=phishing"),
-                   "Security error", IDS_PHISHING_V4_HEADING);
+                   "Security error", IDS_SAFEBROWSING_HEADING);
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, UnwantedSoftwareInterstitial) {
   TestInterstitial(GURL("chrome://interstitials/safebrowsing?type=unwanted"),
-                   "Security error", IDS_HARMFUL_V3_HEADING);
+                   "Security error", IDS_SAFEBROWSING_HEADING);
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, MalwareInterstitialQuiet) {
@@ -155,13 +173,13 @@ IN_PROC_BROWSER_TEST_F(InterstitialUITest, BillingInterstitialQuiet) {
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, ClientsideMalwareInterstitial) {
   TestInterstitial(
       GURL("chrome://interstitials/safebrowsing?type=clientside_malware"),
-      "Security error", IDS_MALWARE_V3_HEADING);
+      "Security error", IDS_SAFEBROWSING_HEADING);
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, ClientsidePhishingInterstitial) {
   TestInterstitial(
       GURL("chrome://interstitials/safebrowsing?type=clientside_phishing"),
-      "Security error", IDS_PHISHING_V4_HEADING);
+      "Security error", IDS_SAFEBROWSING_HEADING);
 }
 
 IN_PROC_BROWSER_TEST_F(InterstitialUITest, BillingInterstitial) {
@@ -184,6 +202,39 @@ IN_PROC_BROWSER_TEST_F(InterstitialUITest, BlockedInterceptionInterstitial) {
                    "Your activity on example.com is being monitored",
                    u"Anything you type");
 }
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+// Tests that the interstitials have the expected title and content.
+IN_PROC_BROWSER_TEST_F(InterstitialUITest,
+                       SupervisedUserVerificationInterstitial) {
+  TestInterstitial(GURL("chrome://interstitials/supervised-user-verify"),
+                   "YouTube", IDS_SUPERVISED_USER_VERIFY_PAGE_PRIMARY_HEADING);
+}
+
+IN_PROC_BROWSER_TEST_F(InterstitialUITest,
+                       SupervisedUserVerificationBlockedSiteInterstitial) {
+  TestInterstitial(
+      GURL("chrome://interstitials/supervised-user-verify-blocked-site"),
+      "Site blocked", IDS_CHILD_BLOCK_INTERSTITIAL_MESSAGE_NOT_SIGNED_IN);
+}
+
+IN_PROC_BROWSER_TEST_F(InterstitialUITest,
+                       SupervisedUserVerificationSubframeInterstitial) {
+  TestInterstitial(
+      GURL("chrome://interstitials/supervised-user-verify-subframe"), "YouTube",
+      IDS_SUPERVISED_USER_VERIFY_PAGE_SUBFRAME_YOUTUBE_HEADING);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    InterstitialUITest,
+    SupervisedUserVerificationBlockedSiteSubframeInterstitial) {
+  TestInterstitial(
+      GURL("chrome://interstitials/"
+           "supervised-user-verify-blocked-site-subframe"),
+      "Site blocked",
+      IDS_SUPERVISED_USER_VERIFY_PAGE_SUBFRAME_BLOCKED_SITE_HEADING);
+}
+#endif
 
 // Tests that back button works after opening an interstitial from
 // chrome://interstitials.

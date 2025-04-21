@@ -1,13 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_INSTALLER_UTIL_ADDITIONAL_PARAMETERS_H_
 #define CHROME_INSTALLER_UTIL_ADDITIONAL_PARAMETERS_H_
 
+#include <optional>
 #include <string>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace version_info {
 enum class Channel;
@@ -59,7 +58,7 @@ class AdditionalParameters {
  private:
   // null if no value is present in the registry, or if any value in the
   // registry should be removed on commit.
-  absl::optional<std::wstring> value_;
+  std::optional<std::wstring> value_;
 };
 
 }  // namespace installer

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "components/performance_manager/public/graph/frame_node.h"
@@ -13,7 +14,6 @@
 #include "components/performance_manager/public/graph/process_node.h"
 #include "components/performance_manager/public/render_frame_host_proxy.h"
 #include "components/performance_manager/public/render_process_host_proxy.h"
-#include "components/performance_manager/public/web_contents_proxy.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -28,7 +28,7 @@ class PerformanceManagerTest : public PerformanceManagerTestHarness {
  public:
   using Super = PerformanceManagerTestHarness;
 
-  PerformanceManagerTest() {}
+  PerformanceManagerTest() = default;
 
   void SetUp() override {
     EXPECT_FALSE(PerformanceManager::IsAvailable());
@@ -45,7 +45,7 @@ class PerformanceManagerTest : public PerformanceManagerTestHarness {
   PerformanceManagerTest(const PerformanceManagerTest&) = delete;
   PerformanceManagerTest& operator=(const PerformanceManagerTest&) = delete;
 
-  ~PerformanceManagerTest() override {}
+  ~PerformanceManagerTest() override = default;
 };
 
 TEST_F(PerformanceManagerTest, NodeAccessors) {
@@ -76,11 +76,11 @@ TEST_F(PerformanceManagerTest, NodeAccessors) {
   // will ensure that the nodes are really associated with the content objects.
 
   base::RunLoop run_loop;
-  auto check_proxies_on_main_thread =
-      base::BindLambdaForTesting([&](const WebContentsProxy& wc_proxy,
-                                     const RenderFrameHostProxy& rfh_proxy,
-                                     const RenderProcessHostProxy& rph_proxy) {
-        EXPECT_EQ(contents.get(), wc_proxy.Get());
+  auto check_proxies_on_main_thread = base::BindLambdaForTesting(
+      [&](base::WeakPtr<content::WebContents> weak_contents,
+          const RenderFrameHostProxy& rfh_proxy,
+          const RenderProcessHostProxy& rph_proxy) {
+        EXPECT_EQ(contents.get(), weak_contents.get());
         EXPECT_EQ(rfh, rfh_proxy.Get());
         EXPECT_EQ(rph, rph_proxy.Get());
         run_loop.Quit();
@@ -92,7 +92,7 @@ TEST_F(PerformanceManagerTest, NodeAccessors) {
     EXPECT_TRUE(process_node.get());
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(std::move(check_proxies_on_main_thread),
-                                  page_node->GetContentsProxy(),
+                                  page_node->GetWebContents(),
                                   frame_node->GetRenderFrameHostProxy(),
                                   process_node->GetRenderProcessHostProxy()));
   });

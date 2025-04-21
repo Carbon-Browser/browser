@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ class CancelationSignal {
 
   // Sets the stop_requested_ flag and calls the OnCancelationSignalReceived()
   // method of the registered handler, if there is one registered at the time.
-  // SignalReceived() will be called with the |signal_lock_| held.
+  // SignalReceived() will be called with the `signal_lock_` held.
   void Signal();
 
  private:

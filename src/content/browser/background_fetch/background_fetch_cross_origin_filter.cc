@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,9 +92,10 @@ BackgroundFetchCrossOriginFilter::BackgroundFetchCrossOriginFilter(
   include_credentials_ = request.fetch_request()->credentials_mode ==
                          ::network::mojom::CredentialsMode::kInclude;
 
-  // TODO(crbug.com/711354): Consider the Access-Control-Allow-Headers header.
-  // TODO(crbug.com/711354): Consider the Access-Control-Allow-Methods header.
-  // TODO(crbug.com/711354): Consider the Access-Control-Expose-Headers header.
+  // TODO(crbug.com/40515511): Consider the Access-Control-Allow-Headers header.
+  // TODO(crbug.com/40515511): Consider the Access-Control-Allow-Methods header.
+  // TODO(crbug.com/40515511): Consider the Access-Control-Expose-Headers
+  // header.
 }
 
 BackgroundFetchCrossOriginFilter::~BackgroundFetchCrossOriginFilter() = default;

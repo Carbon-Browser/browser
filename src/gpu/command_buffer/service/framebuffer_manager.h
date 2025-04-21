@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,9 +69,9 @@ class GPU_GLES2_EXPORT Framebuffer : public base::RefCounted<Framebuffer> {
     virtual size_t GetSignatureSize(TextureManager* texture_manager) const = 0;
     virtual void AddToSignature(
         TextureManager* texture_manager, std::string* signature) const = 0;
-    virtual bool FormsFeedbackLoop(
-        TextureRef* texture, GLint level, GLint layer) const = 0;
-    virtual bool EmulatingRGB() const = 0;
+    virtual bool FormsFeedbackLoop(TextureRef* texture,
+                                   GLint level,
+                                   GLint layer) const = 0;
 
    protected:
     friend class base::RefCounted<Attachment>;

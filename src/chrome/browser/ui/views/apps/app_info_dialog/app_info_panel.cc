@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,13 +21,12 @@ namespace {
 
 // The spacing between the key and the value labels in the Details section.
 const int kSpacingBetweenKeyAndStartOfValue = 3;
-}
+}  // namespace
 
 AppInfoPanel::AppInfoPanel(Profile* profile, const extensions::Extension* app)
     : profile_(profile), app_(app) {}
 
-AppInfoPanel::~AppInfoPanel() {
-}
+AppInfoPanel::~AppInfoPanel() = default;
 
 void AppInfoPanel::Close() {
   GetWidget()->Close();
@@ -79,5 +78,5 @@ std::unique_ptr<views::View> AppInfoPanel::CreateKeyValueField(
   return horizontal_stack;
 }
 
-BEGIN_METADATA(AppInfoPanel, views::View)
+BEGIN_METADATA(AppInfoPanel)
 END_METADATA

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_GEOMETRY_LOGICAL_SIZE_H_
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/layout/geometry/box_strut.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_offset.h"
-#include "third_party/blink/renderer/core/layout/ng/geometry/ng_box_strut.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/text/writing_mode.h"
 
@@ -46,15 +46,50 @@ struct CORE_EXPORT LogicalSize {
     return !(*this == other);
   }
 
+  LogicalSize operator*(float scale) const {
+    return LogicalSize(LayoutUnit(inline_size * scale),
+                       LayoutUnit(block_size * scale));
+  }
+
   constexpr bool IsEmpty() const {
     return inline_size == LayoutUnit() || block_size == LayoutUnit();
   }
+
+  void Expand(LayoutUnit inline_offset, LayoutUnit block_offset) {
+    inline_size += inline_offset;
+    block_size += block_offset;
+  }
+
+  void Shrink(LayoutUnit inline_offset, LayoutUnit block_offset) {
+    inline_size -= inline_offset;
+    block_size -= block_offset;
+  }
+
+  LogicalSize ClampNegativeToZero() const {
+    return LogicalSize(inline_size.ClampNegativeToZero(),
+                       block_size.ClampNegativeToZero());
+  }
+
+  LogicalSize ClampIndefiniteToZero() const {
+    return LogicalSize(inline_size.ClampIndefiniteToZero(),
+                       block_size.ClampIndefiniteToZero());
+  }
 };
 
-inline LogicalSize& operator-=(LogicalSize& a, const NGBoxStrut& b) {
+constexpr LogicalSize kIndefiniteLogicalSize(kIndefiniteSize, kIndefiniteSize);
+
+inline LogicalSize operator-(const LogicalSize& a, const BoxStrut& b) {
+  return {a.inline_size - b.InlineSum(), a.block_size - b.BlockSum()};
+}
+
+inline LogicalSize& operator-=(LogicalSize& a, const BoxStrut& b) {
   a.inline_size -= b.InlineSum();
   a.block_size -= b.BlockSum();
   return a;
+}
+
+inline LogicalSize operator+(const LogicalSize& a, const BoxStrut& b) {
+  return {a.inline_size + b.InlineSum(), a.block_size + b.BlockSum()};
 }
 
 inline LogicalOffset operator+(const LogicalOffset& offset,

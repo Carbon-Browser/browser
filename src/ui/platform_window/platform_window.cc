@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace ui {
@@ -43,10 +42,6 @@ bool PlatformWindow::IsAnimatingClosed() const {
   return false;
 }
 
-bool PlatformWindow::IsTranslucentWindowOpacitySupported() const {
-  return false;
-}
-
 void PlatformWindow::SetOpacity(float opacity) {}
 
 void PlatformWindow::SetVisibilityChangedAnimationsEnabled(bool enabled) {}
@@ -63,11 +58,15 @@ bool PlatformWindow::CanSetDecorationInsets() const {
   return false;
 }
 
-void PlatformWindow::SetDecorationInsets(const gfx::Insets* insets_px) {}
+void PlatformWindow::SetVideoCapture() {}
 
-void PlatformWindow::SetOpaqueRegion(const std::vector<gfx::Rect>* region_px) {}
+void PlatformWindow::ReleaseVideoCapture() {}
 
-void PlatformWindow::SetInputRegion(const gfx::Rect* region_px) {}
+void PlatformWindow::SetOpaqueRegion(
+    std::optional<std::vector<gfx::Rect>> region_px) {}
+
+void PlatformWindow::SetInputRegion(
+    std::optional<std::vector<gfx::Rect>> region_px) {}
 
 bool PlatformWindow::IsClientControlledWindowMovementSupported() const {
   return true;

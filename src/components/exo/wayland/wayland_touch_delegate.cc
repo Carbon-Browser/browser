@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,6 @@ void WaylandTouchDelegate::OnTouchFrame() {
 }
 void WaylandTouchDelegate::OnTouchCancel() {
   wl_touch_send_cancel(touch_resource_);
-  serial_tracker_->ResetTouchDownSerial();
 }
 
 wl_client* WaylandTouchDelegate::client() const {

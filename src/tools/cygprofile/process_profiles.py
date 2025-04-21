@@ -1,5 +1,5 @@
-#!/usr/bin/env vpython
-# Copyright 2017 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -173,8 +173,7 @@ class SymbolOffsetProcessor:
     which contain the dump offsets, and returns their offsets. Note that while
     usually a symbol offset corresponds to a single symbol, in some cases
     several symbols will map to the same offset. For that reason this function
-    returns only the offset list. See cyglog_to_orderfile.py for computing more
-    information about symbols.
+    returns only the offset list.
 
     Args:
      dump: (int iterable) Dump offsets, for example as returned by MergeDumps().
@@ -488,8 +487,8 @@ class ProfileManager:
     # This is a sanity check to ensure the number of race-related
     # inconsistencies is small.
     if total_calls_count != count:
-      logging.warn('Instrumentation missed calls! %u != %u', total_calls_count,
-                   count)
+      logging.warning('Instrumentation missed calls! %u != %u',
+                      total_calls_count, count)
       assert abs(total_calls_count - count) < 3, (
           'Instrumentation call count differs by too much.')
 
@@ -649,7 +648,7 @@ def main():
 
   reached_offsets = instrumented_processor.GetReachedOffsetsFromDump(dumps)
   if args.offsets_output:
-    with file(args.offsets_output, 'w') as f:
+    with open(args.offsets_output, 'w') as f:
       f.write('\n'.join(map(str, reached_offsets)))
   logging.info('Reached Offsets = %d', len(reached_offsets))
 

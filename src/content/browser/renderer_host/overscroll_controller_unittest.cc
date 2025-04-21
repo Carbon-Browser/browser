@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include "base/containers/queue.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/browser/renderer_host/overscroll_controller_delegate.h"
+#include "content/common/features.h"
 #include "content/public/browser/overscroll_configuration.h"
-#include "content/public/common/content_features.h"
 #include "content/public/test/scoped_overscroll_modes.h"
 #include "content/test/test_overscroll_delegate.h"
 #include "testing/gtest/include/gtest/gtest.h"

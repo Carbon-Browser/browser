@@ -1,6 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/accessibility/platform/inspect/ax_call_statement_invoker_auralinux.h"
 
@@ -198,7 +203,6 @@ AXOptionalObject AXCallStatementInvokerAuraLinux::HasState(
   AtspiStateSet* atspi_states =
       atspi_accessible_get_state_set(const_cast<AtspiAccessible*>(target));
   GArray* state_array = atspi_state_set_get_states(atspi_states);
-  auto states = std::make_unique<base::ListValue>();
 
   for (unsigned i = 0; i < state_array->len; i++) {
     AtspiStateType state_type = g_array_index(state_array, AtspiStateType, i);
@@ -324,12 +328,8 @@ AXOptionalObject AXCallStatementInvokerAuraLinux::InvokeForAXElement(
 }
 
 bool AXCallStatementInvokerAuraLinux::IsAtspiAndNotNull(Target target) const {
-  if (auto** atspi_ptr = absl::get_if<const AtspiAccessible*>(&target)) {
-    if (*atspi_ptr != nullptr) {
-      return true;
-    }
-  }
-  return false;
+  auto** atspi_ptr = absl::get_if<const AtspiAccessible*>(&target);
+  return atspi_ptr && *atspi_ptr;
 }
 
 }  // namespace ui

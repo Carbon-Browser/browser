@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/share/default_ranking.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 
 namespace sharing {
@@ -59,7 +60,7 @@ std::vector<ComponentName> DefaultEnUsImageRanking() {
        "ImplicitShareIntentHandlerDefaultAlias"},
       {"com.google.android.apps.photos",
        "com.google.android.apps.photos.uploadtoalbum.UploadContentActivity"},
-      // TODO(https://crbug.com/1228281): Files
+      // TODO(crbug.com/40777590): Files
       {
           "com.snapchat.android",
           "com.snap.mushroom.MainActivity",
@@ -124,7 +125,7 @@ std::vector<ComponentName> DefaultEnUsImageRanking() {
           "com.linkedin.android",
           "com.linkedin.android.publishing.sharing.SharingDeepLinkActivity",
       },
-      // TODO(https://crbug.com/1228281): Samsung email
+      // TODO(crbug.com/40777590): Samsung email
       {
           "com.reddit.frontpage",
           "com.reddit.sharing.ShareActivity",
@@ -141,7 +142,7 @@ std::vector<ComponentName> DefaultEnUsImageRanking() {
           "com.tencent.mm",
           "com.tencent.mm.ui.tools.ShareToTimeLineUI",
       },
-      // TODO(https://crbug.com/1228281): Groupme
+      // TODO(crbug.com/40777590): Groupme
   };
 }
 
@@ -222,7 +223,7 @@ std::vector<ComponentName> DefaultEnUsTextRanking() {
           "com.linkedin.android",
           "com.linkedin.android.publishing.sharing.SharingDeepLinkActivity",
       },
-      // TODO(https://crbug.com/1228281): Samsung email
+      // TODO(crbug.com/40777590): Samsung email
       {
           "com.reddit.frontpage",
           "com.reddit.sharing.ShareActivity",
@@ -239,7 +240,7 @@ std::vector<ComponentName> DefaultEnUsTextRanking() {
           "com.tencent.mm",
           "com.tencent.mm.ui.tools.ShareToTimeLineUI",
       },
-      // TODO(https://crbug.com/1228281): Groupme
+      // TODO(crbug.com/40777590): Groupme
   };
 }
 
@@ -278,7 +279,7 @@ std::vector<ComponentName> DefaultWorldImageRanking() {
       },
       {"com.google.android.apps.photos",
        "com.google.android.apps.photos.uploadtoalbum.UploadContentActivity"},
-      // TODO(https://crbug.com/1228281): Files
+      // TODO(crbug.com/40777590): Files
       {
           "com.google.android.apps.docs.editors.docs",
           "com.google.android.apps.docs.common.shareitem.UploadMenuActivity",
@@ -299,7 +300,7 @@ std::vector<ComponentName> DefaultWorldImageRanking() {
           "com.twitter.android",
           "com.twitter.composer.ComposerActivity",
       },
-      // TODO(https://crbug.com/1227749): Whatsapp Business
+      // TODO(crbug.com/40777253): Whatsapp Business
       {
           "com.pinterest",
           "com.pinterest.activity.create.PinItActivity",
@@ -340,7 +341,7 @@ std::vector<ComponentName> DefaultWorldImageRanking() {
           "com.imo.android.imoim",
           "com.imo.android.imoim.globalshare.SharingActivity2",
       },
-      // TODO(https://crbug.com/1228281): Samsung email
+      // TODO(crbug.com/40777590): Samsung email
       {
           "com.tencent.mm",
           "com.tencent.mm.ui.tools.ShareImgUI",
@@ -381,7 +382,7 @@ std::vector<ComponentName> DefaultWorldTextRanking() {
           "com.google.android.talk",
           "com.google.android.apps.hangouts.phone.ShareIntentActivity",
       },
-      // TODO(https://crbug.com/1228281): Instagram Chat
+      // TODO(crbug.com/40777590): Instagram Chat
       {
           "jp.naver.line.android",
           "com.linecorp.line.share.common.view.FullPickerLaunchActivity",
@@ -399,7 +400,7 @@ std::vector<ComponentName> DefaultWorldTextRanking() {
           "com.twitter.composer.ComposerActivity",
       },
       {"com.discord", "com.discord.app.AppActivity$AppAction"},
-      // TODO(https://crbug.com/1227749): Whatsapp Business
+      // TODO(crbug.com/40777253): Whatsapp Business
       {
           "com.ideashower.readitlater.pro",
           "com.ideashower.readitlater.activity.AddActivity",
@@ -452,7 +453,7 @@ std::vector<ComponentName> DefaultWorldTextRanking() {
           "com.reddit.frontpage",
           "com.reddit.sharing.ShareActivity",
       },
-      // TODO(https://crbug.com/1228281): Samsung email
+      // TODO(crbug.com/40777590): Samsung email
       {
           "com.tencent.mm",
           "com.tencent.mm.ui.tools.ShareImgUI",
@@ -481,10 +482,10 @@ bool IsEnUsLocale(const std::string& locale) {
 }
 
 std::vector<std::string> FlattenComponents(
-    const std::vector<ComponentName> cs) {
+    const std::vector<ComponentName>& cs) {
   std::vector<std::string> result;
-  std::transform(cs.begin(), cs.end(), std::back_inserter(result),
-                 [](const ComponentName& c) { return c.Flatten(); });
+  base::ranges::transform(cs, std::back_inserter(result),
+                          &ComponentName::Flatten);
   return result;
 }
 

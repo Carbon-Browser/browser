@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/recursive_mutex.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
@@ -16,9 +16,7 @@
 #include "base/unguessable_token.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 class RecursiveMutexTest : public testing::Test {
  protected:
@@ -157,6 +155,4 @@ TEST_F(RecursiveMutexTest, CannotUnlockBeforeAnyLocks) {
   EXPECT_DCHECK_DEATH(mutex().Unlock());
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

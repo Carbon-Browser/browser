@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 #define UI_VIEWS_TEST_TEST_LAYOUT_MANAGER_H_
 
 #include "ui/gfx/geometry/size.h"
-#include "ui/views/layout/layout_manager.h"
+#include "ui/views/layout/layout_manager_base.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // A stub layout manager that returns a specific preferred size and height for
 // width.
-class TestLayoutManager : public LayoutManager {
+class TestLayoutManager : public LayoutManagerBase {
  public:
   TestLayoutManager();
 
@@ -30,11 +29,11 @@ class TestLayoutManager : public LayoutManager {
 
   int invalidate_count() const { return invalidate_count_; }
 
-  // LayoutManager:
-  void Layout(View* host) override;
-  gfx::Size GetPreferredSize(const View* host) const override;
-  int GetPreferredHeightForWidth(const View* host, int width) const override;
-  void InvalidateLayout() override;
+ protected:
+  // LayoutManagerBase:
+  views::ProposedLayout CalculateProposedLayout(
+      const views::SizeBounds& size_bounds) const override;
+  void OnLayoutChanged() override;
 
  private:
   // The return value of GetPreferredSize();
@@ -47,7 +46,6 @@ class TestLayoutManager : public LayoutManager {
   int invalidate_count_ = 0;
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_TEST_TEST_LAYOUT_MANAGER_H_

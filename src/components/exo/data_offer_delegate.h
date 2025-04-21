@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 namespace exo {
 
 class DataOffer;
+class SecurityDelegate;
 enum class DndAction;
 
 // Handles events on data devices in context-specific ways.
@@ -29,8 +30,11 @@ class DataOfferDelegate {
   // Called when current |action| is offered by the client.
   virtual void OnAction(DndAction action) = 0;
 
+  // Returns the server's SecurityDelegate.
+  virtual SecurityDelegate* GetSecurityDelegate() const = 0;
+
  protected:
-  virtual ~DataOfferDelegate() {}
+  virtual ~DataOfferDelegate() = default;
 };
 
 }  // namespace exo

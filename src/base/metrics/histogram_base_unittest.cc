@@ -1,12 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/metrics/histogram_base.h"
+
 #include <limits>
+#include <string_view>
 #include <vector>
 
 #include "base/metrics/histogram.h"
-#include "base/metrics/histogram_base.h"
 #include "base/metrics/sample_vector.h"
 #include "base/metrics/sparse_histogram.h"
 #include "base/metrics/statistics_recorder.h"
@@ -40,10 +42,10 @@ class HistogramBaseTest : public testing::Test {
 };
 
 TEST_F(HistogramBaseTest, DeserializeHistogram) {
-  HistogramBase* histogram = Histogram::FactoryGet(
-      "TestHistogram", 1, 1000, 10,
-      (HistogramBase::kUmaTargetedHistogramFlag |
-      HistogramBase::kIPCSerializationSourceFlag));
+  HistogramBase* histogram =
+      Histogram::FactoryGet("TestHistogram", 1, 1000, 10,
+                            (HistogramBase::kUmaTargetedHistogramFlag |
+                             HistogramBase::kIPCSerializationSourceFlag));
 
   Pickle pickle;
   histogram->SerializeInfo(&pickle);
@@ -58,7 +60,7 @@ TEST_F(HistogramBaseTest, DeserializeHistogram) {
   deserialized = DeserializeHistogramInfo(&iter2);
   EXPECT_TRUE(deserialized);
   EXPECT_NE(histogram, deserialized);
-  EXPECT_EQ("TestHistogram", StringPiece(deserialized->histogram_name()));
+  EXPECT_STREQ("TestHistogram", deserialized->histogram_name());
   EXPECT_TRUE(deserialized->HasConstructionArguments(1, 1000, 10));
 
   // kIPCSerializationSourceFlag will be cleared.
@@ -67,8 +69,7 @@ TEST_F(HistogramBaseTest, DeserializeHistogram) {
 
 TEST_F(HistogramBaseTest, DeserializeLinearHistogram) {
   HistogramBase* histogram = LinearHistogram::FactoryGet(
-      "TestHistogram", 1, 1000, 10,
-      HistogramBase::kIPCSerializationSourceFlag);
+      "TestHistogram", 1, 1000, 10, HistogramBase::kIPCSerializationSourceFlag);
 
   Pickle pickle;
   histogram->SerializeInfo(&pickle);
@@ -83,7 +84,7 @@ TEST_F(HistogramBaseTest, DeserializeLinearHistogram) {
   deserialized = DeserializeHistogramInfo(&iter2);
   EXPECT_TRUE(deserialized);
   EXPECT_NE(histogram, deserialized);
-  EXPECT_EQ("TestHistogram", StringPiece(deserialized->histogram_name()));
+  EXPECT_STREQ("TestHistogram", deserialized->histogram_name());
   EXPECT_TRUE(deserialized->HasConstructionArguments(1, 1000, 10));
   EXPECT_EQ(0, deserialized->flags());
 }
@@ -105,7 +106,7 @@ TEST_F(HistogramBaseTest, DeserializeBooleanHistogram) {
   deserialized = DeserializeHistogramInfo(&iter2);
   EXPECT_TRUE(deserialized);
   EXPECT_NE(histogram, deserialized);
-  EXPECT_EQ("TestHistogram", StringPiece(deserialized->histogram_name()));
+  EXPECT_STREQ("TestHistogram", deserialized->histogram_name());
   EXPECT_TRUE(deserialized->HasConstructionArguments(1, 2, 3));
   EXPECT_EQ(0, deserialized->flags());
 }
@@ -132,7 +133,7 @@ TEST_F(HistogramBaseTest, DeserializeCustomHistogram) {
   deserialized = DeserializeHistogramInfo(&iter2);
   EXPECT_TRUE(deserialized);
   EXPECT_NE(histogram, deserialized);
-  EXPECT_EQ("TestHistogram", StringPiece(deserialized->histogram_name()));
+  EXPECT_STREQ("TestHistogram", deserialized->histogram_name());
   EXPECT_TRUE(deserialized->HasConstructionArguments(5, 13, 4));
   EXPECT_EQ(0, deserialized->flags());
 }
@@ -154,7 +155,7 @@ TEST_F(HistogramBaseTest, DeserializeSparseHistogram) {
   deserialized = DeserializeHistogramInfo(&iter2);
   EXPECT_TRUE(deserialized);
   EXPECT_NE(histogram, deserialized);
-  EXPECT_EQ("TestHistogram", StringPiece(deserialized->histogram_name()));
+  EXPECT_STREQ("TestHistogram", deserialized->histogram_name());
   EXPECT_EQ(0, deserialized->flags());
 }
 
@@ -229,8 +230,9 @@ TEST_F(HistogramBaseTest, AddTimeMillisecondsGranularityOverflow) {
 
 TEST_F(HistogramBaseTest, AddTimeMicrosecondsGranularityOverflow) {
   // Nothing to test if we don't have a high resolution clock.
-  if (!TimeTicks::IsHighResolution())
+  if (!TimeTicks::IsHighResolution()) {
     return;
+  }
 
   const HistogramBase::Sample sample_max =
       std::numeric_limits<HistogramBase::Sample>::max() / 2;

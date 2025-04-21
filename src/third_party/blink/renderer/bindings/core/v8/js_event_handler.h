@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,6 @@ class CORE_EXPORT JSEventHandler : public JSBasedEventListener {
                           HandlerType type)
       : event_handler_(event_handler), type_(type) {}
 
-  // blink::CustomWrappable overrides:
   void Trace(Visitor* visitor) const override;
 
   // blink::EventListener overrides:
@@ -86,7 +85,7 @@ class CORE_EXPORT JSEventHandler : public JSBasedEventListener {
   void SetCompiledHandler(ScriptState* incumbent_script_state,
                           v8::Local<v8::Function> listener);
 
-  bool HasCompiledHandler() const { return event_handler_; }
+  bool HasCompiledHandler() const { return event_handler_ != nullptr; }
 
   // For checking special types of EventHandler.
   bool IsOnErrorEventHandler() const {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define DEVICE_VR_PUBLIC_MOJOM_RGB_TUPLE_F32_H_
 
 #include <stddef.h>
+
+#include <array>
 
 namespace device {
 
@@ -24,7 +26,7 @@ struct RgbTupleF32 {
   float blue() const { return components[2]; }
   void set_blue(float blue) { components[2] = blue; }
 
-  float components[kNumComponents];
+  std::array<float, kNumComponents> components;
 };
 
 static_assert(sizeof(RgbTupleF32) ==

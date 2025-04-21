@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Command-line tool for printing class-level dependencies."""
@@ -147,7 +147,7 @@ def print_class_dependencies(to_classes: List[class_dependency.JavaClass],
 
     print_backlog: List[Tuple[int, str]] = []
 
-    # TODO(crbug.com/1124836): This is not quite correct because
+    # TODO(crbug.com/40147556): This is not quite correct because
     # sets considered equal can be converted to different strings. Fix this by
     # making JavaClass.build_targets return a List instead of a Set.
     suspect_dependencies = 0

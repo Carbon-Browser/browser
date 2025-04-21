@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_USER_NOTES_BROWSER_USER_NOTE_SERVICE_H_
 #define COMPONENTS_USER_NOTES_BROWSER_USER_NOTE_SERVICE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 #include <memory>
@@ -113,7 +114,7 @@ class UserNoteService : public KeyedService,
     ModelMapEntry& operator=(const ModelMapEntry&) = delete;
 
     std::unique_ptr<UserNote> model;
-    std::unordered_set<UserNoteManager*> managers;
+    std::unordered_set<raw_ptr<UserNoteManager, CtnExperimental>> managers;
   };
 
   friend class MockUserNoteService;
@@ -145,11 +146,10 @@ class UserNoteService : public KeyedService,
   // Private helpers used when processing note storage changes. Marked virtual
   // for tests to override.
   virtual void OnNoteMetadataFetchedForNavigation(
-      const std::vector<content::RenderFrameHost*>& all_frames,
-      const content::RenderFrameHost* navigated_frame,
+      const std::vector<content::WeakDocumentPtr>& all_frames,
       UserNoteMetadataSnapshot metadata_snapshot);
   virtual void OnNoteMetadataFetched(
-      const std::vector<content::RenderFrameHost*>& all_frames,
+      const std::vector<content::WeakDocumentPtr>& all_frames,
       UserNoteMetadataSnapshot metadata_snapshot);
   virtual void OnNoteModelsFetched(
       const IdSet& new_notes,

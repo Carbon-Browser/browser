@@ -1,16 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/test/trust_token_test_util.h"
 
 #include "base/json/json_reader.h"
-#include "base/json/json_string_value_serializer.h"
+#include "base/json/json_writer.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_builder.h"
+#include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace network {
 
@@ -23,7 +25,7 @@ TestURLRequestMaker::TestURLRequestMaker() {
 TestURLRequestMaker::~TestURLRequestMaker() = default;
 
 std::unique_ptr<net::URLRequest> TestURLRequestMaker::MakeURLRequest(
-    base::StringPiece spec) {
+    std::string_view spec) {
   return context_->CreateRequest(GURL(spec),
                                  net::RequestPriority::DEFAULT_PRIORITY,
                                  &delegate_, TRAFFIC_ANNOTATION_FOR_TESTS);
@@ -43,15 +45,14 @@ mojom::TrustTokenOperationStatus
 TrustTokenRequestHelperTest::ExecuteBeginOperationAndWaitForResult(
     TrustTokenRequestHelper* helper,
     net::URLRequest* request) {
-  base::RunLoop run_loop;
-  mojom::TrustTokenOperationStatus status;
-  helper->Begin(request,
-                base::BindLambdaForTesting(
-                    [&](mojom::TrustTokenOperationStatus returned_status) {
-                      status = returned_status;
-                      run_loop.Quit();
-                    }));
-  run_loop.Run();
+  base::test::TestFuture<std::optional<net::HttpRequestHeaders>,
+                         mojom::TrustTokenOperationStatus>
+      future;
+  helper->Begin(request->url(), future.GetCallback());
+  auto [headers, status] = future.Take();
+  if (headers) {
+    request->SetExtraRequestHeaders(*headers);
+  }
   return status;
 }
 
@@ -59,20 +60,13 @@ mojom::TrustTokenOperationStatus
 TrustTokenRequestHelperTest::ExecuteFinalizeAndWaitForResult(
     TrustTokenRequestHelper* helper,
     mojom::URLResponseHead* response) {
-  base::RunLoop run_loop;
-  mojom::TrustTokenOperationStatus status;
-  helper->Finalize(response,
-                   base::BindLambdaForTesting(
-                       [&](mojom::TrustTokenOperationStatus returned_status) {
-                         status = returned_status;
-                         run_loop.Quit();
-                       }));
-  run_loop.Run();
-  return status;
+  base::test::TestFuture<mojom::TrustTokenOperationStatus> future;
+  helper->Finalize(*response->headers.get(), future.GetCallback());
+  return future.Get();
 }
 
-std::string TrustTokenEnumToString(mojom::TrustTokenOperationType type) {
-  switch (type) {
+std::string TrustTokenEnumToString(mojom::TrustTokenOperationType operation) {
+  switch (operation) {
     case mojom::TrustTokenOperationType::kIssuance:
       return "token-request";
     case mojom::TrustTokenOperationType::kRedemption:
@@ -124,104 +118,56 @@ TrustTokenTestParameters& TrustTokenTestParameters::operator=(
     const TrustTokenTestParameters&) = default;
 
 TrustTokenTestParameters::TrustTokenTestParameters(
-    network::mojom::TrustTokenOperationType type,
-    absl::optional<network::mojom::TrustTokenRefreshPolicy> refresh_policy,
-    absl::optional<network::mojom::TrustTokenSignRequestData> sign_request_data,
-    absl::optional<bool> include_timestamp_header,
-    absl::optional<std::vector<std::string>> issuer_specs,
-    absl::optional<std::vector<std::string>> additional_signed_headers,
-    absl::optional<std::string> possibly_unsafe_additional_signing_data)
-    : type(type),
+    int version,
+    network::mojom::TrustTokenOperationType operation,
+    std::optional<network::mojom::TrustTokenRefreshPolicy> refresh_policy,
+    std::optional<std::vector<std::string>> issuer_specs)
+    : version(version),
+      operation(operation),
       refresh_policy(refresh_policy),
-      sign_request_data(sign_request_data),
-      include_timestamp_header(include_timestamp_header),
-      issuer_specs(issuer_specs),
-      additional_signed_headers(additional_signed_headers),
-      possibly_unsafe_additional_signing_data(
-          possibly_unsafe_additional_signing_data) {}
+      issuer_specs(issuer_specs) {}
 
 TrustTokenParametersAndSerialization
 SerializeTrustTokenParametersAndConstructExpectation(
     const TrustTokenTestParameters& input) {
   auto trust_token_params = mojom::TrustTokenParams::New();
 
-  base::Value parameters(base::Value::Type::DICTIONARY);
-  parameters.SetStringKey("type", TrustTokenEnumToString(input.type));
-  trust_token_params->type = input.type;
+  auto parameters =
+      base::Value::Dict()
+          .Set("version", input.version)
+          .Set("operation", TrustTokenEnumToString(input.operation));
+  trust_token_params->operation = input.operation;
 
   if (input.refresh_policy.has_value()) {
-    parameters.SetStringKey("refreshPolicy",
-                            TrustTokenEnumToString(*input.refresh_policy));
+    parameters.Set("refreshPolicy",
+                   TrustTokenEnumToString(*input.refresh_policy));
     trust_token_params->refresh_policy = *input.refresh_policy;
   }
 
-  if (input.sign_request_data.has_value()) {
-    parameters.SetStringKey("signRequestData",
-                            TrustTokenEnumToString(*input.sign_request_data));
-    trust_token_params->sign_request_data = *input.sign_request_data;
-  }
-
-  if (input.include_timestamp_header.has_value()) {
-    parameters.SetBoolKey("includeTimestampHeader",
-                          *input.include_timestamp_header);
-    trust_token_params->include_timestamp_header =
-        *input.include_timestamp_header;
-  }
-
   if (input.issuer_specs.has_value()) {
-    base::Value issuers(base::Value::Type::LIST);
+    base::Value::List issuers;
     for (const std::string& issuer_spec : *input.issuer_specs) {
       issuers.Append(issuer_spec);
       trust_token_params->issuers.push_back(
           url::Origin::Create(GURL(issuer_spec)));
     }
-    parameters.SetKey("issuers", std::move(issuers));
+    parameters.Set("issuers", std::move(issuers));
   }
 
-  if (input.additional_signed_headers.has_value()) {
-    base::Value headers(base::Value::Type::LIST);
-    for (const std::string& header : *input.additional_signed_headers)
-      headers.Append(header);
-    parameters.SetKey("additionalSignedHeaders", std::move(headers));
-    for (const std::string& input_header : *input.additional_signed_headers) {
-      trust_token_params->additional_signed_headers.push_back(input_header);
-    }
-  }
-
-  if (input.possibly_unsafe_additional_signing_data.has_value()) {
-    parameters.SetStringKey("additionalSigningData",
-                            *input.possibly_unsafe_additional_signing_data);
-    trust_token_params->possibly_unsafe_additional_signing_data =
-        *input.possibly_unsafe_additional_signing_data;
-  }
-
-  std::string serialized_parameters;
-  JSONStringValueSerializer serializer(&serialized_parameters);
-  CHECK(serializer.Serialize(parameters));
-
-  return {std::move(trust_token_params), std::move(serialized_parameters)};
+  return {std::move(trust_token_params), *base::WriteJson(parameters)};
 }
 
 std::string WrapKeyCommitmentsForIssuers(
-    base::flat_map<url::Origin, base::StringPiece> issuers_and_commitments) {
-  std::string ret;
-  JSONStringValueSerializer serializer(&ret);
-
-  base::Value to_serialize(base::Value::Type::DICTIONARY);
-
-  for (const auto& kv : issuers_and_commitments) {
-    const url::Origin& issuer = kv.first;
-    base::StringPiece commitment = kv.second;
-
+    base::flat_map<url::Origin, std::string_view> issuers_and_commitments) {
+  base::Value::Dict to_serialize;
+  for (const auto& [issuer, commitment] : issuers_and_commitments) {
     // guard against accidentally passing an origin without a unique
     // serialization
     CHECK_NE(issuer.Serialize(), "null");
 
-    to_serialize.SetKey(issuer.Serialize(),
-                        *base::JSONReader::Read(commitment));
+    to_serialize.Set(issuer.Serialize(), *base::JSONReader::Read(commitment));
   }
-  CHECK(serializer.Serialize(to_serialize));
-  return ret;
+  return *base::WriteJson(to_serialize);
 }
 
 }  // namespace network

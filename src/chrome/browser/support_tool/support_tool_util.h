@@ -1,39 +1,49 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SUPPORT_TOOL_SUPPORT_TOOL_UTIL_H_
 #define CHROME_BROWSER_SUPPORT_TOOL_SUPPORT_TOOL_UTIL_H_
 
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "base/files/file_path.h"
+#include "base/time/time.h"
 #include "chrome/browser/support_tool/data_collection_module.pb.h"
 #include "chrome/browser/support_tool/support_tool_handler.h"
 
-// Data collector types that can work on every platform.
-static constexpr support_tool::DataCollectorType kDataCollectors[] = {
-    support_tool::CHROME_INTERNAL, support_tool::CRASH_IDS,
-    support_tool::MEMORY_DETAILS};
-
-// Data collector types can only work on Chrome OS Ash.
-static constexpr support_tool::DataCollectorType kDataCollectorsChromeosAsh[] =
-    {support_tool::CHROMEOS_UI_HIERARCHY,  support_tool::CHROMEOS_COMMAND_LINE,
-     support_tool::CHROMEOS_DEVICE_EVENT,  support_tool::CHROMEOS_IWL_WIFI_DUMP,
-     support_tool::CHROMEOS_TOUCH_EVENTS,  support_tool::CHROMEOS_CROS_API,
-     support_tool::CHROMEOS_LACROS,        support_tool::CHROMEOS_DBUS,
-     support_tool::CHROMEOS_NETWORK_ROUTES};
-
-// Data collector types that can only work on if IS_CHROMEOS_WITH_HW_DETAILS
-// flag is turned on. IS_CHROMEOS_WITH_HW_DETAILS flag will be turned on for
-// Chrome OS Flex devices.
-static constexpr support_tool::DataCollectorType
-    kDataCollectorsChromeosHwDetails[] = {support_tool::CHROMEOS_REVEN};
+class Profile;
 
 // Returns SupportToolHandler that is created for collecting logs from the
 // given information. Adds the corresponding DataCollectors that were listed in
-// `included_data_collectors` to the returned SupportToolHandler.
+// `included_data_collectors` to the returned SupportToolHandler. Callers can
+// attach an optional `upload_id` to attach to the support packet.
 std::unique_ptr<SupportToolHandler> GetSupportToolHandler(
     std::string case_id,
     std::string email_address,
     std::string issue_description,
+    std::optional<std::string> upload_id,
+    Profile* profile,
     std::set<support_tool::DataCollectorType> included_data_collectors);
+
+std::vector<support_tool::DataCollectorType> GetAllDataCollectors();
+
+std::vector<support_tool::DataCollectorType>
+GetAllAvailableDataCollectorsOnDevice();
+
+// Returns a filepath in `target_directory` to export the support packet into.
+// The returned filename will be in format of
+// <filename_prefix>_<case_id>_UTCYYYYMMDD_HHmm. `case_id` will not be included
+// if it's empty.
+base::FilePath GetFilepathToExport(base::FilePath target_directory,
+                                   const std::string& filename_prefix,
+                                   const std::string& case_id,
+                                   base::Time timestamp);
+
+// Returns the string representation of support tool errors.
+std::string SupportToolErrorsToString(const std::set<SupportToolError>& errors);
 
 #endif  // CHROME_BROWSER_SUPPORT_TOOL_SUPPORT_TOOL_UTIL_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 
 class Profile;
@@ -83,7 +83,7 @@ class CrostiniFeatures {
   // Returns true if user is allowed to use multiple (non-default) containers.
   virtual bool IsMultiContainerAllowed(Profile*);
 
-  // TODO(crbug.com/1004708): Move other functions from crostini_util to here.
+  // TODO(crbug.com/40647881): Move other functions from crostini_util to here.
 
  protected:
   static void SetForTesting(CrostiniFeatures* features);

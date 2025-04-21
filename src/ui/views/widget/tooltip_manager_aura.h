@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,13 +21,13 @@ class FontList;
 }
 
 namespace views {
-
-class Widget;
-
+namespace internal {
+class NativeWidgetPrivate;
+}
 // TooltipManager implementation for Aura.
 class VIEWS_EXPORT TooltipManagerAura : public TooltipManager {
  public:
-  explicit TooltipManagerAura(Widget* widget);
+  explicit TooltipManagerAura(internal::NativeWidgetPrivate* native_widget);
 
   TooltipManagerAura(const TooltipManagerAura&) = delete;
   TooltipManagerAura& operator=(const TooltipManagerAura&) = delete;
@@ -38,7 +38,8 @@ class VIEWS_EXPORT TooltipManagerAura : public TooltipManager {
   // UpdateTooltip() on it's TooltipManager. This is necessary as when capture
   // is held mouse events are only delivered to the Window that has capture even
   // though we may show tooltips for the Window under the mouse.
-  static void UpdateTooltipManagerForCapture(Widget* source);
+  static void UpdateTooltipManagerForCapture(
+      internal::NativeWidgetPrivate* source);
 
   // Returns the FontList used by all TooltipManagerAuras.
   static const gfx::FontList& GetDefaultFontList();
@@ -47,6 +48,7 @@ class VIEWS_EXPORT TooltipManagerAura : public TooltipManager {
   int GetMaxWidth(const gfx::Point& location) const override;
   const gfx::FontList& GetFontList() const override;
   void UpdateTooltip() override;
+  void UpdateTooltipForFocus(View* view) override;
   void TooltipTextChanged(View* view) override;
 
  private:
@@ -58,7 +60,7 @@ class VIEWS_EXPORT TooltipManagerAura : public TooltipManager {
   // Returns the Window the tooltip text is installed on.
   aura::Window* GetWindow();
 
-  raw_ptr<Widget> widget_;
+  raw_ptr<internal::NativeWidgetPrivate> native_widget_;
   std::u16string tooltip_text_;
 };
 

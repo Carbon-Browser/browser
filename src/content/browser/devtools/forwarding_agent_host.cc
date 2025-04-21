@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,7 @@ ForwardingAgentHost::ForwardingAgentHost(
 
 ForwardingAgentHost::~ForwardingAgentHost() = default;
 
-bool ForwardingAgentHost::AttachSession(DevToolsSession* session,
-                                        bool acquire_wake_lock) {
+bool ForwardingAgentHost::AttachSession(DevToolsSession* session) {
   session->TurnIntoExternalProxy(delegate_.get());
   return true;
 }

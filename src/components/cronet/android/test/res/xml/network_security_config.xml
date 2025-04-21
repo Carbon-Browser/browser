@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!-- Copyright 2016 The Chromium Authors. All rights reserved.
-
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2016 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 
 <network-security-config>
+  <base-config>
+    <trust-anchors>
+      <certificates src="@raw/quicroot"/>
+      <certificates src="system"/>
+    </trust-anchors>
+  </base-config>
   <!-- Since Android N (API 24?) it is possible to disable cleartext support.
 
        This is required to test that we are correctly handling this feature.

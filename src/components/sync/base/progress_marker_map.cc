@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,15 @@
 
 namespace syncer {
 
-std::unique_ptr<base::DictionaryValue> ProgressMarkerMapToValue(
+base::Value::Dict ProgressMarkerMapToValueDict(
     const ProgressMarkerMap& marker_map) {
-  std::unique_ptr<base::DictionaryValue> value(new base::DictionaryValue());
-  for (const auto& [model_type, progress_marker] : marker_map) {
+  base::Value::Dict value;
+  for (const auto& [data_type, progress_marker] : marker_map) {
     std::string printable_payload;
     base::EscapeJSONString(progress_marker, false /* put_in_quotes */,
                            &printable_payload);
-    base::Base64Encode(printable_payload, &printable_payload);
-    value->SetStringPath(ModelTypeToDebugString(model_type), printable_payload);
+    printable_payload = base::Base64Encode(printable_payload);
+    value.Set(DataTypeToDebugString(data_type), printable_payload);
   }
   return value;
 }

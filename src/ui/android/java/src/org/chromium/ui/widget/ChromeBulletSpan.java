@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,15 @@ import android.graphics.Paint;
 import android.text.Layout;
 import android.text.style.BulletSpan;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.R;
 
 /**
  * A wrapper around Android's BulletSpan that provides default styling and adjusts the bullet
  * positioning to prevent it from being cut off.
  */
+@NullMarked
 public class ChromeBulletSpan extends BulletSpan {
     private int mXOffset;
 
@@ -30,8 +33,19 @@ public class ChromeBulletSpan extends BulletSpan {
     }
 
     @Override
-    public void drawLeadingMargin(Canvas c, Paint p, int x, int dir, int top, int baseline,
-            int bottom, CharSequence text, int start, int end, boolean first, Layout l) {
+    public void drawLeadingMargin(
+            Canvas c,
+            Paint p,
+            int x,
+            int dir,
+            int top,
+            int baseline,
+            int bottom,
+            CharSequence text,
+            int start,
+            int end,
+            boolean first,
+            @Nullable Layout l) {
         // Android cuts off the bullet points. Adjust the x-position so that the bullets aren't
         // cut off.
         super.drawLeadingMargin(

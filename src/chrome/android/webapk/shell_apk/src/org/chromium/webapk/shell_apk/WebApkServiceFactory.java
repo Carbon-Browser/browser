@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 
+import org.chromium.webapk.shell_apk.HostBrowserUtils.PackageNameAndComponentName;
+
 import java.lang.reflect.Constructor;
 
 /**
@@ -18,33 +20,33 @@ import java.lang.reflect.Constructor;
  * services from .dex file in Chrome APK.
  */
 public class WebApkServiceFactory extends Service {
-    /**
-     * Key for passing uid of only application allowed to call the service's methods.
-     */
+    /** Key for passing uid of only application allowed to call the service's methods. */
     public static final String KEY_HOST_BROWSER_UID = "host_browser_uid";
 
     private static final String TAG = "cr_WebApkServiceFactory";
 
-    /**
-     * Name of the class with IBinder API implementation.
-     */
+    /** Name of the class with IBinder API implementation. */
     private static final String WEBAPK_SERVICE_IMPL_CLASS_NAME =
             "org.chromium.webapk.lib.runtime_library.WebApkServiceImpl";
 
-    /**
-     * Key for passing id of icon to represent WebAPK notifications in status bar.
-     */
+    /** Key for passing id of icon to represent WebAPK notifications in status bar. */
     private static final String KEY_SMALL_ICON_ID = "small_icon_id";
 
     @Override
     public IBinder onBind(Intent intent) {
-        final String hostBrowserPackage = HostBrowserUtils.getCachedHostBrowserPackage(this);
-        if (!HostBrowserUtils.doesBrowserSupportWebApks(hostBrowserPackage)) {
-            Log.w(TAG, "Host browser does not support WebAPKs.");
+        final PackageNameAndComponentName hostBrowserPackageAndComponent =
+                HostBrowserUtils.computeHostBrowserPackageNameAndComponentName(this);
+        final String hostBrowserPackage =
+                hostBrowserPackageAndComponent != null
+                        ? hostBrowserPackageAndComponent.getPackageName()
+                        : null;
+        if (!HostBrowserUtils.doesBrowserSupportNotificationDelegation(hostBrowserPackage)) {
+            Log.w(TAG, "Host browser does not support WebAPK notification delegation.");
             return null;
         }
-        ClassLoader webApkClassLoader = HostBrowserClassLoader.getClassLoaderInstance(
-                this, hostBrowserPackage, WEBAPK_SERVICE_IMPL_CLASS_NAME);
+        ClassLoader webApkClassLoader =
+                HostBrowserClassLoader.getClassLoaderInstance(
+                        this, hostBrowserPackage, WEBAPK_SERVICE_IMPL_CLASS_NAME);
         if (webApkClassLoader == null) {
             Log.w(TAG, "Unable to create ClassLoader.");
             return null;

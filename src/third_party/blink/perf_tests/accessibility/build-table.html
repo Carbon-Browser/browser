@@ -39,11 +39,11 @@ function runTest() {
                     row.appendChild(cell);
                 }
             }
-        }, 10);
+        }, 250);
 
         // Wait to allow the asynchronous accessibility code that's
         // covered by traceEventsToMeasure to have a chance to run.
-        setTimeout(runTest, 1500);
+        setTimeout(runTest, 2500);
     }
 }
 
@@ -59,8 +59,14 @@ PerfTestRunner.startMeasureValuesAsync({
     iterationCount: 6,
     tracingCategories: 'accessibility',
     traceEventsToMeasure: [
-        'AXObjectCacheImpl::ChildrenChanged(LayoutObject)',
-        'ProcessDeferredAccessibilityEvents'
+        'TotalAccessibilityCleanLayoutLifecycleStages',
+        'ProcessDeferredUpdatesLifecycleStage',
+    'FinalizingTreeLifecycleStage',
+        'SerializeLifecycleStage',
+        'RenderAccessibilityImpl::SendPendingAccessibilityEvents',
+        'BrowserAccessibilityManager::OnAccessibilityEvents',
+        'SerializeLocationChanges',
+        "BrowserAccessibilityManager::OnLocationChanges"
     ]
 });
 </script>

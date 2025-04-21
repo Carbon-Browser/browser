@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,10 +9,7 @@ for more details on the presubmit API built into depot_tools.
 """
 
 import os.path
-
-
-USE_PYTHON3 = True
-
+import tempfile
 
 def CommonChecks(input_api, output_api):
   generating_files = input_api.AffectedFiles(
@@ -34,7 +31,7 @@ def CommonChecks(input_api, output_api):
           'Vulkan function pointer generated files changed but the generator '
           'did not.', long_text=long_text))
 
-  with input_api.temporary_directory() as temp_dir:
+  with tempfile.TemporaryDirectory() as temp_dir:
     commands = []
     if generating_files:
       python_executable = input_api.python3_executable

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -129,9 +129,10 @@ chrome.test.runTests([
   // Checks that a header with NUL bytes does not cause a crash.
   // Regression test for http://crbug.com/348417
   function badResponseHeaderDoesNotCauseCrash() {
+    var headerName = 'X-Header-With-Invalid-Value';
     var callbackWithBadHeadersResponse = function (details) {
       var responseHeaders = [
-        {name: "X-Header-With-Invalid-Value", value: "\x00"}
+        {name: headerName, value: "\x00"}
       ];
       return {responseHeaders: responseHeaders};
     };
@@ -142,25 +143,19 @@ chrome.test.runTests([
 
     chrome.test.getConfig(function(config) {
       var url = 'http://127.0.0.1:' + config.testServer.port + '/simple.html';
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', url);
-      xhr.onload = function() {
+      fetch(url).then((response) => {
         chrome.webRequest.onHeadersReceived.removeListener(
             callbackWithBadHeadersResponse);
-        var responseHeaders = xhr.getAllResponseHeaders() || '';
-        chrome.test.assertTrue(
-            responseHeaders.indexOf('X-Header-With-Invalid-Value') === -1);
+        chrome.test.assertEq(undefined, response.headers.get(headerName));
         // TODO(robwu): If possible, check whether an error with the following
         // message has been logged to the JavaScript console:
         // "Header 'X-Header-With-Invalid-Value' has an invalid value"
         chrome.test.succeed();
-      };
-      xhr.onerror = function() {
+      }).catch((e) => {
         chrome.webRequest.onHeadersReceived.removeListener(
             callbackWithBadHeadersResponse);
-        chrome.test.fail();
-      };
-      xhr.send();
+        chrome.test.fail(e);
+      });
     });
   }
 ]);

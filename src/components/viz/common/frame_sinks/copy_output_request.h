@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define COMPONENTS_VIZ_COMMON_FRAME_SINKS_COPY_OUTPUT_REQUEST_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/unguessable_token.h"
 #include "components/viz/common/frame_sinks/blit_request.h"
@@ -18,7 +19,6 @@
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/vector2d.h"
 
@@ -171,11 +171,11 @@ class VIZ_COMMON_EXPORT CopyOutputRequest {
   scoped_refptr<base::SequencedTaskRunner> result_task_runner_;
   gfx::Vector2d scale_from_;
   gfx::Vector2d scale_to_;
-  absl::optional<base::UnguessableToken> source_;
-  absl::optional<gfx::Rect> area_;
-  absl::optional<gfx::Rect> result_selection_;
+  std::optional<base::UnguessableToken> source_;
+  std::optional<gfx::Rect> area_;
+  std::optional<gfx::Rect> result_selection_;
 
-  absl::optional<BlitRequest> blit_request_;
+  std::optional<BlitRequest> blit_request_;
 };
 
 }  // namespace viz

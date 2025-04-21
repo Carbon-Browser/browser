@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/public/cpp/projector/projector_controller.h"
 
+#include "ash/public/cpp/projector/speech_recognition_availability.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 

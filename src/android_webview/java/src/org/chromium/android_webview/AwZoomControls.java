@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,17 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.android_webview.common.Lifetime;
+
 // This class is visible purely for tests.
+@Lifetime.WebView
 public class AwZoomControls {
     private AwContents mAwContents;
+
     // It is advised to use getZoomController() where possible.
     @SuppressWarnings("deprecation")
     private android.widget.ZoomButtonsController mZoomButtonsController;
+
     private boolean mCanZoomIn;
     private boolean mCanZoomOut;
 
@@ -40,6 +45,13 @@ public class AwZoomControls {
         android.widget.ZoomButtonsController zoomController = getZoomController();
         if (zoomController != null) {
             zoomController.setVisible(true);
+        }
+    }
+
+    public void setAutoDismissed(boolean autoDismiss) {
+        android.widget.ZoomButtonsController zoomController = getZoomController();
+        if (zoomController != null) {
+            zoomController.setAutoDismissed(autoDismiss);
         }
     }
 

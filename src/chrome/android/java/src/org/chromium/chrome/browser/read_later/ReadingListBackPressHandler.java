@@ -1,17 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.read_later;
 
-import org.chromium.base.Callback;
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.base.supplier.OneShotCallback;
+import org.chromium.chrome.browser.ActivityTabProvider;
+import org.chromium.chrome.browser.ActivityTabProvider.ActivityTabTabObserver;
+import org.chromium.chrome.browser.bookmarks.BookmarkModel;
+import org.chromium.chrome.browser.bookmarks.BookmarkUiState;
+import org.chromium.chrome.browser.bookmarks.BookmarkUtils;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
-import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabModelObserver;
+import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.content_public.browser.WebContents;
 
@@ -20,26 +24,65 @@ import org.chromium.content_public.browser.WebContents;
  * from reading list.
  */
 public class ReadingListBackPressHandler implements BackPressHandler, Destroyable {
-    private final ObservableSupplier<TabModelSelector> mTabModelSelectorSupplier;
     private final ObservableSupplierImpl<Boolean> mBackPressChangedSupplier =
             new ObservableSupplierImpl<>();
-    private final Callback<TabModelSelector> mOnTabModelSelectorAvailableCallback;
-    private TabModelSelectorTabModelObserver mTabModelSelectorTabModelObserver;
+    private final ActivityTabProvider mActivityTabProvider;
+    private final ActivityTabTabObserver mActivityTabTabObserver;
+    private final ObservableSupplier<BookmarkModel> mBookmarkModelSupplier;
+
+    private BookmarkId mLastUsedParent;
 
     public ReadingListBackPressHandler(
-            ObservableSupplier<TabModelSelector> tabModelSelectorSupplier) {
-        mTabModelSelectorSupplier = tabModelSelectorSupplier;
-        mOnTabModelSelectorAvailableCallback = this::onTabModelSelectorAvailable;
-        mTabModelSelectorSupplier.addObserver(mOnTabModelSelectorAvailableCallback);
+            ActivityTabProvider activityTabProvider,
+            ObservableSupplier<BookmarkModel> bookmarkModelSupplier) {
+        mActivityTabProvider = activityTabProvider;
+        mActivityTabTabObserver =
+                new ActivityTabTabObserver(mActivityTabProvider, true) {
+                    @Override
+                    protected void onObservingDifferentTab(Tab tab, boolean hint) {
+                        onBackPressStateChanged();
+
+                        // If this tab should intercept back press, start the process of tracking
+                        // the last url so that it can be reopened.
+                        if (shouldInterceptBackPress()) {
+                            new OneShotCallback<>(
+                                    bookmarkModelSupplier,
+                                    ReadingListBackPressHandler.this::setupLastUsedState);
+                        }
+                    }
+                };
+        mBookmarkModelSupplier = bookmarkModelSupplier;
+    }
+
+    // After {@link BookmarkModel} is available, load it then query the last used URL and store it
+    // in a {@link BookmarkId} which will be used to handle the back press.
+    private void setupLastUsedState(BookmarkModel bookmarkModel) {
+        bookmarkModel.finishLoadingBookmarkModel(
+                () -> {
+                    // Note: there's a slight (but unlikely) chance the the user changed the last
+                    // used url prior
+                    // to tracking it here.
+                    BookmarkUiState lastUsedState =
+                            BookmarkUiState.createStateFromUrl(
+                                    BookmarkUtils.getLastUsedUrl(), bookmarkModel);
+                    mLastUsedParent = lastUsedState.getFolder();
+                });
     }
 
     @Override
-    public void handleBackPress() {
-        TabModelSelector selector = mTabModelSelectorSupplier.get();
-        assert selector != null;
-        ReadingListUtils.showReadingList(selector.getCurrentTab().isIncognito());
-        WebContents webContents = selector.getCurrentTab().getWebContents();
+    public @BackPressResult int handleBackPress() {
+        Tab tab = mActivityTabProvider.get();
+        int result = shouldInterceptBackPress() ? BackPressResult.SUCCESS : BackPressResult.FAILURE;
+        if (mBookmarkModelSupplier.hasValue()
+                && mBookmarkModelSupplier.get().areAccountBookmarkFoldersActive()) {
+            BookmarkUtils.showBookmarkManager(null, mLastUsedParent, tab.isIncognito());
+        } else {
+            ReadingListUtils.showReadingList(tab.isIncognito());
+        }
+
+        WebContents webContents = tab.getWebContents();
         if (webContents != null) webContents.dispatchBeforeUnload(false);
+        return result;
     }
 
     @Override
@@ -49,20 +92,15 @@ public class ReadingListBackPressHandler implements BackPressHandler, Destroyabl
 
     @Override
     public void destroy() {
-        if (mTabModelSelectorTabModelObserver != null) {
-            mTabModelSelectorTabModelObserver.destroy();
-            mTabModelSelectorTabModelObserver = null;
-        }
+        mActivityTabTabObserver.destroy();
     }
 
-    private void onTabModelSelectorAvailable(TabModelSelector selector) {
-        mTabModelSelectorTabModelObserver = new TabModelSelectorTabModelObserver(selector) {
-            @Override
-            public void didSelectTab(Tab tab, int type, int lastId) {
-                mBackPressChangedSupplier.set(
-                        tab.getLaunchType() == TabLaunchType.FROM_READING_LIST);
-            }
-        };
-        mTabModelSelectorSupplier.removeObserver(mOnTabModelSelectorAvailableCallback);
+    private void onBackPressStateChanged() {
+        mBackPressChangedSupplier.set(shouldInterceptBackPress());
+    }
+
+    private boolean shouldInterceptBackPress() {
+        Tab tab = mActivityTabProvider.get();
+        return tab != null && tab.getLaunchType() == TabLaunchType.FROM_READING_LIST;
     }
 }

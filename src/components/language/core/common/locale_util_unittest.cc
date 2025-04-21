@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/language/core/common/locale_util.h"
 
+#include <string_view>
+
 #include "base/command_line.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace language {
@@ -15,7 +16,7 @@ namespace {
 typedef testing::Test LocaleUtilTest;
 
 TEST_F(LocaleUtilTest, SplitIntoMainAndTail) {
-  typedef std::pair<base::StringPiece, base::StringPiece> StringPiecePair;
+  typedef std::pair<std::string_view, std::string_view> StringPiecePair;
 
   EXPECT_EQ(StringPiecePair("", ""), SplitIntoMainAndTail(""));
   EXPECT_EQ(StringPiecePair("en", ""), SplitIntoMainAndTail("en"));
@@ -121,7 +122,7 @@ TEST_F(LocaleUtilTest, ConvertToActualUILocale) {
 //---------------------------------------------------------------------------
 // This only matters for ChromeOS and Windows, as they are the only systems
 // where users can set the display UI.
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
   locale = "sd";  // Sindhi
   is_ui = ConvertToActualUILocale(&locale);
   EXPECT_FALSE(is_ui);

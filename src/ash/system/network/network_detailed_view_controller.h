@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <string>
 
 #include "ash/ash_export.h"
-#include "ash/public/cpp/bluetooth_config_service.h"
 #include "ash/system/network/network_detailed_network_view.h"
 #include "ash/system/network/network_detailed_view.h"
 #include "ash/system/network/network_list_view_controller.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ash/system/unified/detailed_view_controller.h"
-#include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -32,7 +32,7 @@ namespace ash {
 class ASH_EXPORT NetworkDetailedViewController
     : public DetailedViewController,
       public NetworkDetailedNetworkView::Delegate,
-      public chromeos::bluetooth_config::mojom::SystemPropertiesObserver {
+      public bluetooth_config::mojom::SystemPropertiesObserver {
  public:
   explicit NetworkDetailedViewController(
       UnifiedSystemTrayController* tray_controller);
@@ -41,9 +41,10 @@ class ASH_EXPORT NetworkDetailedViewController
       const NetworkDetailedViewController&) = delete;
   ~NetworkDetailedViewController() override;
 
-  // DetailedViewControllerBase:
-  views::View* CreateView() override;
+  // DetailedViewController:
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
+  void ShutDown() override;
 
  private:
   // NetworkDetailedView::Delegate:
@@ -55,27 +56,26 @@ class ASH_EXPORT NetworkDetailedViewController
   void OnMobileToggleClicked(bool new_state) override;
   void OnWifiToggleClicked(bool new_state) override;
 
-  // chromeos::bluetooth_config::mojom::SystemPropertiesObserver:
-  void OnPropertiesUpdated(
-      chromeos::bluetooth_config::mojom::BluetoothSystemPropertiesPtr
-          properties) override;
+  // bluetooth_config::mojom::SystemPropertiesObserver:
+  void OnPropertiesUpdated(bluetooth_config::mojom::BluetoothSystemPropertiesPtr
+                               properties) override;
 
-  TrayNetworkStateModel* const model_;
+  const raw_ptr<TrayNetworkStateModel> model_;
 
   const std::unique_ptr<DetailedViewDelegate> detailed_view_delegate_;
 
   bool waiting_to_initialize_bluetooth_ = false;
 
-  mojo::Remote<chromeos::bluetooth_config::mojom::CrosBluetoothConfig>
+  mojo::Remote<bluetooth_config::mojom::CrosBluetoothConfig>
       remote_cros_bluetooth_config_;
-  mojo::Receiver<chromeos::bluetooth_config::mojom::SystemPropertiesObserver>
+  mojo::Receiver<bluetooth_config::mojom::SystemPropertiesObserver>
       cros_system_properties_observer_receiver_{this};
 
-  chromeos::bluetooth_config::mojom::BluetoothSystemState
-      bluetooth_system_state_ =
-          chromeos::bluetooth_config::mojom::BluetoothSystemState::kUnavailable;
+  bluetooth_config::mojom::BluetoothSystemState bluetooth_system_state_ =
+      bluetooth_config::mojom::BluetoothSystemState::kUnavailable;
 
-  NetworkDetailedNetworkView* network_detailed_view_ = nullptr;
+  raw_ptr<NetworkDetailedNetworkView, DanglingUntriaged>
+      network_detailed_view_ = nullptr;
   std::unique_ptr<NetworkListViewController> network_list_view_controller_;
 };
 

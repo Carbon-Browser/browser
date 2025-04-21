@@ -1,23 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/phonehub/camera_roll_download_manager_impl.h"
 
+#include <optional>
 #include <utility>
 
-#include "ash/components/multidevice/logging/logging.h"
-#include "ash/components/phonehub/camera_roll_download_manager.h"
-#include "ash/components/phonehub/proto/phonehub_api.pb.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
-#include "ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -30,10 +27,12 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/camera_roll_download_manager.h"
+#include "chromeos/ash/components/phonehub/proto/phonehub_api.pb.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 
-namespace ash {
-namespace phonehub {
+namespace ash::phonehub {
 
 namespace {
 
@@ -51,12 +50,12 @@ bool HasEnoughDiskSpace(const base::FilePath& root_path,
          item_metadata.file_size_bytes();
 }
 
-absl::optional<secure_channel::mojom::PayloadFilesPtr> DoCreatePayloadFiles(
+std::optional<secure_channel::mojom::PayloadFilesPtr> DoCreatePayloadFiles(
     const base::FilePath& file_path) {
   if (base::PathExists(file_path)) {
     // Perhaps a file was created at the same path for a different payload after
     // we checkedfor its existence.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   base::File output_file =
@@ -95,20 +94,20 @@ void CameraRollDownloadManagerImpl::CreatePayloadFiles(
     int64_t payload_id,
     const proto::CameraRollItemMetadata& item_metadata,
     CreatePayloadFilesCallback payload_files_callback) {
-  absl::optional<base::SafeBaseName> base_name(
+  std::optional<base::SafeBaseName> base_name(
       base::SafeBaseName::Create(item_metadata.file_name()));
   if (!base_name || base_name->path().value() != item_metadata.file_name()) {
     PA_LOG(WARNING) << "Camera roll item file name "
                     << item_metadata.file_name() << " is not a valid base name";
     return std::move(payload_files_callback)
-        .Run(CreatePayloadFilesResult::kInvalidFileName, absl::nullopt);
+        .Run(CreatePayloadFilesResult::kInvalidFileName, std::nullopt);
   }
 
   if (pending_downloads_.contains(payload_id)) {
     PA_LOG(WARNING) << "Payload " << payload_id
                     << " is already being downloaded";
     return std::move(payload_files_callback)
-        .Run(CreatePayloadFilesResult::kPayloadAlreadyExists, absl::nullopt);
+        .Run(CreatePayloadFilesResult::kPayloadAlreadyExists, std::nullopt);
   }
 
   task_runner_->PostTaskAndReplyWithResult(
@@ -128,7 +127,7 @@ void CameraRollDownloadManagerImpl::OnDiskSpaceCheckComplete(
     bool has_enough_disk_space) {
   if (!has_enough_disk_space) {
     std::move(payload_files_callback)
-        .Run(CreatePayloadFilesResult::kInsufficientDiskSpace, absl::nullopt);
+        .Run(CreatePayloadFilesResult::kInsufficientDiskSpace, std::nullopt);
     return;
   }
 
@@ -158,17 +157,17 @@ void CameraRollDownloadManagerImpl::OnPayloadFilesCreated(
     const base::FilePath& file_path,
     int64_t file_size_bytes,
     CreatePayloadFilesCallback payload_files_callback,
-    absl::optional<secure_channel::mojom::PayloadFilesPtr> payload_files) {
+    std::optional<secure_channel::mojom::PayloadFilesPtr> payload_files) {
   if (!payload_files) {
     PA_LOG(WARNING) << "Failed to create files for payload " << payload_id
                     << ": the requested file path already exists.";
     return std::move(payload_files_callback)
-        .Run(CreatePayloadFilesResult::kNotUniqueFilePath, absl::nullopt);
+        .Run(CreatePayloadFilesResult::kNotUniqueFilePath, std::nullopt);
   }
 
   const std::string& holding_space_item_id =
-      holding_space_keyed_service_->AddPhoneHubCameraRollItem(
-          file_path,
+      holding_space_keyed_service_->AddItemOfType(
+          HoldingSpaceItem::Type::kPhoneHubCameraRoll, file_path,
           ash::HoldingSpaceProgress(/*current_bytes=*/0,
                                     /*total_bytes=*/file_size_bytes));
   if (holding_space_item_id.empty()) {
@@ -178,7 +177,7 @@ void CameraRollDownloadManagerImpl::OnPayloadFilesCreated(
                     << " to holding space. It's likely that an item with the "
                        "same file path already exists.";
     return std::move(payload_files_callback)
-        .Run(CreatePayloadFilesResult::kNotUniqueFilePath, absl::nullopt);
+        .Run(CreatePayloadFilesResult::kNotUniqueFilePath, std::nullopt);
   }
 
   pending_downloads_.emplace(
@@ -257,5 +256,4 @@ void CameraRollDownloadManagerImpl::DeleteFile(int64_t payload_id) {
   pending_downloads_.erase(it);
 }
 
-}  // namespace phonehub
-}  // namespace ash
+}  // namespace ash::phonehub

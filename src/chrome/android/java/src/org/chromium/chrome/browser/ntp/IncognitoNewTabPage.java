@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,29 +6,37 @@ package org.chromium.chrome.browser.ntp;
 
 import android.app.Activity;
 import android.graphics.Canvas;
-import android.os.Build;
 import android.view.LayoutInflater;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.core.view.ViewCompat;
 
+import org.chromium.base.ResettersForTesting;
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.compositor.layouts.content.InvalidationAwareThumbnailProvider;
 import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ntp.IncognitoNewTabPageView.IncognitoNewTabPageManager;
+import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tab_ui.InvalidationAwareThumbnailProvider;
+import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
+import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeControllerFactory;
+import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils;
 import org.chromium.chrome.browser.ui.native_page.BasicNativePage;
 import org.chromium.chrome.browser.ui.native_page.NativePageHost;
-import org.chromium.chrome.browser.vr.VrModuleProvider;
+import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgePadAdjuster;
 import org.chromium.components.content_settings.CookieControlsEnforcement;
 import org.chromium.components.embedder_support.util.UrlConstants;
+import org.chromium.components.user_prefs.UserPrefs;
 
-/**
- * Provides functionality when the user interacts with the Incognito NTP.
- */
-public class IncognitoNewTabPage
-        extends BasicNativePage implements InvalidationAwareThumbnailProvider {
-    private Activity mActivity;
+/** Provides functionality when the user interacts with the Incognito NTP. */
+public class IncognitoNewTabPage extends BasicNativePage
+        implements InvalidationAwareThumbnailProvider {
+
+    private static IncognitoNewTabPageManager sIncognitoNtpManagerForTesting;
+    private final Activity mActivity;
+    private final Profile mProfile;
+    private final int mIncognitoNtpBackgroundColor;
 
     private String mTitle;
     protected IncognitoNewTabPageView mIncognitoNewTabPageView;
@@ -38,81 +46,44 @@ public class IncognitoNewTabPage
     private IncognitoNewTabPageManager mIncognitoNewTabPageManager;
     private IncognitoCookieControlsManager mCookieControlsManager;
     private IncognitoCookieControlsManager.Observer mCookieControlsObserver;
-
-    private final int mIncognitoNTPBackgroundColor;
+    private EdgeToEdgePadAdjuster mEdgeToEdgePadAdjuster;
 
     private void showIncognitoLearnMore() {
-        HelpAndFeedbackLauncherImpl.getInstance().show(mActivity,
-                mActivity.getString(R.string.help_context_incognito_learn_more),
-                Profile.getLastUsedRegularProfile().getPrimaryOTRProfile(/*createIfNeeded=*/true),
-                null);
+        HelpAndFeedbackLauncherImpl.getForProfile(mProfile)
+                .show(
+                        mActivity,
+                        mActivity.getString(R.string.help_context_incognito_learn_more),
+                        null);
     }
 
     /**
      * Constructs an Incognito NewTabPage.
+     *
      * @param activity The activity used to create the new tab page's View.
+     * @param host The view that's hosting this incognito NTP.
+     * @param profile The profile associated with this incognito NTP.
+     * @param edgeToEdgeControllerSupplier The supplier for e2e status and the bottom inset.
      */
-    public IncognitoNewTabPage(Activity activity, NativePageHost host) {
+    public IncognitoNewTabPage(
+            Activity activity,
+            NativePageHost host,
+            Profile profile,
+            ObservableSupplier<EdgeToEdgeController> edgeToEdgeControllerSupplier) {
         super(host);
 
         mActivity = activity;
+        mProfile = profile;
 
-        mIncognitoNTPBackgroundColor = host.getContext().getColor(R.color.ntp_bg_incognito);
+        if (!mProfile.isOffTheRecord()) {
+            throw new IllegalStateException(
+                    "Attempting to create an incognito NTP with a normal profile.");
+        }
 
-        mIncognitoNewTabPageManager = new IncognitoNewTabPageManager() {
-            @Override
-            public void loadIncognitoLearnMore() {
-                // Incognito 'Learn More' either opens a new activity or a new non-incognito tab.
-                // Both is not supported in VR. Request to exit VR and if we succeed show the 'Learn
-                // More' page in 2D.
-                if (VrModuleProvider.getDelegate().isInVr()) {
-                    VrModuleProvider.getDelegate().requestToExitVrAndRunOnSuccess(
-                            IncognitoNewTabPage.this ::showIncognitoLearnMore);
-                    return;
-                }
-                showIncognitoLearnMore();
-            }
+        mIncognitoNtpBackgroundColor = host.getContext().getColor(R.color.ntp_bg_incognito);
 
-            @Override
-            public void initCookieControlsManager() {
-                mCookieControlsManager = new IncognitoCookieControlsManager();
-                mCookieControlsManager.initialize();
-                mCookieControlsObserver = new IncognitoCookieControlsManager.Observer() {
-                    @Override
-                    public void onUpdate(
-                            boolean checked, @CookieControlsEnforcement int enforcement) {
-                        mIncognitoNewTabPageView.setIncognitoCookieControlsToggleEnforcement(
-                                enforcement);
-                        mIncognitoNewTabPageView.setIncognitoCookieControlsToggleChecked(checked);
-                    }
-                };
-                mCookieControlsManager.addObserver(mCookieControlsObserver);
-                mIncognitoNewTabPageView.setIncognitoCookieControlsToggleCheckedListener(
-                        mCookieControlsManager);
-                mIncognitoNewTabPageView.setIncognitoCookieControlsIconOnclickListener(
-                        mCookieControlsManager);
-                mCookieControlsManager.updateIfNecessary();
-            }
+        mIncognitoNewTabPageManager = createIncognitoNewTabPageManager();
 
-            @Override
-            public boolean shouldCaptureThumbnail() {
-                return mCookieControlsManager.shouldCaptureThumbnail();
-            }
-
-            @Override
-            public void destroy() {
-                if (mCookieControlsManager != null) {
-                    mCookieControlsManager.removeObserver(mCookieControlsObserver);
-                }
-            }
-
-            @Override
-            public void onLoadingComplete() {
-                mIsLoaded = true;
-            }
-        };
-
-        mTitle = host.getContext().getResources().getString(R.string.new_incognito_tab_title);
+        mTitle = host.getContext().getString(R.string.new_incognito_tab_title);
 
         LayoutInflater inflater = LayoutInflater.from(host.getContext());
         mIncognitoNewTabPageView =
@@ -121,17 +92,20 @@ public class IncognitoNewTabPage
 
         // Work around https://crbug.com/943873 and https://crbug.com/963385 where default focus
         // highlight shows up after toggling dark mode.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            mIncognitoNewTabPageView.setDefaultFocusHighlightEnabled(false);
-        }
+        mIncognitoNewTabPageView.setDefaultFocusHighlightEnabled(false);
 
         initWithView(mIncognitoNewTabPageView);
+
+        if (EdgeToEdgeUtils.isDrawKeyNativePageToEdgeEnabled()) {
+            mEdgeToEdgePadAdjuster =
+                    EdgeToEdgeControllerFactory.createForViewAndObserveSupplier(
+                            mIncognitoNewTabPageView.getScrollView(), edgeToEdgeControllerSupplier);
+        }
     }
 
     /**
      * @return Whether the NTP has finished loaded.
      */
-    @VisibleForTesting
     public boolean isLoadedForTests() {
         return mIsLoaded;
     }
@@ -140,9 +114,15 @@ public class IncognitoNewTabPage
 
     @Override
     public void destroy() {
-        assert !ViewCompat
-                .isAttachedToWindow(getView()) : "Destroy called before removed from window";
+        assert !ViewCompat.isAttachedToWindow(getView())
+                : "Destroy called before removed from window";
         mIncognitoNewTabPageManager.destroy();
+
+        if (mEdgeToEdgePadAdjuster != null) {
+            mEdgeToEdgePadAdjuster.destroy();
+            mEdgeToEdgePadAdjuster = null;
+        }
+
         super.destroy();
     }
 
@@ -153,7 +133,7 @@ public class IncognitoNewTabPage
 
     @Override
     public int getBackgroundColor() {
-        return mIncognitoNTPBackgroundColor;
+        return mIncognitoNtpBackgroundColor;
     }
 
     @Override
@@ -172,7 +152,11 @@ public class IncognitoNewTabPage
     }
 
     @Override
-    public void updateForUrl(String url) {
+    public void updateForUrl(String url) {}
+
+    @Override
+    public boolean supportsEdgeToEdge() {
+        return !ChromeFeatureList.sDrawKeyNativeEdgeToEdgeDisableIncognitoNtpE2e.getValue();
     }
 
     // InvalidationAwareThumbnailProvider
@@ -185,5 +169,71 @@ public class IncognitoNewTabPage
     @Override
     public void captureThumbnail(Canvas canvas) {
         mIncognitoNewTabPageView.captureThumbnail(canvas);
+    }
+
+    private IncognitoNewTabPageManager createIncognitoNewTabPageManager() {
+        if (sIncognitoNtpManagerForTesting != null) return sIncognitoNtpManagerForTesting;
+
+        return new IncognitoNewTabPageManager() {
+            @Override
+            public void loadIncognitoLearnMore() {
+                showIncognitoLearnMore();
+            }
+
+            @Override
+            public void initCookieControlsManager() {
+                mCookieControlsManager = new IncognitoCookieControlsManager();
+                mCookieControlsManager.initialize(mProfile);
+                mCookieControlsObserver =
+                        new IncognitoCookieControlsManager.Observer() {
+                            @Override
+                            public void onUpdate(
+                                    boolean checked, @CookieControlsEnforcement int enforcement) {
+                                mIncognitoNewTabPageView
+                                        .setIncognitoCookieControlsToggleEnforcement(enforcement);
+                                mIncognitoNewTabPageView.setIncognitoCookieControlsToggleChecked(
+                                        checked);
+                            }
+                        };
+                mCookieControlsManager.addObserver(mCookieControlsObserver);
+                mIncognitoNewTabPageView.setIncognitoCookieControlsToggleCheckedListener(
+                        mCookieControlsManager);
+                mIncognitoNewTabPageView.setIncognitoCookieControlsIconOnclickListener(
+                        mCookieControlsManager);
+                mCookieControlsManager.updateIfNecessary();
+            }
+
+            @Override
+            public boolean shouldCaptureThumbnail() {
+                return mCookieControlsManager.shouldCaptureThumbnail();
+            }
+
+            @Override
+            public boolean shouldShowTrackingProtectionNtp() {
+                return UserPrefs.get(mProfile).getBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED)
+                        || ChromeFeatureList.isEnabled(ChromeFeatureList.TRACKING_PROTECTION_3PCD)
+                        || ChromeFeatureList.isEnabled(
+                                ChromeFeatureList.ALWAYS_BLOCK_3PCS_INCOGNITO);
+            }
+
+            @Override
+            public void destroy() {
+                if (mCookieControlsManager != null) {
+                    mCookieControlsManager.removeObserver(mCookieControlsObserver);
+                    mCookieControlsManager.destroy();
+                }
+            }
+
+            @Override
+            public void onLoadingComplete() {
+                mIsLoaded = true;
+            }
+        };
+    }
+
+    /** Set a stubbed {@link IncognitoNewTabPageManager} for testing. */
+    public static void setIncognitoNtpManagerForTesting(IncognitoNewTabPageManager manager) {
+        sIncognitoNtpManagerForTesting = manager;
+        ResettersForTesting.register(() -> sIncognitoNtpManagerForTesting = null);
     }
 }

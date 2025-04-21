@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -98,7 +99,7 @@ class AdaptiveScreenBrightnessManagerTest
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
-    PowerManagerClient::InitializeFake();
+    chromeos::PowerManagerClient::InitializeFake();
     auto logger = std::make_unique<TestingAdaptiveScreenBrightnessUkmLogger>();
     ukm_logger_ = logger.get();
 
@@ -108,15 +109,15 @@ class AdaptiveScreenBrightnessManagerTest
         task_environment()->GetMainThreadTaskRunner());
     screen_brightness_manager_ =
         std::make_unique<AdaptiveScreenBrightnessManager>(
-            std::move(logger), &user_activity_detector_,
-            FakePowerManagerClient::Get(), nullptr, nullptr,
+            std::move(logger), ui::UserActivityDetector::Get(),
+            chromeos::FakePowerManagerClient::Get(), nullptr, nullptr,
             observer.InitWithNewPipeAndPassReceiver(),
             std::move(periodic_timer));
   }
 
   void TearDown() override {
     screen_brightness_manager_.reset();
-    PowerManagerClient::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
     ChromeRenderViewHostTestHarness::TearDown();
   }
 
@@ -133,17 +134,18 @@ class AdaptiveScreenBrightnessManagerTest
     power_manager::PowerSupplyProperties proto;
     proto.set_external_power(power);
     proto.set_battery_percent(battery_percent);
-    FakePowerManagerClient::Get()->UpdatePowerProperties(proto);
+    chromeos::FakePowerManagerClient::Get()->UpdatePowerProperties(proto);
   }
 
-  void ReportLidEvent(const PowerManagerClient::LidState state) {
-    FakePowerManagerClient::Get()->SetLidState(state,
-                                               base::TimeTicks::UnixEpoch());
+  void ReportLidEvent(const chromeos::PowerManagerClient::LidState state) {
+    chromeos::FakePowerManagerClient::Get()->SetLidState(
+        state, base::TimeTicks::UnixEpoch());
   }
 
-  void ReportTabletModeEvent(const PowerManagerClient::TabletMode mode) {
-    FakePowerManagerClient::Get()->SetTabletMode(mode,
-                                                 base::TimeTicks::UnixEpoch());
+  void ReportTabletModeEvent(
+      const chromeos::PowerManagerClient::TabletMode mode) {
+    chromeos::FakePowerManagerClient::Get()->SetTabletMode(
+        mode, base::TimeTicks::UnixEpoch());
   }
 
   void ReportBrightnessChangeEvent(
@@ -223,7 +225,7 @@ class AdaptiveScreenBrightnessManagerTest
   }
 
   const gfx::Point kEventLocation = gfx::Point(90, 90);
-  const ui::MouseEvent kMouseEvent = ui::MouseEvent(ui::ET_MOUSE_MOVED,
+  const ui::MouseEvent kMouseEvent = ui::MouseEvent(ui::EventType::kMouseMoved,
                                                     kEventLocation,
                                                     kEventLocation,
                                                     base::TimeTicks(),
@@ -238,17 +240,17 @@ class AdaptiveScreenBrightnessManagerTest
  private:
   FakeChromeUserManager fake_user_manager_;
 
-  ui::UserActivityDetector user_activity_detector_;
   std::unique_ptr<AdaptiveScreenBrightnessManager> screen_brightness_manager_;
-  TestingAdaptiveScreenBrightnessUkmLogger* ukm_logger_;
+  raw_ptr<TestingAdaptiveScreenBrightnessUkmLogger, DanglingUntriaged>
+      ukm_logger_;
 };
 
 TEST_F(AdaptiveScreenBrightnessManagerTest, PeriodicLogging) {
   InitializeBrightness(75.0f);
   ReportPowerChangeEvent(power_manager::PowerSupplyProperties::AC, 23.0f);
   ReportVideoStart();
-  ReportLidEvent(PowerManagerClient::LidState::OPEN);
-  ReportTabletModeEvent(PowerManagerClient::TabletMode::UNSUPPORTED);
+  ReportLidEvent(chromeos::PowerManagerClient::LidState::OPEN);
+  ReportTabletModeEvent(chromeos::PowerManagerClient::TabletMode::UNSUPPORTED);
 
   FastForwardTimeBySecs(kLoggingIntervalSecs);
 
@@ -274,8 +276,8 @@ TEST_F(AdaptiveScreenBrightnessManagerTest,
        PeriodicLoggingBrightnessUninitialized) {
   ReportPowerChangeEvent(power_manager::PowerSupplyProperties::AC, 23.0f);
   ReportVideoStart();
-  ReportLidEvent(PowerManagerClient::LidState::OPEN);
-  ReportTabletModeEvent(PowerManagerClient::TabletMode::UNSUPPORTED);
+  ReportLidEvent(chromeos::PowerManagerClient::LidState::OPEN);
+  ReportTabletModeEvent(chromeos::PowerManagerClient::TabletMode::UNSUPPORTED);
 
   FastForwardTimeBySecs(kLoggingIntervalSecs);
 
@@ -286,8 +288,8 @@ TEST_F(AdaptiveScreenBrightnessManagerTest,
 TEST_F(AdaptiveScreenBrightnessManagerTest, PeriodicTimerTest) {
   ReportPowerChangeEvent(power_manager::PowerSupplyProperties::AC, 23.0f);
   ReportVideoStart();
-  ReportLidEvent(PowerManagerClient::LidState::OPEN);
-  ReportTabletModeEvent(PowerManagerClient::TabletMode::UNSUPPORTED);
+  ReportLidEvent(chromeos::PowerManagerClient::LidState::OPEN);
+  ReportTabletModeEvent(chromeos::PowerManagerClient::TabletMode::UNSUPPORTED);
 
   FastForwardTimeBySecs(kLoggingIntervalSecs - 10);
 
@@ -590,20 +592,20 @@ TEST_F(AdaptiveScreenBrightnessManagerTest, UserEventCounts) {
   ReportUserActivity(&kMouseEvent);
 
   const ui::TouchEvent kTouchEvent(
-      ui::ET_TOUCH_PRESSED, kEventLocation, base::TimeTicks(),
+      ui::EventType::kTouchPressed, kEventLocation, base::TimeTicks(),
       ui::PointerDetails(ui::EventPointerType::kTouch, 0));
   ReportUserActivity(&kTouchEvent);
   ReportUserActivity(&kTouchEvent);
 
   const ui::KeyEvent kKeyEvent(
-      ui::ET_KEY_PRESSED, ui::VKEY_A, ui::DomCode::US_A, 0,
+      ui::EventType::kKeyPressed, ui::VKEY_A, ui::DomCode::US_A, 0,
       ui::DomKey::FromCharacter('a'), base::TimeTicks());
   ReportUserActivity(&kKeyEvent);
   ReportUserActivity(&kKeyEvent);
   ReportUserActivity(&kKeyEvent);
 
   const ui::TouchEvent kStylusEvent(
-      ui::ET_TOUCH_MOVED, kEventLocation, base::TimeTicks(),
+      ui::EventType::kTouchMoved, kEventLocation, base::TimeTicks(),
       ui::PointerDetails(ui::EventPointerType::kPen, 0), ui::EF_NONE);
   ReportUserActivity(&kStylusEvent);
   ReportUserActivity(&kStylusEvent);

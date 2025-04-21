@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/updater/win/protocol_parser_xml.h"
 
-#include "components/update_client/protocol_definition.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace updater {
@@ -63,6 +62,10 @@ TEST(ProtocolParserXML, Success) {
             update_client::ProtocolParser::kNoDaystart);
   EXPECT_EQ(results.list.size(), size_t{1});
 
+  EXPECT_EQ(results.system_requirements.platform, "win");
+  EXPECT_EQ(results.system_requirements.arch, "x64");
+  EXPECT_EQ(results.system_requirements.min_os_version, "6.1");
+
   const update_client::ProtocolParser::Result& result = results.list[0];
   EXPECT_TRUE(result.action_run.empty());
   EXPECT_EQ(result.cohort_attrs.size(), size_t{0});
@@ -114,7 +117,16 @@ TEST(ProtocolParserXML, BadXML) {
   ProtocolParserXML xml_parser;
   EXPECT_FALSE(
       xml_parser.Parse("<response protocol=\"3.0\"></App></response>"));
-  EXPECT_EQ(xml_parser.errors(), "Load maniftest failed: 0x1");
+  EXPECT_EQ(xml_parser.errors(), "Load manifest failed: 0x1");
+}
+
+TEST(ProtocolParserXML, UnsupportedVersion) {
+  ProtocolParserXML xml_parser;
+  EXPECT_FALSE(xml_parser.Parse(
+      "<response protocol=\"3.1\">"
+      "  <app appid=\"{8A69D345-D564-463C-AFF1-A69D9E530F96}\" status=\"ok\" />"
+      "</response>"));
+  EXPECT_EQ(xml_parser.errors(), "Unsupported protocol version: 3.1");
 }
 
 TEST(ProtocolParserXML, ElementOutOfScope) {
@@ -158,9 +170,22 @@ TEST(ProtocolParserXML, BadUrlValue) {
             "Invalid URL codebase in <url>: ht@tp://dl.google.com");
 }
 
+TEST(ProtocolParserXML, MissingManifestVersion) {
+  ProtocolParserXML xml_parser;
+  EXPECT_TRUE(xml_parser.Parse(
+      "<response protocol=\"3.0\">"
+      "  <app appid=\"{8A69D345-D564-463C-AFF1-A69D9E530F96}\" status=\"ok\">"
+      "    <updatecheck status=\"ok\">"
+      "      <manifest />"
+      "    </updatecheck>"
+      "  </app>"
+      "</response>"));
+  EXPECT_TRUE(xml_parser.errors().empty());
+}
+
 TEST(ProtocolParserXML, BadManifestVersion) {
   ProtocolParserXML xml_parser;
-  EXPECT_FALSE(xml_parser.Parse(
+  EXPECT_TRUE(xml_parser.Parse(
       "<response protocol=\"3.0\">"
       "  <app appid=\"{8A69D345-D564-463C-AFF1-A69D9E530F96}\" status=\"ok\">"
       "    <updatecheck status=\"ok\">"
@@ -168,8 +193,45 @@ TEST(ProtocolParserXML, BadManifestVersion) {
       "    </updatecheck>"
       "  </app>"
       "</response>"));
+  EXPECT_TRUE(xml_parser.errors().empty());
+}
+
+TEST(ProtocolParserXML, BadActionEvent) {
+  ProtocolParserXML xml_parser;
+  EXPECT_FALSE(xml_parser.Parse(
+      "<response protocol=\"3.0\">"
+      "  <app appid=\"{8A69D345-D564-463C-AFF1-A69D9E530F96}\" status=\"ok\">"
+      "    <updatecheck status=\"ok\">"
+      "      <manifest version=\"1.2.3.4\">"
+      "        <actions>"
+      "          <action event=\"bad_event_type\"/>"
+      "        </actions>"
+      "      </manifest>"
+      "    </updatecheck>"
+      "  </app>"
+      "</response>"));
   EXPECT_EQ(xml_parser.errors(),
-            "Bad `version` attribute in <manifest>: 100.99.0.abc");
+            "Unsupported `event` type in <action>: bad_event_type");
+}
+
+TEST(ProtocolParserXML, MulitpleActions) {
+  ProtocolParserXML xml_parser;
+  EXPECT_TRUE(xml_parser.Parse(
+      "<response protocol=\"3.0\">"
+      "  <app appid=\"{8A69D345-D564-463C-AFF1-A69D9E530F96}\" status=\"ok\">"
+      "    <updatecheck status=\"ok\">"
+      "      <manifest version=\"1.2.3.4\">"
+      "        <actions>"
+      "          <action event=\"install\" run=\"installer.exe\" "
+      "              arguments=\"--do-not-launch-chrome\"/>"
+      "          <action event=\"install\" run=\"installer2.exe\" "
+      "              arguments=\"--do-not-launch-chrome\"/>"
+      "        </actions>"
+      "      </manifest>"
+      "    </updatecheck>"
+      "  </app>"
+      "</response>"));
+  EXPECT_EQ(xml_parser.results().list[0].manifest.run, "installer.exe");
 }
 
 }  // namespace updater

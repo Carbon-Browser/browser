@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,8 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/permissions_manager.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/audio/audio_devices_pref_handler_impl.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ash/components/audio/audio_devices_pref_handler_impl.h"
 #endif
 
 using base::FilePath;
@@ -33,7 +33,7 @@ namespace {
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   sessions::SessionIdGenerator::RegisterPrefs(registry);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::AudioDevicesPrefHandlerImpl::RegisterPrefs(registry);
 #endif
 }

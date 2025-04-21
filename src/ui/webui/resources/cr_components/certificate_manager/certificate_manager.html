@@ -30,14 +30,14 @@
     </template>
 
     <cr-tabs selected="{{selected}}" tab-names="[[tabNames_]]"></cr-tabs>
-    <iron-pages selected="[[selected]]">
+    <cr-page-selector selected="[[selected]]">
       <div>
         <certificate-list id="personalCerts"
             certificates="[[personalCerts]]"
             certificate-type="[[certificateTypeEnum_.PERSONAL]]"
             import-allowed="[[clientImportAllowed]]">
         </certificate-list>
-<if expr="chromeos_ash or chromeos_lacros">
+<if expr="is_chromeos">
         <certificate-provisioning-list></certificate-provisioning-list>
 </if>
       </div>
@@ -68,4 +68,4 @@
           </certificate-list>
         </template>
       </div>
-    </iron-pages>
+    </cr-page-selector>

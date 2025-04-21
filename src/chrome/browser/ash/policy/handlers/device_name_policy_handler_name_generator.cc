@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler_name_generator.h"
+
+#include <string_view>
 
 #include "base/strings/string_util.h"
 
@@ -23,7 +25,7 @@ bool inline IsValidHostnameCharacter(char c) {
   return base::IsAsciiAlpha(c) || base::IsAsciiDigit(c) || c == '_' || c == '-';
 }
 
-bool IsValidHostname(const std::string& hostname) {
+bool IsValidHostname(std::string_view hostname) {
   if ((hostname.size() > kMaxHostnameLength) || (hostname.size() == 0))
     return false;
   if (hostname[0] == '-')
@@ -37,13 +39,13 @@ bool IsValidHostname(const std::string& hostname) {
 
 }  // namespace
 
-std::string FormatHostname(const std::string& name_template,
-                           const std::string& asset_id,
-                           const std::string& serial,
-                           const std::string& mac,
-                           const std::string& machine_name,
-                           const std::string& location) {
-  std::string result = name_template;
+std::string FormatHostname(std::string_view name_template,
+                           std::string_view asset_id,
+                           std::string_view serial,
+                           std::string_view mac,
+                           std::string_view machine_name,
+                           std::string_view location) {
+  std::string result = std::string(name_template);
   base::ReplaceSubstringsAfterOffset(&result, 0, kAssetIDPlaceholder, asset_id);
   base::ReplaceSubstringsAfterOffset(&result, 0, kSerialNumPlaceholder, serial);
   base::ReplaceSubstringsAfterOffset(&result, 0, kMACAddressPlaceholder, mac);

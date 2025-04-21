@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,7 @@ async function checkColors() {
 
 // Loads `url` in a new tab, waits for it to finish loading, and returns the
 // tabId of the newly-created tab.
-// TODO(https://crbug.com/824647): Update this to use
+// TODO(crbug.com/40568208): Update this to use
 // test_resources/tabs_util.js when extension service workers support
 // modules.
 async function createTab(url) {

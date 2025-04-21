@@ -186,20 +186,22 @@ File* DOMFileSystemBase::CreateFile(ExecutionContext* context,
   // storage location based on the url.
   // FIXME: We should use the snapshot metadata for all files.
   // https://www.w3.org/Bugs/Public/show_bug.cgi?id=17746
-  if (!metadata.platform_path.IsEmpty() &&
+  if (!metadata.platform_path.empty() &&
       (type == mojom::blink::FileSystemType::kTemporary ||
-       type == mojom::blink::FileSystemType::kPersistent))
+       type == mojom::blink::FileSystemType::kPersistent)) {
     return File::CreateForFileSystemFile(metadata.platform_path, name);
+  }
 
   const File::UserVisibility user_visibility =
       (type == mojom::blink::FileSystemType::kExternal)
           ? File::kIsUserVisible
           : File::kIsNotUserVisible;
 
-  if (!metadata.platform_path.IsEmpty()) {
+  if (!metadata.platform_path.empty()) {
     // If the platformPath in the returned metadata is given, we create a File
     // object for the snapshot path.
-    return File::CreateForFileSystemFile(name, metadata, user_visibility);
+    return File::CreateForFileSystemFile(context, name, metadata,
+                                         user_visibility);
   } else {
     // Otherwise we create a File object for the fileSystemURL.
     return File::CreateForFileSystemFile(*context, file_system_url, metadata,
@@ -233,7 +235,7 @@ static bool VerifyAndGetDestinationPathForCopyOrMove(const EntryBase* source,
   if (!parent || !parent->isDirectory())
     return false;
 
-  if (!new_name.IsEmpty() && !DOMFilePath::IsValidName(new_name))
+  if (!new_name.empty() && !DOMFilePath::IsValidName(new_name))
     return false;
 
   const bool is_same_file_system =
@@ -247,13 +249,12 @@ static bool VerifyAndGetDestinationPathForCopyOrMove(const EntryBase* source,
 
   // It is an error to copy or move an entry into its parent if a name different
   // from its current one isn't provided.
-  if (is_same_file_system &&
-      (new_name.IsEmpty() || source->name() == new_name) &&
+  if (is_same_file_system && (new_name.empty() || source->name() == new_name) &&
       DOMFilePath::GetDirectory(source->fullPath()) == parent->fullPath())
     return false;
 
   destination_path = parent->fullPath();
-  if (!new_name.IsEmpty())
+  if (!new_name.empty())
     destination_path = DOMFilePath::Append(destination_path, new_name);
   else
     destination_path = DOMFilePath::Append(destination_path, source->name());

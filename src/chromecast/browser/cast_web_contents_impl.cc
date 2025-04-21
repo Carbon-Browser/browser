@@ -1,17 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/cast_web_contents_impl.h"
 
+#include <optional>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "chromecast/base/cast_features.h"
@@ -26,23 +29,23 @@
 #include "chromecast/common/mojom/queryable_data_store.mojom.h"
 #include "chromecast/common/queryable_data.h"
 #include "chromecast/net/connectivity_checker.h"
+#include "components/cast/message_port/blink_message_port_adapter.h"
 #include "components/cast/message_port/cast/message_port_cast.h"
+#include "components/media_control/browser/media_blocker.h"
 #include "components/media_control/mojom/media_playback_options.mojom.h"
-#include "components/url_rewrite/common/url_request_rewrite_rules.h"
 #include "content/public/browser/message_port_provider.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/bindings_policy.h"
+#include "media/mojo/buildflags.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
-#include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/net_errors.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
+#include "third_party/blink/public/common/navigation/navigation_params.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/autoplay/autoplay.mojom.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
@@ -63,8 +66,7 @@ size_t next_id = 0;
 // Remove the given CastWebContents pointer from the global instance vector.
 void RemoveCastWebContents(CastWebContents* instance) {
   auto& all_cast_web_contents = CastWebContents::GetAll();
-  auto it = std::find(all_cast_web_contents.begin(),
-                      all_cast_web_contents.end(), instance);
+  auto it = base::ranges::find(all_cast_web_contents, instance);
   if (it != all_cast_web_contents.end()) {
     all_cast_web_contents.erase(it);
   }
@@ -93,11 +95,8 @@ std::vector<CastWebContents*>& CastWebContents::GetAll() {
 CastWebContents* CastWebContents::FromWebContents(
     content::WebContents* web_contents) {
   auto& all_cast_web_contents = CastWebContents::GetAll();
-  auto it =
-      std::find_if(all_cast_web_contents.begin(), all_cast_web_contents.end(),
-                   [&web_contents](const auto* cast_web_contents) {
-                     return cast_web_contents->web_contents() == web_contents;
-                   });
+  auto it = base::ranges::find(all_cast_web_contents, web_contents,
+                               &CastWebContents::web_contents);
   if (it == all_cast_web_contents.end()) {
     return nullptr;
   }
@@ -124,20 +123,14 @@ void CastWebContentsImpl::RenderProcessHostDestroyed(
 }
 
 void CastWebContentsImpl::RemoveRenderProcessHostObserver() {
-  if (main_process_host_)
+  if (main_process_host_) {
     main_process_host_->RemoveObserver(this);
+  }
   main_process_host_ = nullptr;
 }
 
 CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
                                          mojom::CastWebViewParamsPtr params)
-    : CastWebContentsImpl(web_contents,
-                          std::move(params),
-                          nullptr /* parent */) {}
-
-CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
-                                         mojom::CastWebViewParamsPtr params,
-                                         CastWebContents* parent)
     : web_contents_(web_contents),
       params_(std::move(params)),
       page_state_(PageState::IDLE),
@@ -148,7 +141,6 @@ CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
                          ? std::make_unique<CastMediaBlocker>(web_contents_)
                          : nullptr),
       main_process_host_(nullptr),
-      parent_cast_web_contents_(parent),
       tab_id_(params_->is_root_window ? 0 : next_tab_id++),
       id_(next_id++),
       main_frame_loaded_(false),
@@ -157,7 +149,7 @@ CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
       stop_notified_(false),
       notifying_(false),
       last_error_(net::OK),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       weak_factory_(this) {
   DCHECK(web_contents_);
   DCHECK(web_contents_->GetController().IsInitialNavigation());
@@ -171,16 +163,6 @@ CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
   CastWebContents::GetAll().push_back(this);
   content::WebContentsObserver::Observe(web_contents_);
 
-  // The URL rewrite rules manager must be initialized only for the root
-  // CastWebContents that is created with this public ctor. All the inner
-  // CastWebContents created in |InnerWebContentsCreated()| callback will use
-  // the private ctor with |parent| specified which allows sharing the same
-  // manager, so that the whole Cast session applies the same rules.
-  if (!parent_cast_web_contents_) {
-    url_rewrite_rules_manager_.emplace();
-  }
-  url_rewrite_rules_manager()->AddWebContents(web_contents_);
-
   if (params_->enabled_for_dev) {
     LOG(INFO) << "Enabling dev console for CastWebContentsImpl";
     remote_debugging_server_->EnableWebContentsForDebugging(web_contents_);
@@ -190,11 +172,17 @@ CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
   if (GetSwitchValueBoolean(switches::kDisableMojoRenderer, false) &&
       params_->renderer_type == mojom::RendererType::MOJO_RENDERER) {
     params_->renderer_type = mojom::RendererType::DEFAULT_RENDERER;
-  }
-
-  if (params_->webrtc_allow_legacy_tls_protocols) {
-    web_contents_->GetMutableRendererPrefs()
-        ->webrtc_allow_legacy_tls_protocols = true;
+  } else if (GetSwitchValueBoolean(switches::kForceMojoRenderer, false)) {
+#if BUILDFLAG(ENABLE_MOJO_RENDERER) && BUILDFLAG(ENABLE_CAST_RENDERER)
+    LOG(INFO) << "Enabling mojo renderer";
+#else
+    LOG(ERROR)
+        << "The switch " << switches::kForceMojoRenderer
+        << " was used, but either the mojo renderer or cast renderer is "
+           "disabled via GN args. Check the values of enable_cast_renderer and "
+           "mojo_media_services in your GN args";
+#endif  // BUILDFLAG(ENABLE_MOJO_RENDERER) && BUILDFLAG(ENABLE_CAST_RENDERER)
+    params_->renderer_type = mojom::RendererType::MOJO_RENDERER;
   }
 
   web_contents_->SetPageBaseBackgroundColor(chromecast::GetSwitchValueColor(
@@ -202,7 +190,7 @@ CastWebContentsImpl::CastWebContentsImpl(content::WebContents* web_contents,
 
   if (params_->enable_webui_bindings_permission) {
     web_contents_->GetPrimaryMainFrame()->AllowBindings(
-        content::BINDINGS_POLICY_WEB_UI | content::BINDINGS_POLICY_MOJO_WEB_UI);
+        content::kWebUIBindingsPolicySet);
   }
 }
 
@@ -237,30 +225,18 @@ PageState CastWebContentsImpl::page_state() const {
   return page_state_;
 }
 
-url_rewrite::UrlRequestRewriteRulesManager*
-CastWebContentsImpl::url_rewrite_rules_manager() {
+const media_control::MediaBlocker* CastWebContentsImpl::media_blocker() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (parent_cast_web_contents_) {
-    return parent_cast_web_contents_->url_rewrite_rules_manager();
-  }
-  return &*url_rewrite_rules_manager_;
+  return media_blocker_.get();
 }
 
-void CastWebContentsImpl::AddRendererFeatures(base::Value features) {
-  DCHECK(features.is_dict());
+void CastWebContentsImpl::AddRendererFeatures(base::Value::Dict features) {
   renderer_features_ = std::move(features);
 }
 
 void CastWebContentsImpl::SetInterfacesForRenderer(
     mojo::PendingRemote<mojom::RemoteInterfaces> remote_interfaces) {
   remote_interfaces_.SetProvider(std::move(remote_interfaces));
-}
-
-void CastWebContentsImpl::SetUrlRewriteRules(
-    url_rewrite::mojom::UrlRequestRewriteRulesPtr rules) {
-  if (!url_rewrite_rules_manager()->OnRulesUpdated(std::move(rules))) {
-    LOG(ERROR) << "URL rewrite rules update failed.";
-  }
 }
 
 void CastWebContentsImpl::LoadUrl(const GURL& url) {
@@ -292,8 +268,9 @@ void CastWebContentsImpl::LoadUrl(const GURL& url) {
 
 void CastWebContentsImpl::ClosePage() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!web_contents_ || closing_)
+  if (!web_contents_ || closing_) {
     return;
+  }
   closing_ = true;
   web_contents_->DispatchBeforeUnload(false /* auto_cancel */);
   web_contents_->ClosePage();
@@ -325,8 +302,9 @@ void CastWebContentsImpl::Stop(int error_code) {
 }
 
 void CastWebContentsImpl::SetWebVisibilityAndPaint(bool visible) {
-  if (!web_contents_)
+  if (!web_contents_) {
     return;
+  }
   if (visible) {
     web_contents_->WasShown();
   } else {
@@ -340,18 +318,21 @@ void CastWebContentsImpl::SetWebVisibilityAndPaint(bool visible) {
 }
 
 void CastWebContentsImpl::BlockMediaLoading(bool blocked) {
-  if (media_blocker_)
+  if (media_blocker_) {
     media_blocker_->BlockMediaLoading(blocked);
+  }
 }
 
 void CastWebContentsImpl::BlockMediaStarting(bool blocked) {
-  if (media_blocker_)
+  if (media_blocker_) {
     media_blocker_->BlockMediaStarting(blocked);
+  }
 }
 
 void CastWebContentsImpl::EnableBackgroundVideoPlayback(bool enabled) {
-  if (media_blocker_)
+  if (media_blocker_) {
     media_blocker_->EnableBackgroundVideoPlayback(enabled);
+  }
 }
 
 void CastWebContentsImpl::SetAppProperties(
@@ -362,8 +343,9 @@ void CastWebContentsImpl::SetAppProperties(
     bool enforce_feature_permissions,
     const std::vector<int32_t>& feature_permissions,
     const std::vector<std::string>& additional_feature_permission_origins) {
-  if (!web_contents_)
+  if (!web_contents_) {
     return;
+  }
   shell::CastNavigationUIData::SetAppPropertiesForWebContents(
       web_contents_, session_id, is_audio_app);
   new shell::CastPermissionUserData(
@@ -378,7 +360,7 @@ void CastWebContentsImpl::SetGroupInfo(const std::string& session_id,
 }
 
 void CastWebContentsImpl::AddBeforeLoadJavaScript(uint64_t id,
-                                                  base::StringPiece script) {
+                                                  std::string_view script) {
   script_injector_.AddScriptForAllOrigins(id, std::string(script));
 }
 
@@ -392,10 +374,11 @@ void CastWebContentsImpl::PostMessageToMainFrame(
   data_utf16 = base::UTF8ToUTF16(data);
 
   // If origin is set as wildcard, no origin scoping would be applied.
-  absl::optional<std::u16string> target_origin_utf16;
+  std::optional<std::u16string> target_origin_utf16;
   constexpr char kWildcardOrigin[] = "*";
-  if (target_origin != kWildcardOrigin)
+  if (target_origin != kWildcardOrigin) {
     target_origin_utf16 = base::UTF8ToUTF16(target_origin);
+  }
 
   content::MessagePortProvider::PostMessageToFrame(
       web_contents()->GetPrimaryPage(), std::u16string(), target_origin_utf16,
@@ -407,8 +390,9 @@ void CastWebContentsImpl::ExecuteJavaScript(
     base::OnceCallback<void(base::Value)> callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!web_contents_ || closing_ || !main_frame_loaded_ ||
-      !web_contents_->GetPrimaryMainFrame())
+      !web_contents_->GetPrimaryMainFrame()) {
     return;
+  }
 
   web_contents_->GetPrimaryMainFrame()->ExecuteJavaScript(javascript,
                                                           std::move(callback));
@@ -567,9 +551,19 @@ void CastWebContentsImpl::RenderFrameCreated(
 std::vector<chromecast::shell::mojom::FeaturePtr>
 CastWebContentsImpl::GetRendererFeatures() {
   std::vector<chromecast::shell::mojom::FeaturePtr> features;
-  for (auto feature : renderer_features_.DictItems()) {
-    features.push_back(chromecast::shell::mojom::Feature::New(
-        feature.first, feature.second.Clone()));
+  for (const auto pair : renderer_features_) {
+    const std::string& name = pair.first;
+    const base::Value& config_value = pair.second;
+    const base::Value::Dict* maybe_config_dict = config_value.GetIfDict();
+
+    // There are only 2 callers of `AddRendererFeatures` (both in
+    // `runtime_application_service_impl.cc`) and they always provide
+    // well-formed dictionaries as values.
+    DCHECK(maybe_config_dict);
+    base::Value::Dict config_dict = maybe_config_dict->Clone();
+
+    features.push_back(
+        chromecast::shell::mojom::Feature::New(name, std::move(config_dict)));
   }
   return features;
 }
@@ -600,14 +594,14 @@ void CastWebContentsImpl::OnBindingsReceived(
 }
 
 bool CastWebContentsImpl::OnPortConnected(
-    base::StringPiece port_name,
+    std::string_view port_name,
     std::unique_ptr<cast_api_bindings::MessagePort> port) {
   DCHECK(api_bindings_);
 
   api_bindings_->Connect(
       std::string(port_name),
-      cast_api_bindings::MessagePortCast::FromMessagePort(port.get())
-          ->TakePort()
+      cast_api_bindings::BlinkMessagePortAdapter::FromServerPlatformMessagePort(
+          std::move(port))
           .PassPort());
   return true;
 }
@@ -623,8 +617,9 @@ void CastWebContentsImpl::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(navigation_handle);
-  if (!web_contents_ || closing_ || stopped_)
+  if (!web_contents_ || closing_ || stopped_) {
     return;
+  }
 
   if (!navigation_handle->IsInMainFrame() ||
       navigation_handle->IsSameDocument()) {
@@ -656,10 +651,12 @@ void CastWebContentsImpl::DidRedirectNavigation(
     content::NavigationHandle* navigation_handle) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(navigation_handle);
-  if (!web_contents_ || closing_ || stopped_)
+  if (!web_contents_ || closing_ || stopped_) {
     return;
-  if (!navigation_handle->IsInMainFrame())
+  }
+  if (!navigation_handle->IsInMainFrame()) {
     return;
+  }
   // Main frame navigation was redirected by the server.
   LOG(INFO) << "Navigation was redirected by server: "
             << navigation_handle->GetURL();
@@ -668,8 +665,9 @@ void CastWebContentsImpl::DidRedirectNavigation(
 void CastWebContentsImpl::ReadyToCommitNavigation(
     content::NavigationHandle* navigation_handle) {
   DCHECK(navigation_handle);
-  if (!web_contents_ || closing_ || stopped_)
+  if (!web_contents_ || closing_ || stopped_) {
     return;
+  }
 
   // We want to honor the autoplay feature policy (via allow="autoplay") without
   // explicit user activation, since media on Cast is extremely likely to have
@@ -680,8 +678,9 @@ void CastWebContentsImpl::ReadyToCommitNavigation(
 
   // Main frames should have autoplay enabled by default, since autoplay
   // delegation via parent frame doesn't work here.
-  if (navigation_handle->IsInMainFrame())
+  if (navigation_handle->IsInMainFrame()) {
     autoplay_flags |= blink::mojom::kAutoplayFlagForceAllow;
+  }
 
   mojo::AssociatedRemote<blink::mojom::AutoplayConfigurationClient> client;
   navigation_handle->GetRenderFrameHost()
@@ -699,6 +698,13 @@ void CastWebContentsImpl::ReadyToCommitNavigation(
     script_injector_.InjectScriptsForURL(
         navigation_handle->GetURL(), navigation_handle->GetRenderFrameHost());
   }
+
+  // Always allow mixed content (https and http in the same page) for cast.
+  // TODO(https://crbug.com/333795270): Decide whether to use
+  // kKeyAllowInsecureContent to configure allowing mixed content.
+  auto content_settings = blink::CreateDefaultRendererContentSettings();
+  content_settings->allow_mixed_content = true;
+  navigation_handle->SetContentSettings(std::move(content_settings));
 
   // Notifies observers that the navigation of the main frame is ready.
   for (Observer& observer : sync_observers_) {
@@ -853,11 +859,13 @@ void CastWebContentsImpl::UpdatePageState() {
 
 void CastWebContentsImpl::NotifyPageState() {
   // Don't notify if the page state didn't change.
-  if (last_state_ == page_state_)
+  if (last_state_ == page_state_) {
     return;
+  }
   // Don't recursively notify the observers.
-  if (notifying_)
+  if (notifying_) {
     return;
+  }
   notifying_ = true;
   if (stopped_ && !stop_notified_) {
     stop_notified_ = true;
@@ -885,11 +893,13 @@ void CastWebContentsImpl::ResourceLoadComplete(
     const content::GlobalRequestID& request_id,
     const blink::mojom::ResourceLoadInfo& resource_load_info) {
   if (!web_contents_ ||
-      render_frame_host != web_contents_->GetPrimaryMainFrame())
+      render_frame_host != web_contents_->GetPrimaryMainFrame()) {
     return;
+  }
   int net_error = resource_load_info.net_error;
-  if (net_error == net::OK)
+  if (net_error == net::OK) {
     return;
+  }
   metrics::CastMetricsHelper* metrics_helper =
       metrics::CastMetricsHelper::GetInstance();
   metrics_helper->RecordApplicationEventWithValue(
@@ -905,14 +915,15 @@ void CastWebContentsImpl::ResourceLoadComplete(
 
 void CastWebContentsImpl::InnerWebContentsCreated(
     content::WebContents* inner_web_contents) {
-  if (!params_->handle_inner_contents)
+  if (!params_->handle_inner_contents) {
     return;
+  }
 
   mojom::CastWebViewParamsPtr params = mojom::CastWebViewParams::New();
   params->enabled_for_dev = params_->enabled_for_dev;
   params->background_color = params_->background_color;
   auto result = inner_contents_.insert(std::unique_ptr<CastWebContentsImpl>(
-      new CastWebContentsImpl(inner_web_contents, std::move(params), this)));
+      new CastWebContentsImpl(inner_web_contents, std::move(params))));
 
   // Notifies remote observers.
   for (auto& observer : observers_) {
@@ -931,8 +942,9 @@ void CastWebContentsImpl::InnerWebContentsCreated(
 void CastWebContentsImpl::TitleWasSet(content::NavigationEntry* entry) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!entry)
+  if (!entry) {
     return;
+  }
   for (auto& observer : observers_) {
     observer->UpdateTitle(base::UTF16ToUTF8(entry->GetTitle()));
   }
@@ -964,8 +976,9 @@ void CastWebContentsImpl::DidUpdateFaviconURL(
     const std::vector<blink::mojom::FaviconURLPtr>& candidates) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (candidates.empty())
+  if (candidates.empty()) {
     return;
+  }
   GURL icon_url;
   bool found_touch_icon = false;
   // icon search order:
@@ -1000,6 +1013,11 @@ void CastWebContentsImpl::MediaStartedPlaying(
   for (auto& observer : observers_) {
     observer->MediaPlaybackChanged(true /* media_playing */);
   }
+
+  // Notifies the local observers.
+  for (Observer& observer : sync_observers_) {
+    observer.MediaPlaybackChanged(true /* media_playing */);
+  }
 }
 
 void CastWebContentsImpl::MediaStoppedPlaying(
@@ -1010,6 +1028,11 @@ void CastWebContentsImpl::MediaStoppedPlaying(
   metrics::CastMetricsHelper::GetInstance()->LogMediaPause();
   for (auto& observer : observers_) {
     observer->MediaPlaybackChanged(false /* media_playing */);
+  }
+
+  // Notifies the local observers.
+  for (Observer& observer : sync_observers_) {
+    observer.MediaPlaybackChanged(false /* media_playing */);
   }
 }
 
@@ -1029,8 +1052,9 @@ void CastWebContentsImpl::TracePageLoadEnd(const GURL& url) {
 
 void CastWebContentsImpl::DisableDebugging() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!params_->enabled_for_dev || !web_contents_)
+  if (!params_->enabled_for_dev || !web_contents_) {
     return;
+  }
   LOG(INFO) << "Disabling dev console for CastWebContentsImpl";
   remote_debugging_server_->DisableWebContentsForDebugging(web_contents_);
 }

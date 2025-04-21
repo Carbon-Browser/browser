@@ -1,22 +1,25 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/autofill/core/browser/form_structure.h"
 
 #include <algorithm>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -25,12 +28,16 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
-#include "components/autofill/core/browser/autofill_experiments.h"
-#include "components/autofill/core/browser/browser_autofill_manager.h"
-#include "components/autofill/core/browser/form_structure.h"
+#include "components/autofill/content/browser/test_autofill_manager_injector.h"
+#include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
+#include "components/autofill/core/browser/foundations/test_autofill_manager_waiter.h"
+#include "components/autofill/core/browser/heuristic_source.h"
+#include "components/autofill/core/browser/studies/autofill_experiments.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/autofill/core/common/unique_ids.h"
+#include "components/variations/variations_switches.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "net/http/http_status_code.h"
@@ -38,10 +45,11 @@
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/data_driven_testing/data_driven_test.h"
+#include "third_party/blink/public/common/features.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 namespace autofill {
@@ -54,18 +62,20 @@ using net::test_server::HttpResponse;
 const base::FilePath::CharType kFeatureName[] = FILE_PATH_LITERAL("autofill");
 const base::FilePath::CharType kTestName[] = FILE_PATH_LITERAL("heuristics");
 
+#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
 // To disable a data driven test, please add the name of the test file
-// (i.e., "NNN_some_site.html") as a literal to the initializer_list given
+// (i.e., FILE_PATH_LITERAL("NNN_some_site.html")) to the initializer_list given
 // to the failing_test_names constructor.
 const auto& GetFailingTestNames() {
   static std::set<base::FilePath::StringType> failing_test_names{};
   return failing_test_names;
 }
+#endif
 
 const base::FilePath& GetTestDataDir() {
-  static base::NoDestructor<base::FilePath> dir([]() {
+  static base::NoDestructor<base::FilePath> dir([] {
     base::FilePath dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &dir);
     dir = dir.AppendASCII("components").AppendASCII("test").AppendASCII("data");
     return dir;
   }());
@@ -91,7 +101,7 @@ std::vector<base::FilePath> GetTestFiles() {
   std::sort(files.begin(), files.end());
 
 #if BUILDFLAG(IS_MAC)
-  base::mac::ClearAmIBundledCache();
+  base::apple::ClearAmIBundledCache();
 #endif  // BUILDFLAG(IS_MAC)
 
   return files;
@@ -99,45 +109,45 @@ std::vector<base::FilePath> GetTestFiles() {
 
 std::string FormStructuresToString(
     const std::map<FormGlobalId, std::unique_ptr<FormStructure>>& forms) {
-  std::string forms_string;
+  std::vector<std::string> string_forms;
+  string_forms.reserve(forms.size());
   // The forms are sorted by their global ID, which should make the order
   // deterministic.
-  for (const auto& kv : forms) {
-    const auto* form = kv.second.get();
+  for (const auto& [form_id, form_structure] : forms) {
+    std::string string_form;
     std::map<std::string, int> section_to_index;
-    for (const auto& field : *form) {
-      // Normalize the section by replacing the unique but platform-dependent
-      // integers in |field->section| with consecutive unique integers.
-      // The section string is of the form "fieldname_id1_id2-suffix", where
-      // id1, id2 are platform-dependent and thus need to be substituted.
-      std::string section = field->section;
-      size_t last_underscore = section.find_last_of('_');
-      size_t second_last_underscore =
-          section.find_last_of('_', last_underscore - 1);
-      size_t next_dash = section.find_first_of('-', last_underscore);
-      int new_section_index = static_cast<int>(section_to_index.size() + 1);
-      int section_index =
-          section_to_index.insert(std::make_pair(section, new_section_index))
-              .first->second;
-      if (second_last_underscore != std::string::npos &&
-          next_dash != std::string::npos) {
-        section = base::StringPrintf(
-            "%s%d%s", section.substr(0, second_last_underscore + 1).c_str(),
-            section_index, section.substr(next_dash).c_str());
+    for (const auto& field : *form_structure) {
+      std::string section = field->section().ToString();
+      if (field->section().is_from_fieldidentifier()) {
+        // Normalize the section by replacing the unique but platform-dependent
+        // integers in `field->section` with consecutive unique integers.
+        // The section string is of the form "fieldname_id1_id2", where id1, id2
+        // are platform-dependent and thus need to be substituted.
+        size_t last_underscore = section.find_last_of('_');
+        size_t second_last_underscore =
+            section.find_last_of('_', last_underscore - 1);
+        int new_section_index = static_cast<int>(section_to_index.size() + 1);
+        int section_index =
+            section_to_index.insert(std::make_pair(section, new_section_index))
+                .first->second;
+        if (second_last_underscore != std::string::npos) {
+          section = base::StringPrintf(
+              "%s%d", section.substr(0, second_last_underscore + 1).c_str(),
+              section_index);
+        }
       }
-
-      forms_string += base::JoinString(
-          {field->Type().ToString(), base::UTF16ToUTF8(field->name),
-           base::UTF16ToUTF8(field->label), base::UTF16ToUTF8(field->value),
-           section},
-          base::StringPiece(" | "));
-      forms_string += "\n";
+      string_form += base::JoinString(
+          {field->Type().ToStringView(), base::UTF16ToUTF8(field->name()),
+           base::UTF16ToUTF8(field->label()),
+           base::UTF16ToUTF8(field->value(ValueSemantics::kCurrent)), section},
+          " | ");
+      string_form.push_back('\n');
     }
+    string_forms.push_back(string_form);
   }
-  return forms_string;
+  sort(string_forms.begin(), string_forms.end());
+  return base::JoinString(string_forms, "\n");
 }
-
-}  // namespace
 
 // A data-driven test for verifying Autofill heuristics. Each input is an HTML
 // file that contains one or more forms. The corresponding output file lists the
@@ -163,45 +173,62 @@ class FormStructureBrowserTest
   // DataDrivenTest:
   void GenerateResults(const std::string& input, std::string* output) override;
 
- private:
-  std::unique_ptr<HttpResponse> HandleRequest(const HttpRequest& request);
+  content::WebContents* web_contents() {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
 
-  base::test::ScopedFeatureList feature_list_;
+ private:
+  class TestAutofillManager : public BrowserAutofillManager {
+   public:
+    explicit TestAutofillManager(ContentAutofillDriver* driver)
+        : BrowserAutofillManager(driver) {}
+
+    TestAutofillManagerWaiter& waiter() { return waiter_; }
+
+   private:
+    TestAutofillManagerWaiter waiter_{*this,
+                                      {AutofillManagerEvent::kFormsSeen}};
+  };
+
+  std::unique_ptr<HttpResponse> HandleRequest(const HttpRequest& request);
 
   // The response content to be returned by the embedded test server. Note that
   // this is populated in the main thread as a part of the setup in the
   // GenerateResults method but it is consumed later in the IO thread by the
   // embedded test server to generate the response.
   std::string html_content_;
+
+  test::AutofillBrowserTestEnvironment autofill_test_environment_;
+  TestAutofillManagerInjector<TestAutofillManager> autofill_manager_injector_;
+  base::test::ScopedFeatureList feature_list_;
 };
 
 FormStructureBrowserTest::FormStructureBrowserTest()
     : ::testing::DataDrivenTest(GetTestDataDir(), kFeatureName, kTestName) {
   feature_list_.InitWithFeatures(
       // Enabled
-      {// TODO(crbug.com/1187842): Remove once experiment is over.
-       features::kAutofillAcrossIframes,
-       // TODO(crbug.com/1098943): Remove once experiment is over.
-       features::kAutofillEnableSupportForMoreStructureInNames,
-       // TODO(crbug.com/1125978): Remove once launched.
-       features::kAutofillEnableSupportForMoreStructureInAddresses,
-       // TODO(crbug.com/1076175) Remove once launched.
-       features::kAutofillUseNewSectioningMethod,
-       // Remove once launched
-       features::kAutofillEnableAugmentedPhoneCountryCode,
-       // TODO(crbug.com/1157405) Remove once launched.
-       features::kAutofillEnableDependentLocalityParsing,
-       // TODO(crbug.com/1150895) Remove once launched.
-       features::kAutofillParsingPatternProvider,
-       features::kAutofillPageLanguageDetection,
-       // TODO(crbug/1165780): Remove once shared labels are launched.
-       features::kAutofillEnableSupportForParsingWithSharedLabels,
-       // TODO(crbug.com/1277480): Remove once launched.
-       features::kAutofillEnableNameSurenameParsing,
-       // TODO(crbug/1190334): Remove once launched.
-       features::kAutofillParseMerchantPromoCodeFields},
+      {
+          features::kAutofillPageLanguageDetection,
+          features::kAutofillFixValueSemantics,
+          // TODO(crbug.com/40741721): Remove once shared labels are launched.
+          features::kAutofillEnableSupportForParsingWithSharedLabels,
+          // TODO(crbug.com/40230674): Remove once launched.
+          features::kAutofillParseVcnCardOnFileStandaloneCvcFields,
+          // TODO(crbug.com/40266396): Remove once launched.
+          features::kAutofillEnableExpirationDateImprovements,
+          features::kAutofillUseITAddressModel,
+          // TODO(crbug.com/320965828): Remove once launched.
+          features::kAutofillInferLabelFromDefaultSelectText,
+      },
       // Disabled
-      {});
+      {// TODO(crbug.com/1493145): Remove when/if launched. This feature changes
+       // default parsing behavior, so must be disabled to avoid
+       // fieldtrial_testing_config interference.
+       features::kAutofillEnableEmailHeuristicOnlyAddressForms,
+       // TODO(crbug.com/320965828): This feature is not supported on the iOS
+       // renderer side and disabled to avoid too many differences between
+       // the expectations.
+       features::kAutofillBetterLocalHeuristicPlaceholderSupport});
 }
 
 FormStructureBrowserTest::~FormStructureBrowserTest() = default;
@@ -211,11 +238,17 @@ void FormStructureBrowserTest::SetUpCommandLine(
   // Suppress most output logs because we can't really control the output for
   // arbitrary test sites.
   command_line->AppendSwitchASCII(switches::kLoggingLevel, "2");
+  command_line->AppendSwitchASCII(
+      variations::switches::kVariationsOverrideCountry, "us");
+  // SelectParserRelaxation affects the results from the test data because the
+  // test data has unclosed <select> tags. Since SelectParserRelaxation is not
+  // enabled by default, we are disabling it for this test.
+  command_line->AppendSwitchASCII("disable-blink-features",
+                                  "SelectParserRelaxation");
 }
 
 void FormStructureBrowserTest::SetUpOnMainThread() {
   InProcessBrowserTest::SetUpOnMainThread();
-
   embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
       &FormStructureBrowserTest::HandleRequest, base::Unretained(this)));
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -229,26 +262,21 @@ void FormStructureBrowserTest::GenerateResults(const std::string& input,
   html_content_.reserve(input.length());
   for (const char c : input) {
     // Strip `\n`, `\t`, `\r` from |html| to match old `data:` URL behavior.
-    // TODO(crbug/239819): the tests expect weird concatenation behavior based
+    // TODO(crbug.com/40317270): the tests expect weird concatenation behavior
+    // based
     //   legacy data URL behavior. Fix this so the the tests better represent
     //   the parsing being done in the wild.
     if (c != '\r' && c != '\n' && c != '\t')
       html_content_.push_back(c);
   }
 
-  // Navigate to the test html content.
   ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL("/test.html"))));
 
   // Dump the form fields (and their inferred field types).
-  content::WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  ContentAutofillDriver* autofill_driver =
-      ContentAutofillDriverFactory::FromWebContents(web_contents)
-          ->DriverForFrame(web_contents->GetPrimaryMainFrame());
-  ASSERT_NE(nullptr, autofill_driver);
-  AutofillManager* autofill_manager = autofill_driver->autofill_manager();
-  ASSERT_NE(nullptr, autofill_manager);
+  TestAutofillManager* autofill_manager =
+      autofill_manager_injector_[web_contents()];
+  ASSERT_TRUE(autofill_manager->waiter().Wait(1));
   *output = FormStructuresToString(autofill_manager->form_structures());
 }
 
@@ -262,15 +290,21 @@ std::unique_ptr<HttpResponse> FormStructureBrowserTest::HandleRequest(
 }
 
 IN_PROC_BROWSER_TEST_P(FormStructureBrowserTest, DataDrivenHeuristics) {
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
+  GTEST_SKIP() << "DataDrivenHeuristics tests are only supported with legacy "
+                  "parsing patterns";
+#else
   // Prints the path of the test to be executed.
   LOG(INFO) << GetParam().MaybeAsASCII();
   bool is_expected_to_pass =
       !base::Contains(GetFailingTestNames(), GetParam().BaseName().value());
   RunOneDataDrivenTest(GetParam(), GetOutputDirectory(), is_expected_to_pass);
+#endif
 }
 
 INSTANTIATE_TEST_SUITE_P(AllForms,
                          FormStructureBrowserTest,
                          testing::ValuesIn(GetTestFiles()));
 
+}  // namespace
 }  // namespace autofill

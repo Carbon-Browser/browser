@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "base/atomicops.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -130,7 +131,8 @@ class WebDataRequestManager
   // Next handle to be used for requests. Incremented for each use.
   WebDataServiceBase::Handle next_request_handle_;
 
-  std::map<WebDataServiceBase::Handle, WebDataRequest*> pending_requests_;
+  std::map<WebDataServiceBase::Handle, raw_ptr<WebDataRequest, CtnExperimental>>
+      pending_requests_;
 };
 
 #endif  // COMPONENTS_WEBDATA_COMMON_WEB_DATA_REQUEST_MANAGER_H__

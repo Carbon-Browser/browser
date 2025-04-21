@@ -1,23 +1,26 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/threading/thread_local_storage.h"
-
-#include "base/memory/raw_ptr.h"
-#include "build/build_config.h"
-
-#if BUILDFLAG(IS_WIN)
-#include <windows.h>
-#include <process.h>
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
 #endif
 
+#include "base/threading/thread_local_storage.h"
+
+#include <array>
+
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/threading/simple_thread.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+#include <process.h>
 // Ignore warnings about ptr->int conversions that we use when
 // storing ints into ThreadLocalStorage.
 #pragma warning(disable : 4311 4312)
@@ -86,13 +89,13 @@ class ThreadLocalStorageRunner : public DelegateSimpleThread::Delegate {
   raw_ptr<int> tls_value_ptr_;
 };
 
-
-void ThreadLocalStorageCleanup(void *value) {
-  int *ptr = static_cast<int*>(value);
+void ThreadLocalStorageCleanup(void* value) {
+  int* ptr = static_cast<int*>(value);
   // Destructors should never be called with a NULL.
   ASSERT_NE(nullptr, ptr);
-  if (*ptr == kFinalTlsValue)
+  if (*ptr == kFinalTlsValue) {
     return;  // We've been called enough times.
+  }
   ASSERT_LT(kFinalTlsValue, *ptr);
   ASSERT_GE(kFinalTlsValue + kNumberDestructorCallRepetitions, *ptr);
   --*ptr;  // Move closer to our target.
@@ -201,6 +204,69 @@ void* UseTLSTestThreadRun(void* input) {
 
 #endif  // BUILDFLAG(IS_POSIX)
 
+class TlsDestructionOrderRunner : public DelegateSimpleThread::Delegate {
+ public:
+  // The runner creates |n_slots| static slots that will be destroyed at
+  // thread exit, with |spacing| empty slots between them. This allows us to
+  // test that the destruction order is correct regardless of the actual slot
+  // indices in the global array.
+  TlsDestructionOrderRunner(int n_slots, int spacing)
+      : n_slots_(n_slots), spacing_(spacing) {}
+
+  void Run() override {
+    destructor_calls.clear();
+    for (int slot = 1; slot < n_slots_ + 1; ++slot) {
+      for (int i = 0; i < spacing_; ++i) {
+        ThreadLocalStorage::Slot empty_slot(nullptr);
+      }
+      NewStaticTLSSlot(slot);
+    }
+  }
+
+  static std::vector<int> destructor_calls;
+
+ private:
+  ThreadLocalStorage::Slot& NewStaticTLSSlot(int n) {
+    NoDestructor<ThreadLocalStorage::Slot> slot(
+        &TlsDestructionOrderRunner::Destructor);
+    slot->Set(reinterpret_cast<void*>(n));
+    return *slot;
+  }
+
+  static void Destructor(void* value) {
+    int n = reinterpret_cast<intptr_t>(value);
+    destructor_calls.push_back(n);
+  }
+
+  int n_slots_;
+  int spacing_;
+};
+std::vector<int> TlsDestructionOrderRunner::destructor_calls;
+
+class CreateDuringDestructionRunner : public DelegateSimpleThread::Delegate {
+ public:
+  void Run() override {
+    second_destructor_called = false;
+    NoDestructor<ThreadLocalStorage::Slot> slot(
+        &CreateDuringDestructionRunner::FirstDestructor);
+    slot->Set(reinterpret_cast<void*>(123));
+  }
+
+  static bool second_destructor_called;
+
+ private:
+  // The first destructor allocates another TLS slot, which should also be
+  // destroyed eventually.
+  static void FirstDestructor(void*) {
+    NoDestructor<ThreadLocalStorage::Slot> slot(
+        &CreateDuringDestructionRunner::SecondDestructor);
+    slot->Set(reinterpret_cast<void*>(234));
+  }
+
+  static void SecondDestructor(void*) { second_destructor_called = true; }
+};
+bool CreateDuringDestructionRunner::second_destructor_called = false;
+
 }  // namespace
 
 TEST(ThreadLocalStorageTest, Basics) {
@@ -225,16 +291,16 @@ TEST(ThreadLocalStorageTest, MAYBE_TLSDestructors) {
   // threads that set the TLS, while the destructor cleans it up.
   // After the threads finish, verify that the value is cleaned up.
   const int kNumThreads = 5;
-  int values[kNumThreads];
-  ThreadLocalStorageRunner* thread_delegates[kNumThreads];
-  DelegateSimpleThread* threads[kNumThreads];
+  std::array<int, kNumThreads> values;
+  std::array<ThreadLocalStorageRunner*, kNumThreads> thread_delegates;
+  std::array<DelegateSimpleThread*, kNumThreads> threads;
 
   // Spawn the threads.
   for (int index = 0; index < kNumThreads; index++) {
     values[index] = kInitialTlsValue;
     thread_delegates[index] = new ThreadLocalStorageRunner(&values[index]);
-    threads[index] = new DelegateSimpleThread(thread_delegates[index],
-                                              "tls thread");
+    threads[index] =
+        new DelegateSimpleThread(thread_delegates[index], "tls thread");
     threads[index]->Start();
   }
 
@@ -276,5 +342,32 @@ TEST(ThreadLocalStorageTest, UseTLSDuringDestruction) {
   EXPECT_TRUE(runner.teardown_works_correctly());
 }
 #endif  // BUILDFLAG(IS_POSIX)
+
+// Test that TLS slots are destroyed in the reverse order: the one that was
+// created first is destroyed last.
+TEST(ThreadLocalStorageTest, DestructionOrder) {
+  const size_t kNSlots = 5;
+  const size_t kSpacing = 100;
+  // The total number of slots is 256, so creating 5 slots with 100 space
+  // between them will place them in different parts of the slot array.
+  // This test checks that their destruction order depends only on their
+  // creation order and not on their index in the array.
+  TlsDestructionOrderRunner runner(kNSlots, kSpacing);
+  DelegateSimpleThread thread(&runner, "tls thread");
+  thread.Start();
+  thread.Join();
+  ASSERT_EQ(kNSlots, TlsDestructionOrderRunner::destructor_calls.size());
+  for (int call = 0, slot = kNSlots; slot > 0; --slot, ++call) {
+    EXPECT_EQ(slot, TlsDestructionOrderRunner::destructor_calls[call]);
+  }
+}
+
+TEST(ThreadLocalStorageTest, CreateDuringDestruction) {
+  CreateDuringDestructionRunner runner;
+  DelegateSimpleThread thread(&runner, "tls thread");
+  thread.Start();
+  thread.Join();
+  ASSERT_TRUE(CreateDuringDestructionRunner::second_destructor_called);
+}
 
 }  // namespace base

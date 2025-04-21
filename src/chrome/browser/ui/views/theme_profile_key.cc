@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,9 @@ namespace {
 class ProfileTracker : public ProfileObserver {
  public:
   explicit ProfileTracker(Profile* profile) : profile_(profile) {
-    if (profile_)
+    if (profile_) {
       observation_.Observe(profile_.get());
+    }
   }
   ~ProfileTracker() override = default;
 
@@ -39,7 +40,7 @@ class ProfileTracker : public ProfileObserver {
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(ProfileTracker*)
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(ProfileTracker, kThemeProfileKey, nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(ProfileTracker, kThemeProfileKey)
 
 void SetThemeProfileForWindow(aura::Window* window, Profile* profile) {
   window->SetProperty(kThemeProfileKey,

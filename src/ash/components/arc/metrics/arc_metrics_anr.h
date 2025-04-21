@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_COMPONENTS_ARC_METRICS_ARC_METRICS_ANR_H_
 
 #include "ash/components/arc/mojom/anr.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
 
@@ -25,6 +26,10 @@ class ArcMetricsAnr {
 
   void Report(mojom::AnrPtr anr);
 
+  void set_uma_suffix(const std::string& uma_suffix) {
+    uma_suffix_ = uma_suffix;
+  }
+
  private:
   void LogOnStart();
   void UpdateRate();
@@ -39,7 +44,9 @@ class ArcMetricsAnr {
   base::OneShotTimer start_timer_;
   base::OneShotTimer pending_start_timer_;
   base::RepeatingTimer period_updater_;
-  PrefService* const prefs_ = nullptr;
+  const raw_ptr<PrefService> prefs_ = nullptr;
+
+  std::string uma_suffix_;
 
   THREAD_CHECKER(thread_checker_);
 };

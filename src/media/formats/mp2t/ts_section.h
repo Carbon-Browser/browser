@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@ class TsSection {
   // Parse the data bytes of the TS packet.
   // Return true if parsing is successful.
   virtual bool Parse(bool payload_unit_start_indicator,
-                     const uint8_t* buf,
-                     int size) = 0;
+                     base::span<const uint8_t> buf) = 0;
 
   // Process bytes that have not been processed yet (pending buffers in the
   // pipe). Flush might thus results in frame emission, as an example.

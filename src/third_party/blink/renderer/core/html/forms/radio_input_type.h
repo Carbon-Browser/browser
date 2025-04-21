@@ -41,19 +41,21 @@ class RadioInputType final : public BaseCheckableInputType {
   CORE_EXPORT static HTMLInputElement* NextRadioButtonInGroup(HTMLInputElement*,
                                                               bool forward);
 
-  RadioInputType(HTMLInputElement& element) : BaseCheckableInputType(element) {}
+  RadioInputType(HTMLInputElement& element)
+      : BaseCheckableInputType(Type::kRadio, element) {}
+  bool ValueMissing(const String&) const;
 
  private:
   void CountUsage() override;
-  const AtomicString& FormControlType() const override;
-  ControlPart AutoAppearance() const override;
+  AppearanceValue AutoAppearance() const override;
   void WillUpdateCheckedness(bool new_checked) override;
-  bool ValueMissing(const String&) const override;
   String ValueMissingText() const override;
   void HandleClickEvent(MouseEvent&) override;
   void HandleKeydownEvent(KeyboardEvent&) override;
   void HandleKeyupEvent(KeyboardEvent&) override;
-  bool IsKeyboardFocusable() const override;
+  bool IsKeyboardFocusableSlow(
+      Element::UpdateBehavior update_behavior =
+          Element::UpdateBehavior::kStyleAndLayout) const override;
   bool ShouldSendChangeEventAfterCheckedChanged() override;
   ClickHandlingState* WillDispatchClick() override;
   void DidDispatchClick(Event&, const ClickHandlingState&) override;
@@ -62,6 +64,13 @@ class RadioInputType final : public BaseCheckableInputType {
   HTMLInputElement* FindNextFocusableRadioButtonInGroup(HTMLInputElement*,
                                                         bool);
   HTMLInputElement* CheckedRadioButtonForGroup() const;
+};
+
+template <>
+struct DowncastTraits<RadioInputType> {
+  static bool AllowFrom(const InputType& type) {
+    return type.IsRadioInputType();
+  }
 };
 
 }  // namespace blink

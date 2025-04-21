@@ -1,10 +1,9 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/ui.gni")
 import("//components/viz/viz.gni")
-import("//testing/libfuzzer/fuzzer_test.gni")
 
 viz_component("host") {
   defines = [ "VIZ_HOST_IMPLEMENTATION" ]
@@ -19,9 +18,6 @@ viz_component("host") {
     "gpu_client_delegate.h",
     "gpu_host_impl.cc",
     "gpu_host_impl.h",
-    "hit_test/hit_test_query.cc",
-    "hit_test/hit_test_query.h",
-    "hit_test/hit_test_region_observer.h",
     "host_display_client.cc",
     "host_display_client.h",
     "host_frame_sink_client.h",
@@ -43,11 +39,12 @@ viz_component("host") {
 
   deps = [
     "//base",
-    "//build:chromeos_buildflags",
     "//gpu/ipc/client",
     "//gpu/ipc/common",
     "//services/viz/privileged/mojom",
+    "//services/webnn/public/mojom",
     "//ui/base",
+    "//ui/base:ozone_buildflags",
     "//ui/gfx",
   ]
 
@@ -60,7 +57,7 @@ viz_component("host") {
     "//ui/gfx/geometry",
   ]
 
-  if (is_mac) {
+  if (is_apple) {
     deps += [ "//ui/accelerated_widget_mac" ]
   }
 
@@ -73,7 +70,6 @@ viz_source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "hit_test/hit_test_query_unittest.cc",
     "host_frame_sink_manager_unittest.cc",
     "host_gpu_memory_buffer_manager_unittest.cc",
   ]
@@ -82,7 +78,6 @@ viz_source_set("unit_tests") {
     ":host",
     "//base",
     "//base/test:test_support",
-    "//build:chromeos_buildflags",
     "//components/viz/test:test_support",
     "//gpu",
     "//gpu/ipc/host",
@@ -97,16 +92,4 @@ viz_source_set("unit_tests") {
   if (use_ozone) {
     deps += [ "//ui/ozone" ]
   }
-}
-
-fuzzer_test("hit_test_query_fuzzer") {
-  sources = [ "hit_test/hit_test_query_fuzzer.cc" ]
-
-  libfuzzer_options = [ "max_len=4096" ]
-
-  deps = [
-    ":host",
-    "//base/test:test_support",
-    "//components/viz/test:test_support",
-  ]
 }

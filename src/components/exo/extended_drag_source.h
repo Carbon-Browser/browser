@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #define COMPONENTS_EXO_EXTENDED_DRAG_SOURCE_H_
 
 #include <memory>
-#include <string>
+#include <optional>
 
 #include "ash/drag_drop/toplevel_window_drag_delegate.h"
 #include "ash/wm/toplevel_window_event_handler.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/exo/data_source_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/scoped_window_event_targeting_blocker.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/gfx/geometry/point.h"
@@ -43,9 +43,6 @@ class ExtendedDragSource : public DataSourceObserver,
    public:
     virtual bool ShouldAllowDropAnywhere() const = 0;
     virtual bool ShouldLockCursor() const = 0;
-    virtual void OnSwallowed(const std::string& mime_type) = 0;
-    virtual void OnUnswallowed(const std::string& mime_type,
-                               const gfx::Vector2d& offset) = 0;
     virtual void OnDataSourceDestroying() = 0;
 
    protected:
@@ -89,7 +86,7 @@ class ExtendedDragSource : public DataSourceObserver,
   void OnWindowDestroyed(aura::Window* window) override;
 
   aura::Window* GetDraggedWindowForTesting();
-  absl::optional<gfx::Vector2d> GetDragOffsetForTesting() const;
+  std::optional<gfx::Vector2d> GetDragOffsetForTesting() const;
   aura::Window* GetDragSourceWindowForTesting();
 
  private:
@@ -104,11 +101,11 @@ class ExtendedDragSource : public DataSourceObserver,
 
   static ExtendedDragSource* instance_;
 
-  DataSource* source_ = nullptr;
+  raw_ptr<DataSource> source_ = nullptr;
 
   // Created and destroyed at wayland/zcr_extended_drag.cc and its lifetime is
   // tied to the zcr_extended_drag_source_v1 object it's attached to.
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, DanglingUntriaged> delegate_;
 
   // The pointer location in screen coordinates.
   gfx::PointF pointer_location_;
@@ -117,7 +114,8 @@ class ExtendedDragSource : public DataSourceObserver,
 
   std::unique_ptr<DraggedWindowHolder> dragged_window_holder_;
   std::unique_ptr<aura::ScopedWindowEventTargetingBlocker> event_blocker_;
-  aura::Window* drag_source_window_ = nullptr;
+  raw_ptr<aura::Window> drag_source_window_ = nullptr;
+  bool pending_drag_start_ = false;
 
   base::ObserverList<Observer>::Unchecked observers_;
 

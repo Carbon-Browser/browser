@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,11 +27,14 @@ void FramebustBlockTabHelper::OnBlockedUrlClicked(size_t index) {
   size_t total_size = blocked_urls_.size();
   DCHECK_LT(index, total_size);
   const GURL& url = blocked_urls_[index];
-  if (!callbacks_[index].is_null())
+  if (!callbacks_[index].is_null()) {
     std::move(callbacks_[index]).Run(url, index, total_size);
-  web_contents()->OpenURL(content::OpenURLParams(
-      url, content::Referrer(), WindowOpenDisposition::CURRENT_TAB,
-      ui::PAGE_TRANSITION_LINK, false));
+  }
+  web_contents()->OpenURL(
+      content::OpenURLParams(url, content::Referrer(),
+                             WindowOpenDisposition::CURRENT_TAB,
+                             ui::PAGE_TRANSITION_LINK, false),
+      /*navigation_handle_callback=*/{});
 }
 
 FramebustBlockTabHelper::FramebustBlockTabHelper(

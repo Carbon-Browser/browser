@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,13 @@ namespace sharedStoragePrivate {
 
   interface Functions {
     // Gets all items from shared extension local storage.
-    [supportsPromises] static void get(GetCallback callback);
+    static void get(GetCallback callback);
 
     // Sets given items into shared extension local storage.
-    [supportsPromises] static void set(object items, SetCallback callback);
+    static void set(object items, SetCallback callback);
 
     // Removes item from shared extension local storage.
-    [supportsPromises] static void remove(
+    static void remove(
         DOMString[] keys, RemoveCallback callback);
   };
 };

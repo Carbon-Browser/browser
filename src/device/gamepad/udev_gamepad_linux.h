@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include <memory>
 #include <string>
-
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 extern "C" {
 struct udev_device;
@@ -29,8 +28,8 @@ class UdevGamepadLinux {
 
   UdevGamepadLinux(Type type,
                    int index,
-                   base::StringPiece path,
-                   base::StringPiece syspath_prefix);
+                   std::string_view path,
+                   std::string_view syspath_prefix);
   ~UdevGamepadLinux() = default;
 
   // Factory method for creating UdevGamepadLinux instances. Extracts info

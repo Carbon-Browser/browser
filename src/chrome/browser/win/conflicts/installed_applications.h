@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
+#include "base/win/registry.h"
 #include "base/win/windows_types.h"
 
 class MsiUtil;
@@ -68,6 +69,9 @@ class InstalledApplications {
   InstalledApplications& operator=(const InstalledApplications&) = delete;
 
   virtual ~InstalledApplications();
+
+  virtual std::vector<std::pair<HKEY, REGSAM>> GenRegistryKeyCombinations()
+      const;
 
   // Given a |file|, checks if it matches an installed application on the user's
   // machine and appends all the matching applications to |applications|.

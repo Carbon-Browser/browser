@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ bool CastScreen::IsWindowUnderCursor(gfx::NativeWindow window) {
 }
 
 gfx::NativeWindow CastScreen::GetWindowAtScreenPoint(const gfx::Point& point) {
-  return gfx::NativeWindow(nullptr);
+  return gfx::NativeWindow();
 }
 
 display::Display CastScreen::GetDisplayNearestWindow(

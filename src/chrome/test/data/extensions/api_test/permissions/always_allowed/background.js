@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ chrome.test.runTests([
   // Negative test for the tabs API.
   function tabsNegative() {
     try {
-      var tab = chrome.tabs.getSelected();
+      var tab = chrome.tabs.query();
       chrome.test.fail();
     } catch (e) {
       chrome.test.succeed();

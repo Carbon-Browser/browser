@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "chrome/browser/sync/test/integration/updated_progress_marker_checker.h"
 #include "components/spellcheck/common/spellcheck_common.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "content/public/test/browser_test.h"
 
 namespace {
@@ -117,7 +117,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientDictionarySyncTest, Limit) {
   ASSERT_TRUE(DictionaryChecker(/*expected_words=*/{}).Wait());
 
   // Disable client #1 before client #0 starts adding anything.
-  GetClient(1)->DisableSyncForAllDatatypes();
+  ASSERT_TRUE(GetClient(1)->DisableSyncForAllDatatypes());
 
   // Pick a size between 1/2 and 1/3 of kMaxSyncableDictionaryWords. This will
   // allow the test to verify that while we crossed the limit the client not

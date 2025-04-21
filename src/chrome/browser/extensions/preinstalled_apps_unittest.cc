@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,25 +24,25 @@ namespace extensions {
 
 class MockExternalLoader : public ExternalLoader {
  public:
-  MockExternalLoader() {}
+  MockExternalLoader() = default;
 
   void StartLoading() override {}
 
  private:
-  ~MockExternalLoader() override {}
+  ~MockExternalLoader() override = default;
 };
 
 class PreinstalledAppsTest : public testing::Test {
  public:
   PreinstalledAppsTest()
       : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {}
-  ~PreinstalledAppsTest() override {}
+  ~PreinstalledAppsTest() override = default;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
 };
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Chrome OS has different way of installing pre-installed apps.
 // Android does not currently support installing apps via Chrome.
 TEST_F(PreinstalledAppsTest, Install) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/containers/heap_array.h"
+#include "base/functional/bind.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/storage_partition_impl.h"
@@ -18,6 +19,7 @@
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/cpp/p2p_param_traits.h"
+#include "services/network/public/mojom/network_context.mojom.h"
 
 using content::BrowserMessageFilter;
 using content::BrowserThread;
@@ -71,9 +73,9 @@ void P2PSocketDispatcherHost::StopRtpDump(bool incoming, bool outgoing) {
 void P2PSocketDispatcherHost::BindReceiver(
     RenderProcessHostImpl& process,
     mojo::PendingReceiver<network::mojom::P2PSocketManager> receiver,
-    net::NetworkIsolationKey isolation_key,
+    net::NetworkAnonymizationKey anonymization_key,
     const GlobalRenderFrameHostId& render_frame_host_id) {
-  DCHECK_EQ(process.GetID(), render_process_id_);
+  DCHECK_EQ(process.GetDeprecatedID(), render_process_id_);
 
   mojo::PendingRemote<network::mojom::P2PTrustedSocketManagerClient>
       trusted_socket_manager_client;
@@ -83,7 +85,7 @@ void P2PSocketDispatcherHost::BindReceiver(
   mojo::PendingRemote<network::mojom::P2PTrustedSocketManager>
       pending_trusted_socket_manager;
   process.GetStoragePartition()->GetNetworkContext()->CreateP2PSocketManager(
-      isolation_key, std::move(trusted_socket_manager_client),
+      anonymization_key, std::move(trusted_socket_manager_client),
       pending_trusted_socket_manager.InitWithNewPipeAndPassReceiver(),
       std::move(receiver));
   mojo::Remote<network::mojom::P2PTrustedSocketManager> trusted_socket_manager(
@@ -133,14 +135,14 @@ void P2PSocketDispatcherHost::DumpPacket(
     const std::vector<uint8_t>& packet_header,
     uint64_t packet_length,
     bool incoming) {
-  if (!packet_callback_)
+  if (!packet_callback_) {
     return;
+  }
 
-  std::unique_ptr<uint8_t[]> header_buffer(new uint8_t[packet_header.size()]);
-  memcpy(header_buffer.get(), &packet_header[0], packet_header.size());
+  auto header_buffer = base::HeapArray<uint8_t>::Uninit(packet_header.size());
+  header_buffer.copy_from(packet_header);
 
   packet_callback_.Run(std::move(header_buffer),
-                       static_cast<size_t>(packet_header.size()),
                        static_cast<size_t>(packet_length), incoming);
 }
 

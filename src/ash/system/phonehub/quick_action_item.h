@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,9 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/feature_pod_button.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/views/view.h"
 
 namespace views {
 class Label;
@@ -16,6 +19,8 @@ namespace ash {
 
 // A toggle button with labels used in the quick action view.
 class ASH_EXPORT QuickActionItem : public views::View {
+  METADATA_HEADER(QuickActionItem, views::View)
+
  public:
   class Delegate {
    public:
@@ -56,15 +61,14 @@ class ASH_EXPORT QuickActionItem : public views::View {
   // views::View:
   bool HasFocus() const override;
   void RequestFocus() override;
-  const char* GetClassName() const override;
 
   FeaturePodIconButton* icon_button() const { return icon_button_; }
 
  private:
   // Owned by views hierarchy.
-  FeaturePodIconButton* icon_button_ = nullptr;
-  views::Label* label_ = nullptr;
-  views::Label* sub_label_ = nullptr;
+  raw_ptr<FeaturePodIconButton> icon_button_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
+  raw_ptr<views::Label> sub_label_ = nullptr;
 
   // Enabled color of the sub label.
   SkColor sub_label_color_;

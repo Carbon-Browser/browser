@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,17 +35,17 @@ int NativePixmapDmaBuf::GetDmaBufFd(size_t plane) const {
 
 uint32_t NativePixmapDmaBuf::GetDmaBufPitch(size_t plane) const {
   DCHECK_LT(plane, handle_.planes.size());
-  return handle_.planes[plane].stride;
+  return base::checked_cast<uint32_t>(handle_.planes[plane].stride);
 }
 
 size_t NativePixmapDmaBuf::GetDmaBufOffset(size_t plane) const {
   DCHECK_LT(plane, handle_.planes.size());
-  return static_cast<size_t>(handle_.planes[plane].offset);
+  return base::checked_cast<size_t>(handle_.planes[plane].offset);
 }
 
 size_t NativePixmapDmaBuf::GetDmaBufPlaneSize(size_t plane) const {
   DCHECK_LT(plane, handle_.planes.size());
-  return static_cast<size_t>(handle_.planes[plane].size);
+  return base::checked_cast<size_t>(handle_.planes[plane].size);
 }
 
 uint64_t NativePixmapDmaBuf::GetBufferFormatModifier() const {
@@ -61,7 +61,7 @@ size_t NativePixmapDmaBuf::GetNumberOfPlanes() const {
 }
 
 bool NativePixmapDmaBuf::SupportsZeroCopyWebGPUImport() const {
-  // TODO(crbug.com/1258986): Figure out how to import multi-planar pixmap into
+  // TODO(crbug.com/40201271): Figure out how to import multi-planar pixmap into
   // WebGPU without copy.
   return false;
 }
@@ -82,7 +82,7 @@ bool NativePixmapDmaBuf::ScheduleOverlayPlane(
   return false;
 }
 
-gfx::NativePixmapHandle NativePixmapDmaBuf::ExportHandle() {
+gfx::NativePixmapHandle NativePixmapDmaBuf::ExportHandle() const {
   return gfx::CloneHandleForIPC(handle_);
 }
 

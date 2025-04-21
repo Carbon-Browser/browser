@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class ExtensionSignalProcessor {
 
   // Processes (ie. aggregates/derives/adds additional data) the signal and
   // updates internal state & data.
-  virtual void ProcessSignal(std::unique_ptr<ExtensionSignal> signal) = 0;
+  virtual void ProcessSignal(const ExtensionSignal& signal) = 0;
 
   // Returns all signal data collected for the specified extension.
   // Also clears out the existing data.

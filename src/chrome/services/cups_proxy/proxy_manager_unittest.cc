@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <map>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
 #include "chrome/services/cups_proxy/fake_cups_proxy_service_delegate.h"
@@ -35,8 +36,13 @@ class ProxyManagerTest : public testing::Test {
                     ::printing::kBootstrapMojoConnectionChannelToken)),
             std::make_unique<MyFakeCupsProxyServiceDelegate>())) {}
 
+  void TearDown() override {
+    // Wait for the remaining tasks to complete.
+    task_environment_.RunUntilIdle();
+  }
+
   // Proxy a dummy request and add the response code to count_.
-  void ProxyRequest() const {
+  void ProxyRequest() {
     manager_->ProxyRequest({}, {}, {}, {}, {},
                            base::BindOnce(&ProxyManagerTest::Callback,
                                           weak_factory_.GetWeakPtr()));

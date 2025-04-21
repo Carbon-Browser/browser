@@ -1,22 +1,28 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser.test.util;
 
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
-/**
- * Collection of test-only WebContents utilities.
- */
+import org.chromium.base.ThreadUtils;
+
+/** Collection of test-only WebContents utilities. */
 @JNINamespace("content")
 public class RenderProcessHostUtils {
     private RenderProcessHostUtils() {}
 
     public static int getCurrentRenderProcessCount() {
-        return TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> { return nativeGetCurrentRenderProcessCount(); });
+        return ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    return RenderProcessHostUtilsJni.get().getCurrentRenderProcessCount();
+                });
     }
 
-    private static native int nativeGetCurrentRenderProcessCount();
+    @NativeMethods
+    interface Natives {
+        int getCurrentRenderProcessCount();
+    }
 }

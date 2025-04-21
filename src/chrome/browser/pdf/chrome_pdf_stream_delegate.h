@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_PDF_CHROME_PDF_STREAM_DELEGATE_H_
 
 #include "components/pdf/browser/pdf_stream_delegate.h"
+#include "content/public/browser/frame_tree_node_id.h"
 
 class ChromePdfStreamDelegate : public pdf::PdfStreamDelegate {
  public:
@@ -15,10 +16,14 @@ class ChromePdfStreamDelegate : public pdf::PdfStreamDelegate {
   ~ChromePdfStreamDelegate() override;
 
   // `pdf::PdfStreamDelegate`:
-  absl::optional<GURL> MapToOriginalUrl(content::WebContents* contents,
-                                        const GURL& stream_url) override;
-  absl::optional<StreamInfo> GetStreamInfo(
-      content::WebContents* contents) override;
+  std::optional<GURL> MapToOriginalUrl(
+      content::NavigationHandle& navigation_handle) override;
+  std::optional<StreamInfo> GetStreamInfo(
+      content::RenderFrameHost* embedder_frame) override;
+  void OnPdfEmbedderSandboxed(
+      content::FrameTreeNodeId frame_tree_node_id) override;
+  bool ShouldAllowPdfFrameNavigation(
+      content::NavigationHandle* navigation_handle) override;
 };
 
 #endif  // CHROME_BROWSER_PDF_CHROME_PDF_STREAM_DELEGATE_H_

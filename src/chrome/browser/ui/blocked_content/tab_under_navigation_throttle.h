@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,6 @@ constexpr char kBlockTabUnderFormatMessage[] =
 //  legitimate for some cases (like auth).
 class TabUnderNavigationThrottle : public content::NavigationThrottle {
  public:
-  // TODO(https://crbug.com/954178): Remove this.
-  static const base::Feature kBlockTabUnders;
-
   // This enum backs a histogram. Update enums.xml if you make any updates, and
   // put new entries before |kLast|.
   enum class Action {
@@ -89,19 +86,11 @@ class TabUnderNavigationThrottle : public content::NavigationThrottle {
 
   bool HasOpenedPopupSinceLastUserGesture() const;
 
-  // Returns true if tab-unders are allowed due to content settings. Currently,
-  // tab-unders blocking is governed by the same setting as popups.
-  bool TabUndersAllowedBySettings() const;
-
   // content::NavigationThrottle:
   content::NavigationThrottle::ThrottleCheckResult WillStartRequest() override;
   content::NavigationThrottle::ThrottleCheckResult WillRedirectRequest()
       override;
   const char* GetNameForLogging() override;
-
-  // True if the experiment is turned on and the class should actually attempt
-  // to block tab-unders.
-  const bool block_ = false;
 
   // Tracks whether this WebContents has opened a popup since the last user
   // gesture, at the time this navigation is starting.

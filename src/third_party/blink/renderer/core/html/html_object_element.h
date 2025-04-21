@@ -26,7 +26,9 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/forms/form_associated.h"
 #include "third_party/blink/renderer/core/html/forms/listed_element.h"
+#include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
 #include "third_party/blink/renderer/core/html/html_plugin_element.h"
+#include "third_party/blink/renderer/core/html_names.h"
 
 namespace blink {
 
@@ -58,7 +60,7 @@ class CORE_EXPORT HTMLObjectElement final : public HTMLPlugInElement,
   bool HasFallbackContent() const override;
   bool UseFallbackContent() const override;
 
-  bool IsFormControlElement() const override { return false; }
+  bool IsObjectElement() const override { return true; }
 
   bool IsEnumeratable() const override { return true; }
 
@@ -70,10 +72,8 @@ class CORE_EXPORT HTMLObjectElement final : public HTMLPlugInElement,
 
   // Implementations of constraint validation API.
   // Note that the object elements are always barred from constraint validation.
-  String validationMessage() const override { return String(); }
   bool checkValidity() { return true; }
   bool reportValidity() { return true; }
-  void setCustomValidity(const String&) override {}
 
   bool CanContainRangeEndPoint() const override { return UseFallbackContent(); }
 
@@ -93,12 +93,6 @@ class CORE_EXPORT HTMLObjectElement final : public HTMLPlugInElement,
     kDispatch,
   };
   void RenderFallbackContent(ErrorEventPolicy should_dispatch_error_event);
-
-  static bool IsClassOf(const FrameOwner& owner);
-
-  // TODO(crbug.com/1286950) Remove this once a decision is made on deprecation
-  // of the <param> URL functionality.
-  void UseCountParamUrlUsageIfNeeded(bool is_pdf) const;
 
  private:
   void ParseAttribute(const AttributeModificationParams&) override;
@@ -143,18 +137,29 @@ class CORE_EXPORT HTMLObjectElement final : public HTMLPlugInElement,
 
   String class_id_;
   bool use_fallback_content_ : 1;
-
-  // TODO(crbug.com/1286950) Remove this once a decision is made on deprecation
-  // of the <param> URL functionality.
-  bool should_use_count_param_url_ : 1;
 };
 
-// Like To<HTMLObjectElement>() but accepts a ListedElement as input
-// instead of a Node.
-const HTMLObjectElement* ToHTMLObjectElementFromListedElement(
-    const ListedElement*);
-const HTMLObjectElement& ToHTMLObjectElementFromListedElement(
-    const ListedElement&);
+template <>
+struct DowncastTraits<HTMLObjectElement> {
+  static bool AllowFrom(const HTMLFrameOwnerElement& element) {
+    return element.HasTagName(html_names::kObjectTag);
+  }
+  static bool AllowFrom(const FrameOwner& owner) {
+    return IsA<HTMLObjectElement>(DynamicTo<HTMLFrameOwnerElement>(owner));
+  }
+  static bool AllowFrom(const Element& element) {
+    return element.HasTagName(html_names::kObjectTag);
+  }
+  static bool AllowFrom(const Node& node) {
+    // UnsafeTo<> is safe because Is*Element(), by definition, only returns
+    // true if `node` is derived from `Element`.
+    return node.IsHTMLElement() &&
+           IsA<HTMLObjectElement>(UnsafeTo<HTMLElement>(node));
+  }
+  static bool AllowFrom(const ListedElement& control) {
+    return control.IsObjectElement();
+  }
+};
 
 }  // namespace blink
 

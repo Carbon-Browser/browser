@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/components/sync_wifi/network_test_helper.h"
+#include "chromeos/ash/components/sync_wifi/network_test_helper.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -43,20 +43,10 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
   }
   base::HistogramTester* histogram_tester() { return histogram_tester_.get(); }
 
-  absl::optional<int> GetNetworkDropsFromLocalState() {
-    const auto* metrics_value =
-        local_state()->GetDictionary(prefs::kKioskMetrics);
-    if (!metrics_value)
-      return absl::nullopt;
-    const auto* metrics_dict = metrics_value->GetIfDict();
-    if (!metrics_dict)
-      return absl::nullopt;
-    const auto* network_drops_value = metrics_dict->Find(kKioskNetworkDrops);
-    if (!network_drops_value) {
-      return absl::nullopt;
-    }
-
-    return network_drops_value->GetIfInt();
+  std::optional<int> GetNetworkDropsFromLocalState() {
+    return local_state()
+        ->GetDict(prefs::kKioskMetrics)
+        .FindInt(kKioskNetworkDrops);
   }
 
   void SimulateConnectionFailure(const NetworkState* network,
@@ -79,7 +69,7 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
 
   const NetworkState* CreateNetwork() {
     std::string guid = helper_.ConfigureWiFiNetwork(
-        "ssid", /*is_secured=*/true, /*in_profile=*/true,
+        "ssid", /*is_secured=*/true, helper_.primary_user(),
         /*has_connected=*/true,
         /*owned_by_user=*/true, /*configured_by_sync=*/true);
     return helper_.network_state_helper()
@@ -98,7 +88,7 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
-  chromeos::sync_wifi::NetworkTestHelper helper_;
+  sync_wifi::NetworkTestHelper helper_;
   std::unique_ptr<ScopedTestingLocalState> local_state_;
 };
 
@@ -107,7 +97,7 @@ TEST_F(NetworkConnectivityMetricsServiceTest, StartNotInitialized) {
       NetworkConnectivityMetricsService::CreateForTesting(local_state());
   EXPECT_TRUE(network_state_handler()->HasObserver(service.get()));
   EXPECT_FALSE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 }
 
 TEST_F(NetworkConnectivityMetricsServiceTest, StartOnlineGoOnline) {
@@ -116,12 +106,12 @@ TEST_F(NetworkConnectivityMetricsServiceTest, StartOnlineGoOnline) {
       NetworkConnectivityMetricsService::CreateForTesting(local_state());
   EXPECT_TRUE(network_state_handler()->HasObserver(service.get()));
   EXPECT_TRUE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 
   // Nothing changes when go online from online.
   EXPECT_TRUE(SimulateConnectionSuccess() != nullptr);
   EXPECT_TRUE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 }
 
 TEST_F(NetworkConnectivityMetricsServiceTest, StartOnlineGoOfflineDrop) {
@@ -130,12 +120,12 @@ TEST_F(NetworkConnectivityMetricsServiceTest, StartOnlineGoOfflineDrop) {
       NetworkConnectivityMetricsService::CreateForTesting(local_state());
   EXPECT_TRUE(network_state_handler()->HasObserver(service.get()));
   EXPECT_TRUE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 
   // Network connectivity drop.
   SimulateConnectionFailure(network, shill::kErrorUnknownFailure);
   EXPECT_FALSE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(1), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(1), GetNetworkDropsFromLocalState());
 }
 
 TEST_F(NetworkConnectivityMetricsServiceTest, StartOfflineGoOffline) {
@@ -146,12 +136,12 @@ TEST_F(NetworkConnectivityMetricsServiceTest, StartOfflineGoOffline) {
       NetworkConnectivityMetricsService::CreateForTesting(local_state());
   EXPECT_TRUE(network_state_handler()->HasObserver(service.get()));
   EXPECT_FALSE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 
   // Number of drops does not change when go offline from offline.
   SimulateConnectionFailure(network, shill::kErrorUnknownFailure);
   EXPECT_FALSE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 }
 
 TEST_F(NetworkConnectivityMetricsServiceTest, StartOfflineGoOnline) {
@@ -161,12 +151,12 @@ TEST_F(NetworkConnectivityMetricsServiceTest, StartOfflineGoOnline) {
       NetworkConnectivityMetricsService::CreateForTesting(local_state());
   EXPECT_TRUE(network_state_handler()->HasObserver(service.get()));
   EXPECT_FALSE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 
   // Number of drops does not change when go online from offline.
   EXPECT_TRUE(SimulateConnectionSuccess() != nullptr);
   EXPECT_TRUE(service->is_online());
-  EXPECT_EQ(absl::optional<int>(0), GetNetworkDropsFromLocalState());
+  EXPECT_EQ(std::optional<int>(0), GetNetworkDropsFromLocalState());
 }
 
 TEST_F(NetworkConnectivityMetricsServiceTest, LogAndReportNetworkDrops) {
@@ -181,11 +171,11 @@ TEST_F(NetworkConnectivityMetricsServiceTest, LogAndReportNetworkDrops) {
        network_drops++) {
     const auto* network = SimulateConnectionSuccess();
     EXPECT_TRUE(service->is_online());
-    EXPECT_EQ(absl::optional<int>(network_drops - 1),
+    EXPECT_EQ(std::optional<int>(network_drops - 1),
               GetNetworkDropsFromLocalState());
     SimulateConnectionFailure(network, shill::kErrorUnknownFailure);
     EXPECT_FALSE(service->is_online());
-    EXPECT_EQ(absl::optional<int>(network_drops),
+    EXPECT_EQ(std::optional<int>(network_drops),
               GetNetworkDropsFromLocalState());
   }
 

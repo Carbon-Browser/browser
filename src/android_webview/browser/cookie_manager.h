@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "android_webview/browser/aw_cookie_access_policy.h"
+#include "base/android/jni_array.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/file_path.h"
@@ -31,6 +33,8 @@ class CanonicalCookie;
 }
 
 namespace android_webview {
+
+class AwBrowserContext;
 
 // CookieManager creates and owns WebView's CookieStore, in addition to handling
 // calls into the CookieStore from Java.
@@ -84,7 +88,14 @@ namespace android_webview {
 // disk until the flush is complete.
 class CookieManager {
  public:
-  static CookieManager* GetInstance();
+  static CookieManager* GetDefaultInstance();
+
+  // If you want to construct the CookieManager for the default profile, use a
+  // null parent_context, as the default AwBrowserContext does not own its
+  // CookieManager (for legacy reasons). All non-default profile CookieManagers
+  // are owned by an AwBrowserContext - a non-null parent_context.
+  explicit CookieManager(AwBrowserContext* parent_context);
+  ~CookieManager();
 
   CookieManager(const CookieManager&) = delete;
   CookieManager& operator=(const CookieManager&) = delete;
@@ -96,6 +107,8 @@ class CookieManager {
   // while this operation is running.
   void SetMojoCookieManager(
       mojo::PendingRemote<network::mojom::CookieManager> cookie_manager_remote);
+
+  base::android::ScopedJavaLocalRef<jobject> GetJavaCookieManager();
 
   // Configure whether or not this CookieManager should workaround cookies
   // specified for insecure URLs with the 'Secure' directive. See
@@ -114,14 +127,18 @@ class CookieManager {
   void SetCookie(JNIEnv* env,
                  const base::android::JavaParamRef<jobject>& obj,
                  const base::android::JavaParamRef<jstring>& url,
-                 const base::android::JavaParamRef<jstring>& value,
+                 std::string& value,
                  const base::android::JavaParamRef<jobject>& java_callback);
   void SetCookieSync(JNIEnv* env,
                      const base::android::JavaParamRef<jobject>& obj,
                      const base::android::JavaParamRef<jstring>& url,
-                     const base::android::JavaParamRef<jstring>& value);
+                     std::string& value);
 
-  base::android::ScopedJavaLocalRef<jstring> GetCookie(
+  std::string GetCookie(JNIEnv* env,
+                        const base::android::JavaParamRef<jobject>& obj,
+                        const base::android::JavaParamRef<jstring>& url);
+
+  base::android::ScopedJavaLocalRef<jobjectArray> GetCookieInfo(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj,
       const base::android::JavaParamRef<jstring>& url);
@@ -166,12 +183,11 @@ class CookieManager {
 
   base::FilePath GetCookieStorePath();
 
+  AwCookieAccessPolicy* cookie_access_policy() {
+    return &cookie_access_policy_;
+  }
+
  private:
-  friend class base::NoDestructor<CookieManager>;
-
-  CookieManager();
-  ~CookieManager();
-
   // Returns the CookieStore, creating it if necessary. This must only be called
   // on the CookieStore TaskRunner.
   net::CookieStore* GetCookieStore();
@@ -237,6 +253,28 @@ class CookieManager {
                                           bool can_change_schemes);
   void MigrateCookieStorePath();
 
+  // The client hint cache should be cleared if cookies are cleared, but if
+  // cookies are cleared before the browser starts we need a way flag the
+  // need to clear them later.
+  void ClearClientHintsCachedPerOriginMapIfNeeded();
+
+  // Returns the AwBrowserContext associated with the same profile as this
+  // CookieManager. For the default profile, the AwBrowserContext is not
+  // guaranteed to be initialized, so it may be null.
+  AwBrowserContext* GetContext() const;
+  // Get the storage path for the profile this CookieManager is associated with.
+  base::FilePath GetContextPath() const;
+
+  // Java object reference.
+  base::android::ScopedJavaGlobalRef<jobject> java_obj_;
+
+  // If this is the CookieManager for the default profile this will be null,
+  // otherwise it will point to the non-default AwBrowserContext which owns the
+  // CookieManager.
+  const raw_ptr<AwBrowserContext> parent_context_;
+
+  bool should_clear_client_hints_cached_per_origin_map_{false};
+
   base::FilePath cookie_store_path_;
 
   // This protects the following bool, as it's used on multiple threads.
@@ -265,6 +303,10 @@ class CookieManager {
   // note in SetMojoCookieManager(). Must only be accessed on
   // |cookie_store_task_runner_|.
   bool setting_new_mojo_cookie_manager_;
+
+  // The cookie access policy is responsible for configuring when WebView allows
+  // cookies both globally, and per request.
+  AwCookieAccessPolicy cookie_access_policy_;
 
   // |tasks_| is a queue we manage, to allow us to delay tasks until after
   // SetMojoCookieManager()'s work is done. This is modified on different

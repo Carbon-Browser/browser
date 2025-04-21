@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,25 +11,34 @@
 
 namespace ui {
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableHeuristicPalmDetectionFilter;
+BASE_DECLARE_FEATURE(kBlockTelephonyDevicePhoneMute);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableNeuralPalmDetectionFilter;
+BASE_DECLARE_FEATURE(kEnableFastTouchpadClick);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableNeuralPalmAdaptiveHold;
+BASE_DECLARE_FEATURE(kEnableHeatmapPalmDetection);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableNeuralStylusReportFilter;
+BASE_DECLARE_FEATURE(kEnableHeuristicPalmDetectionFilter);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableOrdinalMotion;
+BASE_DECLARE_FEATURE(kEnableKeyboardUsedPalmSuppression);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnablePalmOnMaxTouchMajor;
+BASE_DECLARE_FEATURE(kEnableNeuralPalmDetectionFilter);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnablePalmOnToolTypePalm;
+BASE_DECLARE_FEATURE(kEnableNeuralPalmAdaptiveHold);
+
+COMPONENT_EXPORT(EVENTS_OZONE)
+BASE_DECLARE_FEATURE(kEnableEdgeDetection);
+
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kEnableOrdinalMotion);
+
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kEnablePalmOnMaxTouchMajor);
+
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kEnablePalmOnToolTypePalm);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::FeatureParam<std::string> kNeuralPalmModelVersion;
@@ -37,8 +46,7 @@ extern const base::FeatureParam<std::string> kNeuralPalmModelVersion;
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::FeatureParam<std::string> kNeuralPalmRadiusPolynomial;
 
-COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnablePalmSuppression;
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kEnablePalmSuppression);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::FeatureParam<double> kHeuristicCancelThresholdSeconds;
@@ -49,14 +57,15 @@ extern const base::FeatureParam<double> kHeuristicHoldThresholdSeconds;
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::FeatureParam<int> kHeuristicStrokeCount;
 
-COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableInputEventLogging;
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kEnableInputEventLogging);
+
+COMPONENT_EXPORT(EVENTS_OZONE) BASE_DECLARE_FEATURE(kLibinputHandleTouchpad);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kLibinputHandleTouchpad;
+BASE_DECLARE_FEATURE(kEnableFakeKeyboardHeuristic);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const base::Feature kEnableFakeKeyboardHeuristic;
+BASE_DECLARE_FEATURE(kEnableFakeMouseHeuristic);
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const char kOzoneNNPalmSwitchName[];

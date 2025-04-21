@@ -1,24 +1,34 @@
-    <style include="cr-shared-style settings-shared iron-flex"></style>
-<if expr="not is_macosx and not chromeos_lacros">
+    <style include="cr-shared-style settings-shared"></style>
+<if expr="not is_macosx">
     <settings-toggle-button
         pref="{{prefs.background_mode.enabled}}"
         label="$i18n{backgroundAppsLabel}">
     </settings-toggle-button>
     <div class="hr"></div>
 </if>
-<if expr="not chromeos_ash and not chromeos_lacros">
     <settings-toggle-button id="hardwareAcceleration"
         pref="{{prefs.hardware_acceleration_mode.enabled}}"
         label="$i18n{hardwareAccelerationLabel}">
       <template is="dom-if" if="[[shouldShowRestart_(
           prefs.hardware_acceleration_mode.enabled.value)]]">
-        <cr-button on-click="onRestartTap_" slot="more-actions">
+        <cr-button on-click="onRestartClick_" slot="more-actions">
           $i18n{restart}
         </cr-button>
       </template>
     </settings-toggle-button>
 
-    <div id="proxy" class="cr-row" on-click="onProxyTap_"
+    <!-- <if expr="_google_chrome and is_win"> -->
+      <template is="dom-if" if="[[showFeatureNotificationsSetting_]]">
+        <div class="hr"></div>
+        <settings-toggle-button id="featureNotificationsEnabled"
+            on-settings-boolean-control-change="onFeatureNotificationsChange_"
+            pref="{{prefs.feature_notifications_enabled}}"
+            label="$i18n{featureNotificationsLabel}">
+        </settings-toggle-button>
+      </template>
+    <!-- </if> -->
+
+    <div id="proxy" class="cr-row" on-click="onProxyClick_"
         actionable$="[[isProxyDefault_]]">
       <div class="flex cr-row-text" hidden$="[[!isProxyDefault_]]">
         $i18n{proxySettingsLabel}
@@ -50,23 +60,7 @@
         </extension-controlled-indicator>
       </div>
     </template>
-</if>
-    <if expr="not chromeos_ash">
-      <template is="dom-if" if="[[shouldShowRelaunchDialog]]" restamp>
-        <relaunch-confirmation-dialog restart-type="[[restartTypeEnum.RESTART]]"
-            on-close="onRelaunchDialogClose"></relaunch-confirmation-dialog>
-      </template>
-    </if>
-<if expr="chromeos_lacros">
-    <template is="dom-if" if="[[isSecondaryUser_]]">
-      <settings-toggle-button id="useAshProxy"
-        pref="{{prefs.lacros.proxy.use_ash_proxy}}"
-        label=$i18n{useAshProxyLabel}>
-      </settings-toggle-button>
+    <template is="dom-if" if="[[shouldShowRelaunchDialog]]" restamp>
+      <relaunch-confirmation-dialog restart-type="[[restartTypeEnum.RESTART]]"
+          on-close="onRelaunchDialogClose"></relaunch-confirmation-dialog>
     </template>
-    <template is="dom-if" if="[[!isSecondaryUser_]]">
-      <div id="proxy" class="cr-row">
-        <div class="flex cr-row-text">$i18n{usesAshProxyLabel}</div>
-      </div>
-    </template>
-</if>

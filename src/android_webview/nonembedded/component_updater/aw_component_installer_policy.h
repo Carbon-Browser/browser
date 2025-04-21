@@ -1,14 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ANDROID_WEBVIEW_NONEMBEDDED_COMPONENT_UPDATER_AW_COMPONENT_INSTALLER_POLICY_H_
 #define ANDROID_WEBVIEW_NONEMBEDDED_COMPONENT_UPDATER_AW_COMPONENT_INSTALLER_POLICY_H_
 
+#include "base/values.h"
 #include "components/component_updater/component_installer.h"
 
 namespace base {
-class Value;
 class FilePath;
 class Version;
 }  // namespace base
@@ -26,14 +26,15 @@ class AwComponentInstallerPolicy
 
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) final;
+                      base::Value::Dict manifest) final;
   void OnCustomUninstall() final;
 
  private:
-  base::FilePath GetComponentsProviderServiceDirectory();
 
   // Virtual for testing.
   virtual void IncrementComponentsUpdatedCount();
+  virtual base::FilePath GetComponentsProviderServiceDirectory();
+  virtual int GetHighestSequenceNumber(base::FilePath cps_component_base_path);
 };
 
 }  // namespace android_webview

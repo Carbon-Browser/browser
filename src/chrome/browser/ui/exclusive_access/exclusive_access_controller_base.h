@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,8 @@
 #define CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_CONTROLLER_BASE_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
+#include "content/public/browser/web_contents_observer.h"
 
 class ExclusiveAccessManager;
 class GURL;
@@ -19,10 +17,10 @@ class WebContents;
 }
 
 // The base class for the different exclusive access controllers like the
-// FullscreenController, KeyboardLockController, and MouseLockController which
-// controls lifetime for which the resource (screen/mouse/keyboard) is held
-// exclusively.
-class ExclusiveAccessControllerBase : public content::NotificationObserver {
+// FullscreenController, KeyboardLockController, and PointerLockController which
+// controls lifetime for which the resource (screen/mouse-pointer/keyboard) is
+// held exclusively.
+class ExclusiveAccessControllerBase {
  public:
   explicit ExclusiveAccessControllerBase(ExclusiveAccessManager* manager);
 
@@ -30,19 +28,28 @@ class ExclusiveAccessControllerBase : public content::NotificationObserver {
   ExclusiveAccessControllerBase& operator=(
       const ExclusiveAccessControllerBase&) = delete;
 
-  ~ExclusiveAccessControllerBase() override;
+  virtual ~ExclusiveAccessControllerBase();
 
   GURL GetExclusiveAccessBubbleURL() const;
   virtual GURL GetURLForExclusiveAccessBubble() const;
 
   content::WebContents* exclusive_access_tab() const {
-    return tab_with_exclusive_access_;
+    return web_contents_observer_.web_contents();
   }
 
   // Functions implemented by derived classes:
 
-  // Control behavior when escape is pressed returning true if it was handled.
+  // Called when Esc is pressed. Returns true if the event is handled.
   virtual bool HandleUserPressedEscape() = 0;
+
+  // Called when Esc is held for longer than the press-and-hold duration.
+  virtual void HandleUserHeldEscape() = 0;
+
+  // Called when Esc is released before reaching the press-and-hold duration.
+  virtual void HandleUserReleasedEscapeEarly() = 0;
+
+  // Returns true if the controller requires press-and-hold to exit.
+  virtual bool RequiresPressAndHoldEscToExit() const = 0;
 
   // Called by Browser in response to call from ExclusiveAccessBubble.
   virtual void ExitExclusiveAccessToPreviousState() = 0;
@@ -51,19 +58,6 @@ class ExclusiveAccessControllerBase : public content::NotificationObserver {
   virtual void OnTabDeactivated(content::WebContents* web_contents);
   virtual void OnTabDetachedFromView(content::WebContents* web_contents);
   virtual void OnTabClosing(content::WebContents* web_contents);
-
-  // Callbacks ////////////////////////////////////////////////////////////////
-
-  // content::NotificationObserver to detect page navigation and exit exclusive
-  // access.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
-
-  // For recording UMA.
-  void RecordBubbleReshownUMA();
-  // Called when the exclusive access session ends.
-  void RecordExitingUMA();
 
  protected:
   void SetTabWithExclusiveAccess(content::WebContents* tab);
@@ -77,21 +71,21 @@ class ExclusiveAccessControllerBase : public content::NotificationObserver {
   // if necessary.
   virtual void NotifyTabExclusiveAccessLost() = 0;
 
-  // Records the BubbleReshowsPerSession data to the appropriate histogram for
-  // this controller.
-  virtual void RecordBubbleReshowsHistogram(int bubble_reshow_count) = 0;
-
  private:
-  void UpdateNotificationRegistrations();
-
   const raw_ptr<ExclusiveAccessManager> manager_;
 
-  content::NotificationRegistrar registrar_;
+  class WebContentsObserver : public content::WebContentsObserver {
+   public:
+    explicit WebContentsObserver(ExclusiveAccessControllerBase& controller);
+    // Detect page navigation and exit exclusive access.
+    void NavigationEntryCommitted(
+        const content::LoadCommittedDetails& load_details) override;
+    // Let the controller set the WebContents to be observed.
+    using content::WebContentsObserver::Observe;
 
-  raw_ptr<content::WebContents> tab_with_exclusive_access_ = nullptr;
-
-  // The number of bubble re-shows for the current session (reset upon exiting).
-  int bubble_reshow_count_ = 0;
+   private:
+    const raw_ref<ExclusiveAccessControllerBase> controller_;
+  } web_contents_observer_{*this};
 };
 
 #endif  // CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_CONTROLLER_BASE_H_

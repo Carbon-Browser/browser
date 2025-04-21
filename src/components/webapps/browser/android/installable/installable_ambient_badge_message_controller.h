@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "components/messages/android/message_enums.h"
 #include "components/messages/android/message_wrapper.h"
 #include "components/messages/android/throttler/domain_session_throttler.h"
@@ -59,6 +60,9 @@ class InstallableAmbientBadgeMessageController {
   raw_ptr<InstallableAmbientBadgeClient> client_;
   std::unique_ptr<messages::MessageWrapper> message_;
   url::Origin save_origin_;
+
+  base::WeakPtrFactory<InstallableAmbientBadgeMessageController> weak_factory_{
+      this};
 };
 
 }  // namespace webapps

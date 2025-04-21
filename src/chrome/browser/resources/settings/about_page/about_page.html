@@ -1,4 +1,4 @@
-    <style include="cr-shared-style settings-shared settings-page-styles iron-flex">
+    <style include="cr-shared-style settings-shared settings-page-styles">
       :host {
         --about-page-image-space: 10px;
       }
@@ -18,7 +18,7 @@
         margin-top: auto;
       }
 
-      img {
+      #product-logo {
         margin-inline-end: var(--about-page-image-space);
       }
 
@@ -28,12 +28,17 @@
         text-align: center;
       }
 
-      iron-icon[icon='settings:check-circle'] {
+      cr-icon[icon='cr:check-circle'] {
         fill: var(--cr-checked-color);
       }
 
-      iron-icon[icon='cr:error'] {
+      cr-icon[icon='cr:error'] {
         fill: var(--settings-error-color);
+      }
+
+      #throbber {
+        height: var(--cr-icon-size);
+        vertical-align: middle;
       }
 
       cr-button {
@@ -42,21 +47,12 @@
     </style>
     <settings-section page-title="$i18n{aboutPageTitle}" section="about">
       <div class="cr-row two-line first">
-<if expr="not chromeos_lacros or not _google_chrome">
-        <img id="product-logo" on-click="onProductLogoTap_"
+        <img id="product-logo" on-click="onProductLogoClick_"
             srcset="chrome://theme/current-channel-logo@1x 1x,
                     chrome://theme/current-channel-logo@2x 2x"
             alt="$i18n{aboutProductLogoAlt}"
             role="presentation">
-</if>
-<if expr="_google_chrome and chromeos_lacros">
-        <img id="product-logo" on-click="onProductLogoTap_"
-            srcset="chrome://theme/IDR_PRODUCT_LOGO_32_CANARY@1x 1x,
-                    chrome://theme/IDR_PRODUCT_LOGO_32_CANARY@2x 2x"
-            alt="$i18n{aboutProductLogoAlt}"
-            role="presentation">
-</if>
-        <h1 class="product-title">$i18n{aboutProductTitle}</h1>
+        <div class="product-title">$i18n{aboutProductTitle}</div>
       </div>
       <div class="cr-row two-line">
         <!-- Set the icon from the iconset (when it's obsolete/EOL and
@@ -64,47 +60,47 @@
 <if expr="not chromeos_ash">
         <div class="icon-container"
             hidden="[[!shouldShowIcons_(showUpdateStatus_)]]">
-          <iron-icon
-              icon$="[[getUpdateStatusIcon_(
+          <cr-icon
+              hidden="[[shouldShowThrobber_(
                   obsoleteSystemInfo_, currentUpdateStatusEvent_)]]"
-              src="[[getThrobberSrcIfUpdating_(
+              icon$="[[getUpdateStatusIcon_(
                   obsoleteSystemInfo_, currentUpdateStatusEvent_)]]">
-          </iron-icon>
+          </cr-icon>
+          <img id="throbber" src="chrome://resources/images/throbber_small.svg"
+              hidden="[[!shouldShowThrobber_(
+                  obsoleteSystemInfo_, currentUpdateStatusEvent_)]]">
         </div>
 </if>
         <div class="flex cr-padded-text">
 <if expr="not chromeos_ash">
           <div id="updateStatusMessage" hidden="[[!showUpdateStatus_]]">
-            <div
+            <div role="alert" aria-live="polite"
                 inner-h-t-m-l="[[getUpdateStatusMessage_(
                     currentUpdateStatusEvent_)]]">
             </div>
             <a hidden$="[[!shouldShowLearnMoreLink_(
                 currentUpdateStatusEvent_)]]" target="_blank"
-                href="https://support.google.com/chrome?p=update_error">
+                href="https://support.google.com/chrome?p=update_error"
+                aria-label="$i18nPolymer{aboutLearnMoreUpdatingErrors}">
               $i18n{learnMore}
             </a>
           </div>
           <span id="deprecationWarning"
               hidden="[[!obsoleteSystemInfo_.obsolete]]">
             $i18n{aboutObsoleteSystem}
-            <a href="$i18n{aboutObsoleteSystemURL}" target="_blank">
+            <a href="$i18n{aboutObsoleteSystemURL}" target="_blank"
+                aria-label="$i18nPolymer{aboutLearnMoreSystemRequirements}">
               $i18n{learnMore}
             </a>
           </span>
 </if>
           <div class="secondary">$i18n{aboutBrowserVersion}</div>
-<if expr="chromeos_ash">
-          <div class="secondary"
-              inner-h-t-m-l="[[getUpdateOsSettingsLink_()]]">
-          </div>
-</if>
         </div>
 <if expr="not chromeos_ash">
         <div class="separator" hidden="[[!showButtonContainer_]]"></div>
         <span id="buttonContainer" hidden="[[!showButtonContainer_]]">
           <cr-button id="relaunch" hidden="[[!showRelaunch_]]"
-              on-click="onRelaunchTap_">
+              on-click="onRelaunchClick_">
             $i18n{aboutRelaunch}
           </cr-button>
         </span>
@@ -115,12 +111,13 @@
         <div id="promoteUpdater"
             class$="cr-row [[getPromoteUpdaterClass_(promoteUpdaterStatus_.disabled)]]"
             actionable$="[[promoteUpdaterStatus_.actionable]]"
-            on-click="onPromoteUpdaterTap_">
+            on-click="onPromoteUpdaterClick_">
           <div class="flex">
             [[promoteUpdaterStatus_.text]]
             <a href="https://support.google.com/chrome/answer/95414"
                 target="_blank" id="updaterLearnMore"
-                on-click="onLearnMoreTap_">
+                on-click="onLearnMoreClick_"
+                aria-label="$i18nPolymer{aboutLearnMoreUpdating}">
               $i18n{learnMore}
             </a>
           </div>
@@ -131,15 +128,19 @@
         </div>
       </template>
 </if>
-      <cr-link-row class="hr" id="help" on-click="onHelpTap_"
-          label="$i18n{aboutGetHelpUsingChrome}" external></cr-link-row>
+      <cr-link-row class="hr" id="help" on-click="onHelpClick_"
+          label="$i18n{aboutGetHelpUsingChrome}"
+          external></cr-link-row>
 <if expr="_google_chrome">
-      <cr-link-row class="hr" id="reportIssue" on-click="onReportIssueTap_"
+      <cr-link-row class="hr" id="reportIssue" on-click="onReportIssueClick_"
           hidden="[[!prefs.feedback_allowed.value]]"
           label="$i18n{aboutReportAnIssue}" external></cr-link-row>
+      <cr-link-row class="hr" id="privacyPolicy"
+        on-click="onPrivacyPolicyClick_" label="$i18n{aboutPrivacyPolicy}"
+        external></cr-link-row>
 </if>
-      <cr-link-row class="hr" on-click="onManagementPageTap_"
-          start-icon="cr:domain" label="$i18n{managementPage}"
+      <cr-link-row class="hr" on-click="onManagementPageClick_"
+          start-icon="[[managedByIcon_]]" label="$i18n{managementPage}"
           role-description="$i18n{subpageArrowRoleDescription}"
           hidden$="[[!isManaged_]]"></cr-link-row>
     </settings-section>
@@ -154,9 +155,9 @@
         <div class="info-section">
           <div class="secondary">$i18nRaw{aboutProductLicense}</div>
         </div>
-<if expr="_google_chrome">
+<if expr="_google_chrome or _is_chrome_for_testing_branded">
         <div class="secondary">
-          <a href="$i18n{aboutTermsURL}">$i18n{aboutProductTos}</a>
+          <a id="tos" href="$i18n{aboutTermsURL}">$i18n{aboutProductTos}</a>
         </div>
 </if>
 <if expr="not chromeos_ash">

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,17 @@
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/compiler_specific.h"
-#include "chrome/browser/ui/android/autofill/internal/jni_headers/AuthenticatorSelectionDialogBridge_jni.h"
-#include "chrome/browser/ui/autofill/payments/card_unmask_authentication_selection_dialog_controller.h"
+#include "chrome/browser/ui/autofill/payments/payments_view_factory.h"
 #include "components/autofill/core/browser/payments/card_unmask_challenge_option.h"
+#include "components/autofill/core/browser/ui/payments/card_unmask_authentication_selection_dialog_controller.h"
 #include "components/grit/components_scaled_resources.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
 #include "ui/base/resource/resource_bundle.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/ui/android/autofill/internal/jni_headers/AuthenticatorSelectionDialogBridge_jni.h"
 
 using base::android::ConvertUTF16ToJavaString;
 using base::android::ConvertUTF8ToJavaString;
@@ -35,26 +38,6 @@ AuthenticatorSelectionDialogViewAndroid::
 AuthenticatorSelectionDialogViewAndroid::
     ~AuthenticatorSelectionDialogViewAndroid() = default;
 
-// static
-CardUnmaskAuthenticationSelectionDialogView*
-CardUnmaskAuthenticationSelectionDialogView::CreateAndShow(
-    CardUnmaskAuthenticationSelectionDialogController* controller,
-    content::WebContents* web_contents) {
-  ui::ViewAndroid* view_android = web_contents->GetNativeView();
-  DCHECK(view_android);
-  ui::WindowAndroid* window_android = view_android->GetWindowAndroid();
-  if (!window_android) {
-    return nullptr;
-  }
-  AuthenticatorSelectionDialogViewAndroid* dialog_view =
-      new AuthenticatorSelectionDialogViewAndroid(controller);
-  if (!dialog_view->ShowDialog(window_android)) {
-    delete dialog_view;
-    return nullptr;
-  }
-  return dialog_view;
-}
-
 void AuthenticatorSelectionDialogViewAndroid::Dismiss(bool user_closed_dialog,
                                                       bool server_success) {
   if (controller_) {
@@ -69,13 +52,19 @@ void AuthenticatorSelectionDialogViewAndroid::Dismiss(bool user_closed_dialog,
   }
 }
 
+void AuthenticatorSelectionDialogViewAndroid::UpdateContent() {}
+
 void AuthenticatorSelectionDialogViewAndroid::OnOptionSelected(
     JNIEnv* env,
-    const base::android::JavaParamRef<jstring>& authenticatorOptionIdentifier) {
-  std::string cardUnmaskChallengeOptionId =
+    const base::android::JavaParamRef<jstring>&
+        authenticator_option_identifier) {
+  std::string card_unmask_challenge_option_id =
       base::android::ConvertJavaStringToUTF8(env,
-                                             authenticatorOptionIdentifier);
-  controller_->OnOkButtonClicked(cardUnmaskChallengeOptionId);
+                                             authenticator_option_identifier);
+  controller_->SetSelectedChallengeOptionId(
+      CardUnmaskChallengeOption::ChallengeOptionId(
+          card_unmask_challenge_option_id));
+  controller_->OnOkButtonClicked();
 }
 
 void AuthenticatorSelectionDialogViewAndroid::OnDismissed(JNIEnv* env) {
@@ -118,8 +107,9 @@ AuthenticatorSelectionDialogViewAndroid::CreateJavaAuthenticatorOptions(
       Java_AuthenticatorSelectionDialogBridge_createAuthenticatorOptionList(
           env);
 
-  for (const auto& option : options)
+  for (const auto& option : options) {
     CreateJavaAuthenticatorOptionAndAddToList(env, jlist, option);
+  }
 
   return jlist;
 }
@@ -132,9 +122,27 @@ void AuthenticatorSelectionDialogViewAndroid::
   std::u16string title = controller_->GetAuthenticationModeLabel(option);
   Java_AuthenticatorSelectionDialogBridge_createAuthenticatorOptionAndAddToList(
       env, jlist, ConvertUTF16ToJavaString(env, title),
-      ConvertUTF8ToJavaString(env, option.id),
+      ConvertUTF8ToJavaString(env, option.id.value()),
       ConvertUTF16ToJavaString(env, option.challenge_info),
       static_cast<int>(option.type));
+}
+
+CardUnmaskAuthenticationSelectionDialog*
+CreateAndShowCardUnmaskAuthenticationSelectionDialog(
+    content::WebContents* web_contents,
+    CardUnmaskAuthenticationSelectionDialogController* controller) {
+  ui::ViewAndroid* view_android = web_contents->GetNativeView();
+  ui::WindowAndroid* window_android = view_android->GetWindowAndroid();
+  if (!window_android) {
+    return nullptr;
+  }
+  AuthenticatorSelectionDialogViewAndroid* dialog_view =
+      new AuthenticatorSelectionDialogViewAndroid(controller);
+  if (!dialog_view->ShowDialog(window_android)) {
+    delete dialog_view;
+    return nullptr;
+  }
+  return dialog_view;
 }
 
 }  // namespace autofill

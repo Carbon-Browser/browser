@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
-
-#include "base/strings/string_piece.h"
 
 namespace extensions {
 
@@ -62,11 +61,11 @@ class FeatureProvider {
   // TODO(devlin): Rename this to be features().
   const FeatureMap& GetAllFeatures() const;
 
-  void AddFeature(base::StringPiece name, std::unique_ptr<Feature> feature);
+  void AddFeature(std::string_view name, std::unique_ptr<Feature> feature);
 
   // Takes ownership. Used in preference to unique_ptr variant to reduce size
   // of generated code.
-  void AddFeature(base::StringPiece name, Feature* feature);
+  void AddFeature(std::string_view name, Feature* feature);
 
  private:
   FeatureMap features_;

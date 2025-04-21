@@ -1,10 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_selector.h"
 
 #include <gtest/gtest.h>
+
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 #define EXPECT_SELECTORS_EQ(a, b)    \
   EXPECT_EQ(a.Type(), b.Type());     \
@@ -17,6 +19,11 @@ namespace blink {
 
 static const TextFragmentSelector kInvalidSelector(
     TextFragmentSelector::kInvalid);
+
+class TextFragmentSelectorTest : public testing::Test {
+ private:
+  test::TaskEnvironment task_environment;
+};
 
 TEST(TextFragmentSelectorTest, ExactText) {
   TextFragmentSelector selector =

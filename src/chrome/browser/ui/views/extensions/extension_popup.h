@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_
 #define CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
@@ -19,38 +19,33 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
+#include "ui/views/widget/widget_observer.h"
 #include "url/gurl.h"
-
-#if defined(USE_AURA)
-#include "ui/wm/public/activation_change_observer.h"
-#endif
 
 class ExtensionViewViews;
 
 namespace content {
 class BrowserContext;
 class DevToolsAgentHost;
-}
+}  // namespace content
 
 namespace extensions {
 class Extension;
 class ExtensionViewHost;
 enum class UnloadedExtensionReason;
-}
+}  // namespace extensions
 
 // The bubble used for hosting a browser-action popup provided by an extension.
 class ExtensionPopup : public views::BubbleDialogDelegateView,
-#if defined(USE_AURA)
-                       public wm::ActivationChangeObserver,
-#endif
+                       public views::WidgetObserver,
                        public ExtensionViewViews::Container,
                        public extensions::ExtensionRegistryObserver,
                        public content::WebContentsObserver,
                        public TabStripModelObserver,
                        public content::DevToolsAgentHostObserver {
- public:
-  METADATA_HEADER(ExtensionPopup);
+  METADATA_HEADER(ExtensionPopup, views::BubbleDialogDelegateView)
 
+ public:
   // The min/max height of popups.
   // The minimum is just a little larger than the size of the button itself.
   // The maximum is an arbitrary number and should be smaller than most screens.
@@ -78,20 +73,16 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   extensions::ExtensionViewHost* host() const { return host_.get(); }
 
   // views::BubbleDialogDelegateView:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void AddedToWidget() override;
-  void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
-#if defined(USE_AURA)
-  void OnWidgetDestroying(views::Widget* widget) override;
 
-  // wm::ActivationChangeObserver:
-  void OnWindowActivated(wm::ActivationChangeObserver::ActivationReason reason,
-                         aura::Window* gained_active,
-                         aura::Window* lost_active) override;
-#endif
+  // views::WidgetObserver:
+  void OnWidgetDestroying(views::Widget* widget) override;
+  void OnWidgetTreeActivated(views::Widget* root_widget,
+                             views::Widget* active_widget) override;
 
   // ExtensionViewViews::Container:
-  void OnExtensionSizeChanged(ExtensionViewViews* view) override;
   gfx::Size GetMinBounds() override;
   gfx::Size GetMaxBounds() override;
 
@@ -115,6 +106,12 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   void DevToolsAgentHostDetached(
       content::DevToolsAgentHost* agent_host) override;
 
+  // Closes the popup immediately, if possible. On Mac, if a nested
+  // run loop is running, schedule a deferred close for after the
+  // nested loop ends.
+  void CloseDeferredIfNecessary(views::Widget::ClosedReason reason =
+                                    views::Widget::ClosedReason::kUnspecified);
+
   // Returns the most recently constructed popup. For testing only.
   static ExtensionPopup* last_popup_for_testing();
 
@@ -130,8 +127,10 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   // Shows the bubble, focuses its content, and registers listeners.
   void ShowBubble();
 
-  // Closes the bubble if the devtools window is not attached.
-  void CloseUnlessUnderInspection();
+  // Closes the bubble unless if there is
+  //   1. an attached DevTools inspection window, or
+  //   2. an open web dialog, e.g. JS alert.
+  void CloseUnlessBlockedByInspectionOrJSDialog();
 
   // Handles a signal from the extension host to close.
   void HandleCloseExtensionHost(extensions::ExtensionHost* host);
@@ -139,7 +138,7 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   // The contained host for the view.
   std::unique_ptr<extensions::ExtensionViewHost> host_;
 
-  raw_ptr<ExtensionViewViews> extension_view_;
+  raw_ptr<ExtensionViewViews, DanglingUntriaged> extension_view_;
 
   base::ScopedObservation<extensions::ExtensionRegistry,
                           extensions::ExtensionRegistryObserver>
@@ -149,10 +148,15 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
 
   ShowPopupCallback shown_callback_;
 
+  base::ScopedObservation<views::Widget, views::WidgetObserver>
+      anchor_widget_observation_{this};
+
   // Note: This must be reset *before* `host_`. See note in
   // OnExtensionUnloaded().
   std::unique_ptr<ScopedDevToolsAgentHostObservation>
       scoped_devtools_observation_;
+
+  base::WeakPtrFactory<ExtensionPopup> deferred_close_weak_ptr_factory_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_

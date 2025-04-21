@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,6 @@ const char kMetricsData[] = "feedv2.metrics_data";
 const char kClientInstanceId[] = "feedv2.client_instance_id";
 // This pref applies to all discover APIs despite the string.
 const char kDiscoverAPIEndpointOverride[] = "feedv2.actions_endpoint_override";
-const char kExperiments[] = "feedv2.experiments";
 const char kEnableWebFeedFollowIntroDebug[] =
     "webfeed_follow_intro_debug.enable";
 const char kReliabilityLoggingIdSalt[] = "feedv2.reliability_logging_id_salt";
@@ -47,19 +46,21 @@ const char kWebFeedContentOrder[] = "webfeed.content_order";
 const char kLastSeenFeedType[] = "feedv2.last_seen_feed_type";
 const char kFeedOnDeviceUserActionsCollector[] = "feed.user_actions_collection";
 const char kInfoCardStates[] = "feed.info_card_states";
+const char kHasSeenWebFeed[] = "webfeed.has_seen_feed";
+const char kLastBadgeAnimationTime[] = "webfeed.last_badge_animation_time";
+const char kExperimentsV3[] = "feedv2.experiments_v3";
+const char kInfoCardTrackingStateDict[] = "info-card-tracking-state-dict";
+
+// Deprecated June 2024
+const char kExperimentsV2Deprecated[] = "feedv2.experiments_v2";
 
 }  // namespace prefs
 
 // Deprecated prefs:
 namespace {
 
-// Deprecated May/June 2021
-const char kEnableWebFeedUI[] = "webfeed_ui.enable";
-const char kIsWebFeedSubscriber[] = "webfeed.is_subscriber";
-
-void RegisterObsoletePrefsJune_2021(PrefRegistrySimple* registry) {
-  registry->RegisterBooleanPref(kEnableWebFeedUI, false);
-  registry->RegisterBooleanPref(kIsWebFeedSubscriber, false);
+void RegisterObsoletePrefsJun_2024(PrefRegistrySimple* registry) {
+  registry->RegisterDictionaryPref(prefs::kExperimentsV2Deprecated);
 }
 
 }  // namespace
@@ -82,7 +83,6 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
 
   registry->RegisterIntegerPref(feed::prefs::kNoticeCardViewsCount, 0);
   registry->RegisterIntegerPref(feed::prefs::kNoticeCardClicksCount, 0);
-  registry->RegisterDictionaryPref(feed::prefs::kExperiments);
   registry->RegisterBooleanPref(feed::prefs::kEnableWebFeedFollowIntroDebug,
                                 false);
   registry->RegisterUint64Pref(feed::prefs::kReliabilityLoggingIdSalt, 0);
@@ -92,18 +92,18 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterListPref(feed::prefs::kFeedOnDeviceUserActionsCollector,
                              PrefRegistry::LOSSY_PREF);
   registry->RegisterDictionaryPref(feed::prefs::kInfoCardStates, 0);
+  registry->RegisterBooleanPref(feed::prefs::kHasSeenWebFeed, false);
+  registry->RegisterTimePref(feed::prefs::kLastBadgeAnimationTime,
+                             base::Time());
+  registry->RegisterDictionaryPref(feed::prefs::kExperimentsV3);
+  registry->RegisterDictionaryPref(feed::prefs::kInfoCardTrackingStateDict);
 
 #if BUILDFLAG(IS_IOS)
   registry->RegisterBooleanPref(feed::prefs::kLastFetchHadLoggingEnabled,
                                 false);
 #endif  // BUILDFLAG(IS_IOS)
 
-  RegisterObsoletePrefsJune_2021(registry);
-}
-
-void MigrateObsoleteProfilePrefsJune_2021(PrefService* prefs) {
-  prefs->ClearPref(kEnableWebFeedUI);
-  prefs->ClearPref(kIsWebFeedSubscriber);
+  RegisterObsoletePrefsJun_2024(registry);
 }
 
 }  // namespace feed

@@ -1,36 +1,54 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './print_preview_vars.css.js';
-import '../strings.m.js';
+import '/strings.m.js';
 import '../data/document_info.js';
 import './sidebar.js';
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {isMac, isWindows} from 'chrome://resources/js/cr.m.js';
-import {FocusOutlineManager} from 'chrome://resources/js/cr/ui/focus_outline_manager.m.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {hasKeyModifiers} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
+import {isMac, isWindows} from 'chrome://resources/js/platform.js';
+import {hasKeyModifiers} from 'chrome://resources/js/util.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Destination, PrinterType} from '../data/destination.js';
-import {DocumentSettings, PrintPreviewDocumentInfoElement} from '../data/document_info.js';
-import {Margins} from '../data/margins.js';
+// <if expr="not is_chromeos">
+import type {Destination} from '../data/destination.js';
+import {DestinationOrigin, PrinterType} from '../data/destination.js';
+// </if>
+// <if expr="is_chromeos">
+import type {Destination} from '../data/destination_cros.js';
+import {DestinationOrigin, PrinterType} from '../data/destination_cros.js';
+// </if>
+import type {DocumentSettings, PrintPreviewDocumentInfoElement} from '../data/document_info.js';
+import type {Margins} from '../data/margins.js';
 import {MeasurementSystem} from '../data/measurement_system.js';
-import {DuplexMode, PrintPreviewModelElement, whenReady} from '../data/model.js';
-import {PrintableArea} from '../data/printable_area.js';
-import {Size} from '../data/size.js';
-import {Error, PrintPreviewStateElement, State} from '../data/state.js';
-import {NativeInitialSettings, NativeLayer, NativeLayerImpl} from '../native_layer.js';
+import type {PrintPreviewModelElement} from '../data/model.js';
+import {DuplexMode, whenReady} from '../data/model.js';
+import type {PrintableArea} from '../data/printable_area.js';
+// <if expr="is_chromeos">
+import {computePrinterState, PrintAttemptOutcome, PrinterState} from '../data/printer_status_cros.js';
+// </if>
+import type {Size} from '../data/size.js';
+import type {PrintPreviewStateElement} from '../data/state.js';
+import {Error, State} from '../data/state.js';
+import type {NativeInitialSettings, NativeLayer} from '../native_layer.js';
+import {NativeLayerImpl} from '../native_layer.js';
+// <if expr="is_chromeos">
+import {NativeLayerCrosImpl} from '../native_layer_cros.js';
+
+// </if>
 
 import {getTemplate} from './app.html.js';
 import {DestinationState} from './destination_settings.js';
-import {PreviewAreaState, PrintPreviewPreviewAreaElement} from './preview_area.js';
+import type {PrintPreviewPreviewAreaElement} from './preview_area.js';
+import {PreviewAreaState} from './preview_area.js';
 import {SettingsMixin} from './settings_mixin.js';
-import {PrintPreviewSidebarElement} from './sidebar.js';
+import type {PrintPreviewSidebarElement} from './sidebar.js';
 
 export interface PrintPreviewAppElement {
   $: {
@@ -43,7 +61,7 @@ export interface PrintPreviewAppElement {
 }
 
 const PrintPreviewAppElementBase =
-    WebUIListenerMixin(SettingsMixin(PolymerElement));
+    WebUiListenerMixin(SettingsMixin(PolymerElement));
 
 export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
   static get is() {
@@ -81,7 +99,10 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
 
       documentSettings_: Object,
 
-      error_: Number,
+      error_: {
+        type: Number,
+        observer: 'onErrorChange_',
+      },
 
       margins_: Object,
 
@@ -157,10 +178,10 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
 
     document.documentElement.classList.remove('loading');
     this.nativeLayer_ = NativeLayerImpl.getInstance();
-    this.addWebUIListener('cr-dialog-open', this.onCrDialogOpen_.bind(this));
-    this.addWebUIListener('close', this.onCrDialogClose_.bind(this));
-    this.addWebUIListener('print-failed', this.onPrintFailed_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener('cr-dialog-open', this.onCrDialogOpen_.bind(this));
+    this.addWebUiListener('close', this.onCrDialogClose_.bind(this));
+    this.addWebUiListener('print-failed', this.onPrintFailed_.bind(this));
+    this.addWebUiListener(
         'print-preset-options', this.onPrintPresetOptions_.bind(this));
     this.tracker_.add(window, 'keydown', this.onKeyDown_.bind(this));
     this.$.previewArea.setPluginKeyEventCallback(this.onKeyDown_.bind(this));
@@ -206,6 +227,10 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
         e.preventDefault();
       }
 
+      // <if expr="is_chromeos">
+      this.recordCancelMetricCros_();
+      // </if>
+
       return;
     }
 
@@ -220,7 +245,7 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
     // On Linux/Windows, shift + p means that e.key will be 'P' with caps lock
     // off or 'p' with caps lock on.
     // On Mac, alt + p means that e.key will be unicode 03c0 (pi).
-    // <if expr="not chromeos_ash and not chromeos_lacros">
+    // <if expr="not is_chromeos">
     if (e.key === 'P' || e.key === 'p' || e.key === '\u03c0') {
       if ((isMac && e.metaKey && e.altKey && !e.shiftKey && !e.ctrlKey) ||
           (!isMac && e.shiftKey && e.ctrlKey && !e.altKey && !e.metaKey)) {
@@ -332,15 +357,29 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
         this.$.model.applyDestinationSpecificPolicies();
 
         this.startPreviewWhenReady_ = true;
+
+        if (this.state === State.NOT_READY &&
+            this.destination_.type !== PrinterType.PDF_PRINTER) {
+          this.nativeLayer_!.recordBooleanHistogram(
+              'PrintPreview.TransitionedToReadyState', true);
+        }
+
         this.$.state.transitTo(State.READY);
         break;
       case DestinationState.ERROR:
         let newState = State.ERROR;
-        // <if expr="chromeos_ash or chromeos_lacros">
+        // <if expr="is_chromeos">
         if (this.error_ === Error.NO_DESTINATIONS) {
           newState = State.FATAL_ERROR;
         }
         // </if>
+
+        if (this.state === State.NOT_READY &&
+            this.destination_.type !== PrinterType.PDF_PRINTER) {
+          this.nativeLayer_!.recordBooleanHistogram(
+              'PrintPreview.TransitionedToReadyState', false);
+        }
+
         this.$.state.transitTo(newState);
         break;
       default:
@@ -384,14 +423,28 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
         this.nativeLayer_!.hidePreview();
       }
     } else if (this.state === State.PRINTING) {
+      // <if expr="is_chromeos">
+      if (this.destination_.type === PrinterType.PDF_PRINTER) {
+        NativeLayerCrosImpl.getInstance().recordPrintAttemptOutcome(
+            PrintAttemptOutcome.PDF_PRINT_ATTEMPTED);
+      }
+      // </if>
+
       const whenPrintDone =
-          this.nativeLayer_!.print(this.$.model.createPrintTicket(
+          this.nativeLayer_!.doPrint(this.$.model.createPrintTicket(
               this.destination_, this.openPdfInPreview_,
               this.showSystemDialogBeforePrint_));
       const onError = this.destination_.type === PrinterType.PDF_PRINTER ?
           this.onFileSelectionCancel_.bind(this) :
           this.onPrintFailed_.bind(this);
       whenPrintDone.then(this.close_.bind(this), onError);
+    }
+  }
+
+  private onErrorChange_() {
+    if (this.error_ !== Error.NONE) {
+      this.nativeLayer_!.recordInHistogram(
+          'PrintPreview.StateError', this.error_, Error.MAX_BUCKET);
     }
   }
 
@@ -406,9 +459,49 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
   }
 
   private onCancelRequested_() {
+    // <if expr="is_chromeos">
+    this.recordCancelMetricCros_();
+    // </if>
     this.cancelled_ = true;
     this.$.state.transitTo(State.CLOSING);
   }
+
+  // <if expr="is_chromeos">
+  /** Records the Print Preview state when cancel is requested. */
+  private recordCancelMetricCros_() {
+    let printAttemptOutcome = null;
+    if (this.state !== State.READY) {
+      // Print button is disabled when state !== READY.
+      printAttemptOutcome = PrintAttemptOutcome.CANCELLED_PRINT_BUTTON_DISABLED;
+    } else if (!this.$.sidebar.printerExistsInDisplayedDestinations()) {
+      printAttemptOutcome = PrintAttemptOutcome.CANCELLED_NO_PRINTERS_AVAILABLE;
+    } else if (this.destination_.origin === DestinationOrigin.CROS) {
+      // Fetch and record printer state.
+      switch (computePrinterState(this.destination_.printerStatusReason)) {
+        case PrinterState.GOOD:
+          printAttemptOutcome =
+              PrintAttemptOutcome.CANCELLED_PRINTER_GOOD_STATUS;
+          break;
+        case PrinterState.ERROR:
+          printAttemptOutcome =
+              PrintAttemptOutcome.CANCELLED_PRINTER_ERROR_STATUS;
+          break;
+        case PrinterState.UNKNOWN:
+          printAttemptOutcome =
+              PrintAttemptOutcome.CANCELLED_PRINTER_UNKNOWN_STATUS;
+          break;
+      }
+    } else {
+      printAttemptOutcome =
+          PrintAttemptOutcome.CANCELLED_OTHER_PRINTERS_AVAILABLE;
+    }
+
+    if (printAttemptOutcome !== null) {
+      NativeLayerCrosImpl.getInstance().recordPrintAttemptOutcome(
+          printAttemptOutcome);
+    }
+  }
+  // </if>
 
   /**
    * @param e The event containing the new validity.
@@ -426,7 +519,7 @@ export class PrintPreviewAppElement extends PrintPreviewAppElementBase {
     this.$.state.transitTo(State.READY);
   }
 
-  // <if expr="not chromeos_ash and not chromeos_lacros">
+  // <if expr="not is_chromeos">
   private onPrintWithSystemDialog_() {
     // <if expr="is_win">
     this.showSystemDialogBeforePrint_ = true;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,6 @@ namespace display {
 
 class EdidParser;
 
-// 1 inch in mm.
-constexpr float kInchInMm = 25.4f;
-
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 enum class EdidColorSpaceChecksOutcome {
@@ -31,6 +28,8 @@ enum class EdidColorSpaceChecksOutcome {
   kErrorBadGamma = 5,
   kMaxValue = kErrorBadGamma
 };
+
+const float kDefaultHdrMaxLuminanceRelative = 1.2f;
 
 // Returns true if a given size is allowed. Will return false for certain bogus
 // sizes in mm that should be ignored.
@@ -63,10 +62,15 @@ DISPLAY_UTIL_EXPORT bool IsInternalDisplayId(int64_t display_id);
 // Returns true if the system has at least one internal display.
 DISPLAY_UTIL_EXPORT bool HasInternalDisplay();
 
-// Gets/Sets an id of display corresponding to internal panel.
+// Gets/Sets the set of ids of displays corresponding to internal panel.
 DISPLAY_UTIL_EXPORT const base::flat_set<int64_t>& GetInternalDisplayIds();
+// This overwrites anything that was previously added to this set.
 DISPLAY_UTIL_EXPORT void SetInternalDisplayIds(
     base::flat_set<int64_t> display_ids);
+
+// Adds/removes the display_id corresponding to internal panel.
+DISPLAY_UTIL_EXPORT void AddInternalDisplayId(int64_t display_id);
+DISPLAY_UTIL_EXPORT void RemoveInternalDisplayId(int64_t display_id);
 
 // Converts the color string name into a gfx::ColorSpace profile.
 DISPLAY_UTIL_EXPORT gfx::ColorSpace ForcedColorProfileStringToColorSpace(
@@ -87,8 +91,18 @@ DISPLAY_UTIL_EXPORT bool HasForceDisplayColorProfile();
 DISPLAY_UTIL_EXPORT gfx::DisplayColorSpaces CreateDisplayColorSpaces(
     const gfx::ColorSpace& snapshot_color_space,
     bool allow_high_bit_depth,
-    const absl::optional<gfx::HDRStaticMetadata>& hdr_static_metadata);
+    const std::optional<gfx::HDRStaticMetadata>& hdr_static_metadata);
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+DISPLAY_UTIL_EXPORT int ConnectorIndex8(int device_index, int display_index);
+
+// A connector's index is a combination of:
+// 1) |display_index| the display's index in DRM       bits 0-7
+// 2) |device_index| the display's DRM's index         bits 8-15
+// e.g. - A 3rd display in a 2nd DRM would produce a connector index == 0x0102
+//        (since display index == 2 and DRM index == 1)
+DISPLAY_UTIL_EXPORT uint16_t ConnectorIndex16(uint8_t device_index,
+                                              uint8_t display_index);
 
 }  // namespace display
 

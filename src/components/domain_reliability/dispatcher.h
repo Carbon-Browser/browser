@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <set>
 
-#include "base/callback_forward.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/domain_reliability/domain_reliability_export.h"
@@ -65,7 +65,7 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityDispatcher {
 
   raw_ptr<MockableTime> time_;
   std::set<std::unique_ptr<Task>, base::UniquePtrComparator> tasks_;
-  std::set<Task*> eligible_tasks_;
+  std::set<raw_ptr<Task, SetExperimental>> eligible_tasks_;
 };
 
 }  // namespace domain_reliability

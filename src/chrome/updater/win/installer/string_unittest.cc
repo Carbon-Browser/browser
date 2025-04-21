@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/updater/win/installer/string.h"
+
+#include <windows.h>
+
 #include <stddef.h>
 #include <stdlib.h>
-#include <windows.h>
 
 #include <string>
 
-#include "chrome/updater/win/installer/string.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using updater::StackString;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/capture/mojom/video_capture_buffer.mojom.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
 
@@ -72,22 +74,22 @@ void ClientFrameSinkVideoCapturer::SetAutoThrottlingEnabled(bool enabled) {
 }
 
 void ClientFrameSinkVideoCapturer::ChangeTarget(
-    const absl::optional<VideoCaptureTarget>& target) {
+    const std::optional<VideoCaptureTarget>& target) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  ChangeTarget(target, crop_version_);
+  ChangeTarget(target, sub_capture_target_version_);
 }
 
 void ClientFrameSinkVideoCapturer::ChangeTarget(
-    const absl::optional<VideoCaptureTarget>& target,
-    uint32_t crop_version) {
+    const std::optional<VideoCaptureTarget>& target,
+    uint32_t sub_capture_target_version) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_GE(crop_version, crop_version_);
+  DCHECK_GE(sub_capture_target_version, sub_capture_target_version_);
 
   target_ = target;
-  crop_version_ = crop_version;
+  sub_capture_target_version_ = sub_capture_target_version;
 
-  capturer_remote_->ChangeTarget(target, crop_version);
+  capturer_remote_->ChangeTarget(target, sub_capture_target_version);
 }
 
 void ClientFrameSinkVideoCapturer::Start(
@@ -129,10 +131,8 @@ ClientFrameSinkVideoCapturer::CreateOverlay(int32_t stacking_index) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // If there is an existing overlay at the same index, drop it.
-  auto it = std::find_if(overlays_.begin(), overlays_.end(),
-                         [&stacking_index](const Overlay* overlay) {
-                           return overlay->stacking_index() == stacking_index;
-                         });
+  auto it =
+      base::ranges::find(overlays_, stacking_index, &Overlay::stacking_index);
   if (it != overlays_.end()) {
     (*it)->DisconnectPermanently();
     overlays_.erase(it);
@@ -172,10 +172,11 @@ void ClientFrameSinkVideoCapturer::OnFrameWithEmptyRegionCapture() {
   consumer_->OnFrameWithEmptyRegionCapture();
 }
 
-void ClientFrameSinkVideoCapturer::OnNewCropVersion(uint32_t crop_version) {
+void ClientFrameSinkVideoCapturer::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  consumer_->OnNewCropVersion(crop_version);
+  consumer_->OnNewSubCaptureTargetVersion(sub_capture_target_version);
 }
 
 void ClientFrameSinkVideoCapturer::OnLog(const std::string& message) {
@@ -213,7 +214,8 @@ void ClientFrameSinkVideoCapturer::EstablishConnection() {
   if (auto_throttling_enabled_)
     capturer_remote_->SetAutoThrottlingEnabled(*auto_throttling_enabled_);
   if (target_) {
-    capturer_remote_->ChangeTarget(target_.value(), crop_version_);
+    capturer_remote_->ChangeTarget(target_.value(),
+                                   sub_capture_target_version_);
   }
   for (Overlay* overlay : overlays_)
     overlay->EstablishConnection(capturer_remote_.get());
@@ -224,7 +226,7 @@ void ClientFrameSinkVideoCapturer::EstablishConnection() {
 void ClientFrameSinkVideoCapturer::OnConnectionError() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ClientFrameSinkVideoCapturer::EstablishConnection,
                      weak_factory_.GetWeakPtr()),
@@ -243,8 +245,8 @@ void ClientFrameSinkVideoCapturer::StartInternal() {
 void ClientFrameSinkVideoCapturer::OnOverlayDestroyed(Overlay* overlay) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const auto it = std::find(overlays_.begin(), overlays_.end(), overlay);
-  DCHECK(it != overlays_.end());
+  const auto it = base::ranges::find(overlays_, overlay);
+  CHECK(it != overlays_.end(), base::NotFatalUntil::M130);
   overlays_.erase(it);
 }
 
@@ -283,6 +285,18 @@ void ClientFrameSinkVideoCapturer::Overlay::SetBounds(
 
   bounds_ = bounds;
   overlay_->SetBounds(bounds_);
+}
+
+void ClientFrameSinkVideoCapturer::Overlay::OnCapturedMouseEvent(
+    const gfx::Point& coordinates) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!client_capturer_) {
+    return;
+  }
+
+  // TODO(crbug.com/40267829): Transmit the coordinates to the client_capturer_.
+  NOTIMPLEMENTED();
 }
 
 void ClientFrameSinkVideoCapturer::Overlay::DisconnectPermanently() {

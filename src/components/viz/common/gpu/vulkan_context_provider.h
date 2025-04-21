@@ -1,17 +1,17 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_VIZ_COMMON_GPU_VULKAN_CONTEXT_PROVIDER_H_
 #define COMPONENTS_VIZ_COMMON_GPU_VULKAN_CONTEXT_PROVIDER_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "components/viz/common/viz_vulkan_context_provider_export.h"
 #include "gpu/vulkan/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(ENABLE_VULKAN)
 #include <vulkan/vulkan_core.h>
@@ -59,11 +59,11 @@ class VIZ_VULKAN_CONTEXT_PROVIDER_EXPORT VulkanContextProvider
   // memory immediately. In other words, the CPU will wait for GPU work to
   // complete before proceeding when the current amount of allocated memory
   // exceeds this limit.
-  virtual absl::optional<uint32_t> GetSyncCpuMemoryLimit() const = 0;
+  virtual std::optional<uint32_t> GetSyncCpuMemoryLimit() const = 0;
 
  protected:
   friend class base::RefCountedThreadSafe<VulkanContextProvider>;
-  virtual ~VulkanContextProvider() {}
+  virtual ~VulkanContextProvider() = default;
 };
 
 }  // namespace viz

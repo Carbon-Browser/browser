@@ -1,16 +1,17 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 
 import atexit
-import sys
+
+from gpu_tests.util import host_information
 
 
 # Force all displays to use an sRGB color profile. By default, restore
 # them at exit.
 def ForceUntilExitSRGB(skip_restoring_color_profile: bool = False) -> None:
-  if not sys.platform.startswith('darwin'):
+  if not host_information.IsMac():
     return
   if ForceUntilExitSRGB.has_forced_srgb:
     return

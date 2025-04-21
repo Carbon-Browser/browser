@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_surface_egl.h"
@@ -43,17 +43,21 @@ class GLSurfaceWayland : public gl::NativeViewGLSurfaceEGL {
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
   EGLConfig GetConfig() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   gfx::SwapResult PostSubBuffer(int x,
                                 int y,
                                 int width,
                                 int height,
-                                PresentationCallback callback) override;
+                                PresentationCallback callback,
+                                gfx::FrameData data) override;
 
  private:
   ~GLSurfaceWayland() override;
 
-  void UpdateVisualSize();
+  // Delivers sequence number information to WaylandWindow. See the comments
+  // on WaylandWindow::applied_state() for more information.
+  void OnSequencePoint(int64_t seq);
 
   WaylandEglWindowPtr egl_window_;
   const raw_ptr<WaylandWindow> window_;

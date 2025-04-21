@@ -10,10 +10,9 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutBlockFlow DIV class='composited block'",
+      "name": "LayoutBlockFlow (inline) DIV class='composited block'",
       "position": [-5, -5],
       "bounds": [210, 60],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#0000FF",
       "transform": 1
     },
@@ -25,10 +24,9 @@
       "transform": 1
     },
     {
-      "name": "LayoutBlockFlow DIV class='composited block'",
+      "name": "LayoutBlockFlow (inline) DIV class='composited block'",
       "position": [-5, -5],
       "bounds": [210, 60],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#0000FF",
       "transform": 2
     },

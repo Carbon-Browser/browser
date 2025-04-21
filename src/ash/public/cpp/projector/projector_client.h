@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PUBLIC_CPP_PROJECTOR_PROJECTOR_CLIENT_H_
 #define ASH_PUBLIC_CPP_PROJECTOR_PROJECTOR_CLIENT_H_
+
+#include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
 
@@ -13,8 +15,8 @@ class FilePath;
 
 namespace ash {
 
-class AnnotatorMessageHandler;
 struct NewScreencastPrecondition;
+struct SpeechRecognitionAvailability;
 
 // Creates interface to access Browser side functionalities for the
 // ProjectorControllerImpl.
@@ -27,10 +29,15 @@ class ASH_PUBLIC_EXPORT ProjectorClient {
   ProjectorClient& operator=(const ProjectorClient&) = delete;
   virtual ~ProjectorClient();
 
+  virtual SpeechRecognitionAvailability GetSpeechRecognitionAvailability()
+      const = 0;
   virtual void StartSpeechRecognition() = 0;
   virtual void StopSpeechRecognition() = 0;
-  // Returns false if Drive is not enabled.
-  virtual bool GetDriveFsMountPointPath(base::FilePath* result) const = 0;
+  virtual void ForceEndSpeechRecognition() = 0;
+  // Returns false if base storage path is not available. Normally the base path
+  // is the DriveFS mounted folder. It is download folder when extended feature
+  // command line flag is disabled.
+  virtual bool GetBaseStoragePath(base::FilePath* result) const = 0;
   virtual bool IsDriveFsMounted() const = 0;
   // Return true if Drive mount failed. Drive will not automatically retry to
   // mount.
@@ -41,18 +48,13 @@ class ASH_PUBLIC_EXPORT ProjectorClient {
   virtual void MinimizeProjectorApp() const = 0;
   // Closes Projector SWA.
   virtual void CloseProjectorApp() const = 0;
-
-  // Registers the AnnotatorMessageHandler that is owned by the WebUI that
-  // contains the Projector annotator.
-  virtual void SetAnnotatorMessageHandler(AnnotatorMessageHandler* handler) = 0;
-  // Resets the stored AnnotatorMessageHandler if it matches the one that is
-  // passed in.
-  virtual void ResetAnnotatorMessageHandler(
-      AnnotatorMessageHandler* handler) = 0;
-
   // Notifies the Projector SWA if it can trigger a new Projector session.
   virtual void OnNewScreencastPreconditionChanged(
       const NewScreencastPrecondition& precondition) const = 0;
+  // Toggles to suppress/resume the system notification for `screencast_paths`.
+  virtual void ToggleFileSyncingNotificationForPaths(
+      const std::vector<base::FilePath>& screencast_paths,
+      bool suppress) = 0;
 };
 
 }  // namespace ash

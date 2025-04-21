@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -266,6 +266,11 @@
           }
         ],
         "description": "Used to pass events back to the function calling speak()."
+      },
+      {
+        "name": "onVoicesChanged",
+        "type" : "function",
+        "description": "Called when the list of $(ref:tts.TtsVoice) that would be returned by getVoices has changed."
       }
     ]
   }

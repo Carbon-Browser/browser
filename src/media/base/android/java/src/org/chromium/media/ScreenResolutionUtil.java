@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,13 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.util.Size;
 
+import org.chromium.build.annotations.NullMarked;
+
 /**
- * This class is used as a means to guess the actual screen resolution that the
- * device is capable of playing.
+ * This class is used as a means to guess the actual screen resolution that the device is capable of
+ * playing.
  */
+@NullMarked
 public class ScreenResolutionUtil {
     public static boolean isResolutionSupportedForType(String mimeType, Size targetResolution) {
         MediaCodecInfo[] codecInfos = new MediaCodecList(MediaCodecList.ALL_CODECS).getCodecInfos();
@@ -28,7 +31,7 @@ public class ScreenResolutionUtil {
                     continue;
                 }
                 if (videoCapabilities.isSizeSupported(
-                            targetResolution.getWidth(), targetResolution.getHeight())) {
+                        targetResolution.getWidth(), targetResolution.getHeight())) {
                     return true;
                 }
             } catch (IllegalArgumentException e) {

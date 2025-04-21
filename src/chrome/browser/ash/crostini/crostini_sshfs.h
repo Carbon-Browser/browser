@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include <set>
 #include <utility>
 
-#include "ash/components/disks/disk_mount_manager.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 
 namespace crostini {
 
@@ -45,9 +46,8 @@ class CrostiniSshfs : ContainerShutdownObserver {
   // ContainerShutdownObserver.
   void OnContainerShutdown(const guest_os::GuestId& container_id) override;
 
-  void OnMountEvent(
-      chromeos::MountError error_code,
-      const ash::disks::DiskMountManager::MountPointInfo& mount_info);
+  void OnMountEvent(ash::MountError error_code,
+                    const ash::disks::DiskMountManager::MountPoint& mount_info);
 
   // Returns true if sshfs is mounted for the specified container, else false.
   bool IsSshfsMounted(const guest_os::GuestId& container);
@@ -77,11 +77,6 @@ class CrostiniSshfs : ContainerShutdownObserver {
                                    base::Time started,
                                    bool success);
 
-  void OnGetContainerSshKeys(bool success,
-                             const std::string& container_public_key,
-                             const std::string& host_private_key,
-                             const std::string& hostname);
-
   struct InProgressMount {
     std::string source_path;
     guest_os::GuestId container_id;
@@ -107,12 +102,9 @@ class CrostiniSshfs : ContainerShutdownObserver {
     PendingRequest& operator=(PendingRequest&& other) noexcept;
     ~PendingRequest();
   };
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
-  base::ScopedObservation<CrostiniManager,
-                          ContainerShutdownObserver,
-                          &CrostiniManager::AddContainerShutdownObserver,
-                          &CrostiniManager::RemoveContainerShutdownObserver>
+  base::ScopedObservation<CrostiniManager, ContainerShutdownObserver>
       container_shutdown_observer_{this};
 
   std::unique_ptr<InProgressMount> in_progress_mount_;

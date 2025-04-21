@@ -1,28 +1,33 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "storage/browser/database/database_tracker.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/user_metrics.h"
+#include "base/not_fatal_until.h"
 #include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
@@ -39,7 +44,6 @@
 #include "storage/browser/database/databases_table.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
-#include "storage/browser/quota/special_storage_policy.h"
 #include "storage/common/database/database_identifier.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom.h"
@@ -70,12 +74,6 @@ OriginInfo::OriginInfo(const OriginInfo& origin_info) = default;
 
 OriginInfo::~OriginInfo() = default;
 
-void OriginInfo::GetAllDatabaseNames(
-    std::vector<std::u16string>* databases) const {
-  for (const auto& name_and_size : database_sizes_)
-    databases->push_back(name_and_size.first);
-}
-
 int64_t OriginInfo::GetDatabaseSize(const std::u16string& database_name) const {
   auto it = database_sizes_.find(database_name);
   if (it != database_sizes_.end())
@@ -89,11 +87,10 @@ OriginInfo::OriginInfo(const std::string& origin_identifier, int64_t total_size)
 scoped_refptr<DatabaseTracker> DatabaseTracker::Create(
     const base::FilePath& profile_path,
     bool is_incognito,
-    scoped_refptr<SpecialStoragePolicy> special_storage_policy,
     scoped_refptr<QuotaManagerProxy> quota_manager_proxy) {
   auto database_tracker = base::MakeRefCounted<DatabaseTracker>(
-      profile_path, is_incognito, std::move(special_storage_policy),
-      std::move(quota_manager_proxy), base::PassKey<DatabaseTracker>());
+      profile_path, is_incognito, std::move(quota_manager_proxy),
+      base::PassKey<DatabaseTracker>());
   database_tracker->RegisterQuotaClient();
   return database_tracker;
 }
@@ -101,7 +98,6 @@ scoped_refptr<DatabaseTracker> DatabaseTracker::Create(
 DatabaseTracker::DatabaseTracker(
     const base::FilePath& profile_path,
     bool is_incognito,
-    scoped_refptr<SpecialStoragePolicy> special_storage_policy,
     scoped_refptr<QuotaManagerProxy> quota_manager_proxy,
     base::PassKey<DatabaseTracker>)
     : is_incognito_(is_incognito),
@@ -109,12 +105,12 @@ DatabaseTracker::DatabaseTracker(
       db_dir_(is_incognito_
                   ? profile_path_.Append(kIncognitoDatabaseDirectoryName)
                   : profile_path_.Append(kDatabaseDirectoryName)),
-      db_(std::make_unique<sql::Database>(sql::DatabaseOptions{
-          .exclusive_locking = true,
-          .page_size = 4096,
-          .cache_size = 500,
-      })),
-      special_storage_policy_(std::move(special_storage_policy)),
+      db_(std::make_unique<sql::Database>(
+          sql::DatabaseOptions{
+              .page_size = 4096,
+              .cache_size = 500,
+          },
+          sql::Database::Tag("DatabaseTracker"))),
       quota_manager_proxy_(std::move(quota_manager_proxy)),
       task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
@@ -177,9 +173,10 @@ void DatabaseTracker::DatabaseOpened(const std::string& origin_identifier,
   }
 
   if (quota_manager_proxy_.get())
-    quota_manager_proxy_->NotifyStorageAccessed(
-        blink::StorageKey(GetOriginFromIdentifier(origin_identifier)),
-        blink::mojom::StorageType::kTemporary, base::Time::Now());
+    quota_manager_proxy_->NotifyBucketAccessed(
+        BucketLocator::ForDefaultBucket(blink::StorageKey::CreateFirstParty(
+            GetOriginFromIdentifier(origin_identifier))),
+        base::Time::Now());
 
   InsertOrUpdateDatabaseDetails(origin_identifier, database_name,
                                 database_description);
@@ -213,9 +210,10 @@ void DatabaseTracker::DatabaseClosed(const std::string& origin_identifier,
   // We call NotifiyStorageAccessed when a db is opened and also when
   // closed because we don't call it for read while open.
   if (quota_manager_proxy_.get())
-    quota_manager_proxy_->NotifyStorageAccessed(
-        blink::StorageKey(GetOriginFromIdentifier(origin_identifier)),
-        blink::mojom::StorageType::kTemporary, base::Time::Now());
+    quota_manager_proxy_->NotifyBucketAccessed(
+        BucketLocator::ForDefaultBucket(blink::StorageKey::CreateFirstParty(
+            GetOriginFromIdentifier(origin_identifier))),
+        base::Time::Now());
 
   UpdateOpenDatabaseSizeAndNotify(origin_identifier, database_name);
   if (database_connections_.RemoveConnection(origin_identifier, database_name))
@@ -421,12 +419,14 @@ bool DatabaseTracker::DeleteClosedDatabase(
   if (!sql::Database::Delete(db_file))
     return false;
 
-  if (quota_manager_proxy_.get() && db_file_size)
-    quota_manager_proxy_->NotifyStorageModified(
+  if (quota_manager_proxy_.get() && db_file_size) {
+    quota_manager_proxy_->NotifyBucketModified(
         QuotaClientType::kDatabase,
-        blink::StorageKey(GetOriginFromIdentifier(origin_identifier)),
-        blink::mojom::StorageType::kTemporary, -db_file_size, base::Time::Now(),
-        base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
+        BucketLocator::ForDefaultBucket(blink::StorageKey::CreateFirstParty(
+            GetOriginFromIdentifier(origin_identifier))),
+        -db_file_size, base::Time::Now(),
+        base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
+  }
 
   // Clean up the main database and invalidate the cached record.
   databases_table_->DeleteDatabaseDetails(origin_identifier, database_name);
@@ -501,11 +501,12 @@ bool DatabaseTracker::DeleteOrigin(const std::string& origin_identifier,
   databases_table_->DeleteOriginIdentifier(origin_identifier);
 
   if (quota_manager_proxy_.get() && deleted_size) {
-    quota_manager_proxy_->NotifyStorageModified(
+    quota_manager_proxy_->NotifyBucketModified(
         QuotaClientType::kDatabase,
-        blink::StorageKey(GetOriginFromIdentifier(origin_identifier)),
-        blink::mojom::StorageType::kTemporary, -deleted_size, base::Time::Now(),
-        base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
+        BucketLocator::ForDefaultBucket(blink::StorageKey::CreateFirstParty(
+            GetOriginFromIdentifier(origin_identifier))),
+        -deleted_size, base::Time::Now(),
+        base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
   }
 
   return true;
@@ -543,8 +544,6 @@ bool DatabaseTracker::LazyInit() {
         base::DeletePathRecursively(directory);
       }
     }
-
-    db_->set_histogram_tag("DatabaseTracker");
 
     // If the tracker database exists, but it's corrupt or doesn't
     // have a meta table, delete the database directory.
@@ -587,8 +586,10 @@ bool DatabaseTracker::UpgradeToCurrentVersion() {
       !databases_table_->Init())
     return false;
 
-  if (meta_table_->GetVersionNumber() < kDatabaseTrackerCurrentSchemaVersion)
-    meta_table_->SetVersionNumber(kDatabaseTrackerCurrentSchemaVersion);
+  if (meta_table_->GetVersionNumber() < kDatabaseTrackerCurrentSchemaVersion &&
+      !meta_table_->SetVersionNumber(kDatabaseTrackerCurrentSchemaVersion)) {
+    return false;
+  }
 
   return transaction.Commit();
 }
@@ -623,7 +624,7 @@ DatabaseTracker::CachedOriginInfo* DatabaseTracker::MaybeGetCachedOriginInfo(
     return nullptr;
 
   // Populate the cache with data for this origin if needed.
-  if (origins_info_map_.find(origin_identifier) == origins_info_map_.end()) {
+  if (!base::Contains(origins_info_map_, origin_identifier)) {
     if (!create_if_needed)
       return nullptr;
 
@@ -665,10 +666,7 @@ int64_t DatabaseTracker::GetDBFileSize(const std::string& origin_identifier,
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   base::FilePath db_file_name = GetFullDBFilePath(origin_identifier,
                                                   database_name);
-  int64_t db_file_size = 0;
-  if (!base::GetFileSize(db_file_name, &db_file_size))
-    db_file_size = 0;
-  return db_file_size;
+  return base::GetFileSize(db_file_name).value_or(0);
 }
 
 int64_t DatabaseTracker::SeedOpenDatabaseInfo(
@@ -699,13 +697,16 @@ int64_t DatabaseTracker::UpdateOpenDatabaseInfoAndNotify(
     database_connections_.SetOpenDatabaseSize(origin_id, name, new_size);
     if (info)
       info->SetDatabaseSize(name, new_size);
-    if (quota_manager_proxy_.get())
-      quota_manager_proxy_->NotifyStorageModified(
+
+    if (quota_manager_proxy_.get()) {
+      quota_manager_proxy_->NotifyBucketModified(
           QuotaClientType::kDatabase,
-          blink::StorageKey(GetOriginFromIdentifier(origin_id)),
-          blink::mojom::StorageType::kTemporary, new_size - old_size,
-          base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
-          base::DoNothing());
+          BucketLocator::ForDefaultBucket(blink::StorageKey::CreateFirstParty(
+              GetOriginFromIdentifier(origin_id))),
+          new_size - old_size, base::Time::Now(),
+          base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
+    }
+
     for (auto& observer : observers_)
       observer.OnDatabaseSizeChanged(origin_id, name, new_size);
   }
@@ -778,12 +779,6 @@ void DatabaseTracker::DeleteDataModifiedSince(
   DatabaseSet to_be_deleted;
   int rv = net::OK;
   for (const auto& origin : origins_identifiers) {
-    if (special_storage_policy_.get() &&
-        special_storage_policy_->IsStorageProtected(
-            GetOriginURLFromIdentifier(origin))) {
-      continue;
-    }
-
     std::vector<DatabaseDetails> details;
     if (!databases_table_->GetAllDatabaseDetailsForOriginIdentifier(origin,
                                                                     &details)) {
@@ -887,8 +882,9 @@ void DatabaseTracker::CloseIncognitoFileHandle(
     const std::u16string& vfs_file_name) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   DCHECK(is_incognito_);
-  DCHECK(incognito_file_handles_.find(vfs_file_name) !=
-         incognito_file_handles_.end());
+  CHECK(incognito_file_handles_.find(vfs_file_name) !=
+            incognito_file_handles_.end(),
+        base::NotFatalUntil::M130);
 
   auto it = incognito_file_handles_.find(vfs_file_name);
   if (it != incognito_file_handles_.end()) {
@@ -901,8 +897,7 @@ void DatabaseTracker::CloseIncognitoFileHandle(
 bool DatabaseTracker::HasSavedIncognitoFileHandle(
     const std::u16string& vfs_file_name) const {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  return (incognito_file_handles_.find(vfs_file_name) !=
-          incognito_file_handles_.end());
+  return base::Contains(incognito_file_handles_, vfs_file_name);
 }
 
 void DatabaseTracker::DeleteIncognitoDBDirectory() {
@@ -918,49 +913,10 @@ void DatabaseTracker::DeleteIncognitoDBDirectory() {
     base::DeletePathRecursively(incognito_db_dir);
 }
 
-void DatabaseTracker::ClearSessionOnlyOrigins() {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  bool has_session_only_databases =
-      special_storage_policy_.get() &&
-      special_storage_policy_->HasSessionOnlyOrigins();
-
-  // Clearing only session-only databases, and there are none.
-  if (!has_session_only_databases)
-    return;
-
-  if (!LazyInit())
-    return;
-
-  std::vector<std::string> origin_identifiers;
-  GetAllOriginIdentifiers(&origin_identifiers);
-
-  for (const auto& origin : origin_identifiers) {
-    GURL origin_url = GetOriginURLFromIdentifier(origin);
-    if (!special_storage_policy_->IsStorageSessionOnly(origin_url))
-      continue;
-    if (special_storage_policy_->IsStorageProtected(origin_url))
-      continue;
-    OriginInfo origin_info;
-    std::vector<std::u16string> databases;
-    GetOriginInfo(origin, &origin_info);
-    origin_info.GetAllDatabaseNames(&databases);
-
-    for (const auto& database : databases) {
-      base::File file(
-          GetFullDBFilePath(origin, database),
-          base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_WIN_SHARE_DELETE |
-              base::File::FLAG_DELETE_ON_CLOSE | base::File::FLAG_READ);
-    }
-    DeleteOrigin(origin, true);
-  }
-}
-
-
 void DatabaseTracker::Shutdown() {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   if (shutting_down_) {
     NOTREACHED();
-    return;
   }
   shutting_down_ = true;
 
@@ -972,14 +928,14 @@ void DatabaseTracker::Shutdown() {
 
   if (is_incognito_)
     DeleteIncognitoDBDirectory();
-  else if (!force_keep_session_state_)
-    ClearSessionOnlyOrigins();
   CloseTrackerDatabaseAndClearCaches();
-}
 
-void DatabaseTracker::SetForceKeepSessionState() {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  force_keep_session_state_ = true;
+  // Explicitly destroy `db_` on the correct sequence rather than waiting for
+  // the destructor, which may run on another sequence. Destroy related fields
+  // first to prevent dangling pointers. Destruction order is important.
+  meta_table_.reset();
+  databases_table_.reset();
+  db_.reset();
 }
 
 }  // namespace storage

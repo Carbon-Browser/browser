@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/views/accessibility/ax_view_obj_wrapper.h"
 #include "ui/views/accessibility/ax_virtual_view.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -26,16 +27,18 @@ AXAuraObjWrapper* AXVirtualViewWrapper::GetParent() {
     return const_cast<AXVirtualView*>(virtual_view_->virtual_parent_view())
         ->GetOrCreateWrapper(aura_obj_cache_);
   }
-  if (virtual_view_->GetOwnerView())
+  if (virtual_view_->GetOwnerView()) {
     return aura_obj_cache_->GetOrCreate(virtual_view_->GetOwnerView());
+  }
 
   return nullptr;
 }
 
 void AXVirtualViewWrapper::GetChildren(
-    std::vector<AXAuraObjWrapper*>* out_children) {
-  for (const auto& child : virtual_view_->children())
+    std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>* out_children) {
+  for (const auto& child : virtual_view_->children()) {
     out_children->push_back(child->GetOrCreateWrapper(aura_obj_cache_));
+  }
 }
 
 void AXVirtualViewWrapper::Serialize(ui::AXNodeData* out_node_data) {
@@ -49,7 +52,7 @@ void AXVirtualViewWrapper::Serialize(ui::AXNodeData* out_node_data) {
 }
 
 ui::AXNodeID AXVirtualViewWrapper::GetUniqueId() const {
-  return virtual_view_->GetUniqueId().Get();
+  return virtual_view_->GetUniqueId();
 }
 
 bool AXVirtualViewWrapper::HandleAccessibleAction(

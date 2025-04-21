@@ -1,12 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_SNAPSHOT_SNAPSHOT_H_
 #define UI_SNAPSHOT_SNAPSHOT_H_
 
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "ui/gfx/native_widget_types.h"
@@ -18,59 +17,59 @@ class Image;
 class Size;
 }
 
+// Utility functions to grab snapshots of views and windows. These functions do
+// no security checks, so these are useful for debugging purposes where no
+// BrowserProcess instance is available (ie. tests), and other user-driven
+// scenarios.
+
 namespace ui {
 
-// Grabs a snapshot of the window/view. No security checks are done. This is
-// intended to be used for debugging purposes where no BrowserProcess instance
-// is available (ie. tests). This function is synchronous, so it should NOT be
-// used in a result of user action. Support for async vs synchronous
-// GrabWindowSnapshot differs by platform.  To be most general, use the
-// synchronous function first and if it returns false call the async one.
-SNAPSHOT_EXPORT bool GrabWindowSnapshot(gfx::NativeWindow window,
-                                        const gfx::Rect& snapshot_bounds,
-                                        gfx::Image* image);
+using GrabSnapshotImageCallback = base::OnceCallback<void(gfx::Image snapshot)>;
+using GrabSnapshotDataCallback =
+    base::OnceCallback<void(scoped_refptr<base::RefCountedMemory> data)>;
 
-SNAPSHOT_EXPORT bool GrabViewSnapshot(gfx::NativeView view,
-                                      const gfx::Rect& snapshot_bounds,
-                                      gfx::Image* image);
+// These functions take a snapshot of the specified view or window, within
+// `source_rect`, specified in layer space coordinates (DIP for desktop,
+// physical pixels for Android).
+//
+// Returns the snapshot via the provided `callback`. In case of an error, an
+// empty image (`gfx::Image::IsEmpty()`) will be returned.
 
-// These functions take a snapshot of |source_rect|, specified in layer space
-// coordinates (DIP for desktop, physical pixels for Android), and scale the
-// snapshot to |target_size| (in physical pixels), asynchronously.
-using GrabWindowSnapshotAsyncCallback =
-    base::OnceCallback<void(gfx::Image snapshot)>;
+SNAPSHOT_EXPORT void GrabWindowSnapshot(gfx::NativeWindow window,
+                                        const gfx::Rect& source_rect,
+                                        GrabSnapshotImageCallback callback);
 
-SNAPSHOT_EXPORT void GrabWindowSnapshotAndScaleAsync(
+SNAPSHOT_EXPORT void GrabViewSnapshot(gfx::NativeView view,
+                                      const gfx::Rect& source_rect,
+                                      GrabSnapshotImageCallback callback);
+
+// Takes a snapshot as with `GrabWindowSnapshot()` and scales it to
+// `target_size` (in physical pixels).
+//
+// Returns the snapshot via the provided `callback`. In case of an error, an
+// empty image (`gfx::Image::IsEmpty()`) will be returned.
+SNAPSHOT_EXPORT void GrabWindowSnapshotAndScale(
     gfx::NativeWindow window,
     const gfx::Rect& source_rect,
     const gfx::Size& target_size,
-    GrabWindowSnapshotAsyncCallback callback);
+    GrabSnapshotImageCallback callback);
 
-SNAPSHOT_EXPORT void GrabWindowSnapshotAsync(
+// Takes a snapshot as with `GrabWindowSnapshot()` and encodes it as PNG data.
+//
+// Returns the data via the provided `callback`. In case of an error, a null
+// pointer will be returned.
+SNAPSHOT_EXPORT void GrabWindowSnapshotAsPNG(gfx::NativeWindow window,
+                                             const gfx::Rect& source_rect,
+                                             GrabSnapshotDataCallback callback);
+
+// Takes a snapshot as with `GrabWindowSnapshot()` and encodes it as JPEG data.
+//
+// Returns the data via the provided `callback`. In case of an error, a null
+// pointer will be returned.
+SNAPSHOT_EXPORT void GrabWindowSnapshotAsJPEG(
     gfx::NativeWindow window,
     const gfx::Rect& source_rect,
-    GrabWindowSnapshotAsyncCallback callback);
-
-SNAPSHOT_EXPORT void GrabViewSnapshotAsync(
-    gfx::NativeView view,
-    const gfx::Rect& source_rect,
-    GrabWindowSnapshotAsyncCallback callback);
-
-using GrabWindowSnapshotAsyncPNGCallback =
-    base::OnceCallback<void(scoped_refptr<base::RefCountedMemory> data)>;
-
-SNAPSHOT_EXPORT void GrabWindowSnapshotAsyncPNG(
-    gfx::NativeWindow window,
-    const gfx::Rect& source_rect,
-    GrabWindowSnapshotAsyncPNGCallback callback);
-
-using GrabWindowSnapshotAsyncJPEGCallback =
-    base::OnceCallback<void(scoped_refptr<base::RefCountedMemory> data)>;
-
-SNAPSHOT_EXPORT void GrabWindowSnapshotAsyncJPEG(
-    gfx::NativeWindow window,
-    const gfx::Rect& source_rect,
-    GrabWindowSnapshotAsyncJPEGCallback callback);
+    GrabSnapshotDataCallback callback);
 
 }  // namespace ui
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,13 @@ namespace blink {
 
 class LayoutBox;
 class VTTCueBox;
+struct PhysicalSize;
 
 // VttCueLayoutAlgorithm is responsible to do step 10 of
 // https://w3c.github.io/webvtt/#apply-webvtt-cue-settings .
 //
 // This class is used in a ResizeObserver callback for VTTCueBox.
+// See https://bit.ly/3vfUajH for more details.
 class VttCueLayoutAlgorithm {
   STACK_ALLOCATED();
   using PassKey = base::PassKey<VttCueLayoutAlgorithm>;
@@ -37,7 +39,9 @@ class VttCueLayoutAlgorithm {
 
   // Helpers for AdjustPositionWithSnapToLines():
 
-  LayoutUnit ComputeInitialPositionAdjustment(LayoutUnit max_dimension);
+  static PhysicalSize FirstInlineBoxSize(const LayoutBox& cue_box);
+  LayoutUnit ComputeInitialPositionAdjustment(LayoutUnit max_dimension,
+                                              const gfx::Rect& controls_rect);
   static gfx::Rect CueBoundingBox(const LayoutBox& cue_box);
   bool IsOutside(const gfx::Rect& title_area) const;
   bool IsOverlapping(const gfx::Rect& controls_rect) const;

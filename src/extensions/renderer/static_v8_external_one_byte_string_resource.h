@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <stddef.h>
 
+#include <string_view>
+
 #include "base/compiler_specific.h"
-#include "base/strings/string_piece.h"
 #include "v8/include/v8-primitive.h"
 
 namespace extensions {
@@ -19,15 +20,14 @@ namespace extensions {
 class StaticV8ExternalOneByteStringResource
     : public v8::String::ExternalOneByteStringResource {
  public:
-  explicit StaticV8ExternalOneByteStringResource(
-      const base::StringPiece& buffer);
+  explicit StaticV8ExternalOneByteStringResource(std::string_view buffer);
   ~StaticV8ExternalOneByteStringResource() override;
 
   const char* data() const override;
   size_t length() const override;
 
  private:
-  base::StringPiece buffer_;
+  std::string_view buffer_;
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "build/chromeos_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
@@ -19,6 +18,8 @@
 #include "ui/events/event.h"
 #include "ui/ozone/common/bitmap_cursor_factory.h"
 #include "ui/ozone/platform/wayland/host/wayland_cursor.h"
+#include "ui/ozone/platform/wayland/host/wayland_cursor_factory.h"
+#include "ui/ozone/platform/wayland/host/wayland_seat.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/test/mock_pointer.h"
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
@@ -28,6 +29,9 @@
 #include "ui/platform_window/platform_window_init_properties.h"
 
 using ::testing::_;
+using ::testing::AllOf;
+using ::testing::Ge;
+using ::testing::Le;
 using ::testing::Mock;
 using ::testing::Ne;
 using ::testing::SaveArg;
@@ -35,33 +39,91 @@ using ::testing::Values;
 
 namespace ui {
 
-class WaylandPointerTest : public WaylandTest {
+class WaylandPointerTest : public WaylandTestSimple {
  public:
-  WaylandPointerTest() {}
-
-  WaylandPointerTest(const WaylandPointerTest&) = delete;
-  WaylandPointerTest& operator=(const WaylandPointerTest&) = delete;
-
   void SetUp() override {
-    WaylandTest::SetUp();
+    WaylandTestSimple::SetUp();
 
-    wl_seat_send_capabilities(server_.seat()->resource(),
-                              WL_SEAT_CAPABILITY_POINTER);
-
-    Sync();
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      wl_seat_send_capabilities(server->seat()->resource(),
+                                WL_SEAT_CAPABILITY_POINTER);
+    });
+    ASSERT_TRUE(connection_->seat()->pointer());
 
     EXPECT_EQ(1u, DeviceDataManager::GetInstance()->GetMouseDevices().size());
     // Wayland doesn't expose touchpad devices separately. They are all
     // WaylandPointers.
     EXPECT_EQ(0u,
               DeviceDataManager::GetInstance()->GetTouchpadDevices().size());
-
-    pointer_ = server_.seat()->pointer();
-    ASSERT_TRUE(pointer_);
   }
 
  protected:
-  raw_ptr<wl::MockPointer> pointer_;
+  // The auxiliary convenience methods for entering and leaving the pointer into
+  // and from the surface.
+  void SendEnter(int x, int y) {
+    PostToServerAndWait(
+        [x, y, surface_id = window_->root_surface()->get_surface_id()](
+            wl::TestWaylandServerThread* server) {
+          auto* const pointer = server->seat()->pointer()->resource();
+          auto* const surface =
+              server->GetObject<wl::MockSurface>(surface_id)->resource();
+
+          wl_pointer_send_enter(pointer, server->GetNextSerial(), surface,
+                                wl_fixed_from_int(x), wl_fixed_from_int(y));
+          wl_pointer_send_frame(pointer);
+        });
+  }
+  void SendEnter() { SendEnter(0, 0); }
+
+  void SendLeave() {
+    PostToServerAndWait(
+        [surface_id = window_->root_surface()->get_surface_id()](
+            wl::TestWaylandServerThread* server) {
+          auto* const pointer = server->seat()->pointer()->resource();
+          auto* const surface =
+              server->GetObject<wl::MockSurface>(surface_id)->resource();
+
+          wl_pointer_send_leave(pointer, server->GetNextSerial(), surface);
+          wl_pointer_send_frame(pointer);
+        });
+  }
+
+  void SendAxisStopEvents() {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+
+      wl_pointer_send_axis_stop(pointer, server->GetNextTime(),
+                                WL_POINTER_AXIS_VERTICAL_SCROLL);
+      wl_pointer_send_axis_stop(pointer, server->GetNextTime(),
+                                WL_POINTER_AXIS_HORIZONTAL_SCROLL);
+      wl_pointer_send_frame(pointer);
+    });
+  }
+
+  void SendRightButtonPress() {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+
+      wl_pointer_send_button(pointer, server->GetNextSerial(),
+                             server->GetNextTime(), BTN_RIGHT,
+                             WL_POINTER_BUTTON_STATE_PRESSED);
+      wl_pointer_send_frame(pointer);
+    });
+  }
+
+  void CheckEventType(
+      ui::EventType event_type,
+      ui::Event* event,
+      ui::EventPointerType pointer_type = ui::EventPointerType::kMouse,
+      float force = std::numeric_limits<float>::quiet_NaN(),
+      float tilt_x = 0.0,
+      float tilt_y = 0.0) {
+    ASSERT_TRUE(event);
+    ASSERT_TRUE(event->IsMouseEvent());
+
+    auto* mouse_event = event->AsMouseEvent();
+    EXPECT_EQ(event_type, mouse_event->type());
+  }
 };
 
 void SendAxisEvents(struct wl_resource* resource,
@@ -87,34 +149,26 @@ void SendDiagonalAxisEvents(struct wl_resource* resource,
   wl_pointer_send_frame(resource);
 }
 
-void SendAxisStopEvents(struct wl_resource* resource, uint32_t time) {
-  wl_pointer_send_axis_stop(resource, time, WL_POINTER_AXIS_VERTICAL_SCROLL);
-  wl_pointer_send_axis_stop(resource, time, WL_POINTER_AXIS_HORIZONTAL_SCROLL);
-  wl_pointer_send_frame(resource);
-}
-
 ACTION_P(CloneEvent, ptr) {
-  *ptr = Event::Clone(*arg0);
+  *ptr = arg0->Clone();
 }
 
-TEST_P(WaylandPointerTest, Enter) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(), 0, 0);
-
+TEST_F(WaylandPointerTest, Enter) {
   std::unique_ptr<Event> event;
   EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
-  Sync();
+  SendEnter();
 
   ASSERT_TRUE(event);
   ASSERT_TRUE(event->IsMouseEvent());
   auto* mouse_event = event->AsMouseEvent();
-  EXPECT_EQ(ET_MOUSE_ENTERED, mouse_event->type());
+  EXPECT_EQ(EventType::kMouseEntered, mouse_event->type());
   EXPECT_EQ(0, mouse_event->button_flags());
   EXPECT_EQ(0, mouse_event->changed_button_flags());
   EXPECT_EQ(gfx::PointF(0, 0), mouse_event->location_f());
 }
 
-TEST_P(WaylandPointerTest, Leave) {
+TEST_F(WaylandPointerTest, Leave) {
   MockPlatformWindowDelegate other_delegate;
   gfx::AcceleratedWidget other_widget = gfx::kNullAcceleratedWidget;
   EXPECT_CALL(other_delegate, OnAcceleratedWidgetAvailable(_))
@@ -127,73 +181,90 @@ TEST_P(WaylandPointerTest, Leave) {
                                             std::move(properties));
   ASSERT_NE(other_widget, gfx::kNullAcceleratedWidget);
 
-  Sync();
-
-  wl::MockSurface* other_surface = server_.GetObject<wl::MockSurface>(
-      other_window->root_surface()->GetSurfaceId());
-  ASSERT_TRUE(other_surface);
-
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(), 0, 0);
-  wl_pointer_send_leave(pointer_->resource(), 2, surface_->resource());
-  wl_pointer_send_enter(pointer_->resource(), 3, other_surface->resource(), 0,
-                        0);
-  wl_pointer_send_button(pointer_->resource(), 4, 1004, BTN_LEFT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
   EXPECT_CALL(delegate_, DispatchEvent(_)).Times(2);
   EXPECT_CALL(other_delegate, DispatchEvent(_)).Times(2);
 
-  // Do an extra Sync() here so that we process the second enter event before we
-  // destroy |other_window|.
-  Sync();
+  PostToServerAndWait(
+      [surface_id = window_->root_surface()->get_surface_id(),
+       other_surface_id = other_window->root_surface()->get_surface_id()](
+          wl::TestWaylandServerThread* server) {
+        auto* const pointer = server->seat()->pointer()->resource();
+        auto* const surface =
+            server->GetObject<wl::MockSurface>(surface_id)->resource();
+        auto* const other_surface =
+            server->GetObject<wl::MockSurface>(other_surface_id)->resource();
+
+        wl_pointer_send_enter(pointer, 1, surface, 0, 0);
+        wl_pointer_send_frame(pointer);
+
+        wl_pointer_send_leave(pointer, 2, surface);
+        wl_pointer_send_frame(pointer);
+
+        wl_pointer_send_enter(pointer, 3, other_surface, 0, 0);
+        wl_pointer_send_frame(pointer);
+
+        wl_pointer_send_button(pointer, 4, 1004, BTN_LEFT,
+                               WL_POINTER_BUTTON_STATE_PRESSED);
+        wl_pointer_send_frame(pointer);
+      });
 }
 
 ACTION_P3(CloneEventAndCheckCapture, window, result, ptr) {
   ASSERT_TRUE(window->HasCapture() == result);
-  *ptr = Event::Clone(*arg0);
+  *ptr = arg0->Clone();
 }
 
-TEST_P(WaylandPointerTest, Motion) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(), 0, 0);
-  Sync();  // We're interested in checking Motion event in this test case, so
-           // skip Enter event here.
-
-  wl_pointer_send_motion(pointer_->resource(), 1002,
-                         wl_fixed_from_double(10.75),
-                         wl_fixed_from_double(20.375));
+TEST_F(WaylandPointerTest, Motion) {
+  SendEnter();
 
   std::unique_ptr<Event> event;
   EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
+
+    wl_pointer_send_motion(pointer, 1002, wl_fixed_from_double(10.75),
+                           wl_fixed_from_double(20.375));
+    wl_pointer_send_frame(pointer);
+  });
 
   ASSERT_TRUE(event);
   ASSERT_TRUE(event->IsMouseEvent());
   auto* mouse_event = event->AsMouseEvent();
-  EXPECT_EQ(ET_MOUSE_MOVED, mouse_event->type());
+  EXPECT_EQ(EventType::kMouseMoved, mouse_event->type());
   EXPECT_EQ(0, mouse_event->button_flags());
   EXPECT_EQ(0, mouse_event->changed_button_flags());
   EXPECT_EQ(gfx::PointF(10.75, 20.375), mouse_event->location_f());
   EXPECT_EQ(gfx::PointF(10.75, 20.375), mouse_event->root_location_f());
 }
 
-TEST_P(WaylandPointerTest, MotionDragged) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(), 0, 0);
-  wl_pointer_send_button(pointer_->resource(), 2, 1002, BTN_MIDDLE,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
+TEST_F(WaylandPointerTest, MotionDragged) {
+  SendEnter();
 
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
+
+    wl_pointer_send_button(pointer, server->GetNextSerial(),
+                           server->GetNextTime(), BTN_MIDDLE,
+                           WL_POINTER_BUTTON_STATE_PRESSED);
+    wl_pointer_send_frame(pointer);
+  });
 
   std::unique_ptr<Event> event;
   EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
-  wl_pointer_send_motion(pointer_->resource(), 1003, wl_fixed_from_int(400),
-                         wl_fixed_from_int(500));
 
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
+
+    wl_pointer_send_motion(pointer, 1003, wl_fixed_from_int(400),
+                           wl_fixed_from_int(500));
+    wl_pointer_send_frame(pointer);
+  });
 
   ASSERT_TRUE(event);
   ASSERT_TRUE(event->IsMouseEvent());
   auto* mouse_event = event->AsMouseEvent();
-  EXPECT_EQ(ET_MOUSE_DRAGGED, mouse_event->type());
+  EXPECT_EQ(EventType::kMouseDragged, mouse_event->type());
   EXPECT_EQ(EF_MIDDLE_MOUSE_BUTTON, mouse_event->button_flags());
   EXPECT_EQ(0, mouse_event->changed_button_flags());
   EXPECT_EQ(gfx::PointF(400, 500), mouse_event->location_f());
@@ -202,11 +273,8 @@ TEST_P(WaylandPointerTest, MotionDragged) {
 
 // Verifies whether the platform event source handles all types of axis sources.
 // The actual behaviour of each axis source is not tested here.
-TEST_P(WaylandPointerTest, AxisSourceTypes) {
-  uint32_t time = 1001;
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(), 0, 0);
-  Sync();  // We're interested only in checking axis source types events in this
-           // test case, so skip Enter event here.
+TEST_F(WaylandPointerTest, AxisSourceTypes) {
+  SendEnter();
 
   std::unique_ptr<Event> event1, event2, event3, event4;
   EXPECT_CALL(delegate_, DispatchEvent(_))
@@ -216,27 +284,17 @@ TEST_P(WaylandPointerTest, AxisSourceTypes) {
       .WillOnce(CloneEvent(&event3))
       .WillOnce(CloneEvent(&event4));
 
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_WHEEL,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
 
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
-
-  SendAxisEvents(pointer_->resource(), ++time,
-                 WL_POINTER_AXIS_SOURCE_CONTINUOUS,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
-
-  SendAxisEvents(pointer_->resource(), ++time,
-                 WL_POINTER_AXIS_SOURCE_WHEEL_TILT,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+    for (const auto source :
+         {WL_POINTER_AXIS_SOURCE_WHEEL, WL_POINTER_AXIS_SOURCE_FINGER,
+          WL_POINTER_AXIS_SOURCE_CONTINUOUS,
+          WL_POINTER_AXIS_SOURCE_WHEEL_TILT}) {
+      SendAxisEvents(pointer, server->GetNextTime(), source,
+                     WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
+    }
+  });
 
   ASSERT_TRUE(event1);
   ASSERT_TRUE(event1->IsMouseWheelEvent());
@@ -248,11 +306,8 @@ TEST_P(WaylandPointerTest, AxisSourceTypes) {
   ASSERT_TRUE(event4->IsMouseWheelEvent());
 }
 
-TEST_P(WaylandPointerTest, Axis) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(),
-                        wl_fixed_from_int(0), wl_fixed_from_int(0));
-
-  Sync();
+TEST_F(WaylandPointerTest, Axis) {
+  SendEnter();
 
   for (uint32_t axis :
        {WL_POINTER_AXIS_VERTICAL_SCROLL, WL_POINTER_AXIS_HORIZONTAL_SCROLL}) {
@@ -260,19 +315,20 @@ TEST_P(WaylandPointerTest, Axis) {
       std::unique_ptr<Event> event;
       EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
-      if (send_axis_source) {
-        // The axis source event is optional.  When it is not set within the
-        // event frame, we assume the mouse wheel.
-        wl_pointer_send_axis_source(pointer_->resource(),
-                                    WL_POINTER_AXIS_SOURCE_WHEEL);
-      }
+      PostToServerAndWait([axis, send_axis_source](
+                              wl::TestWaylandServerThread* server) {
+        auto* const pointer = server->seat()->pointer()->resource();
 
-      // Wayland servers typically send a value of 10 per mouse wheel click.
-      wl_pointer_send_axis(pointer_->resource(), 1003, axis,
-                           wl_fixed_from_int(10));
-      wl_pointer_send_frame(pointer_->resource());
+        if (send_axis_source) {
+          // The axis source event is optional.  When it is not set within the
+          // event frame, we assume the mouse wheel.
+          wl_pointer_send_axis_source(pointer, WL_POINTER_AXIS_SOURCE_WHEEL);
+        }
 
-      Sync();
+        // Wayland servers typically send a value of 10 per mouse wheel click.
+        wl_pointer_send_axis(pointer, 1003, axis, wl_fixed_from_int(10));
+        wl_pointer_send_frame(pointer);
+      });
 
       ASSERT_TRUE(event);
       ASSERT_TRUE(event->IsMouseWheelEvent());
@@ -287,98 +343,127 @@ TEST_P(WaylandPointerTest, Axis) {
   }
 }
 
-TEST_P(WaylandPointerTest, SetBitmap) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(),
-                        wl_fixed_from_int(10), wl_fixed_from_int(10));
-  Sync();
+TEST_F(WaylandPointerTest, SetBitmap) {
+  SendEnter();
+
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer();
+
+    EXPECT_CALL(*pointer, SetCursor(nullptr, 0, 0));
+  });
+
+  connection_->SetCursorBitmap({}, {}, 1.0);
+
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer();
+
+    Mock::VerifyAndClearExpectations(pointer);
+  });
+
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer();
+
+    EXPECT_CALL(*pointer, SetCursor(Ne(nullptr), 5, 8));
+  });
 
   SkBitmap dummy_cursor;
   dummy_cursor.setInfo(
       SkImageInfo::Make(16, 16, kUnknown_SkColorType, kUnknown_SkAlphaType));
-
-  EXPECT_CALL(*pointer_, SetCursor(nullptr, 0, 0));
-  connection_->SetCursorBitmap({}, {}, 1.0);
-  connection_->ScheduleFlush();
-  Sync();
-  Mock::VerifyAndClearExpectations(pointer_);
-
-  EXPECT_CALL(*pointer_, SetCursor(Ne(nullptr), 5, 8));
   connection_->SetCursorBitmap({dummy_cursor}, gfx::Point(5, 8), 1.0);
-  connection_->ScheduleFlush();
-  Sync();
-  Mock::VerifyAndClearExpectations(pointer_);
 
-  wl_pointer_send_leave(pointer_->resource(), 2, surface_->resource());
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer();
+
+    Mock::VerifyAndClearExpectations(pointer);
+  });
+
+  SendLeave();
 }
 
 // Tests that bitmap is set on pointer focus and the pointer surface respects
 // provided scale of the surface image.
-TEST_P(WaylandPointerTest, SetBitmapAndScaleOnPointerFocus) {
-  uint32_t serial = 0;
-  for (int32_t scale = 1; scale < 5; scale++) {
-    gfx::Size size = {10 * scale, 10 * scale};
+TEST_F(WaylandPointerTest, SetBitmapAndScaleOnPointerFocus) {
+  for (float scale : {1.0, 1.2, 1.5, 1.75, 2.0, 2.5, 3.0}) {
+    gfx::Size size = {static_cast<int>(10 * scale),
+                      static_cast<int>(10 * scale)};
     SkBitmap dummy_cursor;
     SkImageInfo info = SkImageInfo::Make(size.width(), size.height(),
                                          SkColorType::kBGRA_8888_SkColorType,
                                          SkAlphaType::kPremul_SkAlphaType);
     dummy_cursor.allocPixels(info, size.width() * 4);
 
-    BitmapCursorFactory cursor_factory;
-    cursor_factory.SetDeviceScaleFactor(scale);
-    auto cursor = cursor_factory.CreateImageCursor(
-        mojom::CursorType::kCustom, dummy_cursor, gfx::Point(5, 8));
+    const gfx::Point hotspot_px = {5, 8};
+    const gfx::Point hotspot_dip =
+        gfx::ScaleToRoundedPoint(hotspot_px, 1 / scale);
 
-    wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                          wl_fixed_from_int(10), wl_fixed_from_int(10));
-    Sync();
+    WaylandCursorFactory cursor_factory(connection_.get());
+    auto cursor = cursor_factory.CreateImageCursor(
+        mojom::CursorType::kCustom, dummy_cursor, hotspot_px, scale);
+
+    SendEnter(10, 10);
 
     // Set a cursor.
     wl_resource* surface_resource = nullptr;
-    EXPECT_CALL(*pointer_, SetCursor(Ne(nullptr), 5, 8))
-        .WillOnce(SaveArg<0>(&surface_resource));
-    window_->SetCursor(cursor);
-    connection_->ScheduleFlush();
 
-    wl_pointer_send_leave(pointer_->resource(), ++serial, surface_->resource());
-    Sync();
-    Mock::VerifyAndClearExpectations(pointer_);
+    PostToServerAndWait([&surface_resource,
+                         hotspot_dip](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer();
+
+      // Allow up to 1 DIP of precision loss.
+      EXPECT_CALL(
+          *pointer,
+          SetCursor(Ne(nullptr),
+                    AllOf(Ge(hotspot_dip.x() - 1), Le(hotspot_dip.x() + 1)),
+                    AllOf(Ge(hotspot_dip.y() - 1), Le(hotspot_dip.y() + 1))))
+          .WillOnce(SaveArg<0>(&surface_resource));
+    });
+
+    window_->SetCursor(cursor);
+    connection_->Flush();
+
+    SendLeave();
+
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer();
+
+      Mock::VerifyAndClearExpectations(pointer);
+    });
 
     ASSERT_TRUE(surface_resource);
-    auto* mock_pointer_surface =
-        wl::MockSurface::FromResource(surface_resource);
-    EXPECT_EQ(mock_pointer_surface->buffer_scale(), scale);
 
-    // Update the focus.
-    EXPECT_CALL(*pointer_, SetCursor(Ne(nullptr), 5, 8));
-    wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                          wl_fixed_from_int(50), wl_fixed_from_int(75));
-    Sync();
+    PostToServerAndWait([surface_resource, scale,
+                         hotspot_dip](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer();
 
-    connection_->ScheduleFlush();
+      auto* mock_pointer_surface =
+          wl::MockSurface::FromResource(surface_resource);
+      EXPECT_EQ(mock_pointer_surface->buffer_scale(), std::ceil(scale - 0.2f));
 
-    Sync();
-    Mock::VerifyAndClearExpectations(pointer_);
+      // Update the focus.
+      EXPECT_CALL(
+          *pointer,
+          SetCursor(Ne(nullptr),
+                    AllOf(Ge(hotspot_dip.x() - 1), Le(hotspot_dip.x() + 1)),
+                    AllOf(Ge(hotspot_dip.y() - 1), Le(hotspot_dip.y() + 1))));
+    });
+
+    SendEnter(50, 75);
+
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer();
+
+      Mock::VerifyAndClearExpectations(pointer);
+    });
 
     // Reset the focus for the next iteration.
-    wl_pointer_send_leave(pointer_->resource(), ++serial, surface_->resource());
-    Sync();
-    connection_->ScheduleFlush();
-    Sync();
-    Mock::VerifyAndClearExpectations(pointer_);
+    SendLeave();
   }
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-TEST_P(WaylandPointerTest, FlingVertical) {
-  uint32_t serial = 0;
-  uint32_t time = 1001;
-  wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                        wl_fixed_from_int(50), wl_fixed_from_int(75));
-  wl_pointer_send_button(pointer_->resource(), ++serial, ++time, BTN_RIGHT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
+TEST_F(WaylandPointerTest, FlingVertical) {
+  SendEnter(50, 75);
 
-  Sync();
+  SendRightButtonPress();
 
   std::unique_ptr<Event> event1, event2, event3;
   EXPECT_CALL(delegate_, DispatchEvent(_))
@@ -386,22 +471,24 @@ TEST_P(WaylandPointerTest, FlingVertical) {
       .WillOnce(CloneEvent(&event1))
       .WillOnce(CloneEvent(&event2))
       .WillOnce(CloneEvent(&event3));
-  // 1st axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
 
-  // 2nd axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // Send two axis events.
+  for (int n = 0; n < 2; ++n) {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+
+      SendAxisEvents(pointer, server->GetNextTime(),
+                     WL_POINTER_AXIS_SOURCE_FINGER,
+                     WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
+    });
+
+    // Advance time to emulate delay between events and allow the fling gesture
+    // to be recognised.
+    task_environment_.FastForwardBy(base::Milliseconds(1));
+  }
 
   // axis_stop event which should trigger fling scroll.
-  SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  SendAxisStopEvents();
 
   // Usual axis events should follow before the fling event.
   ASSERT_TRUE(event1);
@@ -413,7 +500,7 @@ TEST_P(WaylandPointerTest, FlingVertical) {
   ASSERT_TRUE(event3);
   ASSERT_TRUE(event3->IsScrollEvent());
   auto* scroll_event = event3->AsScrollEvent();
-  EXPECT_EQ(ET_SCROLL_FLING_START, scroll_event->type());
+  EXPECT_EQ(EventType::kScrollFlingStart, scroll_event->type());
   EXPECT_EQ(gfx::PointF(50, 75), scroll_event->location_f());
   EXPECT_EQ(0.0f, scroll_event->x_offset());
   EXPECT_EQ(0.0f, scroll_event->x_offset_ordinal());
@@ -424,15 +511,10 @@ TEST_P(WaylandPointerTest, FlingVertical) {
   EXPECT_GT(0.0f, scroll_event->y_offset_ordinal());
 }
 
-TEST_P(WaylandPointerTest, FlingHorizontal) {
-  uint32_t serial = 0;
-  uint32_t time = 1001;
-  wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                        wl_fixed_from_int(50), wl_fixed_from_int(75));
-  wl_pointer_send_button(pointer_->resource(), ++serial, ++time, BTN_RIGHT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
+TEST_F(WaylandPointerTest, FlingHorizontal) {
+  SendEnter(50, 75);
 
-  Sync();
+  SendRightButtonPress();
 
   std::unique_ptr<Event> event1, event2, event3;
   EXPECT_CALL(delegate_, DispatchEvent(_))
@@ -440,22 +522,24 @@ TEST_P(WaylandPointerTest, FlingHorizontal) {
       .WillOnce(CloneEvent(&event1))
       .WillOnce(CloneEvent(&event2))
       .WillOnce(CloneEvent(&event3));
-  // 1st axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_HORIZONTAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
 
-  // 2nd axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_HORIZONTAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // Send two axis events.
+  for (int n = 0; n < 2; ++n) {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+
+      SendAxisEvents(pointer, server->GetNextTime(),
+                     WL_POINTER_AXIS_SOURCE_FINGER,
+                     WL_POINTER_AXIS_HORIZONTAL_SCROLL, 10);
+    });
+
+    // Advance time to emulate delay between events and allow the fling gesture
+    // to be recognised.
+    task_environment_.FastForwardBy(base::Milliseconds(1));
+  }
 
   // axis_stop event which should trigger fling scroll.
-  SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  SendAxisStopEvents();
 
   // Usual axis events should follow before the fling event.
   ASSERT_TRUE(event1);
@@ -467,7 +551,7 @@ TEST_P(WaylandPointerTest, FlingHorizontal) {
   ASSERT_TRUE(event3);
   ASSERT_TRUE(event3->IsScrollEvent());
   auto* scroll_event = event3->AsScrollEvent();
-  EXPECT_EQ(ET_SCROLL_FLING_START, scroll_event->type());
+  EXPECT_EQ(EventType::kScrollFlingStart, scroll_event->type());
   EXPECT_EQ(gfx::PointF(50, 75), scroll_event->location_f());
   EXPECT_EQ(0.0f, scroll_event->y_offset());
   EXPECT_EQ(0.0f, scroll_event->y_offset_ordinal());
@@ -478,81 +562,87 @@ TEST_P(WaylandPointerTest, FlingHorizontal) {
   EXPECT_GT(0.0f, scroll_event->x_offset_ordinal());
 }
 
-TEST_P(WaylandPointerTest, FlingCancel) {
-  uint32_t serial = 0;
-  uint32_t time = 1001;
-  wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                        wl_fixed_from_int(50), wl_fixed_from_int(75));
-  wl_pointer_send_button(pointer_->resource(), ++serial, ++time, BTN_RIGHT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
-
-  Sync();
-
-  std::unique_ptr<Event> event1, event2, event3, event4;
+TEST_F(WaylandPointerTest, FlingCancel) {
+  SendEnter(50, 75);
+  SendRightButtonPress();
+  std::unique_ptr<Event> event1, event2, event3, event4, event5;
   EXPECT_CALL(delegate_, DispatchEvent(_))
-      .Times(4)
+      .Times(5)
       .WillOnce(CloneEvent(&event1))
       .WillOnce(CloneEvent(&event2))
       .WillOnce(CloneEvent(&event3))
-      .WillOnce(CloneEvent(&event4));
-  // 1st axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+      .WillOnce(CloneEvent(&event4))
+      .WillOnce(CloneEvent(&event5));
 
-  // 2nd axis event.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // Send two axis events.
+  for (int n = 0; n < 2; ++n) {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+      SendAxisEvents(pointer, server->GetNextTime(),
+                     WL_POINTER_AXIS_SOURCE_FINGER,
+                     WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
+    });
+    // Advance time to emulate delay between events and allow the fling gesture
+    // to be recognised.
+    task_environment_.FastForwardBy(base::Milliseconds(1));
+  }
 
-  // 3rd axis event, whose offset is 0, should make the following axis_stop
-  // trigger fling cancel.
-  SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
-                 WL_POINTER_AXIS_VERTICAL_SCROLL, 0);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // axis_stop event which should trigger FLING_START.
+  SendAxisStopEvents();
 
-  // axis_stop event which should trigger fling cancel.
-  SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // Another axis scroll event is added. In Linux, this must lead to a
+  // FLING_CANCEL being triggered before a usual scroll event occurs because a
+  // FLING_START was triggered beforehand.
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
+    SendAxisEvents(pointer, server->GetNextTime(),
+                   WL_POINTER_AXIS_SOURCE_FINGER,
+                   WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
+  });
 
-  // Usual axis events should follow before the fling event.
+  // Advance time to emulate delay between events and allow the fling gesture
+  // to be recognised.
+  task_environment_.FastForwardBy(base::Milliseconds(1));
+  // Two usual axis events should follow before the fling event.
   ASSERT_TRUE(event1);
   ASSERT_TRUE(event1->IsScrollEvent());
+  EXPECT_EQ(EventType::kScroll, event1->type());
+
   ASSERT_TRUE(event2);
   ASSERT_TRUE(event2->IsScrollEvent());
+  EXPECT_EQ(EventType::kScroll, event2->type());
 
-  // The 3rd axis event's offset is 0.
+  // The 3rd event will be fling start with vertical velocity.
   ASSERT_TRUE(event3);
   ASSERT_TRUE(event3->IsScrollEvent());
-  auto* scroll_event0 = event3->AsScrollEvent();
-  EXPECT_EQ(gfx::Vector2dF(0., 0.), gfx::Vector2dF(scroll_event0->x_offset(),
-                                                   scroll_event0->y_offset()));
+  auto* fling_start_event = event3->AsScrollEvent();
+  EXPECT_EQ(EventType::kScrollFlingStart, fling_start_event->type());
+  EXPECT_EQ(0.0f, fling_start_event->x_offset());
+  EXPECT_GT(0.0f, fling_start_event->y_offset());
+  EXPECT_EQ(0.0f, fling_start_event->x_offset_ordinal());
+  EXPECT_GT(0.0f, fling_start_event->y_offset_ordinal());
 
   // The 4th event should be FLING_CANCEL.
   ASSERT_TRUE(event4);
   ASSERT_TRUE(event4->IsScrollEvent());
-  auto* scroll_event = event4->AsScrollEvent();
-  EXPECT_EQ(ET_SCROLL_FLING_CANCEL, scroll_event->type());
-  EXPECT_EQ(gfx::PointF(50, 75), scroll_event->location_f());
-  EXPECT_EQ(0.0f, scroll_event->x_offset());
-  EXPECT_EQ(0.0f, scroll_event->y_offset());
-  EXPECT_EQ(0.0f, scroll_event->x_offset_ordinal());
-  EXPECT_EQ(0.0f, scroll_event->y_offset_ordinal());
+  auto* fling_cancel_event = event4->AsScrollEvent();
+  EXPECT_EQ(EventType::kScrollFlingCancel, fling_cancel_event->type());
+  EXPECT_EQ(gfx::PointF(50, 75), fling_cancel_event->location_f());
+  EXPECT_EQ(0.0f, fling_cancel_event->x_offset());
+  EXPECT_EQ(0.0f, fling_cancel_event->y_offset());
+  EXPECT_EQ(0.0f, fling_cancel_event->x_offset_ordinal());
+  EXPECT_EQ(0.0f, fling_cancel_event->y_offset_ordinal());
+
+  // The 5th event will be yet another axis event.
+  ASSERT_TRUE(event5);
+  ASSERT_TRUE(event5);
+  EXPECT_EQ(EventType::kScroll, event5->type());
 }
 
-TEST_P(WaylandPointerTest, FlingDiagonal) {
-  uint32_t serial = 0;
-  uint32_t time = 1001;
-  wl_pointer_send_enter(pointer_->resource(), ++serial, surface_->resource(),
-                        wl_fixed_from_int(50), wl_fixed_from_int(75));
-  wl_pointer_send_button(pointer_->resource(), ++serial, ++time, BTN_RIGHT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
+TEST_F(WaylandPointerTest, FlingDiagonal) {
+  SendEnter(50, 75);
 
-  Sync();
+  SendRightButtonPress();
 
   std::unique_ptr<Event> event1, event2, event3;
   EXPECT_CALL(delegate_, DispatchEvent(_))
@@ -560,22 +650,23 @@ TEST_P(WaylandPointerTest, FlingDiagonal) {
       .WillOnce(CloneEvent(&event1))
       .WillOnce(CloneEvent(&event2))
       .WillOnce(CloneEvent(&event3));
-  // 1st axis event notifies scrolls both in vertical and horizontal.
-  SendDiagonalAxisEvents(pointer_->resource(), ++time,
-                         WL_POINTER_AXIS_SOURCE_FINGER, 20, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
 
-  // 2st axis event notifies scrolls both in vertical and horizontal.
-  SendDiagonalAxisEvents(pointer_->resource(), ++time,
-                         WL_POINTER_AXIS_SOURCE_FINGER, 20, 10);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  // Send two axis events that notify scrolls both in vertical and horizontal.
+  for (int n = 0; n < 2; ++n) {
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      auto* const pointer = server->seat()->pointer()->resource();
+
+      SendDiagonalAxisEvents(pointer, server->GetNextTime(),
+                             WL_POINTER_AXIS_SOURCE_FINGER, 20, 10);
+    });
+
+    // Advance time to emulate delay between events and allow the fling gesture
+    // to be recognised.
+    task_environment_.FastForwardBy(base::Milliseconds(1));
+  }
 
   // axis_stop event which should trigger fling scroll.
-  SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::Milliseconds(1));
-  Sync();
+  SendAxisStopEvents();
 
   // Usual axis events should follow before the fling event.
   ASSERT_TRUE(event1);
@@ -587,7 +678,7 @@ TEST_P(WaylandPointerTest, FlingDiagonal) {
   ASSERT_TRUE(event3);
   ASSERT_TRUE(event3->IsScrollEvent());
   auto* scroll_event = event3->AsScrollEvent();
-  EXPECT_EQ(ET_SCROLL_FLING_START, scroll_event->type());
+  EXPECT_EQ(EventType::kScrollFlingStart, scroll_event->type());
   EXPECT_EQ(gfx::PointF(50, 75), scroll_event->location_f());
   // Check the offset direction. It should non-zero in both axes.
   EXPECT_GT(0.0f, scroll_event->x_offset());
@@ -601,15 +692,75 @@ TEST_P(WaylandPointerTest, FlingDiagonal) {
   EXPECT_GT(std::abs(scroll_event->x_offset_ordinal()),
             std::abs(scroll_event->y_offset_ordinal()));
 }
-#endif
 
-INSTANTIATE_TEST_SUITE_P(XdgVersionStableTest,
-                         WaylandPointerTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kStable}));
-INSTANTIATE_TEST_SUITE_P(XdgVersionV6Test,
-                         WaylandPointerTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kV6}));
+// The case tested here should not actually occur in a good implementation of
+// the Wayland protocol.
+TEST_F(WaylandPointerTest, FlingVelocityWithoutLeadingAxis) {
+  SendEnter(50, 75);
+
+  SendRightButtonPress();
+
+  std::unique_ptr<Event> event;
+  EXPECT_CALL(delegate_, DispatchEvent(_))
+      .Times(1)
+      .WillOnce(CloneEvent(&event));
+
+  // Send axis_stop event without leading axis event.
+  SendAxisStopEvents();
+
+  // We expect only a FLING_START event.
+  ASSERT_TRUE(event);
+  ASSERT_TRUE(event->IsScrollEvent());
+  auto* scroll_event = event->AsScrollEvent();
+  EXPECT_EQ(EventType::kScrollFlingStart, scroll_event->type());
+
+  // Check the offset direction. It should be zero in both axes.
+  EXPECT_EQ(0.0f, scroll_event->x_offset());
+  EXPECT_EQ(0.0f, scroll_event->y_offset());
+  EXPECT_EQ(0.0f, scroll_event->x_offset_ordinal());
+  EXPECT_EQ(0.0f, scroll_event->y_offset_ordinal());
+}
+
+TEST_F(WaylandPointerTest, FlingVelocityWithSingleLeadingAxis) {
+  SendEnter(50, 75);
+
+  SendRightButtonPress();
+
+  std::unique_ptr<Event> event1, event2;
+  EXPECT_CALL(delegate_, DispatchEvent(_))
+      .Times(2)
+      .WillOnce(CloneEvent(&event1))
+      .WillOnce(CloneEvent(&event2));
+
+  // Send a single axis event.
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const pointer = server->seat()->pointer()->resource();
+
+    SendDiagonalAxisEvents(pointer, server->GetNextTime(),
+                           WL_POINTER_AXIS_SOURCE_FINGER, -20, 10);
+  });
+
+  // Advance time to emulate delay between events and allow the fling gesture
+  // to be recognised.
+  task_environment_.FastForwardBy(base::Milliseconds(1));
+
+  // One axis event should follow before the fling event.
+  SendAxisStopEvents();
+  ASSERT_TRUE(event1);
+  ASSERT_TRUE(event1->IsScrollEvent());
+
+  // We expect a FLING_START event.
+  ASSERT_TRUE(event2);
+  ASSERT_TRUE(event2->IsScrollEvent());
+  auto* scroll_event2 = event2->AsScrollEvent();
+  EXPECT_EQ(EventType::kScrollFlingStart, scroll_event2->type());
+
+  // Check the offset direction. Horizontal axis should be negative. Vertical
+  // axis should be positive.
+  EXPECT_LT(0.0f, scroll_event2->x_offset());
+  EXPECT_GT(0.0f, scroll_event2->y_offset());
+  EXPECT_LT(0.0f, scroll_event2->x_offset_ordinal());
+  EXPECT_GT(0.0f, scroll_event2->y_offset_ordinal());
+}
 
 }  // namespace ui

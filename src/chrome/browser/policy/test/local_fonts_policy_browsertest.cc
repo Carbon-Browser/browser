@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -89,9 +90,10 @@ IN_PROC_BROWSER_TEST_F(PolicyTestLocalFonts, AllowedForUrlsSettings) {
   auto* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
   PolicyMap policies;
-  base::Value list(base::Value::Type::LIST);
+  base::Value::List list;
   list.Append(url.spec());
-  SetPolicy(&policies, key::kLocalFontsAllowedForUrls, std::move(list));
+  SetPolicy(&policies, key::kLocalFontsAllowedForUrls,
+            base::Value(std::move(list)));
   UpdateProviderPolicy(policies);
 
   HostContentSettingsMap* host_content_settings_map =
@@ -112,9 +114,10 @@ IN_PROC_BROWSER_TEST_F(PolicyTestLocalFonts, BlockedForUrlsSettings) {
   auto* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
   PolicyMap policies;
-  base::Value list(base::Value::Type::LIST);
+  base::Value::List list;
   list.Append(url.spec());
-  SetPolicy(&policies, key::kLocalFontsBlockedForUrls, std::move(list));
+  SetPolicy(&policies, key::kLocalFontsBlockedForUrls,
+            base::Value(std::move(list)));
   UpdateProviderPolicy(policies);
 
   HostContentSettingsMap* host_content_settings_map =

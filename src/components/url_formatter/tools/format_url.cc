@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This binary takes a list of domain names in ASCII or unicode, passes them
 // through the IDN decoding algorithm and prints out the result. The list can be
@@ -65,7 +70,6 @@ std::string SpoofCheckResultToString(IDNSpoofChecker::Result result) {
     default:
       NOTREACHED();
   };
-  return std::string();
 }
 
 // Returns the spoof check result as a string. |ascii_domain| must contain

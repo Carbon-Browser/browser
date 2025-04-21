@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,6 @@ class ReportSchedulerAndroid : public ReportScheduler::Delegate {
                                     base::TimeDelta upload_interval) override;
   void StopWatchingUpdates() override;
   void OnBrowserVersionUploaded() override;
-  void StartWatchingExtensionRequestIfNeeded() override;
-  void StopWatchingExtensionRequest() override;
-  void OnExtensionRequestUploaded() override;
   policy::DMToken GetProfileDMToken() override;
   std::string GetProfileClientId() override;
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/media/web_encrypted_media_client_impl.h"
@@ -78,8 +78,7 @@ void WebContentDecryptionModuleAccessImpl::CreateContentDecryptionModule(
   // As this object's lifetime is controlled by MediaKeySystemAccess on the
   // blink side, copy all values needed by CreateCdm() in case the blink object
   // gets garbage-collected.
-  std::unique_ptr<WebContentDecryptionModuleResult> result_copy(
-      new WebContentDecryptionModuleResult(result));
+  auto result_copy = std::make_unique<WebContentDecryptionModuleResult>(result);
   task_runner->PostTask(FROM_HERE,
                         base::BindOnce(&CreateCdm, client_, security_origin_,
                                        cdm_config_, std::move(result_copy)));

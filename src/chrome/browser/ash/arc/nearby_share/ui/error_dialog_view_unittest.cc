@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 #include <memory>
 
 #include "ash/components/arc/compat_mode/test/compat_mode_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 
 namespace arc {
 
@@ -44,16 +46,17 @@ class ErrorDialogViewTest : public CompatModeTestBase {
  private:
   int on_close_callback_count_ = 0;
   std::unique_ptr<views::Widget> arc_widget_;
-  views::Widget* bubble_widget_;
-  ErrorDialogView* error_dialog_view_;
+  raw_ptr<views::Widget, DanglingUntriaged> bubble_widget_;
+  raw_ptr<ErrorDialogView, DanglingUntriaged> error_dialog_view_;
 };
 
 TEST_F(ErrorDialogViewTest, ConstructDestruct) {
   EXPECT_EQ(0, GetOnCloseCallbackCount());
   // Verify there's only 1 button in the dialog.
-  EXPECT_EQ(ui::DIALOG_BUTTON_OK, error_dialog_view()->GetDialogButtons());
-  EXPECT_TRUE(error_dialog_view()->IsDialogButtonEnabled(
-      ui::DialogButton::DIALOG_BUTTON_OK));
+  EXPECT_EQ(static_cast<int>(ui::mojom::DialogButton::kOk),
+            error_dialog_view()->buttons());
+  EXPECT_TRUE(
+      error_dialog_view()->IsDialogButtonEnabled(ui::mojom::DialogButton::kOk));
 }
 
 TEST_F(ErrorDialogViewTest, TestCloseButton) {

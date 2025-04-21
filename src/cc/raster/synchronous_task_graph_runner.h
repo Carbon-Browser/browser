@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,12 @@ class CC_EXPORT SynchronousTaskGraphRunner : public TaskGraphRunner {
   // Overridden from TaskGraphRunner:
   NamespaceToken GenerateNamespaceToken() override;
   void ScheduleTasks(NamespaceToken token, TaskGraph* graph) override;
+  void ExternalDependencyCompletedForTask(NamespaceToken token,
+                                          scoped_refptr<Task> task) override;
   void WaitForTasksToFinishRunning(NamespaceToken token) override;
   void CollectCompletedTasks(NamespaceToken token,
                              Task::Vector* completed_tasks) override;
+  void RunTasksUntilIdleForTest() override;
 
   // Runs all pending tasks from all namespaces.
   void RunUntilIdle();

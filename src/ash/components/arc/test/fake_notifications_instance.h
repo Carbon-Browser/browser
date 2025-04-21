@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,13 @@ class FakeNotificationsInstance : public mojom::NotificationsInstance {
   void SendNotificationEventToAndroid(
       const std::string& key,
       mojom::ArcNotificationEvent event) override;
+  void SendNotificationButtonClickToAndroid(const std::string& key,
+                                            uint32_t button_index,
+                                            const std::string& input) override;
   void CreateNotificationWindow(const std::string& key) override;
   void CloseNotificationWindow(const std::string& key) override;
   void OpenNotificationSettings(const std::string& key) override;
+  void PopUpAppNotificationSettings(const std::string& key) override;
   void OpenNotificationSnoozeSettings(const std::string& key) override;
   void SetDoNotDisturbStatusOnAndroid(
       mojom::ArcDoNotDisturbStatusPtr status) override;

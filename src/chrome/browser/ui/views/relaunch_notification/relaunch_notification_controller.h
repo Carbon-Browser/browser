@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
@@ -23,7 +23,7 @@
 namespace base {
 class Clock;
 class TickClock;
-}
+}  // namespace base
 
 // A class that observes changes to the browser.relaunch_notification
 // preference (which is backed by the RelaunchNotification policy
@@ -86,9 +86,6 @@ class RelaunchNotificationController : public UpgradeObserver {
     kRecommended,  // Relaunches are recommended.
     kRequired,     // Relaunches are required.
   };
-
-  // The platform-specific implementation.
-  RelaunchNotificationControllerPlatformImpl platform_impl_;
 
   // Adjusts to the current notification style as indicated by the
   // browser.relaunch_notification Local State preference. If the notification
@@ -161,9 +158,6 @@ class RelaunchNotificationController : public UpgradeObserver {
   // default notification on Chrome OS.
   virtual void Close();
 
-  // Updates the required relaunch deadline in the UX.
-  virtual void SetDeadline(base::Time deadline);
-
   // Run to restart the browser/device once the relaunch deadline is reached
   // when relaunches are required by policy.
   virtual void OnRelaunchDeadlineExpired();
@@ -174,6 +168,9 @@ class RelaunchNotificationController : public UpgradeObserver {
   // A provider of Time to the controller and its timer for the sake of
   // testability.
   const raw_ptr<const base::Clock> clock_;
+
+  // The platform-specific implementation.
+  RelaunchNotificationControllerPlatformImpl platform_impl_;
 
   // Observes changes to the browser.relaunch_notification Local State pref.
   PrefChangeRegistrar pref_change_registrar_;

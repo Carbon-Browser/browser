@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_EXECUTION_CONTEXT_PRIORITY_EXECUTION_CONTEXT_PRIORITY_H_
 
 #include "base/task/task_traits.h"
+#include "components/performance_manager/public/voting/optional_voting_channel.h"
 #include "components/performance_manager/public/voting/voting.h"
 
 // Specialization of a voting system used to get votes related to the
@@ -59,6 +60,7 @@ using VoterId = voting::VoterId<Vote>;
 using VoteObserver = voting::VoteObserver<Vote>;
 using VotingChannel = voting::VotingChannel<Vote>;
 using VotingChannelFactory = voting::VotingChannelFactory<Vote>;
+using OptionalVotingChannel = voting::OptionalVotingChannel<Vote>;
 
 }  // namespace execution_context_priority
 }  // namespace performance_manager

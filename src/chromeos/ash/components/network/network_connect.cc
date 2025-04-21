@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_features.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_activation_handler.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
@@ -21,11 +24,11 @@
 #include "chromeos/ash/components/network/network_profile_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
 #include "chromeos/ash/components/network/tether_constants.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -61,16 +64,17 @@ class NetworkConnectImpl : public NetworkConnect {
   // NetworkConnect
   void ConnectToNetworkId(const std::string& network_id) override;
   void DisconnectFromNetworkId(const std::string& network_id) override;
-  void SetTechnologyEnabled(const NetworkTypePattern& technology,
-                            bool enabled_state) override;
   void ShowMobileSetup(const std::string& network_id) override;
   void ShowCarrierAccountDetail(const std::string& network_id) override;
+  void ShowCarrierUnlockNotification() override;
+  void ShowPortalSignin(const std::string& network_id, Source source) override;
   void ConfigureNetworkIdAndConnect(const std::string& network_id,
-                                    const base::Value& shill_properties,
+                                    const base::Value::Dict& shill_properties,
                                     bool shared) override;
-  void CreateConfigurationAndConnect(base::Value* shill_properties,
+  void CreateConfigurationAndConnect(base::Value::Dict shill_properties,
                                      bool shared) override;
-  void CreateConfiguration(base::Value* shill_properties, bool shared) override;
+  void CreateConfiguration(base::Value::Dict shill_properties,
+                           bool shared) override;
 
  private:
   void ActivateCellular(const std::string& network_id);
@@ -85,21 +89,21 @@ class NetworkConnectImpl : public NetworkConnect {
   void OnConfigureSucceeded(bool connect_on_configure,
                             const std::string& service_path,
                             const std::string& network_id);
-  void CallCreateConfiguration(base::Value* properties,
+  void CallCreateConfiguration(base::Value::Dict properties,
                                bool shared,
                                bool connect_on_configure);
   void SetPropertiesFailed(const std::string& desc,
                            const std::string& network_id,
                            const std::string& config_error_name);
-  void SetPropertiesToClear(base::Value* properties_to_set,
+  void SetPropertiesToClear(base::Value::Dict* properties_to_set,
                             std::vector<std::string>* properties_to_clear);
   void ClearPropertiesAndConnect(
       const std::string& network_id,
       const std::vector<std::string>& properties_to_clear);
   void ConfigureSetProfileSucceeded(const std::string& network_id,
-                                    base::Value properties_to_set);
+                                    base::Value::Dict properties_to_set);
 
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
   base::WeakPtrFactory<NetworkConnectImpl> weak_factory_{this};
 };
 
@@ -150,8 +154,12 @@ void NetworkConnectImpl::HandleUnconfiguredNetwork(
 
     // If network is unconfigured because it's SIM locked, do nothing, as this
     // is handled by NetworkStateNotifier.
-    if (network->GetError() == shill::kErrorSimLocked)
+    if (network->GetError() == shill::kErrorSimLocked) {
       return;
+    }
+    if (network->GetError() == shill::kErrorSimCarrierLocked) {
+      return;
+    }
 
     // No special configure or setup for |network|, show the settings UI.
     if (LoginState::Get()->IsUserLoggedIn())
@@ -171,7 +179,7 @@ void NetworkConnectImpl::HandleUnconfiguredNetwork(
     return;
   }
 
-  NOTREACHED();
+  DUMP_WILL_BE_NOTREACHED();
 }
 
 // If |shared| is true, sets |profile_path| to the shared profile path.
@@ -262,20 +270,21 @@ void NetworkConnectImpl::OnConfigureSucceeded(bool connect_on_configure,
   CallConnectToNetwork(network_id, check_error_state);
 }
 
-void NetworkConnectImpl::CallCreateConfiguration(base::Value* shill_properties,
-                                                 bool shared,
-                                                 bool connect_on_configure) {
+void NetworkConnectImpl::CallCreateConfiguration(
+    base::Value::Dict shill_properties,
+    bool shared,
+    bool connect_on_configure) {
   std::string profile_path;
   if (!GetNetworkProfilePath(shared, &profile_path)) {
     delegate_->ShowNetworkConnectError(
         NetworkConnectionHandler::kErrorConfigureFailed, "");
     return;
   }
-  shill_properties->SetKey(shill::kProfileProperty, base::Value(profile_path));
+  shill_properties.Set(shill::kProfileProperty, profile_path);
   NetworkHandler::Get()
       ->network_configuration_handler()
       ->CreateShillConfiguration(
-          *shill_properties,
+          std::move(shill_properties),
           base::BindOnce(&NetworkConnectImpl::OnConfigureSucceeded,
                          weak_factory_.GetWeakPtr(), connect_on_configure),
           base::BindOnce(&NetworkConnectImpl::OnConfigureFailed,
@@ -293,18 +302,20 @@ void NetworkConnectImpl::SetPropertiesFailed(
 }
 
 void NetworkConnectImpl::SetPropertiesToClear(
-    base::Value* properties_to_set,
+    base::Value::Dict* properties_to_set,
     std::vector<std::string>* properties_to_clear) {
   // Move empty string properties to properties_to_clear.
-  for (auto iter : properties_to_set->DictItems()) {
-    if (!iter.second.is_string())
+  for (auto iter : *properties_to_set) {
+    if (!iter.second.is_string()) {
       continue;
-    if (iter.second.GetString().empty())
+    }
+    if (iter.second.GetString().empty()) {
       properties_to_clear->push_back(iter.first);
+    }
   }
   // Remove cleared properties from properties_to_set.
   for (const std::string& property_to_clear : *properties_to_clear) {
-    properties_to_set->RemoveKey(property_to_clear);
+    properties_to_set->Remove(property_to_clear);
   }
 }
 
@@ -331,7 +342,7 @@ void NetworkConnectImpl::ClearPropertiesAndConnect(
 
 void NetworkConnectImpl::ConfigureSetProfileSucceeded(
     const std::string& network_id,
-    base::Value properties_to_set) {
+    base::Value::Dict properties_to_set) {
   std::vector<std::string> properties_to_clear;
   SetPropertiesToClear(&properties_to_set, &properties_to_clear);
   const NetworkState* network = GetNetworkStateFromId(network_id);
@@ -388,57 +399,6 @@ void NetworkConnectImpl::DisconnectFromNetworkId(
       base::BindOnce(&IgnoreDisconnectError));
 }
 
-void NetworkConnectImpl::SetTechnologyEnabled(
-    const NetworkTypePattern& technology,
-    bool enabled_state) {
-  const std::string technology_string = technology.ToDebugString();
-  std::string log_string = base::StringPrintf(
-      "technology %s, target state: %s", technology_string.c_str(),
-      (enabled_state ? "ENABLED" : "DISABLED"));
-  NET_LOG(USER) << "SetTechnologyEnabled: " << log_string;
-  NetworkStateHandler* handler = NetworkHandler::Get()->network_state_handler();
-  bool enabled = handler->IsTechnologyEnabled(technology);
-  if (enabled_state == enabled) {
-    NET_LOG(USER) << "Technology already in target state: " << log_string;
-    return;
-  }
-  if (enabled) {
-    // User requested to disable the technology.
-    NET_LOG(USER) << __func__ << " " << technology_string << ":" << false;
-    handler->SetTechnologyEnabled(technology, false,
-                                  network_handler::ErrorCallback());
-    return;
-  }
-  // If we're dealing with a cellular network, then handle SIM lock here.
-  // SIM locking only applies to cellular.
-  if (technology.MatchesPattern(NetworkTypePattern::Cellular())) {
-    const DeviceState* mobile = handler->GetDeviceStateByType(technology);
-    if (!mobile) {
-      NET_LOG(ERROR) << "SetTechnologyEnabled with no device: " << log_string;
-      return;
-    }
-    if (mobile->IsSimAbsent()) {
-      // If this is true, then we have a cellular device with no SIM
-      // inserted. TODO(armansito): Chrome should display a notification here,
-      // prompting the user to insert a SIM card and restart the device to
-      // enable cellular. See crbug.com/125171.
-      NET_LOG(USER) << "Cannot enable cellular device without SIM: "
-                    << log_string;
-      return;
-    }
-    if (!mobile->IsSimLocked()) {
-      // A SIM has been inserted, but it is locked. Let the user unlock it
-      // via Settings or the details dialog.
-      const NetworkState* network = handler->FirstNetworkByType(technology);
-      delegate_->ShowNetworkSettings(network ? network->guid() : "");
-      return;
-    }
-  }
-  NET_LOG(USER) << __func__ << " " << technology_string << ":" << true;
-  handler->SetTechnologyEnabled(technology, true,
-                                network_handler::ErrorCallback());
-}
-
 void NetworkConnectImpl::ActivateCellular(const std::string& network_id) {
   NET_LOG(USER) << "ActivateCellular: " << NetworkGuidId(network_id);
   const NetworkState* cellular = GetNetworkStateFromId(network_id);
@@ -479,14 +439,23 @@ void NetworkConnectImpl::ShowCarrierAccountDetail(
   delegate_->ShowCarrierAccountDetail(network_id);
 }
 
+void NetworkConnectImpl::ShowCarrierUnlockNotification() {
+  delegate_->ShowCarrierUnlockNotification();
+}
+
+void NetworkConnectImpl::ShowPortalSignin(const std::string& network_id,
+                                          Source source) {
+  delegate_->ShowPortalSignin(network_id, source);
+}
+
 void NetworkConnectImpl::ConfigureNetworkIdAndConnect(
     const std::string& network_id,
-    const base::Value& properties,
+    const base::Value::Dict& properties,
     bool shared) {
   NET_LOG(USER) << "ConfigureNetworkIdAndConnect: "
                 << NetworkGuidId(network_id);
 
-  base::Value properties_to_set = properties.Clone();
+  base::Value::Dict properties_to_set = properties.Clone();
 
   std::string profile_path;
   if (!GetNetworkProfilePath(shared, &profile_path)) {
@@ -510,16 +479,19 @@ void NetworkConnectImpl::ConfigureNetworkIdAndConnect(
                      network_id));
 }
 
-void NetworkConnectImpl::CreateConfigurationAndConnect(base::Value* properties,
-                                                       bool shared) {
+void NetworkConnectImpl::CreateConfigurationAndConnect(
+    base::Value::Dict properties,
+    bool shared) {
   NET_LOG(USER) << "CreateConfigurationAndConnect";
-  CallCreateConfiguration(properties, shared, true /* connect_on_configure */);
+  CallCreateConfiguration(std::move(properties), shared,
+                          true /* connect_on_configure */);
 }
 
-void NetworkConnectImpl::CreateConfiguration(base::Value* properties,
+void NetworkConnectImpl::CreateConfiguration(base::Value::Dict properties,
                                              bool shared) {
   NET_LOG(USER) << "CreateConfiguration";
-  CallCreateConfiguration(properties, shared, false /* connect_on_configure */);
+  CallCreateConfiguration(std::move(properties), shared,
+                          false /* connect_on_configure */);
 }
 
 }  // namespace
@@ -554,4 +526,4 @@ NetworkConnect::NetworkConnect() = default;
 
 NetworkConnect::~NetworkConnect() = default;
 
-}  // namespace chromeos
+}  // namespace ash

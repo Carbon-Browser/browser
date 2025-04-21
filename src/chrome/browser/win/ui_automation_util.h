@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,10 @@
 // Must be before <uiautomation.h>
 #include <objbase.h>
 
-#include <uiautomation.h>
-
 #include <string>
 #include <vector>
 
+#include <uiautomation.h>
 
 // Returns a cached BSTR property of |element|.
 std::wstring GetCachedBstrValue(IUIAutomationElement* element,

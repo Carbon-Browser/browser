@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ namespace bookmarks {
 void WriteBookmarksToPasteboard(
     NSPasteboard* pb,
     const std::vector<BookmarkNodeData::Element>& elements,
-    const base::FilePath& profile_path);
+    const base::FilePath& profile_path,
+    bool is_off_the_record);
 
 // Reads a set of bookmark elements from the specified pasteboard.
 bool ReadBookmarksFromPasteboard(

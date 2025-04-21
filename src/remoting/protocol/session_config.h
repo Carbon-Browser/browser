@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@
 #include <memory>
 #include <string>
 
-
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 extern const int kDefaultStreamVersion;
 
@@ -150,25 +148,19 @@ class CandidateSessionConfig {
     return event_configs_;
   }
 
-  std::list<ChannelConfig>* mutable_event_configs() {
-    return &event_configs_;
-  }
+  std::list<ChannelConfig>* mutable_event_configs() { return &event_configs_; }
 
   const std::list<ChannelConfig>& video_configs() const {
     return video_configs_;
   }
 
-  std::list<ChannelConfig>* mutable_video_configs() {
-    return &video_configs_;
-  }
+  std::list<ChannelConfig>* mutable_video_configs() { return &video_configs_; }
 
   const std::list<ChannelConfig>& audio_configs() const {
     return audio_configs_;
   }
 
-  std::list<ChannelConfig>* mutable_audio_configs() {
-    return &audio_configs_;
-  }
+  std::list<ChannelConfig>* mutable_audio_configs() { return &audio_configs_; }
 
   // Returns true if |config| is supported.
   bool IsSupported(const SessionConfig& config) const;
@@ -193,7 +185,6 @@ class CandidateSessionConfig {
   std::list<ChannelConfig> audio_configs_;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_SESSION_CONFIG_H_

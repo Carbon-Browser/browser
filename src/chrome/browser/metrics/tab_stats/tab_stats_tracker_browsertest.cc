@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_observer.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/ui/browser.h"
@@ -86,35 +85,20 @@ void EnsureTabStatsMatchExpectations(const TabsStats& expected,
 
 }  // namespace
 
-class MockTabStatsTrackerDelegate : public TabStatsTrackerDelegate {
- public:
-  MockTabStatsTrackerDelegate() = default;
-  ~MockTabStatsTrackerDelegate() override = default;
-
-#if BUILDFLAG(IS_WIN)
-  OcclusionStatusMap CallComputeNativeWindowOcclusionStatus(
-      std::vector<aura::WindowTreeHost*> hosts) override {
-    // Checking that the hosts are not nullptr, because of a bug where nullptr
-    // was being passed in addition to the desired aura::WindowTreeHost
-    // pointers, causing a crash when dereferenced. Crash bug found at:
-    // crbug.com/837541
-    for (aura::WindowTreeHost* host : hosts)
-      DCHECK(host);
-
-    return mock_occlusion_results_;
-  }
-
-  void SetMockOcclusionResults(OcclusionStatusMap mock_occlusion_results) {
-    mock_occlusion_results_ = mock_occlusion_results;
-  }
-
- private:
-  OcclusionStatusMap mock_occlusion_results_;
-#endif
-};
-
 class TabStatsTrackerBrowserTest : public InProcessBrowserTest {
  public:
+  struct HistogramStats {
+    std::string name;
+    std::map<int, int> buckets;
+  };
+
+  struct DuplicateHistogramStats {
+    HistogramStats count_single_window;
+    HistogramStats percentage_single_window;
+    HistogramStats count_multi_window;
+    HistogramStats percentage_multi_window;
+  };
+
   TabStatsTrackerBrowserTest() = default;
 
   TabStatsTrackerBrowserTest(const TabStatsTrackerBrowserTest&) = delete;
@@ -132,8 +116,30 @@ class TabStatsTrackerBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(tab_stats_tracker_ != nullptr);
   }
 
+  void TearDownOnMainThread() override { tab_stats_tracker_ = nullptr; }
+
   content::WebContents* GetWebContents() {
     return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+
+  void EnsureTabDuplicateHistogramsMatchExpectations(
+      DuplicateHistogramStats expected) {
+    for (auto const& bucket : expected.count_multi_window.buckets) {
+      histogram_tester_.ExpectBucketCount(expected.count_multi_window.name,
+                                          bucket.first, bucket.second);
+    }
+    for (auto const& bucket : expected.percentage_multi_window.buckets) {
+      histogram_tester_.ExpectBucketCount(expected.percentage_multi_window.name,
+                                          bucket.first, bucket.second);
+    }
+    for (auto const& bucket : expected.count_single_window.buckets) {
+      histogram_tester_.ExpectBucketCount(expected.count_single_window.name,
+                                          bucket.first, bucket.second);
+    }
+    for (auto const& bucket : expected.percentage_single_window.buckets) {
+      histogram_tester_.ExpectBucketCount(
+          expected.percentage_single_window.name, bucket.first, bucket.second);
+    }
   }
 
  protected:
@@ -159,41 +165,99 @@ IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
   expected_stats.window_count = 1;
   expected_stats.window_count_max = 1;
 
+  DuplicateHistogramStats expected_histograms = {};
+
+  expected_histograms.count_multi_window.name =
+      TabStatsTracker::UmaStatsReportingDelegate::
+          kTabDuplicateCountAllProfileWindowsHistogramName;
+  expected_histograms.percentage_multi_window.name =
+      TabStatsTracker::UmaStatsReportingDelegate::
+          kTabDuplicatePercentageAllProfileWindowsHistogramName;
+  expected_histograms.count_single_window.name = TabStatsTracker::
+      UmaStatsReportingDelegate::kTabDuplicateCountSingleWindowHistogramName;
+  expected_histograms.percentage_single_window.name =
+      TabStatsTracker::UmaStatsReportingDelegate::
+          kTabDuplicatePercentageSingleWindowHistogramName;
+  expected_histograms.count_multi_window.buckets[0] = 1;
+  expected_histograms.percentage_multi_window.buckets[0] = 1;
+  expected_histograms.count_single_window.buckets[0] = 1;
+  expected_histograms.percentage_single_window.buckets[0] = 1;
+
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 
   // Add a tab and make sure that the counters get updated.
   ASSERT_TRUE(AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_TYPED));
   ++expected_stats.total_tab_count;
   ++expected_stats.total_tab_count_max;
   ++expected_stats.max_tab_per_window;
+  expected_histograms.count_multi_window.buckets[1] = 1;
+  expected_histograms.percentage_multi_window.buckets[50] = 1;
+  expected_histograms.count_single_window.buckets[1] = 1;
+  expected_histograms.percentage_single_window.buckets[50] = 1;
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 
   browser()->tab_strip_model()->CloseWebContentsAt(1, 0);
   --expected_stats.total_tab_count;
+  ++expected_histograms.count_multi_window.buckets[0];
+  ++expected_histograms.percentage_multi_window.buckets[0];
+  ++expected_histograms.count_single_window.buckets[0];
+  ++expected_histograms.percentage_single_window.buckets[0];
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 
   Browser* new_browser = CreateBrowser(browser()->profile());
   ++expected_stats.total_tab_count;
   ++expected_stats.window_count;
   ++expected_stats.window_count_max;
+  ++expected_histograms.count_multi_window.buckets[1];
+  ++expected_histograms.percentage_multi_window.buckets[50];
+  expected_histograms.count_single_window.buckets[0] += 2;
+  expected_histograms.percentage_single_window.buckets[0] += 2;
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 
   ASSERT_TRUE(AddTabAtIndexToBrowser(new_browser, 1, GURL("about:blank"),
                                      ui::PAGE_TRANSITION_TYPED, true));
   ++expected_stats.total_tab_count;
   ++expected_stats.total_tab_count_max;
+  expected_histograms.count_multi_window.buckets[2] = 1;
+  expected_histograms.percentage_multi_window.buckets[66] = 1;
+  ++expected_histograms.count_single_window.buckets[1];
+  ++expected_histograms.count_single_window.buckets[0];
+  ++expected_histograms.percentage_single_window.buckets[0];
+  ++expected_histograms.percentage_single_window.buckets[50];
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 
   CloseBrowserSynchronously(new_browser);
   expected_stats.total_tab_count = 1;
   expected_stats.window_count = 1;
+  ++expected_histograms.count_multi_window.buckets[0];
+  ++expected_histograms.percentage_multi_window.buckets[0];
+  ++expected_histograms.count_single_window.buckets[0];
+  ++expected_histograms.percentage_single_window.buckets[0];
   EnsureTabStatsMatchExpectations(expected_stats,
                                   tab_stats_tracker_->tab_stats());
+  tab_stats_tracker_->reporting_delegate_for_testing()
+      ->ReportTabDuplicateMetrics(false);
+  EnsureTabDuplicateHistogramsMatchExpectations(expected_histograms);
 }
 
 IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
@@ -241,131 +305,6 @@ IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
   DCHECK_EQ(second_observer->window_count(), expected_stats.window_count);
 }
 
-IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
-                       TabDeletionGetsHandledProperly) {
-  // Assert that the |TabStatsTracker| instance is initialized during the
-  // creation of the main browser.
-  ASSERT_TRUE(tab_stats_tracker_ != nullptr);
-
-  constexpr base::TimeDelta kValidLongInterval = base::Hours(12);
-
-  TabStatsDataStore* data_store = tab_stats_tracker_->tab_stats_data_store();
-  TabStatsDataStore::TabsStateDuringIntervalMap* interval_map =
-      data_store->AddInterval();
-
-  ASSERT_TRUE(AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_TYPED));
-
-  EXPECT_EQ(2U, interval_map->size());
-
-  content::WebContents* web_contents =
-      data_store->existing_tabs_for_testing()->begin()->first;
-
-  // Delete one of the WebContents without calling the |OnTabRemoved| function,
-  // the WebContentsObserver owned by |tab_stats_tracker_| should be notified
-  // and this should be handled correctly.
-  TabStatsDataStore::TabID tab_id =
-      data_store->GetTabIDForTesting(web_contents).value();
-  browser()->tab_strip_model()->DetachAndDeleteWebContentsAt(
-      browser()->tab_strip_model()->GetIndexOfWebContents(web_contents));
-  EXPECT_TRUE(base::Contains(*interval_map, tab_id));
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  EXPECT_EQ(1U, interval_map->size());
-  EXPECT_FALSE(base::Contains(*interval_map, tab_id));
-
-  web_contents = data_store->existing_tabs_for_testing()->begin()->first;
-
-  // Do this a second time, ensures that the situation where there's no existing
-  // tabs is handled properly.
-  tab_id = data_store->GetTabIDForTesting(web_contents).value();
-  browser()->tab_strip_model()->DetachAndDeleteWebContentsAt(
-      browser()->tab_strip_model()->GetIndexOfWebContents(web_contents));
-  EXPECT_TRUE(base::Contains(*interval_map, tab_id));
-  tab_stats_tracker_->OnInterval(kValidLongInterval, interval_map);
-  EXPECT_EQ(0U, interval_map->size());
-}
-
-#if BUILDFLAG(IS_WIN)
-IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
-                       TestCalculateAndRecordNativeWindowVisibilities) {
-  std::unique_ptr<MockTabStatsTrackerDelegate> mock_delegate =
-      std::make_unique<MockTabStatsTrackerDelegate>();
-
-  // Maintaining this reference to |mock_delegate| is safe because the
-  // TabStatsTracker will outlive this test class.
-  MockTabStatsTrackerDelegate* mock_delegate_raw = mock_delegate.get();
-  tab_stats_tracker_->SetDelegateForTesting(std::move(mock_delegate));
-
-  TabStatsTrackerDelegate::OcclusionStatusMap mock_occlusion_results;
-
-  mock_delegate_raw->SetMockOcclusionResults(mock_occlusion_results);
-
-  tab_stats_tracker_->CalculateAndRecordNativeWindowVisibilities();
-
-  // There should be 1 entry for each zero window bucket.
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Occluded",
-                                      0, 1);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Visible",
-                                      0, 1);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Hidden",
-                                      0, 1);
-
-  // There should be no entries in the 1 window bucket.
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Occluded",
-                                      1, 0);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Visible",
-                                      1, 0);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Hidden",
-                                      1, 0);
-
-  // Create a browser for each aura::Window::OcclusionState.
-  mock_occlusion_results[CreateBrowser(browser()->profile())
-                             ->window()
-                             ->GetNativeWindow()
-                             ->GetHost()] =
-      aura::Window::OcclusionState::HIDDEN;
-  mock_occlusion_results[CreateBrowser(browser()->profile())
-                             ->window()
-                             ->GetNativeWindow()
-                             ->GetHost()] =
-      aura::Window::OcclusionState::VISIBLE;
-  mock_occlusion_results[CreateBrowser(browser()->profile())
-                             ->window()
-                             ->GetNativeWindow()
-                             ->GetHost()] =
-      aura::Window::OcclusionState::OCCLUDED;
-
-  mock_delegate_raw->SetMockOcclusionResults(mock_occlusion_results);
-
-  // There should now be 1 entry for each 1 window bucket.
-  tab_stats_tracker_->CalculateAndRecordNativeWindowVisibilities();
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Occluded",
-                                      1, 1);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Visible",
-                                      1, 1);
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Hidden",
-                                      1, 1);
-
-  mock_occlusion_results.clear();
-
-  // Create 5 aura::Window::OcclusionState browsers.
-  for (int count = 0; count < 5; count++) {
-    mock_occlusion_results[CreateBrowser(browser()->profile())
-                               ->window()
-                               ->GetNativeWindow()
-                               ->GetHost()] =
-        aura::Window::OcclusionState::OCCLUDED;
-  }
-
-  mock_delegate_raw->SetMockOcclusionResults(mock_occlusion_results);
-  tab_stats_tracker_->CalculateAndRecordNativeWindowVisibilities();
-
-  // There should be 1 entry in the 5 window occluded bucket.
-  histogram_tester_.ExpectBucketCount("Windows.NativeWindowVisibility.Occluded",
-                                      5, 1);
-}
-
-#endif  // BUILDFLAG(IS_WIN)
-
 namespace {
 
 class LenientMockTabStatsObserver : public TabStatsObserver {
@@ -395,7 +334,7 @@ using MockTabStatsObserver = testing::NiceMock<LenientMockTabStatsObserver>;
 
 }  // namespace
 
-// TODO(1183746): Fix the flakiness on MacOS and re-enable the test.
+// TODO(crbug.com/40752198): Fix the flakiness on MacOS and re-enable the test.
 #if BUILDFLAG(IS_MAC)
 #define MAYBE_TabStatsObserverBasics DISABLED_TabStatsObserverBasics
 #else
@@ -493,7 +432,13 @@ IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest,
   EXPECT_EQ(0U, count_observer.window_count());
 }
 
-IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest, TabSwitch) {
+// TODO(crbug.com/40919431): Re-enable this test
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_TabSwitch DISABLED_TabSwitch
+#else
+#define MAYBE_TabSwitch TabSwitch
+#endif
+IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest, MAYBE_TabSwitch) {
   MockTabStatsObserver mock_observer;
   TestTabStatsObserver count_observer;
   tab_stats_tracker_->AddObserverAndSetInitialState(&count_observer);
@@ -575,8 +520,7 @@ IN_PROC_BROWSER_TEST_F(TabStatsTrackerBrowserTest, AddObserverAudibleTab) {
   // Start the audio.
   base::RunLoop run_loop;
   AudioStartObserver audio_start_observer(web_contents, run_loop.QuitClosure());
-  EXPECT_EQ("OK", content::EvalJs(web_contents, "StartOscillator();",
-                                  content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_EQ("OK", content::EvalJs(web_contents, "StartOscillator();"));
   run_loop.Run();
 
   // Adding an observer now should receive the OnTabIsAudibleChanged() call.
@@ -604,7 +548,7 @@ class TabStatsTrackerPrerenderBrowserTest : public TabStatsTrackerBrowserTest {
       const TabStatsTrackerPrerenderBrowserTest&) = delete;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     TabStatsTrackerBrowserTest::SetUp();
   }
 
@@ -639,7 +583,8 @@ IN_PROC_BROWSER_TEST_F(
     EXPECT_CALL(mock_observer,
                 OnPrimaryMainFrameNavigationCommitted(::testing::_))
         .Times(0);
-    int host_id = prerender_test_helper().AddPrerender(prerender_url);
+    content::FrameTreeNodeId host_id =
+        prerender_test_helper().AddPrerender(prerender_url);
     host_observer = std::make_unique<content::test::PrerenderHostObserver>(
         *GetWebContents(), host_id);
     EXPECT_FALSE(host_observer->was_activated());

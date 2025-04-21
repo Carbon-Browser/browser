@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -19,8 +19,8 @@
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/session_specifics.pb.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
-#include "components/sync/test/model/test_matchers.h"
+#include "components/sync/test/data_type_store_test_util.h"
+#include "components/sync/test/test_matchers.h"
 #include "components/sync_device_info/local_device_info_util.h"
 #include "components/sync_sessions/mock_sync_sessions_client.h"
 #include "components/sync_sessions/session_sync_prefs.h"
@@ -33,13 +33,13 @@ namespace {
 
 using sync_pb::SessionSpecifics;
 using syncer::DataBatch;
+using syncer::DataTypeStore;
 using syncer::EntityData;
 using syncer::EntityMetadataMap;
 using syncer::HasEncryptionKeyName;
 using syncer::IsEmptyMetadataBatch;
 using syncer::MetadataBatch;
 using syncer::MetadataBatchContains;
-using syncer::ModelTypeStore;
 using syncer::NoModelError;
 using testing::_;
 using testing::ElementsAre;
@@ -60,7 +60,7 @@ class MockOpenCallback {
  public:
   MOCK_METHOD(void,
               Run,
-              (const absl::optional<syncer::ModelError>& error,
+              (const std::optional<syncer::ModelError>& error,
                SessionStore* store,
                MetadataBatch* metadata_batch),
               ());
@@ -68,7 +68,7 @@ class MockOpenCallback {
   SessionStore::OpenCallback Get() {
     return base::BindOnce(
         [](MockOpenCallback* callback,
-           const absl::optional<syncer::ModelError>& error,
+           const std::optional<syncer::ModelError>& error,
            std::unique_ptr<SessionStore> store,
            std::unique_ptr<MetadataBatch> metadata_batch) {
           // Store a copy of the pointer for GetResult().
@@ -111,12 +111,12 @@ std::map<std::string, EntityData> BatchToEntityDataMap(
 }
 
 std::unique_ptr<MetadataBatch> ReadAllPersistedMetadataFrom(
-    ModelTypeStore* store) {
+    DataTypeStore* store) {
   std::unique_ptr<MetadataBatch> batch;
   base::RunLoop loop;
   store->ReadAllMetadata(base::BindOnce(
       [](std::unique_ptr<MetadataBatch>* output_batch, base::RunLoop* loop,
-         const absl::optional<syncer::ModelError>& error,
+         const std::optional<syncer::ModelError>& error,
          std::unique_ptr<MetadataBatch> input_batch) {
         EXPECT_FALSE(error) << error->ToString();
         EXPECT_THAT(input_batch, NotNull());
@@ -129,13 +129,13 @@ std::unique_ptr<MetadataBatch> ReadAllPersistedMetadataFrom(
 }
 
 std::map<std::string, SessionSpecifics> ReadAllPersistedDataFrom(
-    ModelTypeStore* store) {
-  std::unique_ptr<ModelTypeStore::RecordList> records;
+    DataTypeStore* store) {
+  std::unique_ptr<DataTypeStore::RecordList> records;
   base::RunLoop loop;
   store->ReadAllData(base::BindOnce(
-      [](std::unique_ptr<ModelTypeStore::RecordList>* output_records,
-         base::RunLoop* loop, const absl::optional<syncer::ModelError>& error,
-         std::unique_ptr<ModelTypeStore::RecordList> input_records) {
+      [](std::unique_ptr<DataTypeStore::RecordList>* output_records,
+         base::RunLoop* loop, const std::optional<syncer::ModelError>& error,
+         std::unique_ptr<DataTypeStore::RecordList> input_records) {
         EXPECT_FALSE(error) << error->ToString();
         EXPECT_THAT(input_records, NotNull());
         *output_records = std::move(input_records);
@@ -145,7 +145,7 @@ std::map<std::string, SessionSpecifics> ReadAllPersistedDataFrom(
   loop.Run();
   std::map<std::string, SessionSpecifics> result;
   if (records) {
-    for (const ModelTypeStore::Record& record : *records) {
+    for (const DataTypeStore::Record& record : *records) {
       SessionSpecifics specifics;
       EXPECT_TRUE(specifics.ParseFromString(record.value));
       result.emplace(record.id, specifics);
@@ -159,7 +159,7 @@ class SessionStoreOpenTest : public ::testing::Test {
   SessionStoreOpenTest()
       : session_sync_prefs_(&pref_service_),
         underlying_store_(
-            syncer::ModelTypeStoreTestUtil::CreateInMemoryStoreForTest(
+            syncer::DataTypeStoreTestUtil::CreateInMemoryStoreForTest(
                 syncer::SESSIONS)) {
     SessionSyncPrefs::RegisterProfilePrefs(pref_service_.registry());
 
@@ -170,7 +170,7 @@ class SessionStoreOpenTest : public ::testing::Test {
         .WillByDefault(Return(&session_sync_prefs_));
     ON_CALL(*mock_sync_sessions_client_, GetStoreFactory())
         .WillByDefault(
-            Return(syncer::ModelTypeStoreTestUtil::FactoryForForwardingStore(
+            Return(syncer::DataTypeStoreTestUtil::FactoryForForwardingStore(
                 underlying_store_.get())));
   }
 
@@ -180,7 +180,7 @@ class SessionStoreOpenTest : public ::testing::Test {
   TestingPrefServiceSimple pref_service_;
   SessionSyncPrefs session_sync_prefs_;
   std::unique_ptr<MockSyncSessionsClient> mock_sync_sessions_client_;
-  std::unique_ptr<ModelTypeStore> underlying_store_;
+  std::unique_ptr<DataTypeStore> underlying_store_;
 };
 
 TEST_F(SessionStoreOpenTest, ShouldCreateStore) {
@@ -227,7 +227,7 @@ TEST_F(SessionStoreOpenTest, ShouldNotUseClientIfCancelled) {
     }
 
    private:
-    void Completed(const absl::optional<syncer::ModelError>& error,
+    void Completed(const std::optional<syncer::ModelError>& error,
                    std::unique_ptr<SessionStore> store,
                    std::unique_ptr<syncer::MetadataBatch> metadata_batch) {
       std::move(cb_).Run(error, std::move(store), std::move(metadata_batch));
@@ -269,6 +269,10 @@ class SessionStoreTest : public SessionStoreOpenTest {
 
   SessionStore* session_store() { return session_store_.get(); }
 
+  std::unique_ptr<SessionStore> TakeSessionStore() {
+    return std::move(session_store_);
+  }
+
  private:
   std::unique_ptr<SessionStore> session_store_;
 };
@@ -279,8 +283,52 @@ TEST_F(SessionStoreTest, ShouldClearLegacySessionsGuidFromPrefs) {
       kLegacySyncSessionsGUID);
   ASSERT_THAT(session_sync_prefs_.GetLegacySyncSessionsGUID(),
               Eq(kLegacySyncSessionsGUID));
-  session_store()->DeleteAllDataAndMetadata();
+  SessionStore::DeleteAllDataAndMetadata(TakeSessionStore());
   EXPECT_THAT(session_sync_prefs_.GetLegacySyncSessionsGUID(), IsEmpty());
+}
+
+TEST_F(SessionStoreTest, ShouldRecreateEmptyStore) {
+  const SessionStore::SessionInfo original_local_session_info =
+      session_store()->local_session_info();
+
+  // Put some data into the store.
+  std::unique_ptr<SessionStore::WriteBatch> batch =
+      session_store()->CreateWriteBatch(/*error_handler=*/base::DoNothing());
+  ASSERT_THAT(batch, NotNull());
+  SessionSpecifics header;
+  header.set_session_tag(kLocalCacheGuid);
+  header.mutable_header()->add_window()->set_window_id(1);
+  header.mutable_header()->mutable_window(0)->add_tab(2);
+  ASSERT_TRUE(SessionStore::AreValidSpecifics(header));
+  batch->PutAndUpdateTracker(header, base::Time::Now());
+  SessionStore::WriteBatch::Commit(std::move(batch));
+  ASSERT_THAT(ReadAllPersistedDataFrom(underlying_store_.get()),
+              Not(IsEmpty()));
+
+  auto recreate_store_callback =
+      SessionStore::DeleteAllDataAndMetadata(TakeSessionStore());
+
+  // Re-create the store with a new cache GUID / session tag.
+  const std::string kNewLocalCacheGuid = "new_cache_guid";
+  ASSERT_NE(kLocalCacheGuid, kNewLocalCacheGuid);
+  std::unique_ptr<SessionStore> new_store =
+      std::move(recreate_store_callback)
+          .Run(kNewLocalCacheGuid, mock_sync_sessions_client_.get());
+
+  // The newly (re)created store should be empty.
+  EXPECT_THAT(ReadAllPersistedDataFrom(underlying_store_.get()), IsEmpty());
+
+  const SessionStore::SessionInfo new_local_session_info =
+      new_store->local_session_info();
+  // The session tag (aka cache GUID) should've been updated.
+  EXPECT_EQ(new_local_session_info.session_tag, kNewLocalCacheGuid);
+  // The remaining local session fields should be unchanged.
+  EXPECT_EQ(original_local_session_info.client_name,
+            new_local_session_info.client_name);
+  EXPECT_EQ(original_local_session_info.device_type,
+            new_local_session_info.device_type);
+  EXPECT_EQ(original_local_session_info.device_form_factor,
+            new_local_session_info.device_form_factor);
 }
 
 TEST_F(SessionStoreTest, ShouldCreateLocalSession) {
@@ -322,9 +370,9 @@ TEST_F(SessionStoreTest, ShouldWriteAndRestoreMetadata) {
   metadata1.set_server_id(kServerId1);
   batch->GetMetadataChangeList()->UpdateMetadata(kStorageKey1, metadata1);
 
-  sync_pb::ModelTypeState model_type_state;
-  model_type_state.set_encryption_key_name(kEncryptionKeyName1);
-  batch->GetMetadataChangeList()->UpdateModelTypeState(model_type_state);
+  sync_pb::DataTypeState data_type_state;
+  data_type_state.set_encryption_key_name(kEncryptionKeyName1);
+  batch->GetMetadataChangeList()->UpdateDataTypeState(data_type_state);
 
   SessionStore::WriteBatch::Commit(std::move(batch));
 

@@ -1,57 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/platform_apps/app_termination_observer.h"
 
 #include "apps/browser_context_keyed_service_factories.h"
-#include "base/no_destructor.h"
 #include "chrome/browser/lifetime/termination_notification.h"
-#include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/browser/browser_context.h"
 
 namespace chrome_apps {
-
-namespace {
-
-class AppTerminationObserverFactory : public BrowserContextKeyedServiceFactory {
- public:
-  AppTerminationObserverFactory();
-  AppTerminationObserverFactory(const AppTerminationObserverFactory&) = delete;
-  AppTerminationObserverFactory& operator=(
-      const AppTerminationObserverFactory&) = delete;
-  ~AppTerminationObserverFactory() override = default;
-
-  // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
-  bool ServiceIsCreatedWithBrowserContext() const override;
-};
-
-AppTerminationObserverFactory::AppTerminationObserverFactory()
-    : BrowserContextKeyedServiceFactory(
-          "AppTerminationObserver",
-          BrowserContextDependencyManager::GetInstance()) {}
-
-KeyedService* AppTerminationObserverFactory::BuildServiceInstanceFor(
-    content::BrowserContext* browser_context) const {
-  return new AppTerminationObserver(browser_context);
-}
-
-content::BrowserContext* AppTerminationObserverFactory::GetBrowserContextToUse(
-    content::BrowserContext* browser_context) const {
-  return Profile::FromBrowserContext(browser_context)->GetOriginalProfile();
-}
-
-bool AppTerminationObserverFactory::ServiceIsCreatedWithBrowserContext() const {
-  return true;
-}
-
-}  // namespace
 
 AppTerminationObserver::AppTerminationObserver(
     content::BrowserContext* browser_context)
@@ -64,11 +21,13 @@ AppTerminationObserver::AppTerminationObserver(
 
 AppTerminationObserver::~AppTerminationObserver() = default;
 
-// static
-BrowserContextKeyedServiceFactory*
-AppTerminationObserver::GetFactoryInstance() {
-  static base::NoDestructor<AppTerminationObserverFactory> factory;
-  return factory.get();
+void AppTerminationObserver::Shutdown() {
+  // The associated `browser_context_` is shutting down, so it's no longer safe
+  // to use (any attempt to access a KeyedService will crash after this point,
+  // since the context is marked as dead). Reset the subscription. See
+  // https://crbug.com/352003806.
+  // See also the note in `OnAppTerminating()`.
+  subscription_.reset();
 }
 
 void AppTerminationObserver::OnAppTerminating() {

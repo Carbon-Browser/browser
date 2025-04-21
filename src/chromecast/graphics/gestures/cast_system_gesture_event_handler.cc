@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,13 +35,13 @@ CastSystemGestureEventHandler::~CastSystemGestureEventHandler() {
 }
 
 void CastSystemGestureEventHandler::OnTouchEvent(ui::TouchEvent* event) {
-  if (event->type() == ui::ET_TOUCH_PRESSED) {
+  if (event->type() == ui::EventType::kTouchPressed) {
     dispatcher_->HandleTapDownGesture(event->location());
   }
 }
 
 void CastSystemGestureEventHandler::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() == ui::ET_GESTURE_TAP) {
+  if (event->type() == ui::EventType::kGestureTap) {
     dispatcher_->HandleTapGesture(event->location());
   }
 }

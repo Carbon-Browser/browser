@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/aw_browser_context.h"
+#include "android_webview/browser/aw_browser_context_store.h"
 #include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/aw_feature_list_creator.h"
 #include "android_webview/browser/network_service/aw_network_change_notifier_factory.h"
@@ -57,8 +58,12 @@ class AwBrowserContextTest : public testing::Test {
 
 // Tests that constraints on trust for Symantec-issued certificates are not
 // enforced for the NetworkContext, as it should behave like the Android system.
-TEST_F(AwBrowserContextTest, SymantecPoliciesExempted) {
-  AwBrowserContext context;
+// TODO(crbug.com/40278955): Fix the flakiness and re-enable.
+TEST_F(AwBrowserContextTest, DISABLED_SymantecPoliciesExempted) {
+  AwBrowserContext context(
+      AwBrowserContextStore::kDefaultContextName,
+      base::FilePath(AwBrowserContextStore::kDefaultContextPath),
+      /*is_default=*/true);
   network::mojom::NetworkContextParams network_context_params;
   cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
   context.ConfigureNetworkContextParams(
@@ -73,7 +78,10 @@ TEST_F(AwBrowserContextTest, SymantecPoliciesExempted) {
 // including those in application manifests, as it should behave like
 // the Android system.
 TEST_F(AwBrowserContextTest, SHA1LocalAnchorsAllowed) {
-  AwBrowserContext context;
+  AwBrowserContext context(
+      AwBrowserContextStore::kDefaultContextName,
+      base::FilePath(AwBrowserContextStore::kDefaultContextPath),
+      /*is_default=*/true);
   network::mojom::NetworkContextParams network_context_params;
   cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
   context.ConfigureNetworkContextParams(
@@ -82,42 +90,6 @@ TEST_F(AwBrowserContextTest, SHA1LocalAnchorsAllowed) {
   ASSERT_TRUE(network_context_params.initial_ssl_config);
   ASSERT_TRUE(
       network_context_params.initial_ssl_config->sha1_local_anchors_enabled);
-}
-
-// Tests that TLS 1.0/1.1 is still allowed for WebView if the escape hatch
-// feature is enabled.
-TEST_F(AwBrowserContextTest, LegacyTLSVersionsAllowed) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(
-      android_webview::features::kWebViewLegacyTlsSupport);
-
-  AwBrowserContext context;
-  network::mojom::NetworkContextParams network_context_params;
-  cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
-  context.ConfigureNetworkContextParams(
-      false, base::FilePath(), &network_context_params, &cert_verifier_params);
-
-  ASSERT_TRUE(network_context_params.initial_ssl_config);
-  EXPECT_EQ(network::mojom::SSLVersion::kTLS1,
-            network_context_params.initial_ssl_config->version_min);
-}
-
-// Tests that TLS 1.0/1.1 are disallowed when the escape hatch feature is
-// disabled.
-TEST_F(AwBrowserContextTest, LegacyTLSVersionsDisallowed) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(
-      android_webview::features::kWebViewLegacyTlsSupport);
-
-  AwBrowserContext context;
-  network::mojom::NetworkContextParams network_context_params;
-  cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
-  context.ConfigureNetworkContextParams(
-      false, base::FilePath(), &network_context_params, &cert_verifier_params);
-
-  ASSERT_TRUE(network_context_params.initial_ssl_config);
-  EXPECT_EQ(network::mojom::SSLVersion::kTLS12,
-            network_context_params.initial_ssl_config->version_min);
 }
 
 }  // namespace android_webview

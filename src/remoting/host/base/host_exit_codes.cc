@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@ const NameMapElement<HostExitCodes> kHostExitCodeStrings[] = {
     {kNoPermissionExitCode, "NO_PERMISSION"},
     {kInvalidHostConfigurationExitCode, "INVALID_HOST_CONFIGURATION"},
     {kInvalidHostIdExitCode, "INVALID_HOST_ID"},
-    {kInvalidOauthCredentialsExitCode, "INVALID_OAUTH_CREDENTIALS"},
+    {kInvalidOAuthCredentialsExitCode, "INVALID_OAUTH_CREDENTIALS"},
     {kInvalidHostDomainExitCode, "INVALID_HOST_DOMAIN"},
-    {kLoginScreenNotSupportedExitCode, "LOGIN_SCREEN_NOT_SUPPORTED"},
+    {kTerminatedByAgentProcessBroker, "TERMINATED_BY_AGENT_PROCESS_BROKER"},
     {kUsernameMismatchExitCode, "USERNAME_MISMATCH"},
     {kHostDeletedExitCode, "HOST_DELETED"},
     {kRemoteAccessDisallowedExitCode, "REMOTE_ACCESS_DISALLOWED"},

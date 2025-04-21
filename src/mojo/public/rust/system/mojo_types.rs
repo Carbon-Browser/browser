@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 //! a whole because it is intended to be used that way. It contains
 //! all of the basic types needed by all system-level Mojo bindings.
 
-use crate::system::ffi::types::{self, *};
+use crate::ffi::types::{self, *};
 use std::fmt;
 use std::u64;
 
@@ -26,7 +26,7 @@ pub use types::MojoTimeTicks;
 pub type MojoDeadline = u64;
 pub static MOJO_INDEFINITE: MojoDeadline = u64::MAX;
 
-pub use crate::system::wait_set::WaitSetResult;
+pub use crate::wait_set::WaitSetResult;
 
 /// MojoResult represents anything that can happen
 /// as a result of performing some operation in Mojo.
@@ -108,6 +108,15 @@ impl MojoResult {
             MojoResult::InvalidResult => "Something went very wrong",
         }
     }
+
+    /// For convenience in code using `Result<_, _>`, maps Okay to Ok(()) and
+    /// other results to Err(self).
+    pub fn into_result(self) -> Result<(), MojoResult> {
+        match self {
+            MojoResult::Okay => Ok(()),
+            e => Err(e),
+        }
+    }
 }
 
 impl fmt::Display for MojoResult {
@@ -118,7 +127,7 @@ impl fmt::Display for MojoResult {
 }
 
 bitflags::bitflags! {
-    #[derive(Default)]
+    #[derive(Clone, Copy, Default)]
     #[repr(transparent)]
     pub struct HandleSignals: MojoHandleSignals {
         const READABLE = 1 << 0;

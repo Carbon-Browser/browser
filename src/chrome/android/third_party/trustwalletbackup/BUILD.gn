@@ -1,0 +1,19 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+android_aar_prebuilt("trustwallet_java") {
+  extract_native_libraries = true
+  ignore_native_libraries = false
+  aar_path = "trustwallet.aar"
+  info_path ="trustwallet.info"
+  deps = [
+    #":trustwallet_proto_java",
+    "//third_party/android_deps:com_google_protobuf_protobuf_java_java",
+  ]
+}
+
+java_prebuilt("trustwallet_proto_java") {
+  jar_path = "trustwallet_proto.jar"
+  supports_android = true
+  #enable_bytecode_checks = false
+}

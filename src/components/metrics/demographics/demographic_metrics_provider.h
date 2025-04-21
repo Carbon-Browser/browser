@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,27 @@
 #define COMPONENTS_METRICS_DEMOGRAPHICS_DEMOGRAPHIC_METRICS_PROVIDER_H_
 
 #include <memory>
+#include <optional>
 
+#include "base/feature_list.h"
 #include "base/time/time.h"
 #include "components/metrics/demographics/user_demographics.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/metrics/ukm_demographic_metrics_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
 #include "third_party/metrics_proto/user_demographics.pb.h"
 
 class PrefService;
-
-namespace base {
-struct Feature;
-}
 
 namespace syncer {
 class SyncService;
 }
 
 namespace metrics {
+
+// Feature switch to report user's noised birth year and gender.
+BASE_DECLARE_FEATURE(kDemographicMetricsReporting);
 
 // Provider of the synced user’s noised birth year and gender to the UMA metrics
 // server. The synced user's birth year and gender were provided to Google when
@@ -53,11 +53,14 @@ class DemographicMetricsProvider : public MetricsProvider,
     // is being synced.
     virtual syncer::SyncService* GetSyncService() = 0;
 
-    // Gets a pointer to the PrefService of the profile.
-    virtual PrefService* GetPrefService() = 0;
+    // Gets a pointer to the PrefService for the Local State of the device.
+    virtual PrefService* GetLocalState() = 0;
+
+    // Gets a pointer to the PrefService of the user profile.
+    virtual PrefService* GetProfilePrefs() = 0;
 
     // Gets the network time that represents now.
-    // TODO(crbug/1145655): Remove this function and replace with
+    // TODO(crbug.com/40729596): Remove this function and replace with
     // base::Time::Now().
     virtual base::Time GetNetworkTime() const = 0;
   };
@@ -81,7 +84,7 @@ class DemographicMetricsProvider : public MetricsProvider,
   void ProvideSyncedUserNoisedBirthYearAndGender(ReportType* report) {
     DCHECK(report);
 
-    absl::optional<UserDemographics> user_demographics =
+    std::optional<UserDemographics> user_demographics =
         ProvideSyncedUserNoisedBirthYearAndGender();
     if (user_demographics.has_value()) {
       report->mutable_user_demographics()->set_birth_year(
@@ -99,12 +102,9 @@ class DemographicMetricsProvider : public MetricsProvider,
   void ProvideSyncedUserNoisedBirthYearAndGenderToReport(
       ukm::Report* report) override;
 
-  // Feature switch to report user's noised birth year and gender.
-  static const base::Feature kDemographicMetricsReporting;
-
  private:
   // Provides the synced user's noised birth year and gender.
-  absl::optional<UserDemographics> ProvideSyncedUserNoisedBirthYearAndGender();
+  std::optional<UserDemographics> ProvideSyncedUserNoisedBirthYearAndGender();
 
   void LogUserDemographicsStatusInHistogram(UserDemographicsStatus status);
 

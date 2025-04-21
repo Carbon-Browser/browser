@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,20 @@
 #include <algorithm>
 #include <numeric>
 #include <set>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/contains.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/ime/input_method.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/menu_separator_types.h"
+#include "ui/base/owned_window_anchor.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -22,127 +28,207 @@
 #include "ui/events/event.h"
 #include "ui/gfx/canvas.h"
 #include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/controls/image_view.h"
 #include "ui/views/controls/menu/menu_config.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/views/controls/menu/menu_host.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_scroll_view_container.h"
+#include "ui/views/controls/menu/menu_separator.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/root_view.h"
 #include "ui/views/widget/widget.h"
+
+namespace views {
 
 namespace {
 
 // Height of the drop indicator. This should be an even number.
 constexpr int kDropIndicatorHeight = 2;
 
+template <typename MIV, typename V>
+std::vector<MIV*> GetMenuItemsFromChildren(const View::Views& children) {
+  std::vector<MIV*> menu_items;
+  base::ranges::transform(
+      children, std::back_inserter(menu_items),
+      static_cast<MIV* (*)(V*)>(&AsViewClass<MenuItemView>));
+  std::erase_if(menu_items, [](MIV* item) {
+    return !item || IsViewClass<EmptyMenuMenuItem>(item);
+  });
+  return menu_items;
+}
+
 }  // namespace
 
-namespace views {
-
-SubmenuView::SubmenuView(MenuItemView* parent)
-    : parent_menu_item_(parent),
-      host_(nullptr),
-      drop_item_(nullptr),
-      drop_position_(MenuDelegate::DropPosition::kNone),
-      scroll_view_container_(nullptr),
-      max_minor_text_width_(0),
-      minimum_preferred_width_(0),
-      resize_open_menu_(false),
-      scroll_animator_(new ScrollAnimator(this)),
-      roundoff_error_(0),
-      prefix_selector_(this, this) {
-  DCHECK(parent);
+SubmenuView::SubmenuView(MenuItemView* parent) : parent_menu_item_(parent) {
+  CHECK(parent_menu_item_);
   // We'll delete ourselves, otherwise the ScrollView would delete us on close.
   set_owned_by_client();
+
+  // Menus in Chrome are always traversed in a vertical direction.
+  GetViewAccessibility().SetIsVertical(true);
+  GetViewAccessibility().SetRole(ax::mojom::Role::kMenu);
 }
 
 SubmenuView::~SubmenuView() {
   // The menu may not have been closed yet (it will be hidden, but not
   // necessarily closed).
   Close();
-
-  delete scroll_view_container_;
 }
 
-bool SubmenuView::HasEmptyMenuItemView() const {
-  return std::any_of(
-      children().cbegin(), children().cend(), [](const View* child) {
-        return child->GetID() == MenuItemView::kEmptyMenuItemViewID;
-      });
+std::vector<MenuItemView*> SubmenuView::GetMenuItems() {
+  return GetMenuItemsFromChildren<MenuItemView, View>(children());
 }
 
-bool SubmenuView::HasVisibleChildren() const {
-  const auto menu_items = GetMenuItems();
-  return std::any_of(
-      menu_items.cbegin(), menu_items.cend(),
-      [](const MenuItemView* item) { return item->GetVisible(); });
-}
-
-SubmenuView::MenuItems SubmenuView::GetMenuItems() const {
-  MenuItems menu_items;
-  for (View* child : children()) {
-    if (child->GetID() == MenuItemView::kMenuItemViewID)
-      menu_items.push_back(static_cast<MenuItemView*>(child));
-  }
-  return menu_items;
+std::vector<const MenuItemView*> SubmenuView::GetMenuItems() const {
+  return GetMenuItemsFromChildren<const MenuItemView, const View>(children());
 }
 
 MenuItemView* SubmenuView::GetMenuItemAt(size_t index) {
-  const MenuItems menu_items = GetMenuItems();
-  DCHECK_LT(index, menu_items.size());
+  const auto menu_items = GetMenuItems();
+  CHECK_LT(index, menu_items.size());
   return menu_items[index];
+}
+
+int SubmenuView::GetPreferredItemHeight() const {
+  EmptyMenuMenuItem menu_item(parent_menu_item_);
+  menu_item.set_controller(parent_menu_item_->GetMenuController());
+  return menu_item.GetPreferredSize({}).height();
 }
 
 PrefixSelector* SubmenuView::GetPrefixSelector() {
   return &prefix_selector_;
 }
 
+void SubmenuView::UpdateMenuPartSizes() {
+  const MenuConfig& config = MenuConfig::instance();
+
+  const auto get_metrics = [&] {
+    return std::tie(icon_area_width_, label_start_, trailing_padding_);
+  };
+  const auto old_metrics = get_metrics();
+
+  trailing_padding_ = config.item_horizontal_padding +
+                      parent_menu_item_->GetItemHorizontalBorder();
+  const auto& menu_items = GetMenuItems();
+  if (config.reserve_dedicated_arrow_column &&
+      base::ranges::any_of(menu_items, &MenuItemView::HasSubmenu)) {
+    trailing_padding_ +=
+        config.arrow_size +
+        (base::Contains(menu_items, MenuItemView::Type::kActionableSubMenu,
+                        &MenuItemView::GetType)
+             ? config.actionable_submenu_arrow_to_edge_padding
+             : config.arrow_to_edge_padding);
+  }
+
+  const auto is_check_or_radio = [](const auto* item) {
+    const auto type = item->GetType();
+    return type == MenuItemView::Type::kCheckbox ||
+           type == MenuItemView::Type::kRadio;
+  };
+  icon_area_width_ = min_icon_height_ =
+      (config.always_reserve_check_region ||
+       base::ranges::any_of(menu_items, is_check_or_radio))
+          ? kMenuCheckSize
+          : 0;
+  int max_icon_width = 0;
+  if (!menu_items.empty()) {
+    std::vector<int> widths(menu_items.size());
+    base::ranges::transform(
+        menu_items, widths.begin(), [&](const MenuItemView* item) {
+          const auto icon_size = item->GetIconPreferredSize();
+          if (icon_size.IsEmpty()) {
+            return 0;
+          }
+          min_icon_height_ = std::max(min_icon_height_, kMenuCheckSize);
+          // If this item has a radio or checkbox, an additional icon will not
+          // affect horizontal alignment of other items.
+          return (config.icons_in_label || !is_check_or_radio(item))
+                     ? icon_size.width()
+                     : 0;
+        });
+    max_icon_width = base::ranges::max(widths);
+  }
+  if (!config.icons_in_label) {
+    icon_area_width_ = std::max(icon_area_width_, max_icon_width);
+  }
+
+  label_start_ = parent_menu_item_->GetContentStart() + icon_area_width_;
+  if (icon_area_width_) {
+    const auto* const controller = parent_menu_item_->GetMenuController();
+    label_start_ += (controller && controller->use_ash_system_ui_layout())
+                        ? config.touchable_item_horizontal_padding
+                        : config.icon_label_spacing;
+  }
+
+  if (config.icons_in_label) {
+    icon_area_width_ = max_icon_width;
+  }
+
+  if (get_metrics() != old_metrics) {
+    InvalidateLayout();
+  }
+}
+
 void SubmenuView::ChildPreferredSizeChanged(View* child) {
-  if (!resize_open_menu_)
+  if (!resize_open_menu_) {
     return;
+  }
 
   MenuItemView* item = parent_menu_item_;
   MenuController* controller = item->GetMenuController();
 
   if (controller) {
-    bool dir;
+    MenuController::MenuOpenDirection dir;
     ui::OwnedWindowAnchor anchor;
-    gfx::Rect bounds =
-        controller->CalculateMenuBounds(item, false, &dir, &anchor);
+    gfx::Rect bounds = controller->CalculateMenuBounds(
+        item, MenuController::MenuOpenDirection::kTrailing, &dir, &anchor);
     Reposition(bounds, anchor);
   }
 }
 
-void SubmenuView::Layout() {
+void SubmenuView::Layout(PassKey) {
   // We're in a ScrollView, and need to set our width/height ourselves.
-  if (!parent())
+  if (!parent()) {
     return;
+  }
 
   // Use our current y, unless it means part of the menu isn't visible anymore.
-  int pref_height = GetPreferredSize().height();
-  int new_y;
-  if (pref_height > parent()->height())
-    new_y = std::max(parent()->height() - pref_height, y());
-  else
-    new_y = 0;
-  SetBounds(x(), new_y, parent()->width(), pref_height);
+  const int pref_height = GetPreferredSize(SizeBounds(size())).height();
+  SetBounds(x(),
+            (pref_height > parent()->height())
+                ? std::max(parent()->height() - pref_height, y())
+                : 0,
+            parent()->width(), pref_height);
 
-  gfx::Insets insets = GetInsets();
-  int x = insets.left();
+  const gfx::Insets insets = GetInsets();
+  const int x = insets.left();
   int y = insets.top();
-  int menu_item_width = width() - insets.width();
+  const int menu_item_width = width() - insets.width();
+  const int between_item_vertical_padding =
+      MenuConfig::instance().between_item_vertical_padding;
+  bool previous_child_was_lower_separator = false;
   for (View* child : children()) {
     if (child->GetVisible()) {
-      int child_height = child->GetHeightForWidth(menu_item_width);
-      child->SetBounds(x, y, menu_item_width, child_height);
-      y += child_height;
+      const auto* separator = AsViewClass<MenuSeparator>(child);
+      if (y != insets.top() && !previous_child_was_lower_separator &&
+          (!separator || separator->GetType() != ui::UPPER_SEPARATOR)) {
+        y += between_item_vertical_padding;
+      }
+      child->SetBounds(x, y, menu_item_width,
+                       child->GetHeightForWidth(menu_item_width));
+      y = child->bounds().bottom();
+      previous_child_was_lower_separator =
+          separator && separator->GetType() == ui::LOWER_SEPARATOR;
     }
   }
 }
 
-gfx::Size SubmenuView::CalculatePreferredSize() const {
-  if (children().empty())
+gfx::Size SubmenuView::CalculatePreferredSize(
+    const SizeBounds& /*available_size*/) const {
+  if (children().empty()) {
     return gfx::Size();
+  }
 
   max_minor_text_width_ = 0;
   // The maximum width of items which contain maybe a label and multiple views.
@@ -157,10 +243,10 @@ gfx::Size SubmenuView::CalculatePreferredSize() const {
   // using that width. This allows views that have flexible widths to adjust
   // accordingly.
   for (const View* child : children()) {
-    if (!child->GetVisible())
+    if (!child->GetVisible()) {
       continue;
-    if (child->GetID() == MenuItemView::kMenuItemViewID) {
-      const MenuItemView* menu = static_cast<const MenuItemView*>(child);
+    }
+    if (const auto* const menu = AsViewClass<const MenuItemView>(child)) {
       const MenuItemView::MenuItemDimensions& dimensions =
           menu->GetDimensions();
       max_simple_width = std::max(max_simple_width, dimensions.standard_width);
@@ -172,14 +258,16 @@ gfx::Size SubmenuView::CalculatePreferredSize() const {
       touchable_minimum_width = dimensions.standard_width;
     } else {
       max_complex_width =
-          std::max(max_complex_width, child->GetPreferredSize().width());
+          std::max(max_complex_width, child->GetPreferredSize({}).width());
     }
   }
-  if (max_minor_text_width_ > 0)
-    max_minor_text_width_ += MenuConfig::instance().item_horizontal_padding;
+  const auto& config = MenuConfig::instance();
+  if (max_minor_text_width_ > 0) {
+    max_minor_text_width_ += config.item_horizontal_padding;
+  }
 
   // Finish calculating our optimum width.
-  gfx::Insets insets = GetInsets();
+  const gfx::Insets insets = GetInsets();
   int width = std::max(
       max_complex_width,
       std::max(max_simple_width + max_minor_text_width_ + insets.width(),
@@ -192,25 +280,24 @@ gfx::Size SubmenuView::CalculatePreferredSize() const {
 
   // Then, the height for that width.
   const int menu_item_width = width - insets.width();
-  const auto get_height = [menu_item_width](int height, const View* child) {
-    return height + (child->GetVisible()
-                         ? child->GetHeightForWidth(menu_item_width)
-                         : 0);
+  bool previous_child_was_lower_separator = false;
+  const auto get_height = [&](int height, const View* child) {
+    if (!child->GetVisible()) {
+      return height;
+    }
+    const auto* separator = AsViewClass<MenuSeparator>(child);
+    if (height && !previous_child_was_lower_separator &&
+        (!separator || separator->GetType() != ui::UPPER_SEPARATOR)) {
+      height += config.between_item_vertical_padding;
+    }
+    previous_child_was_lower_separator =
+        separator && separator->GetType() == ui::LOWER_SEPARATOR;
+    return height + child->GetHeightForWidth(menu_item_width);
   };
   const int height =
       std::accumulate(children().cbegin(), children().cend(), 0, get_height);
 
   return gfx::Size(width, height + insets.height());
-}
-
-void SubmenuView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  // Inherit most of the state from the parent menu item, except the role and
-  // the orientation.
-  if (parent_menu_item_)
-    parent_menu_item_->GetAccessibleNodeData(node_data);
-  node_data->role = ax::mojom::Role::kMenu;
-  // Menus in Chrome are always traversed in a vertical direction.
-  node_data->AddState(ax::mojom::State::kVertical);
 }
 
 void SubmenuView::PaintChildren(const PaintInfo& paint_info) {
@@ -275,6 +362,7 @@ void SubmenuView::OnDragExited() {
 views::View::DropCallback SubmenuView::GetDropCallback(
     const ui::DropTargetEvent& event) {
   DCHECK(parent_menu_item_->GetMenuController());
+  drop_item_ = nullptr;
   return parent_menu_item_->GetMenuController()->GetDropCallback(this, event);
 }
 
@@ -286,43 +374,46 @@ bool SubmenuView::OnMouseWheel(const ui::MouseWheelEvent& e) {
     return true;
   }
 
-  const auto starts_above_vis_bounds = [&vis_bounds](const MenuItemView* item) {
-    return item->y() < vis_bounds.y();
-  };
-  auto i = std::find_if_not(menu_items.cbegin(), menu_items.cend(),
-                            starts_above_vis_bounds);
-  if (i == menu_items.cend())
+  auto i = base::ranges::lower_bound(menu_items, vis_bounds.y(), {},
+                                     &MenuItemView::y);
+  if (i == menu_items.cend()) {
     return true;
+  }
 
   // If the first item isn't entirely visible, make it visible, otherwise make
   // the next/previous one entirely visible. If enough wasn't scrolled to show
   // any new rows, then just scroll the amount so that smooth scrolling using
   // the trackpad is possible.
   int delta = abs(e.y_offset() / ui::MouseWheelEvent::kWheelDelta);
-  if (delta == 0)
+  if (delta == 0) {
     return OnScroll(0, e.y_offset());
+  }
 
   const auto scrolled_to_top = [&vis_bounds](const MenuItemView* item) {
     return item->y() == vis_bounds.y();
   };
-  if (i != menu_items.cbegin() && !scrolled_to_top(*i))
+  if (i != menu_items.cbegin() && !scrolled_to_top(*i)) {
     --i;
+  }
   for (bool scroll_up = (e.y_offset() > 0); delta != 0; --delta) {
     int scroll_target;
     if (scroll_up) {
       if (scrolled_to_top(*i)) {
-        if (i == menu_items.cbegin())
+        if (i == menu_items.cbegin()) {
           break;
+        }
         --i;
       }
       scroll_target = (*i)->y();
     } else {
       const auto next_iter = std::next(i);
-      if (next_iter == menu_items.cend())
+      if (next_iter == menu_items.cend()) {
         break;
+      }
       scroll_target = (*next_iter)->y();
-      if (scrolled_to_top(*i))
+      if (scrolled_to_top(*i)) {
         i = next_iter;
+      }
     }
     ScrollRectToVisible(
         gfx::Rect(gfx::Point(0, scroll_target), vis_bounds.size()));
@@ -335,48 +426,49 @@ bool SubmenuView::OnMouseWheel(const ui::MouseWheelEvent& e) {
 void SubmenuView::OnGestureEvent(ui::GestureEvent* event) {
   bool handled = true;
   switch (event->type()) {
-    case ui::ET_GESTURE_SCROLL_BEGIN:
+    case ui::EventType::kGestureScrollBegin:
       scroll_animator_->Stop();
       break;
-    case ui::ET_GESTURE_SCROLL_UPDATE:
+    case ui::EventType::kGestureScrollUpdate:
       handled = OnScroll(0, event->details().scroll_y());
       break;
-    case ui::ET_GESTURE_SCROLL_END:
+    case ui::EventType::kGestureScrollEnd:
       break;
-    case ui::ET_SCROLL_FLING_START:
-      if (event->details().velocity_y() != 0.0f)
+    case ui::EventType::kScrollFlingStart:
+      if (event->details().velocity_y() != 0.0f) {
         scroll_animator_->Start(0, event->details().velocity_y());
+      }
       break;
-    case ui::ET_GESTURE_TAP_DOWN:
-    case ui::ET_SCROLL_FLING_CANCEL:
-      if (scroll_animator_->is_scrolling())
+    case ui::EventType::kGestureTapDown:
+    case ui::EventType::kScrollFlingCancel:
+      if (scroll_animator_->is_scrolling()) {
         scroll_animator_->Stop();
-      else
+      } else {
         handled = false;
+      }
       break;
     default:
       handled = false;
       break;
   }
-  if (handled)
+  if (handled) {
     event->SetHandled();
+  }
 }
 
 size_t SubmenuView::GetRowCount() {
   return GetMenuItems().size();
 }
 
-absl::optional<size_t> SubmenuView::GetSelectedRow() {
+std::optional<size_t> SubmenuView::GetSelectedRow() {
   const auto menu_items = GetMenuItems();
-  const auto i =
-      std::find_if(menu_items.cbegin(), menu_items.cend(),
-                   [](const MenuItemView* item) { return item->IsSelected(); });
-  return (i == menu_items.cend()) ? absl::nullopt
-                                  : absl::make_optional(static_cast<size_t>(
+  const auto i = base::ranges::find_if(menu_items, &MenuItemView::IsSelected);
+  return (i == menu_items.cend()) ? std::nullopt
+                                  : std::make_optional(static_cast<size_t>(
                                         std::distance(menu_items.cbegin(), i)));
 }
 
-void SubmenuView::SetSelectedRow(absl::optional<size_t> row) {
+void SubmenuView::SetSelectedRow(std::optional<size_t> row) {
   parent_menu_item_->GetMenuController()->SetSelection(
       GetMenuItemAt(row.value()), MenuController::SELECTION_DEFAULT);
 }
@@ -404,7 +496,7 @@ void SubmenuView::ShowAt(const MenuHost::InitParams& init_params) {
     InvalidateLayout();
 
     MenuHost::InitParams new_init_params = init_params;
-    new_init_params.contents_view = scroll_view_container_;
+    new_init_params.contents_view = scroll_view_container_.get();
     host_->InitMenuHost(new_init_params);
   }
 
@@ -418,6 +510,14 @@ void SubmenuView::ShowAt(const MenuHost::InitParams& init_params) {
   }
   // Fire kMenuPopupStart for each menu/submenu that is shown.
   NotifyAccessibilityEvent(ax::mojom::Event::kMenuPopupStart, true);
+
+  GetMenuItem()->UpdateAccessibleExpandedCollapsedState();
+
+  // Announce if the menu/submenu is empty.
+  if (GetRowCount() == 0) {
+    GetViewAccessibility().AnnouncePolitely(
+        l10n_util::GetStringUTF16(IDS_APP_MENU_AX_ANNOUNCE_EMPTY_SUBMENU));
+  }
 }
 
 void SubmenuView::Reposition(const gfx::Rect& bounds,
@@ -433,6 +533,7 @@ void SubmenuView::Close() {
   if (host_) {
     host_->DestroyMenuHost();
     host_ = nullptr;
+    GetMenuItem()->UpdateAccessibleExpandedCollapsedState();
   }
 }
 
@@ -450,61 +551,88 @@ void SubmenuView::Hide() {
       GetViewAccessibility().EndPopupFocusOverride();
     }
     // Fire these kMenuPopupEnd for each menu/submenu that closes/hides.
-    if (host_->IsVisible())
+    if (host_->IsVisible()) {
       NotifyAccessibilityEvent(ax::mojom::Event::kMenuPopupEnd, true);
+    }
 
     host_->HideMenuHost();
+    GetMenuItem()->UpdateAccessibleExpandedCollapsedState();
   }
 
-  if (scroll_animator_->is_scrolling())
+  if (scroll_animator_->is_scrolling()) {
     scroll_animator_->Stop();
+  }
 }
 
 void SubmenuView::ReleaseCapture() {
-  if (host_)
+  if (host_) {
     host_->ReleaseMenuHostCapture();
+  }
 }
 
 bool SubmenuView::SkipDefaultKeyEventProcessing(const ui::KeyEvent& e) {
   return views::FocusManager::IsTabTraversalKeyEvent(e);
 }
 
-MenuItemView* SubmenuView::GetMenuItem() {
+const MenuItemView* SubmenuView::GetMenuItem() const {
   return parent_menu_item_;
 }
 
 void SubmenuView::SetDropMenuItem(MenuItemView* item,
                                   MenuDelegate::DropPosition position) {
-  if (drop_item_ == item && drop_position_ == position)
+  if (drop_item_ == item && drop_position_ == position) {
     return;
+  }
   SchedulePaintForDropIndicator(drop_item_, drop_position_);
-  MenuItemView* old_drop_item = drop_item_;
-  drop_item_ = item;
+  MenuItemView* old_drop_item = std::exchange(drop_item_, item);
   drop_position_ = position;
-  if (old_drop_item && old_drop_item != drop_item_)
-    old_drop_item->OnDropStatusChanged();
-  if (drop_item_)
-    drop_item_->OnDropStatusChanged();
+  if (!old_drop_item || !item) {
+    // Whether the selection is actually drawn
+    // (`MenuItemView:last_paint_as_selected_`) depends upon whether there is a
+    // drop item. Find the selected item and have it updates its paint as
+    // selected state.
+    for (View* child : children()) {
+      if (auto* child_menu_item = AsViewClass<MenuItemView>(child);
+          child_menu_item && child_menu_item->GetVisible() &&
+          child_menu_item->IsSelected()) {
+        child_menu_item->OnDropOrSelectionStatusMayHaveChanged();
+        // Only one menu item is selected, so no need to continue iterating once
+        // the selected item is found.
+        break;
+      }
+    }
+  } else {
+    if (old_drop_item && old_drop_item != drop_item_) {
+      old_drop_item->OnDropOrSelectionStatusMayHaveChanged();
+    }
+    if (drop_item_) {
+      drop_item_->OnDropOrSelectionStatusMayHaveChanged();
+    }
+  }
   SchedulePaintForDropIndicator(drop_item_, drop_position_);
 }
 
 bool SubmenuView::GetShowSelection(const MenuItemView* item) const {
-  if (drop_item_ == nullptr)
-    return true;
-  // Something is being dropped on one of this menus items. Show the
-  // selection if the drop is on the passed in item and the drop position is
-  // ON.
-  return (drop_item_ == item &&
-          drop_position_ == MenuDelegate::DropPosition::kOn);
+  return !drop_item_ || (drop_item_ == item &&
+                         drop_position_ == MenuDelegate::DropPosition::kOn);
 }
 
 MenuScrollViewContainer* SubmenuView::GetScrollViewContainer() {
+  // Perform null checks for scroll_view_container and MenuController since
+  // MenuScrollViewContainer constructor is invoked later, which uses
+  // menucontroller to determine the value of the use_ash_system_ui_layout_
+  // variable.
+  if (!scroll_view_container_ && !parent_menu_item_->GetMenuController()) {
+    return nullptr;
+  }
+
   if (!scroll_view_container_) {
-    scroll_view_container_ = new MenuScrollViewContainer(this);
+    scroll_view_container_ = std::make_unique<MenuScrollViewContainer>(this);
     // Otherwise MenuHost would delete us.
     scroll_view_container_->set_owned_by_client();
+    scroll_view_container_->SetBorderColorId(border_color_id_);
   }
-  return scroll_view_container_;
+  return scroll_view_container_.get();
 }
 
 MenuItemView* SubmenuView::GetLastItem() {
@@ -515,8 +643,9 @@ MenuItemView* SubmenuView::GetLastItem() {
 void SubmenuView::MenuHostDestroyed() {
   host_ = nullptr;
   MenuController* controller = parent_menu_item_->GetMenuController();
-  if (controller)
+  if (controller) {
     controller->Cancel(MenuController::ExitType::kDestroyed);
+  }
 }
 
 void SubmenuView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
@@ -526,8 +655,9 @@ void SubmenuView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
 void SubmenuView::SchedulePaintForDropIndicator(
     MenuItemView* item,
     MenuDelegate::DropPosition position) {
-  if (item == nullptr)
+  if (item == nullptr) {
     return;
+  }
 
   if (position == MenuDelegate::DropPosition::kOn) {
     item->SchedulePaint();
@@ -568,7 +698,7 @@ bool SubmenuView::OnScroll(float dx, float dy) {
 
   // Ensure that we never try to scroll outside the actual child view.
   // Note: the old code here was effectively:
-  //   base::clamp(y, 0, full_bounds.height() - vis_bounds.height() - 1)
+  //   std::clamp(y, 0, full_bounds.height() - vis_bounds.height() - 1)
   // but the -1 there prevented fully scrolling to the bottom here. As a
   // worked example, suppose that:
   //   full_bounds = { x = 0, y = 0, w = 100, h = 1000 }
@@ -584,7 +714,7 @@ bool SubmenuView::OnScroll(float dx, float dy) {
   //   new_vis_bounds = { x = 0, y = 499, w = 100, h = 500 }
   // so pixels y=499 through y=998 of this view are drawn, and pixel y=999 is
   // hidden - oops.
-  y = base::clamp(y, 0, full_bounds.height() - vis_bounds.height());
+  y = std::clamp(y, 0, full_bounds.height() - vis_bounds.height());
 
   gfx::Rect new_vis_bounds(x, y, vis_bounds.width(), vis_bounds.height());
   if (new_vis_bounds != vis_bounds) {
@@ -594,7 +724,15 @@ bool SubmenuView::OnScroll(float dx, float dy) {
   return false;
 }
 
-BEGIN_METADATA(SubmenuView, View)
+void SubmenuView::SetBorderColorId(std::optional<ui::ColorId> color_id) {
+  if (scroll_view_container_) {
+    scroll_view_container_->SetBorderColorId(color_id);
+  }
+
+  border_color_id_ = color_id;
+}
+
+BEGIN_METADATA(SubmenuView)
 END_METADATA
 
 }  // namespace views

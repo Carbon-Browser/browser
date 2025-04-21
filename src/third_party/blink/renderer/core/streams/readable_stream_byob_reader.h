@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be found
-// in the LICENSE file.
+// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_STREAM_BYOB_READER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_STREAM_BYOB_READER_H_
 
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_generic_reader.h"
@@ -17,10 +18,10 @@
 namespace blink {
 
 class ExceptionState;
-class ScriptPromise;
 class ScriptState;
-class StreamPromiseResolver;
 class ReadableStream;
+class ReadableStreamReadResult;
+class ReadIntoRequest;
 class DOMArrayBufferView;
 
 class CORE_EXPORT ReadableStreamBYOBReader
@@ -42,9 +43,10 @@ class CORE_EXPORT ReadableStreamBYOBReader
   bool IsBYOBReader() const override { return true; }
 
   // https://streams.spec.whatwg.org/#byob-reader-read
-  ScriptPromise read(ScriptState*,
-                     NotShared<DOMArrayBufferView> view,
-                     ExceptionState&);
+
+  ScriptPromise<ReadableStreamReadResult> read(ScriptState*,
+                                               NotShared<DOMArrayBufferView>,
+                                               ExceptionState&);
 
   // https://streams.spec.whatwg.org/#byob-reader-release-lock
   void releaseLock(ScriptState*, ExceptionState&);
@@ -58,24 +60,12 @@ class CORE_EXPORT ReadableStreamBYOBReader
   void Trace(Visitor*) const override;
 
  private:
+  friend class ByteStreamTeeEngine;
+  friend class PipeToEngine;
   friend class ReadableByteStreamController;
   friend class ReadableStream;
 
-  class ReadIntoRequest : public GarbageCollected<ReadIntoRequest> {
-   public:
-    explicit ReadIntoRequest(StreamPromiseResolver* resolver);
-
-    void ChunkSteps(ScriptState*, DOMArrayBufferView* chunk) const;
-    void CloseSteps(ScriptState*, DOMArrayBufferView* chunk) const;
-    void ErrorSteps(ScriptState*, v8::Local<v8::Value> e) const;
-
-    void Trace(Visitor*) const;
-
-   private:
-    friend class ReadableStream;
-
-    Member<StreamPromiseResolver> resolver_;
-  };
+  class BYOBReaderReadIntoRequest;
 
   //
   // Readable stream reader abstract operations

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -44,7 +44,7 @@ def ReadFilteredData(path):
   Returns:
     A dict of the data not including any obsolete events or metrics.
   """
-  with open(path) as ukm_file:
+  with open(path, encoding='utf-8') as ukm_file:
     data = ukm_model.UKM_XML_TYPE.Parse(ukm_file.read())
     event_tag = ukm_model._EVENT_TYPE.tag
     metric_tag = ukm_model._METRIC_TYPE.tag

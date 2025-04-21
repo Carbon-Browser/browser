@@ -1,12 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/ui/context_menu_params.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -15,7 +11,8 @@ ContextMenuParams::ContextMenuParams()
       tag_name(nil),
       referrer_policy(ReferrerPolicyDefault),
       location(CGPointZero),
-      text_offset(0) {}
+      text_offset(0),
+      surrounding_text_offset(0) {}
 
 ContextMenuParams::ContextMenuParams(const ContextMenuParams& other) = default;
 

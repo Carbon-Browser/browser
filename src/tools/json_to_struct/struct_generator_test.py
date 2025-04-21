@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,8 +17,11 @@ class StructGeneratorTest(unittest.TestCase):
         GenerateField({'type': 'string', 'field': 'bar_foo'}))
 
   def testGenerateString16Field(self):
-    self.assertEquals('const wchar_t* const foo_bar',
-        GenerateField({'type': 'string16', 'field': 'foo_bar'}))
+    self.assertEquals('const char16_t* const foo_bar',
+                      GenerateField({
+                          'type': 'string16',
+                          'field': 'foo_bar'
+                      }))
 
   def testGenerateEnumField(self):
     self.assertEquals('const MyEnumType foo_foo',
@@ -27,19 +30,23 @@ class StructGeneratorTest(unittest.TestCase):
                        'ctype': 'MyEnumType'}))
 
   def testGenerateArrayField(self):
-    self.assertEquals('const int * bar_bar;\n'
-                      '  const size_t bar_bar_size',
-        GenerateField({'type': 'array',
-                       'field': 'bar_bar',
-                       'contents': {'type': 'int'}}))
+    self.assertEquals(
+        'const base::span<const int> bar_bar',
+        GenerateField({
+            'type': 'array',
+            'field': 'bar_bar',
+            'contents': {
+                'type': 'int'
+            }
+        }))
 
   def testGenerateClassField(self):
     self.assertEquals(
-        'const absl::optional<bool> bar',
+        'const std::optional<bool> bar',
         GenerateField({
             'type': 'class',
             'field': 'bar',
-            'ctype': 'absl::optional<bool>'
+            'ctype': 'std::optional<bool>'
         }))
 
   def testGenerateStruct(self):
@@ -56,11 +63,10 @@ class StructGeneratorTest(unittest.TestCase):
       }
     ]
     struct = ('struct MyTypeName {\n'
-        '  const int foo_bar;\n'
-        '  const char* const bar_foo;\n'
-        '  const MyEnumType * bar_bar;\n'
-        '  const size_t bar_bar_size;\n'
-        '};\n')
+              '  const int foo_bar;\n'
+              '  const char* const bar_foo;\n'
+              '  const base::span<const MyEnumType> bar_bar;\n'
+              '};\n')
     self.assertEquals(struct, GenerateStruct('MyTypeName', schema))
 
   def testGenerateArrayOfStruct(self):
@@ -78,16 +84,14 @@ class StructGeneratorTest(unittest.TestCase):
         }
       }
     ]
-    struct = (
-        'struct InnerTypeName {\n'
-        '  const char* const key;\n'
-        '  const char* const value;\n'
-        '};\n'
-        '\n'
-        'struct MyTypeName {\n'
-        '  const InnerTypeName * bar_bar;\n'
-        '  const size_t bar_bar_size;\n'
-        '};\n')
+    struct = ('struct InnerTypeName {\n'
+              '  const char* const key;\n'
+              '  const char* const value;\n'
+              '};\n'
+              '\n'
+              'struct MyTypeName {\n'
+              '  const base::span<const InnerTypeName> bar_bar;\n'
+              '};\n')
     self.assertEquals(struct, GenerateStruct('MyTypeName', schema))
 
 if __name__ == '__main__':

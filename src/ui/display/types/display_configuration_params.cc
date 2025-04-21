@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,28 +8,40 @@ namespace display {
 
 DisplayConfigurationParams::DisplayConfigurationParams() = default;
 DisplayConfigurationParams::DisplayConfigurationParams(
-    DisplayConfigurationParams& other)
-    : id(other.id), origin(other.origin) {
-  if (other.mode)
-    mode = other.mode->get()->Clone();
-}
-
+    const DisplayConfigurationParams& other)
+    : DisplayConfigurationParams(other.id,
+                                 other.origin,
+                                 other.mode.get(),
+                                 other.enable_vrr) {}
 DisplayConfigurationParams::DisplayConfigurationParams(
-    DisplayConfigurationParams&& other)
-    : id(other.id), origin(other.origin) {
-  if (other.mode)
-    mode = other.mode->get()->Clone();
-}
+    DisplayConfigurationParams&& other) = default;
 
 DisplayConfigurationParams::DisplayConfigurationParams(
     int64_t id,
     const gfx::Point& origin,
-    const display::DisplayMode* pmode)
-    : id(id), origin(origin) {
+    const display::DisplayMode* pmode,
+    bool enable_vrr)
+    : id(id), origin(origin), enable_vrr(enable_vrr) {
   if (pmode)
     mode = pmode->Clone();
 }
 
+DisplayConfigurationParams& DisplayConfigurationParams::operator=(
+    const DisplayConfigurationParams& other) {
+  id = other.id;
+  origin = other.origin;
+  mode = other.mode ? other.mode->Clone() : nullptr;
+  enable_vrr = other.enable_vrr;
+  return *this;
+}
+
 DisplayConfigurationParams::~DisplayConfigurationParams() = default;
+
+bool DisplayConfigurationParams::operator==(
+    const DisplayConfigurationParams& other) const {
+  return id == other.id && origin == other.origin &&
+         (mode == other.mode || (mode && other.mode && *mode == *other.mode)) &&
+         enable_vrr == other.enable_vrr;
+}
 
 }  // namespace display

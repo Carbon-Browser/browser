@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 IconSet::IconSet() = default;
 IconSet::IconSet(const IconSet& icon_set) = default;
@@ -27,5 +26,18 @@ const GURL& IconSet::GetIcon(IconSize size) const {
   return it->second;
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+bool IconSet::operator==(const IconSet& other) const {
+  // Check each IconSize exists (and is equal) in both or neither.
+  for (IconSet::IconSize size = IconSet::IconSize::SIZE_16x16;
+       size <= IconSet::IconSize::kMaxValue; ++(int&)size) {
+    if (HasIcon(size) != other.HasIcon(size)) {
+      return false;
+    }
+    if (HasIcon(size) && GetIcon(size) != other.GetIcon(size)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace ash::file_system_provider

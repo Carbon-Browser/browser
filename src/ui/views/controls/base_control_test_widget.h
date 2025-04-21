@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,18 @@
 #include "build/build_config.h"
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/view.h"
-#include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_utils.h"
 
 #if BUILDFLAG(IS_MAC)
 #include <memory>
 
-namespace display {
-namespace test {
+namespace display::test {
 class TestScreen;
-}  // namespace test
-}  // namespace display
+}  // namespace display::test
 #endif
 
-namespace views {
-
-namespace test {
+namespace views::test {
 
 class BaseControlTestWidget : public ViewsTestBase {
  public:
@@ -43,7 +38,7 @@ class BaseControlTestWidget : public ViewsTestBase {
   Widget* widget() { return widget_.get(); }
 
  private:
-  UniqueWidgetPtr widget_;
+  std::unique_ptr<Widget> widget_;
 
 #if BUILDFLAG(IS_MAC)
   // Need a test screen to work with the event generator to correctly track
@@ -53,7 +48,6 @@ class BaseControlTestWidget : public ViewsTestBase {
 #endif
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_CONTROLS_BASE_CONTROL_TEST_WIDGET_H_

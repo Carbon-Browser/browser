@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,15 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece.h"
 #include "net/base/net_errors.h"
 #include "net/base/url_util.h"
 #include "url/gurl.h"
 
 namespace blink {
+
+namespace {
+constexpr char kIsolatedAppScheme[] = "isolated-app";
+}
 
 void RecordLoadHistograms(const url::Origin& origin,
                           network::mojom::RequestDestination destination,
@@ -27,10 +30,13 @@ void RecordLoadHistograms(const url::Origin& origin,
                                -net_error);
     }
   } else {
-    if (destination == network::mojom::RequestDestination::kImage) {
-      base::UmaHistogramSparse("Net.ErrorCodesForImages2", -net_error);
-    }
     base::UmaHistogramSparse("Net.ErrorCodesForSubresources3", -net_error);
+  }
+
+  // TODO(crbug.com/1384451): This is a temporary metric for monitoring the
+  // launch of Isolated Web Apps over the course of 2023.
+  if (origin.scheme() == kIsolatedAppScheme) {
+    base::UmaHistogramSparse("Net.ErrorCodesForIsolatedAppScheme", -net_error);
   }
 }
 

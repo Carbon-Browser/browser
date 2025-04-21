@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,24 +9,17 @@
 #include <vector>
 
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace safe_browsing {
 
 TestSafeBrowsingDatabaseManager::TestSafeBrowsingDatabaseManager(
-    scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
-    scoped_refptr<base::SequencedTaskRunner> io_task_runner)
-    : SafeBrowsingDatabaseManager(std::move(ui_task_runner),
-                                  std::move(io_task_runner)) {}
+    scoped_refptr<base::SequencedTaskRunner> ui_task_runner)
+    : SafeBrowsingDatabaseManager(std::move(ui_task_runner)), enabled_(false) {}
 
 void TestSafeBrowsingDatabaseManager::CancelCheck(Client* client) {
   NOTIMPLEMENTED();
-}
-
-bool TestSafeBrowsingDatabaseManager::CanCheckRequestDestination(
-    network::mojom::RequestDestination request_destination) const {
-  NOTIMPLEMENTED();
-  return false;
 }
 
 bool TestSafeBrowsingDatabaseManager::CanCheckUrl(const GURL& url) const {
@@ -34,15 +27,11 @@ bool TestSafeBrowsingDatabaseManager::CanCheckUrl(const GURL& url) const {
   return (url != GURL("about:blank"));
 }
 
-bool TestSafeBrowsingDatabaseManager::ChecksAreAlwaysAsync() const {
-  NOTIMPLEMENTED();
-  return false;
-}
-
 bool TestSafeBrowsingDatabaseManager::CheckBrowseUrl(
     const GURL& url,
     const SBThreatTypeSet& threat_types,
-    Client* client) {
+    Client* client,
+    CheckBrowseUrlType check_type) {
   NOTIMPLEMENTED();
   return true;
 }
@@ -61,28 +50,18 @@ bool TestSafeBrowsingDatabaseManager::CheckExtensionIDs(
   return true;
 }
 
-bool TestSafeBrowsingDatabaseManager::CheckResourceUrl(const GURL& url,
-                                                       Client* client) {
-  NOTIMPLEMENTED();
-  return true;
-}
-
-AsyncMatch TestSafeBrowsingDatabaseManager::CheckUrlForHighConfidenceAllowlist(
+void TestSafeBrowsingDatabaseManager::CheckUrlForHighConfidenceAllowlist(
     const GURL& url,
-    Client* client) {
+    CheckUrlForHighConfidenceAllowlistCallback callback) {
   NOTIMPLEMENTED();
-  return AsyncMatch::NO_MATCH;
+  std::move(callback).Run(
+      /*url_on_high_confidence_allowlist=*/false,
+      /*logging_details=*/std::nullopt);
 }
 
 bool TestSafeBrowsingDatabaseManager::CheckUrlForSubresourceFilter(
     const GURL& url,
     Client* client) {
-  NOTIMPLEMENTED();
-  return true;
-}
-
-bool TestSafeBrowsingDatabaseManager::CheckUrlForAccuracyTips(const GURL& url,
-                                                              Client* client) {
   NOTIMPLEMENTED();
   return true;
 }
@@ -94,39 +73,40 @@ AsyncMatch TestSafeBrowsingDatabaseManager::CheckCsdAllowlistUrl(
   return AsyncMatch::MATCH;
 }
 
-bool TestSafeBrowsingDatabaseManager::MatchDownloadAllowlistUrl(
-    const GURL& url) {
+void TestSafeBrowsingDatabaseManager::MatchDownloadAllowlistUrl(
+    const GURL& url,
+    base::OnceCallback<void(bool)> callback) {
   NOTIMPLEMENTED();
-  return true;
+  std::move(callback).Run(true);
 }
 
-bool TestSafeBrowsingDatabaseManager::MatchMalwareIP(
-    const std::string& ip_address) {
-  NOTIMPLEMENTED();
-  return true;
-}
-
-safe_browsing::ThreatSource TestSafeBrowsingDatabaseManager::GetThreatSource()
-    const {
+safe_browsing::ThreatSource
+TestSafeBrowsingDatabaseManager::GetBrowseUrlThreatSource(
+    CheckBrowseUrlType check_type) const {
   NOTIMPLEMENTED();
   return safe_browsing::ThreatSource::UNKNOWN;
 }
 
-bool TestSafeBrowsingDatabaseManager::IsDownloadProtectionEnabled() const {
+safe_browsing::ThreatSource
+TestSafeBrowsingDatabaseManager::GetNonBrowseUrlThreatSource() const {
   NOTIMPLEMENTED();
-  return false;
+  return safe_browsing::ThreatSource::UNKNOWN;
 }
 
-void TestSafeBrowsingDatabaseManager::StartOnIOThread(
+void TestSafeBrowsingDatabaseManager::StartOnUIThread(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const V4ProtocolConfig& config) {
-  SafeBrowsingDatabaseManager::StartOnIOThread(url_loader_factory, config);
+  SafeBrowsingDatabaseManager::StartOnUIThread(url_loader_factory, config);
   enabled_ = true;
 }
 
-void TestSafeBrowsingDatabaseManager::StopOnIOThread(bool shutdown) {
+void TestSafeBrowsingDatabaseManager::StopOnUIThread(bool shutdown) {
   enabled_ = false;
-  SafeBrowsingDatabaseManager::StopOnIOThread(shutdown);
+  SafeBrowsingDatabaseManager::StopOnUIThread(shutdown);
+}
+
+bool TestSafeBrowsingDatabaseManager::IsDatabaseReady() const {
+  return enabled_;
 }
 
 }  // namespace safe_browsing

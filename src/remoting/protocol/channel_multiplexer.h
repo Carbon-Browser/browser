@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "remoting/protocol/message_reader.h"
 #include "remoting/protocol/stream_channel_factory.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class ChannelMultiplexer : public StreamChannelFactory {
  public:
@@ -84,7 +83,7 @@ class ChannelMultiplexer : public StreamChannelFactory {
 
   // Channels are added to |channels_by_receive_id_| only after we receive
   // receive_id from the remote peer.
-  std::map<int, MuxChannel*> channels_by_receive_id_;
+  std::map<int, raw_ptr<MuxChannel, CtnExperimental>> channels_by_receive_id_;
 
   BufferedSocketWriter writer_;
   MessageReader reader_;
@@ -92,8 +91,6 @@ class ChannelMultiplexer : public StreamChannelFactory {
   base::WeakPtrFactory<ChannelMultiplexer> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
-
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_CHANNEL_MULTIPLEXER_H_

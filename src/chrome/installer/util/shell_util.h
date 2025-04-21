@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -14,9 +14,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -24,11 +24,9 @@
 
 #include "base/check.h"
 #include "base/containers/flat_map.h"
-#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/installer/util/work_item_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class RegistryEntry;
 
@@ -408,17 +406,21 @@ class ShellUtil {
       bool& should_install_shortcut,
       base::FilePath& shortcut_path);
 
-  // Updates shortcut in |location| (or creates it if |options| specify
+  // Updates shortcut in `location` (or creates it if `options` specify
   // SHELL_SHORTCUT_CREATE_ALWAYS).
-  // |properties| and |operation| affect this method as described on their
+  // `properties` and `operation` affect this method as described on their
   // invidividual definitions above.
-  // |location| may be one of SHORTCUT_LOCATION_DESKTOP,
+  // `location` may be one of SHORTCUT_LOCATION_DESKTOP,
   // SHORTCUT_LOCATION_QUICK_LAUNCH, SHORTCUT_LOCATION_START_MENU_ROOT,
   // SHORTCUT_LOCATION_START_MENU_CHROME_DIR, or
   // SHORTCUT_LOCATION_START_MENU_CHROME_APPS_DIR.
+  // If `pinned` is not null, and `properties` requests that the shortcut be
+  // pinned, and the shortcut creation succeeds, `pinned` will be set to true
+  // if pinning was successful, false otherwise.
   static bool CreateOrUpdateShortcut(ShortcutLocation location,
                                      const ShortcutProperties& properties,
-                                     ShortcutOperation operation);
+                                     ShortcutOperation operation,
+                                     bool* pinned = nullptr);
 
   // Returns the string "|icon_path|,|icon_index|" (see, for example,
   // http://msdn.microsoft.com/library/windows/desktop/dd391573.aspx).
@@ -429,7 +431,7 @@ class ShellUtil {
   // location. The input should be formatted by FormatIconLocation above,
   // or follow one of the formats specified in
   // http://msdn.microsoft.com/library/windows/desktop/dd391573.aspx.
-  static absl::optional<std::pair<base::FilePath, int>> ParseIconLocation(
+  static std::optional<std::pair<base::FilePath, int>> ParseIconLocation(
       const std::wstring& argument);
 
   // This method returns the command to open URLs/files using chrome. Typically
@@ -491,19 +493,6 @@ class ShellUtil {
   // Windows prior to Windows 8.
   static bool CanMakeChromeDefaultUnattended();
 
-  enum InteractiveSetDefaultMode {
-    // The intent picker is opened with the different choices available to the
-    // user.
-    INTENT_PICKER,
-    // The Windows default apps settings page is opened with the current default
-    // app focused.
-    SYSTEM_SETTINGS,
-  };
-
-  // Returns the interactive mode that should be used to set the default browser
-  // or default protocol client on Windows 8+.
-  static InteractiveSetDefaultMode GetInteractiveSetDefaultMode();
-
   // Returns the DefaultState of Chrome for HTTP and HTTPS and updates the
   // default browser beacons as appropriate.
   static DefaultState GetChromeDefaultState();
@@ -544,16 +533,14 @@ class ShellUtil {
   // This function DCHECKS that it is only called on Windows 10 or higher.
   static bool LaunchUninstallAppsSettings();
 
-  // Windows 8: Shows and waits for the "How do you want to open webpages?"
-  // dialog if Chrome is not already the default HTTP/HTTPS handler. Also does
-  // XP-era registrations if Chrome is chosen or was already the default. Do
-  // not use on pre-Win8 OSes.
+  // Windows 10: Launches the settings dialog focused on default apps.
   //
-  // Windows 10: The associations dialog cannot be launched so the settings
-  // dialog focused on default apps is launched. The function does not wait
-  // in this case.
+  // Windows 11: Launches the default apps settings dialog and navigates to the
+  // Chrome settings page. Falls back to Win10 behavior if the launch fails.
   //
-  // |chrome_exe| The chrome.exe path to register as default browser.
+  // Returns true if the dialog was launched, false otherwise.
+  //
+  // `chrome_exe` The chrome.exe path to register as default browser.
   static bool ShowMakeChromeDefaultSystemUI(const base::FilePath& chrome_exe);
 
   // Make Chrome the default application for a protocol.
@@ -623,7 +610,7 @@ class ShellUtil {
     std::wstring ToCommandLineArgument() const;
 
     // Parses a ProtocolAssociations instance from a string command line arg.
-    static absl::optional<ProtocolAssociations> FromCommandLineArgument(
+    static std::optional<ProtocolAssociations> FromCommandLineArgument(
         const std::wstring& argument);
 
     base::flat_map<std::wstring, std::wstring> associations;
@@ -850,19 +837,6 @@ class ShellUtil {
       HKEY root,
       const std::vector<std::unique_ptr<RegistryEntry>>& entries,
       bool best_effort_no_rollback = false);
-
-  static std::array<uint32_t, 4> ComputeHashForTesting(
-      base::span<const uint8_t> input);
-
-  static std::wstring ComputeUserChoiceHashForTesting(
-      const std::wstring& extension,
-      const std::wstring& sid,
-      const std::wstring& prog_id,
-      const std::wstring& datetime);
-
-  // Use IPinnedList3 to pin shortcut to taskbar on WIN10_RS5 and above.
-  // Returns true if pinning was successful.
-  static bool PinShortcut(const base::FilePath& shortcut);
 };
 
 #endif  // CHROME_INSTALLER_UTIL_SHELL_UTIL_H_

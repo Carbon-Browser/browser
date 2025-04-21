@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ class Location;
 }
 
 namespace syncer {
-class SyncErrorFactory;
 class SyncChangeProcessor;
 }
 
@@ -39,8 +38,8 @@ class SyncChangeProcessor;
 //   foo
 //   checksum_v1 = ec3df4034567e59e119fcf87f2d9bad4
 //
-class SpellcheckCustomDictionary : public SpellcheckDictionary,
-                                   public syncer::SyncableService {
+class SpellcheckCustomDictionary final : public SpellcheckDictionary,
+                                         public syncer::SyncableService {
  public:
   // A change to the dictionary.
   class Change {
@@ -170,16 +169,16 @@ class SpellcheckCustomDictionary : public SpellcheckDictionary,
 
   // Overridden from syncer::SyncableService:
   void WaitUntilReadyToSync(base::OnceClosure done) override;
-  absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
-      syncer::ModelType type,
+  std::optional<syncer::ModelError> MergeDataAndStartSyncing(
+      syncer::DataType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> sync_error_handler) override;
-  void StopSyncing(syncer::ModelType type) override;
-  syncer::SyncDataList GetAllSyncDataForTesting(syncer::ModelType type) const;
-  absl::optional<syncer::ModelError> ProcessSyncChanges(
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
+  void StopSyncing(syncer::DataType type) override;
+  syncer::SyncDataList GetAllSyncDataForTesting(syncer::DataType type) const;
+  std::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
+  base::WeakPtr<SyncableService> AsWeakPtr() override;
 
  private:
   friend class DictionarySyncIntegrationTestHelper;
@@ -218,7 +217,7 @@ class SpellcheckCustomDictionary : public SpellcheckDictionary,
   // Notifies the sync service of the |dictionary_change|. Syncs up to the
   // maximum syncable words on the server. Disables syncing of this dictionary
   // if the server contains the maximum number of syncable words.
-  absl::optional<syncer::ModelError> Sync(const Change& dictionary_change);
+  std::optional<syncer::ModelError> Sync(const Change& dictionary_change);
 
   // Notifies observers of the dictionary change if the dictionary has been
   // changed.
@@ -238,9 +237,6 @@ class SpellcheckCustomDictionary : public SpellcheckDictionary,
 
   // Used to send local changes to the sync infrastructure.
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
-
-  // Used to send sync-related errors to the sync infrastructure.
-  std::unique_ptr<syncer::SyncErrorFactory> sync_error_handler_;
 
   // True if the dictionary has been loaded. Otherwise false.
   bool is_loaded_;

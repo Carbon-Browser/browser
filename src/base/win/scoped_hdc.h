@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,9 @@ class ScopedGetDC {
       // If GetDC(NULL) returns NULL, something really bad has happened, like
       // GDI handle exhaustion.  In this case Chrome is going to behave badly no
       // matter what, so we may as well just force a crash now.
-      if (!hdc_)
+      if (!hdc_) {
         base::debug::CollectGDIUsageAndDie();
+      }
     }
   }
 
@@ -35,8 +36,9 @@ class ScopedGetDC {
   ScopedGetDC& operator=(const ScopedGetDC&) = delete;
 
   ~ScopedGetDC() {
-    if (hdc_)
+    if (hdc_) {
       ReleaseDC(hwnd_, hdc_);
+    }
   }
 
   operator HDC() { return hdc_; }

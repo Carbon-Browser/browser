@@ -1,23 +1,24 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_UI_BASE_WINDOW_STATE_TYPE_H_
 #define CHROMEOS_UI_BASE_WINDOW_STATE_TYPE_H_
 
-#include <cstdint>
 #include <ostream>
 
 #include "base/component_export.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/base/ui_base_types.h"
 
 namespace chromeos {
 
-// A superset of ui::WindowShowState. Ash has more states than the general
-// ui::WindowShowState enum. These need to be communicated back to Chrome.
-// The separate enum is defined here because we don't want to leak these type to
-// ui/base until they're stable and we know for sure that they'll persist over
-// time.
+// A superset of ui::mojom::WindowShowState. Ash has more states than the
+// general ui::mojom::WindowShowState enum. These need to be communicated back
+// to Chrome. The separate enum is defined here because we don't want to leak
+// these type to ui/base until they're stable and we know for sure that they'll
+// persist over time. Note this should be kept in sync with `WindowStateType`
+// enum in tools/metrics/histograms/enums.xml.
 enum class WindowStateType {
   // States which correspond to ui.mojom.ShowState.
   kDefault,
@@ -30,11 +31,6 @@ enum class WindowStateType {
   // Additional ash states.
   kPrimarySnapped,
   kSecondarySnapped,
-
-  // A window is in this state when it is automatically placed and
-  // sized by the window manager. (it's newly opened, or pushed to the side
-  // due to new window, for example).
-  kAutoPositioned,
 
   // A window is pinned on top of other windows with fullscreenized.
   // Corresponding shelf should be hidden, also most of windows other than the
@@ -49,18 +45,20 @@ enum class WindowStateType {
   // floated, users are allowed to change the position and size of the window.
   // One floated window is allowed per desk.
   kFloated,
+
+  kMaxValue = kFloated,
 };
 
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 std::ostream& operator<<(std::ostream& stream, WindowStateType state);
 
-// Utility functions to convert WindowStateType <-> ui::WindowShowState.
+// Utility functions to convert WindowStateType <-> ui::mojom::WindowShowState.
 // Note: LEFT/RIGHT MAXIMIZED, AUTO_POSITIONED types will be lost when
-// converting to ui::WindowShowState.
+// converting to ui::mojom::WindowShowState.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
-WindowStateType ToWindowStateType(ui::WindowShowState state);
+WindowStateType ToWindowStateType(ui::mojom::WindowShowState state);
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
-ui::WindowShowState ToWindowShowState(WindowStateType type);
+ui::mojom::WindowShowState ToWindowShowState(WindowStateType type);
 
 // Returns true if |type| is PINNED or TRUSTED_PINNED.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
@@ -74,6 +72,10 @@ bool IsFullscreenOrPinnedWindowStateType(WindowStateType type);
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 bool IsMaximizedOrFullscreenOrPinnedWindowStateType(WindowStateType type);
 
+// Returns true if `type` is MAXIMIZED or FULLSCREEN.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+bool IsMaximizedOrFullscreenWindowStateType(WindowStateType type);
+
 // Returns true if |type| is MINIMIZED.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 bool IsMinimizedWindowStateType(WindowStateType type);
@@ -81,6 +83,10 @@ bool IsMinimizedWindowStateType(WindowStateType type);
 // Returns true if |type| is either NORMAL or DEFAULT.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 bool IsNormalWindowStateType(WindowStateType type);
+
+// Returns true if `type` is either kPrimarySnapped or kSecondarySnapped.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+bool IsSnappedWindowStateType(WindowStateType type);
 
 }  // namespace chromeos
 

@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_PUBLIC_INIT_IOS_GLOBAL_STATE_H_
 #define IOS_WEB_PUBLIC_INIT_IOS_GLOBAL_STATE_H_
 
+#import "base/memory/raw_ptr.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 
 namespace base {
@@ -13,24 +14,24 @@ class SingleThreadTaskExecutor;
 
 namespace ios_global_state {
 
-// Contains parameters passed to |Create|.
+// Contains parameters passed to `Create`.
 struct CreateParams {
   CreateParams() : install_at_exit_manager(false), argc(0), argv(nullptr) {}
 
   bool install_at_exit_manager;
 
   int argc;
-  const char** argv;
+  raw_ptr<const char*> argv;
 };
 
 // Creates global state for iOS. This should be called as early as possible in
 // the application lifecycle. It is safe to call this method more than once, the
 // initialization will only be performed once.
 //
-// An AtExitManager will only be created if |register_exit_manager| is true. If
-// |register_exit_manager| is false, an AtExitManager must already exist before
-// calling |Create|.
-// |argc| and |argv| may be set to the command line options which were passed to
+// An AtExitManager will only be created if `register_exit_manager` is true. If
+// `register_exit_manager` is false, an AtExitManager must already exist before
+// calling `Create`.
+// `argc` and `argv` may be set to the command line options which were passed to
 // the application.
 //
 // Since the initialization will only be performed the first time this method is
@@ -55,13 +56,13 @@ void CreateNetworkChangeNotifier();
 void DestroyNetworkChangeNotifier();
 
 // Starts a global base::ThreadPoolInstance. This method must be called to start
-// the Thread Pool that is created in |Create|. It is safe to call this method
+// the Thread Pool that is created in `Create`. It is safe to call this method
 // more than once, the thread pool will only be started once.
 void StartThreadPool();
 
-// Destroys the AtExitManager if one was created in |Create|. It is safe to call
-// this method even if |install_at_exit_manager| was false in the CreateParams
-// passed to |Create|. It is safe to call this method more than once, the
+// Destroys the AtExitManager if one was created in `Create`. It is safe to call
+// this method even if `install_at_exit_manager` was false in the CreateParams
+// passed to `Create`. It is safe to call this method more than once, the
 // AtExitManager will be destroyed on the first call.
 void DestroyAtExitManager();
 

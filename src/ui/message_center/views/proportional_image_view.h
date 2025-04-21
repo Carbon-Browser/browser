@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@ namespace message_center {
 // ProportionalImageViews scale and center their images while preserving their
 // original proportions.
 class MESSAGE_CENTER_EXPORT ProportionalImageView : public views::View {
+  METADATA_HEADER(ProportionalImageView, views::View)
+
  public:
-  METADATA_HEADER(ProportionalImageView);
   explicit ProportionalImageView(const gfx::Size& view_size);
   ProportionalImageView(const ProportionalImageView&) = delete;
   ProportionalImageView& operator=(const ProportionalImageView&) = delete;

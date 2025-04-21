@@ -1,13 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef PDF_METRICS_HANDLER_H_
 #define PDF_METRICS_HANDLER_H_
-
-#include <vector>
-
-#include "pdf/document_attachment_info.h"
 
 namespace chrome_pdf {
 
@@ -21,10 +17,8 @@ class MetricsHandler {
   MetricsHandler& operator=(const MetricsHandler& other) = delete;
   ~MetricsHandler();
 
-  void RecordAttachmentTypes(
-      const std::vector<DocumentAttachmentInfo>& attachments);
-
   void RecordDocumentMetrics(const DocumentMetadata& metadata);
+  void RecordAccessibilityIsDocTagged(bool is_tagged);
 };
 
 }  // namespace chrome_pdf

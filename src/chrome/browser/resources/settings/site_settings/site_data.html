@@ -1,77 +1,115 @@
-    <style include="cr-shared-style settings-shared">
-      paper-spinner-lite {
-        height: var(--cr-icon-size);
-        opacity: 0;
-        transition-delay: 1s;
-        width: var(--cr-icon-size);
-      }
+<style include="settings-shared">
+  .content-settings-header,
+  .radio-group {
+    padding: 0 var(--cr-section-padding);
+  }
 
-      paper-spinner-lite[active] {
-        opacity: 1;
-      }
+  .radio-group-sub-heading {
+    padding-bottom: 10px;
+  }
 
-      #removeShowingSites {
-        margin-inline-start: auto;
-      }
-    </style>
-    <div class="cr-row continuation">
-      <paper-spinner-lite active="[[isLoading_]]"></paper-spinner-lite>
-      <cr-button disabled$="[[isLoading_]]" id="removeShowingSites"
-          on-click="onRemoveShowingSitesTap_" hidden$="[[!sites.length]]">
-        [[computeRemoveLabel_(filter)]]
-      </cr-button>
-      <cr-button disabled$="[[isLoading_]]" id="removeThirdPartyCookies"
-          class="cr-button-gap"
-          on-click="onRemoveThirdPartyCookiesTap_"
-          hidden$="[[!showRemoveThirdPartyCookies_(sites.length, filter)]]">
-          $i18n{siteSettingsCookieRemoveAllThirdParty}
-      </cr-button>
+  settings-collapse-radio-button {
+    --settings-collapse-toggle-min-height: var(--cr-section-min-height);
+  }
+
+  settings-collapse-radio-button.two-line {
+    --settings-collapse-toggle-min-height:
+        var(--cr-section-two-line-min-height);
+  }
+
+  settings-collapse-radio-button:not(:first-of-type) {
+    --settings-collapse-separator-line: var(--cr-separator-line);
+  }
+
+  #exceptionHeader {
+    padding: 0 var(--cr-section-padding);
+  }
+
+  #exceptionHeaderSubLabel {
+    padding-bottom: 10px;
+  }
+</style>
+<div class="content-settings-header secondary">
+  $i18n{siteDataPageDescription}
+</div>
+<div class="radio-group">
+  <h2>$i18n{siteDataPageDefaultBehavior}</h2>
+  <div class="secondary radio-group-sub-heading">
+    $i18n{siteDataPagedefaultBehaviorDescription}
+  </div>
+  <settings-radio-group id="defaultGroup" no-set-pref
+      pref="{{prefs.generated.cookie_default_content_setting}}"
+      selectable-elements="cr-radio-button, settings-collapse-radio-button"
+      on-change="onDefaultRadioChange_">
+    <settings-collapse-radio-button id="defaultAllow" no-collapse
+        name="[[contentSettingEnum_.ALLOW]]"
+        pref="[[prefs.generated.cookie_default_content_setting]]"
+        label="$i18n{siteDataPageAllowRadioLabel}"
+        sub-label="$i18n{siteDataPageAllowRadioSubLabel}"
+        icon="privacy:database">
+    </settings-collapse-radio-button>
+    <settings-collapse-radio-button id="defaultSessionOnly" no-collapse
+        class="two-line"
+        name="[[contentSettingEnum_.SESSION_ONLY]]"
+        pref="[[prefs.generated.cookie_default_content_setting]]"
+        label="$i18n{siteDataPageClearOnExitRadioLabel}"
+        sub-label="$i18n{siteDataPageClearOnExitRadioSubLabel}"
+        icon="privacy:database">
+    </settings-collapse-radio-button>
+    <settings-collapse-radio-button id="defaultBlock" no-collapse
+        class="two-line"
+        name="[[contentSettingEnum_.BLOCK]]"
+        pref="[[prefs.generated.cookie_default_content_setting]]"
+        label="$i18n{siteDataPageBlockRadioLabel}"
+        sub-label="$i18n{siteDataPageBlockRadioSublabel}"
+        icon="privacy:database-off">
+    </settings-collapse-radio-button>
+  </settings-radio-group>
+</div>
+<div id="exceptionHeader">
+  <h2>$i18n{siteDataPageCustomizedBehaviorHeading}</h2>
+  <div id="exceptionHeaderSubLabel" class="secondary">
+    $i18n{siteDataPageCustomizedBehaviorDescription}
+  </div>
+</div>
+<site-list id="allowExceptionsList"
+    category="[[cookiesContentSettingType_]]"
+    category-subtype="[[contentSettingEnum_.ALLOW]]"
+    category-header="$i18n{siteDataPageAllowExceptionsSubHeading}"
+    read-only-list="[[exceptionListsReadOnly_]]"
+    search-filter="[[searchTerm]]"
+    cookies-exception-type="site-data">
+</site-list>
+<site-list id="sessionOnlyExceptionsList"
+    category="[[cookiesContentSettingType_]]"
+    category-subtype="[[contentSettingEnum_.SESSION_ONLY]]"
+    category-header="$i18n{siteDataPageDeleteOnExitExceptionsSubHeading}"
+    read-only-list="[[exceptionListsReadOnly_]]"
+    search-filter="[[searchTerm]]"
+    cookies-exception-type="site-data">
+</site-list>
+<!-- Shows all block-exceptions (in contrast to allow and session above). -->
+<site-list id="blockExceptionsList"
+    category="[[cookiesContentSettingType_]]"
+    category-subtype="[[contentSettingEnum_.BLOCK]]"
+    category-header="$i18n{siteDataPageBlockExceptionsSubHeading}"
+    read-only-list="[[exceptionListsReadOnly_]]"
+    search-filter="[[searchTerm]]"
+    cookies-exception-type="combined">
+</site-list>
+<template is="dom-if" if="[[showDefaultBlockDialog_]]" restamp>
+  <cr-dialog id="defaultBlockDialog" show-on-attach>
+    <div slot="title">$i18n{siteDataPageBlockConfirmDialogTitle}</div>
+    <div slot="body">$i18n{siteDataPageBlockConfirmDialogDescription}</div>
+    <div slot="button-container">
+    <cr-button id="defaultBlockDialogCancel" class="cancel-button"
+        on-click="onDefaultBlockDialogCancel_">
+        $i18n{siteDataPageBlockConfirmDialogCancelButton}
+    </cr-button>
+    <cr-button id="defaultBlockDialogConfirm" class="action-button"
+        on-click="onDefaultBlockDialogConfirm_">
+        $i18n{siteDataPageBlockConfirmDialogConfirmButton}
+    </cr-button>
     </div>
-    <iron-list id="list" items="[[sites]]" preserve-focus
-        scroll-target="[[subpageScrollTarget]]" class="cr-separators">
-      <template>
-        <site-data-entry id$="siteItem_[[item.site]]" actionable
-            model="[[item]]" first$="[[!index]]" tabindex$="[[tabIndex]]"
-            iron-list-tab-index="[[tabIndex]]" last-focused="{{lastFocused_}}"
-            list-blurred="{{listBlurred_}}" on-click="onSiteClick_"
-            on-remove-site="onRemoveSite_" focus-row-index="[[index]]">
-        </site-data-entry>
-      </template>
-    </iron-list>
-
-    <!-- Confirm Delete dialog -->
-    <cr-dialog id="confirmDeleteDialog" close-text="$i18n{close}"
-        on-close="onConfirmDeleteDialogClosed_">
-      <div slot="title">
-        $i18n{siteSettingsCookieRemoveDialogTitle}
-      </div>
-      <div slot="body">$i18n{siteSettingsCookieRemoveMultipleConfirmation}</div>
-      <div slot="button-container">
-        <cr-button class="cancel-button" on-click="onCloseDialog_">
-          $i18n{cancel}
-        </cr-button>
-        <cr-button class="action-button" on-click="onConfirmDelete_">
-          $i18n{siteSettingsCookiesClearAll}
-        </cr-button>
-      </div>
-    </cr-dialog>
-
-    <!-- Confirm Delete Third Party Cookies dialog -->
-    <cr-dialog id="confirmDeleteThirdPartyDialog" close-text="$i18n{close}"
-        on-close="onConfirmDeleteThirdPartyDialogClosed_">
-      <div slot="title">
-        $i18n{siteSettingsCookieRemoveThirdPartyDialogTitle}
-      </div>
-      <div slot="body">
-        $i18n{siteSettingsCookieRemoveThirdPartyConfirmation}
-      </div>
-      <div slot="button-container">
-        <cr-button class="cancel-button" on-click="onCloseThirdPartyDialog_">
-          $i18n{cancel}
-        </cr-button>
-        <cr-button class="action-button" on-click="onConfirmThirdPartyDelete_">
-          $i18n{siteSettingsCookiesClearThirdParty}
-        </cr-button>
-      </div>
-    </cr-dialog>
-
+  </cr-dialog>
+</template>

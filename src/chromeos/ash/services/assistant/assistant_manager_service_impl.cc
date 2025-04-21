@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -14,18 +15,20 @@
 #include "ash/public/cpp/assistant/assistant_state_base.h"
 #include "ash/public/cpp/assistant/controller/assistant_notification_controller.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_functions.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/assistant/device_settings_host.h"
@@ -38,90 +41,51 @@
 #include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/cpp/device_actions.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/service.h"
 #include "chromeos/ash/services/assistant/service_context.h"
 #include "chromeos/ash/services/assistant/timer_host.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
-#include "chromeos/dbus/util/version_loader.h"
+#include "chromeos/ash/services/libassistant/public/mojom/android_app_info.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/speech_recognition_observer.mojom.h"
 #include "chromeos/services/assistant/public/shared/utils.h"
-#include "chromeos/services/libassistant/public/mojom/android_app_info.mojom.h"
-#include "chromeos/services/libassistant/public/mojom/speech_recognition_observer.mojom.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
+#include "chromeos/version/version_loader.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/cros_system_api/dbus/dlcservice/dbus-constants.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
 using media_session::mojom::MediaSessionAction;
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 namespace {
-
-using InstallResult = chromeos::assistant::LibassistantDlcInstallResult;
 
 static base::OnceCallback<void()> initialized_internal_callback_for_testing;
 static bool is_first_init = true;
 
 constexpr char kAndroidSettingsAppPackage[] = "com.android.settings";
 
-inline constexpr char kDlcInstallResultHistogram[] =
-    "Assistant.Libassistant.DlcInstallResult";
-
-// The DLC ID of Libassistant.so, used to download and mount the library.
-constexpr char kLibassistantDlcId[] = "assistant-dlc";
-
-std::vector<chromeos::libassistant::mojom::AuthenticationTokenPtr>
-ToAuthenticationTokens(
-    const absl::optional<AssistantManagerService::UserInfo>& user) {
-  std::vector<chromeos::libassistant::mojom::AuthenticationTokenPtr> result;
+std::vector<libassistant::mojom::AuthenticationTokenPtr> ToAuthenticationTokens(
+    const std::optional<AssistantManagerService::UserInfo>& user) {
+  std::vector<libassistant::mojom::AuthenticationTokenPtr> result;
 
   if (user.has_value()) {
     DCHECK(!user.value().gaia_id.empty());
     DCHECK(!user.value().access_token.empty());
     result.emplace_back(libassistant::mojom::AuthenticationToken::New(
-        /*gaia_id=*/user.value().gaia_id,
+        /*gaia_id=*/user.value().gaia_id.ToString(),
         /*access_token=*/user.value().access_token));
   }
 
   return result;
 }
 
-chromeos::libassistant::mojom::BootupConfigPtr CreateBootupConfig(
-    const absl::optional<std::string>& s3_server_uri_override,
-    const absl::optional<std::string>& device_id_override) {
-  auto result = chromeos::libassistant::mojom::BootupConfig::New();
+libassistant::mojom::BootupConfigPtr CreateBootupConfig(
+    const std::optional<std::string>& s3_server_uri_override,
+    const std::optional<std::string>& device_id_override) {
+  auto result = libassistant::mojom::BootupConfig::New();
   result->s3_server_uri_override = s3_server_uri_override;
   result->device_id_override = device_id_override;
   return result;
-}
-
-void RecordLibassistantDlcInstallResult(
-    const chromeos::DlcserviceClient::InstallResult& result) {
-  InstallResult install_result = InstallResult::kErrorInternal;
-  if (result.error == dlcservice::kErrorNone) {
-    install_result = InstallResult::kSuccess;
-  }
-  if (result.error == dlcservice::kErrorInternal) {
-    install_result = InstallResult::kErrorInternal;
-  }
-  if (result.error == dlcservice::kErrorBusy) {
-    install_result = InstallResult::kErrorBusy;
-  }
-  if (result.error == dlcservice::kErrorNeedReboot) {
-    install_result = InstallResult::kErrorNeedReboot;
-  }
-  if (result.error == dlcservice::kErrorInvalidDlc) {
-    install_result = InstallResult::kErrorInvalidDlc;
-  }
-  if (result.error == dlcservice::kErrorAllocation) {
-    install_result = InstallResult::kErrorAllocation;
-  }
-  if (result.error == dlcservice::kErrorNoImageFound) {
-    install_result = InstallResult::kErrorNoImageFound;
-  }
-  base::UmaHistogramEnumeration(kDlcInstallResultHistogram, install_result);
 }
 
 }  // namespace
@@ -129,7 +93,7 @@ void RecordLibassistantDlcInstallResult(
 // Observer that will receive all speech recognition related events,
 // and forwards them to all |AssistantInteractionSubscriber|.
 class SpeechRecognitionObserverWrapper
-    : public chromeos::libassistant::mojom::SpeechRecognitionObserver {
+    : public libassistant::mojom::SpeechRecognitionObserver {
  public:
   explicit SpeechRecognitionObserverWrapper(
       const base::ObserverList<AssistantInteractionSubscriber>* observers)
@@ -142,47 +106,53 @@ class SpeechRecognitionObserverWrapper
       const SpeechRecognitionObserverWrapper&) = delete;
   ~SpeechRecognitionObserverWrapper() override = default;
 
-  mojo::PendingRemote<chromeos::libassistant::mojom::SpeechRecognitionObserver>
+  mojo::PendingRemote<libassistant::mojom::SpeechRecognitionObserver>
   BindNewPipeAndPassRemote() {
     return receiver_.BindNewPipeAndPassRemote();
   }
 
-  // chromeos::libassistant::mojom::SpeechRecognitionObserver implementation:
+  void Stop() { receiver_.reset(); }
+
+  // libassistant::mojom::SpeechRecognitionObserver implementation:
   void OnSpeechLevelUpdated(float speech_level_in_decibels) override {
-    for (auto& it : interaction_subscribers_)
+    for (auto& it : *interaction_subscribers_) {
       it.OnSpeechLevelUpdated(speech_level_in_decibels);
+    }
   }
 
   void OnSpeechRecognitionStart() override {
-    for (auto& it : interaction_subscribers_)
+    for (auto& it : *interaction_subscribers_) {
       it.OnSpeechRecognitionStarted();
+    }
   }
 
   void OnIntermediateResult(const std::string& high_confidence_text,
                             const std::string& low_confidence_text) override {
-    for (auto& it : interaction_subscribers_) {
+    for (auto& it : *interaction_subscribers_) {
       it.OnSpeechRecognitionIntermediateResult(high_confidence_text,
                                                low_confidence_text);
     }
   }
 
   void OnSpeechRecognitionEnd() override {
-    for (auto& it : interaction_subscribers_)
+    for (auto& it : *interaction_subscribers_) {
       it.OnSpeechRecognitionEndOfUtterance();
+    }
   }
 
   void OnFinalResult(const std::string& recognized_text) override {
-    for (auto& it : interaction_subscribers_)
+    for (auto& it : *interaction_subscribers_) {
       it.OnSpeechRecognitionFinalResult(recognized_text);
+    }
   }
 
  private:
   // Owned by our parent, |AssistantManagerServiceImpl|.
-  const base::ObserverList<AssistantInteractionSubscriber>&
+  const raw_ref<const base::ObserverList<AssistantInteractionSubscriber>>
       interaction_subscribers_;
 
-  mojo::Receiver<chromeos::libassistant::mojom::SpeechRecognitionObserver>
-      receiver_{this};
+  mojo::Receiver<libassistant::mojom::SpeechRecognitionObserver> receiver_{
+      this};
 };
 
 // static
@@ -192,8 +162,8 @@ void AssistantManagerServiceImpl::SetInitializedInternalCallbackForTesting(
   // We expect that the callback is set when AssistantStatus is NOT_READY to
   // confirm that AssistantStatus has changed from NOT_READY to READY. See more
   // details at a comment in AssistantManagerServiceImpl::OnDeviceAppsEnabled.
-  CHECK(ash::AssistantState::Get()->assistant_status() ==
-        chromeos::assistant::AssistantStatus::NOT_READY);
+  CHECK(AssistantState::Get()->assistant_status() ==
+        AssistantStatus::NOT_READY);
   initialized_internal_callback_for_testing = std::move(callback);
 }
 
@@ -206,11 +176,11 @@ AssistantManagerServiceImpl::AssistantManagerServiceImpl(
     ServiceContext* context,
     std::unique_ptr<network::PendingSharedURLLoaderFactory>
         pending_url_loader_factory,
-    absl::optional<std::string> s3_server_uri_override,
-    absl::optional<std::string> device_id_override,
+    std::optional<std::string> s3_server_uri_override,
+    std::optional<std::string> device_id_override,
     std::unique_ptr<LibassistantServiceHost> libassistant_service_host)
     : assistant_settings_(std::make_unique<AssistantSettingsImpl>(context)),
-      assistant_host_(std::make_unique<AssistantHost>()),
+      assistant_host_(std::make_unique<AssistantHost>(this)),
       platform_delegate_(std::make_unique<PlatformDelegateImpl>()),
       context_(context),
       device_settings_host_(std::make_unique<DeviceSettingsHost>(context)),
@@ -235,32 +205,6 @@ AssistantManagerServiceImpl::AssistantManagerServiceImpl(
     libassistant_service_host_ =
         std::make_unique<LibassistantServiceHostImpl>();
   }
-
-  assistant_host_->Initialize(libassistant_service_host_.get());
-
-  service_controller().AddAndFireStateObserver(
-      state_observer_receiver_.BindNewPipeAndPassRemote());
-  assistant_host_->AddSpeechRecognitionObserver(
-      speech_recognition_observer_->BindNewPipeAndPassRemote());
-  AddRemoteConversationObserver(this);
-
-  audio_output_delegate_->Bind(assistant_host_->ExtractAudioOutputDelegate());
-  platform_delegate_->Bind(assistant_host_->ExtractPlatformDelegate());
-  audio_input_host_ = std::make_unique<AudioInputHostImpl>(
-      assistant_host_->ExtractAudioInputController(),
-      context_->cras_audio_handler(), context_->power_manager_client(),
-      context_->assistant_state()->locale().value());
-
-  assistant_settings_->Initialize(
-      assistant_host_->ExtractSpeakerIdEnrollmentController(),
-      &assistant_host_->settings_controller());
-
-  media_host_->Initialize(&assistant_host_->media_controller(),
-                          assistant_host_->ExtractMediaDelegate());
-  timer_host_->Initialize(&assistant_host_->timer_controller(),
-                          assistant_host_->ExtractTimerDelegate());
-
-  device_settings_host_->Bind(assistant_host_->ExtractDeviceSettingsDelegate());
 }
 
 AssistantManagerServiceImpl::~AssistantManagerServiceImpl() {
@@ -269,10 +213,12 @@ AssistantManagerServiceImpl::~AssistantManagerServiceImpl() {
   assistant_host_ = nullptr;
 }
 
-void AssistantManagerServiceImpl::Start(const absl::optional<UserInfo>& user,
+void AssistantManagerServiceImpl::Start(const std::optional<UserInfo>& user,
                                         bool enable_hotword) {
   DCHECK(!IsServiceStarted());
-  DCHECK_EQ(GetState(), State::STOPPED);
+  DCHECK(GetState() == State::STOPPED || GetState() == State::DISCONNECTED);
+
+  Initialize();
 
   // Set the flag to avoid starting the service multiple times.
   SetStateAndInformObservers(State::STARTING);
@@ -280,34 +226,26 @@ void AssistantManagerServiceImpl::Start(const absl::optional<UserInfo>& user,
   started_time_ = base::TimeTicks::Now();
 
   EnableHotword(enable_hotword);
-
-  // Install libassistant.so from DLC.
-  // TODO(b/225063204): For phase 1, fallback to load libassistant.so from
-  // rootfs if installabtion failed. No error handling needed.
-  auto* client = chromeos::DlcserviceClient::Get();
-  if (dlc_path_.has_value() || !client) {
-    InitAssistant(user, dlc_path_);
-    return;
-  }
-
-  DVLOG(1) << "Installing libassistant.so from DLC";
-  dlcservice::InstallRequest install_request;
-  install_request.set_id(kLibassistantDlcId);
-  client->Install(
-      install_request,
-      base::BindOnce(&AssistantManagerServiceImpl::OnInstallDlcComplete,
-                     weak_factory_.GetWeakPtr(), user),
-      /*ProgressCallback=*/base::DoNothing());
+  InitAssistant(user);
 }
 
 void AssistantManagerServiceImpl::Stop() {
   // We cannot cleanly stop the service if it is in the process of starting up.
   DCHECK_NE(GetState(), State::STARTING);
 
-  weak_factory_.InvalidateWeakPtrs();
-  SetStateAndInformObservers(State::STOPPED);
+  // During shutdown, this could be called when the libassistant
+  // service is not started.
+  if (!IsServiceStarted()) {
+    return;
+  }
 
+  weak_factory_.InvalidateWeakPtrs();
+  SetStateAndInformObservers(State::STOPPING);
+
+  // We stop observing media events before we destroy `AssistantManagerImpl`,
+  // otherwise notification may happen any time after it is destroyed.
   media_host_->Stop();
+  // For similar reason, stop observing app_list events.
   scoped_app_list_event_subscriber_.Reset();
 
   // When user disables the feature, we also delete all data.
@@ -321,8 +259,7 @@ AssistantManagerService::State AssistantManagerServiceImpl::GetState() const {
   return state_;
 }
 
-void AssistantManagerServiceImpl::SetUser(
-    const absl::optional<UserInfo>& user) {
+void AssistantManagerServiceImpl::SetUser(const std::optional<UserInfo>& user) {
   if (!IsServiceStarted())
     return;
 
@@ -331,10 +268,18 @@ void AssistantManagerServiceImpl::SetUser(
 }
 
 void AssistantManagerServiceImpl::EnableListening(bool enable) {
+  // Could be called when the libassistant service is not started.
+  if (!IsServiceStarted())
+    return;
+
   settings_controller().SetListeningEnabled(enable);
 }
 
 void AssistantManagerServiceImpl::EnableHotword(bool enable) {
+  // Could be called when the libassistant service is not started.
+  if (!IsServiceStarted())
+    return;
+
   audio_input_host_->OnHotwordEnabled(enable);
 }
 
@@ -406,12 +351,6 @@ void AssistantManagerServiceImpl::StopActiveInteraction(
 void AssistantManagerServiceImpl::StartEditReminderInteraction(
     const std::string& client_id) {
   conversation_controller().StartEditReminderInteraction(client_id);
-}
-
-void AssistantManagerServiceImpl::StartScreenContextInteraction(
-    const std::vector<uint8_t>& assistant_screenshot) {
-  conversation_controller().StartScreenContextInteraction(nullptr,
-                                                          assistant_screenshot);
 }
 
 void AssistantManagerServiceImpl::StartTextInteraction(
@@ -487,8 +426,8 @@ void AssistantManagerServiceImpl::OnOpenUrlResponse(const GURL& url,
 }
 
 void AssistantManagerServiceImpl::OnStateChanged(
-    chromeos::libassistant::mojom::ServiceState new_state) {
-  using chromeos::libassistant::mojom::ServiceState;
+    libassistant::mojom::ServiceState new_state) {
+  using libassistant::mojom::ServiceState;
 
   DVLOG(1) << "Libassistant service state changed to " << new_state;
   switch (new_state) {
@@ -498,28 +437,45 @@ void AssistantManagerServiceImpl::OnStateChanged(
     case ServiceState::kRunning:
       OnServiceRunning();
       break;
+    case ServiceState::kDisconnected:
+      OnServiceDisconnected();
+      break;
     case ServiceState::kStopped:
+      OnServiceStopped();
       break;
   }
 }
 
-void AssistantManagerServiceImpl::OnInstallDlcComplete(
-    const absl::optional<UserInfo>& user,
-    const chromeos::DlcserviceClient::InstallResult& result) {
-  if (result.error == dlcservice::kErrorNone) {
-    DVLOG(3) << "Installed libassistant.so from DLC";
-    dlc_path_ = result.root_path;
-  } else {
-    DVLOG(1) << "Failed to install libassistant.so from DLC: " << result.error;
-  }
+void AssistantManagerServiceImpl::Initialize() {
+  assistant_host_->StartLibassistantService(libassistant_service_host_.get());
 
-  RecordLibassistantDlcInstallResult(result);
-  InitAssistant(user, dlc_path_);
+  service_controller().AddAndFireStateObserver(
+      state_observer_receiver_.BindNewPipeAndPassRemote());
+  assistant_host_->AddSpeechRecognitionObserver(
+      speech_recognition_observer_->BindNewPipeAndPassRemote());
+  AddRemoteConversationObserver(this);
+
+  audio_output_delegate_->Bind(assistant_host_->ExtractAudioOutputDelegate());
+  platform_delegate_->Bind(assistant_host_->ExtractPlatformDelegate());
+  audio_input_host_ = std::make_unique<AudioInputHostImpl>(
+      assistant_host_->ExtractAudioInputController(),
+      context_->cras_audio_handler(), context_->power_manager_client(),
+      context_->assistant_state()->locale().value());
+
+  assistant_settings_->Initialize(
+      assistant_host_->ExtractSpeakerIdEnrollmentController(),
+      &assistant_host_->settings_controller());
+
+  media_host_->Initialize(&assistant_host_->media_controller(),
+                          assistant_host_->ExtractMediaDelegate());
+  timer_host_->Initialize(&assistant_host_->timer_controller(),
+                          assistant_host_->ExtractTimerDelegate());
+
+  device_settings_host_->Bind(assistant_host_->ExtractDeviceSettingsDelegate());
 }
 
 void AssistantManagerServiceImpl::InitAssistant(
-    const absl::optional<UserInfo>& user,
-    const absl::optional<std::string>& dlc_path) {
+    const std::optional<UserInfo>& user) {
   DCHECK(!IsServiceStarted());
 
   auto bootup_config = bootup_config_.Clone();
@@ -528,7 +484,6 @@ void AssistantManagerServiceImpl::InitAssistant(
   bootup_config->locale = assistant_state()->locale().value();
   bootup_config->spoken_feedback_enabled = spoken_feedback_enabled_;
   bootup_config->dark_mode_enabled = dark_mode_enabled_;
-  bootup_config->dlc_path = dlc_path;
 
   service_controller().Initialize(std::move(bootup_config),
                                   BindURLLoaderFactory());
@@ -552,7 +507,9 @@ void AssistantManagerServiceImpl::OnServiceStarted() {
 bool AssistantManagerServiceImpl::IsServiceStarted() const {
   switch (state_) {
     case State::STOPPED:
+    case State::STOPPING:
     case State::STARTING:
+    case State::DISCONNECTED:
       return false;
     case State::STARTED:
     case State::RUNNING:
@@ -594,6 +551,34 @@ void AssistantManagerServiceImpl::OnServiceRunning() {
 
   if (base::FeatureList::IsEnabled(assistant::features::kAssistantAppSupport))
     scoped_app_list_event_subscriber_.Observe(device_actions());
+}
+
+void AssistantManagerServiceImpl::OnServiceStopped() {
+  // Valid `STOPPED` will only be called after `STOPPING`.
+  // However, a false `STOPPED` may be received.
+  // An ideal situation would be:
+  // 1. `AddAndFireStateObserver()` is called.
+  // 2. `ServiceController` sends the current state, e.g. STOPPED.
+  // However, since it takes a longer time (through mojom to another thread),
+  // the `state_` in this class could be temporary out of sync. For example:
+  // 1. `AddAndFireStateObserver()` is called when the `state_` is STOPPED.
+  // 2. `Start()`: sets `state_` to STARTING.
+  // 3. `ServiceController` sends the current state inside it, which is STOPPED.
+  // 4. `OnStateChanged()` receives STOPPED, but the `state_` is STARTING.
+  // We will ignore the invalid STOPPED signal.
+  if (GetState() != State::STOPPING)
+    return;
+
+  SetStateAndInformObservers(State::STOPPED);
+
+  // Stop after the `assistant_manager` was destroyed.
+  assistant_host_->StopLibassistantService();
+  ClearAfterStop();
+}
+
+void AssistantManagerServiceImpl::OnServiceDisconnected() {
+  SetStateAndInformObservers(State::DISCONNECTED);
+  ClearAfterStop();
 }
 
 void AssistantManagerServiceImpl::OnAndroidAppListRefreshed(
@@ -685,7 +670,7 @@ void AssistantManagerServiceImpl::AddRemoteConversationObserver(
       observer->BindNewPipeAndPassRemote());
 }
 
-mojo::PendingReceiver<chromeos::libassistant::mojom::NotificationDelegate>
+mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
 AssistantManagerServiceImpl::GetPendingNotificationDelegate() {
   return assistant_host_->ExtractNotificationDelegate();
 }
@@ -710,8 +695,7 @@ AssistantQueryResponseType AssistantManagerServiceImpl::GetQueryResponseType()
   if (device_settings_host_->has_setting_changed()) {
     return AssistantQueryResponseType::kDeviceAction;
   } else if (!receive_url_response_.empty()) {
-    if (receive_url_response_.find("www.google.com/search?") !=
-        std::string::npos) {
+    if (base::Contains(receive_url_response_, "www.google.com/search?")) {
       return AssistantQueryResponseType::kSearchFallback;
     } else {
       return AssistantQueryResponseType::kTargetedAction;
@@ -728,17 +712,12 @@ void AssistantManagerServiceImpl::SendAssistantFeedback(
   conversation_controller().SendAssistantFeedback(assistant_feedback);
 }
 
-ash::AssistantNotificationController*
+AssistantNotificationController*
 AssistantManagerServiceImpl::assistant_notification_controller() {
   return context_->assistant_notification_controller();
 }
 
-ash::AssistantScreenContextController*
-AssistantManagerServiceImpl::assistant_screen_context_controller() {
-  return context_->assistant_screen_context_controller();
-}
-
-ash::AssistantStateBase* AssistantManagerServiceImpl::assistant_state() {
+AssistantStateBase* AssistantManagerServiceImpl::assistant_state() {
   return context_->assistant_state();
 }
 
@@ -751,12 +730,12 @@ AssistantManagerServiceImpl::main_task_runner() {
   return context_->main_task_runner();
 }
 
-chromeos::libassistant::mojom::DisplayController&
+libassistant::mojom::DisplayController&
 AssistantManagerServiceImpl::display_controller() {
   return assistant_host_->display_controller();
 }
 
-chromeos::libassistant::mojom::ServiceController&
+libassistant::mojom::ServiceController&
 AssistantManagerServiceImpl::service_controller() {
   return assistant_host_->service_controller();
 }
@@ -766,12 +745,12 @@ void AssistantManagerServiceImpl::SetMicState(bool mic_open) {
   audio_input_host_->SetMicState(mic_open);
 }
 
-chromeos::libassistant::mojom::ConversationController&
+libassistant::mojom::ConversationController&
 AssistantManagerServiceImpl::conversation_controller() {
   return assistant_host_->conversation_controller();
 }
 
-chromeos::libassistant::mojom::SettingsController&
+libassistant::mojom::SettingsController&
 AssistantManagerServiceImpl::settings_controller() {
   return assistant_host_->settings_controller();
 }
@@ -787,5 +766,24 @@ void AssistantManagerServiceImpl::SetStateAndInformObservers(State new_state) {
     observer.OnStateChanged(state_);
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+void AssistantManagerServiceImpl::ClearAfterStop() {
+  weak_factory_.InvalidateWeakPtrs();
+
+  state_observer_receiver_.reset();
+  speech_recognition_observer_->Stop();
+  audio_output_delegate_->Stop();
+  platform_delegate_->Stop();
+  audio_input_host_.reset();
+  assistant_settings_->Stop();
+  media_host_->Stop();
+  timer_host_->Stop();
+  device_settings_host_->Stop();
+
+  scoped_app_list_event_subscriber_.Reset();
+  interaction_subscribers_.Clear();
+  state_observers_.Clear();
+
+  is_first_init = true;
+}
+
+}  // namespace ash::assistant

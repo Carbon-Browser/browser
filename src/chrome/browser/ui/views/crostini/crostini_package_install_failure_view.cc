@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/text_constants.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/message_box_view.h"
@@ -36,7 +37,7 @@ CrostiniPackageInstallFailureView::CrostiniPackageInstallFailureView(
     const std::string& error_message) {
   SetShowCloseButton(false);
   SetTitle(IDS_CROSTINI_PACKAGE_INSTALL_FAILURE_VIEW_TITLE);
-  SetButtons(ui::DIALOG_BUTTON_OK);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk));
   views::LayoutProvider* provider = views::LayoutProvider::Get();
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical,
@@ -62,6 +63,5 @@ CrostiniPackageInstallFailureView::CrostiniPackageInstallFailureView(
 CrostiniPackageInstallFailureView::~CrostiniPackageInstallFailureView() =
     default;
 
-BEGIN_METADATA(CrostiniPackageInstallFailureView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(CrostiniPackageInstallFailureView)
 END_METADATA

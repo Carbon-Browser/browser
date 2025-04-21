@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,9 +37,9 @@ void LoginKeyboardTestBase::ShowKeyboard() {
   // lock/login layout.
   int height = Shell::GetPrimaryRootWindow()->bounds().height() / 2;
   keyboard_controller->GetKeyboardWindow()->SetBounds(
-      keyboard::KeyboardBoundsFromRootBounds(
+      keyboard::test::KeyboardBoundsFromRootBounds(
           Shell::GetPrimaryRootWindow()->bounds(), height));
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 }
 
 void LoginKeyboardTestBase::HideKeyboard() {

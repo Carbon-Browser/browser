@@ -1,12 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/android/overscroll_controller_android.h"
+
 #include <memory>
+
 #include "base/memory/raw_ptr.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/layers/layer.h"
+#include "gpu/ipc/common/surface_handle.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/input/web_gesture_event.h"
@@ -33,13 +36,19 @@ namespace {
 
 class MockCompositor : public WindowAndroidCompositor {
  public:
-  ~MockCompositor() override {}
-  std::unique_ptr<ReadbackRef> TakeReadbackRef() override { return nullptr; }
+  ~MockCompositor() override = default;
+  ui::WindowAndroidCompositor::ScopedKeepSurfaceAliveCallback
+  TakeScopedKeepSurfaceAliveCallback(const viz::SurfaceId&) override {
+    return base::OnceClosure();
+  }
   void RequestCopyOfOutputOnRootLayer(
       std::unique_ptr<viz::CopyOutputRequest>) override {}
   void SetNeedsAnimate() override {}
   MOCK_METHOD0(GetResourceManager, ResourceManager&());
   MOCK_METHOD0(GetFrameSinkId, viz::FrameSinkId());
+  gpu::SurfaceHandle GetSurfaceHandle() override {
+    return gpu::kNullSurfaceHandle;
+  }
   void AddChildFrameSink(const viz::FrameSinkId& frame_sink_id) override {}
   void RemoveChildFrameSink(const viz::FrameSinkId& frame_sink_id) override {}
   bool IsDrawingFirstVisibleFrame() const override { return false; }
@@ -51,6 +60,12 @@ class MockCompositor : public WindowAndroidCompositor {
       base::TimeDelta timeout) override {
     return nullptr;
   }
+  void OnUpdateOverlayTransform() override {}
+  void PostRequestSuccessfulPresentationTimeForNextFrame(
+      SuccessfulPresentationTimeCallback callback) override {}
+  void AddFrameSubmissionObserver(FrameSubmissionObserver* observer) override {}
+  void RemoveFrameSubmissionObserver(
+      FrameSubmissionObserver* observer) override {}
 };
 
 class MockGlowClient : public OverscrollGlowClient {
@@ -108,7 +123,7 @@ class OverscrollControllerAndroidUnitTest : public testing::Test {
 
  protected:
   raw_ptr<MockGlow> glow_;
-  MockRefresh* refresh_;
+  raw_ptr<MockRefresh> refresh_;
   std::unique_ptr<MockCompositor> compositor_;
   std::unique_ptr<OverscrollControllerAndroid> controller_;
   float dip_scale_;

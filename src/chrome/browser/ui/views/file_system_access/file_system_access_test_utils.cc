@@ -1,8 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/file_system_access/file_system_access_test_utils.h"
+
+#include "ui/shell_dialogs/selected_file_info.h"
+#include "url/gurl.h"
 
 SelectPredeterminedFileDialog::SelectPredeterminedFileDialog(
     std::vector<base::FilePath> result,
@@ -21,11 +24,13 @@ void SelectPredeterminedFileDialog::SelectFileImpl(
     int file_type_index,
     const base::FilePath::StringType& default_extension,
     gfx::NativeWindow owning_window,
-    void* params) {
-  if (result_.size() == 1)
-    listener_->FileSelected(result_[0], 0, params);
-  else
-    listener_->MultiFilesSelected(result_, params);
+    const GURL* caller) {
+  if (result_.size() == 1) {
+    listener_->FileSelected(ui::SelectedFileInfo(result_[0]), 0);
+  } else {
+    listener_->MultiFilesSelected(
+        ui::FilePathListToSelectedFileInfoList(result_));
+  }
 }
 
 bool SelectPredeterminedFileDialog::IsRunning(
@@ -33,7 +38,9 @@ bool SelectPredeterminedFileDialog::IsRunning(
   return false;
 }
 
-void SelectPredeterminedFileDialog::ListenerDestroyed() {}
+void SelectPredeterminedFileDialog::ListenerDestroyed() {
+  listener_ = nullptr;
+}
 
 bool SelectPredeterminedFileDialog::HasMultipleFileTypeChoicesImpl() {
   return false;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <algorithm>
 #include <memory>
 #include <set>
 
+#include "base/containers/contains.h"
+#include "base/containers/span.h"
 #include "base/containers/stack.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
@@ -35,8 +36,8 @@ void PickleFromFileInfo(const SandboxDirectoryDatabase::FileInfo& info,
   DCHECK(pickle);
   std::string data_path;
   // Round off here to match the behavior of the filesystem on real files.
-  base::Time time =
-      base::Time::FromDoubleT(floor(info.modification_time.ToDoubleT()));
+  base::Time time = base::Time::FromSecondsSinceUnixEpoch(
+      floor(info.modification_time.InSecondsFSinceUnixEpoch()));
   std::string name;
 
   data_path = FilePathToString(info.data_path);
@@ -75,8 +76,6 @@ const char kSandboxDirectoryLastIntegerKey[] = "LAST_INTEGER";
 const int64_t kSandboxDirectoryMinimumReportIntervalHours = 1;
 const char kSandboxDirectoryInitStatusHistogramLabel[] =
     "FileSystem.DirectoryDatabaseInit";
-const char kSandboxDirectoryDatabaseRepairHistogramLabel[] =
-    "FileSystem.DirectoryDatabaseRepair";
 
 // These values are recorded in UMA. Changing existing values will invalidate
 // results for older Chrome releases. Only add new values.
@@ -86,14 +85,6 @@ enum class SandboxDirectoryInitStatus {
   INIT_STATUS_IO_ERROR,
   INIT_STATUS_UNKNOWN_ERROR,
   INIT_STATUS_MAX
-};
-
-// These values are recorded in UMA. Changing existing values will invalidate
-// results for older Chrome releases. Only add new values.
-enum class SandboxDirectoryRepairResult {
-  DB_REPAIR_SUCCEEDED = 0,
-  DB_REPAIR_FAILED,
-  DB_REPAIR_MAX
 };
 
 std::string GetChildLookupKey(SandboxDirectoryDatabase::FileId parent_id,
@@ -229,9 +220,10 @@ bool DatabaseCheckHelper::ScanDatabase() {
       // value: "<pickled FileInfo>"
       FileInfo file_info;
       if (!FileInfoFromPickle(
-              base::Pickle(itr->value().data(), itr->value().size()),
-              &file_info))
+              base::Pickle::WithUnownedBuffer(base::as_byte_span(itr->value())),
+              &file_info)) {
         return false;
+      }
 
       FileId file_id = -1;
       if (!base::StringToInt64(key, &file_id) || file_id < 0)
@@ -304,8 +296,7 @@ bool DatabaseCheckHelper::ScanDirectory() {
       if (!path_.AppendRelativePath(absolute_file_path, &relative_file_path))
         return false;
 
-      if (std::find(kExcludes, kExcludes + std::size(kExcludes),
-                    relative_file_path) != kExcludes + std::size(kExcludes))
+      if (base::Contains(kExcludes, relative_file_path))
         continue;
 
       if (find_info.IsDirectory()) {
@@ -488,7 +479,8 @@ bool SandboxDirectoryDatabase::GetFileInfo(FileId file_id, FileInfo* info) {
       db_->Get(leveldb::ReadOptions(), file_key, &file_data_string);
   if (status.ok()) {
     bool success = FileInfoFromPickle(
-        base::Pickle(file_data_string.data(), file_data_string.length()), info);
+        base::Pickle::WithUnownedBuffer(base::as_byte_span(file_data_string)),
+        info);
     if (!success)
       return false;
     if (!VerifyDataPath(info->data_path)) {
@@ -735,15 +727,8 @@ bool SandboxDirectoryDatabase::Init(RecoveryOption recovery_option) {
       LOG(WARNING) << "Corrupted SandboxDirectoryDatabase detected."
                    << " Attempting to repair.";
       if (RepairDatabase(path)) {
-        UMA_HISTOGRAM_ENUMERATION(
-            kSandboxDirectoryDatabaseRepairHistogramLabel,
-            SandboxDirectoryRepairResult::DB_REPAIR_SUCCEEDED,
-            SandboxDirectoryRepairResult::DB_REPAIR_MAX);
         return true;
       }
-      UMA_HISTOGRAM_ENUMERATION(kSandboxDirectoryDatabaseRepairHistogramLabel,
-                                SandboxDirectoryRepairResult::DB_REPAIR_FAILED,
-                                SandboxDirectoryRepairResult::DB_REPAIR_MAX);
       LOG(WARNING) << "Failed to repair SandboxDirectoryDatabase.";
       [[fallthrough]];
     case DELETE_ON_CORRUPTION:
@@ -756,7 +741,6 @@ bool SandboxDirectoryDatabase::Init(RecoveryOption recovery_option) {
   }
 
   NOTREACHED();
-  return false;
 }
 
 bool SandboxDirectoryDatabase::RepairDatabase(const std::string& db_path) {

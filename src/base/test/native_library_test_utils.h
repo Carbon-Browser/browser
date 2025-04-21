@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ extern NATIVE_LIBRARY_TEST_ALWAYS_EXPORT int g_native_library_exported_value;
 // A function which increments an internal counter value and returns its value.
 // The first call returns 1, then 2, etc.
 NATIVE_LIBRARY_TEST_ALWAYS_EXPORT int NativeLibraryTestIncrement();
+
+// A function which resets the internal counter value to 0.
+NATIVE_LIBRARY_TEST_ALWAYS_EXPORT void NativeLibraryResetCounter();
 
 }  // extern "C"
 

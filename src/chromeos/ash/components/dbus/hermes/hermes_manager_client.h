@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/observer_list.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "dbus/property.h"
 #include "third_party/cros_system_api/dbus/hermes/dbus-constants.h"
 
@@ -28,7 +28,7 @@ class COMPONENT_EXPORT(HERMES_CLIENT) HermesManagerClient {
     // Adds a new Euicc object with given path and properties.
     virtual void AddEuicc(const dbus::ObjectPath& path,
                           const std::string& eid,
-                          bool is_actve,
+                          bool is_active,
                           uint32_t physical_slot) = 0;
 
     // Clears all Euicc objects and associated profiles.
@@ -42,6 +42,9 @@ class COMPONENT_EXPORT(HERMES_CLIENT) HermesManagerClient {
 
     // Called when a new Euicc objects are added or removed.
     virtual void OnAvailableEuiccListChanged() {}
+
+    // Called when the Hermes clients are being shut down.
+    virtual void OnShutdown() {}
   };
 
   // Adds an observer for carrier profile lists changes on Hermes manager.
@@ -82,10 +85,5 @@ class COMPONENT_EXPORT(HERMES_CLIENT) HermesManagerClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::HermesManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_HERMES_MANAGER_CLIENT_H_

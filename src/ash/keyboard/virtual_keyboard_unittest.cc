@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/events/test/event_generator.h"
 
@@ -44,7 +44,7 @@ TEST_F(VirtualKeyboardTest, EventsAreHandledBasedOnHitTestBounds) {
 
   auto* keyboard_controller = keyboard::KeyboardUIController::Get();
   keyboard_controller->ShowKeyboard(false);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   // Add two hit test bounds (coordinates relative to keyboard window).
   // Both are 10x10 squares, but placed in different locations.
@@ -94,7 +94,7 @@ TEST_F(VirtualKeyboardTest, HitTestBoundsAreResetWhenContainerTypeChanges) {
 
   auto* keyboard_controller = keyboard::KeyboardUIController::Get();
   keyboard_controller->ShowKeyboard(false);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   // Set empty hit test bounds, so all events pass through to the background.
   keyboard_controller->SetHitTestBounds(std::vector<gfx::Rect>());

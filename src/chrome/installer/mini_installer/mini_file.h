@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,9 @@ class MiniFile {
   MiniFile& operator=(MiniFile&& other) noexcept;
 
   // Creates a new file at |path| for exclusive writing. Returns true if the
-  // file was created, in which case IsValid() will return true.
+  // file was created, in which case IsValid() will return true. Consumers are
+  // expected to write sequentially to the file. This expectation is for the
+  // sake of performance rather than correctness.
   bool Create(const wchar_t* path);
 
   // Returns true if this object has a path and a handle to an open file.

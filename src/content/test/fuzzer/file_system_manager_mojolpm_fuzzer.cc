@@ -1,12 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdint.h>
 #include <utility>
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"  // nogncheck
@@ -20,6 +26,7 @@
 #include "content/test/fuzzer/file_system_manager_mojolpm_fuzzer.pb.h"
 #include "content/test/fuzzer/mojolpm_fuzzer_support.h"
 #include "mojo/public/tools/fuzzers/mojolpm.h"
+#include "storage/browser/file_system/file_permission_policy.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/quota/special_storage_policy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
@@ -223,7 +230,7 @@ void FileSystemManagerTestcase::RunAction(const ProtoAction& action,
 
     case ProtoAction::kRunThread:
       if (action.run_thread().id() == ThreadId_UI) {
-        content::GetUIThreadTaskRunner({})->PostTaskAndReply(
+        GetUIThreadTaskRunner({})->PostTaskAndReply(
             FROM_HERE, base::DoNothing(), std::move(run_closure));
       } else if (action.run_thread().id() == ThreadId_IO) {
         content::GetIOThreadTaskRunner({})->PostTaskAndReply(

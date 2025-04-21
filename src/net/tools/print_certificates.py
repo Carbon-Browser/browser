@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -401,10 +401,11 @@ read from stdin.
 whitespace will be stripped (needed for copy-pasting data
 from NetLogs).''')
 
-  parser.add_argument(
-      '--output', dest='outputs', action='store',
-      default="header,der2ascii,openssl_text,pem",
-      help='output formats to use. Default: %(default)s')
+  parser.add_argument('--output',
+                      dest='outputs',
+                      action='store',
+                      default="header,openssl_text,pem",
+                      help='output formats to use. Default: %(default)s')
 
   args = parser.parse_args()
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "components/feature_engagement/internal/proto/feature_event.pb.h"
@@ -17,7 +18,6 @@
 #include "components/leveldb_proto/public/proto_database.h"
 #include "components/leveldb_proto/testing/fake_db.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace feature_engagement {
 
@@ -63,7 +63,7 @@ class PersistentEventStoreTest : public ::testing::Test {
   }
 
   // Callback results.
-  absl::optional<bool> load_successful_;
+  std::optional<bool> load_successful_;
   std::unique_ptr<std::vector<Event>> load_results_;
 
   EventStore::OnLoadedCallback load_callback_;

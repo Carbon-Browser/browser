@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_buffer.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_destination_node.h"
 #include "third_party/blink/renderer/modules/webaudio/offline_audio_context.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 
 namespace blink {
 
@@ -46,6 +47,7 @@ class OfflineAudioDestinationHandler final : public AudioDestinationHandler {
   void Pause() override;
   void Resume() override;
   uint32_t MaxChannelCount() const override;
+  void PrepareTaskRunnerForWorklet() override {}
 
   void RestartRendering() override;
 
@@ -132,7 +134,7 @@ class OfflineAudioDestinationHandler final : public AudioDestinationHandler {
 
   // The rendering thread for the non-AudioWorklet mode. For the AudioWorklet
   // node, AudioWorkletThread will drive the rendering.
-  std::unique_ptr<Thread> render_thread_;
+  std::unique_ptr<NonMainThread> render_thread_;
 
   scoped_refptr<base::SingleThreadTaskRunner> render_thread_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;

@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZCR_COLOR_MANAGEMENT_SURFACE_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZCR_COLOR_MANAGEMENT_SURFACE_H_
 
+#include "base/memory/scoped_refptr.h"
 #include "ui/gfx/color_space.h"
 #include "ui/ozone/platform/wayland/host/wayland_zcr_color_space.h"
 
@@ -17,7 +18,7 @@ class WaylandConnection;
 class WaylandZcrColorManagementSurface {
  public:
   explicit WaylandZcrColorManagementSurface(
-      struct zcr_color_management_surface_v1* management_surface,
+      zcr_color_management_surface_v1* management_surface,
       WaylandConnection* connection);
   WaylandZcrColorManagementSurface(const WaylandZcrColorManagementSurface&) =
       delete;
@@ -26,13 +27,14 @@ class WaylandZcrColorManagementSurface {
   ~WaylandZcrColorManagementSurface();
 
   void SetDefaultColorSpace();
-  void SetColorSpace(gfx::ColorSpace color_space);
+  void SetColorSpace(
+      scoped_refptr<WaylandZcrColorSpace> wayland_zcr_color_space);
 
  private:
-  // zcr_color_management_surface_v1_listener
+  // zcr_color_management_surface_v1_listener callbacks:
   static void OnPreferredColorSpace(void* data,
-                                    struct zcr_color_management_surface_v1* cms,
-                                    struct wl_output* output);
+                                    zcr_color_management_surface_v1* cms,
+                                    wl_output* output);
 
   wl::Object<zcr_color_management_surface_v1> zcr_color_management_surface_;
   const raw_ptr<WaylandConnection> connection_;

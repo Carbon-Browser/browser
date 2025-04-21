@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,25 @@
 #define CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_INSTALL_FROM_INFO_COMMAND_H_
 
 #include <memory>
+#include <optional>
 
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/commands/web_app_command.h"
-#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_app_install_info.h"
+#include "chrome/browser/web_applications/locks/app_lock.h"
 #include "chrome/browser/web_applications/web_app_install_params.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
+
+class Profile;
 
 namespace web_app {
 
-class WebAppInstallFinalizer;
+class InstallFromInfoJob;
+struct WebAppInstallParams;
 
 // Starts a web app installation process using prefilled
 // |install_info| which holds all the data needed for installation.
@@ -35,43 +39,41 @@ class WebAppInstallFinalizer;
 // then the existing web app manifest fields will be overwritten.
 // If `install_info` contains data freshly fetched from the web app's
 // site then `overwrite_existing_manifest_fields` should be true.
-class InstallFromInfoCommand : public WebAppCommand {
+class InstallFromInfoCommand
+    : public WebAppCommand<AppLock,
+                           const webapps::AppId&,
+                           webapps::InstallResultCode> {
  public:
-  InstallFromInfoCommand(std::unique_ptr<WebAppInstallInfo> install_info,
-                         WebAppInstallFinalizer* install_finalizer,
-                         bool overwrite_existing_manifest_fields,
-                         webapps::WebappInstallSource install_surface,
-                         OnceInstallCallback install_callback);
-
-  InstallFromInfoCommand(std::unique_ptr<WebAppInstallInfo> install_info,
-                         WebAppInstallFinalizer* install_finalizer,
+  // The `install_params` controls whether and how OS hooks get installed. By
+  // default, no params means no os hooks.
+  InstallFromInfoCommand(Profile* profile,
+                         std::unique_ptr<WebAppInstallInfo> install_info,
                          bool overwrite_existing_manifest_fields,
                          webapps::WebappInstallSource install_surface,
                          OnceInstallCallback install_callback,
-                         const WebAppInstallParams& install_params);
+                         std::optional<WebAppInstallParams> install_params);
 
   ~InstallFromInfoCommand() override;
 
-  void Start() override;
-  void OnSyncSourceRemoved() override;
-  void OnShutdown() override;
+  // WebAppCommand:
+  void OnShutdown(base::PassKey<WebAppCommandManager>) const override;
 
-  base::Value ToDebugValue() const override;
+ protected:
+  // WebAppCommand:
+  void StartWithLock(std::unique_ptr<AppLock> lock) override;
 
  private:
-  void Abort(webapps::InstallResultCode code);
+  void OnInstallFromInfoJobCompleted(webapps::AppId app_id,
+                                     webapps::InstallResultCode code);
 
-  void OnInstallCompleted(const AppId& app_id,
-                          webapps::InstallResultCode code,
-                          OsHooksErrors os_hooks_errors);
+  raw_ref<Profile> profile_;
 
-  AppId app_id_;
-  std::unique_ptr<WebAppInstallInfo> install_info_;
-  raw_ptr<WebAppInstallFinalizer> install_finalizer_;
-  bool overwrite_existing_manifest_fields_;
-  webapps::WebappInstallSource install_surface_;
-  OnceInstallCallback install_callback_;
-  absl::optional<WebAppInstallParams> install_params_;
+  const webapps::AppId app_id_;
+  const bool diy_app_;
+
+  std::unique_ptr<AppLock> lock_;
+
+  std::unique_ptr<InstallFromInfoJob> install_from_info_job_;
 
   base::WeakPtrFactory<InstallFromInfoCommand> weak_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/notifications/scheduler/internal/background_task_coordinator.h"
 #include "chrome/browser/notifications/scheduler/internal/display_decider.h"
 #include "chrome/browser/notifications/scheduler/internal/impression_history_tracker.h"

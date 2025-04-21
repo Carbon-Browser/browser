@@ -1,73 +1,154 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/browser/identity_request_dialog_controller.h"
 
 #include <memory>
+#include <optional>
 
 #include "content/public/browser/web_contents.h"
 
 namespace content {
 
-// `Sec-` prefix makes this a forbidden header and cannot be added by
-// JavaScript.
-// This header tags browser-generated requests resulting from calls to the
-// FedCM API. Its presence can be used for, among other things, CSRF protection
-// on the identity provider's server. This originally omitted "-CSRF" but was
-// made more specific on speculation that we might need other headers later,
-// though it is unclear what they would be for. It can change back later if
-// no such requirements appear.
-// See https://fetch.spec.whatwg.org/#forbidden-header-name
-const char kSecFedCmCsrfHeader[] = "Sec-FedCM-CSRF";
-const char kSecFedCmCsrfHeaderValue[] = "?1";
-
-IdentityRequestAccount::IdentityRequestAccount(
-    const std::string& id,
-    const std::string& email,
-    const std::string& name,
-    const std::string& given_name,
-    const GURL& picture,
-    absl::optional<LoginState> login_state)
-    : id{id},
-      email{email},
-      name{name},
-      given_name{given_name},
-      picture{picture},
-      login_state{login_state} {}
-
-IdentityRequestAccount::IdentityRequestAccount(const IdentityRequestAccount&) =
-    default;
-IdentityRequestAccount::~IdentityRequestAccount() = default;
-
-ClientIdData::ClientIdData(const GURL& terms_of_service_url,
-                           const GURL& privacy_policy_url)
+ClientMetadata::ClientMetadata(const GURL& terms_of_service_url,
+                               const GURL& privacy_policy_url,
+                               const GURL& brand_icon_url)
     : terms_of_service_url{terms_of_service_url},
-      privacy_policy_url(privacy_policy_url) {}
+      privacy_policy_url(privacy_policy_url),
+      brand_icon_url(brand_icon_url) {}
+ClientMetadata::ClientMetadata(const ClientMetadata& other) = default;
+ClientMetadata::~ClientMetadata() = default;
 
 IdentityProviderMetadata::IdentityProviderMetadata() = default;
 IdentityProviderMetadata::~IdentityProviderMetadata() = default;
 IdentityProviderMetadata::IdentityProviderMetadata(
     const IdentityProviderMetadata& other) = default;
 
-int IdentityRequestDialogController::GetBrandIconIdealSize() {
-  return 0;
-}
-
-int IdentityRequestDialogController::GetBrandIconMinimumSize() {
-  return 0;
-}
-
-void IdentityRequestDialogController::ShowAccountsDialog(
-    content::WebContents* rp_web_contents,
-    const GURL& idp_signin_url,
-    base::span<const IdentityRequestAccount> accounts,
+IdentityProviderData::IdentityProviderData(
+    const std::string& idp_for_display,
     const IdentityProviderMetadata& idp_metadata,
-    const ClientIdData& client_id_data,
-    IdentityRequestAccount::SignInMode sign_in_mode,
+    const ClientMetadata& client_metadata,
+    blink::mojom::RpContext rp_context,
+    const std::vector<IdentityRequestDialogDisclosureField>& disclosure_fields,
+    bool has_login_status_mismatch)
+    : idp_for_display{idp_for_display},
+      idp_metadata{idp_metadata},
+      client_metadata{client_metadata},
+      rp_context(rp_context),
+      disclosure_fields(disclosure_fields),
+      has_login_status_mismatch(has_login_status_mismatch) {}
+
+IdentityProviderData::~IdentityProviderData() = default;
+
+int IdentityRequestDialogController::GetBrandIconIdealSize(
+    blink::mojom::RpMode rp_mode) {
+  return 0;
+}
+
+int IdentityRequestDialogController::GetBrandIconMinimumSize(
+    blink::mojom::RpMode rp_mode) {
+  return 0;
+}
+
+void IdentityRequestDialogController::SetIsInterceptionEnabled(bool enabled) {
+  is_interception_enabled_ = enabled;
+}
+
+bool IdentityRequestDialogController::ShowAccountsDialog(
+    const std::string& rp_for_display,
+    const std::vector<scoped_refptr<content::IdentityProviderData>>& idp_list,
+    const std::vector<scoped_refptr<content::IdentityRequestAccount>>& accounts,
+    content::IdentityRequestAccount::SignInMode sign_in_mode,
+    blink::mojom::RpMode rp_mode,
+    const std::vector<scoped_refptr<content::IdentityRequestAccount>>&
+        new_accounts,
     AccountSelectionCallback on_selected,
+    LoginToIdPCallback on_add_account,
+    DismissCallback dismiss_callback,
+    AccountsDisplayedCallback accounts_displayed_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+    return false;
+  }
+  return true;
+}
+
+bool IdentityRequestDialogController::ShowFailureDialog(
+    const std::string& rp_for_display,
+    const std::string& idp_for_display,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
+    const IdentityProviderMetadata& idp_metadata,
+    DismissCallback dismiss_callback,
+    LoginToIdPCallback login_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+    return false;
+  }
+  return true;
+}
+
+bool IdentityRequestDialogController::ShowErrorDialog(
+    const std::string& rp_for_display,
+    const std::string& idp_for_display,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
+    const IdentityProviderMetadata& idp_metadata,
+    const std::optional<IdentityCredentialTokenError>& error,
+    DismissCallback dismiss_callback,
+    MoreDetailsCallback more_details_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+    return false;
+  }
+  return true;
+}
+
+bool IdentityRequestDialogController::ShowLoadingDialog(
+    const std::string& rp_for_display,
+    const std::string& idp_for_display,
+    blink::mojom::RpContext rp_context,
+    blink::mojom::RpMode rp_mode,
     DismissCallback dismiss_callback) {
-  std::move(dismiss_callback).Run(DismissReason::OTHER);
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+    return false;
+  }
+  return true;
+}
+
+std::string IdentityRequestDialogController::GetTitle() const {
+  return std::string();
+}
+
+std::optional<std::string> IdentityRequestDialogController::GetSubtitle()
+    const {
+  return std::nullopt;
+}
+
+void IdentityRequestDialogController::ShowUrl(LinkType type, const GURL& url) {}
+
+WebContents* IdentityRequestDialogController::ShowModalDialog(
+    const GURL& url,
+    blink::mojom::RpMode rp_mode,
+    DismissCallback dismiss_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+  }
+  return nullptr;
+}
+
+void IdentityRequestDialogController::CloseModalDialog() {}
+
+WebContents* IdentityRequestDialogController::GetRpWebContents() {
+  return nullptr;
+}
+
+void IdentityRequestDialogController::RequestIdPRegistrationPermision(
+    const url::Origin& origin,
+    base::OnceCallback<void(bool accepted)> callback) {
+  std::move(callback).Run(false);
 }
 
 }  // namespace content

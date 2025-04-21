@@ -1,24 +1,24 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_STORAGE_INDEXED_DB_SCOPES_LEVELDB_SCOPES_TEST_UTILS_H_
 #define COMPONENTS_SERVICES_STORAGE_INDEXED_DB_SCOPES_LEVELDB_SCOPES_TEST_UTILS_H_
 
-#include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_restrictions.h"
 #include "components/services/storage/indexed_db/leveldb/fake_leveldb_factory.h"
 #include "components/services/storage/indexed_db/leveldb/leveldb_state.h"
-#include "components/services/storage/indexed_db/locks/leveled_lock_manager.h"
+#include "components/services/storage/indexed_db/locks/partitioned_lock_manager.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_coding.h"
 #include "components/services/storage/indexed_db/scopes/scopes_metadata.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/leveldatabase/src/include/leveldb/slice.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
 
-namespace content {
+namespace content::indexed_db {
 
 class LevelDBScopesTestBase : public testing::Test {
  public:
@@ -32,6 +32,9 @@ class LevelDBScopesTestBase : public testing::Test {
   // Ensures that |leveldb_| is destroyed correctly, and all contents are
   // deleted off disk.
   void TearDown() override;
+
+  // Destroys the leveldb files.
+  leveldb::Status DestroyDB();
 
   // Ensures that |leveldb_| is destroyed correctly, but doesn't delete the
   // database on disk.
@@ -84,18 +87,17 @@ class LevelDBScopesTestBase : public testing::Test {
 
   // Creates a shared lock request from |simple_lock_begin_| to
   // |simple_lock_end_|.
-  LeveledLockManager::LeveledLockRequest CreateSimpleSharedLock();
+  PartitionedLockManager::PartitionedLockRequest CreateSimpleSharedLock();
   // Creates a exclusive lock request from |simple_lock_begin_| to
   // |simple_lock_end_|.
-  LeveledLockManager::LeveledLockRequest CreateSimpleExclusiveLock();
+  PartitionedLockManager::PartitionedLockRequest CreateSimpleExclusiveLock();
 
-  LeveledLockManager::LeveledLockRequest CreateSharedLock(int i);
-  LeveledLockManager::LeveledLockRequest CreateExclusiveLock(int i);
+  PartitionedLockManager::PartitionedLockRequest CreateSharedLock(int i);
+  PartitionedLockManager::PartitionedLockRequest CreateExclusiveLock(int i);
 
   const base::FilePath& DatabaseDirFilePath();
 
- private:
-  void CreateAndSaveLevelDBState();
+  leveldb::Status CreateAndSaveLevelDBState();
 
  protected:
   base::ScopedAllowBaseSyncPrimitivesForTesting allow_;
@@ -111,7 +113,6 @@ class LevelDBScopesTestBase : public testing::Test {
   const std::vector<uint8_t> metadata_prefix_ = {'a'};
   const std::vector<uint8_t> db_prefix_ = {'b'};
 
-  std::unique_ptr<FakeLevelDBFactory> leveldb_factory_;
   scoped_refptr<LevelDBState> leveldb_;
   std::string large_string_;
   LevelDBScopesUndoTask undo_task_buffer_;
@@ -122,6 +123,6 @@ class LevelDBScopesTestBase : public testing::Test {
   std::string value_buffer_;
 };
 
-}  // namespace content
+}  // namespace content::indexed_db
 
 #endif  // COMPONENTS_SERVICES_STORAGE_INDEXED_DB_SCOPES_LEVELDB_SCOPES_TEST_UTILS_H_

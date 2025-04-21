@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,12 @@
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
+#include "ui/gfx/test/sk_color_eq.h"
 
 #if BUILDFLAG(IS_IOS)
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "skia/ext/skia_utils_ios.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #elif BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
 #include "skia/ext/skia_utils_mac.h"
@@ -37,61 +39,44 @@ namespace {
 // converting a gfx::Image between colorspaces. Color shifts occur when
 // converting between NSImage & UIImage to ImageSkia. Determined by trial and
 // error.
-const int kMaxColorSpaceConversionColorShift = 40;
-
-bool ColorComponentsClose(SkColor component1,
-                          SkColor component2,
-                          int max_deviation) {
-  int c1 = static_cast<int>(component1);
-  int c2 = static_cast<int>(component2);
-  return std::abs(c1 - c2) <= max_deviation;
-}
-
-bool ColorsClose(SkColor color1, SkColor color2, int max_deviation) {
-  // Be tolerant of floating point rounding and lossy color space conversions.
-  return ColorComponentsClose(SkColorGetR(color1), SkColorGetR(color2),
-                              max_deviation) &&
-         ColorComponentsClose(SkColorGetG(color1), SkColorGetG(color2),
-                              max_deviation) &&
-         ColorComponentsClose(SkColorGetB(color1), SkColorGetB(color2),
-                              max_deviation) &&
-         ColorComponentsClose(SkColorGetA(color1), SkColorGetA(color2),
-                              max_deviation);
-}
+constexpr int kMaxColorSpaceConversionColorShift = 40;
 
 }  // namespace
 
-std::vector<float> Get1xAnd2xScales() {
-  std::vector<float> scales;
-  scales.push_back(1.0f);
-  scales.push_back(2.0f);
-  return scales;
+const SkBitmap CreateBitmap(int size, SkColor color) {
+  return CreateBitmap(size, size, color);
 }
 
-const SkBitmap CreateBitmap(int width, int height) {
+const SkBitmap CreateBitmap(int width, int height, SkColor color) {
   SkBitmap bitmap;
   bitmap.allocN32Pixels(width, height);
-  bitmap.eraseARGB(255, 0, 255, 0);
+  bitmap.eraseColor(color);
   return bitmap;
 }
 
-gfx::ImageSkia CreateImageSkia(int width, int height) {
-  return gfx::ImageSkia::CreateFrom1xBitmap(CreateBitmap(width, height));
+gfx::ImageSkia CreateImageSkia(int size, SkColor color) {
+  return CreateImageSkia(size, size, color);
 }
 
-scoped_refptr<base::RefCountedMemory> CreatePNGBytes(int edge_size) {
-  SkBitmap bitmap = CreateBitmap(edge_size, edge_size);
-  scoped_refptr<base::RefCountedBytes> bytes(new base::RefCountedBytes());
-  PNGCodec::EncodeBGRASkBitmap(bitmap, false, &bytes->data());
-  return bytes;
+gfx::ImageSkia CreateImageSkia(int width, int height, SkColor color) {
+  return gfx::ImageSkia::CreateFrom1xBitmap(CreateBitmap(width, height, color));
 }
 
-gfx::Image CreateImage() {
-  return CreateImage(100, 50);
+scoped_refptr<base::RefCountedMemory> CreatePNGBytes(int edge_size,
+                                                     SkColor color) {
+  SkBitmap bitmap = CreateBitmap(edge_size, edge_size, color);
+  std::optional<std::vector<uint8_t>> data =
+      PNGCodec::EncodeBGRASkBitmap(bitmap, /*discard_transparency=*/false);
+  return scoped_refptr<base::RefCountedBytes>(
+      new base::RefCountedBytes(data.value_or(std::vector<uint8_t>())));
 }
 
-gfx::Image CreateImage(int width, int height) {
-  return gfx::Image::CreateFrom1xBitmap(CreateBitmap(width, height));
+gfx::Image CreateImage(int size, SkColor color) {
+  return CreateImage(size, size, color);
+}
+
+gfx::Image CreateImage(int width, int height, SkColor color) {
+  return gfx::Image::CreateFrom1xBitmap(CreateBitmap(width, height, color));
 }
 
 bool AreImagesEqual(const gfx::Image& img1, const gfx::Image& img2) {
@@ -153,9 +138,10 @@ bool AreBitmapsClose(const SkBitmap& bmp1,
 bool ArePNGBytesCloseToBitmap(base::span<const uint8_t> bytes,
                               const SkBitmap& bitmap,
                               int max_deviation) {
-  SkBitmap decoded;
-  if (!PNGCodec::Decode(bytes.data(), bytes.size(), &decoded))
+  SkBitmap decoded = PNGCodec::Decode(bytes);
+  if (decoded.isNull()) {
     return bitmap.isNull();
+  }
 
   return AreBitmapsClose(bitmap, decoded, max_deviation);
 }
@@ -169,7 +155,8 @@ void CheckImageIndicatesPNGDecodeFailure(const gfx::Image& image) {
   EXPECT_FALSE(bitmap.isNull());
   EXPECT_LE(16, bitmap.width());
   EXPECT_LE(16, bitmap.height());
-  CheckColors(bitmap.getColor(10, 10), SK_ColorRED);
+  EXPECT_SKCOLOR_CLOSE(bitmap.getColor(10, 10), SK_ColorRED,
+                       MaxColorSpaceConversionColorShift());
 }
 
 bool ImageSkiaStructureMatches(
@@ -207,22 +194,21 @@ bool IsEmpty(const gfx::Image& image) {
 PlatformImage CreatePlatformImage() {
   SkBitmap bitmap(CreateBitmap(25, 25));
 #if BUILDFLAG(IS_IOS)
-  float scale = ImageSkia::GetMaxSupportedScale();
+  const float scale = ui::GetScaleForMaxSupportedResourceScaleFactor();
 
   if (scale > 1.0) {
     // Always create a 25pt x 25pt image.
-    int size = static_cast<int>(25 * scale);
+    const int size = static_cast<int>(25 * scale);
     bitmap = CreateBitmap(size, size);
   }
 
-  base::ScopedCFTypeRef<CGColorSpaceRef> color_space(
+  base::apple::ScopedCFTypeRef<CGColorSpaceRef> color_space(
       CGColorSpaceCreateDeviceRGB());
   UIImage* image =
-      skia::SkBitmapToUIImageWithColorSpace(bitmap, scale, color_space);
+      skia::SkBitmapToUIImageWithColorSpace(bitmap, scale, color_space.get());
   return image;
 #elif BUILDFLAG(IS_MAC)
-  NSImage* image = skia::SkBitmapToNSImageWithColorSpace(
-      bitmap, base::mac::GetGenericRGBColorSpace());
+  NSImage* image = skia::SkBitmapToNSImage(bitmap);
   return image;
 #else
   return gfx::ImageSkia::CreateFrom1xBitmap(bitmap);
@@ -260,7 +246,7 @@ gfx::Image CopyViaPlatformType(const gfx::Image& image) {
 }
 
 #if BUILDFLAG(IS_APPLE)
-// Defined in image_unittest_util_mac.mm.
+// Defined in image_unittest_util_apple.mm.
 #else
 SkColor GetPlatformImageColor(PlatformImage image, int x, int y) {
   return image.bitmap()->getColor(x, y);
@@ -268,7 +254,8 @@ SkColor GetPlatformImageColor(PlatformImage image, int x, int y) {
 #endif
 
 void CheckColors(SkColor color1, SkColor color2) {
-  EXPECT_TRUE(ColorsClose(color1, color2, MaxColorSpaceConversionColorShift()));
+  // Be tolerant of floating point rounding and lossy color space conversions.
+  EXPECT_SKCOLOR_CLOSE(color1, color2, MaxColorSpaceConversionColorShift());
 }
 
 void CheckIsTransparent(SkColor color) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,26 +24,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Tests for BySelectorIndexUi2Locator.
- */
+/** Tests for BySelectorIndexUi2Locator. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public final class BySelectorIndexUi2LocatorTest {
     private BySelector mSelector;
 
-    @Mock
-    private UiDevice mDevice;
+    @Mock private UiDevice mDevice;
 
-    @Mock
-    private UiObject2 mRoot;
+    @Mock private UiObject2 mRoot;
 
-    @Mock
-    private UiObject2 mResult0;
+    @Mock private UiObject2 mResult0;
 
-    @Mock
-    private UiObject2 mResult1;
+    @Mock private UiObject2 mResult1;
 
     private List<UiObject2> mResults;
 

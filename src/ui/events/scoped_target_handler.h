@@ -1,13 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_EVENTS_SCOPED_TARGET_HANDLER_H_
 #define UI_EVENTS_SCOPED_TARGET_HANDLER_H_
 
+#include <string_view>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "ui/events/event_handler.h"
 #include "ui/events/events_export.h"
 
@@ -31,7 +32,7 @@ class EVENTS_EXPORT ScopedTargetHandler : public EventHandler {
 
   // EventHandler:
   void OnEvent(Event* event) override;
-  base::StringPiece GetLogContext() const override;
+  std::string_view GetLogContext() const override;
 
  private:
 

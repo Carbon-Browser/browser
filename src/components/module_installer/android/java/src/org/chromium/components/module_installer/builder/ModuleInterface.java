@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.module_installer.builder;
+
+import org.chromium.build.annotations.NullMarked;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -15,9 +17,11 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.CLASS)
+@NullMarked
 public @interface ModuleInterface {
     /** The name of the module. */
     String module();
+
     /** The fully qualified name of the module's interface implementation. */
     String impl();
 }

@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file contains definitions for mock objects, used for testing.
 
@@ -14,11 +19,14 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/cmd_buffer_common.h"
 #include "gpu/command_buffer/service/async_api_interface.h"
+#include "gpu/command_buffer/service/decoder_client.h"
+#include "gpu/command_buffer/service/isolation_key_provider.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/program_cache.h"
 #include "gpu/command_buffer/service/shader_translator.h"
@@ -26,12 +34,14 @@
 
 namespace gpu {
 
+class CommandBufferDirect;
 class CommandBufferServiceBase;
 
 // Mocks an AsyncAPIInterface, using GMock.
 class AsyncAPIMock : public AsyncAPIInterface {
  public:
   explicit AsyncAPIMock(bool default_do_commands,
+                        CommandBufferDirect* command_buffer,
                         CommandBufferServiceBase* command_buffer_service);
   ~AsyncAPIMock() override;
 
@@ -59,7 +69,8 @@ class AsyncAPIMock : public AsyncAPIInterface {
 
    private:
     unsigned int arg_count_;
-    volatile CommandBufferEntry* args_;
+    raw_ptr<volatile CommandBufferEntry, DanglingUntriaged | AllowPtrArithmetic>
+        args_;
   };
 
   void BeginDecoding() override {}
@@ -76,7 +87,7 @@ class AsyncAPIMock : public AsyncAPIInterface {
                             int num_entries,
                             int* entries_processed));
 
-  base::StringPiece GetLogPrefix() override { return "None"; }
+  std::string_view GetLogPrefix() override { return "None"; }
 
   // Forwards the SetToken commands to the engine.
   void SetToken(unsigned int command,
@@ -84,7 +95,41 @@ class AsyncAPIMock : public AsyncAPIInterface {
                 const volatile void* _args);
 
  private:
-  raw_ptr<CommandBufferServiceBase> command_buffer_service_;
+  raw_ptr<CommandBufferDirect> command_buffer_;
+  raw_ptr<CommandBufferServiceBase, DanglingUntriaged> command_buffer_service_;
+};
+
+class MockDecoderClient : public DecoderClient {
+ public:
+  MockDecoderClient();
+  ~MockDecoderClient() override;
+
+  MOCK_METHOD(void, OnConsoleMessage, (int32_t id, const std::string& message));
+  MOCK_METHOD(void, OnGpuSwitched, (gl::GpuPreference active_gpu_heuristic));
+  MOCK_METHOD(void,
+              CacheBlob,
+              (gpu::GpuDiskCacheType type,
+               const std::string& key,
+               const std::string& shader));
+  MOCK_METHOD(void, OnFenceSyncRelease, (uint64_t release));
+  MOCK_METHOD(void, OnDescheduleUntilFinished, ());
+  MOCK_METHOD(void, OnRescheduleAfterFinished, ());
+  MOCK_METHOD(void, ScheduleGrContextCleanup, ());
+  MOCK_METHOD(void, SetActiveURL, (GURL url));
+  MOCK_METHOD(void, HandleReturnData, (base::span<const uint8_t> data));
+  MOCK_METHOD(bool, ShouldYield, ());
+};
+
+class MockIsolationKeyProvider : public IsolationKeyProvider {
+ public:
+  MockIsolationKeyProvider();
+  ~MockIsolationKeyProvider() override;
+
+  MOCK_METHOD(void,
+              GetIsolationKey,
+              (const blink::WebGPUExecutionContextToken& token,
+               GetIsolationKeyCallback cb),
+              (override));
 };
 
 namespace gles2 {
@@ -98,7 +143,7 @@ class MockShaderTranslator : public ShaderTranslatorInterface {
                     ShShaderSpec shader_spec,
                     const ShBuiltInResources* resources,
                     ShShaderOutput shader_output_language,
-                    ShCompileOptions driver_bug_workarounds,
+                    const ShCompileOptions& driver_bug_workarounds,
                     bool gl_shader_interm_output));
   MOCK_CONST_METHOD9(Translate,
                      bool(const std::string& shader_source,

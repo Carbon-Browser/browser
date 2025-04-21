@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/task_manager/providers/task_provider.h"
 
 namespace content {
@@ -42,7 +43,7 @@ class WebContentsTaskProvider : public TaskProvider {
   bool HasWebContents(content::WebContents* web_contents) const;
 
   // Returns the task, if any, of the provided frame.
-  Task* GetTaskOfFrame(content::RenderFrameHost* frame);
+  base::WeakPtr<Task> GetTaskOfFrame(content::RenderFrameHost* frame);
 
  private:
   class WebContentsEntry;

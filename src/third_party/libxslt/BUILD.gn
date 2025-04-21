@@ -1,10 +1,12 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 config("libxslt_config") {
   defines = [ "LIBXSLT_STATIC" ]
-  include_dirs = [ "src" ]
+  # TODO(crbug.com/364568421): Consdier removing "src/libxslt" from this list
+  # if we can remove win32config.h
+  include_dirs = [ "src", "src/libxslt" ]
 }
 
 config("libxslt_warnings") {
@@ -81,7 +83,7 @@ static_library("libxslt") {
   if (is_linux || is_chromeos) {
     sources += [ "linux/config.h" ]
   }
-  if (is_mac) {
+  if (is_apple) {
     sources += [ "mac/config.h" ]
   }
 
@@ -97,7 +99,7 @@ static_library("libxslt") {
       # 2015 64-bit warning for pointer truncation
       "/wd4311",
     ]
-  } else if (is_mac) {
+  } else if (is_apple) {
     include_dirs = [ "mac" ]
   }
 

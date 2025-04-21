@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,17 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-CreateFile::CreateFile(extensions::EventRouter* event_router,
+CreateFile::CreateFile(RequestDispatcher* dispatcher,
                        const ProvidedFileSystemInfo& file_system_info,
                        const base::FilePath& file_path,
                        storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_path_(file_path),
       callback_(std::move(callback)) {}
 
-CreateFile::~CreateFile() {
-}
+CreateFile::~CreateFile() = default;
 
 bool CreateFile::Execute(int request_id) {
   using extensions::api::file_system_provider::CreateFileRequestedOptions;
@@ -43,20 +40,18 @@ bool CreateFile::Execute(int request_id) {
           options));
 }
 
-void CreateFile::OnSuccess(int /* request_id */,
-                           std::unique_ptr<RequestValue> /* result */,
+void CreateFile::OnSuccess(/*request_id=*/int,
+                           /*result=*/const RequestValue&,
                            bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
-void CreateFile::OnError(int /* request_id */,
-                         std::unique_ptr<RequestValue> /* result */,
+void CreateFile::OnError(/*request_id=*/int,
+                         /*result=*/const RequestValue&,
                          base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

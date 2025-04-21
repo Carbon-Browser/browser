@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace content {
 // This class implements the native methods of TracingControllerAndroid.java
 class TracingControllerAndroid {
  public:
-  TracingControllerAndroid(JNIEnv* env, jobject obj);
+  TracingControllerAndroid(JNIEnv* env, const jni_zero::JavaRef<jobject>& obj);
 
   TracingControllerAndroid(const TracingControllerAndroid&) = delete;
   TracingControllerAndroid& operator=(const TracingControllerAndroid&) = delete;

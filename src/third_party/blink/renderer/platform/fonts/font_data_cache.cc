@@ -30,36 +30,23 @@
 
 #include "third_party/blink/renderer/platform/fonts/font_data_cache.h"
 
+#include "base/auto_reset.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
 
 namespace blink {
 
-#if !BUILDFLAG(IS_ANDROID)
-const unsigned kCMaxInactiveFontData = 250;
-const unsigned kCTargetInactiveFontData = 200;
-#else
-const unsigned kCMaxInactiveFontData = 225;
-const unsigned kCTargetInactiveFontData = 200;
-#endif
+namespace {
 
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-// static
-FontDataCache& FontDataCache::SharedInstance() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(FontDataCache, shared_font_data_cache, ());
-  return shared_font_data_cache;
-}
-#endif
+// The maximum number of strong references to retain via the LRU.
+// This explicitly leaks fonts (and related objects) unless under extreme
+// memory pressure where it will be cleared. DO NOT increase unnecessarily.
+const wtf_size_t kMaxSize = 64;
 
-// static
-std::unique_ptr<FontDataCache> FontDataCache::Create() {
-  return std::make_unique<FontDataCache>();
-}
+}  // namespace
 
-scoped_refptr<SimpleFontData> FontDataCache::Get(
-    const FontPlatformData* platform_data,
-    ShouldRetain should_retain,
-    bool subpixel_ascent_descent) {
+const SimpleFontData* FontDataCache::Get(const FontPlatformData* platform_data,
+                                         bool subpixel_ascent_descent) {
   if (!platform_data)
     return nullptr;
 
@@ -72,108 +59,21 @@ scoped_refptr<SimpleFontData> FontDataCache::Get(
     return nullptr;
   }
 
-  AutoLockForParallelTextShaping guard(lock_);
-  Cache::iterator result = cache_.find(platform_data);
-  if (result == cache_.end()) {
-    std::pair<scoped_refptr<SimpleFontData>, unsigned> new_value(
-        SimpleFontData::Create(*platform_data, nullptr,
-                               subpixel_ascent_descent),
-        should_retain == kRetain ? 1 : 0);
-    // The new SimpleFontData takes a copy of the incoming FontPlatformData
-    // object. The incoming key may be temporary. So, for cache storage, take
-    // the address of the newly created FontPlatformData that is copied an owned
-    // by SimpleFontData.
-    cache_.Set(&new_value.first->PlatformData(), new_value);
-    if (should_retain == kDoNotRetain)
-      inactive_font_data_.insert(new_value.first);
-    return std::move(new_value.first);
+  auto add_result = cache_.insert(platform_data, nullptr);
+  if (add_result.is_new_entry) {
+    add_result.stored_value->value = MakeGarbageCollected<SimpleFontData>(
+        platform_data, nullptr, subpixel_ascent_descent);
   }
 
-  if (!result.Get()->value.second) {
-    DCHECK(inactive_font_data_.Contains(result.Get()->value.first));
-    inactive_font_data_.erase(result.Get()->value.first);
+  const SimpleFontData* result = add_result.stored_value->value;
+
+  // Update our LRU to keep a strong reference to `result`.
+  strong_reference_lru_.PrependOrMoveToFirst(result);
+  while (strong_reference_lru_.size() > kMaxSize) {
+    strong_reference_lru_.pop_back();
   }
 
-  if (should_retain == kRetain) {
-    result.Get()->value.second++;
-  } else if (!result.Get()->value.second) {
-    // If shouldRetain is DoNotRetain and count is 0, we want to remove the
-    // fontData from m_inactiveFontData (above) and re-add here to update LRU
-    // position.
-    inactive_font_data_.insert(result.Get()->value.first);
-  }
-
-  return result.Get()->value.first;
-}
-
-bool FontDataCache::Contains(const FontPlatformData* font_platform_data) const {
-  AutoLockForParallelTextShaping guard(lock_);
-  return cache_.Contains(font_platform_data);
-}
-
-void FontDataCache::Release(const SimpleFontData* font_data) {
-  DCHECK(!font_data->IsCustomFont());
-
-  AutoLockForParallelTextShaping guard(lock_);
-  Cache::iterator it = cache_.find(&(font_data->PlatformData()));
-  DCHECK_NE(it, cache_.end());
-  if (it == cache_.end())
-    return;
-
-  DCHECK(it->value.second);
-  if (!--it->value.second)
-    inactive_font_data_.insert(it->value.first);
-}
-
-bool FontDataCache::Purge(PurgeSeverity purge_severity) {
-  AutoLockForParallelTextShaping guard(lock_);
-  if (purge_severity == kForcePurge)
-    return PurgeLeastRecentlyUsed(INT_MAX);
-
-  if (inactive_font_data_.size() > kCMaxInactiveFontData)
-    return PurgeLeastRecentlyUsed(inactive_font_data_.size() -
-                                  kCTargetInactiveFontData);
-
-  return false;
-}
-
-bool FontDataCache::PurgeLeastRecentlyUsed(int count) {
-  // Guard against reentry when e.g. a deleted FontData releases its small caps
-  // FontData.
-  static bool is_purging;
-  if (is_purging)
-    return false;
-
-  lock_.AssertAcquired();
-
-  is_purging = true;
-
-  Vector<scoped_refptr<SimpleFontData>, 20> font_data_to_delete;
-  auto end = inactive_font_data_.end();
-  auto it = inactive_font_data_.begin();
-  for (int i = 0; i < count && it != end; ++it, ++i) {
-    const scoped_refptr<SimpleFontData>& font_data = *it;
-    cache_.erase(&(font_data->PlatformData()));
-    // We should not delete SimpleFontData here because deletion can modify
-    // m_inactiveFontData. See http://trac.webkit.org/changeset/44011
-    font_data_to_delete.push_back(font_data);
-  }
-
-  if (it == end) {
-    // Removed everything
-    inactive_font_data_.clear();
-  } else {
-    for (int i = 0; i < count; ++i)
-      inactive_font_data_.erase(inactive_font_data_.begin());
-  }
-
-  bool did_work = font_data_to_delete.size();
-
-  font_data_to_delete.clear();
-
-  is_purging = false;
-
-  return did_work;
+  return result;
 }
 
 }  // namespace blink

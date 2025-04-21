@@ -1,21 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PRESENTATION_PRESENTATION_CONTROLLER_H_
 
-#include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom-blink.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/presentation/presentation.h"
-#include "third_party/blink/renderer/modules/presentation/presentation_availability_callbacks.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 
@@ -66,7 +65,7 @@ class MODULES_EXPORT PresentationController
   // Returns a reference to the PresentationService remote, requesting the
   // remote service if needed. May return an invalid remote if the associated
   // Document is detached.
-  mojo::Remote<mojom::blink::PresentationService>& GetPresentationService();
+  HeapMojoRemote<mojom::blink::PresentationService>& GetPresentationService();
 
   // Returns the PresentationAvailabilityState owned by |this|, creating it if
   // needed. Always non-null.
@@ -104,7 +103,8 @@ class MODULES_EXPORT PresentationController
   HeapHashSet<WeakMember<ControllerPresentationConnection>> connections_;
 
   // Holder of the Mojo connection to the PresentationService remote.
-  mojo::Remote<mojom::blink::PresentationService> presentation_service_remote_;
+  blink::HeapMojoRemote<mojom::blink::PresentationService>
+      presentation_service_remote_;
 
   // Lazily-initialized binding for mojom::blink::PresentationController. Sent
   // to |presentation_service_|'s implementation.

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/android/jni_string.h"
 #include "components/search_engines/template_url.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/search_engines/android/jni_headers/TemplateUrl_jni.h"
 
 using base::android::JavaParamRef;
@@ -31,18 +32,18 @@ ScopedJavaLocalRef<jstring> JNI_TemplateUrl_GetKeyword(JNIEnv* env,
   return base::android::ConvertUTF16ToJavaString(env, template_url->keyword());
 }
 
-jboolean JNI_TemplateUrl_IsPrepopulatedOrCreatedByPolicy(
+jboolean JNI_TemplateUrl_IsPrepopulatedOrDefaultProviderByPolicy(
     JNIEnv* env,
     jlong template_url_ptr) {
   TemplateURL* template_url = ToTemplateURL(template_url_ptr);
   return template_url->prepopulate_id() > 0 ||
-         template_url->created_by_policy() ||
+         template_url->CreatedByPolicy() ||
          template_url->created_from_play_api();
 }
 
 jlong JNI_TemplateUrl_GetLastVisitedTime(JNIEnv* env, jlong template_url_ptr) {
   TemplateURL* template_url = ToTemplateURL(template_url_ptr);
-  return template_url->last_visited().ToJavaTime();
+  return template_url->last_visited().InMillisecondsSinceUnixEpoch();
 }
 
 jint JNI_TemplateUrl_GetPrepopulatedId(JNIEnv* env, jlong template_url_ptr) {
@@ -60,4 +61,12 @@ ScopedJavaLocalRef<jstring> JNI_TemplateUrl_GetURL(JNIEnv* env,
                                                    jlong template_url_ptr) {
   TemplateURL* template_url = ToTemplateURL(template_url_ptr);
   return base::android::ConvertUTF8ToJavaString(env, template_url->url());
+}
+
+ScopedJavaLocalRef<jstring> JNI_TemplateUrl_GetNewTabURL(
+    JNIEnv* env,
+    jlong template_url_ptr) {
+  TemplateURL* template_url = ToTemplateURL(template_url_ptr);
+  return base::android::ConvertUTF8ToJavaString(env,
+                                                template_url->new_tab_url());
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,7 +9,6 @@ For details on the pak file format, see:
 https://dev.chromium.org/developers/design-documents/linuxresourcesandlocalizedstrings
 """
 
-from __future__ import print_function
 
 import argparse
 import gzip
@@ -19,12 +18,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-
-_HERE_PATH = os.path.dirname(__file__)
-_SRC_PATH = os.path.normpath(os.path.join(_HERE_PATH, '..', '..'))
-sys.path.insert(0, os.path.join(_SRC_PATH, 'third_party', 'six', 'src'))
-
-import six
 
 from grit import constants
 from grit.format import data_pack
@@ -70,13 +63,6 @@ def _MaybeDecompress(payload, brotli_path=None):
                               input=payload,
                               stdout=subprocess.PIPE,
                               check=True)
-      # I don't know why with "sudo apt-get install brotli", files come out 4
-      # bytes larger and the command doesn't fail.
-      if len(result.stdout) == len(payload) + 4:
-        sys.stderr.write('Brotli decompression failed. You likely need to use '
-                         'the version of brotli built by Chrome '
-                         '(out/Release/clang_x64/brotli).\n')
-        sys.exit(1)
       return result.stdout
     except subprocess.CalledProcessError as e:
       sys.stderr.write(str(e) + '\n')
@@ -142,7 +128,7 @@ def _PrintMain(args):
     desc = '<data>'
     if try_decode:
       try:
-        desc = six.text_type(data, encoding)
+        desc = str(data, encoding)
         if len(desc) > 60:
           desc = desc[:60] + '...'
         desc = desc.replace('\n', '\\n')

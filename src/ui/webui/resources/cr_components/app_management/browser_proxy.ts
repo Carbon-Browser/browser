@@ -1,8 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PageCallbackRouter, PageHandlerFactory, PageHandlerInterface, PageHandlerRemote} from './app_management.mojom-webui.js';
+import type {PageHandlerInterface} from './app_management.mojom-webui.js';
+import {PageCallbackRouter, PageHandlerFactory, PageHandlerRemote} from './app_management.mojom-webui.js';
 
 export class BrowserProxy {
   callbackRouter: PageCallbackRouter;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,8 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
-
-namespace base {
-class DictionaryValue;
-class Value;
-}
 
 class DevToolsClient;
 class Status;
@@ -32,9 +28,10 @@ class HeapSnapshotTaker : public DevToolsEventListener {
   Status TakeSnapshot(std::unique_ptr<base::Value>* snapshot);
 
   // Overridden from DevToolsEventListener:
+  bool ListensToConnections() const override;
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
  private:
   Status TakeSnapshotInternal();

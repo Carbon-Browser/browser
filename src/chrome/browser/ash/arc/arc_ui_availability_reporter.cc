@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/arc_optin_uma.h"
 
 namespace arc {
@@ -28,7 +29,7 @@ class ArcUiAvailabilityReporter::ConnectionNotifierBase {
   ArcUiAvailabilityReporter* owner() { return owner_; }
 
  private:
-  ArcUiAvailabilityReporter* const owner_;
+  const raw_ptr<ArcUiAvailabilityReporter> owner_;
 };
 
 namespace {
@@ -63,7 +64,7 @@ class ConnectionNotifier
   void OnConnectionReady() override { owner()->MaybeReport(); }
 
  private:
-  ConnectionHolder<InstanceType, HostType>* const holder_;
+  const raw_ptr<ConnectionHolder<InstanceType, HostType>> holder_;
 };
 
 }  // namespace

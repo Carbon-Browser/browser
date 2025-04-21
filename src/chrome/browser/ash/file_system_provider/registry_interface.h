@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/watcher.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Remembers and restores file systems in a persistent storage.
 class RegistryInterface {
@@ -58,7 +57,6 @@ class RegistryInterface {
                                 const Watcher& watcher) = 0;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_REGISTRY_INTERFACE_H_

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_checker.h"
+#include "base/sequence_checker.h"
 #include "components/component_updater/update_scheduler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/update_client/persisted_data.h"
 
 namespace base {
 class TimeTicks;
@@ -28,9 +29,6 @@ namespace component_updater {
 
 class OnDemandUpdater;
 
-using CrxInstaller = update_client::CrxInstaller;
-using UpdateClient = update_client::UpdateClient;
-
 class CrxUpdateService : public ComponentUpdateService,
                          public ComponentUpdateService::Observer,
                          public OnDemandUpdater {
@@ -39,7 +37,7 @@ class CrxUpdateService : public ComponentUpdateService,
  public:
   CrxUpdateService(scoped_refptr<Configurator> config,
                    std::unique_ptr<UpdateScheduler> scheduler,
-                   scoped_refptr<UpdateClient> update_client,
+                   scoped_refptr<update_client::UpdateClient> update_client,
                    const std::string& brand);
 
   CrxUpdateService(const CrxUpdateService&) = delete;
@@ -59,9 +57,12 @@ class CrxUpdateService : public ComponentUpdateService,
                      base::OnceClosure callback) override;
   bool GetComponentDetails(const std::string& id,
                            CrxUpdateItem* item) const override;
+  base::Version GetRegisteredVersion(const std::string& app_id) override;
+  base::Version GetMaxPreviousProductVersion(
+      const std::string& app_id) override;
 
   // Overrides for Observer.
-  void OnEvent(Events event, const std::string& id) override;
+  void OnEvent(const CrxUpdateItem& item) override;
 
   // Overrides for OnDemandUpdater.
   void OnDemandUpdate(const std::string& id,
@@ -83,23 +84,24 @@ class CrxUpdateService : public ComponentUpdateService,
 
   CrxComponent ToCrxComponent(const ComponentRegistration& component) const;
 
-  absl::optional<ComponentRegistration> GetComponent(
+  std::optional<ComponentRegistration> GetComponent(
       const std::string& id) const;
 
   const CrxUpdateItem* GetComponentState(const std::string& id) const;
 
-  std::vector<absl::optional<CrxComponent>> GetCrxComponents(
-      const std::vector<std::string>& ids);
+  void GetCrxComponents(
+      const std::vector<std::string>& ids,
+      base::OnceCallback<void(const std::vector<std::optional<CrxComponent>>&)>
+          callback);
   void OnUpdateComplete(Callback callback,
                         const base::TimeTicks& start_time,
                         update_client::Error error);
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   scoped_refptr<Configurator> config_;
   std::unique_ptr<UpdateScheduler> scheduler_;
-
-  scoped_refptr<UpdateClient> update_client_;
+  scoped_refptr<update_client::UpdateClient> update_client_;
 
   std::string brand_;
 

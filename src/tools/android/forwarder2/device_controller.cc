@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "tools/android/forwarder2/command.h"
 #include "tools/android/forwarder2/device_listener.h"
 #include "tools/android/forwarder2/socket.h"
@@ -48,12 +47,13 @@ DeviceController::DeviceController(std::unique_ptr<Socket> host_socket,
                                    int exit_notifier_fd)
     : host_socket_(std::move(host_socket)),
       exit_notifier_fd_(exit_notifier_fd),
-      construction_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      construction_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {
   host_socket_->AddEventFd(exit_notifier_fd);
 }
 
 void DeviceController::AcceptHostCommandSoon() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&DeviceController::AcceptHostCommandInternal,
                                 base::Unretained(this)));
 }
@@ -67,8 +67,7 @@ void DeviceController::AcceptHostCommandInternal() {
       LOG(INFO) << "Received exit notification";
     return;
   }
-  base::ScopedClosureRunner accept_next_client(base::BindOnce(
-      &DeviceController::AcceptHostCommandSoon, base::Unretained(this)));
+  absl::Cleanup accept_next_client = [this] { AcceptHostCommandSoon(); };
   // So that |socket| doesn't block on read if it has notifications.
   socket->AddEventFd(exit_notifier_fd_);
   int port;

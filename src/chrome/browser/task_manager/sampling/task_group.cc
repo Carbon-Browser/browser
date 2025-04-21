@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,22 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/task_manager/sampling/shared_sampler.h"
 #include "chrome/browser/task_manager/task_manager_observer.h"
-#include "components/nacl/browser/nacl_browser.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "gpu/ipc/common/memory_stats.h"
+
+#if BUILDFLAG(ENABLE_NACL)
+#include "components/nacl/browser/nacl_browser.h"
+#endif
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -169,7 +173,7 @@ void TaskGroup::AddTask(Task* task) {
 
 void TaskGroup::RemoveTask(Task* task) {
   DCHECK(task);
-  base::Erase(tasks_, task);
+  std::erase(tasks_, task);
 }
 
 void TaskGroup::Refresh(const gpu::VideoMemoryUsageStats& gpu_memory_stats,
@@ -261,7 +265,6 @@ Task* TaskGroup::GetTaskById(TaskId task_id) const {
       return task;
   }
   NOTREACHED();
-  return nullptr;
 }
 
 void TaskGroup::ClearCurrentBackgroundCalculationsFlags() {
@@ -306,7 +309,7 @@ void TaskGroup::RefreshWindowsHandles() {
 void TaskGroup::RefreshNaClDebugStubPort(int child_process_unique_id) {
   // Note this needs to be in a PostTask to avoid a use-after-free (see
   // https://crbug.com/1221406).
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TaskGroup::OnRefreshNaClDebugStubPortDone,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 GetNaClDebugStubPortOnProcessThread(
@@ -344,10 +347,10 @@ void TaskGroup::OnSwappedMemRefreshDone(int64_t swapped_mem_bytes) {
   OnBackgroundRefreshTypeFinished(REFRESH_TYPE_SWAPPED_MEM);
 }
 
-void TaskGroup::OnProcessPriorityDone(bool is_backgrounded) {
+void TaskGroup::OnProcessPriorityDone(base::Process::Priority priority) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  is_backgrounded_ = is_backgrounded;
+  is_backgrounded_ = priority == base::Process::Priority::kBestEffort;
   OnBackgroundRefreshTypeFinished(REFRESH_TYPE_PRIORITY);
 }
 
@@ -359,7 +362,7 @@ void TaskGroup::OnIdleWakeupsRefreshDone(int idle_wakeups_per_second) {
 }
 
 void TaskGroup::OnSamplerRefreshDone(
-    absl::optional<SharedSampler::SamplingResult> results) {
+    std::optional<SharedSampler::SamplingResult> results) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   // If any of the Optional<> fields have no value then replace them with
@@ -388,7 +391,7 @@ void TaskGroup::OnSamplerRefreshDone(
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void TaskGroup::OnArcSamplerRefreshDone(
-    absl::optional<ArcSharedSampler::MemoryFootprintBytes> memory_footprint) {
+    std::optional<ArcSharedSampler::MemoryFootprintBytes> memory_footprint) {
   if (memory_footprint)
     set_footprint_bytes(*memory_footprint);
 }

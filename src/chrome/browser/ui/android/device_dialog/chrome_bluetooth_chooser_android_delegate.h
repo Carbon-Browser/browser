@@ -1,19 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_ANDROID_DEVICE_DIALOG_CHROME_BLUETOOTH_CHOOSER_ANDROID_DELEGATE_H_
 #define CHROME_BROWSER_UI_ANDROID_DEVICE_DIALOG_CHROME_BLUETOOTH_CHOOSER_ANDROID_DELEGATE_H_
 
+#include "base/android/scoped_java_ref.h"
 #include "components/permissions/android/bluetooth_chooser_android_delegate.h"
 
-#include "base/android/scoped_java_ref.h"
+class Profile;
 
 // The implementation of BluetoothChooserAndroidDelegate for Chrome.
 class ChromeBluetoothChooserAndroidDelegate
     : public permissions::BluetoothChooserAndroidDelegate {
  public:
-  ChromeBluetoothChooserAndroidDelegate();
+  explicit ChromeBluetoothChooserAndroidDelegate(Profile* profile);
 
   ChromeBluetoothChooserAndroidDelegate(
       const ChromeBluetoothChooserAndroidDelegate&) = delete;

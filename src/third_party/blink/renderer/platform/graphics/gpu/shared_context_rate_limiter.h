@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "gpu/command_buffer/client/raster_interface.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 
@@ -35,7 +36,7 @@ class WebGraphicsContext3DProvider;
 //   and later restored, the existing rate limiter must be destroyed and
 //   a new one created.
 
-class SharedContextRateLimiter final {
+class PLATFORM_EXPORT SharedContextRateLimiter final {
   USING_FAST_MALLOC(SharedContextRateLimiter);
 
  public:

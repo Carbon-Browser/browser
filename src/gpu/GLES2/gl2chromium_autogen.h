@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -291,7 +291,6 @@
 #define glGetProgramResourceLocation GLES2_GET_FUN(GetProgramResourceLocation)
 #define glMemoryBarrierEXT GLES2_GET_FUN(MemoryBarrierEXT)
 #define glMemoryBarrierByRegion GLES2_GET_FUN(MemoryBarrierByRegion)
-#define glSwapBuffers GLES2_GET_FUN(SwapBuffers)
 #define glGetMaxValueInBufferCHROMIUM GLES2_GET_FUN(GetMaxValueInBufferCHROMIUM)
 #define glEnableFeatureCHROMIUM GLES2_GET_FUN(EnableFeatureCHROMIUM)
 #define glMapBufferCHROMIUM GLES2_GET_FUN(MapBufferCHROMIUM)
@@ -303,7 +302,6 @@
 #define glFlushMappedBufferRange GLES2_GET_FUN(FlushMappedBufferRange)
 #define glMapTexSubImage2DCHROMIUM GLES2_GET_FUN(MapTexSubImage2DCHROMIUM)
 #define glUnmapTexSubImage2DCHROMIUM GLES2_GET_FUN(UnmapTexSubImage2DCHROMIUM)
-#define glResizeCHROMIUM GLES2_GET_FUN(ResizeCHROMIUM)
 #define glGetRequestableExtensionsCHROMIUM \
   GLES2_GET_FUN(GetRequestableExtensionsCHROMIUM)
 #define glRequestExtensionCHROMIUM GLES2_GET_FUN(RequestExtensionCHROMIUM)
@@ -325,23 +323,17 @@
 #define glDrawElementsInstancedBaseVertexBaseInstanceANGLE \
   GLES2_GET_FUN(DrawElementsInstancedBaseVertexBaseInstanceANGLE)
 #define glVertexAttribDivisorANGLE GLES2_GET_FUN(VertexAttribDivisorANGLE)
-#define glProduceTextureDirectCHROMIUM \
-  GLES2_GET_FUN(ProduceTextureDirectCHROMIUM)
-#define glCreateAndConsumeTextureCHROMIUM \
-  GLES2_GET_FUN(CreateAndConsumeTextureCHROMIUM)
 #define glBindUniformLocationCHROMIUM GLES2_GET_FUN(BindUniformLocationCHROMIUM)
 #define glTraceBeginCHROMIUM GLES2_GET_FUN(TraceBeginCHROMIUM)
 #define glTraceEndCHROMIUM GLES2_GET_FUN(TraceEndCHROMIUM)
 #define glDiscardFramebufferEXT GLES2_GET_FUN(DiscardFramebufferEXT)
 #define glLoseContextCHROMIUM GLES2_GET_FUN(LoseContextCHROMIUM)
 #define glDrawBuffersEXT GLES2_GET_FUN(DrawBuffersEXT)
-#define glDiscardBackbufferCHROMIUM GLES2_GET_FUN(DiscardBackbufferCHROMIUM)
 #define glFlushDriverCachesCHROMIUM GLES2_GET_FUN(FlushDriverCachesCHROMIUM)
 #define glGetLastFlushIdCHROMIUM GLES2_GET_FUN(GetLastFlushIdCHROMIUM)
 #define glSetActiveURLCHROMIUM GLES2_GET_FUN(SetActiveURLCHROMIUM)
 #define glContextVisibilityHintCHROMIUM \
   GLES2_GET_FUN(ContextVisibilityHintCHROMIUM)
-#define glCoverageModulationCHROMIUM GLES2_GET_FUN(CoverageModulationCHROMIUM)
 #define glGetGraphicsResetStatusKHR GLES2_GET_FUN(GetGraphicsResetStatusKHR)
 #define glBlendBarrierKHR GLES2_GET_FUN(BlendBarrierKHR)
 #define glBindFragDataLocationIndexedEXT \
@@ -367,12 +359,16 @@
 #define glMaxShaderCompilerThreadsKHR GLES2_GET_FUN(MaxShaderCompilerThreadsKHR)
 #define glCreateAndTexStorage2DSharedImageCHROMIUM \
   GLES2_GET_FUN(CreateAndTexStorage2DSharedImageCHROMIUM)
-#define glCreateAndTexStorage2DSharedImageWithInternalFormatCHROMIUM \
-  GLES2_GET_FUN(CreateAndTexStorage2DSharedImageWithInternalFormatCHROMIUM)
 #define glBeginSharedImageAccessDirectCHROMIUM \
   GLES2_GET_FUN(BeginSharedImageAccessDirectCHROMIUM)
 #define glEndSharedImageAccessDirectCHROMIUM \
   GLES2_GET_FUN(EndSharedImageAccessDirectCHROMIUM)
+#define glCopySharedImageINTERNAL GLES2_GET_FUN(CopySharedImageINTERNAL)
+#define glCopySharedImageToTextureINTERNAL \
+  GLES2_GET_FUN(CopySharedImageToTextureINTERNAL)
+#define glReadbackARGBImagePixelsINTERNAL \
+  GLES2_GET_FUN(ReadbackARGBImagePixelsINTERNAL)
+#define glWritePixelsYUVINTERNAL GLES2_GET_FUN(WritePixelsYUVINTERNAL)
 #define glEnableiOES GLES2_GET_FUN(EnableiOES)
 #define glDisableiOES GLES2_GET_FUN(DisableiOES)
 #define glBlendEquationiOES GLES2_GET_FUN(BlendEquationiOES)
@@ -381,5 +377,31 @@
 #define glBlendFuncSeparateiOES GLES2_GET_FUN(BlendFuncSeparateiOES)
 #define glColorMaskiOES GLES2_GET_FUN(ColorMaskiOES)
 #define glIsEnablediOES GLES2_GET_FUN(IsEnablediOES)
+#define glProvokingVertexANGLE GLES2_GET_FUN(ProvokingVertexANGLE)
+#define glFramebufferMemorylessPixelLocalStorageANGLE \
+  GLES2_GET_FUN(FramebufferMemorylessPixelLocalStorageANGLE)
+#define glFramebufferTexturePixelLocalStorageANGLE \
+  GLES2_GET_FUN(FramebufferTexturePixelLocalStorageANGLE)
+#define glFramebufferPixelLocalClearValuefvANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValuefvANGLE)
+#define glFramebufferPixelLocalClearValueivANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValueivANGLE)
+#define glFramebufferPixelLocalClearValueuivANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValueuivANGLE)
+#define glBeginPixelLocalStorageANGLE GLES2_GET_FUN(BeginPixelLocalStorageANGLE)
+#define glEndPixelLocalStorageANGLE GLES2_GET_FUN(EndPixelLocalStorageANGLE)
+#define glPixelLocalStorageBarrierANGLE \
+  GLES2_GET_FUN(PixelLocalStorageBarrierANGLE)
+#define glFramebufferPixelLocalStorageInterruptANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalStorageInterruptANGLE)
+#define glFramebufferPixelLocalStorageRestoreANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalStorageRestoreANGLE)
+#define glGetFramebufferPixelLocalStorageParameterfvANGLE \
+  GLES2_GET_FUN(GetFramebufferPixelLocalStorageParameterfvANGLE)
+#define glGetFramebufferPixelLocalStorageParameterivANGLE \
+  GLES2_GET_FUN(GetFramebufferPixelLocalStorageParameterivANGLE)
+#define glClipControlEXT GLES2_GET_FUN(ClipControlEXT)
+#define glPolygonModeANGLE GLES2_GET_FUN(PolygonModeANGLE)
+#define glPolygonOffsetClampEXT GLES2_GET_FUN(PolygonOffsetClampEXT)
 
 #endif  // GPU_GLES2_GL2CHROMIUM_AUTOGEN_H_

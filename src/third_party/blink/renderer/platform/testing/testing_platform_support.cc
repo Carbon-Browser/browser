@@ -33,16 +33,21 @@
 #include <memory>
 #include <string>
 
+#include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/memory/discardable_memory_allocator.h"
 #include "base/run_loop.h"
 #include "base/test/icu_test_util.h"
 #include "base/test/test_discardable_memory_allocator.h"
+#include "base/test/test_suite_helper.h"
+#include "base/time/default_clock.h"
+#include "base/time/default_tick_clock.h"
 #include "gin/public/v8_platform.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
+#include "third_party/blink/renderer/platform/geometry/length.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_platform.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_utilities.h"
@@ -128,6 +133,52 @@ TestingPlatformSupport::GetBrowserInterfaceBroker() {
   return interface_broker_.get();
 }
 
+// ValueConverter only for simple data types used in tests.
+class V8ValueConverterForTest final : public WebV8ValueConverter {
+ public:
+  void SetDateAllowed(bool val) override {}
+  void SetRegExpAllowed(bool val) override {}
+
+  v8::Local<v8::Value> ToV8Value(base::ValueView,
+                                 v8::Local<v8::Context> context) override {
+    NOTREACHED();
+  }
+  std::unique_ptr<base::Value> FromV8Value(
+      v8::Local<v8::Value> val,
+      v8::Local<v8::Context> context) override {
+    CHECK(!val.IsEmpty());
+
+    v8::Context::Scope context_scope(context);
+    auto* isolate = context->GetIsolate();
+    v8::HandleScope handle_scope(isolate);
+
+    if (val->IsBoolean()) {
+      return std::make_unique<base::Value>(
+          base::Value(val->ToBoolean(isolate)->Value()));
+    }
+
+    if (val->IsInt32()) {
+      return std::make_unique<base::Value>(
+          base::Value(val.As<v8::Int32>()->Value()));
+    }
+
+    if (val->IsString()) {
+      v8::String::Utf8Value utf8(isolate, val);
+      return std::make_unique<base::Value>(
+          base::Value(std::string(*utf8, utf8.length())));
+    }
+
+    // Returns `nullptr` for a broader range of values than actual
+    // `V8ValueConverter`.
+    return nullptr;
+  }
+};
+
+std::unique_ptr<blink::WebV8ValueConverter>
+TestingPlatformSupport::CreateWebV8ValueConverter() {
+  return std::make_unique<V8ValueConverterForTest>();
+}
+
 void TestingPlatformSupport::RunUntilIdle() {
   base::RunLoop().RunUntilIdle();
 }
@@ -138,6 +189,18 @@ bool TestingPlatformSupport::IsThreadedAnimationEnabled() {
 
 void TestingPlatformSupport::SetThreadedAnimationEnabled(bool enabled) {
   is_threaded_animation_enabled_ = enabled;
+}
+
+const base::Clock* TestingPlatformSupport::GetClock() const {
+  return base::DefaultClock::GetInstance();
+}
+
+const base::TickClock* TestingPlatformSupport::GetTickClock() const {
+  return base::DefaultTickClock::GetInstance();
+}
+
+base::TimeTicks TestingPlatformSupport::NowTicks() const {
+  return base::TimeTicks::Now();
 }
 
 ScopedUnittestsEnvironmentSetup::ScopedUnittestsEnvironmentSetup(int argc,
@@ -151,6 +214,11 @@ ScopedUnittestsEnvironmentSetup::ScopedUnittestsEnvironmentSetup(int argc,
   base::DiscardableMemoryAllocator::SetInstance(
       discardable_memory_allocator_.get());
 
+  // FeatureList must be initialized before WTF::Partitions::Initialize(),
+  // because WTF::Partitions::Initialize() uses base::FeatureList to obtain
+  // PartitionOptions.
+  base::test::InitScopedFeatureListForTesting(scoped_feature_list_);
+
   // TODO(yutak): The initialization steps below are essentially a subset of
   // Platform::Initialize() steps with a few modifications for tests.
   // We really shouldn't have those initialization steps in two places,
@@ -162,6 +230,7 @@ ScopedUnittestsEnvironmentSetup::ScopedUnittestsEnvironmentSetup(int argc,
 
   WTF::Partitions::Initialize();
   WTF::Initialize();
+  Length::Initialize();
 
   // This must be called after WTF::Initialize(), because ThreadSpecific<>
   // used in this function depends on WTF::IsMainThread().

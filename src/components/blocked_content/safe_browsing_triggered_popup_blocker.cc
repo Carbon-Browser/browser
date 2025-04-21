@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/browser/db/util.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
-#include "components/subresource_filter/content/browser/subresource_filter_safe_browsing_activation_throttle.h"
+#include "components/subresource_filter/content/browser/safe_browsing_page_activation_throttle.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/back_forward_cache.h"
 #include "content/public/browser/browser_context.h"
@@ -38,18 +38,14 @@ void LogAction(SafeBrowsingTriggeredPopupBlocker::Action action) {
 
 using safe_browsing::SubresourceFilterLevel;
 
-const base::Feature kAbusiveExperienceEnforce{"AbusiveExperienceEnforce",
-                                              base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAbusiveExperienceEnforce,
+             "AbusiveExperienceEnforce",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 SafeBrowsingTriggeredPopupBlocker::PageData::PageData(content::Page& page)
     : PageUserData(page) {}
 
-SafeBrowsingTriggeredPopupBlocker::PageData::~PageData() {
-  if (is_triggered_) {
-    UMA_HISTOGRAM_COUNTS_100("ContentSettings.Popups.StrongBlocker.NumBlocked",
-                             num_popups_blocked_);
-  }
-}
+SafeBrowsingTriggeredPopupBlocker::PageData::~PageData() = default;
 
 SafeBrowsingTriggeredPopupBlocker::NavigationHandleData::NavigationHandleData(
     content::NavigationHandle&) {}
@@ -122,7 +118,7 @@ void SafeBrowsingTriggeredPopupBlocker::DidFinishNavigation(
     return;
   }
 
-  absl::optional<SubresourceFilterLevel> level;
+  std::optional<SubresourceFilterLevel> level;
   NavigationHandleData* data =
       NavigationHandleData::GetOrCreateForNavigationHandle(*navigation_handle);
   data->level_for_next_committed_navigation().swap(level);
@@ -175,12 +171,12 @@ void SafeBrowsingTriggeredPopupBlocker::OnSafeBrowsingChecksComplete(
     const subresource_filter::SubresourceFilterSafeBrowsingClient::CheckResult&
         result) {
   DCHECK(navigation_handle->IsInMainFrame());
-  // TODO(crbug.com/1263541): Replace it with DCHECK.
+  // TODO(crbug.com/40202987): Replace it with DCHECK.
   if (navigation_handle->GetNavigatingFrameType() ==
       content::FrameType::kFencedFrameRoot) {
     return;
   }
-  absl::optional<safe_browsing::SubresourceFilterLevel> match_level;
+  std::optional<safe_browsing::SubresourceFilterLevel> match_level;
   if (result.threat_type ==
       safe_browsing::SBThreatType::SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
     auto abusive = result.threat_metadata.subresource_filter_match.find(

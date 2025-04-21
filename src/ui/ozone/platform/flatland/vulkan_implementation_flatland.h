@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "gpu/vulkan/vulkan_implementation.h"
 #include "gpu/vulkan/vulkan_instance.h"
-#include "ui/ozone/platform/scenic/mojom/scenic_gpu_host.mojom.h"
 
 namespace ui {
 
@@ -43,12 +43,8 @@ class VulkanImplementationFlatland : public gpu::VulkanImplementation {
   std::unique_ptr<gfx::GpuFence> ExportVkFenceToGpuFence(
       VkDevice vk_device,
       VkFence vk_fence) override;
-  VkSemaphore CreateExternalSemaphore(VkDevice vk_device) override;
-  VkSemaphore ImportSemaphoreHandle(VkDevice vk_device,
-                                    gpu::SemaphoreHandle handle) override;
-  gpu::SemaphoreHandle GetSemaphoreHandle(VkDevice vk_device,
-                                          VkSemaphore vk_semaphore) override;
-  VkExternalMemoryHandleTypeFlagBits GetExternalImageHandleType() override;
+  VkExternalSemaphoreHandleTypeFlagBits GetExternalSemaphoreHandleType()
+      override;
   bool CanImportGpuMemoryBuffer(
       gpu::VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferType memory_buffer_type) override;
@@ -56,19 +52,20 @@ class VulkanImplementationFlatland : public gpu::VulkanImplementation {
       gpu::VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferHandle gmb_handle,
       gfx::Size size,
-      VkFormat vk_format) override;
-  std::unique_ptr<gpu::SysmemBufferCollection> RegisterSysmemBufferCollection(
+      VkFormat vk_format,
+      const gfx::ColorSpace& color_space) override;
+  void RegisterSysmemBufferCollection(
       VkDevice device,
-      gfx::SysmemBufferCollectionId id,
-      zx::channel token,
+      zx::eventpair service_handle,
+      zx::channel sysmem_token,
       gfx::BufferFormat format,
       gfx::BufferUsage usage,
       gfx::Size size,
       size_t min_buffer_count,
-      bool register_with_image_pipe) override;
+      bool register_with_flatland_allocator) override;
 
  private:
-  FlatlandSysmemBufferManager* const flatland_sysmem_buffer_manager_;
+  const raw_ptr<FlatlandSysmemBufferManager> flatland_sysmem_buffer_manager_;
 
   gpu::VulkanInstance vulkan_instance_;
 };

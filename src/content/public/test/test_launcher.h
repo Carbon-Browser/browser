@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ struct TestResult;
 }
 
 namespace content {
+class BrowserMainParts;
 class ContentMainDelegate;
 struct ContentMainParams;
 
@@ -33,6 +34,8 @@ class TestLauncherDelegate {
   // harness to use, and do not go through ContentMain() in TestLauncher.
   virtual ContentMainDelegate* CreateContentMainDelegate() = 0;
 #endif
+
+  virtual void CreatedBrowserMainParts(BrowserMainParts* browser_main_parts) {}
 
   // Called prior to running each test.
   //
@@ -71,12 +74,8 @@ class TestLauncherDelegate {
 
 TestLauncherDelegate* GetCurrentTestLauncherDelegate();
 
-// ContentMain is not run on Android in the test process, and is run via
-// java for child processes. So ContentMainParams does not exist there.
-#if !BUILDFLAG(IS_ANDROID)
 // Returns a copy of the ContentMainParams initialized before launching tests.
 ContentMainParams CopyContentMainParams();
-#endif
 
 // Returns true if the currently running test has a prefix that indicates it
 // should run before a test of the same name without the prefix.

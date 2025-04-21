@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Script for updating the project settings for a chromium branch.
@@ -20,6 +20,8 @@ Usage:
 import argparse
 import json
 import os
+
+from typing import Any, Optional
 
 INFRA_CONFIG_DIR = os.path.abspath(os.path.join(__file__, '..', '..'))
 
@@ -46,62 +48,112 @@ def parse_args(args=None, *, parser_type=None):
       '--branch',
       required=True,
       help='The branch name, must correspond to a ref in refs/branch-heads')
+  # Executing "lucicfg validate" fails if the project name is not the name of a
+  # project known to luci-config. This flag allows for an initial branch config
+  # to be created that can be checked with "lucicfg validate".
+  init_parser.add_argument(
+      '--test-config',
+      action='store_true',
+      help=argparse.SUPPRESS,
+  )
 
-  set_type_parser = subparsers.add_parser(
-      'set-type', help='Change the branch type of the project')
-  set_type_parser.set_defaults(func=set_type_cmd)
-  set_type_parser.add_argument(
-      '--type',
+  enable_platform_parser = subparsers.add_parser(
+      'enable-platform', help='Enable builders for an additional platform')
+  enable_platform_parser.set_defaults(func=enable_platform_cmd)
+  enable_platform_parser.add_argument(
+      'platform', help='The platform to enable builders for')
+  enable_platform_parser.add_argument(
+      '--description',
       required=True,
-      choices=BRANCH_TYPES,
-      action='append',
-      help='The type of the branch to change the project config to')
+      help='A description of why the platform is enabled')
+  enable_platform_parser.add_argument(
+      '--gardener-rotation',
+      help=('A gardener rotation that builders'
+            ' associated with the platform should be added to'))
 
   args = parser.parse_args(args)
   if args.func is None:
     parser.error('no sub-command specified')
   return args
 
-def initial_settings(milestone, branch):
+
+def initial_settings(
+    *,
+    milestone: str,
+    branch: str,
+    chromium_project: str,
+    chrome_project: str,
+) -> dict[str, Any]:
   settings = dict(
-      project=f'chromium-m{milestone}',
+      project=chromium_project,
       project_title=f'Chromium M{milestone}',
       ref=f'refs/branch-heads/{branch}',
-      chrome_project=f'chrome-m{milestone}',
-      branch_types=['standard'],
+      chrome_project=chrome_project,
+      is_main=False,
+      platforms={
+          p: {
+              "description": "beta/stable",
+              "gardener_rotation": "chrome_browser_release"
+          }
+          for p in (
+              "android",
+              "cros",
+              "fuchsia",
+              "ios",
+              "linux",
+              "mac",
+              "windows",
+          )
+      },
   )
 
   return json.dumps(settings, indent=4) + '\n'
 
 def initialize_cmd(args):
-  settings = initial_settings(args.milestone, args.branch)
+  if args.test_config:
+    chromium_project = 'chromium'
+    chrome_project = 'chrome'
+  else:
+    chromium_project = f'chromium-m{args.milestone}'
+    chrome_project = f'chrome-m{args.milestone}'
+  settings = initial_settings(
+      milestone=args.milestone,
+      branch=args.branch,
+      chromium_project=chromium_project,
+      chrome_project=chrome_project,
+  )
 
   with open(args.settings_json, 'w') as f:
     f.write(settings)
 
 
-BRANCH_TYPES = (
-    'standard',
-    'desktop-extended-stable',
-    'cros-lts',
-    'fuchsia-lts',
-)
-
-
-def set_type(settings_json, branch_types):
-  for t in branch_types:
-    assert t in BRANCH_TYPES, 'Unknown branch_type {!r}'.format(t)
-
+def enable_platform(
+    settings_json: str,
+    platform: str,
+    description: str,
+    gardener_rotation: Optional[str],
+) -> str:
   settings = json.loads(settings_json)
-  settings.update(branch_types=branch_types)
+  settings['is_main'] = False
+  platforms = settings.pop('platforms', {})
+  platform_settings = {'description': description}
+  if gardener_rotation is not None:
+    platform_settings['gardener_rotation'] = gardener_rotation
+  platforms[platform] = platform_settings
+  settings['platforms'] = dict(sorted(platforms.items()))
   return json.dumps(settings, indent=4) + '\n'
 
 
-def set_type_cmd(args):
+def enable_platform_cmd(args):
   with open(args.settings_json) as f:
     settings = f.read()
 
-  settings = set_type(settings, args.type)
+  settings = enable_platform(
+      settings,
+      args.platform,
+      args.description,
+      args.gardener_rotation,
+  )
 
   with open(args.settings_json, 'w') as f:
     f.write(settings)

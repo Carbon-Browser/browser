@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #import <CoreBluetooth/CoreBluetooth.h>
 
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 
 #if !BUILDFLAG(IS_IOS)
@@ -15,17 +14,14 @@
 #endif
 
 namespace device {
-class BluetoothAdapterMac;
 class BluetoothLowEnergyAdvertisementManagerMac;
 }  // namespace device
 
 @interface BluetoothLowEnergyPeripheralManagerDelegate
     : NSObject<CBPeripheralManagerDelegate>
 
-- (instancetype)
-initWithAdvertisementManager:
-    (device::BluetoothLowEnergyAdvertisementManagerMac*)advertisementManager
-                  andAdapter:(device::BluetoothAdapterMac*)adapter;
+- (instancetype)initWithAdvertisementManager:
+    (device::BluetoothLowEnergyAdvertisementManagerMac*)advertisementManager;
 
 @end
 

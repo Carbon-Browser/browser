@@ -1,29 +1,32 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/tiles/image_controller.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/synchronization/condition_variable.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/simple_thread.h"
 #include "base/threading/thread_checker_impl.h"
 #include "base/threading/thread_restrictions.h"
+#include "cc/base/features.h"
 #include "cc/paint/paint_image_builder.h"
 #include "cc/test/cc_test_suite.h"
 #include "cc/test/skia_common.h"
 #include "cc/test/stub_decode_cache.h"
 #include "cc/test/test_paint_worklet_input.h"
+#include "cc/test/test_tile_task_runner.h"
 #include "cc/tiles/image_decode_cache.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cc {
 namespace {
@@ -33,7 +36,8 @@ class TestableCache : public StubDecodeCache {
  public:
   ~TestableCache() override { EXPECT_EQ(number_of_refs_, 0); }
 
-  TaskResult GetTaskForImageAndRef(const DrawImage& image,
+  TaskResult GetTaskForImageAndRef(uint32_t client_id,
+                                   const DrawImage& image,
                                    const TracingInfo& tracing_info) override {
     // Return false for large images to mimic "won't fit in memory"
     // behavior.
@@ -52,8 +56,9 @@ class TestableCache : public StubDecodeCache {
                       /*can_do_hardware_accelerated_decode=*/false);
   }
   TaskResult GetOutOfRasterDecodeTaskForImageAndRef(
+      uint32_t client_id,
       const DrawImage& image) override {
-    return GetTaskForImageAndRef(image, TracingInfo());
+    return GetTaskForImageAndRef(client_id, image, TracingInfo());
   }
 
   void UnrefImage(const DrawImage& image) override {
@@ -96,9 +101,10 @@ class DecodeClient {
 // A dummy task that does nothing.
 class SimpleTask : public TileTask {
  public:
-  SimpleTask()
+  explicit SimpleTask(bool is_raster_task = true)
       : TileTask(TileTask::SupportsConcurrentExecution::kYes,
-                 TileTask::SupportsBackgroundThreadPriority::kYes) {
+                 TileTask::SupportsBackgroundThreadPriority::kYes),
+        is_raster_task_(is_raster_task) {
     EXPECT_TRUE(thread_checker_.CalledOnValidThread());
   }
   SimpleTask(const SimpleTask&) = delete;
@@ -112,7 +118,7 @@ class SimpleTask : public TileTask {
   void OnTaskCompleted() override {
     EXPECT_TRUE(thread_checker_.CalledOnValidThread());
   }
-
+  bool IsRasterTask() const override { return is_raster_task_; }
   bool has_run() { return has_run_; }
 
  private:
@@ -120,6 +126,7 @@ class SimpleTask : public TileTask {
 
   base::ThreadChecker thread_checker_;
   bool has_run_ = false;
+  bool is_raster_task_;
 };
 
 // A task that blocks until instructed otherwise.
@@ -188,7 +195,8 @@ DrawImage CreateBitmapDrawImage(gfx::Size size) {
 
 class ImageControllerTest : public testing::Test {
  public:
-  ImageControllerTest() : task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+  ImageControllerTest()
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
     image_ = CreateDiscardableDrawImage(gfx::Size(1, 1));
   }
   ~ImageControllerTest() override = default;
@@ -196,8 +204,8 @@ class ImageControllerTest : public testing::Test {
   void SetUp() override {
     controller_ = std::make_unique<ImageController>(
         task_runner_,
-        base::ThreadPool::CreateSequencedTaskRunner(base::TaskTraits()));
-    cache_ = TestableCache();
+        base::ThreadPool::CreateSequencedTaskRunner(base::TaskTraits()),
+        base::DoNothing());
     controller_->SetImageDecodeCache(&cache_);
   }
 
@@ -405,9 +413,7 @@ TEST_F(ImageControllerTest, QueueImageDecodeMultipleImagesSameTask) {
   EXPECT_TRUE(task->HasCompleted());
 }
 
-// TODO(crbug.com/1336053): Re-enable this test
-TEST_F(ImageControllerTest,
-       DISABLED_QueueImageDecodeChangeControllerWithTaskQueued) {
+TEST_F(ImageControllerTest, QueueImageDecodeChangeControllerWithTaskQueued) {
   scoped_refptr<BlockingTask> task_one(new BlockingTask);
   cache()->SetTaskToUse(task_one);
 
@@ -489,6 +495,22 @@ TEST_F(ImageControllerTest, QueueImageDecodeLockedImageControllerChange) {
 
   controller()->SetImageDecodeCache(nullptr);
   EXPECT_EQ(0, cache()->number_of_refs());
+}
+
+TEST_F(ImageControllerTest, DecodeRequestedBeforeCacheIsSet) {
+  scoped_refptr<SimpleTask> task(new SimpleTask);
+  cache()->SetTaskToUse(task);
+  controller()->SetImageDecodeCache(nullptr);
+  base::RunLoop run_loop;
+  DecodeClient decode_client;
+  controller()->QueueImageDecode(
+      image(),
+      base::BindOnce(&DecodeClient::Callback, base::Unretained(&decode_client),
+                     run_loop.QuitClosure()));
+  controller()->SetImageDecodeCache(cache());
+  RunOrTimeout(&run_loop);
+  EXPECT_EQ(ImageController::ImageDecodeResult::SUCCESS,
+            decode_client.result());
 }
 
 TEST_F(ImageControllerTest, DispatchesDecodeCallbacksAfterCacheReset) {
@@ -653,6 +675,43 @@ TEST_F(ImageControllerTest, QueueImageDecodeNonLazyCancelImmediately) {
   // Explicitly reset the controller so that orphaned task callbacks run
   // while the decode clients still exist.
   ResetController();
+}
+
+TEST_F(ImageControllerTest, ExternalDependency) {
+  if (!base::FeatureList::IsEnabled(features::kPreventDuplicateImageDecodes)) {
+    return;
+  }
+  // Set up a stand-alone image decode task in a dependency sandwich with two
+  // external (i.e. raster) tasks.
+  scoped_refptr<SimpleTask> dependency(new SimpleTask);
+  scoped_refptr<SimpleTask> task(new SimpleTask(false /*is_raster_task*/));
+  scoped_refptr<SimpleTask> dependent(new SimpleTask);
+  dependency->SetExternalDependent(task);
+  task->SetExternalDependent(dependent);
+  EXPECT_FALSE(task->dependencies().empty());
+  EXPECT_FALSE(dependent->dependencies().empty());
+
+  base::RunLoop run_loop;
+  DecodeClient decode_client;
+  cache()->SetTaskToUse(task);
+  ImageController::ImageDecodeRequestId expected_id =
+      controller()->QueueImageDecode(
+          image(), base::BindOnce(&DecodeClient::Callback,
+                                  base::Unretained(&decode_client),
+                                  run_loop.QuitClosure()));
+
+  EXPECT_FALSE(controller()->HasReadyToRunTaskForTesting());
+  EXPECT_FALSE(task->has_run());
+  EXPECT_FALSE(task->HasCompleted());
+
+  TestTileTaskRunner::ProcessTask(dependency.get());
+  controller()->ExternalDependencyCompletedForTask(task);
+  RunOrTimeout(&run_loop);
+  EXPECT_EQ(expected_id, decode_client.id());
+  EXPECT_TRUE(task->has_run());
+  EXPECT_TRUE(task->HasCompleted());
+  EXPECT_TRUE(dependent->dependencies().empty());
+  TestTileTaskRunner::ProcessTask(dependent.get());
 }
 
 }  // namespace

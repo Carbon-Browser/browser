@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/webui/feedback/feedback_ui.h"
 #include "chrome/browser/ui/webui/metrics_handler.h"
-#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -34,6 +34,7 @@
 #include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_provider.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/webui/webui_util.h"
 
 namespace media_router {
 
@@ -41,8 +42,8 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui),
       profile_(Profile::FromWebUI(web_ui)),
       web_contents_(web_ui->GetWebContents()) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUICastFeedbackHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile_, chrome::kChromeUICastFeedbackHost);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"additionalComments", IDS_MEDIA_ROUTER_FEEDBACK_ADDITIONAL_COMMENTS},
@@ -131,49 +132,38 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
 
   JSONStringValueSerializer serializer(&log_data);
   serializer.set_pretty_print(true);
-  if (!serializer.Serialize(router->GetState()))
+  if (!serializer.Serialize(router->GetState())) {
     log_data.clear();
+  }
 
   LoggerImpl* const logger = router->GetLogger();
   if (logger) {
     log_data += logger->GetLogsAsJson();
+  }
 
+  MediaRouterDebugger& debugger = router->GetDebugger();
+  if (debugger.ShouldFetchMirroringStats()) {
+    std::string mirroring_stats_json;
+    JSONStringValueSerializer mirroring_stats_serializer(&mirroring_stats_json);
+    mirroring_stats_serializer.set_pretty_print(true);
+    if (mirroring_stats_serializer.Serialize(debugger.GetMirroringStats())) {
+      log_data += mirroring_stats_json;
+    }
+  }
+
+  // If there is any log data, add it to the `source`.
+  if (!log_data.empty()) {
     source->AddString("logData", log_data);
   }
 
-  // Determine the category tag to use for the feedback report.  As the name
-  // suggests, this value is used to categorize feedback reports for easier
-  // analysis and triage.
-  const char* categoryTag = nullptr;
-  switch (chrome::GetChannel()) {
-    case version_info::Channel::CANARY:
-      categoryTag = "canary";
-      break;
-    case version_info::Channel::DEV:
-      categoryTag = "dev";
-      break;
-    case version_info::Channel::BETA:
-      categoryTag = "beta";
-      break;
-    case version_info::Channel::STABLE:
-      categoryTag = "stable";
-      break;
-    case version_info::Channel::UNKNOWN:
-      categoryTag = "unknown";
-      break;
-  }
-  source->AddString("categoryTag", categoryTag);
+  // As the name suggests, this value is used to categorize feedback reports for
+  // easier analysis and triage.
+  source->AddString(
+      "categoryTag",
+      std::string(version_info::GetChannelString(chrome::GetChannel())));
 
-  source->AddBoolean("globalMediaControlsCastStartStop",
-                     GlobalMediaControlsCastStartStopEnabled(profile_));
-
-  webui::SetupWebUIDataSource(
-      source,
-      base::make_span(kMediaRouterFeedbackResources,
-                      kMediaRouterFeedbackResourcesSize),
-      IDR_MEDIA_ROUTER_FEEDBACK_FEEDBACK_HTML);
-
-  content::WebUIDataSource::Add(profile_, source);
+  webui::SetupWebUIDataSource(source, kMediaRouterFeedbackResources,
+                              IDR_MEDIA_ROUTER_FEEDBACK_FEEDBACK_HTML);
 
   web_ui->RegisterMessageCallback(
       "close", base::BindRepeating(&CastFeedbackUI::OnCloseMessage,
@@ -187,6 +177,16 @@ CastFeedbackUI::~CastFeedbackUI() = default;
 
 void CastFeedbackUI::OnCloseMessage(const base::Value::List&) {
   web_contents_->GetDelegate()->CloseContents(web_contents_);
+}
+
+CastFeedbackUIConfig::CastFeedbackUIConfig()
+    : DefaultWebUIConfig(content::kChromeUIScheme,
+                         chrome::kChromeUICastFeedbackHost) {}
+
+bool CastFeedbackUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  return MediaRouterEnabled(profile) && FeedbackUI::IsFeedbackEnabled(profile);
 }
 
 }  // namespace media_router

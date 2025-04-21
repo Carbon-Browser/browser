@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,8 +45,11 @@ class DomainDiversityReporter : public KeyedService,
   void ComputeDomainMetrics();
 
   // Callback to emit histograms for domain metrics.
+  // `result` is a pair of ("local-only", "local-and-synced") data - see
+  // HistoryBackend::GetDomainDiversity().
   void ReportDomainMetrics(base::Time time_current_report_triggered,
-                           history::DomainDiversityResults result);
+                           std::pair<history::DomainDiversityResults,
+                                     history::DomainDiversityResults> result);
 
   // HistoryServiceObserver:
   void OnHistoryServiceLoaded(

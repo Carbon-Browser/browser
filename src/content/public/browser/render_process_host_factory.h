@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ class RenderProcessHost;
 class SiteInstance;
 
 // Factory object for RenderProcessHosts. Using this factory allows tests to
-// swap out a different one to use a TestRenderProcessHost.
+// swap out a different one to use a MockRenderProcessHost.
 class RenderProcessHostFactory {
  public:
   virtual ~RenderProcessHostFactory() {}

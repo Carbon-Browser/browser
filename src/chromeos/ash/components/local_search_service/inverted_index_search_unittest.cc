@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include "chromeos/ash/components/local_search_service/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
+
 // This is (data-id, content-ids).
 using ResultWithIds = std::pair<std::string, std::vector<std::string>>;
 
@@ -108,7 +108,7 @@ std::vector<Result> Find(InvertedIndexSearch* index,
       base::BindOnce(
           [](bool* callback_done, ResponseStatus* status,
              std::vector<Result>* results, ResponseStatus status_callback,
-             const absl::optional<std::vector<Result>>& results_callback) {
+             const std::optional<std::vector<Result>>& results_callback) {
             *callback_done = true;
             *status = status_callback;
             if (results_callback.has_value())
@@ -438,5 +438,4 @@ TEST_F(InvertedIndexSearchTest, UpdateDocumentsTest) {
               /*expected_number_positions=*/1);
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

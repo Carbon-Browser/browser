@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define BASE_WIN_VARIANT_VECTOR_H_
 
 #include <objbase.h>
+
 #include <oleauto.h>
 
 #include <type_traits>
@@ -16,7 +17,7 @@
 #include "base/check.h"
 #include "base/logging.h"
 #include "base/win/scoped_variant.h"
-#include "base/win/variant_util.h"
+#include "base/win/variant_conversions.h"
 
 namespace base {
 namespace win {
@@ -58,9 +59,11 @@ class BASE_EXPORT VariantVector final {
   // on the underlying type that is expected for a VARTYPE.
   template <VARTYPE ExpectedVartype,
             std::enable_if_t<ExpectedVartype != VT_BOOL, int> = 0>
-  void Insert(typename internal::VariantUtil<ExpectedVartype>::Type value) {
-    if (vartype_ == VT_EMPTY)
+  void Insert(
+      typename internal::VariantConverter<ExpectedVartype>::Type value) {
+    if (vartype_ == VT_EMPTY) {
       vartype_ = ExpectedVartype;
+    }
     AssertVartype<ExpectedVartype>();
     ScopedVariant scoped_variant;
     scoped_variant.Set(value);
@@ -72,8 +75,9 @@ class BASE_EXPORT VariantVector final {
   template <VARTYPE ExpectedVartype,
             std::enable_if_t<ExpectedVartype == VT_BOOL, int> = 0>
   void Insert(bool value) {
-    if (vartype_ == VT_EMPTY)
+    if (vartype_ == VT_EMPTY) {
       vartype_ = ExpectedVartype;
+    }
     AssertVartype<ExpectedVartype>();
     ScopedVariant scoped_variant;
     scoped_variant.Set(value);
@@ -83,9 +87,11 @@ class BASE_EXPORT VariantVector final {
   // Specialize VT_DATE because ScopedVariant has a separate SetDate method,
   // this is because VT_R8 and VT_DATE share the same underlying type.
   template <>
-  void Insert<VT_DATE>(typename internal::VariantUtil<VT_DATE>::Type value) {
-    if (vartype_ == VT_EMPTY)
+  void Insert<VT_DATE>(
+      typename internal::VariantConverter<VT_DATE>::Type value) {
+    if (vartype_ == VT_EMPTY) {
       vartype_ = VT_DATE;
+    }
     AssertVartype<VT_DATE>();
     ScopedVariant scoped_variant;
     scoped_variant.SetDate(value);
@@ -118,7 +124,8 @@ class BASE_EXPORT VariantVector final {
   // for inserting into |vector_|.
   template <VARTYPE ExpectedVartype>
   void AssertVartype() const {
-    DCHECK(internal::VariantUtil<ExpectedVartype>::IsConvertibleTo(vartype_))
+    DCHECK(
+        internal::VariantConverter<ExpectedVartype>::IsConvertibleTo(vartype_))
         << "Type mismatch, " << ExpectedVartype << " is not convertible to "
         << Type();
   }

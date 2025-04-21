@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ class DecoderBufferAdapter : public DecoderBufferBase {
   // kPrimary by default.
   explicit DecoderBufferAdapter(
       const scoped_refptr<::media::DecoderBuffer>& buffer);
-  DecoderBufferAdapter(
-      StreamId stream_id, const scoped_refptr<::media::DecoderBuffer>& buffer);
+  DecoderBufferAdapter(StreamId stream_id,
+                       const scoped_refptr<::media::DecoderBuffer>& buffer);
 
   DecoderBufferAdapter(const DecoderBufferAdapter&) = delete;
   DecoderBufferAdapter& operator=(const DecoderBufferAdapter&) = delete;
@@ -42,6 +42,7 @@ class DecoderBufferAdapter : public DecoderBufferBase {
   size_t data_size() const override;
   const CastDecryptConfig* decrypt_config() const override;
   bool end_of_stream() const override;
+  bool is_key_frame() const override;
 
  private:
   ~DecoderBufferAdapter() override;

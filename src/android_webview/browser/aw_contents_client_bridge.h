@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,8 @@
 #include "android_webview/browser/safe_browsing/aw_url_checker_delegate_impl.h"
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
 #include "base/containers/id_map.h"
-#include "base/supports_user_data.h"
+#include "base/functional/callback.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "content/public/browser/certificate_request_result_type.h"
 #include "content/public/browser/javascript_dialog_manager.h"
@@ -41,6 +40,7 @@ namespace android_webview {
 // indirect refs from the Application (via callbacks) and so can outlive
 // webview, this class notifies it before being destroyed and to nullify
 // any references.
+// Lifetime: WebView
 class AwContentsClientBridge {
  public:
   // Used to package up information needed by OnReceivedHttpError for transfer
@@ -98,6 +98,7 @@ class AwContentsClientBridge {
                                 bool has_user_gesture,
                                 bool is_redirect,
                                 bool is_outermost_main_frame,
+                                const net::HttpRequestHeaders& request_headers,
                                 bool* ignore_navigation);
 
   bool SendBrowseIntent(const std::u16string& url);

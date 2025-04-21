@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Chromium Authors. All rights reserved.
+ * Copyright 2019 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -62,9 +62,9 @@ function showPaymentRequest(pr) {
  * Calls updateWith() with {}
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithEmpty(paymentMethod) { // eslint-disable-line no-unused-vars
-  var pr = buildPaymentRequest(paymentMethod);
-  var updatedDetails = {};
+function updateWithEmpty(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const updatedDetails = {};
   pr.addEventListener('shippingaddresschange', function(e) {
     e.updateWith(updatedDetails);
   });
@@ -78,9 +78,9 @@ function updateWithEmpty(paymentMethod) { // eslint-disable-line no-unused-vars
  * Calls updateWith() with total
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithTotal(paymentMethod) { // eslint-disable-line no-unused-vars
-  var pr = buildPaymentRequest(paymentMethod);
-  var updatedDetails = {
+function updateWithTotal(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const updatedDetails = {
     total: {label: 'Updated total', amount: {currency: 'USD', value: '10.00'}},
   };
   pr.addEventListener('shippingaddresschange', function(e) {
@@ -96,9 +96,9 @@ function updateWithTotal(paymentMethod) { // eslint-disable-line no-unused-vars
  * Calls updateWith() with displayItems
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithDisplayItems(paymentMethod) { // eslint-disable-line no-unused-vars, max-len
-  var pr = buildPaymentRequest(paymentMethod);
-  var updatedDetails = {
+function updateWithDisplayItems(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const updatedDetails = {
     displayItems: [
       {label: 'Item1', amount: {currency: 'USD', value: '3.00'}},
       {label: 'Item2', amount: {currency: 'USD', value: '2.00'}},
@@ -117,9 +117,9 @@ function updateWithDisplayItems(paymentMethod) { // eslint-disable-line no-unuse
  * Calls updateWith() with shipping options
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithShippingOptions(paymentMethod) { // eslint-disable-line no-unused-vars, max-len
-  var pr = buildPaymentRequest(paymentMethod);
-  var updatedDetails = {
+function updateWithShippingOptions(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const updatedDetails = {
     shippingOptions: [{
       selected: true,
       id: 'updatedShipping',
@@ -140,9 +140,9 @@ function updateWithShippingOptions(paymentMethod) { // eslint-disable-line no-un
  * Calls updateWith() with modifiers
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithModifiers(paymentMethod) { // eslint-disable-line no-unused-vars, max-len
-  var pr = buildPaymentRequest(paymentMethod);
-  var updatedDetails = {
+function updateWithModifiers(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const updatedDetails = {
     modifiers: [{
       supportedMethods: paymentMethod,
       total: {
@@ -168,9 +168,9 @@ function updateWithModifiers(paymentMethod) { // eslint-disable-line no-unused-v
  * Calls updateWith() with an error.
  * @param {String} paymentMethod - the payment method to be used.
  */
-function updateWithError(paymentMethod) { // eslint-disable-line no-unused-vars
-  var pr = buildPaymentRequest(paymentMethod);
-  var errorDetails = {
+function updateWithError(paymentMethod) {
+  const pr = buildPaymentRequest(paymentMethod);
+  const errorDetails = {
     error: 'This is an error for a browsertest',
   };
   pr.addEventListener('shippingaddresschange', function(e) {

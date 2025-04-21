@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,14 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -29,7 +30,7 @@
 #include "net/base/net_export.h"
 #include "net/base/network_change_notifier.h"
 #include "net/base/priority_queue.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/request_priority.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_handle.h"
@@ -39,7 +40,6 @@
 #include "net/socket/socket_tag.h"
 #include "net/socket/ssl_client_socket.h"
 #include "net/socket/stream_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -68,6 +68,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
  public:
   // Reasons for closing sockets. Exposed here for testing.
   static const char kCertDatabaseChanged[];
+  static const char kCertVerifierChanged[];
   static const char kClosedConnectionReturnedToPool[];
   static const char kDataReceivedUnexpectedly[];
   static const char kIdleTimeLimitExpired[];
@@ -98,7 +99,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
         RespectLimits respect_limits,
         Flags flags,
         scoped_refptr<SocketParams> socket_params,
-        const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+        const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
         const NetLogWithSource& net_log);
 
     Request(const Request&) = delete;
@@ -116,7 +117,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
     RespectLimits respect_limits() const { return respect_limits_; }
     Flags flags() const { return flags_; }
     SocketParams* socket_params() const { return socket_params_.get(); }
-    const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag()
+    const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag()
         const {
       return proxy_annotation_tag_;
     }
@@ -140,7 +141,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
     const RespectLimits respect_limits_;
     const Flags flags_;
     const scoped_refptr<SocketParams> socket_params_;
-    const absl::optional<NetworkTrafficAnnotationTag> proxy_annotation_tag_;
+    const std::optional<NetworkTrafficAnnotationTag> proxy_annotation_tag_;
     const NetLogWithSource net_log_;
     const SocketTag socket_tag_;
     raw_ptr<ConnectJob> job_ = nullptr;
@@ -150,7 +151,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets,
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       bool cleanup_on_ip_address_change = true);
@@ -169,7 +170,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
       base::TimeDelta used_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain_,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       std::unique_ptr<ConnectJobFactory> connect_job_factory,
@@ -190,7 +191,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   int RequestSocket(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       RequestPriority priority,
       const SocketTag& socket_tag,
       RespectLimits respect_limits,
@@ -201,7 +202,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   int RequestSockets(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       int num_sockets,
       CompletionOnceCallback callback,
       const NetLogWithSource& net_log) override;
@@ -262,8 +263,10 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   void OnIPAddressChanged() override;
 
   // SSLClientContext::Observer methods.
-  void OnSSLConfigChanged(bool is_cert_database_change) override;
-  void OnSSLConfigForServerChanged(const HostPortPair& server) override;
+  void OnSSLConfigChanged(
+      SSLClientContext::SSLConfigChangeType change_type) override;
+  void OnSSLConfigForServersChanged(
+      const base::flat_set<HostPortPair>& servers) override;
 
  private:
   // Entry for a persistent socket which became idle at time |start_time|.
@@ -426,8 +429,8 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
     const Request* BindRequestToConnectJob(ConnectJob* connect_job);
 
     // Finds the request, if any, bound to |connect_job|, and returns the
-    // BoundRequest or absl::nullopt if there was none.
-    absl::optional<BoundRequest> FindAndRemoveBoundRequestForConnectJob(
+    // BoundRequest or std::nullopt if there was none.
+    std::optional<BoundRequest> FindAndRemoveBoundRequestForConnectJob(
         ConnectJob* connect_job);
 
     // Finds the bound request, if any, corresponding to |client_socket_handle|
@@ -537,7 +540,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
                     // pointer of each element of |jobs_| stored either in
                     // |unassigned_jobs_|, or as the associated |job_| of an
                     // element of |unbound_requests_|.
-    std::list<ConnectJob*> unassigned_jobs_;
+    std::list<raw_ptr<ConnectJob, CtnExperimental>> unassigned_jobs_;
     RequestQueue unbound_requests_;
     int active_socket_count_ = 0;  // number of active sockets used by clients
     // A timer for when to start the backup job.
@@ -557,7 +560,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
     int64_t generation_ = 0;
   };
 
-  using GroupMap = std::map<GroupId, Group*>;
+  using GroupMap = std::map<GroupId, raw_ptr<Group, CtnExperimental>>;
 
   struct CallbackResultPair {
     CallbackResultPair();
@@ -578,7 +581,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
       base::TimeDelta used_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       bool cleanup_on_ip_address_change,
@@ -636,7 +639,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
 
   Group* GetOrCreateGroup(const GroupId& group_id);
   void RemoveGroup(const GroupId& group_id);
-  void RemoveGroup(GroupMap::iterator it);
+  GroupMap::iterator RemoveGroup(GroupMap::iterator it);
 
   // Called when the number of idle sockets changes.
   void IncrementIdleCount();
@@ -736,7 +739,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   // it's possible that the request has been cancelled, so |handle| may not
   // exist in |pending_callback_map_|.  We look up the callback and result code
   // in |pending_callback_map_|.
-  void InvokeUserCallback(ClientSocketHandle* handle);
+  void InvokeUserCallback(MayBeDangling<ClientSocketHandle> handle);
 
   // Tries to close idle sockets in a higher level socket pool as long as this
   // this pool is stalled.
@@ -753,9 +756,9 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   // The group may be removed if this leaves the group empty. The caller must
   // call CheckForStalledSocketGroups() after all applicable groups have been
   // refreshed.
-  void RefreshGroup(GroupMap::iterator it,
-                    const base::TimeTicks& now,
-                    const char* net_log_reason_utf8);
+  GroupMap::iterator RefreshGroup(GroupMap::iterator it,
+                                  const base::TimeTicks& now,
+                                  const char* net_log_reason_utf8);
 
   GroupMap group_map_;
 
@@ -783,7 +786,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   const base::TimeDelta unused_idle_socket_timeout_;
   const base::TimeDelta used_idle_socket_timeout_;
 
-  const ProxyServer proxy_server_;
+  const ProxyChain proxy_chain_;
 
   const bool cleanup_on_ip_address_change_;
 
@@ -792,7 +795,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
 
   // Pools that create connections through |this|.  |this| will try to close
   // their idle sockets when it stalls.  Must be empty on destruction.
-  std::set<HigherLayeredPool*> higher_pools_;
+  std::set<raw_ptr<HigherLayeredPool, SetExperimental>> higher_pools_;
 
   const raw_ptr<SSLClientContext> ssl_client_context_;
 

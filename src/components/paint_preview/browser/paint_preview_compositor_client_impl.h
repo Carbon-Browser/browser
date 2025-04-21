@@ -1,17 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PAINT_PREVIEW_BROWSER_PAINT_PREVIEW_COMPOSITOR_CLIENT_IMPL_H_
 #define COMPONENTS_PAINT_PREVIEW_BROWSER_PAINT_PREVIEW_COMPOSITOR_CLIENT_IMPL_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/unguessable_token.h"
 #include "components/paint_preview/browser/paint_preview_compositor_service_impl.h"
 #include "components/paint_preview/public/paint_preview_compositor_client.h"
 #include "components/services/paint_preview_compositor/public/mojom/paint_preview_compositor.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
@@ -23,8 +25,8 @@ using CompositorPtr =
 
 // The implementation of the PaintPreviewCompositorClient class.
 // The public interface should be invoked only on the |default_task_runner_|
-// which is the the runner returned by base::SequencedTaskRunnerHandle::Get()
-// when this is constructed.
+// which is the the runner returned by
+// base::SequencedTaskRunner::GetCurrentDefault() when this is constructed.
 class PaintPreviewCompositorClientImpl : public PaintPreviewCompositorClient {
  public:
   using OnCompositorCreatedCallback =
@@ -36,7 +38,7 @@ class PaintPreviewCompositorClientImpl : public PaintPreviewCompositorClient {
   ~PaintPreviewCompositorClientImpl() override;
 
   // PaintPreviewCompositorClient implementation.
-  const absl::optional<base::UnguessableToken>& Token() const override;
+  const std::optional<base::UnguessableToken>& Token() const override;
   void SetDisconnectHandler(base::OnceClosure closure) override;
   void BeginSeparatedFrameComposite(
       mojom::PaintPreviewBeginCompositeRequestPtr request,
@@ -89,7 +91,7 @@ class PaintPreviewCompositorClientImpl : public PaintPreviewCompositorClient {
   base::WeakPtr<PaintPreviewCompositorServiceImpl> service_;
   CompositorPtr compositor_;
 
-  absl::optional<base::UnguessableToken> token_;
+  std::optional<base::UnguessableToken> token_;
   base::OnceClosure user_disconnect_closure_;
 
   base::WeakPtrFactory<PaintPreviewCompositorClientImpl> weak_ptr_factory_{

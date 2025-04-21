@@ -1,99 +1,52 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/family_link_user_metrics_provider.h"
 
 #include "base/metrics/histogram_functions.h"
-#include "components/session_manager/core/session_manager.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/supervised_user/core/browser/family_link_user_log_record.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/supervised_user/core/browser/supervised_user_utils.h"
 
-namespace {
-
-constexpr char kFamilyLinkUserLogSegmentHistogramName[] =
-    "FamilyLinkUser.LogSegment";
-
-bool AreParentalSupervisionCapabilitiesKnown(
-    const AccountCapabilities& capabilities) {
-  return capabilities.can_stop_parental_supervision() !=
-             signin::Tribool::kUnknown &&
-         capabilities.is_subject_to_parental_controls() !=
-             signin::Tribool::kUnknown;
-}
-
-}  // namespace
-
-FamilyLinkUserMetricsProvider::FamilyLinkUserMetricsProvider() {
-  auto* factory = IdentityManagerFactory::GetInstance();
-  if (factory)
-    scoped_factory_observation_.Observe(factory);
-}
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/browser_finder.h"
+#endif
 
 FamilyLinkUserMetricsProvider::~FamilyLinkUserMetricsProvider() = default;
 
-void FamilyLinkUserMetricsProvider::ProvideCurrentSessionData(
-    metrics::ChromeUserMetricsExtension* uma_proto_unused) {
+bool FamilyLinkUserMetricsProvider::ProvideHistograms() {
   // This function is called at unpredictable intervals throughout the Chrome
   // session, so guarantee it will never crash.
-  if (!log_segment_)
-    return;
-  base::UmaHistogramEnumeration(kFamilyLinkUserLogSegmentHistogramName,
-                                log_segment_.value());
-}
-
-void FamilyLinkUserMetricsProvider::IdentityManagerCreated(
-    signin::IdentityManager* identity_manager) {
-  CHECK(identity_manager);
-  scoped_observations_.AddObservation(identity_manager);
-  // The account may have been updated before registering the observer.
-  // Set the log segment to the primary account info if it exists.
-  AccountInfo primary_account_info = identity_manager->FindExtendedAccountInfo(
-      identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin));
-
-  if (!primary_account_info.IsEmpty())
-    OnExtendedAccountInfoUpdated(primary_account_info);
-}
-
-void FamilyLinkUserMetricsProvider::OnIdentityManagerShutdown(
-    signin::IdentityManager* identity_manager) {
-  if (scoped_observations_.IsObservingSource(identity_manager)) {
-    scoped_observations_.RemoveObservation(identity_manager);
-  }
-}
-
-void FamilyLinkUserMetricsProvider::OnExtendedAccountInfoUpdated(
-    const AccountInfo& account_info) {
-  if (!AreParentalSupervisionCapabilitiesKnown(account_info.capabilities)) {
-    // Because account info is fetched asynchronously it is possible for a
-    // subset of the info to be updated that does not include account
-    // capabilities. Only log metrics after the capability fetch completes.
-    return;
-  }
-  auto is_subject_to_parental_controls =
-      account_info.capabilities.is_subject_to_parental_controls();
-  if (is_subject_to_parental_controls == signin::Tribool::kTrue) {
-    auto can_stop_supervision =
-        account_info.capabilities.can_stop_parental_supervision();
-    if (can_stop_supervision == signin::Tribool::kTrue) {
-      // Log as a supervised user that has chosen to enable parental
-      // supervision on their account, e.g. Geller accounts.
-      SetLogSegment(LogSegment::kSupervisionEnabledByUser);
-    } else {
-      // Log as a supervised user that has parental supervision enabled
-      // by a policy applied to their account, e.g. Unicorn accounts.
-      SetLogSegment(LogSegment::kSupervisionEnabledByPolicy);
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+  std::vector<Profile*> profile_list = profile_manager->GetLoadedProfiles();
+  std::vector<supervised_user::FamilyLinkUserLogRecord> records;
+  for (Profile* profile : profile_list) {
+#if !BUILDFLAG(IS_ANDROID)
+    // TODO(b/274889379): Mock call to GetBrowserCount().
+    if (!FamilyLinkUserMetricsProvider::
+            skip_active_browser_count_for_unittesting_ &&
+        chrome::GetBrowserCount(profile) == 0) {
+      // The profile is loaded, but there's no opened browser for this
+      // profile.
+      continue;
     }
-  } else {
-    // Log as unsupervised user if the account is not subject to parental
-    // controls.
-    SetLogSegment(LogSegment::kUnsupervised);
+#endif
+
+    supervised_user::SupervisedUserService* service =
+        SupervisedUserServiceFactory::GetForProfile(profile);
+
+    records.push_back(supervised_user::FamilyLinkUserLogRecord::Create(
+        IdentityManagerFactory::GetForProfile(profile), *profile->GetPrefs(),
+        *HostContentSettingsMapFactory::GetForProfile(profile),
+        service ? service->GetURLFilter() : nullptr));
   }
-}
-
-// static
-const char* FamilyLinkUserMetricsProvider::GetHistogramNameForTesting() {
-  return kFamilyLinkUserLogSegmentHistogramName;
-}
-
-void FamilyLinkUserMetricsProvider::SetLogSegment(LogSegment log_segment) {
-  log_segment_ = log_segment;
+  return supervised_user::EmitLogRecordHistograms(records);
 }

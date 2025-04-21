@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "mojo/public/cpp/bindings/string_traits_wtf.h"
+
+#include <string_view>
 
 #include "base/strings/string_util.h"
 #include "mojo/public/cpp/bindings/string_data_view.h"
@@ -27,20 +29,10 @@ WTF::StringUTF8Adaptor StringTraits<WTF::String>::GetUTF8(
 // static
 bool StringTraits<WTF::String>::Read(StringDataView input,
                                      WTF::String* output) {
-  WTF::String result = WTF::String::FromUTF8(input.storage(), input.size());
+  WTF::String result =
+      WTF::String::FromUTF8(std::string_view(input.storage(), input.size()));
   output->swap(result);
   return true;
-}
-
-// static
-bool StringTraits<WTF::String>::IsValidUTF8(const WTF::String& value) {
-  if (value.IsNull())
-    return true;
-  if (!value.Is8Bit())
-    return false;
-  base::span<const LChar> data = value.Span8();
-  return base::IsStringUTF8(base::StringPiece(
-      reinterpret_cast<const char*>(data.data()), data.size()));
 }
 
 }  // namespace mojo

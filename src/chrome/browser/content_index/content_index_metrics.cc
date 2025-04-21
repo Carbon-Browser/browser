@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 namespace {
 
 void MaybeRecordUkmContentAdded(blink::mojom::ContentCategory category,
-                                absl::optional<ukm::SourceId> source_id) {
+                                std::optional<ukm::SourceId> source_id) {
   if (!source_id)
     return;
 
@@ -24,7 +24,7 @@ void MaybeRecordUkmContentAdded(blink::mojom::ContentCategory category,
 }
 
 void MaybeRecordUkmContentDeletedByUser(
-    absl::optional<ukm::SourceId> source_id) {
+    std::optional<ukm::SourceId> source_id) {
   if (!source_id)
     return;
 
@@ -46,8 +46,6 @@ ContentIndexMetrics::~ContentIndexMetrics() = default;
 void ContentIndexMetrics::RecordContentAdded(
     const url::Origin& origin,
     blink::mojom::ContentCategory category) {
-  base::UmaHistogramEnumeration("ContentIndex.ContentAdded", category);
-
   ukm_background_service_->GetBackgroundSourceIdIfAllowed(
       origin, base::BindOnce(&MaybeRecordUkmContentAdded, category));
 }
@@ -55,8 +53,6 @@ void ContentIndexMetrics::RecordContentAdded(
 void ContentIndexMetrics::RecordContentOpened(
     content::WebContents* web_contents,
     blink::mojom::ContentCategory category) {
-  base::UmaHistogramEnumeration("ContentIndex.ContentOpened", category);
-
   ukm::builders::ContentIndex_Opened(
       web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId())
       .SetIsOffline(net::NetworkChangeNotifier::IsOffline())
@@ -67,9 +63,4 @@ void ContentIndexMetrics::RecordContentDeletedByUser(
     const url::Origin& origin) {
   ukm_background_service_->GetBackgroundSourceIdIfAllowed(
       origin, base::BindOnce(&MaybeRecordUkmContentDeletedByUser));
-}
-
-// static
-void ContentIndexMetrics::RecordContentIndexEntries(size_t num_entries) {
-  base::UmaHistogramCounts1000("ContentIndex.NumEntriesAvailable", num_entries);
 }

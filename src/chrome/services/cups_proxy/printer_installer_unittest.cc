@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/services/cups_proxy/fake_cups_proxy_service_delegate.h"
@@ -23,7 +22,7 @@ namespace {
 
 using Printer = chromeos::Printer;
 
-// Generated via base::GenerateGUID.
+// Generated via base::Uuid::GenerateRandomV4().AsLowercaseString().
 const char kGenericGUID[] = "fd4c5f2e-7549-43d5-b931-9bf4e4f1bf51";
 
 // Faked delegate gives control over PrinterInstaller's printing stack
@@ -48,14 +47,9 @@ class FakeServiceDelegate : public FakeCupsProxyServiceDelegate {
     return installed_printers_.at(printer.id());
   }
 
-  void PrinterInstalled(const Printer& printer) override {
-    DCHECK(base::Contains(installed_printers_, printer.id()));
-    installed_printers_[printer.id()] = true;
-  }
-
-  absl::optional<Printer> GetPrinter(const std::string& id) override {
+  std::optional<Printer> GetPrinter(const std::string& id) override {
     if (!base::Contains(installed_printers_, id)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     return Printer(id);
@@ -74,6 +68,7 @@ class FakeServiceDelegate : public FakeCupsProxyServiceDelegate {
     }
 
     // Install printer.
+    installed_printers_[printer.id()] = true;
     return std::move(callback).Run(true);
   }
 

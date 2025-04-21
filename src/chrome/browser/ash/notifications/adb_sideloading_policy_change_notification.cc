@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/browser_process.h"
@@ -34,9 +34,9 @@ constexpr char kAdbSideloadingPowerwashOnRebootNotificationId[] =
 namespace ash {
 
 AdbSideloadingPolicyChangeNotification::
-    AdbSideloadingPolicyChangeNotification() {}
+    AdbSideloadingPolicyChangeNotification() = default;
 AdbSideloadingPolicyChangeNotification::
-    ~AdbSideloadingPolicyChangeNotification() {}
+    ~AdbSideloadingPolicyChangeNotification() = default;
 
 void AdbSideloadingPolicyChangeNotification::Show(Type type) {
   std::u16string title, text;
@@ -54,7 +54,6 @@ void AdbSideloadingPolicyChangeNotification::Show(Type type) {
   switch (type) {
     case Type::kNone:
       NOTREACHED();
-      return;
     case Type::kSideloadingDisallowed:
       title = l10n_util::GetStringUTF16(
           IDS_ADB_SIDELOADING_POLICY_CHANGE_SIDELOADING_DISALLOWED_NOTIFICATION_TITLE);
@@ -90,29 +89,27 @@ void AdbSideloadingPolicyChangeNotification::Show(Type type) {
       break;
   }
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title,
-          text, std::u16string() /*display_source*/, GURL(),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT, notification_id,
-              catalog_name),
-          message_center::RichNotificationData(),
-          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-              base::BindRepeating(&AdbSideloadingPolicyChangeNotification::
-                                      HandleNotificationClick,
-                                  weak_ptr_factory_.GetWeakPtr())),
-          vector_icons::kBusinessIcon,
-          message_center::SystemNotificationWarningLevel::WARNING);
-  notification->set_priority(message_center::SYSTEM_PRIORITY);
-  notification->set_pinned(pinned);
-  notification->set_buttons(notification_actions);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title, text,
+      std::u16string() /*display_source*/, GURL(),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 notification_id, catalog_name),
+      message_center::RichNotificationData(),
+      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+          base::BindRepeating(
+              &AdbSideloadingPolicyChangeNotification::HandleNotificationClick,
+              weak_ptr_factory_.GetWeakPtr())),
+      vector_icons::kBusinessIcon,
+      message_center::SystemNotificationWarningLevel::WARNING);
+  notification.set_priority(message_center::SYSTEM_PRIORITY);
+  notification.set_pinned(pinned);
+  notification.set_buttons(notification_actions);
 
-  SystemNotificationHelper::GetInstance()->Display(*notification);
+  SystemNotificationHelper::GetInstance()->Display(notification);
 }
 
 void AdbSideloadingPolicyChangeNotification::HandleNotificationClick(
-    absl::optional<int> button_index) {
+    std::optional<int> button_index) {
   // Only request restart when the button is clicked, i.e. ignore the clicks
   // on the body of the notification.
   if (!button_index)

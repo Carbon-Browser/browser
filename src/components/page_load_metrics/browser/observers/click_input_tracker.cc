@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,6 @@ void ClickInputTracker::OnUserInput(const blink::WebInputEvent& event) {
     position = mouse_click.PositionInScreen();
   } else {
     NOTREACHED();
-    return;
   }
 
   if (!last_click_timestamp_.is_null()) {

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/policy/core/common/async_policy_loader.h"
 #include "components/policy/core/common/external_data_fetcher.h"
@@ -47,11 +47,11 @@ class MockPolicyLoader : public AsyncPolicyLoader {
   MockPolicyLoader& operator=(const MockPolicyLoader&) = delete;
   ~MockPolicyLoader() override;
 
-  // Load() returns a std::unique_ptr<PolicyBundle> but it can't be mocked
-  // because std::unique_ptr is moveable but not copyable. This override
+  // Load() returns a PolicyBundle but it can't be mocked
+  // because PolicyBundle is moveable but not copyable. This override
   // forwards the call to MockLoad() which returns a PolicyBundle*, and returns
-  // a copy wrapped in a std::unique_ptr.
-  std::unique_ptr<PolicyBundle> Load() override;
+  // a copy wrapped.
+  PolicyBundle Load() override;
 
   MOCK_METHOD0(MockLoad, const PolicyBundle*());
   MOCK_METHOD0(InitOnBackgroundThread, void());
@@ -62,16 +62,10 @@ MockPolicyLoader::MockPolicyLoader(
     scoped_refptr<base::SequencedTaskRunner> task_runner)
     : AsyncPolicyLoader(task_runner, /*periodic_updates=*/true) {}
 
-MockPolicyLoader::~MockPolicyLoader() {}
+MockPolicyLoader::~MockPolicyLoader() = default;
 
-std::unique_ptr<PolicyBundle> MockPolicyLoader::Load() {
-  std::unique_ptr<PolicyBundle> bundle;
-  const PolicyBundle* loaded = MockLoad();
-  if (loaded) {
-    bundle = std::make_unique<PolicyBundle>();
-    bundle->CopyFrom(*loaded);
-  }
-  return bundle;
+PolicyBundle MockPolicyLoader::Load() {
+  return MockLoad()->Clone();
 }
 
 }  // namespace
@@ -91,17 +85,18 @@ class AsyncPolicyProviderTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_;
   SchemaRegistry schema_registry_;
   PolicyBundle initial_bundle_;
-  raw_ptr<MockPolicyLoader> loader_;
+  raw_ptr<MockPolicyLoader, AcrossTasksDanglingUntriaged> loader_;
   std::unique_ptr<AsyncPolicyProvider> provider_;
 };
 
-AsyncPolicyProviderTest::AsyncPolicyProviderTest() {}
+AsyncPolicyProviderTest::AsyncPolicyProviderTest() = default;
 
-AsyncPolicyProviderTest::~AsyncPolicyProviderTest() {}
+AsyncPolicyProviderTest::~AsyncPolicyProviderTest() = default;
 
 void AsyncPolicyProviderTest::SetUp() {
   SetPolicy(&initial_bundle_, "policy", "initial");
-  loader_ = new MockPolicyLoader(base::ThreadTaskRunnerHandle::Get());
+  loader_ =
+      new MockPolicyLoader(base::SingleThreadTaskRunner::GetCurrentDefault());
   EXPECT_CALL(*loader_, LastModificationTime())
       .WillRepeatedly(Return(base::Time()));
   EXPECT_CALL(*loader_, InitOnBackgroundThread()).Times(1);
@@ -136,7 +131,7 @@ TEST_F(AsyncPolicyProviderTest, RefreshPolicies) {
   MockConfigurationPolicyObserver observer;
   provider_->AddObserver(&observer);
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(1);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   base::RunLoop().RunUntilIdle();
   // The refreshed policies are now provided.
   EXPECT_TRUE(provider_->policies().Equals(refreshed_bundle));
@@ -151,13 +146,13 @@ TEST_F(AsyncPolicyProviderTest, RefreshPoliciesTwice) {
   MockConfigurationPolicyObserver observer;
   provider_->AddObserver(&observer);
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(0);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   // Doesn't refresh before going through the background thread.
   Mock::VerifyAndClearExpectations(&observer);
 
   // Doesn't refresh if another RefreshPolicies request is made.
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(0);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   Mock::VerifyAndClearExpectations(&observer);
 
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(1);
@@ -193,7 +188,7 @@ TEST_F(AsyncPolicyProviderTest, RefreshPoliciesDuringReload) {
 
   // Doesn't refresh before going through the background thread.
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(0);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   Mock::VerifyAndClearExpectations(&observer);
 
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(1);

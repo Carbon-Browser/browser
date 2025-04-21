@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/federated/fake_federated_client.h"
 #include "dbus/bus.h"
@@ -57,7 +58,7 @@ class FederatedClientImpl : public FederatedClient {
     std::move(result_callback).Run(success);
   }
 
-  dbus::ObjectProxy* federated_service_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> federated_service_proxy_ = nullptr;
   // Must be last class member.
   base::WeakPtrFactory<FederatedClientImpl> weak_ptr_factory_{this};
 };

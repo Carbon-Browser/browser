@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SERVICES_NETWORK_PUBLIC_CPP_COOKIE_MANAGER_MOJOM_TRAITS_H_
 
 #include <bitset>
+#include <optional>
 #include <vector>
 
 #include "mojo/public/cpp/bindings/enum_traits.h"
@@ -16,13 +17,19 @@
 #include "net/cookies/cookie_inclusion_status.h"
 #include "net/cookies/cookie_options.h"
 #include "net/cookies/cookie_partition_key_collection.h"
-#include "net/cookies/same_party_context.h"
 #include "services/network/public/cpp/cookie_manager_shared_mojom_traits.h"
 #include "services/network/public/mojom/cookie_manager.mojom-forward.h"
+#include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "services/network/public/mojom/cookie_partition_key.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
+
+template <>
+struct EnumTraits<network::mojom::CookieSourceType, net::CookieSourceType> {
+  static network::mojom::CookieSourceType ToMojom(net::CookieSourceType input);
+  static bool FromMojom(network::mojom::CookieSourceType input,
+                        net::CookieSourceType* output);
+};
 
 template <>
 struct EnumTraits<network::mojom::CookiePriority, net::CookiePriority> {
@@ -54,6 +61,15 @@ struct EnumTraits<network::mojom::CookieAccessSemantics,
       net::CookieAccessSemantics input);
   static bool FromMojom(network::mojom::CookieAccessSemantics input,
                         net::CookieAccessSemantics* output);
+};
+
+template <>
+struct EnumTraits<network::mojom::CookieScopeSemantics,
+                  net::CookieScopeSemantics> {
+  static network::mojom::CookieScopeSemantics ToMojom(
+      net::CookieScopeSemantics input);
+  static bool FromMojom(network::mojom::CookieScopeSemantics input,
+                        net::CookieScopeSemantics* output);
 };
 
 template <>
@@ -93,6 +109,19 @@ struct EnumTraits<network::mojom::ContextRedirectTypeBug1221316,
 };
 
 template <>
+struct EnumTraits<
+    network::mojom::HttpMethod,
+    net::CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod> {
+  static network::mojom::HttpMethod ToMojom(
+      net::CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod
+          input);
+  static bool FromMojom(
+      network::mojom::HttpMethod input,
+      net::CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod*
+          output);
+};
+
+template <>
 struct EnumTraits<network::mojom::CookieSourceScheme, net::CookieSourceScheme> {
   static network::mojom::CookieSourceScheme ToMojom(
       net::CookieSourceScheme input);
@@ -128,6 +157,12 @@ struct StructTraits<
     return m.redirect_type_bug_1221316;
   }
 
+  static net::CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod
+  http_method_bug_1221316(
+      const net::CookieOptions::SameSiteCookieContext::ContextMetadata& m) {
+    return m.http_method_bug_1221316;
+  }
+
   static bool Read(network::mojom::CookieSameSiteContextMetadataDataView,
                    net::CookieOptions::SameSiteCookieContext::ContextMetadata*);
 };
@@ -160,16 +195,6 @@ struct StructTraits<network::mojom::CookieSameSiteContextDataView,
 };
 
 template <>
-struct EnumTraits<network::mojom::SamePartyCookieContextType,
-                  net::SamePartyContext::Type> {
-  static network::mojom::SamePartyCookieContextType ToMojom(
-      net::SamePartyContext::Type context_type);
-
-  static bool FromMojom(network::mojom::SamePartyCookieContextType context_type,
-                        net::SamePartyContext::Type* out);
-};
-
-template <>
 struct StructTraits<network::mojom::CookieOptionsDataView, net::CookieOptions> {
   static bool exclude_httponly(const net::CookieOptions& o) {
     return o.exclude_httponly();
@@ -185,20 +210,15 @@ struct StructTraits<network::mojom::CookieOptionsDataView, net::CookieOptions> {
     return o.return_excluded_cookies();
   }
 
-  static net::SamePartyContext same_party_context(const net::CookieOptions& o) {
-    return o.same_party_context();
-  }
-
-  static uint32_t full_party_context_size(const net::CookieOptions& o) {
-    return o.full_party_context_size();
-  }
-
-  static bool is_in_nontrivial_first_party_set(const net::CookieOptions& o) {
-    return o.is_in_nontrivial_first_party_set();
-  }
-
   static bool Read(network::mojom::CookieOptionsDataView mojo_options,
                    net::CookieOptions* cookie_options);
+};
+
+template <>
+struct EnumTraits<network::mojom::AncestorChainBit,
+                  net::CookiePartitionKey::AncestorChainBit> {
+  static network::mojom::AncestorChainBit ToMojom(bool input);
+  static bool FromMojom(network::mojom::AncestorChainBit input);
 };
 
 template <>
@@ -211,9 +231,16 @@ struct StructTraits<network::mojom::CookiePartitionKeyDataView,
     return cpk.from_script();
   }
 
-  static const absl::optional<base::UnguessableToken>& nonce(
+  static const std::optional<base::UnguessableToken>& nonce(
       const net::CookiePartitionKey& cpk) {
     return cpk.nonce();
+  }
+
+  static network::mojom::AncestorChainBit ancestor_chain_bit(
+      const net::CookiePartitionKey& cpk) {
+    return EnumTraits<
+        network::mojom::AncestorChainBit,
+        net::CookiePartitionKey::AncestorChainBit>::ToMojom(cpk.IsThirdParty());
   }
 
   static bool Read(network::mojom::CookiePartitionKeyDataView partition_key,
@@ -241,9 +268,7 @@ struct StructTraits<network::mojom::CanonicalCookieDataView,
   static const std::string& name(const net::CanonicalCookie& c) {
     return c.Name();
   }
-  static const std::string& value(const net::CanonicalCookie& c) {
-    return c.Value();
-  }
+  static std::string value(const net::CanonicalCookie& c) { return c.Value(); }
   static const std::string& domain(const net::CanonicalCookie& c) {
     return c.Domain();
   }
@@ -262,7 +287,9 @@ struct StructTraits<network::mojom::CanonicalCookieDataView,
   static base::Time last_update(const net::CanonicalCookie& c) {
     return c.LastUpdateDate();
   }
-  static bool secure(const net::CanonicalCookie& c) { return c.IsSecure(); }
+  static bool secure(const net::CanonicalCookie& c) {
+    return c.SecureAttribute();
+  }
   static bool httponly(const net::CanonicalCookie& c) { return c.IsHttpOnly(); }
   static net::CookieSameSite site_restrictions(const net::CanonicalCookie& c) {
     return c.SameSite();
@@ -273,15 +300,15 @@ struct StructTraits<network::mojom::CanonicalCookieDataView,
   static net::CookieSourceScheme source_scheme(const net::CanonicalCookie& c) {
     return c.SourceScheme();
   }
-  static bool same_party(const net::CanonicalCookie& c) {
-    return c.IsSameParty();
-  }
-  static const absl::optional<net::CookiePartitionKey>& partition_key(
+  static const std::optional<net::CookiePartitionKey>& partition_key(
       const net::CanonicalCookie& c) {
     return c.PartitionKey();
   }
   static int source_port(const net::CanonicalCookie& c) {
     return c.SourcePort();
+  }
+  static net::CookieSourceType source_type(const net::CanonicalCookie& c) {
+    return c.SourceType();
   }
 
   static bool Read(network::mojom::CanonicalCookieDataView cookie,
@@ -291,7 +318,7 @@ struct StructTraits<network::mojom::CanonicalCookieDataView,
 template <>
 struct StructTraits<network::mojom::CookieAndLineWithAccessResultDataView,
                     net::CookieAndLineWithAccessResult> {
-  static const absl::optional<net::CanonicalCookie>& cookie(
+  static const std::optional<net::CanonicalCookie>& cookie(
       const net::CookieAndLineWithAccessResult& c) {
     return c.cookie;
   }
@@ -321,6 +348,10 @@ struct StructTraits<network::mojom::CookieAccessResultDataView,
   static const net::CookieAccessSemantics& access_semantics(
       const net::CookieAccessResult& c) {
     return c.access_semantics;
+  }
+  static const net::CookieScopeSemantics& scope_semantics(
+      const net::CookieAccessResult& c) {
+    return c.scope_semantics;
   }
   static bool is_allowed_to_access_secure_cookies(
       const net::CookieAccessResult& c) {
@@ -360,26 +391,6 @@ struct StructTraits<network::mojom::CookieChangeInfoDataView,
   }
   static bool Read(network::mojom::CookieChangeInfoDataView info,
                    net::CookieChangeInfo* out);
-};
-
-template <>
-struct StructTraits<network::mojom::SamePartyContextDataView,
-                    net::SamePartyContext> {
-  static net::SamePartyContext::Type context_type(
-      const net::SamePartyContext& s) {
-    return s.context_type();
-  }
-  static net::SamePartyContext::Type ancestors_for_metrics_only(
-      const net::SamePartyContext& s) {
-    return s.ancestors_for_metrics_only();
-  }
-  static net::SamePartyContext::Type top_resource_for_metrics_only(
-      const net::SamePartyContext& s) {
-    return s.top_resource_for_metrics_only();
-  }
-
-  static bool Read(network::mojom::SamePartyContextDataView bundle,
-                   net::SamePartyContext* out);
 };
 
 }  // namespace mojo

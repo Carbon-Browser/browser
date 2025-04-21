@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,13 @@ class Derived : public Base {
 };
 
 class Mixin : public GarbageCollectedMixin {
+ public:
+  void Trace(Visitor*) const {}
+};
+
+class Traceable {
+  DISALLOW_NEW();
+
  public:
   void Trace(Visitor*) const {}
 };

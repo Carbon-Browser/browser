@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ SyncFileMetadata::SyncFileMetadata(SyncFileType file_type,
                                    const base::Time& last_modified)
     : file_type(file_type), size(size), last_modified(last_modified) {}
 
-SyncFileMetadata::~SyncFileMetadata() {}
+SyncFileMetadata::~SyncFileMetadata() = default;
 
 bool SyncFileMetadata::operator==(const SyncFileMetadata& that) const {
   return file_type == that.file_type &&
@@ -26,8 +26,8 @@ bool SyncFileMetadata::operator==(const SyncFileMetadata& that) const {
          last_modified == that.last_modified;
 }
 
-LocalFileSyncInfo::LocalFileSyncInfo() {}
+LocalFileSyncInfo::LocalFileSyncInfo() = default;
 LocalFileSyncInfo::LocalFileSyncInfo(const LocalFileSyncInfo& other) = default;
-LocalFileSyncInfo::~LocalFileSyncInfo() {}
+LocalFileSyncInfo::~LocalFileSyncInfo() = default;
 
 }  // namespace sync_file_system

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/compiler_specific.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chromecast/media/audio/net/common.pb.h"
 #include "chromecast/media/audio/net/conversions.h"
@@ -58,7 +60,6 @@ AudioChannel ConvertChannelSelection(int channel_selection) {
       return AudioChannel::kRight;
     default:
       NOTREACHED();
-      return AudioChannel::kAll;
   }
 }
 
@@ -150,8 +151,9 @@ void CmaBackendShim::AddData(char* data, int size) {
   if (size == 0) {
     buffer = ::media::DecoderBuffer::CreateEOSBuffer();
   } else {
-    buffer = ::media::DecoderBuffer::CopyFrom(
-        reinterpret_cast<const uint8_t*>(data), size);
+    // TODO(crbug.com/40284755): These functions should use span and size_t.
+    buffer = ::media::DecoderBuffer::CopyFrom(base::as_bytes(
+        UNSAFE_TODO(base::span(data, base::checked_cast<size_t>(size)))));
     buffer->set_timestamp(::media::kNoTimestamp);
   }
   POST_MEDIA_TASK(&CmaBackendShim::AddDataOnMediaThread, std::move(buffer));
@@ -173,7 +175,7 @@ void CmaBackendShim::AddDataOnMediaThread(
 }
 
 void CmaBackendShim::SetVolumeMultiplier(float multiplier) {
-  multiplier = base::clamp(multiplier, 0.0f, 1.0f);
+  multiplier = std::clamp(multiplier, 0.0f, 1.0f);
   POST_MEDIA_TASK(&CmaBackendShim::SetVolumeMultiplierOnMediaThread,
                   multiplier);
 }

@@ -1,4 +1,4 @@
-; Copyright 2018 The Chromium Authors. All rights reserved.
+; Copyright 2018 The Chromium Authors
 ; Use of this source code is governed by a BSD-style license that can be
 ; found in the LICENSE file.
 
@@ -103,6 +103,10 @@
   ; Read network configuration.
   (global-name "com.apple.SystemConfiguration.DNSConfiguration")
   (global-name "com.apple.SystemConfiguration.configd")
+
+  ; If the system has a relay configured, system frameworks may call out
+  ; to nehelper to access its configuration (https://crbug.com/383306185)
+  (global-name "com.apple.nehelper")
 )
 
 (allow sysctl-read

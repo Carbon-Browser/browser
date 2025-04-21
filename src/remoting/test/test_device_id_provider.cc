@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/guid.h"
 #include "base/logging.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 
 namespace remoting {
@@ -23,7 +23,7 @@ TestDeviceIdProvider::~TestDeviceIdProvider() = default;
 ftl::DeviceId TestDeviceIdProvider::GetDeviceId() {
   std::string id = token_storage_->FetchDeviceId();
   if (id.empty()) {
-    id = "crd-test-" + base::GenerateGUID();
+    id = "crd-test-" + base::Uuid::GenerateRandomV4().AsLowercaseString();
     VLOG(0) << "Generated new device_id: " << id;
     token_storage_->StoreDeviceId(id);
   } else {

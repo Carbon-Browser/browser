@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include "base/android/jni_string.h"
 #include "content/browser/android/content_startup_flags.h"
 #include "content/browser/browser_main_loop.h"
-#include "content/public/android/content_jni_headers/BrowserStartupControllerImpl_jni.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/public/android/content_main_dex_jni/BrowserStartupControllerImpl_jni.h"
 
 using base::android::JavaParamRef;
 

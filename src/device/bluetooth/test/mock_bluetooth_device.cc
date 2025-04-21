@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,13 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service.h"
-#include "device/bluetooth/test/mock_bluetooth_adapter.h"
 
 namespace device {
 
 using ::testing::Return;
 using ::testing::ReturnPointee;
 
-MockBluetoothDevice::MockBluetoothDevice(MockBluetoothAdapter* adapter,
+MockBluetoothDevice::MockBluetoothDevice(BluetoothAdapter* adapter,
                                          uint32_t bluetooth_class,
                                          const char* name,
                                          const std::string& address,
@@ -24,7 +23,7 @@ MockBluetoothDevice::MockBluetoothDevice(MockBluetoothAdapter* adapter,
                                          bool connected)
     : BluetoothDevice(adapter),
       bluetooth_class_(bluetooth_class),
-      name_(name ? absl::optional<std::string>(name) : absl::nullopt),
+      name_(name ? std::optional<std::string>(name) : std::nullopt),
       address_(address),
       connected_(connected),
       paired_(initially_paired) {
@@ -40,9 +39,13 @@ MockBluetoothDevice::MockBluetoothDevice(MockBluetoothAdapter* adapter,
   ON_CALL(*this, GetNameForDisplay())
       .WillByDefault(
           Return(base::UTF8ToUTF16(name_ ? name_.value() : "Unnamed Device")));
+  ON_CALL(*this, GetType()).WillByDefault(ReturnPointee(&transport_));
   ON_CALL(*this, GetDeviceType())
       .WillByDefault(Return(BluetoothDeviceType::UNKNOWN));
   ON_CALL(*this, IsPaired()).WillByDefault(ReturnPointee(&paired_));
+#if BUILDFLAG(IS_CHROMEOS)
+  ON_CALL(*this, IsBonded()).WillByDefault(ReturnPointee(&paired_));
+#endif  // BUILDFLAG(IS_CHROMEOS)
   ON_CALL(*this, IsConnected()).WillByDefault(ReturnPointee(&connected_));
   ON_CALL(*this, IsGattConnected()).WillByDefault(ReturnPointee(&connected_));
   ON_CALL(*this, IsConnectable()).WillByDefault(Return(false));

@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/leak_detection/leak_detection_request.h"
+
+#include <string_view>
 
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -48,10 +50,11 @@ TEST_F(LeakDetectionRequestTest, ServerError) {
       net::HTTP_INTERNAL_SERVER_ERROR);
 
   base::MockCallback<LeakDetectionRequest::LookupSingleLeakCallback> callback;
-  request().LookupSingleLeak(test_url_loader_factory(), kAccessToken,
-                             /*api_key=*/absl::nullopt,
-                             {kUsernameHash, kEncryptedPayload},
-                             callback.Get());
+  request().LookupSingleLeak(
+      test_url_loader_factory(), kAccessToken,
+      /*api_key=*/std::nullopt,
+      {LeakDetectionInitiator::kSignInCheck, kUsernameHash, kEncryptedPayload},
+      callback.Get());
   EXPECT_CALL(callback,
               Run(IsNull(), Eq(LeakDetectionError::kInvalidServerResponse)));
   task_env().RunUntilIdle();
@@ -70,10 +73,11 @@ TEST_F(LeakDetectionRequestTest, QuotaLimit) {
       net::HTTP_TOO_MANY_REQUESTS);
 
   base::MockCallback<LeakDetectionRequest::LookupSingleLeakCallback> callback;
-  request().LookupSingleLeak(test_url_loader_factory(), kAccessToken,
-                             /*api_key=*/absl::nullopt,
-                             {kUsernameHash, kEncryptedPayload},
-                             callback.Get());
+  request().LookupSingleLeak(
+      test_url_loader_factory(), kAccessToken,
+      /*api_key=*/std::nullopt,
+      {LeakDetectionInitiator::kSignInCheck, kUsernameHash, kEncryptedPayload},
+      callback.Get());
   EXPECT_CALL(callback, Run(IsNull(), Eq(LeakDetectionError::kQuotaLimit)));
   task_env().RunUntilIdle();
 
@@ -86,16 +90,17 @@ TEST_F(LeakDetectionRequestTest, QuotaLimit) {
 }
 
 TEST_F(LeakDetectionRequestTest, MalformedServerResponse) {
-  static constexpr base::StringPiece kMalformedResponse = "\x01\x02\x03";
+  static constexpr std::string_view kMalformedResponse = "\x01\x02\x03";
   test_url_loader_factory()->AddResponse(
       LeakDetectionRequest::kLookupSingleLeakEndpoint,
       std::string(kMalformedResponse));
 
   base::MockCallback<LeakDetectionRequest::LookupSingleLeakCallback> callback;
-  request().LookupSingleLeak(test_url_loader_factory(), kAccessToken,
-                             /*api_key=*/absl::nullopt,
-                             {kUsernameHash, kEncryptedPayload},
-                             callback.Get());
+  request().LookupSingleLeak(
+      test_url_loader_factory(), kAccessToken,
+      /*api_key=*/std::nullopt,
+      {LeakDetectionInitiator::kSignInCheck, kUsernameHash, kEncryptedPayload},
+      callback.Get());
   EXPECT_CALL(callback,
               Run(IsNull(), Eq(LeakDetectionError::kInvalidServerResponse)));
   task_env().RunUntilIdle();
@@ -116,12 +121,13 @@ TEST_F(LeakDetectionRequestTest, WellformedServerResponse) {
       LeakDetectionRequest::kLookupSingleLeakEndpoint, response_string);
 
   base::MockCallback<LeakDetectionRequest::LookupSingleLeakCallback> callback;
-  request().LookupSingleLeak(test_url_loader_factory(), kAccessToken,
-                             /*api_key=*/absl::nullopt,
-                             {kUsernameHash, kEncryptedPayload},
-                             callback.Get());
+  request().LookupSingleLeak(
+      test_url_loader_factory(), kAccessToken,
+      /*api_key=*/std::nullopt,
+      {LeakDetectionInitiator::kSignInCheck, kUsernameHash, kEncryptedPayload},
+      callback.Get());
   EXPECT_CALL(callback,
-              Run(testing::Pointee(SingleLookupResponse()), Eq(absl::nullopt)));
+              Run(testing::Pointee(SingleLookupResponse()), Eq(std::nullopt)));
   task_env().RunUntilIdle();
 
   histogram_tester().ExpectUniqueSample(
@@ -145,10 +151,11 @@ TEST_F(LeakDetectionRequestTest,
 
   base::MockCallback<LeakDetectionRequest::LookupSingleLeakCallback> callback;
   request().LookupSingleLeak(
-      test_url_loader_factory(), /*access_token=*/absl::nullopt, kApiKey,
-      {kUsernameHash, kEncryptedPayload}, callback.Get());
+      test_url_loader_factory(), /*access_token=*/std::nullopt, kApiKey,
+      {LeakDetectionInitiator::kSignInCheck, kUsernameHash, kEncryptedPayload},
+      callback.Get());
   EXPECT_CALL(callback,
-              Run(testing::Pointee(SingleLookupResponse()), Eq(absl::nullopt)));
+              Run(testing::Pointee(SingleLookupResponse()), Eq(std::nullopt)));
   task_env().RunUntilIdle();
 
   histogram_tester().ExpectUniqueSample(

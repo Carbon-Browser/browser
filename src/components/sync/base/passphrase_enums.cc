@@ -1,11 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/base/passphrase_enums.h"
 
+#include <optional>
+
 #include "base/check_op.h"
 #include "base/notreached.h"
+#include "components/sync/protocol/nigori_specifics.pb.h"
 
 namespace syncer {
 
@@ -21,18 +24,16 @@ bool IsExplicitPassphrase(PassphraseType type) {
   }
 
   NOTREACHED();
-  return false;
 }
 
 sync_pb::NigoriSpecifics::PassphraseType ProtoPassphraseInt32ToProtoEnum(
-    ::google::protobuf::int32 type) {
+    std::int32_t type) {
   return sync_pb::NigoriSpecifics::PassphraseType_IsValid(type)
              ? static_cast<sync_pb::NigoriSpecifics::PassphraseType>(type)
              : sync_pb::NigoriSpecifics::UNKNOWN;
 }
 
-absl::optional<PassphraseType> ProtoPassphraseInt32ToEnum(
-    ::google::protobuf::int32 type) {
+std::optional<PassphraseType> ProtoPassphraseInt32ToEnum(std::int32_t type) {
   switch (ProtoPassphraseInt32ToProtoEnum(type)) {
     case sync_pb::NigoriSpecifics::IMPLICIT_PASSPHRASE:
       return PassphraseType::kImplicitPassphrase;
@@ -50,7 +51,7 @@ absl::optional<PassphraseType> ProtoPassphraseInt32ToEnum(
       break;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 sync_pb::NigoriSpecifics::PassphraseType EnumPassphraseTypeToProto(
@@ -69,11 +70,10 @@ sync_pb::NigoriSpecifics::PassphraseType EnumPassphraseTypeToProto(
   }
 
   NOTREACHED();
-  return sync_pb::NigoriSpecifics::IMPLICIT_PASSPHRASE;
 }
 
-KeyDerivationMethod ProtoKeyDerivationMethodToEnum(
-    ::google::protobuf::int32 method) {
+std::optional<KeyDerivationMethod> ProtoKeyDerivationMethodToEnum(
+    std::int32_t method) {
   DCHECK_GE(method, 0);
 
   switch (method) {
@@ -89,7 +89,7 @@ KeyDerivationMethod ProtoKeyDerivationMethodToEnum(
 
   // We do not know about this value. It is likely a method added in a newer
   // version of Chrome.
-  return KeyDerivationMethod::UNSUPPORTED;
+  return std::nullopt;
 }
 
 sync_pb::NigoriSpecifics::KeyDerivationMethod EnumKeyDerivationMethodToProto(
@@ -99,14 +99,9 @@ sync_pb::NigoriSpecifics::KeyDerivationMethod EnumKeyDerivationMethodToProto(
       return sync_pb::NigoriSpecifics::PBKDF2_HMAC_SHA1_1003;
     case KeyDerivationMethod::SCRYPT_8192_8_11:
       return sync_pb::NigoriSpecifics::SCRYPT_8192_8_11;
-    case KeyDerivationMethod::UNSUPPORTED:
-      // This value does not have a counterpart in the protocol proto enum,
-      // because it is just a client side abstraction.
-      break;
   }
 
   NOTREACHED();
-  return sync_pb::NigoriSpecifics::UNSPECIFIED;
 }
 
 }  // namespace syncer

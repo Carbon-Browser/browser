@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define CHROME_BROWSER_NEARBY_SHARING_INSTANTMESSAGING_RECEIVE_MESSAGES_EXPRESS_H_
 
 #include <cstdint>
+#include <string_view>
 
-#include "ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -16,6 +16,7 @@
 #include "chrome/browser/nearby_sharing/instantmessaging/proto/instantmessaging.pb.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/stream_parser.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/token_fetcher.h"
+#include "chromeos/ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/cpp/simple_url_loader_stream_consumer.h"
@@ -79,7 +80,7 @@ class ReceiveMessagesExpress : public sharing::mojom::ReceiveMessagesSession,
   void OnFastPathReadyTimeout();
 
   // network::SimpleURLLoaderStreamConsumer:
-  void OnDataReceived(base::StringPiece string_piece,
+  void OnDataReceived(std::string_view string_piece,
                       base::OnceClosure resume) override;
   void OnComplete(bool success) override;
   void OnRetry(base::OnceClosure start_retry) override;

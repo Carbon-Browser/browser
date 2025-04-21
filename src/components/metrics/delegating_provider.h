@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@ class DelegatingProvider final : public MetricsProvider {
   void OnRecordingDisabled() override;
   void OnClientStateCleared() override;
   void OnAppEnterBackground() override;
+  void OnPageLoadStarted() override;
   bool HasIndependentMetrics() override;
   void ProvideSystemProfileMetrics(
       SystemProfileProto* system_profile_proto) override;

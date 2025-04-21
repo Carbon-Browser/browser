@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace policy {
 // Sets the hardware acceleration mode policy before the browser is started.
 class HardwareAccelerationModePolicyTest : public PolicyTest {
  public:
-  HardwareAccelerationModePolicyTest() {}
+  HardwareAccelerationModePolicyTest() = default;
 
   void SetUpInProcessBrowserTestFixture() override {
     PolicyTest::SetUpInProcessBrowserTestFixture();

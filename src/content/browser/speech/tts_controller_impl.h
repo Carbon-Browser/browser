@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,10 @@
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/tts_controller.h"
 #include "content/public/browser/tts_platform.h"
@@ -31,7 +29,7 @@
 namespace content {
 class BrowserContext;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 class TtsControllerDelegate;
 #endif
 
@@ -60,11 +58,32 @@ class CONTENT_EXPORT TtsControllerImpl
   void Stop(const GURL& source_url) override;
   void Pause() override;
   void Resume() override;
+  void UpdateLanguageStatus(const std::string& lang,
+                            LanguageInstallStatus install_status,
+                            const std::string& error) override;
+  void AddUpdateLanguageStatusDelegate(
+      UpdateLanguageStatusDelegate* delegate) override;
+  void RemoveUpdateLanguageStatusDelegate(
+      UpdateLanguageStatusDelegate* delegate) override;
+  void UninstallLanguageRequest(content::BrowserContext* browser_context,
+                                const std::string& lang,
+                                const std::string& client_id,
+                                int source,
+                                bool uninstall_immediately) override;
+  void InstallLanguageRequest(BrowserContext* browser_context,
+                              const std::string& lang,
+                              const std::string& client_id,
+                              int source) override;
+  void LanguageStatusRequest(BrowserContext* browser_context,
+                             const std::string& lang,
+                             const std::string& client_id,
+                             int source) override;
   void OnTtsEvent(int utterance_id,
                   TtsEventType event_type,
                   int char_index,
                   int length,
                   const std::string& error_message) override;
+  void OnTtsUtteranceBecameInvalid(int utterance_id) override;
   void GetVoices(BrowserContext* browser_context,
                  const GURL& source_url,
                  std::vector<VoiceData>* out_voices) override;
@@ -91,8 +110,6 @@ class CONTENT_EXPORT TtsControllerImpl
       const std::string& utterance,
       base::OnceCallback<void(const std::string&)> callback) override;
 
-  void SetRemoteTtsEngineDelegate(RemoteTtsEngineDelegate* delegate) override;
-
  protected:
   TtsControllerImpl();
   ~TtsControllerImpl() override;
@@ -103,10 +120,6 @@ class CONTENT_EXPORT TtsControllerImpl
  private:
   friend class TestTtsControllerImpl;
   friend struct base::DefaultSingletonTraits<TtsControllerImpl>;
-
-  void GetVoicesInternal(BrowserContext* browser_context,
-                         const GURL& source_url,
-                         std::vector<VoiceData>* out_voices);
 
   // Get the platform TTS implementation (or injected mock).
   TtsPlatform* GetTtsPlatform();
@@ -130,6 +143,17 @@ class CONTENT_EXPORT TtsControllerImpl
   // Stops the current utterance if it matches |source_url|. Returns true on
   // success, false if the current utterance does not match |source_url|.
   bool StopCurrentUtteranceIfMatches(const GURL& source_url);
+
+  // Stops the current utterance.
+  void StopCurrentUtterance();
+
+  // Removes the utterance matching |utterance_id|, and stops the current
+  // utterance if it matches |utterance_id|.
+  void RemoveUtteranceAndStopIfNeeded(int utterance_id);
+
+  // Stops the current utterance if it matches |utterance_id|. Returns true on
+  // success, false if the current utterance does not match |utterance_id|.
+  bool StopCurrentUtteranceIfMatches(int utterance_id);
 
   // Clear the utterance queue. If send_events is true, will send
   // TTS_EVENT_CANCELLED events on each one.
@@ -177,19 +201,23 @@ class CONTENT_EXPORT TtsControllerImpl
   void OnNetworkChanged(
       net::NetworkChangeNotifier::ConnectionType type) override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   TtsControllerDelegate* GetTtsControllerDelegate();
   void SetTtsControllerDelegateForTesting(TtsControllerDelegate* delegate);
-  TtsControllerDelegate* delegate_ = nullptr;
-  RemoteTtsEngineDelegate* remote_engine_delegate_ = nullptr;
+  raw_ptr<TtsControllerDelegate, DanglingUntriaged> delegate_ = nullptr;
 #endif
 
-  raw_ptr<TtsEngineDelegate> engine_delegate_ = nullptr;
+  raw_ptr<TtsEngineDelegate, DanglingUntriaged> engine_delegate_ = nullptr;
 
   bool stop_speaking_when_hidden_ = false;
 
   // A set of delegates that want to be notified when the voices change.
   base::ObserverList<VoicesChangedDelegate> voices_changed_delegates_;
+
+  // A set of delegates to be notified when a voice status for a language
+  // changes.
+  base::ObserverList<UpdateLanguageStatusDelegate>
+      update_language_status_delegates_;
 
   // The current utterance being spoken.
   std::unique_ptr<TtsUtterance> current_utterance_;
@@ -199,7 +227,7 @@ class CONTENT_EXPORT TtsControllerImpl
 
   // A pointer to the platform implementation of text-to-speech, for
   // dependency injection.
-  raw_ptr<TtsPlatform> tts_platform_ = nullptr;
+  raw_ptr<TtsPlatform, DanglingUntriaged> tts_platform_ = nullptr;
 
   // A queue of utterances to speak after the current one finishes.
   std::list<std::unique_ptr<TtsUtterance>> utterance_list_;

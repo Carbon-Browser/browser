@@ -1,10 +1,8 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.uid;
-
-import androidx.annotation.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +56,6 @@ public final class UniqueIdentificationGeneratorFactory {
         }
     }
 
-    @VisibleForTesting
     public static void clearGeneratorMapForTest() {
         synchronized (LOCK) {
             GENERATOR_MAP.clear();

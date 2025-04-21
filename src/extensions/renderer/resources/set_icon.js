@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 var exceptionHandler = require('uncaught_exception_handler');
-var natives = requireNative('setIcon');
-var SetIconCommon = natives.SetIconCommon;
-var inServiceWorker = natives.IsInServiceWorker();
+var SetIconCommon = requireNative('setIcon').SetIconCommon;
+var inServiceWorker = requireNative('utils').isInServiceWorker();
 
 function loadImagePathForServiceWorker(path, callback, failureCallback) {
   let fetchPromise = fetch(path);
@@ -137,11 +136,21 @@ function setIcon(details, callback, failureCallback) {
       var detailKeyCount = 0;
       for (var iconSize in details.path) {
         ++detailKeyCount;
-        loadImagePath(details.path[iconSize], function(size, imageData) {
-          details.imageData[size] = imageData;
-          if (--detailKeyCount == 0)
-            callback(SetIconCommon(details));
-        }.bind(null, iconSize), failureCallback);
+        loadImagePath(
+            details.path[iconSize],
+            function(size, imageData) {
+              details.imageData[size] = imageData;
+              if (--detailKeyCount == 0) {
+                callback(SetIconCommon(details));
+              }
+            }.bind(null, iconSize),
+            function(errorMessage) {
+              if (failureCallback) {
+                failureCallback(errorMessage);
+                // Only report the first error.
+                failureCallback = null;
+              }
+            });
       }
       if (detailKeyCount == 0)
         throw new Error('The path property must not be empty.');
@@ -171,7 +180,7 @@ function getSetIconHandler(methodName) {
   };
 }
 
-// TODO(crbug.com/462542): The setIcon export is only used by the declarative
+// TODO(crbug.com/41159896): The setIcon export is only used by the declarative
 // content custom bindings and it actually has some major problems with how it
 // uses it. When that is resolved we can likely remove this export.
 exports.$set('setIcon', setIcon);

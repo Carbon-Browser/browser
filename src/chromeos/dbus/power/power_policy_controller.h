@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 #define CHROMEOS_DBUS_POWER_POWER_POLICY_CONTROLLER_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/policy.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {
 
@@ -115,24 +116,32 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerPolicyController
     int custom_charge_start = -1;
     int custom_charge_stop = -1;
     // Only set send_feedback_if_undimmed in policy proto if this field is set.
-    absl::optional<bool> send_feedback_if_undimmed;
+    std::optional<bool> send_feedback_if_undimmed;
     // Only set adaptive_charging_enabled in policy proto if this field is set.
-    absl::optional<bool> adaptive_charging_enabled;
+    std::optional<bool> adaptive_charging_enabled;
+    // Only set charge_limit_enabled in policy proto if this field is set.
+    std::optional<bool> charge_limit_enabled;
+
+    // Adaptive charging configs, only set when adaptive_charging_enabled.
+    // Configurable via base::FeatureParam.
     double adaptive_charging_min_probability = -1.0;
     int adaptive_charging_hold_percent = -1;
+    double adaptive_charging_max_delay_percentile = -1.0;
+    int adaptive_charging_min_days_history = -1;
+    double adaptive_charging_min_full_on_ac_ratio = -1.0;
   };
 
-  // Converts |base::DictionaryValue| to |std::vector<PeakShiftDayConfig>| and
+  // Converts |base::Value::Dict| to |std::vector<PeakShiftDayConfig>| and
   // returns true if there are no missing fields and errors.
   static bool GetPeakShiftDayConfigs(
-      const base::DictionaryValue& value,
+      const base::Value::Dict& value,
       std::vector<PeakShiftDayConfig>* configs_out);
 
-  // Converts |base::DictionaryValue| to
+  // Converts |base::Value::Dict| to
   // |std::vector<AdvancedBatteryChargeModeDayConfig>| and returns true if there
   // are no missing fields and errors.
   static bool GetAdvancedBatteryChargeModeDayConfigs(
-      const base::DictionaryValue& value,
+      const base::Value::Dict& value,
       std::vector<AdvancedBatteryChargeModeDayConfig>* configs_out);
 
   // Saves appropriate value to |mode_out| and returns true if there is mapping
@@ -251,7 +260,7 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerPolicyController
   // Sends a policy based on |prefs_policy_| to the power manager.
   void SendCurrentPolicy();
 
-  PowerManagerClient* client_;  // weak
+  raw_ptr<PowerManagerClient> client_;  // weak
 
   // Policy derived from values passed to ApplyPrefs().
   power_manager::PowerManagementPolicy prefs_policy_;
@@ -298,11 +307,5 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerPolicyController
 };
 
 }  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::PowerPolicyController;
-}
 
 #endif  // CHROMEOS_DBUS_POWER_POWER_POLICY_CONTROLLER_H_

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,6 +18,7 @@ set -u
 # have any type of "significant/visible changes" log that we could use for this?
 gen_changelog() {
   rm -f "${DEB_CHANGELOG}"
+  DATE_RFC5322="$(date --rfc-email)"
   process_template "${SCRIPTDIR}/changelog.template" "${DEB_CHANGELOG}"
   debchange -a --nomultimaint -m --changelog "${DEB_CHANGELOG}" \
     "Release Notes: ${RELEASENOTES}"
@@ -110,7 +111,6 @@ do_package() {
   log_cmd echo "Packaging ${ARCHITECTURE}..."
   PREDEPENDS="$COMMON_PREDEPS"
   DEPENDS="${COMMON_DEPS}"
-  RECOMMENDS="${COMMON_RECOMMENDS}"
   PROVIDES="www-browser"
   gen_changelog
   process_template "${SCRIPTDIR}/control.template" "${DEB_CONTROL}"
@@ -118,12 +118,17 @@ do_package() {
   if [ -f "${DEB_CONTROL}" ]; then
     gen_control
   fi
+  log_cmd fakeroot dpkg-deb -Znone -b "${STAGEDIR}" "${TMPFILEDIR}"
+  local PACKAGEFILE="${PACKAGE}-${CHANNEL}_${VERSIONFULL}_${ARCHITECTURE}.deb"
   if [ ${IS_OFFICIAL_BUILD} -ne 0 ]; then
-    local COMPRESSION_OPTS="-Zxz -z9"
-  else
-    local COMPRESSION_OPTS="-Znone"
+    (cd "${TMPFILEDIR}" && ar -x "${TMPFILEDIR}/${PACKAGEFILE}")
+    xz -z9 -T0 --lzma2='dict=256MiB' "${TMPFILEDIR}/data.tar"
+    xz -z0 "${TMPFILEDIR}/control.tar"
+    ar -d "${TMPFILEDIR}/${PACKAGEFILE}" control.tar data.tar
+    ar -r "${TMPFILEDIR}/${PACKAGEFILE}" "${TMPFILEDIR}/control.tar.xz" \
+      "${TMPFILEDIR}/data.tar.xz"
   fi
-  log_cmd fakeroot dpkg-deb ${COMPRESSION_OPTS} -b "${STAGEDIR}" .
+  mv "${TMPFILEDIR}/${PACKAGEFILE}" .
   verify_package "$DEPENDS"
 }
 
@@ -138,7 +143,7 @@ usage() {
   echo "usage: $(basename $0) [-a target_arch] -c channel -d branding"
   echo "                      [-f] [-o 'dir'] -s 'dir' -t target_os"
   echo "-a arch      deb package architecture"
-  echo "-c channel   the package channel (unstable, beta, stable)"
+  echo "-c channel   the package channel (canary, unstable, beta, stable)"
   echo "-d brand     either chromium or google_chrome"
   echo "-f           indicates that this is an official build"
   echo "-h           this help message"
@@ -161,6 +166,12 @@ verify_channel() {
     dev|unstable|alpha )
       CHANNEL=unstable
       RELEASENOTES="https://chromereleases.googleblog.com/search/label/Dev%20updates"
+      ;;
+    # Canary is released twice a day automatically, so no release notes
+    # attached.
+    canary )
+      CHANNEL=canary
+      RELEASENOTES="N/A"
       ;;
     * )
       echo
@@ -245,7 +256,7 @@ if [ "$BRANDING" = "google_chrome" ]; then
 else
   source "${OUTPUTDIR}/installer/common/chromium-browser.info"
 fi
-eval $(sed -e "s/^\([^=]\+\)=\(.*\)$/export \1='\2'/" \
+eval $(sed -e "s/^\([^=]\+\)=\(.*\)$/\1='\2'/" \
   "${OUTPUTDIR}/installer/theme/BRANDING")
 
 verify_channel
@@ -258,9 +269,6 @@ export ARCHITECTURE="${ARCHITECTURE}"
 DEB_COMMON_DEPS="${OUTPUTDIR}/deb_common.deps"
 COMMON_DEPS=$(sed ':a;N;$!ba;s/\n/, /g' "${DEB_COMMON_DEPS}")
 COMMON_PREDEPS="dpkg (>= 1.14.0)"
-MANUAL_RECOMMENDS="${SCRIPTDIR}/manual_recommends"
-COMMON_RECOMMENDS=$(grep -v ^$ "${MANUAL_RECOMMENDS}" | grep -v ^# |
-                        sed ':a;N;$!ba;s/\n/, /g')
 
 # Make everything happen in the OUTPUTDIR.
 cd "${OUTPUTDIR}"
@@ -270,7 +278,7 @@ BASEREPOCONFIG="dl.google.com/linux/chrome/deb/ stable main"
 REPOCONFIG="${REPOCONFIG-deb [arch=${ARCHITECTURE}] https://${BASEREPOCONFIG}}"
 # Allowed configs include optional HTTPS support and explicit multiarch
 # platforms.
-REPOCONFIGREGEX="deb (\\\\[arch=[^]]*\\\\b${ARCHITECTURE}\\\\b[^]]*\\\\]"
+REPOCONFIGREGEX="deb (\\[arch=[^]]*\\b${ARCHITECTURE}\\b[^]]*\\]"
 REPOCONFIGREGEX+="[[:space:]]*) https?://${BASEREPOCONFIG}"
 stage_install_debian
 

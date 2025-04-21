@@ -1,15 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/download/public/common/download_item_impl_delegate.h"
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
-#include "components/download/public/common/auto_resumption_handler.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item_impl.h"
+#include "components/download/public/common/download_item_rename_handler.h"
+#include "components/download/public/common/download_target_info.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "components/download/public/common/android/auto_resumption_handler.h"
+#endif
 
 namespace download {
 
@@ -33,12 +38,11 @@ void DownloadItemImplDelegate::Detach() {
 void DownloadItemImplDelegate::DetermineDownloadTarget(
     DownloadItemImpl* download,
     DownloadTargetCallback callback) {
-  base::FilePath target_path(download->GetForcedFilePath());
-  std::move(callback).Run(
-      target_path, DownloadItem::TARGET_DISPOSITION_OVERWRITE,
-      DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-      DownloadItem::MixedContentStatus::UNKNOWN, target_path, base::FilePath(),
-      std::string(), DOWNLOAD_INTERRUPT_REASON_NONE);
+  DownloadTargetInfo target_info;
+  target_info.target_path = download->GetForcedFilePath();
+  target_info.intermediate_path = download->GetForcedFilePath();
+
+  std::move(callback).Run(std::move(target_info));
 }
 
 bool DownloadItemImplDelegate::ShouldCompleteDownload(
@@ -96,9 +100,12 @@ bool DownloadItemImplDelegate::IsOffTheRecord() const {
 }
 
 bool DownloadItemImplDelegate::IsActiveNetworkMetered() const {
-  return download::AutoResumptionHandler::Get()
-             ? download::AutoResumptionHandler::Get()->IsActiveNetworkMetered()
-             : false;
+#if BUILDFLAG(IS_ANDROID)
+  return download::AutoResumptionHandler::Get() &&
+         download::AutoResumptionHandler::Get()->IsActiveNetworkMetered();
+#else
+  return false;
+#endif
 }
 
 void DownloadItemImplDelegate::ReportBytesWasted(DownloadItemImpl* download) {}

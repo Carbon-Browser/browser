@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class GenerateFrameworkTestsAndCoverageTest(unittest.TestCase):
             action_name_prefixes=set(),
             browsertest_dir=TEST_DATA_DIR,
             test_file_prefix="tests_default",
-            test_fixture="WebAppIntegrationBrowserTest")
+            test_fixture="WebAppIntegrationTest")
 
         with open(actions_filename, "r", encoding="utf-8") as actions_file, \
                 open(supported_actions_filename, "r", encoding="utf-8") \
@@ -53,7 +53,6 @@ class GenerateFrameworkTestsAndCoverageTest(unittest.TestCase):
             generate_framework_tests_and_coverage(
                 supported_actions_file, enums, actions_file, coverage_file,
                 custom_partitions, default_partition, output_dir, None)
-            print(capturedOutput.read())
             # The framework uses stdout to inform the developer of tests that
             # need to be added or removed. Since there should be no tests
             # changes required, nothing should be printed to stdout.
@@ -69,8 +68,10 @@ class GenerateFrameworkTestsAndCoverageTest(unittest.TestCase):
                         as coverage_file, \
                         open(expected_coverage_filename, "r", \
                         encoding="utf-8") as expected_file:
-                    self.assertListEqual(list(coverage_file.readlines()),
-                                         list(expected_file.readlines()))
+                    self.assertListEqual(
+                        list(expected_file.readlines()),
+                        list(coverage_file.readlines()),
+                        f"file: {expected_coverage_filename}")
 
 
 if __name__ == '__main__':

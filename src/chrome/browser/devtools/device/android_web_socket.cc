@@ -1,21 +1,21 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/rand_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/device/android_device_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "net/server/web_socket_encoder.h"
+#include "net/server/web_socket_parse_result.h"
 #include "net/socket/stream_socket.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
@@ -75,9 +75,7 @@ class AndroidDeviceManager::AndroidWebSocket::WebSocketImpl {
     DCHECK(thread_checker_.CalledOnValidThread());
     DCHECK(socket_);
 
-    scoped_refptr<net::IOBuffer> buffer =
-        base::MakeRefCounted<net::IOBuffer>(kBufferSize);
-
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
     if (!response_buffer_.empty())
       ProcessResponseBuffer(buffer);
     else
@@ -122,10 +120,10 @@ class AndroidDeviceManager::AndroidWebSocket::WebSocketImpl {
   void ProcessResponseBuffer(scoped_refptr<net::IOBuffer> io_buffer) {
     int bytes_consumed;
     std::string output;
-    WebSocket::ParseResult parse_result = encoder_->DecodeFrame(
-        response_buffer_, &bytes_consumed, &output);
+    net::WebSocketParseResult parse_result =
+        encoder_->DecodeFrame(response_buffer_, &bytes_consumed, &output);
 
-    while (parse_result == WebSocket::FRAME_OK_FINAL) {
+    while (parse_result == net::WebSocketParseResult::FRAME_OK_FINAL) {
       response_buffer_ = response_buffer_.substr(bytes_consumed);
       response_task_runner_->PostTask(
           FROM_HERE,
@@ -133,10 +131,11 @@ class AndroidDeviceManager::AndroidWebSocket::WebSocketImpl {
       parse_result = encoder_->DecodeFrame(
           response_buffer_, &bytes_consumed, &output);
     }
-    if (parse_result == WebSocket::FRAME_CLOSE)
+    if (parse_result == net::WebSocketParseResult::FRAME_CLOSE) {
       SendData(kCloseResponse);
+    }
 
-    if (parse_result == WebSocket::FRAME_ERROR) {
+    if (parse_result == net::WebSocketParseResult::FRAME_ERROR) {
       Disconnect();
       return;
     }
@@ -226,9 +225,9 @@ void AndroidDeviceManager::AndroidWebSocket::Connected(
     OnSocketClosed();
     return;
   }
-  socket_impl_.reset(new WebSocketImpl(base::ThreadTaskRunnerHandle::Get(),
-                                       weak_factory_.GetWeakPtr(), extensions,
-                                       body_head, std::move(socket)));
+  socket_impl_.reset(new WebSocketImpl(
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      weak_factory_.GetWeakPtr(), extensions, body_head, std::move(socket)));
   device_->task_runner_->PostTask(FROM_HERE,
                                   base::BindOnce(&WebSocketImpl::StartListening,
                                                  socket_impl_->GetWeakPtr()));

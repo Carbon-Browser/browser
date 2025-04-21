@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/synchronization/waitable_event.h"
 
@@ -109,8 +114,9 @@ TEST(WaitableEventTest, WaitManyShortcut) {
   ev[0]->Signal();
   EXPECT_EQ(WaitableEvent::WaitMany(ev, 5), 0u);
 
-  for (auto* i : ev)
+  for (auto* i : ev) {
     delete i;
+  }
 }
 
 TEST(WaitableEventTest, WaitManyLeftToRight) {
@@ -145,16 +151,15 @@ TEST(WaitableEventTest, WaitManyLeftToRight) {
     EXPECT_EQ(4u, WaitableEvent::WaitMany(ev, 5));
   } while (std::next_permutation(ev, ev + 5));
 
-  for (auto* i : ev)
+  for (auto* i : ev) {
     delete i;
+  }
 }
 
 class WaitableEventSignaler : public PlatformThread::Delegate {
  public:
   WaitableEventSignaler(TimeDelta delay, WaitableEvent* event)
-      : delay_(delay),
-        event_(event) {
-  }
+      : delay_(delay), event_(event) {}
 
   void ThreadMain() override {
     PlatformThread::Sleep(delay_);
@@ -173,11 +178,13 @@ TEST(WaitableEventTest, WaitAndDelete) {
       new WaitableEvent(WaitableEvent::ResetPolicy::AUTOMATIC,
                         WaitableEvent::InitialState::NOT_SIGNALED);
 
-  WaitableEventSignaler signaler(Milliseconds(10), ev);
   PlatformThreadHandle thread;
-  PlatformThread::Create(0, &signaler, &thread);
-
-  ev->Wait();
+  {
+    // Signaler can't outlive event.
+    WaitableEventSignaler signaler(Milliseconds(10), ev);
+    PlatformThread::Create(0, &signaler, &thread);
+    ev->Wait();
+  }
   delete ev;
 
   PlatformThread::Join(thread);
@@ -192,17 +199,20 @@ TEST(WaitableEventTest, WaitMany) {
                           WaitableEvent::InitialState::NOT_SIGNALED);
   }
 
-  WaitableEventSignaler signaler(Milliseconds(10), ev[2]);
   PlatformThreadHandle thread;
-  PlatformThread::Create(0, &signaler, &thread);
+  {
+    // Signaler can't outlive event.
+    WaitableEventSignaler signaler(Milliseconds(10), ev[2]);
+    PlatformThread::Create(0, &signaler, &thread);
+    size_t index = WaitableEvent::WaitMany(ev, 5);
+    EXPECT_EQ(2u, index);
+  }
 
-  size_t index = WaitableEvent::WaitMany(ev, 5);
-
-  for (auto* i : ev)
+  for (auto* i : ev) {
     delete i;
+  }
 
   PlatformThread::Join(thread);
-  EXPECT_EQ(2u, index);
 }
 
 // Tests that using TimeDelta::Max() on TimedWait() is not the same as passing
@@ -212,14 +222,16 @@ TEST(WaitableEventTest, TimedWait) {
       new WaitableEvent(WaitableEvent::ResetPolicy::AUTOMATIC,
                         WaitableEvent::InitialState::NOT_SIGNALED);
 
-  TimeDelta thread_delay = Milliseconds(10);
-  WaitableEventSignaler signaler(thread_delay, ev);
   PlatformThreadHandle thread;
-  TimeTicks start = TimeTicks::Now();
-  PlatformThread::Create(0, &signaler, &thread);
-
-  EXPECT_TRUE(ev->TimedWait(TimeDelta::Max()));
-  EXPECT_GE(TimeTicks::Now() - start, thread_delay);
+  TimeDelta thread_delay = Milliseconds(10);
+  {
+    // Signaler can't outlive event.
+    WaitableEventSignaler signaler(thread_delay, ev);
+    TimeTicks start = TimeTicks::Now();
+    PlatformThread::Create(0, &signaler, &thread);
+    EXPECT_TRUE(ev->TimedWait(TimeDelta::Max()));
+    EXPECT_GE(TimeTicks::Now() - start, thread_delay);
+  }
   delete ev;
 
   PlatformThread::Join(thread);

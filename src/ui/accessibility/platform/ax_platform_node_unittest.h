@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,41 +11,24 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_update.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
+#include "ui/accessibility/test_ax_tree_update.h"
+#include "ui/accessibility/test_single_ax_tree_manager.h"
 
 namespace ui {
 
-struct TestAXTreeUpdateNode;
-
-class AXPlatformNodeTest : public ::testing::Test, public TestAXTreeManager {
+class AXPlatformNodeTest : public ::testing::Test,
+                           public TestSingleAXTreeManager {
  public:
   AXPlatformNodeTest();
   ~AXPlatformNodeTest() override;
   AXPlatformNodeTest(const AXPlatformNodeTest&) = delete;
   AXPlatformNodeTest& operator=(const AXPlatformNodeTest&) = delete;
 
+  // `TestSingleAXTreeManager`
+  void SetTree(std::unique_ptr<AXTree> tree) override;
+
  protected:
   void TearDown() override;
-
-  // Initialize given an AXTreeUpdate.
-  void Init(const AXTreeUpdate& initial_state);
-
-  // Convenience functions to initialize directly from a few AXNodeData objects.
-  void Init(const AXNodeData& node1,
-            const AXNodeData& node2 = AXNodeData(),
-            const AXNodeData& node3 = AXNodeData(),
-            const AXNodeData& node4 = AXNodeData(),
-            const AXNodeData& node5 = AXNodeData(),
-            const AXNodeData& node6 = AXNodeData(),
-            const AXNodeData& node7 = AXNodeData(),
-            const AXNodeData& node8 = AXNodeData(),
-            const AXNodeData& node9 = AXNodeData(),
-            const AXNodeData& node10 = AXNodeData(),
-            const AXNodeData& node11 = AXNodeData(),
-            const AXNodeData& node12 = AXNodeData());
-
-  // Initialize given an AXTreeUpdate by given TestAXTreeUpdateNode instance.
-  AXTree* Init(const TestAXTreeUpdateNode& root);
 
   AXTreeUpdate BuildTextField();
   AXTreeUpdate BuildTextFieldWithSelectionRange(int32_t start, int32_t stop);

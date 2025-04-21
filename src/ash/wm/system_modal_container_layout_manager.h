@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
-#include "ash/shelf/shelf.h"
-#include "ash/shelf/shelf_observer.h"
 #include "ash/wm/wm_default_layout_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/aura/window_observer.h"
+#include "ui/display/display_observer.h"
 
 namespace gfx {
 class Rect;
@@ -29,7 +29,7 @@ class WindowDimmer;
 // when the container size changes.
 class ASH_EXPORT SystemModalContainerLayoutManager
     : public WmDefaultLayoutManager,
-      public ShelfObserver,
+      public display::DisplayObserver,
       public aura::WindowObserver,
       public KeyboardControllerObserver {
  public:
@@ -57,6 +57,7 @@ class ASH_EXPORT SystemModalContainerLayoutManager
   void OnWindowPropertyChanged(aura::Window* window,
                                const void* key,
                                intptr_t old) override;
+  void OnWindowDestroying(aura::Window* window) override;
 
   // Overridden from KeyboardControllerObserver:
   void OnKeyboardOccludedBoundsChanged(const gfx::Rect& new_bounds) override;
@@ -79,8 +80,9 @@ class ASH_EXPORT SystemModalContainerLayoutManager
   // Is the |window| modal background?
   static bool IsModalBackground(aura::Window* window);
 
-  // ShelfObserver:
-  void WillChangeVisibilityState(ShelfVisibilityState new_state) override;
+  // display::DisplayObserver:
+  void OnDisplayMetricsChanged(const display::Display& display,
+                               uint32_t changed_metrics) override;
 
  private:
   void AddModalWindow(aura::Window* window);
@@ -106,26 +108,32 @@ class ASH_EXPORT SystemModalContainerLayoutManager
   // Returns true if |bounds| is considered centered.
   bool IsBoundsCentered(const gfx::Rect& window_bounds) const;
 
+  // Called to stop observing `window`. It can be called when `window` is
+  // removed from the layout or `window` is about to be destroyed. `window` will
+  // also be removed from `windows_to_center_` and `modal_windows_` if it's in
+  // these lists.
+  void StopObservingWindow(aura::Window* window);
+
   aura::Window* modal_window() {
     return !modal_windows_.empty() ? modal_windows_.back() : nullptr;
   }
 
   // The container that owns the layout manager.
-  aura::Window* container_;
+  raw_ptr<aura::Window> container_;
 
   // WindowDimmer used to dim windows behind the modal window(s) being shown in
   // |container_|.
   std::unique_ptr<WindowDimmer> window_dimmer_;
 
   // A stack of modal windows. Only the topmost can receive events.
-  std::vector<aura::Window*> modal_windows_;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> modal_windows_;
 
   // Windows contained in this set are centered. Windows are automatically
   // added to this based on IsBoundsCentered().
-  std::set<const aura::Window*> windows_to_center_;
+  std::set<raw_ptr<const aura::Window, SetExperimental>> windows_to_center_;
 
-  // A shelf observer to update position of modals when work area is updated.
-  base::ScopedObservation<Shelf, ShelfObserver> shelf_observation_{this};
+  // An observer to update position of modals when display work area changes.
+  display::ScopedDisplayObserver display_observer_{this};
 };
 
 }  // namespace ash

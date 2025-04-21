@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_ANDROID_ANDROID_VIDEO_SURFACE_CHOOSER_IMPL_H_
 #define MEDIA_GPU_ANDROID_ANDROID_VIDEO_SURFACE_CHOOSER_IMPL_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/tick_clock.h"
@@ -37,7 +37,7 @@ class MEDIA_GPU_EXPORT AndroidVideoSurfaceChooserImpl
   // AndroidVideoSurfaceChooser
   void SetClientCallbacks(UseOverlayCB use_overlay_cb,
                           UseTextureOwnerCB use_texture_owner_cb) override;
-  void UpdateState(absl::optional<AndroidOverlayFactoryCB> new_factory,
+  void UpdateState(std::optional<AndroidOverlayFactoryCB> new_factory,
                    const State& new_state) override;
 
  private:

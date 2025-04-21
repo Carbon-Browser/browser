@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -21,6 +21,9 @@ mojom("mojom") {
 
   webui_module_path = "/"
 
+  # Blink requires legacy JS bindings.
+  generate_legacy_js_bindings = true
+
   # The blink variant of the Device Service mojom are depended on by the
   # blink platform target. All blink variant mojoms use WTF types, which are
   # part of the blink platform component. In order to avoid a dependency cycle,
@@ -32,6 +35,10 @@ mojom("mojom") {
   cpp_typemaps = [
     {
       types = [
+        {
+          mojom = "media_session.mojom.ChapterInformation"
+          cpp = "::media_session::ChapterInformation"
+        },
         {
           mojom = "media_session.mojom.MediaImage"
           cpp = "::media_session::MediaImage"

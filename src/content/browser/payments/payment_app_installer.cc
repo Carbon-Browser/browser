@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -70,7 +70,8 @@ class SelfDeleteInstaller
             browser_context->GetDefaultStoragePartition()
                 ->GetServiceWorkerContext()));
     service_worker_context_->FindReadyRegistrationForScope(
-        scope_, blink::StorageKey(url::Origin::Create(scope_)),
+        scope_,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_)),
         base::BindOnce(&SelfDeleteInstaller::OnFindReadyRegistrationForScope,
                        this));
   }
@@ -100,11 +101,13 @@ class SelfDeleteInstaller
       option.update_via_cache =
           blink::mojom::ServiceWorkerUpdateViaCache::kNone;
     }
-    // TODO(crbug.com/1199077): Because this function can be called in a 3p
+    // TODO(crbug.com/40177656): Because this function can be called in a 3p
     // context we will need to generate a full StorageKey (origin + top-level
     // site) once StorageKey is expanded with the top-level site.
     service_worker_context_->RegisterServiceWorker(
-        sw_url_, blink::StorageKey(url::Origin::Create(option.scope)), option,
+        sw_url_,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(option.scope)),
+        option,
         base::BindOnce(&SelfDeleteInstaller::OnRegisterServiceWorkerResult,
                        this));
   }

@@ -1,16 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_OPTIMIZATION_GUIDE_CORE_OPTIMIZATION_HINTS_COMPONENT_UPDATE_LISTENER_H_
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_OPTIMIZATION_HINTS_COMPONENT_UPDATE_LISTENER_H_
 
+#include <optional>
+
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "components/optimization_guide/core/hints_component_info.h"
 #include "components/optimization_guide/core/optimization_hints_component_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class OptimizationGuideServiceTest;
 
@@ -43,7 +44,7 @@ class OptimizationHintsComponentUpdateListener {
   void MaybeUpdateHintsComponent(const HintsComponentInfo& info);
 
   // Currently received HintsComponentInfo.
-  absl::optional<HintsComponentInfo> hints_component_info() {
+  std::optional<HintsComponentInfo> hints_component_info() {
     return hints_component_info_;
   }
 
@@ -65,7 +66,7 @@ class OptimizationHintsComponentUpdateListener {
 
   // The current HintsComponentInfo available to observers. This is unset until
   // the first time MaybeUpdateHintsComponent() is called.
-  absl::optional<HintsComponentInfo> hints_component_info_;
+  std::optional<HintsComponentInfo> hints_component_info_;
 };
 
 }  // namespace optimization_guide

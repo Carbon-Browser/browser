@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/input/touch_action.h"
+#include "components/input/child_frame_input_helper.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/surfaces/surface_id.h"
@@ -25,15 +26,21 @@
 
 namespace blink {
 struct FrameVisualProperties;
-class WebGestureEvent;
 }  // namespace blink
 
 namespace cc {
 class RenderFrameMetadata;
 }
 
+namespace input {
+class RenderWidgetHostViewInput;
+}  // namespace input
+
+namespace ui {
+class Cursor;
+}
+
 namespace viz {
-class SurfaceId;
 class SurfaceInfo;
 }  // namespace viz
 
@@ -42,7 +49,6 @@ class RenderFrameHostImpl;
 class RenderFrameProxyHost;
 class RenderWidgetHostViewBase;
 class RenderWidgetHostViewChildFrame;
-class WebCursor;
 
 // CrossProcessFrameConnector provides the platform view abstraction for
 // RenderWidgetHostViewChildFrame allowing RWHVChildFrame to remain ignorant
@@ -80,7 +86,8 @@ class WebCursor;
 // SiteInstance, A2 in the picture above. When a child frame navigates in a new
 // process, SetView() is called to update to the new view.
 //
-class CONTENT_EXPORT CrossProcessFrameConnector {
+class CONTENT_EXPORT CrossProcessFrameConnector
+    : public input::ChildFrameInputHelper::Delegate {
  public:
   // |frame_proxy_in_parent_renderer| corresponds to A2 in the example above.
   explicit CrossProcessFrameConnector(
@@ -90,13 +97,13 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   CrossProcessFrameConnector& operator=(const CrossProcessFrameConnector&) =
       delete;
 
-  virtual ~CrossProcessFrameConnector();
+  ~CrossProcessFrameConnector() override;
 
   // |view| corresponds to B2's RenderWidgetHostViewChildFrame in the example
   // above.
   RenderWidgetHostViewChildFrame* get_view_for_testing() { return view_; }
 
-  void SetView(RenderWidgetHostViewChildFrame* view);
+  void SetView(RenderWidgetHostViewChildFrame* view, bool allow_paint_holding);
 
   // Returns the parent RenderWidgetHostView or nullptr if it doesn't have one.
   virtual RenderWidgetHostViewBase* GetParentRenderWidgetHostView();
@@ -122,6 +129,12 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
       const blink::FrameVisualProperties& visual_properties,
       bool propagate = true);
 
+  // ChildFrameInputHelper::Delegate implementation.
+  input::RenderWidgetHostViewInput* GetParentViewInput() override;
+  input::RenderWidgetHostViewInput* GetRootViewInput() override;
+
+  double css_zoom_factor() const { return last_received_css_zoom_factor_; }
+
   // Return the size of the CompositorFrame to use in the child renderer.
   const gfx::Size& local_frame_size_in_pixels() const {
     return local_frame_size_in_pixels_;
@@ -135,14 +148,8 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Return the rect in DIP that the RenderWidgetHostViewChildFrame's content
   // will render into.
-  const gfx::Rect& screen_space_rect_in_dip() const {
-    return screen_space_rect_in_dip_;
-  }
-
-  // Return the rect in pixels that the RenderWidgetHostViewChildFrame's content
-  // will render into.
-  const gfx::Rect& screen_space_rect_in_pixels() const {
-    return screen_space_rect_in_pixels_;
+  const gfx::Rect& rect_in_parent_view_in_dip() const {
+    return rect_in_parent_view_in_dip_;
   }
 
   // Return the latest capture sequence number for this subframe.
@@ -150,56 +157,42 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Request that the platform change the mouse cursor when the mouse is
   // positioned over this view's content.
-  void UpdateCursor(const WebCursor& cursor);
+  void UpdateCursor(const ui::Cursor& cursor);
 
-  // Given a point in the current view's coordinate space, return the same
-  // point transformed into the coordinate space of the top-level view's
-  // coordinate space.
-  gfx::PointF TransformPointToRootCoordSpace(const gfx::PointF& point,
-                                             const viz::SurfaceId& surface_id);
-
-  // Transform a point into the coordinate space of the root
-  // RenderWidgetHostView, for the current view's coordinate space.
-  // Returns false if |target_view| and |view_| do not have the same root
-  // RenderWidgetHostView.
-  bool TransformPointToCoordSpaceForView(const gfx::PointF& point,
-                                         RenderWidgetHostViewBase* target_view,
-                                         const viz::SurfaceId& local_surface_id,
-                                         gfx::PointF* transformed_point);
-
-  // Pass acked touchpad pinch or double tap gesture events to the root view
-  // for processing.
-  void ForwardAckedTouchpadZoomEvent(
-      const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result);
-
-  // A gesture scroll sequence that is not consumed by a child must be bubbled
-  // to ancestors who may consume it.
-  // Returns false if the scroll event could not be bubbled. The caller must
-  // not attempt to bubble the rest of the scroll sequence in this case.
-  // Otherwise, returns true.
-  // Made virtual for test override.
-  [[nodiscard]] virtual bool BubbleScrollEvent(
-      const blink::WebGestureEvent& event);
+  // These values are written to logs. Do not renumber or delete existing items;
+  // add new entries to the end of the list.
+  enum class RootViewFocusState {
+    // RootView is NULL.
+    kNullView = 0,
+    // Root View is already focused.
+    kFocused = 1,
+    // Root View is not focused at TouchStart. Calls
+    // RenderWidgetHostViewChildFrame::Focus() to focus it.
+    kNotFocused = 2,
+    kMaxValue = kNotFocused
+  };
 
   // Determines whether the root RenderWidgetHostView (and thus the current
-  // page) has focus.
-  bool HasFocus();
+  // page) has focus. We need a tri-state enum as a return variable to
+  // differentiate between the cases where root view is NULL and when it's
+  // actually focused/unfocused. No behaviour change expected in focus handling.
+  RootViewFocusState HasFocus();
 
   // Cause the root RenderWidgetHostView to become focused.
   void FocusRootView();
 
-  // Locks the mouse, if |request_unadjusted_movement_| is true, try setting the
-  // unadjusted movement mode. Returns true if mouse is locked.
-  blink::mojom::PointerLockResult LockMouse(bool request_unadjusted_movement);
+  // Locks the mouse pointer, if |request_unadjusted_movement_| is true, try
+  // setting the unadjusted movement mode. Returns true if mouse pointer is
+  // locked.
+  blink::mojom::PointerLockResult LockPointer(bool request_unadjusted_movement);
 
-  // Change the current mouse lock to match the unadjusted movement option
+  // Change the current pointer lock to match the unadjusted movement option
   // given.
-  blink::mojom::PointerLockResult ChangeMouseLock(
+  blink::mojom::PointerLockResult ChangePointerLock(
       bool request_unadjusted_movement);
 
-  // Unlocks the mouse if the mouse is locked.
-  void UnlockMouse();
+  // Unlocks the mouse pointer if it is locked.
+  void UnlockPointer();
 
   // Returns the state of the frame's intersection with the top-level viewport.
   const blink::mojom::ViewportIntersectionState& intersection_state() const {
@@ -256,9 +249,6 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   bool has_size() const { return has_size_; }
 
-  void DidAckGestureEvent(const blink::WebGestureEvent& event,
-                          blink::mojom::InputEventResultState ack_result);
-
   // Called by RenderWidgetHostViewChildFrame to update the visibility of any
   // nested child RWHVCFs inside it.
   void SetVisibilityForChildViews(bool visible) const;
@@ -268,9 +258,9 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   // if not.
   void SetLocalFrameSize(const gfx::Size& local_frame_size);
 
-  // Called to resize the child renderer. |screen_space_rect| is in pixels if
-  // zoom-for-dsf is enabled, and in DIP if not.
-  void SetScreenSpaceRect(const gfx::Rect& screen_space_rect);
+  // Called to resize the child renderer. |rect_in_parent_view| is in physical
+  // pixels.
+  void SetRectInParentView(const gfx::Rect& rect_in_parent_view);
 
   void SetIsInert(bool inert);
 
@@ -289,7 +279,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
                                     bool display_locked);
   void UpdateViewportIntersection(
       const blink::mojom::ViewportIntersectionState& intersection_state,
-      const absl::optional<blink::FrameVisualProperties>& visual_properties);
+      const std::optional<blink::FrameVisualProperties>& visual_properties);
 
   // These enums back crashed frame histograms - see MaybeLogCrash() and
   // MaybeLogShownCrash() below.  Please do not modify or remove existing enum
@@ -318,7 +308,8 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   bool IsVisible();
 
   // This function is called by the RenderFrameHostDelegate to signal that it
-  // became visible.
+  // became visible. This is called after any navigations resulting from
+  // visibility changes have been queued (e.g. if needs-reload was set).
   void DelegateWasShown();
 
   // Handlers for messages received from the parent frame.
@@ -341,7 +332,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Resets the rect and the viz::LocalSurfaceId of the connector to ensure the
   // unguessable surface ID is not reused after a cross-process navigation.
-  void ResetScreenSpaceRect();
+  void ResetRectInParentView();
 
   // Logs the Stability.ChildFrameCrash.Visibility metric after checking that a
   // crash has indeed happened and checking that the crash has not already been
@@ -366,8 +357,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   display::ScreenInfos screen_infos_;
   gfx::Size local_frame_size_in_dip_;
   gfx::Size local_frame_size_in_pixels_;
-  gfx::Rect screen_space_rect_in_dip_;
-  gfx::Rect screen_space_rect_in_pixels_;
+  gfx::Rect rect_in_parent_view_in_dip_;
 
   viz::LocalSurfaceId local_surface_id_;
 
@@ -418,6 +408,9 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   // The last zoom level received from parent renderer, which is used to check
   // if a new surface is created in case of zoom level change.
   double last_received_zoom_level_ = 0.0;
+
+  // Represents CSS zoom applied to the embedding element in the parent.
+  double last_received_css_zoom_factor_ = 1.0;
 
   // Closure that will be run whenever a sad frame is shown and its visibility
   // metrics have been logged. Used for testing only.

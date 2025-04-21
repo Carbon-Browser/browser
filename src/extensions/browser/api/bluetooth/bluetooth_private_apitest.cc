@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include "base/test/gmock_callback_support.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "content/public/test/browser_test.h"
 #include "device/bluetooth/bluetooth_common.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
@@ -104,10 +106,10 @@ class BluetoothPrivateApiTest : public ExtensionApiTest {
   void DispatchPairingEvent(bt_private::PairingEventType pairing_event_type) {
     bt_private::PairingEvent pairing_event;
     pairing_event.pairing = pairing_event_type;
-    pairing_event.device.name = std::make_unique<std::string>(kDeviceName);
+    pairing_event.device.name = kDeviceName;
     pairing_event.device.address = mock_device_->GetAddress();
-    pairing_event.device.vendor_id_source = bt::VENDOR_ID_SOURCE_USB;
-    pairing_event.device.type = bt::DEVICE_TYPE_PHONE;
+    pairing_event.device.vendor_id_source = bt::VendorIdSource::kUsb;
+    pairing_event.device.type = bt::DeviceType::kPhone;
 
     auto args = bt_private::OnPairing::Create(pairing_event);
     std::unique_ptr<Event> event(new Event(events::BLUETOOTH_PRIVATE_ON_PAIRING,
@@ -118,19 +120,19 @@ class BluetoothPrivateApiTest : public ExtensionApiTest {
   }
 
   void DispatchAuthorizePairingEvent() {
-    DispatchPairingEvent(bt_private::PAIRING_EVENT_TYPE_REQUESTAUTHORIZATION);
+    DispatchPairingEvent(bt_private::PairingEventType::kRequestAuthorization);
   }
 
   void DispatchPincodePairingEvent() {
-    DispatchPairingEvent(bt_private::PAIRING_EVENT_TYPE_REQUESTPINCODE);
+    DispatchPairingEvent(bt_private::PairingEventType::kRequestPincode);
   }
 
   void DispatchPasskeyPairingEvent() {
-    DispatchPairingEvent(bt_private::PAIRING_EVENT_TYPE_REQUESTPASSKEY);
+    DispatchPairingEvent(bt_private::PairingEventType::kRequestPasskey);
   }
 
   void DispatchConfirmPasskeyPairingEvent() {
-    DispatchPairingEvent(bt_private::PAIRING_EVENT_TYPE_CONFIRMPASSKEY);
+    DispatchPairingEvent(bt_private::PairingEventType::kConfirmPasskey);
   }
 
   void StartScanOverride(
@@ -291,8 +293,8 @@ IN_PROC_BROWSER_TEST_F(BluetoothPrivateApiTest, Connect) {
       .Times(2)
       .WillOnce(Return(false))
       .WillOnce(Return(true));
-  EXPECT_CALL(*mock_device_, Connect_(_, _))
-      .WillOnce(RunOnceCallback<1>(/*error_code=*/absl::nullopt));
+  EXPECT_CALL(*mock_device_, Connect(_, _))
+      .WillOnce(RunOnceCallback<1>(/*error_code=*/std::nullopt));
   ASSERT_TRUE(RunExtensionTest("bluetooth_private/connect", {},
                                {.load_as_component = true}))
       << message_;
@@ -304,12 +306,12 @@ IN_PROC_BROWSER_TEST_F(BluetoothPrivateApiTest, Pair) {
                   _, device::BluetoothAdapter::PAIRING_DELEGATE_PRIORITY_HIGH));
   EXPECT_CALL(*mock_device_, ExpectingConfirmation())
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(*mock_device_, Pair_(_, _))
+  EXPECT_CALL(*mock_device_, Pair(_, _))
       .WillOnce(DoAll(
           WithoutArgs(Invoke(
               this,
               &BluetoothPrivateApiTest::DispatchConfirmPasskeyPairingEvent)),
-          RunOnceCallback<1>(/*error_code=*/absl::nullopt)));
+          RunOnceCallback<1>(/*error_code=*/std::nullopt)));
   ASSERT_TRUE(RunExtensionTest("bluetooth_private/pair", {},
                                {.load_as_component = true}))
       << message_;

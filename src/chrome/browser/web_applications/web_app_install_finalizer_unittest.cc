@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,28 @@
 
 #include <initializer_list>
 #include <memory>
+#include <optional>
+#include <tuple>
 #include <utility>
 
 #include "base/feature_list.h"
-#include "base/run_loop.h"
 #include "base/scoped_observation.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "base/traits_bag.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
+#include "chrome/browser/ui/web_applications/test/isolated_web_app_test_utils.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_integrity_block_data.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_storage_location.h"
+#include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
+#include "chrome/browser/web_applications/scope_extension_info.h"
 #include "chrome/browser/web_applications/test/fake_os_integration_manager.h"
+#include "chrome/browser/web_applications/test/fake_web_app_origin_association_manager.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
+#include "chrome/browser/web_applications/test/web_app_test_utils.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
@@ -29,25 +36,26 @@
 #include "chrome/browser/web_applications/web_app_install_utils.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
 #include "components/webapps/browser/install_result_code.h"
 #include "mojo/public/cpp/bindings/struct_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace web_app {
 
 namespace {
 
+using testing::_;
+
 struct FinalizeInstallResult {
-  AppId installed_app_id;
+  webapps::AppId installed_app_id;
   webapps::InstallResultCode code;
-  OsHooksErrors os_hooks_errors;
 };
 
 }  // namespace
@@ -58,8 +66,7 @@ class TestInstallManagerObserver : public WebAppInstallManagerObserver {
     install_manager_observation_.Observe(install_manager);
   }
 
-  void OnWebAppManifestUpdated(const AppId& app_id,
-                               base::StringPiece old_name) override {
+  void OnWebAppManifestUpdated(const webapps::AppId& app_id) override {
     web_app_manifest_updated_called_ = true;
   }
 
@@ -75,10 +82,7 @@ class TestInstallManagerObserver : public WebAppInstallManagerObserver {
 
 class WebAppInstallFinalizerUnitTest : public WebAppTest {
  public:
-  WebAppInstallFinalizerUnitTest() {
-    scoped_feature_list_.InitWithFeatures({blink::features::kFileHandlingAPI},
-                                          {});
-  }
+  WebAppInstallFinalizerUnitTest() = default;
   WebAppInstallFinalizerUnitTest(const WebAppInstallFinalizerUnitTest&) =
       delete;
   WebAppInstallFinalizerUnitTest& operator=(
@@ -89,13 +93,14 @@ class WebAppInstallFinalizerUnitTest : public WebAppTest {
     WebAppTest::SetUp();
 
     FakeWebAppProvider* provider = FakeWebAppProvider::Get(profile());
-    provider->SetDefaultFakeSubsystems();
     auto install_manager = std::make_unique<WebAppInstallManager>(profile());
     install_manager_observer_ =
         std::make_unique<TestInstallManagerObserver>(install_manager.get());
     provider->SetInstallManager(std::move(install_manager));
     provider->SetInstallFinalizer(
         std::make_unique<WebAppInstallFinalizer>(profile()));
+    provider->SetOriginAssociationManager(
+        std::make_unique<FakeWebAppOriginAssociationManager>());
 
     test::AwaitStartWebAppProviderAndSubsystems(profile());
   }
@@ -113,12 +118,10 @@ class WebAppInstallFinalizerUnitTest : public WebAppTest {
     base::RunLoop run_loop;
     finalizer().FinalizeInstall(
         info, options,
-        base::BindLambdaForTesting([&](const AppId& installed_app_id,
-                                       webapps::InstallResultCode code,
-                                       OsHooksErrors os_hooks_errors) {
+        base::BindLambdaForTesting([&](const webapps::AppId& installed_app_id,
+                                       webapps::InstallResultCode code) {
           result.installed_app_id = installed_app_id;
           result.code = code;
-          result.os_hooks_errors = os_hooks_errors;
           run_loop.Quit();
         }));
     run_loop.Run();
@@ -136,25 +139,18 @@ class WebAppInstallFinalizerUnitTest : public WebAppTest {
 
   WebAppProvider& provider() { return *WebAppProvider::GetForTest(profile()); }
   WebAppInstallFinalizer& finalizer() { return provider().install_finalizer(); }
-  WebAppRegistrar& registrar() { return provider().registrar(); }
+  WebAppRegistrar& registrar() { return provider().registrar_unsafe(); }
   WebAppInstallManager& install_manager() {
     return provider().install_manager();
   }
 
  protected:
-  FakeOsIntegrationManager& os_integration_manager() {
-    return static_cast<FakeOsIntegrationManager&>(
-        provider().os_integration_manager());
-  }
   std::unique_ptr<TestInstallManagerObserver> install_manager_observer_;
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(WebAppInstallFinalizerUnitTest, BasicInstallSucceeds) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::INTERNAL_DEFAULT);
@@ -163,17 +159,16 @@ TEST_F(WebAppInstallFinalizerUnitTest, BasicInstallSucceeds) {
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-  EXPECT_EQ(0u, os_integration_manager().num_register_run_on_os_login_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, ConcurrentInstallSucceeds) {
-  auto info1 = std::make_unique<WebAppInstallInfo>();
-  info1->start_url = GURL("https://foo1.example");
+  auto info1 = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo1.example"));
   info1->title = u"Foo1 Title";
 
-  auto info2 = std::make_unique<WebAppInstallInfo>();
-  info2->start_url = GURL("https://foo2.example");
+  auto info2 = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo2.example"));
   info2->title = u"Foo2 Title";
 
   WebAppInstallFinalizer::FinalizeOptions options(
@@ -187,14 +182,12 @@ TEST_F(WebAppInstallFinalizerUnitTest, ConcurrentInstallSucceeds) {
   {
     finalizer().FinalizeInstall(
         *info1, options,
-        base::BindLambdaForTesting([&](const AppId& installed_app_id,
-                                       webapps::InstallResultCode code,
-                                       OsHooksErrors os_hooks_errors) {
+        base::BindLambdaForTesting([&](const webapps::AppId& installed_app_id,
+                                       webapps::InstallResultCode code) {
           EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, code);
           EXPECT_EQ(
               installed_app_id,
-              GenerateAppId(/*manifest_id=*/absl::nullopt, info1->start_url));
-          EXPECT_TRUE(os_hooks_errors.none());
+              GenerateAppId(/*manifest_id=*/std::nullopt, info1->start_url()));
           callback1_called = true;
           if (callback2_called)
             run_loop.Quit();
@@ -205,14 +198,12 @@ TEST_F(WebAppInstallFinalizerUnitTest, ConcurrentInstallSucceeds) {
   {
     finalizer().FinalizeInstall(
         *info2, options,
-        base::BindLambdaForTesting([&](const AppId& installed_app_id,
-                                       webapps::InstallResultCode code,
-                                       OsHooksErrors os_hooks_errors) {
+        base::BindLambdaForTesting([&](const webapps::AppId& installed_app_id,
+                                       webapps::InstallResultCode code) {
           EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, code);
           EXPECT_EQ(
               installed_app_id,
-              GenerateAppId(/*manifest_id=*/absl::nullopt, info2->start_url));
-          EXPECT_TRUE(os_hooks_errors.none());
+              GenerateAppId(/*manifest_id=*/std::nullopt, info2->start_url()));
           callback2_called = true;
           if (callback1_called)
             run_loop.Quit();
@@ -226,39 +217,155 @@ TEST_F(WebAppInstallFinalizerUnitTest, ConcurrentInstallSucceeds) {
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, InstallStoresLatestWebAppInstallSource) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::INTERNAL_DEFAULT);
 
   FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
 
-  EXPECT_EQ(
-      webapps::WebappInstallSource::INTERNAL_DEFAULT,
-      *registrar().GetAppInstallSourceForMetrics(result.installed_app_id));
+  EXPECT_EQ(webapps::WebappInstallSource::INTERNAL_DEFAULT,
+            *registrar().GetLatestAppInstallSource(result.installed_app_id));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, OnWebAppManifestUpdatedTriggered) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::EXTERNAL_POLICY);
 
   FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
-  base::RunLoop runloop;
-  finalizer().FinalizeUpdate(
-      *info, base::BindLambdaForTesting(
-                 [&](const AppId& app_id, webapps::InstallResultCode code,
-                     OsHooksErrors os_hooks_errors) { runloop.Quit(); }));
-  runloop.Run();
+  base::test::TestFuture<const webapps::AppId&, webapps::InstallResultCode>
+      update_future;
+  finalizer().FinalizeUpdate(*info, update_future.GetCallback());
+  ASSERT_TRUE(update_future.Wait());
   EXPECT_TRUE(install_manager_observer_->web_app_manifest_updated_called());
 }
 
+TEST_F(WebAppInstallFinalizerUnitTest, ManifestUpdateOsIntegrationDefaultApps) {
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::EXTERNAL_DEFAULT);
+  options.install_state = proto::InstallState::INSTALLED_WITHOUT_OS_INTEGRATION;
+  options.add_to_applications_menu = false;
+  options.add_to_quick_launch_bar = false;
+  options.add_to_desktop = false;
+
+  FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+  EXPECT_EQ(proto::InstallState::INSTALLED_WITHOUT_OS_INTEGRATION,
+            registrar().GetInstallState(result.installed_app_id));
+
+  base::test::TestFuture<const webapps::AppId&, webapps::InstallResultCode>
+      update_future;
+  finalizer().FinalizeUpdate(*info, update_future.GetCallback());
+  ASSERT_TRUE(update_future.Wait());
+  EXPECT_TRUE(install_manager_observer_->web_app_manifest_updated_called());
+
+  // Post manifest update, OS integration is not triggered for default apps.
+  EXPECT_EQ(proto::InstallState::INSTALLED_WITHOUT_OS_INTEGRATION,
+            registrar().GetInstallState(result.installed_app_id));
+}
+
+TEST_F(WebAppInstallFinalizerUnitTest,
+       NonLocalThenLocalInstallSetsBothInstallTime) {
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::INTERNAL_DEFAULT);
+  options.install_state = proto::SUGGESTED_FROM_ANOTHER_DEVICE;
+  // OS Hooks must be disabled for non-locally installed app.
+  options.add_to_applications_menu = false;
+  options.add_to_desktop = false;
+  options.add_to_quick_launch_bar = false;
+
+  {
+    FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+    ASSERT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+    const WebApp* installed_app =
+        registrar().GetAppById(result.installed_app_id);
+
+    EXPECT_EQ(proto::SUGGESTED_FROM_ANOTHER_DEVICE,
+              installed_app->install_state());
+    EXPECT_TRUE(installed_app->first_install_time().is_null());
+    EXPECT_TRUE(installed_app->latest_install_time().is_null());
+  }
+
+  options.install_state = proto::INSTALLED_WITH_OS_INTEGRATION;
+
+  {
+    FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+    ASSERT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+    const WebApp* installed_app =
+        registrar().GetAppById(result.installed_app_id);
+
+    EXPECT_EQ(proto::INSTALLED_WITH_OS_INTEGRATION,
+              installed_app->install_state());
+    EXPECT_FALSE(installed_app->first_install_time().is_null());
+    EXPECT_FALSE(installed_app->latest_install_time().is_null());
+    EXPECT_EQ(installed_app->first_install_time(),
+              installed_app->latest_install_time());
+  }
+}
+
+TEST_F(WebAppInstallFinalizerUnitTest,
+       LatestInstallTimeAlwaysUpdatedIfReinstalled) {
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::INTERNAL_DEFAULT);
+  options.add_to_applications_menu = false;
+  options.add_to_desktop = false;
+  options.add_to_quick_launch_bar = false;
+  options.install_state = proto::InstallState::INSTALLED_WITH_OS_INTEGRATION;
+
+  base::Time old_first_install_time;
+  base::Time old_latest_install_time;
+
+  {
+    FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+    ASSERT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+    const WebApp* installed_app =
+        registrar().GetAppById(result.installed_app_id);
+
+    EXPECT_EQ(installed_app->install_state(),
+              proto::InstallState::INSTALLED_WITH_OS_INTEGRATION);
+    old_first_install_time = installed_app->first_install_time();
+    old_latest_install_time = installed_app->latest_install_time();
+    EXPECT_FALSE(old_first_install_time.is_null());
+    EXPECT_FALSE(old_latest_install_time.is_null());
+    EXPECT_EQ(old_first_install_time, old_latest_install_time);
+  }
+
+  // Try reinstalling the same app again, the latest install time should be
+  // updated but the first install time should still stay the same.
+  {
+    FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+    ASSERT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+    const WebApp* installed_app =
+        registrar().GetAppById(result.installed_app_id);
+
+    EXPECT_EQ(installed_app->install_state(),
+              proto::InstallState::INSTALLED_WITH_OS_INTEGRATION);
+    EXPECT_FALSE(installed_app->first_install_time().is_null());
+    EXPECT_FALSE(installed_app->latest_install_time().is_null());
+    EXPECT_EQ(installed_app->first_install_time(), old_first_install_time);
+    EXPECT_NE(installed_app->latest_install_time(), old_latest_install_time);
+  }
+}
+
 TEST_F(WebAppInstallFinalizerUnitTest, InstallNoDesktopShortcut) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
@@ -268,17 +375,12 @@ TEST_F(WebAppInstallFinalizerUnitTest, InstallNoDesktopShortcut) {
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-  EXPECT_EQ(1u, os_integration_manager().num_create_shortcuts_calls());
-  EXPECT_FALSE(os_integration_manager().did_add_to_desktop().value());
-  EXPECT_EQ(1u,
-            os_integration_manager().num_add_app_to_quick_launch_bar_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, InstallNoQuickLaunchBarShortcut) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
@@ -288,18 +390,13 @@ TEST_F(WebAppInstallFinalizerUnitTest, InstallNoQuickLaunchBarShortcut) {
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-  EXPECT_EQ(1u, os_integration_manager().num_create_shortcuts_calls());
-  EXPECT_TRUE(os_integration_manager().did_add_to_desktop().value());
-  EXPECT_EQ(0u,
-            os_integration_manager().num_add_app_to_quick_launch_bar_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest,
        InstallNoDesktopShortcutAndNoQuickLaunchBarShortcut) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
@@ -310,38 +407,28 @@ TEST_F(WebAppInstallFinalizerUnitTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-  EXPECT_EQ(1u, os_integration_manager().num_create_shortcuts_calls());
-  EXPECT_FALSE(os_integration_manager().did_add_to_desktop().value());
-  EXPECT_EQ(0u,
-            os_integration_manager().num_add_app_to_quick_launch_bar_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, InstallNoCreateOsShorcuts) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
   options.add_to_desktop = false;
   options.add_to_quick_launch_bar = false;
-
-  os_integration_manager().set_can_create_shortcuts(false);
-
   FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-  EXPECT_EQ(0u, os_integration_manager().num_create_shortcuts_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest,
        InstallOsHooksEnabledForUserInstalledApps) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
@@ -350,59 +437,42 @@ TEST_F(WebAppInstallFinalizerUnitTest,
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-  EXPECT_EQ(1u, os_integration_manager().num_create_file_handlers_calls());
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, InstallOsHooksDisabledForDefaultApps) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   WebAppInstallFinalizer::FinalizeOptions options(
       webapps::WebappInstallSource::EXTERNAL_DEFAULT);
+  options.install_state = proto::InstallState::INSTALLED_WITHOUT_OS_INTEGRATION;
+  options.add_to_applications_menu = false;
+  options.add_to_quick_launch_bar = false;
+  options.add_to_desktop = false;
 
   FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // OS integration is always enabled in ChromeOS
-  EXPECT_EQ(1u, os_integration_manager().num_create_file_handlers_calls());
-#else
-  EXPECT_EQ(0u, os_integration_manager().num_create_file_handlers_calls());
-#endif  // BUILDFLAG(IS_CHROMEOS)
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 
   // Update the app, adding a file handler.
   std::vector<blink::mojom::ManifestFileHandlerPtr> file_handlers;
   AddFileHandler(&file_handlers);
-  info->file_handlers =
-      CreateFileHandlersFromManifest(file_handlers, info->start_url);
+  PopulateFileHandlerInfoFromManifest(file_handlers, info->start_url(),
+                                      info.get());
 
-  base::RunLoop runloop;
-  finalizer().FinalizeUpdate(
-      *info, base::BindLambdaForTesting([&](const AppId& app_id,
-                                            webapps::InstallResultCode code,
-                                            OsHooksErrors os_hooks_errors) {
-        EXPECT_EQ(webapps::InstallResultCode::kSuccessAlreadyInstalled, code);
-        EXPECT_TRUE(os_hooks_errors.none());
-        runloop.Quit();
-      }));
-  runloop.Run();
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // OS integration is always enabled in ChromeOS
-  EXPECT_EQ(1u, os_integration_manager().num_update_file_handlers_calls());
-#else
-  EXPECT_EQ(0u, os_integration_manager().num_update_file_handlers_calls());
-#endif  // BUILDFLAG(IS_CHROMEOS)
+  base::test::TestFuture<const webapps::AppId&, webapps::InstallResultCode>
+      update_future;
+  finalizer().FinalizeUpdate(*info, update_future.GetCallback());
+  auto [app_id, code] = update_future.Take();
+  EXPECT_EQ(webapps::InstallResultCode::kSuccessAlreadyInstalled, code);
 }
 
 TEST_F(WebAppInstallFinalizerUnitTest, InstallUrlSetInWebAppDB) {
-  auto info = std::make_unique<WebAppInstallInfo>();
-  info->start_url = GURL("https://foo.example");
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
   info->title = u"Foo Title";
   info->install_url = GURL("https://foo.example/installer");
   WebAppInstallFinalizer::FinalizeOptions options(
@@ -412,7 +482,7 @@ TEST_F(WebAppInstallFinalizerUnitTest, InstallUrlSetInWebAppDB) {
 
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
   EXPECT_EQ(result.installed_app_id,
-            GenerateAppId(/*manifest_id=*/absl::nullopt, info->start_url));
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
 
   const WebApp* installed_app = registrar().GetAppById(result.installed_app_id);
   const WebApp::ExternalConfigMap& config_map =
@@ -422,6 +492,96 @@ TEST_F(WebAppInstallFinalizerUnitTest, InstallUrlSetInWebAppDB) {
   EXPECT_EQ(1u, it->second.install_urls.size());
   EXPECT_EQ(GURL("https://foo.example/installer"),
             *it->second.install_urls.begin());
+}
+
+TEST_F(WebAppInstallFinalizerUnitTest, IsolationDataSetInWebAppDB) {
+  base::Version version("1.2.3");
+
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  info->isolated_web_app_version = version;
+
+  const IsolatedWebAppStorageLocation location(
+      IwaStorageUnownedBundle{base::FilePath(FILE_PATH_LITERAL("p"))});
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::EXTERNAL_POLICY);
+
+  auto integrity_block_data =
+      IsolatedWebAppIntegrityBlockData(test::CreateSignatures());
+  options.iwa_options = WebAppInstallFinalizer::FinalizeOptions::IwaOptions(
+      location, integrity_block_data);
+
+  FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+  EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+  EXPECT_EQ(result.installed_app_id,
+            GenerateAppId(/*manifest_id=*/std::nullopt, info->start_url()));
+
+  const WebApp* installed_app = registrar().GetAppById(result.installed_app_id);
+  EXPECT_THAT(
+      installed_app,
+      test::IwaIs(_, test::IsolationDataIs(location, version,
+                                           /*controlled_frame_partiions=*/_,
+                                           /*pending_update_info=*/std::nullopt,
+                                           integrity_block_data)));
+}
+
+TEST_F(WebAppInstallFinalizerUnitTest, ValidateOriginAssociationsApproved) {
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::INTERNAL_DEFAULT);
+
+  ScopeExtensionInfo scope_extension =
+      ScopeExtensionInfo(url::Origin::Create(GURL("https://foo.example")),
+                         /*has_origin_wildcard=*/true);
+  CHECK(!scope_extension.origin.opaque());
+  info->scope_extensions = {scope_extension};
+
+  // Set data such that scope_extension will be returned in validated data.
+  std::map<ScopeExtensionInfo, ScopeExtensionInfo> data = {
+      {scope_extension, scope_extension}};
+  static_cast<FakeWebAppOriginAssociationManager&>(
+      provider().origin_association_manager())
+      .SetData(data);
+
+  FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+  EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+  const WebApp* installed_app = registrar().GetAppById(result.installed_app_id);
+  EXPECT_EQ(installed_app->install_state(),
+            proto::InstallState::INSTALLED_WITH_OS_INTEGRATION);
+  EXPECT_EQ(ScopeExtensions({scope_extension}),
+            installed_app->validated_scope_extensions());
+}
+
+TEST_F(WebAppInstallFinalizerUnitTest, ValidateOriginAssociationsDenied) {
+  auto info = WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://foo.example"));
+  info->title = u"Foo Title";
+  WebAppInstallFinalizer::FinalizeOptions options(
+      webapps::WebappInstallSource::INTERNAL_DEFAULT);
+
+  ScopeExtensionInfo scope_extension =
+      ScopeExtensionInfo(url::Origin::Create(GURL("https://foo.example")),
+                         /*has_origin_wildcard=*/true);
+  info->scope_extensions = {scope_extension};
+
+  // Set data such that scope_extension will not be returned in validated data.
+  std::map<ScopeExtensionInfo, ScopeExtensionInfo> data;
+  static_cast<FakeWebAppOriginAssociationManager&>(
+      provider().origin_association_manager())
+      .SetData(data);
+
+  FinalizeInstallResult result = AwaitFinalizeInstall(*info, options);
+
+  EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, result.code);
+  const WebApp* installed_app = registrar().GetAppById(result.installed_app_id);
+  EXPECT_EQ(installed_app->install_state(),
+            proto::InstallState::INSTALLED_WITH_OS_INTEGRATION);
+  EXPECT_EQ(ScopeExtensions(), installed_app->validated_scope_extensions());
 }
 
 }  // namespace web_app

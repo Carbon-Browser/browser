@@ -31,10 +31,12 @@
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
+#include "third_party/blink/renderer/core/dom/tree_ordered_list.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element_with_state.h"
-#include "third_party/blink/renderer/core/html/forms/html_options_collection.h"
+#include "third_party/blink/renderer/core/html/forms/html_selected_content_element.h"
 #include "third_party/blink/renderer/core/html/forms/option_list.h"
 #include "third_party/blink/renderer/core/html/forms/type_ahead.h"
+#include "third_party/blink/renderer/core/html/html_div_element.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -45,11 +47,18 @@ class ExceptionState;
 class HTMLHRElement;
 class HTMLOptGroupElement;
 class HTMLOptionElement;
-class LayoutUnit;
+class HTMLOptionsCollection;
 class PopupMenu;
 class SelectType;
 class V8UnionHTMLElementOrLong;
 class V8UnionHTMLOptGroupElementOrHTMLOptionElement;
+class HTMLSelectedContentElement;
+class SelectDescendantsObserver;
+
+enum class SelectPopupHideBehavior {
+  kNormal,
+  kNoEventsOrFocusing,
+};
 
 class CORE_EXPORT HTMLSelectElement final
     : public HTMLFormControlElementWithState,
@@ -57,6 +66,21 @@ class CORE_EXPORT HTMLSelectElement final
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  class SelectAutofillPreviewElement : public HTMLDivElement {
+   public:
+    SelectAutofillPreviewElement(Document& document, HTMLSelectElement* select);
+
+    const ComputedStyle* CustomStyleForLayoutObject(
+        const StyleRecalcContext& style_recalc_context) override;
+    Node::InsertionNotificationRequest InsertedInto(ContainerNode&) override;
+    void RemovedFrom(ContainerNode&) override;
+
+    void Trace(Visitor*) const override;
+
+   private:
+    Member<HTMLSelectElement> select_;
+  };
+
   explicit HTMLSelectElement(Document&);
   ~HTMLSelectElement() override;
 
@@ -82,6 +106,8 @@ class CORE_EXPORT HTMLSelectElement final
   // Do not call this in the MenuList mode.
   unsigned ListBoxSize() const;
   bool IsMultiple() const { return is_multiple_; }
+
+  void showPicker(ExceptionState&);
 
   bool UsesMenuList() const { return uses_menu_list_; }
 
@@ -115,6 +141,15 @@ class CORE_EXPORT HTMLSelectElement final
   HTMLOptionsCollection* options();
   HTMLCollection* selectedOptions();
 
+  // Returns the first selected OPTION, or nullptr.
+  HTMLOptionElement* SelectedOption() const;
+
+  // Returns true if any of the <select>'s descendants are disallowed
+  // interactive elements.
+  bool IsInDialogMode() const;
+  void IncreaseContentModelViolationCount();
+  void DecreaseContentModelViolationCount();
+
   // This is similar to |options| HTMLCollection.  But this is safe in
   // HTMLOptionElement::removedFrom() and insertedInto().
   // OptionList supports only forward iteration.
@@ -133,7 +168,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   void SetOption(unsigned index, HTMLOptionElement*, ExceptionState&);
 
-  Element* namedItem(const AtomicString& name);
+  HTMLOptionElement* namedItem(const AtomicString& name);
   HTMLOptionElement* item(unsigned index);
 
   bool CanSelectAll() const;
@@ -143,6 +178,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   // For use in the implementation of HTMLOptionElement.
   void OptionSelectionStateChanged(HTMLOptionElement*, bool option_is_selected);
+  void ElementInserted(Node& node);
   void OptionInserted(HTMLOptionElement&, bool option_is_selected);
   void OptionRemoved(HTMLOptionElement&);
   IndexedPropertySetterResult AnonymousIndexedSetter(unsigned,
@@ -158,7 +194,7 @@ class CORE_EXPORT HTMLSelectElement final
 
   // Helper functions for popup menu implementations.
   String ItemText(const Element&) const;
-  bool ItemIsDisplayNone(Element&) const;
+  bool ItemIsDisplayNone(Element&, bool ensure_style) const;
   // itemComputedStyle() returns nullptr only if the owner Document is not
   // active.  So, It returns a valid object when we open a popup.
   const ComputedStyle* ItemComputedStyle(Element&) const;
@@ -167,6 +203,7 @@ class CORE_EXPORT HTMLSelectElement final
   // Text starting offset in RTL.
   LayoutUnit ClientPaddingRight() const;
   void SelectOptionByPopup(int list_index);
+  void SelectOptionByPopup(HTMLOptionElement* option);
   void SelectMultipleOptionsByPopup(const Vector<int>& list_indices);
   // A popup is canceled when the popup was hidden without selecting an item.
   void PopupDidCancel();
@@ -180,7 +217,7 @@ class CORE_EXPORT HTMLSelectElement final
   // the menulist mode.
   const ComputedStyle* OptionStyle() const;
   void ShowPopup();
-  void HidePopup();
+  void HidePopup(SelectPopupHideBehavior);
   PopupMenu* PopupForTesting() const;
 
   void ResetTypeAheadSessionForTesting();
@@ -189,22 +226,86 @@ class CORE_EXPORT HTMLSelectElement final
 
   void Trace(Visitor*) const override;
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
 
-  // These should be called only if UsesMenuList().
+  // InnerElement and PopupRootAXObject should be called only if UsesMenuList().
+  // InnerElement is the in-page <div> element in the UA shadowroot for MenuList
+  // rendering. It is excluded from the layout tree if the author sets
+  // appearance:base-select on this <select> and provides their own child
+  // <button>.
   Element& InnerElement() const;
   AXObject* PopupRootAXObject() const;
 
   bool IsRichlyEditableForAccessibility() const override { return false; }
 
+  bool IsValidBuiltinCommand(HTMLElement& invoker,
+                             CommandEventType command) override;
+  bool HandleCommandInternal(HTMLElement& invoker,
+                             CommandEventType command) override;
+
+  // SlottedButton returns the first child <button> in the light dom tree. If
+  // this select is in a state where the <button> can't be rendered, such as a
+  // <select multiple>, then nullptr will be returned. Since this method is
+  // called during style calculation to compute internal pseudo-classes, the
+  // value of the appearance property is not checked.
+  HTMLButtonElement* SlottedButton() const;
+
+  // This method returns the UA popover element which is used for
+  // appearance:base-select. If this select is rendering in a mode which doesn't
+  // use the UA popover, such as appearance:auto/none or size=2/multiple, then
+  // this will return null.
+  HTMLElement* PopoverForAppearanceBase() const;
+
+  // Returns true if the provided element is some select element's
+  // PopoverForAppearanceBase.
+  static bool IsPopoverForAppearanceBase(const Node*);
+  static bool IsPopoverForAppearanceBase(const Element*);
+
+  // <select> supports appearance:base-select on both the main element and
+  // ::picker(select). When the main element has appearance:base-select,
+  // IsAppearanceBaseButton will return true and the in-page button part of the
+  // <select> will have base appearance and support rendering of the
+  // author-provided <button>. When both the element and its ::picker(select)
+  // has appearance:base-select, IsAppearanceBasePicker will return true and the
+  // popup will be a popover element. The SelectType must also support base
+  // appearance, which is currently only MenuListSelectType.
+  // IsAppearanceBaseButton should be used for code which is concerned with the
+  // in-page rendering of the button, and IsAppearanceBasePicker should be used
+  // for code which is concerned with the popup/popover and the other elements
+  // which are rendered in it.
+  // |no_update| prevents these methods from running an UpdateStyleAndLayoutTree
+  // which is needed in some cases to prevent nested style/layout recalc.
+  enum class StyleUpdateBehavior { kUpdateStyle, kDontUpdateStyle };
+  bool IsAppearanceBaseButton(StyleUpdateBehavior) const;
+  bool IsAppearanceBasePicker() const;
+
+  void SelectedContentElementInserted(
+      HTMLSelectedContentElement* selectedcontent);
+  void SelectedContentElementRemoved(
+      HTMLSelectedContentElement* selectedcontent);
+
+  // This will only return an element if IsAppearanceBaseButton(). The element
+  // is a popover inside the UA shadowroot which is used to show the user a
+  // preview of what is going to be autofilled.
+  SelectAutofillPreviewElement* GetAutofillPreviewElement() const;
+
+  // Getter and setter for the selectedcontentelement attribute
+  HTMLSelectedContentElement* selectedContentElement() const;
+  void setSelectedContentElement(HTMLSelectedContentElement*);
+
+  void DefaultEventHandler(Event&) override;
+
+  void UpdateAllSelectedcontents(HTMLOptionElement* selected_option);
+
  private:
-  const AtomicString& FormControlType() const override;
+  mojom::blink::FormControlType FormControlType() const override;
+  const AtomicString& FormControlTypeAsString() const override;
 
   bool MayTriggerVirtualKeyboard() const override;
 
   bool ShouldHaveFocusAppearance() const final;
 
-  void DispatchFocusEvent(
+  bool DispatchFocusEvent(
       Element* old_focused_element,
       mojom::blink::FocusType,
       InputDeviceCapabilities* source_capabilities) override;
@@ -226,23 +327,19 @@ class CORE_EXPORT HTMLSelectElement final
   void ParseAttribute(const AttributeModificationParams&) override;
   bool IsPresentationAttribute(const QualifiedName&) const override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   void DidRecalcStyle(const StyleRecalcChange) override;
   void AttachLayoutTree(AttachContext&) override;
-  void DetachLayoutTree(bool performing_reattach = false) override;
+  void DetachLayoutTree(bool performing_reattach) override;
   void AppendToFormData(FormData&) override;
   void DidAddUserAgentShadowRoot(ShadowRoot&) override;
   void ManuallyAssignSlots() override;
-
-  void DefaultEventHandler(Event&) override;
 
   void SetRecalcListItems();
   void RecalcListItems() const;
   enum ResetReason { kResetReasonSelectedOptionRemoved, kResetReasonOthers };
   void ResetToDefaultSelection(ResetReason = kResetReasonOthers);
   void TypeAheadFind(const KeyboardEvent&);
-  // Returns the first selected OPTION, or nullptr.
-  HTMLOptionElement* SelectedOption() const;
 
   bool IsOptionalFormControl() const override {
     return !IsRequiredFormControl();
@@ -292,6 +389,9 @@ class CORE_EXPORT HTMLSelectElement final
   void ChangeRendering();
   void UpdateUserAgentShadowTree(ShadowRoot& root);
 
+  // Helper to update the select descendants' mutation observer.
+  void UpdateMutationObserver();
+
   // list_items_ contains HTMLOptionElement, HTMLOptGroupElement, and
   // HTMLHRElement objects.
   mutable ListItems list_items_;
@@ -300,12 +400,16 @@ class CORE_EXPORT HTMLSelectElement final
   Member<HTMLSlotElement> option_slot_;
   Member<HTMLOptionElement> last_on_change_option_;
   Member<HTMLOptionElement> suggested_option_;
+  TreeOrderedList<HTMLSelectedContentElement> descendant_selectedcontents_;
   bool uses_menu_list_ = true;
   bool is_multiple_;
   mutable bool should_recalc_list_items_;
 
   Member<SelectType> select_type_;
   int index_to_select_on_cancel_;
+
+  Member<SelectDescendantsObserver> descendants_observer_;
+  unsigned content_model_violations_count_ = 0U;
 
   friend class ListBoxSelectType;
   friend class MenuListSelectType;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "ui/display/display_layout.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"
@@ -42,22 +43,26 @@ bool GetCalibratedTransform(
   // If the calibration was performed at a resolution that is 0.5 times the
   // current resolution, then the display points (x, y) for a given touch point
   // now represents a display point at (2 * x, 2 * y). This and other kinds of
-  // similar tranforms can be applied using |pre_calibration_tm|.
-  for (int row = 0; row < 4; row++)
-    pre_calibration_tm.TransformPoint(&touch_point_pairs[row].first);
+  // similar transforms can be applied using |pre_calibration_tm|.
+  for (int row = 0; row < 4; row++) {
+    touch_point_pairs[row].first =
+        pre_calibration_tm.MapPoint(touch_point_pairs[row].first);
+  }
 
   // Vector of the X-coordinate of display points corresponding to each of the
   // touch points.
-  SkV4 display_points_x = {static_cast<float>(touch_point_pairs[0].first.x()),
-                           static_cast<float>(touch_point_pairs[1].first.x()),
-                           static_cast<float>(touch_point_pairs[2].first.x()),
-                           static_cast<float>(touch_point_pairs[3].first.x())};
+  float display_points_x[4] = {
+      static_cast<float>(touch_point_pairs[0].first.x()),
+      static_cast<float>(touch_point_pairs[1].first.x()),
+      static_cast<float>(touch_point_pairs[2].first.x()),
+      static_cast<float>(touch_point_pairs[3].first.x())};
   // Vector of the Y-coordinate of display points corresponding to each of the
   // touch points.
-  SkV4 display_points_y = {static_cast<float>(touch_point_pairs[0].first.y()),
-                           static_cast<float>(touch_point_pairs[1].first.y()),
-                           static_cast<float>(touch_point_pairs[2].first.y()),
-                           static_cast<float>(touch_point_pairs[3].first.y())};
+  float display_points_y[4] = {
+      static_cast<float>(touch_point_pairs[0].first.y()),
+      static_cast<float>(touch_point_pairs[1].first.y()),
+      static_cast<float>(touch_point_pairs[2].first.y()),
+      static_cast<float>(touch_point_pairs[3].first.y())};
 
   // Initialize |touch_point_matrix|
   // If {(xt_1, yt_1), (xt_2, yt_2), (xt_3, yt_3)....} are a set of touch points
@@ -69,12 +74,10 @@ bool GetCalibratedTransform(
   // |xt_4  yt_4  1  0|
   gfx::Transform touch_point_matrix;
   for (int row = 0; row < 4; row++) {
-    touch_point_matrix.matrix().setRC(row, 0,
-                                      touch_point_pairs[row].second.x());
-    touch_point_matrix.matrix().setRC(row, 1,
-                                      touch_point_pairs[row].second.y());
-    touch_point_matrix.matrix().setRC(row, 2, 1);
-    touch_point_matrix.matrix().setRC(row, 3, 0);
+    touch_point_matrix.set_rc(row, 0, touch_point_pairs[row].second.x());
+    touch_point_matrix.set_rc(row, 1, touch_point_pairs[row].second.y());
+    touch_point_matrix.set_rc(row, 2, 1);
+    touch_point_matrix.set_rc(row, 3, 0);
   }
   gfx::Transform touch_point_matrix_transpose = touch_point_matrix;
   touch_point_matrix_transpose.Transpose();
@@ -82,37 +85,36 @@ bool GetCalibratedTransform(
   gfx::Transform product_matrix =
       touch_point_matrix_transpose * touch_point_matrix;
 
-  // Set (3, 3) = 1 so that |determinent| of the matrix is != 0 and the inverse
+  // Set (3, 3) = 1 so that |determinant| of the matrix is != 0 and the inverse
   // can be calculated.
-  product_matrix.matrix().setRC(3, 3, 1);
+  product_matrix.set_rc(3, 3, 1);
 
   gfx::Transform product_matrix_inverse;
 
-  // NOTE: If the determinent is zero then the inverse cannot be computed. The
+  // NOTE: If the determinant is zero then the inverse cannot be computed. The
   // only solution is to restart touch calibration and get new points from user.
   if (!product_matrix.GetInverse(&product_matrix_inverse)) {
-    NOTREACHED() << "Touch Calibration failed. Determinent is zero.";
-    return false;
+    NOTREACHED() << "Touch Calibration failed. Determinant is zero.";
   }
 
-  product_matrix_inverse.matrix().setRC(3, 3, 0);
+  product_matrix_inverse.set_rc(3, 3, 0);
 
   product_matrix = product_matrix_inverse * touch_point_matrix_transpose;
 
   // The result [A, B, C, 0] will be used to calibrate the x-coordinate of
   // touch input:
   //   x_new = x_old * A + y_old * B + C;
-  product_matrix.TransformVector4(&display_points_x);
+  product_matrix.TransformVector4(display_points_x);
   // The result [D, E, F, 0] will be used to calibrate the y-coordinate of
   // touch input:
   //   y_new = x_old * D + y_old * E + F;
-  product_matrix.TransformVector4(&display_points_y);
+  product_matrix.TransformVector4(display_points_y);
 
   // Create a transform matrix using the touch calibration data.
   // clang-format off
-  ctm->ConcatTransform(gfx::Transform(
-      display_points_x.x, display_points_x.y, 0, display_points_x.z,
-      display_points_y.x, display_points_y.y, 0, display_points_y.z,
+  ctm->PostConcat(gfx::Transform::RowMajor(
+      display_points_x[0], display_points_x[1], 0, display_points_x[2],
+      display_points_y[0], display_points_y[1], 0, display_points_y[2],
       0, 0, 1, 0,
       0, 0, 0, 1));
   // clang-format on
@@ -130,7 +132,7 @@ gfx::Transform GetUncalibratedTransform(const gfx::Transform& tm,
   // Take care of panel fitting only if supported. Panel fitting is emulated
   // in software mirroring mode (display != touch_display).
   // If panel fitting is enabled then the aspect ratio is preserved and the
-  // display is scaled acordingly. In this case blank regions would be present
+  // display is scaled accordingly. In this case blank regions would be present
   // in order to center the displayed area.
   if (display.is_aspect_preserving_scaling() ||
       display.id() != touch_display.id()) {
@@ -183,8 +185,8 @@ double TouchTransformController::GetTouchResolutionScale(
       touch_display.bounds_in_native().size().IsEmpty())
     return 1.0;
 
-  double display_area = touch_display.bounds_in_native().size().GetArea();
-  double touch_area = touch_device.size.GetArea();
+  double display_area = touch_display.bounds_in_native().size().Area64();
+  double touch_area = touch_device.size.Area64();
   double ratio = std::sqrt(display_area / touch_area);
 
   VLOG(2) << "Display size: "
@@ -232,7 +234,7 @@ gfx::Transform TouchTransformController::GetTouchTransform(
   // The resolution at which the touch calibration was performed.
   gfx::SizeF touch_calib_size(calibration_data.bounds);
 
-  // Any additional transfomration that needs to be applied to the display
+  // Any additional transformation that needs to be applied to the display
   // points, before we solve for the final transform.
   gfx::Transform pre_transform;
 
@@ -274,7 +276,7 @@ gfx::Transform TouchTransformController::GetTouchTransform(
                                     touch_native_size);
   }
 
-  stored_ctm.ConcatTransform(ctm);
+  stored_ctm.PostConcat(ctm);
   return stored_ctm;
 }
 
@@ -342,10 +344,10 @@ void TouchTransformController::UpdateTouchTransforms(
   }
 
   if (display_manager_->IsInMirrorMode()) {
-    std::size_t primary_display_id_index =
-        std::distance(display_id_list.begin(),
-                      std::find(display_id_list.begin(), display_id_list.end(),
-                                Screen::GetScreen()->GetPrimaryDisplay().id()));
+    std::size_t primary_display_id_index = std::distance(
+        display_id_list.begin(),
+        base::ranges::find(display_id_list,
+                           Screen::GetScreen()->GetPrimaryDisplay().id()));
 
     for (std::size_t index = 0; index < display_id_list.size(); index++) {
       // In extended but software mirroring mode, there is a WindowTreeHost

@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/components/network/network_type_pattern.h"
 
@@ -11,7 +16,7 @@
 #include "chromeos/ash/components/network/tether_constants.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -168,4 +173,4 @@ std::string NetworkTypePattern::ToDebugString() const {
 
 NetworkTypePattern::NetworkTypePattern(int pattern) : pattern_(pattern) {}
 
-}  // namespace chromeos
+}  // namespace ash

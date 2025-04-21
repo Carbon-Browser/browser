@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace blink {
 InterpolationValue CSSResolutionInterpolationType::MaybeConvertNeutral(
     const InterpolationValue&,
     ConversionCheckers&) const {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(0));
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(0));
 }
 
 InterpolationValue CSSResolutionInterpolationType::MaybeConvertValue(
@@ -22,7 +22,7 @@ InterpolationValue CSSResolutionInterpolationType::MaybeConvertValue(
   auto* primitive_value = DynamicTo<CSSPrimitiveValue>(value);
   if (!primitive_value || !primitive_value->IsResolution())
     return nullptr;
-  return InterpolationValue(std::make_unique<InterpolableNumber>(
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(
       primitive_value->ComputeDotsPerPixel()));
 }
 

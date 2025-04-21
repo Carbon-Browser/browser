@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/dom_distiller/content/browser/distiller_javascript_utils.h"
@@ -38,7 +36,6 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/dom_distiller_js/dom_distiller.pb.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/resource/resource_bundle.h"
 
 using content::ContentBrowserTest;
 using testing::ContainsRegex;
@@ -121,7 +118,7 @@ class DistillerPageWebContentsTest : public ContentBrowserTest {
                                     bool expect_new_web_contents,
                                     bool wait_for_document_loaded);
 
-  raw_ptr<DistillerPageWebContents> distiller_page_;
+  raw_ptr<DistillerPageWebContents, DanglingUntriaged> distiller_page_;
   std::unique_ptr<proto::DomDistillerResult> distiller_result_;
 };
 
@@ -403,7 +400,7 @@ IN_PROC_BROWSER_TEST_F(DistillerPageWebContentsTest,
   delete distiller_page_;
 
   // Make sure the test ends when it does not crash.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Seconds(2));
 
   run_loop.Run();

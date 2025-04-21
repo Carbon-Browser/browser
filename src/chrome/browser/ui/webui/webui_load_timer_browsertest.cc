@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class WebuiLoadTimerPrerenderTest : public WebuiLoadTimerTest {
                                 base::Unretained(this))) {}
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     ASSERT_TRUE(embedded_test_server()->Start());
     InProcessBrowserTest::SetUp();
   }

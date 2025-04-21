@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,9 +80,7 @@ std::pair<int64_t, int64_t> WriteReadData(int size,
     CHECK(f.IsValid());
 
     auto tick = base::TimeTicks::Now();
-    int written =
-        f.WriteAtCurrentPos(reinterpret_cast<const char*>(&data[0]), size);
-    CHECK_EQ(size, written);
+    CHECK(f.WriteAtCurrentPosAndCheck(data));
     auto tock = base::TimeTicks::Now();
 
     LOG(INFO) << DurationLogMessage("\tWrite", tick, tock, size);
@@ -132,9 +130,7 @@ void RandomlyReadWrite(std::atomic<bool>* should_stop,
     auto f = base::File(
         path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
     CHECK(f.IsValid());
-    int written =
-        f.WriteAtCurrentPos(reinterpret_cast<const char*>(&data[0]), kSize);
-    CHECK_EQ(kSize, written);
+    CHECK(f.WriteAtCurrentPosAndCheck(data));
   }
 
   auto dist = std::uniform_int_distribution<int>(0, kPages - 1);

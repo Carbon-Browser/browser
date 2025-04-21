@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,10 @@ BASE_EXPORT void InitAndroidTestPaths(const FilePath& test_data_dir);
 
 // Init the message loop for tests on Android.
 BASE_EXPORT void InitAndroidTestMessageLoop();
+
+// Counts how many times MessagePumpAndroid::DoNonDelayedLooperWork() has been
+// entered.
+BASE_EXPORT uint32_t GetAndroidNonDelayedWorkEnterCount();
 
 }  // namespace base
 

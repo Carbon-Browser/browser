@@ -1,16 +1,22 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/common/crash_keys.h"
 
 #include <deque>
+#include <string_view>
 
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/format_macros.h"
 #include "base/no_destructor.h"
-#include "base/strings/string_number_conversions.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -23,7 +29,6 @@
 #include "content/public/common/content_switches.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/common/chrome_switches.h"
 #include "components/crash/core/app/crash_switches.h"
 #include "gpu/command_buffer/service/gpu_switches.h"
 #include "ui/gl/gl_switches.h"
@@ -32,16 +37,28 @@
 namespace crash_keys {
 namespace {
 
-#if BUILDFLAG(IS_CHROMEOS)
+constexpr std::string_view kStringAnnotationsSwitch = "string-annotations";
 
 // A convenient wrapper around a crash key and its name.
+//
+// The CrashKey contract requires that CrashKeyStrings are never
+// moved, copied, or deleted (see
+// third_party/crashpad/crashpad/client/annotation.h); since this class holds
+// a CrashKeyString, it likewise cannot be moved, copied, or deleted.
 class CrashKeyWithName {
  public:
   explicit CrashKeyWithName(std::string name)
       : name_(std::move(name)), crash_key_(name_.c_str()) {}
+  CrashKeyWithName(const CrashKeyWithName&) = delete;
+  CrashKeyWithName& operator=(const CrashKeyWithName&) = delete;
+  CrashKeyWithName(CrashKeyWithName&&) = delete;
+  CrashKeyWithName& operator=(CrashKeyWithName&&) = delete;
+  ~CrashKeyWithName() = delete;
 
+  std::string_view Name() const { return name_; }
+  std::string_view Value() const { return crash_key_.value(); }
   void Clear() { crash_key_.Clear(); }
-  void Set(base::StringPiece value) { crash_key_.Set(value); }
+  void Set(std::string_view value) { crash_key_.Set(value); }
 
  private:
   std::string name_;
@@ -49,7 +66,7 @@ class CrashKeyWithName {
 };
 
 void SplitAndPopulateCrashKeys(std::deque<CrashKeyWithName>& crash_keys,
-                               base::StringPiece comma_separated_feature_list,
+                               std::string_view comma_separated_feature_list,
                                std::string crash_key_name_prefix) {
   // Crash keys are indestructable so we can not simply empty the deque.
   // Instead we must keep the previous crash keys alive and clear their values.
@@ -71,10 +88,10 @@ void SplitAndPopulateCrashKeys(std::deque<CrashKeyWithName>& crash_keys,
   }
 }
 
-// ChromeOS uses --enable-features and --disable-features more heavily than
-// most platforms, and the results don't fit into the default 64 bytes. So they
-// are separated out in a list of CrashKeys, one for each enabled or disabled
-// feature.
+// --enable-features and --disable-features often contain a long list not
+// fitting into 64 bytes, hiding important information when analysing crashes.
+// Therefore they are separated out in a list of CrashKeys, one for each enabled
+// or disabled feature.
 // They are also excluded from the default "switches".
 void HandleEnableDisableFeatures(const base::CommandLine& command_line) {
   static base::NoDestructor<std::deque<CrashKeyWithName>>
@@ -92,11 +109,11 @@ void HandleEnableDisableFeatures(const base::CommandLine& command_line) {
       command_line.GetSwitchValueASCII(switches::kDisableFeatures),
       "commandline-disabled-feature");
 }
-#endif
 
 // Return true if we DON'T want to upload this flag to the crash server.
 bool IsBoringSwitch(const std::string& flag) {
-  static const char* const kIgnoreSwitches[] = {
+  static const std::string_view kIgnoreSwitches[] = {
+    kStringAnnotationsSwitch,
     switches::kEnableLogging,
     switches::kFlagSwitchesBegin,
     switches::kFlagSwitchesEnd,
@@ -108,10 +125,8 @@ bool IsBoringSwitch(const std::string& flag) {
     // anyways. Should be switches::kGpuPreferences but we run into linking
     // errors on Windows if we try to use that directly.
     "gpu-preferences",
-#if BUILDFLAG(IS_CHROMEOS)
     switches::kEnableFeatures,
     switches::kDisableFeatures,
-#endif
 #if BUILDFLAG(IS_MAC)
     switches::kMetricsClientID,
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
@@ -130,6 +145,7 @@ bool IsBoringSwitch(const std::string& flag) {
     "guest-wallpaper-large",
     "guest-wallpaper-small",
     "enterprise-enable-forced-re-enrollment",
+    "enterprise-enable-forced-re-enrollment-on-flex",
     "enterprise-enrollment-initial-modulus",
     "enterprise-enrollment-modulus-limit",
     "login-profile",
@@ -155,42 +171,52 @@ bool IsBoringSwitch(const std::string& flag) {
   return false;
 }
 
-}  // namespace
-
-void SetCrashKeysFromCommandLine(const base::CommandLine& command_line) {
-#if BUILDFLAG(IS_CHROMEOS)
-  HandleEnableDisableFeatures(command_line);
-#endif
-  SetSwitchesFromCommandLine(command_line, &IsBoringSwitch);
+std::deque<CrashKeyWithName>& GetCommandLineStringAnnotations() {
+  static base::NoDestructor<std::deque<CrashKeyWithName>>
+      command_line_string_annotations;
+  return *command_line_string_annotations;
 }
 
-void SetActiveExtensions(const std::set<std::string>& extensions) {
-  static crash_reporter::CrashKeyString<4> num_extensions("num-extensions");
-  num_extensions.Set(base::NumberToString(extensions.size()));
-
-  using ExtensionIDKey = crash_reporter::CrashKeyString<64>;
-  static ExtensionIDKey extension_ids[] = {
-      {"extension-1", ExtensionIDKey::Tag::kArray},
-      {"extension-2", ExtensionIDKey::Tag::kArray},
-      {"extension-3", ExtensionIDKey::Tag::kArray},
-      {"extension-4", ExtensionIDKey::Tag::kArray},
-      {"extension-5", ExtensionIDKey::Tag::kArray},
-      {"extension-6", ExtensionIDKey::Tag::kArray},
-      {"extension-7", ExtensionIDKey::Tag::kArray},
-      {"extension-8", ExtensionIDKey::Tag::kArray},
-      {"extension-9", ExtensionIDKey::Tag::kArray},
-      {"extension-10", ExtensionIDKey::Tag::kArray},
-  };
-
-  auto it = extensions.begin();
-  for (size_t i = 0; i < std::size(extension_ids); ++i) {
-    if (it == extensions.end()) {
-      extension_ids[i].Clear();
-    } else {
-      extension_ids[i].Set(*it);
-      ++it;
-    }
+void SetStringAnnotations(const base::CommandLine& command_line) {
+  // This is only meant to be used to pass annotations from the browser to
+  // children and not to be used on the browser command line.
+  if (!command_line.HasSwitch(switches::kProcessType)) {
+    return;
   }
+  base::StringPairs annotations;
+  if (!base::SplitStringIntoKeyValuePairs(
+          command_line.GetSwitchValueASCII(kStringAnnotationsSwitch), '=', ',',
+          &annotations)) {
+    return;
+  }
+  for (const auto& [key, value] : annotations) {
+    GetCommandLineStringAnnotations().emplace_back(key).Set(value);
+  }
+}
+
+}  // namespace
+
+void AllocateCrashKeyInBrowserAndChildren(std::string_view key,
+                                          std::string_view value) {
+  GetCommandLineStringAnnotations().emplace_back(std::string(key)).Set(value);
+}
+
+void AppendStringAnnotationsCommandLineSwitch(base::CommandLine* command_line) {
+  std::string string_annotations;
+  for (const auto& crash_key : GetCommandLineStringAnnotations()) {
+    if (!string_annotations.empty()) {
+      string_annotations.push_back(',');
+    }
+    string_annotations = base::StrCat(
+        {string_annotations, crash_key.Name(), "=", crash_key.Value()});
+  }
+  command_line->AppendSwitchASCII(kStringAnnotationsSwitch, string_annotations);
+}
+
+void SetCrashKeysFromCommandLine(const base::CommandLine& command_line) {
+  SetStringAnnotations(command_line);
+  HandleEnableDisableFeatures(command_line);
+  SetSwitchesFromCommandLine(command_line, &IsBoringSwitch);
 }
 
 }  // namespace crash_keys

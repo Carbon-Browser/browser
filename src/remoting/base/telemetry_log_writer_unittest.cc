@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <array>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
@@ -130,8 +130,7 @@ class TelemetryLogWriterTest : public testing::Test {
   ProtobufHttpTestResponder test_responder_;
   TelemetryLogWriter log_writer_{
       std::make_unique<FakeOAuthTokenGetter>(OAuthTokenGetter::SUCCESS,
-                                             "dummy",
-                                             "dummy")};
+                                             OAuthTokenInfo())};
 
  private:
   // Incremented for each event to allow them to be distinguished.

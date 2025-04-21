@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,9 @@ void DlpContentTabHelper::DidFinishNavigation(
 }
 
 void DlpContentTabHelper::WebContentsDestroyed() {
-  DlpContentObserver::Get()->OnWebContentsDestroyed(web_contents());
+  if (DlpContentObserver::HasInstance()) {
+    DlpContentObserver::Get()->OnWebContentsDestroyed(web_contents());
+  }
 }
 
 void DlpContentTabHelper::OnVisibilityChanged(content::Visibility visibility) {
@@ -98,6 +100,12 @@ void DlpContentTabHelper::OnVisibilityChanged(content::Visibility visibility) {
   if (GetRestrictionSet().IsEmpty())
     return;
   DlpContentObserver::Get()->OnVisibilityChanged(web_contents());
+}
+
+std::vector<DlpContentTabHelper::RfhInfo> DlpContentTabHelper::GetFramesInfo()
+    const {
+  return std::vector<RfhInfo>{confidential_frames_.begin(),
+                              confidential_frames_.end()};
 }
 
 DlpContentTabHelper::DlpContentTabHelper(content::WebContents* web_contents)

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -2651,13 +2651,6 @@ void MemoryBarrierByRegion(GLbitfield barriers) {
   }
 }
 
-void SwapBuffers(GLuint64 swap_id, GLbitfield flags) {
-  gles2::cmds::SwapBuffers* c = GetCmdSpace<gles2::cmds::SwapBuffers>();
-  if (c) {
-    c->Init(swap_id, flags);
-  }
-}
-
 void GetMaxValueInBufferCHROMIUM(GLuint buffer_id,
                                  GLsizei count,
                                  GLenum type,
@@ -2708,20 +2701,6 @@ void FlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr size) {
       GetCmdSpace<gles2::cmds::FlushMappedBufferRange>();
   if (c) {
     c->Init(target, offset, size);
-  }
-}
-
-void ResizeCHROMIUM(GLint width,
-                    GLint height,
-                    GLfloat scale_factor,
-                    GLboolean alpha,
-                    GLuint shm_id,
-                    GLuint shm_offset,
-                    GLsizei color_space_size) {
-  gles2::cmds::ResizeCHROMIUM* c = GetCmdSpace<gles2::cmds::ResizeCHROMIUM>();
-  if (c) {
-    c->Init(width, height, scale_factor, alpha, shm_id, shm_offset,
-            color_space_size);
   }
 }
 
@@ -2890,29 +2869,6 @@ void VertexAttribDivisorANGLE(GLuint index, GLuint divisor) {
   }
 }
 
-void ProduceTextureDirectCHROMIUMImmediate(GLuint texture, GLbyte* mailbox) {
-  const uint32_t size =
-      gles2::cmds::ProduceTextureDirectCHROMIUMImmediate::ComputeSize();
-  gles2::cmds::ProduceTextureDirectCHROMIUMImmediate* c =
-      GetImmediateCmdSpaceTotalSize<
-          gles2::cmds::ProduceTextureDirectCHROMIUMImmediate>(size);
-  if (c) {
-    c->Init(texture, mailbox);
-  }
-}
-
-void CreateAndConsumeTextureINTERNALImmediate(GLuint texture,
-                                              const GLbyte* mailbox) {
-  const uint32_t size =
-      gles2::cmds::CreateAndConsumeTextureINTERNALImmediate::ComputeSize();
-  gles2::cmds::CreateAndConsumeTextureINTERNALImmediate* c =
-      GetImmediateCmdSpaceTotalSize<
-          gles2::cmds::CreateAndConsumeTextureINTERNALImmediate>(size);
-  if (c) {
-    c->Init(texture, mailbox);
-  }
-}
-
 void BindUniformLocationCHROMIUMBucket(GLuint program,
                                        GLint location,
                                        uint32_t name_bucket_id) {
@@ -2970,14 +2926,6 @@ void DrawBuffersEXTImmediate(GLsizei count, const GLenum* bufs) {
   }
 }
 
-void DiscardBackbufferCHROMIUM() {
-  gles2::cmds::DiscardBackbufferCHROMIUM* c =
-      GetCmdSpace<gles2::cmds::DiscardBackbufferCHROMIUM>();
-  if (c) {
-    c->Init();
-  }
-}
-
 void FlushDriverCachesCHROMIUM() {
   gles2::cmds::FlushDriverCachesCHROMIUM* c =
       GetCmdSpace<gles2::cmds::FlushDriverCachesCHROMIUM>();
@@ -2999,14 +2947,6 @@ void ContextVisibilityHintCHROMIUM(GLboolean visibility) {
       GetCmdSpace<gles2::cmds::ContextVisibilityHintCHROMIUM>();
   if (c) {
     c->Init(visibility);
-  }
-}
-
-void CoverageModulationCHROMIUM(GLenum components) {
-  gles2::cmds::CoverageModulationCHROMIUM* c =
-      GetCmdSpace<gles2::cmds::CoverageModulationCHROMIUM>();
-  if (c) {
-    c->Init(components);
   }
 }
 
@@ -3145,7 +3085,6 @@ void MaxShaderCompilerThreadsKHR(GLuint count) {
 }
 
 void CreateAndTexStorage2DSharedImageINTERNALImmediate(GLuint texture,
-                                                       GLenum internalformat,
                                                        const GLbyte* mailbox) {
   const uint32_t size = gles2::cmds::
       CreateAndTexStorage2DSharedImageINTERNALImmediate::ComputeSize();
@@ -3153,7 +3092,7 @@ void CreateAndTexStorage2DSharedImageINTERNALImmediate(GLuint texture,
       GetImmediateCmdSpaceTotalSize<
           gles2::cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>(size);
   if (c) {
-    c->Init(texture, internalformat, mailbox);
+    c->Init(texture, mailbox);
   }
 }
 
@@ -3170,6 +3109,92 @@ void EndSharedImageAccessDirectCHROMIUM(GLuint texture) {
       GetCmdSpace<gles2::cmds::EndSharedImageAccessDirectCHROMIUM>();
   if (c) {
     c->Init(texture);
+  }
+}
+
+void CopySharedImageINTERNALImmediate(GLint xoffset,
+                                      GLint yoffset,
+                                      GLint x,
+                                      GLint y,
+                                      GLsizei width,
+                                      GLsizei height,
+                                      const GLbyte* mailboxes) {
+  const uint32_t size =
+      gles2::cmds::CopySharedImageINTERNALImmediate::ComputeSize();
+  gles2::cmds::CopySharedImageINTERNALImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::CopySharedImageINTERNALImmediate>(size);
+  if (c) {
+    c->Init(xoffset, yoffset, x, y, width, height, mailboxes);
+  }
+}
+
+void CopySharedImageToTextureINTERNALImmediate(GLuint texture,
+                                               GLenum target,
+                                               GLuint internal_format,
+                                               GLenum type,
+                                               GLint src_x,
+                                               GLint src_y,
+                                               GLsizei width,
+                                               GLsizei height,
+                                               GLboolean flip_y,
+                                               const GLbyte* src_mailbox) {
+  const uint32_t size =
+      gles2::cmds::CopySharedImageToTextureINTERNALImmediate::ComputeSize();
+  gles2::cmds::CopySharedImageToTextureINTERNALImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::CopySharedImageToTextureINTERNALImmediate>(size);
+  if (c) {
+    c->Init(texture, target, internal_format, type, src_x, src_y, width, height,
+            flip_y, src_mailbox);
+  }
+}
+
+void ReadbackARGBImagePixelsINTERNAL(GLint src_x,
+                                     GLint src_y,
+                                     GLint plane_index,
+                                     GLuint dst_width,
+                                     GLuint dst_height,
+                                     GLuint row_bytes,
+                                     GLuint dst_sk_color_type,
+                                     GLuint dst_sk_alpha_type,
+                                     GLint shm_id,
+                                     GLuint shm_offset,
+                                     GLuint color_space_offset,
+                                     GLuint pixels_offset,
+                                     GLuint mailbox_offset) {
+  gles2::cmds::ReadbackARGBImagePixelsINTERNAL* c =
+      GetCmdSpace<gles2::cmds::ReadbackARGBImagePixelsINTERNAL>();
+  if (c) {
+    c->Init(src_x, src_y, plane_index, dst_width, dst_height, row_bytes,
+            dst_sk_color_type, dst_sk_alpha_type, shm_id, shm_offset,
+            color_space_offset, pixels_offset, mailbox_offset);
+  }
+}
+
+void WritePixelsYUVINTERNAL(GLuint src_width,
+                            GLuint src_height,
+                            GLuint src_row_bytes_plane1,
+                            GLuint src_row_bytes_plane2,
+                            GLuint src_row_bytes_plane3,
+                            GLuint src_row_bytes_plane4,
+                            GLuint src_yuv_plane_config,
+                            GLuint src_yuv_subsampling,
+                            GLuint src_yuv_datatype,
+                            GLint shm_id,
+                            GLuint shm_offset,
+                            GLuint pixels_offset_plane1,
+                            GLuint pixels_offset_plane2,
+                            GLuint pixels_offset_plane3,
+                            GLuint pixels_offset_plane4) {
+  gles2::cmds::WritePixelsYUVINTERNAL* c =
+      GetCmdSpace<gles2::cmds::WritePixelsYUVINTERNAL>();
+  if (c) {
+    c->Init(src_width, src_height, src_row_bytes_plane1, src_row_bytes_plane2,
+            src_row_bytes_plane3, src_row_bytes_plane4, src_yuv_plane_config,
+            src_yuv_subsampling, src_yuv_datatype, shm_id, shm_offset,
+            pixels_offset_plane1, pixels_offset_plane2, pixels_offset_plane3,
+            pixels_offset_plane4);
   }
 }
 
@@ -3240,6 +3265,164 @@ void IsEnablediOES(GLenum target,
   gles2::cmds::IsEnablediOES* c = GetCmdSpace<gles2::cmds::IsEnablediOES>();
   if (c) {
     c->Init(target, index, result_shm_id, result_shm_offset);
+  }
+}
+
+void ProvokingVertexANGLE(GLenum provokeMode) {
+  gles2::cmds::ProvokingVertexANGLE* c =
+      GetCmdSpace<gles2::cmds::ProvokingVertexANGLE>();
+  if (c) {
+    c->Init(provokeMode);
+  }
+}
+
+void FramebufferMemorylessPixelLocalStorageANGLE(GLint plane,
+                                                 GLenum internalformat) {
+  gles2::cmds::FramebufferMemorylessPixelLocalStorageANGLE* c =
+      GetCmdSpace<gles2::cmds::FramebufferMemorylessPixelLocalStorageANGLE>();
+  if (c) {
+    c->Init(plane, internalformat);
+  }
+}
+
+void FramebufferTexturePixelLocalStorageANGLE(GLint plane,
+                                              GLuint backingtexture,
+                                              GLint level,
+                                              GLint layer) {
+  gles2::cmds::FramebufferTexturePixelLocalStorageANGLE* c =
+      GetCmdSpace<gles2::cmds::FramebufferTexturePixelLocalStorageANGLE>();
+  if (c) {
+    c->Init(plane, backingtexture, level, layer);
+  }
+}
+
+void FramebufferPixelLocalClearValuefvANGLEImmediate(GLint plane,
+                                                     const GLfloat* value) {
+  const uint32_t size = gles2::cmds::
+      FramebufferPixelLocalClearValuefvANGLEImmediate::ComputeSize();
+  gles2::cmds::FramebufferPixelLocalClearValuefvANGLEImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::FramebufferPixelLocalClearValuefvANGLEImmediate>(size);
+  if (c) {
+    c->Init(plane, value);
+  }
+}
+
+void FramebufferPixelLocalClearValueivANGLEImmediate(GLint plane,
+                                                     const GLint* value) {
+  const uint32_t size = gles2::cmds::
+      FramebufferPixelLocalClearValueivANGLEImmediate::ComputeSize();
+  gles2::cmds::FramebufferPixelLocalClearValueivANGLEImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::FramebufferPixelLocalClearValueivANGLEImmediate>(size);
+  if (c) {
+    c->Init(plane, value);
+  }
+}
+
+void FramebufferPixelLocalClearValueuivANGLEImmediate(GLint plane,
+                                                      const GLuint* value) {
+  const uint32_t size = gles2::cmds::
+      FramebufferPixelLocalClearValueuivANGLEImmediate::ComputeSize();
+  gles2::cmds::FramebufferPixelLocalClearValueuivANGLEImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::FramebufferPixelLocalClearValueuivANGLEImmediate>(size);
+  if (c) {
+    c->Init(plane, value);
+  }
+}
+
+void BeginPixelLocalStorageANGLEImmediate(GLsizei count,
+                                          const GLenum* loadops) {
+  const uint32_t size =
+      gles2::cmds::BeginPixelLocalStorageANGLEImmediate::ComputeSize(count);
+  gles2::cmds::BeginPixelLocalStorageANGLEImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::BeginPixelLocalStorageANGLEImmediate>(size);
+  if (c) {
+    c->Init(count, loadops);
+  }
+}
+
+void EndPixelLocalStorageANGLEImmediate(GLsizei count, const GLenum* storeops) {
+  const uint32_t size =
+      gles2::cmds::EndPixelLocalStorageANGLEImmediate::ComputeSize(count);
+  gles2::cmds::EndPixelLocalStorageANGLEImmediate* c =
+      GetImmediateCmdSpaceTotalSize<
+          gles2::cmds::EndPixelLocalStorageANGLEImmediate>(size);
+  if (c) {
+    c->Init(count, storeops);
+  }
+}
+
+void PixelLocalStorageBarrierANGLE() {
+  gles2::cmds::PixelLocalStorageBarrierANGLE* c =
+      GetCmdSpace<gles2::cmds::PixelLocalStorageBarrierANGLE>();
+  if (c) {
+    c->Init();
+  }
+}
+
+void FramebufferPixelLocalStorageInterruptANGLE() {
+  gles2::cmds::FramebufferPixelLocalStorageInterruptANGLE* c =
+      GetCmdSpace<gles2::cmds::FramebufferPixelLocalStorageInterruptANGLE>();
+  if (c) {
+    c->Init();
+  }
+}
+
+void FramebufferPixelLocalStorageRestoreANGLE() {
+  gles2::cmds::FramebufferPixelLocalStorageRestoreANGLE* c =
+      GetCmdSpace<gles2::cmds::FramebufferPixelLocalStorageRestoreANGLE>();
+  if (c) {
+    c->Init();
+  }
+}
+
+void GetFramebufferPixelLocalStorageParameterfvANGLE(
+    GLint plane,
+    GLenum pname,
+    uint32_t params_shm_id,
+    uint32_t params_shm_offset) {
+  gles2::cmds::GetFramebufferPixelLocalStorageParameterfvANGLE* c = GetCmdSpace<
+      gles2::cmds::GetFramebufferPixelLocalStorageParameterfvANGLE>();
+  if (c) {
+    c->Init(plane, pname, params_shm_id, params_shm_offset);
+  }
+}
+
+void GetFramebufferPixelLocalStorageParameterivANGLE(
+    GLint plane,
+    GLenum pname,
+    uint32_t params_shm_id,
+    uint32_t params_shm_offset) {
+  gles2::cmds::GetFramebufferPixelLocalStorageParameterivANGLE* c = GetCmdSpace<
+      gles2::cmds::GetFramebufferPixelLocalStorageParameterivANGLE>();
+  if (c) {
+    c->Init(plane, pname, params_shm_id, params_shm_offset);
+  }
+}
+
+void ClipControlEXT(GLenum origin, GLenum depth) {
+  gles2::cmds::ClipControlEXT* c = GetCmdSpace<gles2::cmds::ClipControlEXT>();
+  if (c) {
+    c->Init(origin, depth);
+  }
+}
+
+void PolygonModeANGLE(GLenum face, GLenum mode) {
+  gles2::cmds::PolygonModeANGLE* c =
+      GetCmdSpace<gles2::cmds::PolygonModeANGLE>();
+  if (c) {
+    c->Init(face, mode);
+  }
+}
+
+void PolygonOffsetClampEXT(GLfloat factor, GLfloat units, GLfloat clamp) {
+  gles2::cmds::PolygonOffsetClampEXT* c =
+      GetCmdSpace<gles2::cmds::PolygonOffsetClampEXT>();
+  if (c) {
+    c->Init(factor, units, clamp);
   }
 }
 

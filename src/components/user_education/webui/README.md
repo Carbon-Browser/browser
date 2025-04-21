@@ -3,10 +3,10 @@
 
 [Frontend documentation can be found here.](/ui/webui/resources/cr_components/help_bubble/README.md)
 
-Allows a WebUI page to support Polymer-based, blue material design ("Navi")
-[HelpBubble](../common/help_bubble.h)s that can be shown in the course of a
-[Feature Promo](../common/feature_promo_controller.h) or
-[Tutorial](../common/tutorial.h).
+Allows a WebUI page to support Polymer/Lit-based, blue material design ("Navi")
+[HelpBubble](../common/help_bubble/help_bubble.h)s that can be shown in the course of a
+[Feature Promo](../common/feature_promo/feature_promo_controller.h) or
+[Tutorial](../common/tutorial/tutorial.h).
 
 This is done by associating HTML elements in a component with an
 [ElementIdentifier](/ui/base/interaction/element_identifier.h) so they can be
@@ -28,7 +28,16 @@ not just for the purpose of anchoring a help bubble.
 
  * Implement the `CreateHelpBubbleHandler()` method to manufacture a
    [HelpBubbleHandler](./help_bubble_handler.h).
-   
+
+   * Create a new `HelpBubbleHandler` and store it in a `unique_ptr` on each
+     call, discarding any previous handler.
+
+     * `CreateHelpBubbleHandler()` should be called exactly once by a WebUI per
+       reload.
+
+     * **Never expose a raw pointer to a `HelpBubbleHandler`** as a reload (or a
+       spurious call from a compromised WebUI) could trigger a discard.
+
    * Assign one or more unique `identifiers` that will correspond to the
      element(s) your bubble(s) will attach to. Each will be mapped to an HTML
      element by your WebUI component.

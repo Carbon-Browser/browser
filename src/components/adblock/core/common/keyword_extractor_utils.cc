@@ -20,7 +20,7 @@
 namespace adblock {
 namespace utils {
 
-bool IsBadKeyword(const std::string& value) {
+bool IsBadKeyword(std::string_view value) {
   return value == "http" || value == "https" || value == "com" ||
          value == "js" || value.size() < 2;
 }

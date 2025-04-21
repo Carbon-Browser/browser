@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,30 +8,28 @@ source_set("compute_pressure") {
   visibility = [ "//services/device:*" ]
 
   sources = [
-    "cpu_probe.cc",
-    "cpu_probe.h",
+    "cpu_probe_manager.cc",
+    "cpu_probe_manager.h",
     "pressure_manager_impl.cc",
     "pressure_manager_impl.h",
-    "pressure_sample.h",
-    "pressure_sampler.cc",
-    "pressure_sampler.h",
+    "probes_manager.cc",
+    "probes_manager.h",
+    "virtual_cpu_probe_manager.cc",
+    "virtual_cpu_probe_manager.h",
+    "virtual_probes_manager.cc",
+    "virtual_probes_manager.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [ "//services/device/public/mojom" ]
 
   deps = [
     "//base",
+    "//components/system_cpu:system_cpu",
     "//mojo/public/cpp/bindings",
+    "//services/device/public/cpp:device_features",
   ]
 
-  if (is_linux || is_chromeos) {
-    sources += [
-      "core_times.cc",
-      "core_times.h",
-      "cpu_probe_linux.cc",
-      "cpu_probe_linux.h",
-      "procfs_stat_cpu_parser.cc",
-      "procfs_stat_cpu_parser.h",
-    ]
-  }
+  libs = []
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.net.impl;
 
 import org.chromium.net.NetworkException;
 
-/**
- * Implements {@link NetworkException}.
- */
+/** Implements {@link NetworkException}. */
 public class NetworkExceptionImpl extends NetworkException {
     // Error code, one of ERROR_*
     protected final int mErrorCode;

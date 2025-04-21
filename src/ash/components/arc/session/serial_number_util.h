@@ -1,16 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_COMPONENTS_ARC_SESSION_SERIAL_NUMBER_UTIL_H_
 #define ASH_COMPONENTS_ARC_SESSION_SERIAL_NUMBER_UTIL_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace arc {
 
@@ -19,8 +19,8 @@ namespace arc {
 // properties. Note that Android treats serialno in a case-insensitive manner.
 // |salt| cannot be the hex-encoded one.
 // Note: The function must be the exact copy of the one in platform2/arc/setup/.
-std::string GenerateFakeSerialNumber(base::StringPiece chromeos_user,
-                                     base::StringPiece salt);
+std::string GenerateFakeSerialNumber(std::string_view chromeos_user,
+                                     std::string_view salt);
 
 // Generates and returns a serial number from the salt in |local_state| and
 // |chromeos_user|. When |local_state| does not have it (or has a corrupted
@@ -28,12 +28,12 @@ std::string GenerateFakeSerialNumber(base::StringPiece chromeos_user,
 // copies |arc_salt_on_disk| to |local_state| if |arc_salt_on_disk| is not
 // empty.
 std::string GetOrCreateSerialNumber(PrefService* local_state,
-                                    base::StringPiece chromeos_user,
-                                    base::StringPiece arc_salt_on_disk);
+                                    std::string_view chromeos_user,
+                                    std::string_view arc_salt_on_disk);
 
 // Reads a salt from |salt_path| and returns it. Returns a non-null value when
 // the file read is successful or the file does not exist.
-absl::optional<std::string> ReadSaltOnDisk(const base::FilePath& salt_path);
+std::optional<std::string> ReadSaltOnDisk(const base::FilePath& salt_path);
 
 }  // namespace arc
 

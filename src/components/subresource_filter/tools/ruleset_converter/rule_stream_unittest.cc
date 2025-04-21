@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/strings/string_number_conversions.h"
@@ -277,7 +276,7 @@ TEST(RuleStreamTest, TransferRulesAndDiscardRegexpRules) {
   input.reset();
   output.reset();
 
-  base::EraseIf(contents.url_rules,
+  std::erase_if(contents.url_rules,
                 [](const url_pattern_index::proto::UrlRule& rule) {
                   return rule.url_pattern_type() ==
                          url_pattern_index::proto::URL_PATTERN_TYPE_REGEXP;
@@ -329,8 +328,7 @@ TEST(RuleStreamTest, TransferRulesFromFilterListWithUnsupportedOptions) {
 
   // Output all the rules to the |source_ruleset| file.
   std::string joined_rules = base::JoinString(text_rules, "\n");
-  base::WriteFile(source_ruleset.ruleset_path(), joined_rules.data(),
-                  joined_rules.size());
+  base::WriteFile(source_ruleset.ruleset_path(), joined_rules);
 
   // Filter out the rules with parse errors, and save the rest to |contents|.
   TestRulesetContents contents;

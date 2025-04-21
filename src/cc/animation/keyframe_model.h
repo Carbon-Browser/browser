@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/check.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_export.h"
 #include "cc/paint/element_id.h"
@@ -26,6 +27,8 @@ class CC_ANIMATION_EXPORT KeyframeModel : public gfx::KeyframeModel {
       const gfx::KeyframeModel* keyframe_model);
 
   static KeyframeModel* ToCcKeyframeModel(gfx::KeyframeModel* keyframe_model);
+
+  static const int kInvalidGroup = -1;
 
   // Bundles a property id with its name and native type.
   class CC_ANIMATION_EXPORT TargetPropertyId {
@@ -79,6 +82,7 @@ class CC_ANIMATION_EXPORT KeyframeModel : public gfx::KeyframeModel {
   KeyframeModel& operator=(const KeyframeModel&) = delete;
 
   int group() const { return group_; }
+  void ungroup() { group_ = kInvalidGroup; }
 
   int TargetProperty() const override;
 
@@ -155,6 +159,11 @@ class CC_ANIMATION_EXPORT KeyframeModel : public gfx::KeyframeModel {
   // If specified, overrides the ElementId to apply this KeyframeModel's effect
   // value on.
   ElementId element_id_;
+
+#if DCHECK_IS_ON()
+  // This id is unique, modulo overflow. Permits quick instance equality checks.
+  int debug_id_ = 0;
+#endif
 
   bool needs_synchronized_start_time_;
   bool received_finished_event_;

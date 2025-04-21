@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,9 @@ namespace update_client {
 const char* kJSONValid = R"()]}'
   {"response":{
    "protocol":"3.1",
+   "systemrequirements":{"platform":"win",
+                         "arch":"x64",
+                         "min_os_version":"6.1"},
    "app":[
     {"appid":"12345",
      "status":"ok",
@@ -107,6 +110,23 @@ const char* kJSONInvalidMissingManifest = R"()]}'
      "status":"ok",
      "urls":{"url":[{"codebase":"http://localhost/download/"}]}
      }
+    }
+   ]
+  }})";
+
+// `manifest` is supposed to be a dictionary. It is a list here.
+const char* kJSONInvalidManifest = R"()]}'
+  {"response":{
+   "protocol":"3.1",
+   "app":[
+    {
+      "appid":"12345",
+      "status":"ok",
+      "updatecheck":{
+        "status":"ok",
+        "urls":{"url":[{"codebase":"http://localhost/download/"}]},
+        "manifest": []
+      }
     }
    ]
   }})";
@@ -304,7 +324,7 @@ const char* kJSONUpdateCheckStatusErrorWithRunAction = R"()]}'
    ]
   }})";
 
-// Includes four app objects with status different than 'ok'.
+// Includes nine app objects with status different than 'ok'.
 const char* kJSONAppsStatusError = R"()]}'
   {"response":{
    "protocol":"3.1",
@@ -322,6 +342,26 @@ const char* kJSONAppsStatusError = R"()]}'
      "updatecheck":{"status":"error-internal"}
     },
     {"appid":"dddddddd",
+     "status":"error-osnotsupported",
+     "updatecheck":{"status":"error-internal"}
+    },
+    {"appid":"eeeeeeee",
+     "status":"error-hwnotsupported",
+     "updatecheck":{"status":"error-internal"}
+    },
+    {"appid":"ffffffff",
+     "status":"error-hash",
+     "updatecheck":{"status":"error-internal"}
+    },
+    {"appid":"gggggggg",
+     "status":"error-unsupportedprotocol",
+     "updatecheck":{"status":"error-internal"}
+    },
+    {"appid":"hhhhhhhh",
+     "status":"error-internal",
+     "updatecheck":{"status":"error-internal"}
+    },
+    {"appid":"iiiiiiii",
      "status":"foobar",
      "updatecheck":{"status":"error-internal"}
     }
@@ -373,6 +413,10 @@ const char* kJSONCustomAttributes = R"()]}'
    ]
   }})";
 
+const char* kBadJSONBadAppIdNoNewlinesBadUCKey =
+    R"()]}'{"response":{"app":[{"appid":";","updatecheck":{"":1}}],)"
+    R"("protocol":"3.1"}})";
+
 TEST(UpdateClientProtocolParserJSONTest, Parse) {
   const auto parser = std::make_unique<ProtocolParserJSON>();
 
@@ -404,10 +448,17 @@ TEST(UpdateClientProtocolParserJSONTest, Parse) {
   EXPECT_TRUE(parser->results().list.empty());
   EXPECT_FALSE(parser->errors().empty());
 
+  EXPECT_TRUE(parser->Parse(kJSONInvalidManifest));
+  EXPECT_TRUE(parser->results().list.empty());
+  EXPECT_FALSE(parser->errors().empty());
+
   {
     // Parse some valid XML, and check that all params came out as expected.
     EXPECT_TRUE(parser->Parse(kJSONValid));
     EXPECT_TRUE(parser->errors().empty());
+    EXPECT_EQ(parser->results().system_requirements.platform, "win");
+    EXPECT_EQ(parser->results().system_requirements.arch, "x64");
+    EXPECT_EQ(parser->results().system_requirements.min_os_version, "6.1");
     EXPECT_EQ(1u, parser->results().list.size());
     const auto* first_result = &parser->results().list[0];
     EXPECT_STREQ("ok", first_result->status.c_str());
@@ -532,19 +583,23 @@ TEST(UpdateClientProtocolParserJSONTest, Parse) {
   {
     EXPECT_TRUE(parser->Parse(kJSONAppsStatusError));
     EXPECT_STREQ("Unknown app status", parser->errors().c_str());
-    EXPECT_EQ(3u, parser->results().list.size());
-    const auto* first_result = &parser->results().list[0];
-    EXPECT_EQ(first_result->extension_id, "aaaaaaaa");
-    EXPECT_STREQ("error-unknownApplication", first_result->status.c_str());
-    EXPECT_TRUE(first_result->manifest.version.empty());
-    const auto* second_result = &parser->results().list[1];
-    EXPECT_EQ(second_result->extension_id, "bbbbbbbb");
-    EXPECT_STREQ("restricted", second_result->status.c_str());
-    EXPECT_TRUE(second_result->manifest.version.empty());
-    const auto* third_result = &parser->results().list[2];
-    EXPECT_EQ(third_result->extension_id, "cccccccc");
-    EXPECT_STREQ("error-invalidAppId", third_result->status.c_str());
-    EXPECT_TRUE(third_result->manifest.version.empty());
+    EXPECT_EQ(8u, parser->results().list.size());
+    size_t index = 0;
+    for (const std::string expected_status : {
+             "error-unknownApplication",
+             "restricted",
+             "error-invalidAppId",
+             "error-osnotsupported",
+             "error-hwnotsupported",
+             "error-hash",
+             "error-unsupportedprotocol",
+             "error-internal",
+         }) {
+      const auto* result = &parser->results().list[index];
+      EXPECT_EQ(result->extension_id, std::string(8, 'a' + index++));
+      EXPECT_EQ(expected_status, result->status);
+      EXPECT_TRUE(result->manifest.version.empty());
+    }
   }
   {
     EXPECT_TRUE(parser->Parse(kJSONManifestRun));
@@ -581,6 +636,11 @@ TEST(UpdateClientProtocolParserJSONTest, ParseAttrs) {
     EXPECT_EQ("example_value1", result.custom_attributes.at("_example1"));
     EXPECT_EQ("example_value2", result.custom_attributes.at("_example2"));
   }
+}
+
+TEST(UpdateClientProtocolParserJSONTest, ParseBadJSONNoCrash) {
+  const auto parser = std::make_unique<ProtocolParserJSON>();
+  EXPECT_TRUE(parser->Parse(kBadJSONBadAppIdNoNewlinesBadUCKey));
 }
 
 }  // namespace update_client

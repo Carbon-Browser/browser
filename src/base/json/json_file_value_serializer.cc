@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,7 @@ const char JSONFileValueDeserializer::kNoSuchFile[] = "File doesn't exist.";
 
 JSONFileValueSerializer::JSONFileValueSerializer(
     const base::FilePath& json_file_path)
-    : json_file_path_(json_file_path) {
-}
+    : json_file_path_(json_file_path) {}
 
 JSONFileValueSerializer::~JSONFileValueSerializer() = default;
 
@@ -41,15 +40,11 @@ bool JSONFileValueSerializer::SerializeInternal(base::ValueView root,
   bool result = omit_binary_values
                     ? serializer.SerializeAndOmitBinaryValues(root)
                     : serializer.Serialize(root);
-  if (!result)
+  if (!result) {
     return false;
+  }
 
-  int data_size = static_cast<int>(json_string.size());
-  if (base::WriteFile(json_file_path_, json_string.data(), data_size) !=
-      data_size)
-    return false;
-
-  return true;
+  return base::WriteFile(json_file_path_, json_string);
 }
 
 JSONFileValueDeserializer::JSONFileValueDeserializer(
@@ -93,7 +88,6 @@ const char* JSONFileValueDeserializer::GetErrorMessageForCode(int error_code) {
       return kNoSuchFile;
     default:
       NOTREACHED();
-      return "";
   }
 }
 
@@ -103,10 +97,12 @@ std::unique_ptr<base::Value> JSONFileValueDeserializer::Deserialize(
   std::string json_string;
   int error = ReadFileToString(&json_string);
   if (error != JSON_NO_ERROR) {
-    if (error_code)
+    if (error_code) {
       *error_code = error;
-    if (error_str)
+    }
+    if (error_str) {
       *error_str = GetErrorMessageForCode(error);
+    }
     return nullptr;
   }
 

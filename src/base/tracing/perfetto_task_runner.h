@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,20 @@
 
 #include "base/base_export.h"
 #include "base/cancelable_callback.h"
+#include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "third_party/perfetto/include/perfetto/base/task_runner.h"
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+#if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
 // Needed for base::FileDescriptorWatcher::Controller and for implementing
 // AddFileDescriptorWatch & RemoveFileDescriptorWatch.
 #include <map>
+
 #include "base/files/file_descriptor_watcher_posix.h"
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+#endif  // (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
 
 namespace base {
 namespace tracing {
@@ -27,8 +29,7 @@ namespace tracing {
 // to provide it to Perfetto.
 class BASE_EXPORT PerfettoTaskRunner : public perfetto::base::TaskRunner {
  public:
-  explicit PerfettoTaskRunner(
-      scoped_refptr<base::SequencedTaskRunner> task_runner);
+  explicit PerfettoTaskRunner(scoped_refptr<base::SequencedTaskRunner>);
   ~PerfettoTaskRunner() override;
   PerfettoTaskRunner(const PerfettoTaskRunner&) = delete;
   void operator=(const PerfettoTaskRunner&) = delete;
@@ -43,25 +44,21 @@ class BASE_EXPORT PerfettoTaskRunner : public perfetto::base::TaskRunner {
   // use case.
   bool RunsTasksOnCurrentThread() const override;
 
-  void SetTaskRunner(scoped_refptr<base::SequencedTaskRunner> task_runner);
-  scoped_refptr<base::SequencedTaskRunner> GetOrCreateTaskRunner();
-  bool HasTaskRunner() const { return !!task_runner_; }
-
   // These are only used on Android when talking to the system Perfetto service.
   void AddFileDescriptorWatch(perfetto::base::PlatformHandle,
                               std::function<void()>) override;
   void RemoveFileDescriptorWatch(perfetto::base::PlatformHandle) override;
 
-  // Tests will shut down all task runners in between runs, so we need
-  // to re-create any static instances on each SetUp();
-  void ResetTaskRunnerForTesting(
-      scoped_refptr<base::SequencedTaskRunner> task_runner);
+  void ResetTaskRunnerForTesting(scoped_refptr<base::SequencedTaskRunner>);
+
+  WeakPtr<PerfettoTaskRunner> GetWeakPtr() {
+    return weak_factory_.GetWeakPtr();
+  }
 
  private:
-  void OnDeferredTasksDrainTimer();
-
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+
+#if (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
   // FDControllerAndCallback keeps track of the state of FD watching:
   // * |controller| has value: FD watching is added. |callback| is nullopt.
   // * |controller| is nullptr: FD watching is pending for add. |callback| has
@@ -77,7 +74,9 @@ class BASE_EXPORT PerfettoTaskRunner : public perfetto::base::TaskRunner {
     ~FDControllerAndCallback();
   };
   std::map<int, FDControllerAndCallback> fd_controllers_;
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+#endif  // (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
+
+  WeakPtrFactory<PerfettoTaskRunner> weak_factory_{this};
 };
 
 }  // namespace tracing

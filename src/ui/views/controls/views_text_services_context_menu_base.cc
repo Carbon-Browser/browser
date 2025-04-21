@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include "build/build_config.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/emoji/emoji_panel_helper.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/events/event.h"
 #include "ui/events/event_constants.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -54,7 +54,7 @@ bool ViewsTextServicesContextMenuBase::GetAcceleratorForCommandId(
     *accelerator = ui::Accelerator(ui::VKEY_SPACE,
                                    ui::EF_COMMAND_DOWN | ui::EF_CONTROL_DOWN);
     return true;
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#elif BUILDFLAG(IS_CHROMEOS)
     *accelerator = ui::Accelerator(ui::VKEY_SPACE,
                                    ui::EF_SHIFT_DOWN | ui::EF_COMMAND_DOWN);
     return true;
@@ -88,13 +88,13 @@ bool ViewsTextServicesContextMenuBase::SupportsCommand(int command_id) const {
   return command_id == IDS_CONTENT_CONTEXT_EMOJI;
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS)
 // static
 std::unique_ptr<ViewsTextServicesContextMenu>
 ViewsTextServicesContextMenu::Create(ui::SimpleMenuModel* menu,
                                      Textfield* client) {
   return std::make_unique<ViewsTextServicesContextMenuBase>(menu, client);
 }
-#endif
+#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace views

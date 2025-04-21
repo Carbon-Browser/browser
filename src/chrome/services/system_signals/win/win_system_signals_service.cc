@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include "base/win/windows_version.h"
 #include "chrome/services/system_signals/win/metrics_utils.h"
 #include "components/device_signals/core/common/common_types.h"
-#include "components/device_signals/core/common/file_system_service.h"
-#include "components/device_signals/core/common/platform_delegate.h"
+#include "components/device_signals/core/system_signals/executable_metadata_service.h"
+#include "components/device_signals/core/system_signals/file_system_service.h"
+#include "components/device_signals/core/system_signals/platform_delegate.h"
 #include "components/device_signals/core/system_signals/win/win_platform_delegate.h"
 #include "components/device_signals/core/system_signals/win/wmi_client.h"
 #include "components/device_signals/core/system_signals/win/wmi_client_impl.h"
@@ -22,7 +23,9 @@ WinSystemSignalsService::WinSystemSignalsService(
     : WinSystemSignalsService(
           std::move(receiver),
           device_signals::FileSystemService::Create(
-              std::make_unique<device_signals::WinPlatformDelegate>()),
+              std::make_unique<device_signals::WinPlatformDelegate>(),
+              device_signals::ExecutableMetadataService::Create(
+                  std::make_unique<device_signals::WinPlatformDelegate>())),
           std::make_unique<device_signals::WmiClientImpl>(),
           std::make_unique<device_signals::WscClientImpl>()) {}
 
@@ -31,18 +34,12 @@ WinSystemSignalsService::WinSystemSignalsService(
     std::unique_ptr<device_signals::FileSystemService> file_system_service,
     std::unique_ptr<device_signals::WmiClient> wmi_client,
     std::unique_ptr<device_signals::WscClient> wsc_client)
-    : receiver_(this, std::move(receiver)),
-      file_system_service_(std::move(file_system_service)),
+    : BaseSystemSignalsService(std::move(receiver),
+                               std::move(file_system_service)),
       wmi_client_(std::move(wmi_client)),
       wsc_client_(std::move(wsc_client)) {}
 
 WinSystemSignalsService::~WinSystemSignalsService() = default;
-
-void WinSystemSignalsService::GetFileSystemSignals(
-    const std::vector<device_signals::GetFileSystemInfoOptions>& requests,
-    GetFileSystemSignalsCallback callback) {
-  std::move(callback).Run(file_system_service_->GetSignals(requests));
-}
 
 void WinSystemSignalsService::GetAntiVirusSignals(
     GetAntiVirusSignalsCallback callback) {
@@ -54,19 +51,10 @@ void WinSystemSignalsService::GetAntiVirusSignals(
   }
 
   std::vector<device_signals::AvProduct> av_products;
-  if (os_info->version() >= base::win::Version::WIN8) {
-    // WSC is only supported on Win8+.
-    auto response = wsc_client_->GetAntiVirusProducts();
+  auto response = wsc_client_->GetAntiVirusProducts();
 
-    LogWscAvResponse(response);
-    av_products = std::move(response.av_products);
-  } else {
-    // Fallback to an undocumented WMI table on Win7 and earlier.
-    auto response = wmi_client_->GetAntiVirusProducts();
-
-    LogWmiAvResponse(response);
-    av_products = std::move(response.av_products);
-  }
+  LogWscAvResponse(response);
+  av_products = std::move(response.av_products);
 
   std::move(callback).Run(std::move(av_products));
 }

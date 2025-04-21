@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,11 @@ WebAppOriginAssociationParserImpl::~WebAppOriginAssociationParserImpl() =
 
 void WebAppOriginAssociationParserImpl::ParseWebAppOriginAssociation(
     const std::string& raw_json,
+    const url::Origin& origin,
     ParseWebAppOriginAssociationCallback callback) {
   webapps::WebAppOriginAssociationParser parser;
-  mojom::WebAppOriginAssociationPtr association = parser.Parse(raw_json);
+  mojom::WebAppOriginAssociationPtr association =
+      parser.Parse(raw_json, origin);
   auto errors = parser.GetErrors();
   std::move(callback).Run(std::move(association), std::move(errors));
 }

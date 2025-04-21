@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "cc/test/pixel_test_utils.h"
 #include "components/viz/common/features.h"
 #include "content/browser/media/capture/content_capture_device_browsertest_base.h"
@@ -74,11 +73,11 @@ class AuraWindowVideoCaptureDeviceBrowserTest
             << ", blue=" << SkColorGetB(color);
 
     while (!testing::Test::HasFailure()) {
-      EXPECT_TRUE(capture_stack()->started());
-      EXPECT_FALSE(capture_stack()->error_occurred());
+      EXPECT_TRUE(capture_stack()->Started());
+      EXPECT_FALSE(capture_stack()->ErrorOccurred());
       capture_stack()->ExpectNoLogMessages();
 
-      while (capture_stack()->has_captured_frames() &&
+      while (capture_stack()->HasCapturedFrames() &&
              !testing::Test::HasFailure()) {
         // Pop the next frame from the front of the queue and convert to a RGB
         // bitmap for analysis.
@@ -202,8 +201,10 @@ IN_PROC_BROWSER_TEST_F(AuraWindowVideoCaptureDeviceBrowserTest,
   // been notified of the error.
   device->AllocateAndStartWithReceiver(capture_params,
                                        capture_stack()->CreateFrameReceiver());
-  EXPECT_FALSE(capture_stack()->started());
-  EXPECT_TRUE(capture_stack()->error_occurred());
+  RunUntilIdle();
+
+  EXPECT_FALSE(capture_stack()->Started());
+  EXPECT_TRUE(capture_stack()->ErrorOccurred());
   capture_stack()->ExpectHasLogMessages();
 
   device->StopAndDeAllocate();
@@ -227,7 +228,7 @@ IN_PROC_BROWSER_TEST_F(AuraWindowVideoCaptureDeviceBrowserTest,
   // permanently lost" error to propagate to the video capture stack.
   shell()->Close();
   RunUntilIdle();
-  EXPECT_TRUE(capture_stack()->error_occurred());
+  EXPECT_TRUE(capture_stack()->ErrorOccurred());
   capture_stack()->ExpectHasLogMessages();
 
   StopAndDeAllocate();
@@ -299,7 +300,7 @@ class AuraWindowVideoCaptureDeviceBrowserTestWin
   void SetUp() override {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kApplyNativeOcclusionToCompositor,
-        {{features::kApplyNativeOcclusionToCompositorType,
+        {{features::kApplyNativeOcclusionToCompositorType.name,
           features::kApplyNativeOcclusionToCompositorTypeRelease}});
 
     AuraWindowVideoCaptureDeviceBrowserTest::SetUp();
@@ -336,7 +337,7 @@ IN_PROC_BROWSER_TEST_F(AuraWindowVideoCaptureDeviceBrowserTestWin,
 }
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // Disabled (https://crbug.com/1096946)
 // On ChromeOS, another window may occlude a window that is being captured.
 // Make sure the visibility is set to visible during capture if it's occluded.
@@ -360,7 +361,7 @@ IN_PROC_BROWSER_TEST_F(AuraWindowVideoCaptureDeviceBrowserTest,
   window.reset();
   StopAndDeAllocate();
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 class AuraWindowVideoCaptureDeviceBrowserTestP
     : public AuraWindowVideoCaptureDeviceBrowserTest,
@@ -374,7 +375,7 @@ class AuraWindowVideoCaptureDeviceBrowserTestP
   }
 };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 INSTANTIATE_TEST_SUITE_P(
     All,
     AuraWindowVideoCaptureDeviceBrowserTestP,
@@ -391,7 +392,7 @@ INSTANTIATE_TEST_SUITE_P(
                                      true /* software compositing */),
                      testing::Values(false /* variable aspect ratio */,
                                      true /* fixed aspect ratio */)));
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // Disabled (https://crbug.com/1096946)
 // Tests that the device successfully captures a series of content changes,

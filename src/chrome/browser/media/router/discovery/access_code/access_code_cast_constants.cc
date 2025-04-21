@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@ bool command_line_enabled_for_testing = false;
 namespace media_router {
 
 bool IsCommandLineSwitchSupported() {
-  if (command_line_enabled_for_testing)
+  if (command_line_enabled_for_testing) {
     return true;
+  }
   version_info::Channel channel = chrome::GetChannel();
   return channel != version_info::Channel::STABLE &&
          channel != version_info::Channel::BETA;
@@ -61,11 +62,6 @@ constexpr char kJsonErrorMessage[] = "message";
 constexpr char kAccessCodeCastFlagParamType[] = "access_code_cast_duration_s";
 namespace switches {
 constexpr char kDiscoveryEndpointSwitch[] = "access-code-cast-url";
-
-// This value is hardcoded in chrome/browser/flag-metadata.json -- please ensure
-// that file is updated if this value is changed.
-constexpr char kAccessCodeCastDeviceDurationSwitch[] =
-    "access-code-cast-device-duration";
 
 }  // namespace switches
 }  // namespace media_router

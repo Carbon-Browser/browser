@@ -1,15 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "cc/tiles/decoded_image_tracker.h"
 
 #include <unordered_map>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "cc/paint/paint_image_builder.h"
 #include "cc/test/skia_common.h"
-#include "cc/tiles/decoded_image_tracker.h"
 #include "cc/tiles/image_controller.h"
 #include "cc/tiles/software_image_decode_cache.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -18,15 +21,12 @@ namespace cc {
 
 class TestImageController : public ImageController {
  public:
-  TestImageController() : ImageController(nullptr, nullptr) {}
+  TestImageController()
+      : ImageController(nullptr, nullptr, base::DoNothing()) {}
 
   void UnlockImageDecode(ImageDecodeRequestId id) override {
-    auto it = std::find_if(
-        locked_ids_.begin(), locked_ids_.end(),
-        [id](const std::pair<const ImageDecodeRequestId,
-                             SoftwareImageDecodeCache::CacheKey>& item) {
-          return item.first == id;
-        });
+    auto it =
+        base::ranges::find(locked_ids_, id, &LockedIds::value_type::first);
     ASSERT_FALSE(it == locked_ids_.end());
     locked_ids_.erase(it);
   }
@@ -46,21 +46,16 @@ class TestImageController : public ImageController {
     SoftwareImageDecodeCache::CacheKey key =
         SoftwareImageDecodeCache::CacheKey::FromDrawImage(
             image, kRGBA_8888_SkColorType);
-    return std::find_if(
-               locked_ids_.begin(), locked_ids_.end(),
-               [&key](
-                   const std::pair<const ImageDecodeRequestId,
-                                   SoftwareImageDecodeCache::CacheKey>& item) {
-                 return item.second == key;
-               }) != locked_ids_.end();
+    return base::Contains(locked_ids_, key, &LockedIds::value_type::second);
   }
 
   size_t num_locked_images() { return locked_ids_.size(); }
 
  private:
+  using LockedIds = std::unordered_map<ImageDecodeRequestId,
+                                       SoftwareImageDecodeCache::CacheKey>;
   ImageDecodeRequestId next_id_ = 1;
-  std::unordered_map<ImageDecodeRequestId, SoftwareImageDecodeCache::CacheKey>
-      locked_ids_;
+  LockedIds locked_ids_;
 };
 
 class DecodedImageTrackerTest : public testing::Test {
@@ -70,6 +65,15 @@ class DecodedImageTrackerTest : public testing::Test {
         decoded_image_tracker_(&image_controller_, task_runner_) {
     decoded_image_tracker_.SetTickClockForTesting(
         task_runner_->GetMockTickClock());
+  }
+
+  DrawImage DrawImageForDecoding(const PaintImage& paint_image,
+                                 const TargetColorParams& color_params) const {
+    return DrawImage(paint_image,
+                     /*use_dark_mode=*/false,
+                     SkIRect::MakeWH(paint_image.width(), paint_image.height()),
+                     PaintFlags::FilterQuality::kNone, SkM44(),
+                     PaintImage::kDefaultFrameIndex, color_params);
   }
 
   TestImageController* image_controller() { return &image_controller_; }
@@ -87,7 +91,8 @@ class DecodedImageTrackerTest : public testing::Test {
 TEST_F(DecodedImageTrackerTest, QueueImageLocksImages) {
   bool locked = false;
   decoded_image_tracker()->QueueImageDecode(
-      CreateDiscardablePaintImage(gfx::Size(1, 1)), TargetColorParams(),
+      DrawImageForDecoding(CreateDiscardablePaintImage(gfx::Size(1, 1)),
+                           TargetColorParams()),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
@@ -103,7 +108,7 @@ TEST_F(DecodedImageTrackerTest, Colorspace) {
   TargetColorParams target_color_params;
   target_color_params.color_space = decoded_color_space;
   decoded_image_tracker()->QueueImageDecode(
-      paint_image, target_color_params,
+      DrawImageForDecoding(paint_image, target_color_params),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
 
@@ -127,7 +132,8 @@ TEST_F(DecodedImageTrackerTest, ImagesTimeOut) {
   // Add an image, this will start a 250ms timeout to release it.
   bool locked = false;
   decoded_image_tracker()->QueueImageDecode(
-      CreateDiscardablePaintImage(gfx::Size(1, 1)), TargetColorParams(),
+      DrawImageForDecoding(CreateDiscardablePaintImage(gfx::Size(1, 1)),
+                           TargetColorParams()),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
@@ -138,8 +144,10 @@ TEST_F(DecodedImageTrackerTest, ImagesTimeOut) {
   EXPECT_EQ(1u, image_controller()->num_locked_images());
 
   // Add an image, this will not start a new timeout, as one is pending.
+  locked = false;
   decoded_image_tracker()->QueueImageDecode(
-      CreateDiscardablePaintImage(gfx::Size(1, 1)), TargetColorParams(),
+      DrawImageForDecoding(CreateDiscardablePaintImage(gfx::Size(1, 1)),
+                           TargetColorParams()),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
@@ -162,15 +170,16 @@ TEST_F(DecodedImageTrackerTest, ImageUsedInDraw) {
   bool locked = false;
   auto paint_image_1 = CreateDiscardablePaintImage(gfx::Size(1, 1));
   decoded_image_tracker()->QueueImageDecode(
-      paint_image_1, TargetColorParams(),
+      DrawImageForDecoding(paint_image_1, target_color_params),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
   EXPECT_EQ(1u, image_controller()->num_locked_images());
 
+  locked = false;
   auto paint_image_2 = CreateDiscardablePaintImage(gfx::Size(1, 1));
   decoded_image_tracker()->QueueImageDecode(
-      paint_image_2, target_color_params,
+      DrawImageForDecoding(paint_image_2, target_color_params),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
@@ -200,13 +209,16 @@ TEST_F(DecodedImageTrackerTest, UnlockAllImages) {
   // Insert two images:
   bool locked = false;
   decoded_image_tracker()->QueueImageDecode(
-      CreateDiscardablePaintImage(gfx::Size(1, 1)), TargetColorParams(),
+      DrawImageForDecoding(CreateDiscardablePaintImage(gfx::Size(1, 1)),
+                           TargetColorParams()),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);
   EXPECT_EQ(1u, image_controller()->num_locked_images());
+  locked = false;
   decoded_image_tracker()->QueueImageDecode(
-      CreateDiscardablePaintImage(gfx::Size(1, 1)), TargetColorParams(),
+      DrawImageForDecoding(CreateDiscardablePaintImage(gfx::Size(1, 1)),
+                           TargetColorParams()),
       base::BindOnce([](bool* locked, bool success) { *locked = true; },
                      base::Unretained(&locked)));
   EXPECT_TRUE(locked);

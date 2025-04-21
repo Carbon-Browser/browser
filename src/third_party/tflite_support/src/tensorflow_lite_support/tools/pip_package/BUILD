@@ -1,8 +1,6 @@
 # Description:
 #  Tools for building the TensorFlow pip package.
 
-load("@local_config_syslibs//:build_defs.bzl", "if_not_system_lib")
-
 package(default_visibility = ["//visibility:private"])
 
 COMMON_PIP_DEPS = [
@@ -19,6 +17,7 @@ COMMON_PIP_DEPS = [
     "//tensorflow_lite_support/metadata/python/metadata_writers:image_segmenter",
     "//tensorflow_lite_support/metadata/python/metadata_writers:audio_classifier",
     "//tensorflow_lite_support/metadata/python/metadata_writers:nl_classifier",
+    "//tensorflow_lite_support/metadata/python/metadata_writers:bert_nl_classifier",
 ]
 
 TASK_PIP_DEPS = [
@@ -29,6 +28,10 @@ TASK_PIP_DEPS = [
     "//tensorflow_lite_support/python/task/vision:object_detector",
     "//tensorflow_lite_support/python/task/text:text_embedder",
     "//tensorflow_lite_support/python/task/text:text_searcher",
+    "//tensorflow_lite_support/python/task/text:nl_classifier",
+    "//tensorflow_lite_support/python/task/text:bert_nl_classifier",
+    "//tensorflow_lite_support/python/task/text:bert_question_answerer",
+    "//tensorflow_lite_support/python/task/text:bert_clu_annotator",
     "//tensorflow_lite_support/python/task/audio:audio_classifier",
     "//tensorflow_lite_support/python/task/audio:audio_embedder",
     # For Model Maker Searcher API to build ScaNN index.
@@ -42,16 +45,7 @@ filegroup(
     data = [
         "//:LICENSE",
         "@org_tensorflow//:LICENSE",
-    ] + if_not_system_lib(
-        "absl_py",
-        [
-            "@absl_py//absl:LICENSE",
-            "@absl_py//absl/logging:LICENSE",
-            "@absl_py//absl/flags:LICENSE",
-            "@absl_py//absl/testing:LICENSE",
-            "@absl_py//absl/third_party/unittest3_backport:LICENSE",
-        ],
-    ),
+    ],
 )
 
 sh_binary(

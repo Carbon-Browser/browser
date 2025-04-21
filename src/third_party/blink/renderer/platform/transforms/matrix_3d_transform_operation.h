@@ -34,12 +34,10 @@ namespace blink {
 class PLATFORM_EXPORT Matrix3DTransformOperation final
     : public TransformOperation {
  public:
-  static scoped_refptr<Matrix3DTransformOperation> Create(
-      const TransformationMatrix& matrix) {
-    return base::AdoptRef(new Matrix3DTransformOperation(matrix));
-  }
+  explicit Matrix3DTransformOperation(const gfx::Transform& matrix)
+      : matrix_(matrix) {}
 
-  TransformationMatrix Matrix() const { return matrix_; }
+  gfx::Transform Matrix() const { return matrix_; }
 
   static bool IsMatchingOperationType(OperationType type) {
     return type == kMatrix3D;
@@ -55,19 +53,16 @@ class PLATFORM_EXPORT Matrix3DTransformOperation final
  private:
   OperationType GetType() const override { return kMatrix3D; }
 
-  void Apply(TransformationMatrix& transform,
-             const gfx::SizeF&) const override {
-    transform.Multiply(TransformationMatrix(matrix_));
+  void Apply(gfx::Transform& transform, const gfx::SizeF&) const override {
+    transform.PreConcat(matrix_);
   }
 
-  scoped_refptr<TransformOperation> Accumulate(
-      const TransformOperation& other) override;
+  TransformOperation* Accumulate(const TransformOperation& other) override;
 
-  scoped_refptr<TransformOperation> Blend(
-      const TransformOperation* from,
-      double progress,
-      bool blend_to_identity = false) override;
-  scoped_refptr<TransformOperation> Zoom(double factor) final;
+  TransformOperation* Blend(const TransformOperation* from,
+                            double progress,
+                            bool blend_to_identity = false) override;
+  TransformOperation* Zoom(double factor) final;
 
   bool PreservesAxisAlignment() const final {
     return matrix_.Preserves2dAxisAlignment();
@@ -76,10 +71,7 @@ class PLATFORM_EXPORT Matrix3DTransformOperation final
     return matrix_.IsIdentityOrTranslation();
   }
 
-  explicit Matrix3DTransformOperation(const TransformationMatrix& mat)
-      : matrix_(mat) {}
-
-  TransformationMatrix matrix_;
+  gfx::Transform matrix_;
 };
 
 template <>

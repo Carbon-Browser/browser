@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ namespace {
 
 const char kExtraDiskSwitch[] = "extra-disk";
 const char kAutoShutdownSwitch[] = "auto-shutdown";
-const char kFeedbackFormsSwitch[] = "feedback-forms";
 
 bool IsDeveloperMode() {
   std::string output;
@@ -59,8 +58,6 @@ BorealisLaunchOptions::Options ParseOptions(const std::string& options_string) {
       opts.extra_disk = base::FilePath(val);
     } else if (key == kAutoShutdownSwitch) {
       opts.auto_shutdown = base::ToLowerASCII(val[0]) == 't';
-    } else if (key == kFeedbackFormsSwitch) {
-      opts.feedback_forms = base::ToLowerASCII(val[0]) == 't';
     }
   }
   return opts;

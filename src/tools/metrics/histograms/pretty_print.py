@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -56,23 +56,6 @@ def canonicalizeUnits(tree):
 
   for child in tree:
     canonicalizeUnits(child)
-
-def fixObsoleteOrder(tree):
-  """Put obsolete tags at the beginning of histogram tags."""
-  obsoletes = []
-
-  for child in tree:
-    if child.tag == 'obsolete':
-      obsoletes.append(child)
-    else:
-      fixObsoleteOrder(child)
-
-  for obsolete in obsoletes:
-    tree.remove(obsolete)
-
-  # Only keep the first obsolete tag.
-  if obsoletes:
-    tree.insert(0, obsoletes[0])
 
 def DropNodesByTagName(tree, tag, dropped_nodes=[]):
   """Drop all nodes with named tag from the XML tree."""
@@ -151,7 +134,6 @@ def PrettyPrintHistogramsTree(tree):
   DropNodesByTagName(tree, 'enums')
   FixMisplacedHistogramsAndHistogramSuffixes(tree)
   canonicalizeUnits(tree)
-  fixObsoleteOrder(tree)
   return histogram_configuration_model.PrettifyTree(tree)
 
 
@@ -192,13 +174,12 @@ def main():
 
   status = 0
   if 'enums.xml' in args.filepath:
-    status = presubmit_util.DoPresubmit(sys.argv, 'enums.xml',
+    status = presubmit_util.DoPresubmit(sys.argv, args.filepath,
                                         'enums.before.pretty-print.xml',
                                         PrettyPrintEnums)
 
   elif 'histograms' in args.filepath:
-    # Specify the individual directory of histograms.xml or
-    # obsolete_histograms.xml.
+    # Specify the individual directory of histograms.xml.
     status = presubmit_util.DoPresubmit(
         sys.argv,
         args.filepath,

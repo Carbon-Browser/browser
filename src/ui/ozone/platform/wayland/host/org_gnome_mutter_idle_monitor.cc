@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ OrgGnomeMutterIdleMonitor::OrgGnomeMutterIdleMonitor()
 
 OrgGnomeMutterIdleMonitor::~OrgGnomeMutterIdleMonitor() = default;
 
-absl::optional<base::TimeDelta> OrgGnomeMutterIdleMonitor::GetIdleTime() const {
+std::optional<base::TimeDelta> OrgGnomeMutterIdleMonitor::GetIdleTime() const {
   DCHECK_CALLED_ON_VALID_THREAD(main_thread_checker_);
 
   switch (service_state_) {
@@ -63,7 +63,7 @@ absl::optional<base::TimeDelta> OrgGnomeMutterIdleMonitor::GetIdleTime() const {
         dbus_proxy->CallMethod(
             &name_has_owner_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
             base::BindOnce(&OrgGnomeMutterIdleMonitor::OnServiceHasOwner,
-                           weak_factory_.GetWeakPtr()));
+                           weak_factory_.GetMutableWeakPtr()));
       }
       return base::Seconds(0);
 
@@ -76,11 +76,10 @@ absl::optional<base::TimeDelta> OrgGnomeMutterIdleMonitor::GetIdleTime() const {
       return base::Time::Now() - idle_timestamp_;
 
     case ServiceState::kNotAvailable:
-      return absl::nullopt;
+      return std::nullopt;
 
     default:
       NOTREACHED();
-      return absl::nullopt;
   }
 }
 

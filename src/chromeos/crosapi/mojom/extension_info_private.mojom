@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import "mojo/public/mojom/base/values.mojom";
 
 // ExtensionInfoPrivate is a service that allows trusted extensions in Lacros to
 // get and set system properties. Implemented in Ash.
-[Stable, Uuid="97236d3f-848a-4365-8c7e-f4133e0c79ff"]
+[Uuid="97236d3f-848a-4365-8c7e-f4133e0c79ff"]
 interface ExtensionInfoPrivate {
   // Returns a Dictionary-type base::Value that contains all results. This is
   // considered an opaque value that is directly passed to the extension.

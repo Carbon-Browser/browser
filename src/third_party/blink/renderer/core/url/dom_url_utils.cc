@@ -60,10 +60,10 @@ void DOMURLUtils::setPassword(const String& value) {
 }
 
 void DOMURLUtils::setHost(const String& value) {
-  if (value.IsEmpty())
-    return;
-
   KURL kurl = Url();
+  if (value.empty() && !kurl.CanRemoveHost()) {
+    return;
+  }
   if (!kurl.CanSetHostOrPort())
     return;
 
@@ -73,10 +73,10 @@ void DOMURLUtils::setHost(const String& value) {
 }
 
 void DOMURLUtils::setHostname(const String& value) {
-  if (value.IsEmpty())
-    return;
-
   KURL kurl = Url();
+  if (value.empty() && !kurl.CanRemoveHost()) {
+    return;
+  }
   if (!kurl.CanSetHostOrPort())
     return;
 
@@ -87,12 +87,14 @@ void DOMURLUtils::setHostname(const String& value) {
 
 void DOMURLUtils::setPort(const String& value) {
   KURL kurl = Url();
-  if (!kurl.CanSetHostOrPort())
+  if (!kurl.CanSetHostOrPort()) {
     return;
-  if (!value.IsEmpty())
+  }
+  if (!value.empty()) {
     kurl.SetPort(value);
-  else
+  } else {
     kurl.RemovePort();
+  }
   if (kurl.IsValid())
     SetURL(kurl);
 }
@@ -119,7 +121,7 @@ void DOMURLUtils::SetSearchInternal(const String& value) {
   // FIXME: have KURL do this clearing of the query component
   // instead, if practical. Will require addressing
   // http://crbug.com/108690, for one.
-  if ((value.length() == 1 && value[0] == '?') || value.IsEmpty())
+  if ((value.length() == 1 && value[0] == '?') || value.empty())
     kurl.SetQuery(String());
   else
     kurl.SetQuery(value);
@@ -138,7 +140,7 @@ void DOMURLUtils::setHash(const String& value) {
   if (value[0] == '#')
     kurl.SetFragmentIdentifier(value.Substring(1));
   else {
-    if (value.IsEmpty())
+    if (value.empty())
       kurl.RemoveFragmentIdentifier();
     else
       kurl.SetFragmentIdentifier(value);

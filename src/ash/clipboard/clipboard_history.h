@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "ash/ash_export.h"
 #include "ash/clipboard/clipboard_history_item.h"
-#include "ash/clipboard/clipboard_history_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/token.h"
@@ -18,15 +17,19 @@
 #include "ui/base/clipboard/clipboard_observer.h"
 
 namespace ash {
-
 class ScopedClipboardHistoryPauseImpl;
+
+namespace clipboard_history_util {
+enum class PauseBehavior;
+}  // namespace clipboard_history_util
 
 // Keeps track of the last few things saved in the clipboard.
 class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
  public:
   class ASH_EXPORT Observer : public base::CheckedObserver {
    public:
-    // Called when a ClipboardHistoryItem has been added.
+    // Called when a `ClipboardHistoryItem` has been added. `is_duplicate` is
+    // true if `item` is already in clipboard history when adding.
     virtual void OnClipboardHistoryItemAdded(const ClipboardHistoryItem& item,
                                              bool is_duplicate) {}
 
@@ -52,8 +55,11 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
   // Returns the list of most recent items. The returned list is sorted by
   // recency.
   const std::list<ClipboardHistoryItem>& GetItems() const;
+  std::list<ClipboardHistoryItem>& GetItems();
 
-  // Deletes clipboard history. Does not modify content stored in the clipboard.
+  // Deletes every item in the clipboard history. The clipboard is cleared as
+  // well to ensure that its contents stay in sync with the first item in the
+  // clipboard history.
   void Clear();
 
   // Returns whether the clipboard history of the active account is empty.
@@ -70,8 +76,9 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
   base::WeakPtr<ClipboardHistory> GetWeakPtr();
 
  private:
-  // Friended to allow ScopedClipboardHistoryPauseImpl to `Pause()` and
+  // Friended to allow `ScopedClipboardHistoryPauseImpl` to `Pause()` and
   // `Resume()`.
+  // TODO(b/269470292): Use a `PassKey` for this.
   friend class ScopedClipboardHistoryPauseImpl;
 
   // Ensures that the clipboard buffer contains the same data as the item at the
@@ -90,11 +97,12 @@ class ASH_EXPORT ClipboardHistory : public ui::ClipboardObserver {
   // `pause_id`. If `Pause()` is called while another pause is active, the
   // newest pause's behavior will be respected. When the newest pause ends, the
   // next newest pause's behavior will be restored.
-  const base::Token& Pause(ClipboardHistoryUtil::PauseBehavior pause_behavior);
+  const base::Token& Pause(
+      clipboard_history_util::PauseBehavior pause_behavior);
   void Resume(const base::Token& pause_id);
   struct PauseInfo {
     base::Token pause_id;
-    ClipboardHistoryUtil::PauseBehavior pause_behavior;
+    clipboard_history_util::PauseBehavior pause_behavior;
   };
 
   // Keeps track of consecutive clipboard operations and records metrics.

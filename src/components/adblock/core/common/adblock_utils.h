@@ -19,63 +19,25 @@
 #define COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_UTILS_H_
 
 #include <string>
+#include <string_view>
+#include <vector>
 
-#include "base/callback_forward.h"
-
-#include "base/memory/scoped_refptr.h"
-#include "base/time/time.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
-#include "components/adblock/core/common/sitekey.h"
+#include "url/gurl.h"
 
-class GURL;
-
-namespace net {
-class HttpResponseHeaders;
-}
-
-namespace adblock {
-
-class Subscription;
-
-namespace utils {
-
-struct AppInfo {
-  AppInfo();
-  ~AppInfo();
-  AppInfo(const AppInfo&);
-  std::string name;
-  std::string version;
-  std::string client_os;
-};
-
-std::string CreateDomainAllowlistingFilter(const std::string& domain);
-
-SiteKey GetSitekeyHeader(
-    const scoped_refptr<net::HttpResponseHeaders>& headers);
-
-AppInfo GetAppInfo();
-
-std::string SerializeLanguages(const std::vector<std::string> languages);
-
-std::vector<std::string> DeserializeLanguages(const std::string languages);
+namespace adblock::utils {
 
 std::vector<std::string> ConvertURLs(const std::vector<GURL>& input);
-
-// converts |date| into abp version format ex: 202107210821
-// in UTC format as necessary for server
-
-std::string ConvertBaseTimeToABPFilterVersionFormat(const base::Time& date);
 
 // Creates a FlatbufferData object that holds data from the ResourceBundle
 
 std::unique_ptr<FlatbufferData> MakeFlatbufferDataFromResourceBundle(
     int resource_id);
 
-bool RegexMatches(base::StringPiece pattern,
-                  base::StringPiece input,
+bool RegexMatches(std::string_view pattern,
+                  std::string_view input,
                   bool case_sensitive);
 
-}  // namespace utils
-}  // namespace adblock
+}  // namespace adblock::utils
 
 #endif  // COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_UTILS_H_

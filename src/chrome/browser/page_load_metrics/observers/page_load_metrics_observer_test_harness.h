@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,9 @@ class PageLoadMetricsObserverTestHarness
 
   PageLoadMetricsObserverTester* tester() { return tester_.get(); }
   const PageLoadMetricsObserverTester* tester() const { return tester_.get(); }
+
+ protected:
+  virtual bool IsNonTabWebUI() const;
 
  private:
   void InitializeFeatureList();

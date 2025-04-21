@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.test;
 
-import static org.chromium.android_webview.test.OnlyRunIn.ProcessMode.SINGLE_PROCESS;
+import static org.chromium.android_webview.test.OnlyRunIn.ProcessMode.EITHER_PROCESS;
 
 import androidx.test.filters.SmallTest;
 
@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Test suite for {@link CleanupReference}. */
 @RunWith(AwJUnit4ClassRunner.class)
-@OnlyRunIn(SINGLE_PROCESS) // These are unit tests
+@OnlyRunIn(EITHER_PROCESS) // These are unit tests
 @Batch(Batch.UNIT_TESTS)
 public class CleanupReferenceTest {
     private static AtomicInteger sObjectCount = new AtomicInteger();
@@ -40,7 +40,7 @@ public class CleanupReferenceTest {
             public void run() {
                 sObjectCount.decrementAndGet();
             }
-        };
+        }
 
         public ReferredObject() {
             sObjectCount.incrementAndGet();

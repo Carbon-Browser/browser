@@ -1,10 +1,12 @@
 <style include="cr-shared-style">
   .body-1 {
     font-size: 14px;
+    line-height: 20px;
   }
 
   .title-1 {
     font-size: 16px;
+    line-height: 24px;
   }
 
   .button-image {
@@ -46,6 +48,7 @@
     align-items: center;
     display: flex;
     font-size: 12px;
+    line-height: 18px;
     justify-content: center;
   }
 
@@ -58,7 +61,7 @@
   }
 
   a[href] {
-    color: var(--cr-link-color);
+    color: var(--color-link-foreground);
     text-decoration: none;
   }
 
@@ -94,7 +97,7 @@
       <template is="dom-if" if="[[qrScannerEnabled]]" class="center-content">
         <div class="center-content">
           <cr-button on-click="switchToQrInput" class="center text-button">
-            <iron-icon class="button-image" icon="cr:videocam"></iron-icon>
+            <cr-icon class="button-image" icon="cr:videocam"></cr-icon>
             $i18n{useCamera}
           </cr-button>
         </div>
@@ -109,7 +112,7 @@
     <div class="space-1"></div>
     <template is="dom-if" if="[[rememberDevices]]">
       <div id="remembered-device-footnote">
-        <iron-icon icon="cr:domain" id="remembered-device-icon"></iron-icon>
+        <cr-icon icon="cr:domain" id="remembered-device-icon"></cr-icon>
         <div id="remembered-device-content">
           [[managedFootnote]]
         </div>
@@ -124,7 +127,7 @@
     </template>
       <cr-button id="castButton" on-click="addSinkAndCast" class="action-button"
         disabled="[[submitDisabled]]">
-        $i18n{submit}
+        $i18n{cast}
       </cr-button>
       <cr-button id="backButton" on-click="switchToCodeInput"
         class="action-button">

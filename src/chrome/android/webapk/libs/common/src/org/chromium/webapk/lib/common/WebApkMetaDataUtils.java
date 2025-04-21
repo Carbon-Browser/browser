@@ -1,15 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.webapk.lib.common;
+import org.chromium.build.annotations.NullMarked;
 
 import android.os.Bundle;
 
 /** Contains utility methods for extracting WebAPK's meta data. */
+@NullMarked
 public class WebApkMetaDataUtils {
     /**
      * Extracts long value from the WebAPK's meta data.
+     *
      * @param metaData WebAPK meta data to extract the long from.
      * @param name Name of the <meta-data> tag to extract the value from.
      * @param defaultValue Value to return if long value could not be extracted.

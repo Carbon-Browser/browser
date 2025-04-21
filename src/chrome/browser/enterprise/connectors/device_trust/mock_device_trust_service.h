@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,14 @@ class MockDeviceTrustService : public DeviceTrustService {
   MOCK_METHOD(bool, IsEnabled, (), (const, override));
   MOCK_METHOD(void,
               BuildChallengeResponse,
-              (const std::string&, AttestationCallback),
+              (const std::string&,
+               const std::set<DTCPolicyLevel>&,
+               DeviceTrustCallback),
               (override));
-  MOCK_METHOD(bool, Watches, (const GURL&), (const, override));
+  MOCK_METHOD(const std::set<DTCPolicyLevel>,
+              Watches,
+              (const GURL&),
+              (const, override));
 };
 
 }  // namespace test

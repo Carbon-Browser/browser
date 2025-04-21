@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,23 +19,20 @@ AccessibilityTreeFormatterAndroidExternal::
 AccessibilityTreeFormatterAndroidExternal::
     ~AccessibilityTreeFormatterAndroidExternal() = default;
 
-base::Value AccessibilityTreeFormatterAndroidExternal::BuildTree(
+base::Value::Dict AccessibilityTreeFormatterAndroidExternal::BuildTree(
     ui::AXPlatformNodeDelegate* root) const {
   if (!root) {
-    return base::Value(base::Value::Type::DICTIONARY);
+    return base::Value::Dict();
   }
 
-  BrowserAccessibility* root_internal =
-      BrowserAccessibility::FromAXPlatformNodeDelegate(root);
-
-  base::DictionaryValue dict;
-  RecursiveBuildTree(*root_internal, &dict);
-  return std::move(dict);
+  base::Value::Dict dict;
+  RecursiveBuildTree(*root, &dict);
+  return dict;
 }
 
 void AccessibilityTreeFormatterAndroidExternal::RecursiveBuildTree(
-    const BrowserAccessibility& node,
-    base::DictionaryValue* dict) const {
+    const ui::AXPlatformNodeDelegate& node,
+    base::Value::Dict* dict) const {
   const BrowserAccessibilityAndroid* android_node =
       static_cast<const BrowserAccessibilityAndroid*>(&node);
 
@@ -44,30 +41,29 @@ void AccessibilityTreeFormatterAndroidExternal::RecursiveBuildTree(
   // TODO: It would be interesting to allow filtering here in the future.
   std::u16string str = android_node->GenerateAccessibilityNodeInfoString();
   if (str.empty()) {
-    dict->SetStringKey(kStringKey, kErrorMessage);
+    dict->Set(kStringKey, kErrorMessage);
     return;
   }
 
-  dict->SetStringKey(kStringKey, str);
+  dict->Set(kStringKey, str);
 
   base::Value::List children;
 
-  for (size_t i = 0; i < node.PlatformChildCount(); ++i) {
-    BrowserAccessibility* child_node = node.PlatformGetChild(i);
-    std::unique_ptr<base::DictionaryValue> child_dict(
-        new base::DictionaryValue);
-    RecursiveBuildTree(*child_node, child_dict.get());
-    children.Append(base::Value::FromUniquePtrValue(std::move(child_dict)));
+  for (size_t i = 0; i < node.GetChildCount(); ++i) {
+    ui::BrowserAccessibility* child_node = android_node->PlatformGetChild(i);
+    base::Value::Dict child_dict;
+    RecursiveBuildTree(*child_node, &child_dict);
+    children.Append(std::move(child_dict));
   }
-  dict->GetDict().Set(kChildrenDictAttr, std::move(children));
+  dict->Set(kChildrenDictAttr, std::move(children));
 }
 
 std::string AccessibilityTreeFormatterAndroidExternal::ProcessTreeForOutput(
-    const base::DictionaryValue& dict) const {
-  std::string line;
-  if (dict.GetString(kStringKey, &line))
-    return line;
-
+    const base::Value::Dict& dict) const {
+  const std::string* line = dict.FindString(kStringKey);
+  if (line) {
+    return *line;
+  }
   return std::string();
 }
 

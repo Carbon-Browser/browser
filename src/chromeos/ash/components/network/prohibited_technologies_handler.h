@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_policy_observer.h"
-#include "chromeos/login/login_state/login_state.h"
 
-namespace chromeos {
+namespace ash {
 
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) ProhibitedTechnologiesHandler
     : public LoginState::Observer,
@@ -34,7 +35,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ProhibitedTechnologiesHandler
   void PoliciesApplied(const std::string& userhash) override;
   // Function for updating the list of technologies that are prohibited during
   // user sessions
-  void SetProhibitedTechnologies(const base::Value& prohibited_list);
+  void SetProhibitedTechnologies(const base::Value::List& prohibited_list);
   // Functions for updating the list of technologies that are prohibited
   // everywhere, including login screen
   void AddGloballyProhibitedTechnology(const std::string& technology);
@@ -44,6 +45,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ProhibitedTechnologiesHandler
   std::vector<std::string> GetCurrentlyProhibitedTechnologies();
 
  private:
+  friend class ManagedNetworkConfigurationHandlerTest;
   friend class NetworkHandler;
   friend class ProhibitedTechnologiesHandlerTest;
 
@@ -51,7 +53,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ProhibitedTechnologiesHandler
 
   void Init(
       ManagedNetworkConfigurationHandler* managed_network_configuration_handler,
-      NetworkStateHandler* network_state_handler);
+      NetworkStateHandler* network_state_handler,
+      TechnologyStateController* technology_state_controller);
 
   void EnforceProhibitedTechnologies();
 
@@ -61,13 +64,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ProhibitedTechnologiesHandler
   // all time.
   std::vector<std::string> globally_prohibited_technologies_;
 
-  ManagedNetworkConfigurationHandler* managed_network_configuration_handler_ =
-      nullptr;
-  NetworkStateHandler* network_state_handler_ = nullptr;
+  raw_ptr<ManagedNetworkConfigurationHandler>
+      managed_network_configuration_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  raw_ptr<TechnologyStateController> technology_state_controller_ = nullptr;
   bool user_logged_in_ = false;
   bool user_policy_applied_ = false;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_PROHIBITED_TECHNOLOGIES_HANDLER_H_

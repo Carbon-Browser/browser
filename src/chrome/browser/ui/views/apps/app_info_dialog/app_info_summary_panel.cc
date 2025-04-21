@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/launch_util.h"
@@ -28,6 +28,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/combobox_model.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/combobox/combobox.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/link.h"
@@ -68,8 +69,7 @@ LaunchOptionsComboboxModel::LaunchOptionsComboboxModel() {
       l10n_util::GetStringUTF16(IDS_APP_CONTEXT_MENU_OPEN_WINDOW));
 }
 
-LaunchOptionsComboboxModel::~LaunchOptionsComboboxModel() {
-}
+LaunchOptionsComboboxModel::~LaunchOptionsComboboxModel() = default;
 
 extensions::LaunchType LaunchOptionsComboboxModel::GetLaunchTypeAtIndex(
     int index) const {
@@ -156,8 +156,9 @@ void AppInfoSummaryPanel::AddDescriptionAndLinksControl(
 
 void AppInfoSummaryPanel::AddDetailsControl(views::View* vertical_stack) {
   // Component apps have no details.
-  if (app_->location() == extensions::mojom::ManifestLocation::kComponent)
+  if (app_->location() == extensions::mojom::ManifestLocation::kComponent) {
     return;
+  }
 
   std::unique_ptr<views::View> details_list =
       CreateVerticalStack(ChromeLayoutProvider::Get()->GetDistanceMetric(
@@ -188,14 +189,15 @@ void AppInfoSummaryPanel::AddDetailsControl(views::View* vertical_stack) {
 }
 
 void AppInfoSummaryPanel::AddLaunchOptionControl(views::View* vertical_stack) {
-  if (!CanSetLaunchType())
+  if (!CanSetLaunchType()) {
     return;
+  }
 
   launch_options_combobox_model_ =
       std::make_unique<LaunchOptionsComboboxModel>();
   auto launch_options_combobox =
       std::make_unique<views::Combobox>(launch_options_combobox_model_.get());
-  launch_options_combobox->SetAccessibleName(
+  launch_options_combobox->GetViewAccessibility().SetName(
       l10n_util::GetStringUTF16(IDS_APPLICATION_INFO_LAUNCH_OPTIONS_ACCNAME));
   launch_options_combobox->SetCallback(base::BindRepeating(
       &AppInfoSummaryPanel::LaunchOptionsChanged, base::Unretained(this)));
@@ -233,7 +235,8 @@ void AppInfoSummaryPanel::StartCalculatingAppSize() {
   if (!app_->path().empty()) {
     extensions::path_util::CalculateAndFormatExtensionDirectorySize(
         app_->path(), IDS_APPLICATION_INFO_SIZE_SMALL_LABEL,
-        base::BindOnce(&AppInfoSummaryPanel::OnAppSizeCalculated, AsWeakPtr()));
+        base::BindOnce(&AppInfoSummaryPanel::OnAppSizeCalculated,
+                       weak_ptr_factory_.GetWeakPtr()));
   }
 }
 
@@ -271,8 +274,9 @@ bool AppInfoSummaryPanel::CanShowAppHomePage() const {
 
 void AppInfoSummaryPanel::DisplayLicenses() {
   DCHECK(CanDisplayLicenses());
-  for (const auto& license_url : GetLicenseUrls())
+  for (const auto& license_url : GetLicenseUrls()) {
     OpenLink(license_url);
+  }
   Close();
 }
 
@@ -281,8 +285,9 @@ bool AppInfoSummaryPanel::CanDisplayLicenses() const {
 }
 
 std::vector<GURL> AppInfoSummaryPanel::GetLicenseUrls() const {
-  if (!extensions::SharedModuleInfo::ImportsModules(app_))
+  if (!extensions::SharedModuleInfo::ImportsModules(app_)) {
     return std::vector<GURL>();
+  }
 
   std::vector<GURL> license_urls;
   extensions::ExtensionRegistry* registry =
@@ -297,11 +302,12 @@ std::vector<GURL> AppInfoSummaryPanel::GetLicenseUrls() const {
     DCHECK(imported_module);
 
     GURL about_page = extensions::ManifestURL::GetAboutPage(imported_module);
-    if (about_page != GURL::EmptyGURL())
+    if (about_page != GURL()) {
       license_urls.push_back(about_page);
+    }
   }
   return license_urls;
 }
 
-BEGIN_METADATA(AppInfoSummaryPanel, AppInfoPanel)
+BEGIN_METADATA(AppInfoSummaryPanel)
 END_METADATA

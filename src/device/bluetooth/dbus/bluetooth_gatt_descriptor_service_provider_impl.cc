@@ -1,13 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/bluetooth/dbus/bluetooth_gatt_descriptor_service_provider_impl.h"
 
 #include <cstddef>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "device/bluetooth/bluetooth_gatt_service.h"
@@ -123,7 +128,7 @@ void BluetoothGattDescriptorServiceProviderImpl::SendValueChanged(
   array_writer.OpenDictEntry(&dict_entry_writer);
   dict_entry_writer.AppendString(bluetooth_gatt_descriptor::kValueProperty);
   dict_entry_writer.OpenVariant("ay", &variant_writer);
-  variant_writer.AppendArrayOfBytes(value.data(), value.size());
+  variant_writer.AppendArrayOfBytes(value);
   dict_entry_writer.CloseContainer(&variant_writer);
   array_writer.CloseContainer(&dict_entry_writer);
   writer.CloseContainer(&array_writer);
@@ -342,7 +347,7 @@ void BluetoothGattDescriptorServiceProviderImpl::OnExported(
 void BluetoothGattDescriptorServiceProviderImpl::OnReadValue(
     dbus::MethodCall* method_call,
     dbus::ExportedObject::ResponseSender response_sender,
-    absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+    std::optional<device::BluetoothGattService::GattErrorCode> error_code,
     const std::vector<uint8_t>& value) {
   if (error_code.has_value()) {
     DVLOG(2) << "Failed to get descriptor value. Report error.";
@@ -359,7 +364,7 @@ void BluetoothGattDescriptorServiceProviderImpl::OnReadValue(
   std::unique_ptr<dbus::Response> response =
       dbus::Response::FromMethodCall(method_call);
   dbus::MessageWriter writer(response.get());
-  writer.AppendArrayOfBytes(value.data(), value.size());
+  writer.AppendArrayOfBytes(value);
   std::move(response_sender).Run(std::move(response));
 }
 

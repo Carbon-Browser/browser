@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module viz.mojom;
 
-import "gpu/ipc/common/mailbox.mojom";
 import "mojo/public/mojom/base/shared_memory.mojom";
 import "services/viz/public/mojom/compositing/begin_frame_args.mojom";
 import "services/viz/public/mojom/compositing/compositor_frame.mojom";
 import "services/viz/public/mojom/compositing/compositor_frame_sink.mojom";
+import "services/viz/public/mojom/compositing/shared_bitmap_id.mojom";
 import "services/viz/public/mojom/compositing/local_surface_id.mojom";
 import "services/viz/public/mojom/compositing/frame_timing_details.mojom";
 import "services/viz/public/mojom/compositing/returned_resource.mojom";
+import "services/viz/public/mojom/compositing/thread.mojom";
 import "services/viz/public/mojom/hit_test/hit_test_region_list.mojom";
 
 // Encapsulates either a single SubmitCompositorFrame call or a single
@@ -35,7 +36,7 @@ union BundledFrameSubmissionData {
   BeginFrameAck did_not_produce_frame;
 
   // Data for a DidDeleteSharedBitmap call.
-  gpu.mojom.Mailbox did_delete_shared_bitmap;
+  SharedBitmapId did_delete_shared_bitmap;
 };
 
 // SubmitCompositorFrame parameters, as bundled by BundledFrameSubmissionData
@@ -59,6 +60,10 @@ interface FrameSinkBundle {
   // for the identified sink.
   SetNeedsBeginFrame(uint32 sink_id, bool needs_begin_frame);
 
+  // Corresponds to a single message of the same name on CompositorFrameSink
+  // for the identified sink.
+  SetWantsBeginFrameAcks(uint32 sink_id);
+
   // Corresponds to a series of batched requests equivalent to calls across
   // arbitrary CompositorFrameSinks for frame sinks belonging to this bundle.
   // Can be used to substantially reduce IPC traffic when many related sinks are
@@ -70,12 +75,12 @@ interface FrameSinkBundle {
   // for the identified sink.
   DidAllocateSharedBitmap(
       uint32 sink_id, mojo_base.mojom.ReadOnlySharedMemoryRegion region,
-      gpu.mojom.Mailbox id);
+      SharedBitmapId id);
 
   // Corresponds to a single message of the same name on CompositorFrameSink
   // for the identified sink.
   [EnableIf=is_android]
-  SetThreadIds(uint32 sink_id, array<int32> thread_ids);
+  SetThreads(uint32 sink_id, array<Thread> threads);
 };
 
 // A set of ReturnedResources belonging to a specific frame sink.
@@ -90,6 +95,8 @@ struct BeginFrameInfo {
   uint32 sink_id;
   BeginFrameArgs args;
   map<uint32, FrameTimingDetails> details;
+  bool frame_ack;
+  array<ReturnedResource> resources;
 };
 
 // Client interface for FrameSinkBundle. This behaves as an aggregated

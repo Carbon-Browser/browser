@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ TEST_F(EnterpriseAuthenticationAppLinkPolicyHandlerTest, ValidPolicy) {
              nullptr);
   this->UpdateProviderPolicy(policy);
   const base::Value* pref_value = nullptr;
-  absl::optional<base::Value> expected = base::JSONReader::Read(R"(
+  std::optional<base::Value> expected = base::JSONReader::Read(R"(
     [
      "https://www.testserver1.com/login",
      "https://www.testserver2.com/login"

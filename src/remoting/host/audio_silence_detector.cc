@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/audio_silence_detector.h"
 
@@ -38,8 +43,7 @@ void AudioSilenceDetector::Reset(int sampling_rate, int channels) {
   channels_ = channels;
 }
 
-bool AudioSilenceDetector::IsSilence(const int16_t* samples,
-                                     size_t frames) {
+bool AudioSilenceDetector::IsSilence(const int16_t* samples, size_t frames) {
   const int samples_count = frames * channels();
   bool silent_packet = true;
   // Potentially this loop can be optimized (e.g. using SSE or adding special

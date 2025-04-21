@@ -30,6 +30,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_H_
 
 #include <sys/types.h>
+
 #include <atomic>
 
 #include "base/memory/scoped_refptr.h"
@@ -47,6 +48,7 @@
 namespace blink {
 
 class AudioNodeOutput;
+class V8AutomationRate;
 
 // AudioParam class represents web-exposed AudioParam interface.
 class AudioParam final : public ScriptWrappable, public InspectorHelperMixin {
@@ -78,7 +80,7 @@ class AudioParam final : public ScriptWrappable, public InspectorHelperMixin {
   // `Handler()` always returns a valid object.
   AudioParamHandler& Handler() const { return *handler_; }
   // `Context()` always returns a valid object.
-  BaseAudioContext* Context() const { return context_; }
+  BaseAudioContext* Context() const { return context_.Get(); }
 
   AudioParamHandler::AudioParamType GetParamType() const {
     return Handler().GetParamType();
@@ -91,8 +93,8 @@ class AudioParam final : public ScriptWrappable, public InspectorHelperMixin {
   void setValue(float, ExceptionState&);
   void setValue(float);
 
-  String automationRate() const;
-  void setAutomationRate(const String&, ExceptionState&);
+  V8AutomationRate automationRate() const;
+  void setAutomationRate(const V8AutomationRate&, ExceptionState&);
 
   float defaultValue() const;
 

@@ -1,13 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.bindings;
 
+import org.chromium.build.annotations.NullMarked;
+
 /**
  * A {@link MessageReceiver} that can also handle the handle the response message generated from the
  * given message.
  */
+@NullMarked
 public interface MessageReceiverWithResponder extends MessageReceiver {
 
     /**

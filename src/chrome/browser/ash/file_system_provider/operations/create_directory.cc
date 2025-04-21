@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,20 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 CreateDirectory::CreateDirectory(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     const base::FilePath& directory_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       directory_path_(directory_path),
       recursive_(recursive),
       callback_(std::move(callback)) {}
 
-CreateDirectory::~CreateDirectory() {
-}
+CreateDirectory::~CreateDirectory() = default;
 
 bool CreateDirectory::Execute(int request_id) {
   using extensions::api::file_system_provider::CreateDirectoryRequestedOptions;
@@ -48,20 +45,18 @@ bool CreateDirectory::Execute(int request_id) {
           options));
 }
 
-void CreateDirectory::OnSuccess(int /* request_id */,
-                                std::unique_ptr<RequestValue> /* result */,
+void CreateDirectory::OnSuccess(/*request_id=*/int,
+                                /*result=*/const RequestValue&,
                                 bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
-void CreateDirectory::OnError(int /* request_id */,
-                              std::unique_ptr<RequestValue> /* result */,
+void CreateDirectory::OnError(/*request_id=*/int,
+                              /*result=*/const RequestValue&,
                               base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

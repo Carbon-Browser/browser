@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.RadioGroup;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.ui.base.ViewUtils;
 
@@ -50,8 +48,8 @@ import java.util.List;
  * }</pre>
  * </p>
  */
-public final class RadioButtonWithDescriptionLayout
-        extends RadioGroup implements RadioButtonWithDescription.ButtonCheckedStateChangedListener {
+public final class RadioButtonWithDescriptionLayout extends RadioGroup
+        implements RadioButtonWithDescription.ButtonCheckedStateChangedListener {
     private final List<RadioButtonWithDescription> mRadioButtonsWithDescriptions;
     private OnCheckedChangeListener mOnCheckedChangeListener;
 
@@ -157,7 +155,6 @@ public final class RadioButtonWithDescriptionLayout
      *
      * @param childIndex Index of the child to select.
      */
-    @VisibleForTesting
     void selectChildAtIndexForTesting(int childIndex) {
         RadioButtonWithDescription b = (RadioButtonWithDescription) getChildAt(childIndex);
         b.setChecked(true);

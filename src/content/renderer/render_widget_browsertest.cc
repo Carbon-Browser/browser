@@ -1,19 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "content/public/renderer/render_frame_visitor.h"
 #include "content/public/test/fake_render_widget_host.h"
 #include "content/public/test/render_view_test.h"
-#include "content/renderer/render_frame_proxy.h"
 #include "content/renderer/render_thread_impl.h"
-#include "content/renderer/render_view_impl.h"
 #include "third_party/blink/public/common/widget/visual_properties.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
+#include "third_party/blink/public/web/web_element.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_hit_test_result.h"
 #include "third_party/blink/public/web/web_input_method_controller.h"
@@ -48,14 +47,14 @@ class RenderWidgetTest : public RenderViewTest {
 
   gfx::PointF GetCenterPointOfElement(const blink::WebString& id) {
     auto rect =
-        GetMainFrame()->GetDocument().GetElementById(id).BoundsInViewport();
+        GetMainFrame()->GetDocument().GetElementById(id).BoundsInWidget();
     return gfx::PointF(rect.x() + rect.width() / 2,
                        rect.y() + rect.height() / 2);
   }
 
   // Returns Compositor scrolling ElementId for a given id. If id is empty it
   // returns the document scrolling ElementId.
-  uint64_t GetCompositorElementId(const blink::WebString& id = "") {
+  cc::ElementId GetCompositorElementId(const blink::WebString& id = "") {
     blink::WebNode node;
     if (id.IsEmpty())
       node = GetMainFrame()->GetDocument();
@@ -190,6 +189,12 @@ TEST_F(RenderWidgetTest, CompositorIdHitTestAPIWithImplicitRootScroller) {
 }
 
 TEST_F(RenderWidgetTest, GetCompositionRangeValidComposition) {
+  // Composition range isn't used on Android and this feature stops the path
+  // that sends composition range info. Disable the feature so that the tests
+  // pass until the Android and non Android code paths are decoupled at which
+  // point the feature can be removed.
+  blink::WebRuntimeFeatures::EnableFeatureFromString("CursorAnchorInfoMojoPipe",
+                                                     false);
   LoadHTML(
       "<div contenteditable>EDITABLE</div>"
       "<script> document.querySelector('div').focus(); </script>");
@@ -206,6 +211,9 @@ TEST_F(RenderWidgetTest, GetCompositionRangeValidComposition) {
 }
 
 TEST_F(RenderWidgetTest, GetCompositionRangeForSelection) {
+  // See comment in GetCompositionRangeValidComposition for explanation.
+  blink::WebRuntimeFeatures::EnableFeatureFromString("CursorAnchorInfoMojoPipe",
+                                                     false);
   LoadHTML(
       "<div>NOT EDITABLE</div>"
       "<script> document.execCommand('selectAll'); </script>");
@@ -215,6 +223,9 @@ TEST_F(RenderWidgetTest, GetCompositionRangeForSelection) {
 }
 
 TEST_F(RenderWidgetTest, GetCompositionRangeInvalid) {
+  // See comment in GetCompositionRangeValidComposition for explanation.
+  blink::WebRuntimeFeatures::EnableFeatureFromString("CursorAnchorInfoMojoPipe",
+                                                     false);
   LoadHTML("<div>NOT EDITABLE</div>");
   gfx::Range range = LastCompositionRange();
   // If this test ever starts failing, one likely outcome is that WebRange

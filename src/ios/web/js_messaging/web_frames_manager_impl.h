@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,11 @@
 
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 
-#include <map>
-#include "base/memory/weak_ptr.h"
+#import <map>
+
+#import "base/memory/raw_ptr.h"
+#import "base/memory/weak_ptr.h"
+#import "base/observer_list.h"
 
 namespace web {
 class WebFrame;
@@ -16,22 +19,25 @@ class WebFrame;
 class WebFramesManagerImpl : public WebFramesManager {
  public:
   explicit WebFramesManagerImpl();
+  ~WebFramesManagerImpl() override;
 
   WebFramesManagerImpl(const WebFramesManagerImpl&) = delete;
   WebFramesManagerImpl& operator=(const WebFramesManagerImpl&) = delete;
 
-  ~WebFramesManagerImpl() override;
-
-  // Adds |frame| to the list of web frames. A frame with the same frame ID must
-  // not already be registered). Returns |false| and |frame| will be ignored if
-  // |frame| is a main frame and a main frame has already been set.
+  // Adds `frame` to the list of web frames. A frame with the same frame ID must
+  // not already be registered). Returns `false` and `frame` will be ignored if
+  // `frame` is a main frame and a main frame has already been set.
   bool AddFrame(std::unique_ptr<WebFrame> frame);
-  // Removes the web frame with |frame_id|, if one exists, from the list of
+  // Removes the web frame with `frame_id`, if one exists, from the list of
   // associated web frames. If the frame manager does not contain a frame with
-  // |frame_id|, operation is a no-op.
+  // `frame_id`, operation is a no-op.
   void RemoveFrameWithId(const std::string& frame_id);
+  // Removes all the associated web frames.
+  void RemoveAllWebFrames();
 
   // WebFramesManager overrides.
+  void AddObserver(Observer* observer) override;
+  void RemoveObserver(Observer* observer) override;
   std::set<WebFrame*> GetAllWebFrames() override;
   WebFrame* GetMainWebFrame() override;
   WebFrame* GetFrameWithId(const std::string& frame_id) override;
@@ -41,8 +47,8 @@ class WebFramesManagerImpl : public WebFramesManager {
   std::map<std::string, std::unique_ptr<WebFrame>> web_frames_;
 
   // Reference to the current main web frame.
-  WebFrame* main_web_frame_ = nullptr;
-
+  raw_ptr<WebFrame> main_web_frame_ = nullptr;
+  base::ObserverList<Observer, /*check_empty=*/false> observers_;
   base::WeakPtrFactory<WebFramesManagerImpl> weak_factory_;
 };
 

@@ -1,24 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/cr_elements/cr_button/cr_button.m.js';
-import '//resources/cr_elements/cr_input/cr_input.m.js';
-import '//resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/cr_elements/cr_radio_button/cr_radio_button.js';
+import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrInputElement} from '//resources/cr_elements/cr_input/cr_input.m.js';
+import type {CrInputElement} from '//resources/cr_elements/cr_input/cr_input.js';
 // <if expr="chromeos_ash">
-import {CrRadioGroupElement} from '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
+import type {CrRadioGroupElement} from '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
 // </if>
 
-import {assert} from '//resources/js/assert_ts.js';
+import {assert} from '//resources/js/assert.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {SyncPrefs, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+import {SyncBrowserProxyImpl} from '/shared/settings/people_page/sync_browser_proxy.js';
 
-import {SyncBrowserProxyImpl, SyncPrefs, SyncStatus} from './sync_browser_proxy.js';
 import {getTemplate} from './sync_encryption_options.html.js';
 
 /**
@@ -182,7 +183,7 @@ export class SettingsSyncEncryptionOptionsElement extends PolymerElement {
     SyncBrowserProxyImpl.getInstance()
         .setEncryptionPassphrase(this.passphrase_)
         .then(successfullySet => {
-          // TODO(crbug.com/1139060): Rename the event, there is no change if
+          // TODO(crbug.com/40725814): Rename the event, there is no change if
           // |successfullySet| is false. It should also mention 'encryption
           // passphrase' in its name.
           this.dispatchEvent(new CustomEvent('passphrase-changed', {

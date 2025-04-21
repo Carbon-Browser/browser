@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 namespace blink {
 
-DOMDataStore::DOMDataStore(v8::Isolate* isolate, bool is_main_world)
-    : is_main_world_(is_main_world) {}
+DOMDataStore::DOMDataStore(v8::Isolate* isolate, bool can_use_inline_storage)
+    : can_use_inline_storage_(can_use_inline_storage) {}
 
 void DOMDataStore::Dispose() {
   for (auto& it : wrapper_map_) {

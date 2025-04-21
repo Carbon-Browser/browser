@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ui/base/window_state_type.h"
 
 #include "base/notreached.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 
 namespace chromeos {
 
@@ -26,8 +27,6 @@ std::ostream& operator<<(std::ostream& stream, WindowStateType state) {
       return stream << "kLeftSnapped";
     case WindowStateType::kSecondarySnapped:
       return stream << "kRightSnapped";
-    case WindowStateType::kAutoPositioned:
-      return stream << "kAutoPositioned";
     case WindowStateType::kPinned:
       return stream << "kPinned";
     case WindowStateType::kTrustedPinned:
@@ -39,54 +38,50 @@ std::ostream& operator<<(std::ostream& stream, WindowStateType state) {
   }
 
   NOTREACHED();
-  return stream;
 }
 
-WindowStateType ToWindowStateType(ui::WindowShowState state) {
+WindowStateType ToWindowStateType(ui::mojom::WindowShowState state) {
   switch (state) {
-    case ui::SHOW_STATE_DEFAULT:
+    case ui::mojom::WindowShowState::kDefault:
       return WindowStateType::kDefault;
-    case ui::SHOW_STATE_NORMAL:
+    case ui::mojom::WindowShowState::kNormal:
       return WindowStateType::kNormal;
-    case ui::SHOW_STATE_MINIMIZED:
+    case ui::mojom::WindowShowState::kMinimized:
       return WindowStateType::kMinimized;
-    case ui::SHOW_STATE_MAXIMIZED:
+    case ui::mojom::WindowShowState::kMaximized:
       return WindowStateType::kMaximized;
-    case ui::SHOW_STATE_INACTIVE:
+    case ui::mojom::WindowShowState::kInactive:
       return WindowStateType::kInactive;
-    case ui::SHOW_STATE_FULLSCREEN:
+    case ui::mojom::WindowShowState::kFullscreen:
       return WindowStateType::kFullscreen;
-    case ui::SHOW_STATE_END:
+    case ui::mojom::WindowShowState::kEnd:
       NOTREACHED();
-      return WindowStateType::kDefault;
   }
 }
 
-ui::WindowShowState ToWindowShowState(WindowStateType type) {
+ui::mojom::WindowShowState ToWindowShowState(WindowStateType type) {
   switch (type) {
     case WindowStateType::kDefault:
-      return ui::SHOW_STATE_DEFAULT;
+      return ui::mojom::WindowShowState::kDefault;
     case WindowStateType::kNormal:
     case WindowStateType::kSecondarySnapped:
     case WindowStateType::kPrimarySnapped:
-    case WindowStateType::kAutoPositioned:
     case WindowStateType::kPip:
     case WindowStateType::kFloated:
-      return ui::SHOW_STATE_NORMAL;
+      return ui::mojom::WindowShowState::kNormal;
 
     case WindowStateType::kMinimized:
-      return ui::SHOW_STATE_MINIMIZED;
+      return ui::mojom::WindowShowState::kMinimized;
     case WindowStateType::kMaximized:
-      return ui::SHOW_STATE_MAXIMIZED;
+      return ui::mojom::WindowShowState::kMaximized;
     case WindowStateType::kInactive:
-      return ui::SHOW_STATE_INACTIVE;
+      return ui::mojom::WindowShowState::kInactive;
     case WindowStateType::kFullscreen:
     case WindowStateType::kPinned:
     case WindowStateType::kTrustedPinned:
-      return ui::SHOW_STATE_FULLSCREEN;
+      return ui::mojom::WindowShowState::kFullscreen;
   }
   NOTREACHED();
-  return ui::SHOW_STATE_DEFAULT;
 }
 
 bool IsPinnedWindowStateType(WindowStateType type) {
@@ -103,12 +98,22 @@ bool IsMaximizedOrFullscreenOrPinnedWindowStateType(WindowStateType type) {
          IsFullscreenOrPinnedWindowStateType(type);
 }
 
+bool IsMaximizedOrFullscreenWindowStateType(WindowStateType type) {
+  return type == WindowStateType::kMaximized ||
+         type == WindowStateType::kFullscreen;
+}
+
 bool IsMinimizedWindowStateType(WindowStateType type) {
   return type == WindowStateType::kMinimized;
 }
 
 bool IsNormalWindowStateType(WindowStateType type) {
   return type == WindowStateType::kNormal || type == WindowStateType::kDefault;
+}
+
+bool IsSnappedWindowStateType(WindowStateType type) {
+  return type == WindowStateType::kPrimarySnapped ||
+         type == WindowStateType::kSecondarySnapped;
 }
 
 }  // namespace chromeos

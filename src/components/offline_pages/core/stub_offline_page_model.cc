@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@ namespace offline_pages {
 
 StubOfflinePageModel::StubOfflinePageModel()
     : archive_directory_(base::FilePath(FILE_PATH_LITERAL("/archive_dir/"))) {}
-StubOfflinePageModel::~StubOfflinePageModel() {}
+StubOfflinePageModel::~StubOfflinePageModel() = default;
 
 void StubOfflinePageModel::SetArchiveDirectory(const base::FilePath& path) {
   archive_directory_ = path;

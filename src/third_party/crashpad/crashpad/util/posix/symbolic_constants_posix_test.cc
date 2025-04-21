@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <sys/types.h>
 
 #include <iterator>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "gtest/gtest.h"
@@ -126,7 +126,7 @@ TEST(SymbolicConstantsPOSIX, SignalToString) {
   }
 }
 
-void TestStringToSignal(const base::StringPiece& string,
+void TestStringToSignal(std::string_view string,
                         StringToSymbolicConstantOptions options,
                         bool expect_result,
                         int expect_value) {
@@ -222,8 +222,8 @@ TEST(SymbolicConstantsPOSIX, StringToSignal) {
 
     for (size_t index = 0; index < std::size(kNULTestData); ++index) {
       SCOPED_TRACE(base::StringPrintf("index %zu", index));
-      base::StringPiece string(kNULTestData[index].string,
-                               kNULTestData[index].length);
+      std::string_view string(kNULTestData[index].string,
+                              kNULTestData[index].length);
       TestStringToSignal(string, options, false, 0);
     }
   }
@@ -232,12 +232,12 @@ TEST(SymbolicConstantsPOSIX, StringToSignal) {
   {
     SCOPED_TRACE("trailing_NUL_full");
     TestStringToSignal(
-        base::StringPiece("SIGBUST", 6), kAllowFullName, true, SIGBUS);
+        std::string_view("SIGBUST", 6), kAllowFullName, true, SIGBUS);
   }
   {
     SCOPED_TRACE("trailing_NUL_short");
     TestStringToSignal(
-        base::StringPiece("BUST", 3), kAllowShortName, true, SIGBUS);
+        std::string_view("BUST", 3), kAllowShortName, true, SIGBUS);
   }
 }
 

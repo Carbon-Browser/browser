@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/geolocation/public_ip_address_geolocation_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/device/geolocation/public_ip_address_geolocator.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
@@ -33,13 +33,14 @@ void PublicIpAddressGeolocationProvider::Bind(
 
 void PublicIpAddressGeolocationProvider::CreateGeolocation(
     const net::MutablePartialNetworkTrafficAnnotationTag& tag,
-    mojo::PendingReceiver<mojom::Geolocation> receiver) {
+    mojo::PendingReceiver<mojom::Geolocation> receiver,
+    mojom::GeolocationClientId client_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(public_ip_address_location_notifier_);
   geolocation_receiver_set_.Add(
       std::make_unique<PublicIpAddressGeolocator>(
           static_cast<net::PartialNetworkTrafficAnnotationTag>(tag),
-          public_ip_address_location_notifier_.get(),
+          public_ip_address_location_notifier_.get(), client_id,
           base::BindRepeating(
               &mojo::UniqueReceiverSet<mojom::Geolocation>::ReportBadMessage,
               base::Unretained(&geolocation_receiver_set_))),

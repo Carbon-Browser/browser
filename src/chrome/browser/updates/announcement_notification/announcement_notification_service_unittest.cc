@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@
 #include "components/prefs/testing_pref_service.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -102,9 +103,8 @@ class AnnouncementNotificationServiceTest : public testing::Test {
             int current_version,
             bool new_profile,
             bool guest_profile = false) {
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-        enabled_features;
-    std::vector<base::Feature> disabled_features;
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
     if (enable_feature)
       enabled_features.emplace_back(kAnnouncementNotification, parameters);
     else
@@ -137,7 +137,7 @@ class AnnouncementNotificationServiceTest : public testing::Test {
     params.profile_path =
         test_profile_manager_->profiles_dir().AppendASCII(kProfileId);
     params.profile_name = u"dummy_name";
-    params.gaia_id = sign_in ? "dummy_gaia_id" : std::string();
+    params.gaia_id = sign_in ? GaiaId("dummy_gaia_id") : GaiaId();
     params.is_consented_primary_account = sign_in;
     test_profile_manager_->profile_attributes_storage()->AddProfile(
         std::move(params));
@@ -151,10 +151,8 @@ class AnnouncementNotificationServiceTest : public testing::Test {
     // Setup test target objects.
     auto delegate = std::make_unique<NiceMock<MockDelegate>>();
     delegate_ = delegate.get();
-    service_ = base::WrapUnique<AnnouncementNotificationService>(
-        AnnouncementNotificationService::Create(test_profile_.get(),
-                                                pref_service_.get(),
-                                                std::move(delegate), &clock_));
+    service_ = AnnouncementNotificationService::Create(
+        test_profile_.get(), pref_service_.get(), std::move(delegate), &clock_);
   }
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include "chrome/test/chromedriver/chrome/adb_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <string_view>
+
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/string_escape.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
@@ -75,7 +76,7 @@ class ResponseBuffer : public base::RefCountedThreadSafe<ResponseBuffer> {
 
  private:
   friend class base::RefCountedThreadSafe<ResponseBuffer>;
-  ~ResponseBuffer() {}
+  ~ResponseBuffer() = default;
 
   std::string response_;
   int result_;
@@ -117,7 +118,7 @@ AdbImpl::AdbImpl(
   CHECK(io_task_runner_.get());
 }
 
-AdbImpl::~AdbImpl() {}
+AdbImpl::~AdbImpl() = default;
 
 Status AdbImpl::GetDevices(std::vector<std::string>* devices) {
   const std::string& serial_from_env = GetSerialFromEnvironment();
@@ -246,10 +247,17 @@ Status AdbImpl::Launch(
     const std::string& device_serial, const std::string& package,
     const std::string& activity) {
   std::string response;
+  ExecuteHostShellCommand(device_serial, "getprop ro.build.version.release",
+                          &response);
+  int android_version = stoi(response);
+  if (android_version >= 13) {
+    ExecuteHostShellCommand(
+        device_serial,
+        "pm grant " + package + " android.permission.POST_NOTIFICATIONS",
+        &response);
+  }
   Status status = ExecuteHostShellCommand(
-      device_serial,
-      "am start -W -n " + package + "/" + activity + " -d data:,",
-      &response);
+      device_serial, "am start -W -n " + package + "/" + activity, &response);
   if (!status.IsOk())
     return status;
   if (response.find("Complete") == std::string::npos)
@@ -281,11 +289,11 @@ Status AdbImpl::GetPidByName(const std::string& device_serial,
   if (!status.IsOk())
     return status;
 
-  for (const base::StringPiece& line : base::SplitStringPiece(
+  for (std::string_view line : base::SplitStringPiece(
            response, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
-    std::vector<base::StringPiece> tokens = base::SplitStringPiece(
-        line, base::kWhitespaceASCII,
-        base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+    std::vector<std::string_view> tokens = base::SplitStringPiece(
+        line, base::kWhitespaceASCII, base::KEEP_WHITESPACE,
+        base::SPLIT_WANT_NONEMPTY);
     if (tokens.size() < 8 || tokens.size() > 10)
       continue;
     // The ps command on Android M+ does not always output a value for WCHAN,
@@ -315,9 +323,9 @@ Status AdbImpl::GetSocketByPattern(const std::string& device_serial,
   if (!status.IsOk())
     return status;
 
-  for (const base::StringPiece& line : base::SplitStringPiece(
+  for (std::string_view line : base::SplitStringPiece(
            response, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
-    std::vector<base::StringPiece> tokens = base::SplitStringPiece(
+    std::vector<std::string_view> tokens = base::SplitStringPiece(
         line, base::kWhitespaceASCII, base::TRIM_WHITESPACE,
         base::SPLIT_WANT_NONEMPTY);
     if (tokens.size() != 8)

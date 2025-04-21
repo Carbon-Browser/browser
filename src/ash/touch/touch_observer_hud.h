@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,10 @@
 
 #include "ash/ash_export.h"
 #include "ash/display/window_tree_host_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/display/display_observer.h"
 #include "ui/display/manager/display_configurator.h"
+#include "ui/display/manager/display_manager_observer.h"
 #include "ui/events/event_handler.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -31,7 +33,7 @@ class ASH_EXPORT TouchObserverHud
       public views::WidgetObserver,
       public display::DisplayObserver,
       public display::DisplayConfigurator::Observer,
-      public WindowTreeHostManager::Observer {
+      public display::DisplayManagerObserver {
  public:
   TouchObserverHud(const TouchObserverHud&) = delete;
   TouchObserverHud& operator=(const TouchObserverHud&) = delete;
@@ -65,26 +67,26 @@ class ASH_EXPORT TouchObserverHud
   void OnWidgetDestroying(views::Widget* widget) override;
 
   // display::DisplayObserver:
-  void OnDisplayRemoved(const display::Display& old_display) override;
+  void OnDisplaysRemoved(const display::Displays& removed_displays) override;
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t metrics) override;
 
   // display::DisplayConfigurator::Observer:
-  void OnDisplayModeChanged(
+  void OnDisplayConfigurationChanged(
       const display::DisplayConfigurator::DisplayStateList& outputs) override;
 
-  // WindowTreeHostManager::Observer:
+  // display::DisplayManagerObserver
   void OnDisplaysInitialized() override;
-  void OnDisplayConfigurationChanging() override;
-  void OnDisplayConfigurationChanged() override;
+  void OnWillApplyDisplayChanges() override;
+  void OnDidApplyDisplayChanges() override;
 
  private:
   friend class TouchHudTestBase;
 
   const int64_t display_id_;
-  aura::Window* root_window_;
+  raw_ptr<aura::Window> root_window_;
 
-  views::Widget* widget_;
+  raw_ptr<views::Widget> widget_;
 
   display::ScopedDisplayObserver display_observer_{this};
 };

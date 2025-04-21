@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 #include "base/check.h"
 #include "content/public/renderer/render_frame.h"
 #include "fuchsia_web/webengine/mojom/web_engine_media_resource_provider.mojom.h"
+#include "fuchsia_web/webengine/renderer/web_engine_audio_output_device.h"
 #include "media/base/audio_renderer_sink.h"
-#include "media/fuchsia/audio/fuchsia_audio_output_device.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 
 namespace {
@@ -40,9 +40,8 @@ WebEngineAudioDeviceFactory::NewAudioRendererSink(
   bool allow_audio_consumer = true;
   switch (source_type) {
     case blink::WebAudioDeviceSourceType::kMediaElement:
-      // MediaElement uses NewSwitchableAudioRendererSink().
+      // MediaElement uses NewMixableSink().
       NOTREACHED();
-      return nullptr;
 
     case blink::WebAudioDeviceSourceType::kWebRtc:
     case blink::WebAudioDeviceSourceType::kNonRtcAudioTrack:
@@ -74,7 +73,7 @@ WebEngineAudioDeviceFactory::NewAudioRendererSink(
     CHECK(render_frame);
 
     // Connect WebEngineMediaResourceProvider.
-    render_frame->GetBrowserInterfaceBroker()->GetInterface(
+    render_frame->GetBrowserInterfaceBroker().GetInterface(
         media_resource_provider.BindNewPipeAndPassReceiver());
 
     bool result =
@@ -92,6 +91,6 @@ WebEngineAudioDeviceFactory::NewAudioRendererSink(
   fidl::InterfaceHandle<fuchsia::media::AudioConsumer> audio_consumer;
   media_resource_provider->CreateAudioConsumer(audio_consumer.NewRequest());
 
-  return media::FuchsiaAudioOutputDevice::CreateOnDefaultThread(
+  return WebEngineAudioOutputDevice::CreateOnDefaultThread(
       std::move(audio_consumer));
 }

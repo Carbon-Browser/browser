@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,21 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
-#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/test/values_test_util.h"
 #include "base/thread_annotations.h"
 #include "base/values.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
 #include "content/services/auction_worklet/auction_v8_inspector_util.h"
+#include "testing/gmock/include/gmock/gmock.h"
+#include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 #include "v8/include/v8-inspector.h"
 
 namespace auction_worklet {
@@ -97,6 +100,46 @@ TestChannel::Event TestChannel::WaitForMethodNotification(
       method));
 }
 
+void TestChannel::WaitForAndValidateConsoleMessage(std::string_view type,
+                                                   std::string_view json_args,
+                                                   size_t stack_trace_size,
+                                                   std::string_view function,
+                                                   const GURL& url,
+                                                   int line_number) {
+  TestChannel::Event message =
+      WaitForMethodNotification("Runtime.consoleAPICalled");
+  const std::string* actual_type =
+      message.value.GetDict().FindStringByDottedPath("params.type");
+  ASSERT_TRUE(actual_type);
+  EXPECT_EQ(type, *actual_type);
+  const base::Value::List* args =
+      message.value.GetDict().FindListByDottedPath("params.args");
+  ASSERT_TRUE(args);
+  EXPECT_THAT(*args, base::test::IsJson(json_args));
+
+  const base::Value::List* stack_trace =
+      message.value.GetDict().FindListByDottedPath(
+          "params.stackTrace.callFrames");
+  ASSERT_TRUE(stack_trace);
+  ASSERT_EQ(stack_trace_size, stack_trace->size());
+  const base::Value::Dict* stack_trace_dict = (*stack_trace)[0].GetIfDict();
+  ASSERT_TRUE(stack_trace_dict);
+  EXPECT_EQ(function, *stack_trace_dict->FindString("functionName"));
+  EXPECT_EQ(url.spec(), *stack_trace_dict->FindString("url"));
+  EXPECT_EQ(line_number, stack_trace_dict->FindInt("lineNumber"));
+}
+
+void TestChannel::ExpectNoMoreConsoleEvents() {
+  base::RunLoop().RunUntilIdle();
+  base::AutoLock hold_lock(lock_);
+  for (const auto& event : events_) {
+    if (event.type == TestChannel::Event::Type::Notification) {
+      EXPECT_NE(*event.value.GetDict().FindString("method"),
+                "Runtime.consoleAPICalled");
+    }
+  }
+}
+
 void TestChannel::sendResponse(
     int call_id,
     std::unique_ptr<v8_inspector::StringBuffer> message) {
@@ -123,7 +166,7 @@ void TestChannel::LogEvent(
   // For TestChannel we always talk JSON.  Make it into a base::Value, to make
   // it easy to look stuff up in it.
   std::string message_str = ToString(message->string());
-  absl::optional<base::Value> val = base::JSONReader::Read(message_str);
+  std::optional<base::Value> val = base::JSONReader::Read(message_str);
   CHECK(val.has_value()) << message_str;
   Event event;
   event.type = type;
@@ -196,10 +239,18 @@ TestChannel* ScopedInspectorSupport::ConnectDebuggerSession(
   return result;
 }
 
+TestChannel* ScopedInspectorSupport::ConnectDebuggerSessionAndRuntimeEnable(
+    int context_group_id) {
+  TestChannel* channel = ConnectDebuggerSession(context_group_id);
+  channel->RunCommandAndWaitForResult(
+      1, "Runtime.enable", R"({"id":1,"method":"Runtime.enable","params":{}})");
+  return channel;
+}
+
 ScopedInspectorSupport::V8State::V8State() = default;
 ScopedInspectorSupport::V8State::~V8State() {
-  inspector_sessions_.clear();
   output_channels_.clear();
+  inspector_sessions_.clear();
 
   // Delete inspector after `inspector_sessions_`, before `inspector_client`_
   v8_helper_->SetV8InspectorForTesting(
@@ -219,7 +270,8 @@ void ScopedInspectorSupport::ConnectDebuggerSessionOnV8Thread(
   *result = test_channel.get();
 
   auto session = v8_state_->v8_helper_->inspector()->connect(
-      context_group_id, test_channel.get(), v8_inspector::StringView());
+      context_group_id, test_channel.get(), v8_inspector::StringView(),
+      v8_inspector::V8Inspector::kFullyTrusted);
   test_channel->SetInspectorSession(session.get());
   v8_state_->output_channels_.push_back(std::move(test_channel));
   v8_state_->inspector_sessions_.push_back(std::move(session));

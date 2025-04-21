@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ Decryptor* CdmContext::GetDecryptor() {
   return nullptr;
 }
 
-absl::optional<base::UnguessableToken> CdmContext::GetCdmId() const {
-  return absl::nullopt;
+std::optional<base::UnguessableToken> CdmContext::GetCdmId() const {
+  return std::nullopt;
 }
 
 std::string CdmContext::CdmIdToString(const base::UnguessableToken* cdm_id) {

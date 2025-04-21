@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSIONS_DIALOGS_BROWSERTEST_H_
 
 #include <string>
+
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 

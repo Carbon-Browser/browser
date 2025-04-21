@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/progress_indicator/progress_icon_animation.h"
 
+#include "base/memory/ptr_util.h"
 #include "ui/gfx/animation/tween.h"
 
 namespace ash {
@@ -14,6 +15,14 @@ ProgressIconAnimation::ProgressIconAnimation()
           /*is_cyclic=*/false) {}
 
 ProgressIconAnimation::~ProgressIconAnimation() = default;
+
+// static
+std::unique_ptr<ProgressIconAnimation> ProgressIconAnimation::Create() {
+  // NOTE: `base::WrapUnique()` is necessary due to constructor visibility.
+  auto animation = base::WrapUnique(new ProgressIconAnimation());
+  animation->Init();
+  return animation;
+}
 
 void ProgressIconAnimation::UpdateAnimatableProperties(double fraction) {
   // Tween.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ plugins::PluginPlaceholder* CreateNonLoadablePlaceholderHelper(
   std::string html_data = webui::GetI18nTemplateHtml(template_html, values);
 
   // PluginPlaceholder will destroy itself when its WebViewPlugin is going away.
-  return new plugins::PluginPlaceholder(render_frame, params, html_data);
+  return plugins::PluginPlaceholder::Create(render_frame, params, html_data);
 }
 
 }  // namespace
@@ -78,7 +78,7 @@ plugins::PluginPlaceholder* NonLoadablePluginPlaceholder::CreateErrorPlugin(
   blink::WebPluginParams params;
   // PluginPlaceholder will destroy itself when its WebViewPlugin is going away.
   plugins::PluginPlaceholder* plugin =
-      new plugins::PluginPlaceholder(render_frame, params, html_data);
+      plugins::PluginPlaceholder::Create(render_frame, params, html_data);
 
   mojo::AssociatedRemote<chrome::mojom::PluginHost> plugin_host;
   render_frame->GetRemoteAssociatedInterfaces()->GetInterface(&plugin_host);

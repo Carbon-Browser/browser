@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class OutputStreamConnection : public MixerConnection,
     // 0 to indicate end-of-stream). The |playout_timestamp| indicates the
     // audio clock timestamp in microseconds when the first frame of the filled
     // data is expected to play out.
-    virtual void FillNextBuffer(void* buffer,
+    virtual void FillNextBuffer(base::span<uint8_t> buffer,
                                 int frames,
                                 int64_t delay_timestamp,
                                 int64_t delay) = 0;

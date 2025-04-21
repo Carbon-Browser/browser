@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chromeos/components/mojo_bootstrap/pending_connection_manager.h"
 #include "dbus/message.h"

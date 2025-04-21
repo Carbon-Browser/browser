@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,8 @@
 namespace ash {
 
 base::Value SystemWebAppData::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetIntKey("system_app_type", static_cast<int>(system_app_type));
-  return root;
+  return base::Value(base::Value::Dict().Set(
+      "system_app_type", static_cast<int>(system_app_type)));
 }
 
 bool operator==(const SystemWebAppData& chromeos_data1,

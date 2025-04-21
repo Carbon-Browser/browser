@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
@@ -114,7 +114,7 @@ void ArcBootPhaseThrottleObserver::OnConnectionReady() {
   DVLOG(1)
       << "app.mojom and intent_helper.mojom are connected. Throttle ARC in "
       << kThrottleArcDelay;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ArcBootPhaseThrottleObserver::ThrottleArc,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -146,7 +146,8 @@ void ArcBootPhaseThrottleObserver::MaybeSetActive() {
 
   auto* session_manager = ArcSessionManager::Get();
   DCHECK(session_manager);
-  const bool opt_in_boot = !session_manager->is_directly_started();
+  const bool opt_in_boot =
+      !session_manager->skipped_terms_of_service_negotiation();
 
   // ARC should be always be unthrottled during boot if ARC is enabled by
   // managed policy, or if this is the opt-in boot. Else, only unthrottle ARC

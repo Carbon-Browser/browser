@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,13 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/power/ml/idle_event_notifier.h"
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
 #include "chrome/browser/ash/power/ml/user_activity_event.pb.h"
@@ -29,6 +28,7 @@
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/test_browser_window_aura.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
@@ -122,12 +122,12 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
 
-    PowerManagerClient::InitializeFake();
+    chromeos::PowerManagerClient::InitializeFake();
     mojo::PendingRemote<viz::mojom::VideoDetectorObserver> observer;
     activity_logger_ = std::make_unique<UserActivityManager>(
-        &delegate_, &user_activity_detector_, PowerManagerClient::Get(),
-        &session_manager_, observer.InitWithNewPipeAndPassReceiver(),
-        &fake_user_manager_);
+        &delegate_, ui::UserActivityDetector::Get(),
+        chromeos::PowerManagerClient::Get(), &session_manager_,
+        observer.InitWithNewPipeAndPassReceiver());
 
     chromeos::machine_learning::ServiceConnection::
         UseFakeServiceConnectionForTesting(&fake_service_connection_);
@@ -136,7 +136,7 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
 
   void TearDown() override {
     activity_logger_.reset();
-    PowerManagerClient::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
     ChromeRenderViewHostTestHarness::TearDown();
   }
 
@@ -159,8 +159,8 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
   }
 
   void ReportLidEvent(chromeos::PowerManagerClient::LidState state) {
-    FakePowerManagerClient::Get()->SetLidState(state,
-                                               base::TimeTicks::UnixEpoch());
+    chromeos::FakePowerManagerClient::Get()->SetLidState(
+        state, base::TimeTicks::UnixEpoch());
   }
 
   void ReportPowerChangeEvent(
@@ -169,12 +169,12 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
     power_manager::PowerSupplyProperties proto;
     proto.set_external_power(power);
     proto.set_battery_percent(battery_percent);
-    FakePowerManagerClient::Get()->UpdatePowerProperties(proto);
+    chromeos::FakePowerManagerClient::Get()->UpdatePowerProperties(proto);
   }
 
   void ReportTabletModeEvent(chromeos::PowerManagerClient::TabletMode mode) {
-    FakePowerManagerClient::Get()->SetTabletMode(mode,
-                                                 base::TimeTicks::UnixEpoch());
+    chromeos::FakePowerManagerClient::Get()->SetTabletMode(
+        mode, base::TimeTicks::UnixEpoch());
   }
 
   void ReportVideoStart() { activity_logger_->OnVideoActivityStarted(); }
@@ -183,7 +183,7 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
     power_manager::ScreenIdleState proto;
     proto.set_dimmed(screen_dim);
     proto.set_off(screen_off);
-    FakePowerManagerClient::Get()->SendScreenIdleStateChanged(proto);
+    chromeos::FakePowerManagerClient::Get()->SendScreenIdleStateChanged(proto);
   }
 
   void ReportScreenLocked() {
@@ -192,9 +192,9 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
 
   void ReportSuspend(power_manager::SuspendImminent::Reason reason,
                      base::TimeDelta sleep_duration) {
-    FakePowerManagerClient::Get()->SendSuspendImminent(reason);
+    chromeos::FakePowerManagerClient::Get()->SendSuspendImminent(reason);
     task_environment()->FastForwardBy(sleep_duration);
-    FakePowerManagerClient::Get()->SendSuspendDone(sleep_duration);
+    chromeos::FakePowerManagerClient::Get()->SendSuspendDone(sleep_duration);
   }
 
   void ReportInactivityDelays(base::TimeDelta screen_dim_delay,
@@ -202,7 +202,7 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
     power_manager::PowerManagementPolicy::Delays proto;
     proto.set_screen_dim_ms(screen_dim_delay.InMilliseconds());
     proto.set_screen_off_ms(screen_off_delay.InMilliseconds());
-    FakePowerManagerClient::Get()->SetInactivityDelays(proto);
+    chromeos::FakePowerManagerClient::Get()->SetInactivityDelays(proto);
   }
 
   TabProperty UpdateOpenTabURL() {
@@ -266,7 +266,6 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
   }
 
   TestingUserActivityUkmLogger delegate_;
-  FakeChromeUserManager fake_user_manager_;
   // Only used to get SourceIds for URLs.
   ukm::TestAutoSetUkmRecorder ukm_recorder_;
   TabActivitySimulator tab_activity_simulator_;
@@ -279,7 +278,6 @@ class UserActivityManagerTest : public ChromeRenderViewHostTestHarness {
   const GURL url4_ = GURL("https://example4.com/");
 
  private:
-  ui::UserActivityDetector user_activity_detector_;
   std::unique_ptr<IdleEventNotifier> idle_event_notifier_;
   session_manager::SessionManager session_manager_;
   std::unique_ptr<UserActivityManager> activity_logger_;
@@ -743,7 +741,10 @@ TEST_F(UserActivityManagerTest, ManagedDevice) {
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitAndDisableFeature(features::kUserActivityPrediction);
 
-  fake_user_manager_.set_is_enterprise_managed(true);
+  profile()
+      ->ScopedCrosSettingsTestHelper()
+      ->InstallAttributes()
+      ->SetCloudManaged("fake-managed.com", "device-id");
 
   const IdleEventNotifier::ActivityData data;
   ReportIdleEvent(data);

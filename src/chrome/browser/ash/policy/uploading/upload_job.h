@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class UploadJob {
 
   UploadJob& operator=(const UploadJob&) = delete;
 
-  virtual ~UploadJob() {}
+  virtual ~UploadJob() = default;
 
   // Adds one data segment to the UploadJob. A DataSegment corresponds
   // to one "Content-Disposition" in the "multipart" request. As per RFC 2388,

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 #define IOS_WEB_PUBLIC_WEBUI_WEB_UI_IOS_CONTROLLER_H_
 
 #include <string>
+#include <string_view>
+
+#import "base/memory/raw_ptr.h"
 
 class GURL;
-
-namespace base {
-class Value;
-}
 
 namespace web {
 
@@ -28,8 +27,7 @@ class WebUIIOSController {
   // Allows the controller to override handling all messages from the page.
   // Return true if the message handling was overridden.
   virtual bool OverrideHandleWebUIIOSMessage(const GURL& source_url,
-                                             const std::string& message,
-                                             const base::Value& args);
+                                             std::string_view message);
 
   WebUIIOS* web_ui() const { return web_ui_; }
 
@@ -37,7 +35,7 @@ class WebUIIOSController {
   std::string GetHost() const { return host_; }
 
  private:
-  WebUIIOS* web_ui_;
+  raw_ptr<WebUIIOS> web_ui_;
   std::string host_;
 };
 

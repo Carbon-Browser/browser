@@ -90,7 +90,7 @@ public class BackgroundController {
             URL url;
             StringBuffer response = new StringBuffer();
             try {
-                url = new URL("https://hydrisapps.com/carbon/android-resources/unsplash/bg_images.json");
+                url = new URL("https://carbon.website/carbon/android-resources/unsplash/bg_images.json");
               } catch (MalformedURLException e) {
                   throw new IllegalArgumentException("invalid url");
               }

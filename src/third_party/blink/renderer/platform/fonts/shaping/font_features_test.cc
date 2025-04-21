@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,9 @@ TEST_P(FontFeaturesByOrientationTest, EastAsianContextualSpacingOnByDefault) {
   features.Initialize(font_description);
   if (IsHorizontal()) {
     EXPECT_EQ(features.FindValueForTesting(chws), 1u);
-    EXPECT_EQ(features.FindValueForTesting(vchw), absl::nullopt);
+    EXPECT_EQ(features.FindValueForTesting(vchw), std::nullopt);
   } else {
-    EXPECT_EQ(features.FindValueForTesting(chws), absl::nullopt);
+    EXPECT_EQ(features.FindValueForTesting(chws), std::nullopt);
     EXPECT_EQ(features.FindValueForTesting(vchw), 1u);
   }
 }
@@ -65,9 +65,9 @@ TEST_P(FontFeaturesByOrientationTest,
     features.Initialize(font_description);
     if (IsHorizontal()) {
       EXPECT_EQ(features.FindValueForTesting(chws), value);
-      EXPECT_EQ(features.FindValueForTesting(vchw), absl::nullopt);
+      EXPECT_EQ(features.FindValueForTesting(vchw), std::nullopt);
     } else {
-      EXPECT_EQ(features.FindValueForTesting(chws), absl::nullopt);
+      EXPECT_EQ(features.FindValueForTesting(chws), std::nullopt);
       EXPECT_EQ(features.FindValueForTesting(vchw), value);
     }
   }
@@ -90,8 +90,8 @@ TEST_P(FontFeaturesByOrientationTest,
     font_description.SetFeatureSettings(settings);
     FontFeatures features;
     features.Initialize(font_description);
-    EXPECT_EQ(features.FindValueForTesting(chws), absl::nullopt);
-    EXPECT_EQ(features.FindValueForTesting(vchw), absl::nullopt);
+    EXPECT_EQ(features.FindValueForTesting(chws), std::nullopt);
+    EXPECT_EQ(features.FindValueForTesting(vchw), std::nullopt);
   }
 }
 

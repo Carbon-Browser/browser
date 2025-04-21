@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,25 @@
 
 #include "base/i18n/rtl.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/accessibility/view_accessibility.h"
 
 namespace views {
 
-ImageViewBase::ImageViewBase() = default;
+ImageViewBase::ImageViewBase() {
+  GetViewAccessibility().SetRole(ax::mojom::Role::kImage);
+
+  // The role of an object should not change over its lifetime. Therefore,
+  // rather than changing the role to `kNone` when there is no presentable
+  // information, set it to ignored. This will result in the same tree
+  // inclusion/exclusion behavior without unexpected platform-specific
+  // side effects related to the role changing.
+  if (GetViewAccessibility().GetCachedName().empty() &&
+      GetCachedTooltipText().empty()) {
+    GetViewAccessibility().SetIsIgnored(true);
+  }
+}
 
 ImageViewBase::~ImageViewBase() = default;
 
@@ -30,17 +42,6 @@ gfx::Rect ImageViewBase::GetImageBounds() const {
 void ImageViewBase::ResetImageSize() {
   image_size_.reset();
   PreferredSizeChanged();
-}
-
-void ImageViewBase::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  const std::u16string& name = GetAccessibleName();
-  if (name.empty()) {
-    node_data->role = ax::mojom::Role::kNone;
-    return;
-  }
-
-  node_data->role = ax::mojom::Role::kImage;
-  node_data->SetName(name);
 }
 
 void ImageViewBase::SetHorizontalAlignment(Alignment alignment) {
@@ -68,31 +69,38 @@ ImageViewBase::Alignment ImageViewBase::GetVerticalAlignment() const {
 }
 
 void ImageViewBase::SetTooltipText(const std::u16string& tooltip) {
-  tooltip_text_ = tooltip;
+  if (GetCachedTooltipText() == tooltip) {
+    return;
+  }
+
+  std::u16string current_tooltip = GetCachedTooltipText();
+  SetCachedTooltipText(tooltip);
+
+  if (GetViewAccessibility().GetCachedName().empty() ||
+      GetViewAccessibility().GetCachedName() == current_tooltip) {
+    GetViewAccessibility().SetName(tooltip);
+  }
 }
 
 const std::u16string& ImageViewBase::GetTooltipText() const {
-  return tooltip_text_;
+  return GetCachedTooltipText();
 }
 
-void ImageViewBase::SetAccessibleName(const std::u16string& accessible_name) {
-  if (accessible_name_ == accessible_name)
-    return;
+void ImageViewBase::AdjustAccessibleName(std::u16string& new_name,
+                                         ax::mojom::NameFrom& name_from) {
+  if (new_name.empty()) {
+    new_name = GetCachedTooltipText();
+  }
 
-  accessible_name_ = accessible_name;
-  OnPropertyChanged(&accessible_name_, kPropertyEffectsNone);
-  NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
-}
-
-const std::u16string& ImageViewBase::GetAccessibleName() const {
-  return accessible_name_.empty() ? tooltip_text_ : accessible_name_;
+  GetViewAccessibility().SetIsIgnored(new_name.empty());
 }
 
 std::u16string ImageViewBase::GetTooltipText(const gfx::Point& p) const {
-  return tooltip_text_;
+  return GetCachedTooltipText();
 }
 
-gfx::Size ImageViewBase::CalculatePreferredSize() const {
+gfx::Size ImageViewBase::CalculatePreferredSize(
+    const SizeBounds& /*available_size*/) const {
   gfx::Size size = GetImageSize();
   size.Enlarge(GetInsets().width(), GetInsets().height());
   return size;
@@ -163,10 +171,9 @@ void ImageViewBase::PreferredSizeChanged() {
   UpdateImageOrigin();
 }
 
-BEGIN_METADATA(ImageViewBase, View)
+BEGIN_METADATA(ImageViewBase)
 ADD_PROPERTY_METADATA(Alignment, HorizontalAlignment)
 ADD_PROPERTY_METADATA(Alignment, VerticalAlignment)
-ADD_PROPERTY_METADATA(std::u16string, AccessibleName)
 ADD_PROPERTY_METADATA(std::u16string, TooltipText)
 END_METADATA
 

@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_FETCH_HANDLER_H_
 #define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_FETCH_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/fetch.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 
 namespace network {
 namespace mojom {
@@ -55,8 +55,8 @@ class FetchHandler : public DevToolsDomainHandler, public Fetch::Backend {
   Response Disable() override;
 
   // Protocol methods.
-  void Enable(Maybe<Array<Fetch::RequestPattern>> patterns,
-              Maybe<bool> handleAuth,
+  void Enable(std::unique_ptr<Array<Fetch::RequestPattern>> patterns,
+              std::optional<bool> handleAuth,
               std::unique_ptr<EnableCallback> callback) override;
 
   void FailRequest(const String& fetchId,
@@ -65,18 +65,18 @@ class FetchHandler : public DevToolsDomainHandler, public Fetch::Backend {
   void FulfillRequest(
       const String& fetchId,
       int responseCode,
-      Maybe<Array<Fetch::HeaderEntry>> responseHeaders,
-      Maybe<Binary> binaryResponseHeaders,
-      Maybe<Binary> body,
-      Maybe<String> responsePhrase,
+      std::unique_ptr<Array<Fetch::HeaderEntry>> responseHeaders,
+      std::optional<Binary> binaryResponseHeaders,
+      std::optional<Binary> body,
+      std::optional<String> responsePhrase,
       std::unique_ptr<FulfillRequestCallback> callback) override;
   void ContinueRequest(
       const String& fetchId,
-      Maybe<String> url,
-      Maybe<String> method,
-      Maybe<protocol::Binary> postData,
-      Maybe<Array<Fetch::HeaderEntry>> headers,
-      Maybe<bool> interceptResponse,
+      std::optional<String> url,
+      std::optional<String> method,
+      std::optional<protocol::Binary> postData,
+      std::unique_ptr<Array<Fetch::HeaderEntry>> headers,
+      std::optional<bool> interceptResponse,
       std::unique_ptr<ContinueRequestCallback> callback) override;
   void ContinueWithAuth(
       const String& fetchId,
@@ -85,10 +85,10 @@ class FetchHandler : public DevToolsDomainHandler, public Fetch::Backend {
       std::unique_ptr<ContinueWithAuthCallback> callback) override;
   void ContinueResponse(
       const String& fetchId,
-      Maybe<int> responseCode,
-      Maybe<String> responsePhrase,
-      Maybe<Array<Fetch::HeaderEntry>> responseHeaders,
-      Maybe<Binary> binaryResponseHeaders,
+      std::optional<int> responseCode,
+      std::optional<String> responsePhrase,
+      std::unique_ptr<Array<Fetch::HeaderEntry>> responseHeaders,
+      std::optional<Binary> binaryResponseHeaders,
       std::unique_ptr<ContinueResponseCallback> callback) override;
   void GetResponseBody(
       const String& fetchId,
@@ -105,7 +105,7 @@ class FetchHandler : public DevToolsDomainHandler, public Fetch::Backend {
 
   void RequestIntercepted(std::unique_ptr<InterceptedRequestInfo> info);
 
-  DevToolsIOContext* const io_context_;
+  const raw_ptr<DevToolsIOContext> io_context_;
   std::unique_ptr<Fetch::Frontend> frontend_;
   std::unique_ptr<DevToolsURLLoaderInterceptor> interceptor_;
   UpdateLoaderFactoriesCallback update_loader_factories_callback_;

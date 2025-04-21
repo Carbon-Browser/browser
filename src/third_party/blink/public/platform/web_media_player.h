@@ -31,19 +31,20 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_MEDIA_PLAYER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_MEDIA_PLAYER_H_
 
-#include "base/memory/ref_counted.h"
+#include <optional>
+
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/viz/common/surfaces/surface_id.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_frame_metadata.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/media/display_type.h"
+#include "third_party/blink/public/platform/web_audio_source_provider_impl.h"
 #include "third_party/blink/public/platform/web_content_decryption_module.h"
 #include "third_party/blink/public/platform/web_media_source.h"
 #include "third_party/blink/public/platform/web_set_sink_id_callbacks.h"
 #include "third_party/blink/public/platform/web_string.h"
-#include "third_party/blink/public/platform/webaudiosourceprovider_impl.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
@@ -129,7 +130,6 @@ class WebMediaPlayer {
     int height;
     base::TimeDelta media_time;
     media::VideoFrameMetadata metadata;
-    scoped_refptr<media::VideoFrame> frame;
     base::TimeDelta rendering_interval;
     base::TimeDelta average_frame_duration;
   };
@@ -159,9 +159,15 @@ class WebMediaPlayer {
   virtual void SetPreservesPitch(bool preserves_pitch) = 0;
 
   // Sets a flag indicating whether the audio stream was played with user
-  // activation.
-  virtual void SetWasPlayedWithUserActivation(
-      bool was_played_with_user_activation) = 0;
+  // activation and high media engagement.
+  virtual void SetWasPlayedWithUserActivationAndHighMediaEngagement(
+      bool was_played_with_user_activation_and_high_media_engagement) = 0;
+
+  // Sets a flag indicating whether media playback should be paused when the
+  // the iframe is hidden.
+  virtual void SetShouldPauseWhenFrameIsHidden(
+      bool should_pause_when_frame_is_hidden) = 0;
+  virtual bool GetShouldPauseWhenFrameIsHidden() { return false; }
 
   // The associated media element is going to enter Picture-in-Picture. This
   // method should make sure the player is set up for this and has a SurfaceId
@@ -174,11 +180,19 @@ class WebMediaPlayer {
   virtual void OnTimeUpdate() {}
 
   virtual void RequestRemotePlaybackDisabled(bool disabled) {}
+  virtual void RequestMediaRemoting() {}
   virtual void FlingingStarted() {}
   virtual void FlingingStopped() {}
+
   virtual void SetPreload(Preload) {}
   virtual WebTimeRanges Buffered() const = 0;
   virtual WebTimeRanges Seekable() const = 0;
+
+  // Called when the backing media element and the page it is attached to is
+  // frozen, meaning that the page is no longer being rendered but nothing has
+  // yet been deconstructed. This may occur in several cases, such as bfcache
+  // for instant backwards and forwards navigation.
+  virtual void OnFrozen() = 0;
 
   // Attempts to switch the audio output device.
   virtual bool SetSinkId(const WebString& sing_id,
@@ -187,9 +201,6 @@ class WebMediaPlayer {
   // True if the loaded media has a playable video/audio track.
   virtual bool HasVideo() const = 0;
   virtual bool HasAudio() const = 0;
-
-  // True if the media is being played on a remote device.
-  virtual bool IsRemote() const { return false; }
 
   // Dimension of the video.
   virtual gfx::Size NaturalSize() const = 0;
@@ -205,8 +216,6 @@ class WebMediaPlayer {
   virtual double Duration() const = 0;
   virtual double CurrentTime() const = 0;
   virtual bool IsEnded() const = 0;
-
-  virtual bool PausedWhenHidden() const { return false; }
 
   // Internal states of loading and network.
   virtual NetworkState GetNetworkState() const = 0;
@@ -233,6 +242,14 @@ class WebMediaPlayer {
   virtual uint64_t AudioDecodedByteCount() const = 0;
   virtual uint64_t VideoDecodedByteCount() const = 0;
 
+  // Returns false if any of the HTTP responses which make up the video data
+  // loaded so far have failed the TAO check as defined by Fetch
+  // (https://fetch.spec.whatwg.org/#tao-check), or true otherwise. Video
+  // streams which do not originate from HTTP responses should return true here.
+  // This check is used to determine if timing information from those responses
+  // may be exposed to the page in Largest Contentful Paint performance entries.
+  virtual bool PassedTimingAllowOriginCheck() const = 0;
+
   // Set the volume multiplier to control audio ducking.
   // Output volume should be set to |player_volume| * |multiplier|. The range
   // of |multiplier| is [0, 1], where 1 indicates normal (non-ducked) playback.
@@ -253,6 +270,11 @@ class WebMediaPlayer {
   // this just means the first frame has been delivered.
   virtual bool HasAvailableVideoFrame() const = 0;
 
+  // Returns true if the player has a frame available for presentation, and the
+  // frame is readable, i.e. it's not protected and can be read back into CPU
+  // memory.
+  virtual bool HasReadableVideoFrame() const = 0;
+
   // Renders the current frame into the provided cc::PaintCanvas.
   virtual void Paint(cc::PaintCanvas*, const gfx::Rect&, cc::PaintFlags&) = 0;
 
@@ -263,10 +285,9 @@ class WebMediaPlayer {
   virtual scoped_refptr<media::VideoFrame> GetCurrentFrameThenUpdate() = 0;
 
   // Return current video frame unique id from compositor. The query is readonly
-  // and should avoid any extra ops. Function returns absl::nullopt if current
+  // and should avoid any extra ops. Function returns std::nullopt if current
   // frame is invalid or fails to access current frame.
-  // TODO(crbug.com/1328005): Change the id into a 64 bit value.
-  virtual absl::optional<int> CurrentFrameId() const = 0;
+  virtual std::optional<media::VideoFrame::ID> CurrentFrameId() const = 0;
 
   // Provides a PaintCanvasVideoRenderer instance owned by this WebMediaPlayer.
   // Useful for ensuring that the paint/texturing operation for current frame is
@@ -311,8 +332,8 @@ class WebMediaPlayer {
 
   virtual void EnabledAudioTracksChanged(
       const WebVector<TrackId>& enabled_track_ids) {}
-  // |selected_track_id| is null if no track is selected.
-  virtual void SelectedVideoTrackChanged(TrackId* selected_track_id) {}
+  virtual void SelectedVideoTrackChanged(
+      std::optional<TrackId> selected_track_id) {}
 
   // Callback called whenever the media element may have received or last native
   // controls. It might be called twice with the same value: the caller has to
@@ -334,17 +355,14 @@ class WebMediaPlayer {
 
   virtual bool IsOpaque() const { return false; }
 
-  // Returns the id given by the WebMediaPlayerDelegate. This is used by the
-  // Blink code to pass a player id to mojo services.
-  // TODO(mlamouri): remove this and move the id handling to Blink.
-  virtual int GetDelegateId() { return -1; }
+  // Returns a per-process unique ID for this WebMediaPlayer that can
+  // be passed to mojo services.
+  virtual int GetPlayerId() { return -1; }
 
   // Returns the SurfaceId the video element is currently using.
-  // Returns absl::nullopt if the element isn't a video or doesn't have a
+  // Returns std::nullopt if the element isn't a video or doesn't have a
   // SurfaceId associated to it.
-  virtual absl::optional<viz::SurfaceId> GetSurfaceId() {
-    return absl::nullopt;
-  }
+  virtual std::optional<viz::SurfaceId> GetSurfaceId() { return std::nullopt; }
 
   // Provide the media URL, after any redirects are applied.  May return an
   // empty GURL, which will be interpreted as "use the original URL".
@@ -371,6 +389,11 @@ class WebMediaPlayer {
   // Adjusts the frame sink hierarchy for the media frame sink.
   virtual void RegisterFrameSinkHierarchy() {}
   virtual void UnregisterFrameSinkHierarchy() {}
+
+  // Records the `MediaVideoVisibilityTracker` occlusion state, at the time that
+  // HTMLVideoElement visibility is reported. The state is recorded using
+  // `MediaLogEvent` s.
+  virtual void RecordVideoOcclusionState(std::string_view occlusion_state) {}
 };
 
 }  // namespace blink

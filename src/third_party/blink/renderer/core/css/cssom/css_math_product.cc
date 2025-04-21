@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,11 @@ CSSNumericSumValue::UnitMap MultiplyUnitMaps(
         a.Contains(unit_exponent.key) ? a.at(unit_exponent.key) : 0;
 
     // Remove any zero entries
-    if (old_value + unit_exponent.value == 0)
+    if (old_value + unit_exponent.value == 0) {
       a.erase(unit_exponent.key);
-    else
+    } else {
       a.Set(unit_exponent.key, old_value + unit_exponent.value);
+    }
   }
   return a;
 }
@@ -35,7 +36,7 @@ CSSNumericSumValue::UnitMap MultiplyUnitMaps(
 CSSMathProduct* CSSMathProduct::Create(
     const HeapVector<Member<V8CSSNumberish>>& args,
     ExceptionState& exception_state) {
-  if (args.IsEmpty()) {
+  if (args.empty()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kSyntaxError,
                                       "Arguments can't be empty");
     return nullptr;
@@ -60,15 +61,16 @@ CSSMathProduct* CSSMathProduct::Create(CSSNumericValueVector values) {
                      final_type);
 }
 
-absl::optional<CSSNumericSumValue> CSSMathProduct::SumValue() const {
+std::optional<CSSNumericSumValue> CSSMathProduct::SumValue() const {
   CSSNumericSumValue sum;
   // Start with the number '1', which is the multiplicative identity.
   sum.terms.push_back(CSSNumericSumValue::Term{1, {}});
 
   for (const auto& value : NumericValues()) {
     const auto child_sum = value->SumValue();
-    if (!child_sum.has_value())
-      return absl::nullopt;
+    if (!child_sum.has_value()) {
+      return std::nullopt;
+    }
 
     CSSNumericSumValue new_sum;
     for (const auto& a : sum.terms) {
@@ -91,11 +93,12 @@ CSSMathExpressionNode* CSSMathProduct::ToCalcExpressionNode() const {
 void CSSMathProduct::BuildCSSText(Nested nested,
                                   ParenLess paren_less,
                                   StringBuilder& result) const {
-  if (paren_less == ParenLess::kNo)
+  if (paren_less == ParenLess::kNo) {
     result.Append(nested == Nested::kYes ? "(" : "calc(");
+  }
 
   const auto& values = NumericValues();
-  DCHECK(!values.IsEmpty());
+  DCHECK(!values.empty());
   values[0]->BuildCSSText(Nested::kYes, ParenLess::kNo, result);
 
   for (wtf_size_t i = 1; i < values.size(); i++) {
@@ -110,8 +113,9 @@ void CSSMathProduct::BuildCSSText(Nested nested,
     }
   }
 
-  if (paren_less == ParenLess::kNo)
+  if (paren_less == ParenLess::kNo) {
     result.Append(")");
+  }
 }
 
 }  // namespace blink

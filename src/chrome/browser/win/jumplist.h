@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,6 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -93,6 +91,8 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   JumpList(const JumpList&) = delete;
   JumpList& operator=(const JumpList&) = delete;
 
+  ~JumpList() override;
+
   // Returns true if the custom JumpList is enabled.
   static bool Enabled();
 
@@ -135,8 +135,6 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   friend JumpListFactory;
   explicit JumpList(Profile* profile);  // Use JumpListFactory instead
 
-  ~JumpList() override;
-
   // history::TopSitesObserver:
   void TopSitesLoaded(history::TopSites* top_sites) override;
   void TopSitesChanged(history::TopSites* top_sites,
@@ -174,7 +172,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   // Adds a new ShellLinkItem for |tab| to the JumpList data provided that doing
   // so will not exceed |max_items|. If |cmd_line_profile_dir| is not empty,
   // it will be added to the command line switch --profile-directory.
-  bool AddTab(const sessions::TabRestoreService::Tab& tab,
+  bool AddTab(const sessions::tab_restore::Tab& tab,
               const base::FilePath& cmd_line_profile_dir,
               size_t max_items);
 
@@ -182,7 +180,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   // provided that doing so will not exceed |max_items|. If
   // |cmd_line_profile_dir| is not empty, it will be added to the command line
   // switch --profile-directory.
-  void AddWindow(const sessions::TabRestoreService::Window& window,
+  void AddWindow(const sessions::tab_restore::Window& window,
                  const base::FilePath& cmd_line_profile_dir,
                  size_t max_items);
 
@@ -190,7 +188,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
   // provided that doing so will not exceed |max_items|. If
   // |cmd_line_profile_dir| is not empty, it will be added to the command line
   // switch --profile-directory.
-  void AddGroup(const sessions::TabRestoreService::Group& group,
+  void AddGroup(const sessions::tab_restore::Group& group,
                 const base::FilePath& cmd_line_profile_dir,
                 size_t max_items);
 
@@ -237,7 +235,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
       const base::FilePath& cmd_line_profile_dir,
       bool most_visited_should_update,
       bool recently_closed_should_update,
-      IncognitoModePrefs::Availability incognito_availability,
+      policy::IncognitoModeAvailability incognito_availability,
       UpdateTransaction* update_transaction);
 
   // Creates a new JumpList along with any icons that are not in the cache,
@@ -251,7 +249,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
       const base::FilePath& cmd_line_profile_dir,
       bool most_visited_should_update,
       bool recently_closed_should_update,
-      IncognitoModePrefs::Availability incognito_availability,
+      policy::IncognitoModeAvailability incognito_availability,
       UpdateTransaction* update_transaction);
 
   // Updates icon files for |item_list| in |icon_dir|, which consists of

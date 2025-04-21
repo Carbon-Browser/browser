@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,9 @@ class ChromeExtensionOptionsGuestDelegate
                          const content::ContextMenuParams& params) override;
 
   content::WebContents* OpenURLInNewTab(
-      const content::OpenURLParams& params) override;
+      const content::OpenURLParams& params,
+      base::OnceCallback<void(content::NavigationHandle&)>
+          navigation_handle_callback) override;
 };
 
 }  // namespace extensions

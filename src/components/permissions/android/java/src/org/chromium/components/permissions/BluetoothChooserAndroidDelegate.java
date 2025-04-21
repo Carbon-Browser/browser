@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.components.permissions;
 
 import org.chromium.components.omnibox.AutocompleteSchemeClassifier;
 
-/**
- *  Provides embedder-level information to {@link BluetoothChooserDialog}.
- */
+/**  Provides embedder-level information to {@link BluetoothChooserDialog}. */
 public interface BluetoothChooserAndroidDelegate {
     /**
      * Creates a new {@link AutoCompleteSchemeClassifier}. After use

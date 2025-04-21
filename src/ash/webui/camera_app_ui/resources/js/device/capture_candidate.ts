@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,7 +95,7 @@ export class PhotoCaptureCandidate extends Camera3CaptureCandidate {
       deviceId: string,
       resolution: Resolution,
       previewResolutions: Resolution[],
-      private readonly supportPTZ: boolean,
+      private readonly builtinPtzSupport: boolean,
   ) {
     super(deviceId, resolution, previewResolutions);
   }
@@ -104,7 +104,7 @@ export class PhotoCaptureCandidate extends Camera3CaptureCandidate {
     let previewResolutions = this.previewResolutions;
     // Use workaround for b/184089334 on PTZ camera to use preview frame
     // as photo result.
-    if (this.supportPTZ &&
+    if (this.builtinPtzSupport &&
         previewResolutions.find((r) => this.resolution.equals(r)) !==
             undefined) {
       previewResolutions = [this.resolution];
@@ -123,27 +123,34 @@ export class PhotoCaptureCandidate extends Camera3CaptureCandidate {
 export class VideoCaptureCandidate extends Camera3CaptureCandidate {
   constructor(
       deviceId: string, resolution: Resolution,
-      previewResolutions: Resolution[], readonly constFps: number|null) {
+      previewResolutions: Resolution[], readonly constFps: number|null,
+      readonly hasAudio: boolean) {
     super(deviceId, resolution, previewResolutions);
   }
 
   getStreamConstraintsCandidates(): StreamConstraints[] {
-    const frameRate =
-        this.constFps !== null ? {exact: this.constFps} : {min: 20, ideal: 30};
-    // For non-multistream recording, preview stream is used directly
-    // to do video recording.
+    // Preview stream is used directly to do video recording.
     const {width, height} = this.resolution;
-    return [
-      {
-        deviceId: this.deviceId,
-        audio: true,
-        video: {
-          frameRate,
-          width,
-          height,
-        },
-      },
-    ];
+    const buildConstraint = (frameRate: MediaTrackConstraints['frameRate']) =>
+        ({
+          deviceId: this.deviceId,
+          audio: this.hasAudio,
+          video: {
+            frameRate,
+            width,
+            height,
+          },
+        });
+    const frameRate =
+        this.constFps === null ? {min: 20, ideal: 30} : {exact: this.constFps};
+    const streamConstraints = [buildConstraint(frameRate)];
+    // If another web app is opened and requests a low fps streaming, CCA will
+    // get an OverconstrainedError. In this case, the constraint is relaxed but
+    // the error message is kept in the log.
+    if (this.constFps === null) {
+      streamConstraints.push(buildConstraint({ideal: 30}));
+    }
+    return streamConstraints;
   }
 
   override getConstFps(): number|null {
@@ -151,39 +158,19 @@ export class VideoCaptureCandidate extends Camera3CaptureCandidate {
   }
 }
 
-export class MultiStreamVideoCaptureCandidate extends VideoCaptureCandidate {
-  constructor(
-      deviceId: string, resolution: Resolution,
-      previewResolutions: Resolution[], constFps: number|null) {
-    super(deviceId, resolution, previewResolutions, constFps);
-  }
-
-  override getStreamConstraintsCandidates(): StreamConstraints[] {
-    const frameRate =
-        this.constFps === null ? {min: 20, ideal: 30} : {exact: this.constFps};
-    return this.previewResolutions.map(({width, height}) => ({
-                                         deviceId: this.deviceId,
-                                         audio: true,
-                                         video: {
-                                           frameRate,
-                                           width,
-                                           height,
-                                         },
-                                       }));
-  }
-}
-
 export class FakeCameraCaptureCandidate implements CaptureCandidate {
   readonly resolution = null;
 
-  constructor(readonly deviceId: string, private readonly videoMode: boolean) {}
+  constructor(
+      readonly deviceId: string, private readonly videoMode: boolean,
+      private readonly hasAudio: boolean) {}
 
   getStreamConstraintsCandidates(): StreamConstraints[] {
     const frameRate = {min: 20, ideal: 30};
     return [
       {
         deviceId: this.deviceId,
-        audio: this.videoMode,
+        audio: this.hasAudio,
         video: {
           aspectRatio: {ideal: this.videoMode ? 1.7777777778 : 1.3333333333},
           width: {min: 1280},
@@ -192,7 +179,7 @@ export class FakeCameraCaptureCandidate implements CaptureCandidate {
       },
       {
         deviceId: this.deviceId,
-        audio: this.videoMode,
+        audio: this.hasAudio,
         video: {
           width: {min: 640},
           frameRate,

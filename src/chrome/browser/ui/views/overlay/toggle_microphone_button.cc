@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,15 +24,17 @@ void ToggleMicrophoneButton::SetMutedState(bool is_muted) {
 }
 
 void ToggleMicrophoneButton::OnBoundsChanged(const gfx::Rect& previous_bounds) {
-  if (size() == previous_bounds.size())
+  if (size() == previous_bounds.size()) {
     return;
+  }
 
   UpdateImageAndTooltipText();
 }
 
 void ToggleMicrophoneButton::UpdateImageAndTooltipText() {
-  if (bounds().IsEmpty())
+  if (bounds().IsEmpty()) {
     return;
+  }
 
   const auto& icon =
       is_muted_ ? vector_icons::kMicOffIcon : vector_icons::kMicIcon;
@@ -46,5 +48,5 @@ void ToggleMicrophoneButton::UpdateImageAndTooltipText() {
   SetTooltipText(l10n_util::GetStringUTF16(text));
 }
 
-BEGIN_METADATA(ToggleMicrophoneButton, OverlayWindowImageButton)
+BEGIN_METADATA(ToggleMicrophoneButton)
 END_METADATA

@@ -1,15 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/extensions/activity_log/database_string_table.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/extensions/activity_log/database_string_table.h"
 #include "sql/database.h"
 #include "sql/statement.h"
+#include "sql/test/test_helpers.h"
 #include "sql/transaction.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -27,7 +29,7 @@ class DatabaseStringTableTest : public testing::Test {
   void TearDown() override { db_.Close(); }
 
   base::ScopedTempDir temp_dir_;
-  sql::Database db_;
+  sql::Database db_{sql::test::kTestTag};
 };
 
 // Check that initializing the database works.
@@ -142,7 +144,7 @@ TEST_F(DatabaseStringTableTest, Prune) {
   // Wrap the lookups in a transaction to improve performance.
   sql::Transaction transaction(&db_);
 
-  transaction.Begin();
+  ASSERT_TRUE(transaction.Begin());
   for (int i = 0; i < 2000; i++) {
     int64_t id;
     ASSERT_TRUE(table.StringToInt(&db_, base::StringPrintf("value-%d", i),

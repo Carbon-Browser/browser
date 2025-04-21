@@ -1,13 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -82,22 +83,21 @@ void FakeUpdateEngineClient::SetChannel(const std::string& target_channel,
 
 void FakeUpdateEngineClient::GetChannel(bool get_current_channel,
                                         GetChannelCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::string()));
 }
 
 void FakeUpdateEngineClient::GetEolInfo(GetEolInfoCallback callback) {
-  UpdateEngineClient::EolInfo eol_info;
-  eol_info.eol_date = eol_date_;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), eol_info));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), eol_info_));
 }
 
 void FakeUpdateEngineClient::SetUpdateOverCellularPermission(
     bool allowed,
     base::OnceClosure callback) {
   update_over_cellular_permission_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(callback));
 }
 
 void FakeUpdateEngineClient::SetUpdateOverCellularOneTimePermission(
@@ -118,7 +118,13 @@ void FakeUpdateEngineClient::IsFeatureEnabled(
     IsFeatureEnabledCallback callback) {
   is_feature_enabled_count_++;
   std::move(callback).Run(features_.count(feature) ? features_[feature]
-                                                   : absl::nullopt);
+                                                   : std::nullopt);
+}
+
+void FakeUpdateEngineClient::ApplyDeferredUpdate(
+    bool shutdown_after_update,
+    base::OnceClosure failure_callback) {
+  apply_deferred_update_count_++;
 }
 
 void FakeUpdateEngineClient::set_default_status(
@@ -131,9 +137,8 @@ void FakeUpdateEngineClient::set_update_check_result(
   update_check_result_ = result;
 }
 
-void FakeUpdateEngineClient::SetToggleFeature(
-    const std::string& feature,
-    absl::optional<bool> opt_enabled) {
+void FakeUpdateEngineClient::SetToggleFeature(const std::string& feature,
+                                              std::optional<bool> opt_enabled) {
   features_[feature] = opt_enabled;
 }
 

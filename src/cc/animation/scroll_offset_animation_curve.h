@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 #define CC_ANIMATION_SCROLL_OFFSET_ANIMATION_CURVE_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/animation/keyframe/animation_curve.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
@@ -45,13 +44,13 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationCurve
   // style scroll animation curves.
   enum class DurationBehavior {
     // Duration proportional to scroll delta; used for programmatic scrolls.
-    DELTA_BASED,
+    kDeltaBased,
     // Constant duration; used for keyboard scrolls.
-    CONSTANT,
+    kConstant,
     // Duration inversely proportional to scroll delta within certain bounds.
     // Used for mouse wheels, makes fast wheel flings feel "snappy" while
     // preserving smoothness of slow wheel movements.
-    INVERSE_DELTA
+    kInverseDelta
   };
 
   static const ScrollOffsetAnimationCurve* ToScrollOffsetAnimationCurve(
@@ -65,7 +64,7 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationCurve
   // here. This delay is represented by the |delayed_by| value. The way we have
   // decided to factor this in is by reducing the duration of the resulting
   // animation by this delayed amount. This also applies to
-  // LinearSegmentDuration and ImpulseSegmentDuration.
+  // LinearSegmentDuration.
   static base::TimeDelta EaseInOutSegmentDuration(
       const gfx::Vector2dF& delta,
       DurationBehavior duration_behavior,
@@ -74,9 +73,6 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationCurve
   static base::TimeDelta LinearSegmentDuration(const gfx::Vector2dF& delta,
                                                base::TimeDelta delayed_by,
                                                float velocity);
-
-  static base::TimeDelta ImpulseSegmentDuration(const gfx::Vector2dF& delta,
-                                                base::TimeDelta delayed_by);
 
   ScrollOffsetAnimationCurve(const ScrollOffsetAnimationCurve&) = delete;
   ~ScrollOffsetAnimationCurve() override;
@@ -112,30 +108,32 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationCurve
   CloneToScrollOffsetAnimationCurve() const;
   void Tick(base::TimeDelta t,
             int property_id,
-            gfx::KeyframeModel* keyframe_model) const override;
+            gfx::KeyframeModel* keyframe_model,
+            gfx::TimingFunction::LimitDirection limit_direction =
+                gfx::TimingFunction::LimitDirection::RIGHT) const override;
   static void SetAnimationDurationForTesting(base::TimeDelta duration);
   void set_target(Target* target) { target_ = target; }
 
  private:
   friend class ScrollOffsetAnimationCurveFactory;
-  enum class AnimationType { kLinear, kEaseInOut, kImpulse };
+  enum class AnimationType { kLinear, kEaseInOut };
 
   // |duration_behavior| should be provided if (and only if) |animation_type| is
   // kEaseInOut.
   ScrollOffsetAnimationCurve(
       const gfx::PointF& target_value,
       AnimationType animation_type,
-      absl::optional<DurationBehavior> duration_behavior = absl::nullopt);
+      std::optional<DurationBehavior> duration_behavior = std::nullopt);
   ScrollOffsetAnimationCurve(
       const gfx::PointF& target_value,
       std::unique_ptr<gfx::TimingFunction> timing_function,
       AnimationType animation_type,
-      absl::optional<DurationBehavior> duration_behavior);
+      std::optional<DurationBehavior> duration_behavior);
 
   base::TimeDelta SegmentDuration(
       const gfx::Vector2dF& delta,
       base::TimeDelta delayed_by,
-      absl::optional<double> velocity = absl::nullopt);
+      std::optional<double> velocity = std::nullopt);
 
   base::TimeDelta EaseInOutBoundedSegmentDuration(
       const gfx::Vector2dF& new_delta,
@@ -156,13 +154,13 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationCurve
   AnimationType animation_type_;
 
   // Only valid when |animation_type_| is EASE_IN_OUT.
-  absl::optional<DurationBehavior> duration_behavior_;
+  std::optional<DurationBehavior> duration_behavior_;
 
   bool has_set_initial_value_;
 
-  static absl::optional<double> animation_duration_for_testing_;
+  static std::optional<double> animation_duration_for_testing_;
 
-  raw_ptr<Target> target_ = nullptr;
+  raw_ptr<Target, DanglingUntriaged> target_ = nullptr;
 };
 
 }  // namespace cc

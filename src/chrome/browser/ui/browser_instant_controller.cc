@@ -1,10 +1,10 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/browser_instant_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/instant_service.h"
 #include "chrome/browser/search/instant_service_factory.h"
@@ -49,8 +49,9 @@ void BrowserInstantController::OnSearchEngineBaseURLChanged(
   int count = tab_model->count();
   for (int index = 0; index < count; ++index) {
     content::WebContents* contents = tab_model->GetWebContentsAt(index);
-    if (!contents)
+    if (!contents) {
       continue;
+    }
 
     GURL site_url =
         contents->GetPrimaryMainFrame()->GetSiteInstance()->GetSiteURL();
@@ -63,12 +64,13 @@ void BrowserInstantController::OnSearchEngineBaseURLChanged(
       if (instant_service) {
         content::RenderProcessHost* rph =
             contents->GetPrimaryMainFrame()->GetProcess();
-        is_ntp = instant_service->IsInstantProcess(rph->GetID());
+        is_ntp = instant_service->IsInstantProcess(rph->GetDeprecatedID());
       }
     }
 
-    if (!is_ntp)
+    if (!is_ntp) {
       continue;
+    }
 
     // When default search engine is changed navigate to chrome://newtab which
     // will redirect to the new tab page associated with the search engine.

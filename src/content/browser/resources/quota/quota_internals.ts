@@ -1,59 +1,42 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
-import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
+import type {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 
-import {QuotaInternalsBrowserProxy} from './quota_internals_browser_proxy.js';
+import type {BucketTableEntry} from './quota_internals.mojom-webui.js';
+import type {RetrieveBucketsTableResult} from './quota_internals_browser_proxy.js';
+import {QuotaInternalsBrowserProxy, StorageType} from './quota_internals_browser_proxy.js';
 
-enum StorageType {
-  TEMPORARY,
-  PERSISTENT,
-  SYNCABLE,
+// Object for constructing the bucket row in the usage table.
+interface StorageTypeBucketTableEntry {
+  'bucketId': string;
+  'name': string;
+  'usage': string;
+  'useCount': string;
+  'lastAccessed': string;
+  'lastModified': string;
 }
 
-type BucketTableEntry = {
-  'bucketId': bigint,
-  'storageKey': string,
-  'type': StorageType,
-  'name': string,
-  'usage': bigint,
-  'useCount': bigint,
-  'lastAccessed': Time,
-  'lastModified': Time,
-};
-
-type RetrieveBucketsTableResult = {
-  entries: BucketTableEntry[],
-};
-
-type StorageTypeBucketTableEntry = {
-  'bucketId': string,
-  'name': string,
-  'usage': string,
-  'useCount': string,
-  'lastAccessed': string,
-  'lastModified': string,
-};
-
-type EntriesForStorageType = StorageTypeBucketTableEntry[];
-
-type StorageTypeEntries = {
+// Bucket entries organized by StorageType for constructing the usage table.
+interface StorageTypeEntries {
   // key = storageType
-  [key: string]: EntriesForStorageType,
-};
+  [key: string]: StorageTypeBucketTableEntry[];
+}
 
-type StorageKeyData = {
-  'bucketCount': number,
-  'storageKeyEntries': StorageTypeEntries,
-};
+// StorageTypeEntries organized by StorageKey for constructing the usage table.
+interface StorageKeyData {
+  'bucketCount': number;
+  'storageKeyEntries': StorageTypeEntries;
+}
 
-type BucketTableEntriesByStorageKey = {
+// Map of StorageKey entries for constructing bucket usage table.
+interface BucketTableEntriesByStorageKey {
   // key = storageKey
-  [key: string]: StorageKeyData,
-};
+  [key: string]: StorageKeyData;
+}
 
 // Converts a mojo time to a JS time.
 function convertMojoTimeToJS(mojoTime: Time): Date {
@@ -106,14 +89,16 @@ async function renderDiskAvailabilityAndTempPoolSize() {
 }
 
 async function renderGlobalUsage() {
-  const globalUsageStorageTypes: string[] =
-      ['temporary', 'persistent', 'syncable'];
+  const typeVals: number[] =
+      Object.keys(StorageType).map((v) => Number(v)).filter((v) => !isNaN(v));
 
-  for (const storageType of globalUsageStorageTypes) {
-    const result = await getProxy().getGlobalUsage(storageType);
+  for (const typeVal of typeVals) {
+    const result = await getProxy().getGlobalUsage(typeVal);
     const formattedResultString: string = `${Number(result.usage)} B (${
         result.unlimitedUsage} B for unlimited origins)`;
-    document.body.querySelector(`.${storageType}-global-and-unlimited-usage`)!
+    document.body
+        .querySelector(`.${
+            StorageType[typeVal].toLowerCase()}-global-and-unlimited-usage`)!
         .textContent = formattedResultString;
   }
 }
@@ -268,7 +253,7 @@ async function renderUsageAndQuotaStats() {
           usageAndQuotaRow.querySelector('.storage-key')!.remove();
         }
 
-        /* If the current storage type (temporary, persistent, syncable) is not
+        /* If the current storage type (temporary, syncable) is not
          * the first of its kind for a given storage key and storage type,
          * remove the Storage Type cells from the row before
          * appending the row to the table body.
@@ -282,11 +267,25 @@ async function renderUsageAndQuotaStats() {
   }
 }
 
+async function renderSimulateStoragePressureButton() {
+  getProxy().isSimulateStoragePressureAvailable().then(result => {
+    if (!result.available) {
+      document.body
+          .querySelector('#simulate-storage-pressure-activation-message')
+          ?.removeAttribute('hidden');
+      document.body.querySelector('#trigger-notification')!.setAttribute(
+          'disabled', '');
+    }
+  });
+
+  document.body.querySelector('#trigger-notification')!.addEventListener(
+      'click', () => getProxy().simulateStoragePressure());
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderDiskAvailabilityAndTempPoolSize();
   renderEvictionStats();
   renderGlobalUsage();
   renderUsageAndQuotaStats();
-  document.body.querySelector('#trigger-notification')!.addEventListener(
-      'click', () => getProxy().simulateStoragePressure());
+  renderSimulateStoragePressureButton();
 });

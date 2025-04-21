@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,10 @@ DeviceType GetDeviceType() {
     return DeviceType::kChromebit;
   if (value == "CHROMEBOX")
     return DeviceType::kChromebox;
-
+  // Don't log errors for VMs, which are type "OTHER".
+  if (value == "OTHER") {
+    return DeviceType::kUnknown;
+  }
   LOG(ERROR) << "Unknown device type \"" << value << "\"";
   return DeviceType::kUnknown;
 

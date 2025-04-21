@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/span.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
@@ -19,7 +20,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/audio/audio_device_description.h"
@@ -162,7 +162,8 @@ class FullDuplexAudioSinkSource
   void OnError() override {}
   void OnData(const AudioBus* src,
               base::TimeTicks capture_time,
-              double volume) override {
+              double volume,
+              const AudioGlitchInfo& glitch_info) override {
     base::AutoLock lock(lock_);
 
     // Update three components in the AudioDelayState for this recorded
@@ -194,7 +195,7 @@ class FullDuplexAudioSinkSource
   void OnError(ErrorType type) override {}
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks /* delay_timestamp */,
-                 int /* prior_frames_skipped */,
+                 const AudioGlitchInfo& /* glitch_info */,
                  AudioBus* dest) override {
     base::AutoLock lock(lock_);
 
@@ -206,19 +207,19 @@ class FullDuplexAudioSinkSource
       ++output_elements_to_write_;
     }
 
-    int size;
-    const uint8_t* source;
     // Read the data from the seekable media buffer which contains
     // captured data at the same size and sample rate as the output side.
-    if (buffer_->GetCurrentChunk(&source, &size) && size > 0) {
+    const base::span<const uint8_t> source = buffer_->GetCurrentChunk();
+    if (!source.empty()) {
       EXPECT_EQ(channels_, dest->channels());
-      size = std::min(dest->frames() * frame_size_, size);
-      EXPECT_EQ(static_cast<size_t>(size) % sizeof(*dest->channel(0)), 0U);
+      const auto size =
+          std::min<size_t>(dest->frames() * frame_size_, source.size());
+      EXPECT_EQ(size % sizeof(*dest->channel(0)), 0U);
 
       // We should only have 16 bits per sample.
       DCHECK_EQ(frame_size_ / channels_, 2);
       dest->FromInterleaved<SignedInt16SampleTypeTraits>(
-          reinterpret_cast<const int16_t*>(source), size / channels_);
+          reinterpret_cast<const int16_t*>(source.data()), size / channels_);
 
       buffer_->Seek(size);
       return size / frame_size_;
@@ -272,8 +273,11 @@ class AudioOutputStreamTraits {
 
   static AudioParameters GetDefaultAudioStreamParameters(
       AudioManager* audio_manager) {
+    std::string default_device_id =
+        AudioDeviceInfoAccessorForTests(audio_manager)
+            .GetDefaultOutputDeviceID();
     return AudioDeviceInfoAccessorForTests(audio_manager)
-        .GetDefaultOutputStreamParameters();
+        .GetOutputStreamParameters(default_device_id);
   }
 
   static StreamType* CreateStream(AudioManager* audio_manager,
@@ -326,8 +330,10 @@ class StreamWrapper {
  private:
   StreamType* CreateStream() {
     StreamType* stream = StreamTraits::CreateStream(
-        audio_manager_, AudioParameters(format_, channel_layout_, sample_rate_,
-                                        samples_per_packet_));
+        audio_manager_,
+        AudioParameters(format_,
+                        ChannelLayoutConfig(channel_layout_, channels()),
+                        sample_rate_, samples_per_packet_));
     EXPECT_TRUE(stream);
     return stream;
   }

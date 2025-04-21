@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_AUDIO_SERVICE_H_
 #define CONTENT_PUBLIC_BROWSER_AUDIO_SERVICE_H_
 
-#include "base/callback.h"
+#include "base/auto_reset.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "media/mojo/mojom/audio_stream_factory.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -21,6 +22,11 @@ namespace content {
 // is started lazily and may run either in-process or in a dedicated sandboxed
 // subprocess.
 CONTENT_EXPORT audio::mojom::AudioService& GetAudioService();
+
+// Provides an override for the reference returned by
+// |GetAudioService()|.
+CONTENT_EXPORT base::AutoReset<audio::mojom::AudioService*>
+OverrideAudioServiceForTesting(audio::mojom::AudioService* service);
 
 // Creates an instance of AudioSystem for use with the Audio Service, bound to
 // the thread it's used on for the first time.

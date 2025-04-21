@@ -1,17 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/gpu_video_decode_accelerator_helpers.h"
 
 namespace media {
-
-GpuVideoDecodeGLClient::GpuVideoDecodeGLClient() = default;
-GpuVideoDecodeGLClient::~GpuVideoDecodeGLClient() = default;
-GpuVideoDecodeGLClient::GpuVideoDecodeGLClient(const GpuVideoDecodeGLClient&) =
-    default;
-GpuVideoDecodeGLClient& GpuVideoDecodeGLClient::operator=(
-    const GpuVideoDecodeGLClient&) = default;
 
 SupportedVideoDecoderConfigs ConvertFromSupportedProfiles(
     const VideoDecodeAccelerator::SupportedProfiles& profiles,

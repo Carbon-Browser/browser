@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,27 +7,28 @@
  * setting and changing security key PINs.
  */
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
-import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/cr_page_selector/cr_page_selector.js';
+import 'chrome://resources/cr_elements/cr_spinner_style.css.js';
 import '../settings_shared.css.js';
 import '../i18n_setup.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {PluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SecurityKeysPINBrowserProxy, SecurityKeysPINBrowserProxyImpl} from './security_keys_browser_proxy.js';
+import type {SecurityKeysPinBrowserProxy} from './security_keys_browser_proxy.js';
+import {SecurityKeysPinBrowserProxyImpl} from './security_keys_browser_proxy.js';
 import {getTemplate} from './security_keys_set_pin_dialog.html.js';
 
-export enum SetPINDialogPage {
+export enum SetPinDialogPage {
   INITIAL = 'initial',
   NO_PIN_SUPPORT = 'noPINSupport',
   REINSERT = 'reinsert',
@@ -169,7 +170,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
        */
       shown_: {
         type: String,
-        value: SetPINDialogPage.INITIAL,
+        value: SetPinDialogPage.INITIAL,
       },
 
       /**
@@ -202,12 +203,12 @@ export class SettingsSecurityKeysSetPinDialogElement extends
   private newPINError_: string;
   private confirmPINError_: string;
   private complete_: boolean;
-  private shown_: SetPINDialogPage;
+  private shown_: SetPinDialogPage;
   private pinsVisible_: boolean;
   private title_: string;
   private newPINDialogDescription_: string;
-  private browserProxy_: SecurityKeysPINBrowserProxy =
-      SecurityKeysPINBrowserProxyImpl.getInstance();
+  private browserProxy_: SecurityKeysPinBrowserProxy =
+      SecurityKeysPinBrowserProxyImpl.getInstance();
 
   override connectedCallback() {
     super.connectedCallback();
@@ -215,29 +216,29 @@ export class SettingsSecurityKeysSetPinDialogElement extends
     this.title_ = this.i18n('securityKeysSetPINInitialTitle');
     this.$.dialog.showModal();
 
-    this.browserProxy_.startSetPIN().then(
+    this.browserProxy_.startSetPin().then(
         ({done, error, currentMinPinLength, newMinPinLength, retries}) => {
           if (done) {
             // Operation is complete. error is a CTAP error code. See
             // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-client-to-authenticator-protocol-v2.0-rd-20180702.html#error-responses
             if (error === 1 /* INVALID_COMMAND */) {
-              this.shown_ = SetPINDialogPage.NO_PIN_SUPPORT;
+              this.shown_ = SetPinDialogPage.NO_PIN_SUPPORT;
               this.finish_();
             } else if (error === 52 /* temporarily locked */) {
-              this.shown_ = SetPINDialogPage.REINSERT;
+              this.shown_ = SetPinDialogPage.REINSERT;
               this.finish_();
             } else if (error === 50 /* locked */) {
-              this.shown_ = SetPINDialogPage.LOCKED;
+              this.shown_ = SetPinDialogPage.LOCKED;
               this.finish_();
             } else {
               this.errorCode_ = error;
-              this.shown_ = SetPINDialogPage.ERROR;
+              this.shown_ = SetPinDialogPage.ERROR;
               this.finish_();
             }
           } else if (retries === 0) {
             // A device can also signal that it is locked by returning zero
             // retries.
-            this.shown_ = SetPINDialogPage.LOCKED;
+            this.shown_ = SetPinDialogPage.LOCKED;
             this.finish_();
           } else {
             // Need to prompt for a pin. Initially set the text boxes to valid
@@ -264,7 +265,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
               this.title_ = this.i18n('securityKeysSetPINChangeTitle');
             }
 
-            this.shown_ = SetPINDialogPage.PIN_PROMPT;
+            this.shown_ = SetPinDialogPage.PIN_PROMPT;
             // Focus cannot be set directly from within a backend callback.
             window.setTimeout(function() {
               focusTarget.focus();
@@ -303,19 +304,19 @@ export class SettingsSecurityKeysSetPinDialogElement extends
     e.stopPropagation();
   }
 
-  private onCurrentPINInput_() {
+  private onCurrentPinInput_() {
     // Typing in the current PIN box after an error makes the error message
     // disappear.
     this.currentPINError_ = '';
   }
 
-  private onNewPINInput_() {
+  private onNewPinInput_() {
     // Typing in the new PIN box after an error makes the error message
     // disappear.
     this.newPINError_ = '';
   }
 
-  private onConfirmPINInput_() {
+  private onConfirmPinInput_() {
     // Typing in the confirm PIN box after an error makes the error message
     // disappear.
     this.confirmPINError_ = '';
@@ -325,7 +326,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
     @param pin A candidate PIN.
     @return An error string or else '' to indicate validity.
   */
-  private isValidPIN_(pin: string, minLength: number): string {
+  private isValidPin_(pin: string, minLength: number): string {
     // The UTF-8 encoding of the PIN must be between minLength and 63 bytes, and
     // the final byte cannot be zero.
     const utf8Encoded = new TextEncoder().encode(pin);
@@ -397,7 +398,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
   private pinSubmitNew_() {
     if (this.showCurrentEntry_) {
       this.currentPINError_ =
-          this.isValidPIN_(this.currentPIN_, this.currentMinPinLength_!);
+          this.isValidPin_(this.currentPIN_, this.currentMinPinLength_!);
       if (this.currentPINError_ !== '') {
         this.focusOn_(this.$.currentPIN);
         this.fire_('ui-ready');  // for test synchronization.
@@ -405,7 +406,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
       }
     }
 
-    this.newPINError_ = this.isValidPIN_(this.newPIN_, this.newMinPinLength_!);
+    this.newPINError_ = this.isValidPin_(this.newPIN_, this.newMinPinLength_!);
     if (this.newPINError_ !== '') {
       this.focusOn_(this.$.newPIN);
       this.fire_('ui-ready');  // for test synchronization.
@@ -427,19 +428,19 @@ export class SettingsSecurityKeysSetPinDialogElement extends
     }
 
     this.setPINButtonValid_ = false;
-    this.browserProxy_.setPIN(this.currentPIN_, this.newPIN_).then(response => {
+    this.browserProxy_.setPin(this.currentPIN_, this.newPIN_).then(response => {
       const error = response.error;
       // This call always completes the process so response.done is always
       // true. error is a CTAP2 error code. See
       // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-client-to-authenticator-protocol-v2.0-rd-20180702.html#error-responses
       if (error === 0 /* SUCCESS */) {
-        this.shown_ = SetPINDialogPage.SUCCESS;
+        this.shown_ = SetPinDialogPage.SUCCESS;
         this.finish_();
       } else if (error === 52 /* temporarily locked */) {
-        this.shown_ = SetPINDialogPage.REINSERT;
+        this.shown_ = SetPinDialogPage.REINSERT;
         this.finish_();
       } else if (error === 50 /* locked */) {
-        this.shown_ = SetPINDialogPage.LOCKED;
+        this.shown_ = SetPinDialogPage.LOCKED;
         this.finish_();
       } else if (error === 49 /* PIN_INVALID */) {
         this.currentPINValid_ = false;
@@ -451,7 +452,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
       } else {
         // Unknown error.
         this.errorCode_ = error;
-        this.shown_ = SetPINDialogPage.ERROR;
+        this.shown_ = SetPinDialogPage.ERROR;
         this.finish_();
       }
     });
@@ -460,7 +461,7 @@ export class SettingsSecurityKeysSetPinDialogElement extends
   /**
    * onClick handler for the show/hide icon.
    */
-  private showPINsClick_() {
+  private showPinsClick_() {
     this.pinsVisible_ = !this.pinsVisible_;
   }
 
@@ -504,14 +505,14 @@ export class SettingsSecurityKeysSetPinDialogElement extends
   /**
    * @return The class (and thus icon) to be displayed.
    */
-  private showPINsClass_(): string {
+  private showPinsClass_(): string {
     return 'icon-visibility' + (this.pinsVisible_ ? '-off' : '');
   }
 
   /**
    * @return The tooltip for the icon.
    */
-  private showPINsTitle_(): string {
+  private showPinsTitle_(): string {
     return this.i18n(
         this.pinsVisible_ ? 'securityKeysHidePINs' : 'securityKeysShowPINs');
   }

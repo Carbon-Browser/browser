@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,17 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 namespace {
+
+TEST(LogicalRectTest, AddOffset) {
+  test::TaskEnvironment task_environment;
+  EXPECT_EQ(LogicalRect(1, 2, 3, 4) + LogicalOffset(5, 6),
+            LogicalRect(6, 8, 3, 4));
+}
 
 struct LogicalRectUniteTestData {
   const char* test_case;

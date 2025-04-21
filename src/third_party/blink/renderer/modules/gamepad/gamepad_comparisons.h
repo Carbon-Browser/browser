@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_GAMEPAD_GAMEPAD_COMPARISONS_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_GAMEPAD_GAMEPAD_COMPARISONS_H_
 
+#include <array>
 #include <bitset>
 
 #include "device/gamepad/public/cpp/gamepads.h"
@@ -49,18 +50,23 @@ class MODULES_EXPORT GamepadStateCompareResult {
                       Gamepad* new_gamepad,
                       size_t gamepad_index,
                       bool compare_all);
+  bool CompareTouches(Gamepad* old_gamepad, Gamepad* new_gamepad);
 
   bool any_change_ = false;
   std::bitset<device::Gamepads::kItemsLengthCap> gamepad_connected_;
   std::bitset<device::Gamepads::kItemsLengthCap> gamepad_disconnected_;
-  std::bitset<device::Gamepad::kAxesLengthCap>
-      axis_changed_[device::Gamepads::kItemsLengthCap];
-  std::bitset<device::Gamepad::kButtonsLengthCap>
-      button_changed_[device::Gamepads::kItemsLengthCap];
-  std::bitset<device::Gamepad::kButtonsLengthCap>
-      button_down_[device::Gamepads::kItemsLengthCap];
-  std::bitset<device::Gamepad::kButtonsLengthCap>
-      button_up_[device::Gamepads::kItemsLengthCap];
+  std::array<std::bitset<device::Gamepad::kAxesLengthCap>,
+             device::Gamepads::kItemsLengthCap>
+      axis_changed_;
+  std::array<std::bitset<device::Gamepad::kButtonsLengthCap>,
+             device::Gamepads::kItemsLengthCap>
+      button_changed_;
+  std::array<std::bitset<device::Gamepad::kButtonsLengthCap>,
+             device::Gamepads::kItemsLengthCap>
+      button_down_;
+  std::array<std::bitset<device::Gamepad::kButtonsLengthCap>,
+             device::Gamepads::kItemsLengthCap>
+      button_up_;
 };
 
 class MODULES_EXPORT GamepadComparisons {

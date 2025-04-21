@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Adapter used to provide First Run pages to the FirstRunActivity ViewPager.
- */
+/** Adapter used to provide First Run pages to the FirstRunActivity ViewPager. */
 class FirstRunPagerAdapter extends FragmentStateAdapter {
     private final List<FirstRunPage> mPages;
 

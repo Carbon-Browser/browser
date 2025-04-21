@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Start and stop the WPTserve servers as they're used by the web tests."""
@@ -19,7 +19,7 @@ class WPTServe(server_base.ServerBase):
     def __init__(self, port_obj, output_dir):
         super(WPTServe, self).__init__(port_obj, output_dir)
 
-        # These ports must match wpt_tools/wpt.config.json
+        # These ports must match external/wpt/config.json
         http_port = 8001
         http_alt_port = 8081
         http_private_port = 8082
@@ -77,7 +77,7 @@ class WPTServe(server_base.ServerBase):
         # TODO(burnik): We can probably avoid PID files for WPT in the future.
         fs = self._filesystem
         self._pid_file = fs.join(self._runtime_path, '%s.pid' % self._name)
-        self._config_file = fs.join(self._runtime_path, 'wpt.config.json')
+        self._config_file = fs.join(self._runtime_path, 'config.json')
 
         finder = PathFinder(fs)
         path_to_pywebsocket = finder.path_from_chromium_base(
@@ -85,10 +85,6 @@ class WPTServe(server_base.ServerBase):
         self.path_to_wpt_support = finder.path_from_chromium_base(
             'third_party', 'wpt_tools')
         path_to_wpt_root = fs.join(self.path_to_wpt_support, 'wpt')
-        path_to_wpt_tests = fs.abspath(
-            fs.join(self._port_obj.web_tests_dir(), 'external', 'wpt'))
-        path_to_ws_handlers = fs.join(path_to_wpt_tests, 'websockets',
-                                      'handlers')
         wpt_script = fs.join(path_to_wpt_root, 'wpt')
         start_cmd = [
             self._port_obj.python3_command(),
@@ -98,11 +94,11 @@ class WPTServe(server_base.ServerBase):
             '--config',
             self._config_file,
             '--doc_root',
-            path_to_wpt_tests,
+            finder.path_from_wpt_tests(),
         ]
 
-        # Some users (e.g. run_webdriver_tests.py) do not need WebSocket
-        # handlers, so we only add the flag if the directory exists.
+        path_to_ws_handlers = finder.path_from_wpt_tests(
+            'websockets', 'handlers')
         if self._port_obj.host.filesystem.exists(path_to_ws_handlers):
             start_cmd += ['--ws_doc_root', path_to_ws_handlers]
 
@@ -114,7 +110,7 @@ class WPTServe(server_base.ServerBase):
             start_cmd.append('--webtransport-h3')
 
         # TODO(burnik): We should stop setting the CWD once WPT can be run without it.
-        self._cwd = path_to_wpt_root
+        self._cwd = finder.path_from_web_tests()
         self._env = port_obj.host.environ.copy()
         self._env.update({'PYTHONPATH': path_to_pywebsocket})
         self._start_cmd = start_cmd
@@ -124,17 +120,21 @@ class WPTServe(server_base.ServerBase):
         self._output_log_path = self._filesystem.join(output_dir,
                                                       'wptserve_stdout.txt')
 
-        expiration_date = datetime.date(2025, 1, 4)
+        expiration_date = datetime.date(2033, 2, 22)
         if datetime.date.today() > expiration_date - datetime.timedelta(30):
             _log.error(
                 'Pre-generated keys and certificates are going to be expired at %s.'
-                ' Please re-generate them by following steps in %s/README.chromium.',
+                ' Please re-generate them by following steps in %s/README.md.',
                 expiration_date.strftime('%b %d %Y'), self.path_to_wpt_support)
 
     def _prepare_config(self):
         fs = self._filesystem
-        template_path = fs.join(self.path_to_wpt_support, 'wpt.config.json')
+        finder = PathFinder(fs)
+        template_path = finder.path_from_wpt_tests('.config.json')
         config = json.loads(fs.read_text_file(template_path))
+        for alias in config['aliases']:
+            if alias['url-path'] == "/resources/testdriver-vendor.js":
+                alias['local-dir'] = "resources"
         config['aliases'].append({
             'url-path':
             '/gen/',

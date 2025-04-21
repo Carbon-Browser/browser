@@ -1,8 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/updater/external_constants_default.h"
+
+#include <optional>
+#include <vector>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
@@ -25,12 +28,20 @@ class DefaultExternalConstants : public ExternalConstants {
     return std::vector<GURL>{GURL(UPDATE_CHECK_URL)};
   }
 
+  GURL CrashUploadURL() const override { return GURL(CRASH_UPLOAD_URL); }
+
+  GURL DeviceManagementURL() const override {
+    return GURL(DEVICE_MANAGEMENT_SERVER_URL);
+  }
+
+  GURL AppLogoURL() const override { return GURL(APP_LOGO_URL); }
+
   bool UseCUP() const override { return true; }
 
-  double InitialDelay() const override { return kInitialDelay; }
+  base::TimeDelta InitialDelay() const override { return kInitialDelay; }
 
-  int ServerKeepAliveSeconds() const override {
-    return kServerKeepAliveSeconds;
+  base::TimeDelta ServerKeepAliveTime() const override {
+    return kServerKeepAliveTime;
   }
 
   crx_file::VerifierFormat CrxVerifierFormat() const override {
@@ -43,6 +54,16 @@ class DefaultExternalConstants : public ExternalConstants {
 
   base::TimeDelta OverinstallTimeout() const override {
     return base::Minutes(2);
+  }
+
+  base::TimeDelta IdleCheckPeriod() const override { return base::Minutes(5); }
+
+  std::optional<bool> IsMachineManaged() const override { return std::nullopt; }
+
+  bool EnableDiffUpdates() const override { return false; }
+
+  base::TimeDelta CecaConnectionTimeout() const override {
+    return kCecaConnectionTimeout;
   }
 
  private:

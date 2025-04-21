@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/containers/flat_set.h"
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -98,7 +98,7 @@ class FakeUsbDevice : public mojom::UsbDevice,
   mojo::SelfOwnedReceiverRef<mojom::UsbDevice> receiver_;
 
  private:
-  void FinishOpen(OpenCallback callback, mojom::UsbOpenDeviceError error);
+  void FinishOpen(OpenCallback callback, mojom::UsbOpenDeviceResultPtr result);
 
   const scoped_refptr<FakeUsbDeviceInfo> device_;
   const base::flat_set<uint8_t> blocked_interface_classes_;

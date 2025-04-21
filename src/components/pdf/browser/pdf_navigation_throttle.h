@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,6 @@ class PdfStreamDelegate;
 
 class PdfNavigationThrottle final : public content::NavigationThrottle {
  public:
-  static std::unique_ptr<content::NavigationThrottle> MaybeCreateThrottleFor(
-      content::NavigationHandle* navigation_handle,
-      std::unique_ptr<PdfStreamDelegate> stream_delegate);
-
   PdfNavigationThrottle(content::NavigationHandle* navigation_handle,
                         std::unique_ptr<PdfStreamDelegate> stream_delegate);
   PdfNavigationThrottle(const PdfNavigationThrottle&) = delete;
@@ -31,6 +27,7 @@ class PdfNavigationThrottle final : public content::NavigationThrottle {
 
   // `content::NavigationThrottle`:
   const char* GetNameForLogging() override;
+  ThrottleCheckResult WillProcessResponse() override;
   ThrottleCheckResult WillStartRequest() override;
 
  private:

@@ -1,14 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
+
 #include <cstddef>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/scoped_command_line.h"
 #include "content/browser/browser_main_loop.h"                 //nogncheck
@@ -29,7 +32,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/libprotobuf-mutator/src/src/libfuzzer/libfuzzer_macro.h"
 
 const char* kCmdline[] = {"image_capture_mojolpm_fuzzer", nullptr};
@@ -71,7 +73,7 @@ class ImageCaptureTestcase
 
   // Prerequisite state.
   content::mojolpm::RenderViewHostTestHarnessAdapter test_adapter_;
-  content::TestRenderFrameHost* render_frame_host_ = nullptr;
+  raw_ptr<content::TestRenderFrameHost> render_frame_host_ = nullptr;
 };
 
 ImageCaptureTestcase::ImageCaptureTestcase(const ProtoTestcase& testcase)

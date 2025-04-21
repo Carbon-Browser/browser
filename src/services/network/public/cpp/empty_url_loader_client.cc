@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
@@ -65,7 +65,8 @@ void EmptyURLLoaderClient::OnReceiveEarlyHints(
 
 void EmptyURLLoaderClient::OnReceiveResponse(
     const mojom::URLResponseHeadPtr head,
-    mojo::ScopedDataPipeConsumerHandle body) {
+    mojo::ScopedDataPipeConsumerHandle body,
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   if (!body)
     return;
 
@@ -86,17 +87,17 @@ void EmptyURLLoaderClient::OnUploadProgress(int64_t current_position,
   std::move(callback).Run();
 }
 
-void EmptyURLLoaderClient::OnReceiveCachedMetadata(mojo_base::BigBuffer data) {}
-
-void EmptyURLLoaderClient::OnTransferSizeUpdated(int32_t transfer_size_diff) {}
+void EmptyURLLoaderClient::OnTransferSizeUpdated(int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kEmptyURLLoaderClient);
+}
 
 void EmptyURLLoaderClient::OnComplete(const URLLoaderCompletionStatus& status) {
   done_status_ = status;
   MaybeDone();
 }
 
-void EmptyURLLoaderClient::OnDataAvailable(const void* data, size_t num_bytes) {
-}
+void EmptyURLLoaderClient::OnDataAvailable(base::span<const uint8_t> data) {}
 
 void EmptyURLLoaderClient::OnDataComplete() {
   response_body_drainer_.reset();

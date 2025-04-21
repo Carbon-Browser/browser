@@ -61,21 +61,20 @@ class CORE_EXPORT FileInputType final : public InputType,
   void CountUsage() override;
 
   void SetFilesFromPaths(const Vector<String>&) override;
+  bool CanSetStringValue() const;
+  bool ValueMissing(const String&) const;
 
  private:
   InputTypeView* CreateView() override;
-  const AtomicString& FormControlType() const override;
   FormControlState SaveFormControlState() const override;
   void RestoreFormControlState(const FormControlState&) override;
   void AppendToFormData(FormData&) const override;
-  bool ValueMissing(const String&) const override;
   String ValueMissingText() const override;
   void HandleDOMActivateEvent(Event&) override;
   void OpenPopupView() override;
-  void CustomStyleForLayoutObject(ComputedStyle& style) override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout) const override;
-  bool CanSetStringValue() const override;
+  bool IsPickerVisible() const override;
+  void AdjustStyle(ComputedStyleBuilder&) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) const override;
   FileList* Files() override;
   bool SetFiles(FileList*) override;
   void SetFilesAndDispatchEvents(FileList*) override;
@@ -114,6 +113,13 @@ class CORE_EXPORT FileInputType final : public InputType,
 
   Member<FileList> file_list_;
   String dropped_file_system_id_;
+};
+
+template <>
+struct DowncastTraits<FileInputType> {
+  static bool AllowFrom(const InputType& type) {
+    return type.IsFileInputType();
+  }
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/browser_thread.h"
@@ -31,8 +31,8 @@ void ConflictsHandler::HandleRequestModuleList(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   // Make sure the JS doesn't call 'requestModuleList' more than once.
-  // TODO(739291): It would be better to kill the renderer instead of the
-  // browser for malformed messages.
+  // TODO(crbug.com/40528619): It would be better to kill the renderer instead
+  // of the browser for malformed messages.
   CHECK_EQ(1U, args_list.size());
   module_list_callback_id_ = args_list[0].GetString();  // CHECKs if not string
 
@@ -41,7 +41,7 @@ void ConflictsHandler::HandleRequestModuleList(
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-void ConflictsHandler::OnConflictsDataFetched(base::DictionaryValue results) {
+void ConflictsHandler::OnConflictsDataFetched(base::Value::Dict results) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!module_list_callback_id_.empty());
 

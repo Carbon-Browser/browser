@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,27 +31,24 @@ class MODULES_EXPORT PresentationReceiver final
       public mojom::blink::PresentationReceiver {
   DEFINE_WRAPPERTYPEINFO();
   using ConnectionListProperty =
-      ScriptPromiseProperty<Member<PresentationConnectionList>,
-                            Member<DOMException>>;
+      ScriptPromiseProperty<PresentationConnectionList, DOMException>;
 
  public:
   explicit PresentationReceiver(LocalDOMWindow*);
   ~PresentationReceiver() override = default;
 
   // PresentationReceiver.idl implementation
-  ScriptPromise connectionList(ScriptState*);
+  ScriptPromise<PresentationConnectionList> connectionList(ScriptState*);
 
   // mojom::blink::PresentationReceiver
   void OnReceiverConnectionAvailable(
-      mojom::blink::PresentationInfoPtr,
-      mojo::PendingRemote<mojom::blink::PresentationConnection>,
-      mojo::PendingReceiver<mojom::blink::PresentationConnection>) override;
+      mojom::blink::PresentationConnectionResultPtr result) override;
 
   void RegisterConnection(ReceiverPresentationConnection*);
   void RemoveConnection(ReceiverPresentationConnection*);
   void Terminate();
 
-  LocalDOMWindow* GetWindow() const { return window_; }
+  LocalDOMWindow* GetWindow() const { return window_.Get(); }
 
   void Trace(Visitor*) const override;
 

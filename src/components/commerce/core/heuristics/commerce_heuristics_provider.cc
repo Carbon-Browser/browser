@@ -1,13 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/commerce/core/heuristics/commerce_heuristics_provider.h"
 
+#include <set>
+
 #include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "build/buildflag.h"
 #include "components/commerce/core/commerce_feature_list.h"
@@ -30,18 +33,17 @@ std::string eTLDPlusOne(const GURL& url) {
 
 const std::map<std::string, std::string>& GetCartPatternMapping() {
   static base::NoDestructor<std::map<std::string, std::string>> pattern_map([] {
-    const base::Value json(
-        base::JSONReader::Read(
-            commerce::kCartPatternMapping.Get().empty()
-                ? ui::ResourceBundle::GetSharedInstance()
-                      .LoadDataResourceString(
-                          IDR_CART_DOMAIN_CART_URL_REGEX_JSON)
-                : commerce::kCartPatternMapping.Get())
-            .value());
+    base::Value json(base::JSONReader::Read(
+                         commerce::kCartPatternMapping.Get().empty()
+                             ? ui::ResourceBundle::GetSharedInstance()
+                                   .LoadDataResourceString(
+                                       IDR_CART_DOMAIN_CART_URL_REGEX_JSON)
+                             : commerce::kCartPatternMapping.Get())
+                         .value());
     DCHECK(json.is_dict());
     std::map<std::string, std::string> map;
-    for (auto item : json.DictItems()) {
-      map.insert({std::move(item.first), std::move(item.second.GetString())});
+    for (auto&& item : json.GetDict()) {
+      map.insert({std::move(item.first), std::move(item.second).TakeString()});
     }
     return map;
   }());
@@ -50,7 +52,7 @@ const std::map<std::string, std::string>& GetCartPatternMapping() {
 
 const std::map<std::string, std::string>& GetCheckoutPatternMapping() {
   static base::NoDestructor<std::map<std::string, std::string>> pattern_map([] {
-    const base::Value json(
+    base::Value json(
         base::JSONReader::Read(
             commerce::kCheckoutPatternMapping.Get().empty()
                 ? ui::ResourceBundle::GetSharedInstance()
@@ -60,8 +62,8 @@ const std::map<std::string, std::string>& GetCheckoutPatternMapping() {
             .value());
     DCHECK(json.is_dict());
     std::map<std::string, std::string> map;
-    for (const auto item : json.DictItems()) {
-      map.insert({std::move(item.first), std::move(item.second.GetString())});
+    for (auto&& item : json.GetDict()) {
+      map.insert({std::move(item.first), std::move(item.second).TakeString()});
     }
     return map;
   }());
@@ -103,7 +105,7 @@ const re2::RE2* GetVisitCartPattern(const GURL& url) {
   return cart_regex_map->at(domain).get();
 }
 
-// TODO(crbug/1164236): cover more shopping sites.
+// TODO(crbug.com/40163450): cover more shopping sites.
 const re2::RE2* GetVisitCheckoutPattern(const GURL& url) {
   std::string domain = eTLDPlusOne(url);
   auto* pattern_from_component =
@@ -148,10 +150,6 @@ const re2::RE2* GetVisitCheckoutPattern(const GURL& url) {
   return checkout_regex_map->at(domain).get();
 }
 
-bool PartialMatch(base::StringPiece str, const re2::RE2& re) {
-  return RE2::PartialMatch(re2::StringPiece(str.data(), str.size()), re);
-}
-
 std::string CanonicalURL(const GURL& url) {
   return base::JoinString({url.scheme_piece(), "://", url.host_piece(),
                            url.path_piece().substr(0, kLengthLimit)},
@@ -164,14 +162,14 @@ bool IsVisitCart(const GURL& url) {
   auto* pattern = GetVisitCartPattern(url);
   if (!pattern)
     return false;
-  return PartialMatch(CanonicalURL(url).substr(0, kLengthLimit), *pattern);
+  return RE2::PartialMatch(CanonicalURL(url).substr(0, kLengthLimit), *pattern);
 }
 
 bool IsVisitCheckout(const GURL& url) {
   auto* pattern = GetVisitCheckoutPattern(url);
   if (!pattern)
     return false;
-  return PartialMatch(CanonicalURL(url).substr(0, kLengthLimit), *pattern);
+  return RE2::PartialMatch(url.spec().substr(0, kLengthLimit), *pattern);
 }
 
 }  // namespace commerce_heuristics

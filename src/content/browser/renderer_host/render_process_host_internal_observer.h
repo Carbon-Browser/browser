@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ class CONTENT_EXPORT RenderProcessHostInternalObserver
     : public base::CheckedObserver {
  public:
   // This method is invoked when the observed RenderProcessHost's value of
-  // |IsProcessBackgrounded()| changes.
-  virtual void RenderProcessBackgroundedChanged(RenderProcessHostImpl* host) {}
+  // |GetPriority()| changes.
+  virtual void RenderProcessPriorityChanged(RenderProcessHostImpl* host) {}
 
  protected:
   ~RenderProcessHostInternalObserver() override;

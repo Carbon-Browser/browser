@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,21 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "chrome/browser/policy/messaging_layer/storage_selector/storage_selector.h"
 #include "chrome/browser/policy/messaging_layer/upload/network_condition_service.h"
 #include "chrome/browser/policy/messaging_layer/upload/upload_client.h"
 #include "chrome/browser/policy/messaging_layer/upload/upload_provider.h"
+#include "chrome/browser/policy/messaging_layer/util/upload_declarations.h"
 #include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
 #include "chromeos/dbus/missive/missive_client.h"
 #include "components/reporting/proto/synced/record.pb.h"
-#include "components/reporting/resources/resource_interface.h"
-#include "components/reporting/storage_selector/storage_selector.h"
+#include "components/reporting/resources/resource_manager.h"
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
 
@@ -45,7 +46,6 @@ class EncryptedReportingServiceProvider
       const EncryptedReportingServiceProvider& other) = delete;
   ~EncryptedReportingServiceProvider() override;
 
-  // Returns true if the current thread is on the origin thread.
   // CrosDBusService::ServiceProviderInterface overrides:
   void Start(scoped_refptr<dbus::ExportedObject> exported_object) override;
 
@@ -62,10 +62,12 @@ class EncryptedReportingServiceProvider
                   bool success);
 
   // Callbacks referring to MissivedClient.
-  static ::reporting::UploadClient::ReportSuccessfulUploadCallback
+  static ::reporting::ReportSuccessfulUploadCallback
   GetReportSuccessUploadCallback();
-  static ::reporting::UploadClient::EncryptionKeyAttachedCallback
+  static ::reporting::EncryptionKeyAttachedCallback
   GetEncryptionKeyAttachedCallback();
+  static ::reporting::UpdateConfigInMissiveCallback
+  GetUpdateConfigInMissiveCallback();
 
   // Returns true if called on the origin thread.
   bool OnOriginThread() const;
@@ -79,7 +81,7 @@ class EncryptedReportingServiceProvider
   const scoped_refptr<base::SingleThreadTaskRunner> origin_thread_runner_;
 
   // Memory resource for upload requests and responses.
-  scoped_refptr<::reporting::ResourceInterface> memory_resource_;
+  scoped_refptr<::reporting::ResourceManager> memory_resource_;
 
   // Upload Provider.
   const std::unique_ptr<::reporting::EncryptedReportingUploadProvider>
@@ -95,10 +97,5 @@ class EncryptedReportingServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::EncryptedReportingServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_ENCRYPTED_REPORTING_SERVICE_PROVIDER_H_

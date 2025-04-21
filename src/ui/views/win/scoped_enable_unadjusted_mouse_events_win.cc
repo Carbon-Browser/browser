@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,9 @@ ScopedEnableUnadjustedMouseEventsWin::~ScopedEnableUnadjustedMouseEventsWin() {
   // Stop receiving raw input.
   std::unique_ptr<RAWINPUTDEVICE> device(
       GetRawInputDevices(nullptr, RIDEV_REMOVE));
-  if (!RegisterRawInputDevices(device.get(), 1, sizeof(*device)))
+  if (!RegisterRawInputDevices(device.get(), 1, sizeof(*device))) {
     PLOG(INFO) << "RegisterRawInputDevices() failed for RIDEV_REMOVE ";
+  }
 
   DCHECK(owner_->using_wm_input());
   owner_->set_using_wm_input(false);

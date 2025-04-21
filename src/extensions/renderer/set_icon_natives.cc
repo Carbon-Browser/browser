@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "extensions/renderer/set_icon_natives.h"
 
@@ -10,7 +15,9 @@
 #include <limits>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "extensions/renderer/script_context.h"
 #include "gin/data_object_builder.h"
@@ -75,9 +82,6 @@ SetIconNatives::SetIconNatives(ScriptContext* context)
     : ObjectBackedNativeHandler(context) {}
 
 void SetIconNatives::AddRoutes() {
-  RouteHandlerFunction("IsInServiceWorker",
-                       base::BindRepeating(&SetIconNatives::IsInServiceWorker,
-                                           base::Unretained(this)));
   RouteHandlerFunction("SetIconCommon",
                        base::BindRepeating(&SetIconNatives::SetIconCommon,
                                            base::Unretained(this)));
@@ -133,26 +137,25 @@ bool SetIconNatives::ConvertImageDataToBitmapValue(
   }
   bitmap.eraseARGB(0, 0, 0, 0);
 
-  uint32_t* pixels = bitmap.getAddr32(0, 0);
-  for (int t = 0; t < width * height; t++) {
+  base::span pixels(bitmap.getAddr32(0, 0),
+                    base::checked_cast<uint32_t>(width * height));
+  auto image_data_bytes = [&](size_t index) {
+    return GetIntPropertyFromV8Object(data, v8_context, index) & 0xFF;
+  };
+  for (size_t t = 0; t < pixels.size(); ++t) {
     // |data| is RGBA, pixels is ARGB.
-    pixels[t] = SkPreMultiplyColor(
-        ((GetIntPropertyFromV8Object(data, v8_context, 4 * t + 3) & 0xFF)
-         << 24) |
-        ((GetIntPropertyFromV8Object(data, v8_context, 4 * t + 0) & 0xFF)
-         << 16) |
-        ((GetIntPropertyFromV8Object(data, v8_context, 4 * t + 1) & 0xFF)
-         << 8) |
-        ((GetIntPropertyFromV8Object(data, v8_context, 4 * t + 2) & 0xFF)
-         << 0));
+    pixels[t] = SkPreMultiplyColor((image_data_bytes(4 * t + 3) << 24) |
+                                   (image_data_bytes(4 * t + 0) << 16) |
+                                   (image_data_bytes(4 * t + 1) << 8) |
+                                   (image_data_bytes(4 * t + 2) << 0));
   }
 
   // Construct the Value object.
   std::vector<uint8_t> s = skia::mojom::InlineBitmap::Serialize(&bitmap);
   blink::WebArrayBuffer buffer = blink::WebArrayBuffer::Create(s.size(), 1);
   memcpy(buffer.Data(), s.data(), s.size());
-  *image_data_bitmap = blink::WebArrayBufferConverter::ToV8Value(
-      &buffer, context()->v8_context()->Global(), isolate);
+  *image_data_bitmap =
+      blink::WebArrayBufferConverter::ToV8Value(&buffer, isolate);
 
   return true;
 }
@@ -204,14 +207,6 @@ bool SetIconNatives::ConvertImageDataSetToBitmapValueSet(
         .FromMaybe(false);
   }
   return true;
-}
-
-void SetIconNatives::IsInServiceWorker(
-    const v8::FunctionCallbackInfo<v8::Value>& args) {
-  CHECK_EQ(0, args.Length());
-  const bool is_in_service_worker = context()->IsForServiceWorker();
-  args.GetReturnValue().Set(
-      v8::Boolean::New(args.GetIsolate(), is_in_service_worker));
 }
 
 void SetIconNatives::SetIconCommon(

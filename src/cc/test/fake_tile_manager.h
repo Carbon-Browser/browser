@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "cc/tiles/software_image_decode_cache.h"
 #include "cc/tiles/tile_manager.h"
 
@@ -23,7 +24,7 @@ class FakeTileManager : public TileManager {
   void AssignMemoryToTiles(
       const GlobalStateThatImpactsTilePriority& state);
 
-  std::vector<Tile*> tiles_for_raster;
+  std::vector<raw_ptr<Tile, VectorExperimental>> tiles_for_raster;
 
  private:
   SoftwareImageDecodeCache image_decode_cache_;

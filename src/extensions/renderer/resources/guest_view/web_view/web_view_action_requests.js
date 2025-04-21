@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 var logging = requireNative('logging');
 var MessagingNatives = requireNative('messaging_natives');
+var tagLogMessage = require('guestViewConstants').tagLogMessage;
 var WebViewConstants = require('webViewConstants').WebViewConstants;
 var WebViewInternal = getInternalApi('webViewInternal');
 
@@ -16,10 +17,11 @@ var PERMISSION_TYPES = ['media',
                         'download',
                         'loadplugin',
                         'filesystem',
-                        'fullscreen'];
+                        'fullscreen',
+                        'hid'];
 
 // The browser will kill us if we send it a bad instance ID.
-// TODO(780728): Remove once the cause of the bad ID is known.
+// TODO(crbug.com/41353094): Remove once the cause of the bad ID is known.
 function CrashIfInvalidInstanceId(instanceId, culpritFunction) {
   logging.CHECK(
       instanceId > 0,
@@ -99,13 +101,15 @@ WebViewActionRequest.prototype.handleActionRequestEvent = function() {
 
 // Displays a warning message when an action request is blocked by default.
 WebViewActionRequest.prototype.showWarningMessage = function() {
-  window.console.warn(this.WARNING_MSG_REQUEST_BLOCKED);
+  window.console.warn(tagLogMessage(
+      this.webViewImpl.getLogTag(), this.WARNING_MSG_REQUEST_BLOCKED));
 };
 
 // This function ensures that each action is taken at most once.
 WebViewActionRequest.prototype.validateCall = function() {
   if (this.actionTaken) {
-    throw new Error(this.ERROR_MSG_ACTION_ALREADY_TAKEN);
+    throw new Error(tagLogMessage(
+        this.webViewImpl.getLogTag(), this.ERROR_MSG_ACTION_ALREADY_TAKEN));
   }
   this.actionTaken = true;
 };
@@ -158,7 +162,8 @@ Dialog.prototype.showWarningMessage = function() {
   this.WARNING_MSG_REQUEST_BLOCKED = $String.replace(
       $String.replace(this.WARNING_MSG_REQUEST_BLOCKED, '%1', article), '%2',
       dialogType);
-  window.console.warn(this.WARNING_MSG_REQUEST_BLOCKED);
+  window.console.warn(tagLogMessage(
+      this.webViewImpl.getLogTag(), this.WARNING_MSG_REQUEST_BLOCKED));
 };
 
 Dialog.prototype.ERROR_MSG_ACTION_ALREADY_TAKEN =
@@ -183,8 +188,10 @@ NewWindow.prototype.getInterfaceObject = function() {
   return {
     attach: $Function.bind(function(webview) {
       this.validateCall();
-      if (!webview || !webview.tagName || webview.tagName != 'WEBVIEW') {
-        throw new Error(ERROR_MSG_WEBVIEW_EXPECTED);
+      if (!webview || !webview.tagName ||
+          (webview.tagName != 'WEBVIEW' &&
+           webview.tagName != 'CONTROLLEDFRAME')) {
+        throw new Error('Cannot attach to invalid container element.');
       }
 
       var webViewImpl = privates(webview).internal;
@@ -193,10 +200,7 @@ NewWindow.prototype.getInterfaceObject = function() {
         webViewImpl.onAttach(this.event.partition);
       }
 
-      var attached = webViewImpl.attachWindow(this.event.windowId);
-      if (!attached) {
-        window.console.error(ERROR_MSG_NEWWINDOW_UNABLE_TO_ATTACH);
-      }
+      webViewImpl.attachWindow(this.event.windowId);
 
       if (this.guestInstanceId != this.webViewImpl.guest.getId()) {
         // If the opener is already gone, then its guestInstanceId will be
@@ -210,7 +214,7 @@ NewWindow.prototype.getInterfaceObject = function() {
       // up the state created for the new window if attaching fails.
       CrashIfInvalidInstanceId(this.guestInstanceId, 'NewWindow attach');
       WebViewInternal.setPermission(this.guestInstanceId, this.requestId,
-                                    attached ? 'allow' : 'deny');
+                                    'allow');
     }, this),
     discard: $Function.bind(function() {
       this.validateCall();
@@ -275,8 +279,10 @@ PermissionRequest.prototype.getInterfaceObject = function() {
 };
 
 PermissionRequest.prototype.showWarningMessage = function() {
-  window.console.warn($String.replace(
-      this.WARNING_MSG_REQUEST_BLOCKED, '%1', this.event.permission));
+  window.console.warn(tagLogMessage(
+      this.webViewImpl.getLogTag(),
+      $String.replace(
+          this.WARNING_MSG_REQUEST_BLOCKED, '%1', this.event.permission)));
 };
 
 // Checks that the requested permission is valid. Returns true if valid.

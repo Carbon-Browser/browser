@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,9 +50,9 @@ class DriverMemoryMapping {
   void Unmap();
 
   IpczDriver driver_;
-  IpczDriverHandle mapping_;
-  void* address_;
-  size_t size_;
+  IpczDriverHandle mapping_ = IPCZ_INVALID_DRIVER_HANDLE;
+  void* address_ = nullptr;
+  size_t size_ = 0;
 };
 
 }  // namespace ipcz

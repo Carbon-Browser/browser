@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/credential_provider/gaiacp/os_process_manager.h"
 
-#include <Windows.h>
+#include <windows.h>
+#include <winternl.h>
 
 #include <MDMRegistration.h>
-#include <Shellapi.h>  // For CommandLineToArgvW()
+#include <Shellapi.h>
 #include <Shlobj.h>
-#include <Winternl.h>
 #include <aclapi.h>
 #include <atlconv.h>
 #include <dpapi.h>
@@ -19,7 +19,6 @@
 #include <security.h>
 #include <stdlib.h>
 #include <userenv.h>
-#include <wincred.h>
 
 #include <iomanip>
 #include <memory>
@@ -28,11 +27,12 @@
 #include "base/files/file_path.h"
 #include "base/process/launch.h"
 #include "base/scoped_native_library.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_process_information.h"
 #include "base/win/win_util.h"
+#include "base/win/wincred_shim.h"
 #include "chrome/credential_provider/common/gcp_strings.h"
 #include "chrome/credential_provider/gaiacp/gcp_utils.h"
 #include "chrome/credential_provider/gaiacp/logging.h"
@@ -430,7 +430,7 @@ void OSProcessManager::SetInstanceForTesting(OSProcessManager* instance) {
   *GetInstanceStorage() = instance;
 }
 
-OSProcessManager::~OSProcessManager() {}
+OSProcessManager::~OSProcessManager() = default;
 
 HRESULT OSProcessManager::GetTokenLogonSID(const base::win::ScopedHandle& token,
                                            PSID* sid) {
@@ -475,9 +475,8 @@ HRESULT OSProcessManager::CreateRunningProcess(
   // code.  However this function is called to execute rundll32 which parses
   // command lines in a special way and fails when the first arg is double
   // quoted.  Therefore the command line is built manually here.
-  std::wstring unquoted_cmdline;
-  base::StringAppendF(&unquoted_cmdline, L"\"%ls\"",
-                      command_line.GetProgram().value().c_str());
+  std::wstring unquoted_cmdline =
+      base::StrCat({L"\"", command_line.GetProgram().value(), L"\""});
   for (const auto& arg : command_line.GetArgs()) {
     unquoted_cmdline.append(FILE_PATH_LITERAL(" "));
     unquoted_cmdline.append(arg);

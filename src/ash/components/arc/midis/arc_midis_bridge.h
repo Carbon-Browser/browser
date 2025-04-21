@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "ash/components/arc/mojom/midis.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -41,6 +42,8 @@ class ArcMidisBridge : public KeyedService, public mojom::MidisHost {
   void Connect(mojo::PendingReceiver<mojom::MidisServer> receiver,
                mojo::PendingRemote<mojom::MidisClient> client_remote) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   void OnBootstrapMojoConnection(
       mojo::PendingReceiver<mojom::MidisServer> receiver,
@@ -48,7 +51,8 @@ class ArcMidisBridge : public KeyedService, public mojom::MidisHost {
       bool result);
   void OnMojoConnectionError();
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
   mojo::Remote<mojom::MidisHost> midis_host_remote_;
 
   // WeakPtrFactory to use for callbacks.

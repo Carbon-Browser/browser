@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,23 @@ SemaphoreHandle GetVkSemaphoreHandle(
   return gpu::SemaphoreHandle(
       VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA,
       zx::event(handle));
+}
+
+bool IsVkOpaqueExternalSemaphoreSupported(VulkanDeviceQueue* device_queue) {
+  return IsVkExternalSemaphoreHandleTypeSupported(
+      device_queue, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA);
+}
+
+VkSemaphore CreateVkOpaqueExternalSemaphore(VkDevice vk_device) {
+  return CreateExternalVkSemaphore(
+      vk_device, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA);
+}
+
+SemaphoreHandle ExportVkOpaqueExternalSemaphore(VkDevice vk_device,
+                                                VkSemaphore vk_semaphore) {
+  return GetVkSemaphoreHandle(
+      vk_device, vk_semaphore,
+      VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA);
 }
 
 }  // namespace gpu

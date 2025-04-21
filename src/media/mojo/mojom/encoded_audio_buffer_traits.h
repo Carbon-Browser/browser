@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,11 @@ struct StructTraits<media::mojom::EncodedAudioBufferDataView,
                     media::EncodedAudioBuffer> {
   static const base::span<const uint8_t> data(
       const media::EncodedAudioBuffer& input) {
-    if (!input.encoded_data || input.encoded_data_size == 0)
+    if (input.encoded_data.empty()) {
       return base::span<const uint8_t>();
+    }
 
-    return base::span<const uint8_t>(input.encoded_data.get(),
-                                     input.encoded_data_size);
+    return input.encoded_data;
   }
 
   static const base::TimeDelta timestamp(

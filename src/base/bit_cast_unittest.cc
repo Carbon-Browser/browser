@@ -1,7 +1,6 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
 
 #include "base/bit_cast.h"
 
@@ -22,7 +21,7 @@ struct A {
 };
 
 TEST(BitCastTest, StructureInt) {
-  A a = { 1 };
+  A a = {1};
   int b = bit_cast<int>(a);
   EXPECT_EQ(1, b);
 }

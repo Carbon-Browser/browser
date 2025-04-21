@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -30,9 +30,9 @@
 namespace {
 
 // Returns the storage of a test hook for `ShowSSLClientCertificateSelector()`.
-chrome::ShowSSLClientCertificateSelectorTestingHook&
+ShowSSLClientCertificateSelectorTestingHook&
 GetShowSSLClientCertificateSelectorTestingHook() {
-  static base::NoDestructor<chrome::ShowSSLClientCertificateSelectorTestingHook>
+  static base::NoDestructor<ShowSSLClientCertificateSelectorTestingHook>
       instance;
   return *instance;
 }
@@ -110,13 +110,14 @@ SSLClientCertificateSelector::SSLClientCertificateSelector(
         // chance to abort instead of proceeding with a null certificate. (This
         // will be ignored if there was a previous call to CertificateSelected
         // or CancelCertificateSelection.)
-        if (dialog->auth_observer_impl_)
+        if (dialog->auth_observer_impl_) {
           dialog->auth_observer_impl_->CertificateSelected(nullptr, nullptr);
+        }
       },
       this));
 }
 
-SSLClientCertificateSelector::~SSLClientCertificateSelector() {}
+SSLClientCertificateSelector::~SSLClientCertificateSelector() = default;
 
 void SSLClientCertificateSelector::Init() {
   auth_observer_impl_->Init(base::BindOnce(
@@ -148,8 +149,9 @@ void SSLClientCertificateSelector::AcceptCertificate(
 
 void SSLClientCertificateSelector::OnCancel() {
   // Close the dialog if it is not currently being displayed
-  if (!GetWidget()->IsVisible())
+  if (!GetWidget()->IsVisible()) {
     CloseDialog();
+  }
 }
 
 base::OnceClosure SSLClientCertificateSelector::GetCancellationCallback() {
@@ -157,8 +159,6 @@ base::OnceClosure SSLClientCertificateSelector::GetCancellationCallback() {
   return base::BindOnce(&SSLClientCertificateSelector::OnCancel,
                         weak_factory_.GetWeakPtr());
 }
-
-namespace chrome {
 
 base::OnceClosure ShowSSLClientCertificateSelector(
     content::WebContents* contents,
@@ -173,12 +173,20 @@ base::OnceClosure ShowSSLClientCertificateSelector(
         std::move(delegate));
   }
 
+  // Don't bother prompting the user if there are no certs to choose from.
+  // Just continue with no certificate.
+  if (client_certs.empty()) {
+    delegate->ContinueWithCertificate(nullptr, nullptr);
+    return base::OnceClosure();
+  }
+
   // Not all WebContentses can show modal dialogs.
   //
   // TODO(davidben): Move this hook to the WebContentsDelegate and only try to
   // show a dialog in Browser's implementation. https://crbug.com/456255
-  if (!SSLClientCertificateSelector::CanShow(contents))
+  if (!SSLClientCertificateSelector::CanShow(contents)) {
     return base::OnceClosure();
+  }
 
   SSLClientCertificateSelector* selector = new SSLClientCertificateSelector(
       contents, cert_request_info, std::move(client_certs),
@@ -193,5 +201,3 @@ void SetShowSSLClientCertificateSelectorHookForTest(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   GetShowSSLClientCertificateSelectorTestingHook() = std::move(hook);
 }
-
-}  // namespace chrome

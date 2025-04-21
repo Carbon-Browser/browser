@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,10 @@ bool RegisterUninstallationViaOsSettings(
     const base::CommandLine& uninstall_command,
     const base::FilePath& icon_path);
 
-// Removes the uninstall command for the program |key|. |key| should be
+// Removes the uninstall command for the program `key`. `key` should be
 // same with what is used for RegisterUninstallationViaOsSettings for the entry.
-void UnregisterUninstallationViaOsSettings(const std::wstring& key);
+// Returns true if no error occurred. The registry entry not existing in the
+// first place is considered a success.
+bool UnregisterUninstallationViaOsSettings(const std::wstring& key);
 
 #endif  // CHROME_BROWSER_WIN_UNINSTALLATION_VIA_OS_SETTINGS_H_

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 #include <list>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/memory/ref_counted.h"
 
 namespace extensions {
@@ -81,10 +81,10 @@ class DedupingFactory {
   typedef std::string InstanceType;
   // Cache of previous prototypes in most-recently-used order. Most recently
   // used objects are at the end.
-  typedef std::list<scoped_refptr<const BaseClassT> > PrototypeList;
-  typedef std::unordered_map<InstanceType, PrototypeList> ExistingPrototypes;
-  typedef std::unordered_map<InstanceType, FactoryMethod> FactoryMethods;
-  typedef std::unordered_set<InstanceType> ParameterizedTypes;
+  using PrototypeList = std::list<scoped_refptr<const BaseClassT>>;
+  using ExistingPrototypes = base::flat_map<InstanceType, PrototypeList>;
+  using FactoryMethods = base::flat_map<InstanceType, FactoryMethod>;
+  using ParameterizedTypes = base::flat_set<InstanceType>;
 
   const size_t max_number_prototypes_;
   ExistingPrototypes prototypes_;
@@ -107,8 +107,9 @@ void DedupingFactory<BaseClassT, ValueT>::RegisterFactoryMethod(
     FactoryMethod factory_method) {
   DCHECK(!base::Contains(factory_methods_, instance_type));
   factory_methods_[instance_type] = factory_method;
-  if (parameterized == IS_PARAMETERIZED)
+  if (parameterized == IS_PARAMETERIZED) {
     parameterized_types_.insert(instance_type);
+  }
 }
 
 template <typename BaseClassT, typename ValueT>
@@ -137,8 +138,9 @@ DedupingFactory<BaseClassT, ValueT>::Instantiate(
     if (prototypes.empty()) {
       scoped_refptr<const BaseClassT> new_object =
           (*factory_method)(instance_type, value, error, bad_message);
-      if (!new_object.get() || !error->empty() || *bad_message)
+      if (!new_object.get() || !error->empty() || *bad_message) {
         return scoped_refptr<const BaseClassT>();
+      }
       prototypes.push_back(new_object);
     }
     return prototypes.front();
@@ -147,8 +149,9 @@ DedupingFactory<BaseClassT, ValueT>::Instantiate(
   // Handle parameterized objects.
   scoped_refptr<const BaseClassT> new_object =
       (*factory_method)(instance_type, value, error, bad_message);
-  if (!new_object.get() || !error->empty() || *bad_message)
+  if (!new_object.get() || !error->empty() || *bad_message) {
     return scoped_refptr<const BaseClassT>();
+  }
 
   size_t length = 0;
   for (typename PrototypeList::iterator i = prototypes.begin();

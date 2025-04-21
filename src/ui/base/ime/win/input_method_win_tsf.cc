@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,13 +32,34 @@ class InputMethodWinTSF::TSFEventObserver : public TSFEventRouterObserver {
   bool is_candidate_popup_open_ = false;
 };
 
-InputMethodWinTSF::InputMethodWinTSF(internal::InputMethodDelegate* delegate,
-                                     HWND attached_window_handle)
-    : InputMethodWinBase(delegate, attached_window_handle),
+InputMethodWinTSF::InputMethodWinTSF(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher,
+    HWND attached_window_handle)
+    : InputMethodWinBase(ime_key_event_dispatcher, attached_window_handle),
       tsf_event_observer_(new TSFEventObserver()),
       tsf_event_router_(new TSFEventRouter(tsf_event_observer_.get())) {}
 
-InputMethodWinTSF::~InputMethodWinTSF() {}
+InputMethodWinTSF::~InputMethodWinTSF() {
+  // A pointer to |this| might have been passed to ui::TSFBridge::GetInstance()
+  // in InputMethodWinTSF::OnFocus(). This TSFBridge can sometime be called
+  // asynchronously with the following stack:
+  //   chrome.dll               ui::TSFTextStore::DispatchKeyEvent
+  //   chrome.dll               ui::TSFTextStore::RequestLock
+  //   textinputframework.dll   SafeRequestLock
+  //   textinputframework.dll   CInputContext::RequestLock
+  //
+  // This will cause the TSFBridge to try to access this pointer, which could
+  // cause a UAF if this object is already destroyed. To avoid this, we need to
+  // explicitly remove the dispatcher before destroying this object. The code in
+  // ui::TSFTextStore::DispatchKeyEvent does properly check the pointer before
+  // trying to use it. Note that everything happens on the same thread here.
+  //
+  // See crbug.com/41488962
+  if (ui::TSFBridge::GetInstance()) {
+    ui::TSFBridge::GetInstance()->RemoveImeKeyEventDispatcher(
+        InputMethodBase::ime_key_event_dispatcher());
+  }
+}
 
 void InputMethodWinTSF::OnFocus() {
   InputMethodBase::OnFocus();
@@ -48,8 +69,8 @@ void InputMethodWinTSF::OnFocus() {
   }
   tsf_event_router_->SetManager(
       ui::TSFBridge::GetInstance()->GetThreadManager().Get());
-  ui::TSFBridge::GetInstance()->SetInputMethodDelegate(
-      InputMethodBase::delegate());
+  ui::TSFBridge::GetInstance()->SetImeKeyEventDispatcher(
+      InputMethodBase::ime_key_event_dispatcher());
 }
 
 void InputMethodWinTSF::OnBlur() {
@@ -59,7 +80,8 @@ void InputMethodWinTSF::OnBlur() {
     return;
   }
   tsf_event_router_->SetManager(nullptr);
-  ui::TSFBridge::GetInstance()->RemoveInputMethodDelegate();
+  ui::TSFBridge::GetInstance()->RemoveImeKeyEventDispatcher(
+      InputMethodBase::ime_key_event_dispatcher());
 }
 
 bool InputMethodWinTSF::OnUntranslatedIMEMessage(
@@ -128,6 +150,8 @@ void InputMethodWinTSF::DetachTextInputClient(TextInputClient* client) {
   ui::TSFBridge::GetInstance()->RemoveFocusedClient(client);
 }
 
+void InputMethodWinTSF::OnInputLocaleChanged() {}
+
 bool InputMethodWinTSF::IsInputLocaleCJK() const {
   if (!ui::TSFBridge::GetInstance()) {
     return false;
@@ -174,6 +198,14 @@ void InputMethodWinTSF::ConfirmCompositionText() {
 
   if (ui::TSFBridge::GetInstance())
     ui::TSFBridge::GetInstance()->ConfirmComposition();
+}
+
+void InputMethodWinTSF::OnUrlChanged() {
+  if (!ui::TSFBridge::GetInstance()) {
+    return;
+  }
+
+  ui::TSFBridge::GetInstance()->OnUrlChanged();
 }
 
 }  // namespace ui

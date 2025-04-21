@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -30,6 +30,7 @@ if __name__ == '__main__':
      'extensions/browser/extension_function_histogram_value.h'))
   for enum_name, source_header in histograms:
     UpdateHistogramEnum(
+        'tools/metrics/histograms/metadata/extensions/enums.xml',
         histogram_enum_name=enum_name,
         source_enum_path=source_header,
         start_marker='^enum HistogramValue {',

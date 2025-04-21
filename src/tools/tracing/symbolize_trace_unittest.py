@@ -1,11 +1,13 @@
 #!/usr/bin/env vpython3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import os
 import sys
 import unittest
+
+from unittest import mock
 
 import symbolize_trace
 import symbol_fetcher
@@ -19,8 +21,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, 'perf'))
 from core import path_util
 path_util.AddPyUtilsToPath()
 path_util.AddTracingToPath()
-
-import mock
 
 
 class TestOptions():
@@ -209,8 +209,8 @@ class SymbolizeTraceTestCase(unittest.TestCase):
 
     symbolize_trace.SymbolizeTrace(self.trace_file, self.options)
 
-    metadata_extractor.MetadataExtractor.assert_not_called()
     symbol_fetcher.GetTraceBreakpadSymbols.assert_not_called()
+    metadata_extractor.MetadataExtractor.assert_called_once()
     breakpad_file_extractor.ExtractBreakpadFiles.assert_called_once()
     symbolize_trace._RunSymbolizer.assert_called_once()
 

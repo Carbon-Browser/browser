@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ InterpolationValue CSSCustomListInterpolationType::MaybeConvertNeutral(
   wtf_size_t underlying_length =
       UnderlyingLengthChecker::GetUnderlyingLength(underlying);
   conversion_checkers.push_back(
-      std::make_unique<UnderlyingLengthChecker>(underlying_length));
+      MakeGarbageCollected<UnderlyingLengthChecker>(underlying_length));
 
   if (underlying_length == 0)
     return nullptr;
@@ -52,6 +52,55 @@ InterpolationValue CSSCustomListInterpolationType::MaybeConvertValue(
       });
 }
 
+InterpolationValue
+CSSCustomListInterpolationType::PreInterpolationCompositeIfNeeded(
+    InterpolationValue value,
+    const InterpolationValue& underlying,
+    EffectModel::CompositeOperation composite,
+    ConversionCheckers& conversion_checkers) const {
+  // This adapts a ListInterpolationFunctions::CompositeItemCallback function
+  // such that we can use the InterpolationType::Composite function of the
+  // inner interpolation type to get the answer.
+  //
+  // TODO(andruud): Make InterpolationType::Composite take an UnderlyingValue
+  // rather than an UnderlyingValueOwner.
+  UnderlyingValueOwner owner;
+  owner.Set(*this, underlying);
+
+  ConversionCheckers null_checkers;
+
+  const CSSInterpolationType* interpolation_type =
+      inner_interpolation_type_.get();
+  auto composite_callback =
+      [interpolation_type, composite, &null_checkers](
+          UnderlyingValue& underlying_value, double underlying_fraction,
+          const InterpolableValue& interpolable_value,
+          const NonInterpolableValue* non_interpolable_value) {
+        CHECK_EQ(underlying_fraction, 1.0);
+        InterpolationValue value(interpolable_value.Clone(),
+                                 non_interpolable_value);
+        InterpolationValue underlying(
+            underlying_value.MutableInterpolableValue().Clone(),
+            underlying_value.GetNonInterpolableValue());
+        InterpolationValue composite_result =
+            interpolation_type->PreInterpolationCompositeIfNeeded(
+                std::move(value), underlying, composite, null_checkers);
+        composite_result = composite_result.Clone();
+        underlying_value.SetInterpolableValue(
+            composite_result.interpolable_value);
+        underlying_value.SetNonInterpolableValue(
+            composite_result.non_interpolable_value);
+      };
+
+  ListInterpolationFunctions::Composite(
+      owner, 1.0, *this, value,
+      ListInterpolationFunctions::LengthMatchingStrategy::kEqual,
+      ListInterpolationFunctions::InterpolableValuesKnownCompatible,
+      NonInterpolableValuesAreCompatible, composite_callback);
+
+  return owner.Value().Clone();
+}
+
 const CSSValue* CSSCustomListInterpolationType::CreateCSSValue(
     const InterpolableValue& interpolable_value,
     const NonInterpolableValue* non_interpolable_value,
@@ -63,15 +112,14 @@ const CSSValue* CSSCustomListInterpolationType::CreateCSSValue(
   CSSValueList* list = nullptr;
 
   switch (syntax_repeat_) {
-    default:
-      NOTREACHED();
-      [[fallthrough]];
     case CSSSyntaxRepeat::kSpaceSeparated:
       list = CSSValueList::CreateSpaceSeparated();
       break;
     case CSSSyntaxRepeat::kCommaSeparated:
       list = CSSValueList::CreateCommaSeparated();
       break;
+    default:
+      NOTREACHED();
   }
 
   DCHECK(!non_interpolable_list ||
@@ -98,12 +146,13 @@ void CSSCustomListInterpolationType::Composite(
   //
   // TODO(andruud): Make InterpolationType::Composite take an UnderlyingValue
   // rather than an UnderlyingValueOwner.
+  const CSSInterpolationType* interpolation_type =
+      inner_interpolation_type_.get();
   auto composite_callback =
-      [](const CSSInterpolationType* interpolation_type,
-         double interpolation_fraction, UnderlyingValue& underlying_value,
-         double underlying_fraction,
-         const InterpolableValue& interpolable_value,
-         const NonInterpolableValue* non_interpolable_value) {
+      [interpolation_type, interpolation_fraction](
+          UnderlyingValue& underlying_value, double underlying_fraction,
+          const InterpolableValue& interpolable_value,
+          const NonInterpolableValue* non_interpolable_value) {
         UnderlyingValueOwner owner;
         owner.Set(*interpolation_type,
                   InterpolationValue(
@@ -125,32 +174,31 @@ void CSSCustomListInterpolationType::Composite(
   ListInterpolationFunctions::Composite(
       underlying_value_owner, underlying_fraction, *this, value,
       ListInterpolationFunctions::LengthMatchingStrategy::kEqual,
-      WTF::BindRepeating(
-          ListInterpolationFunctions::InterpolableValuesKnownCompatible),
-      GetNonInterpolableValuesAreCompatibleCallback(),
-      WTF::BindRepeating(composite_callback,
-                         WTF::Unretained(inner_interpolation_type_.get()),
-                         interpolation_fraction));
+      ListInterpolationFunctions::InterpolableValuesKnownCompatible,
+      NonInterpolableValuesAreCompatible, composite_callback);
 }
 
 PairwiseInterpolationValue CSSCustomListInterpolationType::MaybeMergeSingles(
     InterpolationValue&& start,
     InterpolationValue&& end) const {
+  const CSSInterpolationType* interpolation_type =
+      inner_interpolation_type_.get();
   return ListInterpolationFunctions::MaybeMergeSingles(
       std::move(start), std::move(end),
       ListInterpolationFunctions::LengthMatchingStrategy::kEqual,
-      WTF::BindRepeating(&CSSInterpolationType::MaybeMergeSingles,
-                         WTF::Unretained(inner_interpolation_type_.get())));
+      [interpolation_type](InterpolationValue&& a, InterpolationValue&& b) {
+        return interpolation_type->MaybeMergeSingles(std::move(a),
+                                                     std::move(b));
+      });
 }
 
-ListInterpolationFunctions::NonInterpolableValuesAreCompatibleCallback
-CSSCustomListInterpolationType::GetNonInterpolableValuesAreCompatibleCallback()
-    const {
+bool CSSCustomListInterpolationType::NonInterpolableValuesAreCompatible(
+    const NonInterpolableValue* a,
+    const NonInterpolableValue* b) {
   // TODO(https://crbug.com/981537): Add support for <image> here.
   // TODO(https://crbug.com/981538): Add support for <transform-function> here.
   // TODO(https://crbug.com/981542): Add support for <transform-list> here.
-  return WTF::BindRepeating(
-      ListInterpolationFunctions::VerifyNoNonInterpolableValues);
+  return ListInterpolationFunctions::VerifyNoNonInterpolableValues(a, b);
 }
 
 }  // namespace blink

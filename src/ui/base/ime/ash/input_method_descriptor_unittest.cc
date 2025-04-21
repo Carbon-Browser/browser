@@ -1,10 +1,12 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/ime/ash/input_method_descriptor.h"
 
 #include <stddef.h>
+
+#include <optional>
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
@@ -15,8 +17,6 @@ namespace ash {
 namespace input_method {
 namespace {
 
-using ::base::ASCIIToUTF16;
-
 InputMethodDescriptor CreateDesc(const std::string& id,
                                  const std::string& layout,
                                  const std::vector<std::string>& language_codes,
@@ -25,7 +25,8 @@ InputMethodDescriptor CreateDesc(const std::string& id,
   return InputMethodDescriptor(
       extension_ime_util::GetInputMethodIDByEngineID(id), /* name= */ "",
       indicator, layout, language_codes, /* is_login_keyboard= */ true,
-      /* options_page_url= */ GURL(), /* input_view_url= */ GURL());
+      /* options_page_url= */ GURL(), /* input_view_url= */ GURL(),
+      /*handwriting_language=*/std::nullopt);
 }
 
 TEST(InputMethodDescriptorTest, GetIndicatorTest) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class MockFidoBleConnection : public FidoBleConnection {
   ~MockFidoBleConnection() override;
 
   // GMock cannot mock a method taking a move-only type.
-  // TODO(https://crbug.com/729950): Remove these workarounds once support for
+  // TODO(crbug.com/40524294): Remove these workarounds once support for
   // move-only types is added to GMock.
   MOCK_METHOD1(ConnectPtr, void(ConnectionCallback* cb));
   MOCK_METHOD1(ReadControlPointLengthPtr, void(ControlPointLengthCallback* cb));

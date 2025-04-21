@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -10,6 +10,7 @@
 #include "base/time/time.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/safe_browsing/core/common/safebrowsing_constants.h"
+#include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "url/gurl.h"
 
@@ -24,6 +25,10 @@ class TimeDelta;
 namespace network {
 struct ResourceRequest;
 }  // namespace network
+
+namespace security_interstitials {
+struct UnsafeResource;
+}
 
 class PrefService;
 
@@ -56,6 +61,28 @@ base::TimeDelta GetDelayFromPref(PrefService* prefs, const char* pref_name);
 // (6) Its hostname is less than 4 characters.
 bool CanGetReputationOfUrl(const GURL& url);
 
+// List of callers of
+// `SetAccessTokenAndClearCookieInResourceRequest`. This is used for
+// logging the histogram SafeBrowsing.AuthenticatedCookieResetEndpoint.
+//
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class SafeBrowsingAuthenticatedEndpoint {
+  kDeepScanning = 0,
+  kDownloadProtection = 1,
+  kExtensionTelemetry = 2,
+  kClientSideDetection = 3,
+  kPasswordProtection = 4,
+  kThreatDetails = 5,
+  kRealtimeUrlLookup = 6,
+  kMaxValue = kRealtimeUrlLookup,
+};
+
+// When cookies are changed on this request, log the
+// SafeBrowsing.AuthenticatedCookieResetEndpoint histogram.
+void LogAuthenticatedCookieResets(network::ResourceRequest& resource_request,
+                                  SafeBrowsingAuthenticatedEndpoint endpoint);
+
 // Set |access_token| in |resource_request|. Remove cookies in the request
 // since we only need one identifier.
 void SetAccessTokenAndClearCookieInResourceRequest(
@@ -71,6 +98,17 @@ void SetAccessTokenAndClearCookieInResourceRequest(
 void RecordHttpResponseOrErrorCode(const char* metric_name,
                                    int net_error,
                                    int response_code);
+
+// If the network response for a request has errors, the corresponding service
+// usually increments the backoff counter. However, some errors are not related
+// to the network infrastructure and therefore don't require this. This function
+// returns whether an error is considered retriable and doesn't need to
+// increment backoff.
+bool ErrorIsRetriable(int net_error, int http_error);
+
+// We populate a parallel set of metrics to differentiate some threat sources.
+std::string GetExtraMetricsSuffix(
+    security_interstitials::UnsafeResource unsafe_resource);
 
 }  // namespace safe_browsing
 

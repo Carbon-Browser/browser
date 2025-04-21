@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,18 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/web_applications/test/with_crosapi_param.h"
+#include "chrome/browser/web_applications/test/web_app_test_utils.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/browser_commands.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Profile type to test. Provided to subclasses of TestProfileTypeMixin via
 // get_profile().
@@ -26,11 +32,7 @@ enum class TestProfileType {
 // Profile type to test. Provided to subclasses of TestProfileTypeMixin via
 // GetParam().
 struct TestProfileParam {
-  typedef web_app::test::CrosapiParam CrosapiParam;
-
   TestProfileType profile_type;
-  CrosapiParam crosapi_state = CrosapiParam::kDisabled;
-  bool external_pref_migration_enabled = false;
 };
 
 // GTest string formatter for TestProfileType. Appends, e.g. "/Guest" to the end
@@ -42,11 +44,6 @@ std::string TestProfileTypeToString(
 // mode. Should be invoked in SetUpCommandLine(). Any test can call this: it is
 // not coupled to TestProfileTypeMixin. Should only be invoked on ChromeOS.
 void ConfigureCommandLineForGuestMode(base::CommandLine* command_line);
-
-void InitCrosapiFeaturesForParam(
-    web_app::test::CrosapiParam crosapi_state,
-    base::test::ScopedFeatureList* scoped_feature_list,
-    bool external_pref_migration_enabled);
 
 // "Mixin" for configuring a test harness to parameterize on different profile
 // types. To use it, inherit from
@@ -69,10 +66,7 @@ class TestProfileTypeMixin
  public:
   template <class... Args>
   explicit TestProfileTypeMixin(Args&&... args)
-      : T(std::forward<Args>(args)...) {
-    InitCrosapiFeaturesForParam(GetParam().crosapi_state, &scoped_feature_list_,
-                                GetParam().external_pref_migration_enabled);
-  }
+      : T(std::forward<Args>(args)...) {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     if (profile_type() == TestProfileType::kGuest) {
@@ -84,69 +78,12 @@ class TestProfileTypeMixin
   }
 
   TestProfileType profile_type() const { return GetParam().profile_type; }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 #define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(SUITE, PARAMS) \
   INSTANTIATE_TEST_SUITE_P(All, SUITE, PARAMS, TestProfileTypeToString)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-// Instantiates 6 versions of each test in |SUITE| to ensure coverage of
-// Guest and Incognito profiles, as well as regular profiles. This is currently
-// only used on ChromeOS. Other platforms will likely need a differently defined
-// macro because there is no such thing as Guest mode.
-#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_ALL_PROFILE_TYPES_P(   \
-    SUITE)                                                                   \
-  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                           \
-      SUITE, ::testing::Values(                                              \
-                 TestProfileParam({TestProfileType::kRegular,                \
-                                   web_app::test::CrosapiParam::kDisabled}), \
-                 TestProfileParam({TestProfileType::kRegular,                \
-                                   web_app::test::CrosapiParam::kEnabled}),  \
-                 TestProfileParam({TestProfileType::kIncognito,              \
-                                   web_app::test::CrosapiParam::kDisabled}), \
-                 TestProfileParam({TestProfileType::kIncognito,              \
-                                   web_app::test::CrosapiParam::kEnabled}),  \
-                 TestProfileParam({TestProfileType::kGuest,                  \
-                                   web_app::test::CrosapiParam::kDisabled}), \
-                 TestProfileParam({TestProfileType::kGuest,                  \
-                                   web_app::test::CrosapiParam::kEnabled})))
-
-#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(SUITE) \
-  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                             \
-      SUITE, ::testing::Values(                                                \
-                 TestProfileParam({TestProfileType::kRegular,                  \
-                                   web_app::test::CrosapiParam::kDisabled}),   \
-                 TestProfileParam({TestProfileType::kRegular,                  \
-                                   web_app::test::CrosapiParam::kEnabled})))
-
-#define INSTANTIATE_SYSTEM_WEB_APP_TEST_SUITE_REGULAR_PREF_MIGRATION_P(SUITE) \
-  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                            \
-      SUITE,                                                                  \
-      ::testing::Values(                                                      \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kDisabled,           \
-                            /*external_pref_migration_enabled=*/false}),      \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kDisabled,           \
-                            /*external_pref_migration_enabled=*/true}),       \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kEnabled,            \
-                            /*external_pref_migration_enabled=*/false}),      \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kEnabled,            \
-                            /*external_pref_migration_enabled=*/true})))
-
-#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_GUEST_SESSION_P(SUITE) \
-  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                           \
-      SUITE, ::testing::Values(                                              \
-                 TestProfileParam({TestProfileType::kGuest,                  \
-                                   web_app::test::CrosapiParam::kDisabled}), \
-                 TestProfileParam({TestProfileType::kGuest,                  \
-                                   web_app::test::CrosapiParam::kEnabled})))
-#else
 // Instantiates 3 versions of each test in |SUITE| to ensure coverage of
 // Guest and Incognito profiles, as well as regular profiles. This is currently
 // only used on ChromeOS. Other platforms will likely need a differently defined
@@ -163,16 +100,25 @@ class TestProfileTypeMixin
   INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                             \
       SUITE, ::testing::Values(TestProfileParam({TestProfileType::kRegular})))
 
-#define INSTANTIATE_SYSTEM_WEB_APP_TEST_SUITE_REGULAR_PREF_MIGRATION_P(SUITE) \
-  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                            \
-      SUITE,                                                                  \
-      ::testing::Values(                                                      \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kDisabled,           \
-                            /*external_pref_migration_enabled=*/false}),      \
-          TestProfileParam({TestProfileType::kRegular,                        \
-                            web_app::test::CrosapiParam::kDisabled,           \
-                            /*external_pref_migration_enabled=*/true})))
+#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_GUEST_SESSION_P(SUITE) \
+  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                           \
+      SUITE, ::testing::Values(TestProfileParam({TestProfileType::kGuest})))
+#else
+// Instantiates 3 versions of each test in |SUITE| to ensure coverage of
+// Guest and Incognito profiles, as well as regular profiles. This is currently
+// only used on ChromeOS. Other platforms will likely need a differently defined
+// macro because there is no such thing as Guest mode.
+#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_ALL_PROFILE_TYPES_P( \
+    SUITE)                                                                 \
+  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                         \
+      SUITE,                                                               \
+      ::testing::Values(TestProfileParam({TestProfileType::kRegular}),     \
+                        TestProfileParam({TestProfileType::kIncognito}),   \
+                        TestProfileParam({TestProfileType::kGuest})))
+
+#define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(SUITE) \
+  INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                             \
+      SUITE, ::testing::Values(TestProfileParam({TestProfileType::kRegular})))
 
 #define INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_GUEST_SESSION_P(SUITE) \
   INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_P(                           \

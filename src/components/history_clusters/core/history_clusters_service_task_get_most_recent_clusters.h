@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,12 @@
 #include "base/time/time.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/history_clusters/core/clustering_backend.h"
+#include "components/history_clusters/core/history_clusters_service_task.h"
 #include "components/history_clusters/core/history_clusters_types.h"
 
 namespace history {
 class HistoryService;
-}
+}  // namespace history
 
 namespace history_clusters {
 
@@ -29,7 +30,8 @@ class HistoryClustersService;
 // It is an extension of `HistoryClustersService`; rather than pollute the
 // latter's namespace with a bunch of callbacks, this class groups those
 // callbacks.
-class HistoryClustersServiceTaskGetMostRecentClusters {
+class HistoryClustersServiceTaskGetMostRecentClusters
+    : public HistoryClustersServiceTask {
  public:
   HistoryClustersServiceTaskGetMostRecentClusters(
       base::WeakPtr<HistoryClustersService> weak_history_clusters_service,
@@ -39,15 +41,13 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
       ClusteringRequestSource clustering_request_source,
       base::Time begin_time,
       QueryClustersContinuationParams continuation_params,
+      bool recluster,
       QueryClustersCallback callback);
-  ~HistoryClustersServiceTaskGetMostRecentClusters();
-
-  bool Done() { return done_; }
+  ~HistoryClustersServiceTaskGetMostRecentClusters() override;
 
  private:
-  // When there remain unclustered visits, cluster unclustered visits (possibly
-  // in combination with clustered visits) and return the newly created
-  // clusters:
+  // When there remain unclustered visits, cluster them (possibly in combination
+  // with clustered visits) and return the newly created clusters:
   //   Start() ->
   //   OnGotAnnotatedVisitsToCluster() ->
   //   OnGotModelClusters()
@@ -59,11 +59,13 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
   //   OnGotMostRecentPersistedClusters()
 
   // Invoked during construction. Will asyncly request annotated visits from
-  // `GetAnnotatedVisitsToCluster`.
+  // `GetAnnotatedVisitsToCluster`. May instead asyncly request persisted
+  // clusters if there's no `ClusteringBackend` or all visits are exhausted.
   void Start();
 
   // Invoked after `Start()` asyncly fetches annotated visits. Will asyncly
-  // request clusters from `ClusteringBackend`.
+  // request clusters from `ClusteringBackend`. May instead asyncly request
+  // persisted clusters if no annotated visits were fetched
   void OnGotAnnotatedVisitsToCluster(
       // Unused because clusters aren't persisted in this flow.
       std::vector<int64_t> old_clusters_unused,
@@ -86,7 +88,7 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
   // Never nullptr.
   base::WeakPtr<HistoryClustersService> weak_history_clusters_service_;
   const IncompleteVisitMap incomplete_visit_context_annotations_;
-  // Can be nullptr.
+  // Non-owning pointer, but never nullptr.
   ClusteringBackend* const backend_;
   // Non-owning pointer, but never nullptr.
   history::HistoryService* const history_service_;
@@ -94,23 +96,25 @@ class HistoryClustersServiceTaskGetMostRecentClusters {
   // Used to make requests to `ClusteringBackend`.
   ClusteringRequestSource clustering_request_source_;
 
-  // Used to make requests to `GetAnnotatedVisitsToCluster`.
+  // Used to make requests to `GetAnnotatedVisitsToCluster` and
+  // `HistoryService`.
   base::Time begin_time_;
   QueryClustersContinuationParams continuation_params_;
+  bool recluster_;
   base::CancelableTaskTracker task_tracker_;
 
-  // Invoked after `OnGotModelClusters().
+  // Invoked after either `OnGotModelClusters()` or
+  // `OnGotMostRecentPersistedClusters()`.
   QueryClustersCallback callback_;
 
   // When `Start()` kicked off the request to fetch visits to cluster.
-  base::TimeTicks history_service_get_annotated_visits_to_cluster_start_time_;
+  base::TimeTicks get_annotated_visits_to_cluster_start_time_;
   // When `OnGotAnnotatedVisitsToCluster()` kicked off the request to cluster
   // the visits.
-  base::TimeTicks backend_get_clusters_start_time_;
-
-  // Set to true when `callback_` is invoked, either with clusters or no
-  // clusters.
-  bool done_ = false;
+  base::TimeTicks get_model_clusters_start_time_;
+  // When `ReturnMostRecentPersistedClusters()` kicked off the request to get
+  // persisted clusters.
+  base::TimeTicks get_most_recent_persisted_clusters_start_time_;
 
   // Used for async callbacks.
   base::WeakPtrFactory<HistoryClustersServiceTaskGetMostRecentClusters>

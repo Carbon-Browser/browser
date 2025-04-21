@@ -17,6 +17,8 @@ You need to add the following lines to your .gclient checkout.
 
 *  "checkout_src_internal": True,
 *  "checkout_mobile_internal": True,
+*  "checkout_wpr_archives": True,
+
 
 Here is an example.
 
@@ -30,6 +32,7 @@ solutions = [
     "custom_vars": {
       "checkout_src_internal": True,
       "checkout_mobile_internal": True,
+      "checkout_wpr_archives": True,
     },
   },
 ]
@@ -52,7 +55,7 @@ Here is an example.
     @WPRArchiveConfigFilePath("chrome/android/feed/core/javatests/src/org/chromium/chrome/"
             + "browser/feed/network_fetch/test_data.json")
     public void
-    launchNTP_withMultipleFeedCardsRendered() throws IOException, InterruptedException {
+    launchNtp_withMultipleFeedCardsRendered() throws IOException, InterruptedException {
     ...
     }
 ```
@@ -102,7 +105,7 @@ The script requires 1 arguments
 A example command line:
 
 ```
-vpython chrome/test/data/android/manage_wpr_archives.py upload
+vpython3 chrome/test/data/android/manage_wpr_archives.py upload
 ```
 
 The script also support a --dry_run command line flag.
@@ -115,5 +118,3 @@ based on key/value match.
 
 This techniques makes the test to be hermatic. WPR tests running in reply mode is suitable
 for running on CI/CQ bots.
-
-

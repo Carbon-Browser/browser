@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/apple/foundation_util.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "device/bluetooth/bluetooth_adapter_mac.h"
 
@@ -77,9 +79,9 @@ void BluetoothLowEnergyDeviceWatcherMac::OnPropertyListFileChangedOnFileThread(
   //      "ServiceDiscoveryComplete" => 0
   //    }
   //  }
-  NSString* plist_file_path = base::SysUTF8ToNSString(path.value());
+  NSURL* plist_file = base::apple::FilePathToNSURL(path);
   NSDictionary* bluetooth_info_dictionary =
-      [NSDictionary dictionaryWithContentsOfFile:plist_file_path];
+      [NSDictionary dictionaryWithContentsOfURL:plist_file error:nil];
 
   // |bluetooth_info_dictionary| is nil if there was an error reading the file
   // or if the content of the read file cannot be represented by a dictionary.

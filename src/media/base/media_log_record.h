@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define MEDIA_BASE_MEDIA_LOG_RECORD_H_
 
 #include <stdint.h>
-#include <memory>
 
 #include "base/time/time.h"
 #include "base/values.h"
@@ -23,8 +22,7 @@ struct MediaLogRecord {
   MediaLogRecord& operator=(const MediaLogRecord& event) {
     id = event.id;
     type = event.type;
-    std::unique_ptr<base::DictionaryValue> event_copy(event.params.DeepCopy());
-    params.Swap(event_copy.get());
+    params = event.params.Clone();
     time = event.time;
     return *this;
   }
@@ -55,7 +53,7 @@ struct MediaLogRecord {
 
   int32_t id;
   Type type;
-  base::DictionaryValue params;
+  base::Value::Dict params;
   base::TimeTicks time;
 };
 

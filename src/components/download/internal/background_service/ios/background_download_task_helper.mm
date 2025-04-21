@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,27 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/callback_helpers.h"
+#include <deque>
+#include <optional>
+
+#include "base/apple/foundation_util.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/weak_ptr.h"
+#include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/thread_pool.h"
+#include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/download_params.h"
-#include "net/base/mac/url_conversions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#include "components/download/public/background_service/features.h"
+#include "net/base/apple/url_conversions.h"
 
 namespace {
 bool g_ignore_localhost_ssl_error_for_testing = false;
@@ -48,10 +54,17 @@ class DownloadTaskInfo {
   UpdateCallback update_callback_;
 };
 
-@interface BackgroundDownloadDelegate : NSObject <NSURLSessionDownloadDelegate>
+@interface BackgroundDownloadDelegate
+    : NSObject <NSURLSessionDownloadDelegate> {
+ @private
+  // Callback to invoke once background session completes.
+  base::OnceClosure _sessionCompletionHandler;
+}
+
 - (instancetype)initWithTaskRunner:
     (scoped_refptr<base::SingleThreadTaskRunner>)taskRunner;
 
+- (void)setSessionCompletionHandler:(base::OnceClosure)sessionCompletionHandler;
 @end
 
 @implementation BackgroundDownloadDelegate {
@@ -93,6 +106,11 @@ class DownloadTaskInfo {
         FROM_HERE, base::BindOnce(std::move(taskInfo->completion_callback_),
                                   success, filePath, fileSize));
   }
+}
+
+- (void)setSessionCompletionHandler:
+    (base::OnceClosure)sessionCompletionHandler {
+  _sessionCompletionHandler = std::move(sessionCompletionHandler);
 }
 
 #pragma mark - NSURLSessionDownloadDelegate
@@ -158,7 +176,7 @@ class DownloadTaskInfo {
   // service's target directory. This must happen immediately on the current
   // thread or iOS may delete the file.
   const base::FilePath tempPath =
-      base::mac::NSStringToFilePath([location path]);
+      base::apple::NSStringToFilePath([location path]);
   if (!base::Move(tempPath, it->second->download_path_)) {
     LOG(ERROR) << "Failed to move file from:" << tempPath
                << ", to:" << it->second->download_path_;
@@ -169,8 +187,9 @@ class DownloadTaskInfo {
   }
 
   // Get the file size on current thread.
-  int64_t fileSize = 0;
-  if (!base::GetFileSize(it->second->download_path_, &fileSize)) {
+  std::optional<int64_t> fileSize =
+      base::GetFileSize(it->second->download_path_);
+  if (!fileSize.has_value()) {
     LOG(ERROR) << "Failed to get file size from:" << it->second->download_path_;
     [self onDownloadCompletion:/*success=*/false
                   downloadTask:downloadTask
@@ -179,7 +198,15 @@ class DownloadTaskInfo {
   }
   [self onDownloadCompletion:/*success=*/true
                 downloadTask:downloadTask
-                    fileSize:fileSize];
+                    fileSize:fileSize.value()];
+}
+
+- (void)URLSessionDidFinishEventsForBackgroundURLSession:
+    (NSURLSession*)session {
+  if (!_sessionCompletionHandler.is_null()) {
+    // Nothing should be called after invoking completionHandler.
+    std::move(_sessionCompletionHandler).Run();
+  }
 }
 
 #pragma mark - NSURLSessionDelegate
@@ -226,6 +253,46 @@ class DownloadTaskInfo {
 
 namespace download {
 
+// Object for passing the delegate and session to the UI thread as unique_ptr
+// doesn't work on both of those.
+struct URLSessionHelper {
+  URLSessionHelper(BackgroundDownloadDelegate* delegate, NSURLSession* session)
+      : delegate(delegate), session(session) {}
+  BackgroundDownloadDelegate* delegate = nullptr;
+  NSURLSession* session = nullptr;
+};
+
+using CreateUrlSessionCallback =
+    base::OnceCallback<void(std::unique_ptr<URLSessionHelper>)>;
+
+void CreateNSURLSession(scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+                        CreateUrlSessionCallback callback) {
+  const int kIdentifierSuffix = 1000000;
+  std::string identifier =
+      base::StringPrintf("%s-%d", download::kBackgroundDownloadIdentifierPrefix,
+                         base::RandInt(0, kIdentifierSuffix));
+  NSURLSessionConfiguration* configuration =
+      base::FeatureList::IsEnabled(
+          download::kDownloadServiceForegroundSessionIOSFeature)
+          ? [NSURLSessionConfiguration defaultSessionConfiguration]
+          : [NSURLSessionConfiguration
+                backgroundSessionConfigurationWithIdentifier:
+                    base::SysUTF8ToNSString(identifier)];
+  configuration.sessionSendsLaunchEvents = YES;
+  // TODO(qinmin): Check if we need 2 sessions here, since discretionary
+  // value may be different.
+  configuration.discretionary = true;
+  BackgroundDownloadDelegate* delegate =
+      [[BackgroundDownloadDelegate alloc] initWithTaskRunner:task_runner];
+  NSURLSession* session = [NSURLSession sessionWithConfiguration:configuration
+                                                        delegate:delegate
+                                                   delegateQueue:nil];
+  task_runner->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback),
+                     std::make_unique<URLSessionHelper>(delegate, session)));
+}
+
 // Implementation of BackgroundDownloadTaskHelper based on
 // NSURLSessionDownloadTask api.
 // This class lives on main thread and all the callbacks will be invoked on main
@@ -240,6 +307,31 @@ class BackgroundDownloadTaskHelperImpl : public BackgroundDownloadTaskHelper {
   }
 
  private:
+  struct DownloadTask {
+    DownloadTask(const std::string& guid,
+                 const base::FilePath& target_path,
+                 const RequestParams& request_params,
+                 CompletionCallback completion_callback,
+                 UpdateCallback update_callback)
+        : guid(guid),
+          target_path(target_path),
+          request_params(request_params),
+          completion_callback(std::move(completion_callback)),
+          update_callback(update_callback) {}
+
+    std::string guid;
+    base::FilePath target_path;
+    RequestParams request_params;
+    CompletionCallback completion_callback;
+    UpdateCallback update_callback;
+  };
+
+  void OnNSURLSessionCreated(std::unique_ptr<URLSessionHelper> session_helper) {
+    delegate_ = session_helper->delegate;
+    session_ = session_helper->session;
+    ProcessDownloadTasks();
+  }
+
   void StartDownload(const std::string& guid,
                      const base::FilePath& target_path,
                      const RequestParams& request_params,
@@ -248,30 +340,42 @@ class BackgroundDownloadTaskHelperImpl : public BackgroundDownloadTaskHelper {
                      UpdateCallback update_callback) override {
     DCHECK(!guid.empty());
     DCHECK(!target_path.empty());
-    // TODO(xingliu): Implement handleEventsForBackgroundURLSession and invoke
-    // the callback passed from it.
-    if (!delegate_) {
-      NSURLSessionConfiguration* configuration = [NSURLSessionConfiguration
-          backgroundSessionConfigurationWithIdentifier:
-              base::SysUTF8ToNSString("background_download")];
-      configuration.sessionSendsLaunchEvents = YES;
-      configuration.discretionary =
-          scheduling_params.network_requirements !=
-              SchedulingParams::NetworkRequirements::NONE ||
-          scheduling_params.battery_requirements !=
-              SchedulingParams::BatteryRequirements::BATTERY_INSENSITIVE;
-      delegate_ = [[BackgroundDownloadDelegate alloc]
-          initWithTaskRunner:base::ThreadTaskRunnerHandle::Get()];
-      session_ = [NSURLSession sessionWithConfiguration:configuration
-                                               delegate:delegate_
-                                          delegateQueue:nil];
+    download_tasks_.emplace_back(guid, target_path, request_params,
+                                 std::move(completion_callback),
+                                 update_callback);
+    // Initialize the NSURLSession and delegate on another thread due to
+    // http://crbug.com/1359437.
+    if (!is_initializing_) {
+      is_initializing_ = true;
+      CreateUrlSessionCallback cb = base::BindOnce(
+          &BackgroundDownloadTaskHelperImpl::OnNSURLSessionCreated,
+          weak_ptr_factory_.GetWeakPtr());
+      base::ThreadPool::PostTask(
+          FROM_HERE,
+          {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+          base::BindOnce(&CreateNSURLSession,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(cb)));
+      return;
     }
 
-    NSURL* url = net::NSURLWithGURL(request_params.url);
+    if (delegate_)
+      ProcessDownloadTasks();
+  }
+
+  void ProcessDownloadTasks() {
+    while (!download_tasks_.empty()) {
+      ProcessDownloadTask(download_tasks_.front());
+      download_tasks_.pop_front();
+    }
+  }
+
+  void ProcessDownloadTask(DownloadTask& task) {
+    NSURL* url = net::NSURLWithGURL(task.request_params.url);
     NSMutableURLRequest* request =
         [[NSMutableURLRequest alloc] initWithURL:url];
-    [request setHTTPMethod:base::SysUTF8ToNSString(request_params.method)];
-    net::HttpRequestHeaders::Iterator it(request_params.request_headers);
+    [request setHTTPMethod:base::SysUTF8ToNSString(task.request_params.method)];
+    net::HttpRequestHeaders::Iterator it(task.request_params.request_headers);
     while (it.GetNext()) {
       [request setValue:base::SysUTF8ToNSString(it.value())
           forHTTPHeaderField:base::SysUTF8ToNSString(it.name())];
@@ -280,14 +384,25 @@ class BackgroundDownloadTaskHelperImpl : public BackgroundDownloadTaskHelper {
     NSURLSessionDownloadTask* downloadTask =
         [session_ downloadTaskWithRequest:request];
     auto download_task_info = std::make_unique<DownloadTaskInfo>(
-        target_path, std::move(completion_callback), update_callback);
+        task.target_path, std::move(task.completion_callback),
+        task.update_callback);
     [delegate_ addDownloadTask:downloadTask
               downloadTaskInfo:std::move(download_task_info)];
     [downloadTask resume];
   }
 
+  void HandleEventsForBackgroundURLSession(
+      base::OnceClosure completion_handler) override {
+    delegate_.sessionCompletionHandler = std::move(completion_handler);
+  }
+
   BackgroundDownloadDelegate* delegate_ = nullptr;
   NSURLSession* session_ = nullptr;
+  std::deque<DownloadTask> download_tasks_;
+  bool is_initializing_ = false;
+
+  base::WeakPtrFactory<BackgroundDownloadTaskHelperImpl> weak_ptr_factory_{
+      this};
 };
 
 // static

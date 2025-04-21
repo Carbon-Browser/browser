@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
   // Setup related functions for a Google Cloud Devices (GCD) target device.
   "shell.gcd": {
     "channel": "dev",
-    "contexts": ["blessed_extension"],
+    "contexts": ["privileged_extension"],
     "extension_types": ["platform_app"]
   }
 }

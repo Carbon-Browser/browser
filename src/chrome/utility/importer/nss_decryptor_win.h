@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/native_library.h"
 
 // The following declarations of functions and types are from Firefox
@@ -71,7 +72,9 @@ enum SECItemType {
 
 struct SECItem {
   SECItemType type;
-  unsigned char *data;
+  // RAW_PTR_EXCLUSION: Non-Windows platforms use SECItem from seccomon.h, which
+  // is not in this repo and doesn't use raw_ptr<>.
+  RAW_PTR_EXCLUSION unsigned char* data;
   unsigned int len;
 };
 

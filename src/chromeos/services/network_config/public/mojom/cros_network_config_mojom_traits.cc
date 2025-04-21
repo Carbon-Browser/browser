@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ EnumTraits<chromeos::network_config::mojom::ProxyMode,
   }
 
   NOTREACHED();
-  return chromeos::network_config::mojom::ProxyMode::kDirect;
 }
 
 bool EnumTraits<chromeos::network_config::mojom::ProxyMode,
@@ -53,7 +52,6 @@ bool EnumTraits<chromeos::network_config::mojom::ProxyMode,
   }
 
   NOTREACHED();
-  return false;
 }
 
 }  // namespace mojo

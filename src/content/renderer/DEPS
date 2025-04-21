@@ -4,10 +4,10 @@ include_rules = [
   # *********************************** NOTE ***********************************
   # If adding a new component dependency, email content/OWNERS first.
   # ****************************************************************************
+  "+components/content_settings/core/common",
   "+components/discardable_memory/client",
   "+components/metrics",
   "+components/metrics:single_sample_metrics",
-  "+components/services/screen_ai",
   "+components/url_formatter",
   "+components/viz/client",
   "+components/viz/common",
@@ -20,7 +20,6 @@ include_rules = [
   "+content/public/child",
   "+content/public/renderer",
   "+content/child",
-  "+content/services/shared_storage_worklet",
   "+content/services/auction_worklet",
   "+device/base/synchronization",
   "+device/gamepad/public/cpp",
@@ -33,8 +32,9 @@ include_rules = [
   "+third_party/webrtc_overrides",
   "+third_party/blink/public/common",
   "+third_party/blink/public/mojom",
+  "+ui/strings/grit/auto_image_annotation_strings.h",
   "+v8/include",
-  "+v8/src/third_party/vtune",
+  "+v8/third_party/vtune",
 ]
 
 specific_include_rules = {

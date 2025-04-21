@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_types.h"
-#include "base/callback_helpers.h"
-#include "chrome/browser/ash/crostini/crostini_terminal.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
+#include "chrome/browser/ash/guest_os/guest_os_terminal.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
@@ -19,7 +20,6 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
 #include "ui/display/types/display_constants.h"
@@ -48,7 +48,7 @@ class Waiter : public BrowserListObserver {
   }
 
   base::OnceClosure callback_;
-  Browser* browser_ = nullptr;
+  raw_ptr<Browser> browser_ = nullptr;
 };
 }  // namespace
 
@@ -76,7 +76,7 @@ class AppShortcutShelfItemControllerBrowserTest : public InProcessBrowserTest {
   }
 
   Browser* LaunchApp() {
-    crostini::LaunchTerminal(browser()->profile(), display::kInvalidDisplayId,
+    guest_os::LaunchTerminal(browser()->profile(), display::kInvalidDisplayId,
                              crostini::DefaultContainerId());
     return Waiter::WaitForNewBrowser();
   }
@@ -90,9 +90,9 @@ class AppShortcutShelfItemControllerBrowserTest : public InProcessBrowserTest {
                                                    base::NullCallback());
   }
 
-  ChromeShelfController* controller_;
+  raw_ptr<ChromeShelfController, DanglingUntriaged> controller_;
 
-  web_app::AppId app_id_;
+  webapps::AppId app_id_;
   ash::ShelfID app_shelf_id_;
 };
 

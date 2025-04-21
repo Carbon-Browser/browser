@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ class SelectedColorPatchView;
 //
 // All public methods on ColorChooser are safe to call before, during, or after
 // the existence of the corresponding Widget/Views/etc.
-class VIEWS_EXPORT ColorChooser : public TextfieldController,
-                                  public base::SupportsWeakPtr<ColorChooser> {
+class VIEWS_EXPORT ColorChooser final : public TextfieldController {
  public:
   ColorChooser(ColorChooserListener* listener, SkColor initial_color);
   ~ColorChooser() override;
@@ -81,7 +80,7 @@ class VIEWS_EXPORT ColorChooser : public TextfieldController,
   void OnSaturationValueChosen(SkScalar saturation, SkScalar value);
 
   // The current color in HSV coordinate.
-  SkScalar hsv_[3];
+  std::array<SkScalar, 3> hsv_;
 
   raw_ptr<ColorChooserListener> listener_;
   ViewTracker tracker_;
@@ -100,6 +99,8 @@ class VIEWS_EXPORT ColorChooser : public TextfieldController,
   raw_ptr<Textfield> textfield_ = nullptr;
 
   SkColor initial_color_;
+
+  base::WeakPtrFactory<ColorChooser> weak_ptr_factory_{this};
 };
 
 }  // namespace views

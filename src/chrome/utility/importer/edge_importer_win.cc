@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
@@ -52,7 +53,7 @@ struct EdgeFavoriteEntry {
   GUID item_id;
   GUID parent_id;
 
-  std::vector<const EdgeFavoriteEntry*> children;
+  std::vector<raw_ptr<const EdgeFavoriteEntry, VectorExperimental>> children;
 
   ImportedBookmarkEntry ToBookmarkEntry(
       bool in_toolbar,
@@ -103,15 +104,14 @@ struct GuidComparator {
   }
 };
 
-bool ReadFaviconData(const base::FilePath& file,
-                     std::vector<unsigned char>* data) {
-  std::string image_data;
-  if (!base::ReadFileToString(file, &image_data))
-    return false;
+std::optional<std::vector<uint8_t>> ReadFaviconData(
+    const base::FilePath& file) {
+  std::optional<std::vector<uint8_t>> image_data = base::ReadFileToBytes(file);
+  if (!image_data) {
+    return std::nullopt;
+  }
 
-  const unsigned char* ptr =
-      reinterpret_cast<const unsigned char*>(image_data.c_str());
-  return importer::ReencodeFavicon(ptr, image_data.size(), data);
+  return importer::ReencodeFavicon(image_data.value());
 }
 
 void BuildBookmarkEntries(const EdgeFavoriteEntry& current_entry,
@@ -135,15 +135,19 @@ void BuildBookmarkEntries(const EdgeFavoriteEntry& current_entry,
     } else {
       bookmarks->push_back(entry->ToBookmarkEntry(is_toolbar, *path));
       favicon_base::FaviconUsageData favicon;
-      if (entry->url.is_valid() && !entry->favicon_file.empty() &&
-          ReadFaviconData(entry->favicon_file, &favicon.png_data)) {
-        // As the database doesn't provide us a favicon URL we'll fake one.
-        GURL::Replacements path_replace;
-        path_replace.SetPathStr("/favicon.ico");
-        favicon.favicon_url =
-            entry->url.GetWithEmptyPath().ReplaceComponents(path_replace);
-        favicon.urls.insert(entry->url);
-        favicons->push_back(favicon);
+      if (entry->url.is_valid() && !entry->favicon_file.empty()) {
+        std::optional<std::vector<uint8_t>> png_data =
+            ReadFaviconData(entry->favicon_file);
+        if (png_data) {
+          favicon.png_data = std::move(png_data).value();
+          // As the database doesn't provide us a favicon URL we'll fake one.
+          GURL::Replacements path_replace;
+          path_replace.SetPathStr("/favicon.ico");
+          favicon.favicon_url =
+              entry->url.GetWithEmptyPath().ReplaceComponents(path_replace);
+          favicon.urls.insert(entry->url);
+          favicons->push_back(favicon);
+        }
       }
     }
   }
@@ -151,7 +155,7 @@ void BuildBookmarkEntries(const EdgeFavoriteEntry& current_entry,
 
 }  // namespace
 
-EdgeImporter::EdgeImporter() {}
+EdgeImporter::EdgeImporter() = default;
 
 void EdgeImporter::StartImport(const importer::SourceProfile& source_profile,
                                uint16_t items,
@@ -168,7 +172,7 @@ void EdgeImporter::StartImport(const importer::SourceProfile& source_profile,
   bridge_->NotifyEnded();
 }
 
-EdgeImporter::~EdgeImporter() {}
+EdgeImporter::~EdgeImporter() = default;
 
 void EdgeImporter::ImportFavorites() {
   std::vector<ImportedBookmarkEntry> bookmarks;

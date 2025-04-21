@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_report_interface.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_interface.h"
 #include "chrome/browser/ash/child_accounts/website_approval_notifier.h"
@@ -28,18 +29,16 @@ namespace enterprise_management {
 class ChildStatusReportRequest;
 }  // namespace enterprise_management
 
-class GURL;
 class Profile;
 
 namespace ash {
 namespace app_time {
 class AppId;
 class AppTimeController;
-class WebTimeLimitEnforcer;
 }  // namespace app_time
 
 // Facade that exposes child user related functionality on Chrome OS.
-// TODO(crbug.com/1022231): Migrate ConsumerStatusReportingService,
+// TODO(crbug.com/40106527): Migrate ConsumerStatusReportingService,
 // EventBasedStatusReporting and ScreenTimeController to ChildUserService.
 class ChildUserService : public KeyedService,
                          public app_time::AppTimeLimitInterface,
@@ -51,11 +50,10 @@ class ChildUserService : public KeyedService,
     explicit TestApi(ChildUserService* service);
     ~TestApi();
 
-    app_time::WebTimeLimitEnforcer* web_time_enforcer();
     app_time::AppTimeController* app_time_controller();
 
    private:
-    ChildUserService* const service_;
+    const raw_ptr<ChildUserService> service_;
   };
 
   // These enum values represent the current Family Link user's time limit
@@ -69,6 +67,7 @@ class ChildUserService : public KeyedService,
     kOverrideTimeLimit = 1,
     kBedTimeLimit = 2,
     kScreenTimeLimit = 3,
+    // TODO(crbug.com/40771730) deprecate this enum
     kWebTimeLimit = 4,
     kAppTimeLimit = 5,  // Does not cover blocked apps.
 
@@ -76,11 +75,6 @@ class ChildUserService : public KeyedService,
     // above this comment. Sync with enums.xml.
     kMaxValue = kAppTimeLimit
   };
-
-  // Family Link helper(for child and teens) is an app available to supervised
-  // users and the companion app of Family Link app(for parents).
-  static const char kFamilyLinkHelperAppPackageName[];
-  static const char kFamilyLinkHelperAppPlayStoreURL[];
 
   static const char* GetTimeLimitPolicyTypesHistogramNameForTest();
 
@@ -92,7 +86,7 @@ class ChildUserService : public KeyedService,
   // app_time::AppTimeLimitInterface:
   void PauseWebActivity(const std::string& app_service_id) override;
   void ResumeWebActivity(const std::string& app_service_id) override;
-  absl::optional<base::TimeDelta> GetTimeLimitForApp(
+  std::optional<base::TimeDelta> GetTimeLimitForApp(
       const std::string& app_service_id,
       apps::AppType app_type) override;
 
@@ -102,23 +96,9 @@ class ChildUserService : public KeyedService,
   void AppActivityReportSubmitted(
       base::Time report_generation_timestamp) override;
 
-  // Returns whether web time limit was reached for child user.
-  // Always returns false if per-app times limits feature is disabled.
-  bool WebTimeLimitReached() const;
-
-  // Returns whether given |url| can be used without any time restrictions.
-  // Viewing of allowlisted |url| does not count towards usage web time.
-  // Always returns false if per-app times limits feature is disabled.
-  bool WebTimeLimitAllowlistedURL(const GURL& url) const;
-
   // Returns whether the application with id |app_id| can be used without any
   // time restrictions.
   bool AppTimeLimitAllowlistedApp(const app_time::AppId& app_id) const;
-
-  // Returns time limit set for using the web on a given day.
-  // Should only be called if |features::kPerAppTimeLimits| and
-  // |features::kWebTimeLimits| features are enabled.
-  base::TimeDelta GetWebTimeLimit() const;
 
   // Report enabled TimeLimitPolicyType.
   void ReportTimeLimitPolicy() const;
@@ -127,7 +107,7 @@ class ChildUserService : public KeyedService,
   // KeyedService:
   void Shutdown() override;
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   std::unique_ptr<app_time::AppTimeController> app_time_controller_;
 
@@ -139,10 +119,5 @@ class ChildUserService : public KeyedService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ChildUserService;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CHILD_ACCOUNTS_CHILD_USER_SERVICE_H_

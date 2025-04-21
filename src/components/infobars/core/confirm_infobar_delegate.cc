@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "build/build_config.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/models/image_model.h"
 #include "ui/strings/grit/ui_strings.h"
 
 ConfirmInfoBarDelegate::~ConfirmInfoBarDelegate() = default;
@@ -18,13 +19,14 @@ bool ConfirmInfoBarDelegate::EqualsDelegate(
          (confirm_delegate->GetMessageText() == GetMessageText());
 }
 
-ConfirmInfoBarDelegate* ConfirmInfoBarDelegate::AsConfirmInfoBarDelegate() {
-  return this;
+void ConfirmInfoBarDelegate::InfoBarDismissed() {
+  for (auto& observer : observers_) {
+    observer.OnDismiss();
+  }
 }
 
-infobars::InfoBarDelegate::InfoBarAutomationType
-ConfirmInfoBarDelegate::GetInfoBarAutomationType() const {
-  return CONFIRM_INFOBAR;
+ConfirmInfoBarDelegate* ConfirmInfoBarDelegate::AsConfirmInfoBarDelegate() {
+  return this;
 }
 
 std::u16string ConfirmInfoBarDelegate::GetTitleText() const {
@@ -41,6 +43,7 @@ int ConfirmInfoBarDelegate::GetButtons() const {
 
 std::u16string ConfirmInfoBarDelegate::GetButtonLabel(
     InfoBarButton button) const {
+  DCHECK(button == BUTTON_OK || button == BUTTON_CANCEL);
   return l10n_util::GetStringUTF16((button == BUTTON_OK) ? IDS_APP_OK
                                                          : IDS_APP_CANCEL);
 }
@@ -59,10 +62,6 @@ std::u16string ConfirmInfoBarDelegate::GetButtonTooltip(
   return std::u16string();
 }
 
-bool ConfirmInfoBarDelegate::OKButtonTriggersUACPrompt() const {
-  return false;
-}
-
 #if BUILDFLAG(IS_IOS)
 bool ConfirmInfoBarDelegate::UseIconBackgroundTint() const {
   return true;
@@ -70,11 +69,22 @@ bool ConfirmInfoBarDelegate::UseIconBackgroundTint() const {
 #endif
 
 bool ConfirmInfoBarDelegate::Accept() {
+  for (auto& observer : observers_) {
+    observer.OnAccept();
+  }
   return true;
 }
 
 bool ConfirmInfoBarDelegate::Cancel() {
   return true;
+}
+
+void ConfirmInfoBarDelegate::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void ConfirmInfoBarDelegate::RemoveObserver(const Observer* observer) {
+  observers_.RemoveObserver(observer);
 }
 
 ConfirmInfoBarDelegate::ConfirmInfoBarDelegate() = default;

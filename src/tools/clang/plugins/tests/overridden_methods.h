@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ class BaseClass {
   virtual void SomeInlineMethod() = 0;
   virtual void SomeConstMethod() const = 0;
   virtual void SomeMethodWithExceptionSpec() throw() = 0;
-  virtual void SomeConstMethodWithExceptionSpec() const throw(int) = 0;
+  virtual void SomeConstMethodWithExceptionSpec() const noexcept(false) = 0;
   virtual void SomeNonPureBaseMethod() {}
   virtual void SomeMethodWithComment() = 0;
   virtual void SomeMethodWithCommentAndBody() = 0;
@@ -58,7 +58,7 @@ class DerivedClass : public InterimClass,
   virtual void SomeMethodWithExceptionSpec() throw() {}
   // Should warn with the insertion point after both the const and the throw
   // specifiers.
-  virtual void SomeConstMethodWithExceptionSpec() const throw(int) {}
+  virtual void SomeConstMethodWithExceptionSpec() const noexcept(false) {}
   // Should warn even if overridden method isn't pure.
   virtual void SomeNonPureBaseMethod() {}
   // Should warn and place correctly even when there is a comment.

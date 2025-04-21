@@ -1,19 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/webengine/browser/web_engine_browser_main_parts.h"
 
-#include <fuchsia/ui/scenic/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
+#include <lib/inspect/component/cpp/component.h>
 #include <lib/sys/cpp/component_context.h>
 #include <lib/sys/cpp/outgoing_directory.h>
-#include <lib/sys/inspect/cpp/component.h>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <lib/async/default.h>
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/important_file_writer_cleaner.h"
@@ -22,16 +20,18 @@
 #include "base/fuchsia/intl_profile_watcher.h"
 #include "base/fuchsia/koid.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "build/chromecast_buildflags.h"
 #include "components/fuchsia_component_support/inspect.h"
-#include "components/fuchsia_legacymetrics/legacymetrics_client.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/browser/histogram_fetcher.h"
@@ -45,14 +45,13 @@
 #include "fuchsia_web/webengine/browser/web_engine_browser_context.h"
 #include "fuchsia_web/webengine/browser/web_engine_devtools_controller.h"
 #include "fuchsia_web/webengine/browser/web_engine_memory_inspector.h"
-#include "fuchsia_web/webengine/common/cast_streaming.h"
 #include "fuchsia_web/webengine/switches.h"
 #include "gpu/command_buffer/service/gpu_switches.h"
-#include "media/fuchsia/cdm/service/fuchsia_cdm_manager.h"
+#include "media/mojo/services/fuchsia_cdm_manager.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/network_quality_tracker.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "third_party/widevine/cdm/widevine_cdm_common.h"
+#include "third_party/widevine/cdm/buildflags.h"
 #include "ui/aura/screen_ozone.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/display/screen.h"
@@ -60,11 +59,24 @@
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/ozone_switches.h"
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
+#include "components/fuchsia_legacymetrics/legacymetrics_client.h"  // nogncheck
+#include "fuchsia_web/webengine/common/cast_streaming.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(ENABLE_WIDEVINE)
+#include "third_party/widevine/cdm/widevine_cdm_common.h"  // nogncheck
+#endif
+
 namespace {
 
-base::NoDestructor<fidl::InterfaceRequest<fuchsia::web::Context>>
-    g_test_request;
+fidl::InterfaceRequest<fuchsia::web::Context>& GetTestRequest() {
+  static base::NoDestructor<fidl::InterfaceRequest<fuchsia::web::Context>>
+      request;
+  return *request;
+}
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
 constexpr base::TimeDelta kMetricsReportingInterval = base::Minutes(1);
 
 constexpr base::TimeDelta kChildProcessHistogramFetchTimeout =
@@ -75,11 +87,12 @@ void FetchHistogramsFromChildProcesses(
     base::OnceCallback<void(std::vector<fuchsia::legacymetrics::Event>)>
         done_cb) {
   content::FetchHistogramsAsynchronously(
-      base::ThreadTaskRunnerHandle::Get(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
       base::BindOnce(std::move(done_cb),
                      std::vector<fuchsia::legacymetrics::Event>()),
       kChildProcessHistogramFetchTimeout);
 }
+#endif
 
 template <typename KeySystemInterface>
 fidl::InterfaceHandle<fuchsia::media::drm::KeySystem> ConnectToKeySystem() {
@@ -101,25 +114,33 @@ std::unique_ptr<media::FuchsiaCdmManager> CreateCdmManager() {
 
   const auto* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kEnableWidevine)) {
+#if BUILDFLAG(ENABLE_WIDEVINE)
     create_key_system_callbacks.emplace(
         kWidevineKeySystem,
         base::BindRepeating(
             &ConnectToKeySystem<fuchsia::media::drm::Widevine>));
+#else
+    LOG(WARNING) << "Widevine is not supported.";
+#endif
   }
 
   std::string playready_key_system =
       command_line->GetSwitchValueASCII(switches::kPlayreadyKeySystem);
   if (!playready_key_system.empty()) {
+#if BUILDFLAG(ENABLE_WIDEVINE) && BUILDFLAG(ENABLE_CAST_RECEIVER)
     create_key_system_callbacks.emplace(
         playready_key_system,
         base::BindRepeating(
             &ConnectToKeySystem<fuchsia::media::drm::PlayReady>));
+#else
+    LOG(WARNING) << "PlayReady is not supported.";
+#endif
   }
 
   std::string cdm_data_directory =
       command_line->GetSwitchValueASCII(switches::kCdmDataDirectory);
 
-  absl::optional<uint64_t> cdm_data_quota_bytes;
+  std::optional<uint64_t> cdm_data_quota_bytes;
   if (command_line->HasSwitch(switches::kCdmDataQuotaBytes)) {
     uint64_t value = 0;
     CHECK(base::StringToUint64(
@@ -131,29 +152,6 @@ std::unique_ptr<media::FuchsiaCdmManager> CreateCdmManager() {
   return std::make_unique<media::FuchsiaCdmManager>(
       std::move(create_key_system_callbacks),
       base::FilePath(cdm_data_directory), cdm_data_quota_bytes);
-}
-
-// Checks the supported ozone platform with Scenic if no arg is specified
-// already.
-void MaybeSetOzonePlatformArg(base::CommandLine* launch_args) {
-  if (launch_args->HasSwitch(switches::kOzonePlatform))
-    return;
-
-// TODO(crbug.com/1309100): Emulator on ARM hangs at the Scenic call because
-// there is no GPU emulation. We should add HEADLESS to those test
-// configurations and remove this.
-#if !defined(ARCH_CPU_ARM64)
-  fuchsia::ui::scenic::ScenicSyncPtr scenic;
-  zx_status_t status =
-      base::ComponentContextForProcess()->svc()->Connect(scenic.NewRequest());
-  ZX_CHECK(status == ZX_OK, status) << "Couldn't connect to Scenic.";
-
-  bool scenic_uses_flatland = false;
-  status = scenic->UsesFlatland(&scenic_uses_flatland);
-  ZX_CHECK(status == ZX_OK, status) << "UsesFlatland()";
-  launch_args->AppendSwitchNative(switches::kOzonePlatform,
-                                  scenic_uses_flatland ? "flatland" : "scenic");
-#endif
 }
 
 }  // namespace
@@ -179,11 +177,6 @@ WebEngineBrowserMainParts::browser_contexts() const {
   return contexts;
 }
 
-int WebEngineBrowserMainParts::PreEarlyInitialization() {
-  MaybeSetOzonePlatformArg(base::CommandLine::ForCurrentProcess());
-  return content::BrowserMainParts::PreEarlyInitialization();
-}
-
 void WebEngineBrowserMainParts::PostEarlyInitialization() {
   base::ImportantFileWriterCleaner::GetInstance().Initialize();
 }
@@ -192,10 +185,10 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
   DCHECK_EQ(context_bindings_.size(), 0u);
 
   // Initialize the |component_inspector_| to allow diagnostics to be published.
-  component_inspector_ = std::make_unique<sys::ComponentInspector>(
-      base::ComponentContextForProcess());
+  component_inspector_ = std::make_unique<inspect::ComponentInspector>(
+      async_get_default_dispatcher(), inspect::PublishOptions{});
   fuchsia_component_support::PublishVersionInfoToInspect(
-      component_inspector_.get());
+      &component_inspector_->root());
 
   // Add a node providing memory details for this whole web instance.
   memory_inspector_ =
@@ -216,6 +209,7 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
   devtools_controller_ =
       WebEngineDevToolsController::CreateFromCommandLine(*command_line);
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   if (command_line->HasSwitch(switches::kUseLegacyMetricsService)) {
     legacy_metrics_client_ =
         std::make_unique<fuchsia_legacymetrics::LegacyMetricsClient>();
@@ -227,6 +221,7 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
 
     legacy_metrics_client_->Start(kMetricsReportingInterval);
   }
+#endif
 
   // Configure SysInfo to report total/free space under "/data" based on the
   // requested soft-quota, if any. This only affects persistent instances.
@@ -250,7 +245,7 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
                           base::Unretained(this)));
 
   // Configure Ozone with an Aura implementation of the Screen abstraction.
-  screen_ = std::make_unique<aura::ScopedScreenOzone>();
+  screen_ = std::make_unique<aura::ScreenOzone>();
 
   // Create the FuchsiaCdmManager at startup rather than on-demand, to allow it
   // to perform potentially expensive startup work in the background.
@@ -272,7 +267,7 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
       fidl::InterfaceRequestHandler<fuchsia::web::FrameHost>(fit::bind_member(
           this, &WebEngineBrowserMainParts::HandleFrameHostRequest)));
 
-  // TODO(crbug.com/1315601): Create a base::ProcessLifecycle instance here, to
+  // TODO(crbug.com/42050460): Create a base::ProcessLifecycle instance here, to
   // trigger graceful shutdown on component stop, when migrated to CFv2.
 
   // Manage network-quality signals and send them to renderers. Provides input
@@ -286,10 +281,11 @@ int WebEngineBrowserMainParts::PreMainMessageLoopRun() {
   // requests to the service directory.
   base::ComponentContextForProcess()->outgoing()->ServeFromStartupInfo();
 
-  // TODO(crbug.com/1163073): Update tests to make a service connection to the
+  // TODO(crbug.com/40162984): Update tests to make a service connection to the
   // Context and remove this workaround.
-  if (*g_test_request)
-    HandleContextRequest(std::move(*g_test_request));
+  fidl::InterfaceRequest<fuchsia::web::Context>& request = GetTestRequest();
+  if (request)
+    HandleContextRequest(std::move(request));
 
   return content::RESULT_CODE_NORMAL_EXIT;
 }
@@ -303,10 +299,16 @@ void WebEngineBrowserMainParts::PostMainMessageLoopRun() {
   // Main loop should quit only after all Context instances have been destroyed.
   DCHECK_EQ(context_bindings_.size(), 0u);
 
+  // FrameHost channels may still be active and contain live Frames. Close them
+  // here so that they are torn-down before their dependent resources.
+  frame_host_bindings_.CloseAll();
+
   // These resources must be freed while a MessageLoop is still available, so
   // that they may post cleanup tasks during teardown.
   // NOTE: Objects are destroyed in the reverse order of their creation.
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   legacy_metrics_client_.reset();
+#endif
   intl_profile_watcher_.reset();
 
   base::ImportantFileWriterCleaner::GetInstance().Stop();
@@ -315,7 +317,7 @@ void WebEngineBrowserMainParts::PostMainMessageLoopRun() {
 // static
 void WebEngineBrowserMainParts::SetContextRequestForTest(
     fidl::InterfaceRequest<fuchsia::web::Context> request) {
-  *g_test_request.get() = std::move(request);
+  GetTestRequest() = std::move(request);
 }
 
 ContextImpl* WebEngineBrowserMainParts::context_for_test() const {
@@ -359,10 +361,12 @@ void WebEngineBrowserMainParts::HandleContextRequest(
       component_inspector_->root().CreateChild(inspect_node_name),
       devtools_controller_.get());
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   // If this web instance should allow CastStreaming then enable it in this
   // ContextImpl. CastStreaming will not be available in FrameHost contexts.
   if (IsCastStreamingEnabled())
     context_impl->SetCastStreamingEnabled();
+#endif
 
   // Create the fuchsia.web.Context implementation using the BrowserContext and
   // configure it to terminate the process when the client goes away.

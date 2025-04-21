@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,12 +42,9 @@ MicView::~MicView() {
     AssistantInteractionController::Get()->GetModel()->RemoveObserver(this);
 }
 
-gfx::Size MicView::CalculatePreferredSize() const {
-  return gfx::Size(kPreferredSizeDip, GetHeightForWidth(kPreferredSizeDip));
-}
-
-int MicView::GetHeightForWidth(int width) const {
-  return kPreferredSizeDip;
+gfx::Size MicView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  return gfx::Size(kPreferredSizeDip, kPreferredSizeDip);
 }
 
 void MicView::OnAssistantControllerDestroying() {
@@ -126,7 +123,7 @@ void MicView::UpdateState(bool animate) {
   logo_view_->SetState(mic_state, animate);
 }
 
-BEGIN_METADATA(MicView, AssistantButton)
+BEGIN_METADATA(MicView)
 END_METADATA
 
 }  // namespace ash

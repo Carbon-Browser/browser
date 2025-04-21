@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ int IsCertErrorFatal(int cert_error) {
     case net::ERR_CERT_NO_REVOCATION_MECHANISM:
     case net::ERR_CERT_UNABLE_TO_CHECK_REVOCATION:
     case net::ERR_CERT_WEAK_SIGNATURE_ALGORITHM:
+    case net::ERR_CERT_NON_UNIQUE_NAME:
     case net::ERR_CERT_WEAK_KEY:
     case net::ERR_CERT_NAME_CONSTRAINT_VIOLATION:
     case net::ERR_CERT_VALIDITY_TOO_LONG:
@@ -33,7 +34,6 @@ int IsCertErrorFatal(int cert_error) {
       return true;
     default:
       NOTREACHED();
-      return true;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,10 @@ class EmptyTrashIOTaskTest : public TrashBaseTest {
         trash_parent_path.Append(relative_trash_folder);
     EXPECT_TRUE(EnsureTrashDirectorySetup(trash_directory));
 
-    trash_subdirectories.emplace_back(trash_directory.Append(kFilesFolderName));
-    trash_subdirectories.emplace_back(trash_directory.Append(kInfoFolderName));
+    trash_subdirectories.emplace_back(
+        trash_directory.Append(trash::kFilesFolderName));
+    trash_subdirectories.emplace_back(
+        trash_directory.Append(trash::kInfoFolderName));
     return trash_directory;
   }
 
@@ -72,19 +74,20 @@ class EmptyTrashIOTaskTest : public TrashBaseTest {
     TrashDirectoriesAndSubDirectories directories;
 
     // Setup ~/MyFiles/.Trash
-    directories.trash_directories.emplace_back(SetupTrashDirectory(
-        my_files_dir_, kTrashFolderName, directories.trash_subdirectories));
+    directories.trash_directories.emplace_back(
+        SetupTrashDirectory(my_files_dir_, trash::kTrashFolderName,
+                            directories.trash_subdirectories));
 
     // Setup ~/MyFiles/Downloads/.Trash
-    directories.trash_directories.emplace_back(SetupTrashDirectory(
-        downloads_dir_, kTrashFolderName, directories.trash_subdirectories));
-
-    // Setup /media/fuse/termina_hash_pengiun/.local/share/Trash
-    directories.trash_directories.emplace_back(SetupTrashDirectory(
-        crostini_dir_, ".local/share/Trash", directories.trash_subdirectories));
+    directories.trash_directories.emplace_back(
+        SetupTrashDirectory(downloads_dir_, trash::kTrashFolderName,
+                            directories.trash_subdirectories));
 
     return directories;
   }
+
+ private:
+  content::BrowserTaskEnvironment task_environment_;
 };
 
 TEST_F(EmptyTrashIOTaskTest, EnabledTrashDirsAreTrashed) {
@@ -102,23 +105,16 @@ TEST_F(EmptyTrashIOTaskTest, EnabledTrashDirsAreTrashed) {
       Run(AllOf(Field(&ProgressStatus::state, State::kSuccess),
                 Field(&ProgressStatus::sources, IsEmpty()),
                 Field(&ProgressStatus::outputs,
-                      EntryStatusPaths(ContainerEq(trash_subdirectories))))))
+                      EntryStatusPaths(ContainerEq(trash_directories))))))
       .WillOnce(RunClosure(run_loop.QuitClosure()));
 
-  EmptyTrashIOTask task(kTestStorageKey, profile_.get(), file_system_context_,
-                        temp_dir_.GetPath());
+  EmptyTrashIOTask task(kTestStorageKey, profile_.get(), file_system_context_);
   task.Execute(progress_callback.Get(), complete_callback.Get());
   run_loop.Run();
 
-  // Ensure the trash parent paths still exist, e.g. ~/MyFiles/.Trash
-  for (const auto& directory_path : trash_directories) {
-    ASSERT_TRUE(base::PathExists(directory_path));
-  }
-
-  // Ensure the subdirectories in the trash folder are removed, e.g.
-  // ~/MyFiles/.Trash/{files,info}
-  for (const auto& subdirectory_path : trash_subdirectories) {
-    ASSERT_FALSE(base::PathExists(subdirectory_path));
+  // Ensure the trash directories (e.g. ~/MyFiles/.Trash) are removed.
+  for (const auto& dir : trash_directories) {
+    ASSERT_FALSE(base::PathExists(dir));
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <cinttypes>
 #include <limits>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -171,7 +171,7 @@ TEST(IdentifiabilityMetricBuilderTest, SetStringPiece) {
   test::TestUkmRecorder recorder;
   // StringPiece() needs an explicit constructor invocation.
   IdentifiabilityMetricBuilder(ukm::SourceIdObj{})
-      .Add(kTestSurface, IdentifiableToken(base::StringPiece(kAbcd)))
+      .Add(kTestSurface, IdentifiableToken(std::string_view(kAbcd)))
       .Record(&recorder);
   EXPECT_THAT(collector, FirstMetricIs(kExpectedHashOfAbcd));
 }

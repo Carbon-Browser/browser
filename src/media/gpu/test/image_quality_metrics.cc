@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <math.h>
 #include <algorithm>
@@ -144,14 +149,8 @@ double ComputeSimilarity(const VideoFrame* frame1,
   ASSERT_TRUE_OR_RETURN(
       frame1->visible_rect().size() == frame2->visible_rect().size(),
       static_cast<double>(std::numeric_limits<std::size_t>::max()));
-  // Ideally, frame1->BitDepth() should be the same as frame2->BitDepth()
-  // always. But in the 10 bit case, the 10 bit frame can be carried with P016LE
-  // whose bit depth is regarded to be 16. This is due to a lack of NV12 10-bit
-  // buffer format in media::VideoPixelFormat. As a workaround for this, we
-  // determine the common bit depth as the smaller one.
   ASSERT_TRUE_OR_RETURN(
-      (frame1->BitDepth() == 8 && frame1->BitDepth() == frame2->BitDepth()) ||
-          std::min(frame1->BitDepth(), frame2->BitDepth()) == 10,
+      frame1->BitDepth() == frame2->BitDepth(),
       static_cast<double>(std::numeric_limits<std::size_t>::max()));
   const size_t bit_depth = std::min(frame1->BitDepth(), frame2->BitDepth());
   const VideoPixelFormat common_format =
@@ -194,6 +193,89 @@ double ComputeSimilarity(const VideoFrame* frame1,
       frame2->stride(1), frame2->visible_data(2), frame2->stride(2),
       frame1->visible_rect().width(), frame1->visible_rect().height());
 }
+
+constexpr int kJointDistributionBitDepth = 4;
+constexpr int kJointDistributionDim = 1 << kJointDistributionBitDepth;
+
+using DistributionTable =
+    double[kJointDistributionDim][kJointDistributionDim][kJointDistributionDim];
+
+bool ComputeLogJointDistribution(const VideoFrame& frame,
+                                 DistributionTable& log_joint_distribution) {
+  ASSERT_TRUE_OR_RETURN(frame.IsMappable(), false);
+  ASSERT_TRUE_OR_RETURN(frame.format() == PIXEL_FORMAT_ARGB, false);
+  ASSERT_TRUE_OR_RETURN(frame.BitDepth() == 8, false);
+
+  // Arbitrarily small number to fill the probability distribution table with so
+  // we don't have a problem with taking the log of 0.
+  static const double kMinProbabilityValue = 0.000000001;
+
+  double normalization_factor = kJointDistributionDim * kJointDistributionDim *
+                                    kJointDistributionDim *
+                                    kMinProbabilityValue +
+                                (double)frame.visible_rect().size().GetArea();
+
+  // Initialize distribution table to arbitrarily small probability value.
+  for (int i = 0; i < kJointDistributionDim; i++) {
+    for (int j = 0; j < kJointDistributionDim; j++) {
+      for (int k = 0; k < kJointDistributionDim; k++) {
+        log_joint_distribution[i][j][k] = kMinProbabilityValue;
+      }
+    }
+  }
+
+  // Downsample the RGB values of the plane into 4-bits per channel, and use the
+  // downsampled color information to increment the corresponding element of the
+  // distribution table.
+  const uint8_t* row_ptr = frame.visible_data(0);
+  for (int y = 0; y < frame.visible_rect().height(); y++) {
+    for (int x = 0; x < frame.visible_rect().width(); x++) {
+      log_joint_distribution[row_ptr[4 * x + 1] >> kJointDistributionBitDepth]
+                            [row_ptr[4 * x + 2] >> kJointDistributionBitDepth]
+                            [row_ptr[4 * x + 3] >>
+                             kJointDistributionBitDepth] += 1.0;
+    }
+    row_ptr += frame.stride(0);
+  }
+
+  // Normalize the joint distribution so that it sums to 1.0 and then take the
+  // log.
+  for (int i = 0; i < kJointDistributionDim; i++) {
+    for (int j = 0; j < kJointDistributionDim; j++) {
+      for (int k = 0; k < kJointDistributionDim; k++) {
+        log_joint_distribution[i][j][k] /= normalization_factor;
+        log_joint_distribution[i][j][k] = log(log_joint_distribution[i][j][k]);
+      }
+    }
+  }
+
+  return true;
+}
+
+double ComputeLogProbability(const VideoFrame& frame,
+                             DistributionTable& log_joint_distribution) {
+  ASSERT_TRUE_OR_RETURN(frame.IsMappable(), 0.0);
+  ASSERT_TRUE_OR_RETURN(frame.format() == PIXEL_FORMAT_ARGB, 0.0);
+  ASSERT_TRUE_OR_RETURN(frame.BitDepth() == 8, 0.0);
+
+  double ret = 0.0;
+
+  const uint8_t* row_ptr = frame.visible_data(0);
+  for (int y = 0; y < frame.visible_rect().height(); y++) {
+    for (int x = 0; x < frame.visible_rect().width(); x++) {
+      ret += log_joint_distribution
+          [row_ptr[4 * x + 1] >> kJointDistributionBitDepth]
+          [row_ptr[4 * x + 2] >> kJointDistributionBitDepth]
+          [row_ptr[4 * x + 3] >> kJointDistributionBitDepth];
+    }
+    row_ptr += frame.stride(0);
+  }
+
+  return ret;
+}
+
+constexpr double kMaxPsnr = 128.0;
+
 }  // namespace
 
 size_t CompareFramesWithErrorDiff(const VideoFrame& frame1,
@@ -236,6 +318,73 @@ double ComputePSNR(const VideoFrame& frame1, const VideoFrame& frame2) {
 
 double ComputeSSIM(const VideoFrame& frame1, const VideoFrame& frame2) {
   return ComputeSimilarity(&frame1, &frame2, SimilarityMetrics::SSIM);
+}
+
+double ComputeLogLikelihoodRatio(scoped_refptr<const VideoFrame> golden_frame,
+                                 scoped_refptr<const VideoFrame> test_frame) {
+  ASSERT_TRUE_OR_RETURN(
+      golden_frame->visible_rect().size() == test_frame->visible_rect().size(),
+      0.0);
+
+  if (golden_frame->format() != PIXEL_FORMAT_ARGB) {
+    golden_frame = ConvertVideoFrame(golden_frame.get(), PIXEL_FORMAT_ARGB);
+  }
+
+  if (test_frame->format() != PIXEL_FORMAT_ARGB) {
+    test_frame = ConvertVideoFrame(test_frame.get(), PIXEL_FORMAT_ARGB);
+  }
+
+  DistributionTable log_joint_distribution;
+  double golden_log_prob = 0.0;
+  ASSERT_TRUE_OR_RETURN(
+      ComputeLogJointDistribution(*golden_frame, log_joint_distribution), 0.0);
+  golden_log_prob =
+      ComputeLogProbability(*golden_frame, log_joint_distribution);
+  ASSERT_TRUE_OR_RETURN(golden_log_prob != 0.0, 0.0);
+
+  double test_log_prob = 0.0;
+  test_log_prob = ComputeLogProbability(*test_frame, log_joint_distribution);
+  ASSERT_TRUE_OR_RETURN(test_log_prob != 0.0, 0.0);
+
+  return test_log_prob / golden_log_prob;
+}
+
+double ComputeAR30PSNR(const uint32_t* frame1_data,
+                       size_t frame1_stride,
+                       const uint32_t* frame2_data,
+                       size_t frame2_stride,
+                       size_t width,
+                       size_t height) {
+  uint64_t sum_square_error = 0;
+  const uint64_t samples =
+      static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 3;
+
+  for (size_t y = 0; y < height; y++) {
+    for (size_t x = 0; x < width; x++) {
+      const uint32_t pixel1 = frame1_data[y * frame1_stride + x];
+      const uint32_t pixel2 = frame2_data[y * frame2_stride + x];
+      const int32_t r1 = (pixel1 >> 20) & 0x3FF;
+      const int32_t g1 = (pixel1 >> 10) & 0x3FF;
+      const int32_t b1 = pixel1 & 0x3FF;
+      const int32_t r2 = (pixel2 >> 20) & 0x3FF;
+      const int32_t g2 = (pixel2 >> 10) & 0x3FF;
+      const int32_t b2 = pixel2 & 0x3FF;
+
+      sum_square_error += (r1 - r2) * (r1 - r2);
+      sum_square_error += (g1 - g2) * (g1 - g2);
+      sum_square_error += (b1 - b2) * (b1 - b2);
+    }
+  }
+
+  if (!sum_square_error) {
+    return kMaxPsnr;
+  }
+
+  double inverse_mse =
+      static_cast<double>(samples) / static_cast<double>(sum_square_error);
+  double psnr = 10.0 * log10(1023.0 * 1023.0 * inverse_mse);
+
+  return psnr > kMaxPsnr ? kMaxPsnr : psnr;
 }
 }  // namespace test
 }  // namespace media

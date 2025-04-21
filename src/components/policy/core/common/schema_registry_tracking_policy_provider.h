@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ class POLICY_EXPORT SchemaRegistryTrackingPolicyProvider
   void Init(SchemaRegistry* registry) override;
   bool IsInitializationComplete(PolicyDomain domain) const override;
   bool IsFirstPolicyLoadComplete(PolicyDomain domain) const override;
-  void RefreshPolicies() override;
+  void RefreshPolicies(PolicyFetchReason reason) override;
   void OnSchemaRegistryReady() override;
   void OnSchemaRegistryUpdated(bool has_new_schemas) override;
 

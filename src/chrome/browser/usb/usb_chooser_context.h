@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,9 +45,13 @@ class UsbChooserContext : public permissions::ObjectPermissionContextBase,
     virtual void OnDeviceAdded(const device::mojom::UsbDeviceInfo&);
     virtual void OnDeviceRemoved(const device::mojom::UsbDeviceInfo&);
     virtual void OnDeviceManagerConnectionError();
+
+    // Called when the BrowserContext is shutting down. Observers must remove
+    // themselves before returning.
+    virtual void OnBrowserContextShutdown() = 0;
   };
 
-  static base::Value DeviceInfoToValue(
+  static base::Value::Dict DeviceInfoToValue(
       const device::mojom::UsbDeviceInfo& device_info);
 
   // ObjectPermissionContextBase:
@@ -55,10 +59,10 @@ class UsbChooserContext : public permissions::ObjectPermissionContextBase,
       const url::Origin& origin) override;
   std::vector<std::unique_ptr<Object>> GetAllGrantedObjects() override;
   void RevokeObjectPermission(const url::Origin& origin,
-                              const base::Value& object) override;
-  std::string GetKeyForObject(const base::Value& object) override;
-  bool IsValidObject(const base::Value& object) override;
-  std::u16string GetObjectDisplayName(const base::Value& object) override;
+                              const base::Value::Dict& object) override;
+  std::string GetKeyForObject(const base::Value::Dict& object) override;
+  bool IsValidObject(const base::Value::Dict& object) override;
+  std::u16string GetObjectDisplayName(const base::Value::Dict& object) override;
 
   // Grants |origin| access to the USB device.
   void GrantDevicePermission(const url::Origin& origin,
@@ -104,13 +108,16 @@ class UsbChooserContext : public permissions::ObjectPermissionContextBase,
     return *usb_policy_allowed_devices_;
   }
 
+  // KeyedService:
+  void Shutdown() override;
+
  private:
   // device::mojom::UsbDeviceManagerClient implementation.
   void OnDeviceAdded(device::mojom::UsbDeviceInfoPtr device_info) override;
   void OnDeviceRemoved(device::mojom::UsbDeviceInfoPtr device_info) override;
 
   void RevokeObjectPermissionInternal(const url::Origin& origin,
-                                      const base::Value& object,
+                                      const base::Value::Dict& object,
                                       bool revoked_by_website);
 
   void OnDeviceManagerConnectionError();

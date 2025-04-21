@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <stddef.h>
 
 #include <memory>
+#include <vector>
 
 #include "base/check_op.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/observer_list.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/animation/animation.h"
@@ -63,13 +63,13 @@ LayerAnimator::~LayerAnimator() {
 }
 
 // static
-LayerAnimator* LayerAnimator::CreateDefaultAnimator() {
-  return new LayerAnimator(base::Milliseconds(0));
+scoped_refptr<LayerAnimator> LayerAnimator::CreateDefaultAnimator() {
+  return base::MakeRefCounted<LayerAnimator>(base::Milliseconds(0));
 }
 
 // static
-LayerAnimator* LayerAnimator::CreateImplicitAnimator() {
-  return new LayerAnimator(
+scoped_refptr<LayerAnimator> LayerAnimator::CreateImplicitAnimator() {
+  return base::MakeRefCounted<LayerAnimator>(
       base::Milliseconds(kLayerAnimatorDefaultTransitionDurationMs));
 }
 
@@ -115,7 +115,7 @@ ANIMATED_PROPERTY(float, OPACITY, Opacity, float, opacity)
 ANIMATED_PROPERTY(bool, VISIBILITY, Visibility, bool, visibility)
 ANIMATED_PROPERTY(float, BRIGHTNESS, Brightness, float, brightness)
 ANIMATED_PROPERTY(float, GRAYSCALE, Grayscale, float, grayscale)
-ANIMATED_PROPERTY(SkColor, COLOR, Color, SkColor, color)
+ANIMATED_PROPERTY(SkColor4f, COLOR, Color, SkColor4f, color)
 ANIMATED_PROPERTY(const gfx::Rect&, CLIP, ClipRect, gfx::Rect, clip_rect)
 ANIMATED_PROPERTY(const gfx::RoundedCornersF&,
                   ROUNDED_CORNERS,
@@ -289,7 +289,8 @@ void LayerAnimator::StartTogether(
 
   bool wait_for_group_start = false;
   for (iter = animations.begin(); iter != animations.end(); ++iter)
-    wait_for_group_start |= (*iter)->IsFirstElementThreaded(delegate_);
+    wait_for_group_start |=
+        delegate_ && (*iter)->IsFirstElementThreaded(delegate_);
   int group_id = cc::AnimationIdProvider::NextGroupId();
 
   // These animations (provided they don't animate any common properties) will
@@ -326,7 +327,8 @@ void LayerAnimator::ScheduleTogether(
 
   bool wait_for_group_start = false;
   for (iter = animations.begin(); iter != animations.end(); ++iter)
-    wait_for_group_start |= (*iter)->IsFirstElementThreaded(delegate_);
+    wait_for_group_start |=
+        delegate_ && (*iter)->IsFirstElementThreaded(delegate_);
 
   int group_id = cc::AnimationIdProvider::NextGroupId();
 
@@ -397,10 +399,11 @@ void LayerAnimator::AddOwnedObserver(
 
 void LayerAnimator::RemoveAndDestroyOwnedObserver(
     ImplicitAnimationObserver* animation_observer) {
-  base::EraseIf(owned_observer_list_,[animation_observer](
-      const std::unique_ptr<ImplicitAnimationObserver>& other) {
-    return other.get() == animation_observer;
-  });
+  std::erase_if(owned_observer_list_,
+                [animation_observer](
+                    const std::unique_ptr<ImplicitAnimationObserver>& other) {
+                  return other.get() == animation_observer;
+                });
 }
 
 base::CallbackListSubscription LayerAnimator::AddSequenceScheduledCallback(
@@ -587,7 +590,7 @@ LayerAnimationSequence* LayerAnimator::RemoveAnimation(
 
   // Do not continue and attempt to start other sequences if the delegate is
   // nullptr.
-  // TODO(crbug.com/1247769): Guard other uses of delegate_ in this class.
+  // TODO(crbug.com/40790139): Guard other uses of delegate_ in this class.
   if (!delegate())
     return to_return.release();
 

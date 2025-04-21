@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,8 @@ class BASE_EXPORT DiscardableMemory {
   virtual void DiscardForTesting() = 0;
 
   // Handy method to simplify calling data() with a reinterpret_cast.
-  template<typename T> T* data_as() const {
+  template <typename T>
+  T* data_as() const {
     return reinterpret_cast<T*>(data());
   }
 

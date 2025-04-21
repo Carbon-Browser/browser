@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,7 @@ BarcodeDetector::BarcodeDetector(ExecutionContext* context,
         barcode_detector_options->formats.push_back(format);
     }
 
-    if (barcode_detector_options->formats.IsEmpty()) {
+    if (barcode_detector_options->formats.empty()) {
       exception_state.ThrowTypeError("Hint option provided, but is empty.");
       return;
     }
@@ -92,71 +92,87 @@ BarcodeDetector::BarcodeDetector(ExecutionContext* context,
   BarcodeDetectorStatics::From(context)->CreateBarcodeDetection(
       service_.BindNewPipeAndPassReceiver(task_runner),
       std::move(barcode_detector_options));
-  service_.set_disconnect_handler(
-      WTF::Bind(&BarcodeDetector::OnConnectionError, WrapWeakPersistent(this)));
+  service_.set_disconnect_handler(WTF::BindOnce(
+      &BarcodeDetector::OnConnectionError, WrapWeakPersistent(this)));
 }
 
 // static
-ScriptPromise BarcodeDetector::getSupportedFormats(ScriptState* script_state) {
+ScriptPromise<IDLSequence<V8BarcodeFormat>>
+BarcodeDetector::getSupportedFormats(ScriptState* script_state) {
   ExecutionContext* context = ExecutionContext::From(script_state);
   return BarcodeDetectorStatics::From(context)->EnumerateSupportedFormats(
       script_state);
 }
 
 // static
-String BarcodeDetector::BarcodeFormatToString(
+V8BarcodeFormat::Enum BarcodeDetector::BarcodeFormatToEnum(
     const shape_detection::mojom::BarcodeFormat format) {
   switch (format) {
     case shape_detection::mojom::BarcodeFormat::AZTEC:
-      return "aztec";
+      return V8BarcodeFormat::Enum::kAztec;
     case shape_detection::mojom::BarcodeFormat::CODE_128:
-      return "code_128";
+      return V8BarcodeFormat::Enum::kCode128;
     case shape_detection::mojom::BarcodeFormat::CODE_39:
-      return "code_39";
+      return V8BarcodeFormat::Enum::kCode39;
     case shape_detection::mojom::BarcodeFormat::CODE_93:
-      return "code_93";
+      return V8BarcodeFormat::Enum::kCode93;
     case shape_detection::mojom::BarcodeFormat::CODABAR:
-      return "codabar";
+      return V8BarcodeFormat::Enum::kCodabar;
     case shape_detection::mojom::BarcodeFormat::DATA_MATRIX:
-      return "data_matrix";
+      return V8BarcodeFormat::Enum::kDataMatrix;
     case shape_detection::mojom::BarcodeFormat::EAN_13:
-      return "ean_13";
+      return V8BarcodeFormat::Enum::kEan13;
     case shape_detection::mojom::BarcodeFormat::EAN_8:
-      return "ean_8";
+      return V8BarcodeFormat::Enum::kEan8;
     case shape_detection::mojom::BarcodeFormat::ITF:
-      return "itf";
+      return V8BarcodeFormat::Enum::kItf;
     case shape_detection::mojom::BarcodeFormat::PDF417:
-      return "pdf417";
+      return V8BarcodeFormat::Enum::kPdf417;
     case shape_detection::mojom::BarcodeFormat::QR_CODE:
-      return "qr_code";
+      return V8BarcodeFormat::Enum::kQrCode;
     case shape_detection::mojom::BarcodeFormat::UNKNOWN:
-      return "unknown";
+      return V8BarcodeFormat::Enum::kUnknown;
     case shape_detection::mojom::BarcodeFormat::UPC_A:
-      return "upc_a";
+      return V8BarcodeFormat::Enum::kUpcA;
     case shape_detection::mojom::BarcodeFormat::UPC_E:
-      return "upc_e";
+      return V8BarcodeFormat::Enum::kUpcE;
   }
 }
 
-ScriptPromise BarcodeDetector::DoDetect(ScriptState* script_state,
-                                        SkBitmap bitmap,
-                                        ExceptionState& exception_state) {
-  if (!service_.is_bound()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      "Barcode detection service unavailable.");
-    return ScriptPromise();
+ScriptPromise<IDLSequence<DetectedBarcode>> BarcodeDetector::detect(
+    ScriptState* script_state,
+    const V8ImageBitmapSource* image_source,
+    ExceptionState& exception_state) {
+  std::optional<SkBitmap> bitmap =
+      GetBitmapFromSource(script_state, image_source, exception_state);
+  if (!bitmap) {
+    return ScriptPromise<IDLSequence<DetectedBarcode>>();
   }
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLSequence<DetectedBarcode>>>(
+          script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
+  if (bitmap->isNull()) {
+    resolver->Resolve(HeapVector<Member<DetectedBarcode>>());
+    return promise;
+  }
+
+  if (!service_.is_bound()) {
+    resolver->RejectWithDOMException(DOMExceptionCode::kNotSupportedError,
+                                     "Barcode detection service unavailable.");
+    return promise;
+  }
   detect_requests_.insert(resolver);
-  service_->Detect(std::move(bitmap),
-                   WTF::Bind(&BarcodeDetector::OnDetectBarcodes,
-                             WrapPersistent(this), WrapPersistent(resolver)));
+  service_->Detect(
+      std::move(*bitmap),
+      WTF::BindOnce(&BarcodeDetector::OnDetectBarcodes, WrapPersistent(this),
+                    WrapPersistent(resolver)));
   return promise;
 }
 
 void BarcodeDetector::OnDetectBarcodes(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLSequence<DetectedBarcode>>* resolver,
     Vector<shape_detection::mojom::blink::BarcodeDetectionResultPtr>
         barcode_detection_results) {
   DCHECK(detect_requests_.Contains(resolver));
@@ -177,7 +193,7 @@ void BarcodeDetector::OnDetectBarcodes(
     detected_barcode->setBoundingBox(DOMRectReadOnly::Create(
         barcode->bounding_box.x(), barcode->bounding_box.y(),
         barcode->bounding_box.width(), barcode->bounding_box.height()));
-    detected_barcode->setFormat(BarcodeFormatToString(barcode->format));
+    detected_barcode->setFormat(BarcodeFormatToEnum(barcode->format));
     detected_barcode->setCornerPoints(corner_points);
     detected_barcodes.push_back(detected_barcode);
   }
@@ -188,7 +204,7 @@ void BarcodeDetector::OnDetectBarcodes(
 void BarcodeDetector::OnConnectionError() {
   service_.reset();
 
-  HeapHashSet<Member<ScriptPromiseResolver>> resolvers;
+  HeapHashSet<Member<ScriptPromiseResolverBase>> resolvers;
   resolvers.swap(detect_requests_);
   for (const auto& resolver : resolvers) {
     // Check if callback's resolver is still valid.

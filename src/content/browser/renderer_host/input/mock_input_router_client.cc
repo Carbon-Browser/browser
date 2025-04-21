@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/input/mock_input_router_client.h"
 
-#include "content/browser/renderer_host/input/input_router.h"
+#include "components/input/input_router.h"
+#include "content/browser/scheduler/browser_ui_thread_scheduler.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using blink::WebGestureEvent;
@@ -15,7 +16,6 @@ namespace content {
 
 MockInputRouterClient::MockInputRouterClient()
     : input_router_(nullptr),
-      in_flight_event_count_(0),
       filter_state_(blink::mojom::InputEventResultState::kNotConsumed),
       filter_input_event_called_(false),
       compositor_allowed_touch_action_(cc::TouchAction::kAuto) {}
@@ -39,6 +39,9 @@ void MockInputRouterClient::DecrementInFlightEventCount(
   --in_flight_event_count_;
 }
 
+void MockInputRouterClient::NotifyUISchedulerOfGestureEventUpdate(
+    blink::WebInputEvent::Type gesture_event) {}
+
 void MockInputRouterClient::DidOverscroll(
     const ui::DidOverscrollParams& params) {
   overscroll_ = params;
@@ -56,7 +59,7 @@ void MockInputRouterClient::ForwardGestureEventWithLatencyInfo(
     const ui::LatencyInfo& latency_info) {
   if (input_router_)
     input_router_->SendGestureEvent(
-        GestureEventWithLatencyInfo(gesture_event, latency_info));
+        input::GestureEventWithLatencyInfo(gesture_event, latency_info));
 
   if (gesture_event.SourceDevice() != blink::WebGestureDevice::kTouchpad)
     return;
@@ -74,7 +77,7 @@ void MockInputRouterClient::ForwardWheelEventWithLatencyInfo(
     const ui::LatencyInfo& latency_info) {
   if (input_router_) {
     input_router_->SendWheelEvent(
-        MouseWheelEventWithLatencyInfo(wheel_event, latency_info));
+        input::MouseWheelEventWithLatencyInfo(wheel_event, latency_info));
   }
 }
 
@@ -111,6 +114,33 @@ MockInputRouterClient::GetAndResetCompositorAllowedTouchAction() {
 
 bool MockInputRouterClient::NeedsBeginFrameForFlingProgress() {
   return false;
+}
+
+bool MockInputRouterClient::ShouldUseMobileFlingCurve() {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  return true;
+#else
+  return false;
+#endif
+}
+
+gfx::Vector2dF MockInputRouterClient::GetPixelsPerInch(
+    const gfx::PointF& position_in_screen) {
+  return gfx::Vector2dF(input::kDefaultPixelsPerInch,
+                        input::kDefaultPixelsPerInch);
+}
+
+blink::mojom::WidgetInputHandler*
+MockInputRouterClient::GetWidgetInputHandler() {
+  return &widget_input_handler_;
+}
+
+input::StylusInterface* MockInputRouterClient::GetStylusInterface() {
+  return render_widget_host_view_;
+}
+
+void MockInputRouterClient::OnStartStylusWriting() {
+  on_start_stylus_writing_called_ = true;
 }
 
 }  // namespace content

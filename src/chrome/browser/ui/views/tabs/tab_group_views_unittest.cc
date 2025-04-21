@@ -1,16 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/tabs/tab_group_views.h"
+
 #include <memory>
 
+#include "base/feature_list.h"
+#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/tabs/fake_base_tab_strip_controller.h"
 #include "chrome/browser/ui/views/tabs/fake_tab_slot_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_group_header.h"
 #include "chrome/browser/ui/views/tabs/tab_group_highlight.h"
 #include "chrome/browser/ui/views/tabs/tab_group_underline.h"
 #include "chrome/test/views/chrome_views_test_base.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/widget/widget.h"
 
 class TabGroupViewsTest : public ChromeViewsTestBase {
@@ -23,7 +28,8 @@ class TabGroupViewsTest : public ChromeViewsTestBase {
   void SetUp() override {
     ChromeViewsTestBase::SetUp();
 
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
     tab_container_ = widget_->SetContentsView(std::make_unique<views::View>());
     tab_container_->SetBounds(0, 0, 1000, 100);
     drag_context_ =
@@ -34,16 +40,21 @@ class TabGroupViewsTest : public ChromeViewsTestBase {
     tab_slot_controller_ =
         std::make_unique<FakeTabSlotController>(tab_strip_controller_.get());
     group_views_ = std::make_unique<TabGroupViews>(
-        tab_container_.get(), drag_context_.get(), tab_slot_controller_.get(),
-        id_);
+        tab_container_.get(), drag_context_.get(),
+        *(tab_slot_controller_.get()), id_);
   }
 
   void TearDown() override {
+    drag_context_ = nullptr;
+    tab_container_ = nullptr;
+
     widget_->Close();
 
-    group_views_.release();
-    tab_slot_controller_.release();
-    widget_.release();
+    group_views_.reset();
+    widget_.reset();
+    tab_slot_controller_.reset();
+    tab_strip_controller_.reset();
+
     ChromeViewsTestBase::TearDown();
   }
 
@@ -69,15 +80,26 @@ TEST_F(TabGroupViewsTest, GroupViewsCreated) {
   EXPECT_EQ(drag_context_.get(), group_views_->highlight()->parent());
 }
 
+TEST_F(TabGroupViewsTest, HeaderInitialAccessibilityProperties) {
+  TabGroupHeader* header = group_views_->header();
+  ui::AXNodeData node_data;
+
+  header->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  EXPECT_TRUE(node_data.HasState(ax::mojom::State::kEditable));
+  EXPECT_EQ(node_data.role, ax::mojom::Role::kTabList);
+  EXPECT_TRUE(node_data.HasState(ax::mojom::State::kExpanded));
+  EXPECT_FALSE(node_data.HasState(ax::mojom::State::kCollapsed));
+}
+
 // Underline should actually underline the group.
 TEST_F(TabGroupViewsTest, UnderlineBoundsNoDrag) {
   TabGroupHeader* header = group_views_->header();
   Tab* tab_1 = tab_container_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  tab_1->set_group(id_);
+  tab_1->SetGroup(id_);
   Tab* tab_2 = tab_container_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  tab_2->set_group(id_);
+  tab_2->SetGroup(id_);
 
   header->SetBounds(0, 0, 100, 0);
   tab_1->SetBounds(50, 0, 100, 0);
@@ -99,6 +121,29 @@ TEST_F(TabGroupViewsTest, UnderlineBoundsNoDrag) {
   EXPECT_FALSE(group_views_->drag_underline()->GetVisible());
 }
 
+// Underline should not be visible with chrome refresh flag when only header is
+// visible.
+TEST_F(TabGroupViewsTest, UnderlineBoundsWhenTabsAreNotVisible) {
+  TabGroupHeader* header = group_views_->header();
+  Tab* tab_1 = tab_container_->AddChildView(
+      std::make_unique<Tab>(tab_slot_controller_.get()));
+  tab_1->SetGroup(id_);
+  Tab* tab_2 = tab_container_->AddChildView(
+      std::make_unique<Tab>(tab_slot_controller_.get()));
+  tab_2->SetGroup(id_);
+
+  header->SetBounds(0, 0, 100, 0);
+  tab_1->SetBounds(50, 0, 100, 0);
+  tab_2->SetBounds(100, 0, 100, 0);
+
+  tab_1->SetVisible(false);
+  tab_2->SetVisible(false);
+  group_views_->UpdateBounds();
+
+  EXPECT_FALSE(group_views_->underline()->GetVisible());
+  EXPECT_GT(group_views_->underline()->width(), 0);
+}
+
 // Drag_underline should underline the group when the group is being dragged,
 // and the highlight should highlight it.
 TEST_F(TabGroupViewsTest, UnderlineBoundsHeaderDrag) {
@@ -106,10 +151,10 @@ TEST_F(TabGroupViewsTest, UnderlineBoundsHeaderDrag) {
   drag_context_->AddChildView(header);
   Tab* tab_1 = drag_context_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  tab_1->set_group(id_);
+  tab_1->SetGroup(id_);
   Tab* tab_2 = drag_context_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  tab_2->set_group(id_);
+  tab_2->SetGroup(id_);
 
   header->SetBounds(0, 0, 100, 0);
   tab_1->SetBounds(50, 0, 100, 0);
@@ -147,10 +192,10 @@ TEST_F(TabGroupViewsTest, UnderlineBoundsDragTabInGroup) {
   TabGroupHeader* header = group_views_->header();
   Tab* other_tab = tab_container_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  other_tab->set_group(id_);
+  other_tab->SetGroup(id_);
   Tab* dragged_tab = drag_context_->AddChildView(
       std::make_unique<Tab>(tab_slot_controller_.get()));
-  dragged_tab->set_group(id_);
+  dragged_tab->SetGroup(id_);
 
   header->SetBounds(0, 0, 100, 0);
   other_tab->SetBounds(50, 0, 100, 0);

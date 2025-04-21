@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@
 // and MyEarlGreyImpl has to be a subclass of BaseEGTestHelperImpl.
 //
 #define EG_TEST_HELPER_ASSERT_TRUE(__expression, __description) \
-  [self fail:!__expression                                      \
+  [self fail:!(__expression)                                    \
        expression:@"" #__expression                             \
       description:__description];
 

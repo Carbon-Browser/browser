@@ -1,17 +1,22 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include <algorithm>
+#include <array>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "components/viz/test/test_gpu_service_holder.h"
@@ -30,45 +35,31 @@
 namespace viz {
 
 namespace {
-int kYUVReadbackSizes[] = {2, 4, 14};
+auto kYUVReadbackSizes = std::to_array<int>({2, 4, 14});
 }
 
 class YUVReadbackTest : public testing::Test {
  protected:
-  void SetUp() override {
+  YUVReadbackTest() : context_(std::make_unique<gpu::GLInProcessContext>()) {
     gpu::ContextCreationAttribs attributes;
-    attributes.alpha_size = 8;
-    attributes.depth_size = 24;
-    attributes.red_size = 8;
-    attributes.green_size = 8;
-    attributes.blue_size = 8;
-    attributes.stencil_size = 8;
-    attributes.samples = 4;
-    attributes.sample_buffers = 1;
     attributes.bind_generates_resource = false;
 
-    context_ = std::make_unique<gpu::GLInProcessContext>();
     auto result = context_->Initialize(
         TestGpuServiceHolder::GetInstance()->task_executor(), attributes,
-        gpu::SharedMemoryLimits(),
-        /*image_factory=*/nullptr);
+        gpu::SharedMemoryLimits());
     DCHECK_EQ(result, gpu::ContextResult::kSuccess);
     gl_ = context_->GetImplementation();
-    gpu::ContextSupport* support = context_->GetImplementation();
 
+    gpu::ContextSupport* support = context_->GetImplementation();
     helper_ = std::make_unique<gpu::GLHelper>(gl_, support);
   }
 
-  void TearDown() override {
-    helper_.reset(nullptr);
-    context_.reset(nullptr);
-  }
+  ~YUVReadbackTest() override = default;
 
   void StartTracing(const std::string& filter) {
     base::trace_event::TraceLog::GetInstance()->SetEnabled(
         base::trace_event::TraceConfig(filter,
-                                       base::trace_event::RECORD_UNTIL_FULL),
-        base::trace_event::TraceLog::RECORDING_MODE);
+                                       base::trace_event::RECORD_UNTIL_FULL));
   }
 
   static void TraceDataCB(
@@ -76,10 +67,10 @@ class YUVReadbackTest : public testing::Test {
       std::string* output,
       const scoped_refptr<base::RefCountedString>& json_events_str,
       bool has_more_events) {
-    if (output->size() > 1 && !json_events_str->data().empty()) {
+    if (output->size() > 1 && !json_events_str->as_string().empty()) {
       output->append(",");
     }
-    output->append(json_events_str->data());
+    output->append(json_events_str->as_string());
     if (!has_more_events) {
       std::move(quit_closure).Run();
     }
@@ -104,11 +95,11 @@ class YUVReadbackTest : public testing::Test {
         << json_data;
 
     CHECK(parsed_json->is_list());
-    for (const base::Value& dict : parsed_json->GetListDeprecated()) {
-      CHECK(dict.is_dict());
-      const std::string* name = dict.FindStringPath("name");
+    for (const base::Value& entry : parsed_json->GetList()) {
+      const auto& dict = entry.GetDict();
+      const std::string* name = dict.FindString("name");
       CHECK(name);
-      const std::string* trace_type = dict.FindStringPath("ph");
+      const std::string* trace_type = dict.FindString("ph");
       CHECK(trace_type);
       // Count all except END traces, as they come in BEGIN/END pairs.
       if (*trace_type != "E" && *trace_type != "e")
@@ -122,14 +113,14 @@ class YUVReadbackTest : public testing::Test {
   int Channel(SkBitmap* pixels, int x, int y, int c) {
     if (pixels->bytesPerPixel() == 4) {
       uint32_t* data =
-          pixels->getAddr32(base::clamp(x, 0, pixels->width() - 1),
-                            base::clamp(y, 0, pixels->height() - 1));
+          pixels->getAddr32(std::clamp(x, 0, pixels->width() - 1),
+                            std::clamp(y, 0, pixels->height() - 1));
       return (*data) >> (c * 8) & 0xff;
     } else {
       DCHECK_EQ(pixels->bytesPerPixel(), 1);
       DCHECK_EQ(c, 0);
-      return *pixels->getAddr8(base::clamp(x, 0, pixels->width() - 1),
-                               base::clamp(y, 0, pixels->height() - 1));
+      return *pixels->getAddr8(std::clamp(x, 0, pixels->width() - 1),
+                               std::clamp(y, 0, pixels->height() - 1));
     }
   }
 
@@ -142,13 +133,13 @@ class YUVReadbackTest : public testing::Test {
     DCHECK_LT(y, pixels->height());
     if (pixels->bytesPerPixel() == 4) {
       uint32_t* data = pixels->getAddr32(x, y);
-      v = base::clamp(v, 0, 255);
+      v = std::clamp(v, 0, 255);
       *data = (*data & ~(0xffu << (c * 8))) | (v << (c * 8));
     } else {
       DCHECK_EQ(pixels->bytesPerPixel(), 1);
       DCHECK_EQ(c, 0);
       uint8_t* data = pixels->getAddr8(x, y);
-      v = base::clamp(v, 0, 255);
+      v = std::clamp(v, 0, 255);
       *data = v;
     }
   }
@@ -249,7 +240,10 @@ class YUVReadbackTest : public testing::Test {
     return ret;
   }
 
-  void PrintPlane(unsigned char* plane, int xsize, int stride, int ysize) {
+  void PrintPlane(const unsigned char* plane,
+                  int xsize,
+                  int stride,
+                  int ysize) {
     for (int y = 0; y < std::min(24, ysize); y++) {
       std::string formatted;
       for (int x = 0; x < std::min(24, xsize); x++) {
@@ -261,9 +255,9 @@ class YUVReadbackTest : public testing::Test {
 
   // Compare two planes make sure that each component of each pixel
   // is no more than |maxdiff| apart.
-  void ComparePlane(unsigned char* truth,
+  void ComparePlane(const unsigned char* truth,
                     int truth_stride,
-                    unsigned char* other,
+                    const unsigned char* other,
                     int other_stride,
                     int maxdiff,
                     int xsize,
@@ -374,12 +368,12 @@ class YUVReadbackTest : public testing::Test {
     };
     yuv_reader->ReadbackYUV(
         src_texture, gfx::Size(xsize, ysize), gfx::Rect(0, 0, xsize, ysize),
-        output_frame->stride(media::VideoFrame::kYPlane),
-        output_frame->data(media::VideoFrame::kYPlane),
-        output_frame->stride(media::VideoFrame::kUPlane),
-        output_frame->data(media::VideoFrame::kUPlane),
-        output_frame->stride(media::VideoFrame::kVPlane),
-        output_frame->data(media::VideoFrame::kVPlane),
+        output_frame->stride(media::VideoFrame::Plane::kY),
+        output_frame->writable_data(media::VideoFrame::Plane::kY),
+        output_frame->stride(media::VideoFrame::Plane::kU),
+        output_frame->writable_data(media::VideoFrame::Plane::kU),
+        output_frame->stride(media::VideoFrame::Plane::kV),
+        output_frame->writable_data(media::VideoFrame::Plane::kV),
         gfx::Point(xmargin, ymargin),
         base::BindOnce(run_quit_closure, run_loop.QuitClosure()));
 
@@ -392,19 +386,25 @@ class YUVReadbackTest : public testing::Test {
       FlipSKBitmap(&input_pixels);
     }
 
-    unsigned char* Y = truth_frame->visible_data(media::VideoFrame::kYPlane);
-    unsigned char* U = truth_frame->visible_data(media::VideoFrame::kUPlane);
-    unsigned char* V = truth_frame->visible_data(media::VideoFrame::kVPlane);
-    int32_t y_stride = truth_frame->stride(media::VideoFrame::kYPlane);
-    int32_t u_stride = truth_frame->stride(media::VideoFrame::kUPlane);
-    int32_t v_stride = truth_frame->stride(media::VideoFrame::kVPlane);
+    unsigned char* Y =
+        truth_frame->GetWritableVisibleData(media::VideoFrame::Plane::kY);
+    unsigned char* U =
+        truth_frame->GetWritableVisibleData(media::VideoFrame::Plane::kU);
+    unsigned char* V =
+        truth_frame->GetWritableVisibleData(media::VideoFrame::Plane::kV);
+    int32_t y_stride = truth_frame->stride(media::VideoFrame::Plane::kY);
+    int32_t u_stride = truth_frame->stride(media::VideoFrame::Plane::kU);
+    int32_t v_stride = truth_frame->stride(media::VideoFrame::Plane::kV);
     memset(Y, 0x00, y_stride * output_ysize);
     memset(U, 0x80, u_stride * output_ysize / 2);
     memset(V, 0x80, v_stride * output_ysize / 2);
 
-    const float kRGBtoYColorWeights[] = {0.257f, 0.504f, 0.098f, 0.0625f};
-    const float kRGBtoUColorWeights[] = {-0.148f, -0.291f, 0.439f, 0.5f};
-    const float kRGBtoVColorWeights[] = {0.439f, -0.368f, -0.071f, 0.5f};
+    const auto kRGBtoYColorWeights =
+        std::to_array<float>({0.257f, 0.504f, 0.098f, 0.0625f});
+    const auto kRGBtoUColorWeights =
+        std::to_array<float>({-0.148f, -0.291f, 0.439f, 0.5f});
+    const auto kRGBtoVColorWeights =
+        std::to_array<float>({0.439f, -0.368f, -0.071f, 0.5f});
 
     for (int y = 0; y < ysize; y++) {
       for (int x = 0; x < xsize; x++) {
@@ -438,16 +438,16 @@ class YUVReadbackTest : public testing::Test {
     }
 
     ComparePlane(
-        Y, y_stride, output_frame->visible_data(media::VideoFrame::kYPlane),
-        output_frame->stride(media::VideoFrame::kYPlane), 2, output_xsize,
+        Y, y_stride, output_frame->visible_data(media::VideoFrame::Plane::kY),
+        output_frame->stride(media::VideoFrame::Plane::kY), 2, output_xsize,
         output_ysize, &input_pixels, message + " Y plane");
     ComparePlane(
-        U, u_stride, output_frame->visible_data(media::VideoFrame::kUPlane),
-        output_frame->stride(media::VideoFrame::kUPlane), 2, output_xsize / 2,
+        U, u_stride, output_frame->visible_data(media::VideoFrame::Plane::kU),
+        output_frame->stride(media::VideoFrame::Plane::kU), 2, output_xsize / 2,
         output_ysize / 2, &input_pixels, message + " U plane");
     ComparePlane(
-        V, v_stride, output_frame->visible_data(media::VideoFrame::kVPlane),
-        output_frame->stride(media::VideoFrame::kVPlane), 2, output_xsize / 2,
+        V, v_stride, output_frame->visible_data(media::VideoFrame::Plane::kV),
+        output_frame->stride(media::VideoFrame::Plane::kV), 2, output_xsize / 2,
         output_ysize / 2, &input_pixels, message + " V plane");
 
     gl_->DeleteTextures(1, &src_texture);

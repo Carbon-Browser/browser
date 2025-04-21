@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/base/cache_type.h"
@@ -309,7 +310,7 @@ uint64_t ServiceWorkerDiskCache::GetNextCallId() {
 void ServiceWorkerDiskCache::DidGetEntryResult(uint64_t call_id,
                                                disk_cache::EntryResult result) {
   auto it = active_entry_calls_.find(call_id);
-  DCHECK(it != active_entry_calls_.end());
+  CHECK(it != active_entry_calls_.end(), base::NotFatalUntil::M130);
   EntryCallback callback = std::move(it->second);
   active_entry_calls_.erase(it);
 
@@ -325,7 +326,7 @@ void ServiceWorkerDiskCache::DidGetEntryResult(uint64_t call_id,
 
 void ServiceWorkerDiskCache::DidDoomEntry(uint64_t call_id, int net_error) {
   auto it = active_doom_calls_.find(call_id);
-  DCHECK(it != active_doom_calls_.end());
+  CHECK(it != active_doom_calls_.end(), base::NotFatalUntil::M130);
   net::CompletionOnceCallback callback = std::move(it->second);
   active_doom_calls_.erase(it);
 

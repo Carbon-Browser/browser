@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 namespace media {
 
-// TODO(crbug.com/765862): Remove the type. Use ScopedJavaGlobalRef directly.
+// TODO(crbug.com/40540372): Remove the type. Use ScopedJavaGlobalRef directly.
 using JavaObjectPtr =
     std::unique_ptr<base::android::ScopedJavaGlobalRef<jobject>>;
 

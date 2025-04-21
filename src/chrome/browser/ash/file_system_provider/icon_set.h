@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 
 #include "url/gurl.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Holds urls to icons with multiple dimensions.
 // TODO(mtomasz): Move this to chrome/browser/ash so it can be reused
@@ -20,6 +19,7 @@ class IconSet {
   enum class IconSize {
     SIZE_16x16,
     SIZE_32x32,
+    kMaxValue = SIZE_32x32,
   };
 
   IconSet();
@@ -37,18 +37,12 @@ class IconSet {
   // URL will be returned.
   const GURL& GetIcon(IconSize size) const;
 
+  bool operator==(const IconSet& other) const;
+
  private:
   std::map<IconSize, GURL> icons_;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::IconSet;
-}  // namespace file_system_provider
-}  // namespace chromeos
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_ICON_SET_H_

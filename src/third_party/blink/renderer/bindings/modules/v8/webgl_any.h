@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,9 @@
 namespace blink {
 
 ScriptValue WebGLAny(ScriptState*, bool value);
-ScriptValue WebGLAny(ScriptState*, const bool* value, uint32_t);
-ScriptValue WebGLAny(ScriptState*, const Vector<bool>& value);
-ScriptValue WebGLAny(ScriptState*, const Vector<unsigned>& value);
-ScriptValue WebGLAny(ScriptState*, const Vector<int>& value);
+ScriptValue WebGLAny(ScriptState*, base::span<const bool> value);
+ScriptValue WebGLAny(ScriptState*, base::span<const unsigned> value);
+ScriptValue WebGLAny(ScriptState*, base::span<const int> value);
 ScriptValue WebGLAny(ScriptState*, int value);
 ScriptValue WebGLAny(ScriptState*, unsigned value);
 ScriptValue WebGLAny(ScriptState*, int64_t value);

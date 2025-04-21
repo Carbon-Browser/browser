@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <iosfwd>
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
+#include "base/files/file_path.h"
+#include "base/types/expected.h"
 #include "base/values.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 
@@ -20,45 +22,54 @@ namespace base {
 
 void ExpectDictBooleanValue(bool expected_value,
                             const Value::Dict& dict,
-                            StringPiece path);
+                            std::string_view path);
 
 void ExpectDictIntegerValue(int expected_value,
                             const Value::Dict& dict,
-                            StringPiece path);
+                            std::string_view path);
 
-void ExpectDictStringValue(StringPiece expected_value,
+void ExpectDictStringValue(std::string_view expected_value,
                            const Value::Dict& dict,
-                           StringPiece path);
+                           std::string_view path);
+
+void ExpectDictValue(const Value::Dict& expected_value,
+                     const Value::Dict& dict,
+                     std::string_view path);
 
 void ExpectDictValue(const Value& expected_value,
                      const Value::Dict& dict,
-                     StringPiece path);
+                     std::string_view path);
 
 void ExpectStringValue(const std::string& expected_str, const Value& actual);
 
 namespace test {
 
-// A custom GMock matcher which matches if a base::Value is a dictionary which
-// has a key |key| that is equal to |value|.
-testing::Matcher<const base::Value&> DictionaryHasValue(
+// A custom GMock matcher which matches if a base::Value::Dict has a key |key|
+// that is equal to |value|.
+testing::Matcher<const base::Value::Dict&> DictionaryHasValue(
     const std::string& key,
     const base::Value& expected_value);
 
-// A custom GMock matcher which matches if a base::Value is a dictionary which
-// contains all key/value pairs from |template_value|.
-testing::Matcher<const base::Value&> DictionaryHasValues(
-    const base::Value& template_value);
+// A custom GMock matcher which matches if a base::Value::Dict contains all
+// key/value pairs from |template_value|.
+testing::Matcher<const base::Value::Dict&> DictionaryHasValues(
+    const base::Value::Dict& template_value);
 
 // A custom GMock matcher.  For details, see
 // https://github.com/google/googletest/blob/644319b9f06f6ca9bf69fe791be399061044bc3d/googlemock/docs/CookBook.md#writing-new-polymorphic-matchers
 class IsJsonMatcher {
  public:
-  explicit IsJsonMatcher(base::StringPiece json);
+  explicit IsJsonMatcher(std::string_view json);
   explicit IsJsonMatcher(const base::Value& value);
+  explicit IsJsonMatcher(const base::Value::Dict& value);
+  explicit IsJsonMatcher(const base::Value::List& value);
+
   IsJsonMatcher(const IsJsonMatcher& other);
+  IsJsonMatcher& operator=(const IsJsonMatcher& other);
+
   ~IsJsonMatcher();
 
-  bool MatchAndExplain(base::StringPiece json,
+  bool MatchAndExplain(std::string_view json,
                        testing::MatchResultListener* listener) const;
   bool MatchAndExplain(const base::Value& value,
                        testing::MatchResultListener* listener) const;
@@ -70,8 +81,6 @@ class IsJsonMatcher {
   void DescribeNegationTo(std::ostream* os) const;
 
  private:
-  IsJsonMatcher& operator=(const IsJsonMatcher& other) = delete;
-
   base::Value expected_value_;
 };
 
@@ -88,16 +97,36 @@ inline testing::PolymorphicMatcher<IsJsonMatcher> IsJson(const T& value) {
   return testing::MakePolymorphicMatcher(IsJsonMatcher(value));
 }
 
-// Parses |json| as JSON, allowing trailing commas, and returns the resulting
-// value.  If |json| fails to parse, causes an EXPECT failure and returns the
+// Parses `json` as JSON, allowing trailing commas, and returns the resulting
+// value.  If `json` fails to parse, causes an EXPECT failure and returns the
 // Null Value.
-Value ParseJson(StringPiece json);
+Value ParseJson(std::string_view json);
 
-// DEPRECATED.
-// Parses |json| as JSON, allowing trailing commas, and returns the
-// resulting value.  If the json fails to parse, causes an EXPECT
-// failure and returns the Null Value (but never a NULL pointer).
-std::unique_ptr<Value> ParseJsonDeprecated(StringPiece json);
+// Just like ParseJson(), except returns Dicts/Lists. If `json` fails to parse
+// or is not of the expected type, causes an EXPECT failure and returns an empty
+// container.
+Value::Dict ParseJsonDict(std::string_view json);
+Value::List ParseJsonList(std::string_view json);
+
+// Similar to `ParseJsonDict`, however it loads its contents from a file.
+// Returns the parsed `Value::Dict` when successful. Otherwise, it causes an
+// EXPECT failure, and returns an empty dict.
+Value::Dict ParseJsonDictFromFile(const FilePath& json_file_path);
+
+// An enumaration with the possible types of errors when calling
+// `WriteJsonFile`.
+enum class WriteJsonError {
+  // Failed to generate a json string with the value provided.
+  kGenerateJsonFailure,
+
+  // Failed to write the json string into a file.
+  kWriteFileFailure,
+};
+
+// Serialises `root` as a json string to a file. Returns a empty expected when
+// successful. Otherwise returns an error.
+expected<void, WriteJsonError> WriteJsonFile(const FilePath& json_file_path,
+                                             ValueView root);
 
 }  // namespace test
 }  // namespace base

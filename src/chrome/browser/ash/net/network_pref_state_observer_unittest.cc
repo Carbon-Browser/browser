@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,10 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/strings/string_util.h"
+#include "base/values.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -38,14 +41,14 @@ class NetworkPrefStateObserverTest : public testing::Test {
  public:
   NetworkPrefStateObserverTest()
       : fake_user_manager_(new FakeChromeUserManager),
-        user_manager_enabler_(base::WrapUnique(fake_user_manager_)),
+        user_manager_enabler_(base::WrapUnique(fake_user_manager_.get())),
         profile_manager_(TestingBrowserProcess::GetGlobal()) {}
 
   NetworkPrefStateObserverTest(const NetworkPrefStateObserverTest&) = delete;
   NetworkPrefStateObserverTest& operator=(const NetworkPrefStateObserverTest&) =
       delete;
 
-  ~NetworkPrefStateObserverTest() override {}
+  ~NetworkPrefStateObserverTest() override = default;
 
   void SetUp() override {
     testing::Test::SetUp();
@@ -71,7 +74,7 @@ class NetworkPrefStateObserverTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   NetworkHandlerTestHelper network_handler_test_helper_;
-  FakeChromeUserManager* fake_user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> fake_user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
   TestingProfileManager profile_manager_;
   session_manager::SessionManager session_manager_;
@@ -84,7 +87,7 @@ TEST_F(NetworkPrefStateObserverTest, LoginUser) {
       NetworkHandler::GetUiProxyConfigService();
   ASSERT_TRUE(device_ui_proxy_config_service);
   // There should be no proxy config available.
-  base::Value ui_proxy_config(base::Value::Type::DICTIONARY);
+  base::Value::Dict ui_proxy_config;
   EXPECT_FALSE(device_ui_proxy_config_service->MergeEnforcedProxyConfig(
       kNetworkId, &ui_proxy_config));
 
@@ -95,25 +98,25 @@ TEST_F(NetworkPrefStateObserverTest, LoginUser) {
       NetworkHandler::GetUiProxyConfigService();
   ASSERT_TRUE(profile_ui_proxy_config_service);
   ASSERT_NE(device_ui_proxy_config_service, profile_ui_proxy_config_service);
-  ui_proxy_config = base::Value(base::Value::Type::DICTIONARY);
+  ui_proxy_config = base::Value::Dict();
   EXPECT_FALSE(profile_ui_proxy_config_service->MergeEnforcedProxyConfig(
       kNetworkId, &ui_proxy_config));
 
   // Set the profile pref to PAC script mode.
-  std::unique_ptr<base::DictionaryValue> proxy_config(
-      std::make_unique<base::DictionaryValue>());
-  proxy_config->SetStringKey("mode", ProxyPrefs::kPacScriptProxyModeName);
-  proxy_config->SetStringKey("pac_url", "http://proxy");
-  profile->GetPrefs()->Set(proxy_config::prefs::kProxy, *proxy_config.get());
+  auto proxy_config = base::Value::Dict()
+                          .Set("mode", ProxyPrefs::kPacScriptProxyModeName)
+                          .Set("pac_url", "http://proxy");
+  profile->GetPrefs()->Set(proxy_config::prefs::kProxy,
+                           base::Value(std::move(proxy_config)));
   base::RunLoop().RunUntilIdle();
 
   // Mode should now be MODE_PAC_SCRIPT.
-  ui_proxy_config = base::Value(base::Value::Type::DICTIONARY);
+  ui_proxy_config.clear();
   EXPECT_TRUE(
       NetworkHandler::GetUiProxyConfigService()->MergeEnforcedProxyConfig(
           kNetworkId, &ui_proxy_config));
-  base::Value* mode = ui_proxy_config.FindPath(
-      {::onc::network_config::kType, ::onc::kAugmentationActiveSetting});
+  base::Value* mode = ui_proxy_config.FindByDottedPath(base::JoinString(
+      {::onc::network_config::kType, ::onc::kAugmentationActiveSetting}, "."));
   ASSERT_TRUE(mode);
   EXPECT_EQ(base::Value(::onc::proxy::kPAC), *mode);
 }

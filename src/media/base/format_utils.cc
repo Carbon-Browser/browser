@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 namespace media {
 
-absl::optional<VideoPixelFormat> GfxBufferFormatToVideoPixelFormat(
+std::optional<VideoPixelFormat> GfxBufferFormatToVideoPixelFormat(
     gfx::BufferFormat format) {
   switch (format) {
     case gfx::BufferFormat::BGRX_8888:
@@ -34,17 +34,23 @@ absl::optional<VideoPixelFormat> GfxBufferFormatToVideoPixelFormat(
     case gfx::BufferFormat::YUV_420_BIPLANAR:
       return PIXEL_FORMAT_NV12;
 
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
+      return PIXEL_FORMAT_NV12A;
+
     case gfx::BufferFormat::P010:
-      return PIXEL_FORMAT_P016LE;
+      return PIXEL_FORMAT_P010LE;
+
+    case gfx::BufferFormat::RGBA_1010102:
+      return PIXEL_FORMAT_XR30;
 
     default:
       DLOG(WARNING) << "Unsupported BufferFormat: "
                     << gfx::BufferFormatToString(format);
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
-absl::optional<gfx::BufferFormat> VideoPixelFormatToGfxBufferFormat(
+std::optional<gfx::BufferFormat> VideoPixelFormatToGfxBufferFormat(
     VideoPixelFormat pixel_format) {
   switch (pixel_format) {
     case PIXEL_FORMAT_ARGB:
@@ -59,18 +65,24 @@ absl::optional<gfx::BufferFormat> VideoPixelFormatToGfxBufferFormat(
     case PIXEL_FORMAT_NV12:
       return gfx::BufferFormat::YUV_420_BIPLANAR;
 
+    case PIXEL_FORMAT_NV12A:
+      return gfx::BufferFormat::YUVA_420_TRIPLANAR;
+
     case PIXEL_FORMAT_ABGR:
       return gfx::BufferFormat::RGBA_8888;
 
     case PIXEL_FORMAT_XBGR:
       return gfx::BufferFormat::RGBX_8888;
 
-    case PIXEL_FORMAT_P016LE:
+    case PIXEL_FORMAT_P010LE:
       return gfx::BufferFormat::P010;
+
+    case PIXEL_FORMAT_XR30:
+      return gfx::BufferFormat::RGBA_1010102;
 
     default:
       DLOG(WARNING) << "Unsupported VideoPixelFormat: " << pixel_format;
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 

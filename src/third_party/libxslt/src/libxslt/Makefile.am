@@ -1,7 +1,5 @@
 AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/libxslt
 
-AM_CFLAGS = $(LIBXML_CFLAGS)
-
 lib_LTLIBRARIES = libxslt.la
 
 xsltincdir = $(includedir)/libxslt
@@ -61,6 +59,7 @@ endif
 
 libxslt_la_LIBADD = $(LIBXML_LIBS) $(EXTRA_LIBS) $(LIBM)
 libxslt_la_LDFLAGS =					\
+		$(AM_LDFLAGS) -no-undefined		\
 		$(LIBXSLT_VERSION_SCRIPT)		\
 		-version-info $(LIBXSLT_VERSION_INFO)
 
@@ -71,5 +70,7 @@ EXTRA_DIST = $(man_MANS) trio.h triodef.h libxslt.syms
 xsltproc: all
 	@(cd ../xsltproc ; $(MAKE))
 
+if WITH_MODULES
 install-exec-hook:
 	$(MKDIR_P) "$(DESTDIR)$(libdir)/libxslt-plugins"
+endif

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/public/cpp/test/shell_test_api.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "chrome/browser/ui/ash/login_screen_client_impl.h"
+#include "chrome/browser/ui/ash/login/login_screen_client_impl.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/test/browser_test.h"

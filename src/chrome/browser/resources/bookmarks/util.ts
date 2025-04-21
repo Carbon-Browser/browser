@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 import {BOOKMARKS_BAR_ID, IncognitoAvailability, ROOT_NODE_ID} from './constants.js';
-import {BookmarkNode, BookmarksPageState, NodeMap, ObjectMap} from './types.js';
+import type {BookmarkNode, BookmarksPageState, NodeMap, ObjectMap} from './types.js';
 
 /**
  * @fileoverview Utility functions for the Bookmarks page.

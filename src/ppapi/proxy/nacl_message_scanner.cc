@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "build/build_config.h"
 #include "ipc/ipc_message.h"
 #include "ipc/ipc_message_macros.h"
@@ -199,6 +200,14 @@ void ScanTuple(std::tuple<A, B, C, D>&& t1, ScanningResults* results) {
   ScanParam(std::move(std::get<1>(t1)), results);
   ScanParam(std::move(std::get<2>(t1)), results);
   ScanParam(std::move(std::get<3>(t1)), results);
+}
+template <class A, class B, class C, class D, class E>
+void ScanTuple(std::tuple<A, B, C, D, E>&& t1, ScanningResults* results) {
+  ScanParam(std::move(std::get<0>(t1)), results);
+  ScanParam(std::move(std::get<1>(t1)), results);
+  ScanParam(std::move(std::get<2>(t1)), results);
+  ScanParam(std::move(std::get<3>(t1)), results);
+  ScanParam(std::move(std::get<4>(t1)), results);
 }
 
 template <class MessageType>
@@ -512,7 +521,7 @@ void NaClMessageScanner::ScanUntrustedMessage(
 NaClMessageScanner::FileIO* NaClMessageScanner::GetFile(
     PP_Resource file_io) {
   FileIOMap::iterator it = files_.find(file_io);
-  DCHECK(it != files_.end());
+  CHECK(it != files_.end(), base::NotFatalUntil::M130);
   return it->second;
 }
 
@@ -552,13 +561,13 @@ void NaClMessageScanner::AuditNestedMessage(PP_Resource resource,
       if (ppapi::UnpackMessage<PpapiPluginMsg_FileSystem_ReserveQuotaReply>(
           msg, &amount, &file_sizes)) {
         FileSystemMap::iterator it = file_systems_.find(resource);
-        DCHECK(it != file_systems_.end());
+        CHECK(it != file_systems_.end(), base::NotFatalUntil::M130);
         it->second->UpdateReservedQuota(amount);
 
         FileSizeMap::const_iterator offset_it = file_sizes.begin();
         for (; offset_it != file_sizes.end(); ++offset_it) {
           FileIOMap::iterator fio_it = files_.find(offset_it->first);
-          DCHECK(fio_it != files_.end());
+          CHECK(fio_it != files_.end(), base::NotFatalUntil::M130);
           if (fio_it != files_.end())
             fio_it->second->SetMaxWrittenOffset(offset_it->second);
         }

@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/storage/testing/mock_storage_area.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -36,7 +36,7 @@ void MockStorageArea::AddObserver(
 void MockStorageArea::Put(
     const Vector<uint8_t>& key,
     const Vector<uint8_t>& value,
-    const absl::optional<Vector<uint8_t>>& client_old_value,
+    const std::optional<Vector<uint8_t>>& client_old_value,
     const String& source,
     PutCallback callback) {
   observed_puts_.push_back(ObservedPut{key, value, source});
@@ -45,7 +45,7 @@ void MockStorageArea::Put(
 
 void MockStorageArea::Delete(
     const Vector<uint8_t>& key,
-    const absl::optional<Vector<uint8_t>>& client_old_value,
+    const std::optional<Vector<uint8_t>>& client_old_value,
     const String& source,
     DeleteCallback callback) {
   observed_deletes_.push_back(ObservedDelete{key, source});
@@ -75,6 +75,10 @@ void MockStorageArea::GetAll(
   for (const auto& entry : key_values_)
     entries.push_back(mojom::blink::KeyValue::New(entry.key, entry.value));
   std::move(callback).Run(std::move(entries));
+}
+
+void MockStorageArea::Checkpoint() {
+  ++observed_checkpoints_;
 }
 
 }  // namespace blink

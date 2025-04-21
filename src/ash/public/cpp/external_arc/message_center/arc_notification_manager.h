@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ash/components/arc/session/connection_holder.h"
 #include "ash/components/arc/session/connection_observer.h"
 #include "ash/public/cpp/message_center/arc_notification_manager_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "components/account_id/account_id.h"
@@ -63,6 +64,7 @@ class ArcNotificationManager
       arc::mojom::ArcLockScreenNotificationSettingPtr setting) override;
   void ProcessUserAction(
       arc::mojom::ArcNotificationUserActionDataPtr data) override;
+  void LogInlineReplySent(const std::string& key) override;
 
   // Methods called from ArcNotificationItem:
   void SendNotificationRemovedFromChrome(const std::string& key);
@@ -72,12 +74,16 @@ class ArcNotificationManager
   void CreateNotificationWindow(const std::string& key);
   void CloseNotificationWindow(const std::string& key);
   void OpenNotificationSettings(const std::string& key);
+  void DisableNotification(const std::string& key);
   void OpenNotificationSnoozeSettings(const std::string& key);
   bool IsOpeningSettingsSupported() const;
   void SendNotificationToggleExpansionOnChrome(const std::string& key);
   void SetDoNotDisturbStatusOnAndroid(bool enabled);
   void CancelPress(const std::string& key);
   void SetNotificationConfiguration();
+  void SendNotificationButtonClickedOnChrome(const std::string& key,
+                                             const int button_index,
+                                             const std::string& input);
 
   // Methods called from |visibility_manager_|:
   void OnMessageCenterVisibilityChanged(
@@ -101,7 +107,7 @@ class ArcNotificationManager
 
   std::unique_ptr<ArcNotificationManagerDelegate> delegate_;
   AccountId main_profile_id_;
-  message_center::MessageCenter* message_center_ = nullptr;
+  raw_ptr<message_center::MessageCenter> message_center_ = nullptr;
   std::unique_ptr<message_center::MessageCenterObserver>
       do_not_disturb_manager_;
   std::unique_ptr<message_center::MessageCenterObserver> visibility_manager_;

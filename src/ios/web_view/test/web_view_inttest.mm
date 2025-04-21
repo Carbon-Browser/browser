@@ -1,24 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <ChromeWebView/ChromeWebView.h>
 #import <Foundation/Foundation.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/web_view/test/web_view_inttest_base.h"
 #import "ios/web_view/test/web_view_test_util.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gtest_mac.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForPageLoadTimeout;
@@ -142,14 +138,14 @@ TEST_F(WebViewTest, EvaluateJavaScript) {
   GURL url = GetUrlForPageWithTitleAndBody("Title", "Body");
   ASSERT_TRUE(test::LoadUrl(web_view_, net::NSURLWithGURL(url)));
 
-  NSError* error = nil;
+  NSError* error;
   EXPECT_NSEQ(@"Body", test::EvaluateJavaScript(
                            web_view_, @"document.body.textContent", &error));
-  EXPECT_NSEQ(nil, error);
+  EXPECT_FALSE(error);
 
   // Calls a function which doesn't exist.
   test::EvaluateJavaScript(web_view_, @"hoge()", &error);
-  EXPECT_NSNE(nil, error);
+  EXPECT_TRUE(error);
 }
 
 }  // namespace ios_web_view

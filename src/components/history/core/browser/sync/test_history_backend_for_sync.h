@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,12 @@ class TestHistoryBackendForSync : public HistoryBackendForSync {
 
   // Methods to manipulate the contents. These do *not* notify the observers.
   URLID AddURL(URLRow row);
+  bool UpdateURL(URLRow row);
   VisitID AddVisit(VisitRow row);
   bool UpdateVisit(VisitRow row);
+  void AddOrReplaceContentAnnotation(
+      VisitID visit_id,
+      const VisitContentAnnotations& content_annotation);
 
   void RemoveURLAndVisits(URLID url_id);
   void Clear();
@@ -37,29 +41,58 @@ class TestHistoryBackendForSync : public HistoryBackendForSync {
   const URLRow* FindURLRow(const GURL& url) const;
 
   // HistoryBackendForSync implementation.
+  bool CanAddURL(const GURL& url) const override;
   bool IsExpiredVisitTime(const base::Time& time) const override;
   bool GetURLByID(URLID url_id, URLRow* url_row) override;
+  bool GetVisitByID(VisitID visit_id, VisitRow* visit_row) override;
+  bool GetMostRecentVisitForURL(URLID id, VisitRow* visit_row) override;
   bool GetLastVisitByTime(base::Time visit_time, VisitRow* visit_row) override;
-  bool GetMostRecentVisitsForURL(URLID id,
-                                 int max_visits,
-                                 VisitVector* visits) override;
   VisitVector GetRedirectChain(VisitRow visit) override;
   bool GetForeignVisit(const std::string& originator_cache_guid,
                        VisitID originator_visit_id,
                        VisitRow* visit_row) override;
-  VisitID AddSyncedVisit(const GURL& url,
-                         const std::u16string& title,
-                         bool hidden,
-                         const VisitRow& visit) override;
-  VisitID UpdateSyncedVisit(const VisitRow& visit) override;
+  std::vector<AnnotatedVisit> ToAnnotatedVisitsFromRows(
+      const VisitVector& visit_rows,
+      bool compute_redirect_chain_start_properties) override;
+  VisitID AddSyncedVisit(
+      const GURL& url,
+      const std::u16string& title,
+      bool hidden,
+      const VisitRow& visit,
+      const std::optional<VisitContextAnnotations>& context_annotations,
+      const std::optional<VisitContentAnnotations>& content_annotations)
+      override;
+  VisitID UpdateSyncedVisit(
+      const GURL& url,
+      const std::u16string& title,
+      bool hidden,
+      const VisitRow& visit,
+      const std::optional<VisitContextAnnotations>& context_annotations,
+      const std::optional<VisitContentAnnotations>& content_annotations)
+      override;
   bool UpdateVisitReferrerOpenerIDs(VisitID visit_id,
                                     VisitID referrer_id,
                                     VisitID opener_id) override;
+  void AddVisitToSyncedCluster(const ClusterVisit& cluster_visit,
+                               const std::string& originator_cache_guid,
+                               int64_t originator_cluster_id) override;
+  int64_t GetClusterIdContainingVisit(VisitID visit_id) override;
+  std::vector<GURL> GetFaviconURLsForURL(const GURL& page_url) override;
+  void MarkVisitAsKnownToSync(VisitID visit_id) override;
+  void DeleteAllForeignVisitsAndResetIsKnownToSync() override;
   void AddObserver(HistoryBackendObserver* observer) override;
   void RemoveObserver(HistoryBackendObserver* observer) override;
 
   int get_foreign_visit_call_count() const {
     return get_foreign_visit_call_count_;
+  }
+
+  int delete_all_foreign_visits_call_count() const {
+    return delete_all_foreign_visits_call_count_;
+  }
+
+  int add_visit_to_synced_cluster_count() const {
+    return add_visit_to_synced_cluster_count_;
   }
 
  private:
@@ -74,7 +107,12 @@ class TestHistoryBackendForSync : public HistoryBackendForSync {
   std::vector<VisitRow> visits_;
   VisitID next_visit_id_ = 1;
 
+  std::map<VisitID, VisitContextAnnotations> context_annotations_;
+  std::map<VisitID, VisitContentAnnotations> content_annotations_;
+
   int get_foreign_visit_call_count_ = 0;
+  int delete_all_foreign_visits_call_count_ = 0;
+  int add_visit_to_synced_cluster_count_ = 0;
 
   base::ObserverList<HistoryBackendObserver, true>::Unchecked observers_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_pkcs11_client.h"
 
 #include "base/component_export.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 
 namespace ash {
 
@@ -59,7 +59,7 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeCryptohomePkcs11Client
 
   // The list of callbacks passed to WaitForServiceToBeAvailable when the
   // service wasn't available.
-  std::vector<WaitForServiceToBeAvailableCallback>
+  std::vector<chromeos::WaitForServiceToBeAvailableCallback>
       pending_wait_for_service_to_be_available_callbacks_;
 };
 

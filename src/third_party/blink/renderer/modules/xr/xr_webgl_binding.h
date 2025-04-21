@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/modules/webgl/webgl2_rendering_context.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_rendering_context.h"
+#include "third_party/blink/renderer/modules/xr/xr_graphics_binding.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 
 namespace blink {
@@ -19,8 +20,11 @@ class XRLightProbe;
 class XRSession;
 class XRView;
 class XRWebGLDepthInformation;
+class XRProjectionLayer;
+class XRProjectionLayerInit;
+class XRWebGLSubImage;
 
-class XRWebGLBinding final : public ScriptWrappable {
+class XRWebGLBinding final : public ScriptWrappable, public XRGraphicsBinding {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -31,7 +35,14 @@ class XRWebGLBinding final : public ScriptWrappable {
                                 const V8XRWebGLRenderingContext* context,
                                 ExceptionState& exception_state);
 
-  XRSession* session() const { return session_; }
+  bool usesDepthValues() const;
+
+  XRProjectionLayer* createProjectionLayer(const XRProjectionLayerInit* init,
+                                           ExceptionState& exception_state);
+
+  XRWebGLSubImage* getViewSubImage(XRProjectionLayer* layer,
+                                   XRView* view,
+                                   ExceptionState& exception_state);
 
   WebGLTexture* getReflectionCubeMap(XRLightProbe*, ExceptionState&);
 
@@ -44,7 +55,6 @@ class XRWebGLBinding final : public ScriptWrappable {
   void Trace(Visitor*) const override;
 
  private:
-  const Member<XRSession> session_;
   Member<WebGLRenderingContextBase> webgl_context_;
   bool webgl2_;
 };

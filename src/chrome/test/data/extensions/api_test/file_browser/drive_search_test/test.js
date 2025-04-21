@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,8 +103,8 @@ chrome.test.runTests([
     };
 
     chrome.fileManagerPrivate.searchDrive(
-        {query: query, nextFeed: ''},
-        chrome.test.callbackPass((entries, nextFeed) => {
+        {query: query, nextFeed: ''}, chrome.test.callbackPass((response) => {
+          const {entries, nextFeed} = response;
           chrome.test.assertFalse(!!nextFeed);
           chrome.test.assertFalse(!entries);
 

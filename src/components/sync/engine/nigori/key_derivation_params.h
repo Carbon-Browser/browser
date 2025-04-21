@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "components/sync/base/passphrase_enums.h"
 
-// TODO(crbug.com/947443): Move this file to components/sync/nigori/. It lives
+// TODO(crbug.com/41449994): Move this file to components/sync/nigori/. It lives
 // in engine/nigori/ now because some engine code requires KeyDerivationParams
 // to implement SyncEncryptionHandler::OnPassphraseRequired(). None of the
 // implementations actually uses the parameter though, which means we can
@@ -22,7 +22,6 @@ class KeyDerivationParams {
  public:
   static KeyDerivationParams CreateForPbkdf2();
   static KeyDerivationParams CreateForScrypt(const std::string& salt);
-  static KeyDerivationParams CreateWithUnsupportedMethod();
 
   KeyDerivationMethod method() const { return method_; }
   const std::string& scrypt_salt() const;
@@ -30,8 +29,8 @@ class KeyDerivationParams {
   KeyDerivationParams(const KeyDerivationParams& other);
   KeyDerivationParams(KeyDerivationParams&& other);
   KeyDerivationParams& operator=(const KeyDerivationParams& other);
-  bool operator==(const KeyDerivationParams& other) const;
-  bool operator!=(const KeyDerivationParams& other) const;
+
+  bool operator==(const KeyDerivationParams& other) const = default;
 
  private:
   KeyDerivationParams(KeyDerivationMethod method,

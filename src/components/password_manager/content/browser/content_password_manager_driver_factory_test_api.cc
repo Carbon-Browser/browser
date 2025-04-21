@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,17 @@ namespace password_manager {
 std::unique_ptr<ContentPasswordManagerDriverFactory>
 ContentPasswordManagerDriverFactoryTestApi::Create(
     content::WebContents* web_contents,
-    PasswordManagerClient* password_manager_client,
-    autofill::AutofillClient* autofill_client) {
+    PasswordManagerClient* password_manager_client) {
   return base::WrapUnique(new ContentPasswordManagerDriverFactory(
-      web_contents, password_manager_client, autofill_client));
+      web_contents, password_manager_client));
+}
+
+// static
+ContentPasswordManagerDriver*
+ContentPasswordManagerDriverFactoryTestApi::GetDriverForFrame(
+    ContentPasswordManagerDriverFactory* factory,
+    content::RenderFrameHost* render_frame_host) {
+  return factory->GetDriverForFrame(render_frame_host);
 }
 
 }  // namespace password_manager

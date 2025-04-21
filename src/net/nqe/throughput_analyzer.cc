@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <cmath>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "net/base/host_port_pair.h"
@@ -255,14 +256,16 @@ void ThroughputAnalyzer::NotifyExpectedResponseContentSize(
 }
 
 bool ThroughputAnalyzer::IsHangingWindow(int64_t bits_received,
-                                         base::TimeDelta duration,
-                                         double downstream_kbps_double) const {
+                                         base::TimeDelta duration) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (params_->throughput_hanging_requests_cwnd_size_multiplier() <= 0)
     return false;
 
   if (params_->use_small_responses())
+    return false;
+
+  if (!duration.is_positive())
     return false;
 
   // Initial congestion window size for TCP connections.
@@ -285,14 +288,6 @@ bool ThroughputAnalyzer::IsHangingWindow(int64_t bits_received,
       (kCwndSizeBits *
        params_->throughput_hanging_requests_cwnd_size_multiplier());
 
-  // Record kbps as function of |is_hanging|.
-  if (is_hanging) {
-    LOCAL_HISTOGRAM_COUNTS_1000000("NQE.ThroughputObservation.Hanging",
-                                   downstream_kbps_double);
-  } else {
-    LOCAL_HISTOGRAM_COUNTS_1000000("NQE.ThroughputObservation.NotHanging",
-                                   downstream_kbps_double);
-  }
   return is_hanging;
 }
 
@@ -329,14 +324,14 @@ bool ThroughputAnalyzer::MaybeGetThroughputObservation(
 
   double downstream_kbps_double = bits_received * duration.ToHz() / 1000;
 
-  if (IsHangingWindow(bits_received, duration, downstream_kbps_double)) {
+  if (IsHangingWindow(bits_received, duration)) {
     requests_.clear();
     EndThroughputObservationWindow();
     return false;
   }
 
   // Round-up |downstream_kbps_double|.
-  *downstream_kbps = static_cast<int64_t>(std::ceil(downstream_kbps_double));
+  *downstream_kbps = base::ClampCeil<int32_t>(downstream_kbps_double);
   DCHECK(IsCurrentlyTrackingThroughput());
 
   // Stop the observation window since a throughput measurement has been taken.

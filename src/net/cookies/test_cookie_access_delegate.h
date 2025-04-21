@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,21 @@
 #define NET_COOKIES_TEST_COOKIE_ACCESS_DELEGATE_H_
 
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "net/base/schemeful_site.h"
 #include "net/cookies/cookie_access_delegate.h"
 #include "net/cookies/cookie_constants.h"
-#include "net/cookies/first_party_set_metadata.h"
-#include "net/cookies/same_party_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "net/first_party_sets/first_party_set_entry.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_sets_cache_filter.h"
 
 namespace net {
-
-class SchemefulSite;
 
 // CookieAccessDelegate for testing. You can set the return value for a given
 // cookie_domain (modulo any leading dot). Calling GetAccessSemantics() will
@@ -38,27 +37,25 @@ class TestCookieAccessDelegate : public CookieAccessDelegate {
   // CookieAccessDelegate implementation:
   CookieAccessSemantics GetAccessSemantics(
       const CanonicalCookie& cookie) const override;
+  CookieScopeSemantics GetScopeSemantics(
+      const CanonicalCookie& cookie) const override;
   bool ShouldIgnoreSameSiteRestrictions(
       const GURL& url,
       const SiteForCookies& site_for_cookies) const override;
-  absl::optional<FirstPartySetMetadata> ComputeFirstPartySetMetadataMaybeAsync(
+  bool ShouldTreatUrlAsTrustworthy(const GURL& url) const override;
+  std::optional<
+      std::pair<FirstPartySetMetadata, FirstPartySetsCacheFilter::MatchInfo>>
+  ComputeFirstPartySetMetadataMaybeAsync(
       const SchemefulSite& site,
       const SchemefulSite* top_frame_site,
-      const std::set<SchemefulSite>& party_context,
-      base::OnceCallback<void(FirstPartySetMetadata)> callback) const override;
-  absl::optional<absl::optional<SchemefulSite>> FindFirstPartySetOwner(
-      const SchemefulSite& site,
-      base::OnceCallback<void(absl::optional<SchemefulSite>)> callback)
+      base::OnceCallback<void(FirstPartySetMetadata,
+                              FirstPartySetsCacheFilter::MatchInfo)> callback)
       const override;
-  absl::optional<base::flat_map<SchemefulSite, SchemefulSite>>
-  FindFirstPartySetOwners(
+  std::optional<base::flat_map<SchemefulSite, FirstPartySetEntry>>
+  FindFirstPartySetEntries(
       const base::flat_set<SchemefulSite>& sites,
-      base::OnceCallback<void(base::flat_map<SchemefulSite, SchemefulSite>)>
-          callback) const override;
-  absl::optional<base::flat_map<SchemefulSite, std::set<SchemefulSite>>>
-  RetrieveFirstPartySets(
-      base::OnceCallback<void(
-          base::flat_map<SchemefulSite, std::set<SchemefulSite>>)> callback)
+      base::OnceCallback<
+          void(base::flat_map<SchemefulSite, FirstPartySetEntry>)> callback)
       const override;
 
   // Sets the expected return value for any cookie whose Domain
@@ -67,6 +64,12 @@ class TestCookieAccessDelegate : public CookieAccessDelegate {
   void SetExpectationForCookieDomain(const std::string& cookie_domain,
                                      CookieAccessSemantics access_semantics);
 
+  // Sets the expected return value for Cookie Scoped Semantics for any cookie
+  // whose Domain matches `cookie_domain`. Pass the value of `cookie.Domain()`
+  // and any leading dot will be discarded.
+  void SetExpectationForCookieScope(const std::string& cookie_domain,
+                                    CookieScopeSemantics scoped_semantics);
+
   // Sets the expected return value for ShouldAlwaysAttachSameSiteCookies.
   // Can set schemes that always attach SameSite cookies, or schemes that always
   // attach SameSite cookies if the request URL is secure.
@@ -74,19 +77,22 @@ class TestCookieAccessDelegate : public CookieAccessDelegate {
       const std::string& site_for_cookies_scheme,
       bool require_secure_origin);
 
-  // Set the test delegate's First-Party Sets. The map is keyed on the set's
-  // owner site. The owner site should still be included in the std::set stored
-  // in the map.
+  // Set the test delegate's First-Party Sets. The map's keys are the sites in
+  // the sets. Primary sites must be included among the keys for a given set.
   void SetFirstPartySets(
-      const base::flat_map<SchemefulSite, std::set<SchemefulSite>>& sets);
+      const base::flat_map<SchemefulSite, FirstPartySetEntry>& sets);
 
   void set_invoke_callbacks_asynchronously(bool async) {
     invoke_callbacks_asynchronously_ = async;
   }
 
+  void set_first_party_sets_cache_filter(FirstPartySetsCacheFilter filter) {
+    first_party_sets_cache_filter_ = std::move(filter);
+  }
+
  private:
-  // Synchronous version of FindFirstPartySetOwner, for convenience.
-  absl::optional<SchemefulSite> FindFirstPartySetOwnerSync(
+  // Finds a FirstPartySetEntry for the given site, if one exists.
+  std::optional<FirstPartySetEntry> FindFirstPartySetEntry(
       const SchemefulSite& site) const;
 
   // Discard any leading dot in the domain string.
@@ -95,13 +101,17 @@ class TestCookieAccessDelegate : public CookieAccessDelegate {
   // Invokes the given `callback` asynchronously or returns the result
   // synchronously, depending on the configuration of this instance.
   template <class T>
-  absl::optional<T> RunMaybeAsync(T result,
-                                  base::OnceCallback<void(T)> callback) const;
+  std::optional<T> RunMaybeAsync(T result,
+                                 base::OnceCallback<void(T)> callback) const;
 
   std::map<std::string, CookieAccessSemantics> expectations_;
+  std::map<std::string, CookieScopeSemantics> expectations_scoped_;
   std::map<std::string, bool> ignore_samesite_restrictions_schemes_;
-  base::flat_map<SchemefulSite, std::set<SchemefulSite>> first_party_sets_;
+  base::flat_map<SchemefulSite, FirstPartySetEntry> first_party_sets_;
+  FirstPartySetsCacheFilter first_party_sets_cache_filter_;
   bool invoke_callbacks_asynchronously_ = false;
+  SchemefulSite trustworthy_site_ =
+      SchemefulSite(GURL("http://trustworthysitefortestdelegate.example"));
 };
 
 }  // namespace net

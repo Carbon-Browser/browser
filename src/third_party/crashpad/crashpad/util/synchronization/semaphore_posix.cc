@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@
 #include "util/synchronization/semaphore.h"
 
 #include <errno.h>
-#include <math.h>
 #include <time.h>
 
 #include <chrono>
+#include <cmath>
 
 #include "base/check_op.h"
 #include "base/logging.h"
@@ -43,7 +43,7 @@ void Semaphore::Wait() {
 bool Semaphore::TimedWait(double seconds) {
   DCHECK_GE(seconds, 0.0);
 
-  if (isinf(seconds)) {
+  if (std::isinf(seconds)) {
     Wait();
     return true;
   }
@@ -81,7 +81,7 @@ void Semaphore::Wait() {
 bool Semaphore::TimedWait(double seconds) {
   DCHECK_GE(seconds, 0.0);
 
-  if (isinf(seconds)) {
+  if (std::isinf(seconds)) {
     Wait();
     return true;
   }

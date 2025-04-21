@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_VAAPI_TEST_VIDEO_DECODER_H_
 #define MEDIA_GPU_VAAPI_TEST_VIDEO_DECODER_H_
 
+#include "base/memory/raw_ref.h"
 #include "media/gpu/vaapi/test/shared_va_surface.h"
 
 namespace media {
@@ -55,7 +56,7 @@ class VideoDecoder {
 
  protected:
   // VA handles.
-  const VaapiDevice& va_device_;
+  const raw_ref<const VaapiDevice> va_device_;
   scoped_refptr<SharedVASurface> last_decoded_surface_;
 
   // Whether the last decoded frame was visible.

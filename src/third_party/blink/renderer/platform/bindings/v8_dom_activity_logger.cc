@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,7 @@ typedef HashMap<String, std::unique_ptr<V8DOMActivityLogger>>
     DOMActivityLoggerMapForMainWorld;
 typedef HashMap<int,
                 std::unique_ptr<V8DOMActivityLogger>,
-                WTF::IntHash<int>,
-                WTF::UnsignedWithZeroKeyHashTraits<int>>
+                IntWithZeroKeyHashTraits<int>>
     DOMActivityLoggerMapForIsolatedWorld;
 
 static DOMActivityLoggerMapForMainWorld& DomActivityLoggersForMainWorld() {
@@ -36,14 +35,15 @@ DomActivityLoggersForIsolatedWorld() {
   return map;
 }
 
-void V8DOMActivityLogger::LogMethod(const char* api_name,
+void V8DOMActivityLogger::LogMethod(ScriptState* script_state,
+                                    const char* api_name,
                                     v8::FunctionCallbackInfo<v8::Value> info) {
-  Vector<v8::Local<v8::Value>> loggerArgs;
-  loggerArgs.ReserveInitialCapacity(info.Length());
+  v8::LocalVector<v8::Value> logger_args(info.GetIsolate());
+  logger_args.reserve(info.Length());
   for (int i = 0; i < info.Length(); ++i) {
-    loggerArgs.UncheckedAppend(info[i]);
+    logger_args.push_back(info[i]);
   }
-  LogMethod(api_name, info.Length(), loggerArgs.data());
+  LogMethod(script_state, api_name, logger_args);
 }
 
 void V8DOMActivityLogger::SetActivityLogger(
@@ -66,7 +66,7 @@ V8DOMActivityLogger* V8DOMActivityLogger::ActivityLogger(
     return it == loggers.end() ? nullptr : it->value.get();
   }
 
-  if (extension_id.IsEmpty())
+  if (extension_id.empty())
     return nullptr;
 
   DOMActivityLoggerMapForMainWorld& loggers = DomActivityLoggersForMainWorld();
@@ -86,18 +86,17 @@ V8DOMActivityLogger* V8DOMActivityLogger::ActivityLogger(int world_id,
   if (!CommonSchemeRegistry::IsExtensionScheme(url.Protocol().Ascii()))
     return nullptr;
 
-  return ActivityLogger(world_id, url.Host());
+  return ActivityLogger(world_id, url.Host().ToString());
 }
 
-V8DOMActivityLogger* V8DOMActivityLogger::CurrentActivityLogger() {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+V8DOMActivityLogger* V8DOMActivityLogger::CurrentActivityLogger(
+    v8::Isolate* isolate) {
   if (!isolate->InContext())
     return nullptr;
 
   v8::HandleScope handle_scope(isolate);
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-
-  V8PerContextData* context_data = ScriptState::From(context)->PerContextData();
+  V8PerContextData* context_data =
+      ScriptState::ForCurrentRealm(isolate)->PerContextData();
   if (!context_data)
     return nullptr;
 
@@ -109,7 +108,7 @@ V8DOMActivityLogger* V8DOMActivityLogger::CurrentActivityLoggerIfIsolatedWorld(
   if (!isolate->InContext())
     return nullptr;
 
-  ScriptState* script_state = ScriptState::From(isolate->GetCurrentContext());
+  ScriptState* script_state = ScriptState::ForCurrentRealm(isolate);
   if (!script_state->World().IsIsolatedWorld())
     return nullptr;
 
@@ -120,18 +119,9 @@ V8DOMActivityLogger* V8DOMActivityLogger::CurrentActivityLoggerIfIsolatedWorld(
   return context_data->ActivityLogger();
 }
 
-V8DOMActivityLogger*
-V8DOMActivityLogger::CurrentActivityLoggerIfIsolatedWorld() {
-  return CurrentActivityLoggerIfIsolatedWorld(v8::Isolate::GetCurrent());
-}
-
-V8DOMActivityLogger*
-V8DOMActivityLogger::CurrentActivityLoggerIfIsolatedWorldForMainThread() {
+bool V8DOMActivityLogger::HasActivityLoggerInIsolatedWorlds() {
   DCHECK(IsMainThread());
-  if (DomActivityLoggersForIsolatedWorld().IsEmpty())
-    return nullptr;
-  return CurrentActivityLoggerIfIsolatedWorld(
-      V8PerIsolateData::MainThreadIsolate());
+  return !DomActivityLoggersForIsolatedWorld().empty();
 }
 
 }  // namespace blink

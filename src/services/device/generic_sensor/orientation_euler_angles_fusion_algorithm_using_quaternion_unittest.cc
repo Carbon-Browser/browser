@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ TEST_F(OrientationEulerAnglesFusionAlgorithmUsingQuaternionTest,
        ReadSourceSensorFailed) {
   ASSERT_EQ(1UL, fusion_algorithm_->source_types().size());
 
-  mojom::SensorType source_type = fusion_algorithm_->source_types()[0];
+  mojom::SensorType source_type = *(fusion_algorithm_->source_types().cbegin());
   SensorReading reading;
   SensorReading fused_reading;
   fake_fusion_sensor_->SetSensorReading(source_type, reading,
@@ -52,7 +52,7 @@ TEST_F(OrientationEulerAnglesFusionAlgorithmUsingQuaternionTest,
             euler_angles_in_degrees_test_values.size());
   ASSERT_EQ(1UL, fusion_algorithm_->source_types().size());
 
-  mojom::SensorType source_type = fusion_algorithm_->source_types()[0];
+  mojom::SensorType source_type = *(fusion_algorithm_->source_types().cbegin());
   SensorReading reading;
   SensorReading fused_reading;
 

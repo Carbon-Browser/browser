@@ -25,32 +25,11 @@
 
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
 
-#include <memory>
-#include <utility>
-
-#include "build/build_config.h"
-#include "cc/input/main_thread_scrolling_reason.h"
-#include "cc/input/scroll_snap_data.h"
-#include "cc/layers/picture_layer.h"
-#include "cc/layers/scrollbar_layer_base.h"
-#include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/core/frame/local_frame_ukm_aggregator.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
-#include "third_party/blink/renderer/core/frame/page_scale_constraints_set.h"
-#include "third_party/blink/renderer/core/frame/visual_viewport.h"
-#include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/paint/paint_layer.h"
-#include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
-#include "third_party/blink/renderer/core/scroll/scroll_animator_base.h"
-#include "third_party/blink/renderer/core/scroll/scrollbar_layer_delegate.h"
+#include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
-#include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
-#include "third_party/blink/renderer/platform/instrumentation/histogram.h"
-#include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 
 namespace blink {
 
@@ -62,8 +41,6 @@ ScrollingCoordinator::~ScrollingCoordinator() {
 
 void ScrollingCoordinator::Trace(Visitor* visitor) const {
   visitor->Trace(page_);
-  visitor->Trace(horizontal_scrollbars_);
-  visitor->Trace(vertical_scrollbars_);
 }
 
 ScrollableArea*
@@ -89,7 +66,7 @@ ScrollingCoordinator::ScrollableAreaWithElementIdInAllLocalFrames(
 void ScrollingCoordinator::DidCompositorScroll(
     CompositorElementId element_id,
     const gfx::PointF& offset,
-    const absl::optional<cc::TargetSnapAreaElementIds>& snap_target_ids) {
+    const std::optional<cc::TargetSnapAreaElementIds>& snap_target_ids) {
   // Find the associated scrollable area using the element id and notify it of
   // the compositor-side scroll. We explicitly do not check the VisualViewport
   // which handles scroll offset differently (see:
@@ -120,41 +97,6 @@ void ScrollingCoordinator::DidChangeScrollbarsHidden(
   }
 }
 
-void ScrollingCoordinator::WillDestroyScrollableArea(
-    ScrollableArea* scrollable_area) {
-  RemoveScrollbarLayer(scrollable_area, kHorizontalScrollbar);
-  RemoveScrollbarLayer(scrollable_area, kVerticalScrollbar);
-}
-
-void ScrollingCoordinator::RemoveScrollbarLayer(
-    ScrollableArea* scrollable_area,
-    ScrollbarOrientation orientation) {
-  ScrollbarMap& scrollbars = orientation == kHorizontalScrollbar
-                                 ? horizontal_scrollbars_
-                                 : vertical_scrollbars_;
-  scrollbars.erase(scrollable_area);
-}
-
-void ScrollingCoordinator::SetScrollbarLayer(
-    ScrollableArea* scrollable_area,
-    ScrollbarOrientation orientation,
-    scoped_refptr<cc::ScrollbarLayerBase> scrollbar_layer) {
-  ScrollbarMap& scrollbars = orientation == kHorizontalScrollbar
-                                 ? horizontal_scrollbars_
-                                 : vertical_scrollbars_;
-  scrollbars.Set(scrollable_area, std::move(scrollbar_layer));
-}
-
-cc::ScrollbarLayerBase* ScrollingCoordinator::GetScrollbarLayer(
-    ScrollableArea* scrollable_area,
-    ScrollbarOrientation orientation) {
-  ScrollbarMap& scrollbars = orientation == kHorizontalScrollbar
-                                 ? horizontal_scrollbars_
-                                 : vertical_scrollbars_;
-  const auto it = scrollbars.find(scrollable_area);
-  return it != scrollbars.end() ? it->value.get() : nullptr;
-}
-
 bool ScrollingCoordinator::UpdateCompositorScrollOffset(
     const LocalFrame& frame,
     const ScrollableArea& scrollable_area) {
@@ -166,15 +108,10 @@ bool ScrollingCoordinator::UpdateCompositorScrollOffset(
       scrollable_area.GetScrollElementId(), scrollable_area.ScrollPosition());
 }
 
-void ScrollingCoordinator::Reset(LocalFrame* frame) {
-  horizontal_scrollbars_.clear();
-  vertical_scrollbars_.clear();
-}
-
 void ScrollingCoordinator::WillBeDestroyed() {
   DCHECK(page_);
   page_ = nullptr;
-  weak_ptr_factory_.InvalidateWeakPtrs();
+  callbacks_.reset();
 }
 
 }  // namespace blink

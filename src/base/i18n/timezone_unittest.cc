@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,9 @@ TEST(TimezoneTest, CountryCodeForTimezones) {
     // returns '001' (world) for region-agnostic timezones such as Etc/UTC and
     // |CountryCodeForCurrentTimezone| returns an empty string so that the next
     // fallback can be tried by a customer.
-    if (!country_code.empty())
+    if (!country_code.empty()) {
       EXPECT_EQ(2U, country_code.size()) << "country_code = " << country_code;
+    }
   }
 
   icu::TimeZone::adoptDefault(nullptr);

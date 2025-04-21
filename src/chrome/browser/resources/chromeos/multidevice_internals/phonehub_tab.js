@@ -1,25 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import 'chrome://resources/cr_elements/md_select_css.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/ash/common/cr_elements/md_select.css.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_style.css.js';
 import './browser_tabs_model_form.js';
 import './camera_roll_manager_form.js';
 import './i18n_setup.js';
 import './phone_name_form.js';
 import './phone_status_model_form.js';
 import './notification_manager.js';
-import './shared_style.js';
+import './shared_style.css.js';
 import './quick_action_controller_form.js';
 
-import { loadTimeData } from 'chrome://resources/js/load_time_data.m.js';
-import { WebUIListenerBehavior } from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import { flush, html, Polymer } from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import { MultidevicePhoneHubBrowserProxy } from './multidevice_phonehub_browser_proxy.js';
-import { FeatureStatus } from './types.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {WebUIListenerBehavior} from 'chrome://resources/ash/common/web_ui_listener_behavior.js';
+import {flush, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {MultidevicePhoneHubBrowserProxy} from './multidevice_phonehub_browser_proxy.js';
+import {getTemplate} from './phonehub_tab.html.js';
+import {FeatureStatus} from './types.js';
 
 /**
  * Maps a FeatureStatus to it's title label in the dropdown.
@@ -45,7 +47,7 @@ const featureStatusToStringMap = new Map([
 Polymer({
   is: 'phonehub-tab',
 
-  _template: html`{__html_template__}`,
+  _template: getTemplate(),
 
   behaviors: [
     WebUIListenerBehavior,

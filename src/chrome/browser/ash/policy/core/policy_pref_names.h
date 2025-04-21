@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@ namespace prefs {
 
 // Non-specific prefs.
 extern const char kStoreLogStatesAcrossReboots[];
+
+extern const char kEventBasedLogLastUploadTimes[];
 
 }  // namespace prefs
 }  // namespace policy

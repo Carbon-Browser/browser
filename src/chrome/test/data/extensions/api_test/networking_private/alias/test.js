@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,7 @@ chrome.test.runTests([
               GUID: 'stub_cellular1_guid',
               IPAddressConfigType: chrome.networking.onc.IPConfigType.DHCP,
               Metered: true,
+              TrafficCounterResetTime: 0.0,
               Name: 'cellular1',
               NameServersConfigType: chrome.networking.onc.IPConfigType.DHCP,
               Source: 'User',

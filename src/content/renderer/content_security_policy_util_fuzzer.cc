@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 // Configure:
 // # tools/mb/mb.py gen -m chromium.fuzz -b 'Libfuzzer Upload Linux ASan'  out/libfuzzer
@@ -41,9 +46,12 @@ class Environment {
 
     TestTimeouts::Initialize();
 
-    content::SetUpBlinkTestEnvironment();
+    blink_environment_.SetUp();
   }
   ~Environment() {}
+
+ private:
+  content::BlinkTestEnvironment blink_environment_;
 };
 
 }  // namespace

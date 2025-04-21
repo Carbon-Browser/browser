@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ struct PageFormAnalyserLogger::LogEntry {
 
 PageFormAnalyserLogger::PageFormAnalyserLogger(blink::WebLocalFrame* frame)
     : frame_(frame) {}
-PageFormAnalyserLogger::~PageFormAnalyserLogger() {}
+PageFormAnalyserLogger::~PageFormAnalyserLogger() = default;
 
 void PageFormAnalyserLogger::Send(std::string message,
                                   ConsoleLevel level,
@@ -54,8 +54,9 @@ void PageFormAnalyserLogger::Flush() {
           // Filter out password inputs with values from being logged, as their
           // values are also logged.
           const bool should_obfuscate =
-              !input_element.IsNull() &&
-              input_element.IsPasswordFieldForAutofill() &&
+              input_element &&
+              input_element.FormControlTypeForAutofill() ==
+                  blink::mojom::FormControlType::kInputPassword &&
               !input_element.Value().IsEmpty();
 
           if (!should_obfuscate) {

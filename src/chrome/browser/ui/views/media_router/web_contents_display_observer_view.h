@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_WEB_CONTENTS_DISPLAY_OBSERVER_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_WEB_CONTENTS_DISPLAY_OBSERVER_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/webui/media_router/web_contents_display_observer.h"

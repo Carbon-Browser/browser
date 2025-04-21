@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,6 @@ struct EnumTraits<extensions::mojom::Channel, version_info::Channel> {
         return extensions::mojom::Channel::kStable;
     }
     NOTREACHED();
-    return extensions::mojom::Channel::kUnknown;
   }
 
   static bool FromMojom(extensions::mojom::Channel input,
@@ -51,8 +50,6 @@ struct EnumTraits<extensions::mojom::Channel, version_info::Channel> {
         return true;
     }
     NOTREACHED();
-    *out = version_info::Channel::UNKNOWN;
-    return false;
   }
 };
 

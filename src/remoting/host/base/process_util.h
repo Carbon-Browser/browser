@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,9 @@
 
 namespace remoting {
 
-// Gets the image path of |pid|.
+// Gets the image path of |pid|. Note that on Linux, the process image's
+// original path will still be returned even if the binary has been deleted from
+// the storage.
 base::FilePath GetProcessImagePath(base::ProcessId pid);
 
 }  // namespace remoting

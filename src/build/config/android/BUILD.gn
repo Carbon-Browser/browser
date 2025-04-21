@@ -1,8 +1,8 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/android/config.gni")
+import("//build/config/android/rules.gni")
 import("//build/config/c++/c++.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/sanitizers/sanitizers.gni")
@@ -24,6 +24,9 @@ config("compiler") {
   defines = [
     "ANDROID",
 
+    # https://android.googlesource.com/platform/ndk/+/master/docs/BuildSystemMaintainers.md#weak-symbols-for-api-definitions
+    "__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__",
+
     # The NDK has these things, but doesn't define the constants to say that it
     # does. Define them here instead.
     "HAVE_SYS_UIO_H",
@@ -33,11 +36,10 @@ config("compiler") {
     "ANDROID_NDK_VERSION_ROLL=${android_ndk_version}_1",
   ]
 
-  if (current_cpu == "mips64el") {
-    cflags += [
-      # Have to force IAS for mips64.
-      "-fintegrated-as",
-    ]
+  if (android_64bit_current_cpu) {
+    _max_page_size = 16384
+  } else {
+    _max_page_size = 4096
   }
 
   ldflags = [
@@ -45,26 +47,29 @@ config("compiler") {
     # assembly code with symbols that aren't hidden properly.
     # http://crbug.com/448386
     "-Wl,--exclude-libs=libvpx_assembly_arm.a",
-  ]
 
-  if (current_cpu == "arm64") {
     # Reduce the page size from 65536 in order to reduce binary size slightly
     # by shrinking the alignment gap between segments. This also causes all
     # segments to be mapped adjacently, which breakpad relies on.
-    ldflags += [ "-Wl,-z,max-page-size=4096" ]
-  }
+    "-Wl,-z,max-page-size=$_max_page_size",
+  ]
 
   if (current_cpu == "arm64") {
     if (arm_control_flow_integrity == "standard") {
       cflags += [ "-mbranch-protection=standard" ]
+      rustflags = [ "-Zbranch-protection=bti" ]
     } else if (arm_control_flow_integrity == "pac") {
       cflags += [ "-mbranch-protection=pac-ret" ]
+      rustflags = [ "-Zbranch-protection=pac-ret" ]
     }
   }
 
-  # Instead of using an unwind lib from the toolchain,
-  # buildtools/third_party/libunwind will be built and used directly.
-  ldflags += [ "--unwindlib=none" ]
+  # Disable TLSDESC for riscv64 until the Android NDK supports it. While
+  # Chromium's clang turns it on by default for Android RISC-V devices, NDK r27
+  # currently has it disabled. This can likely be removed in NDK r28.
+  if (current_cpu == "riscv64") {
+    cflags += [ "-mtls-dialect=trad" ]
+  }
 
   # $compile_api_level corresponds to the API level used for the sysroot path
   # calculation in //build/config/android/config.gni
@@ -87,42 +92,20 @@ config("compiler") {
 # that is Android-only. Please see that target for advice on what should go in
 # :runtime_library vs. :compiler.
 config("runtime_library") {
-  libs = []
-  ldflags = []
-
-  # On 64-bit platforms, the only symbols provided by libandroid_support.a are
-  # strto{d,f,l,ul}_l. These symbols are not used by our libc++, and newer NDKs
-  # don't provide a libandroid_support.a on 64-bit platforms, so we only depend
-  # on this library on 32-bit platforms.
-  if (current_cpu == "arm" || current_cpu == "x86") {
-    libs += [ "android_support" ]
-  }
-
-  if (current_cpu == "arm" && arm_version == 6) {
-    libs += [ "atomic" ]
-  }
-
-  if (current_cpu == "mipsel") {
-    libs += [ "atomic" ]
-  }
-
-  # TODO(jdduke) Re-enable on mips after resolving linking
-  # issues with libc++ (crbug.com/456380).
-  if (current_cpu != "mipsel" && current_cpu != "mips64el") {
-    ldflags += [ "-Wl,--warn-shared-textrel" ]
-  }
 }
 
 config("hide_all_but_jni_onload") {
-  ldflags = [ "-Wl,--version-script=" + rebase_path(
-                  "//build/android/android_only_explicit_jni_exports.lst",
-                  root_build_dir) ]
+  _version_script = "//build/android/android_only_explicit_jni_exports.lst"
+  inputs = [ _version_script ]
+  ldflags =
+      [ "-Wl,--version-script=" + rebase_path(_version_script, root_build_dir) ]
 }
 
 config("hide_all_but_jni") {
-  ldflags = [ "-Wl,--version-script=" +
-              rebase_path("//build/android/android_only_jni_exports.lst",
-                          root_build_dir) ]
+  _version_script = "//build/android/android_only_jni_exports.lst"
+  inputs = [ _version_script ]
+  ldflags =
+      [ "-Wl,--version-script=" + rebase_path(_version_script, root_build_dir) ]
 }
 
 config("lld_pack_relocations") {
@@ -163,11 +146,6 @@ config("default_orderfile_instrumentation") {
 }
 
 if (current_toolchain == default_toolchain) {
-  pool("goma_javac_pool") {
-    # Override action_pool when goma is enabled for javac.
-    depth = 10000
-  }
-
   # nocompile tests share output directory to avoid them all needing to rebuild
   # things. But this also means they can't run in parallel.
   pool("nocompile_pool") {

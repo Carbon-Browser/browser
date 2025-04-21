@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/wm/public/tooltip_client.h"
+#include "ui/wm/public/tooltip_observer.h"
 
-namespace views {
-namespace corewm {
+namespace views::corewm {
 namespace {
 
-constexpr auto kDelayForTooltipUpdate = base::Milliseconds(500);
 #if BUILDFLAG(IS_WIN)
 // Drawing a long word in tooltip is very slow on Windows. crbug.com/513693
 constexpr size_t kMaxTooltipLength = 1024;
@@ -31,10 +30,19 @@ constexpr size_t kMaxTooltipLength = 2048;
 }  // namespace
 
 TooltipStateManager::TooltipStateManager(std::unique_ptr<Tooltip> tooltip)
-    : tooltip_(std::move(tooltip)),
-      tooltip_show_delay_(kDelayForTooltipUpdate) {}
+    : tooltip_(std::move(tooltip)) {}
 
 TooltipStateManager::~TooltipStateManager() = default;
+
+void TooltipStateManager::AddObserver(wm::TooltipObserver* observer) {
+  DCHECK(tooltip_);
+  tooltip_->AddObserver(observer);
+}
+
+void TooltipStateManager::RemoveObserver(wm::TooltipObserver* observer) {
+  DCHECK(tooltip_);
+  tooltip_->RemoveObserver(observer);
+}
 
 int TooltipStateManager::GetMaxWidth(const gfx::Point& location) const {
   return tooltip_->GetMaxWidth(location);
@@ -55,6 +63,7 @@ void TooltipStateManager::Show(aura::Window* window,
                                const std::u16string& tooltip_text,
                                const gfx::Point& position,
                                TooltipTrigger trigger,
+                               const base::TimeDelta show_delay,
                                const base::TimeDelta hide_delay) {
   HideAndReset();
 
@@ -71,23 +80,16 @@ void TooltipStateManager::Show(aura::Window* window,
 
   // If the string consists entirely of whitespace, then don't both showing it
   // (an empty tooltip is useless).
-  if (trimmed_text.empty())
+  if (trimmed_text.empty()) {
     return;
+  }
 
   // Initialize the one-shot timer to show the tooltip after a delay. Any
   // running timers have already been canceled by calling HideAndReset above.
   // This ensures that the tooltip won't show up too early. The delayed
-  // appearance of a tooltip is by default and the |tooltip_show_delay_| is only
-  // set to 0 in the unit tests.
-  StartWillShowTooltipTimer(trimmed_text, hide_delay);
-}
-
-void TooltipStateManager::StopWillHideTooltipTimer() {
-  will_hide_tooltip_timer_.Stop();
-}
-
-void TooltipStateManager::StopWillShowTooltipTimer() {
-  will_show_tooltip_timer_.Stop();
+  // appearance of a tooltip is by default and the `show_delay` is only set to
+  // 0 in the unit tests.
+  StartWillShowTooltipTimer(trimmed_text, show_delay, hide_delay);
 }
 
 void TooltipStateManager::UpdatePositionIfNeeded(const gfx::Point& position,
@@ -98,31 +100,26 @@ void TooltipStateManager::UpdatePositionIfNeeded(const gfx::Point& position,
   // the first place. Otherwise, for example, the position of a keyboard
   // triggered tooltip could be updated by an unrelated mouse exited event. The
   // tooltip would then show up at the wrong location.
-  if (!will_show_tooltip_timer_.IsRunning() || trigger != tooltip_trigger_)
+  if (!will_show_tooltip_timer_.IsRunning() || trigger != tooltip_trigger_) {
     return;
+  }
 
   position_ = position;
 }
 
-void TooltipStateManager::SetTooltipShowDelayedForTesting(bool is_delayed) {
-  tooltip_show_delay_ = is_delayed ? kDelayForTooltipUpdate : base::Seconds(0);
-}
-
 void TooltipStateManager::ShowNow(const std::u16string& trimmed_text,
                                   const base::TimeDelta hide_delay) {
-  if (!tooltip_parent_window_)
+  if (!tooltip_parent_window_) {
     return;
+  }
 
-  gfx::Point anchor_point =
-      position_ +
-      tooltip_parent_window_->GetBoundsInScreen().OffsetFromOrigin();
+  if (!tooltip_parent_window_->GetRootWindow()) {
+    // This can happen if the window is in the process of closing.
+    return;
+  }
 
-  TooltipPositionBehavior behavior =
-      tooltip_trigger_ == TooltipTrigger::kCursor
-          ? TooltipPositionBehavior::kRelativeToCursor
-          : TooltipPositionBehavior::kCentered;
-  tooltip_->Update(tooltip_parent_window_, trimmed_text,
-                   {anchor_point, behavior});
+  tooltip_->Update(tooltip_parent_window_, trimmed_text, position_,
+                   tooltip_trigger_);
   tooltip_->Show();
   if (!hide_delay.is_zero()) {
     will_hide_tooltip_timer_.Start(FROM_HERE, hide_delay, this,
@@ -132,20 +129,22 @@ void TooltipStateManager::ShowNow(const std::u16string& trimmed_text,
 
 void TooltipStateManager::StartWillShowTooltipTimer(
     const std::u16string& trimmed_text,
+    const base::TimeDelta show_delay,
     const base::TimeDelta hide_delay) {
-  if (!tooltip_show_delay_.is_zero()) {
+  if (!show_delay.is_zero()) {
+    // Start will show tooltip timer is show_delay is non-zero.
     will_show_tooltip_timer_.Start(
-        FROM_HERE, tooltip_show_delay_,
+        FROM_HERE, show_delay,
         base::BindOnce(&TooltipStateManager::ShowNow,
                        weak_factory_.GetWeakPtr(), trimmed_text, hide_delay));
+    return;
   } else {
     // This other path is needed for the unit tests to pass because Show is not
-    // immediately called when we have a |tooltip_show_delay_| of zero.
+    // immediately called when we have a `show_delay` of zero.
     // TODO(bebeaudr): Fix this by ensuring that the unit tests wait for the
     // timer to fire before continuing.
     ShowNow(trimmed_text, hide_delay);
   }
 }
 
-}  // namespace corewm
-}  // namespace views
+}  // namespace views::corewm

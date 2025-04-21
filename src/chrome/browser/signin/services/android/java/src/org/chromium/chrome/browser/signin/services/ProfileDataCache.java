@@ -1,10 +1,9 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.signin.services;
 
-import android.accounts.Account;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -28,14 +27,18 @@ import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.base.ObserverList;
+import org.chromium.base.Promise;
 import org.chromium.base.ThreadUtils;
 import org.chromium.components.browser_ui.util.AvatarGenerator;
+import org.chromium.components.signin.AccountEmailDisplayHook;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.base.AccountInfo;
+import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.identitymanager.AccountInfoService;
 import org.chromium.components.signin.identitymanager.AccountInfoServiceProvider;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,9 +46,7 @@ import java.util.Map;
  */
 @MainThread
 public class ProfileDataCache implements AccountInfoService.Observer {
-    /**
-     * Observer to get notifications about changes in profile data.
-     */
+    /** Observer to get notifications about changes in profile data. */
     public interface Observer {
         /**
          * Notifies that an account's profile data has been updated.
@@ -70,8 +71,10 @@ public class ProfileDataCache implements AccountInfoService.Observer {
             mBadgeResId = badgeResId;
             mBadge = AppCompatResources.getDrawable(context, badgeResId);
             mBadgeSize = resources.getDimensionPixelSize(R.dimen.badge_size);
-            mPosition = new Point(resources.getDimensionPixelOffset(R.dimen.badge_position_x),
-                    resources.getDimensionPixelOffset(R.dimen.badge_position_y));
+            mPosition =
+                    new Point(
+                            resources.getDimensionPixelOffset(R.dimen.badge_position_x),
+                            resources.getDimensionPixelOffset(R.dimen.badge_position_y));
             mBorderSize = resources.getDimensionPixelSize(R.dimen.badge_border_size);
         }
 
@@ -110,37 +113,47 @@ public class ProfileDataCache implements AccountInfoService.Observer {
     private final ObserverList<Observer> mObservers = new ObserverList<>();
     private final Map<String, DisplayableProfileData> mCachedProfileData = new HashMap<>();
 
+    // TODO(crbug.com/342205162): Require native for ProfileDataCache creation.
     @VisibleForTesting
     ProfileDataCache(Context context, @Px int imageSize, @Nullable BadgeConfig badgeConfig) {
         mContext = context;
         mImageSize = imageSize;
         mDefaultBadgeConfig = badgeConfig;
         mPlaceholderImage = getScaledPlaceholderImage(context, imageSize);
-        AccountInfoServiceProvider.getPromise().then(this::populateCache);
+        // TODO(crbug.com/341948846): Remove AccountInfoService and simplify this.
+        Promise<AccountInfoService> accountInfoServicePromise =
+                AccountInfoServiceProvider.getPromise();
+        if (accountInfoServicePromise.isFulfilled()) {
+            populateCache(accountInfoServicePromise.getResult());
+        } else {
+            accountInfoServicePromise.then(this::populateCache);
+        }
     }
 
     /**
      * @param context Context of the application to extract resources from.
      * @return A {@link ProfileDataCache} object with default image size(R.dimen.user_picture_size)
-     *         and no badge.
+     *     and no badge.
      */
     public static ProfileDataCache createWithDefaultImageSizeAndNoBadge(Context context) {
-        return new ProfileDataCache(context,
+        return new ProfileDataCache(
+                context,
                 context.getResources().getDimensionPixelSize(R.dimen.user_picture_size),
-                /*badgeConfig=*/null);
+                /* badgeConfig= */ null);
     }
 
     /**
      * @param context Context of the application to extract resources from.
      * @param badgeResId Resource id of the badge to be attached.
      * @return A {@link ProfileDataCache} object with default image size(R.dimen.user_picture_size)
-     *         and a badge of given badgeResId provided
-     *
-     * TODO(crbug/1260416): remove this method and instead migrate users to set per-account badges?
+     *     and a badge of given badgeResId provided
+     *     <p>TODO(crbug.com/40798208): remove this method and instead migrate users to set
+     *     per-account badges?
      */
     public static ProfileDataCache createWithDefaultImageSize(
             Context context, @DrawableRes int badgeResId) {
-        return new ProfileDataCache(context,
+        return new ProfileDataCache(
+                context,
                 context.getResources().getDimensionPixelSize(R.dimen.user_picture_size),
                 new BadgeConfig(context, badgeResId));
     }
@@ -152,8 +165,10 @@ public class ProfileDataCache implements AccountInfoService.Observer {
      */
     public static ProfileDataCache createWithoutBadge(
             Context context, @DimenRes int imageSizeRedId) {
-        return new ProfileDataCache(context,
-                context.getResources().getDimensionPixelSize(imageSizeRedId), /*badgeConfig=*/null);
+        return new ProfileDataCache(
+                context,
+                context.getResources().getDimensionPixelSize(imageSizeRedId),
+                /* badgeConfig= */ null);
     }
 
     /**
@@ -164,19 +179,25 @@ public class ProfileDataCache implements AccountInfoService.Observer {
     public DisplayableProfileData getProfileDataOrDefault(String accountEmail) {
         DisplayableProfileData profileData = mCachedProfileData.get(accountEmail);
         if (profileData == null) {
-            return new DisplayableProfileData(accountEmail, mPlaceholderImage, null, null);
+            return new DisplayableProfileData(
+                    accountEmail,
+                    mPlaceholderImage,
+                    null,
+                    null,
+                    AccountEmailDisplayHook.canHaveEmailAddressDisplayed(accountEmail));
         }
         return profileData;
     }
 
     /**
      * Sets a default {@link BadgeConfig} and then populates the cache with the new Badge.
+     *
      * @param badgeResId Resource id of the badge to be attached. If 0 then the current Badge is
-     * removed.
-     *
-     * If both a per-account and default badge are set, the per-account badge takes precedence.
-     *
-     * TODO(crbug/1260416): replace usages of this method with the per-account config below.
+     *     removed.
+     *     <p>If both a per-account and default badge are set, the per-account badge takes
+     *     precedence.
+     *     <p>TODO(crbug.com/40798208): replace usages of this method with the per-account config
+     *     below.
      */
     public void setBadge(@DrawableRes int badgeResId) {
         if (badgeResId == 0 && mDefaultBadgeConfig == null) return;
@@ -189,30 +210,37 @@ public class ProfileDataCache implements AccountInfoService.Observer {
      * Sets a {@link BadgeConfig} for a given account, and then populates the cache with the new
      * Badge.
      *
-     * @param account The account for which to set this badge.
+     * @param accountEmail The account email for which to set this badge.
      * @param badgeResId Resource id of the badge to be attached. If 0 then the current Badge is
-     * removed.
-     *
-     * If both a per-account and default badge are set, the per-account badge takes precedence.
+     *     removed.
+     *     <p>If both a per-account and default badge are set, the per-account badge takes
+     *     precedence.
+     *     <p>TODO(crbug.com/40274844): Replace accountEmail with CoreAccountId or CoreAccountInfo.
      */
-    public void setBadge(Account account, @DrawableRes int badgeResId) {
-        if (((badgeResId == 0) && !mPerAccountBadgeConfig.containsKey(account.name))
-                || ((badgeResId != 0) && mPerAccountBadgeConfig.containsKey(account.name)
-                        && (mPerAccountBadgeConfig.get(account.name).getBadgeResId()
-                                == badgeResId))) {
-            // Update is a no-op.  Skip the work below, both as an optimization and to avoid a
-            // loop whereby the ProfileDataCache user might call back into this function as a
-            // result of the notification callback.
+    public void setBadge(String accountEmail, @DrawableRes int badgeResId) {
+        if (badgeResId == 0 && !mPerAccountBadgeConfig.containsKey(accountEmail)) {
+            // Update is a no-op. There is no badgeResId and accountEmail has no per-account
+            // badge config set.
+            return;
+        }
+        if (badgeResId != 0
+                && mPerAccountBadgeConfig.containsKey(accountEmail)
+                && mPerAccountBadgeConfig.get(accountEmail).getBadgeResId() == badgeResId) {
+            // Update is a no-op. The per-account badge set to accountEmail is the same as the
+            // badgeResId.
             return;
         }
 
         if (badgeResId != 0) {
-            mPerAccountBadgeConfig.put(account.name, new BadgeConfig(mContext, badgeResId));
+            mPerAccountBadgeConfig.put(accountEmail, new BadgeConfig(mContext, badgeResId));
         } else {
-            mPerAccountBadgeConfig.remove(account.name);
+            mPerAccountBadgeConfig.remove(accountEmail);
         }
-        AccountInfoServiceProvider.getPromise().then(
-                accountInfoService -> { populateCacheForAccount(accountInfoService, account); });
+        AccountInfoServiceProvider.getPromise()
+                .then(
+                        accountInfoService -> {
+                            populateCacheForAccount(accountInfoService, accountEmail);
+                        });
     }
 
     /**
@@ -221,8 +249,11 @@ public class ProfileDataCache implements AccountInfoService.Observer {
     public void addObserver(Observer observer) {
         ThreadUtils.assertOnUiThread();
         if (mObservers.isEmpty()) {
-            AccountInfoServiceProvider.getPromise().then(
-                    accountInfoService -> { accountInfoService.addObserver(this); });
+            AccountInfoServiceProvider.getPromise()
+                    .then(
+                            accountInfoService -> {
+                                accountInfoService.addObserver(this);
+                            });
         }
         mObservers.addObserver(observer);
     }
@@ -234,19 +265,15 @@ public class ProfileDataCache implements AccountInfoService.Observer {
         ThreadUtils.assertOnUiThread();
         mObservers.removeObserver(observer);
         if (mObservers.isEmpty()) {
-            AccountInfoServiceProvider.getPromise().then(
-                    accountInfoService -> { accountInfoService.removeObserver(this); });
+            AccountInfoServiceProvider.getPromise()
+                    .then(
+                            accountInfoService -> {
+                                accountInfoService.removeObserver(this);
+                            });
         }
     }
 
-    public void removeProfileData(String accountEmail) {
-        mCachedProfileData.remove(accountEmail);
-        notifyObservers(accountEmail);
-    }
-
-    /**
-     * Implements {@link AccountInfoService.Observer}.
-     */
+    /** Implements {@link AccountInfoService.Observer}. */
     @Override
     public void onAccountInfoUpdated(AccountInfo accountInfo) {
         // We don't update the cache if the account information and ProfileDataCache config mean
@@ -254,42 +281,74 @@ public class ProfileDataCache implements AccountInfoService.Observer {
         if (accountInfo != null
                 && (accountInfo.hasDisplayableInfo()
                         || getBadgeConfigForAccount(accountInfo.getEmail()) != null)) {
-            updateCacheAndNotifyObservers(accountInfo.getEmail(), accountInfo.getAccountImage(),
-                    accountInfo.getFullName(), accountInfo.getGivenName());
+            updateCacheAndNotifyObservers(
+                    accountInfo.getEmail(),
+                    accountInfo.getAccountImage(),
+                    accountInfo.getFullName(),
+                    accountInfo.getGivenName(),
+                    accountInfo.canHaveEmailAddressDisplayed());
         }
     }
 
     /**
      * @return Whether the cache contains non-default profile data for the given account.
      */
-    @VisibleForTesting
     public boolean hasProfileDataForTesting(String accountEmail) {
         return mCachedProfileData.containsKey(accountEmail);
     }
 
     private void populateCache(AccountInfoService accountInfoService) {
-        AccountManagerFacadeProvider.getInstance().getAccounts().then(accounts -> {
-            for (Account account : accounts) {
-                populateCacheForAccount(accountInfoService, account);
-            }
-        });
+        Promise<List<CoreAccountInfo>> accountsPromise =
+                AccountManagerFacadeProvider.getInstance().getCoreAccountInfos();
+        if (accountsPromise.isFulfilled()) {
+            populateCacheForAllAccounts(accountInfoService, accountsPromise.getResult());
+        } else {
+            accountsPromise.then(
+                    accounts -> {
+                        populateCacheForAllAccounts(accountInfoService, accounts);
+                    });
+        }
     }
 
-    private void populateCacheForAccount(AccountInfoService accountInfoService, Account account) {
-        accountInfoService.getAccountInfoByEmail(account.name).then(this::onAccountInfoUpdated);
+    private void populateCacheForAllAccounts(
+            AccountInfoService accountInfoService, List<CoreAccountInfo> accounts) {
+        for (CoreAccountInfo coreAccountInfo : accounts) {
+            populateCacheForAccount(accountInfoService, coreAccountInfo.getEmail());
+        }
+    }
+
+    // TODO(crbug.com/40274844): Replace accountEmail with CoreAccountId or CoreAccountInfo.
+    private void populateCacheForAccount(
+            AccountInfoService accountInfoService, String accountEmail) {
+        // TODO(crbug.com/341948846): Remove AccountInfoService and simplify this.
+        Promise<AccountInfo> accountInfoPromise =
+                accountInfoService.getAccountInfoByEmail(accountEmail);
+        if (accountInfoPromise.isFulfilled()) {
+            onAccountInfoUpdated(accountInfoPromise.getResult());
+        } else {
+            accountInfoPromise.then(this::onAccountInfoUpdated);
+        }
     }
 
     private void updateCacheAndNotifyObservers(
-            String email, Bitmap avatar, String fullName, String givenName) {
-        Drawable croppedAvatar = avatar != null
-                ? AvatarGenerator.makeRoundAvatar(mContext.getResources(), avatar, mImageSize)
-                : mPlaceholderImage;
+            String email,
+            Bitmap avatar,
+            String fullName,
+            String givenName,
+            boolean hasDisplayableEmailAddress) {
+        Drawable croppedAvatar =
+                avatar != null
+                        ? AvatarGenerator.makeRoundAvatar(
+                                mContext.getResources(), avatar, mImageSize)
+                        : mPlaceholderImage;
         BadgeConfig badgeConfig = getBadgeConfigForAccount(email);
         if (badgeConfig != null) {
             croppedAvatar = overlayBadgeOnUserPicture(badgeConfig, croppedAvatar);
         }
         mCachedProfileData.put(
-                email, new DisplayableProfileData(email, croppedAvatar, fullName, givenName));
+                email,
+                new DisplayableProfileData(
+                        email, croppedAvatar, fullName, givenName, hasDisplayableEmailAddress));
         notifyObservers(email);
     }
 
@@ -299,12 +358,14 @@ public class ProfileDataCache implements AccountInfoService.Observer {
         }
     }
 
+    // TODO(crbug.com/40944114): Consider using UiUtils.drawIconWithBadge instead.
     private Drawable overlayBadgeOnUserPicture(BadgeConfig badgeConfig, Drawable userPicture) {
         int badgeSize = badgeConfig.getBadgeSize();
         int badgedPictureWidth = Math.max(badgeConfig.getPosition().x + badgeSize, mImageSize);
         int badgedPictureHeight = Math.max(badgeConfig.getPosition().y + badgeSize, mImageSize);
-        Bitmap badgedPicture = Bitmap.createBitmap(
-                badgedPictureWidth, badgedPictureHeight, Bitmap.Config.ARGB_8888);
+        Bitmap badgedPicture =
+                Bitmap.createBitmap(
+                        badgedPictureWidth, badgedPictureHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(badgedPicture);
         userPicture.setBounds(0, 0, mImageSize, mImageSize);
         userPicture.draw(canvas);
@@ -322,8 +383,11 @@ public class ProfileDataCache implements AccountInfoService.Observer {
 
         // Draw the badge
         Drawable badge = badgeConfig.getBadge();
-        badge.setBounds(badgeConfig.getPosition().x, badgeConfig.getPosition().y,
-                badgeConfig.getPosition().x + badgeSize, badgeConfig.getPosition().y + badgeSize);
+        badge.setBounds(
+                badgeConfig.getPosition().x,
+                badgeConfig.getPosition().y,
+                badgeConfig.getPosition().x + badgeSize,
+                badgeConfig.getPosition().y + badgeSize);
         badge.draw(canvas);
         return new BitmapDrawable(mContext.getResources(), badgedPicture);
     }
@@ -343,7 +407,8 @@ public class ProfileDataCache implements AccountInfoService.Observer {
     }
 
     private @Nullable BadgeConfig getBadgeConfigForAccount(@NonNull String email) {
-        return mPerAccountBadgeConfig.get(email) != null ? mPerAccountBadgeConfig.get(email)
-                                                         : mDefaultBadgeConfig;
+        return mPerAccountBadgeConfig.get(email) != null
+                ? mPerAccountBadgeConfig.get(email)
+                : mDefaultBadgeConfig;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,17 @@ class LocalBrowserManagementStatusProvider final
   EnterpriseManagementAuthority FetchAuthority() final;
 };
 
+class LocalDomainBrowserManagementStatusProvider final
+    : public policy::ManagementStatusProvider {
+ public:
+  LocalDomainBrowserManagementStatusProvider();
+  ~LocalDomainBrowserManagementStatusProvider() final;
+
+ protected:
+  // ManagementStatusProvider impl
+  EnterpriseManagementAuthority FetchAuthority() final;
+};
+
 class ProfileCloudManagementStatusProvider final
     : public policy::ManagementStatusProvider {
  public:
@@ -57,8 +68,38 @@ class ProfileCloudManagementStatusProvider final
   raw_ptr<Profile> profile_;
 };
 
+class LocalTestPolicyUserManagementProvider final
+    : public policy::ManagementStatusProvider {
+ public:
+  explicit LocalTestPolicyUserManagementProvider(Profile* profile);
+  ~LocalTestPolicyUserManagementProvider() final;
+
+ protected:
+  // ManagementStatusProvider impl
+  EnterpriseManagementAuthority FetchAuthority() final;
+
+ private:
+  raw_ptr<Profile> profile_;
+};
+
+class LocalTestPolicyBrowserManagementProvider final
+    : public policy::ManagementStatusProvider {
+ public:
+  explicit LocalTestPolicyBrowserManagementProvider(Profile* profile);
+  ~LocalTestPolicyBrowserManagementProvider() final;
+
+ protected:
+  // ManagementStatusProvider impl
+  EnterpriseManagementAuthority FetchAuthority() final;
+
+ private:
+  raw_ptr<Profile> profile_;
+};
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-// This is both a device and browser management status provider for ChromeOS.
+// Returns the platform managment status of ChromeOS Ash devices. For LaCros,
+// see DeviceEnterpriseManagedStatusProvider which needs to be defined under
+// c/policy/core/common/management/platform_management_status_provider_lacros.
 class DeviceManagementStatusProvider final
     : public policy::ManagementStatusProvider {
  public:

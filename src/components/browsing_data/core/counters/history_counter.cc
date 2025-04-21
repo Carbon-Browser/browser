@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/timer/timer.h"
 #include "components/browsing_data/core/pref_names.h"
 
@@ -58,32 +58,31 @@ void HistoryCounter::Count() {
   cancelable_task_tracker_.TryCancelAll();
   web_history_request_.reset();
   weak_ptr_factory_.InvalidateWeakPtrs();
+  web_history_timeout_.Stop();
 
   has_synced_visits_ = false;
 
-  // Count the locally stored items.
-  local_counting_finished_ = false;
+  history::WebHistoryService* web_history = GetWebHistoryService();
 
+  local_counting_finished_ = false;
+  web_counting_finished_ = !web_history;
+
+  // Count the locally stored items.
   history_service_->GetHistoryCount(
       GetPeriodStart(), GetPeriodEnd(),
       base::BindOnce(&HistoryCounter::OnGetLocalHistoryCount,
                      weak_ptr_factory_.GetWeakPtr()),
       &cancelable_task_tracker_);
 
-  // If the history sync is enabled, test if there is at least one synced item.
-  history::WebHistoryService* web_history = GetWebHistoryService();
-
   if (!web_history) {
-    web_counting_finished_ = true;
     return;
   }
-
-  web_counting_finished_ = false;
 
   web_history_timeout_.Start(FROM_HERE,
                              base::Seconds(kWebHistoryTimeoutSeconds), this,
                              &HistoryCounter::OnWebHistoryTimeout);
 
+  // If the history sync is enabled, test if there is at least one synced item.
   history::QueryOptions options;
   options.max_count = 1;
   options.begin_time = GetPeriodStart();
@@ -137,7 +136,7 @@ void HistoryCounter::OnGetLocalHistoryCount(
 
 void HistoryCounter::OnGetWebHistoryCount(
     history::WebHistoryService::Request* request,
-    const base::Value* result) {
+    base::optional_ref<const base::Value::Dict> result) {
   // Ensure that all callbacks are on the same thread, so that we do not need
   // a mutex for |MergeResults|.
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -151,12 +150,13 @@ void HistoryCounter::OnGetWebHistoryCount(
   // If the query failed, err on the safe side and inform the user that they
   // may have history items stored in Sync. Otherwise, we expect at least one
   // entry in the "event" list.
-  if (!result)
+  if (!result.has_value()) {
     has_synced_visits_ = true;
-  else if (const base::Value* events = result->FindListKey("event"))
-    has_synced_visits_ = !events->GetListDeprecated().empty();
-  else
+  } else if (const base::Value::List* events = result->FindList("event")) {
+    has_synced_visits_ = !events->empty();
+  } else {
     has_synced_visits_ = false;
+  }
   web_counting_finished_ = true;
   MergeResults();
 }
@@ -194,6 +194,6 @@ HistoryCounter::HistoryResult::HistoryResult(const HistoryCounter* source,
     : SyncResult(source, value, is_sync_enabled),
       has_synced_visits_(has_synced_visits) {}
 
-HistoryCounter::HistoryResult::~HistoryResult() {}
+HistoryCounter::HistoryResult::~HistoryResult() = default;
 
 }  // namespace browsing_data

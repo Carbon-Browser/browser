@@ -1,13 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/app_restore/desk_template_read_handler.h"
 
-#include "ash/constants/app_types.h"
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/app_restore_data.h"

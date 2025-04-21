@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/performance_manager_browsertest_harness.h"
+#include "components/performance_manager/test_support/run_in_graph.h"
 #include "content/public/browser/back_forward_cache.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -30,7 +31,7 @@ class Graph;
 // Tests that the PerformanceManager node states are updated correctly during
 // prerendering.
 //
-// TODO(crbug.com/1211368): These tests assume prerendering frames are added as
+// TODO(crbug.com/40182881): These tests assume prerendering frames are added as
 // extra FrameNodes on the existing PageNode. Update this logic once
 // prerendering frame trees have their own PageNode.
 class PerformanceManagerPrerenderingBrowserTest
@@ -42,7 +43,7 @@ class PerformanceManagerPrerenderingBrowserTest
       : prerender_helper_(base::BindRepeating(
             &PerformanceManagerPrerenderingBrowserTest::web_contents,
             base::Unretained(this))) {
-    prerender_helper_.SetUp(&ssl_server_);
+    prerender_helper_.RegisterServerRequestMonitor(&ssl_server_);
   }
 
   void SetUpOnMainThread() override {
@@ -52,7 +53,7 @@ class PerformanceManagerPrerenderingBrowserTest
         net::test_server::EmbeddedTestServer::CERT_TEST_NAMES);
     ASSERT_TRUE(ssl_server_.Start());
 
-    // TODO(https://crbug.com/1186893): PrerenderHost is not deleted when the
+    // TODO(crbug.com/40172688): PrerenderHost is not deleted when the
     // page enters BackForwardCache, though it should be. While this
     // functionality is not implemented, disable BackForwardCache for testing
     // and wait for the old RenderFrameHost to be deleted after we navigate away
@@ -90,7 +91,7 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
   const FrameNode* initial_main_frame_node = nullptr;
   int64_t initial_navigation_id = 0;
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 1U);
     initial_main_frame_node = page_node->GetMainFrameNode();
@@ -105,7 +106,7 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
   base::WeakPtr<PageNode> page_node2 =
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
   const FrameNode* prerender_main_frame_node = nullptr;
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     ASSERT_EQ(page_node.get(), page_node2.get());
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 2U);
@@ -137,7 +138,7 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
   prerender_helper_.NavigatePrimaryPage(kPrerenderingUrl);
   ASSERT_TRUE(prerender_observer.was_activated());
   deleted_observer.WaitUntilDeleted();
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 1U);
     EXPECT_EQ(page_node->GetMainFrameNode(), prerender_main_frame_node);
@@ -162,7 +163,7 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
   const FrameNode* initial_main_frame_node = nullptr;
   int64_t initial_navigation_id = 0;
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 1U);
     initial_main_frame_node = page_node->GetMainFrameNode();
@@ -173,11 +174,12 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
 
   // Start prerendering a document. Test that the prerendering frame tree is
   // added as additional frame nodes, but GetMainFrameNode is unchanged.
-  int prerender_host = prerender_helper_.AddPrerender(kPrerenderingUrl);
+  content::FrameTreeNodeId prerender_host =
+      prerender_helper_.AddPrerender(kPrerenderingUrl);
   base::WeakPtr<PageNode> page_node2 =
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
   const FrameNode* prerender_main_frame_node = nullptr;
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     ASSERT_EQ(page_node.get(), page_node2.get());
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 2U);
@@ -204,14 +206,21 @@ IN_PROC_BROWSER_TEST_F(PerformanceManagerPrerenderingBrowserTest,
   // tree is removed from PerformanceManager.
   content::RenderFrameDeletedObserver deleted_observer(
       prerender_helper_.GetPrerenderedMainFrameHost(prerender_host));
+  bool rfh_should_change =
+      web_contents()
+          ->GetPrimaryMainFrame()
+          ->ShouldChangeRenderFrameHostOnSameSiteNavigation();
   ASSERT_TRUE(content::NavigateToURL(web_contents(), kFinalUrl));
   deleted_observer.WaitUntilDeleted();
-  RunInGraph([&](Graph*) {
+  RunInGraph([&] {
     ASSERT_TRUE(page_node);
     EXPECT_EQ(page_node->GetMainFrameNodes().size(), 1U);
-    EXPECT_EQ(page_node->GetMainFrameNode(), initial_main_frame_node);
+    // The RenderFrameHost might change after the navigation if RenderDocument
+    // is enabled.
+    EXPECT_EQ(rfh_should_change,
+              page_node->GetMainFrameNode() != initial_main_frame_node);
     EXPECT_EQ(page_node->GetMainFrameUrl(), kFinalUrl);
-    EXPECT_TRUE(initial_main_frame_node->IsCurrent());
+    EXPECT_TRUE(page_node->GetMainFrameNode()->IsCurrent());
   });
 }
 

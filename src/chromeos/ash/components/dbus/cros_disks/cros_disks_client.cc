@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,24 @@
 
 #include <map>
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
+#include "ash/constants/ash_features.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
-#include "base/location.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat.h"
 #include "base/system/sys_info.h"
-#include "base/task/task_runner_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/cros_disks/fake_cros_disks_client.h"
@@ -35,134 +36,89 @@
 #include "dbus/object_path.h"
 #include "dbus/object_proxy.h"
 #include "dbus/values_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
-
-constexpr char kReadOnlyOption[] = "ro";
-constexpr char kReadWriteOption[] = "rw";
-constexpr char kRemountOption[] = "remount";
-constexpr char kMountLabelOption[] = "mountlabel";
 
 CrosDisksClient* g_instance = nullptr;
 
-// Checks if retrieved media type is in boundaries of DeviceMediaType.
-bool IsValidMediaType(uint32_t type) {
-  return type < static_cast<uint32_t>(cros_disks::DEVICE_MEDIA_NUM_VALUES);
-}
-
-// Translates enum used in cros-disks to enum used in Chrome.
-// Note that we could just do static_cast, but this is less sensitive to
-// changes in cros-disks.
-DeviceType DeviceMediaTypeToDeviceType(uint32_t media_type_uint32) {
-  if (!IsValidMediaType(media_type_uint32))
-    return DEVICE_TYPE_UNKNOWN;
-
-  cros_disks::DeviceMediaType media_type =
-      cros_disks::DeviceMediaType(media_type_uint32);
-
-  switch (media_type) {
-    case (cros_disks::DEVICE_MEDIA_UNKNOWN):
-      return DEVICE_TYPE_UNKNOWN;
-    case (cros_disks::DEVICE_MEDIA_USB):
-      return DEVICE_TYPE_USB;
-    case (cros_disks::DEVICE_MEDIA_SD):
-      return DEVICE_TYPE_SD;
-    case (cros_disks::DEVICE_MEDIA_OPTICAL_DISC):
-      return DEVICE_TYPE_OPTICAL_DISC;
-    case (cros_disks::DEVICE_MEDIA_MOBILE):
-      return DEVICE_TYPE_MOBILE;
-    case (cros_disks::DEVICE_MEDIA_DVD):
-      return DEVICE_TYPE_DVD;
-    default:
-      return DEVICE_TYPE_UNKNOWN;
+DeviceType ToDeviceType(uint32_t media_type) {
+  if (media_type > static_cast<uint32_t>(DeviceType::kMaxValue)) {
+    return DeviceType::kUnknown;
   }
+
+  return static_cast<DeviceType>(media_type);
 }
 
-MountError CrosDisksMountErrorToChromeMountError(
-    cros_disks::MountErrorType mount_error) {
-  switch (mount_error) {
-    case cros_disks::MOUNT_ERROR_NONE:
-      return MOUNT_ERROR_NONE;
-    case cros_disks::MOUNT_ERROR_UNKNOWN:
-      return MOUNT_ERROR_UNKNOWN;
-    case cros_disks::MOUNT_ERROR_INTERNAL:
-      return MOUNT_ERROR_INTERNAL;
-    case cros_disks::MOUNT_ERROR_INVALID_ARGUMENT:
-      return MOUNT_ERROR_INVALID_ARGUMENT;
-    case cros_disks::MOUNT_ERROR_INVALID_PATH:
-      return MOUNT_ERROR_INVALID_PATH;
-    case cros_disks::MOUNT_ERROR_PATH_ALREADY_MOUNTED:
-      return MOUNT_ERROR_PATH_ALREADY_MOUNTED;
-    case cros_disks::MOUNT_ERROR_PATH_NOT_MOUNTED:
-      return MOUNT_ERROR_PATH_NOT_MOUNTED;
-    case cros_disks::MOUNT_ERROR_DIRECTORY_CREATION_FAILED:
-      return MOUNT_ERROR_DIRECTORY_CREATION_FAILED;
-    case cros_disks::MOUNT_ERROR_INVALID_MOUNT_OPTIONS:
-      return MOUNT_ERROR_INVALID_MOUNT_OPTIONS;
-    case cros_disks::MOUNT_ERROR_INVALID_UNMOUNT_OPTIONS:
-      return MOUNT_ERROR_INVALID_UNMOUNT_OPTIONS;
-    case cros_disks::MOUNT_ERROR_INSUFFICIENT_PERMISSIONS:
-      return MOUNT_ERROR_INSUFFICIENT_PERMISSIONS;
-    case cros_disks::MOUNT_ERROR_MOUNT_PROGRAM_NOT_FOUND:
-      return MOUNT_ERROR_MOUNT_PROGRAM_NOT_FOUND;
-    case cros_disks::MOUNT_ERROR_MOUNT_PROGRAM_FAILED:
-      return MOUNT_ERROR_MOUNT_PROGRAM_FAILED;
-    case cros_disks::MOUNT_ERROR_INVALID_DEVICE_PATH:
-      return MOUNT_ERROR_INVALID_DEVICE_PATH;
-    case cros_disks::MOUNT_ERROR_UNKNOWN_FILESYSTEM:
-      return MOUNT_ERROR_UNKNOWN_FILESYSTEM;
-    case cros_disks::MOUNT_ERROR_UNSUPPORTED_FILESYSTEM:
-      return MOUNT_ERROR_UNSUPPORTED_FILESYSTEM;
-    case cros_disks::MOUNT_ERROR_INVALID_ARCHIVE:
-      return MOUNT_ERROR_INVALID_ARCHIVE;
-    case cros_disks::MOUNT_ERROR_UNSUPPORTED_ARCHIVE:
-      // TODO(amistry): Add MOUNT_ERROR_UNSUPPORTED_ARCHIVE.
-      return MOUNT_ERROR_UNKNOWN;
-    case cros_disks::MOUNT_ERROR_NEED_PASSWORD:
-      return MOUNT_ERROR_NEED_PASSWORD;
-    case cros_disks::MOUNT_ERROR_IN_PROGRESS:
-      return MOUNT_ERROR_IN_PROGRESS;
-    case cros_disks::MOUNT_ERROR_CANCELLED:
-      return MOUNT_ERROR_CANCELLED;
-    default:
-      LOG(ERROR) << "Unrecognised mount error code " << mount_error;
-      return MOUNT_ERROR_UNKNOWN;
-  }
-}
+bool ReadMountEntryFromDbus(dbus::MessageReader* reader, MountPoint* entry) {
+  DCHECK(reader);
+  DCHECK(entry);
 
-bool ReadMountEntryFromDbus(dbus::MessageReader* reader, MountEntry* entry) {
   uint32_t error_code = 0;
-  std::string source_path;
   uint32_t mount_type = 0;
-  std::string mount_path;
-  if (!reader->PopUint32(&error_code) || !reader->PopString(&source_path) ||
-      !reader->PopUint32(&mount_type) || !reader->PopString(&mount_path)) {
+  if (!reader->PopUint32(&error_code) ||
+      !reader->PopString(&entry->source_path) ||
+      !reader->PopUint32(&mount_type) ||
+      !reader->PopString(&entry->mount_path)) {
+    LOG(ERROR) << "Cannot parse MountEntry from DBus";
     return false;
   }
-  *entry =
-      MountEntry(CrosDisksMountErrorToChromeMountError(
-                     static_cast<cros_disks::MountErrorType>(error_code)),
-                 source_path, static_cast<MountType>(mount_type), mount_path);
+
+  if (!reader->PopBool(&entry->read_only)) {
+    LOG(WARNING) << "Cannot get MountEntry's read-only flag from DBus";
+  }
+
+  entry->mount_error = static_cast<MountError>(error_code);
+  entry->mount_type = static_cast<MountType>(mount_type);
+  entry->progress_percent = 100;
+
   return true;
 }
 
-void MaybeGetStringFromDictionaryValue(const base::Value& dict,
+bool ReadMountProgressFromDbus(dbus::MessageReader* reader, MountPoint* entry) {
+  DCHECK(reader);
+  DCHECK(entry);
+
+  uint32_t progress_percent = 0;
+  uint32_t mount_type = 0;
+  if (!reader->PopUint32(&progress_percent) ||
+      !reader->PopString(&entry->source_path) ||
+      !reader->PopUint32(&mount_type) ||
+      !reader->PopString(&entry->mount_path)) {
+    LOG(ERROR) << "Cannot parse MountEntry from DBus";
+    return false;
+  }
+
+  if (!reader->PopBool(&entry->read_only)) {
+    LOG(WARNING) << "Cannot get MountEntry's read-only flag from DBus";
+  }
+
+  if (!(progress_percent >= 0 && progress_percent <= 100)) {
+    LOG(ERROR) << "Invalid progress percentage: " << progress_percent;
+    progress_percent = 0;
+  }
+
+  entry->mount_error = MountError::kInProgress;
+  entry->mount_type = static_cast<MountType>(mount_type);
+  entry->progress_percent = progress_percent;
+
+  return true;
+}
+
+void MaybeGetStringFromDictionaryValue(const base::Value::Dict& dict,
                                        const char* key,
                                        std::string* result) {
-  DCHECK(dict.is_dict());
-  const std::string* value = dict.FindStringKey(key);
-  if (value)
+  const std::string* value = dict.FindString(key);
+  if (value) {
     *result = *value;
+  }
 }
 
 // The CrosDisksClient implementation.
 class CrosDisksClientImpl : public CrosDisksClient {
  public:
-  CrosDisksClientImpl() : proxy_(nullptr) {}
-
+  CrosDisksClientImpl() = default;
   CrosDisksClientImpl(const CrosDisksClientImpl&) = delete;
   CrosDisksClientImpl& operator=(const CrosDisksClientImpl&) = delete;
 
@@ -183,15 +139,14 @@ class CrosDisksClientImpl : public CrosDisksClient {
              const std::vector<std::string>& mount_options,
              MountAccessMode access_mode,
              RemountOption remount,
-             VoidDBusMethodCallback callback) override {
+             chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(cros_disks::kCrosDisksInterface,
                                  cros_disks::kMount);
     dbus::MessageWriter writer(&method_call);
     writer.AppendString(source_path);
     writer.AppendString(source_format);
-    std::vector<std::string> options =
-        ComposeMountOptions(mount_options, mount_label, access_mode, remount);
-    writer.AppendArrayOfStrings(options);
+    writer.AppendArrayOfStrings(
+        ComposeMountOptions(mount_options, mount_label, access_mode, remount));
     proxy_->CallMethod(&method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
                        base::BindOnce(&CrosDisksClientImpl::OnMount,
                                       weak_ptr_factory_.GetWeakPtr(),
@@ -241,7 +196,7 @@ class CrosDisksClientImpl : public CrosDisksClient {
   void Format(const std::string& device_path,
               const std::string& filesystem,
               const std::string& label,
-              VoidDBusMethodCallback callback) override {
+              chromeos::VoidDBusMethodCallback callback) override {
     format_start_time_[device_path] = base::TimeTicks::Now();
     dbus::MethodCall method_call(cros_disks::kCrosDisksInterface,
                                  cros_disks::kFormat);
@@ -276,7 +231,7 @@ class CrosDisksClientImpl : public CrosDisksClient {
 
   void Rename(const std::string& device_path,
               const std::string& volume_name,
-              VoidDBusMethodCallback callback) override {
+              chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(cros_disks::kCrosDisksInterface,
                                  cros_disks::kRename);
     dbus::MessageWriter writer(&method_call);
@@ -310,12 +265,12 @@ class CrosDisksClientImpl : public CrosDisksClient {
 
     // Register handlers for D-Bus signals.
     constexpr SignalEventTuple kSignalEventTuples[] = {
-        {cros_disks::kDeviceAdded, CROS_DISKS_DEVICE_ADDED},
-        {cros_disks::kDeviceScanned, CROS_DISKS_DEVICE_SCANNED},
-        {cros_disks::kDeviceRemoved, CROS_DISKS_DEVICE_REMOVED},
-        {cros_disks::kDiskAdded, CROS_DISKS_DISK_ADDED},
-        {cros_disks::kDiskChanged, CROS_DISKS_DISK_CHANGED},
-        {cros_disks::kDiskRemoved, CROS_DISKS_DISK_REMOVED},
+        {cros_disks::kDeviceAdded, MountEventType::kDeviceAdded},
+        {cros_disks::kDeviceScanned, MountEventType::kDeviceScanned},
+        {cros_disks::kDeviceRemoved, MountEventType::kDeviceRemoved},
+        {cros_disks::kDiskAdded, MountEventType::kDiskAdded},
+        {cros_disks::kDiskChanged, MountEventType::kDiskChanged},
+        {cros_disks::kDiskRemoved, MountEventType::kDiskRemoved},
     };
     for (const auto& entry : kSignalEventTuples) {
       proxy_->ConnectToSignal(
@@ -329,6 +284,13 @@ class CrosDisksClientImpl : public CrosDisksClient {
     proxy_->ConnectToSignal(
         cros_disks::kCrosDisksInterface, cros_disks::kMountCompleted,
         base::BindRepeating(&CrosDisksClientImpl::OnMountCompleted,
+                            weak_ptr_factory_.GetWeakPtr()),
+        base::BindOnce(&CrosDisksClientImpl::OnSignalConnected,
+                       weak_ptr_factory_.GetWeakPtr()));
+
+    proxy_->ConnectToSignal(
+        cros_disks::kCrosDisksInterface, cros_disks::kMountProgress,
+        base::BindRepeating(&CrosDisksClientImpl::OnMountProgress,
                             weak_ptr_factory_.GetWeakPtr()),
         base::BindOnce(&CrosDisksClientImpl::OnSignalConnected,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -357,16 +319,17 @@ class CrosDisksClientImpl : public CrosDisksClient {
   };
 
   // Handles the result of D-Bus method call with no return value.
-  void OnVoidMethod(VoidDBusMethodCallback callback, dbus::Response* response) {
+  void OnVoidMethod(chromeos::VoidDBusMethodCallback callback,
+                    dbus::Response* response) {
     std::move(callback).Run(response);
   }
 
   // Handles the result of Mount and calls |callback|.
-  void OnMount(VoidDBusMethodCallback callback,
+  void OnMount(chromeos::VoidDBusMethodCallback callback,
                base::Time start_time,
                dbus::Response* response) {
-    UMA_HISTOGRAM_MEDIUM_TIMES("CrosDisksClient.MountTime",
-                               base::Time::Now() - start_time);
+    DEPRECATED_UMA_HISTOGRAM_MEDIUM_TIMES("CrosDisksClient.MountTime",
+                                          base::Time::Now() - start_time);
     std::move(callback).Run(response);
   }
 
@@ -374,29 +337,27 @@ class CrosDisksClientImpl : public CrosDisksClient {
   void OnUnmount(UnmountCallback callback,
                  base::Time start_time,
                  dbus::Response* response) {
-    UMA_HISTOGRAM_MEDIUM_TIMES("CrosDisksClient.UnmountTime",
-                               base::Time::Now() - start_time);
+    DEPRECATED_UMA_HISTOGRAM_MEDIUM_TIMES("CrosDisksClient.UnmountTime",
+                                          base::Time::Now() - start_time);
 
     const char kUnmountHistogramName[] = "CrosDisksClient.UnmountError";
     if (!response) {
-      UMA_HISTOGRAM_ENUMERATION(kUnmountHistogramName, MOUNT_ERROR_UNKNOWN,
-                                MOUNT_ERROR_COUNT);
-      std::move(callback).Run(MOUNT_ERROR_UNKNOWN);
+      UMA_HISTOGRAM_ENUMERATION(kUnmountHistogramName,
+                                MountError::kUnknownError);
+      std::move(callback).Run(MountError::kUnknownError);
       return;
     }
 
     dbus::MessageReader reader(response);
     uint32_t error_code = 0;
-    MountError mount_error = MOUNT_ERROR_NONE;
+    MountError mount_error = MountError::kSuccess;
     if (reader.PopUint32(&error_code)) {
-      mount_error = CrosDisksMountErrorToChromeMountError(
-          static_cast<cros_disks::MountErrorType>(error_code));
+      mount_error = static_cast<MountError>(error_code);
     } else {
       LOG(ERROR) << "Invalid response: " << response->ToString();
-      mount_error = MOUNT_ERROR_UNKNOWN;
+      mount_error = MountError::kUnknownError;
     }
-    UMA_HISTOGRAM_ENUMERATION(kUnmountHistogramName, mount_error,
-                              MOUNT_ERROR_COUNT);
+    UMA_HISTOGRAM_ENUMERATION(kUnmountHistogramName, mount_error);
     std::move(callback).Run(mount_error);
   }
 
@@ -430,24 +391,24 @@ class CrosDisksClientImpl : public CrosDisksClient {
     }
 
     dbus::MessageReader reader(response);
-    dbus::MessageReader array_reader(NULL);
+    dbus::MessageReader array_reader(nullptr);
     if (!reader.PopArray(&array_reader)) {
       LOG(ERROR) << "Invalid response: " << response->ToString();
       std::move(error_callback).Run();
       return;
     }
 
-    std::vector<MountEntry> entries;
+    std::vector<MountPoint> entries;
     while (array_reader.HasMoreData()) {
-      MountEntry entry;
-      dbus::MessageReader sub_reader(NULL);
+      MountPoint entry;
+      dbus::MessageReader sub_reader(nullptr);
       if (!array_reader.PopStruct(&sub_reader) ||
           !ReadMountEntryFromDbus(&sub_reader, &entry)) {
         LOG(ERROR) << "Invalid response: " << response->ToString();
         std::move(error_callback).Run();
         return;
       }
-      entries.push_back(entry);
+      entries.push_back(std::move(entry));
     }
     std::move(callback).Run(entries);
   }
@@ -475,32 +436,51 @@ class CrosDisksClientImpl : public CrosDisksClient {
       return;
     }
 
-    for (auto& observer : observer_list_)
+    for (Observer& observer : observer_list_) {
       observer.OnMountEvent(event_type, device);
+    }
   }
 
   // Handles MountCompleted signal and notifies observers.
   void OnMountCompleted(dbus::Signal* signal) {
     dbus::MessageReader reader(signal);
-    MountEntry entry;
+    MountPoint entry;
     if (!ReadMountEntryFromDbus(&reader, &entry)) {
       LOG(ERROR) << "Invalid signal: " << signal->ToString();
       return;
     }
 
     UMA_HISTOGRAM_ENUMERATION("CrosDisksClient.MountCompletedError",
-                              entry.error_code(), MOUNT_ERROR_COUNT);
+                              entry.mount_error);
     // Flatten MountType and MountError into a single dimension.
     constexpr int kMaxMountErrors = 100;
-    static_assert(MOUNT_ERROR_COUNT <= kMaxMountErrors,
-                  "CrosDisksClient.MountErrorMountType histogram must be "
-                  "updated.");
-    const int type_and_error =
-        (entry.mount_type() * kMaxMountErrors) + entry.error_code();
-    base::UmaHistogramSparse("CrosDisksClient.MountErrorMountType",
-                             type_and_error);
-    for (auto& observer : observer_list_)
+    static_assert(
+        static_cast<int>(MountError::kMaxValue) < kMaxMountErrors,
+        "CrosDisksClient.MountErrorMountType histogram must be updated");
+    base::UmaHistogramSparse(
+        "CrosDisksClient.MountErrorMountType",
+        static_cast<int>(entry.mount_type) * kMaxMountErrors +
+            static_cast<int>(entry.mount_error));
+
+    // Notify observers.
+    for (Observer& observer : observer_list_) {
       observer.OnMountCompleted(entry);
+    }
+  }
+
+  // Handles MountProgress signal and notifies observers.
+  void OnMountProgress(dbus::Signal* signal) {
+    dbus::MessageReader reader(signal);
+    MountPoint entry;
+    if (!ReadMountProgressFromDbus(&reader, &entry)) {
+      LOG(ERROR) << "Invalid signal: " << signal->ToString();
+      return;
+    }
+
+    // Notify observers.
+    for (Observer& observer : observer_list_) {
+      observer.OnMountProgress(entry);
+    }
   }
 
   // Handles FormatCompleted signal and notifies observers.
@@ -521,10 +501,9 @@ class CrosDisksClientImpl : public CrosDisksClient {
     }
 
     base::UmaHistogramEnumeration("CrosDisksClient.FormatCompletedError",
-                                  static_cast<FormatError>(error_code),
-                                  FORMAT_ERROR_COUNT);
+                                  static_cast<FormatError>(error_code));
 
-    for (auto& observer : observer_list_) {
+    for (Observer& observer : observer_list_) {
       observer.OnFormatCompleted(static_cast<FormatError>(error_code),
                                  device_path);
     }
@@ -533,15 +512,15 @@ class CrosDisksClientImpl : public CrosDisksClient {
   void OnPartitionCompleted(PartitionCallback callback,
                             dbus::Response* response) {
     if (!response) {
-      std::move(callback).Run(PARTITION_ERROR_UNKNOWN);
+      std::move(callback).Run(PartitionError::kUnknownError);
       return;
     }
-    uint32_t status = PARTITION_ERROR_UNKNOWN;
+    uint32_t status = static_cast<uint32_t>(PartitionError::kUnknownError);
     dbus::MessageReader reader(response);
     if (!reader.PopUint32(&status)) {
       LOG(ERROR) << "Error reading SinglePartitionFormat response: "
                  << response->ToString();
-      std::move(callback).Run(PARTITION_ERROR_UNKNOWN);
+      std::move(callback).Run(PartitionError::kUnknownError);
       return;
     }
     std::move(callback).Run(static_cast<PartitionError>(status));
@@ -571,7 +550,7 @@ class CrosDisksClientImpl : public CrosDisksClient {
         << "Connect to " << interface << " " << signal << " failed.";
   }
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::ObserverList<Observer> observer_list_;
 
@@ -584,53 +563,72 @@ class CrosDisksClientImpl : public CrosDisksClient {
 
 }  // namespace
 
-std::ostream& operator<<(std::ostream& out, const MountError error) {
-  switch (error) {
-#define PRINT_ERROR(s) \
-  case s:              \
+std::ostream& operator<<(std::ostream& out, const MountType type) {
+  switch (type) {
+#define PRINT(s)        \
+  case MountType::k##s: \
     return out << #s;
-    PRINT_ERROR(MOUNT_ERROR_NONE)
-    PRINT_ERROR(MOUNT_ERROR_UNKNOWN)
-    PRINT_ERROR(MOUNT_ERROR_INTERNAL)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_ARGUMENT)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_PATH)
-    PRINT_ERROR(MOUNT_ERROR_PATH_ALREADY_MOUNTED)
-    PRINT_ERROR(MOUNT_ERROR_PATH_NOT_MOUNTED)
-    PRINT_ERROR(MOUNT_ERROR_DIRECTORY_CREATION_FAILED)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_MOUNT_OPTIONS)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_UNMOUNT_OPTIONS)
-    PRINT_ERROR(MOUNT_ERROR_INSUFFICIENT_PERMISSIONS)
-    PRINT_ERROR(MOUNT_ERROR_MOUNT_PROGRAM_NOT_FOUND)
-    PRINT_ERROR(MOUNT_ERROR_MOUNT_PROGRAM_FAILED)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_DEVICE_PATH)
-    PRINT_ERROR(MOUNT_ERROR_UNKNOWN_FILESYSTEM)
-    PRINT_ERROR(MOUNT_ERROR_UNSUPPORTED_FILESYSTEM)
-    PRINT_ERROR(MOUNT_ERROR_INVALID_ARCHIVE)
-    PRINT_ERROR(MOUNT_ERROR_NEED_PASSWORD)
-    PRINT_ERROR(MOUNT_ERROR_IN_PROGRESS)
-    PRINT_ERROR(MOUNT_ERROR_CANCELLED)
-    PRINT_ERROR(MOUNT_ERROR_COUNT)
-#undef PRINT_ERROR
+    PRINT(Invalid)
+    PRINT(Device)
+    PRINT(Archive)
+    PRINT(NetworkStorage)
+#undef PRINT
   }
 
-  return out << "MOUNT_ERROR_" << std::underlying_type_t<MountError>(error);
+  return out << "MountType(" << std::underlying_type_t<MountType>(type) << ")";
 }
+
+std::ostream& operator<<(std::ostream& out, const MountEventType event) {
+  switch (event) {
+#define PRINT(s)             \
+  case MountEventType::k##s: \
+    return out << #s;
+    PRINT(DiskAdded)
+    PRINT(DiskRemoved)
+    PRINT(DiskChanged)
+    PRINT(DeviceAdded)
+    PRINT(DeviceRemoved)
+    PRINT(DeviceScanned)
+#undef PRINT
+  }
+
+  return out << "MountEventType("
+             << std::underlying_type_t<MountEventType>(event) << ")";
+}
+
+std::ostream& operator<<(std::ostream& out, const MountPoint& entry) {
+  return out << "mount_error = " << entry.mount_error << ", source_path = '"
+             << entry.source_path << "', mount_type = " << entry.mount_type
+             << ", mount_path = '" << entry.mount_path
+             << "', read_only = " << entry.read_only
+             << ", progress_percent = " << entry.progress_percent;
+}
+
+MountPoint::MountPoint(const MountPoint&) = default;
+MountPoint& MountPoint::operator=(const MountPoint&) = default;
+
+MountPoint::MountPoint(MountPoint&&) = default;
+MountPoint& MountPoint::operator=(MountPoint&&) = default;
+
+MountPoint::MountPoint() = default;
+MountPoint::MountPoint(std::string_view source_path,
+                       std::string_view mount_path,
+                       const MountType mount_type,
+                       const MountError mount_error,
+                       const int progress_percent,
+                       const bool read_only)
+    : source_path(source_path),
+      mount_path(mount_path),
+      mount_type(mount_type),
+      mount_error(mount_error),
+      progress_percent(progress_percent),
+      read_only(read_only) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 // DiskInfo
 
 DiskInfo::DiskInfo(const std::string& device_path, dbus::Response* response)
-    : device_path_(device_path),
-      is_drive_(false),
-      has_media_(false),
-      on_boot_device_(false),
-      on_removable_device_(false),
-      is_read_only_(false),
-      is_hidden_(true),
-      is_virtual_(false),
-      is_auto_mountable_(false),
-      device_type_(DEVICE_TYPE_UNKNOWN),
-      total_size_in_bytes_(0) {
+    : device_path_(device_path) {
   InitializeFromResponse(response);
 }
 
@@ -746,70 +744,79 @@ DiskInfo::~DiskInfo() = default;
 //     variant       string "vfat"
 //   }
 // ]
-void DiskInfo::InitializeFromResponse(dbus::Response* response) {
+bool DiskInfo::InitializeFromResponse(dbus::Response* response) {
   dbus::MessageReader reader(response);
-  base::Value value(dbus::PopDataAsValue(&reader));
-  if (!value.is_dict())
-    return;
+  const base::Value value(dbus::PopDataAsValue(&reader));
+  if (!value.is_dict()) {
+    LOG(ERROR) << "Value is not a dict: " << value;
+    return false;
+  }
 
-  is_drive_ = value.FindBoolKey(cros_disks::kDeviceIsDrive).value_or(is_drive_);
+  const base::Value::Dict& dict = value.GetDict();
+  is_drive_ = dict.FindBool(cros_disks::kDeviceIsDrive).value_or(is_drive_);
   is_read_only_ =
-      value.FindBoolKey(cros_disks::kDeviceIsReadOnly).value_or(is_read_only_);
-  is_hidden_ = value.FindBoolKey(cros_disks::kDevicePresentationHide)
-                   .value_or(is_hidden_);
-  has_media_ = value.FindBoolKey(cros_disks::kDeviceIsMediaAvailable)
-                   .value_or(has_media_);
-  on_boot_device_ = value.FindBoolKey(cros_disks::kDeviceIsOnBootDevice)
+      dict.FindBool(cros_disks::kDeviceIsReadOnly).value_or(is_read_only_);
+  is_hidden_ =
+      dict.FindBool(cros_disks::kDevicePresentationHide).value_or(is_hidden_);
+  has_media_ =
+      dict.FindBool(cros_disks::kDeviceIsMediaAvailable).value_or(has_media_);
+  on_boot_device_ = dict.FindBool(cros_disks::kDeviceIsOnBootDevice)
                         .value_or(on_boot_device_);
-  on_removable_device_ =
-      value.FindBoolKey(cros_disks::kDeviceIsOnRemovableDevice)
-          .value_or(on_removable_device_);
+  on_removable_device_ = dict.FindBool(cros_disks::kDeviceIsOnRemovableDevice)
+                             .value_or(on_removable_device_);
   is_virtual_ =
-      value.FindBoolKey(cros_disks::kDeviceIsVirtual).value_or(is_virtual_);
-  is_auto_mountable_ = value.FindBoolKey(cros_disks::kIsAutoMountable)
-                           .value_or(is_auto_mountable_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kStorageDevicePath,
+      dict.FindBool(cros_disks::kDeviceIsVirtual).value_or(is_virtual_);
+  is_auto_mountable_ =
+      dict.FindBool(cros_disks::kIsAutoMountable).value_or(is_auto_mountable_);
+
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kStorageDevicePath,
                                     &storage_device_path_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kDeviceFile,
-                                    &file_path_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kVendorId, &vendor_id_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kVendorName,
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kDeviceFile, &file_path_);
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kVendorId, &vendor_id_);
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kVendorName,
                                     &vendor_name_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kProductId,
-                                    &product_id_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kProductName,
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kProductId, &product_id_);
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kProductName,
                                     &product_name_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kDriveModel,
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kDriveModel,
                                     &drive_model_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kIdLabel, &label_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kIdUuid, &uuid_);
-  MaybeGetStringFromDictionaryValue(value, cros_disks::kFileSystemType,
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kIdLabel, &label_);
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kIdUuid, &uuid_);
+  MaybeGetStringFromDictionaryValue(dict, cros_disks::kFileSystemType,
                                     &file_system_type_);
 
-  bus_number_ = value.FindIntKey(cros_disks::kBusNumber).value_or(bus_number_);
+  bus_number_ = dict.FindInt(cros_disks::kBusNumber).value_or(bus_number_);
   device_number_ =
-      value.FindIntKey(cros_disks::kDeviceNumber).value_or(device_number_);
+      dict.FindInt(cros_disks::kDeviceNumber).value_or(device_number_);
 
-  // dbus::PopDataAsValue() pops uint64_t as double.
-  // The top 11 bits of uint64_t are dropped by the use of double. But, this
-  // works
-  // unless the size exceeds 8 PB.
-  absl::optional<double> device_size_double =
-      value.FindDoubleKey(cros_disks::kDeviceSize);
-  if (device_size_double.has_value())
+  // dbus::PopDataAsValue() pops uint64_t as double. The top 11 bits of uint64_t
+  // are dropped by the use of double. But, this works unless the size exceeds 8
+  // PB.
+  std::optional<double> device_size_double =
+      dict.FindDouble(cros_disks::kDeviceSize);
+  if (device_size_double.has_value()) {
     total_size_in_bytes_ = device_size_double.value();
+  }
 
   // dbus::PopDataAsValue() pops uint32_t as double.
-  absl::optional<double> media_type_double =
-      value.FindDoubleKey(cros_disks::kDeviceMediaType);
-  if (media_type_double.has_value())
-    device_type_ = DeviceMediaTypeToDeviceType(media_type_double.value());
-
-  base::Value* mount_paths = value.FindListKey(cros_disks::kDeviceMountPaths);
-  if (mount_paths && !mount_paths->GetListDeprecated().empty() &&
-      mount_paths->GetListDeprecated()[0].is_string()) {
-    mount_path_ = mount_paths->GetListDeprecated()[0].GetString();
+  std::optional<double> media_type_double =
+      dict.FindDouble(cros_disks::kDeviceMediaType);
+  if (media_type_double.has_value()) {
+    device_type_ = ToDeviceType(media_type_double.value());
   }
+
+  if (const base::Value::List* const mount_paths =
+          dict.FindList(cros_disks::kDeviceMountPaths);
+      mount_paths) {
+    if (!mount_paths->empty()) {
+      if (const base::Value& first_mount_path = mount_paths->front();
+          first_mount_path.is_string()) {
+        mount_path_ = first_mount_path.GetString();
+      }
+    }
+  }
+
+  return !mount_path_.empty();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -822,9 +829,8 @@ CrosDisksClient* CrosDisksClient::Get() {
 
 // static
 void CrosDisksClient::Initialize(dbus::Bus* bus) {
-  // See ArcDataSnapshotdManager for code that sets this flag.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kCrosDisksFake)) {
+          chromeos::switches::kCrosDisksFake)) {
     InitializeFake();
     return;
   }
@@ -870,30 +876,27 @@ base::FilePath CrosDisksClient::GetRemovableDiskMountPoint() {
 
 // static
 std::vector<std::string> CrosDisksClient::ComposeMountOptions(
-    const std::vector<std::string>& options,
-    const std::string& mount_label,
-    MountAccessMode access_mode,
-    RemountOption remount) {
-  std::vector<std::string> mount_options = options;
-  switch (access_mode) {
-    case MOUNT_ACCESS_MODE_READ_ONLY:
-      mount_options.push_back(kReadOnlyOption);
-      break;
-    case MOUNT_ACCESS_MODE_READ_WRITE:
-      mount_options.push_back(kReadWriteOption);
-      break;
-  }
-  if (remount == REMOUNT_OPTION_REMOUNT_EXISTING_DEVICE) {
-    mount_options.push_back(kRemountOption);
+    std::vector<std::string> options,
+    std::string_view mount_label,
+    const MountAccessMode access_mode,
+    const RemountOption remount) {
+  options.push_back(access_mode == MountAccessMode::kReadWrite ? "rw" : "ro");
+
+  if (remount == RemountOption::kRemountExistingDevice) {
+    options.push_back("remount");
   }
 
   if (!mount_label.empty()) {
-    std::string mount_label_option =
-        base::StringPrintf("%s=%s", kMountLabelOption, mount_label.c_str());
-    mount_options.push_back(mount_label_option);
+    options.push_back(base::StrCat({"mountlabel=", mount_label}));
   }
 
-  return mount_options;
+  // TODO(b/364409158) Remove with files-kernel-drivers feature flag.
+  options.push_back(base::StrCat(
+      {"prefer-driver=",
+       base::FeatureList::IsEnabled(features::kFilesKernelDrivers) ? "kernel"
+                                                                   : "fuse"}));
+
+  return options;
 }
 
-}  // namespace chromeos
+}  // namespace ash

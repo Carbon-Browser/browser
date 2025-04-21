@@ -1,10 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "build/build_config.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/apps/platform_apps/audio_focus_web_contents_observer.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "content/public/test/browser_test.h"
+#include "extensions/browser/app_window/app_window.h"
+#include "extensions/browser/app_window/app_window_registry.h"
 #include "extensions/test/extension_test_message_listener.h"
 
 namespace apps {
@@ -53,10 +58,19 @@ IN_PROC_BROWSER_TEST_F(AudioFocusWebContentsObserverBrowserTest,
   LaunchPlatformApp(extension);
   ASSERT_TRUE(new_launched_listener.WaitUntilSatisfied());
 
+  // There should be two app windows, find the "other" one from the first.
+  extensions::AppWindowRegistry* app_registry =
+      extensions::AppWindowRegistry::Get(browser()->profile());
+  const auto& app_windows = app_registry->app_windows();
+  ASSERT_EQ(2u, app_windows.size());
+  extensions::AppWindow* app_window = *app_windows.begin();
+  content::WebContents* new_contents = app_window->web_contents();
+  if (new_contents == web_contents) {
+    app_window = *(++app_windows.begin());
+    new_contents = app_window->web_contents();
+  }
+
   // Ensure the new window has the same group id.
-  content::WebContents* new_contents = GetFirstAppWindowWebContents();
-  EXPECT_TRUE(new_contents);
-  EXPECT_NE(web_contents, new_contents);
   EXPECT_EQ(GetAudioFocusGroupId(web_contents),
             GetAudioFocusGroupId(new_contents));
 }

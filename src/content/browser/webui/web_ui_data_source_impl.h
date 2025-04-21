@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,17 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
-#include "content/browser/webui/url_data_manager.h"
 #include "content/browser/webui/url_data_source_impl.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "url/origin.h"
 
 namespace content {
 
@@ -31,25 +32,23 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   WebUIDataSourceImpl& operator=(const WebUIDataSourceImpl&) = delete;
 
   // WebUIDataSource:
-  void AddString(base::StringPiece name, const std::u16string& value) override;
-  void AddString(base::StringPiece name, const std::string& value) override;
-  void AddLocalizedString(base::StringPiece name, int ids) override;
+  void AddString(std::string_view name, std::u16string_view value) override;
+  void AddString(std::string_view name, std::string_view value) override;
+  void AddLocalizedString(std::string_view name, int ids) override;
   void AddLocalizedStrings(
       base::span<const webui::LocalizedString> strings) override;
   void AddLocalizedStrings(const base::Value::Dict& localized_strings) override;
-  void AddBoolean(base::StringPiece name, bool value) override;
-  void AddInteger(base::StringPiece name, int32_t value) override;
-  void AddDouble(base::StringPiece name, double value) override;
+  void AddBoolean(std::string_view name, bool value) override;
+  void AddInteger(std::string_view name, int32_t value) override;
+  void AddDouble(std::string_view name, double value) override;
   void UseStringsJs() override;
-  void AddResourcePath(base::StringPiece path, int resource_id) override;
+  void AddResourcePath(std::string_view path, int resource_id) override;
   void AddResourcePaths(base::span<const webui::ResourcePath> paths) override;
   void SetDefaultResource(int resource_id) override;
   void SetRequestFilter(const WebUIDataSource::ShouldHandleRequestCallback&
                             should_handle_request_callback,
                         const WebUIDataSource::HandleRequestCallback&
                             handle_request_callback) override;
-  void DisableReplaceExistingSource() override;
-  void DisableContentSecurityPolicy() override;
   void OverrideContentSecurityPolicy(network::mojom::CSPDirectiveName directive,
                                      const std::string& value) override;
   void OverrideCrossOriginOpenerPolicy(const std::string& value) override;
@@ -59,12 +58,19 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   void DisableDenyXFrameOptions() override;
   void EnableReplaceI18nInJS() override;
   std::string GetSource() override;
+  url::Origin GetOrigin() override;
+  void SetSupportedScheme(std::string_view scheme) override;
 
   // Add the locale to the load time data defaults. May be called repeatedly.
   void EnsureLoadTimeDataDefaultsAdded();
 
   bool IsWebUIDataSourceImpl() const override;
   void AddFrameAncestor(const GURL& frame_ancestor) override;
+
+  // URL path to resource ID (Grit IDR) map.
+  const std::map<std::string, int>& path_to_idr_map() const {
+    return path_to_idr_map_;
+  }
 
  protected:
   explicit WebUIDataSourceImpl(const std::string& source_name);
@@ -78,17 +84,20 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   virtual const base::Value::Dict* GetLocalizedStrings() const;
 
   // Protected for testing.
-  int PathToIdrOrDefault(const std::string& path) const;
+  int URLToIdrOrDefault(const GURL& url) const;
 
  private:
   class InternalDataSource;
   friend class InternalDataSource;
+  friend class URLDataManagerBackend;
+  friend class URLDataManagerBackendTest;
   friend class WebUIDataSource;
   friend class WebUIDataSourceTest;
+  friend class WebUIImplTest;
 
   // Methods that match URLDataSource which are called by
   // InternalDataSource.
-  std::string GetMimeType(const std::string& path) const;
+  std::string GetMimeType(const GURL& url) const;
   void StartDataRequest(const GURL& url,
                         const WebContents::Getter& wc_getter,
                         URLDataSource::GotDataCallback callback);
@@ -118,17 +127,17 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   WebUIDataSource::HandleRequestCallback filter_callback_;
   WebUIDataSource::ShouldHandleRequestCallback should_handle_request_callback_;
 
-  bool add_csp_ = true;
-
   base::flat_map<network::mojom::CSPDirectiveName, std::string> csp_overrides_;
   std::string coop_value_;
   std::string coep_value_;
   std::string corp_value_;
   bool deny_xframe_options_ = true;
   bool add_load_time_data_defaults_ = true;
-  bool replace_existing_source_ = true;
   bool should_replace_i18n_in_js_ = false;
   std::set<GURL> frame_ancestors_;
+
+  // Supported scheme if not one of the default supported schemes.
+  std::optional<std::string> supported_scheme_;
 };
 
 }  // namespace content

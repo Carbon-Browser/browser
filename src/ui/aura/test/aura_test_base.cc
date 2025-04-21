@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "ui/aura/window.h"
 #include "ui/base/ime/init/input_method_initializer.h"
 #include "ui/base/ui_base_switches.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/events/event_dispatcher.h"
 #include "ui/events/event_sink.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
@@ -93,7 +94,8 @@ void AuraTestBase::RunAllPendingInMessageLoop() {
 }
 
 void AuraTestBase::ParentWindow(Window* window) {
-  client::ParentWindowWithContext(window, root_window(), gfx::Rect());
+  client::ParentWindowWithContext(window, root_window(), gfx::Rect(),
+                                  display::kInvalidDisplayId);
 }
 
 bool AuraTestBase::DispatchEventUsingWindowDispatcher(ui::Event* event) {

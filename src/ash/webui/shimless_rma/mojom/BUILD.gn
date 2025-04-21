@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,6 +9,8 @@ assert(is_chromeos_ash)
 
 mojom("mojom") {
   sources = [ "shimless_rma.mojom" ]
+
+  webui_module_path = "/ash/webui/shimless_rma"
 
   public_deps = [ "//mojo/public/mojom/base" ]
 
@@ -92,6 +94,10 @@ mojom("mojom") {
         {
           mojom = "ash.shimless_rma.mojom.ShutdownMethod"
           cpp = "::rmad::RepairCompleteState_ShutdownMethod"
+        },
+        {
+          mojom = "ash.shimless_rma.mojom.FeatureLevel"
+          cpp = "::rmad::UpdateDeviceInfoState_FeatureLevel"
         },
       ]
       traits_headers = [

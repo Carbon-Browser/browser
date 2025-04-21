@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 
 #include "base/files/file_path.h"
 
-// Returns the major version of the specified cache.
-int GetMajorVersion(const base::FilePath& input_path);
+// Check file version of the specified cache.
+bool CheckFileVersion(const base::FilePath& input_path);
 
 // Dumps all entries from the cache.
 int DumpContents(const base::FilePath& input_path);

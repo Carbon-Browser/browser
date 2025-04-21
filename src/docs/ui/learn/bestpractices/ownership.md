@@ -184,7 +184,7 @@ void TimeView::UpdateClockLayout(
             std::make_unique<views::GridLayout>());
     ...
   }
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 ```
 
@@ -226,7 +226,7 @@ void TimeView::TimeView(ClockLayout clock_layout,
         std::make_unique<HorizontalLabelView>());
   vertical_label_ =
      AddChildView(
-        std::make_unique<VerticalLabelView());
+        std::make_unique<VerticalLabelView>());
   ...
 }
 
@@ -237,7 +237,7 @@ void TimeView::UpdateClockLayout(
       clock_layout == ClockLayout::HORIZONTAL_CLOCK;
   horizontal_label_->SetVisible(is_horizontal);
   vertical_label_->SetVisible(!is_horizontal);
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 

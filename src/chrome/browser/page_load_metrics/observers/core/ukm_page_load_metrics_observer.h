@@ -1,21 +1,25 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_CORE_UKM_PAGE_LOAD_METRICS_OBSERVER_H_
 #define CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_CORE_UKM_PAGE_LOAD_METRICS_OBSERVER_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "base/trace_event/typed_macros.h"
+#include "components/page_load_metrics/browser/navigation_handle_user_data.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
 #include "content/public/browser/navigation_handle_timing.h"
 #include "content/public/browser/site_instance_process_assignment.h"
 #include "net/base/load_timing_info.h"
-#include "net/http/http_response_info.h"
+#include "net/http/http_connection_info.h"
 #include "net/nqe/effective_connection_type.h"
 #include "services/metrics/public/cpp/ukm_source.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/perfetto/include/perfetto/tracing/event_context.h"
 #include "ui/base/page_transition_types.h"
 
 namespace content {
@@ -102,10 +106,11 @@ class UkmPageLoadMetricsObserver
       content::RenderFrameHost* subframe_rfh,
       const page_load_metrics::mojom::CpuTiming& timing) override;
 
-  void DidActivatePortal(base::TimeTicks activation_time) override;
-
   void OnFirstContentfulPaintInPage(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
+
+  void OnSoftNavigationUpdated(
+      const page_load_metrics::mojom::SoftNavigationMetrics&) override;
 
   // Whether the current page load is an Offline Preview. Must be called from
   // OnCommit. Virtual for testing.
@@ -139,6 +144,28 @@ class UkmPageLoadMetricsObserver
 
   void ReportLayoutStability();
 
+  // Returns the current Core Web Vital definition of Cumulative Layout Shift.
+  // Returns nullopt if current value should not be reported to UKM.
+  std::optional<float> GetCoreWebVitalsCLS();
+  std::optional<float> GetCoreWebVitalsSoftNavigationIntervalCLS();
+
+  // Returns the current Core Web Vital definition of Largest Contentful Paint.
+  // The caller needs to check whether the value should be reported to UKM based
+  // on when the page was backgrounded and other validations.
+  const page_load_metrics::ContentfulPaintTimingInfo&
+  GetCoreWebVitalsLcpTimingInfo();
+
+  const page_load_metrics::ContentfulPaintTimingInfo&
+  GetSoftNavigationLargestContentfulPaint() const;
+
+  void RecordSoftNavigationMetrics(
+      ukm::SourceId ukm_source_id,
+      page_load_metrics::mojom::SoftNavigationMetrics& soft_navigation_metrics);
+
+  void RecordResponsivenessMetricsBeforeSoftNavigationForMainFrame();
+
+  void RecordLayoutShiftBeforeSoftNavigationForMainFrame();
+
   void RecordAbortMetrics(
       const page_load_metrics::mojom::PageLoadTiming& timing,
       base::TimeTicks page_end_time,
@@ -148,21 +175,19 @@ class UkmPageLoadMetricsObserver
       ukm::builders::PageLoad& builder,
       const page_load_metrics::PageEndReason page_end_reason);
 
-  void RecordInputTimingMetrics();
   void RecordSmoothnessMetrics();
   void RecordResponsivenessMetrics();
 
-  void RecordMobileFriendlinessMetrics();
   void RecordPageLoadTimestampMetrics(ukm::builders::PageLoad& builder);
 
   // Captures the site engagement score for the committed URL and
   // returns the score rounded to the nearest 10.
-  absl::optional<int64_t> GetRoundedSiteEngagementScore() const;
+  std::optional<int64_t> GetRoundedSiteEngagementScore() const;
 
   // Returns whether third party cookie blocking is enabled for the committed
   // URL. This is only recorded for users who have prefs::kCookieControlsEnabled
   // set to true.
-  absl::optional<bool> GetThirdPartyCookieBlockingEnabled() const;
+  std::optional<bool> GetThirdPartyCookieBlockingEnabled() const;
 
   // Records the metrics for the nostate prefetch to an event with UKM source ID
   // |source_id|.
@@ -204,6 +229,18 @@ class UkmPageLoadMetricsObserver
   // background.
   void ReportLayoutInstabilityAfterFirstForeground();
 
+  // Record some largest contentful paint metrics that have occurred on the
+  // page until the first time the page starts in the foreground and moves to
+  // the background.
+  void ReportLargestContentfulPaintAfterFirstForeground();
+
+  // Record some Responsiveness metrics that have occurred on the page until
+  // the first time the page moves from the foreground to the background.
+  void ReportResponsivenessAfterFirstForeground();
+
+  // Tracing helper for key page load events.
+  void EmitUserTimingEvent(base::TimeDelta duration, const char event_name[]);
+
   // Guaranteed to be non-null during the lifetime of |this|.
   raw_ptr<network::NetworkQualityTracker> network_quality_tracker_;
 
@@ -229,20 +266,23 @@ class UkmPageLoadMetricsObserver
   // Network quality estimates.
   net::EffectiveConnectionType effective_connection_type_ =
       net::EFFECTIVE_CONNECTION_TYPE_UNKNOWN;
-  absl::optional<int32_t> http_response_code_;
-  absl::optional<base::TimeDelta> http_rtt_estimate_;
-  absl::optional<base::TimeDelta> transport_rtt_estimate_;
-  absl::optional<int32_t> downstream_kbps_estimate_;
+  std::optional<int32_t> http_response_code_;
+  std::optional<base::TimeDelta> http_rtt_estimate_;
+  std::optional<base::TimeDelta> transport_rtt_estimate_;
+  std::optional<int32_t> downstream_kbps_estimate_;
 
   // Total CPU wall time used by the page while in the foreground.
   base::TimeDelta total_foreground_cpu_time_;
 
   // Load timing metrics of the main frame resource request.
   content::NavigationHandleTiming navigation_handle_timing_;
-  absl::optional<net::LoadTimingInfo> main_frame_timing_;
+  std::optional<net::LoadTimingInfo> main_frame_timing_;
+
+  // First contentful paint as reported in OnFirstContentfulPaintInPage.
+  std::optional<base::TimeDelta> first_contentful_paint_;
 
   // How the SiteInstance for the committed page was assigned a renderer.
-  absl::optional<content::SiteInstanceProcessAssignment>
+  std::optional<content::SiteInstanceProcessAssignment>
       render_process_assignment_;
 
   // PAGE_TRANSITION_LINK is the default PageTransition value.
@@ -253,6 +293,9 @@ class UkmPageLoadMetricsObserver
 
   // True if the page main resource was served from disk cache.
   bool was_cached_ = false;
+
+  // True if the navigation is a reload after the page has been discarded.
+  bool was_discarded_ = false;
 
   // Whether the first URL in the redirect chain matches the default search
   // engine template.
@@ -268,7 +311,12 @@ class UkmPageLoadMetricsObserver
   // Set to true if any main frame request in the redirect chain had cookies set
   // on the request. Set to false if there were no cookies set. Not set if we
   // didn't get a response from the CookieManager before recording metrics.
-  absl::optional<bool> main_frame_request_had_cookies_;
+  std::optional<bool> main_frame_request_had_cookies_;
+
+  // Set to true if the main frame resource has a 'Cache-control: no-store'
+  // response header and set to false otherwise. Not set if there is no response
+  // header present.
+  std::optional<bool> main_frame_resource_has_no_store_;
 
   // The browser context this navigation is operating in.
   raw_ptr<content::BrowserContext> browser_context_ = nullptr;
@@ -276,10 +324,6 @@ class UkmPageLoadMetricsObserver
   // Whether the navigation resulted in the main frame being hosted in
   // a different process.
   bool navigation_is_cross_process_ = false;
-
-  // True if this page was loaded in a portal and never activated. UKMs are
-  // not recorded for this page unless the portal is activated.
-  bool is_portal_ = false;
 
   // Difference between indices of the previous and current navigation entries
   // (i.e. item history for the current tab).
@@ -303,7 +347,7 @@ class UkmPageLoadMetricsObserver
   base::Time navigation_start_time_;
 
   // The connection info for the committed URL.
-  absl::optional<net::HttpResponseInfo::ConnectionInfo> connection_info_;
+  std::optional<net::HttpConnectionInfo> connection_info_;
 
   base::ReadOnlySharedMemoryMapping ukm_smoothness_data_;
 
@@ -314,6 +358,18 @@ class UkmPageLoadMetricsObserver
   // True if the TemplateURLService has a search engine template for the
   // navigation and a scoped search would have been possible.
   bool was_scoped_search_like_navigation_ = false;
+
+  // True if the refresh rate is capped at 30Hz because of power saver mode when
+  // navigation starts. It is possible but very unlikely for this to change mid
+  // navigation, for instance due to a change by the user in settings or the
+  // battery being recharged above 20%.
+  bool refresh_rate_throttled_ = false;
+
+  // The type of initiator starts the navigation, for more details, please refer
+  // to `page_load_metrics::NavigationHandleUserData::InitiatorLocation`.
+  page_load_metrics::NavigationHandleUserData::InitiatorLocation
+      navigation_trigger_type_ = page_load_metrics::NavigationHandleUserData::
+          InitiatorLocation::kOther;
 
   base::WeakPtrFactory<UkmPageLoadMetricsObserver> weak_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,26 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/browser/payments/local_card_migration_manager.h"
-#include "components/autofill/core/browser/sync_utils.h"
-#include "components/autofill/core/browser/test_personal_data_manager.h"
 
 namespace autofill {
 
-namespace payments {
-class TestPaymentsClient;
-}  // namespace payments
-
-class AutofillClient;
-class AutofillDriver;
-
 class TestLocalCardMigrationManager : public LocalCardMigrationManager {
  public:
-  TestLocalCardMigrationManager(AutofillDriver* driver,
-                                AutofillClient* client,
-                                payments::TestPaymentsClient* payments_client,
-                                TestPersonalDataManager* personal_data_manager);
+  using LocalCardMigrationManager::LocalCardMigrationManager;
 
   TestLocalCardMigrationManager(const TestLocalCardMigrationManager&) = delete;
   TestLocalCardMigrationManager& operator=(
@@ -60,16 +47,17 @@ class TestLocalCardMigrationManager : public LocalCardMigrationManager {
   void OnUserAcceptedMainMigrationDialog(
       const std::vector<std::string>& selected_cards) override;
 
-  // Mock the Chrome Sync state in the LocalCardMigrationManager. If not set,
-  // default to AutofillSyncSigninState::kSignedInAndSyncFeature.
-  void ResetSyncState(AutofillSyncSigninState sync_state);
+  // By default, the `LocalCardMigrationManager` syncing state is "signed in
+  // and sync-the-feature enabled". Using this function, tests can simulate
+  // sync transport mode.
+  void EnablePaymentsWalletSyncInTransportMode();
 
  private:
   void OnDidGetUploadDetails(
       bool is_from_settings_page,
-      AutofillClient::PaymentsRpcResult result,
+      payments::PaymentsAutofillClient::PaymentsRpcResult result,
       const std::u16string& context_token,
-      std::unique_ptr<base::Value> legal_message,
+      std::unique_ptr<base::Value::Dict> legal_message,
       std::vector<std::pair<int, int>> supported_bin_ranges) override;
 
   bool local_card_migration_was_triggered_ = false;
@@ -77,8 +65,6 @@ class TestLocalCardMigrationManager : public LocalCardMigrationManager {
   bool intermediate_prompt_was_shown_ = false;
 
   bool main_prompt_was_shown_ = false;
-
-  raw_ptr<TestPersonalDataManager> personal_data_manager_;
 };
 
 }  // namespace autofill

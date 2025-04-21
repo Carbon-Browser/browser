@@ -1,22 +1,21 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/jumplist.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -27,10 +26,8 @@
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/trace_event.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/history/top_sites_factory.h"
-#include "chrome/browser/metrics/jumplist_metrics_win.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -41,16 +38,17 @@
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_icon_resources_win.h"
 #include "chrome/common/chrome_switches.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/install_static/install_util.h"
 #include "components/favicon/core/favicon_service.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/top_sites.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/sessions/core/session_types.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/icon_util.h"
@@ -97,14 +95,18 @@ constexpr base::TimeDelta kTimeOutForAddCustomCategory =
 // The maximum allowed time for JumpListUpdater::CommitUpdate.
 constexpr base::TimeDelta kTimeOutForCommitUpdate = base::Milliseconds(1000);
 
+// The category types that can be logged with the `--win-jumplist-action`
+// switch.
+constexpr char kMostVisitedCategory[] = "most-visited";
+constexpr char kRecentlyClosedCategory[] = "recently-closed";
+
 // Appends the common switches to each shell link.
 void AppendCommonSwitches(const base::FilePath& cmd_line_profile_dir,
                           ShellLinkItem* shell_link) {
-  const char* kSwitchNames[] = { switches::kUserDataDir };
+  static constexpr const char* kSwitchNames[] = {switches::kUserDataDir};
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
-  shell_link->GetCommandLine()->CopySwitchesFrom(command_line, kSwitchNames,
-                                                 std::size(kSwitchNames));
+  shell_link->GetCommandLine()->CopySwitchesFrom(command_line, kSwitchNames);
   if (!cmd_line_profile_dir.empty()) {
     shell_link->GetCommandLine()->AppendSwitchPath(switches::kProfileDirectory,
                                                    cmd_line_profile_dir);
@@ -135,9 +137,9 @@ bool CreateIconFile(const gfx::ImageSkia& image_skia,
   // save it as the temporary file.
   gfx::ImageFamily image_family;
   if (!image_skia.isNull()) {
-    std::vector<float> supported_scales = image_skia.GetSupportedScales();
-    for (auto& scale : supported_scales) {
-      gfx::ImageSkiaRep image_skia_rep = image_skia.GetRepresentation(scale);
+    for (const auto scale : ui::GetSupportedResourceScaleFactors()) {
+      gfx::ImageSkiaRep image_skia_rep = image_skia.GetRepresentation(
+          ui::GetScaleForResourceScaleFactor(scale));
       if (!image_skia_rep.is_null()) {
         image_family.Add(
             gfx::Image::CreateFrom1xBitmap(image_skia_rep.GetBitmap()));
@@ -159,14 +161,15 @@ bool CreateIconFile(const gfx::ImageSkia& image_skia,
 }
 
 // Updates the "Tasks" category of the JumpList.
-bool UpdateTaskCategory(JumpListUpdater* jumplist_updater,
-                        IncognitoModePrefs::Availability incognito_availability,
-                        const base::FilePath& cmd_line_profile_dir) {
+bool UpdateTaskCategory(
+    JumpListUpdater* jumplist_updater,
+    policy::IncognitoModeAvailability incognito_availability,
+    const base::FilePath& cmd_line_profile_dir) {
   base::FilePath chrome_path;
   if (!base::PathService::Get(base::FILE_EXE, &chrome_path))
     return false;
 
-  int icon_index = install_static::GetIconResourceIndex();
+  int icon_index = install_static::GetAppIconResourceIndex();
 
   ShellLinkItemList items;
 
@@ -174,11 +177,11 @@ bool UpdateTaskCategory(JumpListUpdater* jumplist_updater,
   // collection. We use our application icon as the icon for this item.
   // We remove '&' characters from this string so we can share it with our
   // system menu.
-  if (incognito_availability != IncognitoModePrefs::Availability::kForced) {
+  if (incognito_availability != policy::IncognitoModeAvailability::kForced) {
     scoped_refptr<ShellLinkItem> chrome = CreateShellLink(cmd_line_profile_dir);
     std::u16string chrome_title = l10n_util::GetStringUTF16(IDS_NEW_WINDOW);
     base::ReplaceSubstringsAfterOffset(&chrome_title, 0, u"&",
-                                       base::StringPiece16());
+                                       std::u16string_view());
     chrome->set_title(chrome_title);
     chrome->set_icon(chrome_path, icon_index);
     items.push_back(chrome);
@@ -186,14 +189,14 @@ bool UpdateTaskCategory(JumpListUpdater* jumplist_updater,
 
   // Create an IShellLink object which launches Chrome in incognito mode, and
   // add it to the collection.
-  if (incognito_availability != IncognitoModePrefs::Availability::kDisabled) {
+  if (incognito_availability != policy::IncognitoModeAvailability::kDisabled) {
     scoped_refptr<ShellLinkItem> incognito =
         CreateShellLink(cmd_line_profile_dir);
     incognito->GetCommandLine()->AppendSwitch(switches::kIncognito);
     std::u16string incognito_title =
         l10n_util::GetStringUTF16(IDS_NEW_INCOGNITO_WINDOW);
     base::ReplaceSubstringsAfterOffset(&incognito_title, 0, u"&",
-                                       base::StringPiece16());
+                                       std::u16string_view());
     incognito->set_title(incognito_title);
     incognito->set_icon(chrome_path, icon_resources::kIncognitoIndex);
     items.push_back(incognito);
@@ -214,9 +217,9 @@ base::FilePath GenerateJumplistIconDirName(
 
 }  // namespace
 
-JumpList::UpdateTransaction::UpdateTransaction() {}
+JumpList::UpdateTransaction::UpdateTransaction() = default;
 
-JumpList::UpdateTransaction::~UpdateTransaction() {}
+JumpList::UpdateTransaction::~UpdateTransaction() = default;
 
 // static
 bool JumpList::Enabled() {
@@ -269,7 +272,7 @@ JumpList::JumpList(Profile* profile)
   // base::Unretained is safe since |this| is guaranteed to outlive
   // pref_change_registrar_.
   pref_change_registrar_->Add(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       base::BindRepeating(&JumpList::OnIncognitoAvailabilityChanged,
                           base::Unretained(this)));
 }
@@ -424,17 +427,16 @@ void JumpList::ProcessTabRestoreServiceNotification() {
     if (recently_closed_pages_.size() >= kRecentlyClosedItems)
       break;
     switch (entry->type) {
-      case sessions::TabRestoreService::TAB:
-        AddTab(static_cast<const sessions::TabRestoreService::Tab&>(*entry),
+      case sessions::tab_restore::Type::TAB:
+        AddTab(static_cast<const sessions::tab_restore::Tab&>(*entry),
                profile_dir, kRecentlyClosedItems);
         break;
-      case sessions::TabRestoreService::WINDOW:
-        AddWindow(
-            static_cast<const sessions::TabRestoreService::Window&>(*entry),
-            profile_dir, kRecentlyClosedItems);
+      case sessions::tab_restore::Type::WINDOW:
+        AddWindow(static_cast<const sessions::tab_restore::Window&>(*entry),
+                  profile_dir, kRecentlyClosedItems);
         break;
-      case sessions::TabRestoreService::GROUP:
-        AddGroup(static_cast<const sessions::TabRestoreService::Group&>(*entry),
+      case sessions::tab_restore::Type::GROUP:
+        AddGroup(static_cast<const sessions::tab_restore::Group&>(*entry),
                  profile_dir, kRecentlyClosedItems);
         break;
     }
@@ -464,7 +466,7 @@ void JumpList::OnMostVisitedURLsAvailable(
     std::wstring url_string_wide = base::UTF8ToWide(url_string);
     link->GetCommandLine()->AppendArgNative(url_string_wide);
     link->GetCommandLine()->AppendSwitchASCII(switches::kWinJumplistAction,
-                                              jumplist::kMostVisitedCategory);
+                                              kMostVisitedCategory);
     link->set_title(!url.title.empty() ? url.title
                                        : base::AsString16(url_string_wide));
     link->set_url(url_string);
@@ -479,7 +481,7 @@ void JumpList::OnMostVisitedURLsAvailable(
   StartLoadingFavicon();
 }
 
-bool JumpList::AddTab(const sessions::TabRestoreService::Tab& tab,
+bool JumpList::AddTab(const sessions::tab_restore::Tab& tab,
                       const base::FilePath& cmd_line_profile_dir,
                       size_t max_items) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -495,7 +497,7 @@ bool JumpList::AddTab(const sessions::TabRestoreService::Tab& tab,
   std::string url = current_navigation.virtual_url().spec();
   link->GetCommandLine()->AppendArgNative(base::UTF8ToWide(url));
   link->GetCommandLine()->AppendSwitchASCII(switches::kWinJumplistAction,
-                                            jumplist::kRecentlyClosedCategory);
+                                            kRecentlyClosedCategory);
   link->set_title(current_navigation.title());
   link->set_url(url);
   recently_closed_pages_.push_back(link);
@@ -505,7 +507,7 @@ bool JumpList::AddTab(const sessions::TabRestoreService::Tab& tab,
   return true;
 }
 
-void JumpList::AddWindow(const sessions::TabRestoreService::Window& window,
+void JumpList::AddWindow(const sessions::tab_restore::Window& window,
                          const base::FilePath& cmd_line_profile_dir,
                          size_t max_items) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -517,7 +519,7 @@ void JumpList::AddWindow(const sessions::TabRestoreService::Window& window,
   }
 }
 
-void JumpList::AddGroup(const sessions::TabRestoreService::Group& group,
+void JumpList::AddGroup(const sessions::tab_restore::Group& group,
                         const base::FilePath& cmd_line_profile_dir,
                         size_t max_items) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -586,7 +588,7 @@ void JumpList::PostRunUpdate() {
   base::FilePath profile_dir = profile_->GetPath();
 
   // Check if incognito windows (or normal windows) are disabled by policy.
-  IncognitoModePrefs::Availability incognito_availability =
+  policy::IncognitoModeAvailability incognito_availability =
       IncognitoModePrefs::GetAvailability(profile_->GetPrefs());
 
   auto update_transaction = std::make_unique<UpdateTransaction>();
@@ -599,7 +601,7 @@ void JumpList::PostRunUpdate() {
 
   // Parameter evaluation order is unspecified in C++. Do the first bind and
   // then move it into PostTaskAndReply to ensure the pointer value is obtained
-  // before base::Passed() is called.
+  // before std::move() is called.
   auto run_update = base::BindOnce(
       &JumpList::RunUpdateJumpList, app_id_, profile_dir, most_visited_pages_,
       recently_closed_pages_, GetCmdLineProfileDir(),
@@ -705,7 +707,7 @@ void JumpList::RunUpdateJumpList(
     const base::FilePath& cmd_line_profile_dir,
     bool most_visited_should_update,
     bool recently_closed_should_update,
-    IncognitoModePrefs::Availability incognito_availability,
+    policy::IncognitoModeAvailability incognito_availability,
     UpdateTransaction* update_transaction) {
   DCHECK(update_transaction);
 
@@ -741,7 +743,7 @@ void JumpList::CreateNewJumpListAndNotifyOS(
     const base::FilePath& cmd_line_profile_dir,
     bool most_visited_should_update,
     bool recently_closed_should_update,
-    IncognitoModePrefs::Availability incognito_availability,
+    policy::IncognitoModeAvailability incognito_availability,
     UpdateTransaction* update_transaction) {
   DCHECK(update_transaction);
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -49,7 +49,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattDescriptorWinrt
   const std::vector<uint8_t>& GetValue() const override;
   BluetoothRemoteGattCharacteristic* GetCharacteristic() const override;
   void ReadRemoteDescriptor(ValueCallback callback) override;
-  void WriteRemoteDescriptor(const std::vector<uint8_t>& value,
+  void WriteRemoteDescriptor(base::span<const uint8_t> value,
                              base::OnceClosure callback,
                              ErrorCallback error_callback) override;
 

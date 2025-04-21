@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
@@ -23,8 +23,8 @@
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/test/test_context_provider.h"
 #include "components/viz/test/test_gles2_interface.h"
-#include "components/viz/test/test_gpu_memory_buffer_manager.h"
 #include "components/viz/test/test_raster_interface.h"
+#include "gpu/command_buffer/client/test_gpu_memory_buffer_manager.h"
 
 namespace viz {
 class BeginFrameSource;
@@ -45,15 +45,13 @@ class FakeLayerTreeFrameSink : public LayerTreeFrameSink {
 
     // Calls a function on both the compositor and worker context.
     template <typename... Args>
-    Builder& AllContexts(
-        void (viz::TestGLES2Interface::*compositor_fn)(Args...),
-        void (viz::TestRasterInterface::*worker_fn)(Args...),
-        Args... args) {
+    Builder& AllContexts(void (viz::TestRasterInterface::*context_fn)(Args...),
+                         Args... args) {
       DCHECK(compositor_context_provider_);
-      (compositor_context_provider_->UnboundTestContextGL()->*compositor_fn)(
+      (compositor_context_provider_->UnboundTestRasterInterface()->*context_fn)(
           std::forward<Args>(args)...);
       DCHECK(worker_context_provider_);
-      (worker_context_provider_->UnboundTestRasterInterface()->*worker_fn)(
+      (worker_context_provider_->UnboundTestRasterInterface()->*context_fn)(
           std::forward<Args>(args)...);
 
       return *this;
@@ -85,17 +83,9 @@ class FakeLayerTreeFrameSink : public LayerTreeFrameSink {
         std::move(context_provider), std::move(worker_context_provider)));
   }
 
-  static std::unique_ptr<FakeLayerTreeFrameSink> Create3d(
-      std::unique_ptr<viz::TestGLES2Interface> gl) {
-    return base::WrapUnique(new FakeLayerTreeFrameSink(
-        viz::TestContextProvider::Create(std::move(gl)),
-        viz::TestContextProvider::CreateWorker()));
-  }
-
   static std::unique_ptr<FakeLayerTreeFrameSink> Create3dForGpuRasterization() {
     return Builder()
-        .AllContexts(&viz::TestGLES2Interface::set_gpu_rasterization,
-                     &viz::TestRasterInterface::set_gpu_rasterization, true)
+        .AllContexts(&viz::TestRasterInterface::set_gpu_rasterization, true)
         .Build();
   }
 
@@ -110,6 +100,8 @@ class FakeLayerTreeFrameSink : public LayerTreeFrameSink {
                              bool hit_test_data_changed) override;
   void DidNotProduceFrame(const viz::BeginFrameAck& ack,
                           FrameSkippedReason reason) override;
+  std::unique_ptr<LayerContext> CreateLayerContext(
+      LayerTreeHostImpl& host_impl) override;
   void DidAllocateSharedBitmap(base::ReadOnlySharedMemoryRegion region,
                                const viz::SharedBitmapId& id) override;
   void DidDeleteSharedBitmap(const viz::SharedBitmapId& id) override;
@@ -139,10 +131,10 @@ class FakeLayerTreeFrameSink : public LayerTreeFrameSink {
 
  protected:
   FakeLayerTreeFrameSink(
-      scoped_refptr<viz::ContextProvider> context_provider,
+      scoped_refptr<viz::RasterContextProvider> context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider);
 
-  viz::TestGpuMemoryBufferManager test_gpu_memory_buffer_manager_;
+  gpu::TestGpuMemoryBufferManager test_gpu_memory_buffer_manager_;
 
   std::vector<viz::SharedBitmapId> shared_bitmaps_;
   std::unique_ptr<viz::CompositorFrame> last_sent_frame_;

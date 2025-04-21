@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_offset.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_size.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
+#include "ui/gfx/geometry/rect_f.h"
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
-
-class LayoutRect;
 
 // LogicalRect is the position and size of a rect (typically a fragment)
 // relative to the parent in the logical coordinate system.
@@ -40,15 +42,6 @@ struct CORE_EXPORT LogicalRect {
                         int inline_size,
                         int block_size);
 
-  constexpr explicit LogicalRect(const LayoutRect& source)
-      : LogicalRect({source.X(), source.Y()},
-                    {source.Width(), source.Height()}) {}
-
-  constexpr LayoutRect ToLayoutRect() const {
-    return {offset.inline_offset, offset.block_offset, size.inline_size,
-            size.block_size};
-  }
-
   LogicalOffset offset;
   LogicalSize size;
 
@@ -66,14 +59,77 @@ struct CORE_EXPORT LogicalRect {
     return other.offset == offset && other.size == size;
   }
 
-  LogicalRect operator+(const LogicalOffset&) const {
-    return {this->offset + offset, size};
+  LogicalRect operator+(const LogicalOffset& additional_offset) const {
+    return {offset + additional_offset, size};
   }
 
   void Unite(const LogicalRect&);
   void UniteEvenIfEmpty(const LogicalRect&);
 
-  String ToString() const;
+  // Shift up the inline-start edge and the block-start by `d`, and shift down
+  // the inline-end edge and the block-end edge by `d`.
+  void Inflate(LayoutUnit d) {
+    offset.inline_offset -= d;
+    size.inline_size += d * 2;
+    offset.block_offset -= d;
+    size.block_size += d * 2;
+  }
+
+  // Shift up the inline-start edge by `inline_start`, shift up the block-start
+  // edge by `block_start`, shift down the inline-end edge by `inline_end`, and
+  // shift down the block-end edge by `block_end`.
+  void ExpandEdges(LayoutUnit block_start,
+                   LayoutUnit inline_end,
+                   LayoutUnit block_end,
+                   LayoutUnit inline_start) {
+    offset.inline_offset -= inline_start;
+    offset.block_offset -= block_start;
+    size.inline_size += inline_start + inline_end;
+    size.block_size += block_start + block_end;
+  }
+
+  void ContractEdges(LayoutUnit block_start,
+                     LayoutUnit inline_end,
+                     LayoutUnit block_end,
+                     LayoutUnit inline_start) {
+    ExpandEdges(-block_start, -inline_end, -block_end, -inline_start);
+  }
+
+  // Update inline-start offset without changing the inline-end offset.
+  void ShiftInlineStartEdgeTo(LayoutUnit edge) {
+    LayoutUnit new_size = (InlineEndOffset() - edge).ClampNegativeToZero();
+    offset.inline_offset = edge;
+    size.inline_size = new_size;
+  }
+
+  // Update block-start offset without changing the block-end offset.
+  void ShiftBlockStartEdgeTo(LayoutUnit edge) {
+    LayoutUnit new_block_size = (BlockEndOffset() - edge).ClampNegativeToZero();
+    offset.block_offset = edge;
+    size.block_size = new_block_size;
+  }
+
+  // Update block-end offset without changing the block-start offset.
+  void ShiftBlockEndEdgeTo(LayoutUnit edge) {
+    size.block_size = (edge - offset.block_offset).ClampNegativeToZero();
+  }
+
+  // You can use this function only if we know `rect` is logical. See also:
+  //  * `PhysicalRect::EnclosingRect() -> PhysicalRect`
+  static LogicalRect EnclosingRect(const gfx::RectF& rect) {
+    const LogicalOffset offset(LayoutUnit::FromFloatFloor(rect.x()),
+                               LayoutUnit::FromFloatFloor(rect.y()));
+    const LogicalSize size(
+        LayoutUnit::FromFloatCeil(rect.right()) - offset.inline_offset,
+        LayoutUnit::FromFloatCeil(rect.bottom()) - offset.block_offset);
+    return LogicalRect(offset, size);
+  }
+
+  explicit LogicalRect(const gfx::Rect& r)
+      : offset(LayoutUnit(r.x()), LayoutUnit(r.y())),
+        size(LayoutUnit(r.width()), LayoutUnit(r.height())) {}
+
+  WTF::String ToString() const;
 };
 
 CORE_EXPORT std::ostream& operator<<(std::ostream&, const LogicalRect&);

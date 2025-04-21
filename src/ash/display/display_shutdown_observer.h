@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_DISPLAY_DISPLAY_SHUTDOWN_OBSERVER_H_
 
 #include "ash/public/cpp/session/session_observer.h"
+#include "base/memory/raw_ptr.h"
 
 namespace display {
 class DisplayConfigurator;
@@ -29,7 +30,7 @@ class DisplayShutdownObserver : public SessionObserver {
   // SessionObserver:
   void OnChromeTerminating() override;
 
-  display::DisplayConfigurator* const display_configurator_;
+  const raw_ptr<display::DisplayConfigurator> display_configurator_;
   ScopedSessionObserver scoped_session_observer_;
 };
 

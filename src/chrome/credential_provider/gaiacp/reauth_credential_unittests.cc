@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/win/atl.h"
+#include "chrome/credential_provider/gaiacp/reauth_credential.h"
 
-#include <atlcomcli.h>
 #include <wrl/client.h>
 
 #include "base/command_line.h"
@@ -13,6 +12,8 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_reg_util_win.h"
+#include "base/win/atl.h"
+#include "base/win/ntsecapi_shim.h"
 #include "chrome/browser/ui/startup/credential_provider_signin_dialog_win_test_data.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/credential_provider/common/gcp_strings.h"
@@ -21,7 +22,6 @@
 #include "chrome/credential_provider/gaiacp/gcp_utils.h"
 #include "chrome/credential_provider/gaiacp/gcpw_strings.h"
 #include "chrome/credential_provider/gaiacp/mdm_utils.h"
-#include "chrome/credential_provider/gaiacp/reauth_credential.h"
 #include "chrome/credential_provider/gaiacp/reg_utils.h"
 #include "chrome/credential_provider/test/com_fakes.h"
 #include "chrome/credential_provider/test/gcp_fakes.h"
@@ -502,9 +502,9 @@ TEST_F(GcpReauthCredentialGlsRunnerTest, UserGaiaIdMismatch) {
   std::string unexpected_gaia_id = "unexpected-gaia-id";
 
   // Create an signin result with the unexpected gaia id.
-  base::Value unexpected_full_result =
+  base::Value::Dict unexpected_full_result =
       test_data_storage.expected_full_result().Clone();
-  unexpected_full_result.SetKey(kKeyId, base::Value(unexpected_gaia_id));
+  unexpected_full_result.Set(kKeyId, base::Value(unexpected_gaia_id));
   std::string signin_result_utf8;
   EXPECT_TRUE(
       base::JSONWriter::Write(unexpected_full_result, &signin_result_utf8));

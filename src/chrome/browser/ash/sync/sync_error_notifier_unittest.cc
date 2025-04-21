@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,13 @@
 #include <memory>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
-#include "components/sync/driver/test_sync_service.h"
-#include "components/user_manager/scoped_user_manager.h"
+#include "components/sync/test/test_sync_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/message_center/public/cpp/notification.h"
 
@@ -25,7 +23,8 @@ namespace {
 
 // Notification ID corresponding to kProfileSyncNotificationId + the test
 // profile's name.
-const char kNotificationId[] = "chrome://settings/sync/testing_profile";
+constexpr char kNotificationId[] =
+    "chrome://settings/sync/testing_profile@test";
 
 class FakeLoginUIService : public LoginUIService {
  public:
@@ -77,7 +76,7 @@ class SyncErrorNotifierTest : public BrowserWithTestWindowTest {
 
  protected:
   void ExpectNotificationShown(bool expected_notification) {
-    absl::optional<message_center::Notification> notification =
+    std::optional<message_center::Notification> notification =
         display_service_->GetNotification(kNotificationId);
     if (expected_notification) {
       ASSERT_TRUE(notification);
@@ -92,27 +91,25 @@ class SyncErrorNotifierTest : public BrowserWithTestWindowTest {
   syncer::TestSyncService service_;
   FakeLoginUI login_ui_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-  user_manager::ScopedUserManager scoped_user_manager_{
-      std::make_unique<ash::MockUserManager>()};
 };
 
 TEST_F(SyncErrorNotifierTest, NoNotificationWhenNoPassphrase) {
-  service_.SetPassphraseRequiredForPreferredDataTypes(false);
-  service_.SetFirstSetupComplete(true);
+  ASSERT_FALSE(service_.GetUserSettings()->IsPassphraseRequired());
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(false);
 }
 
 TEST_F(SyncErrorNotifierTest, NotificationShownWhenBrowserSyncEnabled) {
-  service_.SetPassphraseRequiredForPreferredDataTypes(true);
-  service_.SetFirstSetupComplete(true);
+  service_.GetUserSettings()->SetPassphraseRequired();
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(true);
 }
 
 TEST_F(SyncErrorNotifierTest, NotificationShownOnce) {
-  service_.SetPassphraseRequiredForPreferredDataTypes(true);
-  service_.SetFirstSetupComplete(true);
+  service_.GetUserSettings()->SetPassphraseRequired();
+  service_.SetInitialSyncFeatureSetupComplete(true);
   error_notifier_->OnStateChanged(&service_);
   ExpectNotificationShown(true);
 

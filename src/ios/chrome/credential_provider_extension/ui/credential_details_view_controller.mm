@@ -1,25 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/credential_provider_extension/ui/credential_details_view_controller.h"
 
-#import <MobileCoreServices/UTCoreTypes.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-#import "base/mac/foundation_util.h"
-#include "ios/chrome/common/app_group/app_group_metrics.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/common/app_group/app_group_metrics.h"
 #import "ios/chrome/common/constants.h"
 #import "ios/chrome/common/credential_provider/credential.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/elements/highlight_button.h"
 #import "ios/chrome/credential_provider_extension/metrics_util.h"
 #import "ios/chrome/credential_provider_extension/ui/feature_flags.h"
+#import "ios/chrome/credential_provider_extension/ui/password_note_cell.h"
 #import "ios/chrome/credential_provider_extension/ui/tooltip_view.h"
 #import "ios/chrome/credential_provider_extension/ui/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -35,7 +32,10 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
   RowIdentifierURL,
   RowIdentifierUsername,
   RowIdentifierPassword,
-  NumRows
+  RowIdentifierNote,
+  NumRows,
+  RowIdentifierUserDisplayName,
+  RowIdentifierCreationDate,
 };
 
 }  // namespace
@@ -69,14 +69,7 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
       [[UINavigationBarAppearance alloc] init];
   [appearance configureWithDefaultBackground];
   appearance.backgroundColor = backgroundColor;
-  if (@available(iOS 15, *)) {
-    self.navigationItem.scrollEdgeAppearance = appearance;
-  } else {
-    // On iOS 14, scrollEdgeAppearance only affects navigation bars with large
-    // titles, so it can't be used. Instead, the navigation bar will always be
-    // the same style.
-    self.navigationItem.standardAppearance = appearance;
-  }
+  self.navigationItem.scrollEdgeAppearance = appearance;
   self.navigationItem.rightBarButtonItem = [self navigationEnterButton];
   // UITableViewStyleInsetGrouped adds space to the top of the table view by
   // default. Remove that space and add in the desired amount.
@@ -109,6 +102,20 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
 
 - (UITableViewCell*)tableView:(UITableView*)tableView
         cellForRowAtIndexPath:(NSIndexPath*)indexPath {
+  RowIdentifier rowIdentifier = [self rowIdentifier:indexPath.row];
+  if (rowIdentifier == RowIdentifier::RowIdentifierNote) {
+    PasswordNoteCell* cell =
+        [tableView dequeueReusableCellWithIdentifier:PasswordNoteCell.reuseID];
+    if (!cell) {
+      cell = [[PasswordNoteCell alloc] initWithStyle:UITableViewCellStyleValue1
+                                     reuseIdentifier:PasswordNoteCell.reuseID];
+    }
+    [cell configureCell];
+    cell.textView.text = self.credential.note;
+    cell.textView.editable = NO;
+    return cell;
+  }
+
   UITableViewCell* cell =
       [tableView dequeueReusableCellWithIdentifier:kCellIdentifier];
   if (!cell) {
@@ -120,7 +127,7 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
   cell.detailTextLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
   cell.accessibilityTraits |= UIAccessibilityTraitButton;
 
-  switch (indexPath.row) {
+  switch (rowIdentifier) {
     case RowIdentifier::RowIdentifierURL:
       cell.accessoryView = nil;
       cell.textLabel.text =
@@ -131,13 +138,29 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
       cell.accessoryView = nil;
       cell.textLabel.text = NSLocalizedString(
           @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_USERNAME", @"Username");
-      cell.detailTextLabel.text = self.credential.user;
+      cell.detailTextLabel.text = self.credential.username;
       break;
     case RowIdentifier::RowIdentifierPassword:
       cell.accessoryView = [self passwordIconButton];
       cell.textLabel.text = NSLocalizedString(
           @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_PASSWORD", @"Password");
       cell.detailTextLabel.text = [self password];
+      break;
+    case RowIdentifier::RowIdentifierNote:
+      break;
+    case RowIdentifier::RowIdentifierUserDisplayName:
+      cell.accessoryView = nil;
+      cell.textLabel.text = NSLocalizedString(
+          @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_USER_DISPLAY_NAME",
+          @"User Display Name");
+      cell.detailTextLabel.text = self.credential.userDisplayName;
+      break;
+    case RowIdentifier::RowIdentifierCreationDate:
+      cell.accessoryView = nil;
+      cell.textLabel.text = NSLocalizedString(
+          @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_SHOW_CREATION_DATE",
+          @"Passkey");
+      cell.detailTextLabel.text = [self creationDate];
       break;
     default:
       break;
@@ -154,7 +177,7 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
   // though you can find it in the View Hierarchy. Using custom one.
   UITableViewCell* cell = [tableView cellForRowAtIndexPath:indexPath];
 
-  switch (indexPath.row) {
+  switch ([self rowIdentifier:indexPath.row]) {
     case RowIdentifier::RowIdentifierURL:
       [self showTootip:NSLocalizedString(
                            @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_COPY", @"Copy")
@@ -183,6 +206,18 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
                 action:@selector(showPassword)];
       }
       break;
+    case RowIdentifier::RowIdentifierUserDisplayName:
+      [self showTootip:NSLocalizedString(
+                           @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_COPY", @"Copy")
+            atBottomOf:cell
+                action:@selector(copyUserDisplayName)];
+      break;
+    case RowIdentifier::RowIdentifierCreationDate:
+      [self showTootip:NSLocalizedString(
+                           @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_COPY", @"Copy")
+            atBottomOf:cell
+                action:@selector(copyCreationDate)];
+      break;
     default:
       break;
   }
@@ -197,6 +232,27 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
 
 #pragma mark - Private
 
+// Returns the identifier for the provided row.
+// Returns "RowIdentifier::NumRows" if the provided row is invalid.
+- (RowIdentifier)rowIdentifier:(NSInteger)row {
+  switch (row) {
+    case 0:
+      return RowIdentifier::RowIdentifierURL;
+    case 1:
+      return RowIdentifier::RowIdentifierUsername;
+    case 2:
+      return self.credential.isPasskey
+                 ? RowIdentifier::RowIdentifierUserDisplayName
+                 : RowIdentifier::RowIdentifierPassword;
+    case 3:
+      return self.credential.isPasskey
+                 ? RowIdentifier::RowIdentifierCreationDate
+                 : RowIdentifier::RowIdentifierNote;
+    default:
+      return RowIdentifier::NumRows;
+  }
+}
+
 // Copy credential URL to clipboard.
 - (void)copyURL {
   UIPasteboard* generalPasteboard = [UIPasteboard generalPasteboard];
@@ -207,13 +263,27 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
 // Copy credential Username to clipboard.
 - (void)copyUsername {
   UIPasteboard* generalPasteboard = [UIPasteboard generalPasteboard];
-  generalPasteboard.string = self.credential.user;
+  generalPasteboard.string = self.credential.username;
   UpdateUMACountForKey(app_group::kCredentialExtensionCopyUsernameCount);
+}
+
+// Copy credential User Display Name to clipboard.
+- (void)copyUserDisplayName {
+  UIPasteboard* generalPasteboard = [UIPasteboard generalPasteboard];
+  generalPasteboard.string = self.credential.userDisplayName;
+  UpdateUMACountForKey(app_group::kCredentialExtensionCopyUserDisplayNameCount);
+}
+
+// Copy creation date to clipboard.
+- (void)copyCreationDate {
+  UIPasteboard* generalPasteboard = [UIPasteboard generalPasteboard];
+  generalPasteboard.string = [self creationDate];
+  UpdateUMACountForKey(app_group::kCredentialExtensionCopyCreationDateCount);
 }
 
 // Copy password to clipboard.
 - (void)copyPassword {
-  NSDictionary* item = @{(NSString*)kUTTypePlainText : self.clearPassword};
+  NSDictionary* item = @{UTTypePlainText.identifier : self.clearPassword};
   NSDate* expirationDate =
       [NSDate dateWithTimeIntervalSinceNow:kSecurePasteboardExpiration];
   NSDictionary* options = @{UIPasteboardOptionExpirationDate : expirationDate};
@@ -252,6 +322,26 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
                                       action:@selector(enterPassword)];
   enterButton.tintColor = [UIColor colorNamed:kBlueColor];
   return enterButton;
+}
+
+// Returns the string to display as passkey creation date.
+- (NSString*)creationDate {
+  NSString* formattedDate =
+      [self formattedDateForPasskeyCreationDate:self.credential.creationDate];
+  NSString* baseLocalizedString = NSLocalizedString(
+      @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_CREATION_DATE", @"00/00/00");
+
+  return
+      [baseLocalizedString stringByReplacingOccurrencesOfString:@"$1"
+                                                     withString:formattedDate];
+  ;
+}
+
+// Formats and returns the passkey creation date to be displayed in the UI.
+- (NSString*)formattedDateForPasskeyCreationDate:(NSDate*)creationDate {
+  return [NSDateFormatter localizedStringFromDate:creationDate
+                                        dateStyle:NSDateFormatterMediumStyle
+                                        timeStyle:NSDateFormatterNoStyle];
 }
 
 // Returns the string to display as password.

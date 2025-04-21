@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@ class NavigationTypeUtils {
  public:
   static bool IsReload(blink::mojom::NavigationType value) {
     return value == blink::mojom::NavigationType::RELOAD ||
-           value == blink::mojom::NavigationType::RELOAD_BYPASSING_CACHE ||
-           value == blink::mojom::NavigationType::RELOAD_ORIGINAL_REQUEST_URL;
+           value == blink::mojom::NavigationType::RELOAD_BYPASSING_CACHE;
   }
 
   static bool IsSameDocument(blink::mojom::NavigationType value) {
@@ -24,7 +23,8 @@ class NavigationTypeUtils {
 
   static bool IsHistory(blink::mojom::NavigationType value) {
     return value == blink::mojom::NavigationType::HISTORY_SAME_DOCUMENT ||
-           value == blink::mojom::NavigationType::HISTORY_DIFFERENT_DOCUMENT;
+           value == blink::mojom::NavigationType::HISTORY_DIFFERENT_DOCUMENT ||
+           IsRestore(value);
   }
 
   static bool IsRestore(blink::mojom::NavigationType value) {

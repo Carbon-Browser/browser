@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,19 +14,10 @@ cast_source_set("reboot_util") {
   deps = [ "//base" ]
 
   if (!is_fuchsia) {
-    if (chromecast_branding == "google") {
-      deps += [ "//chromecast/internal/system/reboot:reboot_util" ]
-    } else {
-      sources += [ "reboot_util_dummy.cc" ]
-    }
+    sources += [ "reboot_util_dummy.cc" ]
   }
 
-  if (is_android && chromecast_branding != "public") {
-    deps += [
-      "//chromecast/internal/system/reboot/android:reboot_shlib_impl",
-      "//chromecast/public",
-    ]
-  } else if (is_fuchsia) {
+  if (is_fuchsia) {
     deps += [ ":fuchsia" ]
   } else {
     deps += [ ":libcast_reboot_1.0" ]
@@ -49,10 +40,10 @@ test("cast_reboot_unittests") {
     deps += [
       ":fuchsia",
       "//chromecast/public",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hardware.power.statecontrol",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.recovery",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback:fuchsia.feedback_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hardware.power.statecontrol:fuchsia.hardware.power.statecontrol_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.recovery:fuchsia.recovery_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/fidl_cpp",
       "//third_party/fuchsia-sdk/sdk/pkg/fit-promise",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
@@ -80,9 +71,9 @@ if (is_fuchsia) {
     public_deps = [ "//chromecast/public" ]
     deps = [
       "//base",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hardware.power.statecontrol",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.recovery",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback:fuchsia.feedback_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hardware.power.statecontrol:fuchsia.hardware.power.statecontrol_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.recovery:fuchsia.recovery_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/fidl",
       "//third_party/fuchsia-sdk/sdk/pkg/fidl_cpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",

@@ -1,12 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/session_manager/core/session_manager.h"
 
-#include <algorithm>
-
+#include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/user_manager/user_manager.h"
@@ -57,7 +58,7 @@ void SessionManager::CreateSessionForRestart(const AccountId& user_account_id,
   const user_manager::User* user = user_manager->FindUser(user_account_id);
   // Tests do not always create users.
   const bool is_child =
-      user && user->GetType() == user_manager::USER_TYPE_CHILD;
+      user && user->GetType() == user_manager::UserType::kChild;
   CreateSessionInternal(user_account_id, user_id_hash,
                         true /* browser_restart */, is_child);
 }
@@ -66,7 +67,12 @@ bool SessionManager::IsSessionStarted() const {
   return session_started_;
 }
 
+bool SessionManager::IsUserSessionStartUpTaskCompleted() const {
+  return user_session_start_up_task_completed_;
+}
+
 void SessionManager::SessionStarted() {
+  TRACE_EVENT0("login", "SessionManager::SessionStarted");
   session_started_ = true;
 
   bool is_primary = sessions_.size() == 1;
@@ -76,10 +82,7 @@ void SessionManager::SessionStarted() {
 
 bool SessionManager::HasSessionForAccountId(
     const AccountId& user_account_id) const {
-  return std::find_if(sessions_.begin(), sessions_.end(),
-                      [user_account_id](const Session& session) {
-                        return session.user_account_id == user_account_id;
-                      }) != sessions_.end();
+  return base::Contains(sessions_, user_account_id, &Session::user_account_id);
 }
 
 bool SessionManager::IsInSecondaryLoginScreen() const {
@@ -107,15 +110,16 @@ void SessionManager::NotifyUserProfileLoaded(const AccountId& account_id) {
     observer.OnUserProfileLoaded(account_id);
 }
 
-void SessionManager::NotifyNetworkErrorScreenShown() {
-  for (auto& observer : observers_)
-    observer.OnNetworkErrorScreenShown();
-}
-
 void SessionManager::NotifyLoginOrLockScreenVisible() {
   login_or_lock_screen_shown_for_test_ = true;
   for (auto& observer : observers_)
     observer.OnLoginOrLockScreenVisible();
+}
+
+void SessionManager::NotifyUnlockAttempt(const bool success,
+                                         const UnlockType unlock_type) {
+  for (auto& observer : observers_)
+    observer.OnUnlockScreenAttempt(success, unlock_type);
 }
 
 void SessionManager::NotifyUserLoggedIn(const AccountId& user_account_id,
@@ -127,6 +131,15 @@ void SessionManager::NotifyUserLoggedIn(const AccountId& user_account_id,
     return;
   user_manager->UserLoggedIn(user_account_id, user_id_hash, browser_restart,
                              is_child);
+}
+
+void SessionManager::HandleUserSessionStartUpTaskCompleted() {
+  // This method must not be called twice.
+  CHECK(!user_session_start_up_task_completed_);
+  user_session_start_up_task_completed_ = true;
+  for (auto& observer : observers_) {
+    observer.OnUserSessionStartUpTaskCompleted();
+  }
 }
 
 // static

@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,10 +45,11 @@
 #define TRACELINE_ASSEMBLER_H_
 
 #include <windows.h>
-#include <stdio.h>
-#include <string>
 
 #include <stddef.h>
+#include <stdio.h>
+
+#include <string>
 
 #include "logging.h"
 

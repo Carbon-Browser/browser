@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ bool GetAppOutput(const std::vector<std::string>& argv, std::string* output) {
   // Open the process.
   FILE* fp = popen(command.c_str(), "r");
   if (!fp) {
-    LOG(ERROR) << "popen (" << command << ") failed: "
-               << base::safe_strerror(errno);
+    PLOG(ERROR) << "popen (" << command << ") failed";
     return false;
   }
 

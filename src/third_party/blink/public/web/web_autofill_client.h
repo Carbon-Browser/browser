@@ -31,14 +31,19 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_AUTOFILL_CLIENT_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_AUTOFILL_CLIENT_H_
 
+#include "third_party/blink/public/web/web_element.h"
+#include "third_party/blink/public/web/web_form_control_element.h"
+#include "third_party/blink/public/web/web_form_related_change_type.h"
+#include "third_party/blink/public/web/web_local_frame.h"
+
 namespace blink {
 
-class WebFormControlElement;
 class WebFormElement;
 class WebInputElement;
 class WebKeyboardEvent;
 class WebNode;
 class WebString;
+class WebElement;
 
 class WebAutofillClient {
  public:
@@ -47,12 +52,22 @@ class WebAutofillClient {
   virtual void TextFieldDidChange(const WebFormControlElement&) {}
   virtual void TextFieldDidReceiveKeyDown(const WebInputElement&,
                                           const WebKeyboardEvent&) {}
+  // Called when a text field is cleared either by simply deleting the text or
+  // briefly cleared when the whole text is selected and replaced. The latter
+  // would not be conveyed by `TextFieldDidChange()` and some clients might need
+  // that information.
+  virtual void TextFieldCleared(const WebFormControlElement&) {}
+  // This is called once per-character when a user edits a contenteditable
+  // element by typing.
+  virtual void ContentEditableDidChange(const WebElement&) {}
   // This is called when a datalist indicator is clicked.
   virtual void OpenTextDataListChooser(const WebInputElement&) {}
   // This is called when the datalist for an input has changed.
   virtual void DataListOptionsChanged(const WebInputElement&) {}
 
-  // Called when selected option of select control change.
+  // Called when the selected option of a <select> control is changed as a
+  // result of user activation - see
+  // https://html.spec.whatwg.org/multipage/interaction.html#tracking-user-activation
   virtual void SelectControlDidChange(const WebFormControlElement&) {}
 
   // Called when the options of a select control change.
@@ -61,15 +76,23 @@ class WebAutofillClient {
   // Called when the user interacts with the page after a load.
   virtual void UserGestureObserved() {}
 
-  virtual void DidAssociateFormControlsDynamically() {}
+  virtual void DidChangeFormRelatedElementDynamically(
+      const WebElement&,
+      WebFormRelatedChangeType) {}
   virtual void AjaxSucceeded() {}
-  // Called when |element| is in autofilled state and the value has been changed
-  // by JavaScript. |old_value| contains the value before being changed.
-  virtual void JavaScriptChangedAutofilledValue(
-      const WebFormControlElement& element,
-      const WebString& old_value) {}
+  // Called when the value of `element` has been changed by JavaScript.
+  // `old_value` contains the value before being changed.
+  // `was_autofilled` is the state of the field prior to the JS change.
+  // Only called if there is an observable change in the actual value, i.e.
+  // JavaScript setting it to the current value will not trigger this.
+  virtual void JavaScriptChangedValue(WebFormControlElement element,
+                                      const WebString& old_value,
+                                      bool was_autofilled) {}
 
+  // Called when the focused node has changed. This is not called if the focus
+  // moves outside the frame.
   virtual void DidCompleteFocusChangeInFrame() {}
+
   virtual void DidReceiveLeftMouseDownOrGestureTapInNode(const WebNode&) {}
 
   // Asks the client whether to suppess the keyboard for the given control
@@ -80,6 +103,10 @@ class WebAutofillClient {
 
   // Called when the given form element is reset.
   virtual void FormElementReset(const WebFormElement&) {}
+
+  // Determines the form-related issues in the WebAutofillClient's document and
+  // adds them to the associated frame's DevTools issues.
+  virtual void EmitFormIssuesToDevtools() {}
 
   // Called when the empty value is set for the given input element, which is
   // or has been a password field.

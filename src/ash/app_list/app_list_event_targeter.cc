@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,8 @@ bool AppListEventTargeter::SubtreeShouldBeExploredForEvent(
     return false;
 
   if (window->GetProperty(assistant::ui::kOnlyAllowMouseClickEvents)) {
-    if (event.type() != ui::ET_MOUSE_PRESSED &&
-        event.type() != ui::ET_MOUSE_RELEASED) {
+    if (event.type() != ui::EventType::kMousePressed &&
+        event.type() != ui::EventType::kMouseReleased) {
       return false;
     }
   }

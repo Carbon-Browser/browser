@@ -69,8 +69,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:importantForAccessibility="no"
-        android:layout_marginTop="7dp"
         android:text="Loading balance.."
+        android:layout_marginTop="7dp"
         android:layout_marginBottom="28dp"
         android:textSize="25sp"/>
 

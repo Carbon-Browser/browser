@@ -1,16 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_PLATFORM_WINDOW_PLATFORM_WINDOW_INIT_PROPERTIES_H_
 #define UI_PLATFORM_WINDOW_PLATFORM_WINDOW_INIT_PROPERTIES_H_
 
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
 
@@ -18,7 +20,7 @@
 #include <fuchsia/element/cpp/fidl.h>
 #include <fuchsia/ui/composition/cpp/fidl.h>
 #include <fuchsia/ui/views/cpp/fidl.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
+#include <ui/platform_window/fuchsia/view_ref_pair.h>
 #endif
 
 namespace gfx {
@@ -67,6 +69,7 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   explicit PlatformWindowInitProperties(const gfx::Rect& bounds);
 
   PlatformWindowInitProperties(PlatformWindowInitProperties&& props);
+  PlatformWindowInitProperties& operator=(PlatformWindowInitProperties&&);
 
   ~PlatformWindowInitProperties();
 
@@ -89,7 +92,7 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   fuchsia::ui::views::ViewToken view_token;
   fuchsia::ui::views::ViewCreationToken view_creation_token;
 
-  scenic::ViewRefPair view_ref_pair;
+  ViewRefPair view_ref_pair;
 
   // Used to coordinate window closure requests with the shell.
   fuchsia::element::ViewControllerPtr view_controller;
@@ -100,9 +103,11 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   // Specifies whether system virtual keyboard support is enabled.
   bool enable_virtual_keyboard = false;
 
-  ScenicWindowDelegate* scenic_window_delegate = nullptr;
+  raw_ptr<ScenicWindowDelegate> scenic_window_delegate = nullptr;
 #endif
 
+  // See Widget::InitParams for details.
+  bool accept_events = true;
   bool activatable = true;
   bool force_show_in_taskbar;
   bool keep_on_top = false;
@@ -110,6 +115,7 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   bool visible_on_all_workspaces = false;
   bool remove_standard_frame = false;
   std::string workspace;
+  ZOrderLevel z_order = ZOrderLevel::kNormal;
 
   raw_ptr<WorkspaceExtensionDelegate> workspace_extension_delegate = nullptr;
 
@@ -118,7 +124,7 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   bool prefer_dark_theme = false;
   raw_ptr<gfx::ImageSkia> icon = nullptr;
-  absl::optional<int> background_color;
+  std::optional<SkColor> background_color;
 
   // Specifies the res_name and res_class fields,
   // respectively, of the WM_CLASS window property. Controls window grouping
@@ -133,15 +139,11 @@ struct COMPONENT_EXPORT(PLATFORM_WINDOW) PlatformWindowInitProperties {
   // manager to match the desktop entry and group windows.
   std::string wayland_app_id;
 
-  // Specifies the unique session id and the restore window id.
-  int32_t restore_session_id;
-  absl::optional<int32_t> restore_window_id;
-
-  // Specifies the source to get `restore_window_id` from.
-  absl::optional<std::string> restore_window_id_source;
+  // Specifies the id of the target display the window will be created on.
+  std::optional<int64_t> display_id;
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // Specifies whether the current window requests key-events that matches
   // system shortcuts.
   bool inhibit_keyboard_shortcuts = false;

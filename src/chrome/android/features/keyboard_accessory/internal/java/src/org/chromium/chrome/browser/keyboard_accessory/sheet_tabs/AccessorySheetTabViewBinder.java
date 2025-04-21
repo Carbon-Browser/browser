@@ -1,8 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
+
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.IS_DEFAULT_A11Y_FOCUS_REQUESTED;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.ITEMS;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.SCROLL_LISTENER;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,7 +14,6 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -18,17 +21,17 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.chromium.chrome.browser.keyboard_accessory.R;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
-import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece;
+import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece;
 import org.chromium.ui.modelutil.ListModel;
+import org.chromium.ui.modelutil.PropertyKey;
+import org.chromium.ui.modelutil.PropertyModel;
 
 /**
  * This stateless class provides methods to bind a {@link ListModel<AccessorySheetDataPiece>}
  * to the {@link RecyclerView} used as view of a tab for the accessory sheet component.
  */
 class AccessorySheetTabViewBinder {
-    /**
-     * Holds any View that represents a list entry.
-     */
+    /** Holds any View that represents a list entry. */
     abstract static class ElementViewHolder<T, V extends View> extends RecyclerView.ViewHolder {
         ElementViewHolder(ViewGroup parent, int layout) {
             super(LayoutInflater.from(parent.getContext()).inflate(layout, parent, false));
@@ -44,14 +47,13 @@ class AccessorySheetTabViewBinder {
 
     /**
      * Creates an {@link ElementViewHolder} for the given |viewType|.
+     *
      * @param parent A {@link android.view.ViewParent} to attach this view to.
      * @param viewType A {@link AccessorySheetDataPiece.Type} describing the view to be created.
      * @return A {@link ElementViewHolder}.
      */
     static ElementViewHolder create(ViewGroup parent, @AccessorySheetDataPiece.Type int viewType) {
         switch (viewType) {
-            case AccessorySheetDataPiece.Type.TITLE:
-                return new TitleViewHolder(parent);
             case AccessorySheetDataPiece.Type.FOOTER_COMMAND:
                 return new FooterCommandViewHolder(parent);
             case AccessorySheetDataPiece.Type.OPTION_TOGGLE:
@@ -61,29 +63,20 @@ class AccessorySheetTabViewBinder {
         return null;
     }
 
-    /**
-     * Holds a Title consisting of a top divider, a text view and a bottom divider.
-     */
-    static class TitleViewHolder extends ElementViewHolder<String, LinearLayout> {
+    /** Holds a Title consisting of a top divider, a text view and a bottom divider. */
+    static class TitleViewHolder extends ElementViewHolder<String, TextView> {
         TitleViewHolder(ViewGroup parent) {
-            this(parent, R.layout.keyboard_accessory_sheet_tab_legacy_title);
-        }
-
-        TitleViewHolder(ViewGroup parent, @LayoutRes int layout) {
-            super(parent, layout);
+            super(parent, R.layout.keyboard_accessory_sheet_tab_title);
         }
 
         @Override
-        protected void bind(String displayText, LinearLayout view) {
-            TextView titleView = view.findViewById(R.id.tab_title);
+        protected void bind(String displayText, TextView titleView) {
             titleView.setText(displayText);
             titleView.setContentDescription(displayText);
         }
     }
 
-    /**
-     * Holds a clickable {@link TextView} that represents a footer command.
-     */
+    /** Holds a clickable {@link TextView} that represents a footer command. */
     static class FooterCommandViewHolder
             extends ElementViewHolder<KeyboardAccessoryData.FooterCommand, TextView> {
         FooterCommandViewHolder(ViewGroup parent) {
@@ -98,9 +91,7 @@ class AccessorySheetTabViewBinder {
         }
     }
 
-    /**
-     *  Holds a title, subtitle which shows the state of the toggle and a toggle.
-     */
+    /** Holds a title, subtitle which shows the state of the toggle and a toggle. */
     static class OptionToggleViewHolder
             extends ElementViewHolder<KeyboardAccessoryData.OptionToggle, LinearLayout> {
         OptionToggleViewHolder(ViewGroup parent) {
@@ -131,5 +122,20 @@ class AccessorySheetTabViewBinder {
                 new LinearLayoutManager(view.getContext(), LinearLayoutManager.VERTICAL, false));
         view.setItemAnimator(null);
         if (scrollListener != null) view.addOnScrollListener(scrollListener);
+    }
+
+    public static void bind(
+            PropertyModel model, AccessorySheetTabView view, PropertyKey propertyKey) {
+        if (propertyKey == ITEMS) {
+            // TODO(crbug.com/40257527): move setting adapter from initializeView() (in descendants)
+        } else if (propertyKey == SCROLL_LISTENER) {
+            // TODO(crbug.com/40257527): move setting listener from initializeView()
+        } else if (propertyKey == IS_DEFAULT_A11Y_FOCUS_REQUESTED) {
+            if (model.get(IS_DEFAULT_A11Y_FOCUS_REQUESTED)) {
+                view.requestDefaultA11yFocus();
+            }
+        } else {
+            assert false : "Binding property not implemented: " + propertyKey;
+        }
     }
 }

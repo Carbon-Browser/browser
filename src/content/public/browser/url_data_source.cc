@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,8 @@
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
 #include "content/browser/webui/url_data_manager.h"
-#include "content/browser/webui/url_data_manager_backend.h"
-#include "content/browser/webui/url_data_source_impl.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
 #include "content/public/common/url_constants.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 
@@ -51,15 +46,6 @@ std::string URLDataSource::URLToRequestPath(const GURL& url) {
   if (offset < static_cast<int>(spec.size()))
     return spec.substr(offset);
 
-  return std::string();
-}
-
-std::string URLDataSource::GetMimeType(const GURL& url) {
-  return GetMimeType(URLDataSource::URLToRequestPath(url));
-}
-
-std::string URLDataSource::GetMimeType(const std::string& path) {
-  NOTREACHED();
   return std::string();
 }
 
@@ -111,7 +97,6 @@ std::string URLDataSource::GetContentSecurityPolicy(
     case network::mojom::CSPDirectiveName::ImgSrc:
     case network::mojom::CSPDirectiveName::ManifestSrc:
     case network::mojom::CSPDirectiveName::MediaSrc:
-    case network::mojom::CSPDirectiveName::PrefetchSrc:
     case network::mojom::CSPDirectiveName::ReportURI:
     case network::mojom::CSPDirectiveName::Sandbox:
     case network::mojom::CSPDirectiveName::ScriptSrcAttr:
@@ -123,7 +108,6 @@ std::string URLDataSource::GetContentSecurityPolicy(
     case network::mojom::CSPDirectiveName::TreatAsPublicAddress:
     case network::mojom::CSPDirectiveName::WorkerSrc:
     case network::mojom::CSPDirectiveName::ReportTo:
-    case network::mojom::CSPDirectiveName::NavigateTo:
     case network::mojom::CSPDirectiveName::Unknown:
       return std::string();
   }

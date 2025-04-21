@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,11 +22,13 @@ class PlayerFrameGestureDetector
     private boolean mCanDetectZoom;
     private PlayerFrameGestureDetectorDelegate mDelegate;
     private PlayerFrameGestureDetector mParentGestureDetector;
+
     /**
      * Last horizontal scroll distance that was detected by this {@link PlayerFrameGestureDetector}
      * and consumed by {@link #mParentGestureDetector}.
      */
     private float mLastParentScrollX;
+
     /**
      * Last vertical scroll distance that was detected by this {@link PlayerFrameGestureDetector}
      * and consumed by {@link #mParentGestureDetector}.

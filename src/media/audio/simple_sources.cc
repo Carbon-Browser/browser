@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/audio/simple_sources.h"
 
@@ -8,10 +13,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <numbers>
+#include <string_view>
 
+#include "base/containers/heap_array.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/logging.h"
-#include "base/numerics/math_constants.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -21,38 +29,35 @@
 namespace media {
 namespace {
 // Opens |wav_filename|, reads it and loads it as a wav file. This function will
-// return a null pointer if we can't read the file or if it's malformed. The
-// caller takes ownership of the returned data. The size of the data is stored
-// in |read_length|.
-std::unique_ptr<char[]> ReadWavFile(const base::FilePath& wav_filename,
-                                    size_t* read_length) {
-  base::File wav_file(
-      wav_filename, base::File::FLAG_OPEN | base::File::FLAG_READ);
+// return an empty HeapArray if we can't read the file or if it's malformed. The
+// caller takes ownership of the returned data.
+base::HeapArray<uint8_t> ReadWavFile(const base::FilePath& wav_filename) {
+  base::File wav_file(wav_filename,
+                      base::File::FLAG_OPEN | base::File::FLAG_READ);
   if (!wav_file.IsValid()) {
     LOG(ERROR) << "Failed to read " << wav_filename.value()
                << " as input to the fake device."
                   " Try disabling the sandbox with --no-sandbox.";
-    return nullptr;
+    return {};
   }
 
   int64_t wav_file_length = wav_file.GetLength();
   if (wav_file_length < 0) {
     LOG(ERROR) << "Failed to get size of " << wav_filename.value();
-    return nullptr;
+    return {};
   }
   if (wav_file_length == 0) {
     LOG(ERROR) << "Input file to fake device is empty: "
                << wav_filename.value();
-    return nullptr;
+    return {};
   }
 
-  auto data = std::make_unique<char[]>(wav_file_length);
-  int read_bytes = wav_file.Read(0, data.get(), wav_file_length);
+  auto data = base::HeapArray<uint8_t>::Uninit(wav_file_length);
+  std::optional<size_t> read_bytes = wav_file.Read(0, data.as_span());
   if (read_bytes != wav_file_length) {
     LOG(ERROR) << "Failed to read all bytes of " << wav_filename.value();
-    return nullptr;
+    return {};
   }
-  *read_length = wav_file_length;
   return data;
 }
 
@@ -116,7 +121,7 @@ SineWaveAudioSource::~SineWaveAudioSource() = default;
 // but it is efficient enough for our simple needs.
 int SineWaveAudioSource::OnMoreData(base::TimeDelta /* delay */,
                                     base::TimeTicks /* delay_timestamp */,
-                                    int /* prior_frames_skipped */,
+                                    const AudioGlitchInfo& /* glitch_info */,
                                     AudioBus* dest) {
   int max_frames;
 
@@ -131,7 +136,7 @@ int SineWaveAudioSource::OnMoreData(base::TimeDelta /* delay */,
     max_frames = cap_ > 0 ? std::min(dest->frames(), cap_ - pos_samples_)
                           : dest->frames();
     for (int i = 0; i < max_frames; ++i)
-      dest->channel(0)[i] = sin(2.0 * base::kPiDouble * f_ * pos_samples_++);
+      dest->channel(0)[i] = sin(2.0 * std::numbers::pi * f_ * pos_samples_++);
     for (int i = 1; i < dest->channels(); ++i) {
       memcpy(dest->channel(i), dest->channel(0),
              max_frames * sizeof(*dest->channel(i)));
@@ -164,7 +169,6 @@ FileSource::FileSource(const AudioParameters& params,
                        bool loop)
     : params_(params),
       path_to_wav_file_(path_to_wav_file),
-      wav_file_read_pos_(0),
       load_failed_(false),
       looping_(loop) {}
 
@@ -175,19 +179,18 @@ void FileSource::LoadWavFile(const base::FilePath& path_to_wav_file) {
   if (load_failed_)
     return;
 
-  // Read the file, and put its data in a scoped_ptr so it gets deleted when
-  // this class destructs. This data must be valid for the lifetime of
+  // Read the file, and put its data in a HeapArray so it gets deleted when this
+  // class destructs. This data must be valid for the lifetime of
   // |wav_audio_handler_|.
-  size_t length = 0u;
-  raw_wav_data_ = ReadWavFile(path_to_wav_file, &length);
-  if (!raw_wav_data_) {
+  raw_wav_data_ = ReadWavFile(path_to_wav_file);
+  if (raw_wav_data_.empty()) {
     load_failed_ = true;
     return;
   }
 
   // Attempt to create a handler with this data. If the data is invalid, return.
   wav_audio_handler_ =
-      WavAudioHandler::Create(base::StringPiece(raw_wav_data_.get(), length));
+      WavAudioHandler::Create(base::as_byte_span(raw_wav_data_));
   if (!wav_audio_handler_) {
     LOG(ERROR) << "WAV data could be read but is not valid";
     load_failed_ = true;
@@ -199,8 +202,8 @@ void FileSource::LoadWavFile(const base::FilePath& path_to_wav_file) {
   // of it at a time and not the whole thing (like 10 ms at a time).
   AudioParameters file_audio_slice(
       AudioParameters::AUDIO_PCM_LOW_LATENCY,
-      GuessChannelLayout(wav_audio_handler_->num_channels()),
-      wav_audio_handler_->sample_rate(), params_.frames_per_buffer());
+      ChannelLayoutConfig::Guess(wav_audio_handler_->GetNumChannels()),
+      wav_audio_handler_->GetSampleRate(), params_.frames_per_buffer());
 
   file_audio_converter_ =
       std::make_unique<AudioConverter>(file_audio_slice, params_, false);
@@ -209,7 +212,7 @@ void FileSource::LoadWavFile(const base::FilePath& path_to_wav_file) {
 
 int FileSource::OnMoreData(base::TimeDelta /* delay */,
                            base::TimeTicks /* delay_timestamp */,
-                           int /* prior_frames_skipped */,
+                           const AudioGlitchInfo& /* glitch_info */,
                            AudioBus* dest) {
   // Load the file if we haven't already. This load needs to happen on the
   // audio thread, otherwise we'll run on the UI thread on Mac for instance.
@@ -221,7 +224,7 @@ int FileSource::OnMoreData(base::TimeDelta /* delay */,
 
   DCHECK(wav_audio_handler_.get());
 
-  if (wav_audio_handler_->AtEnd(wav_file_read_pos_)) {
+  if (wav_audio_handler_->AtEnd()) {
     if (looping_)
       Rewind();
     else
@@ -234,24 +237,23 @@ int FileSource::OnMoreData(base::TimeDelta /* delay */,
 }
 
 void FileSource::Rewind() {
-  wav_file_read_pos_ = 0;
+  wav_audio_handler_->Reset();
 }
 
 double FileSource::ProvideInput(AudioBus* audio_bus_into_converter,
-                                uint32_t frames_delayed) {
+                                uint32_t frames_delayed,
+                                const AudioGlitchInfo&) {
   // Unfilled frames will be zeroed by CopyTo.
-  size_t bytes_written;
-  wav_audio_handler_->CopyTo(audio_bus_into_converter, wav_file_read_pos_,
-                             &bytes_written);
-  wav_file_read_pos_ += bytes_written;
+  size_t frames_written;
+  wav_audio_handler_->CopyTo(audio_bus_into_converter, &frames_written);
   return 1.0;
 }
 
 void FileSource::OnError(ErrorType type) {}
 
 BeepingSource::BeepingSource(const AudioParameters& params)
-    : buffer_size_(params.GetBytesPerBuffer(kSampleFormatU8)),
-      buffer_(new uint8_t[buffer_size_]),
+    : buffer_(base::HeapArray<uint8_t>::Uninit(
+          params.GetBytesPerBuffer(kSampleFormatU8))),
       params_(params),
       last_callback_time_(base::TimeTicks::Now()),
       beep_duration_in_buffers_(kBeepDurationMilliseconds *
@@ -264,12 +266,12 @@ BeepingSource::~BeepingSource() = default;
 
 int BeepingSource::OnMoreData(base::TimeDelta /* delay */,
                               base::TimeTicks /* delay_timestamp */,
-                              int /* prior_frames_skipped */,
+                              const AudioGlitchInfo& /* glitch_info */,
                               AudioBus* dest) {
   // Accumulate the time from the last beep.
   interval_from_last_beep_ += base::TimeTicks::Now() - last_callback_time_;
 
-  memset(buffer_.get(), 128, buffer_size_);
+  memset(buffer_.data(), 128, buffer_.size());
   bool should_beep = false;
   BeepContext* beep_context = GetBeepContext();
   if (beep_context->automatic_beep()) {
@@ -294,10 +296,10 @@ int BeepingSource::OnMoreData(base::TimeDelta /* delay */,
 
     // Separate high and low with the same number of bytes to generate a
     // square wave.
-    int position = 0;
-    while (position + high_bytes <= buffer_size_) {
+    size_t position = 0;
+    while (position + high_bytes <= buffer_.size()) {
       // Write high values first.
-      memset(buffer_.get() + position, 255, high_bytes);
+      memset(buffer_.data() + position, 255, high_bytes);
       // Then leave low values in the buffer with |high_bytes|.
       position += high_bytes * 2;
     }
@@ -308,7 +310,7 @@ int BeepingSource::OnMoreData(base::TimeDelta /* delay */,
   }
 
   last_callback_time_ = base::TimeTicks::Now();
-  dest->FromInterleaved<UnsignedInt8SampleTypeTraits>(buffer_.get(),
+  dest->FromInterleaved<UnsignedInt8SampleTypeTraits>(buffer_.data(),
                                                       dest->frames());
   return dest->frames();
 }

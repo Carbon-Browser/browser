@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service.h"
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service_factory.h"
 #include "chrome/browser/ash/child_accounts/screen_time_controller_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/browser/network_service_instance.h"
 
@@ -55,7 +56,7 @@ EventBasedStatusReportingService::EventBasedStatusReportingService(
     arc_app_prefs->AddObserver(this);
   session_manager::SessionManager::Get()->AddObserver(this);
   content::GetNetworkConnectionTracker()->AddNetworkConnectionObserver(this);
-  PowerManagerClient::Get()->AddObserver(this);
+  chromeos::PowerManagerClient::Get()->AddObserver(this);
   ScreenTimeControllerFactory::GetForBrowserContext(context_)->AddObserver(
       this);
 }
@@ -73,6 +74,7 @@ void EventBasedStatusReportingService::OnPackageModified(
 }
 
 void EventBasedStatusReportingService::OnSessionStateChanged() {
+  TRACE_EVENT0("ui", "EventBasedStatusReportingService::OnSessionStateChanged");
   session_manager::SessionState session_state =
       session_manager::SessionManager::Get()->session_state();
 
@@ -128,7 +130,7 @@ void EventBasedStatusReportingService::Shutdown() {
     arc_app_prefs->RemoveObserver(this);
   session_manager::SessionManager::Get()->RemoveObserver(this);
   content::GetNetworkConnectionTracker()->RemoveNetworkConnectionObserver(this);
-  PowerManagerClient::Get()->RemoveObserver(this);
+  chromeos::PowerManagerClient::Get()->RemoveObserver(this);
   ScreenTimeControllerFactory::GetForBrowserContext(context_)->RemoveObserver(
       this);
 }

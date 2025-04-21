@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace switches {
 
 // Note: If you add a switch, consider if it needs to be copied to a subsequent
 // command line if the process executes a new copy of itself.  (For example,
-// see chromeos::LoginUtil::GetOffTheRecordCommandLine().)
+// see `ash::GetOffTheRecordCommandLine()`.)
 
 // Please keep alphabetized.
 COMPONENT_EXPORT(UI_WM) extern const char kWindowAnimationsDisabled[];

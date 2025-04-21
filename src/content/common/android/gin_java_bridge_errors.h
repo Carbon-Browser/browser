@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,12 @@
 #define CONTENT_COMMON_ANDROID_GIN_JAVA_BRIDGE_ERRORS_H_
 
 #include "content/common/content_export.h"
+#include "content/common/gin_java_bridge.mojom-shared.h"
 
 namespace content {
 
-enum GinJavaBridgeError {
-  kGinJavaBridgeNoError = 0,
-  kGinJavaBridgeUnknownObjectId,
-  kGinJavaBridgeObjectIsGone,
-  kGinJavaBridgeMethodNotFound,
-  kGinJavaBridgeAccessToObjectGetClassIsBlocked,
-  kGinJavaBridgeJavaExceptionRaised,
-  kGinJavaBridgeNonAssignableTypes,
-  kGinJavaBridgeRenderFrameDeleted,
-  kGinJavaBridgeErrorLast = kGinJavaBridgeRenderFrameDeleted
-};
-
-CONTENT_EXPORT const char* GinJavaBridgeErrorToString(GinJavaBridgeError error);
+CONTENT_EXPORT const char* GinJavaBridgeErrorToString(
+    mojom::GinJavaBridgeError error);
 
 }  // namespace content
 

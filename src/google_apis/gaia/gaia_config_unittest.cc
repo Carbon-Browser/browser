@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "google_apis/gaia/gaia_config.h"
+
+#include <optional>
 
 #include "base/command_line.h"
 #include "base/json/json_reader.h"
 #include "google_apis/gaia/gaia_switches.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace {
@@ -30,53 +31,48 @@ const char kTestConfigContents[] = R"(
 })";
 
 TEST(GaiaConfigTest, ShouldGetURLIfExists) {
-  absl::optional<base::Value> dict =
-      base::JSONReader::Read(kTestConfigContents);
+  std::optional<base::Value> dict = base::JSONReader::Read(kTestConfigContents);
   ASSERT_TRUE(dict.has_value());
 
-  GaiaConfig config(std::move(*dict));
+  GaiaConfig config(std::move(dict->GetDict()));
   GURL url;
   EXPECT_TRUE(config.GetURLIfExists("test_url", &url));
   EXPECT_THAT(url, Eq("https://accounts.example.com/"));
 }
 
 TEST(GaiaConfigTest, ShouldReturnNullIfURLDoesNotExists) {
-  absl::optional<base::Value> dict =
-      base::JSONReader::Read(kTestConfigContents);
+  std::optional<base::Value> dict = base::JSONReader::Read(kTestConfigContents);
   ASSERT_TRUE(dict.has_value());
 
-  GaiaConfig config(std::move(*dict));
+  GaiaConfig config(std::move(dict->GetDict()));
   GURL url;
   EXPECT_FALSE(config.GetURLIfExists("missing_url", &url));
 }
 
 TEST(GaiaConfigTest, ShouldGetAPIKeyIfExists) {
-  absl::optional<base::Value> dict =
-      base::JSONReader::Read(kTestConfigContents);
+  std::optional<base::Value> dict = base::JSONReader::Read(kTestConfigContents);
   ASSERT_TRUE(dict.has_value());
 
-  GaiaConfig config(std::move(*dict));
+  GaiaConfig config(std::move(dict->GetDict()));
   std::string api_key;
   EXPECT_TRUE(config.GetAPIKeyIfExists("test_api_key", &api_key));
   EXPECT_THAT(api_key, Eq("test_api_key_value"));
 }
 
 TEST(GaiaConfigTest, ShouldReturnNullIfAPIKeyDoesNotExists) {
-  absl::optional<base::Value> dict =
-      base::JSONReader::Read(kTestConfigContents);
+  std::optional<base::Value> dict = base::JSONReader::Read(kTestConfigContents);
   ASSERT_TRUE(dict.has_value());
 
-  GaiaConfig config(std::move(*dict));
+  GaiaConfig config(std::move(dict->GetDict()));
   std::string api_key;
   EXPECT_FALSE(config.GetAPIKeyIfExists("missing_api_key", &api_key));
 }
 
 TEST(GaiaConfigTest, ShouldSerializeContentsToCommandLineSwitch) {
-  absl::optional<base::Value> dict =
-      base::JSONReader::Read(kTestConfigContents);
+  std::optional<base::Value> dict = base::JSONReader::Read(kTestConfigContents);
   ASSERT_TRUE(dict.has_value());
 
-  GaiaConfig config(std::move(*dict));
+  GaiaConfig config(std::move(dict->GetDict()));
   GURL url;
   ASSERT_TRUE(config.GetURLIfExists("test_url", &url));
   ASSERT_THAT(url, Eq("https://accounts.example.com/"));

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include "base/notreached.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // static
 std::string TransportRoute::GetTypeString(RouteType type) {
@@ -20,11 +19,9 @@ std::string TransportRoute::GetTypeString(RouteType type) {
       return "relay";
   }
   NOTREACHED();
-  return std::string();
 }
 
 TransportRoute::TransportRoute() : type(DIRECT) {}
 TransportRoute::~TransportRoute() = default;
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

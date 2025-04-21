@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,8 @@ bool StructTraits<viz::mojom::CompositorRenderPassDataView,
     Read(viz::mojom::CompositorRenderPassDataView data,
          std::unique_ptr<viz::CompositorRenderPass>* out) {
   *out = viz::CompositorRenderPass::Create();
+  std::optional<viz::ViewTransitionElementResourceId>
+      opt_view_transition_element_resource_id;
   if (!data.ReadOutputRect(&(*out)->output_rect) ||
       !data.ReadDamageRect(&(*out)->damage_rect) ||
       !data.ReadTransformToRootTarget(&(*out)->transform_to_root_target) ||
@@ -29,10 +31,17 @@ bool StructTraits<viz::mojom::CompositorRenderPassDataView,
       !data.ReadSubtreeCaptureId(&(*out)->subtree_capture_id) ||
       !data.ReadSubtreeSize(&(*out)->subtree_size) ||
       !data.ReadCopyRequests(&(*out)->copy_requests) ||
-      !data.ReadSharedElementResourceId(&(*out)->shared_element_resource_id) ||
+      !data.ReadViewTransitionElementResourceId(
+          &opt_view_transition_element_resource_id) ||
       !data.ReadId(&(*out)->id)) {
     return false;
   }
+
+  if (opt_view_transition_element_resource_id) {
+    (*out)->view_transition_element_resource_id =
+        *opt_view_transition_element_resource_id;
+  }
+
   // CompositorRenderPass ids are never zero.
   if (!(*out)->id) {
     viz::SetDeserializationCrashKeyString("Invalid render pass ID");

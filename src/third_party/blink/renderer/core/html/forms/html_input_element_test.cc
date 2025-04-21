@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 using ::testing::Truly;
 
@@ -33,7 +34,7 @@ namespace blink {
 
 namespace {
 
-class MockChromeClient : public EmptyChromeClient {
+class PasswordResetChromeClient : public EmptyChromeClient {
  public:
   MOCK_METHOD(void,
               PasswordFieldReset,
@@ -41,12 +42,27 @@ class MockChromeClient : public EmptyChromeClient {
               (override));
 };
 
+class HTMLInputElementTestChromeClient : public EmptyChromeClient {
+ public:
+  gfx::Rect LocalRootToScreenDIPs(const gfx::Rect& local_root_rect,
+                                  const LocalFrameView* view) const override {
+    return view->GetPage()->GetVisualViewport().RootFrameToViewport(
+        local_root_rect);
+  }
+};
+
 }  // namespace
 
 class HTMLInputElementTest : public PageTestBase {
  protected:
+  void SetUp() override {
+    auto* chrome_client =
+        MakeGarbageCollected<HTMLInputElementTestChromeClient>();
+    SetupPageWithClients(chrome_client);
+  }
+
   HTMLInputElement& TestElement() {
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     DCHECK(element);
     return To<HTMLInputElement>(*element);
   }
@@ -54,11 +70,11 @@ class HTMLInputElementTest : public PageTestBase {
 
 TEST_F(HTMLInputElementTest, FilteredDataListOptionsNoList) {
   GetDocument().documentElement()->setInnerHTML("<input id=test>");
-  EXPECT_TRUE(TestElement().FilteredDataListOptions().IsEmpty());
+  EXPECT_TRUE(TestElement().FilteredDataListOptions().empty());
 
   GetDocument().documentElement()->setInnerHTML(
       "<input id=test list=dl1><datalist id=dl1></datalist>");
-  EXPECT_TRUE(TestElement().FilteredDataListOptions().IsEmpty());
+  EXPECT_TRUE(TestElement().FilteredDataListOptions().empty());
 }
 
 TEST_F(HTMLInputElementTest, FilteredDataListOptionsContain) {
@@ -135,17 +151,19 @@ TEST_F(HTMLInputElementTest, FilteredDataListOptionsDynamicContain) {
 TEST_F(HTMLInputElementTest, create) {
   auto* input = MakeGarbageCollected<HTMLInputElement>(
       GetDocument(), CreateElementFlags::ByCreateElement());
-  EXPECT_NE(nullptr, input->UserAgentShadowRoot());
+  EXPECT_EQ(nullptr, input->UserAgentShadowRoot());
 
   input = MakeGarbageCollected<HTMLInputElement>(
       GetDocument(), CreateElementFlags::ByParser(&GetDocument()));
   EXPECT_EQ(nullptr, input->UserAgentShadowRoot());
   input->ParserSetAttributes(Vector<Attribute, kAttributePrealloc>());
-  EXPECT_NE(nullptr, input->UserAgentShadowRoot());
+  EXPECT_EQ(nullptr, input->UserAgentShadowRoot());
 }
 
 TEST_F(HTMLInputElementTest, NoAssertWhenMovedInNewDocument) {
-  auto* document_without_frame = Document::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document_without_frame =
+      Document::CreateForTest(execution_context.GetExecutionContext());
   EXPECT_EQ(nullptr, document_without_frame->GetPage());
   auto* html = MakeGarbageCollected<HTMLHtmlElement>(*document_without_frame);
   html->AppendChild(
@@ -171,16 +189,15 @@ TEST_F(HTMLInputElementTest, NoAssertWhenMovedInNewDocument) {
 }
 
 TEST_F(HTMLInputElementTest, DefaultToolTip) {
-  auto* input_without_form = MakeGarbageCollected<HTMLInputElement>(
-      GetDocument(), CreateElementFlags());
+  auto* input_without_form =
+      MakeGarbageCollected<HTMLInputElement>(GetDocument());
   input_without_form->SetBooleanAttribute(html_names::kRequiredAttr, true);
   GetDocument().body()->AppendChild(input_without_form);
   EXPECT_EQ("<<ValidationValueMissing>>", input_without_form->DefaultToolTip());
 
   auto* form = MakeGarbageCollected<HTMLFormElement>(GetDocument());
   GetDocument().body()->AppendChild(form);
-  auto* input_with_form = MakeGarbageCollected<HTMLInputElement>(
-      GetDocument(), CreateElementFlags());
+  auto* input_with_form = MakeGarbageCollected<HTMLInputElement>(GetDocument());
   input_with_form->SetBooleanAttribute(html_names::kRequiredAttr, true);
   form->AppendChild(input_with_form);
   EXPECT_EQ("<<ValidationValueMissing>>", input_with_form->DefaultToolTip());
@@ -191,14 +208,13 @@ TEST_F(HTMLInputElementTest, DefaultToolTip) {
 
 // crbug.com/589838
 TEST_F(HTMLInputElementTest, ImageTypeCrash) {
-  auto* input = MakeGarbageCollected<HTMLInputElement>(GetDocument(),
-                                                       CreateElementFlags());
-  input->setAttribute(html_names::kTypeAttr, "image");
+  auto* input = MakeGarbageCollected<HTMLInputElement>(GetDocument());
+  input->setAttribute(html_names::kTypeAttr, AtomicString("image"));
   input->EnsureFallbackContent();
   // Make sure ensurePrimaryContent() recreates UA shadow tree, and updating
   // |value| doesn't crash.
   input->EnsurePrimaryContent();
-  input->setAttribute(html_names::kValueAttr, "aaa");
+  input->setAttribute(html_names::kValueAttr, AtomicString("aaa"));
 }
 
 TEST_F(HTMLInputElementTest, RadioKeyDownDCHECKFailure) {
@@ -209,11 +225,11 @@ TEST_F(HTMLInputElementTest, RadioKeyDownDCHECKFailure) {
   auto& radio2 = To<HTMLInputElement>(*radio1.nextSibling());
   radio1.Focus();
   // Make layout-dirty.
-  radio2.setAttribute(html_names::kStyleAttr, "position:fixed");
+  radio2.setAttribute(html_names::kStyleAttr, AtomicString("position:fixed"));
   KeyboardEventInit* init = KeyboardEventInit::Create();
-  init->setKey("ArrowRight");
+  init->setKey(keywords::kArrowRight);
   radio1.DefaultEventHandler(
-      *MakeGarbageCollected<KeyboardEvent>("keydown", init));
+      *MakeGarbageCollected<KeyboardEvent>(event_type_names::kKeydown, init));
   EXPECT_EQ(GetDocument().ActiveElement(), &radio2);
 }
 
@@ -228,19 +244,34 @@ TEST_F(HTMLInputElementTest, DateTimeChooserSizeParamRespectsScale) {
   DateTimeChooserParameters params;
   bool success = input->SetupDateTimeChooserParameters(params);
   EXPECT_TRUE(success);
-  EXPECT_EQ("date", params.type);
+  EXPECT_EQ(InputType::Type::kDate, params.type);
   EXPECT_EQ(gfx::Rect(16, 16, 400, 100), params.anchor_rect_in_screen);
 }
 
 TEST_F(HTMLInputElementTest, StepDownOverflow) {
-  auto* input = MakeGarbageCollected<HTMLInputElement>(GetDocument(),
-                                                       CreateElementFlags());
-  input->setAttribute(html_names::kTypeAttr, "date");
-  input->setAttribute(html_names::kMinAttr, "2010-02-10");
-  input->setAttribute(html_names::kStepAttr, "9223372036854775556");
+  auto* input = MakeGarbageCollected<HTMLInputElement>(GetDocument());
+  input->setAttribute(html_names::kTypeAttr, AtomicString("date"));
+  input->setAttribute(html_names::kMinAttr, AtomicString("2010-02-10"));
+  input->setAttribute(html_names::kStepAttr,
+                      AtomicString("9223372036854775556"));
   // InputType::applyStep() should not pass an out-of-range value to
   // setValueAsDecimal, and WTF::msToYear() should not cause a DCHECK failure.
   input->stepDown(1, ASSERT_NO_EXCEPTION);
+}
+
+TEST_F(HTMLInputElementTest, StepDownDefaultToMin) {
+  AtomicString min_attr_value("7");
+
+  auto* input = MakeGarbageCollected<HTMLInputElement>(GetDocument());
+  input->setAttribute(html_names::kTypeAttr, AtomicString("number"));
+  input->setAttribute(html_names::kMinAttr, min_attr_value);
+
+  EXPECT_TRUE(input->Value().empty());
+
+  input->stepDown(1, ASSERT_NO_EXCEPTION);
+
+  // stepDown() should default to min value when the input has no initial value.
+  EXPECT_EQ(min_attr_value, input->Value());
 }
 
 TEST_F(HTMLInputElementTest, CheckboxHasNoShadowRoot) {
@@ -253,7 +284,7 @@ TEST_F(HTMLInputElementTest, ChangingInputTypeCausesShadowRootToBeCreated) {
   GetDocument().body()->setInnerHTML("<input type='checkbox' />");
   auto* input = To<HTMLInputElement>(GetDocument().body()->firstChild());
   EXPECT_EQ(nullptr, input->UserAgentShadowRoot());
-  input->setAttribute(html_names::kTypeAttr, "text");
+  input->setAttribute(html_names::kTypeAttr, AtomicString("text"));
   EXPECT_NE(nullptr, input->UserAgentShadowRoot());
 }
 
@@ -296,6 +327,31 @@ TEST_F(HTMLInputElementTest, UpdateTypeDcheck) {
   // in Document::UpdateFocusAppearanceAfterLayout().
 }
 
+TEST_F(HTMLInputElementTest, LazilyCreateShadowTree) {
+  GetDocument().body()->setInnerHTML("<input/>");
+  auto* input = To<HTMLInputElement>(GetDocument().body()->firstChild());
+  ASSERT_TRUE(input);
+  EXPECT_FALSE(IsShadowHost(*input));
+  GetDocument().UpdateStyleAndLayoutTree();
+  EXPECT_TRUE(IsShadowHost(*input));
+}
+
+TEST_F(HTMLInputElementTest, LazilyCreateShadowTreeWithPlaceholder) {
+  GetDocument().body()->setInnerHTML("<input placeholder='x'/>");
+  auto* input = To<HTMLInputElement>(GetDocument().body()->firstChild());
+  ASSERT_TRUE(input);
+  EXPECT_FALSE(IsShadowHost(*input));
+  GetDocument().UpdateStyleAndLayoutTree();
+  EXPECT_TRUE(IsShadowHost(*input));
+}
+
+TEST_F(HTMLInputElementTest, LazilyCreateShadowTreeWithValue) {
+  GetDocument().body()->setInnerHTML("<input value='x'/>");
+  auto* input = To<HTMLInputElement>(GetDocument().body()->firstChild());
+  ASSERT_TRUE(input);
+  EXPECT_FALSE(IsShadowHost(*input));
+}
+
 struct PasswordFieldResetParam {
   const char* new_type;
   const char* temporary_value;
@@ -307,14 +363,14 @@ class HTMLInputElementPasswordFieldResetTest
       public ::testing::WithParamInterface<PasswordFieldResetParam> {
  protected:
   void SetUp() override {
-    chrome_client_ = MakeGarbageCollected<MockChromeClient>();
+    chrome_client_ = MakeGarbageCollected<PasswordResetChromeClient>();
     SetupPageWithClients(chrome_client_);
   }
 
-  MockChromeClient& chrome_client() { return *chrome_client_; }
+  PasswordResetChromeClient& chrome_client() { return *chrome_client_; }
 
  private:
-  Persistent<MockChromeClient> chrome_client_;
+  Persistent<PasswordResetChromeClient> chrome_client_;
 };
 
 // Tests that PasswordFieldReset() is (only) called for empty fields. This is
@@ -325,7 +381,7 @@ TEST_P(HTMLInputElementPasswordFieldResetTest, PasswordFieldReset) {
       "<input id=test type=password>");
   GetDocument().UpdateStyleAndLayoutTree();
 
-  TestElement().setType(GetParam().new_type);
+  TestElement().setType(AtomicString(GetParam().new_type));
   GetDocument().UpdateStyleAndLayoutTree();
 
   TestElement().SetValue(GetParam().temporary_value);
@@ -333,7 +389,7 @@ TEST_P(HTMLInputElementPasswordFieldResetTest, PasswordFieldReset) {
 
   EXPECT_CALL(chrome_client(),
               PasswordFieldReset(Truly([this](const HTMLInputElement& e) {
-                return e.isSameNode(&TestElement()) && e.Value().IsEmpty();
+                return e.isSameNode(&TestElement()) && e.Value().empty();
               })))
       .Times(GetParam().expected_call ? 1 : 0);
   TestElement().SetValue("");

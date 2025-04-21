@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 namespace extensions {
 
-ContentPredicate::~ContentPredicate() {}
+ContentPredicate::~ContentPredicate() = default;
 
 bool ContentPredicate::IsIgnored() const {
   return false;
 }
 
-ContentPredicate::ContentPredicate() {}
+ContentPredicate::ContentPredicate() = default;
 
-ContentPredicateFactory::~ContentPredicateFactory() {}
+ContentPredicateFactory::~ContentPredicateFactory() = default;
 
-ContentPredicateFactory::ContentPredicateFactory() {}
+ContentPredicateFactory::ContentPredicateFactory() = default;
 
 }  // namespace extensions

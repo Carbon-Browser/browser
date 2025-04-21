@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,14 +15,18 @@
 namespace autofill {
 
 WebauthnDialogModel::WebauthnDialogModel(WebauthnDialogState dialog_state)
-    : state_(dialog_state) {}
+    : state_(dialog_state) {
+  SetIllustrationsFromState();
+}
 
 WebauthnDialogModel::~WebauthnDialogModel() = default;
 
 void WebauthnDialogModel::SetDialogState(WebauthnDialogState state) {
   state_ = state;
-  for (WebauthnDialogModelObserver& observer : observers_)
+  SetIllustrationsFromState();
+  for (WebauthnDialogModelObserver& observer : observers_) {
     observer.OnDialogStateChanged();
+  }
 }
 
 void WebauthnDialogModel::AddObserver(WebauthnDialogModelObserver* observer) {
@@ -37,10 +41,6 @@ void WebauthnDialogModel::RemoveObserver(
 bool WebauthnDialogModel::IsActivityIndicatorVisible() const {
   return state_ == WebauthnDialogState::kOfferPending ||
          state_ == WebauthnDialogState::kVerifyPending;
-}
-
-bool WebauthnDialogModel::IsBackButtonVisible() const {
-  return false;
 }
 
 bool WebauthnDialogModel::IsCancelButtonVisible() const {
@@ -80,26 +80,6 @@ std::u16string WebauthnDialogModel::GetAcceptButtonLabel() const {
       IDS_AUTOFILL_WEBAUTHN_OPT_IN_DIALOG_OK_BUTTON_LABEL);
 }
 
-const gfx::VectorIcon& WebauthnDialogModel::GetStepIllustration(
-    ImageColorScheme color_scheme) const {
-  switch (state_) {
-    case WebauthnDialogState::kOffer:
-    case WebauthnDialogState::kOfferPending:
-    case WebauthnDialogState::kVerifyPending:
-      return color_scheme == ImageColorScheme::kDark
-                 ? kWebauthnDialogHeaderDarkIcon
-                 : kWebauthnDialogHeaderIcon;
-    case WebauthnDialogState::kOfferError:
-      return color_scheme == ImageColorScheme::kDark ? kWebauthnErrorDarkIcon
-                                                     : kWebauthnErrorIcon;
-    case WebauthnDialogState::kInactive:
-    case WebauthnDialogState::kUnknown:
-      break;
-  }
-  NOTREACHED();
-  return gfx::kNoneIcon;
-}
-
 std::u16string WebauthnDialogModel::GetStepTitle() const {
   switch (state_) {
     case WebauthnDialogState::kOffer:
@@ -117,7 +97,6 @@ std::u16string WebauthnDialogModel::GetStepTitle() const {
       break;
   }
   NOTREACHED();
-  return std::u16string();
 }
 
 std::u16string WebauthnDialogModel::GetStepDescription() const {
@@ -136,7 +115,24 @@ std::u16string WebauthnDialogModel::GetStepDescription() const {
       break;
   }
   NOTREACHED();
-  return std::u16string();
+}
+
+void WebauthnDialogModel::SetIllustrationsFromState() {
+  switch (state_) {
+    case WebauthnDialogState::kOffer:
+    case WebauthnDialogState::kOfferPending:
+    case WebauthnDialogState::kVerifyPending:
+      vector_illustrations_.emplace(kWebauthnDialogHeaderIcon,
+                                    kWebauthnDialogHeaderDarkIcon);
+      break;
+    case WebauthnDialogState::kOfferError:
+      vector_illustrations_.emplace(kWebauthnErrorIcon, kWebauthnErrorDarkIcon);
+      break;
+    case WebauthnDialogState::kInactive:
+    case WebauthnDialogState::kUnknown:
+      vector_illustrations_.reset();
+      break;
+  }
 }
 
 }  // namespace autofill

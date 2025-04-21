@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace viz {
 
 class VIZ_COMMON_EXPORT TileDrawQuad : public ContentDrawQuadBase {
  public:
-  static const size_t kResourceIdIndex = 0;
+  static constexpr Material kMaterial = Material::kTiledContent;
 
   TileDrawQuad();
   ~TileDrawQuad() override;
@@ -49,8 +49,6 @@ class VIZ_COMMON_EXPORT TileDrawQuad : public ContentDrawQuadBase {
               bool force_anti_aliasing_off);
 
   static const TileDrawQuad* MaterialCast(const DrawQuad*);
-
-  ResourceId resource_id() const { return resources.ids[kResourceIdIndex]; }
 
  private:
   void ExtendValue(base::trace_event::TracedValue* value) const override;

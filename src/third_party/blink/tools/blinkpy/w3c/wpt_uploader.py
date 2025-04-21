@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Uploads Wpt test results from Chromium to wpt.fyi."""
@@ -13,7 +13,7 @@ import requests
 import six
 import tempfile
 
-from blinkpy.common.net.rpc import Rpc
+from blinkpy.common.net.rpc import BuildbucketClient
 from blinkpy.common.system.log_utils import configure_logging
 
 _log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ _log = logging.getLogger(__name__)
 class WptReportUploader(object):
     def __init__(self, host):
         self._host = host
-        self._rpc = Rpc(host)
+        self._bb_client = BuildbucketClient.from_host(host)
         self.options = None
         self._dry_run = False
         configure_logging(logging_level=logging.INFO, include_time=True)
@@ -44,6 +44,7 @@ class WptReportUploader(object):
         builders = [
             ("chromium", "ci", "android-webview-pie-x86-wpt-fyi-rel"),
             ("chromium", "ci", "android-chrome-pie-x86-wpt-fyi-rel"),
+            ("chromium", "ci", "ios-wpt-fyi-rel"),
         ]
         for builder in builders:
             reports = []
@@ -51,119 +52,63 @@ class WptReportUploader(object):
             build = self.fetch_latest_complete_build(*builder)
             if build:
                 _log.info("Find latest completed build %d" % build.get("number"))
-                urls = self.fetch_wpt_report_urls(build.get("id"))
+                # pylint: disable=unsubscriptable-object
+                urls = self._host.results_fetcher.fetch_wpt_report_urls(
+                    build["id"])
                 for url in urls:
                     _log.info("Fetching wpt report from %s" % url)
-                    res = self._host.web.request("GET", url)
-                    if res.getcode() == 200:
-                        body = res.read()
-                        reports.append(json.loads(body))
-                    else:
+                    body = self._host.web.get_binary(url,
+                                                     return_none_on_404=True)
+                    if not body:
                         _log.error("Failed to fetch wpt report.")
-
+                        continue
+                    # Ignore retry results on subsequent lines.
+                    initial_report, _, _ = body.partition(b'\n')
+                    reports.append(json.loads(initial_report))
             merged_report = self.merge_reports(reports)
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                path = os.path.join(tmpdir, "reports.json.gz")
-                with gzip.open(path, 'wt', encoding="utf-8") as zipfile:
-                    json.dump(merged_report, zipfile)
-                rv = rv | self.upload_report(path)
+            if merged_report is None:
+                _log.error("No result to upload, skip...")
+            else:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    path = os.path.join(tmpdir, "reports.json.gz")
+                    with gzip.open(path, 'wt', encoding="utf-8") as zipfile:
+                        json.dump(merged_report, zipfile)
+                    rv = rv | self.upload_report(path)
             _log.info(" ")
-
-        return rv
-
-    def fetch_wpt_report_urls(self, build_id):
-        """Get a list of fetchUrl for wpt-report from given build.
-
-        This uses the QueryArtifacts rpc format specified in
-        https://source.chromium.org/chromium/infra/infra/+/main:go/src/go.chromium.org/luci/resultdb/proto/v1/resultdb.proto
-
-        The response is a list of dicts of the following form:
-
-        {
-            'artifacts': [
-                {
-                    'name': 'some name',
-                    'artifactId': 'wpt_reports_dada.json',
-                    'fetchUrl': 'https://something...',
-                    'fetchUrlExpiration': 'some future time',
-                    'sizeBytes': '8472164'
-                },
-                ... more artifacts
-            ]
-        }
-
-        An example of the url as below:
-        https://results.usercontent.cr.dev/invocations/ \
-        task-chromium-swarm.appspot.com-58590ed6228fd611/ \
-        artifacts/wpt_reports_android_webview_01.json? \
-        token=AXsiX2kiOiIxNjQxNzYyNzU0MDkxIiwiX3giOiIzNjAwMDAwIn24WM72ciT_oYJG0hGx6MShOXu8SyVxfB_fw
-
-        Returns a sorted(based on shard number) list of URLs for wpt report
-        """
-
-        invocation = "invocations/build-%s" % build_id
-        data = {
-            "invocations": [invocation],
-            "predicate": {
-                "followEdges": {"includedInvocations": True}
-            }
-        }
-        url = 'https://results.api.cr.dev/prpc/luci.resultdb.v1.ResultDB/QueryArtifacts'
-        res = self._rpc.luci_rpc(url, data)
-        artifacts = res.get("artifacts") if res else None
-        if not artifacts:
-            return []
-
-        rv = []
-        for artifact in artifacts:
-            if artifact.get("artifactId").startswith("wpt_reports"):
-                rv.append(artifact.get("fetchUrl"))
-
-        if len(rv) > 0:
-            pos = rv[0].find("wpt_reports")
-            rv.sort(key=lambda x: x[pos:])
 
         return rv
 
     def fetch_latest_complete_build(self, project, bucket, builder_name):
         """Gets latest successful build from a CI builder.
 
-        This uses the SearchBuilds rpc format specified in
-        https://cs.chromium.org/chromium/infra/go/src/go.chromium.org/luci/buildbucket/proto/rpc.proto
+        This uses the SearchBuilds RPC format specified in:
+            https://cs.chromium.org/chromium/infra/go/src/go.chromium.org/luci/buildbucket/proto/builder_service.proto
 
-        The response is a list of dicts of the following form:
-        {
-           "builds": [
-               {
-                   "id": "8828280326907235505",
-                   "builder": {
-                       "builder": "android-webview-pie-x86-wpt-fyi-rel"
-                   },
-                   "status": "SUCCESS"
-               },
-               ... more builds
-        }
+        The 'builds' field of the response is a list of dicts of the following
+        form:
+            [
+                {
+                    "id": "8828280326907235505",
+                    "builder": {
+                        "builder": "android-webview-pie-x86-wpt-fyi-rel"
+                    },
+                    "status": "SUCCESS"
+                },
+                ... more builds,
+            ]
 
         This method returns the latest finished build.
         """
-        data = {
-            "predicate": {
-                "builder": {
-                    "project": project,
-                    "bucket": bucket,
-                    "builder": builder_name
-                },
-                "status": "SUCCESS"
+        predicate = {
+            "builder": {
+                "project": project,
+                "bucket": bucket,
+                "builder": builder_name,
             },
-            "fields": "builds.*.builder.builder,builds.*.number,builds.*.status,builds.*.id",
-            "pageSize": 10
+            "status": "SUCCESS",
         }
-        url = 'https://cr-buildbucket.appspot.com/prpc/buildbucket.v2.Builds/SearchBuilds'
-        raw_results_json = self._rpc.luci_rpc(url, data)
-        if 'builds' not in raw_results_json:
-            return None
-        builds = raw_results_json['builds']
+        builds = self._bb_client.search_builds(
+            predicate, ['builder.builder', 'number', 'status', 'id'], count=10)
         return builds[0] if builds else None
 
     def get_password(self):
@@ -203,6 +148,7 @@ class WptReportUploader(object):
         url = "https://%s/api/results/upload" % fqdn
 
         with open(path_to_report, 'rb') as fp:
+            params = {'labels': 'master'}
             files = {'result_file': fp}
             if self._dry_run:
                 _log.info("Dry run, no report uploaded.")
@@ -210,7 +156,7 @@ class WptReportUploader(object):
             session = requests.Session()
             password = self.get_password()
             session.auth = (username, password)
-            res = session.post(url=url, files=files)
+            res = session.post(url=url, params=params, files=files)
             if res.status_code == 200:
                 _log.info("Successfully uploaded wpt report with response: " + res.text.strip())
                 report_id = res.text.split()[1]
@@ -222,7 +168,7 @@ class WptReportUploader(object):
 
     def merge_reports(self, reports):
         if not reports:
-            return {}
+            return None
 
         merged_report = {}
         merged_report['run_info'] = reports[0]['run_info']
@@ -235,6 +181,8 @@ class WptReportUploader(object):
             merged_report['results'].extend(report['results'])
             merged_report['time_end'] = max(merged_report['time_end'],
                                             report['time_end'])
+        if not merged_report['results']:
+            return None
         return merged_report
 
     def parse_args(self, argv):

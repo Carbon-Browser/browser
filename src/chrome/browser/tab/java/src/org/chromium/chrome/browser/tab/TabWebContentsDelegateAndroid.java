@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.graphics.Rect;
 import org.chromium.components.embedder_support.delegate.WebContentsDelegateAndroid;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * A basic {@link WebContentsDelegateAndroid} that proxies methods into Tab.
- */
+/** A basic {@link WebContentsDelegateAndroid} that proxies methods into Tab. */
 public abstract class TabWebContentsDelegateAndroid extends WebContentsDelegateAndroid {
     /**
      * Returns whether the page should resume accepting requests for the new window. This is
@@ -29,8 +27,12 @@ public abstract class TabWebContentsDelegateAndroid extends WebContentsDelegateA
      * @param userGesture {@code true} if opened by user gesture.
      * @return {@code true} if new tab was created successfully with a give WebContents.
      */
-    protected abstract boolean addNewContents(WebContents sourceWebContents,
-            WebContents webContents, int disposition, Rect initialPosition, boolean userGesture);
+    protected abstract boolean addNewContents(
+            WebContents sourceWebContents,
+            WebContents webContents,
+            int disposition,
+            Rect initialPosition,
+            boolean userGesture);
 
     /**
      * Sets the overlay mode.
@@ -99,6 +101,26 @@ public abstract class TabWebContentsDelegateAndroid extends WebContentsDelegateA
      * @return true if this is TWA and should delegate geolocation request.
      */
     protected boolean isInstalledWebappDelegateGeolocation() {
+        return false;
+    }
+
+    /**
+     * Checks if the associated tab uses modal context menu.
+     * @return true if the current tab uses modal context menu.
+     */
+    protected boolean isModalContextMenu() {
+        return true;
+    }
+
+    /**
+     * @return true if the WebContents is a TWA.
+     */
+    public boolean isTrustedWebActivity(WebContents webContents) {
+        return false;
+    }
+
+    /** Return if dynamically change safe area insets as browser controls scroll. */
+    protected boolean isDynamicSafeAreaInsetsEnabled() {
         return false;
     }
 }

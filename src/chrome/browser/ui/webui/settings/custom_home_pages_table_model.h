@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,11 +40,6 @@ class CustomHomePagesTableModel : public ui::TableModel {
 
   // Sets the set of urls that this model contains.
   void SetURLs(const std::vector<GURL>& urls);
-
-  // Collect all entries indexed by |index_list|, and moves them to be right
-  // before the element addressed by |insert_before|. Used by Drag&Drop.
-  // Expects |index_list| to be ordered ascending.
-  void MoveURLs(size_t insert_before, const std::vector<size_t>& index_list);
 
   // Adds an entry at the specified index.
   void Add(size_t index, const GURL& url);

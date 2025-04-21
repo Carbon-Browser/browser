@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,11 @@ void MetadataBatch::AddMetadata(
   metadata_map_.insert(std::make_pair(storage_key, std::move(metadata)));
 }
 
-const sync_pb::ModelTypeState& MetadataBatch::GetModelTypeState() const {
+const sync_pb::DataTypeState& MetadataBatch::GetDataTypeState() const {
   return state_;
 }
 
-void MetadataBatch::SetModelTypeState(const sync_pb::ModelTypeState& state) {
+void MetadataBatch::SetDataTypeState(const sync_pb::DataTypeState& state) {
   state_ = state;
 }
 

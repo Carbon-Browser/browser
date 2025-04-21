@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,18 @@ SelectToSpeakNavigationControlTest = class extends SelectToSpeakE2ETest {
     chrome.accessibilityPrivate.updateSelectToSpeakPanel =
         this.updateSelectToSpeakPanel;
 
-      await importModule(
-          'selectToSpeak', '/select_to_speak/select_to_speak_main.js');
-      await importModule(
-          'SelectToSpeakConstants',
-          '/select_to_speak/select_to_speak_constants.js');
+    await new Promise(resolve => {
+      chrome.settingsPrivate.setPref(
+          PrefsManager.ENHANCED_VOICES_DIALOG_SHOWN_KEY, true,
+          '' /* unused, see crbug.com/866161 */, () => resolve());
+    });
+    if (!selectToSpeak.prefsManager_.enhancedVoicesDialogShown()) {
+      // TODO(b/267705784): This shouldn't happen, but sometimes the
+      // setPref call above does not cause PrefsManager.updateSettingsPrefs_ to
+      // be called (test: listen to updateSettingsPrefsCallbackForTest_, never
+      // called).
       selectToSpeak.prefsManager_.enhancedVoicesDialogShown_ = true;
+    }
   }
 
   generateHtmlWithSelectedElement(elementId, bodyHtml) {
@@ -1002,14 +1008,15 @@ AX_TEST_F(
 
         // Perform Search key + S, which should restore focus to
         // panel.
-        selectToSpeak.fireMockKeyDownEvent(
-            {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
-        selectToSpeak.fireMockKeyDownEvent(
-            {keyCode: SelectToSpeakConstants.READ_SELECTION_KEY_CODE});
-        selectToSpeak.fireMockKeyUpEvent(
-            {keyCode: SelectToSpeakConstants.READ_SELECTION_KEY_CODE});
-        selectToSpeak.fireMockKeyUpEvent(
-            {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
+        selectToSpeak.sendMockSelectToSpeakKeysPressedChanged(
+            [SelectToSpeakConstants.SEARCH_KEY_CODE]);
+        selectToSpeak.sendMockSelectToSpeakKeysPressedChanged([
+          SelectToSpeakConstants.SEARCH_KEY_CODE,
+          SelectToSpeakConstants.READ_SELECTION_KEY_CODE,
+        ]);
+        selectToSpeak.sendMockSelectToSpeakKeysPressedChanged(
+            [SelectToSpeakConstants.SEARCH_KEY_CODE]);
+        selectToSpeak.sendMockSelectToSpeakKeysPressedChanged([]);
 
         // Verify focus is still on button within panel.
         chrome.automation.getFocus(this.newCallback(focusedNode => {

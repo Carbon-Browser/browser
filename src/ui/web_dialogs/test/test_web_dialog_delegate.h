@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 #include "url/gurl.h"
@@ -37,11 +38,9 @@ class TestWebDialogDelegate : public WebDialogDelegate {
   void SetCloseOnEscape(bool enabled);
 
   // WebDialogDelegate implementation:
-  ModalType GetDialogModalType() const override;
+  ui::mojom::ModalType GetDialogModalType() const override;
   std::u16string GetDialogTitle() const override;
   GURL GetDialogContentURL() const override;
-  void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
   void GetDialogSize(gfx::Size* size) const override;
   std::string GetDialogArgs() const override;
   void OnDialogClosed(const std::string& json_retval) override;

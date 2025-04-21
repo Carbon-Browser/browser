@@ -1,11 +1,13 @@
 Name: xcbproto
 Short Name: xcbproto
 URL: https://gitlab.freedesktop.org/xorg/proto/xcbproto
-Version: 70ca65fa35c3760661b090bc4b2601daa7a099b8
+Revision: 77d7fc04da729ddc5ed4aacf30253726fac24dca
+Version: 1.14.1
 CPEPrefix: unknown
 Security Critical: no
-License: MIT
-License File: NOT_SHIPPED
+Shipped: no
+License: X11
+License File: src/COPYING
 
 Description:
 XML-XCB protocol descriptions

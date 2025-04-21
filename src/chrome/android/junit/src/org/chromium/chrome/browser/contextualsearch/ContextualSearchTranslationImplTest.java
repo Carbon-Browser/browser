@@ -1,12 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.contextualsearch;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -16,43 +17,41 @@ import static org.mockito.Mockito.when;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.BlockJUnit4ClassRunner;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchTranslationImpl.TranslateBridgeWrapper;
 
 import java.util.ArrayList;
 
-/**
- * Tests the {@link ContextualSearchTranslationImpl} class.
- */
-@RunWith(BlockJUnit4ClassRunner.class)
+/** Tests the {@link ContextualSearchTranslationImpl} class. */
+@RunWith(BaseRobolectricTestRunner.class)
 public class ContextualSearchTranslationImplTest {
     private static final String ENGLISH = "en";
     private static final String SPANISH = "es";
     private static final String GERMAN = "de";
     private static final ArrayList<String> ENGLISH_AND_SPANISH;
+
     static {
         ArrayList<String> langs = new ArrayList<String>();
         langs.add(ENGLISH);
         langs.add(SPANISH);
         ENGLISH_AND_SPANISH = langs;
     }
+
     private static final ArrayList<String> ENGLISH_LIST;
+
     static {
         ArrayList<String> langs = new ArrayList<String>();
         langs.add(ENGLISH);
         ENGLISH_LIST = langs;
     }
 
-    @Mock
-    private TranslateBridgeWrapper mTranslateBridgeWrapperMock;
-    @Mock
-    private ContextualSearchRequest mRequest;
-    @Mock
-    private ContextualSearchPolicy mPolicy;
+    @Mock private TranslateBridgeWrapper mTranslateBridgeWrapperMock;
+    @Mock private ContextualSearchRequest mRequest;
+    @Mock private ContextualSearchPolicy mPolicy;
 
     private ContextualSearchTranslationImpl mImpl;
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -156,7 +156,6 @@ std::unique_ptr<GbmBuffer> MockGbmDevice::CreateBufferWithModifiers(
       break;
     default:
       NOTREACHED() << "Unsupported format: " << format;
-      return nullptr;
   }
 
   uint64_t format_modifier =
@@ -188,7 +187,10 @@ std::unique_ptr<GbmBuffer> MockGbmDevice::CreateBufferFromHandle(
     const gfx::Size& size,
     gfx::NativePixmapHandle handle) {
   NOTREACHED();
-  return nullptr;
+}
+
+bool MockGbmDevice::CanCreateBufferForFormat(uint32_t format) {
+  return true;
 }
 
 }  // namespace ui

@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/print_management/printing_manager.h"
 
-#include "ash/webui/print_management/mojom/printing_manager.mojom.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -17,6 +17,7 @@
 #include "chrome/browser/ash/printing/test_cups_print_job_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/components/print_management/mojom/printing_manager.mojom.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -30,7 +31,7 @@ namespace printing {
 namespace print_management {
 namespace {
 
-using printing_manager::mojom::PrintJobInfoPtr;
+using ::chromeos::printing::printing_manager::mojom::PrintJobInfoPtr;
 
 constexpr char kTitle[] = "title";
 const int kPagesNumber = 3;
@@ -54,19 +55,19 @@ class WaitForURLsDeletedObserver : public history::HistoryServiceObserver {
  public:
   explicit WaitForURLsDeletedObserver(base::RunLoop* runner)
       : runner_(runner) {}
-  ~WaitForURLsDeletedObserver() override {}
+  ~WaitForURLsDeletedObserver() override = default;
   WaitForURLsDeletedObserver(const WaitForURLsDeletedObserver&) = delete;
   WaitForURLsDeletedObserver& operator=(const WaitForURLsDeletedObserver&) =
       delete;
 
   // history::HistoryServiceObserver:
-  void OnURLsDeleted(history::HistoryService* service,
-                     const history::DeletionInfo& deletion_info) override {
+  void OnHistoryDeletions(history::HistoryService* service,
+                          const history::DeletionInfo& deletion_info) override {
     runner_->Quit();
   }
 
  private:
-  base::RunLoop* runner_;
+  raw_ptr<base::RunLoop> runner_;
 };
 
 void WaitForURLsDeletedNotification(history::HistoryService* history_service) {
@@ -132,7 +133,7 @@ class PrintingManagerTest : public ::testing::Test {
   std::unique_ptr<CupsPrintJob> CreateOngoingPrintJob(int id) {
     auto print_job = std::make_unique<CupsPrintJob>(
         chromeos::Printer(), id, kTitle, kPagesNumber,
-        ::printing::PrintJob::Source::PRINT_PREVIEW,
+        ::printing::PrintJob::Source::kPrintPreview,
         /*source_id=*/"", proto::PrintSettings());
     print_job_manager_->CreatePrintJob(print_job.get());
     return print_job;
@@ -265,7 +266,7 @@ TEST_F(PrintingManagerTest, DeletingBrowserHistoryDeletesAllPrintJobs) {
   // Simulate deleting all history, expect print job history to also be deleted.
   base::CancelableTaskTracker task_tracker;
   local_history_->ExpireHistoryBetween(
-      std::set<GURL>(), base::Time(), base::Time(),
+      std::set<GURL>(), history::kNoAppIdFilter, base::Time(), base::Time(),
       /*user_initiated*/ true, base::DoNothing(), &task_tracker);
   mock_time_task_runner_->RunUntilIdle();
 
@@ -291,7 +292,7 @@ TEST_F(PrintingManagerTest, PolicyPreventsDeletingBrowserHistoryDeletingJobs) {
   // Simulate deleting all history, expect print job history to not be deleted.
   base::CancelableTaskTracker task_tracker;
   local_history_->ExpireHistoryBetween(
-      std::set<GURL>(), base::Time(), base::Time(),
+      std::set<GURL>(), history::kNoAppIdFilter, base::Time(), base::Time(),
       /*user_initiated*/ true, base::DoNothing(), &task_tracker);
   mock_time_task_runner_->RunUntilIdle();
 
@@ -306,7 +307,9 @@ TEST_F(PrintingManagerTest, ResetReceiverOnBindInterface) {
   // This test simulates a user refreshing the WebUI page. The receiver should
   // be reset before binding the new receiver. Otherwise we would get a DCHECK
   // error from mojo::Receiver
-  mojo::Remote<printing_manager::mojom::PrintingMetadataProvider> remote;
+  mojo::Remote<
+      chromeos::printing::printing_manager::mojom::PrintingMetadataProvider>
+      remote;
   printing_manager_->BindInterface(remote.BindNewPipeAndPassReceiver());
   base::RunLoop().RunUntilIdle();
 

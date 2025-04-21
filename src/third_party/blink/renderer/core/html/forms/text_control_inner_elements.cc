@@ -32,12 +32,12 @@
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_token_list.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/events/mouse_event.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
+#include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/layout/forms/layout_text_control_inner_editor.h"
 
 namespace blink {
 
@@ -47,24 +47,25 @@ EditingViewPortElement::EditingViewPortElement(Document& document)
   setAttribute(html_names::kIdAttr, shadow_element_names::kIdEditingViewPort);
 }
 
-scoped_refptr<ComputedStyle> EditingViewPortElement::CustomStyleForLayoutObject(
+const ComputedStyle* EditingViewPortElement::CustomStyleForLayoutObject(
     const StyleRecalcContext&) {
   // FXIME: Move these styles to html.css.
 
-  scoped_refptr<ComputedStyle> style =
-      GetDocument().GetStyleResolver().CreateComputedStyle();
-  style->InheritFrom(OwnerShadowHost()->ComputedStyleRef());
+  ComputedStyleBuilder style_builder =
+      GetDocument().GetStyleResolver().CreateComputedStyleBuilderInheritingFrom(
+          OwnerShadowHost()->ComputedStyleRef());
 
-  style->SetFlexGrow(1);
-  style->SetMinWidth(Length::Fixed(0));
-  style->SetDisplay(EDisplay::kBlock);
-  style->SetDirection(TextDirection::kLtr);
+  style_builder.SetFlexGrow(1);
+  style_builder.SetMinWidth(Length::Fixed(0));
+  style_builder.SetMinHeight(Length::Fixed(0));
+  style_builder.SetDisplay(EDisplay::kBlock);
+  style_builder.SetDirection(TextDirection::kLtr);
 
   // We don't want the shadow dom to be editable, so we set this block to
   // read-only in case the input itself is editable.
-  style->SetUserModify(EUserModify::kReadOnly);
+  style_builder.SetUserModify(EUserModify::kReadOnly);
 
-  return style;
+  return style_builder.TakeStyle();
 }
 
 // ---------------------------
@@ -91,7 +92,8 @@ void TextControlInnerEditorElement::DefaultEventHandler(Event& event) {
       shadow_ancestor->DefaultEventHandler(event);
   }
 
-  if (event.type() == event_type_names::kScroll) {
+  if (event.type() == event_type_names::kScroll ||
+      event.type() == event_type_names::kScrollend) {
     // The scroller for a text control is inside of a shadow tree but the
     // scroll event won't bubble past the shadow root and authors cannot add
     // an event listener to it. Fire the scroll event at the shadow host so
@@ -122,58 +124,52 @@ void TextControlInnerEditorElement::FocusChanged() {
 }
 
 LayoutObject* TextControlInnerEditorElement::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) {
-  return LayoutObjectFactory::CreateTextControlInnerEditor(*this, style,
-                                                           legacy);
+    const ComputedStyle&) {
+  return MakeGarbageCollected<LayoutTextControlInnerEditor>(this);
 }
 
-scoped_refptr<ComputedStyle>
-TextControlInnerEditorElement::CustomStyleForLayoutObject(
+const ComputedStyle* TextControlInnerEditorElement::CustomStyleForLayoutObject(
     const StyleRecalcContext&) {
-  scoped_refptr<ComputedStyle> inner_editor_style = CreateInnerEditorStyle();
-  // Using StyleAdjuster::adjustComputedStyle updates unwanted style. We'd like
-  // to apply only editing-related and alignment-related.
-  StyleAdjuster::AdjustStyleForEditing(*inner_editor_style);
-  if (!is_visible_)
-    inner_editor_style->SetOpacity(0);
-  return inner_editor_style;
-}
-
-scoped_refptr<ComputedStyle>
-TextControlInnerEditorElement::CreateInnerEditorStyle() const {
   Element* host = OwnerShadowHost();
   DCHECK(host);
   const ComputedStyle& start_style = host->ComputedStyleRef();
-  scoped_refptr<ComputedStyle> text_block_style =
-      GetDocument().GetStyleResolver().CreateComputedStyle();
-  text_block_style->InheritFrom(start_style);
+  ComputedStyleBuilder style_builder =
+      GetDocument().GetStyleResolver().CreateComputedStyleBuilderInheritingFrom(
+          start_style);
   // The inner block, if present, always has its direction set to LTR,
   // so we need to inherit the direction and unicode-bidi style from the
   // element.
   // TODO(https://crbug.com/1101564): The custom inheritance done here means we
   // need to mark for style recalc inside style recalc. See the workaround in
   // LayoutTextControl::StyleDidChange.
-  text_block_style->SetDirection(start_style.Direction());
-  text_block_style->SetUnicodeBidi(start_style.GetUnicodeBidi());
-  text_block_style->SetUserSelect(EUserSelect::kText);
-  text_block_style->SetUserModify(
+  style_builder.SetDirection(start_style.Direction());
+  style_builder.SetUnicodeBidi(start_style.GetUnicodeBidi());
+  style_builder.SetUserSelect(EUserSelect::kText);
+  style_builder.SetUserModify(
       To<HTMLFormControlElement>(host)->IsDisabledOrReadOnly()
           ? EUserModify::kReadOnly
           : EUserModify::kReadWritePlaintextOnly);
-  text_block_style->SetDisplay(EDisplay::kBlock);
-  text_block_style->SetHasLineIfEmpty(true);
-  text_block_style->SetShouldIgnoreOverflowPropertyForInlineBlockBaseline();
+  style_builder.SetDisplay(EDisplay::kBlock);
+  style_builder.SetHasLineIfEmpty(true);
+  if (!start_style.ApplyControlFixedSize(host)) {
+    Length caret_width(GetDocument().View()->CaretWidth(), Length::kFixed);
+    if (IsHorizontalWritingMode(style_builder.GetWritingMode())) {
+      style_builder.SetMinWidth(caret_width);
+    } else {
+      style_builder.SetMinHeight(caret_width);
+    }
+  }
+  style_builder.SetShouldIgnoreOverflowPropertyForInlineBlockBaseline();
 
   if (!IsA<HTMLTextAreaElement>(host)) {
-    text_block_style->SetWhiteSpace(EWhiteSpace::kPre);
-    text_block_style->SetOverflowWrap(EOverflowWrap::kNormal);
-    text_block_style->SetTextOverflow(
-        ToTextControl(host)->ValueForTextOverflow());
+    style_builder.SetScrollbarColor(nullptr);
+    style_builder.SetWhiteSpace(EWhiteSpace::kPre);
+    style_builder.SetOverflowWrap(EOverflowWrap::kNormal);
+    style_builder.SetTextOverflow(ToTextControl(host)->ValueForTextOverflow());
     int computed_line_height = start_style.ComputedLineHeight();
     // Do not allow line-height to be smaller than our default.
-    if (text_block_style->FontSize() >= computed_line_height) {
-      text_block_style->SetLineHeight(
+    if (style_builder.FontSize() >= computed_line_height) {
+      style_builder.SetLineHeight(
           ComputedStyleInitialValues::InitialLineHeight());
     }
 
@@ -186,33 +182,30 @@ TextControlInnerEditorElement::CreateInnerEditorStyle() const {
     // in which we don't want to remove line-height with percent or calculated
     // length.
     // TODO(tkent): This should be done during layout.
-    if (logical_height.IsPercentOrCalc() ||
+    if (logical_height.HasPercent() ||
         (logical_height.IsFixed() &&
          logical_height.GetFloatValue() > computed_line_height)) {
-      text_block_style->SetLineHeight(
+      style_builder.SetLineHeight(
           ComputedStyleInitialValues::InitialLineHeight());
     }
 
     if (To<HTMLInputElement>(host)->ShouldRevealPassword())
-      text_block_style->SetTextSecurity(ETextSecurity::kNone);
+      style_builder.SetTextSecurity(ETextSecurity::kNone);
 
-    text_block_style->SetOverflowX(EOverflow::kScroll);
+    style_builder.SetOverflowX(EOverflow::kScroll);
     // overflow-y:visible doesn't work because overflow-x:scroll makes a layer.
-    text_block_style->SetOverflowY(EOverflow::kScroll);
-    scoped_refptr<ComputedStyle> no_scrollbar_style =
-        GetDocument().GetStyleResolver().CreateComputedStyle();
-    no_scrollbar_style->SetStyleType(kPseudoIdScrollbar);
-    no_scrollbar_style->SetDisplay(EDisplay::kNone);
-    text_block_style->AddCachedPseudoElementStyle(
-        no_scrollbar_style, kPseudoIdScrollbar, g_null_atom);
-    text_block_style->SetHasPseudoElementStyle(kPseudoIdScrollbar);
-
-    text_block_style->SetDisplay(EDisplay::kFlowRoot);
-    if (parentNode()->IsShadowRoot())
-      text_block_style->SetAlignSelfBlockCenter(true);
+    style_builder.SetOverflowY(EOverflow::kScroll);
+    style_builder.SetScrollbarWidth(EScrollbarWidth::kNone);
+    style_builder.SetDisplay(EDisplay::kFlowRoot);
   }
 
-  return text_block_style;
+  // Using StyleAdjuster::adjustComputedStyle updates unwanted style. We'd like
+  // to apply only editing-related and alignment-related.
+  StyleAdjuster::AdjustStyleForEditing(style_builder, this);
+  if (!is_visible_)
+    style_builder.SetOpacity(0);
+
+  return style_builder.TakeStyle();
 }
 
 // ----------------------------
@@ -293,4 +286,5 @@ bool PasswordRevealButtonElement::WillRespondToMouseClickEvents() {
 
   return HTMLDivElement::WillRespondToMouseClickEvents();
 }
+
 }  // namespace blink

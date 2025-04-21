@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,11 @@
 #include <stddef.h>
 
 #include <algorithm>
+#include <optional>
+#include <string_view>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -18,10 +21,9 @@
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_request_args.h"
 #include "base/trace_event/trace_event.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/perfetto/protos/perfetto/config/track_event/track_event_config.gen.h"  // nogncheck
 
-namespace base {
-namespace trace_event {
+namespace base::trace_event {
 
 namespace {
 
@@ -84,8 +86,8 @@ class ConvertableTraceConfigToTraceFormat
 
 std::set<MemoryDumpLevelOfDetail> GetDefaultAllowedMemoryDumpModes() {
   std::set<MemoryDumpLevelOfDetail> all_modes;
-  for (uint32_t mode = static_cast<uint32_t>(MemoryDumpLevelOfDetail::FIRST);
-       mode <= static_cast<uint32_t>(MemoryDumpLevelOfDetail::LAST); mode++) {
+  for (uint32_t mode = static_cast<uint32_t>(MemoryDumpLevelOfDetail::kFirst);
+       mode <= static_cast<uint32_t>(MemoryDumpLevelOfDetail::kLast); mode++) {
     all_modes.insert(static_cast<MemoryDumpLevelOfDetail>(mode));
   }
   return all_modes;
@@ -108,8 +110,8 @@ void TraceConfig::ResetMemoryDumpConfig(
 
 TraceConfig::MemoryDumpConfig::MemoryDumpConfig() = default;
 
-TraceConfig::MemoryDumpConfig::MemoryDumpConfig(
-    const MemoryDumpConfig& other) = default;
+TraceConfig::MemoryDumpConfig::MemoryDumpConfig(const MemoryDumpConfig& other) =
+    default;
 
 TraceConfig::MemoryDumpConfig::~MemoryDumpConfig() = default;
 
@@ -152,12 +154,13 @@ void TraceConfig::ProcessFilterConfig::Merge(
 }
 
 void TraceConfig::ProcessFilterConfig::InitializeFromConfigDict(
-    const Value& dict) {
+    const Value::Dict& dict) {
   included_process_ids_.clear();
-  const Value* value = dict.FindListKey(kIncludedProcessesParam);
-  if (!value)
+  const Value::List* value = dict.FindList(kIncludedProcessesParam);
+  if (!value) {
     return;
-  for (auto& pid_value : value->GetListDeprecated()) {
+  }
+  for (auto& pid_value : *value) {
     if (pid_value.is_int()) {
       included_process_ids_.insert(
           static_cast<base::ProcessId>(pid_value.GetInt()));
@@ -166,13 +169,15 @@ void TraceConfig::ProcessFilterConfig::InitializeFromConfigDict(
 }
 
 void TraceConfig::ProcessFilterConfig::ToDict(Value::Dict& dict) const {
-  if (included_process_ids_.empty())
+  if (included_process_ids_.empty()) {
     return;
+  }
   base::Value::List list;
   std::set<base::ProcessId> ordered_set(included_process_ids_.begin(),
                                         included_process_ids_.end());
-  for (auto process_id : ordered_set)
+  for (auto process_id : ordered_set) {
     list.Append(static_cast<int>(process_id));
+  }
   dict.Set(kIncludedProcessesParam, std::move(list));
 }
 
@@ -194,25 +199,33 @@ TraceConfig::EventFilterConfig::EventFilterConfig(const EventFilterConfig& tc) {
 
 TraceConfig::EventFilterConfig& TraceConfig::EventFilterConfig::operator=(
     const TraceConfig::EventFilterConfig& rhs) {
-  if (this == &rhs)
+  if (this == &rhs) {
     return *this;
+  }
 
   predicate_name_ = rhs.predicate_name_;
   category_filter_ = rhs.category_filter_;
 
-  if (!rhs.args_.is_none())
-    args_ = rhs.args_.Clone();
+  args_ = rhs.args_.Clone();
 
   return *this;
 }
 
+bool TraceConfig::EventFilterConfig::IsEquivalentTo(
+    const EventFilterConfig& other) const {
+  return predicate_name_ == other.predicate_name_ &&
+         category_filter_.IsEquivalentTo(category_filter_) &&
+         args_ == other.args_;
+}
+
 void TraceConfig::EventFilterConfig::InitializeFromConfigDict(
-    const Value& event_filter) {
+    const Value::Dict& event_filter) {
   category_filter_.InitializeFromConfigDict(event_filter);
 
-  const Value* args_dict = event_filter.FindDictKey(kFilterArgsParam);
-  if (args_dict)
+  const Value::Dict* args_dict = event_filter.FindDict(kFilterArgsParam);
+  if (args_dict) {
     args_ = args_dict->Clone();
+  }
 }
 
 void TraceConfig::EventFilterConfig::SetCategoryFilter(
@@ -225,25 +238,28 @@ void TraceConfig::EventFilterConfig::ToDict(Value::Dict& filter_dict) const {
 
   category_filter_.ToDict(filter_dict);
 
-  if (!args_.is_none())
+  if (!args_.empty()) {
     filter_dict.Set(kFilterArgsParam, args_.Clone());
+  }
 }
 
 bool TraceConfig::EventFilterConfig::GetArgAsSet(
     const char* key,
     std::unordered_set<std::string>* out_set) const {
-  const Value* list = args_.FindListPath(key);
-  if (!list)
+  const Value::List* list = args_.FindList(key);
+  if (!list) {
     return false;
-  for (const Value& item : list->GetListDeprecated()) {
-    if (item.is_string())
+  }
+  for (const Value& item : *list) {
+    if (item.is_string()) {
       out_set->insert(item.GetString());
+    }
   }
   return true;
 }
 
 bool TraceConfig::EventFilterConfig::IsCategoryGroupEnabled(
-    const StringPiece& category_group_name) const {
+    std::string_view category_group_name) const {
   return category_filter_.IsCategoryGroupEnabled(category_group_name);
 }
 
@@ -258,8 +274,6 @@ std::string TraceConfig::TraceRecordModeToStr(TraceRecordMode record_mode) {
       return kRecordAsMuchAsPossible;
     case ECHO_TO_CONSOLE:
       return kTraceToConsole;
-    default:
-      NOTREACHED();
   }
   return kRecordUntilFull;
 }
@@ -268,26 +282,27 @@ TraceConfig::TraceConfig() {
   InitializeDefault();
 }
 
-TraceConfig::TraceConfig(StringPiece category_filter_string,
-                         StringPiece trace_options_string) {
+TraceConfig::TraceConfig(std::string_view category_filter_string,
+                         std::string_view trace_options_string) {
   InitializeFromStrings(category_filter_string, trace_options_string);
 }
 
-TraceConfig::TraceConfig(StringPiece category_filter_string,
+TraceConfig::TraceConfig(std::string_view category_filter_string,
                          TraceRecordMode record_mode) {
   InitializeFromStrings(category_filter_string,
                         TraceConfig::TraceRecordModeToStr(record_mode));
 }
 
-TraceConfig::TraceConfig(const Value& config) {
+TraceConfig::TraceConfig(const Value::Dict& config) {
   InitializeFromConfigDict(config);
 }
 
-TraceConfig::TraceConfig(StringPiece config_string) {
-  if (!config_string.empty())
+TraceConfig::TraceConfig(std::string_view config_string) {
+  if (!config_string.empty()) {
     InitializeFromConfigString(config_string);
-  else
+  } else {
     InitializeDefault();
+  }
 }
 
 TraceConfig::TraceConfig(const TraceConfig& tc) = default;
@@ -295,8 +310,9 @@ TraceConfig::TraceConfig(const TraceConfig& tc) = default;
 TraceConfig::~TraceConfig() = default;
 
 TraceConfig& TraceConfig::operator=(const TraceConfig& rhs) {
-  if (this == &rhs)
+  if (this == &rhs) {
     return *this;
+  }
 
   record_mode_ = rhs.record_mode_;
   trace_buffer_size_in_events_ = rhs.trace_buffer_size_in_events_;
@@ -311,6 +327,38 @@ TraceConfig& TraceConfig::operator=(const TraceConfig& rhs) {
   histogram_names_ = rhs.histogram_names_;
   systrace_events_ = rhs.systrace_events_;
   return *this;
+}
+
+bool TraceConfig::IsEquivalentTo(const TraceConfig& other) const {
+  if (enable_systrace_ != other.enable_systrace_ ||
+      enable_argument_filter_ != other.enable_argument_filter_ ||
+      enable_event_package_name_filter_ !=
+          other.enable_event_package_name_filter_ ||
+      histogram_names_ != other.histogram_names_ ||
+      systrace_events_ != other.systrace_events_ ||
+      process_filter_config_ != other.process_filter_config_ ||
+      memory_dump_config_ != other.memory_dump_config_ ||
+      !category_filter_.IsEquivalentTo(other.category_filter_)) {
+    return false;
+  }
+
+  if (event_filters_.size() != other.event_filters_.size()) {
+    return false;
+  }
+  for (const auto& filter : event_filters_) {
+    bool equivalent_found = false;
+    for (const auto& other_filter : other.event_filters_) {
+      if (other_filter.IsEquivalentTo(filter)) {
+        equivalent_found = true;
+        break;
+      }
+    }
+    if (!equivalent_found) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 std::string TraceConfig::ToString() const {
@@ -330,7 +378,7 @@ std::string TraceConfig::ToCategoryFilterString() const {
 }
 
 bool TraceConfig::IsCategoryGroupEnabled(
-    const StringPiece& category_group_name) const {
+    std::string_view category_group_name) const {
   // TraceLog should call this method only as part of enabling/disabling
   // categories.
   return category_filter_.IsCategoryGroupEnabled(category_group_name);
@@ -382,9 +430,9 @@ void TraceConfig::InitializeDefault() {
   enable_event_package_name_filter_ = false;
 }
 
-void TraceConfig::InitializeFromConfigDict(const Value& dict) {
+void TraceConfig::InitializeFromConfigDict(const Value::Dict& dict) {
   record_mode_ = RECORD_UNTIL_FULL;
-  const std::string* record_mode = dict.FindStringKey(kRecordModeParam);
+  const std::string* record_mode = dict.FindString(kRecordModeParam);
   if (record_mode) {
     if (*record_mode == kRecordUntilFull) {
       record_mode_ = RECORD_UNTIL_FULL;
@@ -397,58 +445,65 @@ void TraceConfig::InitializeFromConfigDict(const Value& dict) {
     }
   }
   trace_buffer_size_in_events_ = base::saturated_cast<size_t>(
-      dict.FindIntKey(kTraceBufferSizeInEvents).value_or(0));
+      dict.FindInt(kTraceBufferSizeInEvents).value_or(0));
   trace_buffer_size_in_kb_ = base::saturated_cast<size_t>(
-      dict.FindIntKey(kTraceBufferSizeInKb).value_or(0));
+      dict.FindInt(kTraceBufferSizeInKb).value_or(0));
 
-  enable_systrace_ = dict.FindBoolKey(kEnableSystraceParam).value_or(false);
+  enable_systrace_ = dict.FindBool(kEnableSystraceParam).value_or(false);
   enable_argument_filter_ =
-      dict.FindBoolKey(kEnableArgumentFilterParam).value_or(false);
+      dict.FindBool(kEnableArgumentFilterParam).value_or(false);
   enable_event_package_name_filter_ =
-      dict.FindBoolKey(kEnableEventPackageNameFilterParam).value_or(false);
+      dict.FindBool(kEnableEventPackageNameFilterParam).value_or(false);
 
   category_filter_.InitializeFromConfigDict(dict);
   process_filter_config_.InitializeFromConfigDict(dict);
 
-  const Value* category_event_filters = dict.FindListKey(kEventFiltersParam);
-  if (category_event_filters)
+  const Value::List* category_event_filters = dict.FindList(kEventFiltersParam);
+  if (category_event_filters) {
     SetEventFiltersFromConfigList(*category_event_filters);
-  const Value* histogram_names = dict.FindListKey(kHistogramNamesParam);
-  if (histogram_names)
+  }
+  const Value::List* histogram_names = dict.FindList(kHistogramNamesParam);
+  if (histogram_names) {
     SetHistogramNamesFromConfigList(*histogram_names);
+  }
 
   if (category_filter_.IsCategoryEnabled(MemoryDumpManager::kTraceCategory)) {
     // If dump triggers not set, the client is using the legacy with just
     // category enabled. So, use the default periodic dump config.
-    const Value* memory_dump_config = dict.FindDictKey(kMemoryDumpConfigParam);
-    if (memory_dump_config)
+    const Value::Dict* memory_dump_config =
+        dict.FindDict(kMemoryDumpConfigParam);
+    if (memory_dump_config) {
       SetMemoryDumpConfigFromConfigDict(*memory_dump_config);
-    else
+    } else {
       SetDefaultMemoryDumpConfig();
+    }
   }
 
   systrace_events_.clear();
   if (enable_systrace_) {
-    const Value* systrace_events = dict.FindListKey(kSystraceEventsParam);
+    const Value::List* systrace_events = dict.FindList(kSystraceEventsParam);
     if (systrace_events) {
-      for (const Value& value : systrace_events->GetListDeprecated())
+      for (const Value& value : *systrace_events) {
         systrace_events_.insert(value.GetString());
+      }
     }
   }
 }
 
-void TraceConfig::InitializeFromConfigString(StringPiece config_string) {
-  absl::optional<Value> dict = JSONReader::Read(config_string);
-  if (dict && dict->is_dict())
-    InitializeFromConfigDict(*dict);
-  else
+void TraceConfig::InitializeFromConfigString(std::string_view config_string) {
+  std::optional<Value> dict = JSONReader::Read(config_string);
+  if (dict && dict->is_dict()) {
+    InitializeFromConfigDict(dict->GetDict());
+  } else {
     InitializeDefault();
+  }
 }
 
-void TraceConfig::InitializeFromStrings(StringPiece category_filter_string,
-                                        StringPiece trace_options_string) {
-  if (!category_filter_string.empty())
+void TraceConfig::InitializeFromStrings(std::string_view category_filter_string,
+                                        std::string_view trace_options_string) {
+  if (!category_filter_string.empty()) {
     category_filter_.InitializeFromString(category_filter_string);
+  }
 
   record_mode_ = RECORD_UNTIL_FULL;
   trace_buffer_size_in_events_ = 0;
@@ -488,8 +543,9 @@ void TraceConfig::InitializeFromStrings(StringPiece category_filter_string,
         enable_systrace_ = true;
         const std::vector<std::string> split_systrace_events = SplitString(
             system_events.substr(1), " ", TRIM_WHITESPACE, SPLIT_WANT_NONEMPTY);
-        for (const std::string& systrace_event : split_systrace_events)
+        for (const std::string& systrace_event : split_systrace_events) {
           systrace_events_.insert(systrace_event);
+        }
       } else if (token == kEnableArgumentFilter) {
         enable_argument_filter_ = true;
       }
@@ -502,13 +558,13 @@ void TraceConfig::InitializeFromStrings(StringPiece category_filter_string,
 }
 
 void TraceConfig::SetMemoryDumpConfigFromConfigDict(
-    const Value& memory_dump_config) {
+    const Value::Dict& memory_dump_config) {
   // Set allowed dump modes.
   memory_dump_config_.allowed_dump_modes.clear();
-  const Value* allowed_modes_list =
-      memory_dump_config.FindListKey(kAllowedDumpModesParam);
+  const Value::List* allowed_modes_list =
+      memory_dump_config.FindList(kAllowedDumpModesParam);
   if (allowed_modes_list) {
-    for (const Value& item : allowed_modes_list->GetListDeprecated()) {
+    for (const Value& item : *allowed_modes_list) {
       DCHECK(item.is_string());
       memory_dump_config_.allowed_dump_modes.insert(
           StringToMemoryDumpLevelOfDetail(item.GetString()));
@@ -520,22 +576,24 @@ void TraceConfig::SetMemoryDumpConfigFromConfigDict(
 
   // Set triggers
   memory_dump_config_.triggers.clear();
-  const Value* trigger_list = memory_dump_config.FindListKey(kTriggersParam);
+  const Value::List* trigger_list = memory_dump_config.FindList(kTriggersParam);
   if (trigger_list) {
-    for (const Value& trigger : trigger_list->GetListDeprecated()) {
-      if (!trigger.is_dict())
+    for (const Value& trigger : *trigger_list) {
+      if (!trigger.is_dict()) {
         continue;
+      }
+      const Value::Dict& trigger_dict = trigger.GetDict();
 
       MemoryDumpConfig::Trigger dump_config;
-      absl::optional<int> interval = trigger.FindIntKey(kMinTimeBetweenDumps);
+      std::optional<int> interval = trigger_dict.FindInt(kMinTimeBetweenDumps);
       if (!interval) {
         // If "min_time_between_dumps_ms" param was not given, then the trace
         // config uses old format where only periodic dumps are supported.
-        interval = trigger.FindIntKey(kPeriodicIntervalLegacyParam);
-        dump_config.trigger_type = MemoryDumpType::PERIODIC_INTERVAL;
+        interval = trigger_dict.FindInt(kPeriodicIntervalLegacyParam);
+        dump_config.trigger_type = MemoryDumpType::kPeriodicInterval;
       } else {
         const std::string* trigger_type_str =
-            trigger.FindStringKey(kTriggerTypeParam);
+            trigger_dict.FindString(kTriggerTypeParam);
         DCHECK(trigger_type_str);
         dump_config.trigger_type = StringToMemoryDumpType(*trigger_type_str);
       }
@@ -544,7 +602,7 @@ void TraceConfig::SetMemoryDumpConfigFromConfigDict(
       dump_config.min_time_between_dumps_ms = static_cast<uint32_t>(*interval);
 
       const std::string* level_of_detail_str =
-          trigger.FindStringKey(kTriggerModeParam);
+          trigger_dict.FindString(kTriggerModeParam);
       DCHECK(level_of_detail_str);
       dump_config.level_of_detail =
           StringToMemoryDumpLevelOfDetail(*level_of_detail_str);
@@ -553,12 +611,12 @@ void TraceConfig::SetMemoryDumpConfigFromConfigDict(
     }
   }
 
-  // Set heap profiler options
-  const Value* heap_profiler_options =
-      memory_dump_config.FindDictKey(kHeapProfilerOptions);
+  // Set heap profiler options.
+  const Value::Dict* heap_profiler_options =
+      memory_dump_config.FindDict(kHeapProfilerOptions);
   if (heap_profiler_options) {
-    absl::optional<int> min_size_bytes =
-        heap_profiler_options->FindIntKey(kBreakdownThresholdBytes);
+    std::optional<int> min_size_bytes =
+        heap_profiler_options->FindInt(kBreakdownThresholdBytes);
     if (min_size_bytes && *min_size_bytes >= 0) {
       memory_dump_config_.heap_profiler_options.breakdown_threshold_bytes =
           static_cast<uint32_t>(*min_size_bytes);
@@ -579,26 +637,29 @@ void TraceConfig::SetProcessFilterConfig(const ProcessFilterConfig& config) {
 }
 
 void TraceConfig::SetHistogramNamesFromConfigList(
-    const Value& histogram_names) {
+    const Value::List& histogram_names) {
   histogram_names_.clear();
-  for (const Value& value : histogram_names.GetListDeprecated())
+  for (const Value& value : histogram_names) {
     histogram_names_.insert(value.GetString());
+  }
 }
 
 void TraceConfig::SetEventFiltersFromConfigList(
-    const Value& category_event_filters) {
+    const Value::List& category_event_filters) {
   event_filters_.clear();
 
-  for (const Value& event_filter : category_event_filters.GetListDeprecated()) {
-    if (!event_filter.is_dict())
+  for (const Value& event_filter : category_event_filters) {
+    if (!event_filter.is_dict()) {
       continue;
+    }
+    const Value::Dict& event_filter_dict = event_filter.GetDict();
 
     const std::string* predicate_name =
-        event_filter.FindStringKey(kFilterPredicateParam);
+        event_filter_dict.FindString(kFilterPredicateParam);
     CHECK(predicate_name) << "Invalid predicate name in category event filter.";
 
     EventFilterConfig new_config(*predicate_name);
-    new_config.InitializeFromConfigDict(event_filter);
+    new_config.InitializeFromConfigDict(event_filter_dict);
     event_filters_.push_back(new_config);
   }
 }
@@ -635,8 +696,9 @@ Value TraceConfig::ToValue() const {
 
   if (category_filter_.IsCategoryEnabled(MemoryDumpManager::kTraceCategory)) {
     Value::List allowed_modes;
-    for (auto dump_mode : memory_dump_config_.allowed_dump_modes)
+    for (auto dump_mode : memory_dump_config_.allowed_dump_modes) {
       allowed_modes.Append(MemoryDumpLevelOfDetailToString(dump_mode));
+    }
 
     Value::Dict memory_dump_config;
     memory_dump_config.Set(kAllowedDumpModesParam, std::move(allowed_modes));
@@ -660,8 +722,8 @@ Value TraceConfig::ToValue() const {
 
     if (memory_dump_config_.heap_profiler_options.breakdown_threshold_bytes !=
         MemoryDumpConfig::HeapProfiler::kDefaultBreakdownThresholdBytes) {
-      Value options(Value::Type::DICTIONARY);
-      options.SetIntKey(
+      Value::Dict options;
+      options.Set(
           kBreakdownThresholdBytes,
           base::checked_cast<int>(memory_dump_config_.heap_profiler_options
                                       .breakdown_threshold_bytes));
@@ -672,16 +734,18 @@ Value TraceConfig::ToValue() const {
 
   if (!histogram_names_.empty()) {
     base::Value::List histogram_names;
-    for (const std::string& histogram_name : histogram_names_)
+    for (const std::string& histogram_name : histogram_names_) {
       histogram_names.Append(histogram_name);
+    }
     dict.Set(kHistogramNamesParam, std::move(histogram_names));
   }
 
   if (enable_systrace_) {
     if (!systrace_events_.empty()) {
       base::Value::List systrace_events;
-      for (const std::string& systrace_event : systrace_events_)
+      for (const std::string& systrace_event : systrace_events_) {
         systrace_events.Append(systrace_event);
+      }
       dict.Set(kSystraceEventsParam, std::move(systrace_events));
     }
   }
@@ -712,8 +776,6 @@ std::string TraceConfig::ToTraceOptionsString() const {
     case ECHO_TO_CONSOLE:
       ret = kTraceToConsole;
       break;
-    default:
-      NOTREACHED();
   }
   if (enable_systrace_) {
     ret += ",";
@@ -736,5 +798,38 @@ std::string TraceConfig::ToTraceOptionsString() const {
   return ret;
 }
 
-}  // namespace trace_event
-}  // namespace base
+std::string TraceConfig::ToPerfettoTrackEventConfigRaw(
+    bool privacy_filtering_enabled) const {
+  perfetto::protos::gen::TrackEventConfig te_cfg;
+  if (!base::Contains(category_filter_.excluded_categories(), "*") &&
+      !base::Contains(category_filter_.included_categories(), "*")) {
+    // In the case when the default behavior is not specified, apply the
+    // following rule: if no categories are explicitly enabled, enable the
+    // default ones; otherwise only enable matching categories.
+    if (category_filter_.included_categories().empty()) {
+      te_cfg.add_enabled_categories("*");
+    } else {
+      te_cfg.add_disabled_categories("*");
+    }
+  }
+  for (const auto& excluded : category_filter_.excluded_categories()) {
+    te_cfg.add_disabled_categories(excluded);
+  }
+  for (const auto& included : category_filter_.included_categories()) {
+    te_cfg.add_enabled_categories(included);
+  }
+  for (const auto& disabled : category_filter_.disabled_categories()) {
+    te_cfg.add_enabled_categories(disabled);
+  }
+  // Metadata is always enabled.
+  te_cfg.add_enabled_categories("__metadata");
+  te_cfg.set_enable_thread_time_sampling(true);
+  te_cfg.set_timestamp_unit_multiplier(1000);
+  if (privacy_filtering_enabled) {
+    te_cfg.set_filter_dynamic_event_names(true);
+    te_cfg.set_filter_debug_annotations(true);
+  }
+  return te_cfg.SerializeAsString();
+}
+
+}  // namespace base::trace_event

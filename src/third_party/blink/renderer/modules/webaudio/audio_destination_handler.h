@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,11 @@ class AudioDestinationHandler : public AudioHandler {
   // AudioWorklet. This method ensures the switching of render thread and the
   // restart of the context.
   virtual void RestartRendering() = 0;
+
+  // The worklet thread change can happen when a context/destination is
+  // suspended. In that case, we prepare the worklet operation but do not start
+  // running.
+  virtual void PrepareTaskRunnerForWorklet() = 0;
 
   size_t CurrentSampleFrame() const {
     return current_sample_frame_.load(std::memory_order_acquire);

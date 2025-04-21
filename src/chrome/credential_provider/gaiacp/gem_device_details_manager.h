@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/values.h"
 #include "base/win/windows_types.h"
 #include "chrome/credential_provider/extension/task_manager.h"
+#include "chrome/credential_provider/gaiacp/reg_utils.h"
 #include "url/gurl.h"
 
 namespace credential_provider {
@@ -67,7 +68,7 @@ class GemDeviceDetailsManager {
 
   // Gets the request dictionary used to invoke the GEM service for
   // the purpose of testing.
-  const base::Value& GetRequestDictForTesting() { return *request_dict_; }
+  const base::Value::Dict& GetRequestDictForTesting() { return *request_dict_; }
 
   // Get the upload device details http response status for the
   // purpose of unit testing.
@@ -76,7 +77,7 @@ class GemDeviceDetailsManager {
  private:
   base::TimeDelta upload_device_details_request_timeout_;
   HRESULT upload_status_;
-  std::unique_ptr<base::Value> request_dict_;
+  std::unique_ptr<base::Value::Dict> request_dict_;
   HRESULT UploadDeviceDetailsInternal(const std::string access_token,
                                       const std::wstring obfuscated_user_id,
                                       const std::wstring dm_token,

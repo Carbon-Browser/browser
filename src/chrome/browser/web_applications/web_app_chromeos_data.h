@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ struct WebAppChromeOsData {
 
   // By default an app is shown everywhere.
   bool show_in_launcher = true;
-  bool show_in_search = true;
+  bool show_in_search_and_shelf = true;
   bool show_in_management = true;
   // By default the app is not disabled. Disabling the app means having a
   // blocked logo on top of the app icon, and the user can't launch the app.

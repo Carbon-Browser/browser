@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,9 @@ public class CachedProviderAdapter<T> extends PropertyProvider<T> implements Pro
      * @param defaultItems The items to be notified about if the Provider hasn't provided any.
      * @param newCachedDataAvailable Optional callback to be called if new data arrives.
      */
-    public CachedProviderAdapter(PropertyProvider<T> provider, T defaultItems,
+    public CachedProviderAdapter(
+            PropertyProvider<T> provider,
+            T defaultItems,
             @Nullable Callback<CachedProviderAdapter> newCachedDataAvailable) {
         super(provider.mType);
         mNewCachedDataAvailable = newCachedDataAvailable;

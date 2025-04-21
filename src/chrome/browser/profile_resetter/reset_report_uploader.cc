@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/escape.h"
 #include "chrome/browser/profile_resetter/profile_reset_report.pb.h"
 #include "chrome/browser/profile_resetter/reset_report_uploader.h"
@@ -37,7 +37,7 @@ ResetReportUploader::ResetReportUploader(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : url_loader_factory_(std::move(url_loader_factory)) {}
 
-ResetReportUploader::~ResetReportUploader() {}
+ResetReportUploader::~ResetReportUploader() = default;
 
 void ResetReportUploader::DispatchReport(
     const reset_report::ChromeResetReport& report) {

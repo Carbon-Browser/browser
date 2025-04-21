@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,11 +25,13 @@ source_set("networking_private") {
     "networking_private_event_router_factory.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
     "//components/keyed_service/content",
     "//components/onc",
-    "//extensions/browser/api",
+    "//content/public/browser",
     "//extensions/common",
     "//extensions/common/api",
     "//net",
@@ -37,19 +39,7 @@ source_set("networking_private") {
 
   public_deps = [ "//extensions/browser:browser_sources" ]
 
-  if (is_chromeos_lacros) {
-    sources = default_sources + [
-                "lacros_networking_private_observer.cc",
-                "lacros_networking_private_observer.h",
-                "networking_private_event_router_nonchromeos.cc",
-                "networking_private_lacros.cc",
-                "networking_private_lacros.h",
-              ]
-    deps += [
-      "//chromeos/crosapi/mojom",
-      "//chromeos/lacros",
-    ]
-  } else if (is_linux && use_dbus) {
+  if (is_linux && use_dbus) {
     sources = default_sources + [
                 "network_config_dbus_constants_linux.cc",
                 "network_config_dbus_constants_linux.h",
@@ -66,17 +56,17 @@ source_set("networking_private") {
                 "networking_private_service_client.h",
               ]
     deps += [ "//components/wifi" ]
-  } else if (is_chromeos_ash) {
+  } else if (is_chromeos) {
     sources = default_sources + [
                 "networking_private_chromeos.cc",
                 "networking_private_chromeos.h",
                 "networking_private_event_router_chromeos.cc",
               ]
     deps += [
+      "//chromeos/ash/components/login/login_state",
       "//chromeos/ash/components/network",
       "//chromeos/ash/components/network/portal_detector",
       "//chromeos/components/onc",
-      "//chromeos/login/login_state",
       "//components/proxy_config",
     ]
   } else {

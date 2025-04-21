@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace base {
 
@@ -71,8 +70,9 @@ class AsyncWaiter : public WaitableEvent::Waiter {
 
   bool Fire(WaitableEvent* event) override {
     // Post the callback if we haven't been cancelled.
-    if (!flag_->value())
+    if (!flag_->value()) {
       task_runner_->PostTask(FROM_HERE, std::move(callback_));
+    }
 
     // We are removed from the wait-list by the WaitableEvent itself. It only
     // remains to delete ourselves.
@@ -109,15 +109,16 @@ void AsyncCallbackHelper(Flag* flag,
 }
 
 WaitableEventWatcher::WaitableEventWatcher() {
-  sequence_checker_.DetachFromSequence();
+  DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
 WaitableEventWatcher::~WaitableEventWatcher() {
   // The destructor may be called from a different sequence than StartWatching()
   // when there is no active watch. To avoid triggering a DCHECK in
   // StopWatching(), do not call it when there is no active watch.
-  if (cancel_flag_ && !cancel_flag_->value())
+  if (cancel_flag_ && !cancel_flag_->value()) {
     StopWatching();
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -128,27 +129,32 @@ bool WaitableEventWatcher::StartWatching(
     WaitableEvent* event,
     EventCallback callback,
     scoped_refptr<SequencedTaskRunner> task_runner) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // A user may call StartWatching from within the callback function. In this
   // case, we won't know that we have finished watching, expect that the Flag
   // will have been set in AsyncCallbackHelper().
-  if (cancel_flag_.get() && cancel_flag_->value())
+  if (cancel_flag_.get() && cancel_flag_->value()) {
     cancel_flag_ = nullptr;
+  }
 
   DCHECK(!cancel_flag_) << "StartWatching called while still watching";
 
   cancel_flag_ = new Flag;
+  // UnsafeDanglingUntriaged triggered by test:
+  // WaitableEventWatcherDeletionTest.SignalAndDelete
+  // TODO(crbug.com/40061562): Remove `UnsafeDanglingUntriaged`
   OnceClosure internal_callback =
       base::BindOnce(&AsyncCallbackHelper, base::RetainedRef(cancel_flag_),
-                     std::move(callback), event);
+                     std::move(callback), base::UnsafeDanglingUntriaged(event));
   WaitableEvent::WaitableEventKernel* kernel = event->kernel_.get();
 
   AutoLock locked(kernel->lock_);
 
   if (kernel->signaled_) {
-    if (!kernel->manual_reset_)
+    if (!kernel->manual_reset_) {
       kernel->signaled_ = false;
+    }
 
     // No hairpinning - we can't call the delegate directly here. We have to
     // post a task to |task_runner| as usual.
@@ -165,10 +171,11 @@ bool WaitableEventWatcher::StartWatching(
 }
 
 void WaitableEventWatcher::StopWatching() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!cancel_flag_.get())  // if not currently watching...
+  if (!cancel_flag_.get()) {  // if not currently watching...
     return;
+  }
 
   if (cancel_flag_->value()) {
     // In this case, the event has fired, but we haven't figured that out yet.

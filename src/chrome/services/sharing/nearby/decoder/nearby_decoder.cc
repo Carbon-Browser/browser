@@ -1,19 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/decoder/nearby_decoder.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/services/sharing/nearby/decoder/advertisement_decoder.h"
 #include "chrome/services/sharing/public/cpp/advertisement.h"
 #include "chrome/services/sharing/public/proto/wire_format.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 
 namespace sharing {
 
@@ -145,11 +146,19 @@ mojom::ConnectionResponseFramePtr GetConnectionResponseFrame(
 
 mojom::PairedKeyEncryptionFramePtr GetPairedKeyEncryptionFrame(
     const sharing::nearby::PairedKeyEncryptionFrame& proto_frame) {
+  std::optional<std::vector<uint8_t>> optional_signed_data =
+      proto_frame.has_optional_signed_data()
+          ? std::make_optional<std::vector<uint8_t>>(
+                proto_frame.optional_signed_data().begin(),
+                proto_frame.optional_signed_data().end())
+          : std::nullopt;
+
   return mojom::PairedKeyEncryptionFrame::New(
       std::vector<uint8_t>(proto_frame.signed_data().begin(),
                            proto_frame.signed_data().end()),
       std::vector<uint8_t>(proto_frame.secret_id_hash().begin(),
-                           proto_frame.secret_id_hash().end()));
+                           proto_frame.secret_id_hash().end()),
+      optional_signed_data);
 }
 
 mojom::PairedKeyResultFrame::Status ConvertPairedKeyStatus(
@@ -209,8 +218,11 @@ mojom::CertificateInfoFramePtr GetCertificateInfoFrame(
 }  // namespace
 
 NearbySharingDecoder::NearbySharingDecoder(
-    mojo::PendingReceiver<mojom::NearbySharingDecoder> receiver)
-    : receiver_(this, std::move(receiver)) {}
+    mojo::PendingReceiver<mojom::NearbySharingDecoder> receiver,
+    base::OnceClosure on_disconnect)
+    : receiver_(this, std::move(receiver)) {
+  receiver_.set_disconnect_handler(std::move(on_disconnect));
+}
 
 NearbySharingDecoder::~NearbySharingDecoder() = default;
 
@@ -227,7 +239,10 @@ void NearbySharingDecoder::DecodeAdvertisement(
   }
 
   std::move(callback).Run(mojom::Advertisement::New(
-      advertisement->salt(), advertisement->encrypted_metadata_key(),
+      std::vector<uint8_t>(advertisement->salt().begin(),
+                           advertisement->salt().end()),
+      std::vector<uint8_t>(advertisement->encrypted_metadata_key().begin(),
+                           advertisement->encrypted_metadata_key().end()),
       advertisement->device_type(), advertisement->device_name()));
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 
 #include "ash/components/arc/session/connection_notifier.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
@@ -64,7 +65,7 @@ class ConnectionHolderImpl {
   ConnectionHolderImpl(const ConnectionHolderImpl&) = delete;
   ConnectionHolderImpl& operator=(const ConnectionHolderImpl&) = delete;
 
-  InstanceType* instance() { return IsConnected() ? instance_ : nullptr; }
+  InstanceType* instance() { return IsConnected() ? instance_.get() : nullptr; }
   uint32_t instance_version() const {
     return IsConnected() ? instance_version_ : 0;
   }
@@ -130,7 +131,7 @@ class ConnectionHolderImpl {
     if (!instance_ || !host_)
       return;
     // When both the instance and host are ready, start connection.
-    // TODO(crbug.com/750563): Fix the race issue.
+    // TODO(crbug.com/40532557): Fix the race issue.
     auto receiver = std::make_unique<mojo::Receiver<HostType>>(host_);
     mojo::PendingRemote<HostType> host_proxy;
     receiver->Bind(host_proxy.InitWithNewPipeAndPassReceiver());
@@ -165,10 +166,10 @@ class ConnectionHolderImpl {
 
   // This class does not have ownership. The pointers should be managed by the
   // caller.
-  ConnectionNotifier* const connection_notifier_;
-  InstanceType* instance_ = nullptr;
+  const raw_ptr<ConnectionNotifier> connection_notifier_;
+  raw_ptr<InstanceType, DanglingUntriaged> instance_ = nullptr;
   uint32_t instance_version_ = 0;
-  HostType* host_ = nullptr;
+  raw_ptr<HostType, DanglingUntriaged> host_ = nullptr;
 
   // Created when both |instance_| and |host_| ptr are set.
   std::unique_ptr<mojo::Receiver<HostType>> receiver_;
@@ -237,8 +238,8 @@ class ConnectionHolderImpl<InstanceType, void> {
  private:
   // This class does not have ownership. The pointers should be managed by the
   // caller.
-  ConnectionNotifier* const connection_notifier_;
-  InstanceType* instance_ = nullptr;
+  const raw_ptr<ConnectionNotifier> connection_notifier_;
+  raw_ptr<InstanceType, DanglingUntriaged> instance_ = nullptr;
   uint32_t instance_version_ = 0;
 };
 

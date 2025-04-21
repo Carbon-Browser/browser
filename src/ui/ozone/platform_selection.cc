@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/ozone/platform_selection.h"
 
@@ -42,8 +47,10 @@ int GetOzonePlatformId() {
     }
   }
 
-  LOG(FATAL) << "Invalid ozone platform: " << platform_name;
-  return -1;  // not reached
+  LOG(FATAL) << "Invalid ozone platform: " << platform_name
+             << (platform_name == "auto"
+                     ? ", use --ozone-platform-hint=auto instead?"
+                     : ".");
 }
 
 const char* GetOzonePlatformName() {

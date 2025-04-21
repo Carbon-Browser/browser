@@ -1,15 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/chromevox_hint/chromevox_hint_detector.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
-#include "chrome/browser/ash/idle_detector.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/experiences/idle_detector/idle_detector.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 
 namespace ash {
@@ -27,11 +26,10 @@ ChromeVoxHintDetector::ChromeVoxHintDetector(const base::TickClock* clock,
   StartIdleDetection();
 }
 
-ChromeVoxHintDetector::~ChromeVoxHintDetector() {}
+ChromeVoxHintDetector::~ChromeVoxHintDetector() = default;
 
 void ChromeVoxHintDetector::StartIdleDetection() {
-  if (!features::IsOobeChromeVoxHintEnabled() ||
-      switches::IsOOBEChromeVoxHintTimerDisabledForTesting()) {
+  if (switches::IsOOBEChromeVoxHintTimerDisabledForTesting()) {
     return;
   }
 

@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_FACTORY_H_
 #define CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
+#include "chromeos/ash/services/auth_factor_config/chrome_browser_delegates.h"
 #include "components/account_id/account_id.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 class Profile;
 
@@ -17,12 +18,13 @@ class User;
 
 namespace ash {
 namespace quick_unlock {
+
 class QuickUnlockStorage;
 
 // Singleton that owns all QuickUnlockStorage instances and associates them with
 // Profiles. Listens for the Profile's destruction notification and cleans up
 // the associated QuickUnlockStorage.
-class QuickUnlockFactory : public BrowserContextKeyedServiceFactory {
+class QuickUnlockFactory : public ProfileKeyedServiceFactory {
  public:
   // Returns the QuickUnlockStorage instance for `profile`.
   static QuickUnlockStorage* GetForProfile(Profile* profile);
@@ -38,29 +40,24 @@ class QuickUnlockFactory : public BrowserContextKeyedServiceFactory {
 
   static QuickUnlockFactory* GetInstance();
 
+  // Returns a delegate to QuickUnlockStorage.
+  static ash::auth::QuickUnlockStorageDelegate& GetDelegate();
+
   QuickUnlockFactory(const QuickUnlockFactory&) = delete;
   QuickUnlockFactory& operator=(const QuickUnlockFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<QuickUnlockFactory>;
+  friend base::NoDestructor<QuickUnlockFactory>;
 
   QuickUnlockFactory();
   ~QuickUnlockFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 
 }  // namespace quick_unlock
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace quick_unlock {
-using ::ash::quick_unlock::QuickUnlockFactory;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_FACTORY_H_

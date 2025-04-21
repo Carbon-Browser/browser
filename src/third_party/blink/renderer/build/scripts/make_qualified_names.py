@@ -28,15 +28,13 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import copy
-import sys
 
-import hasher
 import json5_generator
-import name_utilities
 import template_expander
 
 from aria_properties import ARIAReader
 from json5_generator import Json5File
+from name_utilities import tag_symbol_for_entry
 
 
 def _symbol(entry):
@@ -53,8 +51,8 @@ class MakeQualifiedNamesWriter(json5_generator.Writer):
         'namespaceURI': '',
     }
     filters = {
-        'hash': hasher.hash,
         'symbol': _symbol,
+        'tag_symbol': tag_symbol_for_entry,
     }
 
     def __init__(self, json5_file_paths, output_dir):

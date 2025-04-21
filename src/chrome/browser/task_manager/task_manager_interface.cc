@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/task_manager/task_manager_interface.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -15,10 +15,10 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "chrome/browser/ui/browser_dialogs.h"
+#include "chrome/browser/ui/browser_dialogs.h"  // nogncheck
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -151,6 +151,12 @@ void TaskManagerInterface::NotifyObserversOnRefreshWithBackgroundCalculations(
 void TaskManagerInterface::NotifyObserversOnTaskUnresponsive(TaskId id) {
   for (TaskManagerObserver& observer : observers_)
     observer.OnTaskUnresponsive(id);
+}
+
+void TaskManagerInterface::NotifyObserversOnActiveTaskFetched(TaskId id) {
+  for (TaskManagerObserver& observer : observers_) {
+    observer.OnActiveTaskFetched(id);
+  }
 }
 
 base::TimeDelta TaskManagerInterface::GetCurrentRefreshTime() const {

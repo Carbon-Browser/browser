@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@ class MetaTable;
 }  // namespace sql
 
 namespace content {
+
+class AttributionStorageSql;
 
 // Changes to the SQL database schema or data format must be accompanied by
 // a database migration. This includes new columns, new tables, or changes to
@@ -44,8 +46,9 @@ namespace content {
 // |meta_table| accordingly. Must be called with an open |db|. Returns false on
 // failure.
 [[nodiscard]] bool UpgradeAttributionStorageSqlSchema(
-    sql::Database* db,
-    sql::MetaTable* meta_table);
+    AttributionStorageSql& storage,
+    sql::Database& db,
+    sql::MetaTable& meta_table);
 
 }  // namespace content
 

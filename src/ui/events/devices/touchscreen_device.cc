@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/devices/touchscreen_device.h"
 
+#include <ostream>
 #include <string>
 
 #include "ui/events/devices/input_device.h"
@@ -39,5 +40,15 @@ TouchscreenDevice::TouchscreenDevice(const InputDevice& input_device,
 TouchscreenDevice::TouchscreenDevice(const TouchscreenDevice& other) = default;
 
 TouchscreenDevice::~TouchscreenDevice() = default;
+
+std::ostream& TouchscreenDevice::DescribeForLog(std::ostream& os) const {
+  os << "class=ui::TouchscreenDevice id=" << id << std::endl
+     << " size=" << size.ToString() << std::endl
+     << " touch_points=" << touch_points << std::endl
+     << " has_stylus=" << has_stylus << std::endl
+     << " has_stylus_garage_switch=" << has_stylus_garage_switch << std::endl
+     << "base ";
+  return InputDevice::DescribeForLog(os);
+}
 
 }  // namespace ui

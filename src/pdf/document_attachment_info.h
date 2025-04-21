@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef PDF_DOCUMENT_ATTACHMENT_INFO_H_
 #define PDF_DOCUMENT_ATTACHMENT_INFO_H_
+
+#include <stdint.h>
 
 #include <string>
 

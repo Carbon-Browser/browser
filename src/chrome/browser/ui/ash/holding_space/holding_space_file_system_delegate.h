@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,20 +11,27 @@
 #include "ash/components/arc/mojom/file_system.mojom-forward.h"
 #include "ash/components/arc/session/connection_holder.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "ash/components/drivefs/drivefs_host_observer.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager_observer.h"
-#include "chrome/browser/chromeos/fileapi/file_change_service.h"
-#include "chrome/browser/chromeos/fileapi/file_change_service_observer.h"
+#include "chrome/browser/ash/fileapi/file_change_service.h"
+#include "chrome/browser/ash/fileapi/file_change_service_observer.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_delegate.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_util.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
+
+class GURL;
 
 namespace base {
 class FilePath;
 }  // namespace base
+
+namespace storage {
+class FileSystemURL;
+}  // namespace storage
 
 namespace ash {
 
@@ -36,9 +43,9 @@ namespace ash {
 //    holding space items.
 class HoldingSpaceFileSystemDelegate
     : public HoldingSpaceKeyedServiceDelegate,
-      public chromeos::FileChangeServiceObserver,
+      public FileChangeServiceObserver,
       public arc::ConnectionObserver<arc::mojom::FileSystemInstance>,
-      public drivefs::DriveFsHostObserver,
+      public drivefs::DriveFsHost::Observer,
       public file_manager::VolumeManagerObserver {
  public:
   HoldingSpaceFileSystemDelegate(HoldingSpaceKeyedService* service,
@@ -58,17 +65,21 @@ class HoldingSpaceFileSystemDelegate
       const std::vector<const HoldingSpaceItem*>& items) override;
   void OnHoldingSpaceItemsRemoved(
       const std::vector<const HoldingSpaceItem*>& items) override;
-  void OnHoldingSpaceItemUpdated(const HoldingSpaceItem* item,
-                                 uint32_t updated_fields) override;
+  void OnHoldingSpaceItemUpdated(
+      const HoldingSpaceItem* item,
+      const HoldingSpaceItemUpdatedFields& updated_fields) override;
   void OnHoldingSpaceItemInitialized(const HoldingSpaceItem* item) override;
 
   // file_manager::VolumeManagerObserver:
-  void OnVolumeMounted(chromeos::MountError error_code,
+  void OnVolumeMounted(MountError error_code,
                        const file_manager::Volume& volume) override;
-  void OnVolumeUnmounted(chromeos::MountError error_code,
+  void OnVolumeUnmounted(MountError error_code,
                          const file_manager::Volume& volume) override;
 
-  // chromeos::FileChangeServiceObserver:
+  // FileChangeServiceObserver:
+  void OnFileCreatedFromShowSaveFilePicker(
+      const GURL& file_picker_binding_context,
+      const storage::FileSystemURL& url) override;
   void OnFileModified(const storage::FileSystemURL& url) override;
   void OnFileMoved(const storage::FileSystemURL& src,
                    const storage::FileSystemURL& dst) override;
@@ -76,7 +87,7 @@ class HoldingSpaceFileSystemDelegate
   // arc::ConnectionObserver<arc::mojom::FileSystemInstance>:
   void OnConnectionReady() override;
 
-  // drivefs::DriveFsHostObserver:
+  // drivefs::DriveFsHost::Observer:
   void OnFilesChanged(
       const std::vector<drivefs::mojom::FileChange>& changes) override;
 
@@ -150,11 +161,7 @@ class HoldingSpaceFileSystemDelegate
       arc::ConnectionObserver<arc::mojom::FileSystemInstance>>
       arc_file_system_observer_{this};
 
-  base::ScopedObservation<drivefs::DriveFsHost, drivefs::DriveFsHostObserver>
-      drivefs_host_observer_{this};
-
-  base::ScopedObservation<chromeos::FileChangeService,
-                          chromeos::FileChangeServiceObserver>
+  base::ScopedObservation<FileChangeService, FileChangeServiceObserver>
       file_change_service_observer_{this};
 
   base::ScopedObservation<file_manager::VolumeManager,

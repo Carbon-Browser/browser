@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This script runs power measurements for browsers using Intel Power Gadget.
@@ -35,7 +35,7 @@ It is recommended to test with optimized builds of Chromium e.g. these GN args:
   is_debug = false
   is_component_build = false
   is_official_build = true # optimization similar to official builds
-  use_goma = true
+  use_remoteexec = true
   enable_nacl = false
   proprietary_codecs = true
   ffmpeg_branding = "Chrome"

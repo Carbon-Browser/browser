@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,23 +50,21 @@ public interface PaymentAppFactoryParams extends PaymentRequestParams {
 
     /**
      * @return The certificate chain of the top-level context as returned by
-     * CertificateChainHelper.getCertificateChain(). Can be null.
+     * CertificateChainHelper.getCertificateChain(). Can be null when
+     * ANDROID_PAYMENT_INTENTS_OMIT_DEPRECATED_PARAMETERS is enabled or for localhost or local file,
+     * which are secure contexts without SSL. Each byte array cannot be null.
      */
     @Nullable
     default byte[][] getCertificateChain() {
         return null;
     }
 
-    /**
-     * @return Whether crawling the web for just-in-time installable payment handlers is enabled.
-     */
+    /** @return Whether crawling the web for just-in-time installable payment handlers is enabled. */
     default boolean getMayCrawl() {
         return false;
     }
 
-    /**
-     * @return The listener for payment method, shipping address, and shipping option change events.
-     */
+    /** @return The listener for payment method, shipping address, and shipping option change events. */
     default PaymentRequestUpdateEventListener getPaymentRequestUpdateEventListener() {
         return null;
     }

@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/mirroring/service/video_capture_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/run_loop.h"
@@ -19,8 +19,8 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using ::testing::InvokeWithoutArgs;
 using ::testing::_;
+using ::testing::InvokeWithoutArgs;
 
 namespace mirroring {
 
@@ -111,8 +111,7 @@ class VideoCaptureClientTest : public ::testing::Test,
     EXPECT_CALL(*host_impl_, ReleaseBuffer(_, 0, kFeedback))
         .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
     client_->OnBufferReady(media::mojom::ReadyBuffer::New(
-                               buffer_id, GetVideoFrameInfo(frame_size)),
-                           {});
+        buffer_id, GetVideoFrameInfo(frame_size)));
     run_loop.Run();
     task_environment_.RunUntilIdle();
   }

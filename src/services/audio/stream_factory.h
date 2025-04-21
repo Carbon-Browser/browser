@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -21,7 +21,6 @@
 #include "media/mojo/mojom/audio_processing.mojom.h"
 #include "media/mojo/mojom/audio_stream_factory.mojom.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "services/audio/concurrent_stream_metric_reporter.h"
 #include "services/audio/loopback_coordinator.h"
 #include "services/audio/realtime_audio_thread.h"
 
@@ -34,6 +33,7 @@ class UnguessableToken;
 }
 
 namespace media {
+class AecdumpRecordingManager;
 class AudioManager;
 class AudioParameters;
 }  // namespace media
@@ -44,7 +44,6 @@ class InputStream;
 class LocalMuter;
 class LoopbackStream;
 class OutputStream;
-class AecdumpRecordingManager;
 
 // This class is used to provide the AudioStreamFactory interface. It will
 // typically be instantiated when needed and remain for the lifetime of the
@@ -53,8 +52,9 @@ class AecdumpRecordingManager;
 class StreamFactory final : public media::mojom::AudioStreamFactory {
  public:
   // If not nullptr, then |aecdump_recording_manager| must outlive the factory.
-  explicit StreamFactory(media::AudioManager* audio_manager,
-                         AecdumpRecordingManager* aecdump_recording_manager);
+  explicit StreamFactory(
+      media::AudioManager* audio_manager,
+      media::AecdumpRecordingManager* aecdump_recording_manager);
 
   StreamFactory(const StreamFactory&) = delete;
   StreamFactory& operator=(const StreamFactory&) = delete;
@@ -73,7 +73,6 @@ class StreamFactory final : public media::mojom::AudioStreamFactory {
       const media::AudioParameters& params,
       uint32_t shared_memory_count,
       bool enable_agc,
-      base::ReadOnlySharedMemoryRegion key_press_count_buffer,
       media::mojom::AudioProcessingConfigPtr processing_config,
       CreateInputStreamCallback created_callback) final;
 
@@ -83,6 +82,17 @@ class StreamFactory final : public media::mojom::AudioStreamFactory {
 
   void CreateOutputStream(
       mojo::PendingReceiver<media::mojom::AudioOutputStream> receiver,
+      mojo::PendingAssociatedRemote<media::mojom::AudioOutputStreamObserver>
+          observer,
+      mojo::PendingRemote<media::mojom::AudioLog> log,
+      const std::string& output_device_id,
+      const media::AudioParameters& params,
+      const base::UnguessableToken& group_id,
+      CreateOutputStreamCallback created_callback) final;
+  void CreateSwitchableOutputStream(
+      mojo::PendingReceiver<media::mojom::AudioOutputStream> receiver,
+      mojo::PendingReceiver<media::mojom::DeviceSwitchInterface>
+          device_switch_receiver,
       mojo::PendingAssociatedRemote<media::mojom::AudioOutputStreamObserver>
           observer,
       mojo::PendingRemote<media::mojom::AudioLog> log,
@@ -110,8 +120,19 @@ class StreamFactory final : public media::mojom::AudioStreamFactory {
 
   void DestroyInputStream(InputStream* stream);
   void DestroyOutputStream(OutputStream* stream);
-  void DestroyMuter(LocalMuter* muter);
+  void DestroyMuter(base::WeakPtr<LocalMuter> muter);
   void DestroyLoopbackStream(LoopbackStream* stream);
+  void CreateOutputStreamInternal(
+      mojo::PendingReceiver<media::mojom::AudioOutputStream> receiver,
+      mojo::PendingReceiver<media::mojom::DeviceSwitchInterface>
+          device_switch_receiver,
+      mojo::PendingAssociatedRemote<media::mojom::AudioOutputStreamObserver>
+          observer,
+      mojo::PendingRemote<media::mojom::AudioLog> log,
+      const std::string& output_device_id,
+      const media::AudioParameters& params,
+      const base::UnguessableToken& group_id,
+      CreateOutputStreamCallback created_callback);
 
   SEQUENCE_CHECKER(owning_sequence_);
 
@@ -119,11 +140,9 @@ class StreamFactory final : public media::mojom::AudioStreamFactory {
 
   // Manages starting and stopping of diagnostic recordings of audio processing.
   // May be nullptr.
-  const raw_ptr<AecdumpRecordingManager> aecdump_recording_manager_;
+  const raw_ptr<media::AecdumpRecordingManager> aecdump_recording_manager_;
 
   mojo::ReceiverSet<media::mojom::AudioStreamFactory> receivers_;
-
-  ConcurrentStreamMetricReporter stream_count_metric_reporter_;
 
   // Order of the following members is important for a clean shutdown.
 #if BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)

@@ -1,57 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-GEN_INCLUDE(['../common/testing/e2e_test_base.js']);
+GEN_INCLUDE(['../common/testing/common_e2e_test_base.js']);
 
 /**
  * Accessibility common extension browser tests.
  */
-AccessibilityCommonE2ETest = class extends E2ETestBase {
-  constructor() {
-    super();
-  }
-
-  /** @override */
-  testGenCppIncludes() {
-    super.testGenCppIncludes();
-    GEN(`
-#include "ash/accessibility/accessibility_delegate.h"
-#include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "chrome/browser/ash/accessibility/accessibility_manager.h"
-    `);
-  }
-
-  /** @override */
-  testGenPreamble() {
-    super.testGenPreamble();
-    // Note that at least one accessibility common feature has to be enabled for
-    // the extension to load. Extension load is required for this test suite to
-    // have a place to be injected.
-    GEN(`
-  base::OnceClosure load_cb =
-      base::BindOnce(&ash::AccessibilityManager::EnableAutoclick,
-          base::Unretained(ash::AccessibilityManager::Get()),
-          true);
-    `);
-    super.testGenPreambleCommon('kAccessibilityCommonExtensionId');
-  }
-
-  async getPref(name) {
+AccessibilityCommonE2ETest = class extends CommonE2ETestBase {
+  async getFeature(name) {
     return new Promise(resolve => {
-      chrome.settingsPrivate.getPref(name, ret => {
-        resolve(ret);
-      });
-    });
-  }
-
-  async setPref(name, value) {
-    return new Promise(resolve => {
-      chrome.settingsPrivate.setPref(name, value, undefined, () => {
-        resolve();
-      });
+      chrome.accessibilityPrivate.isFeatureEnabled(
+          name, enabled => resolve(enabled));
     });
   }
 };
@@ -110,3 +70,36 @@ TEST_F('AccessibilityCommonE2ETest', 'ToggleFeatures', function() {
     assertTrue(!accessibilityCommon.getMagnifierForTest());
   })();
 });
+
+TEST_F(
+    'AccessibilityCommonE2ETest', 'FaceGazeEnabled', function() {
+      this.newCallback(async () => {
+        // Check that FaceGaze is enabled from the command line.
+        const enabled = await this.getFeature(
+            chrome.accessibilityPrivate.AccessibilityFeature.FACE_GAZE);
+        assertTrue(enabled);
+
+        let pref = await this.getPref('settings.a11y.face_gaze.enabled');
+        assertEquals('settings.a11y.face_gaze.enabled', pref.key);
+        assertFalse(pref.value);
+
+        // FaceGaze should not be loaded yet.
+        assertFalse(Boolean(accessibilityCommon.getFaceGazeForTest()));
+
+        // Update the pref, FaceGaze should be loaded.
+        await this.setPref('settings.a11y.face_gaze.enabled', true);
+        pref = await this.getPref('settings.a11y.face_gaze.enabled');
+        assertEquals('settings.a11y.face_gaze.enabled', pref.key);
+        assertTrue(pref.value);
+
+        // Now it is loaded.
+        assertTrue(Boolean(accessibilityCommon.getFaceGazeForTest()));
+
+        // Unloads when the pref is turned off.
+        await this.setPref('settings.a11y.face_gaze.enabled', false);
+        pref = await this.getPref('settings.a11y.face_gaze.enabled');
+        assertEquals('settings.a11y.face_gaze.enabled', pref.key);
+        assertFalse(pref.value);
+        assertFalse(Boolean(accessibilityCommon.getFaceGazeForTest()));
+      })();
+    });

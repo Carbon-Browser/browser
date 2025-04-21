@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,14 @@ package org.chromium.base.jank_tracker;
 import android.app.Activity;
 import android.os.Build;
 
+import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
+import org.chromium.build.annotations.EnsuresNonNullIf;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+
+import java.lang.ref.WeakReference;
+
 /**
  * Class for recording janky frame metrics for a specific Activity.
  *
@@ -14,51 +22,115 @@ import android.os.Build;
  * based on activity state. When the activity is being destroyed {@link #destroy()} should be called
  * to clear the activity state observer. All methods should be called from the UI thread.
  */
+@NullMarked
 public class JankTrackerImpl implements JankTracker {
+    // We use the DEADLINE field in the Android FrameMetrics which was added in S.
     private static final boolean IS_TRACKING_ENABLED =
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
 
-    private final JankActivityTracker mActivityTracker;
-    private final JankReportingScheduler mReportingScheduler;
+    private @Nullable JankTrackerStateController mController;
+    private @Nullable JankReportingScheduler mReportingScheduler;
 
     /**
      * Creates a new JankTracker instance tracking UI rendering of an activity. Metric recording
-     * starts when the activity starts, and it's paused when the activity stops.
+     * starts when the activity starts, and it's paused when the activity stops. Optionally the
+     * construction can be delayed by passing a value for {@param constructionDelayMs}. This allows
+     * for the impact on startup to be mitigated.
      */
-    public JankTrackerImpl(Activity activity) {
-        if (!IS_TRACKING_ENABLED) {
-            mActivityTracker = null;
-            mReportingScheduler = null;
-            return;
-        }
+    public JankTrackerImpl(Activity activity, int constructionDelayMs) {
+        // This class shouldn't keep the activity alive.
+        WeakReference<Activity> ref = new WeakReference<Activity>(activity);
+        Runnable init =
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        // If we've been destroyed or the Activity is gone early out.
+                        Activity innerActivity = ref.get();
+                        if (mController == null
+                                || innerActivity == null
+                                || innerActivity.isDestroyed()) {
+                            return;
+                        }
 
-        FrameMetricsStore metricsStore = new FrameMetricsStore();
-        FrameMetricsListener metricsListener = new FrameMetricsListener(metricsStore);
-        mReportingScheduler = new JankReportingScheduler(metricsStore);
-        mActivityTracker = new JankActivityTracker(activity, metricsListener, mReportingScheduler);
-        mActivityTracker.initialize();
+                        // Initialize the system.
+                        FrameMetricsStore metricsStore = new FrameMetricsStore();
+                        if (!constructInternalPreController(
+                                new JankReportingScheduler(metricsStore))) {
+                            return;
+                        }
+
+                        constructInternalFinal(
+                                new JankActivityTracker(
+                                        innerActivity,
+                                        new FrameMetricsListener(metricsStore),
+                                        mReportingScheduler));
+                    }
+                };
+        if (constructionDelayMs <= 0) {
+            init.run();
+        } else {
+            PostTask.postDelayedTask(TaskTraits.UI_DEFAULT, init, constructionDelayMs);
+        }
+    }
+
+    /**
+     * Creates a new JankTracker which allows the controller to determine when it should start and
+     * stop metric scenarios/collection.
+     */
+    public JankTrackerImpl(JankTrackerStateController controller) {
+        if (!constructInternalPreController(controller.mReportingScheduler)) return;
+        constructInternalFinal(controller);
+    }
+
+    @EnsuresNonNullIf("mReportingScheduler")
+    private boolean constructInternalPreController(JankReportingScheduler scheduler) {
+        if (!IS_TRACKING_ENABLED) {
+            mReportingScheduler = null;
+            mController = null;
+            return false;
+        }
+        mReportingScheduler = scheduler;
+        return true;
+    }
+
+    @EnsuresNonNullIf({"mController", "mReportingScheduler"})
+    private boolean isInitialized() {
+        if (mController == null) {
+            return false;
+        }
+        assert mReportingScheduler != null;
+        return true;
+    }
+
+    private void constructInternalFinal(JankTrackerStateController controller) {
+        mController = controller;
+        mController.initialize();
     }
 
     @Override
-    public void startTrackingScenario(@JankScenario int scenario) {
-        if (!IS_TRACKING_ENABLED) return;
+    public void startTrackingScenario(JankScenario scenario) {
+        if (!isInitialized()) return;
 
         mReportingScheduler.startTrackingScenario(scenario);
     }
 
     @Override
-    public void finishTrackingScenario(@JankScenario int scenario) {
-        if (!IS_TRACKING_ENABLED) return;
-
-        mReportingScheduler.finishTrackingScenario(scenario);
+    public void finishTrackingScenario(JankScenario scenario) {
+        finishTrackingScenario(scenario, -1);
     }
 
-    /**
-     * Stops listening for Activity state changes.
-     */
-    public void destroy() {
-        if (!IS_TRACKING_ENABLED) return;
+    @Override
+    public void finishTrackingScenario(JankScenario scenario, long endScenarioTimeNs) {
+        if (!isInitialized()) return;
 
-        mActivityTracker.destroy();
+        mReportingScheduler.finishTrackingScenario(scenario, endScenarioTimeNs);
+    }
+
+    /** Stops listening for Activity state changes. */
+    @Override
+    public void destroy() {
+        if (!isInitialized()) return;
+        mController.destroy();
+        mController = null;
     }
 }

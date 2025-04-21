@@ -1,12 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/network_switches.h"
 
-namespace network {
-
-namespace switches {
+namespace network::switches {
 
 // Forces Network Quality Estimator (NQE) to return a specific effective
 // connection type.
@@ -14,12 +12,6 @@ const char kForceEffectiveConnectionType[] = "force-effective-connection-type";
 
 // These mappings only apply to the host resolver.
 const char kHostResolverRules[] = "host-resolver-rules";
-
-// Causes net::URLFetchers to ignore requests for SSL client certificates,
-// causing them to attempt an unauthenticated SSL/TLS session. This is intended
-// for use when testing various service URLs (eg: kPromoServerURL, kSbURLPrefix,
-// kSyncServiceURL, etc).
-const char kIgnoreUrlFetcherCertRequests[] = "ignore-urlfetcher-cert-requests";
 
 // A set of public key hashes for which to ignore certificate-related errors.
 //
@@ -50,11 +42,17 @@ const char kLogNetLog[] = "log-net-log";
 // description of their meanings.
 const char kNetLogCaptureMode[] = "net-log-capture-mode";
 
+// Sets the maximum size, in megabytes. The log file can grow to before older
+// data is overwritten. Do not use this flag if you want an unlimited file size.
+const char kNetLogMaxSizeMb[] = "net-log-max-size-mb";
+
 // Causes SSL key material to be logged to the specified file for debugging
 // purposes. See
 // https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
 // for the format.
 const char kSSLKeyLogFile[] = "ssl-key-log-file";
+
+const char kTestThirdPartyCookiePhaseout[] = "test-third-party-cookie-phaseout";
 
 // Treat given (insecure) origins as secure origins. Multiple origins can be
 // supplied as a comma-separated list. For the definition of secure contexts,
@@ -66,8 +64,8 @@ const char kSSLKeyLogFile[] = "ssl-key-log-file";
 const char kUnsafelyTreatInsecureOriginAsSecure[] =
     "unsafely-treat-insecure-origin-as-secure";
 
-// Manually sets additional Trust Tokens key commitments in the network service
-// to the given value, which should be a JSON dictionary satisfying the
+// Manually sets additional Private State Tokens key commitments in the network
+// service to the given value, which should be a JSON dictionary satisfying the
 // requirements of TrustTokenKeyCommitmentParser::ParseMultipleIssuers.
 //
 // These keys are available in addition to keys provided by the most recent call
@@ -81,12 +79,20 @@ const char kUnsafelyTreatInsecureOriginAsSecure[] =
 // keys were overwritten some time after startup when the component updater
 // runs.
 const char kAdditionalTrustTokenKeyCommitments[] =
-    "additional-trust-token-key-commitments";
+    "additional-private-state-token-key-commitments";
 
 // Allows the manual specification of a First-Party Set, as a comma-separated
 // list of origins. The first origin in the list is treated as the owner of the
 // set.
+// DEPRECATED(crbug.com/1486689): This switch is under deprecation due to
+// renaming "First-Party Set" to "Related Website Set". Please use
+// `kUseRelatedWebsiteSet` instead.
 const char kUseFirstPartySet[] = "use-first-party-set";
+
+// Allows the manual specification of a Related Website Set, as a
+// comma-separated list of origins. The first origin in the list is treated as
+// the primary site of the set.
+const char kUseRelatedWebsiteSet[] = "use-related-website-set";
 
 // Specifies manual overrides to the IP endpoint -> IP address space mapping.
 // This allows running local tests against "public" and "private" IP addresses.
@@ -112,6 +118,9 @@ const char kUseFirstPartySet[] = "use-first-party-set";
 // https://github.com/web-platform-tests/rfcs/blob/master/rfcs/address_space_overrides.md
 const char kIpAddressSpaceOverrides[] = "ip-address-space-overrides";
 
-}  // namespace switches
+// The switch to disable the shared dictionary storage clean up task. Only for
+// testing.
+const char kDisableSharedDictionaryStorageCleanupForTesting[] =
+    "disable-shared-dictionary-storage-cleanup-for-testing";
 
-}  // namespace network
+}  // namespace network::switches

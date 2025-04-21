@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/safe_browsing/core/browser/db/test_database_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/safe_browsing/core/browser/db/v4_test_util.h"
@@ -34,12 +33,14 @@ namespace {
 
 class TestClient : public SafeBrowsingDatabaseManager::Client {
  public:
-  TestClient() : callback_invoked_(false) {}
+  TestClient()
+      : SafeBrowsingDatabaseManager::Client(GetPassKeyForTesting()),
+        callback_invoked_(false) {}
 
   TestClient(const TestClient&) = delete;
   TestClient& operator=(const TestClient&) = delete;
 
-  ~TestClient() override {}
+  ~TestClient() override = default;
 
   void OnCheckApiBlocklistUrlResult(const GURL& url,
                                     const ThreatMetadata& metadata) override {
@@ -72,21 +73,20 @@ class SafeBrowsingDatabaseManagerTest : public testing::Test {
             &test_url_loader_factory_);
 
     db_manager_ = new TestSafeBrowsingDatabaseManager(
-        base::SequencedTaskRunnerHandle::Get(),
-        base::SequencedTaskRunnerHandle::Get());
-    db_manager_->StartOnIOThread(test_shared_loader_factory_,
+        base::SequencedTaskRunner::GetCurrentDefault());
+    db_manager_->StartOnUIThread(test_shared_loader_factory_,
                                  GetTestV4ProtocolConfig());
   }
 
   void TearDown() override {
-    db_manager_->StopOnIOThread(false);
+    db_manager_->StopOnUIThread(false);
     db_manager_ = nullptr;
     base::RunLoop().RunUntilIdle();
   }
 
   std::string GetStockV4GetHashResponse() {
     ListIdentifier list_id = GetChromeUrlApiId();
-    FullHash full_hash = crypto::SHA256HashString("example.com/");
+    FullHashStr full_hash = crypto::SHA256HashString("example.com/");
 
     FindFullHashesResponse response;
     response.mutable_negative_cache_duration()->set_seconds(600);

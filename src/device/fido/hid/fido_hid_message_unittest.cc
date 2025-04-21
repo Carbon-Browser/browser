@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -166,23 +166,17 @@ TEST(FidoHidMessageTest, TestMessagePartitoning) {
 TEST(FidoHidMessageTest, TooLarge) {
   std::vector<uint8_t> data;
 
-#if DCHECK_IS_ON()
-#define EXPECT_SIZE_FAILURE(x) EXPECT_DEATH_IF_SUPPORTED(x, "")
-#else
-#define EXPECT_SIZE_FAILURE(x) EXPECT_FALSE(x.has_value())
-#endif
-
   // kHidInitPacketHeaderSize is too small a report size to be valid.
-  EXPECT_SIZE_FAILURE(FidoHidMessage::Create(kHidBroadcastChannel,
-                                             FidoHidDeviceCommand::kPing,
-                                             kHidInitPacketHeaderSize, data));
+  EXPECT_DEATH_IF_SUPPORTED(
+      FidoHidMessage::Create(kHidBroadcastChannel, FidoHidDeviceCommand::kPing,
+                             kHidInitPacketHeaderSize, data),
+      "");
 
   // kHidMaxPacketSize + 1 is too large a report size.
-  EXPECT_SIZE_FAILURE(FidoHidMessage::Create(kHidBroadcastChannel,
-                                             FidoHidDeviceCommand::kPing,
-                                             kHidMaxPacketSize + 1, data));
-
-#undef EXPECT_SIZE_FAILURE
+  EXPECT_DEATH_IF_SUPPORTED(
+      FidoHidMessage::Create(kHidBroadcastChannel, FidoHidDeviceCommand::kPing,
+                             kHidMaxPacketSize + 1, data),
+      "");
 }
 
 TEST(FidoHidMessageTest, TestMaxSize) {

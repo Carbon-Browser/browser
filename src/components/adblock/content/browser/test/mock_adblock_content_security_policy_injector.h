@@ -33,7 +33,7 @@ class MockAdblockContentSecurityPolicyInjector
   MOCK_METHOD(void,
               InsertContentSecurityPolicyHeadersIfApplicable,
               (const GURL&,
-               content::GlobalRenderFrameHostId,
+               const RequestInitiator&,
                const scoped_refptr<net::HttpResponseHeaders>&,
                InsertContentSecurityPolicyHeadersCallback),
               (override));

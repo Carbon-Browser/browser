@@ -1,27 +1,32 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/metrics/field_trial.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
 #include "base/auto_reset.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
-#include "base/debug/activity_tracker.h"
+#include "base/containers/span.h"
+#include "base/debug/crash_logging.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_param_associator.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/memory.h"
 #include "base/process/process_handle.h"
 #include "base/process/process_info.h"
 #include "base/rand_util.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -29,12 +34,20 @@
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
+#include "base/memory/shared_memory_switch.h"
 #include "base/process/launch.h"
 #endif
 
+#if BUILDFLAG(IS_APPLE) && BUILDFLAG(USE_BLINK)
+#include "base/apple/mach_port_rendezvous.h"
+#endif
+
+#if BUILDFLAG(IS_POSIX) && BUILDFLAG(USE_BLINK)
+#include <unistd.h>  // For getppid().
+
+#include "base/threading/platform_thread.h"
 // On POSIX, the fd is shared using the mapping in GlobalDescriptors.
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
 #include "base/posix/global_descriptors.h"
 #endif
 
@@ -53,6 +66,10 @@ namespace base {
 
 namespace {
 
+#if BUILDFLAG(USE_BLINK)
+using shared_memory::SharedMemoryError;
+#endif
+
 // Define a separator character to use when creating a persistent form of an
 // instance.  This is intended for use as a command line argument, passed to a
 // second process to mimic our state (i.e., provide the same group name).
@@ -65,33 +82,36 @@ const char kActivationMarker = '*';
 // Constants for the field trial allocator.
 const char kAllocatorName[] = "FieldTrialAllocator";
 
-// We allocate 128 KiB to hold all the field trial data. This should be enough,
+// We allocate 256 KiB to hold all the field trial data. This should be enough,
 // as most people use 3 - 25 KiB for field trials (as of 11/25/2016).
-// This also doesn't allocate all 128 KiB at once -- the pages only get mapped
+// This also doesn't allocate all 256 KiB at once -- the pages only get mapped
 // to physical memory when they are touched. If the size of the allocated field
-// trials does get larger than 128 KiB, then we will drop some field trials in
+// trials does get larger than 256 KiB, then we will drop some field trials in
 // child processes, leading to an inconsistent view between browser and child
 // processes and possibly causing crashes (see crbug.com/661617).
-const size_t kFieldTrialAllocationSize = 128 << 10;  // 128 KiB
+const size_t kFieldTrialAllocationSize = 256 << 10;  // 256 KiB
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE) && BUILDFLAG(USE_BLINK)
 constexpr MachPortsForRendezvous::key_type kFieldTrialRendezvousKey = 'fldt';
 #endif
 
 // Writes out string1 and then string2 to pickle.
 void WriteStringPair(Pickle* pickle,
-                     const StringPiece& string1,
-                     const StringPiece& string2) {
+                     std::string_view string1,
+                     std::string_view string2) {
   pickle->WriteString(string1);
   pickle->WriteString(string2);
 }
 
 // Writes out the field trial's contents (via trial_state) to the pickle. The
 // format of the pickle looks like:
-// TrialName, GroupName, ParamKey1, ParamValue1, ParamKey2, ParamValue2, ...
-// If there are no parameters, then it just ends at GroupName.
-void PickleFieldTrial(const FieldTrial::State& trial_state, Pickle* pickle) {
+// TrialName, GroupName, is_overridden, ParamKey1, ParamValue1, ParamKey2,
+// ParamValue2, ... If there are no parameters, then it just ends at
+// is_overridden.
+void PickleFieldTrial(const FieldTrial::PickleState& trial_state,
+                      Pickle* pickle) {
   WriteStringPair(pickle, *trial_state.trial_name, *trial_state.group_name);
+  pickle->WriteBool(trial_state.is_overridden);
 
   // Get field trial params.
   std::map<std::string, std::string> params;
@@ -99,15 +119,15 @@ void PickleFieldTrial(const FieldTrial::State& trial_state, Pickle* pickle) {
       *trial_state.trial_name, *trial_state.group_name, &params);
 
   // Write params to pickle.
-  for (const auto& param : params)
+  for (const auto& param : params) {
     WriteStringPair(pickle, param.first, param.second);
+  }
 }
 
 // Returns the boundary value for comparing against the FieldTrial's added
-// groups for a given |divisor| (total probability) and |entropy_value|.
-FieldTrial::Probability GetGroupBoundaryValue(
-    FieldTrial::Probability divisor,
-    double entropy_value) {
+// groups for a given `divisor` (total probability) and `entropy_value`.
+FieldTrial::Probability GetGroupBoundaryValue(FieldTrial::Probability divisor,
+                                              double entropy_value) {
   // Add a tiny epsilon value to get consistent results when converting floating
   // points to int. Without it, boundary values have inconsistent results, e.g.:
   //
@@ -118,99 +138,35 @@ FieldTrial::Probability GetGroupBoundaryValue(
   const double kEpsilon = 1e-8;
   const FieldTrial::Probability result =
       static_cast<FieldTrial::Probability>(divisor * entropy_value + kEpsilon);
-  // Ensure that adding the epsilon still results in a value < |divisor|.
+  // Ensure that adding the epsilon still results in a value < `divisor`.
   return std::min(result, divisor - 1);
 }
 
-// Separate type from FieldTrial::State so that it can use StringPieces.
-struct FieldTrialStringEntry {
-  StringPiece trial_name;
-  StringPiece group_name;
-  bool activated = false;
-};
-
-// Parses the --force-fieldtrials string |trials_string| into |entries|.
-// Returns true if the string was parsed correctly. On failure, the |entries|
-// array may end up being partially filled.
-bool ParseFieldTrialsString(const std::string& trials_string,
-                            std::vector<FieldTrialStringEntry>* entries) {
-  const StringPiece trials_string_piece(trials_string);
-
-  size_t next_item = 0;
-  while (next_item < trials_string.length()) {
-    size_t name_end = trials_string.find(kPersistentStringSeparator, next_item);
-    if (name_end == trials_string.npos || next_item == name_end)
-      return false;
-    size_t group_name_end =
-        trials_string.find(kPersistentStringSeparator, name_end + 1);
-    if (name_end + 1 == group_name_end)
-      return false;
-    if (group_name_end == trials_string.npos)
-      group_name_end = trials_string.length();
-
-    FieldTrialStringEntry entry;
-    // Verify if the trial should be activated or not.
-    if (trials_string[next_item] == kActivationMarker) {
-      // Name cannot be only the indicator.
-      if (name_end - next_item == 1)
-        return false;
-      next_item++;
-      entry.activated = true;
-    }
-    entry.trial_name =
-        trials_string_piece.substr(next_item, name_end - next_item);
-    entry.group_name =
-        trials_string_piece.substr(name_end + 1, group_name_end - name_end - 1);
-    next_item = group_name_end + 1;
-
-    entries->push_back(std::move(entry));
-  }
-  return true;
-}
-
-#if !BUILDFLAG(IS_IOS)
-void AddFeatureAndFieldTrialFlags(CommandLine* cmd_line) {
-  std::string enabled_features;
-  std::string disabled_features;
-  FeatureList::GetInstance()->GetFeatureOverrides(&enabled_features,
-                                                  &disabled_features);
-
-  if (!enabled_features.empty())
-    cmd_line->AppendSwitchASCII(switches::kEnableFeatures, enabled_features);
-  if (!disabled_features.empty())
-    cmd_line->AppendSwitchASCII(switches::kDisableFeatures, disabled_features);
-
-  std::string field_trial_states;
-  FieldTrialList::AllStatesToString(&field_trial_states, false);
-  if (!field_trial_states.empty()) {
-    cmd_line->AppendSwitchASCII(switches::kForceFieldTrials,
-                                field_trial_states);
-  }
-}
-#endif  // !BUILDFLAG(IS_IOS)
-
 void OnOutOfMemory(size_t size) {
-#if BUILDFLAG(IS_NACL)
-  NOTREACHED();
-#else
   TerminateBecauseOutOfMemory(size);
-#endif
 }
 
-#if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
-// Returns whether the operation succeeded.
-bool DeserializeGUIDFromStringPieces(StringPiece first,
-                                     StringPiece second,
-                                     UnguessableToken* guid) {
-  uint64_t high = 0;
-  uint64_t low = 0;
-  if (!StringToUint64(first, &high) || !StringToUint64(second, &low))
-    return false;
+void AppendFieldTrialGroupToString(bool activated,
+                                   std::string_view trial_name,
+                                   std::string_view group_name,
+                                   std::string& field_trials_string) {
+  DCHECK_EQ(std::string::npos, trial_name.find(kPersistentStringSeparator))
+      << " in name " << trial_name;
+  DCHECK_EQ(std::string::npos, group_name.find(kPersistentStringSeparator))
+      << " in name " << group_name;
 
-  *guid = UnguessableToken::Deserialize(high, low);
-  return true;
+  if (!field_trials_string.empty()) {
+    // Add a '/' in-between field trial groups.
+    field_trials_string.push_back(kPersistentStringSeparator);
+  }
+  if (activated) {
+    field_trials_string.push_back(kActivationMarker);
+  }
+
+  base::StrAppend(&field_trials_string,
+                  {trial_name, std::string_view(&kPersistentStringSeparator, 1),
+                   group_name});
 }
-#endif  // !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
 
 }  // namespace
 
@@ -224,96 +180,107 @@ bool FieldTrial::enable_benchmarking_ = false;
 
 FieldTrial::EntropyProvider::~EntropyProvider() = default;
 
-FieldTrial::State::State() = default;
+uint32_t FieldTrial::EntropyProvider::GetPseudorandomValue(
+    uint32_t salt,
+    uint32_t output_range) const {
+  // Passing a different salt is sufficient to get a "different" result from
+  // GetEntropyForTrial (ignoring collisions).
+  double entropy_value = GetEntropyForTrial(/*trial_name=*/"", salt);
 
-FieldTrial::State::State(const State& other) = default;
+  // Convert the [0,1) double to an [0, output_range) integer.
+  return static_cast<uint32_t>(GetGroupBoundaryValue(
+      static_cast<FieldTrial::Probability>(output_range), entropy_value));
+}
 
-FieldTrial::State::~State() = default;
+FieldTrial::PickleState::PickleState() = default;
 
-bool FieldTrial::FieldTrialEntry::GetTrialAndGroupName(
-    StringPiece* trial_name,
-    StringPiece* group_name) const {
+FieldTrial::PickleState::PickleState(const PickleState& other) = default;
+
+FieldTrial::PickleState::~PickleState() = default;
+
+bool FieldTrial::FieldTrialEntry::GetState(std::string_view& trial_name,
+                                           std::string_view& group_name,
+                                           bool& overridden) const {
   PickleIterator iter = GetPickleIterator();
-  return ReadStringPair(&iter, trial_name, group_name);
+  return ReadHeader(iter, trial_name, group_name, overridden);
 }
 
 bool FieldTrial::FieldTrialEntry::GetParams(
     std::map<std::string, std::string>* params) const {
   PickleIterator iter = GetPickleIterator();
-  StringPiece tmp;
-  // Skip reading trial and group name.
-  if (!ReadStringPair(&iter, &tmp, &tmp))
+  std::string_view tmp_string;
+  bool tmp_bool;
+  // Skip reading trial and group name, and overridden bit.
+  if (!ReadHeader(iter, tmp_string, tmp_string, tmp_bool)) {
     return false;
+  }
 
   while (true) {
-    StringPiece key;
-    StringPiece value;
-    if (!ReadStringPair(&iter, &key, &value))
+    std::string_view key;
+    std::string_view value;
+    if (!ReadStringPair(&iter, &key, &value)) {
       return key.empty();  // Non-empty is bad: got one of a pair.
+    }
     (*params)[std::string(key)] = std::string(value);
   }
 }
 
 PickleIterator FieldTrial::FieldTrialEntry::GetPickleIterator() const {
-  const char* src =
-      reinterpret_cast<const char*>(this) + sizeof(FieldTrialEntry);
-
-  Pickle pickle(src, checked_cast<size_t>(pickle_size));
+  Pickle pickle = Pickle::WithUnownedBuffer(
+      // TODO(crbug.com/40284755): FieldTrialEntry should be constructed with a
+      // span over the pickle memory.
+      UNSAFE_TODO(
+          span(GetPickledDataPtr(), checked_cast<size_t>(pickle_size))));
   return PickleIterator(pickle);
+}
+
+bool FieldTrial::FieldTrialEntry::ReadHeader(PickleIterator& iter,
+                                             std::string_view& trial_name,
+                                             std::string_view& group_name,
+                                             bool& overridden) const {
+  return ReadStringPair(&iter, &trial_name, &group_name) &&
+         iter.ReadBool(&overridden);
 }
 
 bool FieldTrial::FieldTrialEntry::ReadStringPair(
     PickleIterator* iter,
-    StringPiece* trial_name,
-    StringPiece* group_name) const {
-  if (!iter->ReadStringPiece(trial_name))
+    std::string_view* trial_name,
+    std::string_view* group_name) const {
+  if (!iter->ReadStringPiece(trial_name)) {
     return false;
-  if (!iter->ReadStringPiece(group_name))
+  }
+  if (!iter->ReadStringPiece(group_name)) {
     return false;
+  }
   return true;
 }
 
-void FieldTrial::Disable() {
-  // Group choice has already been reported to observers so we can't disable
-  // the study.
-  DCHECK(!group_reported_);
-  enable_field_trial_ = false;
-
-  // In case we are disabled after initialization, we need to switch
-  // the trial to the default group.
-  if (group_ != kNotFinalized) {
-    // Only reset when not already the default group, because in case we were
-    // forced to the default group, the group number may not be
-    // kDefaultGroupNumber, so we should keep it as is.
-    if (group_name_ != default_group_name_)
-      SetGroupChoice(default_group_name_, kDefaultGroupNumber);
-  }
-}
-
-int FieldTrial::AppendGroup(const std::string& name,
-                            Probability group_probability) {
+void FieldTrial::AppendGroup(const std::string& name,
+                             Probability group_probability) {
   // When the group choice was previously forced, we only need to return the
   // the id of the chosen group, and anything can be returned for the others.
   if (forced_) {
     DCHECK(!group_name_.empty());
     if (name == group_name_) {
-      // Note that while |group_| may be equal to |kDefaultGroupNumber| on the
+      // Note that while `group_` may be equal to `kDefaultGroupNumber` on the
       // forced trial, it will not have the same value as the default group
       // number returned from the non-forced |FactoryGetFieldTrial()| call,
       // which takes care to ensure that this does not happen.
-      return group_;
+      return;
     }
     DCHECK_NE(next_group_number_, group_);
     // We still return different numbers each time, in case some caller need
     // them to be different.
-    return next_group_number_++;
+    next_group_number_++;
+    return;
   }
 
   DCHECK_LE(group_probability, divisor_);
   DCHECK_GE(group_probability, 0);
 
-  if (enable_benchmarking_ || !enable_field_trial_)
+  if (enable_benchmarking_) {
     group_probability = 0;
+  }
 
   accumulated_group_probability_ += group_probability;
 
@@ -322,19 +289,20 @@ int FieldTrial::AppendGroup(const std::string& name,
     // This is the group that crossed the random line, so we do the assignment.
     SetGroupChoice(name, next_group_number_);
   }
-  return next_group_number_++;
+  next_group_number_++;
+  return;
 }
 
-int FieldTrial::group() {
+void FieldTrial::Activate() {
   FinalizeGroupChoice();
-  if (trial_registered_)
+  if (trial_registered_) {
     FieldTrialList::NotifyFieldTrialGroupSelection(this);
-  return group_;
+  }
 }
 
 const std::string& FieldTrial::group_name() {
-  // Call |group()| to ensure group gets assigned and observers are notified.
-  group();
+  // Call |Activate()| to ensure group gets assigned and observers are notified.
+  Activate();
   DCHECK(!group_name_.empty());
   return group_name_;
 }
@@ -347,34 +315,110 @@ const std::string& FieldTrial::GetGroupNameWithoutActivation() {
 void FieldTrial::SetForced() {
   // We might have been forced before (e.g., by CreateFieldTrial) and it's
   // first come first served, e.g., command line switch has precedence.
-  if (forced_)
+  if (forced_) {
     return;
+  }
 
   // And we must finalize the group choice before we mark ourselves as forced.
   FinalizeGroupChoice();
   forced_ = true;
 }
 
+bool FieldTrial::IsOverridden() const {
+  return is_overridden_;
+}
+
 // static
 void FieldTrial::EnableBenchmarking() {
-  DCHECK_EQ(0u, FieldTrialList::GetFieldTrialCount());
+  // We don't need to see field trials created via CreateFieldTrial() for
+  // benchmarking, because such field trials have only a single group and are
+  // not affected by randomization that `enable_benchmarking_` would disable.
+  DCHECK_EQ(0u, FieldTrialList::GetRandomizedFieldTrialCount());
   enable_benchmarking_ = true;
 }
 
 // static
 FieldTrial* FieldTrial::CreateSimulatedFieldTrial(
-    StringPiece trial_name,
+    std::string_view trial_name,
     Probability total_probability,
-    StringPiece default_group_name,
+    std::string_view default_group_name,
     double entropy_value) {
+  // `is_low_anonymity` is only used for differentiating which observers of the
+  // global `FieldTrialList` should be notified. As this field trial is assumed
+  // to never be registered with the global `FieldTrialList`, `is_low_anonymity`
+  // can be set to an arbitrary value here.
   return new FieldTrial(trial_name, total_probability, default_group_name,
-                        entropy_value);
+                        entropy_value, /*is_low_anonymity=*/false,
+                        /*is_overridden=*/false);
 }
 
-FieldTrial::FieldTrial(StringPiece trial_name,
+// static
+bool FieldTrial::ParseFieldTrialsString(std::string_view trials_string,
+                                        bool override_trials,
+                                        std::vector<State>& entries) {
+  size_t next_item = 0;
+  while (next_item < trials_string.length()) {
+    // Parse one entry. Entries have the format
+    // TrialName1/GroupName1/TrialName2/GroupName2. Each loop parses one trial
+    // and group name.
+
+    // Find the first delimiter starting at next_item, or quit.
+    size_t trial_name_end =
+        trials_string.find(kPersistentStringSeparator, next_item);
+    if (trial_name_end == trials_string.npos || next_item == trial_name_end) {
+      return false;
+    }
+    // Find the second delimiter, or end of string.
+    size_t group_name_end =
+        trials_string.find(kPersistentStringSeparator, trial_name_end + 1);
+    if (group_name_end == trials_string.npos) {
+      group_name_end = trials_string.length();
+    }
+    // Group names should not be empty, so quit if it is.
+    if (trial_name_end + 1 == group_name_end) {
+      return false;
+    }
+
+    FieldTrial::State entry;
+    // Verify if the trial should be activated or not.
+    if (trials_string[next_item] == kActivationMarker) {
+      // Name cannot be only the indicator.
+      if (trial_name_end - next_item == 1) {
+        return false;
+      }
+      next_item++;
+      entry.activated = true;
+    }
+    entry.trial_name =
+        trials_string.substr(next_item, trial_name_end - next_item);
+    entry.group_name = trials_string.substr(
+        trial_name_end + 1, group_name_end - trial_name_end - 1);
+    entry.is_overridden = override_trials;
+    // The next item starts after the delimiter, if it exists.
+    next_item = group_name_end + 1;
+
+    entries.push_back(std::move(entry));
+  }
+  return true;
+}
+
+// static
+std::string FieldTrial::BuildFieldTrialStateString(
+    const std::vector<State>& states) {
+  std::string result;
+  for (const State& state : states) {
+    AppendFieldTrialGroupToString(state.activated, state.trial_name,
+                                  state.group_name, result);
+  }
+  return result;
+}
+
+FieldTrial::FieldTrial(std::string_view trial_name,
                        const Probability total_probability,
-                       StringPiece default_group_name,
-                       double entropy_value)
+                       std::string_view default_group_name,
+                       double entropy_value,
+                       bool is_low_anonymity,
+                       bool is_overridden)
     : trial_name_(trial_name),
       divisor_(total_probability),
       default_group_name_(default_group_name),
@@ -382,11 +426,12 @@ FieldTrial::FieldTrial(StringPiece trial_name,
       accumulated_group_probability_(0),
       next_group_number_(kDefaultGroupNumber + 1),
       group_(kNotFinalized),
-      enable_field_trial_(true),
       forced_(false),
+      is_overridden_(is_overridden),
       group_reported_(false),
       trial_registered_(false),
-      ref_(FieldTrialList::FieldTrialAllocator::kReferenceNull) {
+      ref_(FieldTrialList::FieldTrialAllocator::kReferenceNull),
+      is_low_anonymity_(is_low_anonymity) {
   DCHECK_GT(total_probability, 0);
   DCHECK(!trial_name_.empty());
   DCHECK(!default_group_name_.empty())
@@ -403,49 +448,42 @@ void FieldTrial::SetTrialRegistered() {
 
 void FieldTrial::SetGroupChoice(const std::string& group_name, int number) {
   group_ = number;
-  if (group_name.empty())
+  if (group_name.empty()) {
     StringAppendF(&group_name_, "%d", group_);
-  else
+  } else {
     group_name_ = group_name;
+  }
   DVLOG(1) << "Field trial: " << trial_name_ << " Group choice:" << group_name_;
 }
 
 void FieldTrial::FinalizeGroupChoice() {
-  FinalizeGroupChoiceImpl(false);
-}
-
-void FieldTrial::FinalizeGroupChoiceImpl(bool is_locked) {
-  if (group_ != kNotFinalized)
+  if (group_ != kNotFinalized) {
     return;
+  }
   accumulated_group_probability_ = divisor_;
-  // Here it's OK to use |kDefaultGroupNumber| since we can't be forced and not
+  // Here it's OK to use `kDefaultGroupNumber` since we can't be forced and not
   // finalized.
   DCHECK(!forced_);
   SetGroupChoice(default_group_name_, kDefaultGroupNumber);
-
-  // Add the field trial to shared memory.
-  if (trial_registered_)
-    FieldTrialList::OnGroupFinalized(is_locked, this);
 }
 
 bool FieldTrial::GetActiveGroup(ActiveGroup* active_group) const {
-  if (!group_reported_ || !enable_field_trial_)
+  if (!group_reported_) {
     return false;
+  }
   DCHECK_NE(group_, kNotFinalized);
   active_group->trial_name = trial_name_;
   active_group->group_name = group_name_;
+  active_group->is_overridden = is_overridden_;
   return true;
 }
 
-bool FieldTrial::GetStateWhileLocked(State* field_trial_state,
-                                     bool include_disabled) {
-  if (!include_disabled && !enable_field_trial_)
-    return false;
-  FinalizeGroupChoiceImpl(true);
+void FieldTrial::GetStateWhileLocked(PickleState* field_trial_state) {
+  FinalizeGroupChoice();
   field_trial_state->trial_name = &trial_name_;
   field_trial_state->group_name = &group_name_;
   field_trial_state->activated = group_reported_;
-  return true;
+  field_trial_state->is_overridden = is_overridden_;
 }
 
 //------------------------------------------------------------------------------
@@ -454,16 +492,10 @@ bool FieldTrial::GetStateWhileLocked(State* field_trial_state,
 // static
 FieldTrialList* FieldTrialList::global_ = nullptr;
 
-// static
-bool FieldTrialList::used_without_global_ = false;
-
 FieldTrialList::Observer::~Observer() = default;
 
-FieldTrialList::FieldTrialList(
-    std::unique_ptr<const FieldTrial::EntropyProvider> entropy_provider)
-    : entropy_provider_(std::move(entropy_provider)) {
+FieldTrialList::FieldTrialList() {
   DCHECK(!global_);
-  DCHECK(!used_without_global_);
   global_ = this;
 }
 
@@ -477,169 +509,116 @@ FieldTrialList::~FieldTrialList() {
   // Note: If this DCHECK fires in a test that uses ScopedFeatureList, it is
   // likely caused by nested ScopedFeatureLists being destroyed in a different
   // order than they are initialized.
-  DCHECK_EQ(this, global_);
-  global_ = nullptr;
+  if (!was_reset_) {
+    DCHECK_EQ(this, global_);
+    global_ = nullptr;
+  }
 }
 
 // static
 FieldTrial* FieldTrialList::FactoryGetFieldTrial(
-    StringPiece trial_name,
+    std::string_view trial_name,
     FieldTrial::Probability total_probability,
-    StringPiece default_group_name,
-    FieldTrial::RandomizationType randomization_type,
-    int* default_group_number) {
-  return FactoryGetFieldTrialWithRandomizationSeed(
-      trial_name, total_probability, default_group_name, randomization_type, 0,
-      default_group_number, nullptr);
-}
-
-// static
-FieldTrial* FieldTrialList::FactoryGetFieldTrialWithRandomizationSeed(
-    StringPiece trial_name,
-    FieldTrial::Probability total_probability,
-    StringPiece default_group_name,
-    FieldTrial::RandomizationType randomization_type,
+    std::string_view default_group_name,
+    const FieldTrial::EntropyProvider& entropy_provider,
     uint32_t randomization_seed,
-    int* default_group_number,
-    const FieldTrial::EntropyProvider* override_entropy_provider) {
-  if (default_group_number)
-    *default_group_number = FieldTrial::kDefaultGroupNumber;
+    bool is_low_anonymity,
+    bool is_overridden) {
   // Check if the field trial has already been created in some other way.
   FieldTrial* existing_trial = Find(trial_name);
   if (existing_trial) {
     CHECK(existing_trial->forced_);
-    // If the default group name differs between the existing forced trial
-    // and this trial, then use a different value for the default group number.
-    if (default_group_number &&
-        default_group_name != existing_trial->default_group_name()) {
-      // If the new default group number corresponds to the group that was
-      // chosen for the forced trial (which has been finalized when it was
-      // forced), then set the default group number to that.
-      if (default_group_name == existing_trial->group_name_internal()) {
-        *default_group_number = existing_trial->group_;
-      } else {
-        // Otherwise, use |kNonConflictingGroupNumber| (-2) for the default
-        // group number, so that it does not conflict with the |AppendGroup()|
-        // result for the chosen group.
-        const int kNonConflictingGroupNumber = -2;
-        static_assert(
-            kNonConflictingGroupNumber != FieldTrial::kDefaultGroupNumber,
-            "The 'non-conflicting' group number conflicts");
-        static_assert(kNonConflictingGroupNumber != FieldTrial::kNotFinalized,
-                      "The 'non-conflicting' group number conflicts");
-        *default_group_number = kNonConflictingGroupNumber;
-      }
-    }
     return existing_trial;
   }
 
-  double entropy_value;
-  if (randomization_type == FieldTrial::ONE_TIME_RANDOMIZED) {
-    // If an override entropy provider is given, use it.
-    const FieldTrial::EntropyProvider* entropy_provider =
-        override_entropy_provider ? override_entropy_provider
-                                  : GetEntropyProviderForOneTimeRandomization();
-    CHECK(entropy_provider);
-    entropy_value = entropy_provider->GetEntropyForTrial(trial_name,
-                                                         randomization_seed);
-  } else {
-    DCHECK_EQ(FieldTrial::SESSION_RANDOMIZED, randomization_type);
-    DCHECK_EQ(0U, randomization_seed);
-    entropy_value = RandDouble();
-  }
+  double entropy_value =
+      entropy_provider.GetEntropyForTrial(trial_name, randomization_seed);
 
-  FieldTrial* field_trial = new FieldTrial(trial_name, total_probability,
-                                           default_group_name, entropy_value);
-  FieldTrialList::Register(field_trial);
+  FieldTrial* field_trial =
+      new FieldTrial(trial_name, total_probability, default_group_name,
+                     entropy_value, is_low_anonymity, is_overridden);
+  FieldTrialList::Register(field_trial, /*is_randomized_trial=*/true);
   return field_trial;
 }
 
 // static
-FieldTrial* FieldTrialList::Find(StringPiece trial_name) {
-  if (!global_)
+FieldTrial* FieldTrialList::Find(std::string_view trial_name) {
+  if (!global_) {
     return nullptr;
+  }
   AutoLock auto_lock(global_->lock_);
   return global_->PreLockedFind(trial_name);
 }
 
 // static
-int FieldTrialList::FindValue(StringPiece trial_name) {
+std::string FieldTrialList::FindFullName(std::string_view trial_name) {
   FieldTrial* field_trial = Find(trial_name);
-  if (field_trial)
-    return field_trial->group();
-  return FieldTrial::kNotFinalized;
-}
-
-// static
-std::string FieldTrialList::FindFullName(StringPiece trial_name) {
-  FieldTrial* field_trial = Find(trial_name);
-  if (field_trial)
+  if (field_trial) {
     return field_trial->group_name();
+  }
   return std::string();
 }
 
 // static
-bool FieldTrialList::TrialExists(StringPiece trial_name) {
+bool FieldTrialList::TrialExists(std::string_view trial_name) {
   return Find(trial_name) != nullptr;
 }
 
 // static
-bool FieldTrialList::IsTrialActive(StringPiece trial_name) {
+bool FieldTrialList::IsTrialActive(std::string_view trial_name) {
   FieldTrial* field_trial = Find(trial_name);
-  FieldTrial::ActiveGroup active_group;
-  return field_trial && field_trial->GetActiveGroup(&active_group);
+  return field_trial && field_trial->group_reported_;
 }
 
 // static
-void FieldTrialList::StatesToString(std::string* output) {
-  FieldTrial::ActiveGroups active_groups;
-  GetActiveFieldTrialGroups(&active_groups);
-  for (const auto& active_group : active_groups) {
-    DCHECK_EQ(std::string::npos,
-              active_group.trial_name.find(kPersistentStringSeparator));
-    DCHECK_EQ(std::string::npos,
-              active_group.group_name.find(kPersistentStringSeparator));
-    output->append(active_group.trial_name);
-    output->append(1, kPersistentStringSeparator);
-    output->append(active_group.group_name);
-    output->append(1, kPersistentStringSeparator);
+std::vector<FieldTrial::State> FieldTrialList::GetAllFieldTrialStates(
+    PassKey<test::ScopedFeatureList>) {
+  std::vector<FieldTrial::State> states;
+
+  if (!global_) {
+    return states;
   }
-}
 
-// static
-void FieldTrialList::AllStatesToString(std::string* output,
-                                       bool include_disabled) {
-  if (!global_)
-    return;
   AutoLock auto_lock(global_->lock_);
-
   for (const auto& registered : global_->registered_) {
-    FieldTrial::State trial;
-    if (!registered.second->GetStateWhileLocked(&trial, include_disabled))
-      continue;
+    FieldTrial::PickleState trial;
+    registered.second->GetStateWhileLocked(&trial);
     DCHECK_EQ(std::string::npos,
               trial.trial_name->find(kPersistentStringSeparator));
     DCHECK_EQ(std::string::npos,
               trial.group_name->find(kPersistentStringSeparator));
-    if (trial.activated)
-      output->append(1, kActivationMarker);
-    output->append(*trial.trial_name);
-    output->append(1, kPersistentStringSeparator);
-    output->append(*trial.group_name);
-    output->append(1, kPersistentStringSeparator);
+    FieldTrial::State entry;
+    entry.activated = trial.activated;
+    entry.trial_name = *trial.trial_name;
+    entry.group_name = *trial.group_name;
+    states.push_back(std::move(entry));
+  }
+  return states;
+}
+
+// static
+void FieldTrialList::AllStatesToString(std::string* output) {
+  if (!global_) {
+    return;
+  }
+  AutoLock auto_lock(global_->lock_);
+
+  for (const auto& registered : global_->registered_) {
+    FieldTrial::PickleState trial;
+    registered.second->GetStateWhileLocked(&trial);
+    AppendFieldTrialGroupToString(trial.activated, *trial.trial_name,
+                                  *trial.group_name, *output);
   }
 }
 
 // static
-std::string FieldTrialList::AllParamsToString(bool include_disabled,
-                                              EscapeDataFunc encode_data_func) {
+std::string FieldTrialList::AllParamsToString(EscapeDataFunc encode_data_func) {
   FieldTrialParamAssociator* params_associator =
       FieldTrialParamAssociator::GetInstance();
   std::string output;
   for (const auto& registered : GetRegisteredTrials()) {
-    FieldTrial::State trial;
-    if (!registered.second->GetStateWhileLocked(&trial, include_disabled))
-      continue;
+    FieldTrial::PickleState trial;
+    registered.second->GetStateWhileLocked(&trial);
     DCHECK_EQ(std::string::npos,
               trial.trial_name->find(kPersistentStringSeparator));
     DCHECK_EQ(std::string::npos,
@@ -649,8 +628,9 @@ std::string FieldTrialList::AllParamsToString(bool include_disabled,
             *trial.trial_name, *trial.group_name, &params)) {
       if (params.size() > 0) {
         // Add comma to seprate from previous entry if it exists.
-        if (!output.empty())
+        if (!output.empty()) {
           output.append(1, ',');
+        }
 
         output.append(encode_data_func(*trial.trial_name));
         output.append(1, '.');
@@ -660,8 +640,9 @@ std::string FieldTrialList::AllParamsToString(bool include_disabled,
         std::string param_str;
         for (const auto& param : params) {
           // Add separator from previous param information if it exists.
-          if (!param_str.empty())
+          if (!param_str.empty()) {
             param_str.append(1, kPersistentStringSeparator);
+          }
           param_str.append(encode_data_func(param.first));
           param_str.append(1, kPersistentStringSeparator);
           param_str.append(encode_data_func(param.second));
@@ -677,48 +658,20 @@ std::string FieldTrialList::AllParamsToString(bool include_disabled,
 // static
 void FieldTrialList::GetActiveFieldTrialGroups(
     FieldTrial::ActiveGroups* active_groups) {
-  DCHECK(active_groups->empty());
-  if (!global_)
-    return;
-  AutoLock auto_lock(global_->lock_);
-
-  for (const auto& registered : global_->registered_) {
-    FieldTrial::ActiveGroup active_group;
-    if (registered.second->GetActiveGroup(&active_group))
-      active_groups->push_back(active_group);
-  }
+  GetActiveFieldTrialGroupsInternal(active_groups,
+                                    /*include_low_anonymity=*/false);
 }
 
 // static
-void FieldTrialList::GetActiveFieldTrialGroupsFromString(
-    const std::string& trials_string,
-    FieldTrial::ActiveGroups* active_groups) {
-  std::vector<FieldTrialStringEntry> entries;
-  if (!ParseFieldTrialsString(trials_string, &entries))
-    return;
+std::set<std::string> FieldTrialList::GetActiveTrialsOfParentProcess() {
+  CHECK(global_);
+  CHECK(global_->create_trials_in_child_process_called_);
 
-  for (const auto& entry : entries) {
-    if (entry.activated) {
-      FieldTrial::ActiveGroup group;
-      group.trial_name = std::string(entry.trial_name);
-      group.group_name = std::string(entry.group_name);
-      active_groups->push_back(group);
-    }
-  }
-}
-
-// static
-void FieldTrialList::GetInitiallyActiveFieldTrials(
-    const CommandLine& command_line,
-    FieldTrial::ActiveGroups* active_groups) {
-  DCHECK(global_);
-  DCHECK(global_->create_trials_from_command_line_called_);
-
+  std::set<std::string> result;
+  // CreateTrialsInChildProcess() may not have created the allocator if
+  // kFieldTrialHandle was not passed on the command line.
   if (!global_->field_trial_allocator_) {
-    GetActiveFieldTrialGroupsFromString(
-        command_line.GetSwitchValueASCII(switches::kForceFieldTrials),
-        active_groups);
-    return;
+    return result;
   }
 
   FieldTrialAllocator* allocator = global_->field_trial_allocator_.get();
@@ -726,106 +679,96 @@ void FieldTrialList::GetInitiallyActiveFieldTrials(
   const FieldTrial::FieldTrialEntry* entry;
   while ((entry = mem_iter.GetNextOfObject<FieldTrial::FieldTrialEntry>()) !=
          nullptr) {
-    StringPiece trial_name;
-    StringPiece group_name;
+    std::string_view trial_name;
+    std::string_view group_name;
+    bool is_overridden;
     if (subtle::NoBarrier_Load(&entry->activated) &&
-        entry->GetTrialAndGroupName(&trial_name, &group_name)) {
-      FieldTrial::ActiveGroup group;
-      group.trial_name = std::string(trial_name);
-      group.group_name = std::string(group_name);
-      active_groups->push_back(group);
+        entry->GetState(trial_name, group_name, is_overridden)) {
+      result.emplace(trial_name);
     }
   }
+  return result;
 }
 
 // static
-bool FieldTrialList::CreateTrialsFromString(const std::string& trials_string) {
+bool FieldTrialList::CreateTrialsFromString(const std::string& trials_string,
+                                            bool override_trials) {
   DCHECK(global_);
-  if (trials_string.empty() || !global_)
+  if (trials_string.empty() || !global_) {
     return true;
-
-  std::vector<FieldTrialStringEntry> entries;
-  if (!ParseFieldTrialsString(trials_string, &entries))
-    return false;
-
-  for (const auto& entry : entries) {
-    FieldTrial* trial = CreateFieldTrial(entry.trial_name, entry.group_name);
-    if (!trial)
-      return false;
-    if (entry.activated) {
-      // Call |group()| to mark the trial as "used" and notify observers, if
-      // any. This is useful to ensure that field trials created in child
-      // processes are properly reported in crash reports.
-      trial->group();
-    }
   }
-  return true;
+
+  std::vector<FieldTrial::State> entries;
+  if (!FieldTrial::ParseFieldTrialsString(trials_string, override_trials,
+                                          entries)) {
+    return false;
+  }
+
+  return CreateTrialsFromFieldTrialStatesInternal(entries);
 }
 
 // static
-void FieldTrialList::CreateTrialsFromCommandLine(const CommandLine& cmd_line,
-                                                 uint32_t fd_key) {
-  global_->create_trials_from_command_line_called_ = true;
+bool FieldTrialList::CreateTrialsFromFieldTrialStates(
+    PassKey<test::ScopedFeatureList>,
+    const std::vector<FieldTrial::State>& entries) {
+  return CreateTrialsFromFieldTrialStatesInternal(entries);
+}
 
-#if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
+// static
+void FieldTrialList::CreateTrialsInChildProcess(const CommandLine& cmd_line) {
+  CHECK(!global_->create_trials_in_child_process_called_);
+  global_->create_trials_in_child_process_called_ = true;
+
+#if BUILDFLAG(USE_BLINK)
+  // TODO(crbug.com/41403903): Change to a CHECK.
   if (cmd_line.HasSwitch(switches::kFieldTrialHandle)) {
     std::string switch_value =
         cmd_line.GetSwitchValueASCII(switches::kFieldTrialHandle);
-    bool result = CreateTrialsFromSwitchValue(switch_value, fd_key);
-    UMA_HISTOGRAM_BOOLEAN("ChildProcess.FieldTrials.CreateFromShmemSuccess",
-                          result);
-    DCHECK(result);
+    SharedMemoryError result = CreateTrialsFromSwitchValue(switch_value);
+    SCOPED_CRASH_KEY_NUMBER("FieldTrialList", "SharedMemoryError",
+                            static_cast<int>(result));
+    CHECK_EQ(result, SharedMemoryError::kNoError);
   }
-#endif  // !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
-
-  if (cmd_line.HasSwitch(switches::kForceFieldTrials)) {
-    bool result = FieldTrialList::CreateTrialsFromString(
-        cmd_line.GetSwitchValueASCII(switches::kForceFieldTrials));
-    UMA_HISTOGRAM_BOOLEAN("ChildProcess.FieldTrials.CreateFromSwitchSuccess",
-                          result);
-    DCHECK(result);
-  }
+#endif  // BUILDFLAG(USE_BLINK)
 }
 
 // static
-void FieldTrialList::CreateFeaturesFromCommandLine(
-    const CommandLine& command_line,
+void FieldTrialList::ApplyFeatureOverridesInChildProcess(
     FeatureList* feature_list) {
-  // Fallback to command line if not using shared memory.
-  if (!global_->field_trial_allocator_.get()) {
-    return feature_list->InitializeFromCommandLine(
-        command_line.GetSwitchValueASCII(switches::kEnableFeatures),
-        command_line.GetSwitchValueASCII(switches::kDisableFeatures));
+  CHECK(global_->create_trials_in_child_process_called_);
+  // TODO(crbug.com/41403903): Change to a CHECK.
+  if (global_->field_trial_allocator_) {
+    feature_list->InitFromSharedMemory(global_->field_trial_allocator_.get());
   }
-
-  feature_list->InitializeFromSharedMemory(
-      global_->field_trial_allocator_.get());
 }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 // static
 void FieldTrialList::PopulateLaunchOptionsWithFieldTrialState(
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_APPLE)
+    GlobalDescriptors::Key descriptor_key,
+    ScopedFD& descriptor_to_share,
+#endif
     CommandLine* command_line,
     LaunchOptions* launch_options) {
-  DCHECK(command_line);
-  DCHECK(launch_options);
+  CHECK(command_line);
 
   // Use shared memory to communicate field trial state to child processes.
   // The browser is the only process that has write access to the shared memory.
   InstantiateFieldTrialAllocatorIfNeeded();
+  CHECK(global_);
+  CHECK(global_->readonly_allocator_region_.IsValid());
 
-  // If the readonly handle did not get created, fall back to flags.
-  if (!global_ || !global_->readonly_allocator_region_.IsValid()) {
-    AddFeatureAndFieldTrialFlags(command_line);
-    return;
-  }
-
-#if !BUILDFLAG(IS_NACL)
   global_->field_trial_allocator_->UpdateTrackingHistograms();
-  std::string switch_value = SerializeSharedMemoryRegionMetadata(
-      global_->readonly_allocator_region_, launch_options);
-  command_line->AppendSwitchASCII(switches::kFieldTrialHandle, switch_value);
-#endif  // !BUILDFLAG(IS_NACL)
+  shared_memory::AddToLaunchParameters(
+      switches::kFieldTrialHandle,
+      global_->readonly_allocator_region_.Duplicate(),
+#if BUILDFLAG(IS_APPLE)
+      kFieldTrialRendezvousKey,
+#elif BUILDFLAG(IS_POSIX)
+      descriptor_key, descriptor_to_share,
+#endif
+      command_line, launch_options);
 
   // Append --enable-features and --disable-features switches corresponding
   // to the features enabled on the command-line, so that child and browser
@@ -845,52 +788,45 @@ void FieldTrialList::PopulateLaunchOptionsWithFieldTrialState(
                                     disabled_features);
   }
 }
-#endif  // !BUILDFLAG(IS_IOS)
-
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_NACL)
-// static
-int FieldTrialList::GetFieldTrialDescriptor() {
-  InstantiateFieldTrialAllocatorIfNeeded();
-  if (!global_ || !global_->readonly_allocator_region_.IsValid())
-    return -1;
-
-#if BUILDFLAG(IS_ANDROID)
-  return global_->readonly_allocator_region_.GetPlatformHandle();
-#else
-  return global_->readonly_allocator_region_.GetPlatformHandle().fd;
-#endif
-}
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_NACL)
+#endif  // BUILDFLAG(USE_BLINK)
 
 // static
 ReadOnlySharedMemoryRegion
 FieldTrialList::DuplicateFieldTrialSharedMemoryForTesting() {
-  if (!global_)
+  if (!global_) {
     return ReadOnlySharedMemoryRegion();
+  }
 
   return global_->readonly_allocator_region_.Duplicate();
 }
 
 // static
-FieldTrial* FieldTrialList::CreateFieldTrial(StringPiece name,
-                                             StringPiece group_name) {
+FieldTrial* FieldTrialList::CreateFieldTrial(std::string_view name,
+                                             std::string_view group_name,
+                                             bool is_low_anonymity,
+                                             bool is_overridden) {
   DCHECK(global_);
   DCHECK_GE(name.size(), 0u);
   DCHECK_GE(group_name.size(), 0u);
-  if (name.empty() || group_name.empty() || !global_)
+  if (name.empty() || group_name.empty() || !global_) {
     return nullptr;
+  }
 
   FieldTrial* field_trial = FieldTrialList::Find(name);
   if (field_trial) {
     // In single process mode, or when we force them from the command line,
     // we may have already created the field trial.
-    if (field_trial->group_name_internal() != group_name)
+    if (field_trial->group_name_internal() != group_name) {
       return nullptr;
+    }
     return field_trial;
   }
   const int kTotalProbability = 100;
-  field_trial = new FieldTrial(name, kTotalProbability, group_name, 0);
-  FieldTrialList::Register(field_trial);
+  field_trial = new FieldTrial(name, kTotalProbability, group_name, 0,
+                               is_low_anonymity, is_overridden);
+  // The group choice will be finalized in this method. So
+  // `is_randomized_trial` should be false.
+  FieldTrialList::Register(field_trial, /*is_randomized_trial=*/false);
   // Force the trial, which will also finalize the group choice.
   field_trial->SetForced();
   return field_trial;
@@ -898,52 +834,32 @@ FieldTrial* FieldTrialList::CreateFieldTrial(StringPiece name,
 
 // static
 bool FieldTrialList::AddObserver(Observer* observer) {
-  if (!global_)
-    return false;
-  AutoLock auto_lock(global_->lock_);
-  global_->observers_.push_back(observer);
-  return true;
+  return FieldTrialList::AddObserverInternal(observer,
+                                             /*include_low_anonymity=*/false);
 }
 
 // static
 void FieldTrialList::RemoveObserver(Observer* observer) {
-  if (!global_)
-    return;
-  AutoLock auto_lock(global_->lock_);
-  Erase(global_->observers_, observer);
-  DCHECK_EQ(global_->num_ongoing_notify_field_trial_group_selection_calls_, 0)
-      << "Cannot call RemoveObserver while accessing FieldTrial::group().";
-}
-
-// static
-void FieldTrialList::OnGroupFinalized(bool is_locked, FieldTrial* field_trial) {
-  if (!global_)
-    return;
-  if (is_locked) {
-    AddToAllocatorWhileLocked(global_->field_trial_allocator_.get(),
-                              field_trial);
-  } else {
-    AutoLock auto_lock(global_->lock_);
-    AddToAllocatorWhileLocked(global_->field_trial_allocator_.get(),
-                              field_trial);
-  }
+  FieldTrialList::RemoveObserverInternal(observer,
+                                         /*include_low_anonymity=*/false);
 }
 
 // static
 void FieldTrialList::NotifyFieldTrialGroupSelection(FieldTrial* field_trial) {
-  if (!global_)
+  if (!global_) {
     return;
+  }
 
-  std::vector<Observer*> local_observers;
+  std::vector<raw_ptr<Observer, VectorExperimental>> local_observers;
+  std::vector<raw_ptr<Observer, VectorExperimental>>
+      local_observers_including_low_anonymity;
 
   {
     AutoLock auto_lock(global_->lock_);
-    if (field_trial->group_reported_)
+    if (field_trial->group_reported_) {
       return;
+    }
     field_trial->group_reported_ = true;
-
-    if (!field_trial->enable_field_trial_)
-      return;
 
     ++global_->num_ongoing_notify_field_trial_group_selection_calls_;
 
@@ -953,10 +869,19 @@ void FieldTrialList::NotifyFieldTrialGroupSelection(FieldTrial* field_trial) {
     // lock. Since removing observers concurrently with this method is
     // disallowed, pointers should remain valid while observers are notified.
     local_observers = global_->observers_;
+    local_observers_including_low_anonymity =
+        global_->observers_including_low_anonymity_;
   }
 
-  for (Observer* observer : local_observers) {
-    observer->OnFieldTrialGroupFinalized(field_trial->trial_name(),
+  if (!field_trial->is_low_anonymity_) {
+    for (Observer* observer : local_observers) {
+      observer->OnFieldTrialGroupFinalized(*field_trial,
+                                           field_trial->group_name_internal());
+    }
+  }
+
+  for (Observer* observer : local_observers_including_low_anonymity) {
+    observer->OnFieldTrialGroupFinalized(*field_trial,
                                          field_trial->group_name_internal());
   }
 
@@ -967,10 +892,20 @@ void FieldTrialList::NotifyFieldTrialGroupSelection(FieldTrial* field_trial) {
 
 // static
 size_t FieldTrialList::GetFieldTrialCount() {
-  if (!global_)
+  if (!global_) {
     return 0;
+  }
   AutoLock auto_lock(global_->lock_);
   return global_->registered_.size();
+}
+
+// static
+size_t FieldTrialList::GetRandomizedFieldTrialCount() {
+  if (!global_) {
+    return 0;
+  }
+  AutoLock auto_lock(global_->lock_);
+  return global_->num_registered_randomized_trials_;
 }
 
 // static
@@ -990,35 +925,40 @@ bool FieldTrialList::GetParamsFromSharedMemory(
   //   allocator should get set up very early in the lifecycle. Try to see if
   //   you can call it after it's been set up.
   AutoLock auto_lock(global_->lock_);
-  if (!global_->field_trial_allocator_)
+  if (!global_->field_trial_allocator_) {
     return false;
+  }
 
   // If ref_ isn't set, then the field trial data can't be in shared memory.
-  if (!field_trial->ref_)
+  if (!field_trial->ref_) {
     return false;
+  }
 
+  size_t allocated_size = 0;
   const FieldTrial::FieldTrialEntry* entry =
       global_->field_trial_allocator_->GetAsObject<FieldTrial::FieldTrialEntry>(
-          field_trial->ref_);
+          field_trial->ref_, &allocated_size);
+  CHECK(entry);
 
-  size_t allocated_size =
-      global_->field_trial_allocator_->GetAllocSize(field_trial->ref_);
   uint64_t actual_size =
       sizeof(FieldTrial::FieldTrialEntry) + entry->pickle_size;
-  if (allocated_size < actual_size)
+  if (allocated_size < actual_size) {
     return false;
+  }
 
   return entry->GetParams(params);
 }
 
 // static
 void FieldTrialList::ClearParamsFromSharedMemoryForTesting() {
-  if (!global_)
+  if (!global_) {
     return;
+  }
 
   AutoLock auto_lock(global_->lock_);
-  if (!global_->field_trial_allocator_)
+  if (!global_->field_trial_allocator_) {
     return;
+  }
 
   // To clear the params, we iterate through every item in the allocator, copy
   // just the trial and group name into a newly-allocated segment and then clear
@@ -1036,27 +976,44 @@ void FieldTrialList::ClearParamsFromSharedMemoryForTesting() {
     // Get the existing field trial entry in shared memory.
     const FieldTrial::FieldTrialEntry* prev_entry =
         allocator->GetAsObject<FieldTrial::FieldTrialEntry>(prev_ref);
-    StringPiece trial_name;
-    StringPiece group_name;
-    if (!prev_entry->GetTrialAndGroupName(&trial_name, &group_name))
+    std::string_view trial_name;
+    std::string_view group_name;
+    bool is_overridden;
+    if (!prev_entry->GetState(trial_name, group_name, is_overridden)) {
       continue;
+    }
 
     // Write a new entry, minus the params.
     Pickle pickle;
     pickle.WriteString(trial_name);
     pickle.WriteString(group_name);
+    pickle.WriteBool(is_overridden);
+
+    if (prev_entry->pickle_size == pickle.size() &&
+        memcmp(prev_entry->GetPickledDataPtr(), pickle.data(), pickle.size()) ==
+            0) {
+      // If the new entry is going to be the exact same as the existing one,
+      // then simply keep the existing one to avoid taking extra space in the
+      // allocator. This should mean that this trial has no params.
+      std::map<std::string, std::string> params;
+      CHECK(prev_entry->GetParams(&params));
+      CHECK(params.empty());
+      continue;
+    }
+
     size_t total_size = sizeof(FieldTrial::FieldTrialEntry) + pickle.size();
     FieldTrial::FieldTrialEntry* new_entry =
         allocator->New<FieldTrial::FieldTrialEntry>(total_size);
+    DCHECK(new_entry)
+        << "Failed to allocate a new entry, likely because the allocator is "
+           "full. Consider increasing kFieldTrialAllocationSize.";
     subtle::NoBarrier_Store(&new_entry->activated,
                             subtle::NoBarrier_Load(&prev_entry->activated));
     new_entry->pickle_size = pickle.size();
 
     // TODO(lawrencewu): Modify base::Pickle to be able to write over a section
     // in memory, so we can avoid this memcpy.
-    char* dst = reinterpret_cast<char*>(new_entry) +
-                sizeof(FieldTrial::FieldTrialEntry);
-    memcpy(dst, pickle.data(), pickle.size());
+    memcpy(new_entry->GetPickledDataPtr(), pickle.data(), pickle.size());
 
     // Update the ref on the field trial and add it to the list to be made
     // iterable.
@@ -1079,8 +1036,9 @@ void FieldTrialList::ClearParamsFromSharedMemoryForTesting() {
 // static
 void FieldTrialList::DumpAllFieldTrialsToPersistentAllocator(
     PersistentMemoryAllocator* allocator) {
-  if (!global_)
+  if (!global_) {
     return;
+  }
   AutoLock auto_lock(global_->lock_);
   for (const auto& registered : global_->registered_) {
     AddToAllocatorWhileLocked(allocator, registered.second);
@@ -1102,19 +1060,16 @@ FieldTrialList::GetAllFieldTrialsFromPersistentAllocator(
 }
 
 // static
-const FieldTrial::EntropyProvider*
-FieldTrialList::GetEntropyProviderForOneTimeRandomization() {
-  if (!global_) {
-    used_without_global_ = true;
-    return nullptr;
-  }
-
-  return global_->entropy_provider_.get();
+FieldTrialList* FieldTrialList::GetInstance() {
+  return global_;
 }
 
 // static
-FieldTrialList* FieldTrialList::GetInstance() {
-  return global_;
+FieldTrialList* FieldTrialList::ResetInstance() {
+  FieldTrialList* instance = global_;
+  instance->was_reset_ = true;
+  global_ = nullptr;
+  return instance;
 }
 
 // static
@@ -1129,170 +1084,31 @@ void FieldTrialList::RestoreInstanceForTesting(FieldTrialList* instance) {
   global_ = instance;
 }
 
-#if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
 // static
-std::string FieldTrialList::SerializeSharedMemoryRegionMetadata(
-    const ReadOnlySharedMemoryRegion& shm,
-    LaunchOptions* launch_options) {
-  DCHECK(launch_options);
-
-  std::stringstream ss;
-#if BUILDFLAG(IS_WIN)
-  // Elevated process might not need this, although it is harmless.
-  launch_options->handles_to_inherit.push_back(shm.GetPlatformHandle());
-
-  // Tell the child process the name of the inherited HANDLE.
-  uintptr_t uintptr_handle =
-      reinterpret_cast<uintptr_t>(shm.GetPlatformHandle());
-  ss << uintptr_handle << ",";
-  if (launch_options->elevated) {
-    // Tell the child that it must open its parent and grab the handle.
-    ss << "p,";
-  } else {
-    // Tell the child that it inherited the handle.
-    ss << "i,";
+SharedMemoryError FieldTrialList::CreateTrialsFromSwitchValue(
+    const std::string& switch_value) {
+  auto shm = shared_memory::ReadOnlySharedMemoryRegionFrom(switch_value);
+  if (!shm.has_value()) {
+    return shm.error();
   }
-#elif BUILDFLAG(IS_MAC)
-  launch_options->mach_ports_for_rendezvous.emplace(
-      kFieldTrialRendezvousKey,
-      MachRendezvousPort(shm.GetPlatformHandle(), MACH_MSG_TYPE_COPY_SEND));
-
-  // The handle on Mac is looked up directly by the child, rather than being
-  // transferred to the child over the command line.
-  ss << kFieldTrialRendezvousKey << ",";
-  // Tell the child that the handle is looked up.
-  ss << "r,";
-#elif BUILDFLAG(IS_FUCHSIA)
-  zx::vmo transfer_vmo;
-  zx_status_t status = shm.GetPlatformHandle()->duplicate(
-      ZX_RIGHT_READ | ZX_RIGHT_MAP | ZX_RIGHT_TRANSFER | ZX_RIGHT_GET_PROPERTY |
-          ZX_RIGHT_DUPLICATE,
-      &transfer_vmo);
-  ZX_CHECK(status == ZX_OK, status) << "zx_handle_duplicate";
-
-  // The handle on Fuchsia is passed as part of the launch handles to transfer.
-  uint32_t handle_id = LaunchOptions::AddHandleToTransfer(
-      &launch_options->handles_to_transfer, transfer_vmo.release());
-  ss << handle_id << ",";
-  // Tell the child that the handle is inherited.
-  ss << "i,";
-#elif BUILDFLAG(IS_POSIX)
-  // This is actually unused in the child process, but allows non-Mac Posix
-  // platforms to have the same format as the others.
-  ss << "0,i,";
-#else
-#error Unsupported OS
-#endif
-
-  UnguessableToken guid = shm.GetGUID();
-  ss << guid.GetHighForSerialization() << "," << guid.GetLowForSerialization();
-  ss << "," << shm.GetSize();
-  return ss.str();
-}
-
-// static
-ReadOnlySharedMemoryRegion
-FieldTrialList::DeserializeSharedMemoryRegionMetadata(
-    const std::string& switch_value,
-    int fd) {
-  // Format: "handle,[irp],guid-high,guid-low,size".
-  std::vector<StringPiece> tokens =
-      SplitStringPiece(switch_value, ",", KEEP_WHITESPACE, SPLIT_WANT_ALL);
-
-  if (tokens.size() != 5)
-    return ReadOnlySharedMemoryRegion();
-
-  int field_trial_handle = 0;
-  if (!StringToInt(tokens[0], &field_trial_handle))
-    return ReadOnlySharedMemoryRegion();
-
-    // token[1] has a fixed value but is ignored on all platforms except
-    // Windows, where it can be 'i' or 'p' to indicate that the handle is
-    // inherited or must be obtained from the parent.
-#if BUILDFLAG(IS_WIN)
-  HANDLE handle = reinterpret_cast<HANDLE>(field_trial_handle);
-  if (tokens[1] == "p") {
-    DCHECK(IsCurrentProcessElevated());
-    // LaunchProcess doesn't have a way to duplicate the handle, but this
-    // process can since by definition it's not sandboxed.
-    ProcessId parent_pid = GetParentProcessId(GetCurrentProcess());
-    HANDLE parent_handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, parent_pid);
-    // TODO(https://crbug.com/916461): Duplicating the handle is known to fail
-    // with ERROR_ACCESS_DENIED when the parent process is being torn down. This
-    // should be handled elegantly somehow.
-    DuplicateHandle(parent_handle, handle, GetCurrentProcess(), &handle, 0,
-                    FALSE, DUPLICATE_SAME_ACCESS);
-    CloseHandle(parent_handle);
-  } else if (tokens[1] != "i") {
-    return ReadOnlySharedMemoryRegion();
+  if (!FieldTrialList::CreateTrialsFromSharedMemoryRegion(shm.value())) {
+    return SharedMemoryError::kCreateTrialsFailed;
   }
-  win::ScopedHandle scoped_handle(handle);
-#elif BUILDFLAG(IS_MAC)
-  auto* rendezvous = MachPortRendezvousClient::GetInstance();
-  if (!rendezvous)
-    return ReadOnlySharedMemoryRegion();
-  mac::ScopedMachSendRight scoped_handle = rendezvous->TakeSendRight(
-      static_cast<MachPortsForRendezvous::key_type>(field_trial_handle));
-  if (!scoped_handle.is_valid())
-    return ReadOnlySharedMemoryRegion();
-#elif BUILDFLAG(IS_FUCHSIA)
-  static bool startup_handle_taken = false;
-  DCHECK(!startup_handle_taken) << "Shared memory region initialized twice";
-  zx::vmo scoped_handle(
-      zx_take_startup_handle(checked_cast<uint32_t>(field_trial_handle)));
-  startup_handle_taken = true;
-  if (!scoped_handle.is_valid())
-    return ReadOnlySharedMemoryRegion();
-#elif BUILDFLAG(IS_POSIX)
-  if (fd == -1)
-    return ReadOnlySharedMemoryRegion();
-  ScopedFD scoped_handle(fd);
-#else
-#error Unsupported OS
-#endif
-
-  UnguessableToken guid;
-  if (!DeserializeGUIDFromStringPieces(tokens[2], tokens[3], &guid))
-    return ReadOnlySharedMemoryRegion();
-
-  int size;
-  if (!StringToInt(tokens[4], &size))
-    return ReadOnlySharedMemoryRegion();
-
-  auto platform_handle = subtle::PlatformSharedMemoryRegion::Take(
-      std::move(scoped_handle),
-      subtle::PlatformSharedMemoryRegion::Mode::kReadOnly,
-      static_cast<size_t>(size), guid);
-  return ReadOnlySharedMemoryRegion::Deserialize(std::move(platform_handle));
+  return SharedMemoryError::kNoError;
 }
 
-// static
-bool FieldTrialList::CreateTrialsFromSwitchValue(
-    const std::string& switch_value,
-    uint32_t fd_key) {
-  int fd = -1;
-#if BUILDFLAG(IS_POSIX)
-  fd = GlobalDescriptors::GetInstance()->MaybeGet(fd_key);
-  if (fd == -1)
-    return false;
-#endif  // BUILDFLAG(IS_POSIX)
-  ReadOnlySharedMemoryRegion shm =
-      DeserializeSharedMemoryRegionMetadata(switch_value, fd);
-  if (!shm.IsValid())
-    return false;
-  return FieldTrialList::CreateTrialsFromSharedMemoryRegion(shm);
-}
-
-#endif  // !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 // static
 bool FieldTrialList::CreateTrialsFromSharedMemoryRegion(
     const ReadOnlySharedMemoryRegion& shm_region) {
   ReadOnlySharedMemoryMapping shm_mapping =
       shm_region.MapAt(0, kFieldTrialAllocationSize);
-  if (!shm_mapping.IsValid())
+  if (!shm_mapping.IsValid()) {
     OnOutOfMemory(kFieldTrialAllocationSize);
+  }
 
   return FieldTrialList::CreateTrialsFromSharedMemoryMapping(
       std::move(shm_mapping));
@@ -1310,18 +1126,22 @@ bool FieldTrialList::CreateTrialsFromSharedMemoryMapping(
   const FieldTrial::FieldTrialEntry* entry;
   while ((entry = mem_iter.GetNextOfObject<FieldTrial::FieldTrialEntry>()) !=
          nullptr) {
-    StringPiece trial_name;
-    StringPiece group_name;
-    if (!entry->GetTrialAndGroupName(&trial_name, &group_name))
+    std::string_view trial_name;
+    std::string_view group_name;
+    bool is_overridden;
+    if (!entry->GetState(trial_name, group_name, is_overridden)) {
       return false;
-
-    FieldTrial* trial = CreateFieldTrial(trial_name, group_name);
+    }
+    // TODO(crbug.com/40263398): Don't set is_low_anonymity=false, but instead
+    // propagate the is_low_anonymity state to the child process.
+    FieldTrial* trial = CreateFieldTrial(
+        trial_name, group_name, /*is_low_anonymity=*/false, is_overridden);
     trial->ref_ = mem_iter.GetAsReference(entry);
     if (subtle::NoBarrier_Load(&entry->activated)) {
-      // Call |group()| to mark the trial as "used" and notify observers, if
-      // any. This is useful to ensure that field trials created in child
+      // Mark the trial as "used" and notify observers, if any.
+      // This is useful to ensure that field trials created in child
       // processes are properly reported in crash reports.
-      trial->group();
+      trial->Activate();
     }
   }
   return true;
@@ -1329,19 +1149,22 @@ bool FieldTrialList::CreateTrialsFromSharedMemoryMapping(
 
 // static
 void FieldTrialList::InstantiateFieldTrialAllocatorIfNeeded() {
-  if (!global_)
+  if (!global_) {
     return;
+  }
 
   AutoLock auto_lock(global_->lock_);
   // Create the allocator if not already created and add all existing trials.
-  if (global_->field_trial_allocator_ != nullptr)
+  if (global_->field_trial_allocator_ != nullptr) {
     return;
+  }
 
   MappedReadOnlyRegion shm =
       ReadOnlySharedMemoryRegion::Create(kFieldTrialAllocationSize);
 
-  if (!shm.IsValid())
+  if (!shm.IsValid()) {
     OnOutOfMemory(kFieldTrialAllocationSize);
+  }
 
   global_->field_trial_allocator_ =
       std::make_unique<WritableSharedPersistentMemoryAllocator>(
@@ -1358,9 +1181,7 @@ void FieldTrialList::InstantiateFieldTrialAllocatorIfNeeded() {
   FeatureList::GetInstance()->AddFeaturesToAllocator(
       global_->field_trial_allocator_.get());
 
-#if !BUILDFLAG(IS_NACL)
   global_->readonly_allocator_region_ = std::move(shm.region);
-#endif
 }
 
 // static
@@ -1368,22 +1189,24 @@ void FieldTrialList::AddToAllocatorWhileLocked(
     PersistentMemoryAllocator* allocator,
     FieldTrial* field_trial) {
   // Don't do anything if the allocator hasn't been instantiated yet.
-  if (allocator == nullptr)
+  if (allocator == nullptr) {
     return;
+  }
 
   // Or if the allocator is read only, which means we are in a child process and
   // shouldn't be writing to it.
-  if (allocator->IsReadonly())
+  if (allocator->IsReadonly()) {
     return;
+  }
 
-  FieldTrial::State trial_state;
-  if (!field_trial->GetStateWhileLocked(&trial_state, false))
-    return;
+  FieldTrial::PickleState trial_state;
+  field_trial->GetStateWhileLocked(&trial_state);
 
   // Or if we've already added it. We must check after GetState since it can
   // also add to the allocator.
-  if (field_trial->ref_)
+  if (field_trial->ref_) {
     return;
+  }
 
   Pickle pickle;
   PickleFieldTrial(trial_state, &pickle);
@@ -1393,7 +1216,6 @@ void FieldTrialList::AddToAllocatorWhileLocked(
       total_size, FieldTrial::FieldTrialEntry::kPersistentTypeId);
   if (ref == FieldTrialAllocator::kReferenceNull) {
     NOTREACHED();
-    return;
   }
 
   FieldTrial::FieldTrialEntry* entry =
@@ -1403,9 +1225,7 @@ void FieldTrialList::AddToAllocatorWhileLocked(
 
   // TODO(lawrencewu): Modify base::Pickle to be able to write over a section in
   // memory, so we can avoid this memcpy.
-  char* dst =
-      reinterpret_cast<char*>(entry) + sizeof(FieldTrial::FieldTrialEntry);
-  memcpy(dst, pickle.data(), pickle.size());
+  memcpy(entry->GetPickledDataPtr(), pickle.data(), pickle.size());
 
   allocator->MakeIterable(ref);
   field_trial->ref_ = ref;
@@ -1417,8 +1237,9 @@ void FieldTrialList::ActivateFieldTrialEntryWhileLocked(
   FieldTrialAllocator* allocator = global_->field_trial_allocator_.get();
 
   // Check if we're in the child process and return early if so.
-  if (!allocator || allocator->IsReadonly())
+  if (!allocator || allocator->IsReadonly()) {
     return;
+  }
 
   FieldTrial::FieldTrialRef ref = field_trial->ref_;
   if (ref == FieldTrialAllocator::kReferenceNull) {
@@ -1435,24 +1256,27 @@ void FieldTrialList::ActivateFieldTrialEntryWhileLocked(
   }
 }
 
-FieldTrial* FieldTrialList::PreLockedFind(StringPiece name) {
+FieldTrial* FieldTrialList::PreLockedFind(std::string_view name) {
   auto it = registered_.find(name);
-  if (registered_.end() == it)
+  if (registered_.end() == it) {
     return nullptr;
+  }
   return it->second;
 }
 
 // static
-void FieldTrialList::Register(FieldTrial* trial) {
-  if (!global_) {
-    used_without_global_ = true;
-    return;
-  }
+void FieldTrialList::Register(FieldTrial* trial, bool is_randomized_trial) {
+  DCHECK(global_);
+
   AutoLock auto_lock(global_->lock_);
   CHECK(!global_->PreLockedFind(trial->trial_name())) << trial->trial_name();
   trial->AddRef();
   trial->SetTrialRegistered();
   global_->registered_[trial->trial_name()] = trial;
+
+  if (is_randomized_trial) {
+    ++global_->num_registered_randomized_trials_;
+  }
 }
 
 // static
@@ -1463,6 +1287,77 @@ FieldTrialList::RegistrationMap FieldTrialList::GetRegisteredTrials() {
     output = global_->registered_;
   }
   return output;
+}
+
+// static
+bool FieldTrialList::CreateTrialsFromFieldTrialStatesInternal(
+    const std::vector<FieldTrial::State>& entries) {
+  DCHECK(global_);
+
+  for (const auto& entry : entries) {
+    FieldTrial* trial =
+        CreateFieldTrial(entry.trial_name, entry.group_name,
+                         /*is_low_anonymity=*/false, entry.is_overridden);
+    if (!trial) {
+      return false;
+    }
+    if (entry.activated) {
+      // Mark the trial as "used" and notify observers, if any.
+      // This is useful to ensure that field trials created in child
+      // processes are properly reported in crash reports.
+      trial->Activate();
+    }
+  }
+  return true;
+}
+
+// static
+void FieldTrialList::GetActiveFieldTrialGroupsInternal(
+    FieldTrial::ActiveGroups* active_groups,
+    bool include_low_anonymity) {
+  DCHECK(active_groups->empty());
+  if (!global_) {
+    return;
+  }
+  AutoLock auto_lock(global_->lock_);
+
+  for (const auto& registered : global_->registered_) {
+    const FieldTrial& trial = *registered.second;
+    FieldTrial::ActiveGroup active_group;
+    if ((include_low_anonymity || !trial.is_low_anonymity_) &&
+        trial.GetActiveGroup(&active_group)) {
+      active_groups->push_back(active_group);
+    }
+  }
+}
+
+// static
+bool FieldTrialList::AddObserverInternal(Observer* observer,
+                                         bool include_low_anonymity) {
+  if (!global_) {
+    return false;
+  }
+  AutoLock auto_lock(global_->lock_);
+  if (include_low_anonymity) {
+    global_->observers_including_low_anonymity_.push_back(observer);
+  } else {
+    global_->observers_.push_back(observer);
+  }
+  return true;
+}
+
+// static
+void FieldTrialList::RemoveObserverInternal(Observer* observer,
+                                            bool include_low_anonymity) {
+  if (!global_) {
+    return;
+  }
+  AutoLock auto_lock(global_->lock_);
+  std::erase(include_low_anonymity ? global_->observers_including_low_anonymity_
+                                   : global_->observers_,
+             observer);
+  DCHECK_EQ(global_->num_ongoing_notify_field_trial_group_selection_calls_, 0)
+      << "Cannot call RemoveObserver while accessing FieldTrial::group_name().";
 }
 
 }  // namespace base

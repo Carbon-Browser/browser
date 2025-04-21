@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 //   // http://crbug.com/178677
 //   "interceptor_via_lib:libsqlite3.so\n"
 char kASanDefaultSuppressions[] =
-
     // End of suppressions.
     // PLEASE READ ABOVE BEFORE ADDING NEW SUPPRESSIONS.
     "";  // Please keep this semicolon.

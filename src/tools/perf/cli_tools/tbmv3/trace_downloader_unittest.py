@@ -1,13 +1,13 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import os
 import unittest
+from unittest import mock
+
 from cli_tools.tbmv3 import trace_downloader
 from py_utils import cloud_storage
-
-import mock
 
 
 class TraceDownloaderTests(unittest.TestCase):

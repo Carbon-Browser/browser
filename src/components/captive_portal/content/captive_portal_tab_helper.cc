@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/captive_portal/content/captive_portal_tab_helper.h"
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/captive_portal/content/captive_portal_login_detector.h"
 #include "content/public/browser/browser_thread.h"
@@ -31,7 +31,6 @@ CaptivePortalTabHelper::CaptivePortalTabHelper(
                                                  open_login_tab_callback)),
 
       login_detector_(new CaptivePortalLoginDetector(captive_portal_service)),
-      is_captive_portal_window_(false),
       subscription_(captive_portal_service->RegisterCallback(
           base::BindRepeating(&CaptivePortalTabHelper::Observe,
                               base::Unretained(this)))) {

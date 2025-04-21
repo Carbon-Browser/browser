@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ MockDeviceInfo::MockDeviceInfo() {
   ON_CALL(*this, IsSetOutputSurfaceSupported()).WillByDefault(Return(true));
   ON_CALL(*this, SupportsOverlaySurfaces()).WillByDefault(Return(true));
   ON_CALL(*this, CodecNeedsFlushWorkaround(_)).WillByDefault(Return(false));
-  ON_CALL(*this, IsAsyncApiSupported()).WillByDefault(Return(false));
 }
 
 MockDeviceInfo::~MockDeviceInfo() = default;

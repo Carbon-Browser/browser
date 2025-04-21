@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/policy/core/common/cloud/reporting_job_configuration_base.h"
@@ -39,15 +39,10 @@ class POLICY_EXPORT RealtimeReportingJobConfiguration
                                        base::Value::Dict context);
 
   // Configures a request to send real-time reports to the |server_url|
-  // endpoint.  If |add_connector_url_params| is true then URL parameters
-  // specific to enterprise connectors are added to the request uploading
-  // the report.  |callback| is invoked once the report is uploaded.
-  // |add_connector_url_params| will flip whether the service provider endpoint
-  // parameters will be used.
+  // endpoint. |callback| is invoked once the report is uploaded.
   RealtimeReportingJobConfiguration(CloudPolicyClient* client,
                                     const std::string& server_url,
                                     bool include_device_info,
-                                    bool add_connector_url_params,
                                     UploadCompleteCallback callback);
   RealtimeReportingJobConfiguration(const RealtimeReportingJobConfiguration&) =
       delete;
@@ -75,13 +70,14 @@ class POLICY_EXPORT RealtimeReportingJobConfiguration
   void OnBeforeRetryInternal(int response_code,
                              const std::string& response_body) override;
 
+  bool ShouldRecordUma() const override;
   std::string GetUmaString() const override;
 
  private:
   // Does one time initialization of the payload when the configuration is
   // created.
   void InitializePayloadInternal(CloudPolicyClient* client,
-                                 bool add_connector_url_params);
+                                 bool include_device_info);
 
   // Gathers the ids of the uploads that failed
   std::set<std::string> GetFailedUploadIds(

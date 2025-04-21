@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@ class MultiProfileCredentialsFilter
   // interception.
   MultiProfileCredentialsFilter(
       password_manager::PasswordManagerClient* client,
-      SyncServiceFactoryFunction sync_service_factory_function,
       DiceWebSigninInterceptor* dice_web_signin_interceptor);
 
   MultiProfileCredentialsFilter(const MultiProfileCredentialsFilter&) = delete;

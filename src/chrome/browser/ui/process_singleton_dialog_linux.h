@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_PROCESS_SINGLETON_DIALOG_LINUX_H_
 
 #include <string>
-
 
 // Displays an error to the user when the ProcessSingleton cannot acquire the
 // lock.  This runs the message loop itself as the browser message loop has not

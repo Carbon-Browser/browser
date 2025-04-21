@@ -1,10 +1,10 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 var receivedRequests = {};
 
-chrome.extension.onRequest.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (receivedRequests[request.source]) {
     chrome.test.fail(
         'Received multiple requests from "' + request.source + '".');

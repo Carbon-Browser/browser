@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,8 @@
 namespace history {
 
 gfx::Image CreateGoogleThumbnailForTest() {
-  // Returned image takes ownership of decoded SkBitmap.
-  std::unique_ptr<SkBitmap> thumbnail_bitmap(
-      gfx::JPEGCodec::Decode(kGoogleThumbnail, sizeof(kGoogleThumbnail)));
-  return gfx::Image::CreateFrom1xBitmap(*thumbnail_bitmap);
+  return gfx::Image::CreateFrom1xBitmap(
+      gfx::JPEGCodec::Decode(kGoogleThumbnail));
 }
 
 }  // namespace

@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/crostini/crostini_update_filesystem_view.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -20,6 +20,7 @@
 #include "components/crx_file/id_util.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 
 ash::FakeCiceroneClient* GetFakeCiceroneClient() {
   return ash::FakeCiceroneClient::Get();
@@ -86,7 +87,8 @@ IN_PROC_BROWSER_TEST_F(CrostiniUpdateFilesystemViewBrowserTest, HitOK) {
 
   ShowUi("default");
   ExpectView();
-  EXPECT_EQ(ui::DIALOG_BUTTON_OK, ActiveView()->GetDialogButtons());
+  EXPECT_EQ(static_cast<int>(ui::mojom::DialogButton::kOk),
+            ActiveView()->buttons());
 
   EXPECT_TRUE(HasAcceptButton());
   EXPECT_FALSE(HasCancelButton());

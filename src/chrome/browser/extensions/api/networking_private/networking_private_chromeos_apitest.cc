@@ -1,35 +1,44 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
-#include "base/memory/ptr_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/login/helper.h"
-#include "chrome/browser/browser_process.h"
-#include "chrome/browser/extensions/api/networking_private/networking_private_ui_delegate_chromeos.h"
+#include "base/test/test_future.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/shill/shill_device_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_ipconfig_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_profile_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_certificate_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/onc/network_onc_utils.h"
 #include "components/onc/onc_constants.h"
-#include "components/onc/onc_pref_names.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
-#include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
-#include "components/proxy_config/proxy_config_dictionary.h"
-#include "components/proxy_config/proxy_config_pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -39,61 +48,27 @@
 #include "extensions/browser/api/networking_private/networking_private_chromeos.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate_factory.h"
 #include "extensions/common/switches.h"
-#include "extensions/common/value_builder.h"
 #include "extensions/test/extension_test_message_listener.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/cros_system_api/dbus/service_constants.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/constants/ash_switches.h"
-#include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
-#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/ash/components/network/cellular_metrics_logger.h"
-#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
-#include "chromeos/ash/components/network/network_certificate_handler.h"
-#include "chromeos/ash/components/network/network_handler.h"
-#include "chromeos/ash/components/network/network_handler_test_helper.h"
-#include "chromeos/ash/components/network/network_state.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/ash/components/network/network_type_pattern.h"
-#include "chromeos/ash/components/network/onc/network_onc_utils.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/shill/shill_device_client.h"
-#include "chromeos/dbus/shill/shill_ipconfig_client.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/dbus/shill/shill_profile_client.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/crosapi/mojom/test_controller.mojom-test-utils.h"
-#include "chromeos/crosapi/mojom/test_controller.mojom.h"
-#include "chromeos/lacros/lacros_service.h"
-
-using crosapi::mojom::ShillClientTestInterfaceAsyncWaiter;
-#endif
+#include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 // This tests the Chrome OS implementation of the networkingPrivate API
 // (NetworkingPrivateChromeOS). Note: The test expectations for chromeos, and
 // win/mac (NetworkingPrivateServiceClient) are different to reflect the
 // different implementations, but should be kept similar where possible.
 
-using testing::Return;
 using testing::_;
+using testing::Return;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+using ash::ShillDeviceClient;
+using ash::ShillIPConfigClient;
+using ash::ShillManagerClient;
+using ash::ShillProfileClient;
+using ash::ShillServiceClient;
 using ash::UserDataAuthClient;
-using chromeos::ShillDeviceClient;
-using chromeos::ShillIPConfigClient;
-using chromeos::ShillManagerClient;
-using chromeos::ShillProfileClient;
-using chromeos::ShillServiceClient;
 
+using extensions::NetworkingPrivateChromeOS;
 using extensions::NetworkingPrivateDelegate;
 using extensions::NetworkingPrivateDelegateFactory;
-using extensions::NetworkingPrivateChromeOS;
-#endif
 
 namespace {
 
@@ -136,22 +111,22 @@ class NetworkingPrivateChromeOSApiTestBase
     AddProfile(kUser1ProfilePath, userhash);
 
     // Add IPConfigs
-    base::DictionaryValue ipconfig;
-    ipconfig.SetKey(shill::kAddressProperty, base::Value("0.0.0.0"));
-    ipconfig.SetKey(shill::kGatewayProperty, base::Value("0.0.0.1"));
-    ipconfig.SetKey(shill::kPrefixlenProperty, base::Value(0));
-    ipconfig.SetKey(shill::kMethodProperty, base::Value(shill::kTypeIPv4));
-    AddIPConfig(kIPConfigPath, ipconfig);
+    base::Value::Dict ipconfig;
+    ipconfig.Set(shill::kAddressProperty, "0.0.0.0");
+    ipconfig.Set(shill::kGatewayProperty, "0.0.0.1");
+    ipconfig.Set(shill::kPrefixlenProperty, 0);
+    ipconfig.Set(shill::kMethodProperty, shill::kTypeIPv4);
+    AddIPConfig(kIPConfigPath, std::move(ipconfig));
 
     // Add Devices
     AddDevice(kEthernetDevicePath, shill::kTypeEthernet,
               "stub_ethernet_device1");
 
     AddDevice(kWifiDevicePath, shill::kTypeWifi, "stub_wifi_device1");
-    base::ListValue wifi_ip_configs;
+    base::Value::List wifi_ip_configs;
     wifi_ip_configs.Append(kIPConfigPath);
     SetDeviceProperty(kWifiDevicePath, shill::kIPConfigsProperty,
-                      wifi_ip_configs);
+                      base::Value(std::move(wifi_ip_configs)));
     SetDeviceProperty(kWifiDevicePath, shill::kAddressProperty,
                       base::Value("001122aabbcc"));
 
@@ -165,7 +140,7 @@ class NetworkingPrivateChromeOSApiTestBase
     AddService(kWifi1ServicePath, "wifi1", shill::kTypeWifi,
                shill::kStateOnline);
     SetServiceProperty(kWifi1ServicePath, shill::kSecurityClassProperty,
-                       base::Value(shill::kSecurityWep));
+                       base::Value(shill::kSecurityClassWep));
     SetServiceProperty(kWifi1ServicePath, shill::kWifiBSsid,
                        base::Value("00:01:02:03:04:05"));
     SetServiceProperty(kWifi1ServicePath, shill::kSignalStrengthProperty,
@@ -176,16 +151,16 @@ class NetworkingPrivateChromeOSApiTestBase
                        base::Value(true));
     SetServiceProperty(kWifi1ServicePath, shill::kDeviceProperty,
                        base::Value(kWifiDevicePath));
-    base::DictionaryValue static_ipconfig;
-    static_ipconfig.SetKey(shill::kAddressProperty, base::Value("1.2.3.4"));
-    static_ipconfig.SetKey(shill::kGatewayProperty, base::Value("0.0.0.0"));
-    static_ipconfig.SetKey(shill::kPrefixlenProperty, base::Value(1));
+    base::Value::Dict static_ipconfig;
+    static_ipconfig.Set(shill::kAddressProperty, "1.2.3.4");
+    static_ipconfig.Set(shill::kGatewayProperty, "0.0.0.0");
+    static_ipconfig.Set(shill::kPrefixlenProperty, 1);
     SetServiceProperty(kWifi1ServicePath, shill::kStaticIPConfigProperty,
-                       static_ipconfig);
-    base::ListValue frequencies1;
+                       base::Value(std::move(static_ipconfig)));
+    base::Value::List frequencies1;
     frequencies1.Append(2400);
     SetServiceProperty(kWifi1ServicePath, shill::kWifiFrequencyListProperty,
-                       frequencies1);
+                       base::Value(std::move(frequencies1)));
     SetServiceProperty(kWifi1ServicePath, shill::kWifiFrequency,
                        base::Value(2400));
     AddServiceToProfile(kUser1ProfilePath, kWifi1ServicePath);
@@ -193,17 +168,17 @@ class NetworkingPrivateChromeOSApiTestBase
     AddService(kWifi2ServicePath, "wifi2_PSK", shill::kTypeWifi,
                shill::kStateIdle);
     SetServiceProperty(kWifi2ServicePath, shill::kSecurityClassProperty,
-                       base::Value(shill::kSecurityPsk));
+                       base::Value(shill::kSecurityClassPsk));
     SetServiceProperty(kWifi2ServicePath, shill::kSignalStrengthProperty,
                        base::Value(80));
     SetServiceProperty(kWifi2ServicePath, shill::kConnectableProperty,
                        base::Value(true));
 
-    base::ListValue frequencies2;
+    base::Value::List frequencies2;
     frequencies2.Append(2400);
     frequencies2.Append(5000);
     SetServiceProperty(kWifi2ServicePath, shill::kWifiFrequencyListProperty,
-                       frequencies2);
+                       base::Value(std::move(frequencies2)));
     SetServiceProperty(kWifi2ServicePath, shill::kWifiFrequency,
                        base::Value(5000));
     SetServiceProperty(kWifi2ServicePath, shill::kProfileProperty,
@@ -215,7 +190,7 @@ class NetworkingPrivateChromeOSApiTestBase
                        base::Value(shill::kProviderOpenVpn));
     AddServiceToProfile(kUser1ProfilePath, "stub_vpn1");
 
-    AddService("stub_vpn2", "vpn2", shill::kTypeVPN, shill::kStateOffline);
+    AddService("stub_vpn2", "vpn2", shill::kTypeVPN, shill::kStateIdle);
     SetServiceProperty("stub_vpn2", shill::kProviderTypeProperty,
                        base::Value(shill::kProviderThirdPartyVpn));
     SetServiceProperty("stub_vpn2", shill::kProviderHostProperty,
@@ -227,12 +202,12 @@ class NetworkingPrivateChromeOSApiTestBase
     // Add a Cellular GSM Device.
     AddDevice(kCellularDevicePath, shill::kTypeCellular,
               "stub_cellular_device1");
-    base::DictionaryValue home_provider;
-    home_provider.SetStringKey("name", "Cellular1_Provider");
-    home_provider.SetStringKey("code", "000000");
-    home_provider.SetStringKey("country", "us");
+    base::Value::Dict home_provider;
+    home_provider.Set("name", "Cellular1_Provider");
+    home_provider.Set("code", "000000");
+    home_provider.Set("country", "us");
     SetDeviceProperty(kCellularDevicePath, shill::kHomeProviderProperty,
-                      home_provider);
+                      base::Value(std::move(home_provider)));
     SetDeviceProperty(kCellularDevicePath, shill::kTechnologyFamilyProperty,
                       base::Value(shill::kNetworkTechnologyGsm));
     SetDeviceProperty(kCellularDevicePath, shill::kMeidProperty,
@@ -296,10 +271,9 @@ class NetworkingPrivateChromeOSApiTestBase
                                    const std::string& service_path) = 0;
   virtual std::string GetSharedProfilePath() = 0;
   virtual void AddIPConfig(const std::string& ip_config_path,
-                           const base::Value& properties) = 0;
+                           base::Value::Dict properties) = 0;
 };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 class UIDelegateStub : public NetworkingPrivateDelegate::UIDelegate {
  public:
   static int s_show_account_details_called_;
@@ -314,15 +288,15 @@ class UIDelegateStub : public NetworkingPrivateDelegate::UIDelegate {
 // static
 int UIDelegateStub::s_show_account_details_called_ = 0;
 
-class NetworkingPrivateChromeOSApiTestAsh
+class NetworkingPrivateChromeOSApiTest
     : public NetworkingPrivateChromeOSApiTestBase {
  public:
-  NetworkingPrivateChromeOSApiTestAsh() = default;
+  NetworkingPrivateChromeOSApiTest() = default;
 
-  NetworkingPrivateChromeOSApiTestAsh(
-      const NetworkingPrivateChromeOSApiTestAsh&) = delete;
-  NetworkingPrivateChromeOSApiTestAsh& operator=(
-      const NetworkingPrivateChromeOSApiTestAsh&) = delete;
+  NetworkingPrivateChromeOSApiTest(const NetworkingPrivateChromeOSApiTest&) =
+      delete;
+  NetworkingPrivateChromeOSApiTest& operator=(
+      const NetworkingPrivateChromeOSApiTest&) = delete;
 
   static std::unique_ptr<KeyedService> CreateNetworkingPrivateDelegate(
       content::BrowserContext* context) {
@@ -335,10 +309,10 @@ class NetworkingPrivateChromeOSApiTestAsh
   }
 
   void SetupTether() {
-    chromeos::NetworkStateHandler* network_state_handler =
-        chromeos::NetworkHandler::Get()->network_state_handler();
+    ash::NetworkStateHandler* network_state_handler =
+        ash::NetworkHandler::Get()->network_state_handler();
     network_state_handler->SetTetherTechnologyState(
-        chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED);
+        ash::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED);
     network_state_handler->AddTetherNetworkState(
         "tetherGuid1", "tetherName1", "tetherCarrier1",
         50 /* battery_percentage */, 75 /* signal_strength */,
@@ -381,7 +355,7 @@ class NetworkingPrivateChromeOSApiTestAsh
         profile(), base::BindRepeating(&CreateNetworkingPrivateDelegate));
 
     network_handler_test_helper_ =
-        std::make_unique<chromeos::NetworkHandlerTestHelper>();
+        std::make_unique<ash::NetworkHandlerTestHelper>();
 
     ConfigFakeNetwork();
 
@@ -426,7 +400,7 @@ class NetworkingPrivateChromeOSApiTestAsh
         request,
         base::BindOnce(
             [](std::string* out,
-               absl::optional<::user_data_auth::GetSanitizedUsernameReply>
+               std::optional<::user_data_auth::GetSanitizedUsernameReply>
                    result) {
               CHECK(result.has_value());
               *out = result->sanitized_username();
@@ -479,9 +453,9 @@ class NetworkingPrivateChromeOSApiTestAsh
   }
 
   void AddIPConfig(const std::string& ip_config_path,
-                   const base::Value& properties) override {
-    network_handler_test_helper_->ip_config_test()->AddIPConfig(ip_config_path,
-                                                                properties);
+                   base::Value::Dict properties) override {
+    network_handler_test_helper_->ip_config_test()->AddIPConfig(
+        ip_config_path, std::move(properties));
   }
 
   void AddProfile(const std::string& profile_path,
@@ -499,209 +473,47 @@ class NetworkingPrivateChromeOSApiTestAsh
   }
 
  protected:
-  std::unique_ptr<chromeos::NetworkHandlerTestHelper>
-      network_handler_test_helper_;
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   testing::NiceMock<policy::MockConfigurationPolicyProvider> provider_;
   sync_preferences::TestingPrefServiceSyncable user_prefs_;
   TestingPrefServiceSimple local_state_;
 };
-#else
-class NetworkingPrivateChromeOSApiTestLacros
-    : public NetworkingPrivateChromeOSApiTestBase {
- public:
-  NetworkingPrivateChromeOSApiTestLacros() {}
-
-  NetworkingPrivateChromeOSApiTestLacros(
-      const NetworkingPrivateChromeOSApiTestLacros&) = delete;
-  NetworkingPrivateChromeOSApiTestLacros& operator=(
-      const NetworkingPrivateChromeOSApiTestLacros&) = delete;
-
-  bool SetUpAsh() {
-    auto* service = chromeos::LacrosService::Get();
-    if (!service->IsAvailable<crosapi::mojom::TestController>() ||
-        service->GetInterfaceVersion(crosapi::mojom::TestController::Uuid_) <
-            static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
-                                 kBindShillClientTestInterfaceMinVersion)) {
-      LOG(ERROR) << "Unsupported ash version.";
-      return false;
-    }
-    crosapi::mojom::TestControllerAsyncWaiter test_controller_waiter{
-        service->GetRemote<crosapi::mojom::TestController>().get()};
-
-    test_controller_waiter.BindShillClientTestInterface(
-        shill_test_.BindNewPipeAndPassReceiver());
-
-    ConfigFakeNetwork();
-
-    return true;
-  }
-
-  // NetworkingPrivateChromeOSApiTestBase overrides
-
-  std::string GetSanitizedActiveUsername() override {
-    auto* service = chromeos::LacrosService::Get();
-    if (!service->IsAvailable<crosapi::mojom::TestController>() ||
-        service->GetInterfaceVersion(crosapi::mojom::TestController::Uuid_) <
-            static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
-                                 kGetSanitizedActiveUsernameMinVersion)) {
-      LOG(ERROR) << "Unsupported ash version.";
-      return "";
-    }
-
-    crosapi::mojom::TestControllerAsyncWaiter test_controller_waiter{
-        service->GetRemote<crosapi::mojom::TestController>().get()};
-
-    std::string userhash;
-    test_controller_waiter.GetSanitizedActiveUsername(&userhash);
-    return userhash;
-  }
-
-  void AddDevice(const std::string& device_path,
-                 const std::string& type,
-                 const std::string& name) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddDevice(device_path, type, name);
-  }
-
-  void SetDeviceProperty(const std::string& device_path,
-                         const std::string& name,
-                         const base::Value& value) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetDeviceProperty(device_path, name, value.Clone(),
-                           /*notify_changed=*/true);
-  }
-
-  void SetSimLocked(const std::string& device_path, bool enabled) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetSimLocked(device_path, enabled);
-  }
-
-  void ClearDevices() override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get()).ClearDevices();
-  }
-
-  void AddService(const std::string& service_path,
-                  const std::string& name,
-                  const std::string& type,
-                  const std::string& state) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddService(service_path, service_path + "_guid", name, type, state,
-                    true /* add_to_visible */);
-  }
-
-  void ClearServices() override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get()).ClearServices();
-  }
-
-  void SetServiceProperty(const std::string& service_path,
-                          const std::string& property,
-                          const base::Value& value) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .SetServiceProperty(service_path, property, value.Clone());
-  }
-
-  void AddIPConfig(const std::string& ip_config_path,
-                   const base::Value& properties) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddIPConfig(ip_config_path, properties.Clone());
-  }
-
-  void AddProfile(const std::string& profile_path,
-                  const std::string& userhash) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddProfile(profile_path, userhash);
-  }
-
-  void AddServiceToProfile(const std::string& profile_path,
-                           const std::string& service_path) override {
-    ShillClientTestInterfaceAsyncWaiter(shill_test_.get())
-        .AddServiceToProfile(profile_path, service_path);
-  }
-
-  std::string GetSharedProfilePath() override {
-    // TODO(crbug.com/): get this information from Ash
-    const char kSharedProfilePath[] = "/profile/default";
-    return kSharedProfilePath;
-  }
-
- protected:
-  mojo::Remote<crosapi::mojom::ShillClientTestInterface> shill_test_;
-};
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-using NetworkingPrivateChromeOSApiTest = NetworkingPrivateChromeOSApiTestLacros;
-#else
-using NetworkingPrivateChromeOSApiTest = NetworkingPrivateChromeOSApiTestAsh;
-#endif
 
 // Place each subtest into a separate browser test so that the stub networking
 // library state is reset for each subtest run. This way they won't affect each
 // other.
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, StartConnect) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("startConnect")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, StartDisconnect) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("startDisconnect")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, StartActivate) {
   SetupCellular();
   EXPECT_TRUE(RunNetworkingSubtest("startActivate")) << message_;
   EXPECT_EQ(1, UIDelegateStub::s_show_account_details_called_);
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        StartConnectNonexistent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("startConnectNonexistent")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        StartDisconnectNonexistent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("startDisconnectNonexistent")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        StartGetPropertiesNonexistent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("startGetPropertiesNonexistent"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetNetworks) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   // Hide stub_wifi2.
   SetServiceProperty(kWifi2ServicePath, shill::kVisibleProperty,
                      base::Value(false));
@@ -713,23 +525,15 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetNetworks) {
   EXPECT_TRUE(RunNetworkingSubtest("getNetworks")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetVisibleNetworks) {
   EXPECT_TRUE(RunNetworkingSubtest("getVisibleNetworks")) << message_;
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        GetVisibleNetworksWifi) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("getVisibleNetworksWifi")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, EnabledNetworkTypes) {
   EXPECT_TRUE(RunNetworkingSubtest("enabledNetworkTypesDisable")) << message_;
   EXPECT_TRUE(RunNetworkingSubtest("enabledNetworkTypesEnable")) << message_;
@@ -742,24 +546,13 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetDeviceStates) {
   manager_test()->SetTechnologyInitializing("cellular", true);
   EXPECT_TRUE(RunNetworkingSubtest("getDeviceStates")) << message_;
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, RequestNetworkScan) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("requestNetworkScan")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        RequestNetworkScanCellular) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   EXPECT_TRUE(RunNetworkingSubtest("requestNetworkScanCellular")) << message_;
 }
@@ -767,41 +560,23 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 // Properties are filtered and translated through
 // ShillToONCTranslator::TranslateWiFiWithState
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetProperties) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("getProperties")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        GetCellularProperties) {
   SetupCellular();
   EXPECT_TRUE(RunNetworkingSubtest("getPropertiesCellular")) << message_;
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetState) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("getState")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetStateNonExistent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("getStateNonExistent")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        SetCellularProperties) {
   SetupCellular();
@@ -850,18 +625,11 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 
   EXPECT_TRUE(RunNetworkingSubtest("createNetworkForPolicyControlledNetwork"));
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, ForgetNetwork) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("forgetNetwork")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        ForgetPolicyControlledNetwork) {
   constexpr char kUserPolicyBlob[] =
@@ -943,72 +711,46 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetManagedProperties) {
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetErrorState) {
-  chromeos::NetworkHandler::Get()->network_state_handler()->SetErrorForTest(
+  ash::NetworkHandler::Get()->network_state_handler()->SetErrorForTest(
       kWifi1ServicePath, "TestErrorState");
   EXPECT_TRUE(RunNetworkingSubtest("getErrorState")) << message_;
 }
-#endif
 
+// TODO(crbug.com/41496066): This test is flaky.
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
-                       OnNetworksChangedEventConnect) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
+                       DISABLED_OnNetworksChangedEventConnect) {
   EXPECT_TRUE(RunNetworkingSubtest("onNetworksChangedEventConnect"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        OnNetworksChangedEventDisconnect) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("onNetworksChangedEventDisconnect"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        OnNetworkListChangedEvent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("onNetworkListChangedEvent")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        OnDeviceStateListChangedEvent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   EXPECT_TRUE(RunNetworkingSubtest("onDeviceStateListChangedEvent"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        OnDeviceScanningChangedEvent) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   EXPECT_TRUE(RunNetworkingSubtest("onDeviceScanningChangedEvent")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        OnCertificateListsChangedEvent) {
   ExtensionTestMessageListener listener("eventListenerReady");
   listener.SetOnSatisfied(base::BindOnce([](const std::string& message) {
-    chromeos::NetworkHandler::Get()
+    ash::NetworkHandler::Get()
         ->network_certificate_handler()
         ->AddAuthorityCertificateForTest("authority_cert");
   }));
@@ -1018,8 +760,9 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        GetCaptivePortalStatus) {
-  // Ethernet defaults to online. Set wifi1 to idle -> 'Offline', and wifi2 to
-  // redirect-found -> 'Portal'.
+  // Ethernet defaults to online.
+  // Set wifi1 to idle with captive portal status mapping 'Offline'.
+  // Set wifi2 to redirect-found with captive portal statu smapping 'Portal'.
   SetServiceProperty(kWifi1ServicePath, shill::kStateProperty,
                      base::Value(shill::kStateIdle));
   SetServiceProperty(kWifi2ServicePath, shill::kStateProperty,
@@ -1045,14 +788,8 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 
   EXPECT_TRUE(RunNetworkingSubtest("captivePortalNotification")) << message_;
 }
-#endif
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, UnlockCellularSim) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   // Lock the SIM
   SetSimLocked(kCellularDevicePath, true);
@@ -1060,69 +797,49 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, UnlockCellularSim) {
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, SetCellularSimState) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   EXPECT_TRUE(RunNetworkingSubtest("setCellularSimState")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
                        SelectCellularMobileNetwork) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   // Create fake list of found networks.
-  std::unique_ptr<base::ListValue> found_networks =
-      extensions::ListBuilder()
-          .Append(extensions::DictionaryBuilder()
+  base::Value::List found_networks =
+      base::Value::List()
+          .Append(base::Value::Dict()
                       .Set(shill::kNetworkIdProperty, "network1")
                       .Set(shill::kTechnologyProperty, "GSM")
-                      .Set(shill::kStatusProperty, "current")
-                      .Build())
-          .Append(extensions::DictionaryBuilder()
+                      .Set(shill::kStatusProperty, "current"))
+          .Append(base::Value::Dict()
                       .Set(shill::kNetworkIdProperty, "network2")
                       .Set(shill::kTechnologyProperty, "GSM")
-                      .Set(shill::kStatusProperty, "available")
-                      .Build())
-          .Build();
+                      .Set(shill::kStatusProperty, "available"));
   SetDeviceProperty(kCellularDevicePath, shill::kFoundNetworksProperty,
-                    *found_networks);
+                    base::Value(std::move(found_networks)));
   EXPECT_TRUE(RunNetworkingSubtest("selectCellularMobileNetwork")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, CellularSimPuk) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (!SetUpAsh()) {
-    GTEST_SKIP() << "Unsupported ash version.";
-  }
-#endif
   SetupCellular();
   // Lock the SIM
   SetSimLocked(kCellularDevicePath, true);
   EXPECT_TRUE(RunNetworkingSubtest("cellularSimPuk")) << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetGlobalPolicy) {
-  base::DictionaryValue global_config;
-  global_config.SetKey(
+  base::Value::Dict global_config;
+  global_config.Set(
       ::onc::global_network_config::kAllowOnlyPolicyNetworksToAutoconnect,
-      base::Value(true));
-  global_config.SetKey(
-      ::onc::global_network_config::kAllowOnlyPolicyWiFiToConnect,
-      base::Value(false));
-  global_config.SetKey("SomeNewGlobalPolicy", base::Value(false));
-  chromeos::NetworkHandler::Get()
+      true);
+  global_config.Set(::onc::global_network_config::kAllowOnlyPolicyWiFiToConnect,
+                    false);
+  global_config.Set("SomeNewGlobalPolicy", false);
+  ash::NetworkHandler::Get()
       ->managed_network_configuration_handler()
       ->SetPolicy(::onc::ONC_SOURCE_DEVICE_POLICY,
-                  std::string() /* no username hash */, base::ListValue(),
-                  global_config);
+                  /*userhash=*/std::string(),
+                  /*network_configs_onc=*/base::Value::List(), global_config);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(RunNetworkingSubtest("getGlobalPolicy")) << message_;
@@ -1154,7 +871,7 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest,
 }
 
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, GetCertificateLists) {
-  chromeos::NetworkHandler::Get()
+  ash::NetworkHandler::Get()
       ->network_certificate_handler()
       ->AddAuthorityCertificateForTest("authority_cert");
   EXPECT_TRUE(RunNetworkingSubtest("getCertificateLists")) << message_;
@@ -1169,6 +886,5 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateChromeOSApiTest, Alias) {
                                {.launch_as_platform_app = true}))
       << message_;
 }
-#endif
 
 }  // namespace

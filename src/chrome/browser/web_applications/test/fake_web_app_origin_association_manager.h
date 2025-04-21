@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,20 +19,20 @@ class FakeWebAppOriginAssociationManager
   ~FakeWebAppOriginAssociationManager() override;
 
   // Sends back preset data.
-  // Sends back |url_handlers| as is if pass_through_ is set.
+  // Sends back |scope_extensions| as is if pass_through_ is set.
   void GetWebAppOriginAssociations(
-      const GURL& manifest_url,
-      apps::UrlHandlers url_handlers,
+      const GURL& web_app_identity,
+      ScopeExtensions scope_extensions,
       OnDidGetWebAppOriginAssociations callback) override;
 
-  void SetData(std::map<apps::UrlHandlerInfo, apps::UrlHandlerInfo> data);
+  void SetData(std::map<ScopeExtensionInfo, ScopeExtensionInfo> data);
 
   void set_pass_through(bool value) { pass_through_ = value; }
 
  private:
   // Maps a url handler to the corresponding result to send back in the
   // callback.
-  std::map<apps::UrlHandlerInfo, apps::UrlHandlerInfo> data_;
+  std::map<ScopeExtensionInfo, ScopeExtensionInfo> data_;
   bool pass_through_ = false;
 };
 

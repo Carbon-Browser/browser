@@ -1,15 +1,20 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/policy/core/common/cloud/resource_cache.h"
 
 #include "base/base64url.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -26,8 +31,6 @@ bool Base64UrlEncode(const std::set<std::string>& input,
   for (const auto& plain : input) {
     if (plain.empty()) {
       NOTREACHED();
-      output->clear();
-      return false;
     }
 
     std::string encoded;
@@ -44,7 +47,7 @@ bool Base64UrlEncode(const std::set<std::string>& input,
 ResourceCache::ResourceCache(
     const base::FilePath& cache_dir,
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    absl::optional<int64_t> max_cache_size)
+    std::optional<int64_t> max_cache_size)
     : cache_dir_(cache_dir),
       task_runner_(task_runner),
       max_cache_size_(max_cache_size) {
@@ -225,7 +228,6 @@ bool ResourceCache::VerifyKeyPath(const std::string& key,
                                   base::FilePath* path) {
   if (key.empty()) {
     NOTREACHED();
-    return false;
   }
 
   std::string encoded;
@@ -243,7 +245,6 @@ bool ResourceCache::VerifyKeyPathAndGetSubkeyPath(const std::string& key,
                                                   base::FilePath* path) {
   if (subkey.empty()) {
     NOTREACHED();
-    return false;
   }
 
   base::FilePath key_path;
@@ -267,12 +268,20 @@ bool ResourceCache::WriteCacheFile(const base::FilePath& path,
                                    const std::string& data) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   DCHECK(cache_dir_.IsParent(path));
-  bool success = DeleteCacheFile(path, false);
-  int size = base::checked_cast<int>(data.size());
-  int bytes_written = base::WriteFile(path, data.data(), size);
-  if (max_cache_size_.has_value())
-    current_cache_size_ += bytes_written;
-  return success && bytes_written == size;
+  bool success = DeleteCacheFile(path, /*recursive=*/false);
+  if (!success) {
+    return false;
+  }
+  if (base::WriteFile(path, data)) {
+    if (max_cache_size_.has_value()) {
+      current_cache_size_ += data.size();
+    }
+    return true;
+  } else {
+    // If we didn't write the entire file remove it.
+    DeleteCacheFile(path, /*recursive=*/false);
+  }
+  return false;
 }
 
 bool ResourceCache::DeleteCacheFile(const base::FilePath& path,
@@ -306,8 +315,9 @@ int64_t ResourceCache::GetCacheDirectoryOrFileSize(
          child_path = enumerator.Next()) {
       path_size += GetCacheDirectoryOrFileSize(child_path);
     }
-  } else if (!base::GetFileSize(path, &path_size)) {
-    path_size = 0;
+  } else {
+    std::optional<int64_t> file_size = base::GetFileSize(path);
+    path_size = file_size.value_or(0);
   }
   return path_size;
 }

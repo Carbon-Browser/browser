@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@
 #include "ash/wm/window_util.h"
 #include "chrome/browser/ash/input_method/assistive_window_controller_delegate.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
-#include "chrome/browser/ash/input_method/ui/suggestion_details.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/input_method/suggestion_details.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -22,10 +21,14 @@
 
 namespace ash {
 namespace input_method {
-
 namespace {
+
+constexpr char16_t kAnnouncementViewName[] = u"Assistive Input";
+constexpr base::TimeDelta kAnnouncementDelay = base::Milliseconds(100);
+constexpr base::TimeDelta kShowSuggestionDelay = base::Milliseconds(5);
+
 gfx::NativeView GetParentView() {
-  gfx::NativeView parent = nullptr;
+  gfx::NativeView parent = gfx::NativeView();
 
   aura::Window* active_window = ash::window_util::GetActiveWindow();
   // Use MenuContainer so that it works even with a system modal dialog.
@@ -41,25 +44,31 @@ gfx::NativeView GetParentView() {
 AssistiveWindowController::AssistiveWindowController(
     AssistiveWindowControllerDelegate* delegate,
     Profile* profile,
-    ui::ime::AssistiveAccessibilityView* accessibility_view)
-    : delegate_(delegate), accessibility_view_(accessibility_view) {}
+    ui::ime::AnnouncementView* announcement_view)
+    : delegate_(delegate), announcement_view_(announcement_view) {}
 
 AssistiveWindowController::~AssistiveWindowController() {
-  if (suggestion_window_view_ && suggestion_window_view_->GetWidget())
+  ClearPendingSuggestionTimer();
+  if (suggestion_window_view_ && suggestion_window_view_->GetWidget()) {
     suggestion_window_view_->GetWidget()->RemoveObserver(this);
-  if (undo_window_ && undo_window_->GetWidget())
+  }
+  if (undo_window_ && undo_window_->GetWidget()) {
     undo_window_->GetWidget()->RemoveObserver(this);
-  if (grammar_suggestion_window_ && grammar_suggestion_window_->GetWidget())
+  }
+  if (grammar_suggestion_window_ && grammar_suggestion_window_->GetWidget()) {
     grammar_suggestion_window_->GetWidget()->RemoveObserver(this);
-  if (accessibility_view_ && accessibility_view_->GetWidget())
-    accessibility_view_->GetWidget()->RemoveObserver(this);
+  }
+  if (announcement_view_ && announcement_view_->GetWidget()) {
+    announcement_view_->GetWidget()->RemoveObserver(this);
+  }
   CHECK(!IsInObserverList());
 }
 
 void AssistiveWindowController::InitSuggestionWindow(
     ui::ime::SuggestionWindowView::Orientation orientation) {
-  if (suggestion_window_view_)
+  if (suggestion_window_view_) {
     return;
+  }
   // suggestion_window_view_ is deleted by DialogDelegateView::DeleteDelegate.
   suggestion_window_view_ =
       ui::ime::SuggestionWindowView::Create(GetParentView(), this, orientation);
@@ -69,8 +78,9 @@ void AssistiveWindowController::InitSuggestionWindow(
 }
 
 void AssistiveWindowController::InitUndoWindow() {
-  if (undo_window_)
+  if (undo_window_) {
     return;
+  }
   // undo_window is deleted by DialogDelegateView::DeleteDelegate.
   undo_window_ = new ui::ime::UndoWindow(GetParentView(), this);
   views::Widget* widget = undo_window_->InitWidget();
@@ -79,8 +89,9 @@ void AssistiveWindowController::InitUndoWindow() {
 }
 
 void AssistiveWindowController::InitGrammarSuggestionWindow() {
-  if (grammar_suggestion_window_)
+  if (grammar_suggestion_window_) {
     return;
+  }
   // grammar_suggestion_window_ is deleted by
   // DialogDelegateView::DeleteDelegate.
   grammar_suggestion_window_ =
@@ -90,17 +101,19 @@ void AssistiveWindowController::InitGrammarSuggestionWindow() {
   widget->Show();
 }
 
-void AssistiveWindowController::InitAccessibilityView() {
-  if (accessibility_view_)
+void AssistiveWindowController::InitAnnouncementView() {
+  if (announcement_view_) {
     return;
+  }
 
   // accessibility_view_ is deleted by DialogDelegateView::DeleteDelegate.
-  accessibility_view_ =
-      new ui::ime::AssistiveAccessibilityView(GetParentView());
-  accessibility_view_->GetWidget()->AddObserver(this);
+  announcement_view_ =
+      new ui::ime::AnnouncementView(GetParentView(), kAnnouncementViewName);
+  announcement_view_->GetWidget()->AddObserver(this);
 }
 
 void AssistiveWindowController::OnWidgetDestroying(views::Widget* widget) {
+  ClearPendingSuggestionTimer();
   if (suggestion_window_view_ &&
       widget == suggestion_window_view_->GetWidget()) {
     widget->RemoveObserver(this);
@@ -115,24 +128,28 @@ void AssistiveWindowController::OnWidgetDestroying(views::Widget* widget) {
     widget->RemoveObserver(this);
     grammar_suggestion_window_ = nullptr;
   }
-  if (accessibility_view_ && widget == accessibility_view_->GetWidget()) {
+  if (announcement_view_ && widget == announcement_view_->GetWidget()) {
     widget->RemoveObserver(this);
-    accessibility_view_ = nullptr;
+    announcement_view_ = nullptr;
   }
 }
 
 void AssistiveWindowController::Announce(const std::u16string& message) {
-  if (!accessibility_view_)
-    InitAccessibilityView();
+  if (!announcement_view_) {
+    InitAnnouncementView();
+  }
 
-  accessibility_view_->Announce(message);
+  // Announcements for assistive suggestions often collide with key press or
+  // text update announcements from ChromeVox. By adding a very small delay
+  // these collisions are *mostly* avoided.
+  announcement_view_->AnnounceAfterDelay(message, kAnnouncementDelay);
 }
 
-// TODO(crbug/1119570): Update AcceptSuggestion signature (either use
+// TODO(crbug.com/40145550): Update AcceptSuggestion signature (either use
 // announce_string, or no string)
 void AssistiveWindowController::AcceptSuggestion(
     const std::u16string& suggestion) {
-  if (window_.type == ui::ime::AssistiveWindowType::kEmojiSuggestion) {
+  if (window_.type == ash::ime::AssistiveWindowType::kEmojiSuggestion) {
     Announce(l10n_util::GetStringUTF16(IDS_SUGGESTION_EMOJI_SUGGESTED));
   } else {
     Announce(l10n_util::GetStringUTF16(IDS_SUGGESTION_INSERTED));
@@ -141,80 +158,91 @@ void AssistiveWindowController::AcceptSuggestion(
 }
 
 void AssistiveWindowController::HideSuggestion() {
-  suggestion_text_ = base::EmptyString16();
+  suggestion_text_.clear();
   confirmed_length_ = 0;
-  tracking_last_suggestion_ = false;
-  if (suggestion_window_view_)
+  if (suggestion_window_view_) {
     suggestion_window_view_->GetWidget()->Close();
-  if (grammar_suggestion_window_)
+  }
+  if (grammar_suggestion_window_) {
     grammar_suggestion_window_->GetWidget()->Close();
+  }
 }
 
 void AssistiveWindowController::SetBounds(const Bounds& bounds) {
+  if (bounds == bounds_) {
+    return;
+  }
+
   bounds_ = bounds;
-  // Sets suggestion_window_view_'s bounds here for most up-to-date cursor
-  // position. This is different from UndoWindow because UndoWindow gets cursors
-  // position before showing.
-  // TODO(crbug/1112982): Investigate getting bounds to suggester before sending
-  // show suggestion request.
   if (suggestion_window_view_) {
     suggestion_window_view_->SetAnchorRect(bounds.caret);
   }
   if (grammar_suggestion_window_) {
     grammar_suggestion_window_->SetBounds(bounds_.caret);
   }
+  if (pending_suggestion_timer_ && pending_suggestion_timer_->IsRunning()) {
+    pending_suggestion_timer_->FireNow();
+    pending_suggestion_timer_ = nullptr;
+  }
 }
 
 void AssistiveWindowController::FocusStateChanged() {
   HideSuggestion();
-  if (undo_window_)
+  if (undo_window_) {
     undo_window_->Hide();
+  }
 }
 
 void AssistiveWindowController::ShowSuggestion(
     const ui::ime::SuggestionDetails& details) {
-  if (!suggestion_window_view_)
-    // Since there is only one suggestion text in ShowSuggestion, we default to
-    // vertical layout.
-    InitSuggestionWindow(ui::ime::SuggestionWindowView::Orientation::kVertical);
-  tracking_last_suggestion_ = suggestion_text_ == details.text;
   suggestion_text_ = details.text;
   confirmed_length_ = details.confirmed_length;
-  suggestion_window_view_->Show(details);
+  // Delay the showing of a completion suggestion. This is required to solve
+  // b/241321719, where we receive a ShowSuggestion call prior to a
+  // corresponding SetBounds call. Delaying allows any relevant SetBounds calls
+  // to be received before we show the suggestion to the user.
+  ClearPendingSuggestionTimer();
+  pending_suggestion_timer_ = std::make_unique<base::OneShotTimer>();
+  pending_suggestion_timer_->Start(
+      FROM_HERE, kShowSuggestionDelay,
+      base::BindOnce(&AssistiveWindowController::DisplayCompletionSuggestion,
+                     weak_ptr_factory_.GetWeakPtr(), details));
 }
 
 void AssistiveWindowController::SetButtonHighlighted(
     const ui::ime::AssistiveWindowButton& button,
     bool highlighted) {
   switch (button.window_type) {
-    case ui::ime::AssistiveWindowType::kEmojiSuggestion:
-    case ui::ime::AssistiveWindowType::kPersonalInfoSuggestion:
-    case ui::ime::AssistiveWindowType::kMultiWordSuggestion:
-    case ui::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
-      if (!suggestion_window_view_)
+    case ash::ime::AssistiveWindowType::kEmojiSuggestion:
+    case ash::ime::AssistiveWindowType::kPersonalInfoSuggestion:
+    case ash::ime::AssistiveWindowType::kMultiWordSuggestion:
+    case ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
+      if (!suggestion_window_view_) {
         return;
+      }
 
       suggestion_window_view_->SetButtonHighlighted(button, highlighted);
-      if (highlighted)
-        Announce(button.announce_string);
       break;
-    case ui::ime::AssistiveWindowType::kUndoWindow:
-      if (!undo_window_)
+    case ash::ime::AssistiveWindowType::kLearnMore:
+    case ash::ime::AssistiveWindowType::kUndoWindow:
+      if (!undo_window_) {
         return;
+      }
 
       undo_window_->SetButtonHighlighted(button, highlighted);
-      Announce(button.announce_string);
       break;
-    case ui::ime::AssistiveWindowType::kGrammarSuggestion:
-      if (!grammar_suggestion_window_)
+    case ash::ime::AssistiveWindowType::kGrammarSuggestion:
+      if (!grammar_suggestion_window_) {
         return;
+      }
 
       grammar_suggestion_window_->SetButtonHighlighted(button, highlighted);
-      if (highlighted)
-        Announce(button.announce_string);
       break;
-    case ui::ime::AssistiveWindowType::kNone:
+    case ash::ime::AssistiveWindowType::kNone:
       break;
+  }
+  if (highlighted) {
+    Announce(button.announce_string);
   }
 }
 
@@ -228,58 +256,70 @@ size_t AssistiveWindowController::GetConfirmedLength() const {
 
 ui::ime::SuggestionWindowView::Orientation
 AssistiveWindowController::WindowOrientationFor(
-    ui::ime::AssistiveWindowType window_type) {
+    ash::ime::AssistiveWindowType window_type) {
   switch (window_type) {
-    case ui::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
+    case ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
+    case ash::ime::AssistiveWindowType::kLearnMore:
       return ui::ime::SuggestionWindowView::Orientation::kHorizontal;
-    case ui::ime::AssistiveWindowType::kUndoWindow:
-    case ui::ime::AssistiveWindowType::kEmojiSuggestion:
-    case ui::ime::AssistiveWindowType::kPersonalInfoSuggestion:
-    case ui::ime::AssistiveWindowType::kMultiWordSuggestion:
-    case ui::ime::AssistiveWindowType::kGrammarSuggestion:
+    case ash::ime::AssistiveWindowType::kUndoWindow:
+    case ash::ime::AssistiveWindowType::kEmojiSuggestion:
+    case ash::ime::AssistiveWindowType::kPersonalInfoSuggestion:
+    case ash::ime::AssistiveWindowType::kMultiWordSuggestion:
+    case ash::ime::AssistiveWindowType::kGrammarSuggestion:
       return ui::ime::SuggestionWindowView::Orientation::kVertical;
-    case ui::ime::AssistiveWindowType::kNone:
+    case ash::ime::AssistiveWindowType::kNone:
       NOTREACHED();
   }
   NOTREACHED();
-  return ui::ime::SuggestionWindowView::Orientation::kVertical;
 }
 
 void AssistiveWindowController::SetAssistiveWindowProperties(
     const AssistiveWindowProperties& window) {
   window_ = window;
+
+  // Make sure any pending timers are cleared before we attempt to show, or
+  // update, another assistive window.
+  ClearPendingSuggestionTimer();
+
   switch (window.type) {
-    case ui::ime::AssistiveWindowType::kUndoWindow:
-      if (!undo_window_)
+    case ash::ime::AssistiveWindowType::kUndoWindow:
+      if (!undo_window_) {
         InitUndoWindow();
+      }
       if (window.visible) {
         // Apply 4px padding to move the window away from the cursor.
         gfx::Rect anchor_rect =
             bounds_.autocorrect.IsEmpty() ? bounds_.caret : bounds_.autocorrect;
         anchor_rect.Inset(-4);
         undo_window_->SetAnchorRect(anchor_rect);
-        undo_window_->Show();
+        undo_window_->Show(window.show_setting_link);
       } else {
         undo_window_->Hide();
       }
       break;
-    case ui::ime::AssistiveWindowType::kEmojiSuggestion:
-    case ui::ime::AssistiveWindowType::kPersonalInfoSuggestion:
-    case ui::ime::AssistiveWindowType::kMultiWordSuggestion:
-    case ui::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
-      if (!suggestion_window_view_)
+    case ash::ime::AssistiveWindowType::kLearnMore:
+    case ash::ime::AssistiveWindowType::kEmojiSuggestion:
+    case ash::ime::AssistiveWindowType::kPersonalInfoSuggestion:
+    case ash::ime::AssistiveWindowType::kMultiWordSuggestion:
+    case ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion:
+      if (!suggestion_window_view_) {
         InitSuggestionWindow(WindowOrientationFor(window.type));
+      }
       if (window_.visible) {
-        suggestion_window_view_->ShowMultipleCandidates(window);
+        suggestion_window_view_->SetAnchorRect(bounds_.caret);
+        suggestion_window_view_->ShowMultipleCandidates(
+            window, WindowOrientationFor(window.type));
       } else {
         HideSuggestion();
       }
       break;
-    case ui::ime::AssistiveWindowType::kGrammarSuggestion:
-      if (window.candidates.size() == 0)
+    case ash::ime::AssistiveWindowType::kGrammarSuggestion:
+      if (window.candidates.size() == 0) {
         return;
-      if (!grammar_suggestion_window_)
+      }
+      if (!grammar_suggestion_window_) {
         InitGrammarSuggestionWindow();
+      }
       if (window.visible) {
         grammar_suggestion_window_->SetBounds(bounds_.caret);
         grammar_suggestion_window_->SetSuggestion(window.candidates[0]);
@@ -288,15 +328,38 @@ void AssistiveWindowController::SetAssistiveWindowProperties(
         grammar_suggestion_window_->Hide();
       }
       break;
-    case ui::ime::AssistiveWindowType::kNone:
+    case ash::ime::AssistiveWindowType::kNone:
       break;
   }
   Announce(window.announce_string);
 }
 
+void AssistiveWindowController::DisplayCompletionSuggestion(
+    const ui::ime::SuggestionDetails& details) {
+  if (!suggestion_window_view_) {
+    InitSuggestionWindow(ui::ime::SuggestionWindowView::Orientation::kVertical);
+  }
+  suggestion_window_view_->SetAnchorRect(bounds_.caret);
+  suggestion_window_view_->Show(details);
+}
+
+void AssistiveWindowController::ClearPendingSuggestionTimer() {
+  if (pending_suggestion_timer_) {
+    if (pending_suggestion_timer_->IsRunning()) {
+      pending_suggestion_timer_->Stop();
+    }
+    pending_suggestion_timer_ = nullptr;
+  }
+}
+
 void AssistiveWindowController::AssistiveWindowButtonClicked(
     const ui::ime::AssistiveWindowButton& button) const {
   delegate_->AssistiveWindowButtonClicked(button);
+}
+
+void AssistiveWindowController::AssistiveWindowChanged(
+    const ash::ime::AssistiveWindow& window) const {
+  delegate_->AssistiveWindowChanged(window);
 }
 
 ui::ime::SuggestionWindowView*

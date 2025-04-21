@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "third_party/nearby/src/internal/platform/implementation/ble.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // Concrete BleMedium implementation.
 // api::BleMedium is a synchronous interface, so this implementation consumes
@@ -110,8 +108,6 @@ class BleMedium : public api::BleMedium,
   std::map<std::string, chrome::BlePeripheral> discovered_ble_peripherals_map_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_BLE_MEDIUM_H_

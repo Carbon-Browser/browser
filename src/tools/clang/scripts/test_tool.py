@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -35,10 +35,16 @@ def _GenerateCompileCommands(files, include_paths):
   files = [f.replace('\\', '/') for f in files]
   include_path_flags = ' '.join('-I %s' % include_path.replace('\\', '/')
                                 for include_path in include_paths)
-  return json.dumps([{'directory': os.path.dirname(f),
-                      'command': 'clang++ -std=c++14 -fsyntax-only %s -c %s' % (
-                          include_path_flags, os.path.basename(f)),
-                      'file': os.path.basename(f)} for f in files], indent=2)
+  return json.dumps([{
+      'directory':
+      os.path.dirname(f),
+      'command':
+      'clang++ -std=c++20 -fsyntax-only %s %s' %
+      (include_path_flags, os.path.basename(f)),
+      'file':
+      os.path.basename(f)
+  } for f in files],
+                    indent=2)
 
 
 def _NumberOfTestsToString(tests):
@@ -46,13 +52,9 @@ def _NumberOfTestsToString(tests):
   return '%d test%s' % (tests, 's' if tests != 1 else '')
 
 
-def _ApplyTool(tools_clang_scripts_directory,
-               tool_to_test,
-               tool_path,
-               tool_args,
-               test_directory_for_tool,
-               actual_files,
-               apply_edits):
+def _ApplyTool(tools_clang_scripts_directory, tool_to_test, tool_path,
+               tool_args, test_directory_for_tool, actual_files, apply_edits,
+               extract_edits_path):
   try:
     # Stage the test files in the git index. If they aren't staged, then
     # run_tool.py will skip them when applying replacements.
@@ -85,12 +87,21 @@ def _ApplyTool(tools_clang_scripts_directory,
     processes.append(subprocess.Popen(args, stdout=subprocess.PIPE))
 
     if apply_edits:
-      args = [
-          'python',
-          os.path.join(tools_clang_scripts_directory, 'extract_edits.py')
-      ]
-      processes.append(subprocess.Popen(
-          args, stdin=processes[-1].stdout, stdout=subprocess.PIPE))
+      if not extract_edits_path:
+        args = [
+            'python',
+            os.path.join(tools_clang_scripts_directory, 'extract_edits.py')
+        ]
+        processes.append(
+            subprocess.Popen(args,
+                             stdin=processes[-1].stdout,
+                             stdout=subprocess.PIPE))
+      else:
+        args = ['python', os.path.join(extract_edits_path, 'extract_edits.py')]
+        processes.append(
+            subprocess.Popen(args,
+                             stdin=processes[-1].stdout,
+                             stdout=subprocess.PIPE))
 
       args = [
           'python',
@@ -116,7 +127,7 @@ def _ApplyTool(tools_clang_scripts_directory,
       _RunGit(args)
     else:
       with open(actual_files[0], 'w') as output_file:
-        output_file.write(stdout)
+        output_file.write(stdout.decode('utf-8'))
 
     return 0
 
@@ -146,8 +157,9 @@ def _NormalizeSingleRawOutputLine(output_line, test_dir):
 
 
 def _NormalizeRawOutput(output_lines, test_dir):
-  return map(lambda line: _NormalizeSingleRawOutputLine(line, test_dir),
-             output_lines)
+  return list(
+      map(lambda line: _NormalizeSingleRawOutputLine(line, test_dir),
+          output_lines))
 
 
 def main(argv):
@@ -168,6 +180,10 @@ def main(argv):
                       help='Clang tool to be tested.')
   parser.add_argument(
       '--test-filter', default='*', help='optional glob filter for test names')
+  parser.add_argument('--extract-edits-path',
+                      nargs='?',
+                      help='optional path to the extract_edits script\
+      [e.g. if custom filtering or post-processing of edits is needed]')
   args = parser.parse_args(argv)
   tool_to_test = args.tool_name[0]
   print('\nTesting %s\n' % tool_to_test)
@@ -203,6 +219,16 @@ def main(argv):
                                     '../..',
                                     'testing/gmock/include')))
 
+  include_paths.append(
+      os.path.realpath(
+          os.path.join(tools_clang_directory, '../..',
+                       'third_party/googletest/src/googletest/include')))
+
+  include_paths.append(
+      os.path.realpath(
+          os.path.join(tools_clang_directory, '../..',
+                       'third_party/googletest/src/googlemock/include')))
+
   if len(actual_files) == 0:
     print('Tool "%s" does not have compatible test files.' % tool_to_test)
     return 1
@@ -217,9 +243,8 @@ def main(argv):
   # Run the tool.
   os.chdir(test_directory_for_tool)
   exitcode = _ApplyTool(tools_clang_scripts_directory, tool_to_test,
-                        args.tool_path, args.tool_arg,
-                        test_directory_for_tool, actual_files,
-                        args.apply_edits)
+                        args.tool_path, args.tool_arg, test_directory_for_tool,
+                        actual_files, args.apply_edits, args.extract_edits_path)
   if (exitcode != 0):
     return exitcode
 

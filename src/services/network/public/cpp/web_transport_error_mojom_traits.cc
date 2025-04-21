@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@ bool StructTraits<
   if (in.net_error() >= 0) {
     return false;
   }
-  if (in.quic_error() < 0 || in.quic_error() >= quic::QUIC_LAST_ERROR) {
+  if (in.quic_error() < 0 ||
+      in.quic_error() >= static_cast<int>(quic::QUIC_LAST_ERROR)) {
     return false;
   }
   std::string details;

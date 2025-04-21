@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/safe_browsing/verdict_cache_manager_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
+#include "components/safe_browsing/core/browser/sync/safe_browsing_primary_account_token_fetcher.h"
 #include "components/safe_browsing/core/browser/sync/sync_utils.h"
 #include "components/safe_browsing/core/browser/verdict_cache_manager.h"
 #include "components/safe_browsing/core/common/features.h"
@@ -27,33 +28,42 @@
 namespace safe_browsing {
 
 // static
-ChromeEnterpriseRealTimeUrlLookupService*
+RealTimeUrlLookupServiceBase*
 ChromeEnterpriseRealTimeUrlLookupServiceFactory::GetForProfile(
     Profile* profile) {
-  return static_cast<ChromeEnterpriseRealTimeUrlLookupService*>(
+  return static_cast<RealTimeUrlLookupServiceBase*>(
       GetInstance()->GetServiceForBrowserContext(profile, /* create= */ true));
 }
 
 // static
 ChromeEnterpriseRealTimeUrlLookupServiceFactory*
 ChromeEnterpriseRealTimeUrlLookupServiceFactory::GetInstance() {
-  return base::Singleton<
-      ChromeEnterpriseRealTimeUrlLookupServiceFactory>::get();
+  static base::NoDestructor<ChromeEnterpriseRealTimeUrlLookupServiceFactory>
+      instance;
+  return instance.get();
 }
 
 ChromeEnterpriseRealTimeUrlLookupServiceFactory::
     ChromeEnterpriseRealTimeUrlLookupServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ChromeEnterpriseRealTimeUrlLookupService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // Enterprise real time URL check can be enabled in guest profile.
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(VerdictCacheManagerFactory::GetInstance());
   DependsOn(enterprise_connectors::ConnectorsServiceFactory::GetInstance());
   DependsOn(SafeBrowsingNavigationObserverManagerFactory::GetInstance());
+  DependsOn(IdentityManagerFactory::GetInstance());
 }
 
-KeyedService*
-ChromeEnterpriseRealTimeUrlLookupServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> ChromeEnterpriseRealTimeUrlLookupServiceFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   if (!g_browser_process->safe_browsing_service()) {
     return nullptr;
   }
@@ -61,10 +71,12 @@ ChromeEnterpriseRealTimeUrlLookupServiceFactory::BuildServiceInstanceFor(
   auto url_loader_factory =
       std::make_unique<network::CrossThreadPendingSharedURLLoaderFactory>(
           profile->GetURLLoaderFactory());
-  return new ChromeEnterpriseRealTimeUrlLookupService(
+  return std::make_unique<ChromeEnterpriseRealTimeUrlLookupService>(
       network::SharedURLLoaderFactory::Create(std::move(url_loader_factory)),
       VerdictCacheManagerFactory::GetForProfile(profile), profile,
       base::BindRepeating(&safe_browsing::GetUserPopulationForProfile, profile),
+      std::make_unique<SafeBrowsingPrimaryAccountTokenFetcher>(
+          IdentityManagerFactory::GetForProfile(profile)),
       enterprise_connectors::ConnectorsServiceFactory::GetForBrowserContext(
           profile),
       SafeBrowsingNavigationObserverManagerFactory::GetForBrowserContext(

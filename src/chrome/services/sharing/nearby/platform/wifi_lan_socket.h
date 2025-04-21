@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,7 @@ namespace base {
 class SequencedTaskRunner;
 }  // namespace base
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // An implementation of Nearby Connections's abstract class api::WifiLanSocket.
 // This implementation wraps a TCPConnectedSocket which lives until Close() is
@@ -72,8 +70,6 @@ class WifiLanSocket : public api::WifiLanSocket {
   BidirectionalStream bidirectional_stream_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WIFI_LAN_SOCKET_H_

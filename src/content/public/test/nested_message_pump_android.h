@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace content {
 
 // A nested message pump to be used for content browsertests and web tests
 // on Android. It overrides the default UI message pump to allow nested loops.
-class NestedMessagePumpAndroid : public base::MessagePumpForUI {
+class NestedMessagePumpAndroid : public base::MessagePumpAndroid {
  public:
   NestedMessagePumpAndroid();
 

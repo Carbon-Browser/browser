@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,30 +6,52 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/image_editor/screenshot_flow.h"
-#include "chrome/browser/lens/metrics/lens_metrics.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/lens/lens_side_panel_helper.h"
+#include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tab_contents/core_tab_helper.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/lens/lens_region_search_instructions_view.h"
+#include "components/lens/buildflags.h"
 #include "components/lens/lens_entrypoints.h"
 #include "components/lens/lens_features.h"
+#include "components/lens/lens_metadata.mojom.h"
+#include "components/lens/lens_metrics.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "ui/gfx/image/image_util.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/widget/widget.h"
 
+namespace {
+#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
+views::Widget* OpenLensRegionSearchInstructions(
+    Browser* browser,
+    base::OnceClosure close_callback,
+    base::OnceClosure escape_callback) {
+  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+  CHECK(browser_view);
+  // Our anchor should be the browser view's top container view. This makes sure
+  // that we account for side panel width and the top container view.
+  views::View* anchor = browser_view->contents_web_view();
+  return views::BubbleDialogDelegateView::CreateBubble(
+      std::make_unique<lens::LensRegionSearchInstructionsView>(
+          anchor, std::move(close_callback), std::move(escape_callback)));
+}
+#endif // BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
+}  // namespace
+
 namespace lens {
 
-LensRegionSearchController::LensRegionSearchController(
-    content::WebContents* web_contents,
-    Browser* browser)
-    : content::WebContentsObserver(web_contents), browser_(browser) {
-  screenshot_flow_ =
-      std::make_unique<image_editor::ScreenshotFlow>(web_contents);
+LensRegionSearchControllerData::LensRegionSearchControllerData() = default;
+LensRegionSearchControllerData::~LensRegionSearchControllerData() = default;
+
+RegionSearchCapturedData::RegionSearchCapturedData() = default;
+RegionSearchCapturedData::~RegionSearchCapturedData() = default;
+
+LensRegionSearchController::LensRegionSearchController() {
   weak_this_ = weak_factory_.GetWeakPtr();
 }
 
@@ -37,24 +59,28 @@ LensRegionSearchController::~LensRegionSearchController() {
   CloseWithReason(views::Widget::ClosedReason::kLostFocus);
 }
 
-void LensRegionSearchController::Start(bool use_fullscreen_capture,
-                                       bool is_google_default_search_provider) {
+void LensRegionSearchController::Start(
+    content::WebContents* web_contents,
+    bool use_fullscreen_capture,
+    bool is_google_default_search_provider,
+    lens::AmbientSearchEntryPoint entry_point) {
+  entry_point_ = entry_point;
   is_google_default_search_provider_ = is_google_default_search_provider;
-  if (!web_contents() || !browser_)
+  // Return early if web contents/browser don't exist and if capture mode is
+  // already active.
+  if (!web_contents || in_capture_mode_) {
     return;
+  }
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
+  if (!browser) {
+    return;
+  }
 
-  if (!screenshot_flow_)
+  Observe(web_contents);
+  if (!screenshot_flow_) {
     screenshot_flow_ =
-        std::make_unique<image_editor::ScreenshotFlow>(web_contents());
-
-  // Create user education bubble anchored to the toolbar container.
-  bubble_widget_ = lens::OpenLensRegionSearchInstructions(
-      browser_,
-      base::BindOnce(&LensRegionSearchController::Close,
-                     base::Unretained(this)),
-      base::BindOnce(&LensRegionSearchController::Escape,
-                     base::Unretained(this)));
-  bubble_widget_->Show();
+        std::make_unique<image_editor::ScreenshotFlow>(web_contents);
+  }
 
   base::OnceCallback<void(const image_editor::ScreenshotCaptureResult&)>
       callback = base::BindOnce(&LensRegionSearchController::OnCaptureCompleted,
@@ -63,16 +89,19 @@ void LensRegionSearchController::Start(bool use_fullscreen_capture,
   if (use_fullscreen_capture) {
     screenshot_flow_->StartFullscreenCapture(std::move(callback));
   } else {
+#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
+    // Create user education bubble anchored to the toolbar container.
+    // This is only done for non-fulllscreen capture.
+    bubble_widget_ = OpenLensRegionSearchInstructions(
+        browser,
+        base::BindOnce(&LensRegionSearchController::Close,
+                       base::Unretained(this)),
+        base::BindOnce(&LensRegionSearchController::Escape,
+                       base::Unretained(this)));
+    bubble_widget_->Show();
+#endif
     screenshot_flow_->Start(std::move(callback));
   }
-}
-
-gfx::Image LensRegionSearchController::ResizeImageIfNecessary(
-    const gfx::Image& image) {
-  return gfx::ResizedImageForMaxDimensions(
-      image, features::GetMaxPixelsForRegionSearch(),
-      features::GetMaxPixelsForRegionSearch(),
-      features::GetMaxAreaForRegionSearch());
 }
 
 void LensRegionSearchController::RecordCaptureResult(
@@ -132,8 +161,9 @@ void LensRegionSearchController::RecordRegionSizeRelatedMetrics(
     gfx::Size image_size) {
   // If any of the rects are empty, it means the area is zero. In this case,
   // return.
-  if (screen_bounds.IsEmpty() || image_size.IsEmpty())
+  if (screen_bounds.IsEmpty() || image_size.IsEmpty()) {
     return;
+  }
   double region_width = image_size.width();
   double region_height = image_size.height();
 
@@ -168,39 +198,43 @@ void LensRegionSearchController::OnCaptureCompleted(
     return;
   }
 
-  const gfx::Image& captured_image = result.image;
+  const gfx::Image& image = result.image;
+
   // If image is empty, then record UMA and close.
-  if (captured_image.IsEmpty()) {
+  if (image.IsEmpty()) {
     RecordCaptureResult(
         lens::LensRegionSearchCaptureResult::ERROR_CAPTURING_REGION);
     return;
   }
 
   // Record region size related UMA histograms according to region and screen.
-  RecordRegionSizeRelatedMetrics(result.screen_bounds, captured_image.Size());
+  RecordRegionSizeRelatedMetrics(result.screen_bounds, image.Size());
 
-  const gfx::Image& image = ResizeImageIfNecessary(captured_image);
-  CoreTabHelper* core_tab_helper =
-      CoreTabHelper::FromWebContents(web_contents());
+  auto* core_tab_helper = CoreTabHelper::FromWebContents(web_contents());
   if (!core_tab_helper) {
     RecordCaptureResult(
         lens::LensRegionSearchCaptureResult::FAILED_TO_OPEN_TAB);
     return;
   }
 
+  lens::RecordAmbientSearchQuery(entry_point_);
+
   if (is_google_default_search_provider_) {
-    // Do not show the side panel on region searches and modify the entry point
-    // if Lens fullscreen search features are enabled.
-    lens::EntryPoint entry_point =
-        lens::features::IsLensFullscreenSearchEnabled()
-            ? lens::EntryPoint::CHROME_FULLSCREEN_SEARCH_MENU_ITEM
-            : lens::EntryPoint::CHROME_REGION_SEARCH_MENU_ITEM;
-    bool use_side_panel = lens::features::IsLensSidePanelEnabled() &&
-                          !lens::features::IsLensFullscreenSearchEnabled();
-    core_tab_helper->SearchWithLensInNewTab(image, captured_image.Size(),
-                                            entry_point, use_side_panel);
+    lens::EntryPoint lens_entry_point =
+        lens::EntryPoint::CHROME_REGION_SEARCH_MENU_ITEM;
+    switch (entry_point_) {
+      case lens::AmbientSearchEntryPoint::
+          LENS_OVERLAY_LOCATION_BAR_ACCESSIBILITY_FALLBACK:
+        lens_entry_point = lens::EntryPoint::CHROME_LENS_OVERLAY_LOCATION_BAR;
+        break;
+      default:
+        // The other possible values of `entry_point_` should not be possible
+        // and are considered invalid.
+        break;
+    }
+    core_tab_helper->SearchWithLens(image, lens_entry_point);
   } else {
-    core_tab_helper->SearchByImageInNewTab(image, captured_image.Size());
+    core_tab_helper->SearchByImage(image);
   }
 
   RecordCaptureResult(lens::LensRegionSearchCaptureResult::SUCCESS);
@@ -241,8 +275,27 @@ void LensRegionSearchController::CloseWithReason(
   if (bubble_widget_) {
     std::exchange(bubble_widget_, nullptr)->CloseWithReason(reason);
   }
-  if (screenshot_flow_)
+  if (screenshot_flow_) {
     screenshot_flow_->CancelCapture();
+    screenshot_flow_.reset();
+  }
+}
+
+bool LensRegionSearchController::IsOverlayUIVisibleForTesting() {
+  if (!bubble_widget_ || !screenshot_flow_) {
+    return false;
+  }
+  return bubble_widget_->IsVisible() && screenshot_flow_->IsCaptureModeActive();
+}
+
+void LensRegionSearchController::SetEntryPointForTesting(
+    lens::AmbientSearchEntryPoint entry_point) {
+  entry_point_ = entry_point;
+}
+
+void LensRegionSearchController::SetWebContentsForTesting(
+    content::WebContents* web_contents) {
+  Observe(web_contents);
 }
 
 }  // namespace lens

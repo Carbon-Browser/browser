@@ -26,7 +26,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_TIMING_PERFORMANCE_USER_TIMING_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TIMING_PERFORMANCE_USER_TIMING_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/timing/performance.h"
 #include "third_party/blink/renderer/core/timing/performance_timing.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
@@ -50,15 +51,17 @@ class UserTiming final : public GarbageCollected<UserTiming> {
   PerformanceMeasure* Measure(ScriptState*,
                               const AtomicString& measure_name,
                               const V8UnionDoubleOrString* start,
-                              const absl::optional<double>& duration,
+                              const std::optional<double>& duration,
                               const V8UnionDoubleOrString* end,
                               const ScriptValue& detail,
-                              ExceptionState&);
+                              ExceptionState&,
+                              DOMWindow* source);
   void ClearMeasures(const AtomicString& measure_name);
 
   PerformanceEntryVector GetMarks() const;
   PerformanceEntryVector GetMeasures() const;
-  void AddMarkToPerformanceTimeline(PerformanceMark&);
+  String GetSerializedDetail(const ScriptValue&);
+  void AddMarkToPerformanceTimeline(PerformanceMark&, PerformanceMarkOptions*);
 
   PerformanceEntryVector GetMarks(const AtomicString& name) const;
   PerformanceEntryVector GetMeasures(const AtomicString& name) const;
@@ -76,9 +79,22 @@ class UserTiming final : public GarbageCollected<UserTiming> {
                                const V8UnionDoubleOrString* mark_or_time,
                                ExceptionState&);
 
+  void InsertPerformanceEntry(PerformanceEntryMap& performance_entry_map,
+                              PerformanceEntryVector& performance_entry_buffer,
+                              PerformanceEntry& entry);
+
+  void ClearPerformanceEntries(PerformanceEntryMap& performance_entry_map,
+                               PerformanceEntryVector& performance_entry_buffer,
+                               const AtomicString& name);
+
   Member<Performance> performance_;
   PerformanceEntryMap marks_map_;
   PerformanceEntryMap measures_map_;
+
+  // Maintain vectors to improve fetch time for marks/measures in exchange for
+  // memory.
+  PerformanceEntryVector marks_buffer_;
+  PerformanceEntryVector measures_buffer_;
 };
 
 }  // namespace blink

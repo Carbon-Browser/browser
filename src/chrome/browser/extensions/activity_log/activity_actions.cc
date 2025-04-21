@@ -1,10 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/activity_log/activity_actions.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -19,7 +20,6 @@
 #include "chrome/browser/extensions/activity_log/fullstream_ui_policy.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/dom_action_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace constants = activity_log_constants;
@@ -29,7 +29,7 @@ namespace extensions {
 
 namespace {
 
-std::string Serialize(absl::optional<base::ValueView> value) {
+std::string Serialize(std::optional<base::ValueView> value) {
   std::string value_as_text;
   if (!value) {
     value_as_text = "null";
@@ -55,7 +55,7 @@ Action::Action(const std::string& extension_id,
       api_name_(api_name),
       action_id_(action_id) {}
 
-Action::~Action() {}
+Action::~Action() = default;
 
 // TODO(mvrable): As an optimization, we might return this directly if the
 // refcount is one.  However, there are likely to be other stray references in
@@ -76,7 +76,7 @@ scoped_refptr<Action> Action::Clone() const {
   return clone;
 }
 
-void Action::set_args(absl::optional<base::Value::List> args) {
+void Action::set_args(std::optional<base::Value::List> args) {
   args_ = std::move(args);
 }
 
@@ -95,7 +95,7 @@ void Action::set_arg_url(const GURL& arg_url) {
   arg_url_ = arg_url;
 }
 
-void Action::set_other(absl::optional<base::Value::Dict> other) {
+void Action::set_other(std::optional<base::Value::Dict> other) {
   other_ = std::move(other);
 }
 
@@ -140,102 +140,99 @@ ExtensionActivity Action::ConvertToExtensionActivity() {
   // without affecting the database.
   switch (action_type()) {
     case ACTION_API_CALL:
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_API_CALL;
+      result.activity_type = activity_log::ExtensionActivityType::kApiCall;
       break;
     case ACTION_API_EVENT:
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_API_EVENT;
+      result.activity_type = activity_log::ExtensionActivityType::kApiEvent;
       break;
     case ACTION_CONTENT_SCRIPT:
       result.activity_type =
-          activity_log::EXTENSION_ACTIVITY_TYPE_CONTENT_SCRIPT;
+          activity_log::ExtensionActivityType::kContentScript;
       break;
     case ACTION_DOM_ACCESS:
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_DOM_ACCESS;
+      result.activity_type = activity_log::ExtensionActivityType::kDomAccess;
       break;
     case ACTION_DOM_EVENT:
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_DOM_EVENT;
+      result.activity_type = activity_log::ExtensionActivityType::kDomEvent;
       break;
     case ACTION_WEB_REQUEST:
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_WEB_REQUEST;
+      result.activity_type = activity_log::ExtensionActivityType::kWebRequest;
       break;
     case UNUSED_ACTION_API_BLOCKED:
     case ACTION_ANY:
     default:
       // This shouldn't be reached, but some people might have old or otherwise
       // weird db entries. Treat it like an API call if that happens.
-      result.activity_type = activity_log::EXTENSION_ACTIVITY_TYPE_API_CALL;
+      result.activity_type = activity_log::ExtensionActivityType::kApiCall;
       break;
   }
 
-  result.extension_id = std::make_unique<std::string>(extension_id());
-  result.time = std::make_unique<double>(time().ToJsTime());
-  result.count = std::make_unique<double>(count());
-  result.api_call = std::make_unique<std::string>(api_name());
-  result.args = std::make_unique<std::string>(Serialize(args()));
+  result.extension_id = extension_id();
+  result.time = time().InMillisecondsFSinceUnixEpoch();
+  result.count = count();
+  result.api_call = api_name();
+  result.args = Serialize(args());
   if (action_id() != -1)
-    result.activity_id = std::make_unique<std::string>(
-        base::StringPrintf("%" PRId64, action_id()));
+    result.activity_id = base::StringPrintf("%" PRId64, action_id());
   if (page_url().is_valid()) {
     if (!page_title().empty())
-      result.page_title = std::make_unique<std::string>(page_title());
-    result.page_url = std::make_unique<std::string>(SerializePageUrl());
+      result.page_title = page_title();
+    result.page_url = SerializePageUrl();
   }
   if (arg_url().is_valid())
-    result.arg_url = std::make_unique<std::string>(SerializeArgUrl());
+    result.arg_url = SerializeArgUrl();
 
   if (other()) {
-    std::unique_ptr<ExtensionActivity::Other> other_field(
-        new ExtensionActivity::Other);
-    if (absl::optional<bool> prerender =
+    result.other.emplace();
+    if (std::optional<bool> prerender =
             other()->FindBool(constants::kActionPrerender)) {
-      other_field->prerender = std::make_unique<bool>(*prerender);
+      result.other->prerender = *prerender;
     }
     if (const base::Value::Dict* web_request =
             other()->FindDict(constants::kActionWebRequest)) {
-      other_field->web_request = std::make_unique<std::string>(
-          ActivityLogPolicy::Util::Serialize(*web_request));
+      result.other->web_request =
+          ActivityLogPolicy::Util::Serialize(*web_request);
     }
     const std::string* extra = other()->FindString(constants::kActionExtra);
     if (extra)
-      other_field->extra = std::make_unique<std::string>(*extra);
-    if (absl::optional<int> dom_verb =
+      result.other->extra = *extra;
+    if (std::optional<int> dom_verb =
             other()->FindInt(constants::kActionDomVerb)) {
       switch (static_cast<DomActionType::Type>(dom_verb.value())) {
         case DomActionType::GETTER:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_GETTER;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kGetter;
           break;
         case DomActionType::SETTER:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_SETTER;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kSetter;
           break;
         case DomActionType::METHOD:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_METHOD;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kMethod;
           break;
         case DomActionType::INSERTED:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_INSERTED;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kInserted;
           break;
         case DomActionType::XHR:
-          other_field->dom_verb = activity_log::EXTENSION_ACTIVITY_DOM_VERB_XHR;
+          result.other->dom_verb = activity_log::ExtensionActivityDomVerb::kXhr;
           break;
         case DomActionType::WEBREQUEST:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_WEBREQUEST;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kWebrequest;
           break;
         case DomActionType::MODIFIED:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_MODIFIED;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kModified;
           break;
         default:
-          other_field->dom_verb =
-              activity_log::EXTENSION_ACTIVITY_DOM_VERB_NONE;
+          result.other->dom_verb =
+              activity_log::ExtensionActivityDomVerb::kNone;
       }
     } else {
-      other_field->dom_verb = activity_log::EXTENSION_ACTIVITY_DOM_VERB_NONE;
+      result.other->dom_verb = activity_log::ExtensionActivityDomVerb::kNone;
     }
-    result.other = std::move(other_field);
   }
 
   return result;

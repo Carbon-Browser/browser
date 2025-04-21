@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/heap_array.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
+#include "base/task/bind_post_task.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "content/renderer/pepper/host_globals.h"
 #include "content/renderer/render_thread_impl.h"
-#include "media/base/bind_to_current_loop.h"
 #include "ppapi/c/pp_codecs.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/host/dispatch_host_message.h"
@@ -76,7 +77,7 @@ class PepperAudioEncoderHost::AudioEncoderImpl {
   void RequestBitrateChange(uint32_t bitrate);
 
  private:
-  std::unique_ptr<uint8_t[]> encoder_memory_;
+  base::HeapArray<uint8_t> encoder_memory_;
   OpusEncoder* opus_encoder_;
 
   // Initialization parameters, only valid if |encoder_memory_| is not
@@ -112,14 +113,14 @@ bool PepperAudioEncoderHost::AudioEncoderImpl::Initialize(
   if (parameters.output_profile != PP_AUDIOPROFILE_OPUS)
     return false;
 
-  DCHECK(!encoder_memory_);
+  DCHECK(encoder_memory_.empty());
 
   int32_t encoder_size = opus_encoder_get_size(parameters.channels);
   if (encoder_size < 1)
     return false;
 
-  std::unique_ptr<uint8_t[]> encoder_memory(new uint8_t[encoder_size]);
-  opus_encoder_ = reinterpret_cast<OpusEncoder*>(encoder_memory.get());
+  auto encoder_memory = base::HeapArray<uint8_t>::Uninit(encoder_size);
+  opus_encoder_ = reinterpret_cast<OpusEncoder*>(encoder_memory.data());
 
   if (opus_encoder_init(opus_encoder_, parameters.input_sample_rate,
                         parameters.channels, OPUS_APPLICATION_AUDIO) != OPUS_OK)
@@ -132,14 +133,14 @@ bool PepperAudioEncoderHost::AudioEncoderImpl::Initialize(
       OPUS_OK)
     return false;
 
-  encoder_memory_.swap(encoder_memory);
+  encoder_memory_ = std::move(encoder_memory);
   parameters_ = parameters;
 
   return true;
 }
 
 int32_t PepperAudioEncoderHost::AudioEncoderImpl::GetNumberOfSamplesPerFrame() {
-  DCHECK(encoder_memory_);
+  DCHECK(!encoder_memory_.empty());
   // Opus supports 2.5, 5, 10, 20, 40 or 60ms audio frames. We take
   // 10ms by default.
   return parameters_.input_sample_rate / 100;
@@ -151,7 +152,7 @@ void PepperAudioEncoderHost::AudioEncoderImpl::Encode(
     uint8_t* output_data,
     size_t output_size,
     BitstreamBufferReadyCB callback) {
-  DCHECK(encoder_memory_);
+  DCHECK(!encoder_memory_.empty());
   int32_t result = opus_encode(
       opus_encoder_, reinterpret_cast<opus_int16*>(input_data),
       (input_size / parameters_.channels) / parameters_.input_sample_size,
@@ -161,7 +162,7 @@ void PepperAudioEncoderHost::AudioEncoderImpl::Encode(
 
 void PepperAudioEncoderHost::AudioEncoderImpl::RequestBitrateChange(
     uint32_t bitrate) {
-  DCHECK(encoder_memory_);
+  DCHECK(!encoder_memory_.empty());
   opus_encoder_ctl(opus_encoder_, OPUS_SET_BITRATE(bitrate));
 }
 
@@ -440,7 +441,7 @@ void PepperAudioEncoderHost::DoEncode() {
                      static_cast<uint8_t*>(bitstream_buffer->bitstream.data),
                      bitstream_buffer_manager_->buffer_size() -
                          sizeof(ppapi::MediaStreamBuffer::Bitstream),
-                     media::BindToCurrentLoop(base::BindOnce(
+                     base::BindPostTaskToCurrentDefault(base::BindOnce(
                          &PepperAudioEncoderHost::BitstreamBufferReady,
                          weak_ptr_factory_.GetWeakPtr(), audio_buffer_id,
                          bitstream_buffer_id))));

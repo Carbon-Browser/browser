@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -178,7 +178,7 @@ TYPED_TEST_P(PostAsyncResultsTest,
                               value_received = result;
                               std::move(quit_closure).Run();
                             }),
-                        base::BindLambdaForTesting([&]() {
+                        base::BindLambdaForTesting([&] {
                           failure_handler_called = true;
                           std::move(quit_closure).Run();
                         })));
@@ -208,7 +208,7 @@ TYPED_TEST_P(PostAsyncResultsTest,
                               success_handler_called = true;
                               std::move(quit_closure).Run();
                             }),
-                        base::BindLambdaForTesting([&]() {
+                        base::BindLambdaForTesting([&] {
                           failure_handler_called = true;
                           std::move(quit_closure).Run();
                         })));

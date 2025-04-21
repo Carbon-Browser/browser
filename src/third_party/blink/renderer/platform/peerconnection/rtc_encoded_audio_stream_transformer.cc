@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ class RTCEncodedAudioStreamTransformerDelegate
     : public webrtc::FrameTransformerInterface {
  public:
   RTCEncodedAudioStreamTransformerDelegate(
-      RTCEncodedAudioStreamTransformer* transformer,
       scoped_refptr<base::SingleThreadTaskRunner> realm_task_runner,
       scoped_refptr<RTCEncodedAudioStreamTransformer::Broker>
           transformer_broker)
@@ -62,8 +61,9 @@ class RTCEncodedAudioStreamTransformerDelegate
   void Transform(
       std::unique_ptr<webrtc::TransformableFrameInterface> frame) override {
     base::AutoLock locker(source_task_runner_lock_);
-    auto audio_frame = base::WrapUnique(
-        static_cast<webrtc::TransformableFrameInterface*>(frame.release()));
+    auto audio_frame =
+        base::WrapUnique(static_cast<webrtc::TransformableAudioFrameInterface*>(
+            frame.release()));
     PostCrossThreadTask(
         *source_task_runner_, FROM_HERE,
         CrossThreadBindOnce(&RTCEncodedAudioStreamTransformer::Broker::
@@ -103,7 +103,7 @@ void RTCEncodedAudioStreamTransformer::Broker::
 }
 
 void RTCEncodedAudioStreamTransformer::Broker::TransformFrameOnSourceTaskRunner(
-    std::unique_ptr<webrtc::TransformableFrameInterface> frame) {
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame) {
   base::AutoLock locker(transformer_lock_);
   if (transformer_) {
     transformer_->TransformFrame(std::move(frame));
@@ -139,10 +139,17 @@ void RTCEncodedAudioStreamTransformer::Broker::ClearTransformer() {
 }
 
 void RTCEncodedAudioStreamTransformer::Broker::SendFrameToSink(
-    std::unique_ptr<webrtc::TransformableFrameInterface> frame) {
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame) {
   base::AutoLock locker(transformer_lock_);
   if (transformer_) {
     transformer_->SendFrameToSink(std::move(frame));
+  }
+}
+
+void RTCEncodedAudioStreamTransformer::Broker::StartShortCircuiting() {
+  base::AutoLock locker(transformer_lock_);
+  if (transformer_) {
+    transformer_->StartShortCircuiting();
   }
 }
 
@@ -151,7 +158,6 @@ RTCEncodedAudioStreamTransformer::RTCEncodedAudioStreamTransformer(
     : broker_(base::AdoptRef(new Broker(this))),
       delegate_(
           new rtc::RefCountedObject<RTCEncodedAudioStreamTransformerDelegate>(
-              this,
               std::move(realm_task_runner),
               broker_)) {}
 
@@ -163,6 +169,9 @@ void RTCEncodedAudioStreamTransformer::RegisterTransformedFrameCallback(
     rtc::scoped_refptr<webrtc::TransformedFrameCallback> callback) {
   base::AutoLock locker(sink_lock_);
   send_frame_to_sink_cb_ = callback;
+  if (short_circuit_) {
+    callback->StartShortCircuiting();
+  }
 }
 
 void RTCEncodedAudioStreamTransformer::UnregisterTransformedFrameCallback() {
@@ -171,7 +180,7 @@ void RTCEncodedAudioStreamTransformer::UnregisterTransformedFrameCallback() {
 }
 
 void RTCEncodedAudioStreamTransformer::TransformFrame(
-    std::unique_ptr<webrtc::TransformableFrameInterface> frame) {
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame) {
   base::AutoLock locker(source_lock_);
   // If no transformer callback has been set, drop the frame.
   if (!transformer_callback_)
@@ -180,16 +189,23 @@ void RTCEncodedAudioStreamTransformer::TransformFrame(
 }
 
 void RTCEncodedAudioStreamTransformer::SendFrameToSink(
-    std::unique_ptr<webrtc::TransformableFrameInterface> frame) {
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame) {
   base::AutoLock locker(sink_lock_);
   if (send_frame_to_sink_cb_)
     send_frame_to_sink_cb_->OnTransformedFrame(std::move(frame));
 }
 
+void RTCEncodedAudioStreamTransformer::StartShortCircuiting() {
+  base::AutoLock locker(sink_lock_);
+  short_circuit_ = true;
+  if (send_frame_to_sink_cb_) {
+    send_frame_to_sink_cb_->StartShortCircuiting();
+  }
+}
+
 void RTCEncodedAudioStreamTransformer::SetTransformerCallback(
     TransformerCallback callback) {
   base::AutoLock locker(source_lock_);
-  DCHECK(!transformer_callback_);
   transformer_callback_ = std::move(callback);
 }
 

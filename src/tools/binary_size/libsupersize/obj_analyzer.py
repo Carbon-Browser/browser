@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -146,7 +146,7 @@ class _BulkObjectFileAnalyzerWorker:
       if encoded_strs != parallel.EMPTY_ENCODED_DICT:
         self._encoded_string_addresses_by_path_chunks.append(encoded_strs)
     if total_no_symbols:
-      logging.warn('nm found no symbols in %d objects.', total_no_symbols)
+      logging.warning('nm found no symbols in %d objects.', total_no_symbols)
 
   def _RunLlvmBcAnalyzer(self, paths_by_type):
     """Calls llvm-bcanalyzer to extract string data (for LLD-LTO)."""

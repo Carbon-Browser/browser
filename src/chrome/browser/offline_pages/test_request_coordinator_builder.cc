@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ namespace offline_pages {
 namespace {
 class ActiveTabInfo : public RequestCoordinator::ActiveTabInfo {
  public:
-  ~ActiveTabInfo() override {}
+  ~ActiveTabInfo() override = default;
   bool DoesActiveTabMatch(const GURL&) override { return false; }
 };
 }  // namespace

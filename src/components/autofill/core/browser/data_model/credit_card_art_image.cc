@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 
 namespace autofill {
 
-CreditCardArtImage::CreditCardArtImage() = default;
+CreditCardArtImage::CreditCardArtImage(const GURL& card_art_url,
+                                       const gfx::Image& card_art_image)
+    : card_art_url(card_art_url), card_art_image(card_art_image) {}
 
 CreditCardArtImage::CreditCardArtImage(const CreditCardArtImage& other) =
     default;

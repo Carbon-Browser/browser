@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,9 @@
 #include <vector>
 
 namespace updater {
+
+// Returns true if the app id is for the updater itself or its companion app.
+bool IsUpdaterOrCompanionApp(const std::string& app_id);
 
 // Returns true if the updater should uninstall itself. `app_ids` is the set of
 // registered applications, `server_starts` is the number of times the server

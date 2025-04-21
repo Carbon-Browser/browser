@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/media_router/browser/presentation/local_presentation_manager.h"
+
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "components/media_router/browser/presentation/local_presentation_manager.h"
+#include "base/functional/bind.h"
 #include "components/media_router/browser/test/test_helper.h"
 #include "content/public/test/test_renderer_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -15,8 +16,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
+using blink::mojom::PresentationConnectionResultPtr;
 using blink::mojom::PresentationInfo;
-using blink::mojom::PresentationInfoPtr;
 using testing::_;
 
 namespace media_router {
@@ -29,11 +30,8 @@ const char kPresentationUrl[] = "http://www.example.com/presentation.html";
 
 class MockReceiverConnectionAvailableCallback {
  public:
-  MOCK_METHOD3(
-      OnReceiverConnectionAvailable,
-      void(PresentationInfoPtr,
-           mojo::PendingRemote<blink::mojom::PresentationConnection>,
-           mojo::PendingReceiver<blink::mojom::PresentationConnection>));
+  MOCK_METHOD1(OnReceiverConnectionAvailable,
+               void(PresentationConnectionResultPtr));
 };
 
 class LocalPresentationManagerTest : public content::RenderViewHostTestHarness {
@@ -180,7 +178,7 @@ TEST_F(LocalPresentationManagerTest,
   VerifyPresentationsSize(0);
 
   RegisterController(std::move(controller));
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _));
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_));
   RegisterReceiver(receiver_callback);
 }
 
@@ -192,7 +190,7 @@ TEST_F(LocalPresentationManagerTest,
   VerifyPresentationsSize(0);
 
   RegisterController(std::move(controller));
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _));
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_));
   RegisterReceiver(receiver_callback);
   UnregisterReceiver();
 
@@ -207,7 +205,7 @@ TEST_F(LocalPresentationManagerTest,
   VerifyPresentationsSize(0);
 
   RegisterController(std::move(controller));
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _));
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_));
   RegisterReceiver(receiver_callback);
   UnregisterController();
 
@@ -222,7 +220,7 @@ TEST_F(LocalPresentationManagerTest,
   VerifyPresentationsSize(0);
 
   RegisterController(std::move(controller));
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _));
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_));
   RegisterReceiver(receiver_callback);
   UnregisterReceiver();
   UnregisterController();
@@ -238,7 +236,7 @@ TEST_F(LocalPresentationManagerTest,
   VerifyPresentationsSize(0);
 
   RegisterController(std::move(controller));
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _));
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_));
   RegisterReceiver(receiver_callback);
   UnregisterController();
   UnregisterReceiver();
@@ -256,8 +254,7 @@ TEST_F(LocalPresentationManagerTest,
                      std::move(controller2));
 
   MockReceiverConnectionAvailableCallback receiver_callback;
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _))
-      .Times(2);
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_)).Times(2);
   RegisterReceiver(receiver_callback);
 }
 
@@ -268,8 +265,7 @@ TEST_F(LocalPresentationManagerTest,
                      std::move(controller1));
 
   MockReceiverConnectionAvailableCallback receiver_callback;
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _))
-      .Times(2);
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_)).Times(2);
   RegisterReceiver(receiver_callback);
 
   mojo::PendingRemote<blink::mojom::PresentationConnection> controller2;
@@ -287,8 +283,7 @@ TEST_F(LocalPresentationManagerTest,
                      std::move(controller2));
 
   MockReceiverConnectionAvailableCallback receiver_callback;
-  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_, _, _))
-      .Times(2);
+  EXPECT_CALL(receiver_callback, OnReceiverConnectionAvailable(_)).Times(2);
   RegisterReceiver(receiver_callback);
   UnregisterController(content::GlobalRenderFrameHostId(1, 1));
   UnregisterController(content::GlobalRenderFrameHostId(1, 1));
@@ -301,16 +296,14 @@ TEST_F(LocalPresentationManagerTest, TwoPresentations) {
   RegisterController(kPresentationId, std::move(controller1));
 
   MockReceiverConnectionAvailableCallback receiver_callback1;
-  EXPECT_CALL(receiver_callback1, OnReceiverConnectionAvailable(_, _, _))
-      .Times(1);
+  EXPECT_CALL(receiver_callback1, OnReceiverConnectionAvailable(_)).Times(1);
   RegisterReceiver(kPresentationId, receiver_callback1);
 
   mojo::PendingRemote<blink::mojom::PresentationConnection> controller2;
   RegisterController(kPresentationId2, std::move(controller2));
 
   MockReceiverConnectionAvailableCallback receiver_callback2;
-  EXPECT_CALL(receiver_callback2, OnReceiverConnectionAvailable(_, _, _))
-      .Times(1);
+  EXPECT_CALL(receiver_callback2, OnReceiverConnectionAvailable(_)).Times(1);
   RegisterReceiver(kPresentationId2, receiver_callback2);
 
   VerifyPresentationsSize(2);

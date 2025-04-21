@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ struct ParsedFaviconPath {
   // The device scale factor of the requested favicon.
   float device_scale_factor = 1.0f;
 
-  // TODO(victorvianna): Remove this parameter.
   // The index of the first character (relative to the path) where the the URL
   // from which the favicon is being requested is located.
   size_t path_index = std::string::npos;
@@ -42,6 +41,10 @@ struct ParsedFaviconPath {
 
   // Whether we should show a fallback monogram in place of the default favicon.
   bool show_fallback_monogram = false;
+
+  // Whether we should ignore the theme when themeing the default favicon and
+  // just return the light mode version.
+  bool force_light_mode = false;
 };
 
 // Enum describing the two possible url formats: the legacy chrome://favicon
@@ -91,7 +94,6 @@ struct ParsedFaviconPath {
 //      Specifies the requested favicon's size in DIP. If unspecified, defaults
 //      to 16.
 //    Example: chrome://favicon2/?size=32
-// TODO(victorvianna): Refactor to remove scaleFactor parameter.
 //  'scaleFactor'  Optional
 //      Values: ['SCALEx']
 //      Specifies the requested favicon's scale factor. If unspecified, defaults

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,16 @@
 
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/shelf_item.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/vector_icon_types.h"
+#include "ui/menus/simple_menu_model.h"
 
 class ChromeShelfController;
+
+// ElementIdentifier for the shelf context menu "Close" menu item.
+DECLARE_ELEMENT_IDENTIFIER_VALUE(kShelfCloseMenuItem);
+DECLARE_ELEMENT_IDENTIFIER_VALUE(kShelfContextMenuNewWindowMenuItem);
+DECLARE_ELEMENT_IDENTIFIER_VALUE(kShelfContextMenuIncognitoWindowMenuItem);
 
 // A base class for browser, extension, and ARC shelf item context menus.
 class ShelfContextMenu : public ui::SimpleMenuModel::Delegate {
@@ -60,10 +66,14 @@ class ShelfContextMenu : public ui::SimpleMenuModel::Delegate {
                             ash::CommandId type,
                             int string_id);
 
+  // Helper method to add element identifiers to some menu items.
+  void MaybeSetElementIdentifier(ui::SimpleMenuModel* menu_model,
+                                 ash::CommandId type);
+
   int64_t display_id() const { return display_id_; }
 
  private:
-  ChromeShelfController* controller_;
+  raw_ptr<ChromeShelfController> controller_;
 
   const ash::ShelfItem item_;
 

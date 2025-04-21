@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,19 @@
 namespace blink {
 
 class BasicShape;
+class CSSProperty;
 class CSSValue;
 class CSSToLengthConversionData;
 
 namespace basic_shape_interpolation_functions {
 
-InterpolationValue MaybeConvertCSSValue(const CSSValue&);
-CORE_EXPORT InterpolationValue MaybeConvertBasicShape(const BasicShape*,
-                                                      double zoom);
-std::unique_ptr<InterpolableValue> CreateNeutralValue(
-    const NonInterpolableValue&);
+InterpolationValue MaybeConvertCSSValue(const CSSValue&,
+                                        const CSSProperty& property);
+CORE_EXPORT InterpolationValue
+MaybeConvertBasicShape(const BasicShape*,
+                       const CSSProperty& property,
+                       double zoom);
+InterpolableValue* CreateNeutralValue(const NonInterpolableValue&);
 CORE_EXPORT bool ShapesAreCompatible(const NonInterpolableValue&,
                                      const NonInterpolableValue&);
 CORE_EXPORT scoped_refptr<BasicShape> CreateBasicShape(

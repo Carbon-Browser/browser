@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@ namespace android_webview {
 // This class manages the browser's behavior in response to renderer exits. If
 // the application does not successfully handle a renderer crash/kill, the
 // browser needs to crash itself.
+// Lifetime: Singleton
 class AwBrowserTerminator : public crash_reporter::ChildExitObserver::Client {
  public:
   AwBrowserTerminator();

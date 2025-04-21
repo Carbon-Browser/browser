@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,12 +56,13 @@ void BackgroundFetchRecord::ResolveResponseReadyProperty(Response* response) {
   }
 }
 
-ScriptPromise BackgroundFetchRecord::responseReady(ScriptState* script_state) {
+ScriptPromise<Response> BackgroundFetchRecord::responseReady(
+    ScriptState* script_state) {
   return response_ready_property_->Promise(script_state->World());
 }
 
 Request* BackgroundFetchRecord::request() const {
-  return request_;
+  return request_.Get();
 }
 
 void BackgroundFetchRecord::UpdateState(

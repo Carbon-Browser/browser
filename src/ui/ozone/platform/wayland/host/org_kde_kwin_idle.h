@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_ORG_KDE_KWIN_IDLE_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 
 namespace ui {
@@ -33,8 +33,8 @@ class OrgKdeKwinIdle : public wl::GlobalObjectRegistrar<OrgKdeKwinIdle> {
   OrgKdeKwinIdle& operator=(const OrgKdeKwinIdle&) = delete;
   ~OrgKdeKwinIdle();
 
-  // Returns the idle time if querying it is possible, absl::nullopt otherwise.
-  absl::optional<base::TimeDelta> GetIdleTime() const;
+  // Returns the idle time if querying it is possible, std::nullopt otherwise.
+  std::optional<base::TimeDelta> GetIdleTime() const;
 
  private:
   class Timeout;

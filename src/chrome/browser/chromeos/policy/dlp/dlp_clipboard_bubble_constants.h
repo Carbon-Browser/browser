@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,6 @@ constexpr int kClipboardDlpBlockDurationMs = 6000;
 
 // The duration of the clipboard warning shown before paste.
 constexpr int kClipboardDlpWarnDurationMs = 16000;
-
-// Link to the Help Center article about Data Leak Prevention.
-constexpr char kDlpLearnMoreUrl[] =
-    "https://support.google.com/chrome/a/?p=chromeos_datacontrols";
 
 }  // namespace policy
 

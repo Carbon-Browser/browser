@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ class MockLocationSettings : public LocationSettings {
 
   ~MockLocationSettings() override;
 
-  static void SetLocationStatus(bool has_android_location_permission,
+  static void SetLocationStatus(bool has_android_coarse_location_permission,
+                                bool has_android_fine_location_permission,
                                 bool is_system_location_setting_enabled);
   static void SetCanPromptForAndroidPermission(bool can_prompt);
   static void SetLocationSettingsDialogStatus(
@@ -33,6 +34,7 @@ class MockLocationSettings : public LocationSettings {
 
   // LocationSettings implementation:
   bool HasAndroidLocationPermission() override;
+  bool HasAndroidFineLocationPermission() override;
   bool CanPromptForAndroidLocationPermission(
       ui::WindowAndroid* window) override;
   bool IsSystemLocationSettingEnabled() override;

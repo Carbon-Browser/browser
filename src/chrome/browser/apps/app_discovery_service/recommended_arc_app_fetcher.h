@@ -1,25 +1,25 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_APPS_APP_DISCOVERY_SERVICE_RECOMMENDED_ARC_APP_FETCHER_H_
 #define CHROME_BROWSER_APPS_APP_DISCOVERY_SERVICE_RECOMMENDED_ARC_APP_FETCHER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/apps/app_discovery_service/app_discovery_util.h"
 #include "chrome/browser/apps/app_discovery_service/app_fetcher_manager.h"
-#include "chrome/browser/ash/login/screens/recommend_apps/recommend_apps_fetcher_delegate.h"
+#include "chrome/browser/apps/app_discovery_service/recommended_arc_apps/recommend_apps_fetcher_delegate.h"
 
-namespace ash {
-class RecommendAppsFetcher;
-}
+class Profile;
 
 namespace apps {
+class RecommendAppsFetcher;
 
 class RecommendedArcAppFetcher : public AppFetcher,
-                                 public ash::RecommendAppsFetcherDelegate {
+                                 public RecommendAppsFetcherDelegate {
  public:
-  RecommendedArcAppFetcher();
+  explicit RecommendedArcAppFetcher(Profile* profile);
   RecommendedArcAppFetcher(const RecommendedArcAppFetcher&) = delete;
   RecommendedArcAppFetcher& operator=(const RecommendedArcAppFetcher&) = delete;
   ~RecommendedArcAppFetcher() override;
@@ -36,8 +36,9 @@ class RecommendedArcAppFetcher : public AppFetcher,
   void SetCallbackForTesting(ResultCallback callback);
 
  private:
+  raw_ptr<Profile> profile_;
   apps::ResultCallback callback_;
-  std::unique_ptr<ash::RecommendAppsFetcher> recommend_apps_fetcher_;
+  std::unique_ptr<RecommendAppsFetcher> recommend_apps_fetcher_;
 };
 
 }  // namespace apps

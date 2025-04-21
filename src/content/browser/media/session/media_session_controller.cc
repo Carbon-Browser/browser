@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ bool MediaSessionController::OnPlaybackStarted() {
 
 void MediaSessionController::OnSuspend(int player_id) {
   DCHECK_EQ(player_id_, player_id);
-  // TODO(crbug.com/953645): Set triggered_by_user to true ONLY if that action
+  // TODO(crbug.com/40623496): Set triggered_by_user to true ONLY if that action
   // was actually triggered by user as this will activate the frame.
   web_contents_->media_web_contents_observer()
       ->GetMediaPlayerRemote(id_)
@@ -106,14 +106,6 @@ void MediaSessionController::OnEnterPictureInPicture(int player_id) {
       ->RequestEnterPictureInPicture();
 }
 
-void MediaSessionController::OnExitPictureInPicture(int player_id) {
-  DCHECK_EQ(player_id_, player_id);
-
-  web_contents_->media_web_contents_observer()
-      ->GetMediaPlayerRemote(id_)
-      ->RequestExitPictureInPicture();
-}
-
 void MediaSessionController::OnSetAudioSinkId(
     int player_id,
     const std::string& raw_device_id) {
@@ -123,18 +115,22 @@ void MediaSessionController::OnSetAudioSinkId(
   if (!render_frame_host)
     return;
 
-  // The sink id needs to be hashed before it is suitable for use in the
-  // renderer process.
-  auto salt_and_origin = content::GetMediaDeviceSaltAndOrigin(
-      render_frame_host->GetProcess()->GetID(),
-      render_frame_host->GetRoutingID());
+  GetHMACFromRawDeviceId(
+      render_frame_host->GetGlobalId(), raw_device_id,
+      base::BindOnce(&MediaSessionController::OnHashedSinkIdReceived,
+                     weak_factory_.GetWeakPtr()));
+}
 
-  std::string hashed_sink_id = GetHMACForMediaDeviceID(
-      salt_and_origin.device_id_salt, salt_and_origin.origin, raw_device_id);
-
+void MediaSessionController::OnHashedSinkIdReceived(
+    const std::string& hashed_sink_id) {
   // Grant the renderer the permission to use this audio output device.
-  static_cast<RenderFrameHostImpl*>(render_frame_host)
-      ->SetAudioOutputDeviceIdForGlobalMediaControls(hashed_sink_id);
+  auto* render_frame_host_impl =
+      RenderFrameHostImpl::FromID(id_.frame_routing_id);
+  if (!render_frame_host_impl) {
+    return;
+  }
+  render_frame_host_impl->SetAudioOutputDeviceIdForGlobalMediaControls(
+      hashed_sink_id);
 
   web_contents_->media_web_contents_observer()
       ->GetMediaPlayerRemote(id_)
@@ -149,12 +145,36 @@ void MediaSessionController::OnSetMute(int player_id, bool mute) {
       ->RequestMute(mute);
 }
 
+void MediaSessionController::OnRequestMediaRemoting(int player_id) {
+  DCHECK_EQ(player_id_, player_id);
+
+  // Media Remoting can't start if the media is paused. So we should start
+  // playing before requesting Media Remoting.
+  if (is_paused_) {
+    web_contents_->media_web_contents_observer()
+        ->GetMediaPlayerRemote(id_)
+        ->RequestPlay();
+  }
+  web_contents_->media_web_contents_observer()
+      ->GetMediaPlayerRemote(id_)
+      ->RequestMediaRemoting();
+}
+
+void MediaSessionController::OnRequestVisibility(
+    int player_id,
+    RequestVisibilityCallback request_visibility_callback) {
+  DCHECK_EQ(player_id_, player_id);
+  web_contents_->media_web_contents_observer()
+      ->GetMediaPlayerRemote(id_)
+      ->RequestVisibility(std::move(request_visibility_callback));
+}
+
 RenderFrameHost* MediaSessionController::render_frame_host() const {
   return RenderFrameHost::FromID(id_.frame_routing_id);
 }
 
-absl::optional<media_session::MediaPosition>
-MediaSessionController::GetPosition(int player_id) const {
+std::optional<media_session::MediaPosition> MediaSessionController::GetPosition(
+    int player_id) const {
   DCHECK_EQ(player_id_, player_id);
   return position_;
 }
@@ -162,6 +182,11 @@ MediaSessionController::GetPosition(int player_id) const {
 bool MediaSessionController::IsPictureInPictureAvailable(int player_id) const {
   DCHECK_EQ(player_id_, player_id);
   return is_picture_in_picture_available_;
+}
+
+bool MediaSessionController::HasSufficientlyVisibleVideo(int player_id) const {
+  DCHECK_EQ(player_id_, player_id);
+  return has_sufficiently_visible_video_;
 }
 
 void MediaSessionController::OnPlaybackPaused(bool reached_end_of_stream) {
@@ -214,12 +239,33 @@ void MediaSessionController::OnAudioOutputSinkChangingDisabled() {
   media_session_->OnAudioOutputSinkChangingDisabled();
 }
 
+void MediaSessionController::OnRemotePlaybackMetadataChanged(
+    media_session::mojom::RemotePlaybackMetadataPtr metadata) {
+  media_session_->SetRemotePlaybackMetadata(std::move(metadata));
+  AddOrRemovePlayer();
+}
+
+void MediaSessionController::OnVideoVisibilityChanged(
+    bool meets_visibility_threshold) {
+  has_sufficiently_visible_video_ = meets_visibility_threshold;
+  media_session_->OnVideoVisibilityChanged();
+}
+
 bool MediaSessionController::IsMediaSessionNeeded() const {
   if (web_contents_->HasPictureInPictureVideo())
     return true;
 
   if (!is_playback_in_progress_)
     return false;
+
+  // If the media content has an associated Remote Playback session started, we
+  // should request audio focus regardless of whether the tab is muted.
+  media_session::mojom::MediaSessionInfoPtr session_info =
+      media_session_->GetMediaSessionInfoSync();
+  if (session_info && session_info->remote_playback_metadata &&
+      session_info->remote_playback_metadata->remote_playback_started) {
+    return true;
+  }
 
   // We want to make sure we do not request audio focus on a muted tab as it
   // would break user expectations by pausing/ducking other playbacks.
@@ -259,6 +305,11 @@ bool MediaSessionController::HasAudio(int player_id) const {
 bool MediaSessionController::HasVideo(int player_id) const {
   DCHECK_EQ(player_id_, player_id);
   return has_video_;
+}
+
+bool MediaSessionController::IsPaused(int player_id) const {
+  DCHECK_EQ(player_id_, player_id);
+  return is_paused_;
 }
 
 std::string MediaSessionController::GetAudioOutputSinkId(int player_id) const {

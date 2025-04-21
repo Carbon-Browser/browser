@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,15 @@
 #include "chrome/browser/ash/guest_os/virtual_machines/virtual_machines_util.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
+#include "components/user_manager/user.h"
 
 namespace {
 
@@ -131,7 +132,7 @@ void CanChangeManagedAdbSideloading(
   DCHECK(is_device_enterprise_managed || is_profile_enterprise_managed);
 
   if (!base::FeatureList::IsEnabled(
-          chromeos::features::kArcManagedAdbSideloadingSupport)) {
+          ash::features::kArcManagedAdbSideloadingSupport)) {
     DVLOG(1) << "adb sideloading is disabled by a feature flag";
     std::move(callback).Run(false);
     return;
@@ -191,6 +192,12 @@ bool CrostiniFeatures::CouldBeAllowed(Profile* profile, std::string* reason) {
     return false;
   }
 
+  if (!crostini::CrostiniManager::IsVmLaunchAllowed()) {
+    VLOG(1) << "Concierge does not allow VM to be launched.";
+    *reason = "Virtualization is not supported on this device";
+    return false;
+  }
+
   if (!ash::ProfileHelper::IsPrimaryProfile(profile)) {
     VLOG(1) << "Crostini UI is not allowed on non-primary profiles.";
     *reason = "Crostini is only allowed in primary user sessions";
@@ -198,8 +205,7 @@ bool CrostiniFeatures::CouldBeAllowed(Profile* profile, std::string* reason) {
   }
 
   if (!profile || profile->IsChild() || profile->IsOffTheRecord() ||
-      ash::ProfileHelper::IsEphemeralUserProfile(profile) ||
-      ash::ProfileHelper::IsLockScreenAppProfile(profile)) {
+      ash::ProfileHelper::IsEphemeralUserProfile(profile)) {
     VLOG(1) << "Profile is not allowed to run crostini.";
     *reason = "This user session is not allowed to run crostini";
     return false;

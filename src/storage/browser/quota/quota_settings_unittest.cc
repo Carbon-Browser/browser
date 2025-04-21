@@ -1,13 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "storage/browser/quota/quota_settings.h"
+
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -15,9 +18,7 @@
 #include "base/test/task_environment.h"
 #include "storage/browser/quota/quota_device_info_helper.h"
 #include "storage/browser/quota/quota_features.h"
-#include "storage/browser/quota/quota_settings.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::testing::_;
 
@@ -43,14 +44,14 @@ class QuotaSettingsTest : public testing::Test {
   void SetUp() override { ASSERT_TRUE(data_dir_.CreateUniqueTempDir()); }
 
   // Synchronous proxy to GetNominalDynamicSettings().
-  absl::optional<QuotaSettings> GetSettings(
+  std::optional<QuotaSettings> GetSettings(
       bool is_incognito,
       QuotaDeviceInfoHelper* device_info_helper) {
-    absl::optional<QuotaSettings> quota_settings;
+    std::optional<QuotaSettings> quota_settings;
     base::RunLoop run_loop;
     GetNominalDynamicSettings(
         profile_path(), is_incognito, device_info_helper,
-        base::BindLambdaForTesting([&](absl::optional<QuotaSettings> settings) {
+        base::BindLambdaForTesting([&](std::optional<QuotaSettings> settings) {
           quota_settings = std::move(settings);
           run_loop.Quit();
         }));
@@ -80,7 +81,7 @@ class QuotaSettingsIncognitoTest : public QuotaSettingsTest {
   }
 
   void GetAndTestSettings(const uint64_t physical_memory_amount) {
-    absl::optional<QuotaSettings> settings =
+    std::optional<QuotaSettings> settings =
         GetSettings(true, &device_info_helper_);
     ASSERT_TRUE(settings.has_value());
     const uint64_t pool_size =
@@ -102,13 +103,13 @@ TEST_F(QuotaSettingsTest, Default) {
   ON_CALL(device_info_helper, AmountOfTotalDiskSpace(_))
       .WillByDefault(::testing::Return(2000));
 
-  absl::optional<QuotaSettings> settings =
+  std::optional<QuotaSettings> settings =
       GetSettings(false, &device_info_helper);
   ASSERT_TRUE(settings.has_value());
   // 1600 = 2000 * default PoolSizeRatio (0.8)
   EXPECT_EQ(settings->pool_size, 1600);
-  // 1200 = 1600 * default PerHostRatio (.75)
-  EXPECT_EQ(settings->per_host_quota, 1200);
+  // 1200 = 1600 * default PerStorageKeyRatio (.75)
+  EXPECT_EQ(settings->per_storage_key_quota, 1200);
 }
 
 TEST_F(QuotaSettingsTest, FeatureParamsWithLargeFixedQuota) {
@@ -124,7 +125,7 @@ TEST_F(QuotaSettingsTest, FeatureParamsWithLargeFixedQuota) {
   ON_CALL(device_info_helper, AmountOfTotalDiskSpace(_))
       .WillByDefault(::testing::Return(2000));
 
-  absl::optional<QuotaSettings> settings =
+  std::optional<QuotaSettings> settings =
       GetSettings(false, &device_info_helper);
   ASSERT_TRUE(settings.has_value());
 
@@ -146,7 +147,7 @@ TEST_F(QuotaSettingsTest, FeatureParamsWithSmallFixedQuota) {
   ON_CALL(device_info_helper, AmountOfTotalDiskSpace(_))
       .WillByDefault(::testing::Return(2000));
 
-  absl::optional<QuotaSettings> settings =
+  std::optional<QuotaSettings> settings =
       GetSettings(false, &device_info_helper);
   ASSERT_TRUE(settings.has_value());
 
@@ -165,7 +166,7 @@ TEST_F(QuotaSettingsTest, FeatureParamsWithoutFixedQuota) {
   ON_CALL(device_info_helper, AmountOfTotalDiskSpace(_))
       .WillByDefault(::testing::Return(2000));
 
-  absl::optional<QuotaSettings> settings =
+  std::optional<QuotaSettings> settings =
       GetSettings(false, &device_info_helper);
   ASSERT_TRUE(settings.has_value());
 

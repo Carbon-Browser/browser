@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@ module crosapi.mojom;
 
 import "mojo/public/mojom/base/string16.mojom";
 import "url/mojom/url.mojom";
+import "mojo/public/mojom/base/file_path.mojom";
 
 // Corresponds to DlpRulesManager::Level enum.
-[Stable, Extensible]
+[Extensible]
 enum DlpRestrictionLevel {
   kAllow = 0,
   kReport = 1,
@@ -18,14 +19,12 @@ enum DlpRestrictionLevel {
 };
 
 // Corresponds to RestrictionLevelAndUrl struct.
-[Stable]
 struct DlpRestrictionLevelAndUrl {
   DlpRestrictionLevel level@0;
   url.mojom.Url url@1;
 };
 
 // Corresponds to DlpContentRestrictionSet class.
-[Stable]
 struct DlpRestrictionSet {
   DlpRestrictionLevelAndUrl screenshot@0;
   DlpRestrictionLevelAndUrl privacy_screen@1;
@@ -34,7 +33,6 @@ struct DlpRestrictionSet {
 };
 
 // Captured area.
-[Stable]
 struct ScreenShareArea {
   // All root windows if |window_id| is null.
   string? window_id@0;
@@ -44,7 +42,6 @@ struct ScreenShareArea {
 };
 
 // Callback to control the state (pause/resume) of a remote screen share.
-[Stable]
 interface StateChangeDelegate {
   // Request to pause the screen share.
   OnPause@0();
@@ -54,12 +51,29 @@ interface StateChangeDelegate {
   OnStop@2();
 };
 
+// Corresponds to the dlp::FileAction enum.
+[Extensible]
+enum FileAction {
+  [Default] kUnknown = 0,
+  kDownload = 1,
+  kTransfer = 2,
+  kUpload = 3,
+  kCopy = 4,
+  kMove = 5,
+  kOpen = 6,
+  kShare = 7,
+};
+
 // Interface to communicate from Lacros DLP layer to Ash. Used to notify Ash
 // about changes in restrictions applied to web content in Lacros.
 //
-// Next MinVersion: 4
-// Next ID: 4
-[Stable, Uuid="793ee9c6-3873-4ea8-a541-894412ddfc0b"]
+// TODO(b/308912502): Move this interface to Wayland IPC. Until than: The
+// connection by Lacros has to be kept over its whole lifetime as the closing
+// indicates that associated windows are no longer existing.
+//
+// Next MinVersion: 5
+// Next ID: 5
+[Uuid="793ee9c6-3873-4ea8-a541-894412ddfc0b"]
 interface Dlp {
   // Called when |restrictions| are changed for window with |window_id|.
   DlpRestrictionsUpdated@0(string window_id, DlpRestrictionSet restrictions);
@@ -76,4 +90,9 @@ interface Dlp {
 
   // Called when screen share in Lacros is stopped.
   [MinVersion=2] OnScreenShareStopped@3(string label, ScreenShareArea area);
+
+  // Shows a notification to inform the user that `files` where blocked during
+  // `action` while performing a task with id `task_id`.
+  [MinVersion=4] ShowBlockedFiles@4(uint64? task_id,
+      array<mojo_base.mojom.FilePath> files, FileAction action);
 };

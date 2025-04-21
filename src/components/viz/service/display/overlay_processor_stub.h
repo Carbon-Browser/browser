@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class VIZ_SERVICE_EXPORT OverlayProcessorStub
   OverlayProcessorStub(const OverlayProcessorStub&) = delete;
   OverlayProcessorStub& operator=(const OverlayProcessorStub&) = delete;
 
-  ~OverlayProcessorStub() override {}
+  ~OverlayProcessorStub() override = default;
 
   // Overrides OverlayProcessorInterface's pure virtual functions.
   bool IsOverlaySupported() const final;
@@ -39,7 +39,7 @@ class VIZ_SERVICE_EXPORT OverlayProcessorStub
       gfx::Rect* damage_rect,
       std::vector<gfx::Rect>* content_bounds) final {}
   void AdjustOutputSurfaceOverlay(
-      absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) final {}
+      std::optional<OutputSurfaceOverlayPlane>* output_surface_plane) final {}
   void SetDisplayTransformHint(gfx::OverlayTransform transform) final {}
   void SetViewportSize(const gfx::Size& size) final {}
   gfx::CALayerResult GetCALayerErrorCode() const final;

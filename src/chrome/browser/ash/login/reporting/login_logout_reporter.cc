@@ -1,27 +1,35 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/reporting/login_logout_reporter.h"
 
-#include "ash/components/login/auth/public/auth_failure.h"
+#include <optional>
+
+#include "base/hash/md5.h"
 #include "base/logging.h"
+#include "base/strings/strcat.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
-#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/reporting/user_event_reporter_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/policy/messaging_layer/proto/synced/login_logout_event.pb.h"
+#include "chrome/browser/profiles/reporting_util.h"
+#include "chromeos/ash/components/login/auth/public/auth_failure.h"
+#include "components/account_id/account_id.h"
+#include "components/policy/core/common/device_local_account_type.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/user_manager/user.h"
-#include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace ash {
 namespace reporting {
+
 namespace {
 
 constexpr char kLoginLogoutReporterDictionary[] =
@@ -41,23 +49,21 @@ LoginLogoutSessionType GetSessionType(const AccountId& account_id) {
     return LoginLogoutSessionType::GUEST_SESSION;
   }
 
-  policy::DeviceLocalAccount::Type type;
-  if (!IsDeviceLocalAccountUser(account_id.GetUserEmail(), &type)) {
+  auto type = policy::GetDeviceLocalAccountType(account_id.GetUserEmail());
+  if (!type.has_value()) {
     return LoginLogoutSessionType::REGULAR_USER_SESSION;
   }
 
-  switch (type) {
-    case policy::DeviceLocalAccount::TYPE_PUBLIC_SESSION:
-    case policy::DeviceLocalAccount::TYPE_SAML_PUBLIC_SESSION:
+  switch (type.value()) {
+    case policy::DeviceLocalAccountType::kPublicSession:
+    case policy::DeviceLocalAccountType::kSamlPublicSession:
       return LoginLogoutSessionType::PUBLIC_ACCOUNT_SESSION;
-    case policy::DeviceLocalAccount::TYPE_KIOSK_APP:
-    case policy::DeviceLocalAccount::TYPE_ARC_KIOSK_APP:
-    case policy::DeviceLocalAccount::TYPE_WEB_KIOSK_APP:
+    case policy::DeviceLocalAccountType::kKioskApp:
+    case policy::DeviceLocalAccountType::kWebKioskApp:
+    case policy::DeviceLocalAccountType::kKioskIsolatedWebApp:
       return LoginLogoutSessionType::KIOSK_SESSION;
-    default:
-      NOTREACHED();
-      return LoginLogoutSessionType::UNSPECIFIED_LOGIN_LOGOUT_SESSION_TYPE;
   }
+  NOTREACHED();
 }
 
 LoginFailureReason GetLoginFailureReasonForReport(
@@ -93,23 +99,20 @@ LoginFailureReason GetLoginFailureReasonForReport(
     case AuthFailure::NETWORK_AUTH_FAILED:
     case AuthFailure::ALLOWLIST_CHECK_FAILED:
     case AuthFailure::AUTH_DISABLED:
+    case AuthFailure::CRYPTOHOME_RECOVERY_SERVICE_ERROR:
+    case AuthFailure::CRYPTOHOME_RECOVERY_OAUTH_TOKEN_ERROR:
     case AuthFailure::NUM_FAILURE_REASONS:
       return LoginFailureReason::UNKNOWN_LOGIN_FAILURE_REASON;
   }
 }
+
 }  // namespace
 
-// static
-const base::Feature
-    LoginLogoutReporter::kEnableKioskAndGuestLoginLogoutReporting{
-        "EnableKioskAndGuestLoginLogoutReporting",
-        base::FEATURE_ENABLED_BY_DEFAULT};
-
 AccountId LoginLogoutReporter::Delegate::GetLastLoginAttemptAccountId() const {
-  if (!ash::ExistingUserController::current_controller()) {
+  if (!ExistingUserController::current_controller()) {
     return EmptyAccountId();
   }
-  return ash::ExistingUserController::current_controller()
+  return ExistingUserController::current_controller()
       ->GetLastLoginAttemptAccountId();
 }
 
@@ -163,21 +166,22 @@ void LoginLogoutReporter::MaybeReportEvent(LoginLogoutRecord record,
   }
 
   const LoginLogoutSessionType session_type = GetSessionType(account_id);
-  if (!base::FeatureList::IsEnabled(kEnableKioskAndGuestLoginLogoutReporting) &&
-      (session_type == LoginLogoutSessionType::GUEST_SESSION ||
-       session_type == LoginLogoutSessionType::KIOSK_SESSION)) {
-    return;
-  }
   record.set_event_timestamp_sec(clock_->Now().ToTimeT());
   record.set_session_type(session_type);
   const std::string& user_email = account_id.GetUserEmail();
-  if (session_type == LoginLogoutSessionType::PUBLIC_ACCOUNT_SESSION ||
-      session_type == LoginLogoutSessionType::GUEST_SESSION) {
+  if (session_type == PUBLIC_ACCOUNT_SESSION || session_type == GUEST_SESSION) {
     record.set_is_guest_session(true);
-  } else if (session_type == LoginLogoutSessionType::REGULAR_USER_SESSION &&
-             reporter_helper_->ShouldReportUser(user_email)) {
-    record.mutable_affiliated_user()->set_user_email(user_email);
-  }
+  } else if (session_type == REGULAR_USER_SESSION) {
+    if (reporter_helper_->ShouldReportUser(user_email)) {
+      record.mutable_affiliated_user()->set_user_email(user_email);
+    } else if (std::optional<uint32_t> user_id =
+                   reporter_helper_->GetUniqueUserIdForThisDevice(user_email);
+               user_id.has_value()) {
+      // This is an unaffiliated user. We can't report any personal information
+      // about them, so we report a device-unique user id instead.
+      record.mutable_unaffiliated_user()->set_user_id_num(user_id.value());
+    }
+    }
   reporter_helper_->ReportEvent(
       std::make_unique<LoginLogoutRecord>(std::move(record)),
       ::reporting::Priority::SECURITY);
@@ -213,23 +217,21 @@ void LoginLogoutReporter::OnLoginFailure(const AuthFailure& error) {
 void LoginLogoutReporter::OnKioskLoginFailure() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (!base::FeatureList::IsEnabled(kEnableKioskAndGuestLoginLogoutReporting) ||
-      !reporter_helper_->ReportingEnabled(kReportDeviceLoginLogout) ||
+  if (!reporter_helper_->ReportingEnabled(kReportDeviceLoginLogout) ||
       !GetLocalState()) {
     return;
   }
 
-  DictionaryPrefUpdate dict_update(GetLocalState(),
+  ScopedDictPrefUpdate dict_update(GetLocalState(),
                                    kLoginLogoutReporterDictionary);
-  dict_update->GetDict().Set(kKioskLoginFailureTimestamp,
-                             static_cast<int>(clock_->Now().ToTimeT()));
+  dict_update->Set(kKioskLoginFailureTimestamp,
+                   static_cast<int>(clock_->Now().ToTimeT()));
 }
 
 void LoginLogoutReporter::MaybeReportKioskLoginFailure() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (!base::FeatureList::IsEnabled(kEnableKioskAndGuestLoginLogoutReporting) ||
-      !GetLocalState()) {
+  if (!GetLocalState()) {
     return;
   }
 
@@ -237,10 +239,9 @@ void LoginLogoutReporter::MaybeReportKioskLoginFailure() {
       GetLocalState()->FindPreference(kLoginLogoutReporterDictionary);
   if (!pref) {
     NOTREACHED() << "Cannot find pref.";
-    return;
   }
 
-  absl::optional<int> last_kiosk_login_failure_timestamp =
+  std::optional<int> last_kiosk_login_failure_timestamp =
       pref->GetValue()->GetDict().FindInt(kKioskLoginFailureTimestamp);
   if (!last_kiosk_login_failure_timestamp.has_value()) {
     // No kiosk login failure to report.
@@ -262,16 +263,16 @@ void LoginLogoutReporter::MaybeReportKioskLoginFailure() {
     if (!GetLocalState()) {
       return;
     }
-    DictionaryPrefUpdate dict_update(GetLocalState(),
+    ScopedDictPrefUpdate dict_update(GetLocalState(),
                                      kLoginLogoutReporterDictionary);
-    dict_update->RemoveKey(kKioskLoginFailureTimestamp);
+    dict_update->Remove(kKioskLoginFailureTimestamp);
   });
 
   // Enqueue callback should run on the UI thread (current thread) to access
   // pref service.
   reporter_helper_->ReportEvent(
       std::move(record), ::reporting::Priority::SECURITY,
-      base::BindPostTask(base::ThreadTaskRunnerHandle::Get(),
+      base::BindPostTask(base::SingleThreadTaskRunner::GetCurrentDefault(),
                          std::move(enqueue_cb)));
 }
 

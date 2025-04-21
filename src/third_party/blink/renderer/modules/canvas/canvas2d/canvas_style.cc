@@ -28,112 +28,113 @@
 
 #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_style.h"
 
-#include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
+#include "cc/paint/paint_flags.h"
+#include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink.h"
+#include "third_party/blink/renderer/core/css/css_color_mix_value.h"
 #include "third_party/blink/renderer/core/css/css_property_names.h"
-#include "third_party/blink/renderer/core/css/css_property_value_set.h"
-#include "third_party/blink/renderer/core/css/cssom/css_color_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
-#include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
+#include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
+#include "third_party/blink/renderer/core/css/resolver/style_builder_converter.h"
+#include "third_party/blink/renderer/core/css/style_color.h"
+#include "third_party/blink/renderer/core/dom/text_link_colors.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_gradient.h"
 #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_pattern.h"
+#include "third_party/blink/renderer/platform/graphics/gradient.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
+#include "third_party/blink/renderer/platform/graphics/pattern.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
-#include "third_party/skia/include/core/SkShader.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
+#include "third_party/blink/renderer/platform/wtf/casting.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_view.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkMatrix.h"
 
 namespace blink {
 
-enum ColorParseResult {
-  kParsedRGBA,
-  kParsedCurrentColor,
-  kParsedSystemColor,
-  kParseFailed
-};
-
 static ColorParseResult ParseColor(Color& parsed_color,
                                    const String& color_string,
-                                   mojom::blink::ColorScheme color_scheme) {
+                                   mojom::blink::ColorScheme color_scheme,
+                                   const ui::ColorProvider* color_provider,
+                                   bool is_in_web_app_scope) {
   if (EqualIgnoringASCIICase(color_string, "currentcolor"))
-    return kParsedCurrentColor;
+    return ColorParseResult::kCurrentColor;
   const bool kUseStrictParsing = true;
   if (CSSParser::ParseColor(parsed_color, color_string, kUseStrictParsing))
-    return kParsedRGBA;
-  if (CSSParser::ParseSystemColor(parsed_color, color_string, color_scheme))
-    return kParsedSystemColor;
-  return kParseFailed;
-}
-
-static Color CurrentColor(HTMLCanvasElement* canvas) {
-  if (!canvas || !canvas->isConnected() || !canvas->InlineStyle())
-    return Color::kBlack;
-  Color color = Color::kBlack;
-  CSSParser::ParseColor(
-      color, canvas->InlineStyle()->GetPropertyValue(CSSPropertyID::kColor));
-  return color;
-}
-
-static mojom::blink::ColorScheme ColorScheme(HTMLCanvasElement* canvas) {
-  if (canvas && canvas->isConnected()) {
-    if (auto* style = canvas->GetComputedStyle())
-      return style->UsedColorScheme();
+    return ColorParseResult::kColor;
+  if (CSSParser::ParseSystemColor(parsed_color, color_string, color_scheme,
+                                  color_provider, is_in_web_app_scope)) {
+    return ColorParseResult::kColor;
   }
-  return mojom::blink::ColorScheme::kLight;
+  const CSSValue* parsed_value = CSSParser::ParseSingleValue(
+      CSSPropertyID::kColor, color_string,
+      StrictCSSParserContext(SecureContextMode::kInsecureContext));
+  if (parsed_value && (parsed_value->IsColorMixValue() ||
+                       parsed_value->IsRelativeColorValue())) {
+    static const TextLinkColors kDefaultTextLinkColors{};
+    // TODO(40946458): Don't use default length resolver here!
+    const ResolveColorValueContext context{
+        .length_resolver = CSSToLengthConversionData(/*element=*/nullptr),
+        .text_link_colors = kDefaultTextLinkColors,
+        .used_color_scheme = color_scheme,
+        .color_provider = color_provider,
+        .is_in_web_app_scope = is_in_web_app_scope};
+    const StyleColor style_color = ResolveColorValue(*parsed_value, context);
+    parsed_color = style_color.Resolve(Color::kBlack, color_scheme);
+    return ColorParseResult::kColorFunction;
+  }
+  return ColorParseResult::kParseFailed;
 }
 
-bool ParseColorOrCurrentColor(Color& parsed_color,
-                              const String& color_string,
-                              HTMLCanvasElement* canvas) {
-  ColorParseResult parse_result =
-      ParseColor(parsed_color, color_string.StripWhiteSpace(IsHTMLSpace<UChar>),
-                 ColorScheme(canvas));
+ColorParseResult ParseCanvasColorString(const String& color_string,
+                                        mojom::blink::ColorScheme color_scheme,
+                                        Color& parsed_color,
+                                        const ui::ColorProvider* color_provider,
+                                        bool is_in_web_app_scope) {
+  return ParseColor(parsed_color,
+                    color_string.StripWhiteSpace(IsHTMLSpace<UChar>),
+                    color_scheme, color_provider, is_in_web_app_scope);
+}
+
+bool ParseCanvasColorString(const String& color_string, Color& parsed_color) {
+  const ColorParseResult parse_result = ParseCanvasColorString(
+      color_string, mojom::blink::ColorScheme::kLight, parsed_color,
+      /*color_provider=*/nullptr, /*is_in_web_app_scope=*/false);
   switch (parse_result) {
-    case kParsedRGBA:
-    case kParsedSystemColor:
+    case ColorParseResult::kColor:
+    case ColorParseResult::kColorFunction:
       return true;
-    case kParsedCurrentColor:
-      parsed_color = CurrentColor(canvas);
+    case ColorParseResult::kCurrentColor:
+      parsed_color = Color::kBlack;
       return true;
-    case kParseFailed:
-      return false;
-    default:
-      NOTREACHED();
+    case ColorParseResult::kParseFailed:
       return false;
   }
 }
 
-CanvasStyle::CanvasStyle(RGBA32 rgba) : type_(kColorRGBA), rgba_(rgba) {}
-
-CanvasStyle::CanvasStyle(CanvasGradient* gradient)
-    : type_(kGradient), gradient_(gradient) {}
-
-CanvasStyle::CanvasStyle(CanvasPattern* pattern)
-    : type_(kImagePattern), pattern_(pattern) {}
-
-void CanvasStyle::ApplyToFlags(cc::PaintFlags& flags) const {
-  ImageDrawOptions draw_options;
+void CanvasStyle::ApplyToFlags(cc::PaintFlags& flags,
+                               float global_alpha) const {
   switch (type_) {
-    case kColorRGBA:
-      flags.setShader(nullptr);
+    case kColor:
+      ApplyColorToFlags(flags, global_alpha);
       break;
     case kGradient:
       GetCanvasGradient()->GetGradient()->ApplyToFlags(flags, SkMatrix::I(),
-                                                       draw_options);
+                                                       ImageDrawOptions());
+      flags.setColor(SkColor4f(0.0f, 0.0f, 0.0f, global_alpha));
       break;
     case kImagePattern:
       GetCanvasPattern()->GetPattern()->ApplyToFlags(
           flags, AffineTransformToSkMatrix(GetCanvasPattern()->GetTransform()));
+      flags.setColor(SkColor4f(0.0f, 0.0f, 0.0f, global_alpha));
       break;
     default:
       NOTREACHED();
   }
-}
-
-RGBA32 CanvasStyle::PaintColor() const {
-  if (type_ == kColorRGBA)
-    return rgba_;
-  DCHECK(type_ == kGradient || type_ == kImagePattern);
-  return Color::kBlack;
 }
 
 void CanvasStyle::Trace(Visitor* visitor) const {

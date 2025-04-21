@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/command_line.h"
@@ -26,7 +27,9 @@
 #include "components/zucchini/zucchini_commands.h"
 
 #if BUILDFLAG(IS_WIN)
-#include <windows.h>  // This include must come first.
+// clang-format off
+#include <windows.h> // Must be in front of other Windows header files.
+// clang-format on
 
 #include <psapi.h>
 #endif
@@ -76,6 +79,7 @@ constexpr Command kCommands[] = {
     {"match", "-match <old_file> <new_file> [-impose=#+#=#+#,#+#=#+#,...]", 2,
      &MainMatch},
     {"crc32", "-crc32 <file>", 1, &MainCrc32},
+    {"suffix-array", "-suffix-array <file>", 1, &MainSuffixArray},
 };
 
 /******** GetPeakMemoryMetrics ********/
@@ -97,12 +101,12 @@ void GetPeakMemoryMetrics(size_t* peak_virtual_memory,
           .Append("status");
   std::string contents_string;
   base::ReadFileToString(status_path, &contents_string);
-  std::vector<base::StringPiece> lines = base::SplitStringPiece(
+  std::vector<std::string_view> lines = base::SplitStringPiece(
       contents_string, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 
   for (const auto& line : lines) {
     // Tokens should generally be of the form "Metric: <val> kB"
-    std::vector<base::StringPiece> tokens = base::SplitStringPiece(
+    std::vector<std::string_view> tokens = base::SplitStringPiece(
         line, " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
     if (tokens.size() < 2)
       continue;
@@ -255,5 +259,6 @@ zucchini::status::Code RunZucchiniCommand(const base::CommandLine& command_line,
   }
 
   ScopedResourceUsageTracker resource_usage_tracker;
-  return command_use->command_function({command_line, paths, out, err});
+  return command_use->command_function(
+      {raw_ref(command_line), raw_ref(paths), raw_ref(out), raw_ref(err)});
 }

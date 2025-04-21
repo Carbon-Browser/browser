@@ -1,14 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.customtabs;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.app.PendingIntent.CanceledException;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.net.Uri;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnLayoutChangeListener;
@@ -21,53 +24,71 @@ import android.widget.RemoteViews;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsIntent;
 
+import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
+import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider.CustomTabProfileType;
 import org.chromium.chrome.browser.browserservices.intents.CustomButtonParams;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelManager.OverlayPanelManagerObserver;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManagerImpl;
-import org.chromium.chrome.browser.customtabs.content.CustomTabActivityTabProvider;
-import org.chromium.chrome.browser.dependency_injection.ActivityScope;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.night_mode.RemoteViewsWithNightModeInflater;
 import org.chromium.chrome.browser.night_mode.SystemNightModeMonitor;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.theme.ThemeUtils;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
+import org.chromium.components.browser_ui.widget.gesture.SwipeGestureListener;
+import org.chromium.components.browser_ui.widget.gesture.SwipeGestureListener.ScrollDirection;
+import org.chromium.ui.base.ViewportInsets;
 import org.chromium.ui.base.WindowAndroid;
-import org.chromium.ui.interpolators.BakedBezierInterpolator;
+import org.chromium.ui.interpolators.Interpolators;
 
 import java.util.List;
 
-import javax.inject.Inject;
-
-/**
- * Delegate that manages bottom bar area inside of {@link CustomTabActivity}.
- */
-@ActivityScope
-public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.Observer {
+/** Delegate that manages bottom bar area inside of {@link CustomTabActivity}. */
+public class CustomTabBottomBarDelegate
+        implements BrowserControlsStateProvider.Observer, SwipeGestureListener.SwipeHandler {
     private static final String TAG = "CustomTab";
     private static final int SLIDE_ANIMATION_DURATION_MS = 400;
+
+    /**
+     * Provides an interface for updating custom button states based on provided parameters.
+     *
+     * <p>Implementations of this interface should define the logic for determining how a custom
+     * button's appearance or behavior should change in response to the given parameters.
+     */
+    public interface CustomButtonsUpdater {
+
+        /**
+         * Updates the state of a bottom bar button based on the provided parameters.
+         *
+         * @param params The parameters containing information relevant to the button update.
+         * @return {@code true} if the button was successfully updated, {@code false} otherwise.
+         */
+        boolean updateBottomBarButton(CustomButtonParams params);
+    }
 
     private final Activity mActivity;
     private final WindowAndroid mWindowAndroid;
     private final BrowserControlsSizer mBrowserControlsSizer;
-    private final ObservableSupplier<Integer> mAutofillUiBottomInsetSupplier;
     private final BrowserServicesIntentDataProvider mDataProvider;
-    private final CustomTabActivityTabProvider mTabProvider;
+    private final Supplier<Tab> mTabProvider;
     private final CustomTabNightModeStateController mNightModeStateController;
-    private final SystemNightModeMonitor mSystemNightModeMonitor;
 
-    private ViewGroup mBottomBarView;
+    private CustomTabBottomBarView mBottomBarView;
     @Nullable private View mBottomBarContentView;
+    @Nullable private CustomButtonsUpdater mCustomButtonsUpdater;
     private PendingIntent mClickPendingIntent;
     private int[] mClickableIDs;
     private boolean mShowShadow = true;
+    private @Nullable PendingIntent mSwipeUpPendingIntent;
+    private boolean mKeepContentView;
 
     /**
      * The override height in pixels. A value of -1 is interpreted as "not set" and means it should
@@ -75,48 +96,43 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
      */
     private int mBottomBarHeightOverride = -1;
 
-    private OnClickListener mBottomBarClickListener = new OnClickListener() {
-        @Override
-        public void onClick(View v) {
-            if (mClickPendingIntent == null) return;
-            Intent extraIntent = new Intent();
-            int originalId = v.getId();
-            if (ChromeFeatureList.sCctRemoveRemoteViewIds.isEnabled()) {
-                originalId = (Integer) v.getTag(R.id.view_id_tag_key);
-            }
-            extraIntent.putExtra(CustomTabsIntent.EXTRA_REMOTEVIEWS_CLICKED_ID, originalId);
-            sendPendingIntentWithUrl(mClickPendingIntent, extraIntent, mActivity, mTabProvider);
-        }
-    };
+    private OnClickListener mBottomBarClickListener =
+            new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (mClickPendingIntent == null) return;
+                    Intent extraIntent = new Intent();
+                    int originalId = (Integer) v.getTag(R.id.view_id_tag_key);
+                    extraIntent.putExtra(CustomTabsIntent.EXTRA_REMOTEVIEWS_CLICKED_ID, originalId);
+                    sendPendingIntentWithUrl(
+                            mClickPendingIntent, extraIntent, mActivity, mTabProvider);
+                }
+            };
 
-    @Inject
-    public CustomTabBottomBarDelegate(Activity activity, WindowAndroid windowAndroid,
+    public CustomTabBottomBarDelegate(
+            Activity activity,
+            WindowAndroid windowAndroid,
             BrowserServicesIntentDataProvider dataProvider,
             BrowserControlsSizer browserControlsSizer,
-            ObservableSupplier<Integer> autofillUiBottomInsetSupplier,
             CustomTabNightModeStateController nightModeStateController,
-            SystemNightModeMonitor systemNightModeMonitor, CustomTabActivityTabProvider tabProvider,
+            Supplier<Tab> tabProvider,
             CustomTabCompositorContentInitializer compositorContentInitializer) {
         mActivity = activity;
         mWindowAndroid = windowAndroid;
         mDataProvider = dataProvider;
         mBrowserControlsSizer = browserControlsSizer;
-        mAutofillUiBottomInsetSupplier = autofillUiBottomInsetSupplier;
         mNightModeStateController = nightModeStateController;
-        mSystemNightModeMonitor = systemNightModeMonitor;
         mTabProvider = tabProvider;
-        browserControlsSizer.addObserver(this);
-
+        mBrowserControlsSizer.addObserver(this);
+        mKeepContentView = false;
         compositorContentInitializer.addCallback(this::addOverlayPanelManagerObserver);
 
-        Callback<Integer> insetObserver = this::onViewPortInsetChange;
-        mWindowAndroid.getApplicationBottomInsetProvider().addObserver(insetObserver);
-        mAutofillUiBottomInsetSupplier.addObserver(insetObserver);
+        Callback<ViewportInsets> insetObserver = this::onViewportInsetChange;
+        // TODO(REVIEW): Is it ok this doesn't remove itself?
+        mWindowAndroid.getApplicationBottomInsetSupplier().addObserver(insetObserver);
     }
 
-    /**
-     * Makes the bottom bar area to show, if any.
-     */
+    /** Makes the bottom bar area to show, if any. */
     public void showBottomBarIfNecessary() {
         if (!shouldShowBottomBar()) return;
 
@@ -124,16 +140,30 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
                 .findViewById(R.id.bottombar_shadow)
                 .setVisibility(mShowShadow ? View.VISIBLE : View.GONE);
 
+        if (mDataProvider.getSecondaryToolbarSwipeUpPendingIntent() != null) {
+            startListeningForSwipeUpGestures(
+                    mDataProvider.getSecondaryToolbarSwipeUpPendingIntent());
+        }
+
         if (mBottomBarContentView != null) {
             getBottomBarView().addView(mBottomBarContentView);
-            mBottomBarContentView.addOnLayoutChangeListener(new OnLayoutChangeListener() {
-                @Override
-                public void onLayoutChange(View v, int left, int top, int right, int bottom,
-                        int oldLeft, int oldTop, int oldRight, int oldBottom) {
-                    mBottomBarContentView.removeOnLayoutChangeListener(this);
-                    mBrowserControlsSizer.setBottomControlsHeight(getBottomBarHeight(), 0);
-                }
-            });
+            mBottomBarContentView.addOnLayoutChangeListener(
+                    new OnLayoutChangeListener() {
+                        @Override
+                        public void onLayoutChange(
+                                View v,
+                                int left,
+                                int top,
+                                int right,
+                                int bottom,
+                                int oldLeft,
+                                int oldTop,
+                                int oldRight,
+                                int oldBottom) {
+                            mBottomBarContentView.removeOnLayoutChangeListener(this);
+                            setBottomControlsHeight(getBottomBarHeight());
+                        }
+                    });
             return;
         }
 
@@ -160,31 +190,67 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
                         v -> sendPendingIntentWithUrl(pendingIntent, null, mActivity, mTabProvider);
             }
             layout.addView(
-                    params.buildBottomBarButton(mActivity, getBottomBarView(), clickListener));
+                    params.buildBottomBarButton(
+                            mActivity, getBottomBarView(), clickListener, getButtonIconTint()));
         }
         getBottomBarView().addView(layout);
     }
 
     /**
      * Updates the custom buttons on bottom bar area.
+     *
      * @param params The {@link CustomButtonParams} that describes the button to update.
      */
     public void updateBottomBarButtons(CustomButtonParams params) {
+        if (mCustomButtonsUpdater != null && mCustomButtonsUpdater.updateBottomBarButton(params)) {
+            return;
+        }
         ImageButton button = (ImageButton) getBottomBarView().findViewById(params.getId());
         button.setContentDescription(params.getDescription());
-        button.setImageDrawable(params.getIcon(mActivity));
+        button.setImageDrawable(params.getIcon(mActivity, getButtonIconTint()));
+    }
+
+    private ColorStateList getButtonIconTint() {
+        // We use OmniboxResourceProvider so that our color scheme matches the CCT top toolbar's
+        // color scheme - see CustomTabToolbar.
+        @BrandedColorScheme
+        int brandedColorScheme =
+                OmniboxResourceProvider.getBrandedColorScheme(
+                        mActivity,
+                        mDataProvider.getCustomTabMode() == CustomTabProfileType.INCOGNITO,
+                        mDataProvider.getColorProvider().getBottomBarColor());
+        return ThemeUtils.getThemedToolbarIconTint(mActivity, brandedColorScheme);
+    }
+
+    /**
+     * Sets the updater responsible for managing the state of custom buttons.
+     *
+     * <p>If the bottom bar view is set with {@link #setBottomBarContentView} you should always
+     * provide customButtonsUpdater.
+     *
+     * @param customButtonsUpdater The {@link CustomButtonsUpdater} implementation that will handle
+     *     the logic for updating custom button states, overriding the default logic.
+     */
+    public void setCustomButtonsUpdater(CustomButtonsUpdater customButtonsUpdater) {
+        mCustomButtonsUpdater = customButtonsUpdater;
     }
 
     /**
      * Updates the RemoteViews on the bottom bar. If the given remote view is null, animates the
      * bottom bar out.
+     *
      * @param remoteViews The new remote view hierarchy sent from the client.
      * @param clickableIDs Array of view ids, the onclick event of which is intercepcted by chrome.
      * @param pendingIntent The {@link PendingIntent} that will be sent on clicking event.
      * @return Whether the update is successful.
      */
-    public boolean updateRemoteViews(RemoteViews remoteViews, int[] clickableIDs,
-            PendingIntent pendingIntent) {
+    public boolean updateRemoteViews(
+            RemoteViews remoteViews, int[] clickableIDs, PendingIntent pendingIntent) {
+        // If the contentView is already set, it should have priority to keep being displayed over
+        // any remote views that are trying to be updated.
+        if (mBottomBarContentView != null && mKeepContentView) {
+            return false;
+        }
         RecordUserAction.record("CustomTabsRemoteViewsUpdated");
         if (remoteViews == null) {
             if (mBottomBarView == null) return false;
@@ -202,29 +268,55 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
     }
 
     /**
-     * Sets the content of the bottom bar.
+     * Updates the {@link PendingIntent} to be sent when the user swipes up from the toolbar.
+     * @param pendingIntent The {@link PendingIntent}.
+     * @return Whether the update is successful.
      */
+    public boolean updateSwipeUpPendingIntent(PendingIntent pendingIntent) {
+        if (pendingIntent == null) {
+            if (mBottomBarView == null) return false;
+            stopListeningForSwipeUpGestures();
+        } else {
+            startListeningForSwipeUpGestures(pendingIntent);
+        }
+        return true;
+    }
+
+    /** Sets the content of the bottom bar. */
     public void setBottomBarContentView(View view) {
         mBottomBarContentView = view;
     }
 
-    /**
-     * Sets the visibility of the bottom bar shadow.
-     */
+    /** Sets the visibility of the bottom bar shadow. */
     public void setShowShadow(boolean show) {
         mShowShadow = show;
+    }
+
+    /**
+     * Determines the behavior of the bottom bar content view when using RemoteViews.
+     *
+     * <p>By default, RemoteViews may replace the bottom bar content view. If the bottom bar view
+     * set with {@link #setBottomBarContentView} should always displayed, set this value to {@code
+     * true}.
+     *
+     * <p>**Important Note:** Enabling this feature will prevent RemoteViews from being used via
+     * {@link #updateRemoteViews}.
+     */
+    public void setKeepContentView(boolean keep) {
+        mKeepContentView = keep;
     }
 
     /**
      * @return The height of the bottom bar, excluding its top shadow.
      */
     public int getBottomBarHeight() {
-        if (!shouldShowBottomBar() || mBottomBarView == null
+        if (!shouldShowBottomBar()
+                || mBottomBarView == null
                 || mBottomBarView.getChildCount() < 2) {
             return 0;
         }
         if (mBottomBarHeightOverride != -1) return mBottomBarHeightOverride;
-        return mBottomBarView.getChildAt(1).getHeight();
+        return mBottomBarView.getHeight();
     }
 
     /**
@@ -244,35 +336,44 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
     private ViewGroup getBottomBarView() {
         if (mBottomBarView == null) {
             assert isViewReady() : "The required view stub couldn't be found! (Called too early?)";
-            ViewStub bottomBarStub = ((ViewStub) mActivity.findViewById(R.id.bottombar_stub));
-            mBottomBarView = (ViewGroup) bottomBarStub.inflate();
+            ViewStub bottomBarStub = mActivity.findViewById(R.id.bottombar_stub);
+            mBottomBarView = (CustomTabBottomBarView) bottomBarStub.inflate();
         }
         return mBottomBarView;
     }
 
     public void addOverlayPanelManagerObserver(LayoutManagerImpl layoutDriver) {
-        layoutDriver.getOverlayPanelManager().addObserver(new OverlayPanelManagerObserver() {
-            @Override
-            public void onOverlayPanelShown() {
-                if (mBottomBarView == null) return;
-                mBottomBarView.animate()
-                        .alpha(0)
-                        .setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE)
-                        .setDuration(SLIDE_ANIMATION_DURATION_MS)
-                        .withEndAction(() -> mBottomBarView.setVisibility(View.GONE))
-                        .start();
-            }
-            @Override
-            public void onOverlayPanelHidden() {
-                if (mBottomBarView == null) return;
-                mBottomBarView.setVisibility(View.VISIBLE);
-                mBottomBarView.animate()
-                        .alpha(1)
-                        .setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE)
-                        .setDuration(SLIDE_ANIMATION_DURATION_MS)
-                        .start();
-            }
-        });
+        layoutDriver
+                .getOverlayPanelManager()
+                .addObserver(
+                        new OverlayPanelManagerObserver() {
+                            @Override
+                            public void onOverlayPanelShown() {
+                                if (mBottomBarView == null) return;
+                                mBottomBarView
+                                        .animate()
+                                        .alpha(0)
+                                        .setInterpolator(
+                                                Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR)
+                                        .setDuration(SLIDE_ANIMATION_DURATION_MS)
+                                        .withEndAction(
+                                                () -> mBottomBarView.setVisibility(View.GONE))
+                                        .start();
+                            }
+
+                            @Override
+                            public void onOverlayPanelHidden() {
+                                if (mBottomBarView == null) return;
+                                mBottomBarView.setVisibility(View.VISIBLE);
+                                mBottomBarView
+                                        .animate()
+                                        .alpha(1)
+                                        .setInterpolator(
+                                                Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR)
+                                        .setDuration(SLIDE_ANIMATION_DURATION_MS)
+                                        .start();
+                            }
+                        });
     }
 
     /**
@@ -281,17 +382,23 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
      */
     private void hideBottomBar() {
         if (mBottomBarView == null) return;
-        mBottomBarView.animate().alpha(0f).translationY(mBottomBarView.getHeight())
-                .setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE)
+        stopListeningForSwipeUpGestures();
+        mBottomBarView
+                .animate()
+                .alpha(0f)
+                .translationY(mBottomBarView.getHeight())
+                .setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR)
                 .setDuration(SLIDE_ANIMATION_DURATION_MS)
-                .withEndAction(new Runnable() {
-                    @Override
-                    public void run() {
-                        ((ViewGroup) mBottomBarView.getParent()).removeView(mBottomBarView);
-                        mBottomBarView = null;
-                    }
-                }).start();
-        mBrowserControlsSizer.setBottomControlsHeight(0, 0);
+                .withEndAction(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                ((ViewGroup) mBottomBarView.getParent()).removeView(mBottomBarView);
+                                mBottomBarView = null;
+                            }
+                        })
+                .start();
+        setBottomControlsHeight(0);
     }
 
     private void transformViewIds(View view) {
@@ -299,8 +406,7 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
         // as it is unique across all tags.
         view.setTag(R.id.view_id_tag_key, view.getId());
         view.setId(View.NO_ID);
-        if (view instanceof ViewGroup) {
-            final ViewGroup group = (ViewGroup) view;
+        if (view instanceof ViewGroup group) {
             final int childCount = group.getChildCount();
             for (int i = 0; i < childCount; i++) {
                 final View child = group.getChildAt(i);
@@ -310,9 +416,12 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
     }
 
     private boolean showRemoteViews(RemoteViews remoteViews) {
-        final View inflatedView = RemoteViewsWithNightModeInflater.inflate(remoteViews,
-                getBottomBarView(), mNightModeStateController.isInNightMode(),
-                mSystemNightModeMonitor.isSystemNightModeOn());
+        final View inflatedView =
+                RemoteViewsWithNightModeInflater.inflate(
+                        remoteViews,
+                        getBottomBarView(),
+                        mNightModeStateController.isInNightMode(),
+                        SystemNightModeMonitor.getInstance().isSystemNightModeOn());
 
         if (inflatedView == null) return false;
 
@@ -323,30 +432,47 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
                 if (view != null) view.setOnClickListener(mBottomBarClickListener);
             }
         }
-        if (ChromeFeatureList.sCctRemoveRemoteViewIds.isEnabled()) {
-            // Set all views' ids to be View.NO_ID to prevent them clashing with
-            // chrome's resource ids. See http://crbug.com/1061872
-            transformViewIds(inflatedView);
-        }
+
+        // Set all views' ids to be View.NO_ID to prevent them clashing with
+        // chrome's resource ids. See http://crbug.com/1061872
+        transformViewIds(inflatedView);
+
         getBottomBarView().addView(inflatedView, 1);
-        inflatedView.addOnLayoutChangeListener(new OnLayoutChangeListener() {
-            @Override
-            public void onLayoutChange(View v, int left, int top, int right, int bottom,
-                    int oldLeft, int oldTop, int oldRight, int oldBottom) {
-                inflatedView.removeOnLayoutChangeListener(this);
-                mBrowserControlsSizer.setBottomControlsHeight(getBottomBarHeight(), 0);
-            }
-        });
+        inflatedView.addOnLayoutChangeListener(
+                new OnLayoutChangeListener() {
+                    @Override
+                    public void onLayoutChange(
+                            View v,
+                            int left,
+                            int top,
+                            int right,
+                            int bottom,
+                            int oldLeft,
+                            int oldTop,
+                            int oldRight,
+                            int oldBottom) {
+                        inflatedView.removeOnLayoutChangeListener(this);
+                        setBottomControlsHeight(getBottomBarHeight());
+                    }
+                });
         return true;
     }
 
-    private static void sendPendingIntentWithUrl(PendingIntent pendingIntent, Intent extraIntent,
-            Activity activity, CustomTabActivityTabProvider tabProvider) {
+    private static void sendPendingIntentWithUrl(
+            PendingIntent pendingIntent,
+            Intent extraIntent,
+            Activity activity,
+            Supplier<Tab> tabProvider) {
         Intent addedIntent = extraIntent == null ? new Intent() : new Intent(extraIntent);
-        Tab tab = tabProvider.getTab();
-        if (tab != null) addedIntent.setData(Uri.parse(tab.getUrl().getSpec()));
+        Tab tab = tabProvider.get();
+        if (tab != null) {
+            addedIntent.setData(Uri.parse(tab.getUrl().getSpec()));
+            addedIntent.putExtra(Intent.EXTRA_SUBJECT, tab.getTitle());
+        }
         try {
-            pendingIntent.send(activity, 0, addedIntent, null, null);
+            ActivityOptions options = ActivityOptions.makeBasic();
+            ApiCompatibilityUtils.setActivityOptionsBackgroundActivityStartMode(options);
+            pendingIntent.send(activity, 0, addedIntent, null, null, null, options.toBundle());
         } catch (CanceledException e) {
             Log.e(TAG, "CanceledException when sending pending intent.");
         }
@@ -367,18 +493,30 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
     // BrowserControlsStateProvider.Observer methods
 
     @Override
-    public void onControlsOffsetChanged(int topOffset, int topControlsMinHeightOffset,
-            int bottomOffset, int bottomControlsMinHeightOffset, boolean needsAnimate) {
-        if (mBottomBarView != null) mBottomBarView.setTranslationY(bottomOffset);
+    public void onControlsOffsetChanged(
+            int topOffset,
+            int topControlsMinHeightOffset,
+            boolean topControlsMinHeightChanged,
+            int bottomOffset,
+            int bottomControlsMinHeightOffset,
+            boolean bottomControlsMinHeightChanged,
+            boolean requestNewFrame,
+            boolean isVisibilityForced) {
+        if (mBottomBarView != null) {
+            int minHeight = mBrowserControlsSizer.getBottomControlsMinHeight();
+            mBottomBarView.setTranslationY(bottomOffset - minHeight);
+        }
         // If the bottom bar is not visible use the top controls as a guide to set state.
         int offset = getBottomBarHeight() == 0 ? topOffset : bottomOffset;
-        int height = getBottomBarHeight() == 0 ? mBrowserControlsSizer.getTopControlsHeight()
-                                               : mBrowserControlsSizer.getBottomControlsHeight();
+        int height =
+                getBottomBarHeight() == 0
+                        ? mBrowserControlsSizer.getTopControlsHeight()
+                        : mBrowserControlsSizer.getBottomControlsHeight();
         // Avoid spamming this callback across process boundaries, by only sending messages at
         // absolute transitions.
         if (Math.abs(offset) == height || offset == 0) {
-            CustomTabsConnection.getInstance().onBottomBarScrollStateChanged(
-                    mDataProvider.getSession(), offset != 0);
+            CustomTabsConnection.getInstance()
+                    .onBottomBarScrollStateChanged(mDataProvider.getSession(), offset != 0);
         }
     }
 
@@ -388,35 +526,79 @@ public class CustomTabBottomBarDelegate implements BrowserControlsStateProvider.
         if (!isViewReady()) return;
         // Bottom offset might not have been received by BrowserControlsManager at this point, so
         // using getBrowserControlHiddenRatio(), http://crbug.com/928903.
-        getBottomBarView().setTranslationY(
-                mBrowserControlsSizer.getBrowserControlHiddenRatio() * bottomControlsHeight);
+        getBottomBarView()
+                .setTranslationY(
+                        mBrowserControlsSizer.getBrowserControlHiddenRatio() * bottomControlsHeight
+                                - mBrowserControlsSizer.getBottomControlsMinHeightOffset());
     }
 
     /**
      * This method temporarily hides bottomBarView.
      *
-     * If you need to remove bottom bar completely use {@link #hideBottomBar()}.
+     * <p>If you need to remove bottom bar completely use {@link #hideBottomBar()}.
      *
      * @param hidesBottomBar whether bottom bar needs to be hidden.
      */
     public void hideBottomBar(boolean hidesBottomBar) {
         if (hidesBottomBar) {
+            // No-op if it is already in hidden state. This keeps bottom controls height from
+            // changing inadvertently while it is being updated by other insets.
+            if (getBottomBarView().getVisibility() == View.GONE) return;
             getBottomBarView().setVisibility(View.GONE);
-            mBrowserControlsSizer.setBottomControlsHeight(0, 0);
+            setBottomControlsHeight(0);
         } else {
             getBottomBarView().setVisibility(View.VISIBLE);
-            mBrowserControlsSizer.setBottomControlsHeight(getBottomBarHeight(), 0);
+            setBottomControlsHeight(getBottomBarHeight());
         }
     }
 
-    private void onViewPortInsetChange(Integer integer) {
+    private void onViewportInsetChange(ViewportInsets insets) {
         if (mBottomBarView == null) return;
-        hideBottomBar(hasNonZeroInset(mAutofillUiBottomInsetSupplier)
-                || hasNonZeroInset(mWindowAndroid.getApplicationBottomInsetProvider()));
+        boolean isKeyboardShowing =
+                mWindowAndroid
+                        .getKeyboardDelegate()
+                        .isKeyboardShowing(mBottomBarView.getContext(), mBottomBarView);
+
+        hideBottomBar(insets.viewVisibleHeightInset > 0 || isKeyboardShowing);
     }
 
-    private static boolean hasNonZeroInset(Supplier<Integer> insetSupplier) {
-        Integer inset = insetSupplier.get();
-        return inset != null && inset > 0;
+    /**
+     * Starts listening for swipe up gesture to send the {@link PendingIntent}.
+     * @param pendingIntent The {@link PendingIntent} to be sent.
+     */
+    private void startListeningForSwipeUpGestures(PendingIntent pendingIntent) {
+        if (mBottomBarView == null) return;
+        mSwipeUpPendingIntent = pendingIntent;
+        mBottomBarView.setSwipeHandler(this);
+    }
+
+    private void stopListeningForSwipeUpGestures() {
+        if (mBottomBarView == null) return;
+        mBottomBarView.setSwipeHandler(null);
+        mSwipeUpPendingIntent = null;
+    }
+
+    private void setBottomControlsHeight(int height) {
+        int minHeight = mBrowserControlsSizer.getBottomControlsMinHeight();
+        mBrowserControlsSizer.setBottomControlsHeight(minHeight + height, minHeight);
+    }
+
+    // SwipeGestureListener.SwipeHandler methods
+
+    @Override
+    public void onSwipeStarted(@ScrollDirection int direction, MotionEvent ev) {
+        if (mSwipeUpPendingIntent == null) return;
+        // Do not send URL for swipe action.
+        sendPendingIntentWithUrl(mSwipeUpPendingIntent, null, mActivity, () -> null);
+    }
+
+    @Override
+    public boolean isSwipeEnabled(@ScrollDirection int direction) {
+        return direction == ScrollDirection.UP
+                && getBottomBarView().getVisibility() == View.VISIBLE;
+    }
+
+    void setBottomBarViewForTesting(CustomTabBottomBarView bottomBarView) {
+        mBottomBarView = bottomBarView;
     }
 }

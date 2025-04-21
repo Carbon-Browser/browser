@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/upgrade_detector/upgrade_detector_chromeos.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "base/environment.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/time/clock.h"
 #include "base/time/tick_clock.h"
@@ -21,11 +23,9 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -73,7 +73,7 @@ class MockUpgradeObserver : public UpgradeObserver {
   MOCK_METHOD1(OnRelaunchOverriddenToRequired, void(bool overridden));
 
  private:
-  UpgradeDetector* const upgrade_detector_;
+  const raw_ptr<UpgradeDetector> upgrade_detector_;
 };
 
 }  // namespace
@@ -95,7 +95,6 @@ class UpgradeDetectorChromeosTest : public ::testing::Test {
     scoped_local_state_.Get()->SetUserPref(prefs::kAttemptedToEnableAutoupdate,
                                            std::make_unique<base::Value>(true));
 
-    chromeos::DBusThreadManager::Initialize();
     fake_update_engine_client_ =
         ash::UpdateEngineClient::InitializeFakeForTest();
 
@@ -120,7 +119,6 @@ class UpgradeDetectorChromeosTest : public ::testing::Test {
     tzset();
 
     ash::UpdateEngineClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   const base::Clock* GetMockClock() { return task_environment_.GetMockClock(); }
@@ -207,9 +205,10 @@ class UpgradeDetectorChromeosTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   ScopedTestingLocalState scoped_local_state_;
   std::unique_ptr<base::Environment> env_;
-  absl::optional<std::string> original_tz_;
+  std::optional<std::string> original_tz_;
 
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;  // Not owned.
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_;  // Not owned.
 };
 
 TEST_F(UpgradeDetectorChromeosTest, PolicyNotEnabled) {

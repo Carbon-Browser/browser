@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,8 @@ const char kHintHeuristicsJSONData[] = R"###(
               "checkout_url_regex" : "bar.com/([^/]+/)?checkout"
           },
           "baz.com": {
-              "purchase_url_regex" : "baz.com/([^/]+/)?purchase"
+              "purchase_url_regex" : "baz.com/([^/]+/)?purchase",
+              "skip_add_to_cart_regex": "dummy-request-url"
           }
       }
   )###";
@@ -30,6 +31,7 @@ const char kGlobalHeuristicsJSONData[] = R"###(
         "sensitive_product_regex": "\\b\\B",
         "rule_discount_partner_merchant_regex": "foo",
         "coupon_discount_partner_merchant_regex": "bar",
+        "no_discount_merchant_regex": "baz",
         "cart_page_url_regex": "cart",
         "checkout_page_url_regex": "checkout",
         "purchase_button_text_regex": "purchase",
@@ -94,8 +96,11 @@ TEST_F(CommerceHeuristicsDataTest, TestPopulateHintHeuristics_Success) {
   EXPECT_EQ(
       *hint_heuristics->FindDict("baz.com")->FindString("purchase_url_regex"),
       "baz.com/([^/]+/)?purchase");
+  EXPECT_EQ(*hint_heuristics->FindDict("baz.com")->FindString(
+                "skip_add_to_cart_regex"),
+            "dummy-request-url");
   auto* global_heuristics = GetGlobalHeuristics();
-  EXPECT_EQ(global_heuristics->size(), 8u);
+  EXPECT_EQ(global_heuristics->size(), 9u);
   EXPECT_TRUE(global_heuristics->contains("sensitive_product_regex"));
   EXPECT_EQ(*global_heuristics->FindString("sensitive_product_regex"),
             "\\b\\B");
@@ -109,6 +114,9 @@ TEST_F(CommerceHeuristicsDataTest, TestPopulateHintHeuristics_Success) {
   EXPECT_EQ(
       *global_heuristics->FindString("coupon_discount_partner_merchant_regex"),
       "bar");
+  EXPECT_TRUE(global_heuristics->contains("no_discount_merchant_regex"));
+  EXPECT_EQ(*global_heuristics->FindString("no_discount_merchant_regex"),
+            "baz");
   EXPECT_TRUE(global_heuristics->contains("cart_page_url_regex"));
   EXPECT_EQ(*global_heuristics->FindString("cart_page_url_regex"), "cart");
   EXPECT_TRUE(global_heuristics->contains("checkout_page_url_regex"));
@@ -192,6 +200,15 @@ TEST_F(CommerceHeuristicsDataTest,
   EXPECT_EQ(data.GetCouponDiscountPartnerMerchantPattern()->pattern(), "bar");
 }
 
+TEST_F(CommerceHeuristicsDataTest, TestGetNoDiscountMerchantPattern) {
+  auto& data = commerce_heuristics::CommerceHeuristicsData::GetInstance();
+
+  ASSERT_TRUE(data.PopulateDataFromComponent(
+      kHintHeuristicsJSONData, kGlobalHeuristicsJSONData, "", ""));
+
+  EXPECT_EQ(data.GetNoDiscountMerchantPattern()->pattern(), "baz");
+}
+
 TEST_F(CommerceHeuristicsDataTest, TestGetCartPageURLPattern) {
   auto& data = commerce_heuristics::CommerceHeuristicsData::GetInstance();
 
@@ -256,6 +273,16 @@ TEST_F(CommerceHeuristicsDataTest, TestGetPurchasePageURLPatternForDomain) {
 
   EXPECT_EQ(data.GetPurchasePageURLPatternForDomain("baz.com")->pattern(),
             "baz.com/([^/]+/)?purchase");
+}
+
+TEST_F(CommerceHeuristicsDataTest, TestGetSkipAddToCartPatternForDomain) {
+  auto& data = commerce_heuristics::CommerceHeuristicsData::GetInstance();
+
+  ASSERT_TRUE(data.PopulateDataFromComponent(
+      kHintHeuristicsJSONData, kGlobalHeuristicsJSONData, "", ""));
+
+  EXPECT_EQ(data.GetSkipAddToCartPatternForDomain("baz.com")->pattern(),
+            "dummy-request-url");
 }
 
 TEST_F(CommerceHeuristicsDataTest, TestRepopulateHintData) {

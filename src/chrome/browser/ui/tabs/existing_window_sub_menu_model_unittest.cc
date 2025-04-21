@@ -1,8 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/tabs/existing_window_sub_menu_model.h"
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -58,10 +63,10 @@ std::unique_ptr<views::Widget>
 TestBrowserWindowViewsWithDesktopNativeWidgetAura::CreateDesktopWidget(
     bool popup) {
   auto widget = std::make_unique<views::Widget>();
-  views::Widget::InitParams params;
-  params.type = popup ? views::Widget::InitParams::TYPE_POPUP
-                      : views::Widget::InitParams::TYPE_WINDOW;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      popup ? views::Widget::InitParams::TYPE_POPUP
+            : views::Widget::InitParams::TYPE_WINDOW);
   params.native_widget = new views::DesktopNativeWidgetAura(widget.get());
   params.bounds = gfx::Rect(0, 0, 20, 20);
   widget->Init(std::move(params));
@@ -71,7 +76,7 @@ TestBrowserWindowViewsWithDesktopNativeWidgetAura::CreateDesktopWidget(
 
 class ExistingWindowSubMenuModelTest : public BrowserWithTestWindowTest {
  public:
-  ExistingWindowSubMenuModelTest() : BrowserWithTestWindowTest() {}
+  ExistingWindowSubMenuModelTest() = default;
 
  protected:
   std::unique_ptr<Browser> CreateTestBrowser(bool incognito, bool popup);
@@ -89,20 +94,22 @@ std::unique_ptr<Browser> ExistingWindowSubMenuModelTest::CreateTestBrowser(
     bool incognito,
     bool popup) {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  TestBrowserWindow* window =
-      new TestBrowserWindowViewsWithDesktopNativeWidgetAura(popup);
+  auto window =
+      std::make_unique<TestBrowserWindowViewsWithDesktopNativeWidgetAura>(
+          popup);
 #else
-  TestBrowserWindow* window = new TestBrowserWindow;
+  auto window = std::make_unique<TestBrowserWindow>();
 #endif
-  new TestBrowserWindowOwner(window);
   Profile* profile = incognito ? browser()->profile()->GetPrimaryOTRProfile(
                                      /*create_if_needed=*/true)
                                : browser()->profile();
   Browser::Type type = popup ? Browser::TYPE_POPUP : Browser::TYPE_NORMAL;
 
   std::unique_ptr<Browser> browser =
-      CreateBrowser(profile, type, false, window);
+      CreateBrowser(profile, type, false, window.get());
   BrowserList::SetLastActive(browser.get());
+  // Self deleting.
+  new TestBrowserWindowOwner(std::move(window));
   return browser;
 }
 
@@ -155,7 +162,7 @@ void ExistingWindowSubMenuModelTest::CheckBrowserTitle(
                                  base::CompareCase::SENSITIVE));
 
     // Title should always have at least a few characters.
-    EXPECT_GE(tokens[0].size(), 3ull);
+    EXPECT_GE(tokens[0].size(), 3u);
   }
 }
 
@@ -387,7 +394,8 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuGroupedByDesks) {
       browser_7.get(), browser_5.get(), browser_4.get(),
       browser_2.get(), browser_3.get(), browser_6.get()};
   const auto& mru_ordered_windows =
-      browser()->tab_menu_model_delegate()->GetExistingWindowsForMoveMenu();
+      browser()->tab_menu_model_delegate()->GetOtherBrowserWindows(
+          /*is_app=*/false);
   ASSERT_EQ(6u, mru_ordered_windows.size());
   ASSERT_EQ(mru_ordered_windows, kExpectedMRUOrder);
 
@@ -444,7 +452,8 @@ TEST_F(ExistingWindowSubMenuModelTest, EnsureGroupedByDesksCommands) {
   const std::vector<Browser*> kExpectedMRUOrder{
       browser_4.get(), browser_2.get(), browser_3.get(), browser_5.get()};
   const auto& mru_ordered_windows =
-      browser()->tab_menu_model_delegate()->GetExistingWindowsForMoveMenu();
+      browser()->tab_menu_model_delegate()->GetOtherBrowserWindows(
+          /*is_app=*/false);
   ASSERT_EQ(4u, mru_ordered_windows.size());
   ASSERT_EQ(mru_ordered_windows, kExpectedMRUOrder);
 
@@ -462,7 +471,8 @@ TEST_F(ExistingWindowSubMenuModelTest, EnsureGroupedByDesksCommands) {
   const std::vector<std::pair<int, int>> kExpectedMappings{
       {1002, 1}, {1003, 0}, {1004, 2}, {1005, 3}};
   for (const auto& pair : kExpectedMappings) {
-    EXPECT_EQ(pair.second, command_id_to_target_index.at(pair.first));
+    EXPECT_EQ(pair.second,
+              static_cast<int>(command_id_to_target_index.at(pair.first)));
   }
 
   // Clean up.

@@ -1,27 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-import {Cdd} from './data/cdd.js';
-import {ExtensionDestinationInfo} from './data/local_parsers.js';
-import {PrinterStatus} from './data/printer_status_cros.js';
+import type {Cdd} from './data/cdd.js';
+import type {ExtensionDestinationInfo, LocalDestinationInfo} from './data/local_parsers.js';
+import type {PrintAttemptOutcome, PrinterStatus} from './data/printer_status_cros.js';
 
-export type PrinterSetupResponse = {
-  printerId: string,
-  capabilities: Cdd,
-};
+export interface PrinterSetupResponse {
+  printerId: string;
+  capabilities: Cdd;
+}
 
-export type PrintServer = {
-  id: string,
-  name: string,
-};
+export interface PrintServer {
+  id: string;
+  name: string;
+}
 
-export type PrintServersConfig = {
-  printServers: PrintServer[],
-  isSingleServerFetchingMode: boolean,
-};
+export interface PrintServersConfig {
+  printServers: PrintServer[];
+  isSingleServerFetchingMode: boolean;
+}
 
 /**
  * An interface to the Chrome OS platform specific part of the native Chromium
@@ -55,12 +55,6 @@ export interface NativeLayerCros {
   requestPrinterStatusUpdate(printerId: string): Promise<PrinterStatus>;
 
   /**
-   * Records the histogram to capture if the retried printer status was
-   * able to get a valid response from the local printer.
-   */
-  recordPrinterStatusRetrySuccessHistogram(retrySuccessful: boolean): void;
-
-  /**
    * Selects all print servers with ids in |printServerIds| to query for their
    * printers.
    */
@@ -71,6 +65,24 @@ export interface NativeLayerCros {
    * fetching mode.
    */
   getPrintServersConfig(): Promise<PrintServersConfig>;
+
+  /**
+   * Records the `PrintPreview.PrintAttemptOutcome` histogram for capturing
+   * the result from opening Print Preview.
+   */
+  recordPrintAttemptOutcome(printAttemptOutcome: PrintAttemptOutcome): void;
+
+  /**
+   * Returns whether or not the manage printers button should be displayed for
+   * the given print preview initiator.
+   */
+  getShowManagePrinters(): Promise<boolean>;
+
+  /**
+   * Observes the LocalPrinterObserver then returns the current list of local
+   * printers.
+   */
+  observeLocalPrinters(): Promise<LocalDestinationInfo[]>;
 }
 
 export class NativeLayerCrosImpl implements NativeLayerCros {
@@ -91,18 +103,24 @@ export class NativeLayerCrosImpl implements NativeLayerCros {
     return sendWithPromise('requestPrinterStatus', printerId);
   }
 
-  recordPrinterStatusRetrySuccessHistogram(retrySuccessful: boolean) {
-    chrome.send(
-        'metricsHandler:recordBooleanHistogram',
-        ['PrinterStatusRetrySuccess', retrySuccessful]);
-  }
-
   choosePrintServers(printServerIds: string[]) {
     chrome.send('choosePrintServers', [printServerIds]);
   }
 
   getPrintServersConfig() {
     return sendWithPromise('getPrintServersConfig');
+  }
+
+  recordPrintAttemptOutcome(printAttemptOutcome: PrintAttemptOutcome) {
+    chrome.send('recordPrintAttemptOutcome', [printAttemptOutcome]);
+  }
+
+  getShowManagePrinters() {
+    return sendWithPromise('getShowManagePrinters');
+  }
+
+  observeLocalPrinters() {
+    return sendWithPromise('observeLocalPrinters');
   }
 
   static getInstance(): NativeLayerCros {

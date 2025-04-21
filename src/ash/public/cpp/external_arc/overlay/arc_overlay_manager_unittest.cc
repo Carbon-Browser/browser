@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,9 @@
 
 #include "ash/test/test_widget_builder.h"
 #include "ash/wm/window_state.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "components/exo/shell_surface.h"
 #include "components/exo/test/exo_test_base.h"
 #include "components/exo/test/shell_surface_builder.h"
@@ -32,8 +35,8 @@ class ArcOverlayManagerTest : public exo::test::ExoTestBase {
     overlay_window_ = overlay_shell_surface_->GetWidget()->GetNativeWindow();
     overlay_shell_surface_->root_surface()->SetClientSurfaceId(
         kOverlayClientSurfaceId);
-    overlay_window_->SetProperty(aura::client::kAppType,
-                                 static_cast<int>(ash::AppType::ARC_APP));
+    overlay_window_->SetProperty(chromeos::kAppTypeKey,
+                                 chromeos::AppType::ARC_APP);
     manager_->OnWindowInitialized(overlay_window_);
     deregister_closure_ = manager_->RegisterHostWindow(
         kOverlayToken, host_widget_->GetNativeWindow());
@@ -63,7 +66,7 @@ class ArcOverlayManagerTest : public exo::test::ExoTestBase {
   std::unique_ptr<views::Widget> host_widget_;
 
   std::unique_ptr<exo::ShellSurface> overlay_shell_surface_;
-  aura::Window* overlay_window_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> overlay_window_ = nullptr;
 
   base::ScopedClosureRunner deregister_closure_;
 };

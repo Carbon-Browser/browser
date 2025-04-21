@@ -1,14 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://history/history.js';
 
-import {BrowserServiceImpl, HistoryAppElement} from 'chrome://history/history.js';
-import {isMac} from 'chrome://resources/js/cr.m.js';
-import {pressAndReleaseKeyOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
+import type {HistoryAppElement} from 'chrome://history/history.js';
+import {BrowserServiceImpl} from 'chrome://history/history.js';
+import {isMac} from 'chrome://resources/js/platform.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks} from 'chrome://webui-test/test_util.js';
+import {pressAndReleaseKeyOn} from 'chrome://webui-test/keyboard_mock_interactions.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
 import {TestBrowserService} from './test_browser_service.js';
 
@@ -16,7 +17,7 @@ suite('<history-toolbar>', function() {
   let app: HistoryAppElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     window.history.replaceState({}, '', '/');
     BrowserServiceImpl.setInstance(new TestBrowserService());
 
@@ -41,17 +42,19 @@ suite('<history-toolbar>', function() {
     assertFalse(app.$.toolbar.$.mainToolbar.getSearchField().isSearchFocused());
   });
 
-  test('shortcuts to open search field', function() {
+  test('shortcuts to open search field', async function() {
     const field = app.$.toolbar.$.mainToolbar.getSearchField();
     field.blur();
     assertFalse(field.showingSearch);
 
     const modifier = isMac ? 'meta' : 'ctrl';
     pressAndReleaseKeyOn(document.body, 70, modifier, 'f');
+    await field.updateComplete;
     assertTrue(field.showingSearch);
     assertEquals(field.$.searchInput, field.shadowRoot!.activeElement);
 
-    pressAndReleaseKeyOn(field.$.searchInput, 27, '', 'Escape');
+    pressAndReleaseKeyOn(field.$.searchInput, 27, [], 'Escape');
+    await field.updateComplete;
     assertFalse(field.showingSearch, 'Pressing escape closes field.');
     assertNotEquals(field.$.searchInput, field.shadowRoot!.activeElement);
   });

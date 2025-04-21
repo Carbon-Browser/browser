@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,15 +49,6 @@ void GestureRecognizerImplMac::TransferEventsTo(
     GestureConsumer* current_consumer,
     GestureConsumer* new_consumer,
     TransferTouchesBehavior transfer_touches_behavior) {}
-
-std::vector<std::unique_ptr<ui::TouchEvent>>
-GestureRecognizerImplMac::ExtractTouches(GestureConsumer* consumer) {
-  return std::vector<std::unique_ptr<ui::TouchEvent>>();
-}
-
-void GestureRecognizerImplMac::TransferTouches(
-    GestureConsumer* consumer,
-    const std::vector<std::unique_ptr<ui::TouchEvent>>& touch_events) {}
 
 bool GestureRecognizerImplMac::GetLastTouchPointForTarget(
     GestureConsumer* consumer,

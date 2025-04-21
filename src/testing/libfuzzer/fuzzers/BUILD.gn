@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,20 +18,18 @@ fuzzer_test("empty_fuzzer") {
   additional_configs = [ "//testing/libfuzzer:no_clusterfuzz" ]
 }
 
-fuzzer_test("courgette_fuzzer") {
-  sources = [ "courgette_fuzzer.cc" ]
-  deps = [
-    "//base",
-    "//courgette:courgette_lib",
-  ]
+fuzzer_test("string_compare_fuzzer") {
+  sources = [ "string_compare_fuzzer.cc" ]
+  additional_configs = [ "//testing/libfuzzer:no_clusterfuzz" ]
 }
 
-fuzzer_test("language_detection_fuzzer") {
-  sources = [ "language_detection_fuzzer.cc" ]
+fuzzer_test("string_compare_proto_fuzzer") {
+  sources = [ "string_compare_proto_fuzzer.cc" ]
   deps = [
-    "//base",
-    "//components/translate/core/language_detection:language_detection",
+    "//testing/libfuzzer/proto:string_compare_proto",
+    "//third_party/libprotobuf-mutator",
   ]
+  additional_configs = [ "//testing/libfuzzer:no_clusterfuzz" ]
 }
 
 fuzzer_test("snappy_compress_fuzzer") {
@@ -79,7 +77,7 @@ fuzzer_test("libsrtp_fuzzer") {
 }
 
 libpng_seed_corpuses = [
-  "//components/viz/test/data",
+  "//components/test/data/viz",
   "//third_party/blink/web_tests/images/png-suite/samples",
   "//third_party/blink/web_tests/images/resources/pngfuzz",
 ]
@@ -88,6 +86,7 @@ fuzzer_test("gfx_png_image_fuzzer") {
   sources = [ "gfx_png_image_fuzzer.cc" ]
   deps = [
     "//base",
+    "//ui/base",
     "//ui/gfx",
   ]
   dict = "dicts/png.dict"
@@ -111,22 +110,48 @@ fuzzer_test("libpng_progressive_read_fuzzer") {
   seed_corpuses = libpng_seed_corpuses
 }
 
-fuzzer_test("v8_script_parser_fuzzer") {
-  sources = []
-  deps = [ "//v8:parser_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
+template("v8_fuzzer") {
+  if (defined(invoker.v8_dep)) {
+    _deps = [ "//v8:${invoker.v8_dep}" ]
+  } else {
+    _deps = [ "//v8:${target_name}" ]
+  }
+
+  fuzzer_test("v8_${target_name}") {
+    forward_variables_from(invoker,
+                           "*",
+                           [
+                             "v8_dep",
+                             "max_len",
+                           ])
+
+    sources = []
+    deps = _deps
+    if (defined(invoker.max_len)) {
+      if (!defined(libfuzzer_options)) {
+        libfuzzer_options = []
+      }
+      libfuzzer_options += [ "max_len=${invoker.max_len}" ]
+    }
+
+    asan_options = [
+      "allow_user_segv_handler=1",
+      "handle_sigtrap=1",
+    ]
+    msan_options = [ "handle_sigtrap=1" ]
+    ubsan_options = [
+      "handle_sigtrap=1",
+      "handle_segv=1",
+    ]
+    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  }
+}
+
+v8_fuzzer("script_parser_fuzzer") {
+  v8_dep = "parser_fuzzer"
   dict = "dicts/generated/javascript.dict"
   seed_corpus = "//v8/test/mjsunit/regress/"
   libfuzzer_options = [ "only_ascii=1" ]
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
 }
 
 v8_inspector_fuzzer_corpus_dir = "$target_gen_dir/v8_inspector_fuzzer_corpus"
@@ -141,18 +166,7 @@ action("generate_v8_inspector_fuzzer_corpus") {
   outputs = [ v8_inspector_fuzzer_corpus_dir ]
 }
 
-fuzzer_test("v8_inspector_fuzzer") {
-  sources = []
-  deps = [ "//v8:inspector_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
+v8_fuzzer("inspector_fuzzer") {
   dict = "dicts/generated/javascript.dict"
   seed_corpus = v8_inspector_fuzzer_corpus_dir
   seed_corpus_deps = [ ":generate_v8_inspector_fuzzer_corpus" ]
@@ -160,156 +174,70 @@ fuzzer_test("v8_inspector_fuzzer") {
   # The fuzzer is able to handle any input, but since the input is interpreted
   # as JS code, restricting to ascii only will increase fuzzing efficiency.
   libfuzzer_options = [ "only_ascii=1" ]
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
 }
 
-fuzzer_test("v8_json_parser_fuzzer") {
-  sources = []
-  deps = [ "//v8:json_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
+v8_fuzzer("json_parser_fuzzer") {
+  v8_dep = "json_fuzzer"
   dict = "dicts/json.dict"
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
 }
 
-fuzzer_test("v8_regexp_parser_fuzzer") {
-  sources = []
-  deps = [ "//v8:regexp_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
+v8_fuzzer("regexp_parser_fuzzer") {
+  v8_dep = "regexp_fuzzer"
   dict = "dicts/regexp.dict"
   seed_corpus = "//v8/test/fuzzer/regexp/"
   libfuzzer_options = [ "max_len=64" ]
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
-}
-
-fuzzer_test("v8_regexp_builtins_fuzzer") {
-  sources = []
-  deps = [ "//v8:regexp_builtins_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
 }
 
 if (v8_enable_webassembly) {
-  fuzzer_test("v8_multi_return_fuzzer") {
-    sources = []
-    deps = [ "//v8:multi_return_fuzzer" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  v8_fuzzer("multi_return_fuzzer") {
   }
 
-  fuzzer_test("v8_wasm_code_fuzzer") {
-    sources = []
-    deps = [ "//v8:wasm_code_fuzzer" ]
-    libfuzzer_options = [ "max_len=500" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  v8_fuzzer("wasm_code_fuzzer") {
+    max_len = 500
   }
 
-  fuzzer_test("v8_wasm_compile_fuzzer") {
-    sources = []
-    deps = [ "//v8:wasm_compile_fuzzer" ]
-    libfuzzer_options = [ "max_len=500" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  v8_fuzzer("wasm_module_fuzzer") {
+    max_len = 500
+    seed_corpus = "//testing/libfuzzer/fuzzers/wasm_corpus/"
   }
 
-  fuzzer_test("v8_wasm_fuzzer") {
-    sources = []
-    deps = [ "//v8:wasm_fuzzer" ]
-    dict = "dicts/v8_wasm.dict"
-    seed_corpus = "//v8/test/fuzzer/wasm_corpus/"
-    libfuzzer_options = [ "max_len=500" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  v8_fuzzer("wasm_async_fuzzer") {
+    max_len = 500
+    seed_corpus = "//testing/libfuzzer/fuzzers/wasm_corpus/"
   }
 
-  fuzzer_test("v8_wasm_async_fuzzer") {
-    sources = []
-    deps = [ "//v8:wasm_async_fuzzer" ]
-    dict = "dicts/v8_wasm.dict"
-    seed_corpus = "//v8/test/fuzzer/wasm_corpus/"
-    libfuzzer_options = [ "max_len=500" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  v8_fuzzer("wasm_streaming_fuzzer") {
+    max_len = 500
+    seed_corpus = "//testing/libfuzzer/fuzzers/wasm_corpus/"
   }
 
-  fuzzer_test("v8_wasm_streaming_fuzzer") {
-    sources = []
-    deps = [ "//v8:wasm_streaming_fuzzer" ]
-    libfuzzer_options = [ "max_len=500" ]
-    asan_options = [
-      "allow_user_segv_handler=1",
-      "handle_sigtrap=1",
-    ]
-    msan_options = [ "handle_sigtrap=1" ]
-    ubsan_options = [
-      "handle_sigtrap=1",
-      "handle_segv=1",
-    ]
-    environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
+  # These fuzzers are not supported in official builds as they depend on
+  # functionality in the v8 library that is skipped in official builds for
+  # binary size reasons.
+  if (!is_official_build) {
+    v8_fuzzer("wasm_compile_all_fuzzer") {
+      max_len = 500
+    }
+
+    v8_fuzzer("wasm_compile_fuzzer") {
+      max_len = 500
+    }
+
+    v8_fuzzer("wasm_compile_simd_fuzzer") {
+      max_len = 500
+    }
+
+    v8_fuzzer("wasm_compile_wasmgc_fuzzer") {
+      max_len = 500
+    }
+
+    v8_fuzzer("wasm_init_expr_fuzzer") {
+      max_len = 500
+    }
+
+    v8_fuzzer("wasm_deopt_fuzzer") {
+      max_len = 500
+    }
   }
 }
 
@@ -336,7 +264,10 @@ fuzzer_test("skia_path_fuzzer") {
     "skia_path_common.h",
     "skia_path_fuzzer.cc",
   ]
-  deps = [ "//skia" ]
+  deps = [
+    "//base",
+    "//skia",
+  ]
   libfuzzer_options = [ "max_len=256" ]
   if (is_debug) {
     # Disabled due to crashing on SkASSERT (crbug.com/642750, crbug.com/643275).
@@ -388,10 +319,7 @@ fuzzer_test("hash_fuzzer") {
 action("gen_javascript_parser_proto") {
   # Only targets in this file and the top-level visibility target can
   # depend on this.
-  visibility = [
-    ":*",
-    "//:gn_visibility",
-  ]
+  visibility = [ ":*" ]
 
   script = "generate_javascript_parser_proto.py"
 
@@ -421,6 +349,7 @@ fuzzer_test("javascript_parser_proto_fuzzer") {
   deps = [
     ":gen_javascript_parser_proto",
     ":javascript_parser_proto",
+    "//base",
     "//third_party/libprotobuf-mutator",
     "//v8:v8",
     "//v8:v8_libplatform",
@@ -460,8 +389,60 @@ fuzzer_test("skia_image_filter_proto_fuzzer") {
   ]
 }
 
-fuzzer_test("libyuv_scale_fuzzer") {
-  sources = [ "libyuv_scale_fuzzer.cc" ]
+# We build the libyuv_scale_fuzzer both for fuzztest
+# and libfuzzer, for education/comparison purposes.
+# Abstract the common parts:
+source_set("libyuv_scale_fuzzer_common") {
+  testonly = true
+  sources = [
+    "libyuv_scale_fuzzer.cc",
+    "libyuv_scale_fuzzer.h",
+  ]
 
-  deps = [ "//third_party/libyuv" ]
+  public_deps = [ "//third_party/libyuv" ]
+}
+
+# The libfuzzer version (which also works with other compatible
+# frameworks, e.g. centipede)
+fuzzer_test("libyuv_scale_fuzzer") {
+  sources = [ "libyuv_scale_fuzzer_libfuzzer.cc" ]
+  deps = [ ":libyuv_scale_fuzzer_common" ]
+}
+
+# This is a fuzztest fuzzer, which (for now) means we build this as
+# a unit test rather than using a fuzzing gn template such as
+# fuzzer_test.
+# This executable can be run in four modes:
+# modes:
+# ./libyuv_scale_fuzzer - runs a small amount of fuzzing as if
+#    to fit in with a unit test framework, just to look for
+#    egregious bugs
+# With the enable_fuzztest_fuzz gn arg:
+#   ./libyuv_scale_fuzzer -fuzz=    - fuzzes properly.
+# With the use_centipede gn arg:
+#   centipede --binary=libyuv_scale_fuzzer - fuzzes using centipede
+# With the use_libfuzzer gn arg:
+#   ./libyuv_scale_fuzzer - runs in a libfuzzer-compatible way
+# Note that right now this is using the plain 'test' template.
+# In time, we may choose a different option here.
+test("libyuv_scale_fuzztest") {
+  sources = [ "libyuv_scale_fuzztest.cc" ]
+  fuzztests = [ "ScaleFuzz.ScaleDoesNotCrash" ]
+
+  deps = [
+    ":libyuv_scale_fuzzer_common",
+    "//third_party/fuzztest:fuzztest_gtest_main",
+  ]
+}
+
+test("paint_vector_icon_fuzztest") {
+  sources = [ "paint_vector_icon_fuzztest.cc" ]
+  fuzztests = [ "PaintVectorIconFuzzTest.PaintVectorIcon" ]
+
+  deps = [
+    "//base",
+    "//skia:skia_switches",
+    "//third_party/fuzztest:fuzztest_gtest_main",
+    "//ui/gfx:gfx",
+  ]
 }

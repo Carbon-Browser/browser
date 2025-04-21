@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,20 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.components.background_task_scheduler.BackgroundTaskScheduler;
 import org.chromium.components.background_task_scheduler.TaskIds;
 import org.chromium.components.background_task_scheduler.TaskInfo;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.gms.shadows.ShadowChromiumPlayServicesAvailability;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * Tests for {@link BackgroundTaskSchedulerImpl}.
- */
+/** Tests for {@link BackgroundTaskSchedulerImpl}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE,
-        shadows = {ShadowGcmNetworkManager.class, ShadowChromiumPlayServicesAvailability.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowChromiumPlayServicesAvailability.class})
 public class BackgroundTaskSchedulerImplWithMockTest {
     private static final int TEST_MINUTES = 10;
 
@@ -34,8 +33,7 @@ public class BackgroundTaskSchedulerImplWithMockTest {
     @Before
     public void setUp() {
         mDelegate = new MockBackgroundTaskSchedulerDelegate();
-        mTaskScheduler = new BackgroundTaskSchedulerImpl(
-                mDelegate, new BackgroundTaskSchedulerAlarmManager());
+        mTaskScheduler = new BackgroundTaskSchedulerImpl(mDelegate);
     }
 
     @Test
@@ -46,8 +44,10 @@ public class BackgroundTaskSchedulerImplWithMockTest {
                         .build();
         TaskInfo oneOffTask = TaskInfo.createTask(TaskIds.TEST, timingInfo).build();
 
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertTrue(mTaskScheduler.schedule(null, oneOffTask)); });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(mTaskScheduler.schedule(null, oneOffTask));
+                });
 
         Assert.assertEquals(oneOffTask, mDelegate.getScheduledTaskInfo());
         Assert.assertEquals(0, mDelegate.getCanceledTaskId());
@@ -61,8 +61,10 @@ public class BackgroundTaskSchedulerImplWithMockTest {
                         .build();
         TaskInfo periodicTask = TaskInfo.createTask(TaskIds.TEST, timingInfo).build();
 
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertTrue(mTaskScheduler.schedule(null, periodicTask)); });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(mTaskScheduler.schedule(null, periodicTask));
+                });
 
         Assert.assertEquals(periodicTask, mDelegate.getScheduledTaskInfo());
         Assert.assertEquals(0, mDelegate.getCanceledTaskId());
@@ -76,10 +78,11 @@ public class BackgroundTaskSchedulerImplWithMockTest {
                         .build();
         TaskInfo oneOffTask = TaskInfo.createTask(TaskIds.TEST, timingInfo).build();
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertTrue(mTaskScheduler.schedule(null, oneOffTask));
-            mTaskScheduler.cancel(null, TaskIds.TEST);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(mTaskScheduler.schedule(null, oneOffTask));
+                    mTaskScheduler.cancel(null, TaskIds.TEST);
+                });
 
         Assert.assertEquals(null, mDelegate.getScheduledTaskInfo());
         Assert.assertEquals(TaskIds.TEST, mDelegate.getCanceledTaskId());

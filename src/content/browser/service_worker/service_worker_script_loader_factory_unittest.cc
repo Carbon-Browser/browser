@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/service_worker/service_worker_script_loader_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
@@ -40,21 +40,23 @@ class ServiceWorkerScriptLoaderFactoryTest : public testing::Test {
 
     blink::mojom::ServiceWorkerRegistrationOptions options;
     options.scope = scope_;
-    registration_ = base::MakeRefCounted<ServiceWorkerRegistration>(
-        options, blink::StorageKey(url::Origin::Create(scope_)),
+    registration_ = ServiceWorkerRegistration::Create(
+        options,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_)),
         1L /* registration_id */, context->AsWeakPtr(),
         blink::mojom::AncestorFrameType::kNormalFrame);
     version_ = CreateNewServiceWorkerVersion(
         context->registry(), registration_.get(), script_url_,
         blink::mojom::ScriptType::kClassic);
+    DCHECK(version_);
 
-    worker_host_ = CreateServiceWorkerHost(
-        helper_->mock_render_process_id(), true /* is_parent_frame_secure */,
-        version_.get(), context->AsWeakPtr(), &remote_endpoint_);
+    worker_host_ = CreateServiceWorkerHost(helper_->mock_render_process_id(),
+                                           true /* is_parent_frame_secure */,
+                                           *version_, context->AsWeakPtr());
 
     factory_ = std::make_unique<ServiceWorkerScriptLoaderFactory>(
         helper_->context()->AsWeakPtr(), worker_host_->GetWeakPtr(),
-        helper_->url_loader_factory_getter()->GetNetworkFactory());
+        helper_->GetNetworkFactory());
   }
 
  protected:
@@ -83,7 +85,6 @@ class ServiceWorkerScriptLoaderFactoryTest : public testing::Test {
   scoped_refptr<ServiceWorkerRegistration> registration_;
   scoped_refptr<ServiceWorkerVersion> version_;
   std::unique_ptr<ServiceWorkerHost> worker_host_;
-  ServiceWorkerRemoteContainerEndpoint remote_endpoint_;
   std::unique_ptr<ServiceWorkerScriptLoaderFactory> factory_;
 };
 

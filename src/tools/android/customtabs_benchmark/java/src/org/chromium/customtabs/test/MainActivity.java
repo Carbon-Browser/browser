@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,14 +40,15 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-/** Activity used to benchmark Custom Tabs PLT.
+/**
+ * Activity used to benchmark Custom Tabs PLT.
  *
- * This activity contains benchmark code for two modes:
- * 1. Comparison between a basic use of Custom Tabs and a basic use of WebView.
+ * <p>This activity contains benchmark code for two modes: <br>
+ * 1. Comparison between a basic use of Custom Tabs and a basic use of WebView. <br>
  * 2. Custom Tabs benchmarking under various scenarios.
  *
- * The two modes are not merged into one as the metrics we can extract in the two cases
- * are constrained for the first one by what WebView provides.
+ * <p>The two modes are not merged into one as the metrics we can extract in the two cases are
+ * constrained for the first one by what WebView provides.
  */
 public class MainActivity extends Activity implements View.OnClickListener {
     static final String TAG = "CUSTOMTABSBENCH";
@@ -92,6 +93,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private CheckBox mParallelUrlCheckBox;
     private EditText mParallelUrlEditText;
     private long mIntentSentMs;
+    private CustomTabsIntent mIntent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,12 +104,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         // Automated mode, 1s later to leave time for the app to settle.
         if (intent.getStringExtra(URL_KEY) != null) {
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    processArguments(intent);
-                }
-            }, 1000);
+            mHandler.postDelayed(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            processArguments(intent);
+                        }
+                    },
+                    1000);
         }
     }
 
@@ -161,9 +165,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
-    /** Start the CustomTabs / WebView comparison benchmark.
+    /**
+     * Start the CustomTabs / WebView comparison benchmark.
      *
-     * NOTE: Methods below are for the first benchmark mode.
+     * <p>NOTE: Methods below are for the first benchmark mode.
      */
     private void startCustomTabsWebViewBenchmark(Intent intent) {
         Bundle extras = intent.getExtras();
@@ -195,20 +200,25 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void launchChrome(String url, boolean warmup, String parallelUrl) {
-        CustomTabsServiceConnection connection = new CustomTabsServiceConnection() {
-            @Override
-            public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
-                launchChromeIntent(url, warmup, client, parallelUrl);
-            }
+        CustomTabsServiceConnection connection =
+                new CustomTabsServiceConnection() {
+                    @Override
+                    public void onCustomTabsServiceConnected(
+                            ComponentName name, CustomTabsClient client) {
+                        launchChromeIntent(url, warmup, client, parallelUrl);
+                    }
 
-            @Override
-            public void onServiceDisconnected(ComponentName name) {}
-        };
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {}
+                };
         CustomTabsClient.bindCustomTabsService(this, DEFAULT_PACKAGE, connection);
     }
 
-    private static void maybePrepareParallelUrlRequest(String parallelUrl, CustomTabsClient client,
-            CustomTabsIntent intent, IBinder sessionBinder) {
+    private static void maybePrepareParallelUrlRequest(
+            String parallelUrl,
+            CustomTabsClient client,
+            CustomTabsIntent intent,
+            IBinder sessionBinder) {
         if (parallelUrl == null || parallelUrl.length() == 0) {
             Log.w(TAG, "null or empty parallelUrl");
             return;
@@ -236,44 +246,48 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private void launchChromeIntent(
             String url, boolean warmup, CustomTabsClient client, String parallelUrl) {
-        CustomTabsCallback callback = new CustomTabsCallback() {
-            private long mNavigationStartOffsetMs;
+        CustomTabsCallback callback =
+                new CustomTabsCallback() {
+                    private long mNavigationStartOffsetMs;
 
-            @Override
-            public void onNavigationEvent(int navigationEvent, Bundle extras) {
-                long offsetMs = now() - mIntentSentMs;
-                switch (navigationEvent) {
-                    case CustomTabsCallback.NAVIGATION_STARTED:
-                        mNavigationStartOffsetMs = offsetMs;
-                        Log.w(TAG, "navigationStarted = " + offsetMs);
-                        break;
-                    case CustomTabsCallback.NAVIGATION_FINISHED:
-                        Log.w(TAG, "navigationFinished = " + offsetMs);
-                        Log.w(TAG, "CHROME," + mNavigationStartOffsetMs + "," + offsetMs);
-                        break;
-                    default:
-                        break;
-                }
-            }
-        };
+                    @Override
+                    public void onNavigationEvent(int navigationEvent, Bundle extras) {
+                        long offsetMs = now() - mIntentSentMs;
+                        switch (navigationEvent) {
+                            case CustomTabsCallback.NAVIGATION_STARTED:
+                                mNavigationStartOffsetMs = offsetMs;
+                                Log.w(TAG, "navigationStarted = " + offsetMs);
+                                break;
+                            case CustomTabsCallback.NAVIGATION_FINISHED:
+                                Log.w(TAG, "navigationFinished = " + offsetMs);
+                                Log.w(TAG, "CHROME," + mNavigationStartOffsetMs + "," + offsetMs);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                };
         CustomTabsSession session = client.newSession(callback);
         final CustomTabsIntent customTabsIntent = new CustomTabsIntent.Builder(session).build();
         final Uri uri = Uri.parse(url);
 
-        IBinder sessionBinder = BundleCompat.getBinder(
-                customTabsIntent.intent.getExtras(), CustomTabsIntent.EXTRA_SESSION);
+        IBinder sessionBinder =
+                BundleCompat.getBinder(
+                        customTabsIntent.intent.getExtras(), CustomTabsIntent.EXTRA_SESSION);
         assert sessionBinder != null;
         maybePrepareParallelUrlRequest(parallelUrl, client, customTabsIntent, sessionBinder);
 
         if (warmup) {
             client.warmup(0);
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    mIntentSentMs = now();
-                    customTabsIntent.launchUrl(MainActivity.this, uri);
-                }
-            }, 3000);
+            mHandler.postDelayed(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            mIntentSentMs = now();
+                            customTabsIntent.launchUrl(MainActivity.this, uri);
+                        }
+                    },
+                    3000);
         } else {
             mIntentSentMs = now();
             customTabsIntent.launchUrl(MainActivity.this, uri);
@@ -284,9 +298,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         return System.currentTimeMillis();
     }
 
-    /**
-     * Holds the file and the range for pinning. Used only in the 'Pinning Benchmark' mode.
-     */
+    /** Holds the file and the range for pinning. Used only in the 'Pinning Benchmark' mode. */
     private static class PinInfo {
         public boolean pinningBenchmark;
         public String fileName;
@@ -324,9 +336,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
-    /** Start the second benchmark mode.
+    /**
+     * Start the second benchmark mode.
      *
-     * NOTE: Methods below are for the second mode.
+     * <p>NOTE: Methods below are for the second mode.
      */
     private void startCustomTabsBenchmark(Intent intent) {
         String url = intent.getStringExtra(URL_KEY);
@@ -350,8 +363,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
         if (!intent.getBooleanExtra("pinning_benchmark", false)) {
             pinInfo = new PinInfo();
         } else {
-            pinInfo = new PinInfo(true, intent.getStringExtra("pin_filename"),
-                    intent.getIntExtra("pin_offset", NONE), intent.getIntExtra("pin_length", NONE));
+            pinInfo =
+                    new PinInfo(
+                            true,
+                            intent.getStringExtra("pin_filename"),
+                            intent.getIntExtra("pin_offset", NONE),
+                            intent.getIntExtra("pin_length", NONE));
         }
         int extraBriefMemoryMb = intent.getIntExtra("extra_brief_memory_mb", 0);
 
@@ -369,8 +386,15 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
 
         final CustomCallback cb =
-                new CustomCallback(packageName, warmup, skipLauncherActivity, speculationMode,
-                        delayToMayLaunchUrl, delayToLaunchUrl, pinInfo, extraBriefMemoryMb);
+                new CustomCallback(
+                        packageName,
+                        warmup,
+                        skipLauncherActivity,
+                        speculationMode,
+                        delayToMayLaunchUrl,
+                        delayToLaunchUrl,
+                        pinInfo,
+                        extraBriefMemoryMb);
         launchCustomTabs(cb, new LaunchInfo(url, speculatedUrl, parallelUrl, timeoutSeconds));
     }
 
@@ -386,12 +410,19 @@ public class MainActivity extends Activity implements View.OnClickListener {
         public long pageLoadStartedMs = NONE;
         public long pageLoadFinishedMs = NONE;
         public long firstContentfulPaintMs = NONE;
+        public long largeContentfulPaintMs = NONE;
         public PinInfo pinInfo;
         public long extraBriefMemoryMb;
 
-        public CustomCallback(String packageName, boolean warmup, boolean skipLauncherActivity,
-                String speculationMode, int delayToMayLaunchUrl, int delayToLaunchUrl,
-                PinInfo pinInfo, long extraBriefMemoryMb) {
+        public CustomCallback(
+                String packageName,
+                boolean warmup,
+                boolean skipLauncherActivity,
+                String speculationMode,
+                int delayToMayLaunchUrl,
+                int delayToLaunchUrl,
+                PinInfo pinInfo,
+                long extraBriefMemoryMb) {
             this.packageName = packageName;
             this.warmup = warmup;
             this.skipLauncherActivity = skipLauncherActivity;
@@ -410,10 +441,19 @@ public class MainActivity extends Activity implements View.OnClickListener {
         public void onNavigationEvent(int navigationEvent, Bundle extras) {
             switch (navigationEvent) {
                 case CustomTabsCallback.NAVIGATION_STARTED:
+                    if (pageLoadStartedMs != NONE) return;
                     pageLoadStartedMs = SystemClock.uptimeMillis();
                     break;
                 case CustomTabsCallback.NAVIGATION_FINISHED:
+                    if (pageLoadFinishedMs != NONE) return;
                     pageLoadFinishedMs = SystemClock.uptimeMillis();
+                    mHandler.postDelayed(
+                            () -> {
+                                // In order to record LCP, we need to navigate away, so give a few
+                                // seconds to let LCP settle after page load finishes.
+                                mIntent.launchUrl(MainActivity.this, Uri.parse("about:blank"));
+                            },
+                            3000);
                     break;
                 default:
                     break;
@@ -433,26 +473,50 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 return;
             }
             long firstPaintMs = args.getLong("firstContentfulPaint", NONE);
+            long largePaintMs = args.getLong("largestContentfulPaint", NONE);
             long navigationStartMs = args.getLong("navigationStart", NONE);
-            if (firstPaintMs == NONE || navigationStartMs == NONE) return;
+            if ((firstPaintMs == NONE && largePaintMs == NONE) || navigationStartMs == NONE) return;
             // Can be reported several times, only record the first one.
-            if (firstContentfulPaintMs == NONE) {
+            if (firstContentfulPaintMs == NONE && firstPaintMs != NONE) {
                 firstContentfulPaintMs = navigationStartMs + firstPaintMs;
+            }
+            if (largeContentfulPaintMs == NONE && largePaintMs != NONE) {
+                largeContentfulPaintMs = navigationStartMs + largePaintMs;
             }
             if (allSet()) logMetricsAndFinish();
         }
 
         private boolean allSet() {
-            return intentSentMs != NONE && pageLoadStartedMs != NONE
-                    && firstContentfulPaintMs != NONE && pageLoadFinishedMs != NONE;
+            return intentSentMs != NONE
+                    && pageLoadStartedMs != NONE
+                    && firstContentfulPaintMs != NONE
+                    && pageLoadFinishedMs != NONE
+                    && largeContentfulPaintMs != NONE;
         }
 
         /** Outputs the available metrics, and die. Unavalaible metrics are set to -1. */
         private void logMetricsAndFinish() {
-            String logLine = (warmup ? "1" : "0") + "," + (skipLauncherActivity ? "1" : "0") + ","
-                    + speculationMode + "," + delayToMayLaunchUrl + "," + delayToLaunchUrl + ","
-                    + intentSentMs + "," + pageLoadStartedMs + "," + pageLoadFinishedMs + ","
-                    + firstContentfulPaintMs;
+            if (MainActivity.this.isFinishing()) return;
+            String logLine =
+                    (warmup ? "1" : "0")
+                            + ","
+                            + (skipLauncherActivity ? "1" : "0")
+                            + ","
+                            + speculationMode
+                            + ","
+                            + delayToMayLaunchUrl
+                            + ","
+                            + delayToLaunchUrl
+                            + ","
+                            + intentSentMs
+                            + ","
+                            + pageLoadStartedMs
+                            + ","
+                            + pageLoadFinishedMs
+                            + ","
+                            + firstContentfulPaintMs
+                            + ","
+                            + largeContentfulPaintMs;
             if (pinInfo.pinningBenchmark) {
                 logLine += ',' + extraBriefMemoryMb + ',' + pinInfo.length;
             }
@@ -463,12 +527,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         /** Same as {@link #logMetricsAndFinish()} with a set delay in ms. */
         public void logMetricsAndFinishDelayed(int delayMs) {
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    logMetricsAndFinish();
-                }
-            }, delayMs);
+            mHandler.postDelayed(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            logMetricsAndFinish();
+                        }
+                    },
+                    delayMs);
         }
     }
 
@@ -512,8 +578,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void logMemory(String packageName, String message) {
-        int[] pssAndPrivateDirty = getPackagePssAndPrivateDirty(
-                getApplicationContext(), packageName);
+        int[] pssAndPrivateDirty =
+                getPackagePssAndPrivateDirty(getApplicationContext(), packageName);
         if (pssAndPrivateDirty == null) return;
         Log.w(MEMORY_TAG, message + "," + pssAndPrivateDirty[0] + "," + pssAndPrivateDirty[1]);
     }
@@ -527,20 +593,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
         params.putBoolean("ignoreFragments", true);
         params.putBoolean("prerender", true);
 
-        int speculationModeValue;
-        switch (speculationMode) {
-            case "disabled":
-                speculationModeValue = NO_SPECULATION;
-                break;
-            case "prerender":
-                speculationModeValue = PRERENDER;
-                break;
-            case "hidden_tab":
-                speculationModeValue = HIDDEN_TAB;
-                break;
-            default:
-                throw new RuntimeException("Invalid speculation mode");
-        }
+        int speculationModeValue =
+                switch (speculationMode) {
+                    case "disabled" -> NO_SPECULATION;
+                    case "prerender" -> PRERENDER;
+                    case "hidden_tab" -> HIDDEN_TAB;
+                    default -> throw new RuntimeException("Invalid speculation mode");
+                };
         params.putInt("speculationMode", speculationModeValue);
 
         boolean ok = client.extraCommand(SET_PRERENDER_ON_CELLULAR, params) != null;
@@ -563,8 +622,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
         byte[] randomBytes = new byte[chunkSize];
         for (int i = 0; i < size / chunkSize; i++) {
             random.nextBytes(randomBytes);
-            System.arraycopy(randomBytes /* src */, 0 /* srcPos */, array /* dest */,
-                    i * chunkSize /* destPos */, chunkSize /* length */);
+            System.arraycopy(
+                    /* src= */ randomBytes,
+                    /* srcPos= */ 0,
+                    /* dest= */ array,
+                    /* destPos= */ i * chunkSize,
+                    /* length= */ chunkSize);
         }
         return array;
     }
@@ -583,8 +646,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
 
         try {
-            Method pinRangeFromFile = pinner.getClass().getMethod(
-                    "pinRangeFromFile", String.class, int.class, int.class);
+            Method pinRangeFromFile =
+                    pinner.getClass()
+                            .getMethod("pinRangeFromFile", String.class, int.class, int.class);
             boolean ok = (Boolean) pinRangeFromFile.invoke(pinner, fileName, startOffset, length);
             if (!ok) {
                 Log.e(TAG, "Not allowed to call the method, should not happen");
@@ -656,39 +720,41 @@ public class MainActivity extends Activity implements View.OnClickListener {
         logMemory(cb.packageName, "OnServiceConnected");
 
         final CustomTabsSession session = client.newSession(cb);
-        final CustomTabsIntent intent = (new CustomTabsIntent.Builder(session)).build();
+        mIntent = new CustomTabsIntent.Builder(session).build();
         IBinder sessionBinder =
-                BundleCompat.getBinder(intent.intent.getExtras(), CustomTabsIntent.EXTRA_SESSION);
+                BundleCompat.getBinder(mIntent.intent.getExtras(), CustomTabsIntent.EXTRA_SESSION);
         assert sessionBinder != null;
         forceSpeculationMode(client, sessionBinder, cb.speculationMode);
 
-        final Runnable launchRunnable = () -> {
-            logMemory(cb.packageName, "BeforeLaunch");
+        final Runnable launchRunnable =
+                () -> {
+                    logMemory(cb.packageName, "BeforeLaunch");
 
-            if (cb.warmupCompleted) {
-                maybePrepareParallelUrlRequest(
-                        launchInfo.parallelUrl, client, intent, sessionBinder);
-            } else {
-                Log.e(TAG, "not warmed up yet!");
-            }
+                    if (cb.warmupCompleted) {
+                        maybePrepareParallelUrlRequest(
+                                launchInfo.parallelUrl, client, mIntent, sessionBinder);
+                    } else {
+                        Log.e(TAG, "not warmed up yet!");
+                    }
 
-            intent.launchUrl(MainActivity.this, Uri.parse(launchInfo.url));
-            cb.recordIntentHasBeenSent();
-            if (launchInfo.timeoutSeconds != NONE) {
-                cb.logMetricsAndFinishDelayed(launchInfo.timeoutSeconds * 1000);
-            }
-        };
+                    mIntent.launchUrl(MainActivity.this, Uri.parse(launchInfo.url));
+                    cb.recordIntentHasBeenSent();
+                    if (launchInfo.timeoutSeconds != NONE) {
+                        cb.logMetricsAndFinishDelayed(launchInfo.timeoutSeconds * 1000);
+                    }
+                };
 
         if (cb.pinInfo.pinningBenchmark) {
             mHandler.post(launchRunnable); // Already waited for the delay.
         } else {
             if (cb.warmup) client.warmup(0);
             if (cb.delayToMayLaunchUrl != NONE) {
-                final Runnable mayLaunchRunnable = () -> {
-                    logMemory(cb.packageName, "BeforeMayLaunchUrl");
-                    session.mayLaunchUrl(Uri.parse(launchInfo.speculatedUrl), null, null);
-                    mHandler.postDelayed(launchRunnable, cb.delayToLaunchUrl);
-                };
+                final Runnable mayLaunchRunnable =
+                        () -> {
+                            logMemory(cb.packageName, "BeforeMayLaunchUrl");
+                            session.mayLaunchUrl(Uri.parse(launchInfo.speculatedUrl), null, null);
+                            mHandler.postDelayed(launchRunnable, cb.delayToLaunchUrl);
+                        };
                 mHandler.postDelayed(mayLaunchRunnable, cb.delayToMayLaunchUrl);
             } else {
                 mHandler.postDelayed(launchRunnable, cb.delayToLaunchUrl);
@@ -707,7 +773,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private void continueWithServiceConnection(
             final CustomCallback cb, final LaunchInfo launchInfo) {
         CustomTabsClient.bindCustomTabsService(
-                this, cb.packageName, new CustomTabsServiceConnection() {
+                this,
+                cb.packageName,
+                new CustomTabsServiceConnection() {
                     @Override
                     public void onCustomTabsServiceConnected(
                             ComponentName name, final CustomTabsClient client) {
@@ -723,26 +791,38 @@ public class MainActivity extends Activity implements View.OnClickListener {
         final PinInfo pinInfo = cb.pinInfo;
         if (!pinInfo.pinningBenchmark) {
             continueWithServiceConnection(cb, launchInfo);
-        } else {
-            // Execute off the UI thread to allow slow operations like pinning or eating RAM for
-            // dinner.
-            new Thread(() -> {
-                if (pinInfo.length > 0) {
-                    boolean ok = pinChrome(pinInfo.fileName, pinInfo.offset, pinInfo.length);
-                    if (!ok) throw new RuntimeException("Failed to pin Chrome file.");
-                } else {
-                    boolean ok = unpinChrome();
-                    if (!ok) throw new RuntimeException("Failed to unpin Chrome file.");
-                }
-                // Pinning is async, wait until hopefully it finishes.
-                syncSleepMs(3000);
-                if (cb.extraBriefMemoryMb != 0) {
-                    consumeExtraMemoryBriefly(cb.extraBriefMemoryMb);
-                }
-                Log.i(TAG, "Waiting for " + cb.delayToLaunchUrl + "ms before launching URL");
-                syncSleepMs(cb.delayToLaunchUrl);
-                continueWithServiceConnection(cb, launchInfo);
-            }).start();
+            return;
         }
+        // Execute off the UI thread to allow slow operations like pinning or eating RAM for
+        // dinner.
+        Thread thread =
+                new Thread(
+                        () -> {
+                            if (pinInfo.length > 0) {
+                                boolean ok =
+                                        pinChrome(pinInfo.fileName, pinInfo.offset, pinInfo.length);
+                                if (!ok) {
+                                    throw new RuntimeException("Failed to pin Chrome file.");
+                                }
+                            } else {
+                                boolean ok = unpinChrome();
+                                if (!ok) {
+                                    throw new RuntimeException("Failed to unpin Chrome file.");
+                                }
+                            }
+                            // Pinning is async, wait until hopefully it finishes.
+                            syncSleepMs(3000);
+                            if (cb.extraBriefMemoryMb != 0) {
+                                consumeExtraMemoryBriefly(cb.extraBriefMemoryMb);
+                            }
+                            Log.i(
+                                    TAG,
+                                    "Waiting for "
+                                            + cb.delayToLaunchUrl
+                                            + "ms before launching URL");
+                            syncSleepMs(cb.delayToLaunchUrl);
+                            continueWithServiceConnection(cb, launchInfo);
+                        });
+        thread.start();
     }
 }

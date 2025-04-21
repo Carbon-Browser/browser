@@ -1,11 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SPEECH_DOWNSTREAM_LOADER_CLIENT_H_
 #define COMPONENTS_SPEECH_DOWNSTREAM_LOADER_CLIENT_H_
-
-#include "base/strings/string_piece.h"
 
 namespace speech {
 
@@ -25,8 +23,7 @@ class DownstreamLoaderClient {
   friend class DownstreamLoader;
 
   // Executed when downstream data is received.
-  virtual void OnDownstreamDataReceived(
-      base::StringPiece new_response_data) = 0;
+  virtual void OnDownstreamDataReceived(std::string_view new_response_data) = 0;
 
   // Executed when downstream data is completed.
   // success: True on 2xx responses where the entire body was successfully

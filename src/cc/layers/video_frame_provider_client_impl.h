@@ -1,14 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_LAYERS_VIDEO_FRAME_PROVIDER_CLIENT_IMPL_H_
 #define CC_LAYERS_VIDEO_FRAME_PROVIDER_CLIENT_IMPL_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "cc/cc_export.h"
 #include "cc/layers/video_frame_provider.h"
 #include "cc/scheduler/video_frame_controller.h"
@@ -52,6 +55,7 @@ class CC_EXPORT VideoFrameProviderClientImpl
     provider_lock_.AssertAcquired();
   }
   bool HasCurrentFrame();
+  std::optional<base::TimeDelta> GetPreferredRenderInterval();
 
   // VideoFrameController implementation.
   void OnBeginFrame(const viz::BeginFrameArgs& args) override;

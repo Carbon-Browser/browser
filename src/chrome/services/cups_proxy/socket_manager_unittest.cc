@@ -1,23 +1,32 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include "chrome/services/cups_proxy/socket_manager.h"
 
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/services/cups_proxy/fake_cups_proxy_service_delegate.h"
 #include "chrome/services/cups_proxy/public/cpp/type_conversions.h"
-#include "chrome/services/cups_proxy/socket_manager.h"
 #include "chrome/services/cups_proxy/test/paths.h"
 #include "net/base/io_buffer.h"
 #include "net/socket/unix_domain_client_socket_posix.h"
@@ -26,14 +35,14 @@
 namespace cups_proxy {
 namespace {
 
-// Returns absl::nullopt on failure.
-absl::optional<std::string> GetTestFile(std::string test_name) {
+// Returns std::nullopt on failure.
+std::optional<std::string> GetTestFile(std::string test_name) {
   base::ScopedAllowBlockingForTesting allow_blocking;
 
   // Build file path.
   base::FilePath path;
   if (!base::PathService::Get(Paths::DIR_TEST_DATA, &path)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   path = path.Append(FILE_PATH_LITERAL(test_name))
@@ -42,7 +51,7 @@ absl::optional<std::string> GetTestFile(std::string test_name) {
   // Read in file contents.
   std::string contents;
   if (!base::ReadFileToString(path, &contents)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return contents;
@@ -70,8 +79,8 @@ class FakeSocket : public net::UnixDomainClientSocket {
   ~FakeSocket() override = default;
 
   // Saves expected request and corresponding response to send back.
-  void set_request(base::StringPiece request) { request_ = request; }
-  void set_response(base::StringPiece response) { response_ = response; }
+  void set_request(std::string_view request) { request_ = request; }
+  void set_response(std::string_view response) { response_ = response; }
 
   // Controls whether each method runs synchronously or asynchronously.
   void set_connect_async() { connect_async = true; }
@@ -95,7 +104,7 @@ class FakeSocket : public net::UnixDomainClientSocket {
     }
 
     // Async
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSocket::OnAsyncCallback, base::Unretained(this),
                        std::move(callback), net::OK));
@@ -120,7 +129,7 @@ class FakeSocket : public net::UnixDomainClientSocket {
     }
 
     // Async
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSocket::OnAsyncCallback, base::Unretained(this),
                        std::move(callback), num_to_read));
@@ -151,7 +160,7 @@ class FakeSocket : public net::UnixDomainClientSocket {
     }
 
     // Async
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSocket::OnAsyncCallback, base::Unretained(this),
                        std::move(callback), num_to_write));
@@ -166,7 +175,7 @@ class FakeSocket : public net::UnixDomainClientSocket {
  private:
   bool is_connected = false;
   bool connect_async = false, read_async = false, write_async = false;
-  base::StringPiece request_, response_;
+  std::string_view request_, response_;
 };
 
 class SocketManagerTest : public testing::Test {
@@ -210,7 +219,7 @@ class SocketManagerTest : public testing::Test {
   std::unique_ptr<FakeServiceDelegate> delegate_;
 
   // Not owned.
-  FakeSocket* socket_;
+  raw_ptr<FakeSocket> socket_;
 
   std::unique_ptr<SocketManager> manager_;
   base::WeakPtrFactory<SocketManagerTest> weak_factory_{this};
@@ -231,11 +240,11 @@ class SocketManagerTest : public testing::Test {
 // All socket accesses are resolved synchronously.
 TEST_F(SocketManagerTest, SyncEverything) {
   // Read request & response
-  absl::optional<std::string> http_handshake = GetTestFile("basic_handshake");
+  std::optional<std::string> http_handshake = GetTestFile("basic_handshake");
   EXPECT_TRUE(http_handshake);
 
   // Pre-load |socket_| with request/response.
-  // TODO(crbug.com/495409): Test with actual http response.
+  // TODO(crbug.com/41179657): Test with actual http response.
   socket_->set_request(*http_handshake);
   socket_->set_response(*http_handshake);
 

@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
+
+#include "build/build_config.h"
 
 namespace blink {
 
@@ -114,7 +116,7 @@ WebMouseWheelEvent WebMouseWheelEvent::FlattenTransform() const {
 WebMouseWheelEvent::EventAction
 WebMouseWheelEvent::GetPlatformSpecificDefaultEventAction(
     const WebMouseWheelEvent& event) {
-#if defined(USE_AURA)
+#if defined(USE_AURA) || BUILDFLAG(IS_ANDROID)
   // Scroll events generated from the mouse wheel when the control key is held
   // don't trigger scrolling. Instead, they may cause zooming.
   if (event.delta_units != ui::ScrollGranularity::kScrollByPrecisePixel &&

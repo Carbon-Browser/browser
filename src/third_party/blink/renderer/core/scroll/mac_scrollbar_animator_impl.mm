@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/scroll/mac_scrollbar_animator_impl.h"
 
+#import "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/scroll/scroll_animator.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_mac.h"
 #include "third_party/blink/renderer/platform/animation/timing_function.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
-#include "third_party/blink/renderer/platform/mac/block_exceptions.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 
 namespace blink {
@@ -121,9 +121,7 @@ int MacScrollbarImplV2::GetTrackBoxWidth() {
 }
 
 bool MacScrollbarImplV2::IsMouseInScrollbarFrameRect() const {
-  if (auto* area = scrollbar_->GetScrollableArea())
-    return scrollbar_->FrameRect().Contains(area->LastKnownMousePosition());
-  return false;
+  return scrollbar_->LastKnownMousePositionInFrameRect();
 }
 void MacScrollbarImplV2::SetHidden(bool hidden) {
   scrollbar_->SetScrollbarsHiddenFromExternalAnimator(hidden);

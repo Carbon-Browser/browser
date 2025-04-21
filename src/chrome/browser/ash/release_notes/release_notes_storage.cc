@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
@@ -25,10 +25,6 @@
 
 namespace {
 
-// This stores the latest milestone with new Release Notes content. If the last
-// milestone the user has seen the notification is before this, a new
-// notification will be shown.
-constexpr int kLastChromeVersionWithReleaseNotes = 105;
 constexpr int kTimesToShowSuggestionChip = 3;
 
 int GetMilestone() {
@@ -73,6 +69,7 @@ bool ShouldShowForCurrentChannel() {
 
 namespace ash {
 
+// Called on every session startup.
 void ReleaseNotesStorage::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(
       prefs::kReleaseNotesSuggestionChipTimesLeftToShow, 0);
@@ -85,8 +82,14 @@ ReleaseNotesStorage::~ReleaseNotesStorage() = default;
 
 bool ReleaseNotesStorage::ShouldNotify() {
   // TODO(b/174514401): Make this server controlled.
-  if (!ShouldShowForCurrentChannel())
+  if (base::FeatureList::IsEnabled(
+          ash::features::kReleaseNotesNotificationAlwaysEligible)) {
+    return true;
+  }
+
+  if (!ShouldShowForCurrentChannel()) {
     return false;
+  }
 
   if (!IsEligibleProfile(profile_))
     return false;
@@ -109,18 +112,15 @@ bool ReleaseNotesStorage::ShouldNotify() {
 void ReleaseNotesStorage::MarkNotificationShown() {
   profile_->GetPrefs()->SetInteger(
       prefs::kHelpAppNotificationLastShownMilestone, GetMilestone());
-  // When the notification is shown we should also show the suggestion chip a
-  // number of times.
+}
+
+void ReleaseNotesStorage::StartShowingSuggestionChip() {
   profile_->GetPrefs()->SetInteger(
       prefs::kReleaseNotesSuggestionChipTimesLeftToShow,
       kTimesToShowSuggestionChip);
 }
 
 bool ReleaseNotesStorage::ShouldShowSuggestionChip() {
-  if (!base::FeatureList::IsEnabled(features::kReleaseNotesSuggestionChip)) {
-    return false;
-  }
-
   const int times_left_to_show = profile_->GetPrefs()->GetInteger(
       prefs::kReleaseNotesSuggestionChipTimesLeftToShow);
   return times_left_to_show > 0;

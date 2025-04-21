@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/surrounding_text.h"
 
 #include <memory>
+
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/range.h"
@@ -15,10 +16,12 @@
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
+#include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
-class SurroundingTextTest : public testing::Test {
+class SurroundingTextTest : public PageTestBase {
  protected:
   Document& GetDocument() const { return dummy_page_holder_->GetDocument(); }
   void SetHTML(const String&);
@@ -41,7 +44,7 @@ void SurroundingTextTest::SetHTML(const String& content) {
 }
 
 EphemeralRange SurroundingTextTest::Select(int start, int end) {
-  Element* element = GetDocument().getElementById("selection");
+  Element* element = GetDocument().getElementById(AtomicString("selection"));
   return EphemeralRange(Position(element->firstChild(), start),
                         Position(element->firstChild(), end));
 }
@@ -288,7 +291,7 @@ TEST_F(SurroundingTextTest, TextAreaSelection) {
              "<p>Second paragraph</p>"));
 
   TextControlElement* text_ctrl = reinterpret_cast<TextControlElement*>(
-      GetDocument().getElementById("selection"));
+      GetDocument().getElementById(AtomicString("selection")));
 
   text_ctrl->SetSelectionRange(4, 7);
   EphemeralRange selection = text_ctrl->Selection().ComputeRange();
@@ -305,7 +308,7 @@ TEST_F(SurroundingTextTest, EmptyInputElementWithChild) {
   SetHTML(String("<input type=\"text\" id=\"input_name\"/>"));
 
   TextControlElement* input_element = reinterpret_cast<TextControlElement*>(
-      GetDocument().getElementById("input_name"));
+      GetDocument().getElementById(AtomicString("input_name")));
   input_element->SetInnerEditorValue("John Smith");
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
@@ -321,7 +324,7 @@ TEST_F(SurroundingTextTest, EmptyInputElementWithChild) {
 
   // Surrounding text should not crash. See http://crbug.com/758438.
   SurroundingText surrounding_text(EphemeralRange(start, end), 8);
-  EXPECT_TRUE(surrounding_text.TextContent().IsEmpty());
+  EXPECT_TRUE(surrounding_text.TextContent().empty());
 }
 
 TEST_F(SurroundingTextTest, ButtonsAndParagraph) {
@@ -352,7 +355,7 @@ TEST_F(SurroundingTextTest, ButtonsAndParagraph) {
     EphemeralRange selection = Select(0);
     SurroundingText surrounding_text(selection, 0);
 
-    EXPECT_TRUE(surrounding_text.TextContent().IsEmpty());
+    EXPECT_TRUE(surrounding_text.TextContent().empty());
   }
 
   {
@@ -443,14 +446,14 @@ TEST_F(SurroundingTextTest, EmptySurroundingTextInOptionsAndButton) {
     EphemeralRange selection = Select(1);
     SurroundingText surrounding_text(selection, 100);
 
-    EXPECT_TRUE(surrounding_text.TextContent().IsEmpty());
+    EXPECT_TRUE(surrounding_text.TextContent().empty());
   }
 
   {
     EphemeralRange selection = Select(3);
     SurroundingText surrounding_text(selection, 100);
 
-    EXPECT_TRUE(surrounding_text.TextContent().IsEmpty());
+    EXPECT_TRUE(surrounding_text.TextContent().empty());
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/network/client_cert_util.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
+#include "chromeos/ash/components/network/text_message_suppression_state.h"
 #include "components/onc/onc_constants.h"
 
 namespace base {
 class Value;
 }  // namespace base
 
-namespace chromeos {
+namespace ash {
 
 class NetworkConfigurationHandler;
 class NetworkDeviceHandler;
@@ -95,9 +96,16 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // will be merged with the existing settings, and it won't clear any existing
   // properties.
   virtual void SetProperties(const std::string& service_path,
-                             const base::Value& user_settings,
+                             const base::Value::Dict& user_settings,
                              base::OnceClosure callback,
                              network_handler::ErrorCallback error_callback) = 0;
+
+  // Clears Shill properties in |names| of a network with |service_path|.
+  virtual void ClearShillProperties(
+      const std::string& service_path,
+      const std::vector<std::string>& names,
+      base::OnceClosure callback,
+      network_handler::ErrorCallback error_callback) = 0;
 
   // Initially configures an unconfigured network with the given user settings
   // and returns the new identifier to |callback| if successful. Fails if the
@@ -106,7 +114,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // |userhash| is empty, the new configuration will be shared.
   virtual void CreateConfiguration(
       const std::string& userhash,
-      const base::Value& properties,
+      const base::Value::Dict& properties,
       network_handler::ServiceResultCallback callback,
       network_handler::ErrorCallback error_callback) const = 0;
 
@@ -115,7 +123,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // before calling this method. |callback| will be called after the
   // configuration update has been reflected in NetworkStateHandler, or on
   // error. This fires OnPolicyApplied notification on success.
-  virtual void ConfigurePolicyNetwork(const base::Value& shill_properties,
+  virtual void ConfigurePolicyNetwork(const base::Value::Dict& shill_properties,
                                       base::OnceClosure callback) const = 0;
 
   // Removes the user's configuration from the network with |service_path|. The
@@ -143,8 +151,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // again with this function. For device policies, |userhash| must be empty.
   virtual void SetPolicy(::onc::ONCSource onc_source,
                          const std::string& userhash,
-                         const base::Value& network_configs_onc,
-                         const base::Value& global_network_config) = 0;
+                         const base::Value::List& network_configs_onc,
+                         const base::Value::Dict& global_network_config) = 0;
 
   // Returns true if any policy application is currently running or pending.
   // NetworkPolicyObservers are notified about applications finishing.
@@ -170,10 +178,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // Returns the user policy for user |userhash| or device policy, which has
   // |guid|. If |userhash| is empty, only looks for a device policy. If such
   // doesn't exist, returns NULL. Sets |onc_source| accordingly.
-  virtual const base::Value* FindPolicyByGUID(
+  virtual const base::Value::Dict* FindPolicyByGUID(
       const std::string userhash,
       const std::string& guid,
       ::onc::ONCSource* onc_source) const = 0;
+
+  // Calls GetProperties and runs ResetDNSPropertiesCallback as the primary
+  // callback, changes the NameServersConfigType ONC property to be
+  // automatically set by DHCP and applies it to a specific network device.
+  virtual void ResetDNSProperties(const std::string& service_path) = 0;
 
   // Returns true if the user policy for |userhash| or device policy if
   // |userhash| is empty has any policy-configured network.
@@ -182,13 +195,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
 
   // Returns the global configuration of the policy of user |userhash| or device
   // policy if |userhash| is empty.
-  virtual const base::Value* GetGlobalConfigFromPolicy(
+  virtual const base::Value::Dict* GetGlobalConfigFromPolicy(
       const std::string& userhash) const = 0;
 
   // Returns the policy with |guid| for profile |profile_path|. If such
   // doesn't exist, returns nullptr. Sets |onc_source| and |userhash|
   // accordingly if it is not nullptr.
-  virtual const base::Value* FindPolicyByGuidAndProfile(
+  virtual const base::Value::Dict* FindPolicyByGuidAndProfile(
       const std::string& guid,
       const std::string& profile_path,
       PolicyType policy_type,
@@ -217,8 +230,18 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // installed from policy. The network list should be updated at this point.
   virtual void OnCellularPoliciesApplied(const NetworkProfile& profile) = 0;
 
+  // Triggers performing tasks to wipe network configuration elements marked as
+  // ephemeral by device policy.
+  virtual void TriggerEphemeralNetworkConfigActions() = 0;
+
+  // Return true if AllowAPNModification policy is enabled.
+  virtual bool AllowApnModification() const = 0;
+
   // Return true if AllowCellularSimLock policy is enabled.
   virtual bool AllowCellularSimLock() const = 0;
+
+  // Return true if AllowCellularHotspot policy is enabled.
+  virtual bool AllowCellularHotspot() const = 0;
 
   // Return true if AllowOnlyPolicyCellularNetworks policy is enabled.
   virtual bool AllowOnlyPolicyCellularNetworks() const = 0;
@@ -233,8 +256,28 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
   // Return true if the AllowOnlyPolicyNetworksToAutoconnect policy is enabled.
   virtual bool AllowOnlyPolicyNetworksToAutoconnect() const = 0;
 
+  // Return true if the RecommendedValuesAreEphemeral policy is enabled.
+  virtual bool RecommendedValuesAreEphemeral() const = 0;
+
+  // Return true if the UserCreatedNetworkConfigurationsAreEphemeral policy is
+  // enabled.
+  virtual bool UserCreatedNetworkConfigurationsAreEphemeral() const = 0;
+
+  // Return true if the following user prefs exist and meet the following
+  // conditions: `arc::prefs::kAlwaysOnVpnPackage` is non-empty,
+  // `arc::prefs::kAlwaysOnVpnLockdown` is true, and `prefs::kVpnConfigAllowed`
+  // is false.
+  virtual bool IsProhibitedFromConfiguringVpn() const = 0;
+
+  // Returns the value for the AllowTextMessages policy.
+  virtual PolicyTextMessageSuppressionState GetAllowTextMessages() const = 0;
+
   // Return the list of blocked WiFi networks (identified by HexSSIDs).
   virtual std::vector<std::string> GetBlockedHexSSIDs() const = 0;
+
+  // Called after either secure DNS status or deviceReportXDREvents policy is
+  // updated.
+  virtual void OnEnterpriseMonitoredWebPoliciesApplied() const = 0;
 
   // Called just before destruction to give observers a chance to remove
   // themselves and disable any networking.
@@ -249,12 +292,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedNetworkConfigurationHandler {
       UIProxyConfigService* ui_proxy_config_service);
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::ManagedNetworkConfigurationHandler;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_MANAGED_NETWORK_CONFIGURATION_HANDLER_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,11 +95,12 @@ TEST(SecureDnsUtil, MakeProbeRunner) {
   EXPECT_EQ(doh_config, overrides.dns_over_https_config);
 }
 
+BASE_FEATURE(kDohProviderFeatureForProvider_Global1,
+             "DohProviderFeatureForProvider_Global1",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 const auto kProviderGlobal1 = net::DohProviderEntry::ConstructForTesting(
     "Provider_Global1",
-    base::Feature("DohProviderFeatureForProvider_Global1",
-                  base::FEATURE_ENABLED_BY_DEFAULT),
-    net::DohProviderIdForHistogram{-1},
+    &kDohProviderFeatureForProvider_Global1,
     /*ip_strs=*/{},
     /*dns_over_tls_hostnames=*/{},
     "https://global1.provider/dns-query{?dns}",
@@ -107,11 +108,12 @@ const auto kProviderGlobal1 = net::DohProviderEntry::ConstructForTesting(
     /*privacy_policy=*/"https://global1.provider/privacy_policy/",
     /*display_globally=*/true,
     /*display_countries=*/{});
+BASE_FEATURE(kDohProviderFeatureForProvider_NoDisplay,
+             "DohProviderFeatureForProvider_NoDisplay",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 const auto kProviderNoDisplay = net::DohProviderEntry::ConstructForTesting(
     "Provider_NoDisplay",
-    base::Feature("DohProviderFeatureForProvider_NoDisplay",
-                  base::FEATURE_ENABLED_BY_DEFAULT),
-    net::DohProviderIdForHistogram{-2},
+    &kDohProviderFeatureForProvider_NoDisplay,
     /*ip_strs=*/{},
     /*dns_over_tls_hostnames=*/{},
     "https://nodisplay.provider/dns-query{?dns}",
@@ -119,11 +121,12 @@ const auto kProviderNoDisplay = net::DohProviderEntry::ConstructForTesting(
     /*privacy_policy=*/"https://nodisplay.provider/privacy_policy/",
     /*display_globally=*/false,
     /* display_countries */ {});
+BASE_FEATURE(kDohProviderFeatureForProvider_EE_FR,
+             "DohProviderFeatureForProvider_EE_FR",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 const auto kProviderEeFrDisabled = net::DohProviderEntry::ConstructForTesting(
     "Provider_EE_FR",
-    base::Feature("DohProviderFeatureForProvider_EE_FR",
-                  base::FEATURE_DISABLED_BY_DEFAULT),
-    net::DohProviderIdForHistogram{-3},
+    &kDohProviderFeatureForProvider_EE_FR,
     /*ip_strs=*/{},
     /*dns_over_tls_hostnames=*/{},
     "https://ee.fr.provider/dns-query{?dns}",
@@ -131,11 +134,12 @@ const auto kProviderEeFrDisabled = net::DohProviderEntry::ConstructForTesting(
     /*privacy_policy=*/"https://ee.fr.provider/privacy_policy/",
     /*display_globally=*/false,
     /*display_countries=*/{"EE", "FR"});
+BASE_FEATURE(kDohProviderFeatureForProvider_FR,
+             "DohProviderFeatureForProvider_FR",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 const auto kProviderFr = net::DohProviderEntry::ConstructForTesting(
-    "Provider_FR",
-    base::Feature("DohProviderFeatureForProvider_FR",
-                  base::FEATURE_ENABLED_BY_DEFAULT),
-    net::DohProviderIdForHistogram{-4},
+    "provider_FR",
+    &kDohProviderFeatureForProvider_FR,
     /*ip_strs=*/{},
     /*dns_over_tls_hostnames=*/{},
     "https://fr.provider/dns-query{?dns}",
@@ -143,11 +147,12 @@ const auto kProviderFr = net::DohProviderEntry::ConstructForTesting(
     /*privacy_policy=*/"https://fr.provider/privacy_policy/",
     /*display_globally=*/false,
     /*display_countries=*/{"FR"});
+BASE_FEATURE(kDohProviderFeatureForProvider_Global2,
+             "DohProviderFeatureForProvider_Global2",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 const auto kProviderGlobal2 = net::DohProviderEntry::ConstructForTesting(
     "Provider_Global2",
-    base::Feature("DohProviderFeatureForProvider_Global2",
-                  base::FEATURE_ENABLED_BY_DEFAULT),
-    net::DohProviderIdForHistogram{-5},
+    &kDohProviderFeatureForProvider_Global2,
     /*ip_strs=*/{},
     /*dns_over_tls_hostnames=*/{},
     "https://global2.provider/dns-query{?dns}",
@@ -155,12 +160,13 @@ const auto kProviderGlobal2 = net::DohProviderEntry::ConstructForTesting(
     /*privacy_policy=*/"https://global2.provider/privacy_policy/",
     /*display_globally=*/true,
     /*display_countries=*/{});
+BASE_FEATURE(kDohProviderFeatureForProvider_Global3,
+             "DohProviderFeatureForProvider_Global3",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 const auto kProviderGlobal3Disabled =
     net::DohProviderEntry::ConstructForTesting(
         "Provider_Global3",
-        base::Feature("DohProviderFeatureForProvider_Global3",
-                      base::FEATURE_DISABLED_BY_DEFAULT),
-        net::DohProviderIdForHistogram{-6},
+        &kDohProviderFeatureForProvider_Global3,
         /*ip_strs=*/{},
         /*dns_over_tls_hostnames=*/{},
         "https://global3.provider/dns-query{?dns}",
@@ -213,63 +219,6 @@ TEST(SecureDnsUtil, SelectEnabledProviders) {
   EXPECT_THAT(SelectEnabledProviders(GetProvidersForTesting()),
               testing::ElementsAre(&kProviderGlobal1, &kProviderNoDisplay,
                                    &kProviderFr, &kProviderGlobal2));
-}
-
-TEST(SecureDnsUtil, UpdateDropdownHistograms) {
-  base::HistogramTester histograms;
-
-  UpdateDropdownHistograms(
-      /*providers=*/GetProvidersForTesting(),
-      /*old_config=*/kProviderGlobal2.doh_server_config.server_template_piece(),
-      /*new_config=*/kProviderFr.doh_server_config.server_template_piece());
-
-  const std::string kUmaBase = "Net.DNS.UI.DropdownSelectionEvent";
-  histograms.ExpectTotalCount(kUmaBase + ".Ignored", 5u);
-  histograms.ExpectTotalCount(kUmaBase + ".Selected", 1u);
-  histograms.ExpectTotalCount(kUmaBase + ".Unselected", 1u);
-}
-
-TEST(SecureDnsUtil, UpdateDropdownHistogramsSameSelection) {
-  base::HistogramTester histograms;
-
-  UpdateDropdownHistograms(
-      /*providers=*/GetProvidersForTesting(),
-      /*old_config=*/kProviderGlobal2.doh_server_config.server_template_piece(),
-      /*new_config=*/
-      kProviderGlobal2.doh_server_config.server_template_piece());
-
-  const std::string kUmaBase = "Net.DNS.UI.DropdownSelectionEvent";
-  histograms.ExpectTotalCount(kUmaBase + ".Ignored", 6u);
-  histograms.ExpectTotalCount(kUmaBase + ".Selected", 0u);
-  histograms.ExpectTotalCount(kUmaBase + ".Unselected", 1u);
-}
-
-TEST(SecureDnsUtil, UpdateDropdownHistogramsCustom) {
-  base::HistogramTester histograms;
-
-  UpdateDropdownHistograms(
-      /*providers=*/GetProvidersForTesting(),
-      /*old_config=*/base::StringPiece(),
-      /*new_config=*/kProviderFr.doh_server_config.server_template_piece());
-
-  const std::string kUmaBase = "Net.DNS.UI.DropdownSelectionEvent";
-  histograms.ExpectTotalCount(kUmaBase + ".Ignored", 5u);
-  histograms.ExpectTotalCount(kUmaBase + ".Selected", 1u);
-  histograms.ExpectTotalCount(kUmaBase + ".Unselected", 1u);
-}
-
-TEST(SecureDnsUtil, UpdateDropdownHistogramsCustomToCustom) {
-  base::HistogramTester histograms;
-
-  UpdateDropdownHistograms(
-      /*providers=*/GetProvidersForTesting(),
-      /*old_config=*/base::StringPiece(),
-      /*new_config=*/base::StringPiece());
-
-  const std::string kUmaBase = "Net.DNS.UI.DropdownSelectionEvent";
-  histograms.ExpectTotalCount(kUmaBase + ".Ignored", 6u);
-  histograms.ExpectTotalCount(kUmaBase + ".Selected", 0u);
-  histograms.ExpectTotalCount(kUmaBase + ".Unselected", 1u);
 }
 
 }  // namespace chrome_browser_net::secure_dns

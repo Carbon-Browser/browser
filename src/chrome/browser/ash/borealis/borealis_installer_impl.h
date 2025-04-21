@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/time/time.h"
+#include "base/types/expected.h"
 #include "chrome/browser/ash/borealis/borealis_installer.h"
 #include "chrome/browser/ash/borealis/borealis_metrics.h"
+#include "chrome/browser/ash/borealis/borealis_types.mojom-forward.h"
 #include "chrome/browser/ash/borealis/infra/described.h"
-#include "chrome/browser/ash/borealis/infra/expected.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
 
 class Profile;
 
@@ -21,8 +21,9 @@ namespace borealis {
 
 // This class is responsible for installing the Borealis VM. Currently
 // the only installation requirements for Borealis is to install the
-// relevant DLC component. The installer works with closesly with
-// chrome/browser/ui/views/borealis/borealis_installer_view.h.
+// relevant DLC component. The installer works closely with
+// chrome/browser/ui/webui/ash/borealis_installer/
+// borealis_installer_page_handler.cc.
 class BorealisInstallerImpl : public BorealisInstaller {
  public:
   explicit BorealisInstallerImpl(Profile* profile);
@@ -46,9 +47,6 @@ class BorealisInstallerImpl : public BorealisInstaller {
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
 
-  // Override the timeout to wait for the main app to appear.
-  void SetMainAppTimeoutForTesting(base::TimeDelta timeout);
-
  private:
   // Holds information about (un)install operations.
   struct InstallInfo {
@@ -64,21 +62,20 @@ class BorealisInstallerImpl : public BorealisInstaller {
   void UpdateInstallingState(InstallingState installing_state);
 
   void OnInstallComplete(
-      Expected<std::unique_ptr<InstallInfo>, Described<BorealisInstallResult>>
-          result_or_error);
+      base::expected<std::unique_ptr<InstallInfo>,
+                     Described<mojom::InstallResult>> result_or_error);
   void OnUninstallComplete(
       base::OnceCallback<void(BorealisUninstallResult)> on_uninstall_callback,
-      Expected<std::unique_ptr<InstallInfo>, BorealisUninstallResult> result);
+      base::expected<std::unique_ptr<InstallInfo>, BorealisUninstallResult>
+          result);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   base::ObserverList<Observer> observers_;
 
   InstallingState installing_state_;
 
   std::unique_ptr<Installation> in_progress_installation_;
   std::unique_ptr<Uninstallation> in_progress_uninstallation_;
-
-  base::TimeDelta main_app_timeout_;
 
   base::WeakPtrFactory<BorealisInstallerImpl> weak_ptr_factory_;
 };

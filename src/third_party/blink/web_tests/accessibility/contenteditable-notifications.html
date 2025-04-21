@@ -13,10 +13,16 @@
 async_test((t) => {
   const textbox = document.getElementById('textbox');
   const axTextBox = accessibilityController.accessibleElementById('textbox');
+  const axRoot = accessibilityController.rootElement;
   let valueChangedCount = 0;
   let selectedTextChangedCount = 0;
   const expectedValueChangedIntents = [];
   const expectedSelectedTextChangedIntents = [];
+
+  function checkAllNotificationsReceived() {
+    if (valueChangedCount >= 5 && selectedTextChangedCount >= 11)
+      t.done();
+  }
 
   axTextBox.setNotificationListener(t.step_func((notification, intents) => {
     if (notification == 'ValueChanged') {
@@ -24,16 +30,21 @@ async_test((t) => {
                           expectedValueChangedIntents[valueChangedCount],
                           'ValueChanged at ' + valueChangedCount);
       ++valueChangedCount;
-    } else if (notification == 'SelectedTextChanged') {
+    }
+
+    checkAllNotificationsReceived();
+  }));
+
+  axRoot.setNotificationListener(t.step_func((notification, intents) => {
+    if (notification == 'DocumentSelectionChanged') {
+      // These are no longer fired for contenteditables.
       assert_array_equals(intents,
                           expectedSelectedTextChangedIntents[selectedTextChangedCount],
-                          'SelectedTextChanged at ' + selectedTextChangedCount);
+                          'DocumentSelectionChanged at ' + selectedTextChangedCount);
       ++selectedTextChangedCount;
     }
 
-    if (valueChangedCount >= 6 && selectedTextChangedCount >= 11) {
-      t.done();
-    }
+    checkAllNotificationsReceived();
   }));
 
   // SelectedTextChanged at 0.
@@ -71,8 +82,8 @@ async_test((t) => {
   ]);
   // SelectedTextChanged at 4.
   expectedSelectedTextChangedIntents.push([
-    'AXEventIntent(setSelection,none,character,forward)',
-    'AXEventIntent(insert,insertText,none,none)'
+    'AXEventIntent(insert,insertText,none,none)',
+    'AXEventIntent(setSelection,none,character,forward)'
   ]);
   eventSender.keyDown('x', []);
 
@@ -100,8 +111,8 @@ async_test((t) => {
   ]);
   // SelectedTextChanged at 7.
   expectedSelectedTextChangedIntents.push([
-    'AXEventIntent(setSelection,none,character,forward)',
-    'AXEventIntent(insert,insertText,none,none)'
+    'AXEventIntent(insert,insertText,none,none)',
+    'AXEventIntent(setSelection,none,character,forward)'
   ]);
   eventSender.keyDown('y', []);
 
@@ -111,10 +122,6 @@ async_test((t) => {
   ]);
   eventSender.keyDown('ArrowUp', []);
 
-  // ValueChanged at 4.
-  expectedValueChangedIntents.push([
-    'AXEventIntent(insert,insertParagraph,none,none)'
-  ]);
   // SelectedTextChanged at 9.
   expectedSelectedTextChangedIntents.push([
     'AXEventIntent(insert,insertParagraph,none,none)',
@@ -122,14 +129,14 @@ async_test((t) => {
   ]);
   eventSender.keyDown('Enter', []);
 
-  // ValueChanged at 5.
+  // ValueChanged at 4.
   expectedValueChangedIntents.push([
     'AXEventIntent(delete,deleteContentBackward,none,none)',
   ]);
   // SelectedTextChanged at 10.
   expectedSelectedTextChangedIntents.push([
-    'AXEventIntent(setSelection,none,character,forward)',
     'AXEventIntent(delete,deleteContentBackward,none,none)',
+    'AXEventIntent(setSelection,none,character,forward)',
   ]);
   eventSender.keyDown('Backspace', []);
 }, 'Ensures that moving the cursor in a contentEditable sends a selected text change notification, and typing in a contentEditable sends both a value changed and selected text changed notification.');

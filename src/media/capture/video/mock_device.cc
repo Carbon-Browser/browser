@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,9 @@ void MockDevice::SendStubFrame(const media::VideoCaptureFormat& format,
       static_cast<int>(media::VideoFrame::AllocationSize(
           stub_frame->format(), stub_frame->coded_size())),
       format, gfx::ColorSpace(), rotation, false /* flip_y */,
-      base::TimeTicks(), base::TimeDelta(), frame_feedback_id);
+      base::TimeTicks(), base::TimeDelta(),
+      /*capture_begin_timestamp=*/std::nullopt,
+      /*metadata=*/std::nullopt, frame_feedback_id);
 }
 
 void MockDevice::SendOnStarted() {

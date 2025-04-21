@@ -1,19 +1,24 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/image_annotation/public/cpp/image_processor.h"
 
 #include <cmath>
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "services/image_annotation/image_annotation_metrics.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/skia/src/core/SkEndian.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 namespace image_annotation {
@@ -42,9 +47,8 @@ SkBitmap GenCheckerboardBitmap(const int dim) {
       uint8_t* const byte_pos =
           pixels + row * out.rowBytes() + col * out.bytesPerPixel();
 
-      // RGBA refers to big endian ordering.
       *reinterpret_cast<uint32_t*>(byte_pos) =
-          black ? SkEndian_SwapBE32(0x000000FF) : 0xFFFFFFFF;
+          black ? SK_ColorBLACK : SK_ColorWHITE;
     }
   }
 
@@ -79,12 +83,11 @@ void OutputImageError(double* const error,
                       const std::vector<uint8_t>& result,
                       const int32_t width,
                       const int32_t height) {
-  const std::unique_ptr<SkBitmap> comp =
-      gfx::JPEGCodec::Decode(result.data(), result.size());
-  CHECK(comp);
+  SkBitmap comp = gfx::JPEGCodec::Decode(result);
+  CHECK(!comp.isNull());
 
   *error = width == expected.width() && height == expected.height()
-               ? CalcImageError(expected, *comp)
+               ? CalcImageError(expected, comp)
                : std::numeric_limits<double>::infinity();
 }
 

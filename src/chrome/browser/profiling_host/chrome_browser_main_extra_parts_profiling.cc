@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/profiling_host/chrome_browser_main_extra_parts_profiling.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiling_host/chrome_client_connection_manager.h"
 #include "chrome/browser/profiling_host/profiling_process_host.h"
 #include "chrome/common/chrome_switches.h"

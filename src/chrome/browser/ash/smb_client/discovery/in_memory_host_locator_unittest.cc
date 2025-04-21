@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,10 @@
 #include <map>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -156,5 +155,4 @@ TEST_F(InMemoryHostLocatorTest, AddHostsShouldKeepPreviousHostsAndOverwrite) {
   ExpectHostMapEqual(expected);
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

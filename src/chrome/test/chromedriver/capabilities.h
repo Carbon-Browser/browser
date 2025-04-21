@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -20,7 +21,9 @@
 #include "chrome/test/chromedriver/chrome/device_metrics.h"
 #include "chrome/test/chromedriver/chrome/devtools_http_client.h"
 #include "chrome/test/chromedriver/chrome/log.h"
+#include "chrome/test/chromedriver/chrome/mobile_device.h"
 #include "chrome/test/chromedriver/net/net_util.h"
+#include "chrome/test/chromedriver/prompt_behavior.h"
 #include "chrome/test/chromedriver/session.h"
 
 namespace base {
@@ -99,8 +102,11 @@ struct Capabilities {
 
   // Accepts all W3C defined capabilities
   // and all ChromeDriver-specific extensions.
-  Status Parse(const base::DictionaryValue& desired_caps,
+  Status Parse(const base::Value::Dict& desired_caps,
                bool w3c_compliant = true);
+
+  // Migrate capabilities to maintain backward compatibility.
+  Status MigrateCapabilities();
 
   //
   // W3C defined capabilities
@@ -119,10 +125,12 @@ struct Capabilities {
   base::TimeDelta script_timeout = Session::kDefaultScriptTimeout;
   base::TimeDelta page_load_timeout = Session::kDefaultPageLoadTimeout;
   base::TimeDelta implicit_wait_timeout = Session::kDefaultImplicitWaitTimeout;
+  base::TimeDelta browser_startup_timeout =
+      Session::kDefaultBrowserStartupTimeout;
 
   bool strict_file_interactability;
 
-  std::string unhandled_prompt_behavior;
+  std::optional<PromptBehavior> unhandled_prompt_behavior;
 
   //
   // ChromeDriver specific capabilities
@@ -146,6 +154,8 @@ struct Capabilities {
 
   int android_devtools_port = 0;
 
+  bool enable_extension_targets = false;
+
   base::FilePath binary;
 
   // If provided, the remote debugging address to connect to.
@@ -156,8 +166,7 @@ struct Capabilities {
   // ChromeDriver dies.
   bool detach;
 
-  // Device metrics for use in Device Emulation.
-  std::unique_ptr<DeviceMetrics> device_metrics;
+  std::optional<MobileDevice> mobile_device;
 
   // Set of switches which should be removed from default list when launching
   // Chrome.
@@ -168,7 +177,7 @@ struct Capabilities {
   // Time to wait for extension background page to appear. If 0, no waiting.
   base::TimeDelta extension_load_timeout;
 
-  std::unique_ptr<base::DictionaryValue> local_state;
+  std::unique_ptr<base::Value::Dict> local_state;
 
   std::string log_path;
 
@@ -183,16 +192,16 @@ struct Capabilities {
 
   base::Value devtools_events_logging_prefs;
 
-  std::unique_ptr<base::DictionaryValue> prefs;
+  std::unique_ptr<base::Value::Dict> prefs;
 
   Switches switches;
 
   std::set<WebViewInfo::Type> window_types;
 
-  bool webSocketUrl = false;
+  bool web_socket_url = false;
 };
 
-bool GetChromeOptionsDictionary(const base::DictionaryValue& params,
-                                const base::DictionaryValue** out);
+bool GetChromeOptionsDictionary(const base::Value::Dict& params,
+                                const base::Value::Dict** out);
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CAPABILITIES_H_

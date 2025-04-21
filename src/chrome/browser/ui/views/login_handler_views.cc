@@ -1,33 +1,31 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/login/login_handler.h"
-
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/blocked_content/popunder_preventer.h"
 #include "chrome/browser/ui/browser_dialogs.h"
+#include "chrome/browser/ui/login/login_handler.h"
 #include "chrome/browser/ui/views/login_view.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/password_manager/core/browser/password_manager.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_delegate.h"
 
-namespace chrome {
-
 namespace {
 
-// This class simply forwards the authentication from the LoginView (on
-// the UI thread) to the net::URLRequest (on the I/O thread).
-// This class uses ref counting to ensure that it lives until all InvokeLaters
-// have been called.
+// This class prompts the user for credentials and returns the result to
+// `auth_required_callback`.
 class LoginHandlerViews : public LoginHandler {
  public:
   LoginHandlerViews(const net::AuthChallengeInfo& auth_info,
@@ -50,14 +48,25 @@ class LoginHandlerViews : public LoginHandler {
 
  protected:
   // LoginHandler:
-  void BuildViewImpl(const std::u16string& authority,
+  bool BuildViewImpl(const std::u16string& authority,
                      const std::u16string& explanation,
                      LoginModelData* login_model_data) override {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     DCHECK(!dialog_);
 
+    // A WebContentsModalDialogManager is necessary to show the Dialog. A
+    // manager may not be available during the shutdown process of the
+    // WebContents, which can trigger DidFinishNavigation events.
+    // See https://crbug.com/328462789.
+    web_modal::WebContentsModalDialogManager* manager =
+        web_modal::WebContentsModalDialogManager::FromWebContents(
+            constrained_window::GetTopLevelWebContents(web_contents()));
+    if (!manager || !manager->delegate()) {
+      return false;
+    }
     dialog_ = new Dialog(this, web_contents(), authority, explanation,
                          login_model_data);
+    return true;
   }
 
   void CloseDialog() override {
@@ -90,24 +99,26 @@ class LoginHandlerViews : public LoginHandler {
            LoginHandler::LoginModelData* login_model_data)
         : handler_(handler), login_view_(nullptr), widget_(nullptr) {
       SetButtonLabel(
-          ui::DIALOG_BUTTON_OK,
+          ui::mojom::DialogButton::kOk,
           l10n_util::GetStringUTF16(IDS_LOGIN_DIALOG_OK_BUTTON_LABEL));
       SetAcceptCallback(base::BindOnce(
           [](Dialog* dialog) {
-            if (!dialog->handler_)
+            if (!dialog->handler_) {
               return;
+            }
             dialog->handler_->SetAuth(dialog->login_view_->GetUsername(),
                                       dialog->login_view_->GetPassword());
           },
           base::Unretained(this)));
       SetCancelCallback(base::BindOnce(
           [](Dialog* dialog) {
-            if (!dialog->handler_)
+            if (!dialog->handler_) {
               return;
-            dialog->handler_->CancelAuth();
+            }
+            dialog->handler_->CancelAuth(/*notify_others=*/true);
           },
           base::Unretained(this)));
-      SetModalType(ui::MODAL_TYPE_CHILD);
+      SetModalType(ui::mojom::ModalType::kChild);
       SetOwnedByWidget(true);
 
       // Create a new LoginView and set the model for it.  The model (password
@@ -125,8 +136,9 @@ class LoginHandlerViews : public LoginHandler {
     void CloseDialog() {
       handler_ = nullptr;
       // The hosting widget may have been freed.
-      if (widget_)
+      if (widget_) {
         widget_->Close();
+      }
     }
 
     // views::DialogDelegate:
@@ -139,8 +151,9 @@ class LoginHandlerViews : public LoginHandler {
     void WindowClosing() override {
       // Reference is no longer valid.
       widget_ = nullptr;
-      if (handler_)
-        handler_->CancelAuth();
+      if (handler_) {
+        handler_->CancelAuth(/*notify_others=*/true);
+      }
     }
 
     views::View* GetInitiallyFocusedView() override {
@@ -157,8 +170,9 @@ class LoginHandlerViews : public LoginHandler {
 
    private:
     ~Dialog() override {
-      if (handler_)
+      if (handler_) {
         handler_->OnDialogDestroyed();
+      }
     }
 
     raw_ptr<LoginHandlerViews> handler_;
@@ -173,12 +187,11 @@ class LoginHandlerViews : public LoginHandler {
 
 }  // namespace
 
-std::unique_ptr<LoginHandler> CreateLoginHandlerViews(
+// static
+std::unique_ptr<LoginHandler> LoginHandler::Create(
     const net::AuthChallengeInfo& auth_info,
     content::WebContents* web_contents,
     LoginAuthRequiredCallback auth_required_callback) {
   return std::make_unique<LoginHandlerViews>(auth_info, web_contents,
                                              std::move(auth_required_callback));
 }
-
-}  // namespace chrome

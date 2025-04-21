@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,15 @@ namespace blink {
 
 class GPUBindGroupLayout;
 class GPUComputePipelineDescriptor;
+struct OwnedProgrammableStage;
 
-WGPUComputePipelineDescriptor AsDawnType(
+wgpu::ComputePipelineDescriptor AsDawnType(
     GPUDevice* device,
     const GPUComputePipelineDescriptor* webgpu_desc,
     std::string* label,
-    OwnedProgrammableStageDescriptor* computeStageDescriptor);
+    OwnedProgrammableStage* computeStage);
 
-class GPUComputePipeline : public DawnObject<WGPUComputePipeline> {
+class GPUComputePipeline : public DawnObject<wgpu::ComputePipeline> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -27,7 +28,8 @@ class GPUComputePipeline : public DawnObject<WGPUComputePipeline> {
       GPUDevice* device,
       const GPUComputePipelineDescriptor* webgpu_desc);
   explicit GPUComputePipeline(GPUDevice* device,
-                              WGPUComputePipeline compute_pipeline);
+                              wgpu::ComputePipeline compute_pipeline,
+                              const String& label);
 
   GPUComputePipeline(const GPUComputePipeline&) = delete;
   GPUComputePipeline& operator=(const GPUComputePipeline&) = delete;
@@ -36,7 +38,7 @@ class GPUComputePipeline : public DawnObject<WGPUComputePipeline> {
 
   void setLabelImpl(const String& value) override {
     std::string utf8_label = value.Utf8();
-    GetProcs().computePipelineSetLabel(GetHandle(), utf8_label.c_str());
+    GetHandle().SetLabel(utf8_label.c_str());
   }
 };
 

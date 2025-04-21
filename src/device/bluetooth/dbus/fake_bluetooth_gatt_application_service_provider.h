@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluez/bluetooth_local_gatt_service_bluez.h"
@@ -28,7 +29,8 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothGattApplicationServiceProvider
  public:
   FakeBluetoothGattApplicationServiceProvider(
       const dbus::ObjectPath& object_path,
-      const std::map<dbus::ObjectPath, BluetoothLocalGattServiceBlueZ*>&
+      const std::map<dbus::ObjectPath,
+                     raw_ptr<BluetoothLocalGattServiceBlueZ, CtnExperimental>>&
           services);
 
   FakeBluetoothGattApplicationServiceProvider(

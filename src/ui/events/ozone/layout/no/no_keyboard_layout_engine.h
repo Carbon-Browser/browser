@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,10 @@ class COMPONENT_EXPORT(EVENTS_OZONE_LAYOUT) NoKeyboardLayoutEngine
   ~NoKeyboardLayoutEngine() override {}
 
   // KeyboardLayoutEngine overrides:
+  std::string_view GetLayoutName() const override;
   bool CanSetCurrentLayout() const override;
-  bool SetCurrentLayoutByName(const std::string& layout_name) override;
+  void SetCurrentLayoutByName(const std::string& layout_name,
+                              base::OnceCallback<void(bool)> callback) override;
   bool SetCurrentLayoutFromBuffer(const char* keymap_string,
                                   size_t size) override;
   bool UsesISOLevel5Shift() const override;

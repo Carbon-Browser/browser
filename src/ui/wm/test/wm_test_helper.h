@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,8 @@ class WMTestHelper : public aura::client::WindowParentingClient {
 
   // Overridden from client::WindowParentingClient:
   aura::Window* GetDefaultParent(aura::Window* window,
-                                 const gfx::Rect& bounds) override;
+                                 const gfx::Rect& bounds,
+                                 const int64_t display_id) override;
 
  private:
   std::unique_ptr<WMState> wm_state_;

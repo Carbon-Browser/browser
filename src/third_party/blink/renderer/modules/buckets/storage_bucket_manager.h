@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ namespace blink {
 class ExceptionState;
 class NavigatorBase;
 class StorageBucketOptions;
+class StorageBucket;
 
 class MODULES_EXPORT StorageBucketManager final
     : public ScriptWrappable,
@@ -29,37 +30,43 @@ class MODULES_EXPORT StorageBucketManager final
   static const char kSupplementName[];
 
   // Web-exposed as navigator.storageBuckets
-  static StorageBucketManager* storageBuckets(ScriptState* script_state,
-                                              NavigatorBase& navigator,
-                                              ExceptionState& exception_state);
+  static StorageBucketManager* storageBuckets(NavigatorBase& navigator);
 
   explicit StorageBucketManager(NavigatorBase& navigator);
   ~StorageBucketManager() override = default;
 
-  ScriptPromise open(ScriptState* script_state,
-                     const String& name,
-                     const StorageBucketOptions* options,
-                     ExceptionState& exception_state);
-  ScriptPromise keys(ScriptState* script_state,
-                     ExceptionState& exception_state);
-  ScriptPromise Delete(ScriptState* script_state,
-                       const String& name,
-                       ExceptionState& exception_state);
+  ScriptPromise<StorageBucket> open(ScriptState* script_state,
+                                    const String& name,
+                                    const StorageBucketOptions* options,
+                                    ExceptionState& exception_state);
+  ScriptPromise<IDLSequence<IDLString>> keys(ScriptState* script_state,
+                                             ExceptionState& exception_state);
+  ScriptPromise<IDLUndefined> Delete(ScriptState* script_state,
+                                     const String& name,
+                                     ExceptionState& exception_state);
 
   // GarbageCollected
   void Trace(Visitor*) const override;
 
+  // These are not exposed to the web applications and only used by DevTools.
+  StorageBucket* GetBucketForDevtools(ScriptState* script_state,
+                                      const String& name);
+
  private:
   mojom::blink::BucketManagerHost* GetBucketManager(ScriptState* script_state);
 
-  void DidOpen(ScriptPromiseResolver* resolver,
-               mojo::PendingRemote<mojom::blink::BucketHost> bucket_remote);
-  void DidGetKeys(ScriptPromiseResolver* resolver,
+  void DidOpen(ScriptPromiseResolver<StorageBucket>* resolver,
+               const String& name,
+               mojo::PendingRemote<mojom::blink::BucketHost> bucket_remote,
+               mojom::blink::BucketError error);
+  void DidGetKeys(ScriptPromiseResolver<IDLSequence<IDLString>>* resolver,
                   const Vector<String>& keys,
                   bool success);
-  void DidDelete(ScriptPromiseResolver* resolver, bool success);
+  void DidDelete(ScriptPromiseResolver<IDLUndefined>*, bool success);
 
   HeapMojoRemote<mojom::blink::BucketManagerHost> manager_remote_;
+
+  Member<NavigatorBase> navigator_base_;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_COCOA_TOUCHBAR_BROWSER_WINDOW_TOUCH_BAR_CONTROLLER_H_
 
 #import <Cocoa/Cocoa.h>
-#include <os/availability.h>
 
 class Browser;
 @class BrowserWindowDefaultTouchBar;
@@ -36,6 +35,7 @@ class WebContents;
 - (BrowserWindowDefaultTouchBar*)defaultTouchBar;
 
 - (WebTextfieldTouchBarController*)webTextfieldTouchBar;
+
 @end
 
 #endif  // CHROME_BROWSER_UI_COCOA_TOUCHBAR_BROWSER_WINDOW_TOUCH_BAR_CONTROLLER_H_

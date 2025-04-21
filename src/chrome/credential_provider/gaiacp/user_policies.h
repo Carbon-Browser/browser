@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ struct COMPONENT_EXPORT(GCPW_POLICIES) UserPolicies {
 
   // Creates the user policies by reading the values found in the |dict|
   // dictionary.
-  static UserPolicies FromValue(const base::Value& dict);
+  static UserPolicies FromValue(const base::Value::Dict& dict);
 
   base::Value ToValue() const;
 

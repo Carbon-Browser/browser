@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,11 +33,6 @@ CWV_EXPORT
 
 // The delegate of CWVSyncController.
 @property(nonatomic, weak, nullable) id<CWVSyncControllerDelegate> delegate;
-
-// Whether or not sync is running.
-// This property may change after |syncControllerDidUpdateState:| is invoked on
-// the |delegate|.
-@property(nonatomic, readonly, getter=isSyncing) BOOL syncing;
 
 // The user who is syncing.
 // This property may change after |syncControllerDidUpdateState:| is invoked on

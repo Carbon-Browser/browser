@@ -1,40 +1,24 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_V4L2_TEST_AV1_DECODER_H_
 #define MEDIA_GPU_V4L2_TEST_AV1_DECODER_H_
 
-#include "media/gpu/v4l2/test/video_decoder.h"
-
-// TODO(b/234019411): Move this include to v4l2_stateless_decoder.cc
-// once the bug is fixed.
-#include <linux/media/av1-ctrls.h>
-
 #include <set>
 
 #include "base/files/memory_mapped_file.h"
-#include "media/filters/ivf_parser.h"
 #include "media/gpu/v4l2/test/v4l2_ioctl_shim.h"
-// For libgav1::ObuSequenceHeader. absl::optional demands ObuSequenceHeader to
+#include "media/gpu/v4l2/test/video_decoder.h"
+#include "media/parsers/ivf_parser.h"
+// For libgav1::ObuSequenceHeader. std::optional demands ObuSequenceHeader to
 // fulfill std::is_trivially_constructible if it is forward-declared. But
 // ObuSequenceHeader doesn't.
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/libgav1/src/src/obu_parser.h"
 
-// TODO(stevecho): Remove ANALYZER_ALLOW_UNUSED() later if this is added later
-// in base/logging.h for Chromium. Note that this already exists in
-// base/logging.h for ChromeOS.
-#define ANALYZER_ALLOW_UNUSED(var) static_cast<void>(var);
-
-// TODO(stevecho): RESTORATION_TILESIZE_MAX in the spec is not available in the
-// AV1 uAPI. It was recommended to be added in the userspace code. If the uAPI
-// stays as it is for upstreaming, then #ifndef can be removed. If the uAPI ends
-// up adding this constant, then we can remove this define at that time.
-// https://patchwork.linuxtv.org/project/linux-media/patch/20210810220552.298140-2-daniel.almeida@collabora.com/
-#ifndef V4L2_AV1_RESTORATION_TILESIZE_MAX
-#define V4L2_AV1_RESTORATION_TILESIZE_MAX 256
-#endif
+struct v4l2_ctrl_av1_frame;
 
 namespace media {
 namespace v4l2_test {
@@ -53,15 +37,15 @@ class Av1Decoder : public VideoDecoder {
   static std::unique_ptr<Av1Decoder> Create(
       const base::MemoryMappedFile& stream);
 
-  // TODO(stevecho): implement DecodeNextFrame() function
   // Parses next frame from IVF stream and decodes the frame. This method will
   // place the Y, U, and V values into the respective vectors and update the
   // size with the display area size of the decoded frame.
-  VideoDecoder::Result DecodeNextFrame(std::vector<char>& y_plane,
-                                       std::vector<char>& u_plane,
-                                       std::vector<char>& v_plane,
+  VideoDecoder::Result DecodeNextFrame(const int frame_number,
+                                       std::vector<uint8_t>& y_plane,
+                                       std::vector<uint8_t>& u_plane,
+                                       std::vector<uint8_t>& v_plane,
                                        gfx::Size& size,
-                                       const int frame_number) override;
+                                       BitDepth& bit_depth) override;
 
  private:
   enum class ParsingResult {
@@ -72,8 +56,7 @@ class Av1Decoder : public VideoDecoder {
 
   Av1Decoder(std::unique_ptr<IvfParser> ivf_parser,
              std::unique_ptr<V4L2IoctlShim> v4l2_ioctl,
-             std::unique_ptr<V4L2Queue> OUTPUT_queue,
-             std::unique_ptr<V4L2Queue> CAPTURE_queue);
+             gfx::Size display_resolution);
 
   // Reads an OBU frame, if there is one available. If an |obu_parser_|
   // didn't exist and there is data to be read, |obu_parser_| will be
@@ -88,17 +71,38 @@ class Av1Decoder : public VideoDecoder {
   void CopyFrameData(const libgav1::ObuFrameHeader& frame_hdr,
                      std::unique_ptr<V4L2Queue>& queue);
 
+  // Sets up per frame parameters |v4l2_frame_params| needed for AV1 decoding
+  // with VIDIOC_S_EXT_CTRLS ioctl call.
+  void SetupFrameParams(
+      struct v4l2_ctrl_av1_frame* v4l2_frame_params,
+      const std::optional<libgav1::ObuSequenceHeader>& seq_header,
+      const libgav1::ObuFrameHeader& frm_header);
+
   // Refreshes |ref_frames_| slots with the current |buffer| and refreshes
-  // |state_| with |current_frame|. Returns |reusable_buffer_slots| to indicate
-  // which CAPTURE buffers can be reused for VIDIOC_QBUF ioctl call.
+  // |state_| with |current_frame|. Updates |ref_order_hint_| using |order_hint|
+  // of current frame header, which is needed for the next frame decoding.
+  // Returns |reusable_buffer_slots| to indicate which CAPTURE buffers can be
+  // reused for VIDIOC_QBUF ioctl call.
   std::set<int> RefreshReferenceSlots(
-      uint8_t refresh_frame_flags,
-      libgav1::RefCountedBufferPtr current_frame,
-      scoped_refptr<MmapedBuffer> buffer,
-      uint32_t last_queued_buffer_index);
+      const libgav1::ObuFrameHeader& frame_hdr,
+      const libgav1::RefCountedBufferPtr current_frame,
+      const scoped_refptr<MmappedBuffer> buffer,
+      const uint32_t last_queued_buffer_id);
+
+  // Queues reusable buffers in CAPTURE queue, indicated by
+  // |reusable_buffer_ids|. Saves buffer ids for inter frames to prevent
+  // unnecessary QBUF attempts.
+  void QueueReusableBuffersInCaptureQueue(
+      const std::set<int> reusable_buffer_ids,
+      const bool is_inter_frame);
 
   // Reference frames currently in use.
-  std::array<scoped_refptr<MmapedBuffer>, kAv1NumRefFrames> ref_frames_;
+  std::array<scoped_refptr<MmappedBuffer>, kAv1NumRefFrames> ref_frames_;
+
+  // Represents the least significant bits of the expected output order of the
+  // frames. Corresponds to |RefOrderHint| in the AV1 spec.
+  // https://aomediacodec.github.io/av1-spec/#set-frame-refs-process
+  std::array<uint8_t, kAv1NumRefFrames> ref_order_hint_{0};
 
   // Parser for the IVF stream to decode.
   const std::unique_ptr<IvfParser> ivf_parser_;
@@ -110,7 +114,7 @@ class Av1Decoder : public VideoDecoder {
   std::unique_ptr<libgav1::ObuParser> obu_parser_;
   std::unique_ptr<libgav1::BufferPool> buffer_pool_;
   std::unique_ptr<libgav1::DecoderState> state_;
-  absl::optional<libgav1::ObuSequenceHeader> current_sequence_header_;
+  std::optional<libgav1::ObuSequenceHeader> current_sequence_header_;
 };
 
 }  // namespace v4l2_test

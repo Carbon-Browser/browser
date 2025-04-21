@@ -1,20 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/smb_client/smb_url.h"
 
+#include <string_view>
 #include <vector>
 
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/smb_client/smb_constants.h"
 #include "url/url_canon_stdstring.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -54,7 +53,7 @@ bool ParseAndValidateUrl(const std::string& url, url::Parsed* parsed) {
   DCHECK(parsed);
   DCHECK(ShouldProcessUrl(url));
 
-  url::ParseStandardURL(url.c_str(), url.size(), parsed);
+  *parsed = url::ParseStandardURL(url);
   return !ContainsUnnecessaryComponents(*parsed);
 }
 
@@ -107,6 +106,8 @@ SmbUrl SmbUrl::ReplaceHost(const std::string& new_host) const {
 }
 
 bool SmbUrl::IsValid() const {
+  // The URL is valid as long as it has a host, but some users (eg.
+  // SmbService) may also require that the share_ is defined.
   return !url_.empty() && host_.is_valid();
 }
 
@@ -127,6 +128,8 @@ void SmbUrl::CanonicalizeSmbUrl(const std::string& url) {
     return;
   }
 
+  // Try to canonicalize the input URL into |url_|. IsValid() returns
+  // false if this is unsuccessful.
   url::StdStringCanonOutput canonical_output(&url_);
 
   url::Component scheme;
@@ -157,18 +160,24 @@ void SmbUrl::CanonicalizeSmbUrl(const std::string& url) {
 
   canonical_output.Complete();
 
+  // |url_| is now valid, parse out any (optional) share and path component.
   if (path.is_nonempty()) {
     // Extract share name, which is the first path element.
     // Paths always start with '/', but extra '/'s are not removed.
     // So both "smb://foo" and "smb://foo//bar/" have the share name "", but
     // "smb://foo/bar/" has the share name "bar".
     std::string path_str = url_.substr(path.begin, path.len);
-    std::vector<base::StringPiece> split_path = base::SplitStringPiece(
+    std::vector<std::string_view> split_path = base::SplitStringPiece(
         path_str, "/", base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
     if (split_path.size() >= 2) {
       DCHECK_EQ(split_path[0], "");
       share_ = std::string(split_path[1]);
     }
+  }
+
+  // Valid SmbUrls never have trailing slashes.
+  while (url_.size() && url_.back() == '/') {
+    url_.pop_back();
   }
 
   DCHECK(host_.is_nonempty());
@@ -195,5 +204,4 @@ void SmbUrl::Reset() {
   url_.clear();
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

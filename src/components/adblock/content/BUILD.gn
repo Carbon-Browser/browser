@@ -16,17 +16,7 @@
 
 assert(!is_ios)
 
-import("//components/adblock/core/features.gni")
-
 # External targets should depend on this
 group("browser") {
   public_deps = [ "//components/adblock/content/browser:browser_impl" ]
-}
-
-# External targets should depend on this
-group("common") {
-  public_deps = [
-    "//components/adblock/content/common:common_impl",
-    "//components/adblock/content/common/mojom:adblock_interfaces",
-  ]
 }

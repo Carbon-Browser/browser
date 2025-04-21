@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IPCZ_SRC_REFERENCE_DRIVERS_MEMORY_H_
 #define IPCZ_SRC_REFERENCE_DRIVERS_MEMORY_H_
+
+#include <stdint.h>
 
 #include "reference_drivers/file_descriptor.h"
 #include "third_party/abseil-cpp/absl/types/span.h"

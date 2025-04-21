@@ -1,10 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.payments;
 
 import android.os.Bundle;
+
+import org.chromium.components.payments.IPaymentDetailsUpdateService;
 
 /**
  * Helper interface used by the browser to notify the invoked native app about
@@ -26,4 +28,16 @@ interface IPaymentDetailsUpdateServiceCallback {
      * modified the payment details.
      */
     oneway void paymentDetailsNotUpdated();
+
+    /**
+     * Called during a payment flow to point the payment app back to the payment
+     * details update service to invoke when the user changes the payment
+     * method, the shipping address, or the shipping option.
+     *
+     * @param service The payment details update service to invoke when the user
+     *      changes the payment method, the shipping address, or the shipping
+     *      option.
+     */
+    oneway void setPaymentDetailsUpdateService(
+            IPaymentDetailsUpdateService service);
 }

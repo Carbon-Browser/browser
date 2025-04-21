@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,7 +16,6 @@ static_library("common") {
   ]
   deps = [
     "//base",
-    "//build:chromeos_buildflags",
     "//ui/gfx/geometry",
   ]
 }
@@ -29,8 +28,8 @@ source_set("unit_tests") {
     ":common",
     "//base",
     "//base/test:test_support",
-    "//build:chromeos_buildflags",
     "//testing/gmock",
     "//testing/gtest",
+    "//ui/gfx/geometry",
   ]
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ ReportRequest::ReportRequest(ReportType type) {
   switch (type) {
     case ReportType::kFull:
     case ReportType::kBrowserVersion:
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
       proto_.emplace<em::ChromeOsUserReportRequest>();
 #else
       proto_.emplace<em::ChromeDesktopReportRequest>();

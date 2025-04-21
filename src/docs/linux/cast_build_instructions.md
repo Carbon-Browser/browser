@@ -13,7 +13,7 @@ Are you a Google employee? See
 
 ## System requirements
 
-*   A 64-bit Intel machine with at least 8GB of RAM. More than 16GB is highly
+*   An x86-64 machine with at least 8GB of RAM. More than 16GB is highly
     recommended.
 *   At least 100GB of free disk space.
 *   You must have Git and Python installed already.
@@ -104,7 +104,7 @@ to generate `.ninja` files. You can create any number of *build directories*
 with different configurations. To create a build directory, run:
 
 ```shell
-$ gn gen out/Default --args='is_chromecast=true'
+$ gn gen out/Default --args='enable_cast_receiver=true is_castos=true'
 ```
 
 * You only have to run this once for each new build directory, Ninja will

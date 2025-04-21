@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,16 +14,21 @@ source_set("perf") {
   ]
   deps = [
     "//base",
+    "//base:i18n",
     "//testing/gtest",
   ]
 }
 
 source_set("unit_tests") {
   testonly = true
-  sources = [ "luci_test_result_unittest.cc" ]
+  sources = [
+    "confidence/ratio_bootstrap_estimator_test.cc",
+    "luci_test_result_unittest.cc",
+  ]
   deps = [
     ":perf",
     "//base",
     "//testing/gtest",
+    "//testing/perf/confidence:ratio_bootstrap_estimator",
   ]
 }

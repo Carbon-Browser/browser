@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,19 @@ class MockPaymentManifestWebDataService : public PaymentManifestWebDataService {
   MOCK_METHOD(void,
               ClearSecurePaymentConfirmationCredentials,
               (base::Time begin, base::Time end, base::OnceClosure callback),
+              (override));
+  MOCK_METHOD(WebDataServiceBase::Handle,
+              SetBrowserBoundKey,
+              (std::vector<uint8_t> credential_id,
+               std::string relying_party_id,
+               std::vector<uint8_t> browser_bound_key_id,
+               WebDataServiceConsumer* consumer),
+              (override));
+  MOCK_METHOD(WebDataServiceBase::Handle,
+              GetBrowserBoundKey,
+              (std::vector<uint8_t> credential_id,
+               std::string relying_party_id,
+               WebDataServiceConsumer* consumer),
               (override));
 
  protected:

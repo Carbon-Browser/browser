@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/unguessable_token.h"
 #include "content/renderer/render_thread_impl.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
-#include "gpu/ipc/common/command_buffer_id.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
 #include "ipc/ipc_message_macros.h"
@@ -33,7 +32,8 @@ StreamTextureHost::~StreamTextureHost() {
     // to ensure this is ordered correctly with regards to previous deferred
     // messages, such as CreateSharedImage.
     uint32_t flush_id = channel_->EnqueueDeferredMessage(
-        gpu::mojom::DeferredRequestParams::NewDestroyStreamTexture(route_id_));
+        gpu::mojom::DeferredRequestParams::NewDestroyStreamTexture(route_id_),
+        /*sync_token_fences=*/{}, /*release_count=*/0);
     channel_->EnsureFlush(flush_id);
   }
 }
@@ -83,7 +83,7 @@ void StreamTextureHost::OnFrameWithInfoAvailable(
     const gpu::Mailbox& mailbox,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
-    absl::optional<gpu::VulkanYCbCrInfo> ycbcr_info) {
+    std::optional<gpu::VulkanYCbCrInfo> ycbcr_info) {
   if (listener_) {
     listener_->OnFrameWithInfoAvailable(mailbox, coded_size, visible_rect,
                                         ycbcr_info);
@@ -104,18 +104,6 @@ void StreamTextureHost::ForwardStreamTextureForSurfaceRequest(
 void StreamTextureHost::UpdateRotatedVisibleSize(const gfx::Size& size) {
   if (texture_remote_)
     texture_remote_->UpdateRotatedVisibleSize(size);
-}
-
-gpu::SyncToken StreamTextureHost::GenUnverifiedSyncToken() {
-  // |channel_| can be set to null via OnDisconnectedFromGpuProcess() which
-  // means StreamTextureHost could still be alive when |channel_| is gone.
-  if (!channel_)
-    return gpu::SyncToken();
-
-  return gpu::SyncToken(gpu::CommandBufferNamespace::GPU_IO,
-                        gpu::CommandBufferIdFromChannelAndRoute(
-                            channel_->channel_id(), route_id_),
-                        release_id_);
 }
 
 }  // namespace content

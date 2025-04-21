@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #define BASE_WIN_WINDOWS_TYPES_H_
 
 // Needed for function prototypes.
-#include <concurrencysal.h>
 #include <sal.h>
 #include <specstrings.h>
 
@@ -79,6 +78,12 @@ typedef LONG NTSTATUS;
 #define REFGUID const GUID&
 #endif
 
+// As defined in ncrypt.h.
+#ifndef __SECSTATUS_DEFINED__
+typedef LONG SECURITY_STATUS;
+#define __SECSTATUS_DEFINED__
+#endif
+
 typedef LPVOID HINTERNET;
 typedef HICON HCURSOR;
 typedef HINSTANCE HMODULE;
@@ -98,6 +103,7 @@ typedef RTL_SRWLOCK SRWLOCK, *PSRWLOCK;
 typedef struct _GUID GUID;
 typedef GUID CLSID;
 typedef GUID IID;
+typedef GUID UUID;
 
 typedef struct tagLOGFONTW LOGFONTW, *PLOGFONTW, *NPLOGFONTW, *LPLOGFONTW;
 typedef LOGFONTW LOGFONT;
@@ -111,6 +117,8 @@ typedef struct tagNMHDR NMHDR;
 typedef struct _SP_DEVINFO_DATA SP_DEVINFO_DATA;
 
 typedef PVOID PSID;
+typedef PVOID PSECURITY_DESCRIPTOR;
+typedef DWORD SECURITY_INFORMATION;
 
 typedef HANDLE HLOCAL;
 
@@ -129,6 +137,8 @@ typedef UINT_PTR SOCKET;
 typedef struct _PROCESS_INFORMATION PROCESS_INFORMATION;
 typedef struct _SECURITY_CAPABILITIES SECURITY_CAPABILITIES;
 typedef struct _ACL ACL;
+typedef struct _SECURITY_DESCRIPTOR SECURITY_DESCRIPTOR;
+typedef struct _GENERIC_MAPPING GENERIC_MAPPING;
 
 // Declare Chrome versions of some Windows structures. These are needed for
 // when we need a concrete type but don't want to pull in Windows.h. We can't
@@ -148,6 +158,8 @@ struct CHROME_CONDITION_VARIABLE {
 struct CHROME_LUID {
   DWORD LowPart;
   LONG HighPart;
+
+  bool operator==(const CHROME_LUID&) const = default;
 };
 
 // _WIN32_FIND_DATAW is 592 bytes and the largest built-in type in it is a
@@ -183,6 +195,12 @@ struct CHROME_MSG {
 
 // clang-format off
 
+#ifndef FALSE
+#define FALSE               0
+#endif
+#ifndef TRUE
+#define TRUE                1
+#endif
 #ifndef INVALID_HANDLE_VALUE
 // Work around there being two slightly different definitions in the SDK.
 #define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)
@@ -202,7 +220,10 @@ struct CHROME_MSG {
 #define REG_BINARY ( 3ul )
 #define REG_NONE ( 0ul )
 
+#ifndef STATUS_PENDING
+// Allow people to include ntstatus.h
 #define STATUS_PENDING ((DWORD   )0x00000103L)
+#endif  // STATUS_PENDING
 #define STILL_ACTIVE STATUS_PENDING
 #define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
 #define FAILED(hr) (((HRESULT)(hr)) < 0)
@@ -254,7 +275,9 @@ struct CHROME_MSG {
 
 // The trailing white-spaces after this macro are required, for compatibility
 // with the definition in winnt.h.
+// clang-format off
 #define RTL_SRWLOCK_INIT {0}                            // NOLINT
+// clang-format on
 #define SRWLOCK_INIT RTL_SRWLOCK_INIT
 
 // clang-format on
@@ -267,6 +290,9 @@ struct CHROME_MSG {
 #define WINAPI __stdcall
 #define APIENTRY WINAPI
 #define CALLBACK __stdcall
+#define NTAPI __stdcall
+
+typedef INT_PTR(WINAPI* FARPROC)();
 
 // Needed for LockImpl.
 WINBASEAPI _Releases_exclusive_lock_(*SRWLock) VOID WINAPI

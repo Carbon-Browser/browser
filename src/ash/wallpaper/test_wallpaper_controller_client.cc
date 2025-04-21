@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,12 +45,8 @@ void TestWallpaperControllerClient::AddCollection(
 
 void TestWallpaperControllerClient::ResetCounts() {
   open_count_ = 0;
-  set_default_wallpaper_count_ = 0;
-  migrate_collection_id_from_chrome_app_count_ = 0;
   fetch_daily_refresh_wallpaper_param_ = std::string();
   fetch_daily_refresh_info_fails_ = false;
-  get_wallpaper_path_from_drive_fs_account_id_.clear();
-  save_wallpaper_to_drive_fs_account_id_.clear();
   fake_files_ids_.clear();
   wallpaper_sync_enabled_ = true;
 }
@@ -58,20 +54,6 @@ void TestWallpaperControllerClient::ResetCounts() {
 // WallpaperControllerClient:
 void TestWallpaperControllerClient::OpenWallpaperPicker() {
   open_count_++;
-}
-
-void TestWallpaperControllerClient::SetDefaultWallpaper(
-    const AccountId& account_id,
-    bool show_wallpaper,
-    base::OnceCallback<void(bool success)> callback) {
-  set_default_wallpaper_count_++;
-  std::move(callback).Run(/*success=*/true);
-}
-
-void TestWallpaperControllerClient::MigrateCollectionIdFromChromeApp(
-    const AccountId& account_id,
-    base::OnceCallback<void(const std::string&)>) {
-  migrate_collection_id_from_chrome_app_count_++;
 }
 
 void TestWallpaperControllerClient::FetchDailyRefreshWallpaper(
@@ -107,10 +89,20 @@ void TestWallpaperControllerClient::FetchGooglePhotosPhoto(
     const AccountId& account_id,
     const std::string& id,
     FetchGooglePhotosPhotoCallback callback) {
+  fetch_google_photos_photo_id_ = id;
+  auto iter = wallpaper_google_photos_integration_enabled_.find(account_id);
+  if (iter != wallpaper_google_photos_integration_enabled_.end() &&
+      !iter->second) {
+    std::move(callback).Run(/*photo=*/nullptr, /*success=*/true);
+    return;
+  }
   base::Time time;
-  base::Time::Exploded exploded_time{2011, 6, 3, 15, 12, 0, 0, 0};
-  if (!base::Time::FromUTCExploded(exploded_time, &time))
-    NOTREACHED();
+  static constexpr base::Time::Exploded kTime = {.year = 2011,
+                                                 .month = 6,
+                                                 .day_of_week = 3,
+                                                 .day_of_month = 15,
+                                                 .hour = 12};
+  CHECK(base::Time::FromUTCExploded(kTime, &time));
   if (fetch_google_photos_photo_fails_ || google_photo_has_been_deleted_) {
     std::move(callback).Run(nullptr,
                             /*success=*/google_photo_has_been_deleted_);
@@ -135,21 +127,7 @@ void TestWallpaperControllerClient::FetchDailyGooglePhotosPhoto(
 void TestWallpaperControllerClient::FetchGooglePhotosAccessToken(
     const AccountId& account_id,
     FetchGooglePhotosAccessTokenCallback callback) {
-  std::move(callback).Run(absl::nullopt);
-}
-
-void TestWallpaperControllerClient::SaveWallpaperToDriveFs(
-    const AccountId& account_id,
-    const base::FilePath& origin,
-    base::OnceCallback<void(bool)> wallpaper_saved_callback) {
-  save_wallpaper_to_drive_fs_account_id_ = account_id;
-  std::move(wallpaper_saved_callback).Run(true);
-}
-
-base::FilePath TestWallpaperControllerClient::GetWallpaperPathFromDriveFs(
-    const AccountId& account_id) {
-  get_wallpaper_path_from_drive_fs_account_id_ = account_id;
-  return base::FilePath();
+  std::move(callback).Run(std::nullopt);
 }
 
 void TestWallpaperControllerClient::GetFilesId(

@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 
-import {CrToastManagerElement, getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
-
+import type {CrToastManagerElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
+import {getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 // clang-format on
 
@@ -15,9 +16,8 @@ suite('cr-toast-manager', () => {
   let toastManager: CrToastManagerElement;
 
   suiteSetup(() => {
-    document.body.innerHTML = '';
-    toastManager = /** @type {!CrToastManagerElement} */ (
-        document.createElement('cr-toast-manager'));
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    toastManager = document.createElement('cr-toast-manager');
     document.body.appendChild(toastManager);
   });
 
@@ -48,8 +48,9 @@ suite('cr-toast-manager', () => {
     assertFalse(elements[2]!.classList.contains('collapsible'));
   });
 
-  test('duration passed through to toast', () => {
+  test('duration passed through to toast', async () => {
     toastManager.duration = 3;
+    await microtasksFinished();
     assertEquals(3, toastManager.$.toast.duration);
   });
 

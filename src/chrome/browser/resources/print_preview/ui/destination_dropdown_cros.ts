@@ -1,20 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 // TODO(gavinwill): Remove iron-dropdown dependency https://crbug.com/1082587.
 import 'chrome://resources/polymer/v3_0/iron-dropdown/iron-dropdown.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
 import 'chrome://resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import './print_preview_vars.css.js';
 
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Destination} from '../data/destination.js';
-import {ERROR_STRING_KEY_MAP, getPrinterStatusIcon, PrinterStatusReason} from '../data/printer_status_cros.js';
+import type {Destination} from '../data/destination_cros.js';
+import type {PrinterStatusReason} from '../data/printer_status_cros.js';
+import {ERROR_STRING_KEY_MAP, getPrinterStatusIcon} from '../data/printer_status_cros.js';
 
 import {getTemplate} from './destination_dropdown_cros.html.js';
 
@@ -84,7 +85,19 @@ export class PrintPreviewDestinationDropdownCrosElement extends
       },
 
       destinationStatusText: String,
+
+      pdfPosinset: Number,
+
+      drivePosinset: Number,
+
+      seeMorePosinset: Number,
     };
+  }
+
+  static get observers() {
+    return [
+      'updateAriaPosinset(itemList, pdfPrinterDisabled, driveDestinationKey)',
+    ];
   }
 
   value: Destination;
@@ -95,10 +108,13 @@ export class PrintPreviewDestinationDropdownCrosElement extends
   noDestinations: boolean;
   pdfDestinationKey: string;
   pdfPrinterDisabled: boolean;
-  destinationStatusText: string;
+  destinationStatusText: TrustedHTML;
   private isDarkModeActive_: boolean;
   private highlightedIndex_: number;
   private dropdownLength_: number;
+  private pdfPosinset: number;
+  private drivePosinset: number;
+  private seeMorePosinset: number;
 
   private opened_: boolean = false;
   private dropdownRefitPending_: boolean = false;
@@ -117,6 +133,10 @@ export class PrintPreviewDestinationDropdownCrosElement extends
 
   override focus() {
     this.$.destinationDropdown.focus();
+  }
+
+  private getAriaDescription_(): string {
+    return this.destinationStatusText.toString();
   }
 
   private fireDropdownValueSelected_(element: Element) {
@@ -344,6 +364,24 @@ export class PrintPreviewDestinationDropdownCrosElement extends
       isEnterprisePrinter: boolean): string {
     return getPrinterStatusIcon(
         printerStatusReason, isEnterprisePrinter, this.isDarkModeActive_);
+  }
+
+  private getPrinterPosinset_(index: number): number {
+    return index + 1;
+  }
+
+  /**
+   * Set the ARIA position in the dropdown based on the visible items.
+   */
+  private updateAriaPosinset(): void {
+    let currentPosition = this.itemList ? this.itemList.length + 1 : 1;
+    if (!this.pdfPrinterDisabled) {
+      this.pdfPosinset = currentPosition++;
+    }
+    if (this.driveDestinationKey) {
+      this.drivePosinset = currentPosition++;
+    }
+    this.seeMorePosinset = currentPosition++;
   }
 }
 

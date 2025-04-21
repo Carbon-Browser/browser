@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_MANAGER_SERVICE_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,13 +14,12 @@
 #include "base/observer_list.h"
 #include "chromeos/ash/services/assistant/assistant_manager_service.h"
 #include "chromeos/ash/services/assistant/test_support/fake_assistant_settings_impl.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 using media_session::mojom::MediaSessionAction;
 
@@ -40,10 +40,9 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   void FinishStart();
 
   // assistant::AssistantManagerService overrides
-  void Start(const absl::optional<UserInfo>& user,
-             bool enable_hotword) override;
+  void Start(const std::optional<UserInfo>& user, bool enable_hotword) override;
   void Stop() override;
-  void SetUser(const absl::optional<UserInfo>& user) override;
+  void SetUser(const std::optional<UserInfo>& user) override;
   void EnableListening(bool enable) override;
   void EnableHotword(bool enable) override;
   void SetArcPlayStoreEnabled(bool enabled) override;
@@ -59,8 +58,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
 
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
                             AssistantQuerySource source,
                             bool allow_tts) override;
@@ -71,7 +68,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   void AddRemoteConversationObserver(ConversationObserver* observer) override {}
   void RemoveAssistantInteractionSubscriber(
       AssistantInteractionSubscriber* subscriber) override;
-  mojo::PendingReceiver<chromeos::libassistant::mojom::NotificationDelegate>
+  mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
   GetPendingNotificationDelegate() override;
   void RetrieveNotification(const AssistantNotification& notification,
                             int action_index) override;
@@ -89,9 +86,11 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   void SetStateAndInformObservers(State new_state);
 
   // Return the access token that was passed to |SetUser|.
-  absl::optional<std::string> access_token() { return access_token_; }
+  std::optional<std::string> access_token() { return access_token_; }
   // Return the Gaia ID that was passed to |SetUser|.
-  absl::optional<std::string> gaia_id() { return gaia_id_; }
+  const std::optional<GaiaId>& gaia_id() const { return gaia_id_; }
+
+  void Disconnected();
 
  private:
   // Send out a |AssistantStateObserver::OnStateChange(state)| event if we are
@@ -99,13 +98,12 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   void MaybeSendStateChange(State state, State old_state, State target_state);
 
   State state_ = State::STOPPED;
-  absl::optional<std::string> gaia_id_;
-  absl::optional<std::string> access_token_;
+  std::optional<GaiaId> gaia_id_;
+  std::optional<std::string> access_token_;
   FakeAssistantSettingsImpl assistant_settings_;
   base::ObserverList<StateObserver> state_observers_;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_MANAGER_SERVICE_IMPL_H_

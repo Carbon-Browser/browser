@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,32 +7,32 @@
  * 'site-entry' is an element representing a single eTLD+1 site entity.
  */
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
+import 'chrome://resources/cr_elements/cr_collapse/cr_collapse.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 
-import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/js/i18n_mixin.js';
-import {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
-import {DomRepeatEvent, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrCollapseElement} from 'chrome://resources/cr_elements/cr_collapse/cr_collapse.js';
+import type {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {BaseMixin, BaseMixinInterface} from '../base_mixin.js';
+import {BaseMixin} from '../base_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
 import {AllSitesAction2, SortMethod} from './constants.js';
-import {LocalDataBrowserProxy, LocalDataBrowserProxyImpl} from './local_data_browser_proxy.js';
 import {getTemplate} from './site_entry.html.js';
-import {SiteSettingsMixin, SiteSettingsMixinInterface} from './site_settings_mixin.js';
-import {OriginInfo, SiteGroup} from './site_settings_prefs_browser_proxy.js';
+import {SiteSettingsMixin} from './site_settings_mixin.js';
+import type {OriginInfo, SiteGroup} from './site_settings_prefs_browser_proxy.js';
 
 
 export interface SiteEntryElement {
@@ -40,19 +40,16 @@ export interface SiteEntryElement {
     expandIcon: CrIconButtonElement,
     collapseParent: HTMLElement,
     cookies: HTMLElement,
+    rwsMembership: HTMLElement,
     displayName: HTMLElement,
-    originList: CrLazyRenderElement<IronCollapseElement>,
+    originList: CrLazyRenderElement<CrCollapseElement>,
     toggleButton: HTMLElement,
+    extensionIdDescription: HTMLElement,
   };
 }
 
 const SiteEntryElementBase =
-    mixinBehaviors(
-        [FocusRowBehavior],
-        BaseMixin(SiteSettingsMixin(I18nMixin(PolymerElement)))) as {
-      new (): PolymerElement & I18nMixinInterface & SiteSettingsMixinInterface &
-          BaseMixinInterface,
-    };
+    FocusRowMixin(BaseMixin(SiteSettingsMixin(I18nMixin(PolymerElement))));
 
 export class SiteEntryElement extends SiteEntryElementBase {
   static get is() {
@@ -75,7 +72,9 @@ export class SiteEntryElement extends SiteEntryElementBase {
 
       /**
        * The name to display beside the icon. If grouped_() is true, it will be
-       * the eTLD+1 for all the origins, otherwise, it will return the host.
+       * the eTLD+1 for all the origins. For Isolated Web Apps instead of
+       * displaying the origin, the short name of the app will be displayed.
+       * Otherwise, it will return the host.
        */
       displayName_: String,
 
@@ -83,6 +82,26 @@ export class SiteEntryElement extends SiteEntryElementBase {
        * The string to display when there is a non-zero number of cookies.
        */
       cookieString_: String,
+
+      /**
+       * The related website set info for a site including owner and members
+       * count.
+       */
+      rwsMembershipLabel_: {
+        type: String,
+        value: '',
+      },
+
+      /**
+       * Mock preference used to power managed policy icon for related website
+       * sets.
+       */
+      rwsEnterprisePref_: Object,
+
+      /**
+       * Whether site entry is shown with a related website set filter search.
+       */
+      isRwsFiltered: Boolean,
 
       /**
        * The position of this site-entry in its parent list.
@@ -123,28 +142,30 @@ export class SiteEntryElement extends SiteEntryElementBase {
        * The selected sort method.
        */
       sortMethod: {type: String, observer: 'updateOrigins_'},
-
-      enableConsolidatedSiteStorageControls_: {
-        type: Boolean,
-        value: () =>
-            loadTimeData.getBoolean('consolidatedSiteStorageControlsEnabled'),
-      },
     };
+  }
+
+  static get observers() {
+    return [
+      'updateRwsMembershipLabel_(siteGroup.rwsNumMembers, siteGroup.rwsOwner)',
+      'updatePolicyPref_(siteGroup.rwsEnterpriseManaged)',
+      'updateFocus_(siteGroup.rwsOwner)',
+    ];
   }
 
   siteGroup: SiteGroup;
   private displayName_: string;
   private cookieString_: string;
+  private rwsMembershipLabel_: string;
+  isRwsFiltered: boolean;
   listIndex: number;
   private overallUsageString_: string;
   private originUsages_: string[];
   private cookiesNum_: string[];
   sortMethod?: SortMethod;
-  private enableConsolidatedSiteStorageControls_: boolean;
+  private rwsEnterprisePref_: chrome.settingsPrivate.PrefObject;
 
   private button_: Element|null = null;
-  private localDataBrowserProxy_: LocalDataBrowserProxy =
-      LocalDataBrowserProxyImpl.getInstance();
   private eventTracker_: EventTracker = new EventTracker();
 
   override disconnectedCallback() {
@@ -180,23 +201,14 @@ export class SiteEntryElement extends SiteEntryElementBase {
 
   /**
    * Returns a user-friendly name for the siteGroup.
-   * If grouped_() is true and eTLD+1 is available, returns the eTLD+1,
-   * otherwise return the origin representation for the first origin.
-   * @param siteGroup The eTLD+1 group of origins.
+   * @param siteGroup The group of origins.
    * @return The user-friendly name.
    */
   private siteGroupRepresentation_(siteGroup: SiteGroup): string {
     if (!siteGroup) {
       return '';
     }
-    if (this.grouped_(siteGroup)) {
-      if (siteGroup.etldPlus1 !== '') {
-        return siteGroup.etldPlus1;
-      }
-      // Fall back onto using the host of the first origin, if no eTLD+1 name
-      // was computed.
-    }
-    return this.originRepresentation(siteGroup.origins[0].origin);
+    return siteGroup.displayName;
   }
 
   /**
@@ -277,8 +289,9 @@ export class SiteEntryElement extends SiteEntryElementBase {
     // origin. Otherwise find the origin with largest storage, and use the
     // number of cookies as a tie breaker.
     for (const originInfo of origins) {
-      if (this.toUrl(originInfo.origin)!.host ===
-          'www.' + siteGroup.etldPlus1) {
+      if (siteGroup.etldPlus1 &&
+          this.toUrl(originInfo.origin)!.host ===
+              'www.' + siteGroup.etldPlus1) {
         return originInfo.origin;
       }
     }
@@ -308,6 +321,19 @@ export class SiteEntryElement extends SiteEntryElementBase {
     });
   }
 
+  private isRwsMember_(): boolean {
+    return !!this.siteGroup && this.siteGroup.rwsOwner !== undefined;
+  }
+
+  /**
+   * Evaluates whether the three dot menu should be shown for the site entry.
+   * @returns True if site group is a related website set member and filter by
+   * related website set owner is not applied.
+   */
+  private shouldShowOverflowMenu(): boolean {
+    return this.isRwsMember_() && !this.isRwsFiltered;
+  }
+
   /**
    * Get display string for number of cookies.
    */
@@ -315,7 +341,63 @@ export class SiteEntryElement extends SiteEntryElementBase {
     if (numCookies === 0) {
       return Promise.resolve('');
     }
-    return this.localDataBrowserProxy_.getNumCookiesString(numCookies);
+    return this.browserProxy.getNumCookiesString(numCookies);
+  }
+
+  /**
+   * Updates the display string for RWS information of owner and member count.
+   * @param rwsNumMembers The number of members in the related website set.
+   * @param rwsOwner The eTLD+1 for the related website set owner.
+   */
+  private updateRwsMembershipLabel_() {
+    if (!this.siteGroup.rwsOwner) {
+      this.rwsMembershipLabel_ = '';
+    } else {
+      this.browserProxy
+          .getRwsMembershipLabel(
+              this.siteGroup.rwsNumMembers!, this.siteGroup.rwsOwner!)
+          .then(label => this.rwsMembershipLabel_ = label);
+    }
+  }
+
+  /**
+   * Evaluates whether the policy icon should be shown.
+   * @returns True when `this.siteGroup.rwsEnterpriseManaged` is true,
+   * otherwise false.
+   */
+  private shouldShowPolicyPrefIndicator_(): boolean {
+    return !!this.siteGroup.rwsEnterpriseManaged;
+  }
+
+  /**
+   * Updates `rwsEnterprisePref_` based on `siteGroup.rwsEnterpriseManaged`.
+   */
+  private updatePolicyPref_() {
+    this.rwsEnterprisePref_ = this.siteGroup.rwsEnterpriseManaged ?
+        Object.assign({
+          enforcement: chrome.settingsPrivate.Enforcement.ENFORCED,
+          controlledBy: chrome.settingsPrivate.ControlledBy.DEVICE_POLICY,
+        }) :
+        Object.assign({
+          enforcement: undefined,
+          controlledBy: undefined,
+        });
+  }
+
+  private updateFocus_() {
+    // TODO(crbug.com/40875159): Re-focusing a changed entry (such as when an
+    // entry is removed from list) happens before the entry elements have been
+    // updated (e.g. different buttons shown / hidden). This causes the
+    // focusRowMixin to incorrectly identify an element which is about to be
+    // hidden / removed as a valid focus target.
+    const isCurrentlyFocused = this.isFocused;
+    afterNextRender(this, () => {
+      if (isCurrentlyFocused) {
+        (this.shouldShowOverflowMenu() ?
+             this.$$<CrIconButtonElement>('#rwsOverflowMenuButton') :
+             this.$$<CrIconButtonElement>('#removeSiteButton'))!.focus();
+      }
+    });
   }
 
   /**
@@ -351,7 +433,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
   /**
    * A handler for selecting a site (by clicking on the origin).
    */
-  private onOriginTap_(e: DomRepeatEvent<OriginInfo>) {
+  private onOriginClick_(e: DomRepeatEvent<OriginInfo>) {
     if (this.siteGroup.origins[e.model.index].isPartitioned) {
       return;
     }
@@ -364,7 +446,7 @@ export class SiteEntryElement extends SiteEntryElementBase {
    * A handler for clicking on a site-entry heading. This will either show a
    * list of origins or directly navigates to Site Details if there is only one.
    */
-  private onSiteEntryTap_() {
+  private onSiteEntryClick_() {
     // Individual origins don't expand - just go straight to Site Details.
     if (!this.grouped_(this.siteGroup)) {
       this.navigateToSiteDetails_(this.siteGroup.origins[0].origin);
@@ -387,8 +469,10 @@ export class SiteEntryElement extends SiteEntryElementBase {
     collapseChild.toggle();
     this.$.toggleButton.setAttribute(
         'aria-expanded', collapseChild.opened ? 'true' : 'false');
-    this.$.expandIcon.toggleClass('icon-expand-more');
-    this.$.expandIcon.toggleClass('icon-expand-less');
+    this.$.expandIcon.setAttribute(
+        'aria-expanded', collapseChild.opened ? 'true' : 'false');
+    this.$.expandIcon.classList.toggle('icon-expand-more');
+    this.$.expandIcon.classList.toggle('icon-expand-less');
     this.fire('iron-resize');
   }
 
@@ -427,11 +511,20 @@ export class SiteEntryElement extends SiteEntryElementBase {
     return index > 0 ? 'hr' : '';
   }
 
+  private getSubpageLabel_(target: string): string {
+    return this.i18n(
+        'siteSettingsSiteDetailsSubpageAccessibilityLabel', target);
+  }
+
   private getRemoveOriginButtonTitle_(origin: string): string {
     return this.i18n(
         'siteSettingsCookieRemoveSite', this.originRepresentation(origin));
   }
 
+  private getMoreActionsLabel_(): string {
+    return this.i18n(
+        'relatedWebsiteSetsMoreActionsTitle', this.siteGroup.displayName);
+  }
   /**
    * Update the order and data display text for origins.
    */
@@ -485,6 +578,21 @@ export class SiteEntryElement extends SiteEntryElementBase {
       };
     }
     assertNotReached();
+  }
+
+  /**
+   * Get extension id description string for an extension |siteGroup|.
+   */
+  private extensionIdDescription_(siteGroup: SiteGroup): string {
+    const id = this.originRepresentation(siteGroup.origins[0].origin);
+    return loadTimeData.getStringF('siteSettingsExtensionIdDescription', id);
+  }
+
+  /**
+   * Check if the given |siteGroup| is an extension.
+   */
+  private isExtension_(siteGroup: SiteGroup): boolean {
+    return this.siteGroupScheme_(siteGroup) === 'chrome-extension';
   }
 }
 

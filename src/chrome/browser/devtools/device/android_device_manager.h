@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/device/public/mojom/usb_manager.mojom.h"
@@ -80,7 +81,7 @@ class AndroidDeviceManager {
       virtual void OnSocketClosed() = 0;
 
      protected:
-      virtual ~Delegate() {}
+      virtual ~Delegate() = default;
     };
 
     AndroidWebSocket(const AndroidWebSocket&) = delete;
@@ -108,7 +109,7 @@ class AndroidDeviceManager {
 
     scoped_refptr<Device> device_;
     std::unique_ptr<WebSocketImpl, base::OnTaskRunnerDeleter> socket_impl_;
-    Delegate* delegate_;
+    raw_ptr<Delegate> delegate_;
     base::WeakPtrFactory<AndroidWebSocket> weak_factory_{this};
   };
 
@@ -228,19 +229,18 @@ class AndroidDeviceManager {
   typedef std::vector<DeviceDescriptor> DeviceDescriptors;
 
  private:
-  class HandlerThread : public base::RefCountedThreadSafe<HandlerThread> {
+  class HandlerThread {
    public:
-    static scoped_refptr<HandlerThread> GetInstance();
+    static HandlerThread* GetInstance();
     scoped_refptr<base::SingleThreadTaskRunner> message_loop();
 
    private:
-    friend class base::RefCountedThreadSafe<HandlerThread>;
-    static HandlerThread* instance_;
+    friend class base::NoDestructor<HandlerThread>;
     static void StopThread(base::Thread* thread);
 
     HandlerThread();
-    virtual ~HandlerThread();
-    base::Thread* thread_;
+    ~HandlerThread();
+    raw_ptr<base::Thread> thread_;
   };
 
   AndroidDeviceManager();
@@ -250,7 +250,7 @@ class AndroidDeviceManager {
 
   typedef std::map<std::string, base::WeakPtr<Device> > DeviceWeakMap;
 
-  scoped_refptr<HandlerThread> handler_thread_;
+  raw_ptr<HandlerThread> handler_thread_;
   DeviceProviders providers_;
   DeviceWeakMap devices_;
 

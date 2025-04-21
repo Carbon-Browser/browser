@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,57 +20,22 @@ namespace mojo {
 // Issue
 
 template <>
-struct EnumTraits<media_router::mojom::Issue_ActionType,
-                  media_router::IssueInfo::Action> {
-  static media_router::mojom::Issue_ActionType ToMojom(
-      media_router::IssueInfo::Action action) {
-    switch (action) {
-      case media_router::IssueInfo::Action::DISMISS:
-        return media_router::mojom::Issue_ActionType::DISMISS;
-      case media_router::IssueInfo::Action::LEARN_MORE:
-        return media_router::mojom::Issue_ActionType::LEARN_MORE;
-    }
-    NOTREACHED() << "Unknown issue action type " << static_cast<int>(action);
-    return media_router::mojom::Issue_ActionType::DISMISS;
-  }
-
-  static bool FromMojom(media_router::mojom::Issue_ActionType input,
-                        media_router::IssueInfo::Action* output) {
-    switch (input) {
-      case media_router::mojom::Issue_ActionType::DISMISS:
-        *output = media_router::IssueInfo::Action::DISMISS;
-        return true;
-      case media_router::mojom::Issue_ActionType::LEARN_MORE:
-        *output = media_router::IssueInfo::Action::LEARN_MORE;
-        return true;
-    }
-    return false;
-  }
-};
-
-template <>
 struct EnumTraits<media_router::mojom::Issue_Severity,
                   media_router::IssueInfo::Severity> {
   static media_router::mojom::Issue_Severity ToMojom(
       media_router::IssueInfo::Severity severity) {
     switch (severity) {
-      case media_router::IssueInfo::Severity::FATAL:
-        return media_router::mojom::Issue_Severity::FATAL;
       case media_router::IssueInfo::Severity::WARNING:
         return media_router::mojom::Issue_Severity::WARNING;
       case media_router::IssueInfo::Severity::NOTIFICATION:
         return media_router::mojom::Issue_Severity::NOTIFICATION;
     }
     NOTREACHED() << "Unknown issue severity " << static_cast<int>(severity);
-    return media_router::mojom::Issue_Severity::WARNING;
   }
 
   static bool FromMojom(media_router::mojom::Issue_Severity input,
                         media_router::IssueInfo::Severity* output) {
     switch (input) {
-      case media_router::mojom::Issue_Severity::FATAL:
-        *output = media_router::IssueInfo::Severity::FATAL;
-        return true;
       case media_router::mojom::Issue_Severity::WARNING:
         *output = media_router::IssueInfo::Severity::WARNING;
         return true;
@@ -143,9 +108,9 @@ struct StructTraits<media_router::mojom::CastMediaSinkDataView,
     return extra_data.ip_endpoint;
   }
 
-  static uint8_t capabilities(
+  static uint64_t capabilities(
       const media_router::CastSinkExtraData& extra_data) {
-    return extra_data.capabilities;
+    return extra_data.capabilities.ToEnumBitmask();
   }
 
   static int32_t cast_channel_id(
@@ -176,30 +141,12 @@ struct StructTraits<media_router::mojom::IssueDataView,
     return issue.severity;
   }
 
-  static bool is_blocking(const media_router::IssueInfo& issue) {
-    return issue.is_blocking;
-  }
-
   static const std::string& title(const media_router::IssueInfo& issue) {
     return issue.title;
   }
 
   static const std::string& message(const media_router::IssueInfo& issue) {
     return issue.message;
-  }
-
-  static media_router::IssueInfo::Action default_action(
-      const media_router::IssueInfo& issue) {
-    return issue.default_action;
-  }
-
-  static const std::vector<media_router::IssueInfo::Action>& secondary_actions(
-      const media_router::IssueInfo& issue) {
-    return issue.secondary_actions;
-  }
-
-  static int32_t help_page_id(const media_router::IssueInfo& issue) {
-    return issue.help_page_id;
   }
 };
 
@@ -225,7 +172,6 @@ struct EnumTraits<media_router::mojom::SinkIconType,
         break;
     }
     NOTREACHED() << "Unknown sink icon type " << static_cast<int>(icon_type);
-    return media_router::mojom::SinkIconType::GENERIC;
   }
 
   static bool FromMojom(media_router::mojom::SinkIconType input,
@@ -267,16 +213,6 @@ struct StructTraits<media_router::mojom::MediaSinkDataView,
     return sink_internal.sink().name();
   }
 
-  static const absl::optional<std::string>& description(
-      const media_router::MediaSinkInternal& sink_internal) {
-    return sink_internal.sink().description();
-  }
-
-  static const absl::optional<std::string>& domain(
-      const media_router::MediaSinkInternal& sink_internal) {
-    return sink_internal.sink().domain();
-  }
-
   static media_router::SinkIconType icon_type(
       const media_router::MediaSinkInternal& sink_internal) {
     return sink_internal.sink().icon_type();
@@ -310,7 +246,6 @@ struct EnumTraits<media_router::mojom::RouteControllerType,
     }
     NOTREACHED() << "Unknown controller type "
                  << static_cast<int>(controller_type);
-    return media_router::mojom::RouteControllerType::kNone;
   }
 
   static bool FromMojom(media_router::mojom::RouteControllerType input,
@@ -350,11 +285,11 @@ struct StructTraits<media_router::mojom::MediaRouteDataView,
       const media_router::MediaRoute& route) {
     // TODO(imcheng): If we ever convert from C++ to Mojo outside of unit tests,
     // it would be better to make the |media_source_| field on MediaRoute a
-    // absl::optional<MediaSource::Id> instead so it can be returned directly
+    // std::optional<MediaSource::Id> instead so it can be returned directly
     // here.
-    return mojo::MakeOptionalAsPointer(route.media_source().id().empty()
-                                           ? nullptr
-                                           : &route.media_source().id());
+    return mojo::OptionalAsPointer(route.media_source().id().empty()
+                                       ? nullptr
+                                       : &route.media_source().id());
   }
 
   static const std::string& media_sink_id(
@@ -378,10 +313,6 @@ struct StructTraits<media_router::mojom::MediaRouteDataView,
   static media_router::RouteControllerType controller_type(
       const media_router::MediaRoute& route) {
     return route.controller_type();
-  }
-
-  static bool is_off_the_record(const media_router::MediaRoute& route) {
-    return route.is_off_the_record();
   }
 
   static bool is_local_presentation(const media_router::MediaRoute& route) {

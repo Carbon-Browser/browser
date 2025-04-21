@@ -1,18 +1,13 @@
 # Lint as: python3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Implementation of the graph module for a [Java class] dependency graph."""
 
-import re
-from typing import Set, Tuple
+from typing import Optional, Set, Tuple
 
 import graph
 import class_json_consts
-
-# Matches w/o parens: (some.package.name).(class)$($optional$nested$class)
-JAVA_CLASS_FULL_NAME_REGEX = re.compile(
-    r'^(?P<package>.*)\.(?P<class_name>.*?)(\$(?P<nested>.*))?$')
 
 
 def java_class_params_to_key(package: str, class_name: str):
@@ -20,13 +15,17 @@ def java_class_params_to_key(package: str, class_name: str):
     return f'{package}.{class_name}'
 
 
-def split_nested_class_from_key(key: str) -> Tuple[str, str]:
-    """Splits a jdeps class name into its key and nested class, if any."""
-    re_match = JAVA_CLASS_FULL_NAME_REGEX.match(key)
-    package = re_match.group('package')
-    class_name = re_match.group('class_name')
-    nested = re_match.group('nested')
-    return java_class_params_to_key(package, class_name), nested
+def split_nested_class_from_key(key: str) -> Tuple[str, Optional[str]]:
+    """Splits a jdeps class name into its key and nested class, if any.
+
+    E.g. package.class => 'package.class', None
+         package.class$nested => 'package.class', 'nested'
+    """
+    first_dollar_sign = key.find('$')
+    if first_dollar_sign == -1:
+        return key, None
+    else:
+        return key[:first_dollar_sign], key[first_dollar_sign + 1:]
 
 
 class JavaClass(graph.Node):
@@ -79,7 +78,7 @@ class JavaClass(graph.Node):
     @property
     def build_targets(self) -> Set[str]:
         """Which build target(s) contain the class."""
-        # TODO(crbug.com/1124836): Make this return a List, sorted by
+        # TODO(crbug.com/40147556): Make this return a List, sorted by
         # importance.
         return self._build_targets
 
@@ -113,14 +112,14 @@ class JavaClass(graph.Node):
         }
 
 
-class JavaClassDependencyGraph(graph.Graph):
+class JavaClassDependencyGraph(graph.Graph[JavaClass]):
     """A graph representation of the dependencies between Java classes.
 
     A directed edge A -> B indicates that A depends on B.
     """
     def create_node_from_key(self, key: str):
-        """See comment above the regex definition."""
-        re_match = JAVA_CLASS_FULL_NAME_REGEX.match(key)
-        package = re_match.group('package')
-        class_name = re_match.group('class_name')
-        return JavaClass(package, class_name)
+        """Splits the key into package and class_name."""
+        key_without_nested_class, _ = split_nested_class_from_key(key)
+        last_period = key_without_nested_class.rfind('.')
+        return JavaClass(package=key_without_nested_class[:last_period],
+                         class_name=key_without_nested_class[last_period + 1:])

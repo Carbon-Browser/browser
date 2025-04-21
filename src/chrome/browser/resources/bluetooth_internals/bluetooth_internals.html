@@ -1,7 +1,7 @@
 <!DOCTYPE HTML>
 <html lang="en">
 
-<!-- TODO(crbug.com/658814): Localize strings. -->
+<!-- TODO(crbug.com/40490364): Localize strings. -->
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,6 +21,9 @@
     </header>
     <section id="adapter" class="flex" hidden>
       <div class="header-extras">
+<if expr="chromeos_ash">
+        <button id="restart-bluetooth-btn">Restart system Bluetooth</button>
+</if>
         <button id="adapter-refresh-btn">Refresh</button>
       </div>
     </section>
@@ -57,24 +60,6 @@
   </aside>
 </body>
 
-<template id="table-template">
-  <table>
-    <thead>
-      <tr>
-        <th data-field="nameForDisplay">Name</th>
-        <th data-field="address">Address</th>
-        <th data-field="rssi.value">Latest RSSI</th>
-        <th data-field="serviceUuids">Services</th>
-        <th data-field="manufacturerDataMap">Manufacturer Data</th>
-        <th data-field="isGattConnected">GATT Connection State</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    </tbody>
-  </table>
-</template>
-
 <template id="device-details-template">
   <div class="device-details-page">
     <div class="header-extras">
@@ -87,5 +72,62 @@
     <section class="services"></section>
   </div>
 </template>
+
+<if expr="chromeos_ash">
+<template id="btsnoop-template">
+  <div>
+    <div>
+      Capture a Bluetooth debug log that will be saved to Downloads.
+    </div>
+    <div>
+      Debug logs may contain sensitive information including device identifiers.
+      Only share debug logs with people you trust.
+    </div>
+    <div>
+      <button id="btmon-start-btn"></button>
+      <span id="btmon-status-bar"></span>
+    </div>
+  </div>
+</template>
+</if>
+
+<dialog id="need-location-services-on">
+  Chrome needs location access to scan for devices. Location access is
+  <a id="need-location-services-on-services-link">
+    turned off for this device
+  </a>.
+</dialog>
+
+<dialog id="need-location-permission-and-services-on">
+  Chrome needs location access to scan for devices.
+  <a id="need-location-permission-and-services-on-permission-link">
+    Update permissions
+  </a>. Location access is also
+  <a id="need-location-permission-and-services-on-services-link">
+    turned off for this device
+  </a>.
+</dialog>
+
+<dialog id="need-nearby-devices-permission">
+  Chrome needs permission to scan for nearby devices.
+  <a id="need-nearby-devices-permission-permission-link">
+    Update permissions
+  </a>.
+</dialog>
+
+<dialog id="need-location-permission">
+  Chrome needs location access to scan for devices.
+  <a id="need-location-permission-permission-link">
+    Update permissions
+  </a>.
+</dialog>
+
+<dialog id="can-not-request-permissions">
+  Can not request permissions.
+</dialog>
+
+<dialog id="refresh-page">
+  Please refresh the page.
+</dialog>
 
 </html>

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,9 @@
 
 namespace service_manager {
 
+namespace mojom {
 class Service;
+}  // namespace mojom
 
 // Creates Connector instances which route BindInterface requests directly to
 // manually registered Service implementations. Useful for testing production

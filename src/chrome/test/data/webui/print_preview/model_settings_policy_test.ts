@@ -1,11 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ColorModeRestriction, Destination, DestinationOrigin, DuplexModeRestriction, Margins, PrintPreviewModelElement, Size} from 'chrome://print/print_preview.js';
-// <if expr="chromeos_ash or chromeos_lacros">
-import {PinModeRestriction} from 'chrome://print/print_preview.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import type {PrintPreviewModelElement} from 'chrome://print/print_preview.js';
+import {ColorModeRestriction, Destination, DestinationOrigin, DuplexModeRestriction, Margins,
+        // <if expr="is_chromeos">
+        PinModeRestriction,
+        // </if>
+        Size} from 'chrome://print/print_preview.js';
+// <if expr="is_chromeos">
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 // </if>
 
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
@@ -16,12 +20,13 @@ suite('ModelSettingsPolicyTest', function() {
   let model: PrintPreviewModelElement;
 
   function setupModel() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     model = document.createElement('print-preview-model');
     document.body.appendChild(model);
 
     model.documentSettings = {
-      hasCssMediaStyles: false,
+      allPagesHaveCustomSize: false,
+      allPagesHaveCustomOrientation: false,
       hasSelection: false,
       isModifiable: true,
       isScalingDisabled: false,
@@ -180,27 +185,36 @@ suite('ModelSettingsPolicyTest', function() {
        expectedShortEdgeEnforced: false,
      },
      {
-       // Policy sets duplex type, overriding default.
-       duplexCap: {
-         option: [
-           {type: 'NO_DUPLEX'},
-           {type: 'LONG_EDGE', is_default: true},
-           {type: 'SHORT_EDGE'},
-         ],
-       },
-       duplexPolicy: DuplexModeRestriction.SHORT_EDGE,
-       // Default mismatches restriction and is ignored.
-       duplexDefault: DuplexModeRestriction.LONG_EDGE,
-       expectedValue: true,
-       expectedAvailable: true,
-       expectedManaged: true,
-       expectedEnforced: true,
-       expectedShortEdge: true,
-       expectedShortEdgeAvailable: true,
-       expectedShortEdgeEnforced: true,
+       // Policies are unset.
+       duplexCap: {option: [{type: 'NO_DUPLEX', is_default: true}]},
+       duplexPolicy: DuplexModeRestriction.UNSET,
+       duplexDefault: DuplexModeRestriction.UNSET,
+       expectedValue: false,
+       expectedAvailable: false,
+       expectedManaged: false,
+       expectedEnforced: false,
+       expectedShortEdge: false,
+       expectedShortEdgeAvailable: false,
+       expectedShortEdgeEnforced: false,
      },
      {
-       // Default defined by policy but setting is modifiable.
+       // Policies are undefined.
+       duplexCap: {option: [{type: 'NO_DUPLEX', is_default: true}]},
+       duplexPolicy: undefined,
+       duplexDefault: undefined,
+       expectedValue: false,
+       expectedAvailable: false,
+       expectedManaged: false,
+       expectedEnforced: false,
+       expectedShortEdge: false,
+       expectedShortEdgeAvailable: false,
+       expectedShortEdgeEnforced: false,
+     },
+     // Couple of tests that verify the default and available duplex values set
+     // by policies.
+     // Default printing destination duplex mode should always be overwritten by
+     // the policy default.
+     {
        duplexCap: {
          option: [
            {type: 'NO_DUPLEX', is_default: true},
@@ -208,11 +222,48 @@ suite('ModelSettingsPolicyTest', function() {
            {type: 'SHORT_EDGE'},
          ],
        },
+       duplexPolicy: DuplexModeRestriction.DUPLEX,
+       duplexDefault: DuplexModeRestriction.SHORT_EDGE,
+       expectedValue: true,
+       expectedAvailable: true,
+       expectedManaged: true,
+       expectedEnforced: true,
+       expectedShortEdge: true,
+       expectedShortEdgeAvailable: true,
+       expectedShortEdgeEnforced: false,
+     },
+     {
+       duplexCap: {
+         option: [
+           {type: 'NO_DUPLEX'},
+           {type: 'LONG_EDGE'},
+           {type: 'SHORT_EDGE', is_default: true},
+         ],
+       },
+       duplexPolicy: DuplexModeRestriction.UNSET,
        duplexDefault: DuplexModeRestriction.LONG_EDGE,
        expectedValue: true,
        expectedAvailable: true,
        expectedManaged: false,
        expectedEnforced: false,
+       expectedShortEdge: false,
+       expectedShortEdgeAvailable: true,
+       expectedShortEdgeEnforced: false,
+     },
+     {
+       duplexCap: {
+         option: [
+           {type: 'NO_DUPLEX'},
+           {type: 'LONG_EDGE', is_default: true},
+           {type: 'SHORT_EDGE'},
+         ],
+       },
+       duplexPolicy: DuplexModeRestriction.SIMPLEX,
+       duplexDefault: DuplexModeRestriction.SIMPLEX,
+       expectedValue: false,
+       expectedAvailable: true,
+       expectedManaged: true,
+       expectedEnforced: true,
        expectedShortEdge: false,
        expectedShortEdgeAvailable: true,
        expectedShortEdgeEnforced: false,
@@ -251,7 +302,7 @@ suite('ModelSettingsPolicyTest', function() {
     });
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   test('pin managed', function() {
     [{
       // No policies, settings is modifiable.

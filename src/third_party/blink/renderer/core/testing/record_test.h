@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_TESTING_RECORD_TEST_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TESTING_RECORD_TEST_H_
 
+#include <optional>
 #include <utility>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -30,8 +30,8 @@ class RecordTest final : public ScriptWrappable {
   Vector<std::pair<String, int32_t>> getStringLongRecord();
 
   void setNullableStringLongRecord(
-      const absl::optional<Vector<std::pair<String, int32_t>>>& arg);
-  absl::optional<Vector<std::pair<String, int32_t>>>
+      const std::optional<Vector<std::pair<String, int32_t>>>& arg);
+  std::optional<Vector<std::pair<String, int32_t>>>
   getNullableStringLongRecord();
 
   Vector<std::pair<String, String>> GetByteStringByteStringRecord();
@@ -60,7 +60,7 @@ class RecordTest final : public ScriptWrappable {
 
  private:
   Vector<std::pair<String, int32_t>> string_long_record_;
-  absl::optional<Vector<std::pair<String, int32_t>>>
+  std::optional<Vector<std::pair<String, int32_t>>>
       nullable_string_long_record_;
   Vector<std::pair<String, String>> byte_string_byte_string_record_;
   HeapVector<std::pair<String, Member<Element>>> string_element_record_;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ void CheckCastedOriginsAlreadyNormalized(
   if (origin.IsOpaque())
     return;
 
-  absl::optional<url::Origin> checked_origin =
+  std::optional<url::Origin> checked_origin =
       url::Origin::UnsafelyCreateTupleOriginWithoutNormalization(
           origin.Protocol().Utf8(), origin.Host().Utf8(), origin.Port());
   url::Origin non_checked_origin = url::Origin::CreateFromNormalizedTuple(

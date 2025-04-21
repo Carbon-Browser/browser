@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,8 @@ class CORE_EXPORT SpellCheckMarkerListImpl : public DocumentMarkerList {
                     unsigned offset,
                     unsigned old_length,
                     unsigned new_length) final;
+
+  void MergeOverlappingMarkers() final {}
 
   void Trace(Visitor*) const override;
 

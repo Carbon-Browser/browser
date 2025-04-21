@@ -1,12 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/354829279): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/gfx/display_color_spaces.h"
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
-#include "third_party/skia/include/core/SkColorSpace.h"
+#include "skia/ext/skcolorspace_primaries.h"
 
 namespace gfx {
 
@@ -21,7 +25,10 @@ const ContentColorUsage kAllColorUsages[] = {
 gfx::BufferFormat DefaultBufferFormat() {
   // ChromeOS expects the default buffer format be BGRA_8888 in several places.
   // https://crbug.com/1057501, https://crbug.com/1073237
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // The default format on Mac is BGRA in screen_mac.cc, so we set it here
+  // too so that it matches with --ensure-forced-color-profile.
+  // https://crbug.com/1478708
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
   return gfx::BufferFormat::BGRA_8888;
 #else
   return gfx::BufferFormat::RGBA_8888;
@@ -42,7 +49,7 @@ size_t GetIndex(ContentColorUsage color_usage, bool needs_alpha) {
 }  // namespace
 
 DisplayColorSpaces::DisplayColorSpaces() {
-  // TODO(crbug/1309228): Revert back to range-based for loops if possible
+  // TODO(crbug.com/40219387): Revert back to range-based for loops if possible
   for (size_t i = 0; i < kConfigCount; i++) {
     color_spaces_[i] = gfx::ColorSpace::CreateSRGB();
     buffer_formats_[i] = DefaultBufferFormat();
@@ -59,13 +66,14 @@ DisplayColorSpaces::DisplayColorSpaces(const gfx::ColorSpace& c)
     : DisplayColorSpaces() {
   if (!c.IsValid())
     return;
+  primaries_ = c.GetPrimaries();
   for (size_t i = 0; i < kConfigCount; i++)  // NOLINT (modernize-loop-convert)
     color_spaces_[i] = c;
 }
 
-DisplayColorSpaces::DisplayColorSpaces(const ColorSpace& c, BufferFormat f) {
+DisplayColorSpaces::DisplayColorSpaces(const ColorSpace& c, BufferFormat f)
+    : DisplayColorSpaces(c) {
   for (size_t i = 0; i < kConfigCount; i++) {
-    color_spaces_[i] = c.IsValid() ? c : gfx::ColorSpace::CreateSRGB();
     buffer_formats_[i] = f;
   }
 }
@@ -118,13 +126,8 @@ gfx::ColorSpace DisplayColorSpaces::GetCompositingColorSpace(
 
 bool DisplayColorSpaces::SupportsHDR() const {
   return GetOutputColorSpace(ContentColorUsage::kHDR, false).IsHDR() ||
-         GetOutputColorSpace(ContentColorUsage::kHDR, true).IsHDR();
-}
-
-SkColorSpacePrimaries DisplayColorSpaces::GetPrimaries() const {
-  // TODO(https://crbug.com/1274220): Store this directly, rather than inferring
-  // it from the raster color space.
-  return GetRasterColorSpace().GetColorSpacePrimaries();
+         GetOutputColorSpace(ContentColorUsage::kHDR, true).IsHDR() ||
+         hdr_max_luminance_relative_ > 1.f;
 }
 
 ColorSpace DisplayColorSpaces::GetScreenInfoColorSpace() const {
@@ -197,6 +200,8 @@ bool DisplayColorSpaces::operator==(const DisplayColorSpaces& other) const {
     if (buffer_formats_[i] != other.buffer_formats_[i])
       return false;
   }
+  if (primaries_ != other.primaries_)
+    return false;
   if (sdr_max_luminance_nits_ != other.sdr_max_luminance_nits_)
     return false;
   if (hdr_max_luminance_relative_ != other.hdr_max_luminance_relative_)
@@ -207,6 +212,15 @@ bool DisplayColorSpaces::operator==(const DisplayColorSpaces& other) const {
 
 bool DisplayColorSpaces::operator!=(const DisplayColorSpaces& other) const {
   return !(*this == other);
+}
+
+// static
+bool DisplayColorSpaces::EqualExceptForHdrHeadroom(
+    const DisplayColorSpaces& a,
+    const DisplayColorSpaces& b) {
+  DisplayColorSpaces b_with_a_params = b;
+  b_with_a_params.hdr_max_luminance_relative_ = a.hdr_max_luminance_relative_;
+  return a == b_with_a_params;
 }
 
 }  // namespace gfx

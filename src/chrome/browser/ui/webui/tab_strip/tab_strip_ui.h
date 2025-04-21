@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,37 @@
 #include "chrome/browser/ui/webui/tab_strip/tab_strip.mojom.h"
 #include "chrome/browser/ui/webui/tab_strip/thumbnail_tracker.h"
 #include "chrome/browser/ui/webui/webui_load_timer.h"
+#include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/web_ui_controller.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "ui/webui/mojo_web_ui_controller.h"
 #include "ui/webui/resources/cr_components/color_change_listener/color_change_listener.mojom.h"
 
-class Browser;
+namespace ui {
 class ColorChangeHandler;
+}  // namespace ui
+
+class Browser;
 class TabStripPageHandler;
 class TabStripUIEmbedder;
 
-extern const char kWebUITabIdDataType[];
-extern const char kWebUITabGroupIdDataType[];
+// These data types must be in all lowercase.
+constexpr char16_t kWebUITabIdDataType[] = u"application/vnd.chromium.tab";
+constexpr char16_t kWebUITabGroupIdDataType[] =
+    u"application/vnd.chromium.tabgroup";
+
+class TabStripUI;
+
+class TabStripUIConfig : public content::DefaultWebUIConfig<TabStripUI> {
+ public:
+  TabStripUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUITabStripHost) {}
+};
 
 // The WebUI version of the tab strip in the browser. It is currently only
 // supported on ChromeOS in tablet mode.
@@ -62,9 +79,6 @@ class TabStripUI : public ui::MojoWebUIController,
   void ReceivedKeyboardFocus();
 
  private:
-  void HandleThumbnailUpdate(int extension_tab_id,
-                             ThumbnailTracker::CompressedThumbnailData image);
-
   // tab_strip::mojom::PageHandlerFactory
   void CreatePageHandler(
       mojo::PendingRemote<tab_strip::mojom::Page> page,
@@ -74,7 +88,7 @@ class TabStripUI : public ui::MojoWebUIController,
 
   std::unique_ptr<TabStripPageHandler> page_handler_;
 
-  std::unique_ptr<ColorChangeHandler> color_provider_handler_;
+  std::unique_ptr<ui::ColorChangeHandler> color_provider_handler_;
 
   mojo::Receiver<tab_strip::mojom::PageHandlerFactory> page_factory_receiver_{
       this};

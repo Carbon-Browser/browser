@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/tab_footprint_aggregator.h"
 
+#include <string_view>
 #include <utility>
 
 #include "components/ukm/test_ukm_recorder.h"
@@ -37,7 +38,7 @@ class TabFootprintAggregatorTest : public testing::Test {
  protected:
   // Walk through |mock_recorder_|'s UKM entries to collect |metric_name|
   // values.
-  ResultMap CollectResults(const base::StringPiece& metric_name) const {
+  ResultMap CollectResults(std::string_view metric_name) const {
     ResultMap result;
     for (const ukm::mojom::UkmEntry* entry :
          mock_recorder_.GetEntriesByName(Memory_TabFootprint::kEntryName)) {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,13 +41,13 @@ class CORE_EXPORT InterpolationType {
   // maybeConvertSingle() to enable the caller to check whether the result is
   // still valid given changes in the InterpolationEnvironment and underlying
   // InterpolationValue.
-  class ConversionChecker {
-    USING_FAST_MALLOC(ConversionChecker);
-
+  class ConversionChecker : public GarbageCollected<ConversionChecker> {
    public:
     ConversionChecker(const ConversionChecker&) = delete;
     ConversionChecker& operator=(const ConversionChecker&) = delete;
     virtual ~ConversionChecker() = default;
+    virtual void Trace(Visitor*) const {}
+
     void SetType(const InterpolationType& type) { type_ = &type; }
     const InterpolationType& GetType() const { return *type_; }
     virtual bool IsValid(const InterpolationEnvironment&,
@@ -57,7 +57,7 @@ class CORE_EXPORT InterpolationType {
     ConversionChecker() : type_(nullptr) {}
     const InterpolationType* type_;
   };
-  using ConversionCheckers = Vector<std::unique_ptr<ConversionChecker>>;
+  using ConversionCheckers = HeapVector<Member<ConversionChecker>>;
 
   virtual PairwiseInterpolationValue MaybeConvertPairwise(
       const PropertySpecificKeyframe& start_keyframe,
@@ -108,6 +108,13 @@ class CORE_EXPORT InterpolationType {
   virtual void Apply(const InterpolableValue&,
                      const NonInterpolableValue*,
                      InterpolationEnvironment&) const = 0;
+
+  // If this returns true, then transition-behavior:allow-discrete must be set
+  // in order to use this InterpolationType. Discrete properties generally don't
+  // have an InterpolationType set because there is nothing to interpolate, but
+  // some of them do in order to flip at the beginning or end of the animation
+  // instead of in the middle.
+  virtual bool IsDiscrete() const { return false; }
 
   // Implement reference equality checking via pointer equality checking as
   // these are singletons.

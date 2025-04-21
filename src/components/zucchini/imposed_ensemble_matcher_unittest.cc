@@ -1,25 +1,25 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/zucchini/imposed_ensemble_matcher.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "components/zucchini/imposed_ensemble_matcher.h"
-
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/zucchini/buffer_view.h"
 #include "components/zucchini/disassembler.h"
 #include "components/zucchini/element_detection.h"
 #include "components/zucchini/image_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace zucchini {
 
@@ -34,16 +34,16 @@ namespace {
 // - Everything else specify kExeTypeUnknown.
 class TestElementDetector {
  public:
-  TestElementDetector() {}
+  TestElementDetector() = default;
 
-  absl::optional<Element> Run(ConstBufferView image) const {
+  std::optional<Element> Run(ConstBufferView image) const {
     DCHECK_GT(image.size(), 0U);
     char first_char = *image.begin();
     if (first_char == 'W' || first_char == 'w')
       return Element(image.local_region(), kExeTypeWin32X86);
     if (first_char == 'E' || first_char == 'e')
       return Element(image.local_region(), kExeTypeElfX86);
-    return absl::nullopt;
+    return std::nullopt;
   }
 };
 

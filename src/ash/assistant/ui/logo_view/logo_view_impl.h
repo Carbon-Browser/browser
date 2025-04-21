@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/assistant/ui/logo_view/logo_view.h"
 #include "ash/assistant/ui/logo_view/shape/mic_part_shape.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/assistant/internal/logo_view/input_value_provider/sound_level_input_value_provider.h"
 #include "chromeos/assistant/internal/logo_view/logo_model/logo.h"
 #include "chromeos/assistant/internal/logo_view/state_animator.h"
@@ -45,9 +46,9 @@ class Shape;
 class LogoViewImpl : public LogoView,
                      public chromeos::assistant::StateAnimatorTimerDelegate,
                      public ui::CompositorAnimationObserver {
- public:
-  METADATA_HEADER(LogoViewImpl);
+  METADATA_HEADER(LogoViewImpl, LogoView)
 
+ public:
   using Dot = chromeos::assistant::Dot;
   using Logo = chromeos::assistant::Logo;
   using StateAnimator = chromeos::assistant::StateAnimator;
@@ -93,7 +94,7 @@ class LogoViewImpl : public LogoView,
 
   StateAnimator state_animator_;
 
-  ui::Compositor* animating_compositor_ = nullptr;
+  raw_ptr<ui::Compositor> animating_compositor_ = nullptr;
 
   float dots_scale_ = 1.0f;
 

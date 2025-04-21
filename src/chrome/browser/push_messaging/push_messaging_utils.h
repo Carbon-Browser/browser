@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,14 @@
 
 class GURL;
 
+namespace version_info {
+enum class Channel;
+}  // namespace version_info
+
 namespace push_messaging {
+
+// Returns the appropriate GCM endpoint for the given Chrome |channel|.
+std::string GetGcmEndpointForChannel(version_info::Channel channel);
 
 // Returns the URL used to send push messages to the subscription identified
 // by |subscription_id|.

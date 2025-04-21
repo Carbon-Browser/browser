@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,20 @@ static const size_t kHandleVectorInlineCapacity = 4;
 
 namespace blink {
 
+namespace {
+
+base::span<uint8_t> ByteSpanForBufferSource(const V8BufferSource& buffer) {
+  switch (buffer.GetContentType()) {
+    case V8BufferSource::ContentType::kArrayBuffer:
+      return buffer.GetAsArrayBuffer()->ByteSpan();
+    case V8BufferSource::ContentType::kArrayBufferView:
+      return buffer.GetAsArrayBufferView()->ByteSpan();
+  }
+  return {};
+}
+
+}  // namespace
+
 mojo::ScopedHandle MojoHandle::TakeHandle() {
   return std::move(handle_);
 }
@@ -54,7 +68,7 @@ MojoResult MojoHandle::writeMessage(
     const V8BufferSource* buffer,
     const HeapVector<Member<MojoHandle>>& handles) {
   Vector<mojo::ScopedHandle, kHandleVectorInlineCapacity> scoped_handles;
-  scoped_handles.ReserveCapacity(handles.size());
+  scoped_handles.reserve(handles.size());
   bool has_invalid_handles = false;
   for (auto& handle : handles) {
     if (!handle->handle_.is_valid())
@@ -65,26 +79,9 @@ MojoResult MojoHandle::writeMessage(
   if (has_invalid_handles)
     return MOJO_RESULT_INVALID_ARGUMENT;
 
-  const void* bytes = nullptr;
-  size_t num_bytes = 0;
-  switch (buffer->GetContentType()) {
-    case V8BufferSource::ContentType::kArrayBuffer: {
-      DOMArrayBuffer* array = buffer->GetAsArrayBuffer();
-      bytes = array->Data();
-      num_bytes = array->ByteLength();
-      break;
-    }
-    case V8BufferSource::ContentType::kArrayBufferView: {
-      const auto& view = buffer->GetAsArrayBufferView();
-      bytes = view->BaseAddress();
-      num_bytes = view->byteLength();
-      break;
-    }
-  }
+  base::span<const uint8_t> bytes = ByteSpanForBufferSource(*buffer);
 
-  auto message = mojo::Message(
-      base::make_span(static_cast<const uint8_t*>(bytes), num_bytes),
-      base::make_span(scoped_handles));
+  auto message = mojo::Message(bytes, base::span(scoped_handles));
   DCHECK(!message.IsNull());
   return mojo::WriteMessageNew(mojo::MessagePipeHandle(handle_.get().value()),
                                message.TakeMojoMessage(),
@@ -148,37 +145,23 @@ MojoReadMessageResult* MojoHandle::readMessage(
 MojoWriteDataResult* MojoHandle::writeData(
     const V8BufferSource* buffer,
     const MojoWriteDataOptions* options_dict) {
-  MojoWriteDataResult* result_dict = MojoWriteDataResult::Create();
-
   MojoWriteDataFlags flags = MOJO_WRITE_DATA_FLAG_NONE;
   if (options_dict->allOrNone())
     flags |= MOJO_WRITE_DATA_FLAG_ALL_OR_NONE;
 
-  const void* elements = nullptr;
-  base::CheckedNumeric<uint32_t> checked_num_bytes;
-  switch (buffer->GetContentType()) {
-    case V8BufferSource::ContentType::kArrayBuffer: {
-      DOMArrayBuffer* array = buffer->GetAsArrayBuffer();
-      elements = array->Data();
-      checked_num_bytes = array->ByteLength();
-      break;
-    }
-    case V8BufferSource::ContentType::kArrayBufferView: {
-      const auto& view = buffer->GetAsArrayBufferView();
-      elements = view->BaseAddress();
-      checked_num_bytes = view->byteLength();
-      break;
-    }
-  }
+  base::span<const uint8_t> bytes = ByteSpanForBufferSource(*buffer);
 
   ::MojoWriteDataOptions options;
   options.struct_size = sizeof(options);
   options.flags = flags;
   uint32_t num_bytes = 0;
   MojoResult result =
-      checked_num_bytes.AssignIfValid(&num_bytes)
-          ? MojoWriteData(handle_.get().value(), elements, &num_bytes, &options)
+      base::CheckedNumeric<uint32_t>(bytes.size()).AssignIfValid(&num_bytes)
+          ? MojoWriteData(handle_.get().value(), bytes.data(), &num_bytes,
+                          &options)
           : MOJO_RESULT_INVALID_ARGUMENT;
+
+  MojoWriteDataResult* result_dict = MojoWriteDataResult::Create();
   result_dict->setResult(result);
   result_dict->setNumBytes(result == MOJO_RESULT_OK ? num_bytes : 0);
   return result_dict;
@@ -218,29 +201,13 @@ MojoReadDataResult* MojoHandle::discardData(
 MojoReadDataResult* MojoHandle::readData(
     const V8BufferSource* buffer,
     const MojoReadDataOptions* options_dict) const {
-  MojoReadDataResult* result_dict = MojoReadDataResult::Create();
   MojoReadDataFlags flags = MOJO_READ_DATA_FLAG_NONE;
   if (options_dict->allOrNone())
     flags |= MOJO_READ_DATA_FLAG_ALL_OR_NONE;
   if (options_dict->peek())
     flags |= MOJO_READ_DATA_FLAG_PEEK;
 
-  void* elements = nullptr;
-  base::CheckedNumeric<uint32_t> checked_num_bytes;
-  switch (buffer->GetContentType()) {
-    case V8BufferSource::ContentType::kArrayBuffer: {
-      DOMArrayBuffer* array = buffer->GetAsArrayBuffer();
-      elements = array->Data();
-      checked_num_bytes = array->ByteLength();
-      break;
-    }
-    case V8BufferSource::ContentType::kArrayBufferView: {
-      const auto& view = buffer->GetAsArrayBufferView();
-      elements = view->BaseAddress();
-      checked_num_bytes = view->byteLength();
-      break;
-    }
-  }
+  base::span<uint8_t> bytes = ByteSpanForBufferSource(*buffer);
 
   ::MojoReadDataOptions options;
   options.struct_size = sizeof(options);
@@ -248,9 +215,12 @@ MojoReadDataResult* MojoHandle::readData(
 
   uint32_t num_bytes;
   MojoResult result =
-      checked_num_bytes.AssignIfValid(&num_bytes)
-          ? MojoReadData(handle_.get().value(), &options, elements, &num_bytes)
+      base::CheckedNumeric<uint32_t>(bytes.size()).AssignIfValid(&num_bytes)
+          ? MojoReadData(handle_.get().value(), &options, bytes.data(),
+                         &num_bytes)
           : MOJO_RESULT_INVALID_ARGUMENT;
+
+  MojoReadDataResult* result_dict = MojoReadDataResult::Create();
   result_dict->setResult(result);
   result_dict->setNumBytes(result == MOJO_RESULT_OK ? num_bytes : 0);
   return result_dict;
@@ -272,8 +242,13 @@ MojoMapBufferResult* MojoHandle::mapBuffer(unsigned offset,
 
   if (region.IsValid()) {
     ArrayBufferContents contents(region, offset, num_bytes);
-    result_dict->setResult(MOJO_RESULT_OK);
-    result_dict->setBuffer(DOMArrayBuffer::Create(contents));
+    if (contents.IsValid()) {
+      result_dict->setResult(MOJO_RESULT_OK);
+      result_dict->setBuffer(DOMArrayBuffer::Create(contents));
+    } else {
+      // Contents would be invalid if `MapAt()` failed.
+      result_dict->setResult(MOJO_RESULT_INVALID_ARGUMENT);
+    }
   } else {
     result_dict->setResult(MOJO_RESULT_UNKNOWN);
   }

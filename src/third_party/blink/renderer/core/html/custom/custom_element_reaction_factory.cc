@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,27 @@ class CustomElementDisconnectedCallbackReaction final
  private:
   void Invoke(Element& element) override {
     definition_->RunDisconnectedCallback(element);
+  }
+};
+
+// ----------------------------------------------------------------
+
+class CustomElementConnectedMoveCallbackReaction final
+    : public CustomElementReaction {
+ public:
+  explicit CustomElementConnectedMoveCallbackReaction(
+      CustomElementDefinition& definition)
+      : CustomElementReaction(definition) {
+    DCHECK(definition.HasConnectedMoveCallback());
+  }
+  CustomElementConnectedMoveCallbackReaction(
+      const CustomElementConnectedMoveCallbackReaction&) = delete;
+  CustomElementDisconnectedCallbackReaction& operator=(
+      const CustomElementConnectedMoveCallbackReaction&) = delete;
+
+ private:
+  void Invoke(Element& element) override {
+    definition_->RunConnectedMoveCallback(element);
   }
 };
 
@@ -261,6 +282,12 @@ CustomElementReaction& CustomElementReactionFactory::CreateConnected(
 CustomElementReaction& CustomElementReactionFactory::CreateDisconnected(
     CustomElementDefinition& definition) {
   return *MakeGarbageCollected<CustomElementDisconnectedCallbackReaction>(
+      definition);
+}
+
+CustomElementReaction& CustomElementReactionFactory::CreateConnectedMove(
+    CustomElementDefinition& definition) {
+  return *MakeGarbageCollected<CustomElementConnectedMoveCallbackReaction>(
       definition);
 }
 

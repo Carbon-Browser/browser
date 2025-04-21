@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,6 @@
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 
 namespace apps {
-
-class AppUpdate;
 
 // The default app's histogram name. This is used for logging so do
 // not change the order of this enum.
@@ -55,7 +53,8 @@ enum class DefaultAppName {
   kYouTubeMusic = 38,
   // This is our test SWA. It's only installed in tests.
   kMockSystemApp = 39,
-  kStadia = 40,
+  // Stadia was removed from the web app definitions in M112.
+  kDeletedStadia = 40,
   kScanningApp = 41,
   kDiagnosticsApp = 42,
   kPrintManagementApp = 43,
@@ -68,9 +67,19 @@ enum class DefaultAppName {
   kProjector = 49,
   kCalculator = 50,
   kFirmwareUpdateApp = 51,
+  kGoogleTv = 52,
+  kGoogleCalendar = 53,
+  kGoogleChat = 54,
+  kGoogleMeet = 55,
+  kGoogleMaps = 56,
+  kGoogleMessages = 57,
+  kGemini = 58,
+  kMall = 59,
+  kSanitizeApp = 60,
+  kGraduationApp = 61,
   // Add any new values above this one, and update kMaxValue to the highest
   // enumerator value.
-  kMaxValue = kFirmwareUpdateApp,
+  kMaxValue = kGraduationApp,
 };
 
 // The built-in app's histogram name. This is used for logging so do not change
@@ -78,7 +87,7 @@ enum class DefaultAppName {
 enum class BuiltInAppName {
   kKeyboardShortcutViewer = 0,
   kSettings = 1,
-  kContinueReading = 2,
+  // kContinueReading = 2, obsolete
   kCameraDeprecated = 3,
   // kDiscover = 4, obsolete
   kPluginVm = 5,
@@ -86,16 +95,24 @@ enum class BuiltInAppName {
   kMaxValue = kReleaseNotes,
 };
 
+// Converts an app ID to the corresponding `DefaultAppName`, or nullopt if
+// it doesn't match a known ID.
+std::optional<apps::DefaultAppName> AppIdToName(const std::string& app_id);
+
 void RecordAppLaunch(const std::string& app_id,
                      apps::LaunchSource launch_source);
 
+// Converts a preinstalled web app ID to the corresponding `DefaultAppName`, or
+// nullopt if it doesn't match a known ID.
+const std::optional<apps::DefaultAppName> PreinstalledWebAppIdToName(
+    const std::string& app_id);
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-void RecordBuiltInAppSearchResult(const std::string& app_id);
-#endif
-
-void RecordAppBounce(const apps::AppUpdate& app);
-
-void RecordAppsPerNotification(int count);
+// Converts a system web app ID to the corresponding `DefaultAppName`, or
+// nullopt if it doesn't match a known ID.
+const std::optional<apps::DefaultAppName> SystemWebAppIdToName(
+    const std::string& app_id);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace apps
 

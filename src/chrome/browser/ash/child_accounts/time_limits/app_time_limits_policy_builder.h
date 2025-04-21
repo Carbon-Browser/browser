@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,10 +30,10 @@ class AppTimeLimitsPolicyBuilder {
 
   void SetAppActivityReportingEnabled(bool enabled);
 
-  const base::Value& value() const { return value_; }
+  const base::Value::Dict& value() const { return value_; }
 
  private:
-  base::Value value_{base::Value::Type::DICTIONARY};
+  base::Value::Dict value_;
 };
 
 }  // namespace app_time

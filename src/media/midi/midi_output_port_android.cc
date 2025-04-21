@@ -1,10 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/midi/midi_output_port_android.h"
 
 #include "base/android/jni_array.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "media/midi/midi_jni_headers/MidiOutputPortAndroid_jni.h"
 
 using base::android::ScopedJavaLocalRef;
@@ -18,12 +20,12 @@ MidiOutputPortAndroid::~MidiOutputPortAndroid() {
 }
 
 bool MidiOutputPortAndroid::Open() {
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
   return Java_MidiOutputPortAndroid_open(env, raw_port_);
 }
 
 void MidiOutputPortAndroid::Close() {
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
   Java_MidiOutputPortAndroid_close(env, raw_port_);
 }
 
@@ -32,9 +34,9 @@ void MidiOutputPortAndroid::Send(const std::vector<uint8_t>& data) {
     return;
   }
 
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
   ScopedJavaLocalRef<jbyteArray> data_to_pass =
-      base::android::ToJavaByteArray(env, &data[0], data.size());
+      base::android::ToJavaByteArray(env, data);
 
   Java_MidiOutputPortAndroid_send(env, raw_port_, data_to_pass);
 }

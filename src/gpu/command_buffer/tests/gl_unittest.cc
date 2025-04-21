@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 #include <GLES2/gl2ext.h>
 #include <stdint.h>
 
-#include <memory>
-
+#include "base/containers/heap_array.h"
 #include "gpu/command_buffer/service/feature_info.h"
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "gpu/command_buffer/tests/gl_test_utils.h"
@@ -42,10 +41,9 @@ TEST_F(GLTest, BasicFBO) {
   GLuint fbo = 0;
   glGenFramebuffers(1, &fbo);
   glBindTexture(GL_TEXTURE_2D, tex);
-  std::unique_ptr<uint8_t[]> pixels(new uint8_t[16 * 16 * 4]);
-  memset(pixels.get(), 0, 16*16*4);
+  auto pixels = base::HeapArray<uint8_t>::WithSize(16 * 16 * 4);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-               pixels.get());
+               pixels.data());
   glGenerateMipmap(GL_TEXTURE_2D);
   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -106,27 +104,20 @@ TEST_F(GLTest, FeatureFlagsMatchCapabilities) {
       new gles2::FeatureInfo(gl_.workarounds(), GpuFeatureInfo());
   features->InitializeForTesting();
   const auto& caps = gl_.GetCapabilities();
+  const auto& gl_caps = gl_.GetGLCapabilities();
   const auto& flags = features->feature_flags();
   EXPECT_EQ(caps.egl_image_external, flags.oes_egl_image_external);
   EXPECT_EQ(caps.texture_format_bgra8888, flags.ext_texture_format_bgra8888);
-  EXPECT_EQ(caps.texture_format_etc1, flags.oes_compressed_etc1_rgb8_texture);
-  EXPECT_EQ(caps.texture_rectangle, flags.arb_texture_rectangle);
-  EXPECT_EQ(caps.texture_usage, flags.angle_texture_usage);
-  EXPECT_EQ(caps.texture_storage, flags.ext_texture_storage);
-  EXPECT_EQ(caps.discard_framebuffer, flags.ext_discard_framebuffer);
+  EXPECT_EQ(gl_caps.sync_query, flags.chromium_sync_query);
   EXPECT_EQ(caps.sync_query, flags.chromium_sync_query);
-  EXPECT_EQ(caps.blend_equation_advanced, flags.blend_equation_advanced);
-  EXPECT_EQ(caps.blend_equation_advanced_coherent,
-            flags.blend_equation_advanced_coherent);
   EXPECT_EQ(caps.texture_rg, flags.ext_texture_rg);
-  EXPECT_EQ(caps.image_ycbcr_422, flags.chromium_image_ycbcr_422);
   EXPECT_EQ(caps.image_ycbcr_420v, flags.chromium_image_ycbcr_420v);
   EXPECT_EQ(caps.image_ar30, flags.chromium_image_ar30);
   EXPECT_EQ(caps.image_ab30, flags.chromium_image_ab30);
   EXPECT_EQ(caps.image_ycbcr_p010, flags.chromium_image_ycbcr_p010);
   EXPECT_EQ(caps.render_buffer_format_bgra8888,
             flags.ext_render_buffer_format_bgra8888);
-  EXPECT_EQ(caps.occlusion_query_boolean, flags.occlusion_query_boolean);
+  EXPECT_EQ(gl_caps.occlusion_query_boolean, flags.occlusion_query_boolean);
 }
 
 TEST_F(GLTest, GetString) {

@@ -28,12 +28,12 @@
 #include <tuple>
 
 #include "build/build_config.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token_builder.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_speech_synthesis_error_event_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_speech_synthesis_event_init.h"
@@ -53,6 +53,10 @@
 namespace blink {
 
 const char SpeechSynthesis::kSupplementName[] = "SpeechSynthesis";
+
+SpeechSynthesisBase* SpeechSynthesis::Create(LocalDOMWindow& window) {
+  return MakeGarbageCollected<SpeechSynthesis>(window);
+}
 
 SpeechSynthesis* SpeechSynthesis::speechSynthesis(LocalDOMWindow& window) {
   SpeechSynthesis* synthesis =
@@ -124,7 +128,7 @@ void SpeechSynthesis::RecordVoicesForIdentifiability() const {
       .Record(GetSupplementable()->UkmRecorder());
 }
 
-bool SpeechSynthesis::speaking() const {
+bool SpeechSynthesis::Speaking() const {
   // If we have a current speech utterance, then that means we're assumed to be
   // in a speaking state. This state is independent of whether the utterance
   // happens to be paused.
@@ -139,6 +143,15 @@ bool SpeechSynthesis::pending() const {
 
 bool SpeechSynthesis::paused() const {
   return is_paused_;
+}
+
+void SpeechSynthesis::Speak(const String& text, const String& lang) {
+  ScriptState* script_state =
+      ToScriptStateForMainWorld(GetSupplementable()->GetFrame());
+  SpeechSynthesisUtterance* utterance =
+      SpeechSynthesisUtterance::Create(GetSupplementable(), text);
+  utterance->setLang(lang);
+  speak(script_state, utterance);
 }
 
 void SpeechSynthesis::speak(ScriptState* script_state,
@@ -167,7 +180,7 @@ void SpeechSynthesis::speak(ScriptState* script_state,
     StartSpeakingImmediately();
 }
 
-void SpeechSynthesis::cancel() {
+void SpeechSynthesis::Cancel() {
   // Remove all the items from the utterance queue. The platform
   // may still have references to some of these utterances and may
   // fire events on them asynchronously.
@@ -178,7 +191,7 @@ void SpeechSynthesis::cancel() {
     mojom_synthesis->Cancel();
 }
 
-void SpeechSynthesis::pause() {
+void SpeechSynthesis::Pause() {
   if (is_paused_)
     return;
 
@@ -187,7 +200,7 @@ void SpeechSynthesis::pause() {
     mojom_synthesis->Pause();
 }
 
-void SpeechSynthesis::resume() {
+void SpeechSynthesis::Resume() {
   if (!CurrentSpeechUtterance())
     return;
 
@@ -210,13 +223,16 @@ void SpeechSynthesis::DidResumeSpeaking(SpeechSynthesisUtterance* utterance) {
   FireEvent(event_type_names::kResume, utterance, 0, 0, String());
 }
 
-void SpeechSynthesis::DidFinishSpeaking(SpeechSynthesisUtterance* utterance) {
-  HandleSpeakingCompleted(utterance, false);
+void SpeechSynthesis::DidFinishSpeaking(
+    SpeechSynthesisUtterance* utterance,
+    mojom::blink::SpeechSynthesisErrorCode error_code) {
+  HandleSpeakingCompleted(utterance, error_code);
 }
 
 void SpeechSynthesis::SpeakingErrorOccurred(
     SpeechSynthesisUtterance* utterance) {
-  HandleSpeakingCompleted(utterance, true);
+  HandleSpeakingCompleted(
+      utterance, mojom::blink::SpeechSynthesisErrorCode::kErrorOccurred);
 }
 
 void SpeechSynthesis::WordBoundaryEventOccurred(
@@ -258,8 +274,11 @@ void SpeechSynthesis::StartSpeakingImmediately() {
 
 void SpeechSynthesis::HandleSpeakingCompleted(
     SpeechSynthesisUtterance* utterance,
-    bool error_occurred) {
+    mojom::blink::SpeechSynthesisErrorCode error_code) {
   DCHECK(utterance);
+
+  // Special handling for audio descriptions.
+  SpeechSynthesisBase::HandleSpeakingCompleted();
 
   bool should_start_speaking = false;
   // If the utterance that completed was the one we're currently speaking,
@@ -269,20 +288,35 @@ void SpeechSynthesis::HandleSpeakingCompleted(
     should_start_speaking = !utterance_queue_.empty();
   }
 
+  // https://wicg.github.io/speech-api/#speechsynthesiserrorevent-attributes
+  // The below errors are matched with SpeechSynthesisErrorCode values.
+  static constexpr char kErrorCanceled[] = "canceled";
+  static constexpr char kErrorInterrupted[] = "interrupted";
+  static constexpr char kErrorSynthesisFailed[] = "synthesis-failed";
+
   // Always fire the event, because the platform may have asynchronously
   // sent an event on an utterance before it got the message that we
   // canceled it, and we should always report to the user what actually
   // happened.
-  if (error_occurred) {
-    // TODO(csharrison): Actually pass the correct message. For now just use a
-    // generic error.
-    FireErrorEvent(utterance, 0, "synthesis-failed");
-  } else {
-    FireEvent(event_type_names::kEnd, utterance, 0, 0, String());
+  switch (error_code) {
+    case mojom::blink::SpeechSynthesisErrorCode::kInterrupted:
+      FireErrorEvent(utterance, 0, kErrorInterrupted);
+      break;
+    case mojom::blink::SpeechSynthesisErrorCode::kCancelled:
+      FireErrorEvent(utterance, 0, kErrorCanceled);
+      break;
+    case mojom::blink::SpeechSynthesisErrorCode::kErrorOccurred:
+      // TODO(csharrison): Actually pass the correct message. For now just use a
+      // generic error.
+      FireErrorEvent(utterance, 0, kErrorSynthesisFailed);
+      break;
+    case mojom::blink::SpeechSynthesisErrorCode::kNoError:
+      FireEvent(event_type_names::kEnd, utterance, 0, 0, String());
+      break;
   }
 
   // Start the next utterance if we just finished one and one was pending.
-  if (should_start_speaking && !utterance_queue_.IsEmpty())
+  if (should_start_speaking && !utterance_queue_.empty())
     StartSpeakingImmediately();
 }
 
@@ -321,10 +355,10 @@ void SpeechSynthesis::FireErrorEvent(SpeechSynthesisUtterance* utterance,
 }
 
 SpeechSynthesisUtterance* SpeechSynthesis::CurrentSpeechUtterance() const {
-  if (utterance_queue_.IsEmpty())
+  if (utterance_queue_.empty())
     return nullptr;
 
-  return utterance_queue_.front();
+  return utterance_queue_.front().Get();
 }
 
 ExecutionContext* SpeechSynthesis::GetExecutionContext() const {
@@ -337,7 +371,8 @@ void SpeechSynthesis::Trace(Visitor* visitor) const {
   visitor->Trace(voice_list_);
   visitor->Trace(utterance_queue_);
   Supplement<LocalDOMWindow>::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
+  SpeechSynthesisBase::Trace(visitor);
 }
 
 bool SpeechSynthesis::GetElapsedTimeMillis(double* millis) {

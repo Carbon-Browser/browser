@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -43,25 +43,30 @@ class RemoteWebAuthnNativeMessagingHost final
  private:
   friend class RemoteWebAuthnNativeMessagingHostTest;
 
+  using IdToRequestMap = base::flat_map<base::Value, mojo::RemoteSetElementId>;
+
   RemoteWebAuthnNativeMessagingHost(
       std::unique_ptr<ChromotingHostServicesProvider> host_service_api_client,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
-  void ProcessHello(base::Value response);
-  void ProcessGetRemoteState(base::Value response);
-  void ProcessIsUvpaa(const base::Value& request, base::Value response);
-  void ProcessCreate(const base::Value& request, base::Value response);
-  void ProcessGet(const base::Value& request, base::Value response);
-  void ProcessCancel(const base::Value& request, base::Value response);
+  void ProcessHello(base::Value::Dict response);
+  void ProcessGetRemoteState(base::Value::Dict response);
+  void ProcessIsUvpaa(const base::Value::Dict& request,
+                      base::Value::Dict response);
+  void ProcessCreate(const base::Value::Dict& request,
+                     base::Value::Dict response);
+  void ProcessGet(const base::Value::Dict& request, base::Value::Dict response);
+  void ProcessCancel(const base::Value::Dict& request,
+                     base::Value::Dict response);
 
   void OnQueryVersionResult(uint32_t version);
   void OnIpcDisconnected();
-  void OnIsUvpaaResponse(base::Value response, bool is_available);
-  void OnCreateResponse(base::Value response,
+  void OnIsUvpaaResponse(base::Value::Dict response, bool is_available);
+  void OnCreateResponse(base::Value::Dict response,
                         mojom::WebAuthnCreateResponsePtr remote_response);
-  void OnGetResponse(base::Value response,
+  void OnGetResponse(base::Value::Dict response,
                      mojom::WebAuthnGetResponsePtr remote_response);
-  void OnCancelResponse(base::Value response, bool was_canceled);
+  void OnCancelResponse(base::Value::Dict response, bool was_canceled);
 
   void QueryNextRemoteState();
   void SendNextRemoteState(bool is_remoted);
@@ -70,20 +75,20 @@ class RemoteWebAuthnNativeMessagingHost final
   // established. Returns a boolean indicating whether there is a valid IPC
   // connection to the crd host.
   bool EnsureIpcConnection();
-  void SendMessageToClient(base::Value message);
+  void SendMessageToClient(base::Value::Dict message);
 
   // Finds and returns the message ID from |response|. If message ID is not
   // found, |response| will be attached with a WebAuthn error dict and sent to
   // the NMH client, and `nullptr` will be returned.
-  const base::Value* FindMessageIdOrSendError(base::Value& response);
+  const base::Value* FindMessageIdOrSendError(base::Value::Dict& response);
 
   // Finds and returns request[request_data_key]. If request_data_key is not
   // found, |response| will be attached with a WebAuthn error dict and sent to
   // the NMH client, and `nullptr` will be returned.
   const std::string* FindRequestDataOrSendError(
-      const base::Value& request,
+      const base::Value::Dict& request,
       const std::string& request_data_key,
-      base::Value& response);
+      base::Value::Dict& response);
 
   mojo::PendingReceiver<mojom::WebAuthnRequestCanceller> AddRequestCanceller(
       base::Value message_id);
@@ -99,8 +104,7 @@ class RemoteWebAuthnNativeMessagingHost final
   std::unique_ptr<ChromotingHostServicesProvider> host_service_api_client_;
   mojo::Remote<mojom::WebAuthnProxy> remote_;
   mojo::RemoteSet<mojom::WebAuthnRequestCanceller> request_cancellers_;
-  base::flat_map<base::Value, mojo::RemoteSetElementId>
-      id_to_request_canceller_;
+  IdToRequestMap id_to_request_canceller_;
 
   // Only available after Start() is called.
   raw_ptr<extensions::NativeMessageHost::Client> client_ = nullptr;
@@ -109,7 +113,7 @@ class RemoteWebAuthnNativeMessagingHost final
   base::RepeatingClosure on_request_canceller_disconnected_for_testing_;
 
   // Pending getRemoteStateResponses to be sent.
-  base::queue<base::Value> get_remote_state_responses_;
+  base::queue<base::Value::Dict> get_remote_state_responses_;
 };
 
 }  // namespace remoting

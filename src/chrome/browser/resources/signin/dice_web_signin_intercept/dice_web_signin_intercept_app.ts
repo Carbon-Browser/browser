@@ -1,27 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import './signin_shared.css.js';
-import './signin_vars.css.js';
-import './strings.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import '/strings.m.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {WebUiListenerMixinLit} from 'chrome://resources/cr_elements/web_ui_listener_mixin_lit.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
-import {getTemplate} from './dice_web_signin_intercept_app.html.js';
-import {DiceWebSigninInterceptBrowserProxy, DiceWebSigninInterceptBrowserProxyImpl, InterceptionParameters} from './dice_web_signin_intercept_browser_proxy.js';
+import {getCss} from './dice_web_signin_intercept_app.css.js';
+import {getHtml} from './dice_web_signin_intercept_app.html.js';
+import type {DiceWebSigninInterceptBrowserProxy, InterceptionParameters} from './dice_web_signin_intercept_browser_proxy.js';
+import {DiceWebSigninInterceptBrowserProxyImpl} from './dice_web_signin_intercept_browser_proxy.js';
 
-const DiceWebSigninInterceptAppElementBase = WebUIListenerMixin(PolymerElement);
+const DiceWebSigninInterceptAppElementBase =
+    WebUiListenerMixinLit(CrLitElement);
 
 export interface DiceWebSigninInterceptAppElement {
   $: {
+    interceptDialog: HTMLElement,
     cancelButton: CrButtonElement,
     acceptButton: CrButtonElement,
   };
@@ -33,34 +34,39 @@ export class DiceWebSigninInterceptAppElement extends
     return 'dice-web-signin-intercept-app';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
-      interceptionParameters_: {
-        type: Object,
-        value: null,
-      },
-
-      acceptButtonClicked_: {
-        type: Boolean,
-        value: false,
-      },
-
-      guestLink_: {
-        type: String,
-        value() {
-          return loadTimeData.getString('guestLink');
-        },
-      },
+      interceptionParameters_: {type: Object},
+      acceptButtonClicked_: {type: Boolean},
     };
   }
 
-  private interceptionParameters_: InterceptionParameters;
-  private acceptButtonClicked_: boolean;
-  private guestLink_: string;
+  protected interceptionParameters_: InterceptionParameters = {
+    headerText: '',
+    bodyTitle: '',
+    bodyText: '',
+    confirmButtonLabel: '',
+    cancelButtonLabel: '',
+    managedDisclaimerText: '',
+    headerTextColor: '',
+    interceptedProfileColor: '',
+    primaryProfileColor: '',
+    interceptedAccount: {pictureUrl: '', avatarBadge: '', userBadgeAltText: ''},
+    primaryAccount: {pictureUrl: '', avatarBadge: '', userBadgeAltText: ''},
+    useV2Design: false,
+    showManagedDisclaimer: false,
+    interceptedProfileBadgeColor: '',
+    primaryProfileBadgeColor: '',
+  };
+  protected acceptButtonClicked_: boolean = false;
   private diceWebSigninInterceptBrowserProxy_:
       DiceWebSigninInterceptBrowserProxy =
           DiceWebSigninInterceptBrowserProxyImpl.getInstance();
@@ -68,40 +74,27 @@ export class DiceWebSigninInterceptAppElement extends
   override connectedCallback() {
     super.connectedCallback();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'interception-parameters-changed',
         this.handleParametersChanged_.bind(this));
     this.diceWebSigninInterceptBrowserProxy_.pageLoaded().then(
         parameters => this.onPageLoaded_(parameters));
   }
 
-  private onPageLoaded_(parameters: InterceptionParameters) {
+  private async onPageLoaded_(parameters: InterceptionParameters) {
     this.handleParametersChanged_(parameters);
-    afterNextRender(this, () => {
-      // |showGuestOption| is constant during the lifetime of this bubble,
-      // therefore it's safe to set the listener only during initialization.
-      if (this.interceptionParameters_.showGuestOption) {
-        this.shadowRoot!.querySelector('#footer-description a')!
-            .addEventListener('click', () => this.onGuest_());
-      }
-    });
+    await this.updateComplete;
+    const height = this.$.interceptDialog.offsetHeight;
+    this.diceWebSigninInterceptBrowserProxy_.initializedWithHeight(height);
   }
 
-  private onAccept_() {
+  protected onAccept_() {
     this.acceptButtonClicked_ = true;
     this.diceWebSigninInterceptBrowserProxy_.accept();
   }
 
-  private onCancel_() {
+  protected onCancel_() {
     this.diceWebSigninInterceptBrowserProxy_.cancel();
-  }
-
-  private onGuest_() {
-    if (this.acceptButtonClicked_) {
-      return;
-    }
-    this.acceptButtonClicked_ = true;
-    this.diceWebSigninInterceptBrowserProxy_.guest();
   }
 
   /** Called when the interception parameters are updated. */
@@ -112,8 +105,14 @@ export class DiceWebSigninInterceptAppElement extends
     this.style.setProperty(
         '--primary-profile-color', parameters.primaryProfileColor);
     this.style.setProperty('--header-text-color', parameters.headerTextColor);
-    this.notifyPath('interceptionParameters_.interceptedAccount.isManaged');
-    this.notifyPath('interceptionParameters_.primaryAccount.isManaged');
+    this.style.setProperty(
+      '--intercepted-profile-avatar-badge-color', parameters.interceptedProfileBadgeColor);
+    this.style.setProperty(
+      '--primary-profile-avatar-badge-color', parameters.primaryProfileBadgeColor);
+  }
+
+  protected sanitizeInnerHtml_(text: string): TrustedHTML {
+    return sanitizeInnerHtml(text);
   }
 }
 

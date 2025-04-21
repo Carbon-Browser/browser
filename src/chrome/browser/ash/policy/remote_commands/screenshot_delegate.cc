@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/syslog_logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
 #include "chrome/browser/ash/policy/uploading/status_uploader.h"
@@ -23,9 +23,9 @@
 
 namespace policy {
 
-ScreenshotDelegate::ScreenshotDelegate() {}
+ScreenshotDelegate::ScreenshotDelegate() = default;
 
-ScreenshotDelegate::~ScreenshotDelegate() {}
+ScreenshotDelegate::~ScreenshotDelegate() = default;
 
 bool ScreenshotDelegate::IsScreenshotAllowed() {
   BrowserPolicyConnectorAsh* connector =
@@ -36,14 +36,14 @@ bool ScreenshotDelegate::IsScreenshotAllowed() {
   // shutdown (and unit tests) - don't allow screenshots unless we have a
   // StatusUploader that can confirm that screenshots are allowed.
   return manager && manager->GetStatusUploader() &&
-         manager->GetStatusUploader()->IsSessionDataUploadAllowed();
+         manager->GetStatusUploader()->IsScreenshotAllowed();
 }
 
 void ScreenshotDelegate::TakeSnapshot(
     gfx::NativeWindow window,
     const gfx::Rect& source_rect,
     OnScreenshotTakenCallback upload_callback) {
-  ui::GrabWindowSnapshotAsyncPNG(
+  ui::GrabWindowSnapshotAsPNG(
       window, source_rect,
       base::BindOnce(&ScreenshotDelegate::OnScreenshotTaken,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -84,7 +84,7 @@ std::unique_ptr<UploadJob> ScreenshotDelegate::CreateUploadJob(
       device_oauth2_token_service->GetAccessTokenManager(),
       g_browser_process->shared_url_loader_factory(), delegate,
       base::WrapUnique(new UploadJobImpl::RandomMimeBoundaryGenerator),
-      traffic_annotation, base::ThreadTaskRunnerHandle::Get()));
+      traffic_annotation, base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void ScreenshotDelegate::OnScreenshotTaken(

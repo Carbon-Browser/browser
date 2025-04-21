@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,9 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/memory/ptr_util.h"
 #include "cc/metrics/compositor_frame_reporting_controller.h"
 #include "cc/metrics/frame_sequence_tracker.h"
-#include "cc/metrics/throughput_ukm_reporter.h"
 
 namespace cc {
 
@@ -53,8 +51,7 @@ FrameSequenceTracker* FrameSequenceTrackerCollection::StartSequenceInternal(
   if (frame_trackers_.contains(key))
     return frame_trackers_[key].get();
 
-  auto tracker = base::WrapUnique(
-      new FrameSequenceTracker(type, throughput_ukm_reporter_.get()));
+  auto tracker = base::WrapUnique(new FrameSequenceTracker(type));
   frame_trackers_[key] = std::move(tracker);
 
   if (compositor_frame_reporting_controller_)
@@ -78,6 +75,13 @@ FrameSequenceTracker* FrameSequenceTrackerCollection::StartSequenceInternal(
           ThreadType::kCompositor, true);
     }
     ++compositor_thread_driving_smoothness_;
+  } else if (metrics->GetEffectiveThread() == ThreadType::kRaster) {
+    if (compositor_frame_reporting_controller_ &&
+        raster_thread_driving_smoothness_ == 0) {
+      compositor_frame_reporting_controller_->SetThreadAffectsSmoothness(
+          ThreadType::kRaster, true);
+    }
+    ++raster_thread_driving_smoothness_;
   } else {
     DCHECK_EQ(metrics->GetEffectiveThread(), ThreadType::kMain);
     if (compositor_frame_reporting_controller_ &&
@@ -112,7 +116,6 @@ void FrameSequenceTrackerCollection::CleanUp() {
     tracker->CleanUp();
   for (auto& metric : accumulated_metrics_)
     metric.second->ReportLeftoverData();
-  throughput_ukm_reporter_ = nullptr;
 }
 
 void FrameSequenceTrackerCollection::StopSequence(
@@ -126,6 +129,9 @@ void FrameSequenceTrackerCollection::StopSequence(
     key = std::make_pair(type, ThreadType::kCompositor);
     if (!frame_trackers_.contains(key))
       key = std::make_pair(type, ThreadType::kMain);
+    if (!frame_trackers_.contains(key)) {
+      key = std::make_pair(type, ThreadType::kRaster);
+    }
   }
 
   if (!frame_trackers_.contains(key))
@@ -144,6 +150,14 @@ void FrameSequenceTrackerCollection::StopSequence(
         compositor_thread_driving_smoothness_ == 0) {
       compositor_frame_reporting_controller_->SetThreadAffectsSmoothness(
           ThreadType::kCompositor, false);
+    }
+  } else if (tracker->metrics()->GetEffectiveThread() == ThreadType::kRaster) {
+    DCHECK_GT(raster_thread_driving_smoothness_, 0u);
+    --raster_thread_driving_smoothness_;
+    if (compositor_frame_reporting_controller_ &&
+        raster_thread_driving_smoothness_ == 0) {
+      compositor_frame_reporting_controller_->SetThreadAffectsSmoothness(
+          ThreadType::kRaster, false);
     }
   } else {
     DCHECK_GT(main_thread_driving_smoothness_, 0u);
@@ -202,75 +216,11 @@ void FrameSequenceTrackerCollection::NotifyBeginImplFrame(
     tracker.second->ReportBeginImplFrame(args);
 }
 
-void FrameSequenceTrackerCollection::NotifyBeginMainFrame(
-    const viz::BeginFrameArgs& args) {
-  for (auto& tracker : frame_trackers_)
-    tracker.second->ReportBeginMainFrame(args);
-  for (auto& tracker : custom_frame_trackers_)
-    tracker.second->ReportBeginMainFrame(args);
-}
-
-void FrameSequenceTrackerCollection::NotifyMainFrameProcessed(
-    const viz::BeginFrameArgs& args) {
-  for (auto& tracker : frame_trackers_)
-    tracker.second->ReportMainFrameProcessed(args);
-  for (auto& tracker : custom_frame_trackers_)
-    tracker.second->ReportMainFrameProcessed(args);
-}
-
-void FrameSequenceTrackerCollection::NotifyImplFrameCausedNoDamage(
-    const viz::BeginFrameAck& ack) {
-  for (auto& tracker : frame_trackers_)
-    tracker.second->ReportImplFrameCausedNoDamage(ack);
-  for (auto& tracker : custom_frame_trackers_)
-    tracker.second->ReportImplFrameCausedNoDamage(ack);
-
-  // Removal trackers continue to process any frames which they started
-  // observing.
-  for (auto& tracker : removal_trackers_)
-    tracker->ReportImplFrameCausedNoDamage(ack);
-}
-
-void FrameSequenceTrackerCollection::NotifyMainFrameCausedNoDamage(
-    const viz::BeginFrameArgs& args,
-    bool aborted) {
-  for (auto& tracker : frame_trackers_)
-    tracker.second->ReportMainFrameCausedNoDamage(args, aborted);
-  for (auto& tracker : custom_frame_trackers_)
-    tracker.second->ReportMainFrameCausedNoDamage(args, aborted);
-}
-
 void FrameSequenceTrackerCollection::NotifyPauseFrameProduction() {
   for (auto& tracker : frame_trackers_)
     tracker.second->PauseFrameProduction();
   for (auto& tracker : custom_frame_trackers_)
     tracker.second->PauseFrameProduction();
-}
-
-void FrameSequenceTrackerCollection::NotifySubmitFrame(
-    uint32_t frame_token,
-    bool has_missing_content,
-    const viz::BeginFrameAck& ack,
-    const viz::BeginFrameArgs& origin_args) {
-  for (auto& tracker : frame_trackers_) {
-    tracker.second->ReportSubmitFrame(frame_token, has_missing_content, ack,
-                                      origin_args);
-  }
-  for (auto& tracker : custom_frame_trackers_) {
-    tracker.second->ReportSubmitFrame(frame_token, has_missing_content, ack,
-                                      origin_args);
-  }
-
-  // Removal trackers continue to process any frames which they started
-  // observing.
-  for (auto& tracker : removal_trackers_) {
-    tracker->ReportSubmitFrame(frame_token, has_missing_content, ack,
-                               origin_args);
-  }
-
-  // TODO(crbug.com/1072482): find a proper way to terminate a tracker. Please
-  // refer to details in FrameSequenceTracker::ReportSubmitFrame
-  DestroyTrackers();
 }
 
 void FrameSequenceTrackerCollection::NotifyFrameEnd(
@@ -285,19 +235,6 @@ void FrameSequenceTrackerCollection::NotifyFrameEnd(
   // observing.
   for (auto& tracker : removal_trackers_)
     tracker->ReportFrameEnd(args, main_args);
-  DestroyTrackers();
-}
-
-void FrameSequenceTrackerCollection::NotifyFramePresented(
-    uint32_t frame_token,
-    const gfx::PresentationFeedback& feedback) {
-  for (auto& tracker : frame_trackers_)
-    tracker.second->ReportFramePresented(frame_token, feedback);
-  for (auto& tracker : custom_frame_trackers_)
-    tracker.second->ReportFramePresented(frame_token, feedback);
-  for (auto& tracker : removal_trackers_)
-    tracker->ReportFramePresented(frame_token, feedback);
-
   DestroyTrackers();
 }
 
@@ -332,7 +269,7 @@ void FrameSequenceTrackerCollection::DestroyTrackers() {
     }
   }
 
-  base::EraseIf(
+  std::erase_if(
       removal_trackers_,
       [](const std::unique_ptr<FrameSequenceTracker>& tracker) {
         return tracker->termination_status() ==
@@ -389,14 +326,6 @@ FrameSequenceTrackerCollection::GetRemovalTrackerForTesting(
   return nullptr;
 }
 
-void FrameSequenceTrackerCollection::SetUkmManager(UkmManager* manager) {
-  DCHECK(frame_trackers_.empty());
-  if (manager)
-    throughput_ukm_reporter_ = std::make_unique<ThroughputUkmReporter>(manager);
-  else
-    throughput_ukm_reporter_ = nullptr;
-}
-
 void FrameSequenceTrackerCollection::AddCustomTrackerResult(
     int custom_sequence_id,
     const FrameSequenceMetrics::CustomReportData& data) {
@@ -414,6 +343,15 @@ void FrameSequenceTrackerCollection::AddSortedFrame(
     tracker.second->AddSortedFrame(args, frame_info);
   for (auto& tracker : custom_frame_trackers_)
     tracker.second->AddSortedFrame(args, frame_info);
+
+  // Sorted frames could arrive after tracker are scheduled for termination.
+  // Removal trackers continue to report metrics for frames which they started
+  // observing.
+  for (auto& tracker : removal_trackers_) {
+    tracker->AddSortedFrame(args, frame_info);
+  }
+
+  DestroyTrackers();
 }
 
 }  // namespace cc

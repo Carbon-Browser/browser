@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_ASSISTANT_TEST_TEST_ASSISTANT_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,10 +14,9 @@
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -34,7 +34,7 @@ class LibassistantContractChecker;
 //     assistant_service()->SetInteractionResponse(std::move(response));
 class InteractionResponse {
  public:
-  using Resolution = chromeos::assistant::AssistantInteractionResolution;
+  using Resolution = assistant::AssistantInteractionResolution;
   class Response;
 
   InteractionResponse();
@@ -52,7 +52,7 @@ class InteractionResponse {
   // |resolution| to |AssistantInteractionSubscriber::OnInteractionFinished|.
   InteractionResponse* AddResolution(Resolution resolution);
 
-  void SendTo(chromeos::assistant::AssistantInteractionSubscriber* receiver);
+  void SendTo(assistant::AssistantInteractionSubscriber* receiver);
 
  private:
   void AddResponse(std::unique_ptr<Response> responses);
@@ -71,7 +71,7 @@ class InteractionResponse {
 //    - Finish a conversation before starting a new one.
 //    - Not send any responses (text, card, ...) before starting or after
 //      finishing an interaction.
-class TestAssistantService : public chromeos::assistant::Assistant {
+class TestAssistantService : public assistant::Assistant {
  public:
   TestAssistantService();
 
@@ -84,50 +84,46 @@ class TestAssistantService : public chromeos::assistant::Assistant {
   void SetInteractionResponse(std::unique_ptr<InteractionResponse> response);
 
   // Returns the current interaction.
-  absl::optional<chromeos::assistant::AssistantInteractionMetadata>
-  current_interaction();
+  std::optional<assistant::AssistantInteractionMetadata> current_interaction();
 
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
-                            chromeos::assistant::AssistantQuerySource source,
+                            assistant::AssistantQuerySource source,
                             bool allow_tts) override;
   void StartVoiceInteraction() override;
   void StopActiveInteraction(bool cancel_conversation) override;
   void AddAssistantInteractionSubscriber(
-      chromeos::assistant::AssistantInteractionSubscriber* subscriber) override;
+      assistant::AssistantInteractionSubscriber* subscriber) override;
   void RemoveAssistantInteractionSubscriber(
-      chromeos::assistant::AssistantInteractionSubscriber* subscriber) override;
+      assistant::AssistantInteractionSubscriber* subscriber) override;
   void AddRemoteConversationObserver(
-      chromeos::assistant::ConversationObserver* observer) override {}
-  mojo::PendingReceiver<chromeos::libassistant::mojom::NotificationDelegate>
+      assistant::ConversationObserver* observer) override {}
+  mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
   GetPendingNotificationDelegate() override;
   void RetrieveNotification(
-      const chromeos::assistant::AssistantNotification& notification,
+      const assistant::AssistantNotification& notification,
       int action_index) override;
   void DismissNotification(
-      const chromeos::assistant::AssistantNotification& notification) override;
+      const assistant::AssistantNotification& notification) override;
   void OnAccessibilityStatusChanged(bool spoken_feedback_enabled) override;
   void OnColorModeChanged(bool dark_mode_enabled) override;
   void SendAssistantFeedback(
-      const chromeos::assistant::AssistantFeedback& feedback) override;
+      const assistant::AssistantFeedback& feedback) override;
   void AddTimeToTimer(const std::string& id, base::TimeDelta duration) override;
   void PauseTimer(const std::string& id) override;
   void RemoveAlarmOrTimer(const std::string& id) override;
   void ResumeTimer(const std::string& id) override;
 
-  absl::optional<bool> dark_mode_enabled() { return dark_mode_enabled_; }
+  std::optional<bool> dark_mode_enabled() { return dark_mode_enabled_; }
 
  private:
-  void StartInteraction(
-      chromeos::assistant::AssistantInteractionType type,
-      chromeos::assistant::AssistantQuerySource source =
-          chromeos::assistant::AssistantQuerySource::kUnspecified,
-      const std::string& query = std::string());
-  void InteractionStarted(chromeos::assistant::AssistantInteractionType type,
-                          chromeos::assistant::AssistantQuerySource source,
+  void StartInteraction(assistant::AssistantInteractionType type,
+                        assistant::AssistantQuerySource source =
+                            assistant::AssistantQuerySource::kUnspecified,
+                        const std::string& query = std::string());
+  void InteractionStarted(assistant::AssistantInteractionType type,
+                          assistant::AssistantQuerySource source,
                           const std::string& query);
   void SendInteractionResponse();
 
@@ -135,9 +131,9 @@ class TestAssistantService : public chromeos::assistant::Assistant {
   std::unique_ptr<CurrentInteractionSubscriber> current_interaction_subscriber_;
   std::unique_ptr<InteractionResponse> interaction_response_;
 
-  absl::optional<bool> dark_mode_enabled_;
+  std::optional<bool> dark_mode_enabled_;
 
-  base::ObserverList<chromeos::assistant::AssistantInteractionSubscriber>
+  base::ObserverList<assistant::AssistantInteractionSubscriber>
       interaction_subscribers_;
   bool running_active_interaction_ = false;
 

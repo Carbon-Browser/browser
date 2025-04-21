@@ -1,8 +1,6 @@
 rootWebArea
 ++genericContainer ignored
 ++++genericContainer ignored
-++++++genericContainer ignored
-++++++++genericContainer ignored invisible
-++++++++++genericContainer ignored invisible
+++++++genericContainer
 ++++++++genericContainer description='b'
 ++++++++genericContainer description='c'

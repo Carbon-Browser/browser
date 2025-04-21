@@ -1,20 +1,29 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #define INITGUID  // required for GUID_PROP_INPUTSCOPE
 #include "ui/base/ime/win/tsf_text_store.h"
 
 #include <InputScope.h>
 #include <OleCtl.h>
+#include <tsattrs.h>
 #include <wrl/client.h>
 
 #include <algorithm>
 
 #include "base/logging.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/scoped_variant.h"
+#include "components/stylus_handwriting/win/features.h"
 #include "ui/base/ime/text_input_client.h"
+#include "ui/base/ime/text_input_flags.h"
 #include "ui/base/ime/win/tsf_input_scope.h"
 #include "ui/display/win/screen_win.h"
 #include "ui/events/event_dispatcher.h"
@@ -151,10 +160,34 @@ HRESULT TSFTextStore::GetACPFromPoint(TsViewCookie view_cookie,
                                       const POINT* point,
                                       DWORD flags,
                                       LONG* acp) {
-  NOTIMPLEMENTED();
-  if (view_cookie != kViewCookie)
-    return E_INVALIDARG;
-  return E_NOTIMPL;
+  if (view_cookie == kViewCookie) {
+    NOTIMPLEMENTED();
+    return E_NOTIMPL;
+  }
+  // If the `view_cookie` isn't known and StylusHandwritingWin is enabled,
+  // try to query the "proximate" bounds cache as a fallback. See comments
+  // around `IndexFromPointFlags` and its values for how each flag affects the
+  // results. When successful, yields a character index via the out parameter
+  // `acp`, otherwise returns an error HRESULT.
+  if (stylus_handwriting::win::IsStylusHandwritingWinEnabled()) {
+    IndexFromPointFlags index_flags{};
+    if (flags & GXFPF_NEAREST) {
+      index_flags |= IndexFromPointFlags::kNearestToUncontainedPoint;
+    }
+    if (flags & GXFPF_ROUND_NEAREST) {
+      index_flags |= IndexFromPointFlags::kNearestToContainedPoint;
+    }
+    const std::optional<size_t> index =
+        text_input_client_->GetProximateCharacterIndexFromPoint(
+            gfx::Point(*point), index_flags);
+    if (!index.has_value()) {
+      return TS_E_INVALIDPOINT;
+    }
+    *acp = index.value();
+    return S_OK;
+  }
+
+  return E_INVALIDARG;
 }
 
 HRESULT TSFTextStore::GetActiveView(TsViewCookie* view_cookie) {
@@ -203,8 +236,8 @@ HRESULT TSFTextStore::GetScreenExt(TsViewCookie view_cookie, RECT* rect) {
 
   // {0, 0, 0, 0} means that the document rect is not currently displayed.
   SetRect(rect, 0, 0, 0, 0);
-  absl::optional<gfx::Rect> result_rect;
-  absl::optional<gfx::Rect> tmp_rect;
+  std::optional<gfx::Rect> result_rect;
+  std::optional<gfx::Rect> tmp_rect;
   // If the EditContext is active, then fetch the layout bounds from
   // the active EditContext, else get it from the focused element's
   // bounding client rect.
@@ -263,6 +296,10 @@ HRESULT TSFTextStore::GetStatus(TS_STATUS* status) {
   // TODO(IME): Remove TS_SS_TRANSITORY to support Korean reconversion
   status->dwStaticFlags = TS_SS_TRANSITORY | TS_SS_NOHIDDENTEXT;
 
+  // No text support is needed for empty text store.
+  if (is_empty_text_store_) {
+    status->dwDynamicFlags |= TS_SD_READONLY;
+  }
   return S_OK;
 }
 
@@ -322,36 +359,43 @@ HRESULT TSFTextStore::GetTextExt(TsViewCookie view_cookie,
     return E_INVALIDARG;
   if (!text_input_client_)
     return E_UNEXPECTED;
-  if (view_cookie != kViewCookie)
+  const bool is_stylus_handwriting_win_enabled =
+      stylus_handwriting::win::IsStylusHandwritingWinEnabled();
+  if (view_cookie != kViewCookie && !is_stylus_handwriting_win_enabled) {
     return E_INVALIDARG;
+  }
   if (!HasReadLock())
     return TS_E_NOLOCK;
-  if (!((static_cast<LONG>(composition_start_) <= acp_start) &&
+  if (view_cookie == kViewCookie &&
+      !((static_cast<LONG>(composition_start_) <= acp_start) &&
         (acp_start <= acp_end) &&
         (acp_end <= static_cast<LONG>(string_buffer_document_.size())))) {
     return TS_E_INVALIDPOS;
   }
 
-  TRACE_EVENT1("ime", "TSFTextStore::GetTextExt", "start, end",
-               std::to_string(acp_start) + ", " + std::to_string(acp_end));
+  TRACE_EVENT1(
+      "ime", "TSFTextStore::GetTextExt", "start, end",
+      base::NumberToString(acp_start) + ", " + base::NumberToString(acp_end));
 
   // According to a behavior of notepad.exe and wordpad.exe, top left corner of
   // rect indicates a first character's one, and bottom right corner of rect
   // indicates a last character's one.
   // TODO(IME): add tests for scenario that left position is bigger than right
   // position.
-  absl::optional<gfx::Rect> result_rect;
+  std::optional<gfx::Rect> result_rect;
   const uint32_t start_pos = acp_start - composition_start_;
   const uint32_t end_pos = acp_end - composition_start_;
 
   gfx::Rect tmp_rect;
-  if (start_pos == end_pos) {
+  if (view_cookie == kViewCookie && start_pos == end_pos) {
     if (text_input_client_->HasCompositionText()) {
       // According to MSDN document, if |acp_start| and |acp_end| are equal it
       // is OK to just return E_INVALIDARG.
       // http://msdn.microsoft.com/en-us/library/ms538435
-      // But when using Pinin IME of Windows 8, this method is called with the
+      // But when using Pinyin IME of Windows 8, this method is called with the
       // equal values of |acp_start| and |acp_end|. So we handle this condition.
+      // TODO(crbug.com/371021293): Since Windows 8 is no longer a supported
+      // platform, can this now just return E_INVALIDARG?
       if (start_pos == 0) {
         if (text_input_client_->GetCompositionCharacterBounds(0, &tmp_rect)) {
           tmp_rect.set_width(0);
@@ -371,7 +415,7 @@ HRESULT TSFTextStore::GetTextExt(TsViewCookie view_cookie,
     } else {
       result_rect = gfx::Rect(text_input_client_->GetCaretBounds());
     }
-  } else {
+  } else if (view_cookie == kViewCookie) {
     if (text_input_client_->HasCompositionText()) {
       if (text_input_client_->GetCompositionCharacterBounds(start_pos,
                                                             &tmp_rect)) {
@@ -391,6 +435,17 @@ HRESULT TSFTextStore::GetTextExt(TsViewCookie view_cookie,
       }
     } else {
       result_rect = gfx::Rect(text_input_client_->GetCaretBounds());
+    }
+  } else if (is_stylus_handwriting_win_enabled) {
+    if (acp_start == acp_end) {
+      return E_INVALIDARG;
+    }
+    // If the `view_cookie` isn't known and StylusHandwritingWin is enabled,
+    // try to query the "proximate" bounds cache as a fallback.
+    result_rect = text_input_client_->GetProximateCharacterBounds(
+        gfx::Range(acp_start, acp_end));
+    if (!result_rect.has_value()) {
+      return TS_E_NOLAYOUT;
     }
   }
   TRACE_EVENT1("ime", "TSFTextStore::GetTextExt", "DIP rect",
@@ -559,6 +614,17 @@ HRESULT TSFTextStore::RequestAttrsTransitioningAtPosition(
 HRESULT TSFTextStore::RequestLock(DWORD lock_flags, HRESULT* result) {
   if (!text_input_client_)
     return E_UNEXPECTED;
+  // No lock is necessary for an empty text store. This is to deny lock to an
+  // unsuspecting TSF in the wild that always assumes a text update with a
+  // store.
+  if (is_empty_text_store_) {
+    return E_FAIL;
+  }
+  // If the text input type has already switched to NONE in the text input
+  // client, then do nothing. See crbug.com/1483978.
+  if (text_input_client_->GetTextInputType() == ui::TEXT_INPUT_TYPE_NONE) {
+    return E_FAIL;
+  }
 
   if (!text_store_acp_sink_.Get())
     return E_FAIL;
@@ -662,7 +728,7 @@ HRESULT TSFTextStore::RequestLock(DWORD lock_flags, HRESULT* result) {
   // is called during current edit session.
   if ((has_composition_range_ || on_start_composition_called_) &&
       wparam_keydown_cached_ != 0 && lparam_keydown_cached_ != 0) {
-    DispatchKeyEvent(ui::ET_KEY_PRESSED, wparam_keydown_cached_,
+    DispatchKeyEvent(ui::EventType::kKeyPressed, wparam_keydown_cached_,
                      lparam_keydown_cached_);
   }
 
@@ -754,7 +820,8 @@ HRESULT TSFTextStore::RequestSupportedAttrs(
   for (size_t i = 0; i < attribute_buffer_size; ++i) {
     const auto& attribute = attribute_buffer[i];
     if (IsEqualGUID(GUID_PROP_INPUTSCOPE, attribute) ||
-        IsEqualGUID(GUID_PROP_URL, attribute)) {
+        IsEqualGUID(GUID_PROP_URL, attribute) ||
+        IsEqualGUID(TSATTRID_Text_VerticalWriting, attribute)) {
       supported_attrs_.push_back(attribute);
     }
   }
@@ -805,6 +872,12 @@ HRESULT TSFTextStore::RetrieveRequestedAttrs(ULONG attribute_buffer_size,
       }
       attribute_buffer[i].varValue.bstrVal =
           SysAllocStringLen(wide_url.c_str(), wide_url.length());
+    } else if (IsEqualGUID(TSATTRID_Text_VerticalWriting,
+                           supported_attrs_[i])) {
+      attribute_buffer[i].varValue.vt = VT_BOOL;
+      attribute_buffer[i].varValue.boolVal =
+          !!(text_input_client_->GetTextInputFlags() &
+             ui::TEXT_INPUT_FLAG_VERTICAL);
     }
   }
   return S_OK;
@@ -903,7 +976,7 @@ HRESULT TSFTextStore::OnLanguageChanged() {
 HRESULT TSFTextStore::OnKeyTraceDown(WPARAM wParam, LPARAM lParam) {
   // fire the event right away if we're in composition
   if (has_composition_range_) {
-    DispatchKeyEvent(ui::ET_KEY_PRESSED, wParam, lParam);
+    DispatchKeyEvent(ui::EventType::kKeyPressed, wParam, lParam);
   } else {
     // we're not in composition but we might be starting it - remember these key
     // events to fire when composition starts
@@ -915,7 +988,7 @@ HRESULT TSFTextStore::OnKeyTraceDown(WPARAM wParam, LPARAM lParam) {
 
 HRESULT TSFTextStore::OnKeyTraceUp(WPARAM wParam, LPARAM lParam) {
   if (has_composition_range_ || wparam_keydown_fired_ == wParam) {
-    DispatchKeyEvent(ui::ET_KEY_RELEASED, wParam, lParam);
+    DispatchKeyEvent(ui::EventType::kKeyReleased, wParam, lParam);
   } else if (wparam_keydown_cached_ == wParam) {
     // If we didn't fire corresponding keydown event, then we need to clear the
     // cached keydown wParam and lParam.
@@ -931,12 +1004,12 @@ void TSFTextStore::DispatchKeyEvent(ui::EventType type,
   if (!text_input_client_)
     return;
 
-  if (type == ui::ET_KEY_PRESSED) {
+  if (type == ui::EventType::kKeyPressed) {
     // clear the saved values since we just fired a keydown
     wparam_keydown_cached_ = 0;
     lparam_keydown_cached_ = 0;
     wparam_keydown_fired_ = wparam;
-  } else if (type == ui::ET_KEY_RELEASED) {
+  } else if (type == ui::EventType::kKeyReleased) {
     // clear the saved values since we just fired a keyup
     wparam_keydown_fired_ = 0;
   } else {
@@ -945,13 +1018,13 @@ void TSFTextStore::DispatchKeyEvent(ui::EventType type,
   }
 
   // prepare ui::KeyEvent.
-  UINT message = type == ui::ET_KEY_PRESSED ? WM_KEYDOWN : WM_KEYUP;
+  UINT message = type == ui::EventType::kKeyPressed ? WM_KEYDOWN : WM_KEYUP;
   const CHROME_MSG key_event_MSG = {window_handle_, message, VK_PROCESSKEY,
                                     lparam};
   ui::KeyEvent key_event = KeyEventFromMSG(key_event_MSG);
 
-  if (input_method_delegate_) {
-    input_method_delegate_->DispatchKeyEventPostIME(&key_event);
+  if (ime_key_event_dispatcher_) {
+    ime_key_event_dispatcher_->DispatchKeyEventPostIME(&key_event);
   }
 }
 
@@ -1283,8 +1356,8 @@ void TSFTextStore::CalculateTextandSelectionDiffAndNotifyIfNeeded() {
     if (notify_text_change && text_changed) {
       TRACE_EVENT2(
           "ime", "TSFTextStore::CalculateTextandSelectionDiffAndNotifyIfNeeded",
-          "text_change_start", std::to_string(text_change.acpStart),
-          "text_change_end", std::to_string(text_change.acpNewEnd));
+          "text_change_start", base::NumberToString(text_change.acpStart),
+          "text_change_end", base::NumberToString(text_change.acpNewEnd));
       text_store_acp_sink_->OnTextChange(0, &text_change);
     }
 
@@ -1317,13 +1390,16 @@ void TSFTextStore::RemoveFocusedTextInputClient(
   }
 }
 
-void TSFTextStore::SetInputMethodDelegate(
-    internal::InputMethodDelegate* delegate) {
-  input_method_delegate_ = delegate;
+void TSFTextStore::SetImeKeyEventDispatcher(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher) {
+  ime_key_event_dispatcher_ = ime_key_event_dispatcher;
 }
 
-void TSFTextStore::RemoveInputMethodDelegate() {
-  input_method_delegate_ = nullptr;
+void TSFTextStore::RemoveImeKeyEventDispatcher(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher) {
+  if (ime_key_event_dispatcher == ime_key_event_dispatcher_) {
+    ime_key_event_dispatcher_ = nullptr;
+  }
 }
 
 bool TSFTextStore::CancelComposition() {
@@ -1366,8 +1442,9 @@ bool TSFTextStore::ConfirmComposition() {
 void TSFTextStore::SendOnLayoutChange() {
   // A re-entrant call leads to infinite loop in TSF.
   // We bail out if are in the process of notifying TSF about changes.
-  if (is_notification_in_progress_)
+  if (is_notification_in_progress_ || is_empty_text_store_) {
     return;
+  }
   CalculateTextandSelectionDiffAndNotifyIfNeeded();
   if (text_store_acp_sink_ &&
       (text_store_acp_sink_mask_ & TS_AS_LAYOUT_CHANGE)) {
@@ -1464,7 +1541,7 @@ void TSFTextStore::CommitTextAndEndCompositionIfAny(size_t old_size,
   // Construct string to be committed.
   const std::u16string& new_committed_string = string_buffer_document_.substr(
       new_committed_string_offset, new_committed_string_size);
-  // TODO(crbug.com/978678): Unify the behavior of
+  // TODO(crbug.com/41467857): Unify the behavior of
   //     |TextInputClient::InsertText(text)| for the empty text.
   if (!new_committed_string.empty()) {
     // If composition was started and committed in one edit session, we still
@@ -1609,6 +1686,25 @@ bool TSFTextStore::IsInputIME() const {
            profile.dwProfileType == TF_PROFILETYPE_INPUTPROCESSOR;
   }
   return false;
+}
+
+void TSFTextStore::UseEmptyTextStore(bool is_enabled) {
+  is_empty_text_store_ = is_enabled;
+}
+
+bool TSFTextStore::MaybeSendOnUrlChanged() {
+  // When the user interacts with a traditional editing control, TSF will query
+  // for the current Url as needed. However, when TSF supports empty stores, we
+  // will also notify the OS when a frame with a committed Url is focused, to
+  // enable scenarios where, for example, a page implements its own controls in
+  // JavaScript (crbug.com/1447061).
+  if (!is_empty_text_store_ || (text_store_acp_sink_ == nullptr)) {
+    return false;
+  }
+  TS_ATTRID attrs[1];
+  attrs[0] = GUID_PROP_URL;
+  text_store_acp_sink_->OnAttrsChange(NULL, NULL, 1, attrs);
+  return true;
 }
 
 }  // namespace ui

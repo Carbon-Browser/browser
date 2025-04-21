@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/command_buffer.h"
 #include "gpu/command_buffer/common/command_buffer_shared.h"
@@ -71,7 +71,8 @@ union CommandBufferEntry;
 // API to manage the put and get pointers.
 class GPU_EXPORT CommandBufferService : public CommandBufferServiceBase {
  public:
-  static const int kParseCommandsSlice = 20;
+  static const int kParseCommandsSliceSmall = 20;
+  static const int kParseCommandsSliceLarge = 100;
 
   CommandBufferService(CommandBufferServiceClient* client,
                        MemoryTracker* memory_tracker);
@@ -111,10 +112,14 @@ class GPU_EXPORT CommandBufferService : public CommandBufferServiceBase {
 
   // Creates an in-process transfer buffer and register it with a newly created
   // id.
-  scoped_refptr<Buffer> CreateTransferBuffer(uint32_t size, int32_t* id);
+  scoped_refptr<Buffer> CreateTransferBuffer(uint32_t size,
+                                             int32_t* id,
+                                             uint32_t alignment = 0);
 
   // Creates an in-process transfer buffer and register it with a given id.
-  scoped_refptr<Buffer> CreateTransferBufferWithId(uint32_t size, int32_t id);
+  scoped_refptr<Buffer> CreateTransferBufferWithId(uint32_t size,
+                                                   int32_t id,
+                                                   uint32_t alignment = 0);
 
   // Sets whether commands should be processed by this scheduler. Setting to
   // false unschedules. Setting to true reschedules.
@@ -130,6 +135,8 @@ class GPU_EXPORT CommandBufferService : public CommandBufferServiceBase {
 
   size_t GetSharedMemoryBytesAllocated() const;
 
+  bool ShouldYield();
+
  private:
   raw_ptr<CommandBufferServiceClient> client_;
   std::unique_ptr<TransferBufferManager> transfer_buffer_manager_;
@@ -139,7 +146,7 @@ class GPU_EXPORT CommandBufferService : public CommandBufferServiceBase {
 
   int32_t num_entries_ = 0;
   scoped_refptr<Buffer> ring_buffer_;
-  raw_ptr<volatile CommandBufferEntry> buffer_ = nullptr;
+  raw_ptr<volatile CommandBufferEntry, AllowPtrArithmetic> buffer_ = nullptr;
 
   std::unique_ptr<BufferBacking> shared_state_buffer_;
   raw_ptr<CommandBufferSharedState> shared_state_ = nullptr;

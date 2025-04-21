@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,24 +11,32 @@
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
-#include "base/run_loop.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
+#include "base/path_service.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/ash/login/test/cryptohome_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
+#include "chrome/browser/ash/login/test/user_auth_config.h"
+#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/signin/chrome_device_id_helper.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chromeos/dbus/constants/dbus_paths.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace ash {
 namespace {
@@ -55,7 +63,7 @@ class DeviceIDTest : public OobeBaseTest,
   }
 
   void SetUpOnMainThread() override {
-    user_removal_loop_ = std::make_unique<base::RunLoop>();
+    user_removal_signal_ = std::make_unique<base::test::TestFuture<void>>();
     OobeBaseTest::SetUpOnMainThread();
     LoadRefreshTokenToDeviceIdMap();
     user_manager::UserManager::Get()->AddObserver(this);
@@ -100,16 +108,29 @@ class DeviceIDTest : public OobeBaseTest,
     }
   }
 
+  // This is a helper function to online login the user using fake gaia mixin.
+  // Preconditions:
+  //  - GaiaScreen should be shown.
+  // Postconditions:
+  //  - Install attributes for the user exist.
+  //  - User session starts.
   void SignInOnline(const std::string& user_id,
                     const std::string& password,
                     const std::string& refresh_token,
-                    const std::string& gaia_id) {
-    WaitForGaiaPageLoad();
+                    const GaiaId& gaia_id) {
+    cryptohome_mixin_.ApplyAuthConfigIfUserExists(
+        AccountId::FromUserEmail(user_id),
+        test::UserAuthConfig::Create(test::kDefaultAuthSetup));
 
-    FakeGaia::MergeSessionParams params;
+    OobeScreenWaiter(GaiaView::kScreenId).Wait();
+    // On a real device the first user would create the install attributes file,
+    // emulate that, so the following users don't try to establish ownership.
+    EnsureInstallAttributesCreated();
+
+    FakeGaia::Configuration params;
     params.email = user_id;
     params.refresh_token = refresh_token;
-    fake_gaia_.fake_gaia()->UpdateMergeSessionParams(params);
+    fake_gaia_.fake_gaia()->UpdateConfiguration(params);
     fake_gaia_.fake_gaia()->MapEmailToGaiaId(user_id, gaia_id);
 
     LoginDisplayHost::default_host()
@@ -121,6 +142,10 @@ class DeviceIDTest : public OobeBaseTest,
   }
 
   void SignInOffline(const std::string& user_id, const std::string& password) {
+    cryptohome_mixin_.ApplyAuthConfigIfUserExists(
+        AccountId::FromUserEmail(user_id),
+        test::UserAuthConfig::Create(test::kDefaultAuthSetup));
+
     LoginScreenTestApi::SubmitPassword(AccountId::FromUserEmail(user_id),
                                        FakeGaiaMixin::kFakeUserPassword,
                                        false /* check_if_submittable */);
@@ -129,12 +154,14 @@ class DeviceIDTest : public OobeBaseTest,
 
   void RemoveUser(const AccountId& account_id) {
     ASSERT_TRUE(LoginScreenTestApi::RemoveUser(account_id));
-    user_removal_loop_->Run();
+    EXPECT_TRUE(user_removal_signal_->Wait());
   }
 
  private:
   void LocalStateChanged(user_manager::UserManager* manager) override {
-    user_removal_loop_->Quit();
+    if (user_removal_signal_ && !user_removal_signal_->IsReady()) {
+      user_removal_signal_->SetValue();
+    }
   }
 
   base::FilePath GetRefreshTokenToDeviceIdMapFilePath() const {
@@ -148,7 +175,7 @@ class DeviceIDTest : public OobeBaseTest,
     if (!base::ReadFileToString(GetRefreshTokenToDeviceIdMapFilePath(),
                                 &file_contents))
       return;
-    absl::optional<base::Value> value = base::JSONReader::Read(file_contents);
+    std::optional<base::Value> value = base::JSONReader::Read(file_contents);
     EXPECT_TRUE(value->is_dict());
     base::Value::Dict& dictionary = value->GetDict();
     FakeGaia::RefreshTokenToDeviceIdMap map;
@@ -169,14 +196,28 @@ class DeviceIDTest : public OobeBaseTest,
     EXPECT_TRUE(base::WriteFile(GetRefreshTokenToDeviceIdMapFilePath(), json));
   }
 
-  std::unique_ptr<base::RunLoop> user_removal_loop_;
+  void EnsureInstallAttributesCreated() {
+    base::FilePath install_attrs_path = base::PathService::CheckedGet(
+        chromeos::dbus_paths::FILE_INSTALL_ATTRIBUTES);
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    if (!base::PathExists(install_attrs_path)) {
+      EXPECT_TRUE(
+          base::WriteFile(install_attrs_path, "fake_install_attributes_data"));
+    }
+  }
+
+  std::unique_ptr<base::test::TestFuture<void>> user_removal_signal_;
   FakeGaiaMixin fake_gaia_{&mixin_host_};
+  CryptohomeMixin cryptohome_mixin_{&mixin_host_};
 };
 
 // Add the first user and check that device ID is consistent.
 IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_PRE_PRE_PRE_PRE_NewUsers) {
+  LoginDisplayHost::default_host()
+      ->GetWizardController()
+      ->SkipToLoginForTesting();
   SignInOnline(FakeGaiaMixin::kFakeUserEmail, FakeGaiaMixin::kFakeUserPassword,
-               kRefreshToken1, FakeGaiaMixin::kFakeUserGaiaId);
+               kRefreshToken1, GaiaId(FakeGaiaMixin::kFakeUserGaiaId));
   CheckDeviceIDIsConsistent(
       AccountId::FromUserEmail(FakeGaiaMixin::kFakeUserEmail), kRefreshToken1);
 }
@@ -190,8 +231,11 @@ IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_PRE_PRE_PRE_NewUsers) {
   EXPECT_EQ(device_id, GetDeviceIdFromGAIA(kRefreshToken1));
 
   ASSERT_TRUE(LoginScreenTestApi::ClickAddUserButton());
+  OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+  test::TapForPersonalUseCrRadioButton();
+  test::TapUserCreationNext();
   SignInOnline(FakeGaiaMixin::kFakeUserEmail, FakeGaiaMixin::kFakeUserPassword,
-               kRefreshToken2, FakeGaiaMixin::kFakeUserGaiaId);
+               kRefreshToken2, GaiaId(FakeGaiaMixin::kFakeUserGaiaId));
   CheckDeviceIDIsConsistent(
       AccountId::FromUserEmail(FakeGaiaMixin::kFakeUserEmail), kRefreshToken2);
 
@@ -221,8 +265,11 @@ IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_PRE_PRE_NewUsers) {
 // Add the second user.
 IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_PRE_NewUsers) {
   ASSERT_TRUE(LoginScreenTestApi::ClickAddUserButton());
+  OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+  test::TapForPersonalUseCrRadioButton();
+  test::TapUserCreationNext();
   SignInOnline(kSecondUserEmail, kSecondUserPassword, kSecondUserRefreshToken1,
-               kSecondUserGaiaId);
+               GaiaId(kSecondUserGaiaId));
   CheckDeviceIDIsConsistent(AccountId::FromUserEmail(kSecondUserEmail),
                             kSecondUserRefreshToken1);
 }
@@ -232,18 +279,14 @@ IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_NewUsers) {
   RemoveUser(AccountId::FromUserEmail(kSecondUserEmail));
 }
 
-// crbug.com/1304049
-#if BUILDFLAG(IS_LINUX)
-#define MAYBE_NewUsers DISABLED_NewUsers
-#else
-#define MAYBE_NewUsers NewUsers
-#endif  // BUILDFLAG(IS_LINUX)
-// Add the second user back. Verify that device ID has been changed.
-IN_PROC_BROWSER_TEST_F(DeviceIDTest, MAYBE_NewUsers) {
+IN_PROC_BROWSER_TEST_F(DeviceIDTest, NewUsers) {
   EXPECT_TRUE(GetDeviceId(AccountId::FromUserEmail(kSecondUserEmail)).empty());
   ASSERT_TRUE(LoginScreenTestApi::ClickAddUserButton());
+  OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+  test::TapForPersonalUseCrRadioButton();
+  test::TapUserCreationNext();
   SignInOnline(kSecondUserEmail, kSecondUserPassword, kSecondUserRefreshToken2,
-               kSecondUserGaiaId);
+               GaiaId(kSecondUserGaiaId));
   CheckDeviceIDIsConsistent(AccountId::FromUserEmail(kSecondUserEmail),
                             kSecondUserRefreshToken2);
   EXPECT_NE(GetDeviceIdFromGAIA(kSecondUserRefreshToken1),
@@ -252,8 +295,11 @@ IN_PROC_BROWSER_TEST_F(DeviceIDTest, MAYBE_NewUsers) {
 
 // Set up a user that has a device ID stored in preference only.
 IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_Migration) {
+  LoginDisplayHost::default_host()
+      ->GetWizardController()
+      ->SkipToLoginForTesting();
   SignInOnline(FakeGaiaMixin::kFakeUserEmail, FakeGaiaMixin::kFakeUserPassword,
-               kRefreshToken1, FakeGaiaMixin::kFakeUserGaiaId);
+               kRefreshToken1, GaiaId(FakeGaiaMixin::kFakeUserGaiaId));
 
   // Simulate user that has device ID saved only in preferences (pre-M44).
   PrefService* prefs =
@@ -286,8 +332,11 @@ IN_PROC_BROWSER_TEST_F(DeviceIDTest, Migration) {
 
 // Set up a user that doesn't have a device ID.
 IN_PROC_BROWSER_TEST_F(DeviceIDTest, PRE_LegacyUsers) {
+  LoginDisplayHost::default_host()
+      ->GetWizardController()
+      ->SkipToLoginForTesting();
   SignInOnline(FakeGaiaMixin::kFakeUserEmail, FakeGaiaMixin::kFakeUserPassword,
-               kRefreshToken1, FakeGaiaMixin::kFakeUserGaiaId);
+               kRefreshToken1, GaiaId(FakeGaiaMixin::kFakeUserGaiaId));
 
   PrefService* prefs =
       ProfileHelper::Get()

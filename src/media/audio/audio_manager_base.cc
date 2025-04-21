@@ -1,34 +1,34 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/audio_manager_base.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "media/audio/audio_device_description.h"
+#include "media/audio/audio_input_stream_data_interceptor.h"
 #include "media/audio/audio_output_dispatcher_impl.h"
 #include "media/audio/audio_output_proxy.h"
 #include "media/audio/audio_output_resampler.h"
 #include "media/audio/fake_audio_input_stream.h"
 #include "media/audio/fake_audio_output_stream.h"
 #include "media/base/media_switches.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#include "base/logging.h"
-#include "media/audio/audio_input_stream_data_interceptor.h"
 
 namespace media {
 
@@ -65,6 +65,29 @@ enum StreamFormat {
   STREAM_FORMAT_MAX = 4,
 };
 
+// Used to log errors in `AudioManagerBase::MakeAudioInputStream` and
+// `AudioManagerBase::MakeAudioOutputStream`. These values are persisted to
+// logs. Entries should not be renumbered and numeric values should never be
+// reused.
+enum class MakeAudioStreamResult {
+  kNoError = 0,
+  kErrorSwitchFailAudioStreamCreation = 1,
+  kErrorInvalidParams = 2,
+  kErrorExcessiveStreams = 3,
+  kErrorCreateStream = 4,
+  kMaxValue = kErrorCreateStream
+};
+
+void LogMakeAudioInputStreamResult(MakeAudioStreamResult result) {
+  base::UmaHistogramEnumeration("Media.Audio.MakeAudioInputStreamStatus",
+                                result);
+}
+
+void LogMakeAudioOutputStreamResult(MakeAudioStreamResult result) {
+  base::UmaHistogramEnumeration("Media.Audio.MakeAudioOutputStreamStatus",
+                                result);
+}
+
 PRINTF_FORMAT(2, 3)
 void SendLogMessage(const AudioManagerBase::LogCallback& callback,
                     const char* format,
@@ -96,26 +119,6 @@ struct AudioManagerBase::DispatcherParams {
   const AudioParameters output_params;
   const std::string output_device_id;
   std::unique_ptr<AudioOutputDispatcher> dispatcher;
-};
-
-class AudioManagerBase::CompareByParams {
- public:
-  explicit CompareByParams(const DispatcherParams* dispatcher)
-      : dispatcher_(dispatcher) {}
-  bool operator()(
-      const std::unique_ptr<DispatcherParams>& dispatcher_in) const {
-    // We will reuse the existing dispatcher when:
-    // 1) Unified IO is not used, input_params and output_params of the
-    //    existing dispatcher are the same as the requested dispatcher.
-    // 2) Unified IO is used, input_params and output_params of the existing
-    //    dispatcher are the same as the request dispatcher.
-    return (dispatcher_->input_params.Equals(dispatcher_in->input_params) &&
-            dispatcher_->output_params.Equals(dispatcher_in->output_params) &&
-            dispatcher_->output_device_id == dispatcher_in->output_device_id);
-  }
-
- private:
-  raw_ptr<const DispatcherParams> dispatcher_;
 };
 
 AudioManagerBase::AudioManagerBase(std::unique_ptr<AudioThread> audio_thread,
@@ -180,14 +183,30 @@ void AudioManagerBase::GetAudioDeviceDescriptions(
   }
 
   for (auto& name : device_names) {
-    if (AudioDeviceDescription::IsDefaultDevice(name.unique_id))
+    // Checks whether `name.unique_id` is the id of the real device that is
+    // mapped to the virtual default and/or communications devices.
+    bool is_real_system_default = name.unique_id == real_default_device_id;
+    bool is_real_communications_device =
+        name.unique_id == real_communications_device_id;
+
+    bool is_virtual_system_default = false;
+    bool is_virtual_communications_device = false;
+    if (AudioDeviceDescription::IsDefaultDevice(name.unique_id)) {
+      // Virtual default device.
       name.device_name = real_default_name;
-    else if (AudioDeviceDescription::IsCommunicationsDevice(name.unique_id))
+      is_virtual_system_default = true;
+    } else if (AudioDeviceDescription::IsCommunicationsDevice(name.unique_id)) {
+      // Virtual communications device.
       name.device_name = real_communications_name;
+      is_virtual_communications_device = true;
+    }
+
     std::string group_id = (this->*get_group_id)(name.unique_id);
-    device_descriptions->emplace_back(std::move(name.device_name),
-                                      std::move(name.unique_id),
-                                      std::move(group_id));
+    device_descriptions->emplace_back(
+        std::move(name.device_name), std::move(name.unique_id),
+        std::move(group_id),
+        is_virtual_system_default || is_real_system_default,
+        is_virtual_communications_device || is_real_communications_device);
   }
 }
 
@@ -200,6 +219,8 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStream(
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kFailAudioStreamCreation)) {
+    LogMakeAudioOutputStreamResult(
+        MakeAudioStreamResult::kErrorSwitchFailAudioStreamCreation);
     return nullptr;
   }
 
@@ -214,6 +235,8 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStream(
     LOG(ERROR) << "Number of opened output audio streams "
                << num_output_streams_ << " exceed the max allowed number "
                << max_num_output_streams_;
+    LogMakeAudioOutputStreamResult(
+        MakeAudioStreamResult::kErrorExcessiveStreams);
     return nullptr;
   }
 
@@ -248,6 +271,9 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStream(
     SendLogMessage(log_callback, "%s => (number of streams=%d)", __func__,
                    output_stream_count());
   }
+  LogMakeAudioOutputStreamResult(
+      stream ? MakeAudioStreamResult::kNoError
+             : MakeAudioStreamResult::kErrorCreateStream);
 
   return stream;
 }
@@ -260,14 +286,23 @@ AudioOutputStream* AudioManagerBase::MakeBitstreamOutputStream(
 }
 
 AudioInputStream* AudioManagerBase::MakeAudioInputStream(
-    const AudioParameters& params,
+    const AudioParameters& input_params,
     const std::string& device_id,
     const LogCallback& log_callback) {
   CHECK(GetTaskRunner()->BelongsToCurrentThread());
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kFailAudioStreamCreation)) {
+    LogMakeAudioInputStreamResult(
+        MakeAudioStreamResult::kErrorSwitchFailAudioStreamCreation);
     return nullptr;
+  }
+
+  // If audio has been disabled force usage of a fake audio stream.
+  auto params = input_params;
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableAudioInput)) {
+    params.set_format(AudioParameters::AUDIO_FAKE);
   }
 
   SendLogMessage(log_callback, "%s({device_id=%s}, {params=[%s]})", __func__,
@@ -277,6 +312,7 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
       device_id.empty()) {
     DLOG(ERROR) << "Audio parameters are invalid for device " << device_id
                 << ", params: " << params.AsHumanReadableString();
+    LogMakeAudioInputStreamResult(MakeAudioStreamResult::kErrorInvalidParams);
     return nullptr;
   }
 
@@ -284,6 +320,8 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
     LOG(ERROR) << "Number of opened input audio streams "
                << input_stream_count() << " exceed the max allowed number "
                << kMaxInputStreams;
+    LogMakeAudioInputStreamResult(
+        MakeAudioStreamResult::kErrorExcessiveStreams);
     return nullptr;
   }
 
@@ -329,6 +367,10 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
     }
   }
 
+  LogMakeAudioInputStreamResult(
+      stream ? MakeAudioStreamResult::kNoError
+             : MakeAudioStreamResult::kErrorCreateStream);
+
   return stream;
 }
 
@@ -337,7 +379,7 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStreamProxy(
     const std::string& device_id) {
   CHECK(GetTaskRunner()->BelongsToCurrentThread());
   DCHECK(params.IsValid());
-  absl::optional<StreamFormat> uma_stream_format;
+  std::optional<StreamFormat> uma_stream_format;
 
   // If the caller supplied an empty device id to select the default device,
   // we fetch the actual device id of the default device so that the lookup
@@ -410,10 +452,11 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStreamProxy(
         uma_stream_format = STREAM_FORMAT_FAKE;
         break;
       default:
-        if (output_params.IsBitstreamFormat())
+        if (output_params.IsBitstreamFormat()) {
           uma_stream_format = STREAM_FORMAT_BITSTREAM;
-        else
+        } else {
           NOTREACHED();
+        }
     }
   }
 
@@ -424,14 +467,31 @@ AudioOutputStream* AudioManagerBase::MakeAudioOutputStreamProxy(
     NOTREACHED();
   }
 
-  std::unique_ptr<DispatcherParams> dispatcher_params =
-      std::make_unique<DispatcherParams>(params, output_params,
-                                         output_device_id);
+  auto dispatcher_params = std::make_unique<DispatcherParams>(
+      params, output_params, output_device_id);
 
-  auto it = std::find_if(output_dispatchers_.begin(), output_dispatchers_.end(),
-                         CompareByParams(dispatcher_params.get()));
-  if (it != output_dispatchers_.end())
-    return (*it)->dispatcher->CreateStreamProxy();
+  // Do not reuse the output dispatcher if audio offload is requested.
+  // Their underlying audio client is configured differently to make
+  // it work with expected buffer size according to requested output
+  // param.
+  if (!output_params.RequireOffload()) {
+    auto it = base::ranges::find_if(
+        output_dispatchers_,
+        [&](const std::unique_ptr<DispatcherParams>& dispatcher) {
+          // We will reuse the existing dispatcher when:
+          // 1) Unified IO is not used, input_params and output_params of the
+          //    existing dispatcher are the same as the requested dispatcher.
+          // 2) Unified IO is used, input_params and output_params of the
+          // existing
+          //    dispatcher are the same as the request dispatcher.
+          return params.Equals(dispatcher->input_params) &&
+                 output_params.Equals(dispatcher->output_params) &&
+                 output_device_id == dispatcher->output_device_id;
+        });
+    if (it != output_dispatchers_.end()) {
+      return (*it)->dispatcher->CreateStreamProxy();
+    }
+  }
 
   const base::TimeDelta kCloseDelay = base::Seconds(kStreamCloseDelaySeconds);
   std::unique_ptr<AudioOutputDispatcher> dispatcher;
@@ -510,11 +570,6 @@ void AudioManagerBase::NotifyAllOutputDeviceChangeListeners() {
     observer.OnDeviceChange();
 }
 
-AudioParameters AudioManagerBase::GetDefaultOutputStreamParameters() {
-  return GetPreferredOutputStreamParameters(GetDefaultOutputDeviceID(),
-      AudioParameters());
-}
-
 AudioParameters AudioManagerBase::GetOutputStreamParameters(
     const std::string& device_id) {
   return GetPreferredOutputStreamParameters(device_id,
@@ -524,7 +579,6 @@ AudioParameters AudioManagerBase::GetOutputStreamParameters(
 AudioParameters AudioManagerBase::GetInputStreamParameters(
     const std::string& device_id) {
   NOTREACHED();
-  return AudioParameters();
 }
 
 std::string AudioManagerBase::GetAssociatedOutputDeviceID(
@@ -620,18 +674,22 @@ void AudioManagerBase::InitializeDebugRecording() {
   }
 
   DCHECK(!debug_recording_manager_);
-  debug_recording_manager_ = CreateAudioDebugRecordingManager(GetTaskRunner());
+  debug_recording_manager_ = CreateAudioDebugRecordingManager();
 }
 
 std::unique_ptr<AudioDebugRecordingManager>
-AudioManagerBase::CreateAudioDebugRecordingManager(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
-  return std::make_unique<AudioDebugRecordingManager>(std::move(task_runner));
+AudioManagerBase::CreateAudioDebugRecordingManager() {
+  return std::make_unique<AudioDebugRecordingManager>();
 }
 
 AudioDebugRecordingManager* AudioManagerBase::GetAudioDebugRecordingManager() {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   return debug_recording_manager_.get();
+}
+
+void AudioManagerBase::SetAecDumpRecordingManager(
+    base::WeakPtr<AecdumpRecordingManager>) {
+  // This is no-op by default.
 }
 
 }  // namespace media

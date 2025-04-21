@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,6 @@ struct coalition_resource_usage {
   uint64_t cpu_ptime;
   uint64_t cpu_time_eqos_len; /* Stores the number of thread QoS types */
   uint64_t cpu_time_eqos[COALITION_NUM_THREAD_QOS_TYPES];
-  // `cpu_instructions` and `cpu_cycles` are only populated on macOS 10.15+
   uint64_t cpu_instructions;
   uint64_t cpu_cycles;
   uint64_t fs_metadata_writes;

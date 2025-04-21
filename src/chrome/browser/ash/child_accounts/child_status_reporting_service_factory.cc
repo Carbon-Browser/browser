@@ -1,12 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service_factory.h"
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash {
 
@@ -26,16 +27,25 @@ ChildStatusReportingServiceFactory::GetInstance() {
 }
 
 ChildStatusReportingServiceFactory::ChildStatusReportingServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ChildStatusReportingServiceFactory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ChildStatusReportingServiceFactory::~ChildStatusReportingServiceFactory() =
     default;
 
-KeyedService* ChildStatusReportingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ChildStatusReportingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ChildStatusReportingService(context);
+  return std::make_unique<ChildStatusReportingService>(context);
 }
 
 }  // namespace ash

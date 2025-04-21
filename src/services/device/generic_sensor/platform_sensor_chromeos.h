@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chromeos/components/sensors/mojom/sensor.mojom.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/generic_sensor/platform_sensor.h"
 
@@ -25,7 +26,7 @@ class PlatformSensorChromeOS
       int32_t iio_device_id,
       mojom::SensorType type,
       SensorReadingSharedBuffer* reading_buffer,
-      PlatformSensorProvider* provider,
+      base::WeakPtr<PlatformSensorProvider> provider,
       mojo::ConnectionErrorWithReasonCallback sensor_device_disconnect_callback,
       double scale,
       mojo::Remote<chromeos::sensors::mojom::SensorDevice>

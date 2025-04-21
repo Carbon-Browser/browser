@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,16 @@
  * 'media-picker' handles showing the dropdown allowing users to select the
  * default camera/microphone.
  */
-import 'chrome://resources/cr_elements/md_select_css.m.js';
+import 'chrome://resources/cr_elements/md_select.css.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './media_picker.html.js';
 import {SiteSettingsMixin} from './site_settings_mixin.js';
-import {MediaPickerEntry} from './site_settings_prefs_browser_proxy.js';
+import type {MediaPickerEntry} from './site_settings_prefs_browser_proxy.js';
 
 interface MediaPickerElement {
   $: {
@@ -26,7 +26,7 @@ interface MediaPickerElement {
 }
 
 const MediaPickerElementBase =
-    SiteSettingsMixin(WebUIListenerMixin(PolymerElement));
+    SiteSettingsMixin(WebUiListenerMixin(PolymerElement));
 
 class MediaPickerElement extends MediaPickerElementBase {
   static get is() {
@@ -61,11 +61,11 @@ class MediaPickerElement extends MediaPickerElementBase {
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'updateDevicesMenu',
-        (type: string, devices: MediaPickerEntry[], defaultDevice: string) =>
-            this.updateDevicesMenu_(type, devices, defaultDevice));
-    this.browserProxy.getDefaultCaptureDevices(this.type);
+        (type: string, devices: MediaPickerEntry[], selectedDevice: string) =>
+            this.updateDevicesMenu_(type, devices, selectedDevice));
+    this.browserProxy.initializeCaptureDevices(this.type);
   }
 
   /**
@@ -75,7 +75,7 @@ class MediaPickerElement extends MediaPickerElementBase {
    * @param defaultDevice The unique id of the current default device.
    */
   private updateDevicesMenu_(
-      type: string, devices: MediaPickerEntry[], defaultDevice: string) {
+      type: string, devices: MediaPickerEntry[], selectedDevice: string) {
     if (type !== this.type) {
       return;
     }
@@ -86,7 +86,7 @@ class MediaPickerElement extends MediaPickerElementBase {
 
       // Wait for <select> to be populated.
       microTask.run(() => {
-        this.$.mediaPicker.value = defaultDevice;
+        this.$.mediaPicker.value = selectedDevice;
       });
     }
   }
@@ -95,7 +95,7 @@ class MediaPickerElement extends MediaPickerElementBase {
    * A handler for when an item is selected in the media picker.
    */
   private onChange_() {
-    this.browserProxy.setDefaultCaptureDevice(
+    this.browserProxy.setPreferredCaptureDevice(
         this.type, this.$.mediaPicker.value);
   }
 }

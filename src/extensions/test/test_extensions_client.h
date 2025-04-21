@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "extensions/common/extensions_client.h"
 #include "url/gurl.h"
 
@@ -47,6 +48,7 @@ class TestExtensionsClient : public ExtensionsClient {
       const APIPermissionSet& api_permissions) const override;
   bool IsScriptableURL(const GURL& url, std::string* error) const override;
   const GURL& GetWebstoreBaseURL() const override;
+  const GURL& GetNewWebstoreBaseURL() const override;
   const GURL& GetWebstoreUpdateURL() const override;
   bool IsBlocklistUpdateURL(const GURL& url) const override;
   std::set<base::FilePath> GetBrowserImagePaths(
@@ -58,9 +60,11 @@ class TestExtensionsClient : public ExtensionsClient {
   // added to this list.
   ScriptingAllowlist scripting_allowlist_;
 
-  std::set<BrowserImagePathsFilter*> browser_image_filters_;
+  std::set<raw_ptr<BrowserImagePathsFilter, SetExperimental>>
+      browser_image_filters_;
 
   const GURL webstore_base_url_;
+  const GURL new_webstore_base_url_;
   GURL webstore_update_url_;
 };
 

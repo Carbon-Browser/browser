@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include "base/memory/raw_ptr.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-#include "third_party/skia/include/gpu/GrContextOptions.h"
+#include "third_party/skia/include/gpu/ganesh/GrContextOptions.h"
+
+class GrDirectContext;
 
 namespace gpu {
 struct Capabilities;
@@ -46,7 +48,7 @@ class GrContextForGLES2Interface : public GrContextOptions::ShaderErrorHandler {
   void FreeGpuResources();
 
  private:
-  sk_sp<class GrDirectContext> gr_context_;
+  sk_sp<GrDirectContext> gr_context_;
   raw_ptr<gpu::ContextSupport> context_support_;
 };
 

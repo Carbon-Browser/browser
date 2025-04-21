@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/fuchsia/accessibility_bridge_fuchsia_registry.h"
 
 #include "base/no_destructor.h"
+#include "base/not_fatal_until.h"
 
 namespace ui {
 
@@ -42,7 +43,7 @@ void AccessibilityBridgeFuchsiaRegistry::RegisterAccessibilityBridge(
 void AccessibilityBridgeFuchsiaRegistry::UnregisterAccessibilityBridge(
     aura::Window* window) {
   auto it = window_to_bridge_map_.find(window);
-  DCHECK(it != window_to_bridge_map_.end());
+  CHECK(it != window_to_bridge_map_.end(), base::NotFatalUntil::M130);
 
   window_to_bridge_map_.erase(it);
 }

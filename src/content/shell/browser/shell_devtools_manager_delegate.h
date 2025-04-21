@@ -1,13 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_SHELL_BROWSER_SHELL_DEVTOOLS_MANAGER_DELEGATE_H_
 #define CONTENT_SHELL_BROWSER_SHELL_DEVTOOLS_MANAGER_DELEGATE_H_
 
-#include "base/containers/flat_set.h"
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/devtools_manager_delegate.h"
+#include "content/shell/browser/protocol/shell_devtools_session.h"
 
 namespace content {
 
@@ -29,7 +30,12 @@ class ShellDevToolsManagerDelegate : public DevToolsManagerDelegate {
 
   // DevToolsManagerDelegate implementation.
   BrowserContext* GetDefaultBrowserContext() override;
-  scoped_refptr<DevToolsAgentHost> CreateNewTarget(const GURL& url) override;
+  void HandleCommand(content::DevToolsAgentHostClientChannel* channel,
+                     base::span<const uint8_t> message,
+                     NotHandledCallback callback) override;
+  scoped_refptr<DevToolsAgentHost> CreateNewTarget(
+      const GURL& url,
+      TargetType target_type) override;
   std::string GetDiscoveryPageHTML() override;
   bool HasBundledFrontendResources() override;
   void ClientAttached(
@@ -39,7 +45,9 @@ class ShellDevToolsManagerDelegate : public DevToolsManagerDelegate {
 
  private:
   raw_ptr<BrowserContext, DanglingUntriaged> browser_context_;
-  base::flat_set<content::DevToolsAgentHostClient*> clients_;
+  base::flat_map<raw_ptr<content::DevToolsAgentHostClientChannel>,
+                 std::unique_ptr<shell::protocol::ShellDevToolsSession>>
+      sessions_;
 };
 
 }  // namespace content

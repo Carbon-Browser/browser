@@ -1,15 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/public/provider/chrome/browser/signin/trusted_vault_api.h"
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "base/notreached.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios {
 namespace provider {
@@ -22,66 +18,104 @@ class ChromiumTrustedVaultClientBackend final
     : public TrustedVaultClientBackend {
  public:
   // TrustedVaultClientBackend implementation.
-  void AddObserver(Observer* observer) final;
-  void RemoveObserver(Observer* observer) final;
-  void FetchKeys(ChromeIdentity* chrome_identity,
-                 KeyFetchedCallback callback) final;
-  void MarkLocalKeysAsStale(ChromeIdentity* chrome_identity,
-                            base::OnceClosure callback) final;
+  void SetDeviceRegistrationPublicKeyVerifierForUMA(
+      VerifierCallback verifier) final;
+  void FetchKeys(id<SystemIdentity> identity,
+                 trusted_vault::SecurityDomainId security_domain_id,
+                 KeysFetchedCallback completion) final;
+  void MarkLocalKeysAsStale(id<SystemIdentity> identity,
+                            trusted_vault::SecurityDomainId security_domain_id,
+                            base::OnceClosure completion) final;
   void GetDegradedRecoverabilityStatus(
-      ChromeIdentity* chrome_identity,
-      base::OnceCallback<void(bool)> callback) final;
-  void Reauthentication(ChromeIdentity* chrome_identity,
-                        UIViewController* presenting_view_controller,
-                        CompletionBlock callback) final;
-  void FixDegradedRecoverability(ChromeIdentity* chrome_identity,
-                                 UIViewController* presenting_view_controller,
-                                 CompletionBlock callback) final;
-  void CancelDialog(BOOL animated, ProceduralBlock callback) final;
+      id<SystemIdentity> identity,
+      trusted_vault::SecurityDomainId security_domain_id,
+      base::OnceCallback<void(bool)> completion) final;
+  CancelDialogCallback Reauthentication(
+      id<SystemIdentity> identity,
+      trusted_vault::SecurityDomainId security_domain_id,
+      UIViewController* presenting_view_controller,
+      CompletionBlock completion) final;
+  CancelDialogCallback FixDegradedRecoverability(
+      id<SystemIdentity> identity,
+      trusted_vault::SecurityDomainId security_domain_id,
+      UIViewController* presenting_view_controller,
+      CompletionBlock completion) final;
+  void ClearLocalData(id<SystemIdentity> identity,
+                      trusted_vault::SecurityDomainId security_domain_id,
+                      base::OnceCallback<void(bool)> completion) final;
+  void GetPublicKeyForIdentity(id<SystemIdentity> identity,
+                               GetPublicKeyCallback completion) final;
+  void UpdateGPMPinForAccount(
+      id<SystemIdentity> identity,
+      trusted_vault::SecurityDomainId security_domain_id,
+      UINavigationController* navigationController,
+      UIView* brandedNavigationItemTitleView,
+      UpdateGPMPinCompletionCallback completion) final;
 };
 
-void ChromiumTrustedVaultClientBackend::AddObserver(Observer* observer) {
-  // Do nothing.
-}
-
-void ChromiumTrustedVaultClientBackend::RemoveObserver(Observer* observer) {
+void ChromiumTrustedVaultClientBackend::
+    SetDeviceRegistrationPublicKeyVerifierForUMA(VerifierCallback verifier) {
   // Do nothing.
 }
 
 void ChromiumTrustedVaultClientBackend::FetchKeys(
-    ChromeIdentity* chrome_identity,
-    KeyFetchedCallback callback) {
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
+    KeysFetchedCallback completion) {
   NOTREACHED();
 }
 
 void ChromiumTrustedVaultClientBackend::MarkLocalKeysAsStale(
-    ChromeIdentity* chrome_identity,
-    base::OnceClosure callback) {
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
+    base::OnceClosure completion) {
   NOTREACHED();
 }
 
 void ChromiumTrustedVaultClientBackend::GetDegradedRecoverabilityStatus(
-    ChromeIdentity* chrome_identity,
-    base::OnceCallback<void(bool)> callback) {
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
+    base::OnceCallback<void(bool)> completion) {
   NOTREACHED();
 }
 
-void ChromiumTrustedVaultClientBackend::Reauthentication(
-    ChromeIdentity* chrome_identity,
+TrustedVaultClientBackend::CancelDialogCallback
+ChromiumTrustedVaultClientBackend::Reauthentication(
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
     UIViewController* presenting_view_controller,
-    CompletionBlock callback) {
+    CompletionBlock completion) {
   NOTREACHED();
 }
 
-void ChromiumTrustedVaultClientBackend::FixDegradedRecoverability(
-    ChromeIdentity* chrome_identity,
+TrustedVaultClientBackend::CancelDialogCallback
+ChromiumTrustedVaultClientBackend::FixDegradedRecoverability(
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
     UIViewController* presenting_view_controller,
-    CompletionBlock callback) {
+    CompletionBlock completion) {
   NOTREACHED();
 }
 
-void ChromiumTrustedVaultClientBackend::CancelDialog(BOOL animated,
-                                                     ProceduralBlock callback) {
+void ChromiumTrustedVaultClientBackend::ClearLocalData(
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
+    base::OnceCallback<void(bool)> completion) {
+  // Do nothing.
+}
+
+void ChromiumTrustedVaultClientBackend::GetPublicKeyForIdentity(
+    id<SystemIdentity> identity,
+    GetPublicKeyCallback completion) {
+  NOTREACHED();
+}
+
+void ChromiumTrustedVaultClientBackend::UpdateGPMPinForAccount(
+    id<SystemIdentity> identity,
+    trusted_vault::SecurityDomainId security_domain_id,
+    UINavigationController* navigationController,
+    UIView* brandedNavigationItemTitleView,
+    UpdateGPMPinCompletionCallback completion) {
   NOTREACHED();
 }
 

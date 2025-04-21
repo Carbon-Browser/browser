@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/common/unique_ids.h"
 #include "url/gurl.h"
 
@@ -46,11 +47,12 @@ struct Credential {
 };
 
 // Contains all information whis is required for filling the password form.
-// TODO(crbug.com/1075444): Remove form name and field identifiers once
+// TODO(crbug.com/40128249): Remove form name and field identifiers once
 // unique IDs are used in filling.
 struct FillData {
   FillData();
   ~FillData();
+  FillData(const FillData& other);
 
   GURL origin;
   autofill::FormRendererId form_id;
@@ -77,7 +79,8 @@ class AccountSelectFillData {
   // Adds form structure from |form_data| to internal lists of known forms and
   // overrides known credentials with credentials from |form_data|. So only the
   // credentials from the latest |form_data| will be shown to the user.
-  void Add(const autofill::PasswordFormFillData& form_data);
+  void Add(const autofill::PasswordFormFillData& form_data,
+           bool always_populate_realm);
   void Reset();
   bool Empty() const;
 
@@ -100,6 +103,18 @@ class AccountSelectFillData {
   // field the user clicked.
   std::unique_ptr<FillData> GetFillData(const std::u16string& username) const;
 
+  // Returns form information from |forms_| that has id |form_identifier|.
+  // If |is_password_field| == false and |field_identifier| is not equal to
+  // form username_element null is returned. If |is_password_field| == true then
+  // |field_identifier| is ignored. That corresponds to the logic, that
+  // suggestions should be shown on any password fields.
+  const FormInfo* GetFormInfo(autofill::FormRendererId form_identifier,
+                              autofill::FieldRendererId field_identifier,
+                              bool is_password_field) const;
+
+  // Clear credentials cache.
+  void ResetCache();
+
  private:
   // Keeps data about all known forms. The key is the pair (form_id, username
   // field_name).
@@ -112,19 +127,10 @@ class AccountSelectFillData {
   // should be const.
   // Keeps information about last form that was requested in
   // RetrieveSuggestions.
-  mutable const FormInfo* last_requested_form_ = nullptr;
+  mutable raw_ptr<const FormInfo> last_requested_form_ = nullptr;
   // Keeps id of the last requested field if it was password otherwise the empty
   // string.
   autofill::FieldRendererId last_requested_password_field_id_;
-
-  // Returns form information from |forms_| that has id |form_identifier|.
-  // If |is_password_field| == false and |field_identifier| is not equal to
-  // form username_element null is returned. If |is_password_field| == true then
-  // |field_identifier| is ignored. That corresponds to the logic, that
-  // suggestions should be shown on any password fields.
-  const FormInfo* GetFormInfo(autofill::FormRendererId form_identifier,
-                              autofill::FieldRendererId field_identifier,
-                              bool is_password_field) const;
 };
 
 }  // namespace  password_manager

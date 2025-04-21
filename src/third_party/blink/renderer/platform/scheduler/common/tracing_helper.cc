@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,9 @@ RendererMainThreadTaskExecution::TaskType TaskTypeToProto(TaskType task_type) {
       return RendererMainThreadTaskExecution::TASK_TYPE_NETWORKING;
     case TaskType::kNetworkingControl:
       return RendererMainThreadTaskExecution::TASK_TYPE_NETWORKING_CONTROL;
+    case TaskType::kLowPriorityScriptExecution:
+      return RendererMainThreadTaskExecution::
+          TASK_TYPE_LOW_PRIORITY_SCRIPT_EXECUTION;
     case TaskType::kHistoryTraversal:
       return RendererMainThreadTaskExecution::TASK_TYPE_HISTORY_TRAVERSAL;
     case TaskType::kEmbed:
@@ -93,6 +96,12 @@ RendererMainThreadTaskExecution::TaskType TaskTypeToProto(TaskType task_type) {
     case TaskType::kMainThreadTaskQueueV8:
       return RendererMainThreadTaskExecution::
           TASK_TYPE_MAIN_THREAD_TASK_QUEUE_V8;
+    case TaskType::kMainThreadTaskQueueV8UserVisible:
+      return RendererMainThreadTaskExecution::
+          TASK_TYPE_MAIN_THREAD_TASK_QUEUE_V8_USER_VISIBLE;
+    case TaskType::kMainThreadTaskQueueV8BestEffort:
+      return RendererMainThreadTaskExecution::
+          TASK_TYPE_MAIN_THREAD_TASK_QUEUE_V8_BEST_EFFORT;
     case TaskType::kMainThreadTaskQueueCompositor:
       return RendererMainThreadTaskExecution::
           TASK_TYPE_MAIN_THREAD_TASK_QUEUE_COMPOSITOR;
@@ -161,6 +170,12 @@ RendererMainThreadTaskExecution::TaskType TaskTypeToProto(TaskType task_type) {
           TASK_TYPE_INTERNAL_CONTINUE_SCRIPT_LOADING;
     case TaskType::kWebLocks:
       return RendererMainThreadTaskExecution::TASK_TYPE_WEB_LOCKS;
+    case TaskType::kStorage:
+      return RendererMainThreadTaskExecution::TASK_TYPE_STORAGE;
+    case TaskType::kClipboard:
+      return RendererMainThreadTaskExecution::TASK_TYPE_CLIPBOARD;
+    case TaskType::kMachineLearning:
+      return RendererMainThreadTaskExecution::TASK_TYPE_MACHINE_LEARNING;
     case TaskType::kWebSchedulingPostedTask:
       return RendererMainThreadTaskExecution::
           TASK_TYPE_WEB_SCHEDULING_POSTED_TASK;
@@ -186,6 +201,9 @@ RendererMainThreadTaskExecution::TaskType TaskTypeToProto(TaskType task_type) {
           TASK_TYPE_MAIN_THREAD_TASK_QUEUE_IPC_TRACKING;
     case TaskType::kNetworkingUnfreezable:
       return RendererMainThreadTaskExecution::TASK_TYPE_NETWORKING_UNFREEZABLE;
+    case TaskType::kNetworkingUnfreezableRenderBlockingLoading:
+      return RendererMainThreadTaskExecution::
+          TASK_TYPE_NETWORKING_UNFREEZABLE_RENDER_BLOCKING_LOADING;
     case TaskType::kWakeLock:
       return RendererMainThreadTaskExecution::TASK_TYPE_WAKE_LOCK;
     case TaskType::kInternalInputBlocking:

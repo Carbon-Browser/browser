@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,8 @@
 #define CHROME_BROWSER_SSL_CERT_VERIFIER_PLATFORM_BROWSER_TEST_H_
 
 #include "build/build_config.h"
+#include "chrome/test/base/platform_browser_test.h"
 #include "content/public/test/content_mock_cert_verifier.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/test/base/android/android_browser_test.h"
-#else
-#include "chrome/test/base/in_process_browser_test.h"
-#endif
 
 // CertVerifierPlatformBrowserTest allows tests to force certificate
 // verification results for requests made with any profile's main

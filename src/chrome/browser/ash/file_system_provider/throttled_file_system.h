@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/file_system_provider/abort_callback.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system.h"
@@ -30,11 +29,10 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class Queue;
-class RequestManager;
+class OperationRequestManager;
 
 // Decorates ProvidedFileSystemInterface with throttling capabilities.
 class ThrottledFileSystem : public ProvidedFileSystemInterface {
@@ -102,6 +100,9 @@ class ThrottledFileSystem : public ProvidedFileSystemInterface {
       int64_t offset,
       int length,
       storage::AsyncFileUtil::StatusCallback callback) override;
+  AbortCallback FlushFile(
+      int file_handle,
+      storage::AsyncFileUtil::StatusCallback callback) override;
   AbortCallback AddWatcher(const GURL& origin,
                            const base::FilePath& entry_path,
                            bool recursive,
@@ -114,7 +115,7 @@ class ThrottledFileSystem : public ProvidedFileSystemInterface {
                      bool recursive,
                      storage::AsyncFileUtil::StatusCallback callback) override;
   const ProvidedFileSystemInfo& GetFileSystemInfo() const override;
-  RequestManager* GetRequestManager() override;
+  OperationRequestManager* GetRequestManager() override;
   Watchers* GetWatchers() override;
   const OpenedFiles& GetOpenedFiles() const override;
   void AddObserver(ProvidedFileSystemObserver* observer) override;
@@ -127,6 +128,7 @@ class ThrottledFileSystem : public ProvidedFileSystemInterface {
               storage::AsyncFileUtil::StatusCallback callback) override;
   void Configure(storage::AsyncFileUtil::StatusCallback callback) override;
   base::WeakPtr<ProvidedFileSystemInterface> GetWeakPtr() override;
+  std::unique_ptr<ScopedUserInteraction> StartUserInteraction() override;
 
  private:
   // Called when an operation enqueued with |queue_token| is aborted.
@@ -136,7 +138,8 @@ class ThrottledFileSystem : public ProvidedFileSystemInterface {
   void OnOpenFileCompleted(int queue_token,
                            OpenFileCallback callback,
                            int file_handle,
-                           base::File::Error result);
+                           base::File::Error result,
+                           std::unique_ptr<EntryMetadata> metadata);
 
   // Called when closing a file is completed with either a success or an error.
   void OnCloseFileCompleted(int file_handle,
@@ -152,7 +155,6 @@ class ThrottledFileSystem : public ProvidedFileSystemInterface {
   base::WeakPtrFactory<ThrottledFileSystem> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_THROTTLED_FILE_SYSTEM_H_

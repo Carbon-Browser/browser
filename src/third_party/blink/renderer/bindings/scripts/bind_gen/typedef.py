@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -29,13 +29,15 @@ def _make_typedefs_to_unions(typedefs, component_selector):
 
     new_and_old_names = list(
         map(
-            lambda typedef: (blink_class_name(typedef),
-                             blink_class_name(typedef.idl_type.
-                                              union_definition_object)),
+            lambda typedef:
+            (blink_class_name(typedef),
+             blink_class_name(typedef.idl_type.union_definition_object)),
             filter(
                 lambda typedef: component_selector(
                     [typedef, typedef.idl_type.union_definition_object]),
-                filter(lambda typedef: typedef.idl_type.is_union, typedefs))))
+                filter(
+                    lambda typedef: typedef.idl_type.is_union and not typedef.
+                    idl_type.is_phantom, typedefs))))
     node = ListNode([
         TextNode("using {} = {};".format(new_name, old_name))
         for new_name, old_name in new_and_old_names

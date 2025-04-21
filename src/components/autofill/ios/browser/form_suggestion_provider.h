@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_IOS_BROWSER_FORM_SUGGESTION_PROVIDER_H_
 #define COMPONENTS_AUTOFILL_IOS_BROWSER_FORM_SUGGESTION_PROVIDER_H_
 
+#include "components/autofill/core/browser/filling/filling_product.h"
 #import "components/autofill/ios/browser/form_suggestion.h"
 #import "components/autofill/ios/browser/form_suggestion_provider_query.h"
 
@@ -34,14 +35,16 @@ typedef NS_ENUM(NSUInteger, SuggestionProviderType) {
 // The type of the suggestion provider.
 @property(nonatomic, readonly) SuggestionProviderType type;
 
+// Main type of the shown suggestions.
+@property(nonatomic, readonly) autofill::FillingProduct mainFillingProduct;
+
 // Determines whether the receiver can provide suggestions for the specified
 // |form| and |field|, returning the result using the provided |completion|.
 // |typedValue| contains the text that the user has typed into the field so far.
-// TODO(crbug.com/1075444): Remove formName and fieldIdentifier once unique IDs
+// TODO(crbug.com/40128249): Remove formName and fieldIdentifier once unique IDs
 // are used in Autofill.
 - (void)checkIfSuggestionsAvailableForForm:
             (FormSuggestionProviderQuery*)formQuery
-                               isMainFrame:(BOOL)isMainFrame
                             hasUserGesture:(BOOL)hasUserGesture
                                   webState:(web::WebState*)webState
                          completionHandler:
@@ -54,13 +57,14 @@ typedef NS_ENUM(NSUInteger, SuggestionProviderType) {
                           webState:(web::WebState*)webState
                  completionHandler:(SuggestionsReadyCompletion)completion;
 
-// Handles user selection of a suggestion for the specified form and
+// Handles user selection of a suggestion at |index| for the specified form and
 // field, invoking |completion| when finished.
 - (void)didSelectSuggestion:(FormSuggestion*)suggestion
+                    atIndex:(NSInteger)index
                        form:(NSString*)formName
-               uniqueFormID:(autofill::FormRendererId)uniqueFormID
+             formRendererID:(autofill::FormRendererId)formRendererID
             fieldIdentifier:(NSString*)fieldIdentifier
-              uniqueFieldID:(autofill::FieldRendererId)uniqueFieldID
+            fieldRendererID:(autofill::FieldRendererId)fieldRendererID
                     frameID:(NSString*)frameID
           completionHandler:(SuggestionHandledCompletion)completion;
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,19 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "components/feedback/system_logs/system_logs_source.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/api/feedback_private/access_rate_limiter.h"
 #include "extensions/common/api/feedback_private.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -57,7 +59,7 @@ class LogSourceAccessManager {
   // Initiates a fetch from a log source, as specified in |params|. See
   // feedback_private.idl for more info about the actual parameters.
   bool FetchFromSource(const api::feedback_private::ReadLogSourceParams& params,
-                       const std::string& extension_id,
+                       const ExtensionId& extension_id,
                        ReadLogSourceCallback callback);
 
   // Each log source may not have more than this number of readers accessing it,
@@ -73,7 +75,7 @@ class LogSourceAccessManager {
   // Contains a source/extension pair.
   struct SourceAndExtension {
     explicit SourceAndExtension(api::feedback_private::LogSource source,
-                                const std::string& extension_id);
+                                const ExtensionId& extension_id);
 
     bool operator<(const SourceAndExtension& other) const {
       return std::make_pair(source, extension_id) <
@@ -83,7 +85,7 @@ class LogSourceAccessManager {
     // The log source that this handle is accessing.
     api::feedback_private::LogSource source;
     // ID of the extension that opened this handle.
-    std::string extension_id;
+    ExtensionId extension_id;
   };
 
   using ResourceId = int;
@@ -101,7 +103,7 @@ class LogSourceAccessManager {
   // Returns the nonzero ID of the newly created LogSourceResource, or
   // |kInvalidResourceId| if a new resource could not be created.
   ResourceId CreateResource(api::feedback_private::LogSource source,
-                            const std::string& extension_id);
+                            const ExtensionId& extension_id);
 
   // Callback that is passed to the log source from FetchFromSource.
   // Arguments:
@@ -114,7 +116,7 @@ class LogSourceAccessManager {
   // - response: Contains the result from an operation to fetch from system
   //   log(s).
   void OnFetchComplete(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       ResourceId resource_id,
       bool delete_source,
       ReadLogSourceCallback callback,
@@ -152,15 +154,15 @@ class LogSourceAccessManager {
   std::map<api::feedback_private::LogSource, size_t> num_readers_per_source_;
 
   // For fetching browser resources like ApiResourceManager.
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext> context_;
 
   // Provides a timer clock implementation for keeping track of access times.
   // Can override the default clock for testing.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   // For removing PII from log strings from log sources.
   scoped_refptr<base::SequencedTaskRunner> task_runner_for_redactor_;
-  scoped_refptr<feedback::RedactionToolContainer> redactor_container_;
+  scoped_refptr<redaction::RedactionToolContainer> redactor_container_;
 
   base::WeakPtrFactory<LogSourceAccessManager> weak_factory_{this};
 };

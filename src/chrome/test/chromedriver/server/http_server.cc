@@ -1,9 +1,12 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/chromedriver/server/http_server.h"
 
+#include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_interfaces.h"
 #include "net/base/sys_addrinfo.h"
@@ -89,8 +92,8 @@ bool HostIsSafeToServe(GURL host_url,
     net::NetworkInterfaceList list;
     if (net::GetNetworkList(&list,
                             net::INCLUDE_HOST_SCOPE_VIRTUAL_INTERFACES)) {
-      for (const auto& networkInterface : list) {
-        if (networkInterface.address == host_address) {
+      for (const auto& network_interface : list) {
+        if (network_interface.address == host_address) {
           return true;
         }
       }
@@ -191,14 +194,18 @@ int HttpServer::Start(uint16_t port, bool allow_remote, bool use_ipv4) {
       new net::TCPServerSocket(nullptr, net::NetLogSource()));
   int status = use_ipv4 ? ListenOnIPv4(server_socket.get(), port, allow_remote)
                         : ListenOnIPv6(server_socket.get(), port, allow_remote);
+
   if (status != net::OK) {
     VLOG(0) << "listen on " << (use_ipv4 ? "IPv4" : "IPv6")
             << " failed with error " << net::ErrorToShortString(status);
     return status;
   }
   server_ = std::make_unique<net::HttpServer>(std::move(server_socket), this);
-  net::IPEndPoint address;
-  return server_->GetLocalAddress(&address);
+  return server_->GetLocalAddress(&local_address_);
+}
+
+const net::IPEndPoint& HttpServer::LocalAddress() const {
+  return local_address_;
 }
 
 void HttpServer::OnConnect(int connection_id) {
@@ -232,18 +239,23 @@ void HttpServer::OnWebSocketRequest(int connection_id,
 }
 
 void HttpServer::OnWebSocketMessage(int connection_id, std::string data) {
-  // TODO: Make use of WebSocket data
-  VLOG(0) << "HttpServer::OnWebSocketMessage received: " << data;
-  // https://crbug.com/chromedriver/3974
-  // Response "not supported" to avoid WebSocket tests timeout.
-  server_->SendOverWebSocket(connection_id, "not supported",
-                             TRAFFIC_ANNOTATION_FOR_TESTS);
+  cmd_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&HttpHandler::OnWebSocketMessage, handler_,
+                                this, connection_id, data));
 }
 
 void HttpServer::OnClose(int connection_id) {
   cmd_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&HttpHandler::OnClose, handler_, this, connection_id));
+}
+
+void HttpServer::Close(int connection_id) {
+  server_->Close(connection_id);
+}
+
+void HttpServer::SendOverWebSocket(int connection_id, const std::string& data) {
+  server_->SendOverWebSocket(connection_id, data, TRAFFIC_ANNOTATION_FOR_TESTS);
 }
 
 void HttpServer::AcceptWebSocket(int connection_id,

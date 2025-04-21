@@ -32,7 +32,7 @@
 #include "third_party/blink/renderer/modules/webaudio/audio_graph_tracer.h"
 #include "third_party/blink/renderer/modules/webaudio/media_stream_audio_destination_handler.h"
 #include "third_party/blink/renderer/platform/mediastream/webaudio_media_stream_source.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
 
 namespace blink {
@@ -42,21 +42,11 @@ namespace {
 // Default to stereo; `options` will update it appropriately if needed.
 constexpr uint32_t kDefaultNumberOfChannels = 2;
 
-void DidCreateMediaStreamAndTracks(MediaStreamDescriptor* stream) {
-  for (uint32_t i = 0; i < stream->NumberOfAudioComponents(); ++i) {
-    MediaStreamUtils::DidCreateMediaStreamTrack(stream->AudioComponent(i));
-  }
-
-  for (uint32_t i = 0; i < stream->NumberOfVideoComponents(); ++i) {
-    MediaStreamUtils::DidCreateMediaStreamTrack(stream->VideoComponent(i));
-  }
-}
-
-MediaStreamSource* CreateMediaStreamSource() {
+MediaStreamSource* CreateMediaStreamSource(
+    ExecutionContext* execution_context) {
   DVLOG(1) << "Creating WebAudio media stream source.";
-  // TODO(crbug.com/704136) Use executionContext::GetTaskRunner() instead.
   auto audio_source = std::make_unique<WebAudioMediaStreamSource>(
-      Thread::MainThread()->GetTaskRunner());
+      execution_context->GetTaskRunner(TaskType::kInternalMedia));
   WebAudioMediaStreamSource* audio_source_ptr = audio_source.get();
 
   String source_id = "WebAudio-" + WTF::CreateCanonicalUUIDString();
@@ -66,6 +56,7 @@ MediaStreamSource* CreateMediaStreamSource() {
   capabilities.echo_cancellation = Vector<bool>({false});
   capabilities.auto_gain_control = Vector<bool>({false});
   capabilities.noise_suppression = Vector<bool>({false});
+  capabilities.voice_isolation = Vector<bool>({false});
   capabilities.sample_size = {
       media::SampleFormatToBitsPerChannel(media::kSampleFormatS16),  // min
       media::SampleFormatToBitsPerChannel(media::kSampleFormatS16)   // max
@@ -85,24 +76,23 @@ MediaStreamSource* CreateMediaStreamSource() {
 MediaStreamAudioDestinationNode::MediaStreamAudioDestinationNode(
     AudioContext& context,
     uint32_t number_of_channels)
-    : AudioBasicInspectorNode(context),
-      source_(CreateMediaStreamSource()),
-      stream_(MediaStream::Create(context.GetExecutionContext(),
-                                  MakeGarbageCollected<MediaStreamDescriptor>(
-                                      MediaStreamSourceVector({source_.Get()}),
-                                      MediaStreamSourceVector()))) {
-  DidCreateMediaStreamAndTracks(stream_->Descriptor());
+    : AudioNode(context),
+      source_(CreateMediaStreamSource(context.GetExecutionContext())),
+      stream_(MediaStream::Create(
+          context.GetExecutionContext(),
+          MediaStreamTrackVector({MediaStreamUtils::CreateLocalAudioTrack(
+              context.GetExecutionContext(),
+              source_)}))) {
   SetHandler(
       MediaStreamAudioDestinationHandler::Create(*this, number_of_channels));
-  WebRtcLogMessage(
-      String::Format(
-          "[WA]MSADN::%s({context.state=%s}, {context.sampleRate=%.0f}, "
-          "{number_of_channels=%u}, {handler=0x%" PRIXPTR "}, [this=0x%" PRIXPTR
-          "])",
-          __func__, context.state().Utf8().c_str(), context.sampleRate(),
-          number_of_channels, reinterpret_cast<uintptr_t>(&Handler()),
-          reinterpret_cast<uintptr_t>(this))
-          .Utf8());
+  SendLogMessage(
+      __func__, String::Format(
+                    "({context.state=%s}, {context.sampleRate=%.0f}, "
+                    "{number_of_channels=%u}, {handler=0x%" PRIXPTR
+                    "}, [this=0x%" PRIXPTR "])",
+                    context.state().AsCStr(), context.sampleRate(),
+                    number_of_channels, reinterpret_cast<uintptr_t>(&Handler()),
+                    reinterpret_cast<uintptr_t>(this)));
 }
 
 MediaStreamAudioDestinationNode* MediaStreamAudioDestinationNode::Create(
@@ -150,7 +140,7 @@ MediaStreamAudioDestinationNode* MediaStreamAudioDestinationNode::Create(
 void MediaStreamAudioDestinationNode::Trace(Visitor* visitor) const {
   visitor->Trace(stream_);
   visitor->Trace(source_);
-  AudioBasicInspectorNode::Trace(visitor);
+  AudioNode::Trace(visitor);
 }
 
 void MediaStreamAudioDestinationNode::ReportDidCreate() {
@@ -159,6 +149,14 @@ void MediaStreamAudioDestinationNode::ReportDidCreate() {
 
 void MediaStreamAudioDestinationNode::ReportWillBeDestroyed() {
   GraphTracer().WillDestroyAudioNode(this);
+}
+
+void MediaStreamAudioDestinationNode::SendLogMessage(
+    const char* const function_name,
+    const String& message) {
+  WebRtcLogMessage(
+      String::Format("[WA]MSADN::%s %s", function_name, message.Utf8().c_str())
+          .Utf8());
 }
 
 }  // namespace blink

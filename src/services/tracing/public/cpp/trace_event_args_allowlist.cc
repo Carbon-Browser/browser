@@ -1,10 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "services/tracing/public/cpp/trace_event_args_allowlist.h"
 
-#include "base/bind.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
@@ -21,7 +29,8 @@ struct AllowlistEntry {
   // Pattern to match the interested trace event name.
   const char* event_name;
   // List of patterns that match the allowlisted arguments.
-  const char* const* arg_name_filter;
+  // RAW_PTR_EXCLUSION: constant data that is not freed.
+  RAW_PTR_EXCLUSION const char* const* arg_name_filter;
 };
 
 const char* const kScopedBlockingCallAllowedArgs[] = {
@@ -137,8 +146,7 @@ bool IsTraceEventArgsAllowlisted(
       category_group_name, category_group_name + strlen(category_group_name),
       ",");
   while (category_group_tokens.GetNext()) {
-    base::StringPiece category_group_token =
-        category_group_tokens.token_piece();
+    std::string_view category_group_token = category_group_tokens.token_piece();
     for (int i = 0; kEventArgsAllowlist[i].category_name != nullptr; ++i) {
       const AllowlistEntry& allowlist_entry = kEventArgsAllowlist[i];
       DCHECK(allowlist_entry.event_name);

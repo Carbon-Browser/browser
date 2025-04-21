@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,20 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_owner.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/gfx/interpolated_transform.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/animation/animation_key.h"
 
@@ -98,7 +99,7 @@ AnimationSequenceBlock& AnimationSequenceBlock::SetClipRect(
 
 AnimationSequenceBlock& AnimationSequenceBlock::SetColor(
     ui::Layer* target,
-    SkColor color,
+    SkColor4f color,
     gfx::Tween::Type tween_type) {
   return AddAnimation({target, ui::LayerAnimationElement::COLOR},
                       Element(color, tween_type));
@@ -106,7 +107,7 @@ AnimationSequenceBlock& AnimationSequenceBlock::SetColor(
 
 AnimationSequenceBlock& AnimationSequenceBlock::SetColor(
     ui::LayerOwner* target,
-    SkColor color,
+    SkColor4f color,
     gfx::Tween::Type tween_type) {
   return SetColor(target->layer(), color, tween_type);
 }
@@ -201,6 +202,22 @@ AnimationSequenceBlock& AnimationSequenceBlock::SetVisibility(
   return SetVisibility(target->layer(), visible, tween_type);
 }
 
+AnimationSequenceBlock& AnimationSequenceBlock::SetInterpolatedTransform(
+    ui::Layer* target,
+    std::unique_ptr<ui::InterpolatedTransform> interpolated_transform,
+    gfx::Tween::Type tween_type) {
+  return AddAnimation({target, ui::LayerAnimationElement::TRANSFORM},
+                      Element(std::move(interpolated_transform), tween_type));
+}
+
+AnimationSequenceBlock& AnimationSequenceBlock::SetInterpolatedTransform(
+    ui::LayerOwner* target,
+    std::unique_ptr<ui::InterpolatedTransform> interpolated_transform,
+    gfx::Tween::Type tween_type) {
+  return SetInterpolatedTransform(
+      target->layer(), std::move(interpolated_transform), tween_type);
+}
+
 AnimationSequenceBlock& AnimationSequenceBlock::At(
     base::TimeDelta since_sequence_start) {
   // NOTE: at the end of this function, this object is destroyed.
@@ -251,9 +268,21 @@ void AnimationSequenceBlock::TerminateBlock() {
     std::unique_ptr<ui::LayerAnimationElement> element;
     switch (pair.first.property) {
       case ui::LayerAnimationElement::TRANSFORM:
-        element = ui::LayerAnimationElement::CreateTransformElement(
-            absl::get<gfx::Transform>(std::move(pair.second.animation_value_)),
-            duration);
+        if (absl::holds_alternative<std::unique_ptr<ui::InterpolatedTransform>>(
+                pair.second.animation_value_)) {
+          element =
+              ui::LayerAnimationElement::CreateInterpolatedTransformElement(
+                  absl::get<std::unique_ptr<ui::InterpolatedTransform>>(
+                      std::move(pair.second.animation_value_)),
+                  duration);
+        } else {
+          DCHECK(absl::holds_alternative<gfx::Transform>(
+              pair.second.animation_value_));
+          element = ui::LayerAnimationElement::CreateTransformElement(
+              absl::get<gfx::Transform>(
+                  std::move(pair.second.animation_value_)),
+              duration);
+        }
         break;
       case ui::LayerAnimationElement::BOUNDS:
         element = ui::LayerAnimationElement::CreateBoundsElement(
@@ -277,7 +306,7 @@ void AnimationSequenceBlock::TerminateBlock() {
         break;
       case ui::LayerAnimationElement::COLOR:
         element = ui::LayerAnimationElement::CreateColorElement(
-            absl::get<SkColor>(pair.second.animation_value_), duration);
+            absl::get<SkColor4f>(pair.second.animation_value_), duration);
         break;
       case ui::LayerAnimationElement::CLIP:
         element = ui::LayerAnimationElement::CreateClipRectElement(

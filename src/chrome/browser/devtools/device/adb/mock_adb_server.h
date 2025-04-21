@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 
 // Single instance mock ADB server for use in browser tests. Runs on IO thread.
 
@@ -29,7 +30,7 @@ class MockAndroidConnection {
     virtual void SendSuccess(const std::string& message) {}
     virtual void SendRaw(const std::string& data) {}
     virtual void Close() {}
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
   };
 
   MockAndroidConnection(Delegate* delegate,
@@ -43,7 +44,7 @@ class MockAndroidConnection {
   void ProcessCommand(const std::string& command);
   void SendHTTPResponse(const std::string& body);
 
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
   std::string serial_;
   std::string socket_name_;
   std::string request_;

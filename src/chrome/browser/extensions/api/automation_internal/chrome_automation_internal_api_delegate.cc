@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/automation_internal/chrome_automation_internal_api_delegate.h"
 
 #include <memory>
+#include <string>
 
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/tabs/tabs_constants.h"
@@ -20,12 +21,13 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest_handlers/automation.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "ui/accessibility/ax_tree_id.h"
 
 #if defined(USE_AURA)
 #include "chrome/browser/ui/aura/accessibility/automation_manager_aura.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/ash/crosapi/automation_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
@@ -48,9 +50,6 @@ bool ChromeAutomationInternalApiDelegate::CanRequestAutomation(
     return true;
 
   const GURL& url = contents->GetURL();
-  // TODO(aboxhall): check for webstore URL
-  if (automation_info->matches.MatchesURL(url))
-    return true;
 
   int tab_id = ExtensionTabUtil::GetTabId(contents);
   std::string unused_error;
@@ -58,33 +57,9 @@ bool ChromeAutomationInternalApiDelegate::CanRequestAutomation(
                                                       &unused_error);
 }
 
-bool ChromeAutomationInternalApiDelegate::GetTabById(
-    int tab_id,
-    content::BrowserContext* browser_context,
-    bool include_incognito,
-    content::WebContents** contents,
-    std::string* error_msg) {
-  *error_msg = tabs_constants::kTabNotFoundError;
-  return ExtensionTabUtil::GetTabById(tab_id, browser_context,
-                                      include_incognito, contents);
-}
-
-int ChromeAutomationInternalApiDelegate::GetTabId(
-    content::WebContents* contents) {
-  return ExtensionTabUtil::GetTabId(contents);
-}
-
-content::WebContents* ChromeAutomationInternalApiDelegate::GetActiveWebContents(
-    ExtensionFunction* function) {
-  return ChromeExtensionFunctionDetails(function)
-      .GetCurrentBrowser()
-      ->tab_strip_model()
-      ->GetActiveWebContents();
-}
-
 bool ChromeAutomationInternalApiDelegate::EnableTree(
     const ui::AXTreeID& tree_id) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // CrosapiManager may not be initialized on unit testing.
   // Propagate the EnableTree signal to crosapi clients.
   if (crosapi::CrosapiManager::IsInitialized()) {
@@ -102,7 +77,7 @@ bool ChromeAutomationInternalApiDelegate::EnableTree(
 }
 
 void ChromeAutomationInternalApiDelegate::EnableDesktop() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // CrosapiManager may not be initialized on unit testing.
   // Propagate the EnableDesktop signal to crosapi clients.
   if (crosapi::CrosapiManager::IsInitialized()) {
@@ -141,7 +116,13 @@ void ChromeAutomationInternalApiDelegate::SetAutomationEventRouterInterface(
 
 content::BrowserContext*
 ChromeAutomationInternalApiDelegate::GetActiveUserContext() {
+  // Use the main profile on ChromeOS. Desktop platforms don't have the concept
+  // of a "main" profile, so pick the "last used" profile instead.
+#if BUILDFLAG(IS_CHROMEOS)
   return ProfileManager::GetActiveUserProfile();
+#else
+  return ProfileManager::GetLastUsedProfile();
+#endif
 }
 
 }  // namespace extensions

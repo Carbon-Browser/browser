@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -100,14 +100,15 @@ KNOWN_COMPUTED_USERS = (
     'user_metrics.cc',  # method definition
     'external_metrics.cc',  # see AddChromeOSActions()
     'render_thread_impl.cc',  # impl of RenderThread::RecordComputedAction()
-    'render_process_host_impl.cc',  # browser side impl for
-    # RenderThread::RecordComputedAction()
+    # browser side impl for RenderThread::RecordComputedAction()
+    'render_process_host_impl.cc',
     'mock_render_thread.cc',  # mock of RenderThread::RecordComputedAction()
-    'pdf_view_plugin_base.cc',  # see AddPDFPluginActions()
+    'pdf_view_web_plugin_client.cc',  # see AddPDFPluginActions()
     'blink_platform_impl.cc',  # see WebKit/public/platform/Platform.h
     'devtools_ui_bindings.cc',  # see AddDevToolsActions()
     'sharing_hub_bubble_controller.cc',  # share targets
     'sharing_hub_sub_menu_model.cc',  # share targets
+    'bookmark_metrics.cc',  # see AddBookmarkUsageActions()
 )
 
 # The path to the root of the repository.
@@ -203,6 +204,27 @@ def AddBookmarkManagerActions(actions):
   actions.add('BookmarkManager_NavigateTo_Recent')
   actions.add('BookmarkManager_NavigateTo_Search')
   actions.add('BookmarkManager_NavigateTo_SubFolder')
+
+
+def AddBookmarkUsageActions(actions):
+  """Add actions related to bookmarks usage.
+
+  Arguments
+    actions: set of actions to add to.
+  """
+  actions.add('Bookmarks.Added')
+  actions.add('Bookmarks.Added.AccountStorage')
+  actions.add('Bookmarks.Added.LocalStorage')
+  actions.add('Bookmarks.Added.LocalStorageSyncing')
+  actions.add('Bookmarks.FolderAdded')
+  actions.add('Bookmarks.FolderAdded.AccountStorage')
+  actions.add('Bookmarks.FolderAdded.LocalStorage')
+  actions.add('Bookmarks.FolderAdded.LocalStorageSyncing')
+  actions.add('Bookmarks.Opened')
+  actions.add('Bookmarks.Opened.AccountStorage')
+  actions.add('Bookmarks.Opened.LocalStorage')
+  actions.add('Bookmarks.Opened.LocalStorageSyncing')
+
 
 def AddChromeOSActions(actions):
   """Add actions reported by non-Chrome processes in Chrome OS.
@@ -307,7 +329,16 @@ def GrepForActions(path, actions):
   else:
     action_re = USER_METRICS_ACTION_RE
 
-  finder = ActionNameFinder(path, open(path).read(), action_re)
+  if os.name == 'nt':
+    # TODO(crbug.com/40941175): Remove when Windows bots have LongPathsEnabled.
+    # Windows APIs limits path names to 260 characters unless the Windows
+    # property LongPathsEnabled is set to 1. As a workaround, the "\\?\"
+    # disables all string parsing by the Windows API and thus allows us to
+    # exceed Windows' path length limit of 260 characters.
+    path = '\\\\?\\' + os.path.abspath(path)
+
+  finder = ActionNameFinder(path,
+                            open(path, encoding='utf-8').read(), action_re)
   while True:
     try:
       action_name = finder.FindNextAction()
@@ -321,7 +352,7 @@ def GrepForActions(path, actions):
     return
 
   line_number = 0
-  for line in open(path):
+  for line in open(path, encoding='utf-8'):
     line_number = line_number + 1
     if COMPUTED_ACTION_RE.search(line):
       # Warn if this file shouldn't be calling RecordComputedAction.
@@ -376,7 +407,7 @@ def GrepForWebUIActions(path, actions):
   close_called = False
   try:
     parser = WebUIActionsParser(actions)
-    parser.feed(open(path).read())
+    parser.feed(open(path, encoding='utf-8').read())
     # An exception can be thrown by parser.close(), so do it in the try to
     # ensure the path of the file being parsed gets printed if that happens.
     close_called = True
@@ -402,8 +433,9 @@ def GrepForDevToolsActions(path, actions):
   if ext != '.js':
     return
 
-  finder = ActionNameFinder(path, open(path).read(),
-      USER_METRICS_ACTION_RE_DEVTOOLS)
+  finder = ActionNameFinder(path,
+                            open(path, encoding='utf-8').read(),
+                            USER_METRICS_ACTION_RE_DEVTOOLS)
   while True:
     try:
       action_name = finder.FindNextAction()
@@ -414,12 +446,36 @@ def GrepForDevToolsActions(path, actions):
       logging.warning(str(e))
 
 def WalkDirectory(root_path, actions, extensions, callback):
+  """Walk directory chooses which files to process based on a set
+   of extensions, and runs the callback function on them.
+
+    It's important to know that `extensions` should be a tuple,
+    and if it's not, it will be converted into one. This is to correct
+    for Python automatically converting ('foo') to 'foo'.
+
+    Note: Files starting with a `.` will be ignored by default. See
+    comments in implementation.
+  """
+
+  # Convert `extensions` to tuple if it is not one already
+  if type(extensions) != tuple:
+    extensions = (extensions, )
+
   for path, dirs, files in os.walk(root_path):
     if '.svn' in dirs:
       dirs.remove('.svn')
     if '.git' in dirs:
       dirs.remove('.git')
     for file in files:
+      """splitext() returns an empty extension |ext| for files
+      starting with `.`, as a result, files starting with a `.` will
+      be ignored (unless the |extensions| tuple includes an empty
+      element). Beware of allowing the callback() to run on all files
+      that start with a `.`: the callback needs to be resilient to
+      different file formats (binary, ASCII, etc.) and may also end
+      up processing many files that don't need to be processed, wasting
+      time.
+      """
       filename, ext = os.path.splitext(file)
       if ext in extensions and not filename.endswith('test'):
         callback(os.path.join(path, file), actions)
@@ -715,6 +771,7 @@ def UpdateXml(original_xml):
   AddLiteralActions(actions)
   AddAutomaticResetBannerActions(actions)
   AddBookmarkManagerActions(actions)
+  AddBookmarkUsageActions(actions)
   AddChromeOSActions(actions)
   AddExtensionActions(actions)
   AddHistoryPageActions(actions)

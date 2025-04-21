@@ -1,11 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_ACCESS_CODE_CAST_ACCESS_CODE_CAST_DIALOG_H_
 #define CHROME_BROWSER_UI_WEBUI_ACCESS_CODE_CAST_ACCESS_CODE_CAST_DIALOG_H_
 
+#include "base/check_is_test.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/media_router/media_cast_mode.h"
@@ -54,8 +56,19 @@ class AccessCodeCastDialog : public ui::WebDialogDelegate,
   static void ShowForDesktopMirroring(
       AccessCodeCastDialogOpenLocation open_location);
 
+  void CloseDialogWidget();
+
   // views::WidgetObserver:
   void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
+
+  // Blocks the widget automatically closing
+  // when focus changes. This is to counter flaky tests.
+  static void ShouldBlockWidgetActivationChangedForTest(bool should_block) {
+    CHECK_IS_TEST();
+    block_widget_activation_changed_for_test_ = should_block;
+  }
+
+  base::WeakPtr<AccessCodeCastDialog> GetWeakPtr();
 
  protected:
   // Creates default params for showing AccessCodeCastDialog
@@ -63,37 +76,21 @@ class AccessCodeCastDialog : public ui::WebDialogDelegate,
       AccessCodeCastDialogMode dialog_mode);
 
  private:
-  ui::ModalType GetDialogModalType() const override;
-  std::u16string GetDialogTitle() const override;
-  GURL GetDialogContentURL() const override;
-  void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
-  void GetDialogSize(gfx::Size* size) const override;
-  std::string GetDialogArgs() const override;
   void OnDialogShown(content::WebUI* webui) override;
-  void OnDialogClosed(const std::string& json_retval) override;
   void OnCloseContents(content::WebContents* source,
                        bool* out_close_dialog) override;
-  bool ShouldShowDialogTitle() const override;
-  bool ShouldShowCloseButton() const override;
-  FrameKind GetWebDialogFrameKind() const override;
   void RequestMediaAccessPermission(
       content::WebContents* web_contents,
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override;
 
   // Displays the dialog
   void ShowWebDialog(AccessCodeCastDialogMode dialog_mode);
 
   gfx::NativeView GetParentView();
-
-  // ObserveWidget must be called during dialog initialization so that we can
-  // observe the dialog for activation state changes and close the dialog when
-  // it loses focus.
-  void ObserveWidget(views::Widget*);
 
   raw_ptr<views::Widget> dialog_widget_ = nullptr;
   raw_ptr<content::WebUI> webui_ = nullptr;
@@ -106,10 +103,18 @@ class AccessCodeCastDialog : public ui::WebDialogDelegate,
   // use of the media_route_starter_ pointer after c'tor.
   std::unique_ptr<media_router::MediaRouteStarter> media_route_starter_;
 
-  const raw_ptr<content::WebContents> web_contents_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
   const raw_ptr<Profile> context_;
   base::Time dialog_creation_timestamp_;
   bool closing_dialog_ = false;
+
+  base::ScopedObservation<views::Widget, views::WidgetObserver>
+      widget_observation_{this};
+
+  static bool block_widget_activation_changed_for_test_;
+
+  base::WeakPtrFactory<AccessCodeCastDialog> weak_ptr_factory_{this};
 };
 
 }  // namespace media_router

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -20,7 +18,6 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.LocationSettingsTestUtil;
 import org.chromium.components.content_settings.ContentSettingValues;
 import org.chromium.components.content_settings.ContentSettingsType;
@@ -32,19 +29,13 @@ import org.chromium.ui.permissions.PermissionCallback;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for PermissionParamsListBuilder.
- */
+/** Unit tests for PermissionParamsListBuilder. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PermissionParamsListBuilderUnitTest {
     private PermissionParamsListBuilder mPermissionParamsListBuilder;
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
-
-    @Mock
-    Profile mProfileMock;
+    @Mock Profile mProfileMock;
 
     @Before
     public void setUp() {

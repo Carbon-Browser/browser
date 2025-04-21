@@ -1,18 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/component_updater/timer_update_scheduler.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 
 namespace component_updater {
 
 TimerUpdateScheduler::TimerUpdateScheduler() = default;
 TimerUpdateScheduler::~TimerUpdateScheduler() = default;
 
-void TimerUpdateScheduler::Schedule(const base::TimeDelta& initial_delay,
-                                    const base::TimeDelta& delay,
+void TimerUpdateScheduler::Schedule(base::TimeDelta initial_delay,
+                                    base::TimeDelta delay,
                                     const UserTask& user_task,
                                     const OnStopTaskCallback& on_stop) {
   timer_.Start(

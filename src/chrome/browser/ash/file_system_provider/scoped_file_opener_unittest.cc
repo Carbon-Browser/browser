@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,16 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/file_system_provider/fake_provided_file_system.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 class TestingProvidedFileSystem : public FakeProvidedFileSystem {
@@ -26,7 +24,7 @@ class TestingProvidedFileSystem : public FakeProvidedFileSystem {
   TestingProvidedFileSystem()
       : FakeProvidedFileSystem(ProvidedFileSystemInfo()) {}
 
-  ~TestingProvidedFileSystem() override {}
+  ~TestingProvidedFileSystem() override = default;
 
   AbortCallback OpenFile(const base::FilePath& file_path,
                          OpenFileMode mode,
@@ -55,19 +53,25 @@ class TestingProvidedFileSystem : public FakeProvidedFileSystem {
   OpenFileCallback open_callback_;
   std::vector<int> close_requests_;
 
-  void CompleteOpen(int file_handle, base::File::Error result) {
-    std::move(open_callback_).Run(file_handle, result);
+  void CompleteOpen(int file_handle,
+                    base::File::Error result,
+                    std::unique_ptr<EntryMetadata> metadata) {
+    std::move(open_callback_).Run(file_handle, result, std::move(metadata));
   }
 
   void AbortOpen() {
-    std::move(open_callback_).Run(0, base::File::FILE_ERROR_ABORT);
+    std::move(open_callback_)
+        .Run(0, base::File::FILE_ERROR_ABORT, /*metadata=*/nullptr);
   }
 };
 
 typedef std::vector<std::pair<int, base::File::Error>> OpenLog;
 
-void LogOpen(OpenLog* log, int file_handle, base::File::Error result) {
-  log->push_back(std::make_pair(file_handle, result));
+void LogOpen(OpenLog* log,
+             int file_handle,
+             base::File::Error result,
+             std::unique_ptr<EntryMetadata> metadata) {
+  log->emplace_back(file_handle, result);
 }
 
 }  // namespace
@@ -101,7 +105,8 @@ TEST(ScopedFileOpenerTest, CloseAfterOpening) {
                                  base::BindOnce(&LogOpen, &log));
     base::RunLoop().RunUntilIdle();
     ASSERT_TRUE(file_system.has_open_callback());
-    file_system.open_callback().Run(123, base::File::FILE_OK);
+    file_system.open_callback().Run(123, base::File::FILE_OK,
+                                    /*cloud_file_info=*/nullptr);
   }
 
   ASSERT_EQ(1u, log.size());
@@ -122,7 +127,8 @@ TEST(ScopedFileOpenerTest, CloseAfterAborting) {
                                  base::BindOnce(&LogOpen, &log));
     base::RunLoop().RunUntilIdle();
     ASSERT_TRUE(file_system.has_open_callback());
-    file_system.open_callback().Run(0, base::File::FILE_ERROR_ABORT);
+    file_system.open_callback().Run(0, base::File::FILE_ERROR_ABORT,
+                                    /*cloud_file_info=*/nullptr);
   }
 
   ASSERT_EQ(1u, log.size());
@@ -131,5 +137,4 @@ TEST(ScopedFileOpenerTest, CloseAfterAborting) {
   EXPECT_EQ(0u, file_system.close_requests().size());
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

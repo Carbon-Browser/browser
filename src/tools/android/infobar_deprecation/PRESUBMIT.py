@@ -1,12 +1,10 @@
-# Copyright (c) 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Presubmit tests for /tools/android/infobar_deprecation.
 
 Runs Python unit tests in /tools/android/infobar_deprecation on upload.
 """
-
-USE_PYTHON3 = True
 
 
 def CheckChangeOnUpload(input_api, output_api):

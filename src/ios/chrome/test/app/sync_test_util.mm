@@ -1,75 +1,81 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/test/app/sync_test_util.h"
 
-#include <set>
-#include <string>
+#import <set>
+#import <string>
 
-#include "base/bind.h"
-#include "base/check.h"
-#include "base/guid.h"
-#include "base/memory/ptr_util.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/check.h"
+#import "base/files/file_path.h"
+#import "base/functional/bind.h"
+#import "base/memory/ptr_util.h"
+#import "base/path_service.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/history/core/browser/history_service.h"
-#include "components/keyed_service/core/service_access_type.h"
-#include "components/metrics/demographics/demographic_metrics_test_utils.h"
-#include "components/sync/base/pref_names.h"
+#import "base/uuid.h"
+#import "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#import "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#import "components/history/core/browser/history_service.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/metrics/demographics/demographic_metrics_test_utils.h"
+#import "components/saved_tab_groups/internal/saved_tab_group_sync_bridge.h"
+#import "components/saved_tab_groups/public/saved_tab_group.h"
+#import "components/saved_tab_groups/public/saved_tab_group_tab.h"
+#import "components/sync/base/data_type.h"
+#import "components/sync/base/pref_names.h"
 #import "components/sync/base/time.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_impl.h"
-#include "components/sync/engine/loopback_server/loopback_server_entity.h"
-#include "components/sync/nigori/nigori_test_utils.h"
+#import "components/sync/engine/loopback_server/loopback_server_entity.h"
 #import "components/sync/protocol/device_info_specifics.pb.h"
+#import "components/sync/protocol/session_specifics.pb.h"
 #import "components/sync/protocol/sync_enums.pb.h"
-#include "components/sync/test/fake_server/entity_builder_factory.h"
-#include "components/sync/test/fake_server/fake_server.h"
-#include "components/sync/test/fake_server/fake_server_network_resources.h"
-#include "components/sync/test/fake_server/fake_server_nigori_helper.h"
-#include "components/sync/test/fake_server/fake_server_verifier.h"
-#include "components/sync/test/fake_server/sessions_hierarchy.h"
-#include "components/sync_device_info/device_info.h"
-#include "components/sync_device_info/device_info_sync_service.h"
+#import "components/sync/service/sync_service.h"
+#import "components/sync/service/sync_service_impl.h"
+#import "components/sync/test/entity_builder_factory.h"
+#import "components/sync/test/fake_server.h"
+#import "components/sync/test/fake_server_network_resources.h"
+#import "components/sync/test/fake_server_nigori_helper.h"
+#import "components/sync/test/fake_server_verifier.h"
+#import "components/sync/test/nigori_test_utils.h"
+#import "components/sync/test/sessions_hierarchy.h"
+#import "components/sync_device_info/device_info.h"
+#import "components/sync_device_info/device_info_sync_service.h"
 #import "components/sync_device_info/device_info_util.h"
-#include "components/sync_device_info/local_device_info_provider.h"
-#include "ios/chrome/browser/autofill/personal_data_manager_factory.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/history/history_service_factory.h"
-#include "ios/chrome/browser/sync/device_info_sync_service_factory.h"
-#include "ios/chrome/browser/sync/sync_service_factory.h"
-#include "ios/chrome/browser/sync/sync_setup_service.h"
-#include "ios/chrome/browser/sync/sync_setup_service_factory.h"
+#import "components/sync_device_info/local_device_info_provider.h"
+#import "components/sync_sessions/session_store.h"
+#import "components/sync_sessions/session_sync_test_helper.h"
+#import "ios/chrome/browser/autofill/model/personal_data_manager_factory.h"
+#import "ios/chrome/browser/history/model/history_service_factory.h"
+#import "ios/chrome/browser/shared/model/paths/paths.h"
+#import "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#import "ios/chrome/browser/sync/model/device_info_sync_service_factory.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
+#import "ios/chrome/browser/synced_sessions/model/distant_session.h"
+#import "ios/chrome/browser/synced_sessions/model/distant_tab.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest/include/gtest/gtest.h"
 
 namespace {
 
-fake_server::FakeServer* gSyncFakeServer = nullptr;
+std::unique_ptr<fake_server::FakeServer> gSyncFakeServer;
 
 NSString* const kSyncTestErrorDomain = @"SyncTestDomain";
 
 // Overrides the network callback of the current SyncServiceImpl with
-// |create_http_post_provider_factory_cb|.
+// `create_http_post_provider_factory_cb`.
 void OverrideSyncNetwork(const syncer::CreateHttpPostProviderFactory&
                              create_http_post_provider_factory_cb) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  DCHECK(browser_state);
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
+  DCHECK(profile);
   syncer::SyncServiceImpl* service =
-      SyncServiceFactory::GetAsSyncServiceImplForBrowserState(browser_state);
+      SyncServiceFactory::GetForProfileAsSyncServiceImplForTesting(profile);
   service->OverrideNetworkForTest(create_http_post_provider_factory_cb);
 }
 
-// Returns a bookmark server entity based on |title| and |url|.
+// Returns a bookmark server entity based on `title` and `url`.
 std::unique_ptr<syncer::LoopbackServerEntity> CreateBookmarkServerEntity(
     const std::string& title,
     const GURL& url) {
@@ -84,77 +90,59 @@ std::unique_ptr<syncer::LoopbackServerEntity> CreateBookmarkServerEntity(
 namespace chrome_test_util {
 
 bool IsFakeSyncServerSetUp() {
-  return gSyncFakeServer;
+  return gSyncFakeServer.get();
 }
 
 void SetUpFakeSyncServer() {
   DCHECK(!gSyncFakeServer);
-  gSyncFakeServer = new fake_server::FakeServer();
+  base::FilePath user_data_dir;
+  base::PathService::Get(ios::DIR_USER_DATA, &user_data_dir);
+  gSyncFakeServer = std::make_unique<fake_server::FakeServer>(
+      user_data_dir.AppendASCII("FakeServer"));
   OverrideSyncNetwork(fake_server::CreateFakeServerHttpPostProviderFactory(
       gSyncFakeServer->AsWeakPtr()));
 }
 
 void TearDownFakeSyncServer() {
   DCHECK(gSyncFakeServer);
-  delete gSyncFakeServer;
-  gSyncFakeServer = nullptr;
+  gSyncFakeServer.reset();
   OverrideSyncNetwork(syncer::CreateHttpPostProviderFactory());
 }
 
-void StartSync() {
-  DCHECK(!IsSyncInitialized());
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  SyncSetupService* sync_setup_service =
-      SyncSetupServiceFactory::GetForBrowserState(browser_state);
-  sync_setup_service->SetSyncEnabled(true);
-  syncer::SyncServiceImpl* sync_service =
-      SyncServiceFactory::GetAsSyncServiceImplForBrowserState(browser_state);
-  sync_service->TriggerPoliciesLoadedForTest();
-}
-
-void StopSync() {
-  DCHECK(IsSyncInitialized());
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  SyncSetupService* sync_setup_service =
-      SyncSetupServiceFactory::GetForBrowserState(browser_state);
-  sync_setup_service->SetSyncEnabled(false);
-}
-
-void TriggerSyncCycle(syncer::ModelType type) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  syncer::SyncService* sync_service =
-      SyncServiceFactory::GetForBrowserState(browser_state);
-  sync_service->TriggerRefresh({type});
-}
-
-void ClearSyncServerData() {
+void ClearFakeSyncServerData() {
   // Allow the caller to preventively clear server data.
   if (gSyncFakeServer) {
     gSyncFakeServer->ClearServerData();
   }
 }
 
-int GetNumberOfSyncEntities(syncer::ModelType type) {
-  std::unique_ptr<base::DictionaryValue> entities =
-      gSyncFakeServer->GetEntitiesAsDictionaryValue();
-
-  std::string model_type_string = ModelTypeToDebugString(type);
-  base::ListValue* entity_list = NULL;
-  if (!entities->GetList(model_type_string, &entity_list)) {
-    return 0;
-  }
-  return entity_list->GetListDeprecated().size();
+void FlushFakeSyncServerToDisk() {
+  DCHECK(gSyncFakeServer);
+  gSyncFakeServer->FlushToDisk();
 }
 
-BOOL VerifyNumberOfSyncEntitiesWithName(syncer::ModelType type,
+void TriggerSyncCycle(syncer::DataType type) {
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
+  syncer::SyncService* sync_service =
+      SyncServiceFactory::GetForProfile(profile);
+  sync_service->TriggerRefresh({type});
+}
+
+int GetNumberOfSyncEntities(syncer::DataType type) {
+  base::Value::Dict entities = gSyncFakeServer->GetEntitiesAsDictForTesting();
+
+  base::Value::List* entity_list =
+      entities.FindList(DataTypeToDebugString(type));
+  DCHECK(entity_list);
+  return static_cast<int>(entity_list->size());
+}
+
+BOOL VerifyNumberOfSyncEntitiesWithName(syncer::DataType type,
                                         std::string name,
                                         size_t count,
                                         NSError** error) {
   DCHECK(gSyncFakeServer);
-  fake_server::FakeServerVerifier verifier(gSyncFakeServer);
+  fake_server::FakeServerVerifier verifier(gSyncFakeServer.get());
   testing::AssertionResult result =
       verifier.VerifyEntityCountByTypeAndName(count, type, name);
   if (result != testing::AssertionSuccess() && error != nil) {
@@ -179,11 +167,12 @@ void AddBookmarkToFakeSyncServer(std::string url, std::string title) {
 void AddLegacyBookmarkToFakeSyncServer(std::string url,
                                        std::string title,
                                        std::string originator_client_item_id) {
-  DCHECK(!base::IsValidGUID(originator_client_item_id));
+  DCHECK(
+      !base::Uuid::ParseCaseInsensitive(originator_client_item_id).is_valid());
   fake_server::EntityBuilderFactory entity_builder_factory;
   fake_server::BookmarkEntityBuilder bookmark_builder =
-      entity_builder_factory.NewBookmarkEntityBuilder(
-          title, std::move(originator_client_item_id));
+      entity_builder_factory.NewBookmarkEntityBuilder(title)
+          .SetOriginatorClientItemId(std::move(originator_client_item_id));
   gSyncFakeServer->InjectEntity(
       bookmark_builder
           .SetGeneration(fake_server::BookmarkEntityBuilder::
@@ -191,21 +180,57 @@ void AddLegacyBookmarkToFakeSyncServer(std::string url,
           .BuildBookmark(GURL(url)));
 }
 
-bool IsSyncInitialized() {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  DCHECK(browser_state);
-  syncer::SyncService* syncService =
-      SyncServiceFactory::GetForBrowserState(browser_state);
+void AddSessionToFakeSyncServer(
+    const synced_sessions::DistantSession& session) {
+  std::vector<sync_pb::SessionSpecifics> specifics_list;
+  SessionID window_id = SessionID::NewUnique();
+  // Tab specifics.
+  std::vector<SessionID> tab_list;
+  sync_sessions::SessionSyncTestHelper helper;
+  for (const std::unique_ptr<synced_sessions::DistantTab>& distant_tab :
+       session.tabs) {
+    sync_pb::SessionSpecifics tab = helper.BuildTabSpecifics(
+        session.tag, base::UTF16ToUTF8(distant_tab->title),
+        distant_tab->virtual_url.spec(), window_id, distant_tab->tab_id);
+    tab.mutable_tab()->set_last_active_time_unix_epoch_millis(
+        (distant_tab->last_active_time - base::Time::UnixEpoch())
+            .InMilliseconds());
+    specifics_list.push_back(tab);
+    tab_list.push_back(distant_tab->tab_id);
+  }
+  // Header specifics.
+  sync_pb::SessionSpecifics header =
+      sync_sessions::SessionSyncTestHelper::BuildHeaderSpecificsWithoutWindows(
+          session.tag, session.name, session.form_factor);
+  sync_sessions::SessionSyncTestHelper::AddWindowSpecifics(window_id, tab_list,
+                                                           &header);
+  specifics_list.push_back(header);
+  // Add entities to fake server.
+  for (const sync_pb::SessionSpecifics& specifics : specifics_list) {
+    sync_pb::EntitySpecifics entity;
+    *entity.mutable_session() = specifics;
+    gSyncFakeServer->InjectEntity(
+        syncer::PersistentUniqueClientEntity::CreateFromSpecificsForTesting(
+            /*non_unique_name=*/"",
+            sync_sessions::SessionStore::GetClientTag(entity.session()), entity,
+            /*creation_time=*/syncer::TimeToProtoTime(session.modified_time),
+            /*last_modified_time=*/
+            syncer::TimeToProtoTime(session.modified_time)));
+  }
+}
+
+bool IsSyncEngineInitialized() {
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
+  DCHECK(profile);
+  syncer::SyncService* syncService = SyncServiceFactory::GetForProfile(profile);
   return syncService->IsEngineInitialized();
 }
 
 std::string GetSyncCacheGuid() {
-  DCHECK(IsSyncInitialized());
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
+  DCHECK(IsSyncEngineInitialized());
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   syncer::DeviceInfoSyncService* service =
-      DeviceInfoSyncServiceFactory::GetForBrowserState(browser_state);
+      DeviceInfoSyncServiceFactory::GetForProfile(profile);
   const syncer::LocalDeviceInfoProvider* info_provider =
       service->GetLocalDeviceInfoProvider();
   return info_provider->GetLocalDeviceInfo()->guid();
@@ -215,12 +240,12 @@ bool VerifySyncInvalidationFieldsPopulated() {
   DCHECK(IsFakeSyncServerSetUp());
   const std::string cache_guid = GetSyncCacheGuid();
   std::vector<sync_pb::SyncEntity> entities =
-      gSyncFakeServer->GetSyncEntitiesByModelType(syncer::DEVICE_INFO);
+      gSyncFakeServer->GetSyncEntitiesByDataType(syncer::DEVICE_INFO);
   for (const sync_pb::SyncEntity& entity : entities) {
     if (entity.specifics().device_info().cache_guid() == cache_guid) {
       const sync_pb::InvalidationSpecificFields& invalidation_fields =
           entity.specifics().device_info().invalidation_fields();
-      // TODO(crbug.com/1187481): check if |instance_id_token| is present once
+      // TODO(crbug.com/40754340): check if `instance_id_token` is present once
       // fixed.
       return !invalidation_fields.interested_data_type_ids().empty();
     }
@@ -238,6 +263,8 @@ void AddUserDemographicsToSyncServer(
 
 void AddAutofillProfileToFakeSyncServer(std::string guid,
                                         std::string full_name) {
+  DCHECK(IsFakeSyncServerSetUp());
+
   sync_pb::EntitySpecifics entity_specifics;
   sync_pb::AutofillProfileSpecifics* autofill_profile =
       entity_specifics.mutable_autofill_profile();
@@ -252,14 +279,16 @@ void AddAutofillProfileToFakeSyncServer(std::string guid,
 }
 
 void DeleteAutofillProfileFromFakeSyncServer(std::string guid) {
+  DCHECK(IsFakeSyncServerSetUp());
+
   std::vector<sync_pb::SyncEntity> autofill_profiles =
-      gSyncFakeServer->GetSyncEntitiesByModelType(syncer::AUTOFILL_PROFILE);
+      gSyncFakeServer->GetSyncEntitiesByDataType(syncer::AUTOFILL_PROFILE);
   std::string entity_id;
   std::string client_tag_hash;
   for (const sync_pb::SyncEntity& autofill_profile : autofill_profiles) {
     if (autofill_profile.specifics().autofill_profile().guid() == guid) {
       entity_id = autofill_profile.id_string();
-      client_tag_hash = autofill_profile.client_defined_unique_tag();
+      client_tag_hash = autofill_profile.client_tag_hash();
       break;
     }
   }
@@ -273,12 +302,11 @@ void DeleteAutofillProfileFromFakeSyncServer(std::string guid) {
 }
 
 bool IsAutofillProfilePresent(std::string guid, std::string full_name) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   autofill::PersonalDataManager* personal_data_manager =
-      autofill::PersonalDataManagerFactory::GetForBrowserState(browser_state);
-  autofill::AutofillProfile* autofill_profile =
-      personal_data_manager->GetProfileByGUID(guid);
+      autofill::PersonalDataManagerFactory::GetForProfile(profile);
+  const autofill::AutofillProfile* autofill_profile =
+      personal_data_manager->address_data_manager().GetProfileByGUID(guid);
 
   if (autofill_profile) {
     std::string actual_full_name =
@@ -289,10 +317,9 @@ bool IsAutofillProfilePresent(std::string guid, std::string full_name) {
 }
 
 void ClearAutofillProfile(std::string guid) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   autofill::PersonalDataManager* personal_data_manager =
-      autofill::PersonalDataManagerFactory::GetForBrowserState(browser_state);
+      autofill::PersonalDataManagerFactory::GetForProfile(profile);
   personal_data_manager->RemoveByGUID(guid);
 }
 
@@ -301,7 +328,7 @@ BOOL VerifySessionsOnSyncServer(const std::multiset<std::string>& expected_urls,
   DCHECK(gSyncFakeServer);
   fake_server::SessionsHierarchy expected_sessions;
   expected_sessions.AddWindow(expected_urls);
-  fake_server::FakeServerVerifier verifier(gSyncFakeServer);
+  fake_server::FakeServerVerifier verifier(gSyncFakeServer.get());
   testing::AssertionResult result = verifier.VerifySessions(expected_sessions);
   if (result != testing::AssertionSuccess() && error != nil) {
     NSDictionary* errorInfo = @{
@@ -315,30 +342,50 @@ BOOL VerifySessionsOnSyncServer(const std::multiset<std::string>& expected_urls,
   return result == testing::AssertionSuccess();
 }
 
-void AddTypedURLToClient(const GURL& url) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  history::HistoryService* historyService =
-      ios::HistoryServiceFactory::GetForBrowserState(
-          browser_state, ServiceAccessType::EXPLICIT_ACCESS);
-
-  historyService->AddPage(url, base::Time::Now(), nullptr, 1, GURL(),
-                          history::RedirectList(), ui::PAGE_TRANSITION_TYPED,
-                          history::SOURCE_BROWSED, false, false);
+BOOL VerifyHistoryOnSyncServer(const std::multiset<GURL>& expected_urls,
+                               NSError** error) {
+  DCHECK(gSyncFakeServer);
+  fake_server::FakeServerVerifier verifier(gSyncFakeServer.get());
+  testing::AssertionResult result = verifier.VerifyHistory(expected_urls);
+  if (result != testing::AssertionSuccess() && error != nil) {
+    NSDictionary* errorInfo = @{
+      NSLocalizedDescriptionKey : base::SysUTF8ToNSString(result.message())
+    };
+    *error = [NSError errorWithDomain:kSyncTestErrorDomain
+                                 code:0
+                             userInfo:errorInfo];
+    return NO;
+  }
+  return result == testing::AssertionSuccess();
 }
 
-void AddTypedURLToFakeSyncServer(const std::string& url) {
-  sync_pb::EntitySpecifics entitySpecifics;
-  sync_pb::TypedUrlSpecifics* typedUrl = entitySpecifics.mutable_typed_url();
-  typedUrl->set_url(url);
-  typedUrl->set_title(url);
-  typedUrl->add_visits(base::Time::Max().ToInternalValue());
-  typedUrl->add_visit_transitions(sync_pb::SyncEnums::TYPED);
+void AddTypedURLToClient(const GURL& url, base::Time visitTimestamp) {
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
+  history::HistoryService* historyService =
+      ios::HistoryServiceFactory::GetForProfile(
+          profile, ServiceAccessType::EXPLICIT_ACCESS);
 
+  historyService->AddPage(url, visitTimestamp, 0, 1, GURL(),
+                          history::RedirectList(), ui::PAGE_TRANSITION_TYPED,
+                          history::SOURCE_BROWSED, false);
+}
+
+void AddHistoryVisitToFakeSyncServer(const GURL& url) {
+  sync_pb::EntitySpecifics entitySpecifics;
+  sync_pb::HistorySpecifics* history = entitySpecifics.mutable_history();
+  history->set_visit_time_windows_epoch_micros(
+      base::Time::Now().ToDeltaSinceWindowsEpoch().InMicroseconds());
+  history->set_originator_cache_guid("originator_cache_guid");
+  history->mutable_page_transition()->set_core_transition(
+      sync_pb::SyncEnums_PageTransition_LINK);
+  auto* redirect_entry = history->add_redirect_entries();
+  redirect_entry->set_url(url.spec());
   std::unique_ptr<syncer::LoopbackServerEntity> entity =
       syncer::PersistentUniqueClientEntity::CreateFromSpecificsForTesting(
-          /*non_unique_name=*/std::string(), /*client_tag=*/url,
-          entitySpecifics, 12345, 12345);
+          /*non_unique_name=*/std::string(), /*client_tag=*/
+          base::NumberToString(history->visit_time_windows_epoch_micros()),
+          entitySpecifics, /*creation_time=*/12345,
+          /*last_modified_time=*/12345);
   gSyncFakeServer->InjectEntity(std::move(entity));
 }
 
@@ -356,6 +403,9 @@ void AddDeviceInfoToFakeSyncServer(const std::string& device_name,
   device_info.set_last_updated_timestamp(mtime);
   device_info.mutable_feature_fields()->set_send_tab_to_self_receiving_enabled(
       true);
+  device_info.mutable_feature_fields()->set_send_tab_to_self_receiving_type(
+      sync_pb::
+          SyncEnums_SendTabReceivingType_SEND_TAB_RECEIVING_TYPE_CHROME_OR_UNSPECIFIED);
 
   gSyncFakeServer->InjectEntity(
       syncer::PersistentUniqueClientEntity::CreateFromSpecificsForTesting(
@@ -364,15 +414,14 @@ void AddDeviceInfoToFakeSyncServer(const std::string& device_name,
           /*creation_time=*/mtime, mtime));
 }
 
-BOOL IsTypedUrlPresentOnClient(const GURL& url,
-                               BOOL expect_present,
-                               NSError** error) {
+BOOL IsUrlPresentOnClient(const GURL& url,
+                          BOOL expect_present,
+                          NSError** error) {
   // Call the history service.
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   history::HistoryService* history_service =
-      ios::HistoryServiceFactory::GetForBrowserState(
-          browser_state, ServiceAccessType::EXPLICIT_ACCESS);
+      ios::HistoryServiceFactory::GetForProfile(
+          profile, ServiceAccessType::EXPLICIT_ACCESS);
 
   const GURL block_safe_url(url);
   std::set<GURL> origins;
@@ -399,9 +448,9 @@ BOOL IsTypedUrlPresentOnClient(const GURL& url,
     error_message = @"History::GetCountsAndLastVisitForOrigins callback never "
                      "called, app will probably crash later.";
   } else if (count == 0 && expect_present) {
-    error_message = @"Typed URL isn't found in HistoryService.";
+    error_message = @"URL isn't found in HistoryService.";
   } else if (count > 0 && !expect_present) {
-    error_message = @"Typed URL isn't supposed to be in HistoryService.";
+    error_message = @"URL isn't supposed to be in HistoryService.";
   }
 
   if (error_message != nil && error != nil) {
@@ -415,45 +464,93 @@ BOOL IsTypedUrlPresentOnClient(const GURL& url,
 }
 
 void DeleteTypedUrlFromClient(const GURL& url) {
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
+  ProfileIOS* profile = chrome_test_util::GetOriginalProfile();
   history::HistoryService* history_service =
-      ios::HistoryServiceFactory::GetForBrowserState(
-          browser_state, ServiceAccessType::EXPLICIT_ACCESS);
+      ios::HistoryServiceFactory::GetForProfile(
+          profile, ServiceAccessType::EXPLICIT_ACCESS);
 
   history_service->DeleteURLs({url});
 }
 
-void DeleteTypedUrlFromFakeSyncServer(std::string url) {
-  std::vector<sync_pb::SyncEntity> typed_urls =
-      gSyncFakeServer->GetSyncEntitiesByModelType(syncer::TYPED_URLS);
-  std::string entity_id;
-  for (const sync_pb::SyncEntity& typed_url : typed_urls) {
-    if (typed_url.specifics().typed_url().url() == url) {
-      entity_id = typed_url.id_string();
-      break;
-    }
-  }
-  if (!entity_id.empty()) {
-    std::unique_ptr<syncer::LoopbackServerEntity> entity;
-    entity =
-        syncer::PersistentTombstoneEntity::CreateNew(entity_id, std::string());
-    gSyncFakeServer->InjectEntity(std::move(entity));
-  }
+namespace {
+// Add a sync passphrase and returns its key_params.
+syncer::KeyParamsForTesting AddSyncPassphraseInternal(
+    const std::string& sync_passphrase) {
+  syncer::KeyParamsForTesting key_params =
+      syncer::Pbkdf2PassphraseKeyParamsForTesting(sync_passphrase);
+  fake_server::SetNigoriInFakeServer(
+      syncer::BuildCustomPassphraseNigoriSpecifics(key_params),
+      gSyncFakeServer.get());
+  return key_params;
+}
+}  // namespace
+
+void AddSyncPassphrase(const std::string& sync_passphrase) {
+  AddSyncPassphraseInternal(sync_passphrase);
+}
+
+void AddCollaboration(const std::string& collaboration_id) {
+  gSyncFakeServer->AddCollaboration(collaboration_id);
 }
 
 void AddBookmarkWithSyncPassphrase(const std::string& sync_passphrase) {
   syncer::KeyParamsForTesting key_params =
-      syncer::Pbkdf2PassphraseKeyParamsForTesting(sync_passphrase);
+      AddSyncPassphraseInternal(sync_passphrase);
   std::unique_ptr<syncer::LoopbackServerEntity> server_entity =
       CreateBookmarkServerEntity("PBKDF2-encrypted bookmark",
                                  GURL("http://example.com/doesnt-matter"));
   server_entity->SetSpecifics(GetEncryptedBookmarkEntitySpecifics(
       server_entity->GetSpecifics().bookmark(), key_params));
   gSyncFakeServer->InjectEntity(std::move(server_entity));
-  fake_server::SetNigoriInFakeServer(
-      syncer::BuildCustomPassphraseNigoriSpecifics(key_params),
-      gSyncFakeServer);
+}
+
+namespace {
+// Adds SavedTabGroup `specifics` to the fake server.
+void AddDataToFakeServer(const sync_pb::SavedTabGroupSpecifics& specifics) {
+  sync_pb::EntitySpecifics group_entity_specifics;
+  sync_pb::SavedTabGroupSpecifics* group_specifics =
+      group_entity_specifics.mutable_saved_tab_group();
+  group_specifics->CopyFrom(specifics);
+
+  std::string client_tag = group_specifics->guid();
+  int64_t creation_time = group_specifics->creation_time_windows_epoch_micros();
+  int64_t update_time = group_specifics->update_time_windows_epoch_micros();
+
+  gSyncFakeServer->InjectEntity(
+      syncer::PersistentUniqueClientEntity::CreateFromSpecificsForTesting(
+          "non_unique_name", client_tag, group_entity_specifics,
+          /*creation_time=*/creation_time,
+          /*last_modified_time=*/update_time));
+}
+}  // namespace
+
+void AddGroupToFakeServer(const tab_groups::SavedTabGroup& group) {
+  AddDataToFakeServer(
+      tab_groups::SavedTabGroupSyncBridge::SavedTabGroupToSpecificsForTest(
+          group));
+}
+
+void AddTabToFakeServer(const tab_groups::SavedTabGroupTab& tab) {
+  AddDataToFakeServer(
+      tab_groups::SavedTabGroupSyncBridge::SavedTabGroupTabToSpecificsForTest(
+          tab));
+}
+
+void DeleteTabOrGroupFromFakeServer(const base::Uuid& uuid) {
+  std::vector<sync_pb::SyncEntity> server_tabs_and_groups =
+      gSyncFakeServer->GetSyncEntitiesByDataType(syncer::SAVED_TAB_GROUP);
+
+  // Remove the entity with a matching `uuid`.
+  for (const sync_pb::SyncEntity& tab_or_group : server_tabs_and_groups) {
+    const sync_pb::SavedTabGroupSpecifics actual_specifics =
+        tab_or_group.specifics().saved_tab_group();
+    if (base::Uuid::ParseCaseInsensitive(actual_specifics.guid()) == uuid) {
+      // Replace it with a tombstone to remove it from sync.
+      gSyncFakeServer->InjectEntity(
+          syncer::PersistentTombstoneEntity::CreateFromEntity(tab_or_group));
+      return;
+    }
+  }
 }
 
 }  // namespace chrome_test_util

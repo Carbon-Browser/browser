@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <!--
-Copyright (c) 2012 The Chromium Authors. All rights reserved.
+Copyright 2012 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -41,9 +41,9 @@ found in the LICENSE file.
           <button id="tcp-discovery-config-open">
             Configure...</button>
         </div>
-        <div id="node-frontend" class="action node-frontend-action">
+        <button id="node-frontend" class="action node-frontend-action">
           Open dedicated DevTools for Node
-        </div>
+        </button>
       </div>
       <div id="devices-help" hidden>No devices detected. Please read the
         <a href="https://developers.google.com/chrome-developer-tools/docs/remote-debugging">
@@ -75,11 +75,20 @@ found in the LICENSE file.
       <div class="content-header">Service workers</div>
       <div id="service-workers-list" class="list"></div>
     </div>
+    <div id="shared-storage-worklets">
+      <div class="content-header">Shared storage worklets</div>
+      <div id="shared-storage-worklets-list" class="list"></div>
+    </div>
     <div id="native-ui" hidden>
       <div class="content-header">Native UI</div>
         <div class="settings-bar">
           <button id="launch-ui-devtools" hidden>
             Inspect Native UI</button>
+            <label id="bubble-locking-label"
+                title="Prevent bubbles from closing on focus lost.">
+              <input id="bubble-locking-checkbox" type="checkbox" disabled>
+              Bubble Locking
+            </label>
         </div>
         <div id="ui-devtools-disabled-text" hidden>
           The following front-end is running:</div>

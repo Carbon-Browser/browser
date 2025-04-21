@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,44 +6,40 @@
 
 #include <tuple>
 
-#include "ash/constants/app_types.h"
 #include "ash/wm/desks/desks_util.h"
-#include "ash/wm/window_positioning_utils.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "components/exo/buffer.h"
 #include "components/exo/display.h"
+#include "components/exo/security_delegate.h"
 #include "components/exo/sub_surface.h"
 #include "components/exo/surface.h"
 #include "components/exo/test/exo_test_base.h"
+#include "components/exo/test/test_security_delegate.h"
 #include "components/exo/xdg_shell_surface.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
-#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/env.h"
-
-#include "base/logging.h"
+#include "ui/display/types/display_constants.h"
 
 namespace {
 
 // Internal structure that owns buffer, surface and subsurface instances.
 // This is owned by the host window as an owned property.
 struct Holder {
-  exo::Surface* root_surface = nullptr;
+  raw_ptr<exo::Surface, DanglingUntriaged> root_surface = nullptr;
   std::vector<std::tuple<std::unique_ptr<exo::Buffer>,
                          std::unique_ptr<exo::Surface>,
                          std::unique_ptr<exo::SubSurface>>>
       sub_surfaces;
+  std::unique_ptr<exo::SecurityDelegate> security_delegate_;
 
   void AddRootSurface(const gfx::Size& size,
-                      absl::optional<gfx::BufferFormat> buffer_format) {
+                      std::optional<gfx::BufferFormat> buffer_format) {
     auto surface = std::make_unique<exo::Surface>();
     std::unique_ptr<exo::Buffer> buffer;
     if (!size.IsEmpty() && buffer_format) {
-      buffer = std::make_unique<exo::Buffer>(
-          aura::Env::GetInstance()
-              ->context_factory()
-              ->GetGpuMemoryBufferManager()
-              ->CreateGpuMemoryBuffer(size, *buffer_format,
-                                      gfx::BufferUsage::GPU_READ,
-                                      gpu::kNullSurfaceHandle, nullptr));
+      buffer = exo::test::ExoTestHelper::CreateBuffer(size, *buffer_format);
       surface->Attach(buffer.get());
     }
     root_surface = surface.get();
@@ -52,14 +48,7 @@ struct Holder {
   }
 
   exo::Surface* AddChildSurface(exo::Surface* parent, const gfx::Rect& bounds) {
-    auto buffer = std::make_unique<exo::Buffer>(
-        aura::Env::GetInstance()
-            ->context_factory()
-            ->GetGpuMemoryBufferManager()
-            ->CreateGpuMemoryBuffer(bounds.size(), gfx::BufferFormat::RGBA_8888,
-                                    gfx::BufferUsage::GPU_READ,
-                                    gpu::kNullSurfaceHandle, nullptr));
-
+    auto buffer = exo::test::ExoTestHelper::CreateBuffer(bounds.size());
     auto surface = std::make_unique<exo::Surface>();
     surface->Attach(buffer.get());
     auto sub_surface = std::make_unique<exo::SubSurface>(surface.get(), parent);
@@ -83,6 +72,11 @@ struct Holder {
     }
     root_surface = nullptr;
   }
+
+  exo::SecurityDelegate* CreateTestSecurityDelegate() {
+    security_delegate_ = std::make_unique<exo::test::TestSecurityDelegate>();
+    return security_delegate_.get();
+  }
 };
 
 }  // namespace
@@ -93,7 +87,7 @@ namespace exo {
 namespace test {
 namespace {
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(Holder, kBuilderResourceHolderKey, nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(Holder, kBuilderResourceHolderKey)
 
 Holder* FindHolder(Surface* surface) {
   aura::Window* window = surface->window();
@@ -155,6 +149,12 @@ ShellSurfaceBuilder& ShellSurfaceBuilder::SetCanMinimize(bool can_minimize) {
   return *this;
 }
 
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetCanMaximize(bool can_maximize) {
+  DCHECK(!built_);
+  can_maximize_ = can_maximize;
+  return *this;
+}
+
 ShellSurfaceBuilder& ShellSurfaceBuilder::SetMaximumSize(
     const gfx::Size& size) {
   DCHECK(!built_);
@@ -189,6 +189,14 @@ ShellSurfaceBuilder& ShellSurfaceBuilder::SetFrame(SurfaceFrameType type) {
   return *this;
 }
 
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetFrameColors(SkColor active,
+                                                         SkColor inactive) {
+  DCHECK(!built_);
+  active_frame_color_ = active;
+  inactive_frame_color_ = inactive;
+  return *this;
+}
+
 ShellSurfaceBuilder& ShellSurfaceBuilder::SetApplicationId(
     const std::string& application_id) {
   DCHECK(!built_);
@@ -215,6 +223,13 @@ ShellSurfaceBuilder& ShellSurfaceBuilder::SetSecurityDelegate(
   return *this;
 }
 
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetAppType(
+    chromeos::AppType app_type) {
+  DCHECK(!built_);
+  app_type_ = app_type;
+  return *this;
+}
+
 ShellSurfaceBuilder& ShellSurfaceBuilder::SetParent(ShellSurface* parent) {
   DCHECK(!built_);
   parent_shell_surface_ = parent;
@@ -224,6 +239,25 @@ ShellSurfaceBuilder& ShellSurfaceBuilder::SetParent(ShellSurface* parent) {
 ShellSurfaceBuilder& ShellSurfaceBuilder::SetAsPopup() {
   DCHECK(!built_);
   popup_ = true;
+  return *this;
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetAsMenu() {
+  DCHECK(!built_);
+  menu_ = true;
+  return SetAsPopup();
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetGrab() {
+  DCHECK(!built_);
+  grab_ = true;
+  return *this;
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetClientSubmitsInPixelCoordinates(
+    bool enabled) {
+  DCHECK(!built_);
+  client_submits_surfaces_in_pixel_coordinates_ = enabled;
   return *this;
 }
 
@@ -247,6 +281,31 @@ ShellSurfaceBuilder& ShellSurfaceBuilder::SetDelegate(
   return *this;
 }
 
+ShellSurfaceBuilder& ShellSurfaceBuilder::DisableSupportsFloatedState() {
+  DCHECK(!built_);
+  supports_floated_state_ = false;
+  return *this;
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetDisplayId(int64_t display_id) {
+  DCHECK(!built_);
+  DCHECK_NE(display_id, display::kInvalidDisplayId);
+  display_id_ = display_id;
+  return *this;
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetBounds(const gfx::Rect& bounds) {
+  DCHECK(!built_);
+  bounds_.emplace(bounds);
+  return *this;
+}
+
+ShellSurfaceBuilder& ShellSurfaceBuilder::SetConfigureCallback(
+    ShellSurface::ConfigureCallback configure_callback) {
+  configure_callback_ = configure_callback;
+  return *this;
+}
+
 // static
 void ShellSurfaceBuilder::DestroyRootSurface(ShellSurfaceBase* shell_surface) {
   Holder* holder =
@@ -266,22 +325,65 @@ Surface* ShellSurfaceBuilder::AddChildSurface(Surface* parent,
 std::unique_ptr<ShellSurface> ShellSurfaceBuilder::BuildShellSurface() {
   // Create a ShellSurface instance.
   DCHECK(!built_);
-  DCHECK(isConfigurationValidForShellSurface());
+  DCHECK(IsConfigurationValidForShellSurface());
   built_ = true;
-  Holder* holder = new Holder();
+
+  auto holder = std::make_unique<Holder>();
   holder->AddRootSurface(root_buffer_size_, root_buffer_format_);
-  auto shell_surface = std::make_unique<ShellSurface>(
+  auto shell_surface = std::make_unique<XdgShellSurface>(
       holder->root_surface, origin_, can_minimize_, GetContainer());
-  shell_surface->host_window()->SetProperty(kBuilderResourceHolderKey, holder);
+
+  if (!configure_callback_.is_null()) {
+    shell_surface->set_configure_callback(configure_callback_);
+  }
+
+  shell_surface->host_window()->SetProperty(kBuilderResourceHolderKey,
+                                            std::move(holder));
 
   // Set the properties specific to ShellSurface.
   if (parent_shell_surface_)
     shell_surface->SetParent(parent_shell_surface_);
   if (popup_)
     shell_surface->SetPopup();
+  if (menu_)
+    shell_surface->SetMenu();
+  if (grab_) {
+    shell_surface->Grab();
+  }
+  if (client_submits_surfaces_in_pixel_coordinates_.has_value()) {
+    shell_surface->set_client_submits_surfaces_in_pixel_coordinates(
+        client_submits_surfaces_in_pixel_coordinates_.value());
+  }
+
+  if (window_state_.has_value()) {
+    switch (window_state_.value()) {
+      case chromeos::WindowStateType::kDefault:
+      case chromeos::WindowStateType::kNormal:
+        shell_surface->Restore();
+        break;
+      case chromeos::WindowStateType::kMaximized:
+        shell_surface->Maximize();
+        break;
+      case chromeos::WindowStateType::kMinimized:
+        shell_surface->Minimize();
+        break;
+      case chromeos::WindowStateType::kFullscreen:
+        shell_surface->SetFullscreen(/*fullscreen=*/true,
+                                     /*display_id=*/display::kInvalidDisplayId);
+        break;
+      default:
+        // Other states are not supported as initial state in ShellSurface.
+        NOTREACHED();
+    }
+  }
 
   SetCommonPropertiesAndCommitIfNecessary(shell_surface.get());
 
+  // The widget becomes available after the first commit.
+  if (shell_surface->GetWidget() && app_type_ != chromeos::AppType::NON_APP) {
+    shell_surface->GetWidget()->GetNativeWindow()->SetProperty(
+        chromeos::kAppTypeKey, app_type_);
+  }
   return shell_surface;
 }
 
@@ -289,15 +391,15 @@ std::unique_ptr<ClientControlledShellSurface>
 ShellSurfaceBuilder::BuildClientControlledShellSurface() {
   // Create a ClientControlledShellSurface instance.
   DCHECK(!built_);
-  DCHECK(isConfigurationValidForClientControlledShellSurface());
+  DCHECK(IsConfigurationValidForClientControlledShellSurface());
   built_ = true;
-  Holder* holder = new Holder();
+  auto holder = std::make_unique<Holder>();
   holder->AddRootSurface(root_buffer_size_, root_buffer_format_);
   auto shell_surface = Display().CreateOrGetClientControlledShellSurface(
-      holder->root_surface, GetContainer(),
-      WMHelper::GetInstance()->GetDefaultDeviceScaleFactor(),
-      default_scale_cancellation_);
-  shell_surface->host_window()->SetProperty(kBuilderResourceHolderKey, holder);
+      holder->root_surface, GetContainer(), default_scale_cancellation_,
+      supports_floated_state_);
+  shell_surface->host_window()->SetProperty(kBuilderResourceHolderKey,
+                                            std::move(holder));
 
   // Set the properties specific to ClientControlledShellSurface.
   shell_surface->SetApplicationId(!application_id_.empty()
@@ -313,6 +415,7 @@ ShellSurfaceBuilder::BuildClientControlledShellSurface() {
         std::make_unique<ClientControlledShellSurfaceDelegate>(
             shell_surface.get()));
   }
+
   if (window_state_.has_value()) {
     switch (window_state_.value()) {
       case chromeos::WindowStateType::kDefault:
@@ -326,13 +429,14 @@ ShellSurfaceBuilder::BuildClientControlledShellSurface() {
         shell_surface->SetMinimized();
         break;
       case chromeos::WindowStateType::kFullscreen:
-        shell_surface->SetFullscreen(/*fullscreen=*/true);
+        shell_surface->SetFullscreen(/*fullscreen=*/true,
+                                     /*display_id=*/display::kInvalidDisplayId);
         break;
       case chromeos::WindowStateType::kPrimarySnapped:
-        shell_surface->SetSnappedToPrimary();
+        shell_surface->SetSnapPrimary(chromeos::kDefaultSnapRatio);
         break;
       case chromeos::WindowStateType::kSecondarySnapped:
-        shell_surface->SetSnappedToSecondary();
+        shell_surface->SetSnapSecondary(chromeos::kDefaultSnapRatio);
         break;
       case chromeos::WindowStateType::kPip:
         shell_surface->SetPip();
@@ -346,25 +450,37 @@ ShellSurfaceBuilder::BuildClientControlledShellSurface() {
 
   // The widget becomes available after the first commit.
   if (shell_surface->GetWidget()) {
+    CHECK(app_type_ == chromeos::AppType::NON_APP ||
+          app_type_ == chromeos::AppType::ARC_APP)
+        << "Incompatible app type is set for ClientControlledShellSurface.";
     shell_surface->GetWidget()->GetNativeWindow()->SetProperty(
-        aura::client::kAppType, static_cast<int>(ash::AppType::ARC_APP));
+        chromeos::kAppTypeKey, chromeos::AppType::ARC_APP);
   }
+
+  shell_surface->SetCanMaximize(can_maximize_);
 
   return shell_surface;
 }
 
-bool ShellSurfaceBuilder::isConfigurationValidForShellSurface() {
-  return !default_scale_cancellation_ && !window_state_.has_value() &&
-         !delegate_;
+bool ShellSurfaceBuilder::IsConfigurationValidForShellSurface() {
+  return !default_scale_cancellation_ && !delegate_;
 }
 
 bool ShellSurfaceBuilder::
-    isConfigurationValidForClientControlledShellSurface() {
+    IsConfigurationValidForClientControlledShellSurface() {
   return !parent_shell_surface_ && !popup_;
 }
 
 void ShellSurfaceBuilder::SetCommonPropertiesAndCommitIfNecessary(
     ShellSurfaceBase* shell_surface) {
+  if (display_id_ != display::kInvalidDisplayId) {
+    shell_surface->SetDisplay(display_id_);
+  }
+
+  if (bounds_) {
+    shell_surface->SetWindowBounds(*bounds_);
+  }
+
   if (disable_movement_)
     shell_surface->DisableMovement();
 
@@ -385,18 +501,33 @@ void ShellSurfaceBuilder::SetCommonPropertiesAndCommitIfNecessary(
     shell_surface->root_surface()->SetFrame(type_.value());
   }
 
+  if (active_frame_color_.has_value()) {
+    shell_surface->root_surface()->SetFrameColors(
+        active_frame_color_.value(), inactive_frame_color_.value());
+  }
+
   if (system_modal_) {
     shell_surface->SetSystemModal(true);
   }
 
   if (security_delegate_) {
     shell_surface->SetSecurityDelegate(security_delegate_);
+  } else {
+    auto* holder =
+        shell_surface->host_window()->GetProperty(kBuilderResourceHolderKey);
+    shell_surface->SetSecurityDelegate(holder->CreateTestSecurityDelegate());
   }
 
   if (commit_on_build_) {
     shell_surface->root_surface()->Commit();
-    if (centered_)
-      ash::CenterWindow(shell_surface->GetWidget()->GetNativeWindow());
+    if (centered_) {
+      auto* window = shell_surface->GetWidget()->GetNativeWindow();
+      const display::Display display =
+          display::Screen::GetScreen()->GetDisplayNearestWindow(window);
+      gfx::Rect center_bounds = display.work_area();
+      center_bounds.ClampToCenteredSize(window->bounds().size());
+      window->SetBoundsInScreen(center_bounds, display);
+    }
   } else {
     // 'SetCentered' requires its shell surface to be committed when creatted.
     DCHECK(!centered_);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@ import org.junit.runners.model.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Test SetUpStatement is working as intended with SetUpTestRule.
- */
+/** Test SetUpStatement is working as intended with SetUpTestRule. */
 @RunWith(BlockJUnit4ClassRunner.class)
 public class SetUpStatementTest {
     private Statement mBase;
@@ -26,24 +24,26 @@ public class SetUpStatementTest {
 
     @Before
     public void setUp() {
-        mBase = new Statement() {
-            @Override
-            public void evaluate() {
-                mList.add(1);
-            }
-        };
+        mBase =
+                new Statement() {
+                    @Override
+                    public void evaluate() {
+                        mList.add(1);
+                    }
+                };
         mList = new ArrayList<>();
-        mRule = new SetUpTestRule<TestRule>() {
-            @Override
-            public void setUp() {
-                mList.add(0);
-            }
+        mRule =
+                new SetUpTestRule<TestRule>() {
+                    @Override
+                    public void setUp() {
+                        mList.add(0);
+                    }
 
-            @Override
-            public TestRule shouldSetUp(boolean toSetUp) {
-                return null;
-            }
-        };
+                    @Override
+                    public TestRule shouldSetUp(boolean toSetUp) {
+                        return null;
+                    }
+                };
     }
 
     @Test

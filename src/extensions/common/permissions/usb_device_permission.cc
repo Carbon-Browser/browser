@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,13 +109,13 @@ UsbDevicePermission::CheckParam::CheckParam(
       interface_id(interface_id),
       interface_class_allowed(IsInterfaceClassPermissionAlowed(extension)) {}
 
-UsbDevicePermission::CheckParam::~CheckParam() {}
+UsbDevicePermission::CheckParam::~CheckParam() = default;
 
 UsbDevicePermission::UsbDevicePermission(const APIPermissionInfo* info)
     : SetDisjunctionPermission<UsbDevicePermissionData, UsbDevicePermission>(
           info) {}
 
-UsbDevicePermission::~UsbDevicePermission() {}
+UsbDevicePermission::~UsbDevicePermission() = default;
 
 bool UsbDevicePermission::FromValue(
     const base::Value* value,

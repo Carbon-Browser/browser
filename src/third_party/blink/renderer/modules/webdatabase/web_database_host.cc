@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/webdatabase/web_database.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "third_party/sqlite/sqlite3.h"
 
 namespace blink {
@@ -29,8 +29,7 @@ void WebDatabaseHost::Init() {
       pending_remote_.InitWithNewPipeAndPassReceiver());
 }
 
-WebDatabaseHost::WebDatabaseHost()
-    : main_thread_task_runner_(Thread::MainThread()->GetTaskRunner()) {}
+WebDatabaseHost::WebDatabaseHost() = default;
 
 mojom::blink::WebDatabaseHost& WebDatabaseHost::GetWebDatabaseHost() {
   if (!shared_remote_) {
@@ -62,12 +61,6 @@ int32_t WebDatabaseHost::GetFileAttributes(const String& vfs_file_name) {
   return rv;
 }
 
-bool WebDatabaseHost::SetFileSize(const String& vfs_file_name, int64_t size) {
-  bool rv = false;
-  GetWebDatabaseHost().SetFileSize(vfs_file_name, size, &rv);
-  return rv;
-}
-
 int64_t WebDatabaseHost::GetSpaceAvailableForOrigin(
     const SecurityOrigin& origin) {
   int64_t rv = 0LL;
@@ -78,26 +71,26 @@ int64_t WebDatabaseHost::GetSpaceAvailableForOrigin(
 void WebDatabaseHost::DatabaseOpened(const SecurityOrigin& origin,
                                      const String& database_name,
                                      const String& database_display_name) {
-  DCHECK(main_thread_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(IsMainThread());
   GetWebDatabaseHost().Opened(&origin, database_name, database_display_name);
 }
 
 void WebDatabaseHost::DatabaseModified(const SecurityOrigin& origin,
                                        const String& database_name) {
-  DCHECK(!main_thread_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(!IsMainThread());
   GetWebDatabaseHost().Modified(&origin, database_name);
 }
 
 void WebDatabaseHost::DatabaseClosed(const SecurityOrigin& origin,
                                      const String& database_name) {
-  DCHECK(!main_thread_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(!IsMainThread());
   GetWebDatabaseHost().Closed(&origin, database_name);
 }
 
 void WebDatabaseHost::ReportSqliteError(const SecurityOrigin& origin,
                                         const String& database_name,
                                         int error) {
-  DCHECK(!main_thread_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(!IsMainThread());
 
   // We filter out errors which the backend doesn't act on to avoid a
   // unnecessary ipc traffic, this method can get called at a fairly high

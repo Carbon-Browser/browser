@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_LANGUAGE_ACCEPT_LANGUAGES_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_LANGUAGE_ACCEPT_LANGUAGES_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace language {
 class AcceptLanguagesService;
@@ -14,7 +14,7 @@ class AcceptLanguagesService;
 
 // AcceptLanguagesServiceFactory is a way to associate an
 // AcceptLanguagesService instance to a BrowserContext.
-class AcceptLanguagesServiceFactory : public BrowserContextKeyedServiceFactory {
+class AcceptLanguagesServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static language::AcceptLanguagesService* GetForBrowserContext(
       content::BrowserContext* browser_context);
@@ -25,16 +25,14 @@ class AcceptLanguagesServiceFactory : public BrowserContextKeyedServiceFactory {
       const AcceptLanguagesServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<AcceptLanguagesServiceFactory>;
+  friend base::NoDestructor<AcceptLanguagesServiceFactory>;
 
   AcceptLanguagesServiceFactory();
   ~AcceptLanguagesServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
 };
 
 #endif  // CHROME_BROWSER_LANGUAGE_ACCEPT_LANGUAGES_SERVICE_FACTORY_H_

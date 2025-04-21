@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync/test/integration/status_change_checker.h"
-#include "chrome/browser/sync/test/integration/sync_test.h"
 #include "chrome/browser/themes/theme_service_observer.h"
 
 class Profile;
 class ThemeService;
 
 namespace themes_helper {
+
+bool IsSystemThemeDistinctFromDefaultTheme(Profile* profile);
 
 // Gets the unique ID of the custom theme with the given index.
 [[nodiscard]] std::string GetCustomTheme(int index);
@@ -33,6 +35,9 @@ namespace themes_helper {
 
 // Returns true iff |profile| is using the system theme.
 [[nodiscard]] bool UsingSystemTheme(Profile* profile);
+
+// Returns true iff `profile` has grayscale theme enabled.
+[[nodiscard]] bool UsingGrayscaleTheme(Profile* profile);
 
 // Returns true iff a theme with the given ID is pending install in
 // |profile|.
@@ -70,7 +75,7 @@ class ThemeConditionChecker : public StatusChangeChecker,
   void OnThemeChanged() override;
 
  private:
-  raw_ptr<Profile> profile_;
+  const raw_ptr<Profile> profile_;
   const std::string debug_message_;
   base::RepeatingCallback<bool(ThemeService*)> exit_condition_;
 };
@@ -93,8 +98,8 @@ class ThemePendingInstallChecker : public StatusChangeChecker {
   bool IsExitConditionSatisfied(std::ostream* os) override;
 
  private:
-  raw_ptr<Profile> profile_;
-  const std::string& theme_;
+  const raw_ptr<Profile> profile_;
+  const raw_ref<const std::string> theme_;
 
   base::WeakPtrFactory<ThemePendingInstallChecker> weak_ptr_factory_{this};
 };
@@ -111,6 +116,20 @@ class SystemThemeChecker : public ThemeConditionChecker {
 class DefaultThemeChecker : public ThemeConditionChecker {
  public:
   explicit DefaultThemeChecker(Profile* profile);
+};
+
+// Waits until |profile| is using a custom theme.
+// Returns false in case of timeout.
+class CustomThemeChecker : public ThemeConditionChecker {
+ public:
+  explicit CustomThemeChecker(Profile* profile);
+};
+
+// Waits until `profile` has grayscale theme enabled.
+// Returns false in case of timeout.
+class GrayscaleThemeChecker : public ThemeConditionChecker {
+ public:
+  explicit GrayscaleThemeChecker(Profile* profile);
 };
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_THEMES_HELPER_H_

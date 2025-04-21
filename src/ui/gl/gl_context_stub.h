@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@ class GL_EXPORT GLContextStub : public GLContextReal {
   GLContextStub& operator=(const GLContextStub&) = delete;
 
   // Implement GLContext.
-  bool Initialize(GLSurface* compatible_surface,
-                  const GLContextAttribs& attribs) override;
+  bool InitializeImpl(GLSurface* compatible_surface,
+                      const GLContextAttribs& attribs) override;
   bool MakeCurrentImpl(GLSurface* surface) override;
   void ReleaseCurrent(GLSurface* surface) override;
   bool IsCurrent(GLSurface* surface) override;
@@ -38,7 +38,7 @@ class GL_EXPORT GLContextStub : public GLContextReal {
   void SetGLVersionString(const char* version_str);
   bool HasRobustness();
 
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
   void FlushForDriverCrashWorkaround() override;
 #endif
 

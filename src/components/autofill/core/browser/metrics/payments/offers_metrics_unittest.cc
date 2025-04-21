@@ -1,7 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <string_view>
 #include <vector>
 
 #include "base/test/metrics/histogram_tester.h"
@@ -16,10 +17,14 @@ using ::base::BucketsAre;
 
 namespace autofill::autofill_metrics {
 
-class OffersMetricsTest : public metrics::AutofillMetricsBaseTest {
+class OffersMetricsTest : public AutofillMetricsBaseTest, public testing::Test {
  public:
   OffersMetricsTest() = default;
   ~OffersMetricsTest() override = default;
+
+  void SetUp() override { SetUpHelper(); }
+
+  void TearDown() override { TearDownHelper(); }
 };
 
 TEST_F(OffersMetricsTest, LogStoredOfferMetrics) {
@@ -46,9 +51,9 @@ TEST_F(OffersMetricsTest, LogStoredOfferMetrics) {
 
   base::HistogramTester histogram_tester;
 
-  autofill_metrics::LogStoredOfferMetrics(offers);
+  LogStoredOfferMetrics(offers);
 
-  auto SamplesOf = [&histogram_tester](base::StringPiece metric) {
+  auto SamplesOf = [&histogram_tester](std::string_view metric) {
     return histogram_tester.GetAllSamples(metric);
   };
 
@@ -72,10 +77,9 @@ TEST_F(OffersMetricsTest, LogStoredOfferMetrics) {
 TEST_F(OffersMetricsTest, LogStoredOfferMetrics_NoOffers) {
   base::HistogramTester histogram_tester;
 
-  autofill_metrics::LogStoredOfferMetrics(
-      std::vector<std::unique_ptr<AutofillOfferData>>());
+  LogStoredOfferMetrics(std::vector<std::unique_ptr<AutofillOfferData>>());
 
-  auto SamplesOf = [&histogram_tester](base::StringPiece metric) {
+  auto SamplesOf = [&histogram_tester](std::string_view metric) {
     return histogram_tester.GetAllSamples(metric);
   };
 

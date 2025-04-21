@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class MockReportQueueProvider : public ReportQueueProvider {
   MOCK_METHOD(
       (StatusOr<std::unique_ptr<ReportQueue, base::OnTaskRunnerDeleter>>),
       CreateNewSpeculativeQueueMock,
-      (),
+      (const ReportQueue::SpeculativeConfigSettings& config_settings),
       ());
 
   MOCK_METHOD(void, OnInitCompletedMock, (), ());
@@ -66,13 +66,13 @@ class MockReportQueueProvider : public ReportQueueProvider {
   void CreateNewQueue(std::unique_ptr<ReportQueueConfiguration> config,
                       CreateReportQueueCallback cb) override;
   StatusOr<std::unique_ptr<ReportQueue, base::OnTaskRunnerDeleter>>
-  CreateNewSpeculativeQueue() override;
+  CreateNewSpeculativeQueue(
+      const ReportQueue::SpeculativeConfigSettings& config_settings) override;
   void ConfigureReportQueue(
       std::unique_ptr<ReportQueueConfiguration> report_queue_config,
       ReportQueueConfiguredCallback completion_cb) override;
 
   scoped_refptr<StorageModuleInterface> storage_;
-  const scoped_refptr<base::SequencedTaskRunner> test_sequenced_task_runner_;
   SEQUENCE_CHECKER(test_sequence_checker_);
 };
 

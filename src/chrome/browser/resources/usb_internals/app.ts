@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
  */
 
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
+import 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 import {getTemplate} from './app.html.js';
 import {DevicesPage} from './devices_page.js';
@@ -24,7 +25,7 @@ export function setSetupFn(newSetupFn: () => Promise<void>) {
   setupFn = newSetupFn;
 }
 
-class UsbInternalsAppElement extends HTMLElement {
+export class UsbInternalsAppElement extends HTMLElement {
   private usbManagerTest_: UsbDeviceManagerTestRemote|null = null;
 
   static get template() {
@@ -36,8 +37,8 @@ class UsbInternalsAppElement extends HTMLElement {
 
     this.attachShadow({mode: 'open'});
     const template = document.createElement('template');
-    template.innerHTML = (UsbInternalsAppElement.template ||
-                          window.trustedTypes!.emptyHTML) as unknown as string;
+    template.innerHTML =
+        UsbInternalsAppElement.template || window.trustedTypes!.emptyHTML;
     this.shadowRoot!.appendChild(template.content.cloneNode(true));
   }
 
@@ -81,7 +82,7 @@ class UsbInternalsAppElement extends HTMLElement {
     const response = await this.usbManagerTest_.getTestDevices();
 
     const tableBody = this.$<HTMLElement>('#test-device-list');
-    tableBody.innerHTML = window.trustedTypes!.emptyHTML as unknown as string;
+    tableBody.innerHTML = window.trustedTypes!.emptyHTML;
 
     const rowTemplate = this.$<HTMLTemplateElement>('#test-device-row');
     const td = rowTemplate.content.querySelectorAll('td');
@@ -123,4 +124,11 @@ class UsbInternalsAppElement extends HTMLElement {
         response.success ? 'action-success' : 'action-failure';
   }
 }
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'usb-internals-app': UsbInternalsAppElement;
+  }
+}
+
 customElements.define('usb-internals-app', UsbInternalsAppElement);

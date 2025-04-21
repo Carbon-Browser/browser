@@ -1,37 +1,38 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/paged_apps_grid_view.h"
 
+#include <list>
 #include <utility>
 
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/apps_grid_row_change_animator.h"
-#include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/model/app_list_model.h"
 #include "ash/app_list/test/app_list_test_helper.h"
 #include "ash/app_list/test/test_focus_change_listener.h"
-#include "ash/app_list/views/app_list_a11y_announcer.h"
 #include "ash/app_list/views/app_list_folder_view.h"
+#include "ash/app_list/views/app_list_item_view.h"
 #include "ash/app_list/views/app_list_toast_container_view.h"
 #include "ash/app_list/views/app_list_toast_view.h"
-#include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/apps_container_view.h"
 #include "ash/app_list/views/apps_grid_view_test_api.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/layer_animation_stopped_waiter.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/bounds_animator.h"
@@ -59,37 +60,36 @@ class PageFlipWaiter : public PaginationModelObserver {
   }
 
   std::unique_ptr<base::RunLoop> ui_run_loop_;
-  PaginationModel* model_ = nullptr;
+  raw_ptr<PaginationModel> model_ = nullptr;
 };
 
 }  // namespace
 
-class PagedAppsGridViewTestBase : public AshTestBase {
+class PagedAppsGridViewTest : public AshTestBase {
  public:
-  PagedAppsGridViewTestBase()
+  PagedAppsGridViewTest()
       : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
-  ~PagedAppsGridViewTestBase() override = default;
+  ~PagedAppsGridViewTest() override = default;
 
   void SetUp() override {
     AshTestBase::SetUp();
 
-    app_list_test_model_ = std::make_unique<test::AppListTestModel>();
-    search_model_ = std::make_unique<SearchModel>();
-    Shell::Get()->app_list_controller()->SetActiveModel(
-        /*profile_id=*/1, app_list_test_model_.get(), search_model_.get());
-
-    Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+    ash::TabletModeControllerTestApi().EnterTabletMode();
     grid_test_api_ = std::make_unique<test::AppsGridViewTestApi>(
         GetAppListTestHelper()->GetRootPagedAppsGridView());
   }
 
-  AppListItemView* StartDragOnItemViewAtVisualIndex(int page, int slot) {
-    AppListItemView* item = grid_test_api_->GetViewAtVisualIndex(page, slot);
+  AppListItemView* StartDragOnItemView(AppListItemView* item) {
     auto* generator = GetEventGenerator();
     generator->MoveMouseTo(item->GetBoundsInScreen().CenterPoint());
     generator->PressLeftButton();
-    item->FireMouseDragTimerForTest();
+    EXPECT_TRUE(item->FireMouseDragTimerForTest());
     return item;
+  }
+
+  AppListItemView* StartDragOnItemViewAtVisualIndex(int page, int slot) {
+    return StartDragOnItemView(
+        grid_test_api_->GetViewAtVisualIndex(page, slot));
   }
 
   PagedAppsGridView* GetPagedAppsGridView() {
@@ -120,24 +120,20 @@ class PagedAppsGridViewTestBase : public AshTestBase {
     return GetPagedAppsGridView()->row_change_animator_->IsAnimating();
   }
 
-  std::unique_ptr<test::AppsGridViewTestApi> grid_test_api_;
-  std::unique_ptr<test::AppListTestModel> app_list_test_model_;
-  std::unique_ptr<SearchModel> search_model_;
-};
+  void WaitForItemLayerAnimations() {
+    ui::LayerAnimationStoppedWaiter animation_waiter;
+    const views::ViewModelT<AppListItemView>* view_model =
+        GetPagedAppsGridView()->view_model();
 
-// Tests with ProductivityLauncher enabled.
-class PagedAppsGridViewTest : public PagedAppsGridViewTestBase {
- public:
-  PagedAppsGridViewTest() {
-    scoped_features_.InitWithFeatures(
-        {features::kProductivityLauncher,
-         features::kLauncherDismissButtonsOnSortNudgeAndToast},
-        {});
+    for (size_t i = 0; i < view_model->view_size(); i++) {
+      if (view_model->view_at(i)->layer())
+        animation_waiter.Wait(view_model->view_at(i)->layer());
+    }
   }
 
   // Sorts app list with the specified order. If `wait` is true, wait for the
   // reorder animation to complete.
-  void SortAppList(const absl::optional<AppListSortOrder>& order, bool wait) {
+  void SortAppList(const std::optional<AppListSortOrder>& order, bool wait) {
     AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
         order,
         /*animate=*/true, /*update_position_closure=*/base::DoNothing());
@@ -155,10 +151,10 @@ class PagedAppsGridViewTest : public PagedAppsGridViewTestBase {
     run_loop.Run();
   }
 
-  base::test::ScopedFeatureList scoped_features_;
+  std::unique_ptr<test::AppsGridViewTestApi> grid_test_api_;
 };
 
-// Tests with ProductivityLauncher and app list nudge enabled.
+// Tests with app list nudge enabled.
 class PagedAppsGridViewWithNudgeTest : public PagedAppsGridViewTest {
  public:
   void SetUp() override {
@@ -172,17 +168,7 @@ class PagedAppsGridViewWithNudgeTest : public PagedAppsGridViewTest {
   }
 };
 
-// Tests with ProductivityLauncher disabled, which disables the bubble launcher.
-class PagedAppsGridViewNonBubbleTest : public PagedAppsGridViewTestBase {
- public:
-  PagedAppsGridViewNonBubbleTest() {
-    scoped_features_.InitAndDisableFeature(features::kProductivityLauncher);
-  }
-
-  base::test::ScopedFeatureList scoped_features_;
-};
-
-TEST_F(PagedAppsGridViewNonBubbleTest, CreatePage) {
+TEST_F(PagedAppsGridViewTest, CreatePage) {
   PagedAppsGridView* apps_grid_view =
       GetAppListTestHelper()->GetRootPagedAppsGridView();
 
@@ -248,7 +234,7 @@ TEST_F(PagedAppsGridViewTest, GridDimensionsChangesWithDisplaySize) {
 
   // Test with a display in landscape mode a with a little more height. This
   // should have equal rows on the first and second pages.
-  UpdateDisplay("1600x900");
+  UpdateDisplay("1600x910");
   EXPECT_EQ(4, GetPagedAppsGridView()->GetFirstPageRowsForTesting());
   EXPECT_EQ(4, GetPagedAppsGridView()->GetRowsForTesting());
   EXPECT_EQ(5, GetPagedAppsGridView()->cols());
@@ -274,22 +260,6 @@ TEST_F(PagedAppsGridViewTest, GridDimensionsChangesWithDisplaySize) {
   EXPECT_EQ(5, GetPagedAppsGridView()->cols());
 }
 
-// Test that spacing between pages is removed when the remove empty space flag
-// is enabled.
-TEST_F(PagedAppsGridViewTest, TestPaging) {
-  GetAppListTestHelper()->AddAppItems(1);
-  GetAppListTestHelper()->AddPageBreakItem();
-  GetAppListTestHelper()->AddAppItems(1);
-  GetAppListTestHelper()->AddPageBreakItem();
-  GetAppListTestHelper()->AddAppItems(1);
-
-  EXPECT_EQ(1, GetAppListTestHelper()
-                   ->GetRootPagedAppsGridView()
-                   ->pagination_model()
-                   ->total_pages());
-  EXPECT_EQ(3, grid_test_api_->AppsOnPage(0));
-}
-
 // Test that an app cannot be dragged to create a new page when the remove empty
 // space flag is enabled.
 TEST_F(PagedAppsGridViewTest, DragItemToNextPage) {
@@ -301,25 +271,46 @@ TEST_F(PagedAppsGridViewTest, DragItemToNextPage) {
   EXPECT_EQ(2, pagination_model->total_pages());
   GetPagedAppsGridView()->GetWidget()->LayoutRootViewIfNecessary();
 
-  // Drag the item at page 0 slot 0 to the next page.
-  StartDragOnItemViewAtVisualIndex(0, 0);
-  auto page_flip_waiter = std::make_unique<PageFlipWaiter>(pagination_model);
   const gfx::Rect apps_grid_bounds =
       GetPagedAppsGridView()->GetBoundsInScreen();
   gfx::Point next_page_point =
       gfx::Point(apps_grid_bounds.width() / 2, apps_grid_bounds.bottom() - 1);
-  GetEventGenerator()->MoveMouseTo(next_page_point);
-  page_flip_waiter->Wait();
-  GetEventGenerator()->ReleaseLeftButton();
+  auto page_flip_waiter = std::make_unique<PageFlipWaiter>(pagination_model);
+
+  // Drag the item at page 0 slot 0 to the next page.
+  StartDragOnItemViewAtVisualIndex(0, 0);
+
+  // Test that dragging an item to just past the bottom of the background
+  // card causes a page flip.
+  std::list<base::OnceClosure> drag_page_flip;
+  drag_page_flip.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+    GetEventGenerator()->MoveMouseTo(next_page_point);
+  }));
+  drag_page_flip.push_back(base::BindLambdaForTesting([&]() {
+    page_flip_waiter->Wait();
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&drag_page_flip, /*is_touch=*/false);
 
   // With the drag complete, check that page 1 is now selected.
   EXPECT_EQ(1, pagination_model->selected_page());
 
   // Drag the item at page 1 slot 0 to the next page and hold it there.
   StartDragOnItemViewAtVisualIndex(1, 0);
-  GetEventGenerator()->MoveMouseTo(next_page_point);
-  task_environment()->FastForwardBy(base::Seconds(2));
-  GetEventGenerator()->ReleaseLeftButton();
+
+  std::list<base::OnceClosure> drag_does_nothing;
+  drag_does_nothing.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+    GetEventGenerator()->MoveMouseTo(next_page_point);
+  }));
+  drag_does_nothing.push_back(base::BindLambdaForTesting([&]() {
+    task_environment()->FastForwardBy(base::Seconds(2));
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&drag_does_nothing, /*is_touch=*/false);
 
   // With the drag complete, check that page 1 is still selected, because a new
   // page cannot be created.
@@ -336,38 +327,55 @@ TEST_F(PagedAppsGridViewTest, PageFlipBufferSizedByBackgroundCard) {
   GetAppListTestHelper()->AddAppItems(30);
   EXPECT_EQ(2, pagination_model->total_pages());
   GetPagedAppsGridView()->GetWidget()->LayoutRootViewIfNecessary();
+
   auto page_flip_waiter = std::make_unique<PageFlipWaiter>(pagination_model);
 
   // Drag down to the next page.
   StartDragOnItemViewAtVisualIndex(0, 0);
-  GetEventGenerator()->MoveMouseBy(10, 10);
 
-  // Test that dragging an item to just past the bottom of the background card
-  // causes a page flip.
-  gfx::Point bottom_of_card = GetPagedAppsGridView()
-                                  ->GetBackgroundCardBoundsForTesting(0)
-                                  .bottom_left();
-  bottom_of_card.Offset(0, 1);
-  views::View::ConvertPointToScreen(GetPagedAppsGridView(), &bottom_of_card);
-  GetEventGenerator()->MoveMouseTo(bottom_of_card);
-  page_flip_waiter->Wait();
-  GetEventGenerator()->ReleaseLeftButton();
+  std::list<base::OnceClosure> drag_page_flip_down;
+  // Test that dragging an item to just past the bottom of the background
+  // card causes a page flip.
+  drag_page_flip_down.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+    gfx::Point bottom_of_card = GetPagedAppsGridView()
+                                    ->GetBackgroundCardBoundsForTesting(0)
+                                    .bottom_left();
+    bottom_of_card.Offset(0, 1);
+    views::View::ConvertPointToScreen(GetPagedAppsGridView(), &bottom_of_card);
+    GetEventGenerator()->MoveMouseTo(bottom_of_card);
+  }));
+  drag_page_flip_down.push_back(base::BindLambdaForTesting([&]() {
+    page_flip_waiter->Wait();
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&drag_page_flip_down,
+                                        /*is_touch=*/false);
 
   EXPECT_EQ(1, pagination_model->selected_page());
 
   // Drag up to the previous page.
   StartDragOnItemViewAtVisualIndex(1, 0);
-  GetEventGenerator()->MoveMouseBy(10, 10);
 
-  // Test that dragging an item to just past the top of the background card
-  // causes a page flip.
-  gfx::Point top_of_card =
-      GetPagedAppsGridView()->GetBackgroundCardBoundsForTesting(1).origin();
-  top_of_card.Offset(0, -1);
-  views::View::ConvertPointToScreen(GetPagedAppsGridView(), &top_of_card);
-  GetEventGenerator()->MoveMouseTo(top_of_card);
-  page_flip_waiter->Wait();
-  GetEventGenerator()->ReleaseLeftButton();
+  std::list<base::OnceClosure> drag_page_flip_top;
+  // Test that dragging an item to just past the top of the background
+  // card causes a page flip.
+  drag_page_flip_top.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+    gfx::Point top_of_card =
+        GetPagedAppsGridView()->GetBackgroundCardBoundsForTesting(1).origin();
+    top_of_card.Offset(0, -1);
+    views::View::ConvertPointToScreen(GetPagedAppsGridView(), &top_of_card);
+    GetEventGenerator()->MoveMouseTo(top_of_card);
+  }));
+  drag_page_flip_top.push_back(base::BindLambdaForTesting([&]() {
+    page_flip_waiter->Wait();
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&drag_page_flip_top,
+                                        /*is_touch=*/false);
 
   EXPECT_EQ(0, pagination_model->selected_page());
 }
@@ -383,18 +391,27 @@ TEST_F(PagedAppsGridViewTest, NoPageFlipUpOnFirstPage) {
   EXPECT_EQ(2, pagination_model->total_pages());
   GetPagedAppsGridView()->GetWidget()->LayoutRootViewIfNecessary();
 
+  // Drag down to the next page.
   StartDragOnItemViewAtVisualIndex(0, 0);
-  GetEventGenerator()->MoveMouseBy(10, 10);
 
+  std::list<base::OnceClosure> tasks;
   // Drag an item to just past the top of the first page background card.
-  gfx::Point top_of_first_card =
-      GetPagedAppsGridView()->GetBackgroundCardBoundsForTesting(0).origin();
-  top_of_first_card.Offset(0, -1);
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+    gfx::Point top_of_first_card =
+        GetPagedAppsGridView()->GetBackgroundCardBoundsForTesting(0).origin();
+    top_of_first_card.Offset(0, -1);
 
-  views::View::ConvertPointToScreen(GetPagedAppsGridView(), &top_of_first_card);
-  GetEventGenerator()->MoveMouseTo(top_of_first_card);
-  task_environment()->FastForwardBy(base::Seconds(2));
-  GetEventGenerator()->ReleaseLeftButton();
+    views::View::ConvertPointToScreen(GetPagedAppsGridView(),
+                                      &top_of_first_card);
+    GetEventGenerator()->MoveMouseTo(top_of_first_card);
+  }));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    task_environment()->FastForwardBy(base::Seconds(2));
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 
   // Selected page should still be at the first page.
   EXPECT_EQ(0, pagination_model->selected_page());
@@ -415,19 +432,29 @@ TEST_F(PagedAppsGridViewTest, NoPageFlipDownOnLastPage) {
   pagination_model->SelectPage(pagination_model->total_pages() - 1, false);
   EXPECT_EQ(1, pagination_model->selected_page());
 
+  // Drag down to the next page.
   StartDragOnItemViewAtVisualIndex(1, 0);
-  GetEventGenerator()->MoveMouseBy(10, 10);
 
+  std::list<base::OnceClosure> tasks;
   // Drag an item to just past the bottom of the last background card.
-  gfx::Point bottom_of_last_card = GetPagedAppsGridView()
-                                       ->GetBackgroundCardBoundsForTesting(1)
-                                       .bottom_left();
-  bottom_of_last_card.Offset(0, 1);
-  views::View::ConvertPointToScreen(GetPagedAppsGridView(),
-                                    &bottom_of_last_card);
-  GetEventGenerator()->MoveMouseTo(bottom_of_last_card);
-  task_environment()->FastForwardBy(base::Seconds(2));
-  GetEventGenerator()->ReleaseLeftButton();
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified  state.
+    GetEventGenerator()->MoveMouseBy(10, 10);
+  }));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    gfx::Point bottom_of_last_card = GetPagedAppsGridView()
+                                         ->GetBackgroundCardBoundsForTesting(1)
+                                         .bottom_left();
+    bottom_of_last_card.Offset(0, 1);
+    views::View::ConvertPointToScreen(GetPagedAppsGridView(),
+                                      &bottom_of_last_card);
+    GetEventGenerator()->MoveMouseTo(bottom_of_last_card);
+  }));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    task_environment()->FastForwardBy(base::Seconds(2));
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 
   // Selected page should not have changed and should still be the last page.
   EXPECT_EQ(1, pagination_model->selected_page());
@@ -509,10 +536,7 @@ TEST_F(PagedAppsGridViewTest, SortAppsMakesA11yAnnouncement) {
   helper->AddAppItems(5);
   helper->GetAppsContainerView()->ResetForShowApps();
 
-  AppsContainerView* container_view = helper->GetAppsContainerView();
-  views::View* announcement_view = container_view->toast_container()
-                                       ->a11y_announcer_for_test()
-                                       ->announcement_view_for_test();
+  views::View* announcement_view = helper->GetAccessibilityAnnounceView();
   ASSERT_TRUE(announcement_view);
 
   // Add a callback to wait for an accessibility event.
@@ -596,7 +620,7 @@ TEST_F(PagedAppsGridViewTest, SortAppsWithItemFocused) {
 
   // Simulate the sort undo by setting the new order to nullopt. The focus
   // should be on the search box after undoing the sort.
-  SortAppList(absl::nullopt, /*wait=*/true);
+  SortAppList(std::nullopt, /*wait=*/true);
   EXPECT_TRUE(helper->GetSearchBoxView()->search_box()->HasFocus());
 }
 
@@ -671,7 +695,8 @@ TEST_F(PagedAppsGridViewTest, CloseReorderToast) {
 
   // Wait for the toast to finish fade out animation.
   EXPECT_EQ(toast_container->toast_view()->layer()->GetTargetOpacity(), 0.0f);
-  LayerAnimationStoppedWaiter().Wait(toast_container->toast_view()->layer());
+  ui::LayerAnimationStoppedWaiter().Wait(
+      toast_container->toast_view()->layer());
 
   const views::ViewModelT<AppListItemView>* view_model =
       GetPagedAppsGridView()->view_model();
@@ -681,7 +706,7 @@ TEST_F(PagedAppsGridViewTest, CloseReorderToast) {
   for (size_t i = 1; i < view_model->view_size(); i++) {
     AppListItemView* item_view = view_model->view_at(i);
     // The items off screen on the second page should not animate.
-    if (i >= grid_test_api_->TilesPerPage(0)) {
+    if (i >= grid_test_api_->TilesPerPageInPagedGrid(0)) {
       EXPECT_FALSE(GetPagedAppsGridView()->IsAnimatingView(item_view));
       continue;
     }
@@ -689,11 +714,11 @@ TEST_F(PagedAppsGridViewTest, CloseReorderToast) {
     // Make sure that no between rows animation is occurring by checking that
     // all items are animating upward vertically and not horizontally.
     EXPECT_TRUE(GetPagedAppsGridView()->IsAnimatingView(item_view));
-    gfx::Rect target_bounds =
-        GetPagedAppsGridView()->bounds_animator_for_testing()->GetTargetBounds(
-            item_view);
-    EXPECT_GT(item_view->bounds().y(), target_bounds.y());
-    EXPECT_EQ(item_view->bounds().x(), target_bounds.x());
+    gfx::RectF bounds(item_view->GetMirroredBounds());
+    bounds = item_view->layer()->transform().MapRect(bounds);
+    gfx::Rect current_bounds_in_animation = gfx::ToRoundedRect(bounds);
+    EXPECT_GT(current_bounds_in_animation.y(), item_view->bounds().y());
+    EXPECT_EQ(current_bounds_in_animation.x(), item_view->bounds().x());
   }
 
   // Verify that another row appears once the toast is closed.
@@ -707,8 +732,9 @@ TEST_F(PagedAppsGridViewTest, CloseReorderToast) {
 TEST_F(PagedAppsGridViewTest, DestroyLayersOnDragLastItemFromFolder) {
   ui::ScopedAnimationDurationScaleMode scope_duration(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-  app_list_test_model_->CreateSingleItemFolder("folder_id", "Item_0");
-  app_list_test_model_->PopulateApps(5);
+  GetAppListTestHelper()->model()->CreateSingleItemFolder("folder_id",
+                                                          "Item_0");
+  GetAppListTestHelper()->model()->PopulateApps(5);
   UpdateLayout();
 
   auto* generator = GetEventGenerator();
@@ -735,24 +761,23 @@ TEST_F(PagedAppsGridViewTest, DestroyLayersOnDragLastItemFromFolder) {
                                    ->items_grid_view()
                                    ->view_model()
                                    ->view_at(0);
-  generator->MoveMouseTo(item_view->GetBoundsInScreen().CenterPoint());
 
-  // Begin drag on the single item within the folder.
-  generator->PressLeftButton();
-  item_view->FireMouseDragTimerForTest();
+  StartDragOnItemView(item_view);
 
+  std::list<base::OnceClosure> tasks;
   // Move the mouse outside of the folder.
-  generator->MoveMouseTo(helper->GetAppsContainerView()
-                             ->app_list_folder_view()
-                             ->GetBoundsInScreen()
-                             .bottom_center() +
-                         gfx::Vector2d(0, item_view->height()));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    generator->MoveMouseTo(helper->GetAppsContainerView()
+                               ->app_list_folder_view()
+                               ->GetBoundsInScreen()
+                               .bottom_center() +
+                           gfx::Vector2d(0, item_view->height()));
+      // Generate OnDragExit() event for the folder apps grid view.
+      generator->MoveMouseBy(10, 10);
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 
-  // End the drag.
-  ASSERT_TRUE(helper->GetFullscreenFolderView()
-                  ->items_grid_view()
-                  ->FireFolderItemReparentTimerForTest());
-  generator->ReleaseLeftButton();
   ASSERT_FALSE(helper->IsInFolderView());
 
   const views::ViewModelT<AppListItemView>* view_model =
@@ -763,20 +788,66 @@ TEST_F(PagedAppsGridViewTest, DestroyLayersOnDragLastItemFromFolder) {
   for (size_t i = 0; i < view_model->view_size(); i++)
     EXPECT_TRUE(view_model->view_at(i)->layer());
 
-  // Wait for each item's layer animation to complete.
-  LayerAnimationStoppedWaiter animation_waiter;
-  for (size_t i = 0; i < view_model->view_size(); i++) {
-    if (view_model->view_at(i)->layer())
-      animation_waiter.Wait(view_model->view_at(i)->layer());
-  }
+  WaitForItemLayerAnimations();
 
   // When each item's layer animation is complete, their layers should have been
   // removed.
   for (size_t i = 0; i < view_model->view_size(); i++)
     EXPECT_FALSE(view_model->view_at(i)->layer());
 
-  EXPECT_FALSE(GetPagedAppsGridView()
-                   ->GetBoundsAnimationForCardifiedStateInProgressForTest());
+  EXPECT_FALSE(GetPagedAppsGridView()->IsItemAnimationRunning());
+}
+
+// Test that when quickly dragging an item into a second page, and then into the
+// search box while the reorder animation is running, does not results in a
+// crash.
+TEST_F(PagedAppsGridViewTest, EnterSearchBoxDuringDragNoCrash) {
+  const size_t kTotalApps = grid_test_api_->TilesPerPageInPagedGrid(0) + 1;
+  GetAppListTestHelper()->model()->PopulateApps(kTotalApps);
+  UpdateLayout();
+
+  PaginationModel* pagination_model =
+      GetAppListTestHelper()->GetRootPagedAppsGridView()->pagination_model();
+  EXPECT_EQ(0, pagination_model->selected_page());
+  EXPECT_EQ(2, pagination_model->total_pages());
+
+  auto* generator = GetEventGenerator();
+
+  AppListItemView* item_view = GetPagedAppsGridView()->GetItemViewAt(0);
+
+  StartDragOnItemView(item_view);
+
+  std::list<base::OnceClosure> tasks;
+
+  // Move to the second page.
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    generator->MoveMouseTo(
+        GetPagedAppsGridView()->GetBoundsInScreen().bottom_left() +
+        gfx::Vector2d(0, -1));
+    EXPECT_TRUE(GetPagedAppsGridView()->cardified_state_for_testing());
+    auto page_flip_waiter = std::make_unique<PageFlipWaiter>(pagination_model);
+    page_flip_waiter->Wait();
+    // Second page should be selected.
+    EXPECT_EQ(1, pagination_model->selected_page());
+  }));
+  // Trigger animation for reordering, and move to the search box while it is
+  // still animating.
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    ui::ScopedAnimationDurationScaleMode scope_duration(
+        ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+    generator->MoveMouseTo(
+        GetPagedAppsGridView()->GetBoundsInScreen().CenterPoint());
+    ASSERT_TRUE(GetPagedAppsGridView()->reorder_timer_for_test()->IsRunning());
+    GetPagedAppsGridView()->reorder_timer_for_test()->FireNow();
+    generator->MoveMouseTo(GetAppListTestHelper()
+                               ->GetSearchBoxView()
+                               ->GetBoundsInScreen()
+                               .CenterPoint());
+  }));
+  // Release drag, required by the drag and drop controller
+  tasks.push_back(base::BindLambdaForTesting(
+      [&]() { GetEventGenerator()->ReleaseLeftButton(); }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 }
 
 // Test the case of beginning an item drag and then immediately ending the drag.
@@ -787,7 +858,7 @@ TEST_F(PagedAppsGridViewTest, DestroyLayersOnDragLastItemFromFolder) {
 TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItem) {
   ui::ScopedAnimationDurationScaleMode scope_duration(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-  app_list_test_model_->PopulateApps(5);
+  GetAppListTestHelper()->model()->PopulateApps(5);
   UpdateLayout();
 
   auto* generator = GetEventGenerator();
@@ -800,32 +871,27 @@ TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItem) {
 
   const views::ViewModelT<AppListItemView>* view_model =
       GetPagedAppsGridView()->view_model();
-  AppListItemView* item_view = view_model->view_at(1);
-  generator->MoveMouseTo(item_view->GetBoundsInScreen().CenterPoint());
 
-  // Begin drag.
-  generator->PressLeftButton();
-  item_view->FireMouseDragTimerForTest();
+  // Drag down to the next page.
+  StartDragOnItemView(view_model->view_at(1));
 
+  std::list<base::OnceClosure> tasks;
   // Drag the item a short distance and immediately release drag.
-  generator->MoveMouseBy(100, 100);
-  generator->ReleaseLeftButton();
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    generator->MoveMouseBy(100, 100);
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 
   EXPECT_FALSE(IsRowChangeAnimatorAnimating());
 
-  // Wait for each item's layer animation to complete.
-  LayerAnimationStoppedWaiter animation_waiter;
-  for (size_t i = 0; i < view_model->view_size(); i++) {
-    if (view_model->view_at(i)->layer())
-      animation_waiter.Wait(view_model->view_at(i)->layer());
-  }
+  WaitForItemLayerAnimations();
 
   // When each item's layer animation is complete, their layers should have been
   // removed.
   for (size_t i = 0; i < view_model->view_size(); i++)
     EXPECT_FALSE(view_model->view_at(i)->layer());
-  EXPECT_FALSE(GetPagedAppsGridView()
-                   ->GetBoundsAnimationForCardifiedStateInProgressForTest());
+  EXPECT_FALSE(GetPagedAppsGridView()->IsItemAnimationRunning());
 
   // Now that cardified item animations are complete, make sure that
   // `OnCardifiedStateEnded()` is only called once.
@@ -837,7 +903,7 @@ TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItem) {
 TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItemToNewRow) {
   ui::ScopedAnimationDurationScaleMode scope_duration(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-  app_list_test_model_->PopulateApps(10);
+  GetAppListTestHelper()->model()->PopulateApps(10);
   UpdateLayout();
 
   auto* generator = GetEventGenerator();
@@ -850,20 +916,21 @@ TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItemToNewRow) {
 
   const views::ViewModelT<AppListItemView>* view_model =
       GetPagedAppsGridView()->view_model();
-  AppListItemView* item_view = view_model->view_at(1);
-  generator->MoveMouseTo(item_view->GetBoundsInScreen().CenterPoint());
 
-  // Begin drag.
-  generator->PressLeftButton();
-  item_view->FireMouseDragTimerForTest();
+  // Drag down to the next page.
+  StartDragOnItemView(view_model->view_at(1));
 
+  std::list<base::OnceClosure> tasks;
   // Quickly drag the item from the first row to the second row, which should
   // cause a row change animation when the drag is released.
-  gfx::Point second_row_drag_point =
-      view_model->view_at(5)->GetBoundsInScreen().right_center();
-  second_row_drag_point.Offset(50, 0);
-  generator->MoveMouseTo(second_row_drag_point);
-  generator->ReleaseLeftButton();
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    gfx::Point second_row_drag_point =
+        view_model->view_at(5)->GetBoundsInScreen().right_center();
+    second_row_drag_point.Offset(50, 0);
+    generator->MoveMouseTo(second_row_drag_point);
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
 
   // There should be a row change animation happening.
   EXPECT_TRUE(IsRowChangeAnimatorAnimating());
@@ -875,25 +942,152 @@ TEST_F(PagedAppsGridViewTest, QuicklyDragAndDropItemToNewRow) {
   EXPECT_TRUE(IsRowChangeAnimatorAnimating());
   EXPECT_EQ(1, GetNumberOfRowChangeLayersForTest());
 
-  // Wait for each item's layer animation to complete.
-  LayerAnimationStoppedWaiter animation_waiter;
-  for (size_t i = 0; i < view_model->view_size(); i++) {
-    if (view_model->view_at(i)->layer())
-      animation_waiter.Wait(view_model->view_at(i)->layer());
-  }
+  WaitForItemLayerAnimations();
 
   // When each item's layer animation is complete, their layers should have been
   // removed.
   for (size_t i = 0; i < view_model->view_size(); i++)
     EXPECT_FALSE(view_model->view_at(i)->layer());
-  EXPECT_FALSE(GetPagedAppsGridView()
-                   ->GetBoundsAnimationForCardifiedStateInProgressForTest());
+  EXPECT_FALSE(GetPagedAppsGridView()->IsItemAnimationRunning());
   EXPECT_FALSE(IsRowChangeAnimatorAnimating());
   EXPECT_EQ(0, GetNumberOfRowChangeLayersForTest());
 
   // Now that cardified item animations are complete, make sure that
   // `OnCardifiedStateEnded()` is only called once.
   EXPECT_EQ(1, number_of_times_cardified_state_ended);
+}
+
+TEST_F(PagedAppsGridViewTest, CardifiedEnterAnimationInterruptedByExit) {
+  ui::ScopedAnimationDurationScaleMode scope_duration(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+  GetAppListTestHelper()->model()->PopulateApps(5);
+  UpdateLayout();
+
+  AppListItemView* item_view = GetPagedAppsGridView()->view_model()->view_at(0);
+  EXPECT_GE(GetPagedAppsGridView()->view_model()->view_size(), 2u);
+  auto* generator = GetEventGenerator();
+
+  StartDragOnItemView(GetPagedAppsGridView()->view_model()->view_at(1));
+
+  std::list<base::OnceClosure> first_animation_completes;
+  first_animation_completes.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified state.
+    generator->MoveMouseBy(10, 10);
+    EXPECT_TRUE(GetPagedAppsGridView()->cardified_state_for_testing());
+    EXPECT_TRUE(item_view->layer()->GetAnimator()->is_animating());
+  }));
+  // Check that the first item completes the entering cardified state
+  // animation.
+  first_animation_completes.push_back(base::BindLambdaForTesting([&]() {
+    WaitForItemLayerAnimations();
+    EXPECT_FALSE(item_view->layer()->GetAnimator()->is_animating());
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&first_animation_completes,
+                                        /*is_touch=*/false);
+
+  EXPECT_FALSE(GetPagedAppsGridView()->cardified_state_for_testing());
+
+  // With the item view animating from its completed cardified position, to the
+  // non-cardified position, check that the layer transform is not identity.
+  EXPECT_TRUE(item_view->layer()->GetAnimator()->is_animating());
+  EXPECT_FALSE(item_view->layer()->transform().IsIdentity());
+
+  WaitForItemLayerAnimations();
+  EXPECT_FALSE(item_view->layer());
+
+  StartDragOnItemView(GetPagedAppsGridView()->view_model()->view_at(1));
+
+  std::list<base::OnceClosure> animation_not_completes;
+  // Exit cardified state, without waiting for the enter animation to complete.
+  animation_not_completes.push_back(base::BindLambdaForTesting([&]() {
+    // Start cardified state.
+    generator->MoveMouseBy(10, 10);
+    EXPECT_TRUE(GetPagedAppsGridView()->cardified_state_for_testing());
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&animation_not_completes,
+                                        /*is_touch=*/false);
+
+  // With the item view animating from its current position at the start of the
+  // begin cardified state, to its non-cardified position, the layer transform
+  // should be the identity transform, indicating a smoothly interrupted
+  // animation.
+  EXPECT_TRUE(item_view->layer()->GetAnimator()->is_animating());
+  EXPECT_TRUE(item_view->layer()->transform().IsIdentity());
+
+  WaitForItemLayerAnimations();
+  EXPECT_FALSE(item_view->layer());
+}
+
+// Test that a first page item released outside of the grid with second page
+// shown will visually change back to the first page.
+TEST_F(PagedAppsGridViewTest, DragOutsideOfNextPageSelectsOriginalPage) {
+  const size_t kTotalApps = grid_test_api_->TilesPerPageInPagedGrid(0) + 1;
+  GetAppListTestHelper()->model()->PopulateApps(kTotalApps);
+  UpdateLayout();
+
+  PaginationModel* pagination_model =
+      GetAppListTestHelper()->GetRootPagedAppsGridView()->pagination_model();
+  EXPECT_EQ(0, pagination_model->selected_page());
+  EXPECT_EQ(2, pagination_model->total_pages());
+
+  auto* item_view = GetPagedAppsGridView()->view_model()->view_at(0);
+  auto* generator = GetEventGenerator();
+  std::list<base::OnceClosure> tasks;
+
+  // Start dragging an item on the first page.
+  StartDragOnItemView(item_view);
+
+  // Exit cardified state, without waiting for the enter animation to complete.
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    generator->MoveMouseTo(
+        GetPagedAppsGridView()->GetBoundsInScreen().bottom_left() +
+        gfx::Vector2d(0, -1));
+    EXPECT_TRUE(GetPagedAppsGridView()->cardified_state_for_testing());
+  }));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    auto page_flip_waiter = std::make_unique<PageFlipWaiter>(pagination_model);
+    page_flip_waiter->Wait();
+    ui::ScopedAnimationDurationScaleMode non_zero_duration_mode(
+        ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+    // Second page should be selected.
+    EXPECT_EQ(1, pagination_model->selected_page());
+  }));
+  // Move the mouse down to be completely below the grid view. Releasing
+  // a drag here will move the item back to its starting position.
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    generator->MoveMouseBy(0, 50);
+    EXPECT_EQ(1, pagination_model->selected_page());
+  }));
+  tasks.push_back(base::BindLambdaForTesting([&]() {
+    // End Drag
+    GetEventGenerator()->ReleaseLeftButton();
+  }));
+  MaybeRunDragAndDropSequenceForAppList(&tasks, /*is_touch=*/false);
+
+  WaitForItemLayerAnimations();
+  UpdateLayout();
+
+  // First page should be selected.
+  EXPECT_EQ(0, pagination_model->selected_page());
+
+  // Dragged item should be in starting position.
+  EXPECT_EQ(item_view, grid_test_api_->GetViewAtIndex(GridIndex(0, 0)));
+
+  auto app_list_item_view_visible = [this](const views::View* view) -> bool {
+    return GetPagedAppsGridView()
+        ->GetWidget()
+        ->GetWindowBoundsInScreen()
+        .Contains(view->GetBoundsInScreen());
+  };
+
+  // It is possible that the selected page is correct but visually never
+  // changes, so check that the dragged 'item_view' is visible, and the item
+  // on the second page is not visible.
+  EXPECT_TRUE(app_list_item_view_visible(item_view));
+  EXPECT_FALSE(app_list_item_view_visible(
+      grid_test_api_->GetViewAtIndex(GridIndex(1, 0))));
 }
 
 }  // namespace ash

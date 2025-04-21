@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,17 @@
 #include "content/public/browser/restore_type.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
+#include "ui/base/window_open_disposition.h"
 
 // The android implementation does not do anything "foreign session" specific.
-// We use it to restore tabs from "recently closed" too.
+// It is also used to replace the current tab when restoring from "recently
+// closed".
 // static
 content::WebContents* SessionRestore::RestoreForeignSessionTab(
     content::WebContents* web_contents,
     const sessions::SessionTab& session_tab,
-    WindowOpenDisposition disposition) {
+    WindowOpenDisposition disposition,
+    bool skip_renderer_creation) {
   DCHECK(session_tab.navigations.size() > 0);
   content::BrowserContext* context = web_contents->GetBrowserContext();
   Profile* profile = Profile::FromBrowserContext(context);
@@ -32,8 +35,20 @@ content::WebContents* SessionRestore::RestoreForeignSessionTab(
   std::vector<std::unique_ptr<content::NavigationEntry>> entries =
       sessions::ContentSerializedNavigationBuilder::ToNavigationEntries(
           session_tab.navigations, profile);
+
+  bool is_background_tab =
+      disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB;
+  content::WebContents::CreateParams create_params(context);
+  if (is_background_tab && skip_renderer_creation) {
+    create_params.initially_hidden = true;
+    create_params.desired_renderer_state =
+        content::WebContents::CreateParams::kNoRendererProcess;
+  }
+  // Ensure that skipping renderer creation is only enabled for background tabs.
+  DCHECK(skip_renderer_creation ? is_background_tab : true);
   std::unique_ptr<content::WebContents> new_web_contents =
-      content::WebContents::Create(content::WebContents::CreateParams(context));
+      content::WebContents::Create(create_params);
+
   content::WebContents* raw_new_web_contents = new_web_contents.get();
   int selected_index = session_tab.normalized_navigation_index();
   new_web_contents->GetController().Restore(
@@ -41,13 +56,16 @@ content::WebContents* SessionRestore::RestoreForeignSessionTab(
 
   TabAndroid* current_tab = TabAndroid::FromWebContents(web_contents);
   DCHECK(current_tab);
+  // If swapped, return the current tab's most up-to-date web contents.
   if (disposition == WindowOpenDisposition::CURRENT_TAB) {
     current_tab->SwapWebContents(std::move(new_web_contents), false, false);
-  } else {
-    DCHECK(disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
-           disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB);
-    tab_model->CreateTab(current_tab, new_web_contents.release());
+    return current_tab->web_contents();
   }
+  DCHECK(disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
+         disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB);
+  // Do not select a tab here it will interrupt bulk session restores.
+  tab_model->CreateTab(current_tab, new_web_contents.release(),
+                       /*select=*/false);
   return raw_new_web_contents;
 }
 
@@ -57,5 +75,4 @@ std::vector<Browser*> SessionRestore::RestoreForeignSessionWindows(
     std::vector<const sessions::SessionWindow*>::const_iterator begin,
     std::vector<const sessions::SessionWindow*>::const_iterator end) {
   NOTREACHED();
-  return std::vector<Browser*>();
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,41 +19,31 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.base.GoogleServiceAuthError;
 import org.chromium.components.signin.base.GoogleServiceAuthError.State;
 
-/**
- * Unit tests for {@link WebSigninBridge}.
- */
+/** Unit tests for {@link WebSigninBridge}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class WebSigninBridgeTest {
     private static final CoreAccountInfo CORE_ACCOUNT_INFO =
             CoreAccountInfo.createFromEmailAndGaiaId("user@domain.com", "gaia-id-user");
     private static final long NATIVE_WEB_SIGNIN_BRIDGE = 1000L;
 
-    @Rule
-    public final JniMocker mocker = new JniMocker();
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Rule
-    public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Mock private WebSigninBridge.Natives mNativeMock;
 
-    @Mock
-    private WebSigninBridge.Natives mNativeMock;
+    @Mock private Profile mProfileMock;
 
-    @Mock
-    private Profile mProfileMock;
-
-    @Mock
-    private WebSigninBridge.Listener mListenerMock;
+    @Mock private WebSigninBridge.Listener mListenerMock;
 
     private final WebSigninBridge.Factory mFactory = new WebSigninBridge.Factory();
 
     @Before
     public void setUp() {
-        mocker.mock(WebSigninBridgeJni.TEST_HOOKS, mNativeMock);
+        WebSigninBridgeJni.setInstanceForTesting(mNativeMock);
         when(mNativeMock.create(mProfileMock, CORE_ACCOUNT_INFO, mListenerMock))
                 .thenReturn(NATIVE_WEB_SIGNIN_BRIDGE);
     }

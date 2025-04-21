@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class DesktopMediaPickerFactory;
 // user to select a desktop or an application window whose content will be made
 // available as a video stream.
 //
-// TODO(crbug.com/987001): Rename this class.  Consider merging with
+// TODO(crbug.com/40637301): Rename this class.  Consider merging with
 // DesktopMediaPickerViews and naming the merged class just DesktopMediaPicker.
 class DesktopMediaPickerController : private content::WebContentsObserver {
  public:
@@ -47,6 +47,10 @@ class DesktopMediaPickerController : private content::WebContentsObserver {
   DesktopMediaPickerController& operator=(const DesktopMediaPickerController&) =
       delete;
   ~DesktopMediaPickerController() override;
+
+  // Checks if system audio capture is supported on the current platform.
+  static bool IsSystemAudioCaptureSupported(
+      Params::RequestSource request_source);
 
   // Show the desktop picker dialog using the parameters specified by |params|,
   // with the possible selections restricted to those included in |sources|.  If

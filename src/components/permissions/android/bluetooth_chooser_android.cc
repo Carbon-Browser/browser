@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,19 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/permissions/android/bluetooth_chooser_android_delegate.h"
-#include "components/permissions/android/jni_headers/BluetoothChooserDialog_jni.h"
 #include "components/permissions/constants.h"
+#include "components/permissions/permission_util.h"
 #include "components/url_formatter/elide_url.h"
 #include "content/public/browser/render_frame_host.h"
 #include "ui/android/window_android.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/permissions/android/jni_headers/BluetoothChooserDialog_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaParamRef;
@@ -22,14 +26,28 @@ using base::android::ScopedJavaLocalRef;
 
 namespace permissions {
 
+namespace {
+
+BluetoothChooserAndroid::CreateJavaDialogCallback
+GetCreateJavaBluetoothChooserDialogCallback() {
+  return base::BindOnce(&Java_BluetoothChooserDialog_create);
+}
+
+}  // namespace
+
 BluetoothChooserAndroid::BluetoothChooserAndroid(
     content::RenderFrameHost* frame,
     const EventHandler& event_handler,
-    std::unique_ptr<BluetoothChooserAndroidDelegate> delegate)
+    std::unique_ptr<BluetoothChooserAndroidDelegate> delegate,
+    CreateJavaDialogCallback create_java_dialog_callback)
     : web_contents_(content::WebContents::FromRenderFrameHost(frame)),
       event_handler_(event_handler),
       delegate_(std::move(delegate)) {
-  const url::Origin origin = frame->GetLastCommittedOrigin();
+  // Permission delegation means the permission request should be attributed to
+  // the main frame.
+  const url::Origin origin = url::Origin::Create(
+      permissions::PermissionUtil::GetLastCommittedOriginAsURL(
+          frame->GetMainFrame()));
   DCHECK(!origin.opaque());
 
   ScopedJavaLocalRef<jobject> window_android =
@@ -40,11 +58,21 @@ BluetoothChooserAndroid::BluetoothChooserAndroid(
   ScopedJavaLocalRef<jstring> origin_string =
       base::android::ConvertUTF16ToJavaString(
           env, url_formatter::FormatOriginForSecurityDisplay(origin));
-  java_dialog_.Reset(Java_BluetoothChooserDialog_create(
-      env, window_android, origin_string,
-      delegate_->GetSecurityLevel(web_contents_), delegate_->GetJavaObject(),
-      reinterpret_cast<intptr_t>(this)));
+  java_dialog_.Reset(std::move(create_java_dialog_callback)
+                         .Run(env, window_android, origin_string,
+                              delegate_->GetSecurityLevel(web_contents_),
+                              delegate_->GetJavaObject(),
+                              reinterpret_cast<intptr_t>(this)));
 }
+
+BluetoothChooserAndroid::BluetoothChooserAndroid(
+    content::RenderFrameHost* frame,
+    const EventHandler& event_handler,
+    std::unique_ptr<BluetoothChooserAndroidDelegate> delegate)
+    : BluetoothChooserAndroid(frame,
+                              event_handler,
+                              std::move(delegate),
+                              GetCreateJavaBluetoothChooserDialogCallback()) {}
 
 BluetoothChooserAndroid::~BluetoothChooserAndroid() {
   if (!java_dialog_.is_null()) {
@@ -149,9 +177,12 @@ void BluetoothChooserAndroid::ShowNeedLocationPermissionLink(JNIEnv* env) {
 }
 
 void BluetoothChooserAndroid::OpenURL(const char* url) {
-  web_contents_->OpenURL(content::OpenURLParams(
-      GURL(url), content::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
-      ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false /* is_renderer_initiated */));
+  web_contents_->OpenURL(
+      content::OpenURLParams(GURL(url), content::Referrer(),
+                             WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                             ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
+                             false /* is_renderer_initiated */),
+      /*navigation_handle_callback=*/{});
 }
 
 }  // namespace permissions

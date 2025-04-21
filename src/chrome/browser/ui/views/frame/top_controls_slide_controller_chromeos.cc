@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,19 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
 #include "cc/input/browser_controls_state.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/search.h"
-#include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/top_container_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/common/url_constants.h"
-#include "chromeos/ui/base/tablet_state.h"
 #include "components/permissions/permission_request_manager.h"
+#include "components/security_state/content/security_state_tab_helper.h"
 #include "content/public/browser/focused_node_details.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
@@ -33,26 +34,16 @@
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/display.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/views/controls/native/native_view_host.h"
 
 namespace {
 
-bool IsTabletModeEnabled() {
-  return chromeos::TabletState::Get() &&
-         chromeos::TabletState::Get()->InTabletMode();
-}
-
 bool IsSpokenFeedbackEnabled() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   auto* accessibility_manager = ash::AccessibilityManager::Get();
   return accessibility_manager &&
          accessibility_manager->IsSpokenFeedbackEnabled();
-#else
-  // TODO(https://crbug.com/1165746): Enable accessibility (a11y) support for
-  // Lacros.
-  NOTIMPLEMENTED() << "Enable accessibility support for Lacros.";
-  return false;
-#endif
 }
 
 // Based on the current status of |contents|, returns the browser top controls
@@ -65,15 +56,17 @@ cc::BrowserControlsState GetBrowserControlsStateConstraints(
     content::WebContents* contents) {
   DCHECK(contents);
 
-  if (!IsTabletModeEnabled() || contents->IsFullscreen() ||
-      contents->IsFocusedElementEditable() || contents->IsBeingDestroyed() ||
-      contents->IsCrashed() || IsSpokenFeedbackEnabled()) {
+  if (!display::Screen::GetScreen()->InTabletMode() ||
+      contents->IsFullscreen() || contents->IsFocusedElementEditable() ||
+      contents->IsBeingDestroyed() || contents->IsCrashed() ||
+      IsSpokenFeedbackEnabled()) {
     return cc::BrowserControlsState::kShown;
   }
 
   content::NavigationEntry* entry = contents->GetController().GetVisibleEntry();
-  if (!entry || entry->GetPageType() != content::PAGE_TYPE_NORMAL)
+  if (!entry || entry->GetPageType() != content::PAGE_TYPE_NORMAL) {
     return cc::BrowserControlsState::kShown;
+  }
 
   const GURL& url = entry->GetURL();
   if (url.SchemeIs(content::kChromeUIScheme) ||
@@ -83,8 +76,9 @@ cc::BrowserControlsState GetBrowserControlsStateConstraints(
   }
 
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
-  if (profile && search::IsNTPOrRelatedURL(url, profile))
+  if (profile && search::IsNTPOrRelatedURL(url, profile)) {
     return cc::BrowserControlsState::kShown;
+  }
 
   auto* helper = SecurityStateTabHelper::FromWebContents(contents);
   switch (helper->GetSecurityLevel()) {
@@ -104,8 +98,9 @@ cc::BrowserControlsState GetBrowserControlsStateConstraints(
   // Keep top-chrome visible while a permission bubble is visible.
   auto* permission_manager =
       permissions::PermissionRequestManager::FromWebContents(contents);
-  if (permission_manager && permission_manager->IsRequestInProgress())
+  if (permission_manager && permission_manager->IsRequestInProgress()) {
     return cc::BrowserControlsState::kShown;
+  }
 
   return cc::BrowserControlsState::kBoth;
 }
@@ -116,16 +111,19 @@ void SynchronizeVisualProperties(content::WebContents* contents) {
   DCHECK(contents);
 
   content::RenderFrameHost* main_frame = contents->GetPrimaryMainFrame();
-  if (!main_frame)
+  if (!main_frame) {
     return;
+  }
 
   auto* rvh = main_frame->GetRenderViewHost();
-  if (!rvh)
+  if (!rvh) {
     return;
+  }
 
   auto* widget = rvh->GetWidget();
-  if (!widget)
+  if (!widget) {
     return;
+  }
 
   widget->SynchronizeVisualProperties();
 }
@@ -153,8 +151,9 @@ class TopControlsSlideTabObserver
     SynchronizeVisualProperties(web_contents);
     auto* permission_manager =
         permissions::PermissionRequestManager::FromWebContents(web_contents);
-    if (permission_manager)
+    if (permission_manager) {
       permission_manager->AddObserver(this);
+    }
   }
 
   TopControlsSlideTabObserver(const TopControlsSlideTabObserver&) = delete;
@@ -164,8 +163,9 @@ class TopControlsSlideTabObserver
   ~TopControlsSlideTabObserver() override {
     auto* permission_manager =
         permissions::PermissionRequestManager::FromWebContents(web_contents());
-    if (permission_manager)
+    if (permission_manager) {
       permission_manager->RemoveObserver(this);
+    }
   }
 
   float shown_ratio() const { return shown_ratio_; }
@@ -173,8 +173,9 @@ class TopControlsSlideTabObserver
 
   void SetShownRatio(float ratio, bool sliding_or_scrolling_in_progress) {
     shown_ratio_ = ratio;
-    if (!sliding_or_scrolling_in_progress)
+    if (!sliding_or_scrolling_in_progress) {
       UpdateDoBrowserControlsShrinkRendererSize();
+    }
   }
 
   void UpdateDoBrowserControlsShrinkRendererSize() {
@@ -211,7 +212,7 @@ class TopControlsSlideTabObserver
                    const GURL& validated_url,
                    int error_code) override {
     if (render_frame_host->IsActive() &&
-        (render_frame_host == web_contents()->GetPrimaryMainFrame())) {
+        render_frame_host->IsInPrimaryMainFrame()) {
       UpdateBrowserControlsStateShown(/*animate=*/true);
     }
   }
@@ -224,12 +225,13 @@ class TopControlsSlideTabObserver
     // Even if a non-editable node gets focused, if top-chrome is fully shown,
     // we should also update the browser controls state constraints so that
     // top-chrome is able to be hidden again.
-    if (details->is_editable_node || shown_ratio_ == 1.f)
+    if (details->is_editable_node || shown_ratio_ == 1.f) {
       UpdateBrowserControlsStateShown(/*animate=*/true);
+    }
   }
 
   // PermissionRequestManager::Observer:
-  void OnBubbleAdded() override {
+  void OnPromptAdded() override {
     UpdateBrowserControlsStateShown(/*animate=*/true);
   }
 
@@ -294,7 +296,6 @@ TopControlsSlideControllerChromeOS::TopControlsSlideControllerChromeOS(
 
   browser_view_->browser()->tab_strip_model()->AddObserver(this);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   auto* accessibility_manager = ash::AccessibilityManager::Get();
   if (accessibility_manager) {
     accessibility_status_subscription_ =
@@ -302,9 +303,8 @@ TopControlsSlideControllerChromeOS::TopControlsSlideControllerChromeOS(
             &TopControlsSlideControllerChromeOS::OnAccessibilityStatusChanged,
             base::Unretained(this)));
   }
-#endif
 
-  OnEnabledStateChanged(CanEnable(absl::nullopt));
+  OnEnabledStateChanged(CanEnable(std::nullopt));
 }
 
 TopControlsSlideControllerChromeOS::~TopControlsSlideControllerChromeOS() {
@@ -312,8 +312,9 @@ TopControlsSlideControllerChromeOS::~TopControlsSlideControllerChromeOS() {
 
   browser_view_->browser()->tab_strip_model()->RemoveObserver(this);
 
-  if (observed_omni_box_)
+  if (observed_omni_box_) {
     observed_omni_box_->RemoveObserver(this);
+  }
 }
 
 bool TopControlsSlideControllerChromeOS::IsEnabled() const {
@@ -329,8 +330,9 @@ void TopControlsSlideControllerChromeOS::SetShownRatio(
     float ratio) {
   DCHECK(contents);
 
-  if (pause_updates_)
+  if (pause_updates_) {
     return;
+  }
 
   // Make sure the value tracked per tab is always updated even when sliding is
   // disabled, so that we're always synchronized with the renderer.
@@ -362,11 +364,13 @@ void TopControlsSlideControllerChromeOS::SetShownRatio(
 
   // Skip |shown_ratio_| update if the changes are not from the active
   // WebContents.
-  if (contents != browser_view_->GetActiveWebContents())
+  if (contents != browser_view_->GetActiveWebContents()) {
     return;
+  }
 
-  if (shown_ratio_ == ratio)
+  if (shown_ratio_ == ratio) {
     return;
+  }
 
   shown_ratio_ = ratio;
 
@@ -379,7 +383,7 @@ void TopControlsSlideControllerChromeOS::SetShownRatio(
     defer_disabling_ = false;
 
     // Don't just set |is_enabled_| to false. Make sure it's a correct value.
-    OnEnabledStateChanged(CanEnable(absl::nullopt));
+    OnEnabledStateChanged(CanEnable(std::nullopt));
   }
 }
 
@@ -390,8 +394,9 @@ void TopControlsSlideControllerChromeOS::OnBrowserFullscreenStateWillChange(
 
 bool TopControlsSlideControllerChromeOS::DoBrowserControlsShrinkRendererSize(
     const content::WebContents* contents) const {
-  if (!IsEnabled())
+  if (!IsEnabled()) {
     return false;
+  }
 
   auto* tab_observer = GetTabSlideObserverForWebContents(contents);
   return tab_observer && tab_observer->shrink_renderer_size();
@@ -399,21 +404,23 @@ bool TopControlsSlideControllerChromeOS::DoBrowserControlsShrinkRendererSize(
 
 void TopControlsSlideControllerChromeOS::SetTopControlsGestureScrollInProgress(
     bool in_progress) {
-  if (is_gesture_scrolling_in_progress_ == in_progress)
+  if (is_gesture_scrolling_in_progress_ == in_progress) {
     return;
+  }
 
   is_gesture_scrolling_in_progress_ = in_progress;
 
   if (update_state_after_gesture_scrolling_ends_) {
     DCHECK(!is_gesture_scrolling_in_progress_);
     DCHECK(pause_updates_);
-    OnEnabledStateChanged(CanEnable(absl::nullopt));
+    OnEnabledStateChanged(CanEnable(std::nullopt));
     update_state_after_gesture_scrolling_ends_ = false;
     pause_updates_ = false;
   }
 
-  if (!IsEnabled())
+  if (!IsEnabled()) {
     return;
+  }
 
   if (is_gesture_scrolling_in_progress_) {
     // Once gesture scrolling starts, the renderer is expected to
@@ -460,7 +467,7 @@ void TopControlsSlideControllerChromeOS::OnDisplayTabletStateChanged(
   switch (state) {
     case display::TabletState::kInTabletMode:
     case display::TabletState::kInClamshellMode:
-      OnEnabledStateChanged(CanEnable(absl::nullopt));
+      OnEnabledStateChanged(CanEnable(std::nullopt));
       return;
     case display::TabletState::kEnteringTabletMode:
     case display::TabletState::kExitingTabletMode:
@@ -479,8 +486,9 @@ void TopControlsSlideControllerChromeOS::OnTabStripModelChanged(
                                  contents.contents, this));
     }
   } else if (change.type() == TabStripModelChange::kRemoved) {
-    for (const auto& contents : change.GetRemove()->contents)
+    for (const auto& contents : change.GetRemove()->contents) {
       observed_tabs_.erase(contents.contents);
+    }
   } else if (change.type() == TabStripModelChange::kReplaced) {
     auto* replace = change.GetReplace();
     observed_tabs_.erase(replace->old_contents);
@@ -490,8 +498,9 @@ void TopControlsSlideControllerChromeOS::OnTabStripModelChanged(
                                replace->new_contents, this));
   }
 
-  if (tab_strip_model->empty() || !selection.active_tab_changed())
+  if (tab_strip_model->empty() || !selection.active_tab_changed()) {
     return;
+  }
 
   content::WebContents* new_active_contents = selection.new_contents;
   DCHECK(observed_tabs_.count(new_active_contents));
@@ -512,11 +521,13 @@ void TopControlsSlideControllerChromeOS::SetTabNeedsAttentionAt(
 void TopControlsSlideControllerChromeOS::OnDisplayMetricsChanged(
     const display::Display& display,
     uint32_t changed_metrics) {
-  if (!IsEnabled())
+  if (!IsEnabled()) {
     return;
+  }
 
-  if (!is_sliding_in_progress_ || !is_gesture_scrolling_in_progress_)
+  if (!is_sliding_in_progress_ || !is_gesture_scrolling_in_progress_) {
     return;
+  }
 
   // If any of the below display metrics changes while both sliding and gesture
   // scrolling are in progress, we force-set the top controls to be fully shown,
@@ -534,8 +545,9 @@ void TopControlsSlideControllerChromeOS::OnDisplayMetricsChanged(
       display::DisplayObserver::DISPLAY_METRIC_PRIMARY |
       display::DisplayObserver::DISPLAY_METRIC_MIRROR_STATE;
 
-  if ((changed_metrics & kCheckedMetrics) == 0)
+  if ((changed_metrics & kCheckedMetrics) == 0) {
     return;
+  }
 
   if (browser_view_->GetNativeWindow()->GetHost()->GetDisplayId() !=
       display.id()) {
@@ -543,8 +555,9 @@ void TopControlsSlideControllerChromeOS::OnDisplayMetricsChanged(
   }
 
   content::WebContents* active_contents = browser_view_->GetActiveWebContents();
-  if (!active_contents)
+  if (!active_contents) {
     return;
+  }
 
   update_state_after_gesture_scrolling_ends_ = true;
   {
@@ -581,8 +594,9 @@ void TopControlsSlideControllerChromeOS::UpdateBrowserControlsStateShown(
     bool animate) {
   web_contents =
       web_contents ? web_contents : browser_view_->GetActiveWebContents();
-  if (!web_contents)
+  if (!web_contents) {
     return;
+  }
 
   // If the omnibox is focused, then the top controls should be constrained to
   // remain fully shown until the omnibox is blurred.
@@ -594,16 +608,15 @@ void TopControlsSlideControllerChromeOS::UpdateBrowserControlsStateShown(
   const cc::BrowserControlsState current_state =
       cc::BrowserControlsState::kShown;
   web_contents->UpdateBrowserControlsState(constraints_state, current_state,
-                                           animate);
+                                           animate, std::nullopt);
 }
 
 bool TopControlsSlideControllerChromeOS::CanEnable(
-    absl::optional<bool> fullscreen_state) const {
-  return IsTabletModeEnabled() &&
+    std::optional<bool> fullscreen_state) const {
+  return display::Screen::GetScreen()->InTabletMode() &&
          !(fullscreen_state.value_or(browser_view_->IsFullscreen()));
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 void TopControlsSlideControllerChromeOS::OnAccessibilityStatusChanged(
     const ash::AccessibilityStatusEventDetails& event_details) {
   if (event_details.notification_type !=
@@ -613,17 +626,18 @@ void TopControlsSlideControllerChromeOS::OnAccessibilityStatusChanged(
 
   UpdateBrowserControlsStateShown(/*web_contents=*/nullptr, /*animate=*/true);
 }
-#endif
 
 void TopControlsSlideControllerChromeOS::OnEnabledStateChanged(bool new_state) {
-  if (new_state == is_enabled_)
+  if (new_state == is_enabled_) {
     return;
+  }
 
   is_enabled_ = new_state;
 
   content::WebContents* active_contents = browser_view_->GetActiveWebContents();
-  if (!active_contents)
+  if (!active_contents) {
     return;
+  }
 
   if (!new_state && shown_ratio_ < 1.f) {
     // We should never set the shown ratio immediately here, rather ask the
@@ -755,14 +769,14 @@ void TopControlsSlideControllerChromeOS::OnBeginSliding() {
   root_bounds.set_height(new_height);
   root_view->SetBoundsRect(root_bounds);
   // Changing the bounds will have triggered an InvalidateLayout() on
-  // NativeViewHost. InvalidateLayout() results in Layout() being called later,
+  // NativeViewHost. InvalidateLayout() results in layout being performed later,
   // after transforms are set. NativeViewHostAura calculates the bounds of the
   // window using transforms. By calling LayoutRootViewIfNecessary() we force
   // the layout now, before any transforms are installed. To do otherwise
   // results in NativeViewHost positioning the WebContents at the wrong
   // location.
-  // TODO(https://crbug.com/950981): this is rather fragile, and the code should
-  // deal with Layout() being called during the slide.
+  // TODO(crbug.com/40622302): this is rather fragile, and the code should
+  // deal with layout being performed during the slide.
   root_view->GetWidget()->LayoutRootViewIfNecessary();
 
   // We don't want anything to show outside the browser window's bounds.
@@ -829,7 +843,7 @@ void TopControlsSlideControllerChromeOS::OnEndSliding() {
     // This can happen when setting the shown ratio directly from one terminal
     // value to the opposite. The height of the root view doesn't change, but
     // the browser view must be re-laid out.
-    browser_view_->Layout();
+    browser_view_->DeprecatedLayoutImmediately();
   }
 
   // If the top controls are fully hidden, then the top container is laid out
@@ -844,12 +858,14 @@ void TopControlsSlideControllerChromeOS::
   DCHECK(!is_sliding_in_progress_);
 
   content::WebContents* active_contents = browser_view_->GetActiveWebContents();
-  if (!active_contents)
+  if (!active_contents) {
     return;
+  }
 
   auto* tab_observer = GetTabSlideObserverForWebContents(active_contents);
-  if (tab_observer)
+  if (tab_observer) {
     tab_observer->UpdateDoBrowserControlsShrinkRendererSize();
+  }
 }
 
 TopControlsSlideTabObserver*

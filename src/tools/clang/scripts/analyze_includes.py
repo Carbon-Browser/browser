@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This script is used to analyze #include graphs.
@@ -13,8 +13,8 @@ $ autoninja -C out/Debug -v chrome | tee /tmp/build_log
 $ analyze_includes.py --target=chrome --revision=$(git rev-parse --short HEAD) \
     --json-out=/tmp/include-analysis.js /tmp/build_log
 
-(If you have goma access, add use_goma=true to the gn args, but not on Windows
-due to crbug.com/1223741#c9)
+(If you have reclient access, add use_reclient=true to the gn args, but not on
+Windows due to crbug.com/1223741#c9)
 
 The script takes roughly half an hour on a fast machine for the chrome build
 target, which is considered fast enough for batch job purposes for now.
@@ -92,7 +92,7 @@ def parse_build(build_log, root_filter=None):
 
       if depth > prev_depth:
         if sys.platform != 'win32':
-          # TODO(crbug.com/1223741): Always assert.
+          # TODO(crbug.com/40187759): Always assert.
           assert depth == prev_depth + 1
         elif depth > prev_depth + 1:
           # Until the bug is fixed, skip these includes.
@@ -466,7 +466,7 @@ def main():
 
   parser = argparse.ArgumentParser(description='Analyze an #include graph.')
   parser.add_argument('build_log',
-                      type=argparse.FileType('r'),
+                      type=argparse.FileType('r', errors='replace'),
                       help='The build log to analyze (- for stdin).')
   parser.add_argument('--target',
                       help='The target that was built (e.g. chrome).')

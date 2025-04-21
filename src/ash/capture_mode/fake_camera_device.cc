@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,21 @@
 #include <cstring>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/notreached.h"
 #include "cc/paint/paint_flags.h"
 #include "cc/paint/skia_paint_canvas.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
@@ -28,7 +33,6 @@
 #include "third_party/skia/include/core/SkRect.h"
 #include "ui/aura/env.h"
 #include "ui/compositor/compositor.h"
-#include "ui/gfx/gpu_memory_buffer.h"
 
 namespace ash {
 
@@ -37,15 +41,25 @@ namespace {
 // The next ID to be used for a newly created buffer.
 int g_next_buffer_id = 0;
 
-std::unique_ptr<gfx::GpuMemoryBuffer> CreateGpuMemoryBuffer(
+scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
     const gfx::Size& frame_size) {
-  return aura::Env::GetInstance()
-      ->context_factory()
-      ->GetGpuMemoryBufferManager()
-      ->CreateGpuMemoryBuffer(frame_size, gfx::BufferFormat::BGRA_8888,
-                              gfx::BufferUsage::SCANOUT_CPU_READ_WRITE,
-                              gpu::kNullSurfaceHandle,
-                              /*shutdown_event=*/nullptr);
+  auto* sii = aura::Env::GetInstance()
+                  ->context_factory()
+                  ->SharedMainThreadRasterContextProvider()
+                  ->SharedImageInterface();
+
+  gpu::SharedImageUsageSet shared_image_usage =
+      gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+      gpu::SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE;
+
+  if (sii->GetCapabilities().supports_scanout_shared_images) {
+    shared_image_usage |= gpu::SHARED_IMAGE_USAGE_SCANOUT;
+  }
+
+  return sii->CreateSharedImage(
+      {viz::SinglePlaneFormat::kBGRA_8888, frame_size, gfx::ColorSpace(),
+       shared_image_usage, "FakeCameraDevice"},
+      gpu::kNullSurfaceHandle, gfx::BufferUsage::SCANOUT_CPU_READ_WRITE);
 }
 
 SkRect GetCircleRect(const gfx::Point& center, int radius) {
@@ -97,23 +111,22 @@ class BufferStrategy {
 class GpuMemoryBufferStrategy : public BufferStrategy {
  public:
   explicit GpuMemoryBufferStrategy(const gfx::Size& frame_size)
-      : gmb_(CreateGpuMemoryBuffer(frame_size)) {
-    DCHECK(gmb_);
+      : client_si_(CreateSharedImage(frame_size)) {
+    CHECK(client_si_);
   }
-
-  uint8_t* data() { return static_cast<uint8_t*>(gmb_->memory(0)); }
-  size_t bytes_per_row() { return gmb_->stride(0); }
 
   // BufferStrategy:
   media::mojom::VideoBufferHandlePtr GetHandle() const override {
     return media::mojom::VideoBufferHandle::NewGpuMemoryBufferHandle(
-        gmb_->CloneHandle());
+        client_si_->CloneGpuMemoryBufferHandle());
   }
   void DrawFrameOnBuffer(const gfx::Size& frame_size) override {
-    const gfx::Size buffer_size = gmb_->GetSize();
-    gmb_->Map();
+    auto scoped_mapping = client_si_->Map();
+    CHECK(scoped_mapping);
+    base::span<uint8_t> data_span = scoped_mapping->GetMemoryForPlane(0);
+
     // Clear all the buffer to 0.
-    memset(data(), 0, bytes_per_row() * buffer_size.height());
+    std::ranges::fill(data_span, 0x0);
 
     SkBitmap bitmap;
     // Create an `SkImageInfo` with color type `kBGRA_8888_SkColorType` which
@@ -123,14 +136,12 @@ class GpuMemoryBufferStrategy : public BufferStrategy {
         SkImageInfo::Make(frame_size.width(), frame_size.height(),
                           kBGRA_8888_SkColorType, kPremul_SkAlphaType);
     bitmap.setInfo(info);
-    bitmap.setPixels(data());
+    bitmap.setPixels(data_span.data());
     DrawFrameOnCanvas(cc::SkiaPaintCanvas(bitmap), frame_size);
-
-    gmb_->Unmap();
   }
 
  private:
-  std::unique_ptr<gfx::GpuMemoryBuffer> gmb_;
+  scoped_refptr<gpu::ClientSharedImage> client_si_;
 };
 
 // -----------------------------------------------------------------------------
@@ -200,7 +211,6 @@ class FakeCameraDevice::Buffer {
                        std::make_unique<GpuMemoryBufferStrategy>(frame_size)));
       default:
         NOTREACHED();
-        return nullptr;
     }
   }
 
@@ -294,7 +304,7 @@ class FakeCameraDevice::Subscription
   void OnFrameReadyInBuffer(
       video_capture::mojom::ReadyFrameInBufferPtr buffer) {
     DCHECK(is_active_ && !is_suspended_);
-    subscriber_->OnFrameReadyInBuffer(std::move(buffer), {});
+    subscriber_->OnFrameReadyInBuffer(std::move(buffer));
   }
 
   void OnFrameDropped() {
@@ -335,7 +345,7 @@ class FakeCameraDevice::Subscription
   }
 
   // The camera device which owns this object.
-  FakeCameraDevice* const owner_device_;
+  const raw_ptr<FakeCameraDevice> owner_device_;
 
   mojo::Receiver<video_capture::mojom::PushVideoStreamSubscription> receiver_{
       this};
@@ -410,6 +420,9 @@ void FakeCameraDevice::CreatePushSubscription(
               kCreatedWithRequestedSettings),
       requested_settings);
 }
+
+void FakeCameraDevice::RegisterVideoEffectsProcessor(
+    mojo::PendingRemote<video_effects::mojom::VideoEffectsProcessor> remote) {}
 
 void FakeCameraDevice::OnFinishedConsumingBuffer(int32_t buffer_id) {
   auto iter = buffer_pool_.find(buffer_id);
@@ -494,7 +507,6 @@ void FakeCameraDevice::OnNextFrame() {
     info->coded_size = current_settings_->requested_format.frame_size;
     info->visible_rect = gfx::Rect(info->coded_size);
     info->is_premapped = false;
-    info->color_space = gfx::ColorSpace();
 
     subscription->OnFrameReadyInBuffer(
         video_capture::mojom::ReadyFrameInBuffer::New(buffer->buffer_id(),
@@ -545,8 +557,8 @@ FakeCameraDevice::Buffer* FakeCameraDevice::AllocateOrReuseBuffer() {
 void FakeCameraDevice::RetireAllBuffers() {
   for (auto& pair : buffer_pool_) {
     const int buffer_id = pair.first;
-    for (auto& pair : subscriptions_map_) {
-      auto* subscription = pair.first;
+    for (auto& subscription_pair : subscriptions_map_) {
+      auto* subscription = subscription_pair.first;
       if (subscription->is_active())
         subscription->OnBufferRetired(buffer_id);
     }

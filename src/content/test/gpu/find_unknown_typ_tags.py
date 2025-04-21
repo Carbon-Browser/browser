@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Script for comparing known typ tags to what's generated on the bots.
@@ -33,6 +33,7 @@ WITH
             )
         ) AS typ_tags
         FROM `{table}` tr
+        WHERE DATE(partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
     )
 SELECT DISTINCT typ_tags
 FROM tags

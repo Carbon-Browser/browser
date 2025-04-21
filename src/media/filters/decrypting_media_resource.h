@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/media_resource.h"
@@ -23,7 +23,7 @@ class DecryptingDemuxerStream;
 
 // DecryptingMediaResource is a wrapper for a MediaResource implementation that
 // provides decryption. It should only be created when:
-// - The |media_resource| has type MediaResource::STREAM, and
+// - The |media_resource| has type MediaResource::Type::kStream, and
 // - The |cdm_context| has a Decryptor that always supports decrypt-only.
 // Internally DecryptingDemuxerStreams will be created for all streams in
 // |media_resource| and decrypt them into clear streams. These clear streams are

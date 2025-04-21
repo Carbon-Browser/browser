@@ -1,12 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Suite of tests for activity-log-history. */
 
-import {ActivityLogHistoryElement, ActivityLogPageState} from 'chrome://extensions/extensions.js';
-import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {ActivityLogHistoryElement} from 'chrome://extensions/extensions.js';
+import {ActivityLogPageState} from 'chrome://extensions/extensions.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 import {TestService} from './test_service.js';
 import {testVisible} from './test_util.js';
@@ -145,7 +146,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
   let boundTestVisible: (selector: string, expectedVisible: boolean) => void;
 
   function setupActivityLogHistory() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     activityLogHistory = document.createElement('activity-log-history');
     boundTestVisible = testVisible.bind(null, activityLogHistory);
@@ -182,7 +183,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     proxyDelegate.testActivities = testActivities;
     await setupActivityLogHistory();
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#no-activities', false);
     boundTestVisible('#loading-activities', false);
@@ -233,11 +234,11 @@ suite('ExtensionsActivityLogHistoryTest', function() {
 
     // Partial, case insensitive search for i18n.getUILanguage. Whitespace is
     // also appended to the search term to test trimming.
-    search!.setValue('getuilanguage   ');
+    search.setValue('getuilanguage   ');
 
     await proxyDelegate.whenCalled('getFilteredExtensionActivityLog');
 
-    flush();
+    await microtasksFinished();
     const activityLogItems = getHistoryItems();
     // Since we searched for an API call, we expect only one match as
     // activity log entries are grouped by their API call.
@@ -253,7 +254,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
 
     await proxyDelegate.whenCalled('getFilteredExtensionActivityLog');
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#no-activities', true);
     boundTestVisible('#loading-activities', false);
@@ -268,7 +269,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
 
     await proxyDelegate.whenCalled('getExtensionActivityLog');
 
-    flush();
+    await microtasksFinished();
     assertEquals(3, getHistoryItems().length);
   });
 
@@ -276,7 +277,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     proxyDelegate.testActivities = testContentScriptActivities;
     await setupActivityLogHistory();
 
-    flush();
+    await microtasksFinished();
     const activityLogItems = getHistoryItems();
 
     // One activity should be shown for each content script name.
@@ -298,7 +299,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
         proxyDelegate.testActivities = testWebRequestActivities;
         await setupActivityLogHistory();
 
-        flush();
+        await microtasksFinished();
         const activityLogItems = getHistoryItems();
 
         // First activity should be split into two groups as it has two actions
@@ -327,7 +328,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     proxyDelegate.testActivities = testActivities;
     await setupActivityLogHistory();
 
-    flush();
+    await microtasksFinished();
 
     const expandableItems = Array.from(getHistoryItems())
                                 .filter(
@@ -344,7 +345,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     activityLogHistory.shadowRoot!
         .querySelector<HTMLElement>('#expand-all-button')!.click();
 
-    flush();
+    await microtasksFinished();
     assertEquals(2, getExpandedItems().length);
 
     // Collapse all items.
@@ -353,7 +354,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     activityLogHistory.shadowRoot!
         .querySelector<HTMLElement>('#collapse-all-button')!.click();
 
-    flush();
+    await microtasksFinished();
     assertEquals(0, getExpandedItems().length);
   });
 
@@ -371,7 +372,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
 
     proxyDelegate.testActivities = testExportActivities;
     await setupActivityLogHistory();
-    flush();
+    await microtasksFinished();
 
     activityLogHistory.shadowRoot!.querySelector<HTMLElement>(
                                       '#more-actions')!.click();
@@ -391,7 +392,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
         proxyDelegate.testActivities = testActivities;
         await setupActivityLogHistory();
 
-        flush();
+        await microtasksFinished();
         const activityLogItems = getHistoryItems();
 
         assertEquals(activityLogItems.length, 3);
@@ -404,7 +405,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
         await proxyDelegate.whenCalled('deleteActivitiesById');
         await proxyDelegate.whenCalled('getExtensionActivityLog');
 
-        flush();
+        await microtasksFinished();
         assertEquals(2, getHistoryItems().length);
       });
 
@@ -415,7 +416,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
         proxyDelegate.testActivities = {activities: []};
         await setupActivityLogHistory();
 
-        flush();
+        await microtasksFinished();
 
         boundTestVisible('#no-activities', true);
         boundTestVisible('#loading-activities', false);
@@ -431,7 +432,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
     // Pretend the activity log is still loading.
     activityLogHistory.setPageStateForTest(ActivityLogPageState.LOADING);
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#no-activities', false);
     boundTestVisible('#loading-activities', true);
@@ -444,7 +445,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
         proxyDelegate.testActivities = testActivities;
         await setupActivityLogHistory();
 
-        flush();
+        await microtasksFinished();
 
         assertEquals(3, getHistoryItems().length);
         activityLogHistory.shadowRoot!
@@ -452,7 +453,7 @@ suite('ExtensionsActivityLogHistoryTest', function() {
 
         await proxyDelegate.whenCalled('deleteActivitiesFromExtension');
 
-        flush();
+        await microtasksFinished();
         boundTestVisible('#no-activities', true);
         boundTestVisible('.activity-table-headings', false);
         assertEquals(0, getHistoryItems().length);

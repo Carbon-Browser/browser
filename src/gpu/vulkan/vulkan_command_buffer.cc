@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,6 @@ VkPipelineStageFlags GetPipelineStageFlags(
     default:
       NOTREACHED() << "layout=" << layout;
   }
-  return 0;
 }
 
 VkAccessFlags GetAccessMask(const VkImageLayout layout) {
@@ -79,7 +78,6 @@ VkAccessFlags GetAccessMask(const VkImageLayout layout) {
     default:
       NOTREACHED() << "layout=" << layout;
   }
-  return 0;
 }
 
 }  // namespace
@@ -141,15 +139,20 @@ void VulkanCommandBuffer::Destroy() {
 bool VulkanCommandBuffer::Submit(uint32_t num_wait_semaphores,
                                  VkSemaphore* wait_semaphores,
                                  uint32_t num_signal_semaphores,
-                                 VkSemaphore* signal_semaphores) {
+                                 VkSemaphore* signal_semaphores,
+                                 bool allow_protected_memory) {
   DCHECK(primary_);
 
   std::vector<VkPipelineStageFlags> wait_dst_stage_mask(
       num_wait_semaphores, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
+  VkProtectedSubmitInfo protected_submit_info = {};
+  protected_submit_info.sType = VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO;
+  protected_submit_info.protectedSubmit = allow_protected_memory;
+
   VkSubmitInfo submit_info = {};
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit_info.pNext = nullptr;
+  submit_info.pNext = &protected_submit_info;
   submit_info.waitSemaphoreCount = num_wait_semaphores;
   submit_info.pWaitSemaphores = wait_semaphores;
   submit_info.pWaitDstStageMask = wait_dst_stage_mask.data();
@@ -244,9 +247,10 @@ void VulkanCommandBuffer::CopyBufferToImage(VkBuffer buffer,
                                             uint32_t buffer_width,
                                             uint32_t buffer_height,
                                             uint32_t width,
-                                            uint32_t height) {
+                                            uint32_t height,
+                                            uint64_t buffer_offset) {
   VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
+  region.bufferOffset = buffer_offset;
   region.bufferRowLength = buffer_width;
   region.bufferImageHeight = buffer_height;
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -264,9 +268,10 @@ void VulkanCommandBuffer::CopyImageToBuffer(VkBuffer buffer,
                                             uint32_t buffer_width,
                                             uint32_t buffer_height,
                                             uint32_t width,
-                                            uint32_t height) {
+                                            uint32_t height,
+                                            uint64_t buffer_offset) {
   VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
+  region.bufferOffset = buffer_offset;
   region.bufferRowLength = buffer_width;
   region.bufferImageHeight = buffer_height;
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

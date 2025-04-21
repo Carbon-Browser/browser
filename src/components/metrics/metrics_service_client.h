@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,14 @@
 #define COMPONENTS_METRICS_METRICS_SERVICE_CLIENT_H_
 
 #include <stdint.h>
+
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/callback_list.h"
+#include "base/functional/callback.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 #include "components/metrics/metrics_log_store.h"
 #include "components/metrics/metrics_log_uploader.h"
@@ -21,6 +25,10 @@ namespace ukm {
 class UkmService;
 }
 
+namespace metrics::dwa {
+class DwaService;
+}
+
 namespace network_time {
 class NetworkTimeTracker;
 }
@@ -29,10 +37,16 @@ namespace variations {
 class SyntheticTrialRegistry;
 }
 
+class IdentifiabilityStudyState;
+
 namespace metrics {
 
 class MetricsLogUploader;
 class MetricsService;
+
+namespace structured {
+class StructuredMetricsService;
+}
 
 // An abstraction of operations that depend on the embedder's (e.g. Chrome)
 // environment.
@@ -57,6 +71,17 @@ class MetricsServiceClient {
 
   // Returns the UkmService instance that this client is associated with.
   virtual ukm::UkmService* GetUkmService();
+
+  // Returns the DwaService instance that this client is associated with.
+  virtual metrics::dwa::DwaService* GetDwaService();
+
+  // Returns the IdentifiabilityStudyState instance that this client is
+  // associated with. Might be nullptr.
+  virtual IdentifiabilityStudyState* GetIdentifiabilityStudyState();
+
+  // Returns the StructuredMetricsService instance that this client is
+  // associated with.
+  virtual structured::StructuredMetricsService* GetStructuredMetricsService();
 
   // Returns true if metrics should be uploaded for the given |user_id|, which
   // corresponds to the |user_id| field in ChromeUserMetricsExtension.
@@ -96,6 +121,11 @@ class MetricsServiceClient {
   // ownership.
   virtual void OnEnvironmentUpdate(std::string* serialized_environment) {}
 
+  // Collects child process histograms and merges them into StatisticsRecorder.
+  // Called when child process histograms need to be merged ASAP. For example,
+  // on Android, when the browser was backgrounded.
+  virtual void MergeSubprocessHistograms() {}
+
   // Called prior to a metrics log being closed, allowing the client to collect
   // extra histograms that will go in that log. Asynchronous API - the client
   // implementation should call |done_callback| when complete.
@@ -112,16 +142,22 @@ class MetricsServiceClient {
   virtual std::unique_ptr<MetricsLogUploader> CreateUploader(
       const GURL& server_url,
       const GURL& insecure_server_url,
-      base::StringPiece mime_type,
+      std::string_view mime_type,
       metrics::MetricsLogUploader::MetricServiceType service_type,
       const MetricsLogUploader::UploadCallback& on_upload_complete) = 0;
 
   // Returns the interval between upload attempts. Checks if debugging flags
-  // have been set, otherwise defaults to GetStandardUploadInterval().
+  // have been set, if there the is a custom interval, otherwise defaults to
+  // GetStandardUploadInterval().
   base::TimeDelta GetUploadInterval();
 
   // Returns the standard interval between upload attempts.
   virtual base::TimeDelta GetStandardUploadInterval() = 0;
+
+  // Returns a custom interval between upload attempts. This interval will be
+  // used instead of the standard interval returned by GetStandardUploadInterval
+  // if it is set.
+  virtual std::optional<base::TimeDelta> GetCustomUploadInterval() const;
 
   // Whether or not the MetricsService should start up quickly and upload the
   // initial report quickly. By default, this work may be delayed by some
@@ -133,11 +169,6 @@ class MetricsServiceClient {
   // Called when loading state changed, e.g. start/stop loading.
   virtual void LoadingStateChanged(bool is_loading) {}
 
-  // Called on renderer crashes in some embedders (e.g., those that do not use
-  // //content and thus do not have //content's notification system available
-  // as a mechanism for observing renderer crashes).
-  virtual void OnRendererProcessCrash() {}
-
   // Returns whether metrics reporting is managed by policy.
   virtual bool IsReportingPolicyManaged();
 
@@ -145,20 +176,16 @@ class MetricsServiceClient {
   // shown during first-run.
   virtual EnableMetricsDefault GetMetricsReportingDefaultState();
 
-  // Returns whether cellular logic is enabled for metrics reporting.
-  virtual bool IsUMACellularUploadLogicEnabled();
-
-  // Returns whether the allowlist for external experiment ids is enabled. Some
-  // embedders like WebLayer disable it. For Chrome, it should be enabled.
-  virtual bool IsExternalExperimentAllowlistEnabled();
+  // Return true iff the system is currently on a cellular connection.
+  virtual bool IsOnCellularConnection();
 
   // Returns true iff UKM is allowed for all profiles.
   // See //components/ukm/observers/ukm_consent_state_observer.h for details.
   virtual bool IsUkmAllowedForAllProfiles();
 
-  // Returns true iff UKM is allowed to capture extensions for all profiles.
-  // See //components/ukm/observers/ukm_consent_state_observer.h for details.
-  virtual bool IsUkmAllowedWithExtensionsForAllProfiles();
+  // Returns true iff DWA is allowed for all profiles.
+  // DWA is allowed if all applicable UKM consents for a platform are given.
+  virtual bool IsDwaAllowedForAllProfiles();
 
   // Returns whether UKM notification listeners were attached to all profiles.
   virtual bool AreNotificationListenersEnabledOnAllProfiles();
@@ -176,6 +203,9 @@ class MetricsServiceClient {
 
   // Checks if the cloned install detector says that client ids should be reset.
   virtual bool ShouldResetClientIdsOnClonedInstall();
+
+  virtual base::CallbackListSubscription AddOnClonedInstallDetectedCallback(
+      base::OnceClosure callback);
 
   // Specifies local log storage requirements and restrictions.
   virtual MetricsLogStore::StorageLimits GetStorageLimits() const;
@@ -209,21 +239,21 @@ class MetricsServiceClient {
   // when a user metric consent state should not be applied (ie no logged in
   // user or managed policy).
   //
-  // Will return absl::nullopt if there is no current user or current user
+  // Will return std::nullopt if there is no current user or current user
   // metrics consent should not be applied to determine metrics reporting state.
   //
   // Not all platforms support per-user consent. If per-user consent is not
-  // supported, this function should return absl::nullopt.
-  virtual absl::optional<bool> GetCurrentUserMetricsConsent() const;
+  // supported, this function should return std::nullopt.
+  virtual std::optional<bool> GetCurrentUserMetricsConsent() const;
 
   // Returns the current user id.
   //
-  // Will return absl::nullopt if there is no current user, metrics reporting is
+  // Will return std::nullopt if there is no current user, metrics reporting is
   // disabled, or current user should not have a user id.
   //
   // Not all platforms support per-user consent. If per-user consent is not
-  // supported, this function should return absl::nullopt.
-  virtual absl::optional<std::string> GetCurrentUserId() const;
+  // supported, this function should return std::nullopt.
+  virtual std::optional<std::string> GetCurrentUserId() const;
 
  private:
   base::RepeatingClosure update_running_services_;

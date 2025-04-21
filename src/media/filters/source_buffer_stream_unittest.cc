@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
@@ -27,7 +27,6 @@
 #include "media/base/media_util.h"
 #include "media/base/mock_media_log.h"
 #include "media/base/test_helpers.h"
-#include "media/base/text_track_config.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/webvtt_util.h"
 #include "media/filters/source_buffer_range.h"
@@ -51,7 +50,7 @@ static const int kDefaultFramesPerSecond = 30;
 static const int kDefaultKeyframesPerSecond = 6;
 static const uint8_t kDataA = 0x11;
 static const uint8_t kDataB = 0x33;
-static const int kDataSize = 1;
+static const size_t kDataSize = 1u;
 
 // Matchers for verifying common media log entry strings.
 MATCHER_P(ContainsTrackBufferExhaustionSkipLog, skip_milliseconds, "") {
@@ -85,20 +84,13 @@ class SourceBufferStreamTest : public testing::Test {
   }
 
   void SetMemoryLimit(size_t buffers_of_data) {
-    stream_->set_memory_limit(buffers_of_data * kDataSize);
+    stream_->set_memory_limit(buffers_of_data * GetMemoryUsagePerBuffer());
   }
 
   void SetStreamInfo(int frames_per_second, int keyframes_per_second) {
     frames_per_second_ = frames_per_second;
     keyframes_per_second_ = keyframes_per_second;
     frame_duration_ = ConvertToFrameDuration(frames_per_second);
-  }
-
-  void SetTextStream() {
-    video_config_ = TestVideoConfig::Invalid();
-    TextTrackConfig config(kTextSubtitles, "", "", "");
-    ResetStream<>(config);
-    SetStreamInfo(2, 2);
   }
 
   void SetAudioStream() {
@@ -261,20 +253,21 @@ class SourceBufferStreamTest : public testing::Test {
 
   void CheckExpectedBuffers(
       int starting_position, int ending_position) {
-    CheckExpectedBuffers(starting_position, ending_position, false, NULL, 0);
+    CheckExpectedBuffers(starting_position, ending_position, false,
+                         std::nullopt);
   }
 
   void CheckExpectedBuffers(
       int starting_position, int ending_position, bool expect_keyframe) {
     CheckExpectedBuffers(starting_position, ending_position, expect_keyframe,
-                         NULL, 0);
+                         std::nullopt);
   }
 
   void CheckExpectedBuffers(int starting_position,
                             int ending_position,
                             const uint8_t* data) {
-    CheckExpectedBuffers(starting_position, ending_position, false, data,
-                         kDataSize);
+    CheckExpectedBuffers(starting_position, ending_position, false,
+                         UNSAFE_TODO(base::span(data, kDataSize)));
   }
 
   void CheckExpectedBuffers(int starting_position,
@@ -282,14 +275,14 @@ class SourceBufferStreamTest : public testing::Test {
                             const uint8_t* data,
                             bool expect_keyframe) {
     CheckExpectedBuffers(starting_position, ending_position, expect_keyframe,
-                         data, kDataSize);
+                         UNSAFE_TODO(base::span(data, kDataSize)));
   }
 
-  void CheckExpectedBuffers(int starting_position,
-                            int ending_position,
-                            bool expect_keyframe,
-                            const uint8_t* expected_data,
-                            int expected_size) {
+  void CheckExpectedBuffers(
+      int starting_position,
+      int ending_position,
+      bool expect_keyframe,
+      std::optional<base::span<const uint8_t>> expected_data) {
     int current_position = starting_position;
     for (; current_position <= ending_position; current_position++) {
       scoped_refptr<StreamParserBuffer> buffer;
@@ -302,12 +295,7 @@ class SourceBufferStreamTest : public testing::Test {
         EXPECT_TRUE(buffer->is_key_frame());
 
       if (expected_data) {
-        const uint8_t* actual_data = buffer->data();
-        const int actual_size = buffer->data_size();
-        EXPECT_EQ(expected_size, actual_size);
-        for (int i = 0; i < std::min(actual_size, expected_size); i++) {
-          EXPECT_EQ(expected_data[i], actual_data[i]);
-        }
+        EXPECT_EQ(base::span(*expected_data), base::span(*buffer));
       }
 
       EXPECT_EQ(
@@ -339,9 +327,6 @@ class SourceBufferStreamTest : public testing::Test {
             break;
           case SourceBufferStreamType::kAudio:
             stream_->GetCurrentAudioDecoderConfig();
-            break;
-          case SourceBufferStreamType::kText:
-            stream_->GetCurrentTextTrackConfig();
             break;
         }
 
@@ -430,6 +415,10 @@ class SourceBufferStreamTest : public testing::Test {
         << "\nActual: " << actual.AsHumanReadableString();
   }
 
+  int GetMemoryUsagePerBuffer() const {
+    return kDataSize + sizeof(StreamParserBuffer);
+  }
+
   base::TimeDelta frame_duration() const { return frame_duration_; }
 
   StrictMock<MockMediaLog> media_log_;
@@ -445,12 +434,8 @@ class SourceBufferStreamTest : public testing::Test {
         return DemuxerStream::AUDIO;
       case SourceBufferStreamType::kVideo:
         return DemuxerStream::VIDEO;
-      case SourceBufferStreamType::kText:
-        return DemuxerStream::TEXT;
-      default:
-        NOTREACHED();
-        return DemuxerStream::UNKNOWN;
     }
+    NOTREACHED();
   }
 
   base::TimeDelta ConvertToFrameDuration(int frames_per_second) {
@@ -1140,7 +1125,7 @@ TEST_F(SourceBufferStreamTest, Start_Overlap_Selected_EdgeCase) {
   // Now replace the last 5 buffers with new data.
   NewCodedFrameGroupAppend(10, 5, &kDataB);
 
-  // The next 4 buffers should be the origial data, held in the track buffer.
+  // The next 4 buffers should be the original data, held in the track buffer.
   CheckExpectedBuffers(11, 14, &kDataA);
 
   // The next buffer is at position 15, so we should fail to fulfill the
@@ -2384,7 +2369,7 @@ TEST_F(SourceBufferStreamTest, GetNextBuffer_ExhaustThenStartOverlap) {
   // Next buffer is at position 10, so should not be able to fulfill request.
   CheckNoNextBuffer();
 
-  // Append 6 buffers at positons 5 through 10. This is to test that doing a
+  // Append 6 buffers at positions 5 through 10. This is to test that doing a
   // start-overlap successfully fulfills the read at position 10, even though
   // position 10 was unbuffered.
   NewCodedFrameGroupAppend(5, 6, &kDataB);
@@ -2599,7 +2584,8 @@ TEST_F(SourceBufferStreamTest,
   // GOP in that first range. Neither can it collect the last appended GOP
   // (which is the entire second range), so GC should return false since it
   // couldn't collect enough.
-  EXPECT_FALSE(GarbageCollect(base::Milliseconds(95), 7));
+  EXPECT_FALSE(
+      GarbageCollect(base::Milliseconds(95), 7 * GetMemoryUsagePerBuffer()));
   CheckExpectedRangesByTimestamp("{ [50,100) [1000,1050) }");
 }
 
@@ -3261,45 +3247,53 @@ TEST_F(SourceBufferStreamTest, GetRemovalRange_BytesToFree) {
   EXPECT_EQ(0, bytes_removed);
 
   // Smaller than the size of GOP.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 1, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(390, remove_range_end);
   // Remove as the size of GOP.
-  EXPECT_EQ(3, bytes_removed);
+  EXPECT_EQ(3 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // The same size with a GOP.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 3, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 3 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(390, remove_range_end);
-  EXPECT_EQ(3, bytes_removed);
+  EXPECT_EQ(3 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // The same size with a range.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 6, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 6 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(480, remove_range_end);
-  EXPECT_EQ(6, bytes_removed);
+  EXPECT_EQ(6 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // A frame larger than a range.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 7, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 7 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(690, remove_range_end);
-  EXPECT_EQ(9, bytes_removed);
+  EXPECT_EQ(9 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // The same size with two ranges.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 12, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 12 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(780, remove_range_end);
-  EXPECT_EQ(12, bytes_removed);
+  EXPECT_EQ(12 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // Larger than two ranges.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 14, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 14 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(990, remove_range_end);
-  EXPECT_EQ(15, bytes_removed);
+  EXPECT_EQ(15 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // The same size with the whole ranges.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 18, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 18 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(1080, remove_range_end);
-  EXPECT_EQ(18, bytes_removed);
+  EXPECT_EQ(18 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // Larger than the whole ranges.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(1080, remove_range_end);
-  EXPECT_EQ(18, bytes_removed);
+  EXPECT_EQ(18 * GetMemoryUsagePerBuffer(), bytes_removed);
 }
 
 TEST_F(SourceBufferStreamTest, GetRemovalRange_Range) {
@@ -3318,60 +3312,101 @@ TEST_F(SourceBufferStreamTest, GetRemovalRange_Range) {
   int bytes_removed = -1;
 
   // Within a GOP and no keyframe.
-  bytes_removed = GetRemovalRangeInMs(630, 660, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(630, 660, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(-1, remove_range_end);
   EXPECT_EQ(0, bytes_removed);
 
   // Across a GOP and no keyframe.
-  bytes_removed = GetRemovalRangeInMs(630, 750, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(630, 750, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(-1, remove_range_end);
   EXPECT_EQ(0, bytes_removed);
 
   // The same size with a range.
-  bytes_removed = GetRemovalRangeInMs(600, 780, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(600, 780, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(780, remove_range_end);
-  EXPECT_EQ(6, bytes_removed);
+  EXPECT_EQ(6 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // One frame larger than a range.
-  bytes_removed = GetRemovalRangeInMs(570, 810, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(570, 810, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(780, remove_range_end);
-  EXPECT_EQ(6, bytes_removed);
+  EXPECT_EQ(6 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // Facing the other ranges.
-  bytes_removed = GetRemovalRangeInMs(480, 900, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(480, 900, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(780, remove_range_end);
-  EXPECT_EQ(6, bytes_removed);
+  EXPECT_EQ(6 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // In the midle of the other ranges, but not including any GOP.
-  bytes_removed = GetRemovalRangeInMs(420, 960, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(420, 960, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(780, remove_range_end);
-  EXPECT_EQ(6, bytes_removed);
+  EXPECT_EQ(6 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // In the middle of the other ranges.
-  bytes_removed = GetRemovalRangeInMs(390, 990, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(390, 990, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(990, remove_range_end);
-  EXPECT_EQ(12, bytes_removed);
+  EXPECT_EQ(12 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // A frame smaller than the whole ranges.
-  bytes_removed = GetRemovalRangeInMs(330, 1050, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(330, 1050, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(990, remove_range_end);
-  EXPECT_EQ(12, bytes_removed);
+  EXPECT_EQ(12 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // The same with the whole ranges.
-  bytes_removed = GetRemovalRangeInMs(300, 1080, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(300, 1080, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(1080, remove_range_end);
-  EXPECT_EQ(18, bytes_removed);
+  EXPECT_EQ(18 * GetMemoryUsagePerBuffer(), bytes_removed);
 
   // Larger than the whole ranges.
-  bytes_removed = GetRemovalRangeInMs(270, 1110, 20, &remove_range_end);
+  bytes_removed = GetRemovalRangeInMs(270, 1110, 20 * GetMemoryUsagePerBuffer(),
+                                      &remove_range_end);
   EXPECT_EQ(1080, remove_range_end);
-  EXPECT_EQ(18, bytes_removed);
+  EXPECT_EQ(18 * GetMemoryUsagePerBuffer(), bytes_removed);
+}
+
+TEST_F(SourceBufferStreamTest, IsNextBufferConfigChanged) {
+  // selected_range_ is nullptr, so return false
+  EXPECT_FALSE(stream_->IsNextBufferConfigChanged());
+  VideoDecoderConfig new_config = TestVideoConfig::Large();
+  ASSERT_FALSE(new_config.Matches(video_config_));
+
+  // read all buffers
+  NewCodedFrameGroupAppend("0K 10 20");
+  Seek(0);
+  CheckExpectedRangesByTimestamp("{ [0,30) }");
+  CheckExpectedBuffers("0K 10 20");
+  EXPECT_FALSE(stream_->IsNextBufferConfigChanged());
+
+  // Signal a config change.
+  stream_->UpdateVideoConfig(new_config, false);
+  NewCodedFrameGroupAppend("30K 40");
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
+
+  scoped_refptr<StreamParserBuffer> buffer;
+  EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
+  CheckVideoConfig(new_config);
+
+  // Overlap-append
+  NewCodedFrameGroupAppend(
+      "21K 41 51 61 71 81 91 101 111 121 "
+      "131K 141");
+  CheckExpectedRangesByTimestamp("{ [0,151) }");
+
+  // track_buffer has the buffers with timestamp 30 and 40
+  EXPECT_FALSE(stream_->IsNextBufferConfigChanged());
 }
 
 TEST_F(SourceBufferStreamTest, ConfigChange_Basic) {
   VideoDecoderConfig new_config = TestVideoConfig::Large();
   ASSERT_FALSE(new_config.Matches(video_config_));
-
   Seek(0);
   CheckVideoConfig(video_config_);
 
@@ -3399,6 +3434,7 @@ TEST_F(SourceBufferStreamTest, ConfigChange_Basic) {
 
   // Verify the next attempt to get a buffer will signal that a config change
   // has happened.
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
 
   // Verify that the new config is now returned.
@@ -3425,6 +3461,7 @@ TEST_F(SourceBufferStreamTest, ConfigChange_Seek) {
   CheckVideoConfig(video_config_);
   Seek(5);
   CheckVideoConfig(video_config_);
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
   CheckVideoConfig(new_config);
   CheckExpectedBuffers(5, 9, &kDataB);
@@ -3443,6 +3480,7 @@ TEST_F(SourceBufferStreamTest, ConfigChange_Seek) {
   CheckVideoConfig(new_config);
   Seek(0);
   CheckVideoConfig(new_config);
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
   CheckVideoConfig(video_config_);
   CheckExpectedBuffers(0, 4, &kDataA);
@@ -4258,73 +4296,6 @@ TEST_F(SourceBufferStreamTest,
   CheckNoNextBuffer();
 }
 
-TEST_F(SourceBufferStreamTest, Text_Append_SingleRange) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("0K 500K 1000K");
-  CheckExpectedRangesByTimestamp("{ [0,1500) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 500K 1000K");
-}
-
-TEST_F(SourceBufferStreamTest, Text_Append_DisjointAfter) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("0K 500K 1000K");
-  CheckExpectedRangesByTimestamp("{ [0,1500) }");
-  NewCodedFrameGroupAppend("3000K 3500K 4000K");
-  CheckExpectedRangesByTimestamp("{ [0,4500) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 500K 1000K 3000K 3500K 4000K");
-}
-
-TEST_F(SourceBufferStreamTest, Text_Append_DisjointBefore) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("3000K 3500K 4000K");
-  CheckExpectedRangesByTimestamp("{ [3000,4500) }");
-  NewCodedFrameGroupAppend("0K 500K 1000K");
-  CheckExpectedRangesByTimestamp("{ [0,4500) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 500K 1000K 3000K 3500K 4000K");
-}
-
-TEST_F(SourceBufferStreamTest, Text_CompleteOverlap) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("3000K 3500K 4000K");
-  CheckExpectedRangesByTimestamp("{ [3000,4500) }");
-  NewCodedFrameGroupAppend(
-      "0K 501K 1001K 1501K 2001K 2501K "
-      "3001K 3501K 4001K 4501K 5001K");
-  CheckExpectedRangesByTimestamp("{ [0,5501) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 501K 1001K 1501K 2001K 2501K "
-                       "3001K 3501K 4001K 4501K 5001K");
-}
-
-TEST_F(SourceBufferStreamTest, Text_OverlapAfter) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("0K 500K 1000K 1500K 2000K");
-  CheckExpectedRangesByTimestamp("{ [0,2500) }");
-  NewCodedFrameGroupAppend("1499K 2001K 2501K 3001K");
-  CheckExpectedRangesByTimestamp("{ [0,3501) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 500K 1000K 1499K 2001K 2501K 3001K");
-}
-
-TEST_F(SourceBufferStreamTest, Text_OverlapBefore) {
-  SetTextStream();
-  NewCodedFrameGroupAppend("1500K 2000K 2500K 3000K 3500K");
-  CheckExpectedRangesByTimestamp("{ [1500,4000) }");
-  NewCodedFrameGroupAppend("0K 501K 1001K 1501K 2001K");
-  CheckExpectedRangesByTimestamp("{ [0,4000) }");
-
-  Seek(0);
-  CheckExpectedBuffers("0K 501K 1001K 1501K 2001K 3000K 3500K");
-}
-
 TEST_F(SourceBufferStreamTest, Audio_SpliceTrimmingForOverlap) {
   SetAudioStream();
   Seek(0);
@@ -4578,6 +4549,7 @@ TEST_F(SourceBufferStreamTest, Audio_ConfigChangeWithPreroll) {
   // Verify the next attempt to get a buffer will signal that a config change
   // has happened.
   scoped_refptr<StreamParserBuffer> buffer;
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
 
   // Verify upcoming buffers will use the new config.
@@ -4832,6 +4804,7 @@ TEST_F(SourceBufferStreamTest, ConfigChange_ReSeek) {
   CheckVideoConfig(video_config_);
   SeekToTimestampMs(2030);
   CheckVideoConfig(video_config_);
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
   CheckVideoConfig(new_config);
 
@@ -4853,10 +4826,12 @@ TEST_F(SourceBufferStreamTest, ConfigChange_ReSeek) {
   SeekToTimestampMs(2000);
   CheckVideoConfig(new_config);
   ASSERT_FALSE(new_config.Matches(video_config_));
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
   CheckVideoConfig(video_config_);
   CheckExpectedBuffers("2000K 2010 2020D10");
   CheckVideoConfig(video_config_);
+  EXPECT_TRUE(stream_->IsNextBufferConfigChanged());
   EXPECT_STATUS_FOR_STREAM_OP(kConfigChange, GetNextBuffer(&buffer));
   CheckVideoConfig(new_config);
   CheckExpectedBuffers("2030K 2040 2050D10");
@@ -5069,6 +5044,62 @@ TEST_F(SourceBufferStreamTest,
   Seek(0);
   CheckExpectedBuffers("0K 10 20 30K 40 2000K 2010");
   CheckNoNextBuffer();
+}
+
+TEST_F(SourceBufferStreamTest, GetLowestPresentationTimestamp_NonMuxed) {
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
+
+  NewCodedFrameGroupAppend("100K 110K");
+  EXPECT_EQ(base::Milliseconds(100), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(110, 120, 120);
+  EXPECT_EQ(base::Milliseconds(100), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(100, 110, 120);
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
+
+  NewCodedFrameGroupAppend("100K 110K");
+  EXPECT_EQ(base::Milliseconds(100), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(100, 110, 120);
+  EXPECT_EQ(base::Milliseconds(110), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(110, 120, 120);
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
+}
+
+TEST_F(SourceBufferStreamTest, GetLowestPresentationTimestamp_Muxed) {
+  // Simulate `stream_` being one of multiple resulting from parsing and
+  // buffering a muxed bytestream. In this case, it is common for range start
+  // times across the streams in the same muxed segment to not precisely align.
+  // The frame processing algorithm indicates the segment's "coded frame group
+  // start time" to the SourceBufferStream, and the underlying range remembers
+  // this even if the corresponding actual start time in the underlying range is
+  // later than that start time. However, if the start of that range is removed,
+  // then the underlying range no longer attempts to maintain the original
+  // "coded frame group start time" as the lowest timestamp. This impacts
+  // GetLowestPresentationTimestamp(), since the underlying range start time of
+  // the first range is involved and is conditional. See also
+  // SourceBufferRange::GetStartTimestamp().
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
+
+  NewCodedFrameGroupAppend(base::Milliseconds(50), "100K 110K");
+  EXPECT_EQ(base::Milliseconds(50), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(110, 120, 120);
+  EXPECT_EQ(base::Milliseconds(50), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(100, 110, 120);
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
+
+  NewCodedFrameGroupAppend(base::Milliseconds(50), "100K 110K");
+  EXPECT_EQ(base::Milliseconds(50), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(100, 110, 120);
+  EXPECT_EQ(base::Milliseconds(110), stream_->GetLowestPresentationTimestamp());
+
+  RemoveInMs(110, 120, 120);
+  EXPECT_EQ(base::TimeDelta(), stream_->GetLowestPresentationTimestamp());
 }
 
 TEST_F(SourceBufferStreamTest, GetHighestPresentationTimestamp) {

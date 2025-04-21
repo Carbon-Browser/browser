@@ -27,11 +27,14 @@
 
 #include "third_party/blink/renderer/modules/geolocation/geolocation.h"
 
+#include <optional>
+
+#include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/device/public/mojom/geoposition.mojom-blink.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
@@ -43,6 +46,7 @@
 #include "third_party/blink/renderer/core/timing/epoch_time_stamp.h"
 #include "third_party/blink/renderer/modules/geolocation/geolocation_coordinates.h"
 #include "third_party/blink/renderer/modules/geolocation/geolocation_error.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 
 namespace blink {
 namespace {
@@ -60,32 +64,41 @@ Geoposition* CreateGeoposition(
   auto* coordinates = MakeGarbageCollected<GeolocationCoordinates>(
       position.latitude, position.longitude,
       // Lowest point on land is at approximately -400 meters.
-      position.altitude > -10000., position.altitude, position.accuracy,
-      position.altitude_accuracy >= 0., position.altitude_accuracy,
-      position.heading >= 0. && position.heading <= 360., position.heading,
-      position.speed >= 0., position.speed);
+      position.altitude > -10000. ? std::make_optional(position.altitude)
+                                  : std::nullopt,
+      position.accuracy,
+      position.altitude_accuracy >= 0.
+          ? std::make_optional(position.altitude_accuracy)
+          : std::nullopt,
+      position.heading >= 0. && position.heading <= 360.
+          ? std::make_optional(position.heading)
+          : std::nullopt,
+      position.speed >= 0. ? std::optional(position.speed) : std::nullopt);
   return MakeGarbageCollected<Geoposition>(
       coordinates, ConvertTimeToEpochTimeStamp(position.timestamp));
 }
 
 GeolocationPositionError* CreatePositionError(
-    device::mojom::blink::Geoposition::ErrorCode mojom_error_code,
-    const String& error) {
+    const device::mojom::blink::GeopositionError& error) {
   GeolocationPositionError::ErrorCode error_code =
       GeolocationPositionError::kPositionUnavailable;
-  switch (mojom_error_code) {
-    case device::mojom::blink::Geoposition::ErrorCode::PERMISSION_DENIED:
+  switch (error.error_code) {
+    case device::mojom::blink::GeopositionErrorCode::kPermissionDenied:
       error_code = GeolocationPositionError::kPermissionDenied;
       break;
-    case device::mojom::blink::Geoposition::ErrorCode::POSITION_UNAVAILABLE:
+    case device::mojom::blink::GeopositionErrorCode::kPositionUnavailable:
       error_code = GeolocationPositionError::kPositionUnavailable;
       break;
-    case device::mojom::blink::Geoposition::ErrorCode::NONE:
-    case device::mojom::blink::Geoposition::ErrorCode::TIMEOUT:
-      NOTREACHED();
+    default:
+      // On the Blink side, it should only handle W3C-defined error codes. If it
+      // reaches here, that means a platform-specific error type is being
+      // propagated to Blink. We will now just use kPositionUnavailable until
+      // more explicit error codes are defined in the W3C spec.
+      error_code = GeolocationPositionError::kPositionUnavailable;
       break;
   }
-  return MakeGarbageCollected<GeolocationPositionError>(error_code, error);
+  return MakeGarbageCollected<GeolocationPositionError>(error_code,
+                                                        error.error_message);
 }
 
 static void ReportGeolocationViolation(LocalDOMWindow* window) {
@@ -97,6 +110,12 @@ static void ReportGeolocationViolation(LocalDOMWindow* window) {
         "Only request geolocation information in response to a user gesture.",
         base::TimeDelta(), nullptr);
   }
+}
+
+bool ValidateGeoposition(const device::mojom::blink::Geoposition& position) {
+  return position.latitude >= -90. && position.latitude <= 90. &&
+         position.longitude >= -180. && position.longitude <= 180. &&
+         position.accuracy >= 0. && !position.timestamp.is_null();
 }
 
 }  // namespace
@@ -118,7 +137,8 @@ Geolocation* Geolocation::geolocation(Navigator& navigator) {
 }
 
 Geolocation::Geolocation(Navigator& navigator)
-    : Supplement<Navigator>(navigator),
+    : ActiveScriptWrappable<Geolocation>({}),
+      Supplement<Navigator>(navigator),
       ExecutionContextLifecycleObserver(navigator.DomWindow()),
       PageVisibilityObserver(navigator.DomWindow()->GetFrame()->GetPage()),
       one_shots_(MakeGarbageCollected<GeoNotifierSet>()),
@@ -192,6 +212,11 @@ void Geolocation::getCurrentPosition(V8PositionCallback* success_callback,
                                      const PositionOptions* options) {
   if (!GetFrame())
     return;
+
+  if (GetFrame()->IsAdScriptInStack()) {
+    UseCounter::Count(GetExecutionContext(),
+                      WebFeature::kAdScriptInStackOnGeoLocation);
+  }
 
   probe::BreakableLocation(GetExecutionContext(),
                            "Geolocation.getCurrentPosition");
@@ -342,7 +367,7 @@ void Geolocation::HandleError(GeolocationPositionError* error) {
   DCHECK(error);
 
   DCHECK(one_shots_being_invoked_->IsEmpty());
-  DCHECK(watchers_being_invoked_.IsEmpty());
+  DCHECK(watchers_being_invoked_.empty());
 
   if (error->IsFatal()) {
     // Stop the timers of |one_shots_| and |watchers_| before swapping/copying
@@ -405,7 +430,7 @@ void Geolocation::MakeSuccessCallbacks() {
   DCHECK(last_position_);
 
   DCHECK(one_shots_being_invoked_->IsEmpty());
-  DCHECK(watchers_being_invoked_.IsEmpty());
+  DCHECK(watchers_being_invoked_.empty());
 
   // Set |one_shots_being_invoked_| and |watchers_being_invoked_| to the
   // callbacks to be invoked, which must not change during invocation of
@@ -444,8 +469,9 @@ void Geolocation::StartUpdating(GeoNotifier* notifier) {
   updating_ = true;
   if (notifier->Options()->enableHighAccuracy() && !enable_high_accuracy_) {
     enable_high_accuracy_ = true;
-    if (geolocation_.is_bound())
-      geolocation_->SetHighAccuracy(true);
+    if (geolocation_.is_bound()) {
+      geolocation_->SetHighAccuracyHint(/*high_accuracy=*/true);
+    }
   }
   UpdateGeolocationConnection(notifier);
 }
@@ -478,38 +504,44 @@ void Geolocation::UpdateGeolocationConnection(GeoNotifier* notifier) {
   geolocation_service_->CreateGeolocation(
       geolocation_.BindNewPipeAndPassReceiver(std::move(task_runner)),
       LocalFrame::HasTransientUserActivation(GetFrame()),
-      WTF::Bind(&Geolocation::OnGeolocationPermissionStatusUpdated,
-                WrapWeakPersistent(this), WrapWeakPersistent(notifier)));
+      WTF::BindOnce(&Geolocation::OnGeolocationPermissionStatusUpdated,
+                    WrapWeakPersistent(this), WrapWeakPersistent(notifier)));
 
-  geolocation_.set_disconnect_handler(WTF::Bind(
+  geolocation_.set_disconnect_handler(WTF::BindOnce(
       &Geolocation::OnGeolocationConnectionError, WrapWeakPersistent(this)));
-  if (enable_high_accuracy_)
-    geolocation_->SetHighAccuracy(true);
+  if (enable_high_accuracy_) {
+    geolocation_->SetHighAccuracyHint(/*high_accuracy=*/true);
+  }
   QueryNextPosition();
 }
 
 void Geolocation::QueryNextPosition() {
   geolocation_->QueryNextPosition(
-      WTF::Bind(&Geolocation::OnPositionUpdated, WrapPersistent(this)));
+      WTF::BindOnce(&Geolocation::OnPositionUpdated, WrapPersistent(this)));
 }
 
 void Geolocation::OnPositionUpdated(
-    device::mojom::blink::GeopositionPtr position) {
+    device::mojom::blink::GeopositionResultPtr result) {
   disconnected_geolocation_ = false;
-  if (position->valid) {
-    last_position_ = CreateGeoposition(*position);
+  if (result->is_position()) {
+    if (!ValidateGeoposition(*result->get_position())) {
+      return;
+    }
+    last_position_ = CreateGeoposition(*result->get_position());
     PositionChanged();
   } else {
+    DCHECK(result->is_error());
+    const auto& geoposition_error = *result->get_error();
     GeolocationPositionError* position_error =
-        CreatePositionError(position->error_code, position->error_message);
+        CreatePositionError(geoposition_error);
 
     auto* context = GetExecutionContext();
     DCHECK(context);
-    if (!position->error_technical.IsEmpty()) {
+    if (!geoposition_error.error_technical.empty()) {
       context->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
           mojom::blink::ConsoleMessageSource::kNetwork,
           mojom::blink::ConsoleMessageLevel::kError,
-          position->error_technical));
+          geoposition_error.error_technical));
     }
 
     if (position_error->code() == GeolocationPositionError::kPermissionDenied) {
@@ -533,7 +565,7 @@ void Geolocation::PageVisibilityChanged() {
 
 bool Geolocation::HasPendingActivity() const {
   return !one_shots_->IsEmpty() || !one_shots_being_invoked_->IsEmpty() ||
-         !watchers_->IsEmpty() || !watchers_being_invoked_.IsEmpty();
+         !watchers_->IsEmpty() || !watchers_being_invoked_.empty();
 }
 
 void Geolocation::OnGeolocationConnectionError() {

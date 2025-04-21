@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
-
 #include "third_party/icu/source/common/unicode/uniset.h"
 
 // 'icu' does not work. Use U_ICU_NAMESPACE.
@@ -64,7 +63,7 @@ class SkeletonGenerator {
 
   // Returns the set of skeletons for the |hostname|. For IDN, |hostname| must
   // already be decoded to unicode.
-  Skeletons GetSkeletons(base::StringPiece16 hostname);
+  Skeletons GetSkeletons(std::u16string_view hostname);
 
   // Returns true if the diacritics should be removed from |label|. Diacritic
   // removal is a slow operation and should be avoided when possible.
@@ -73,13 +72,13 @@ class SkeletonGenerator {
   // Removes diacritics from |hostname| and returns the new string if the input
   // only contains Latin-Greek-Cyrillic characters. Otherwise, returns the
   // input string.
-  std::u16string MaybeRemoveDiacritics(base::StringPiece16 hostname);
+  std::u16string MaybeRemoveDiacritics(std::u16string_view hostname);
 
   // Returns the set of alternative strings using the one-to-many string
   // mapping provided in `mapping`. Generates at most `max_alternatives` strings
   // from the input string.
   static base::flat_set<std::u16string> GenerateSupplementalHostnames(
-      base::StringPiece16 input,
+      std::u16string_view input,
       size_t max_alternatives,
       const SkeletonMap& mapping);
 
@@ -96,7 +95,7 @@ class SkeletonGenerator {
   // Returns true if supplemental hostnames of `input_hostname` should be
   // generated without removing its diacritics.
   bool ShouldComputeSupplementalHostnamesWithDiacritics(
-      base::StringPiece16 input_hostname) const;
+      std::u16string_view input_hostname) const;
 
   icu::UnicodeSet lgc_letters_n_ascii_;
 
@@ -110,7 +109,7 @@ class SkeletonGenerator {
   // hostname without removing its diacritics.
   base::flat_set<char16_t> characters_with_multiple_skeletons_with_diacritics_;
 
-  raw_ptr<const USpoofChecker> checker_;
+  raw_ptr<const USpoofChecker, DanglingUntriaged> checker_;
 };
 
 #endif  // COMPONENTS_URL_FORMATTER_SPOOF_CHECKS_SKELETON_GENERATOR_H_

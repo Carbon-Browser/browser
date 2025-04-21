@@ -1,26 +1,31 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/input_method/input_method_manager_impl.h"
 
 #include <stdint.h>
 
-#include <algorithm>  // std::find
 #include <memory>
 #include <set>
 #include <sstream>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/i18n/string_compare.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -30,19 +35,16 @@
 #include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/input_method/assistive_window_controller.h"
 #include "chrome/browser/ash/input_method/candidate_window_controller.h"
-#include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
-#include "chrome/browser/ash/input_method/ui/input_method_menu_item.h"
-#include "chrome/browser/ash/input_method/ui/input_method_menu_manager.h"
-#include "chrome/browser/ash/language_preferences.h"
-#include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
 #include "chrome/browser/lifetime/termination_notification.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/input_method/assistive_delegate.h"
+#include "chrome/browser/ui/ash/input_method/input_method_menu_item.h"
+#include "chrome/browser/ui/ash/input_method/input_method_menu_manager.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/system/devicemode.h"
+#include "chromeos/ash/components/language_preferences/language_preferences.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
 #include "third_party/icu/source/common/unicode/uloc.h"
@@ -50,13 +52,11 @@
 #include "ui/base/ime/ash/component_extension_ime_manager.h"
 #include "ui/base/ime/ash/component_extension_ime_manager_delegate.h"
 #include "ui/base/ime/ash/extension_ime_util.h"
-#include "ui/base/ime/ash/fake_ime_keyboard.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/ime/ash/ime_keyboard.h"
 #include "ui/base/ime/ash/ime_keyboard_impl.h"
 #include "ui/base/ime/ash/input_method_delegate.h"
 #include "ui/base/ui_base_features.h"
-#include "ui/ozone/public/ozone_platform.h"
 
 namespace ash {
 namespace input_method {
@@ -174,37 +174,37 @@ InputMethodManagerImpl::StateImpl::Clone() const {
   return scoped_refptr<InputMethodManager::State>(new_state.get());
 }
 
-std::unique_ptr<InputMethodDescriptors>
+InputMethodDescriptors
 InputMethodManagerImpl::StateImpl::GetEnabledInputMethods() const {
-  std::unique_ptr<InputMethodDescriptors> result(new InputMethodDescriptors);
+  InputMethodDescriptors result;
   // Build the enabled input method descriptors from the enabled input
   // methods cache |enabled_input_method_ids_|.
   for (const auto& input_method_id : enabled_input_method_ids_) {
     const InputMethodDescriptor* descriptor =
         manager_->util_.GetInputMethodDescriptorFromId(input_method_id);
     if (descriptor) {
-      result->push_back(*descriptor);
+      result.push_back(*descriptor);
     } else {
       const auto ix = available_input_methods_.find(input_method_id);
-      if (ix != available_input_methods_.end())
-        result->push_back(ix->second);
-      else
+      if (ix != available_input_methods_.end()) {
+        result.push_back(ix->second);
+      } else {
         DVLOG(1) << "Descriptor is not found for: " << input_method_id;
+      }
     }
   }
-  if (result->empty()) {
+  if (result.empty()) {
     // Initially |enabled_input_method_ids_| is empty. browser_tests might take
     // this path.
-    result->push_back(
-        InputMethodUtil::GetFallbackInputMethodDescriptor());
+    result.push_back(InputMethodUtil::GetFallbackInputMethodDescriptor());
   }
 
   return result;
 }
 
-std::unique_ptr<InputMethodDescriptors> InputMethodManagerImpl::StateImpl::
+InputMethodDescriptors InputMethodManagerImpl::StateImpl::
     GetEnabledInputMethodsSortedByLocalizedDisplayNames() const {
-  std::unique_ptr<InputMethodDescriptors> result = GetEnabledInputMethods();
+  InputMethodDescriptors result = GetEnabledInputMethods();
 
   UErrorCode error_code = U_ZERO_ERROR;
   std::unique_ptr<icu::Collator> collator(
@@ -213,7 +213,7 @@ std::unique_ptr<InputMethodDescriptors> InputMethodManagerImpl::StateImpl::
   const InputMethodUtil& util = manager_->util_;
 
   std::sort(
-      result->begin(), result->end(),
+      result.begin(), result.end(),
       [&collator, &util](const InputMethodDescriptor& a,
                          const InputMethodDescriptor& b) {
         std::u16string a16 = base::UTF8ToUTF16(util.GetLocalizedDisplayName(a));
@@ -240,8 +240,9 @@ InputMethodManagerImpl::StateImpl::GetInputMethodFromId(
       manager_->util_.GetInputMethodDescriptorFromId(input_method_id);
   if (!ime) {
     const auto ix = available_input_methods_.find(input_method_id);
-    if (ix != available_input_methods_.end())
+    if (ix != available_input_methods_.end()) {
       ime = &ix->second;
+    }
   }
   return ime;
 }
@@ -249,8 +250,9 @@ InputMethodManagerImpl::StateImpl::GetInputMethodFromId(
 void InputMethodManagerImpl::StateImpl::EnableLoginLayouts(
     const std::string& language_code,
     const std::vector<std::string>& initial_layouts) {
-  if (IsShuttingDown())
+  if (IsShuttingDown()) {
     return;
+  }
 
   // First, hardware keyboard layout should be shown.
   std::vector<std::string> candidates =
@@ -299,15 +301,16 @@ void InputMethodManagerImpl::StateImpl::EnableLoginLayouts(
     }
   }
 
-  manager_->MigrateInputMethods(&layouts);
+  manager_->GetMigratedInputMethodIDs(&layouts);
   enabled_input_method_ids_.swap(layouts);
 
   if (IsActive()) {
     // Initialize candidate window controller and widgets such as
     // candidate window, infolist and mode indicator.  Note, mode
     // indicator is used by only keyboard layout input methods.
-    if (enabled_input_method_ids_.size() > 1)
+    if (enabled_input_method_ids_.size() > 1) {
       manager_->MaybeInitializeCandidateWindowController();
+    }
 
     // you can pass empty |initial_layout|.
     ChangeInputMethod(initial_layouts.empty()
@@ -329,8 +332,7 @@ void InputMethodManagerImpl::StateImpl::DisableNonLockScreenLayouts() {
     // Skip if it's not a keyboard layout. Drop input methods including
     // extension ones. We need to keep all IMEs to support inputting on inline
     // reply on a notification if notifications on lock screen is enabled.
-    if ((!ash::features::IsLockScreenInlineReplyEnabled() &&
-         !manager_->IsLoginKeyboard(input_method_id)) ||
+    if (!manager_->IsLoginKeyboard(input_method_id) ||
         added_ids.count(input_method_id)) {
       continue;
     }
@@ -342,8 +344,9 @@ void InputMethodManagerImpl::StateImpl::DisableNonLockScreenLayouts() {
   // |enabled_input_method_ids_| so that the user can always use the hardware
   // keyboard on the screen locker.
   for (const auto& hardware_keyboard_id : hardware_keyboard_ids) {
-    if (added_ids.count(hardware_keyboard_id))
+    if (added_ids.count(hardware_keyboard_id)) {
       continue;
+    }
     new_enabled_input_method_ids.push_back(hardware_keyboard_id);
     added_ids.insert(hardware_keyboard_id);
   }
@@ -369,16 +372,18 @@ bool InputMethodManagerImpl::StateImpl::EnableInputMethodImpl(
     return false;
   }
 
-  if (!base::Contains(*new_enabled_input_method_ids, input_method_id))
+  if (!base::Contains(*new_enabled_input_method_ids, input_method_id)) {
     new_enabled_input_method_ids->push_back(input_method_id);
+  }
 
   return true;
 }
 
 bool InputMethodManagerImpl::StateImpl::EnableInputMethod(
     const std::string& input_method_id) {
-  if (!EnableInputMethodImpl(input_method_id, &enabled_input_method_ids_))
+  if (!EnableInputMethodImpl(input_method_id, &enabled_input_method_ids_)) {
     return false;
+  }
 
   manager_->ReconfigureIMFramework(this);
   return true;
@@ -386,15 +391,17 @@ bool InputMethodManagerImpl::StateImpl::EnableInputMethod(
 
 bool InputMethodManagerImpl::StateImpl::ReplaceEnabledInputMethods(
     const std::vector<std::string>& new_enabled_input_method_ids) {
-  if (IsShuttingDown())
+  if (IsShuttingDown()) {
     return false;
+  }
 
   // Filter unknown or obsolete IDs.
   std::vector<std::string> new_enabled_input_method_ids_filtered;
 
-  for (const auto& new_enabled_input_method_id : new_enabled_input_method_ids)
+  for (const auto& new_enabled_input_method_id : new_enabled_input_method_ids) {
     EnableInputMethodImpl(new_enabled_input_method_id,
                           &new_enabled_input_method_ids_filtered);
+  }
 
   if (new_enabled_input_method_ids_filtered.empty()) {
     DVLOG(1) << "ReplaceEnabledInputMethods: No valid input method ID";
@@ -404,11 +411,12 @@ bool InputMethodManagerImpl::StateImpl::ReplaceEnabledInputMethods(
   // Copy extension IDs to |new_enabled_input_method_ids_filtered|. We have to
   // keep relative order of the extension input method IDs.
   for (const auto& input_method_id : enabled_input_method_ids_) {
-    if (extension_ime_util::IsExtensionIME(input_method_id))
+    if (extension_ime_util::IsExtensionIME(input_method_id)) {
       new_enabled_input_method_ids_filtered.push_back(input_method_id);
+    }
   }
   enabled_input_method_ids_.swap(new_enabled_input_method_ids_filtered);
-  manager_->MigrateInputMethods(&enabled_input_method_ids_);
+  manager_->GetMigratedInputMethodIDs(&enabled_input_method_ids_);
 
   manager_->ReconfigureIMFramework(this);
 
@@ -431,15 +439,16 @@ bool InputMethodManagerImpl::StateImpl::SetAllowedInputMethods(
   allowed_keyboard_layout_input_method_ids_.clear();
   for (auto input_method_id : new_allowed_input_method_ids) {
     std::string migrated_id =
-        manager_->util_.MigrateInputMethod(input_method_id);
+        manager_->util_.GetMigratedInputMethod(input_method_id);
     if (manager_->util_.IsValidInputMethodId(migrated_id)) {
       allowed_keyboard_layout_input_method_ids_.push_back(migrated_id);
       // Kiosk users are not able to go to the settings and manually enable
       // allowed input methods, thus it has to be done automatically for
       // non-empty list.
       DCHECK(user_manager::UserManager::Get());
-      if (user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp())
+      if (user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp()) {
         EnableInputMethod(migrated_id);
+      }
     }
   }
 
@@ -459,21 +468,24 @@ bool InputMethodManagerImpl::StateImpl::IsInputMethodAllowed(
     const std::string& input_method_id) const {
   // Every input method is allowed if SetAllowedKeyboardLayoutInputMethods has
   // not been called.
-  if (allowed_keyboard_layout_input_method_ids_.empty())
+  if (allowed_keyboard_layout_input_method_ids_.empty()) {
     return true;
+  }
 
   return base::Contains(allowed_keyboard_layout_input_method_ids_,
                         input_method_id) ||
-         base::Contains(allowed_keyboard_layout_input_method_ids_,
-                        manager_->util_.MigrateInputMethod(input_method_id));
+         base::Contains(
+             allowed_keyboard_layout_input_method_ids_,
+             manager_->util_.GetMigratedInputMethod(input_method_id));
 }
 
 std::string
 InputMethodManagerImpl::StateImpl::GetAllowedFallBackKeyboardLayout() const {
   for (const std::string& hardware_id :
        manager_->util_.GetHardwareInputMethodIds()) {
-    if (IsInputMethodAllowed(hardware_id))
+    if (IsInputMethodAllowed(hardware_id)) {
       return hardware_id;
+    }
   }
   return allowed_keyboard_layout_input_method_ids_[0];
 }
@@ -481,8 +493,9 @@ InputMethodManagerImpl::StateImpl::GetAllowedFallBackKeyboardLayout() const {
 void InputMethodManagerImpl::StateImpl::ChangeInputMethod(
     const std::string& input_method_id,
     bool show_message) {
-  if (IsShuttingDown())
+  if (IsShuttingDown()) {
     return;
+  }
 
   bool notify_menu = false;
 
@@ -492,8 +505,8 @@ void InputMethodManagerImpl::StateImpl::ChangeInputMethod(
   // |enabled_input_method_ids_|.
   const InputMethodDescriptor* descriptor = LookupInputMethod(input_method_id);
   if (!descriptor) {
-    descriptor =
-        LookupInputMethod(manager_->util_.MigrateInputMethod(input_method_id));
+    descriptor = LookupInputMethod(
+        manager_->util_.GetMigratedInputMethod(input_method_id));
     if (!descriptor) {
       LOG(ERROR) << "Can't find InputMethodDescriptor for \"" << input_method_id
                  << "\"";
@@ -549,9 +562,10 @@ void InputMethodManagerImpl::StateImpl::ToggleInputMethodForJpIme() {
 void InputMethodManagerImpl::StateImpl::AddInputMethodExtension(
     const std::string& extension_id,
     const InputMethodDescriptors& descriptors,
-    ui::IMEEngineHandlerInterface* engine) {
-  if (IsShuttingDown())
+    TextInputMethod* engine) {
+  if (IsShuttingDown()) {
     return;
+  }
 
   DCHECK(engine);
 
@@ -576,14 +590,15 @@ void InputMethodManagerImpl::StateImpl::AddInputMethodExtension(
   if (IsActive()) {
     if (extension_id == extension_ime_util::GetExtensionIDFromInputMethodID(
                             current_input_method_.id())) {
-      ui::IMEBridge::Get()->SetCurrentEngineHandler(engine);
+      IMEBridge::Get()->SetCurrentEngineHandler(engine);
       engine->Enable(extension_ime_util::GetComponentIDByInputMethodID(
           current_input_method_.id()));
     }
 
     // Ensure that the input method daemon is running.
-    if (contain)
+    if (contain) {
       manager_->MaybeInitializeCandidateWindowController();
+    }
   }
 
   manager_->NotifyImeMenuListChanged();
@@ -596,8 +611,9 @@ void InputMethodManagerImpl::StateImpl::RemoveInputMethodExtension(
   std::vector<std::string> new_enabled_input_method_ids;
   for (const auto& enabled_input_method_id : enabled_input_method_ids_) {
     if (extension_id != extension_ime_util::GetExtensionIDFromInputMethodID(
-                            enabled_input_method_id))
+                            enabled_input_method_id)) {
       new_enabled_input_method_ids.push_back(enabled_input_method_id);
+    }
   }
   enabled_input_method_ids_.swap(new_enabled_input_method_ids);
 
@@ -605,15 +621,16 @@ void InputMethodManagerImpl::StateImpl::RemoveInputMethodExtension(
   std::map<std::string, InputMethodDescriptor> new_available_input_methods;
   for (const auto& entry : available_input_methods_) {
     if (extension_id !=
-        extension_ime_util::GetExtensionIDFromInputMethodID(entry.first))
+        extension_ime_util::GetExtensionIDFromInputMethodID(entry.first)) {
       new_available_input_methods[entry.first] = entry.second;
+    }
   }
   available_input_methods_.swap(new_available_input_methods);
 
   if (IsActive()) {
-    if (ui::IMEBridge::Get()->GetCurrentEngineHandler() ==
+    if (IMEBridge::Get()->GetCurrentEngineHandler() ==
         manager_->engine_map_[profile_][extension_id]) {
-      ui::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
+      IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
     }
     manager_->engine_map_[profile_].erase(extension_id);
   }
@@ -637,36 +654,40 @@ void InputMethodManagerImpl::StateImpl::GetInputMethodExtensions(
 }
 
 void InputMethodManagerImpl::StateImpl::SetEnabledExtensionImes(
-    std::vector<std::string>* ids) {
+    base::span<const std::string> ids) {
   enabled_extension_imes_.clear();
-  enabled_extension_imes_.insert(enabled_extension_imes_.end(), ids->begin(),
-                                 ids->end());
+  enabled_extension_imes_.insert(enabled_extension_imes_.end(), ids.begin(),
+                                 ids.end());
   bool enabled_imes_changed = false;
   bool switch_to_pending = false;
 
   for (const auto& entry : available_input_methods_) {
-    if (extension_ime_util::IsComponentExtensionIME(entry.first))
+    if (extension_ime_util::IsComponentExtensionIME(entry.first)) {
       continue;  // Do not filter component extension.
+    }
 
-    if (pending_input_method_id_ == entry.first)
+    if (pending_input_method_id_ == entry.first) {
       switch_to_pending = true;
+    }
 
     const auto currently_enabled_iter =
-        std::find(enabled_input_method_ids_.begin(),
-                  enabled_input_method_ids_.end(), entry.first);
+        base::ranges::find(enabled_input_method_ids_, entry.first);
 
     bool currently_enabled =
         currently_enabled_iter != enabled_input_method_ids_.end();
     bool enabled = base::Contains(enabled_extension_imes_, entry.first);
 
-    if (currently_enabled && !enabled)
+    if (currently_enabled && !enabled) {
       enabled_input_method_ids_.erase(currently_enabled_iter);
+    }
 
-    if (!currently_enabled && enabled)
+    if (!currently_enabled && enabled) {
       enabled_input_method_ids_.push_back(entry.first);
+    }
 
-    if (currently_enabled == !enabled)
+    if (currently_enabled == !enabled) {
       enabled_imes_changed = true;
+    }
   }
 
   if (IsActive() && enabled_imes_changed) {
@@ -703,12 +724,13 @@ void InputMethodManagerImpl::StateImpl::SetInputMethodLoginDefaultFromVPD(
     }
   }
 
-  if (layout.empty())
+  if (layout.empty()) {
     return;
+  }
 
   std::vector<std::string> layouts = base::SplitString(
       layout, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  manager_->MigrateInputMethods(&layouts);
+  manager_->GetMigratedInputMethodIDs(&layouts);
 
   PrefService* prefs = g_browser_process->local_state();
   prefs->SetString(prefs::kHardwareKeyboardLayout,
@@ -761,20 +783,19 @@ void InputMethodManagerImpl::StateImpl::SwitchToNextInputMethod() {
   }
 
   const std::string& current_input_method_id = current_input_method_.id();
-  std::unique_ptr<InputMethodDescriptors> sorted_enabled_input_methods =
+  InputMethodDescriptors sorted_enabled_input_methods =
       GetEnabledInputMethodsSortedByLocalizedDisplayNames();
 
-  auto iter = std::find_if(
-      sorted_enabled_input_methods->begin(),
-      sorted_enabled_input_methods->end(),
-      [&current_input_method_id](const InputMethodDescriptor& input_method) {
-        return current_input_method_id == input_method.id();
-      });
+  auto iter =
+      base::ranges::find(sorted_enabled_input_methods, current_input_method_id,
+                         &InputMethodDescriptor::id);
 
-  if (iter != sorted_enabled_input_methods->end())
+  if (iter != sorted_enabled_input_methods.end()) {
     ++iter;
-  if (iter == sorted_enabled_input_methods->end())
-    iter = sorted_enabled_input_methods->begin();
+  }
+  if (iter == sorted_enabled_input_methods.end()) {
+    iter = sorted_enabled_input_methods.begin();
+  }
 
   ChangeInputMethod(iter->id(), true);
 }
@@ -792,8 +813,7 @@ void InputMethodManagerImpl::StateImpl::SwitchToLastUsedInputMethod() {
   }
 
   const auto iter =
-      std::find(enabled_input_method_ids_.begin(),
-                enabled_input_method_ids_.end(), last_used_input_method_id_);
+      base::ranges::find(enabled_input_method_ids_, last_used_input_method_id_);
   if (iter == enabled_input_method_ids_.end()) {
     // last_used_input_method_id_ is not supported.
     SwitchToNextInputMethod();
@@ -804,8 +824,9 @@ void InputMethodManagerImpl::StateImpl::SwitchToLastUsedInputMethod() {
 
 InputMethodDescriptor InputMethodManagerImpl::StateImpl::GetCurrentInputMethod()
     const {
-  if (current_input_method_.id().empty())
+  if (current_input_method_.id().empty()) {
     return InputMethodUtil::GetFallbackInputMethodDescriptor();
+  }
 
   return current_input_method_;
 }
@@ -884,14 +905,13 @@ InputMethodManagerImpl::StateImpl::LookupInputMethod(
 
   // Sanity check
   if (!InputMethodIsEnabled(input_method_id)) {
-    std::unique_ptr<InputMethodDescriptors> input_methods(
-        GetEnabledInputMethods());
-    DCHECK(!input_methods->empty());
-    input_method_id_to_switch = input_methods->at(0).id();
+    InputMethodDescriptors input_methods(GetEnabledInputMethods());
+    DCHECK(!input_methods.empty());
+    input_method_id_to_switch = input_methods.at(0).id();
     if (!input_method_id.empty()) {
       DVLOG(1) << "Can't change the current input method to " << input_method_id
-               << " since the engine is not enabled. "
-               << "Switch to " << input_method_id_to_switch << " instead.";
+               << " since the engine is not enabled. " << "Switch to "
+               << input_method_id_to_switch << " instead.";
     }
   }
 
@@ -904,8 +924,9 @@ InputMethodManagerImpl::StateImpl::LookupInputMethod(
   } else {
     descriptor = manager_->util_.GetInputMethodDescriptorFromId(
         input_method_id_to_switch);
-    if (!descriptor)
+    if (!descriptor) {
       LOG(ERROR) << "Unknown input method id: " << input_method_id_to_switch;
+    }
   }
   DCHECK(descriptor);
   return descriptor;
@@ -924,14 +945,18 @@ bool InputMethodManagerImpl::StateImpl::IsMenuActivated() const {
 }
 
 // ------------------------ InputMethodManagerImpl
-bool InputMethodManagerImpl::IsLoginKeyboard(
-    const std::string& layout) const {
+bool InputMethodManagerImpl::IsLoginKeyboard(const std::string& layout) const {
   return util_.IsLoginKeyboard(layout);
 }
 
-bool InputMethodManagerImpl::MigrateInputMethods(
+std::string InputMethodManagerImpl::GetMigratedInputMethodID(
+    const std::string& input_method_id) {
+  return util_.GetMigratedInputMethod(input_method_id);
+}
+
+bool InputMethodManagerImpl::GetMigratedInputMethodIDs(
     std::vector<std::string>* input_method_ids) {
-  return util_.MigrateInputMethods(input_method_ids);
+  return util_.GetMigratedInputMethodIDs(input_method_ids);
 }
 
 // Starts or stops the system input method framework as needed.
@@ -981,9 +1006,11 @@ InputMethodManagerImpl::InputMethodManagerImpl(
     std::unique_ptr<InputMethodDelegate> delegate,
     std::unique_ptr<ComponentExtensionIMEManagerDelegate>
         component_extension_ime_manager_delegate,
-    bool enable_extension_loading)
+    bool enable_extension_loading,
+    std::unique_ptr<ImeKeyboard> ime_keyboard)
     : delegate_(std::move(delegate)),
       util_(delegate_.get()),
+      keyboard_(std::move(ime_keyboard)),
       enable_extension_loading_(enable_extension_loading),
       features_enabled_state_(InputMethodManager::FEATURE_ALL) {
   if (::features::IsImprovedKeyboardShortcutsEnabled()) {
@@ -994,12 +1021,6 @@ InputMethodManagerImpl::InputMethodManagerImpl(
     }
   }
 
-  if (chromeos::IsRunningAsSystemCompositor()) {
-    keyboard_ = std::make_unique<ImeKeyboardImpl>(
-        ui::OzonePlatform::GetInstance()->GetInputController());
-  } else {
-    keyboard_ = std::make_unique<FakeImeKeyboard>();
-  }
   // Initializes the system IME list.
   component_extension_ime_manager_ =
       std::make_unique<ComponentExtensionIMEManager>(
@@ -1016,8 +1037,9 @@ InputMethodManagerImpl::InputMethodManagerImpl(
 }
 
 InputMethodManagerImpl::~InputMethodManagerImpl() {
-  if (candidate_window_controller_.get())
+  if (candidate_window_controller_.get()) {
     candidate_window_controller_->RemoveObserver(this);
+  }
 }
 
 void InputMethodManagerImpl::RecordInputMethodUsage(
@@ -1074,26 +1096,27 @@ void InputMethodManagerImpl::ChangeInputMethodInternalFromActiveState(
     return;
   }
 
-  if (candidate_window_controller_.get())
+  if (candidate_window_controller_.get()) {
     candidate_window_controller_->Hide();
+  }
 
   if (notify_menu) {
     // Clear property list.  Property list would be updated by
-    // extension IMEs via IMEEngineHandlerInterface::(Set|Update)MenuItems.
+    // extension IMEs via TextInputMethod::(Set|Update)MenuItems.
     // If the current input method is a keyboard layout, empty
     // properties are sufficient.
     const ui::ime::InputMethodMenuItemList empty_menu_item_list;
     ui::ime::InputMethodMenuManager* input_method_menu_manager =
         ui::ime::InputMethodMenuManager::GetInstance();
     input_method_menu_manager->SetCurrentInputMethodMenuItemList(
-            empty_menu_item_list);
+        empty_menu_item_list);
   }
 
   // Disable the current engine handler.
-  ui::IMEEngineHandlerInterface* engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (engine)
+  TextInputMethod* engine = IMEBridge::Get()->GetCurrentEngineHandler();
+  if (engine) {
     engine->Disable();
+  }
 
   // Configure the next engine handler.
   // This must be after |current_input_method_| has been set to new input
@@ -1111,7 +1134,7 @@ void InputMethodManagerImpl::ChangeInputMethodInternalFromActiveState(
   }
   engine = engine_map_[state_->GetProfile()][extension_id];
 
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine);
+  IMEBridge::Get()->SetCurrentEngineHandler(engine);
 
   if (engine) {
     engine->Enable(component_id);
@@ -1123,29 +1146,38 @@ void InputMethodManagerImpl::ChangeInputMethodInternalFromActiveState(
   }
 
   // Change the keyboard layout to a preferred layout for the input method.
-  if (!keyboard_->SetCurrentKeyboardLayoutByName(
-          state_->GetCurrentInputMethod().keyboard_layout())) {
+  keyboard_->SetCurrentKeyboardLayoutByName(
+      state_->GetCurrentInputMethod().keyboard_layout(),
+      base::BindOnce(&InputMethodManagerImpl::NotifyInputMethodChanged,
+                     base::Unretained(this), show_message));
+
+  // Update the current input method in IME menu.
+  NotifyImeMenuListChanged();
+}
+
+void InputMethodManagerImpl::NotifyInputMethodChanged(bool show_message,
+                                                      bool success) {
+  if (!success) {
     LOG(ERROR) << "Failed to change keyboard layout to "
                << state_->GetCurrentInputMethod().keyboard_layout();
   }
 
   // Update input method indicators (e.g. "US", "DV") in Chrome windows.
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.InputMethodChanged(this, state_->GetProfile(), show_message);
-  // Update the current input method in IME menu.
-  NotifyImeMenuListChanged();
+  }
 }
 
 void InputMethodManagerImpl::ActivateInputMethodMenuItem(
     const std::string& key) {
   DCHECK(!key.empty());
 
-  if (ui::ime::InputMethodMenuManager::GetInstance()->
-      HasInputMethodMenuItemForKey(key)) {
-    ui::IMEEngineHandlerInterface* engine =
-        ui::IMEBridge::Get()->GetCurrentEngineHandler();
-    if (engine)
+  if (ui::ime::InputMethodMenuManager::GetInstance()
+          ->HasInputMethodMenuItemForKey(key)) {
+    TextInputMethod* engine = IMEBridge::Get()->GetCurrentEngineHandler();
+    if (engine) {
       engine->PropertyActivate(key);
+    }
     return;
   }
 
@@ -1168,6 +1200,22 @@ void InputMethodManagerImpl::ConnectInputEngineManager(
   iter->second->SetupImeService(std::move(receiver));
 }
 
+void InputMethodManagerImpl::BindInputMethodUserDataService(
+    mojo::PendingReceiver<ime::mojom::InputMethodUserDataService> receiver) {
+  DCHECK(state_);
+  ImeServiceConnectorMap::iterator iter =
+      ime_service_connectors_.find(state_->GetProfile());
+  if (iter == ime_service_connectors_.end()) {
+    auto connector_ =
+        std::make_unique<ImeServiceConnector>(state_->GetProfile());
+    iter =
+        ime_service_connectors_
+            .insert(std::make_pair(state_->GetProfile(), std::move(connector_)))
+            .first;
+  }
+  iter->second->BindInputMethodUserDataService(std::move(receiver));
+}
+
 bool InputMethodManagerImpl::IsISOLevel5ShiftUsedByCurrentInputMethod() const {
   return keyboard_->IsISOLevel5ShiftAvailable();
 }
@@ -1178,8 +1226,9 @@ bool InputMethodManagerImpl::IsAltGrUsedByCurrentInputMethod() const {
 
 bool InputMethodManagerImpl::ArePositionalShortcutsUsedByCurrentInputMethod()
     const {
-  if (!state_ || !::features::IsImprovedKeyboardShortcutsEnabled())
+  if (!state_ || !::features::IsImprovedKeyboardShortcutsEnabled()) {
     return false;
+  }
 
   return !non_positional_layouts_.contains(
       state_.get()->GetCurrentInputMethod().keyboard_layout());
@@ -1194,7 +1243,7 @@ InputMethodUtil* InputMethodManagerImpl::GetInputMethodUtil() {
 }
 
 ComponentExtensionIMEManager*
-    InputMethodManagerImpl::GetComponentExtensionIMEManager() {
+InputMethodManagerImpl::GetComponentExtensionIMEManager() {
   return component_extension_ime_manager_.get();
 }
 
@@ -1229,43 +1278,50 @@ void InputMethodManagerImpl::SetCandidateWindowControllerForTesting(
   candidate_window_controller_->AddObserver(this);
 }
 
-void InputMethodManagerImpl::SetImeKeyboardForTesting(ImeKeyboard* keyboard) {
-  keyboard_.reset(keyboard);
-}
-
 void InputMethodManagerImpl::OnAppTerminating() {
-  if (candidate_window_controller_.get())
+  if (candidate_window_controller_.get()) {
     candidate_window_controller_.reset();
+  }
 
   if (assistive_window_controller_.get()) {
     assistive_window_controller_.reset();
-    ui::IMEBridge::Get()->SetAssistiveWindowHandler(nullptr);
+    IMEBridge::Get()->SetAssistiveWindowHandler(nullptr);
   }
 }
 
 void InputMethodManagerImpl::CandidateClicked(int index) {
-  ui::IMEEngineHandlerInterface* engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (engine)
+  TextInputMethod* engine = IMEBridge::Get()->GetCurrentEngineHandler();
+  if (engine) {
     engine->CandidateClicked(index);
+  }
 }
 
 void InputMethodManagerImpl::CandidateWindowOpened() {
-  for (auto& observer : candidate_window_observers_)
+  for (auto& observer : candidate_window_observers_) {
     observer.CandidateWindowOpened(this);
+  }
 }
 
 void InputMethodManagerImpl::CandidateWindowClosed() {
-  for (auto& observer : candidate_window_observers_)
+  for (auto& observer : candidate_window_observers_) {
     observer.CandidateWindowClosed(this);
+  }
 }
 
 void InputMethodManagerImpl::AssistiveWindowButtonClicked(
     const ui::ime::AssistiveWindowButton& button) const {
-  ui::IMEEngineHandlerInterface* engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (engine)
+  TextInputMethod* engine = IMEBridge::Get()->GetCurrentEngineHandler();
+  if (engine) {
     engine->AssistiveWindowButtonClicked(button);
+  }
+}
+
+void InputMethodManagerImpl::AssistiveWindowChanged(
+    const ash::ime::AssistiveWindow& window) const {
+  TextInputMethod* engine = IMEBridge::Get()->GetCurrentEngineHandler();
+  if (engine) {
+    engine->AssistiveWindowChanged(window);
+  }
 }
 
 void InputMethodManagerImpl::ImeMenuActivationChanged(bool is_active) {
@@ -1277,24 +1333,28 @@ void InputMethodManagerImpl::ImeMenuActivationChanged(bool is_active) {
 
 void InputMethodManagerImpl::NotifyInputMethodExtensionAdded(
     const std::string& extension_id) {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnInputMethodExtensionAdded(extension_id);
+  }
 }
 
 void InputMethodManagerImpl::NotifyInputMethodExtensionRemoved(
     const std::string& extension_id) {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnInputMethodExtensionRemoved(extension_id);
+  }
 }
 
 void InputMethodManagerImpl::NotifyImeMenuListChanged() {
-  for (auto& observer : ime_menu_observers_)
+  for (auto& observer : ime_menu_observers_) {
     observer.ImeMenuListChanged();
+  }
 }
 
 void InputMethodManagerImpl::MaybeInitializeCandidateWindowController() {
-  if (candidate_window_controller_.get())
+  if (candidate_window_controller_.get()) {
     return;
+  }
 
   candidate_window_controller_.reset(
       CandidateWindowController::CreateCandidateWindowController());
@@ -1302,31 +1362,33 @@ void InputMethodManagerImpl::MaybeInitializeCandidateWindowController() {
 }
 
 void InputMethodManagerImpl::MaybeInitializeAssistiveWindowController() {
-  if (assistive_window_controller_.get())
+  if (assistive_window_controller_.get()) {
     return;
+  }
 
   assistive_window_controller_ =
       std::make_unique<AssistiveWindowController>(this, state_->GetProfile());
-  ui::IMEBridge::Get()->SetAssistiveWindowHandler(
+  IMEBridge::Get()->SetAssistiveWindowHandler(
       assistive_window_controller_.get());
 }
 
 void InputMethodManagerImpl::NotifyImeMenuItemsChanged(
     const std::string& engine_id,
     const std::vector<InputMethodManager::MenuItem>& items) {
-  for (auto& observer : ime_menu_observers_)
+  for (auto& observer : ime_menu_observers_) {
     observer.ImeMenuItemsChanged(engine_id, items);
+  }
 }
 
 void InputMethodManagerImpl::MaybeNotifyImeMenuActivationChanged() {
-  if (is_ime_menu_activated_ == state_->IsMenuActivated())
+  if (is_ime_menu_activated_ == state_->IsMenuActivated()) {
     return;
+  }
 
   is_ime_menu_activated_ = state_->IsMenuActivated();
-  for (auto& observer : ime_menu_observers_)
+  for (auto& observer : ime_menu_observers_) {
     observer.ImeMenuActivationChanged(is_ime_menu_activated_);
-  UMA_HISTOGRAM_BOOLEAN("InputMethod.ImeMenu.ActivationChanged",
-                        is_ime_menu_activated_);
+  }
 }
 
 void InputMethodManagerImpl::OverrideKeyboardKeyset(ImeKeyset keyset) {
@@ -1335,13 +1397,15 @@ void InputMethodManagerImpl::OverrideKeyboardKeyset(ImeKeyset keyset) {
   // If fails to find ref or tag "id" in the ref, it means the current IME is
   // not system IME, and we don't support show emoji, handwriting or voice
   // input for such IME extension.
-  if (!url.has_ref())
+  if (!url.has_ref()) {
     return;
+  }
   std::string overridden_ref = url.ref();
 
   auto id_start = overridden_ref.find("id=");
-  if (id_start == std::string::npos)
+  if (id_start == std::string::npos) {
     return;
+  }
 
   if (keyset == ImeKeyset::kNone) {
     // Resets the url as the input method default url and notify the hash
@@ -1359,8 +1423,8 @@ void InputMethodManagerImpl::OverrideKeyboardKeyset(ImeKeyset keyset) {
   auto id_end = overridden_ref.find("&", id_start + 1);
   std::string id_string = overridden_ref.substr(id_start, id_end - id_start);
   // Remove existing keyset string.
-  for (const ImeKeyset keyset : kKeysets) {
-    std::string keyset_string = KeysetToString(keyset);
+  for (const ImeKeyset keyset_to_find : kKeysets) {
+    std::string keyset_string = KeysetToString(keyset_to_find);
     auto keyset_start = id_string.find("." + keyset_string);
     if (keyset_start != std::string::npos) {
       id_string.replace(keyset_start, keyset_string.length() + 1, "");
@@ -1397,12 +1461,14 @@ void InputMethodManagerImpl::OverrideKeyboardKeyset(ImeKeyset keyset) {
 void InputMethodManagerImpl::SetImeMenuFeatureEnabled(ImeMenuFeature feature,
                                                       bool enabled) {
   const uint32_t original_state = features_enabled_state_;
-  if (enabled)
+  if (enabled) {
     features_enabled_state_ |= feature;
-  else
+  } else {
     features_enabled_state_ &= ~feature;
-  if (original_state != features_enabled_state_)
+  }
+  if (original_state != features_enabled_state_) {
     NotifyObserversImeExtraInputStateChange();
+  }
 }
 
 bool InputMethodManagerImpl::GetImeMenuFeatureEnabled(
@@ -1423,19 +1489,11 @@ void InputMethodManagerImpl::NotifyObserversImeExtraInputStateChange() {
   }
 }
 
-ui::VirtualKeyboardController*
-InputMethodManagerImpl::GetVirtualKeyboardController() {
-  ui::IMEEngineHandlerInterface* engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (!engine)
-    return nullptr;
-  return engine->GetVirtualKeyboardController();
-}
-
 void InputMethodManagerImpl::ReloadKeyboard() {
   auto* keyboard_client = ChromeKeyboardControllerClient::Get();
-  if (keyboard_client->is_keyboard_enabled())
+  if (keyboard_client->is_keyboard_enabled()) {
     keyboard_client->ReloadKeyboardIfNeeded();
+  }
 }
 
 }  // namespace input_method

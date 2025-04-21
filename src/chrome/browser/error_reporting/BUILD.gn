@@ -1,11 +1,10 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import("//build/config/chromeos/ui_mode.gni")
 
-# TODO(crbug.com/1129544) This is currently disabled due to Windows DLL
-# thunking issues. Fix & re-enable.
-assert(is_linux || is_chromeos)
+# TODO(crbug.com/40188745): fuchsia cannot use components/crash.
+assert(!is_android && !is_fuchsia)
 
 source_set("constants") {
   sources = [
@@ -27,8 +26,8 @@ static_library("error_reporting") {
     "//chrome/common:constants",
     "//components/crash/content/browser/error_reporting",
     "//components/crash/core/app",
-    "//components/feedback",
-    "//components/startup_metric_utils/browser",
+    "//components/feedback/redaction_tool",
+    "//components/startup_metric_utils",
     "//components/upload_list",
     "//components/variations",
     "//content/public/browser",
@@ -57,8 +56,10 @@ source_set("test_support") {
     "//build:chromeos_buildflags",
     "//chrome/common:constants",
     "//components/crash/content/browser/error_reporting",
-    "//components/crash/content/browser/error_reporting:mock_crash_endpoint",
     "//components/variations",
+  ]
+  public_deps = [
+    "//components/crash/content/browser/error_reporting:mock_crash_endpoint",
   ]
   if (is_chromeos) {
     data_deps = [ ":mock_chromeos_crash_reporter" ]
@@ -72,6 +73,7 @@ source_set("unit_test") {
     ":error_reporting",
     ":test_support",
     "//base",
+    "//chrome/browser/crash_upload_list",
     "//chrome/test:test_support",
     "//components/crash/content/browser/error_reporting",
     "//components/crash/content/browser/error_reporting:mock_crash_endpoint",

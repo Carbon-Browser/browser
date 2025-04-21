@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,11 +18,10 @@
 #include "base/time/time.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "media/base/video_frame_pool.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/video_capture/video_capturer_source.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
-#include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/ganesh/GrTypes.h"
 
 class SkImage;
 
@@ -59,6 +59,7 @@ class MODULES_EXPORT CanvasCaptureHandler {
       LocalFrame* frame,
       const gfx::Size& size,
       double frame_rate,
+      scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
       MediaStreamComponent** component);
 
@@ -90,6 +91,7 @@ class MODULES_EXPORT CanvasCaptureHandler {
       LocalFrame* frame,
       const gfx::Size& size,
       double frame_rate,
+      scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
       MediaStreamComponent** component);
 
@@ -103,6 +105,7 @@ class MODULES_EXPORT CanvasCaptureHandler {
                  scoped_refptr<media::VideoFrame> video_frame);
 
   void AddVideoCapturerSourceToVideoTrack(
+      scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
       LocalFrame* frame,
       std::unique_ptr<VideoCapturerSource> source,
       MediaStreamComponent** component);
@@ -117,7 +120,7 @@ class MODULES_EXPORT CanvasCaptureHandler {
   media::VideoCaptureFormat capture_format_;
   bool can_discard_alpha_ = false;
   bool ask_for_new_frame_ = false;
-  absl::optional<base::TimeTicks> first_frame_ticks_;
+  std::optional<base::TimeTicks> first_frame_ticks_;
   scoped_refptr<media::VideoFrame> last_frame_;
 
   // The following attributes ensure that CanvasCaptureHandler emits

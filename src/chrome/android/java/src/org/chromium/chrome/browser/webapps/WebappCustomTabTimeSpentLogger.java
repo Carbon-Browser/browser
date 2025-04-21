@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider.Launch
 /**
  * Logs to UMA the amount of time user spends in a CCT for CCTs launched from webapps.
  *
- * TODO(https://crbug.com/883402): Rename this to CustomTabTimeSpentLogger and refactor into the
+ * <p>TODO(crbug.com/41413392): Rename this to CustomTabTimeSpentLogger and refactor into the
  * customtabs package.
  */
 public class WebappCustomTabTimeSpentLogger {
@@ -26,7 +26,8 @@ public class WebappCustomTabTimeSpentLogger {
 
     /**
      * Create {@link WebappCustomTabTimeSpentLogger} instance and starts timer.
-     * @param type of the activity that opens the CCT.
+     *
+     * @param activityType type of the activity that opens the CCT.
      * @return {@link WebappCustomTabTimeSpentLogger} instance.
      */
     public static WebappCustomTabTimeSpentLogger createInstanceAndStartTimer(
@@ -34,9 +35,7 @@ public class WebappCustomTabTimeSpentLogger {
         return new WebappCustomTabTimeSpentLogger(activityType);
     }
 
-    /**
-     * Stop timer and log UMA.
-     */
+    /** Stop timer and log UMA. */
     public void onPause() {
         long timeSpent = SystemClock.elapsedRealtime() - mStartTime;
         String umaSuffix;

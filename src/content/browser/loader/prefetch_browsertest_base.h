@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -107,8 +107,14 @@ class PrefetchBrowserTestBase : public ContentBrowserTest {
 
   int GetPrefetchURLLoaderCallCount();
 
+  // Register a callback to be called just before the `PrefetchURLLoader` is
+  // created and started.
+  void RegisterPrefetchLoaderCallback(base::OnceClosure callback);
+
  private:
   std::map<std::string, ResponseEntry> response_map_;
+
+  base::OnceClosure prefetch_loader_callback_;
 
   int prefetch_url_loader_called_ GUARDED_BY(lock_) = 0;
   base::Lock lock_;

@@ -1,15 +1,17 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/cast/logging/log_event_dispatcher.h"
 
-#include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/synchronization/waitable_event.h"
 #include "media/cast/cast_environment.h"
 
@@ -103,37 +105,39 @@ LogEventDispatcher::Impl::~Impl() {
 
 void LogEventDispatcher::Impl::DispatchFrameEvent(
     std::unique_ptr<FrameEvent> event) const {
-  for (RawEventSubscriber* s : subscribers_)
+  for (RawEventSubscriber* s : subscribers_) {
     s->OnReceiveFrameEvent(*event);
+  }
 }
 
 void LogEventDispatcher::Impl::DispatchPacketEvent(
     std::unique_ptr<PacketEvent> event) const {
-  for (RawEventSubscriber* s : subscribers_)
+  for (RawEventSubscriber* s : subscribers_) {
     s->OnReceivePacketEvent(*event);
+  }
 }
 
 void LogEventDispatcher::Impl::DispatchBatchOfEvents(
     std::unique_ptr<std::vector<FrameEvent>> frame_events,
     std::unique_ptr<std::vector<PacketEvent>> packet_events) const {
   for (RawEventSubscriber* s : subscribers_) {
-    for (const FrameEvent& e : *frame_events)
+    for (const FrameEvent& e : *frame_events) {
       s->OnReceiveFrameEvent(e);
-    for (const PacketEvent& e : *packet_events)
+    }
+    for (const PacketEvent& e : *packet_events) {
       s->OnReceivePacketEvent(e);
+    }
   }
 }
 
 void LogEventDispatcher::Impl::Subscribe(RawEventSubscriber* subscriber) {
-  DCHECK(std::find(subscribers_.begin(), subscribers_.end(), subscriber) ==
-         subscribers_.end());
+  DCHECK(!base::Contains(subscribers_, subscriber));
   subscribers_.push_back(subscriber);
 }
 
 void LogEventDispatcher::Impl::Unsubscribe(RawEventSubscriber* subscriber) {
-  const auto it =
-      std::find(subscribers_.begin(), subscribers_.end(), subscriber);
-  DCHECK(it != subscribers_.end());
+  const auto it = base::ranges::find(subscribers_, subscriber);
+  CHECK(it != subscribers_.end(), base::NotFatalUntil::M130);
   subscribers_.erase(it);
 }
 

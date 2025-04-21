@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/process_node.h"
@@ -30,8 +30,8 @@ namespace v8_memory {
 V8DetailedMemoryRequestAnySeq::V8DetailedMemoryRequestAnySeq(
     const base::TimeDelta& min_time_between_requests,
     MeasurementMode mode,
-    absl::optional<RenderProcessHostId> process_to_measure) {
-  absl::optional<base::WeakPtr<ProcessNode>> process_node;
+    std::optional<RenderProcessHostId> process_to_measure) {
+  std::optional<base::WeakPtr<ProcessNode>> process_node;
   if (process_to_measure) {
     // GetProcessNodeForRenderProcessHostId must be called from the UI thread.
     auto ui_task_runner = content::GetUIThreadTaskRunner({});
@@ -96,7 +96,7 @@ void V8DetailedMemoryRequestAnySeq::NotifyObserversOnMeasurementAvailable(
 void V8DetailedMemoryRequestAnySeq::InitializeWrappedRequest(
     const base::TimeDelta& min_time_between_requests,
     MeasurementMode mode,
-    absl::optional<base::WeakPtr<ProcessNode>> process_to_measure) {
+    std::optional<base::WeakPtr<ProcessNode>> process_to_measure) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // After construction the V8DetailedMemoryRequest must only be accessed on
   // the graph sequence.
@@ -165,7 +165,7 @@ void V8DetailedMemoryRequestOneShotAnySeq::InitializeWrappedRequest(
   auto wrapped_callback = base::BindOnce(
       &V8DetailedMemoryRequestOneShotAnySeq::OnMeasurementAvailable,
       base::SequenceBound<MeasurementCallback>(
-          base::SequencedTaskRunnerHandle::Get(), std::move(callback)));
+          base::SequencedTaskRunner::GetCurrentDefault(), std::move(callback)));
 
   // After construction the V8DetailedMemoryRequest must only be accessed on
   // the graph sequence.
@@ -185,19 +185,15 @@ void V8DetailedMemoryRequestOneShotAnySeq::OnMeasurementAvailable(
   using FrameAndData = std::pair<content::GlobalRenderFrameHostId,
                                  V8DetailedMemoryExecutionContextData>;
   std::vector<FrameAndData> all_frame_data;
-  process_node->VisitFrameNodes(base::BindRepeating(
-      [](std::vector<FrameAndData>* all_frame_data,
-         const FrameNode* frame_node) {
-        const auto* frame_data =
-            V8DetailedMemoryExecutionContextData::ForFrameNode(frame_node);
-        if (frame_data) {
-          all_frame_data->push_back(std::make_pair(
-              frame_node->GetRenderFrameHostProxy().global_frame_routing_id(),
-              *frame_data));
-        }
-        return true;
-      },
-      base::Unretained(&all_frame_data)));
+  for (const FrameNode* frame_node : process_node->GetFrameNodes()) {
+    const auto* frame_data =
+        V8DetailedMemoryExecutionContextData::ForFrameNode(frame_node);
+    if (frame_data) {
+      all_frame_data.push_back(std::make_pair(
+          frame_node->GetRenderFrameHostProxy().global_frame_routing_id(),
+          *frame_data));
+    }
+  }
 
   sequence_bound_callback.PostTaskWithThisObject(
       base::BindOnce(

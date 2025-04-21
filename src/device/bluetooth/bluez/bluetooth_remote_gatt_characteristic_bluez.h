@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "dbus/object_path.h"
@@ -60,16 +60,16 @@ class BluetoothRemoteGattCharacteristicBlueZ
   device::BluetoothRemoteGattService* GetService() const override;
   bool IsNotifying() const override;
   void ReadRemoteCharacteristic(ValueCallback callback) override;
-  void WriteRemoteCharacteristic(const std::vector<uint8_t>& value,
+  void WriteRemoteCharacteristic(base::span<const uint8_t> value,
                                  WriteType write_type,
                                  base::OnceClosure callback,
                                  ErrorCallback error_callback) override;
   void DeprecatedWriteRemoteCharacteristic(
-      const std::vector<uint8_t>& value,
+      base::span<const uint8_t> value,
       base::OnceClosure callback,
       ErrorCallback error_callback) override;
 #if BUILDFLAG(IS_CHROMEOS)
-  void PrepareWriteRemoteCharacteristic(const std::vector<uint8_t>& value,
+  void PrepareWriteRemoteCharacteristic(base::span<const uint8_t> value,
                                         base::OnceClosure callback,
                                         ErrorCallback error_callback) override;
 #endif  // BUILDFLAG(IS_CHROMEOS)

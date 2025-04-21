@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,9 @@ namespace blink {
 
 void AudioProcessingProperties::DisableDefaultProperties() {
   echo_cancellation_type = EchoCancellationType::kEchoCancellationDisabled;
-  goog_auto_gain_control = false;
-  goog_experimental_echo_cancellation = false;
-  goog_noise_suppression = false;
-  goog_experimental_noise_suppression = false;
-  goog_highpass_filter = false;
-  goog_experimental_auto_gain_control = false;
+  auto_gain_control = false;
+  noise_suppression = false;
+  voice_isolation = VoiceIsolationType::kVoiceIsolationDefault;
 }
 
 bool AudioProcessingProperties::EchoCancellationEnabled() const {
@@ -33,16 +30,13 @@ bool AudioProcessingProperties::HasSameReconfigurableSettings(
 bool AudioProcessingProperties::HasSameNonReconfigurableSettings(
     const AudioProcessingProperties& other) const {
   return disable_hw_noise_suppression == other.disable_hw_noise_suppression &&
-         goog_audio_mirroring == other.goog_audio_mirroring &&
-         goog_auto_gain_control == other.goog_auto_gain_control &&
-         goog_experimental_echo_cancellation ==
-             other.goog_experimental_echo_cancellation &&
-         goog_noise_suppression == other.goog_noise_suppression &&
-         goog_experimental_noise_suppression ==
-             other.goog_experimental_noise_suppression &&
-         goog_highpass_filter == other.goog_highpass_filter &&
-         goog_experimental_auto_gain_control ==
-             other.goog_experimental_auto_gain_control;
+         auto_gain_control == other.auto_gain_control &&
+         noise_suppression == other.noise_suppression &&
+         voice_isolation == other.voice_isolation;
+}
+
+bool AudioProcessingProperties::GainControlEnabled() const {
+  return auto_gain_control;
 }
 
 media::AudioProcessingSettings
@@ -52,21 +46,12 @@ AudioProcessingProperties::ToAudioProcessingSettings(
   out.echo_cancellation =
       echo_cancellation_type == EchoCancellationType::kEchoCancellationAec3;
   out.noise_suppression =
-      goog_noise_suppression && !system_noise_suppression_activated;
-  // TODO(https://bugs.webrtc.org/5298): Also toggle transient suppression when
-  // system effects are activated?
-  out.transient_noise_suppression = goog_experimental_noise_suppression;
+      noise_suppression && !system_noise_suppression_activated;
 
   out.automatic_gain_control =
-      goog_auto_gain_control && !system_gain_control_activated;
-  out.experimental_automatic_gain_control = goog_experimental_auto_gain_control;
+      auto_gain_control && !system_gain_control_activated;
 
-  out.high_pass_filter = goog_highpass_filter;
   out.multi_channel_capture_processing = multi_channel_capture_processing;
-  out.stereo_mirroring = goog_audio_mirroring;
-  // TODO(https://crbug.com/1215061): Deprecate this behavior. The constraint is
-  // no longer meaningful, but sees significant usage, so some care is required.
-  out.force_apm_creation = goog_experimental_echo_cancellation;
   return out;
 }
 }  // namespace blink

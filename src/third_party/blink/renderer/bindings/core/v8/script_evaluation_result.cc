@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/script_state.h"
 
 namespace blink {
 
@@ -110,6 +111,16 @@ v8::Local<v8::Value> ScriptEvaluationResult::GetExceptionForModule() const {
   return value_;
 }
 
+v8::Local<v8::Value> ScriptEvaluationResult::GetExceptionForWorklet() const {
+#if DCHECK_IS_ON()
+  DCHECK_EQ(script_type_, mojom::blink::ScriptType::kClassic);
+#endif
+  DCHECK_EQ(result_type_, ResultType::kException);
+  DCHECK(!value_.IsEmpty());
+
+  return value_;
+}
+
 v8::Local<v8::Value> ScriptEvaluationResult::GetExceptionForClassicForTesting()
     const {
   DCHECK_EQ(result_type_, ResultType::kException);
@@ -118,7 +129,7 @@ v8::Local<v8::Value> ScriptEvaluationResult::GetExceptionForClassicForTesting()
   return value_;
 }
 
-ScriptPromise ScriptEvaluationResult::GetPromise(
+ScriptPromise<IDLAny> ScriptEvaluationResult::GetPromise(
     ScriptState* script_state) const {
 #if DCHECK_IS_ON()
   DCHECK_EQ(script_type_, mojom::blink::ScriptType::kModule);
@@ -126,15 +137,16 @@ ScriptPromise ScriptEvaluationResult::GetPromise(
 
   switch (result_type_) {
     case ResultType::kSuccess:
-      return ScriptPromise(script_state, GetSuccessValue());
+      return ScriptPromise<IDLAny>::FromV8Promise(
+          script_state->GetIsolate(), GetSuccessValue().As<v8::Promise>());
 
     case ResultType::kException:
-      return ScriptPromise::Reject(script_state, GetExceptionForModule());
+      return ScriptPromise<IDLAny>::Reject(script_state,
+                                           GetExceptionForModule());
 
     case ResultType::kNotRun:
     case ResultType::kAborted:
       NOTREACHED();
-      return ScriptPromise::Reject(script_state, v8::Local<v8::Value>());
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ void ElementIdentifier::RegisterKnownIdentifier(
 #if DCHECK_IS_ON()
   // Enforce uniqueness in DCHECK builds.
   const ElementIdentifier existing = FromName(element_identifier.handle_->name);
-  DCHECK(!existing || existing == element_identifier);
+  DCHECK(!existing || existing == element_identifier)
+      << "Duplicate identifier: " << element_identifier.handle_->name;
 #endif
 
   GetKnownIdentifiers().insert(element_identifier.handle_);
@@ -65,8 +66,7 @@ ElementIdentifier::KnownIdentifiers& ElementIdentifier::GetKnownIdentifiers() {
 }
 
 void PrintTo(ElementIdentifier element_identifier, std::ostream* os) {
-  *os << "ElementIdentifier " << element_identifier.GetRawValue() << " ["
-      << element_identifier.GetName() << "]";
+  *os << "ElementIdentifier " << element_identifier.GetName();
 }
 
 void PrintTo(ElementContext element_context, std::ostream* os) {

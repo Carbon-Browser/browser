@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@ class Layer;
 
 namespace views {
 class CircleLayerDelegate;
+class InkDropHost;
 class RectangleLayerDelegate;
 
 namespace test {
@@ -53,7 +54,8 @@ class VIEWS_EXPORT SquareInkDropRipple : public InkDropRipple {
   // The shape to use for the ACTIVATED/DEACTIVATED states.
   enum class ActivatedShape { kCircle, kRoundedRect };
 
-  SquareInkDropRipple(const gfx::Size& large_size,
+  SquareInkDropRipple(InkDropHost* ink_drop_host,
+                      const gfx::Size& large_size,
                       int large_corner_radius,
                       const gfx::Size& small_size,
                       int small_corner_radius,
@@ -67,7 +69,6 @@ class VIEWS_EXPORT SquareInkDropRipple : public InkDropRipple {
   void set_activated_shape(ActivatedShape shape) { activated_shape_ = shape; }
 
   // InkDropRipple:
-  void SnapToActivated() override;
   ui::Layer* GetRootLayer() override;
 
  private:
@@ -90,13 +91,14 @@ class VIEWS_EXPORT SquareInkDropRipple : public InkDropRipple {
 
   // Type that contains a gfx::Tansform for each of the layers required by the
   // ink drop.
-  typedef gfx::Transform InkDropTransforms[PAINTED_SHAPE_COUNT];
+  using InkDropTransforms = std::array<gfx::Transform, PAINTED_SHAPE_COUNT>;
 
   float GetCurrentOpacity() const;
 
   // InkDropRipple:
   void AnimateStateChange(InkDropState old_ink_drop_state,
                           InkDropState new_ink_drop_state) override;
+  void SetStateToActivated() override;
   void SetStateToHidden() override;
   void AbortAllAnimations() override;
 
@@ -149,7 +151,7 @@ class VIEWS_EXPORT SquareInkDropRipple : public InkDropRipple {
   void OnLayerAnimationSequenceScheduled(ui::LayerAnimationSequence* sequence);
 
   // The shape used for the ACTIVATED/DEACTIVATED states.
-  ActivatedShape activated_shape_;
+  ActivatedShape activated_shape_ = ActivatedShape::kRoundedRect;
 
   // Ink drop opacity when it is visible.
   float visible_opacity_;
@@ -188,10 +190,11 @@ class VIEWS_EXPORT SquareInkDropRipple : public InkDropRipple {
   base::CallbackListSubscription root_callback_subscription_;
 
   // ui::Layers for all of the painted shape layers that compose the ink drop.
-  std::unique_ptr<ui::Layer> painted_layers_[PAINTED_SHAPE_COUNT];
+  std::array<std::unique_ptr<ui::Layer>, PAINTED_SHAPE_COUNT> painted_layers_;
 
   // Sequence scheduled callback subscriptions for the painted layers.
-  base::CallbackListSubscription callback_subscriptions_[PAINTED_SHAPE_COUNT];
+  std::array<base::CallbackListSubscription, PAINTED_SHAPE_COUNT>
+      callback_subscriptions_;
 };
 
 }  // namespace views

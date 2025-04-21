@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/scheduling.h"
 
 #include "base/json/values_util.h"
-#include "base/stl_util.h"
 #include "base/time/time.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "components/feed/core/v2/config.h"
 #include "components/feed/core/v2/feedstore_util.h"
@@ -26,7 +26,7 @@ base::Value::List VectorToList(const std::vector<base::TimeDelta>& values) {
 bool ListToVector(const base::Value::List& value,
                   std::vector<base::TimeDelta>* result) {
   for (const base::Value& entry : value) {
-    absl::optional<base::TimeDelta> delta = base::ValueToTimeDelta(entry);
+    std::optional<base::TimeDelta> delta = base::ValueToTimeDelta(entry);
     if (!delta)
       return false;
     result->push_back(*delta);
@@ -73,7 +73,7 @@ base::Value::Dict RequestScheduleToDict(const RequestSchedule& schedule) {
 
 RequestSchedule RequestScheduleFromDict(const base::Value::Dict& value) {
   RequestSchedule result;
-  absl::optional<base::Time> anchor = base::ValueToTime(value.Find("anchor"));
+  std::optional<base::Time> anchor = base::ValueToTime(value.Find("anchor"));
   const base::Value::List* offsets = value.FindList("offsets");
   result.type = GetScheduleType(value.Find("type"));
 
@@ -137,7 +137,7 @@ bool ContentInvalidFromAge(const feedstore::Metadata& metadata,
   base::TimeDelta content_expiration_threshold =
       GetFeedConfig().content_expiration_threshold;
   if (base::FeatureList::IsEnabled(kWebFeedOnboarding) &&
-      !is_web_feed_subscriber && stream_type == kWebFeedStream) {
+      !is_web_feed_subscriber && stream_type.IsWebFeed()) {
     content_expiration_threshold =
         GetFeedConfig().subscriptionless_content_expiration_threshold;
   }

@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/no_destructor.h"
@@ -16,13 +17,22 @@
 #include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
+#include "chrome/browser/ui/views/frame/picture_in_picture_browser_frame_view.h"
+#include "chrome/browser/ui/views/tabs/tab_drag_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "third_party/skia/include/core/SkRRect.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/native_theme/native_theme.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
 #include "ui/platform_window/extensions/x11_extension.h"
+#include "ui/platform_window/platform_window_init_properties.h"
 
 namespace {
 
@@ -37,6 +47,24 @@ bool CreateGlobalMenuBar() {
 std::unordered_set<std::string>& SentStartupIds() {
   static base::NoDestructor<std::unordered_set<std::string>> sent_startup_ids;
   return *sent_startup_ids;
+}
+
+// Returns the event source for the active tab drag session.
+std::optional<ui::mojom::DragEventSource> GetCurrentTabDragEventSource() {
+  if (auto* source_context = TabDragController::GetSourceContext()) {
+    if (auto* drag_controller = source_context->GetDragController()) {
+      return drag_controller->event_source();
+    }
+  }
+  return std::nullopt;
+}
+
+bool IsShowingFrame(bool use_custom_frame,
+                    ui::PlatformWindowState window_state) {
+  return use_custom_frame &&
+         window_state != ui::PlatformWindowState::kMaximized &&
+         window_state != ui::PlatformWindowState::kMinimized &&
+         window_state != ui::PlatformWindowState::kFullScreen;
 }
 
 }  // namespace
@@ -62,16 +90,30 @@ BrowserDesktopWindowTreeHostLinux::BrowserDesktopWindowTreeHostLinux(
                                     : views::Widget::FrameType::kForceNative);
 
   theme_observation_.Observe(ui::NativeTheme::GetInstanceForNativeUi());
-  if (auto* linux_ui = ui::LinuxUi::instance())
+  if (auto* linux_ui = ui::LinuxUi::instance()) {
     scale_observation_.Observe(linux_ui);
+  }
 }
 
-BrowserDesktopWindowTreeHostLinux::~BrowserDesktopWindowTreeHostLinux() =
-    default;
+BrowserDesktopWindowTreeHostLinux::~BrowserDesktopWindowTreeHostLinux() {
+  native_frame_->set_host(nullptr);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // BrowserDesktopWindowTreeHostLinux,
 //     BrowserDesktopWindowTreeHost implementation:
+
+void BrowserDesktopWindowTreeHostLinux::AddAdditionalInitProperties(
+    const views::Widget::InitParams& params,
+    ui::PlatformWindowInitProperties* properties) {
+  views::DesktopWindowTreeHostLinux::AddAdditionalInitProperties(params,
+                                                                 properties);
+
+  auto* profile = browser_view_->browser()->profile();
+  const auto* linux_ui_theme = ui::LinuxUiTheme::GetForProfile(profile);
+  properties->prefer_dark_theme =
+      linux_ui_theme && linux_ui_theme->PreferDarkTheme();
+}
 
 views::DesktopWindowTreeHost*
 BrowserDesktopWindowTreeHostLinux::AsDesktopWindowTreeHost() {
@@ -92,9 +134,10 @@ void BrowserDesktopWindowTreeHostLinux::FrameTypeChanged() {
 }
 
 bool BrowserDesktopWindowTreeHostLinux::SupportsMouseLock() {
-  auto* wayland_extension = ui::GetWaylandExtension(*platform_window());
-  if (!wayland_extension)
+  auto* wayland_extension = ui::GetWaylandToplevelExtension(*platform_window());
+  if (!wayland_extension) {
     return false;
+  }
 
   return wayland_extension->SupportsPointerLock();
 }
@@ -103,7 +146,8 @@ void BrowserDesktopWindowTreeHostLinux::LockMouse(aura::Window* window) {
   DesktopWindowTreeHostLinux::LockMouse(window);
 
   if (SupportsMouseLock()) {
-    auto* wayland_extension = ui::GetWaylandExtension(*platform_window());
+    auto* wayland_extension =
+        ui::GetWaylandToplevelExtension(*platform_window());
     wayland_extension->LockPointer(true /*enabled*/);
   }
 }
@@ -112,7 +156,8 @@ void BrowserDesktopWindowTreeHostLinux::UnlockMouse(aura::Window* window) {
   DesktopWindowTreeHostLinux::UnlockMouse(window);
 
   if (SupportsMouseLock()) {
-    auto* wayland_extension = ui::GetWaylandExtension(*platform_window());
+    auto* wayland_extension =
+        ui::GetWaylandToplevelExtension(*platform_window());
     wayland_extension->LockPointer(false /*enabled*/);
   }
 }
@@ -121,8 +166,9 @@ void BrowserDesktopWindowTreeHostLinux::TabDraggingKindChanged(
     TabDragKind tab_drag_kind) {
   // If there's no tabs left, the browser window is about to close, so don't
   // call SetOverrideRedirect() to prevent the window from flashing.
-  if (!browser_view_->tabstrip()->GetModelCount())
+  if (!browser_view_->tabstrip()->GetModelCount()) {
     return;
+  }
 
   auto* x11_extension = GetX11Extension();
   if (x11_extension && x11_extension->IsWmTiling() &&
@@ -130,63 +176,56 @@ void BrowserDesktopWindowTreeHostLinux::TabDraggingKindChanged(
     bool was_dragging_window =
         browser_frame_->tab_drag_kind() == TabDragKind::kAllTabs;
     bool is_dragging_window = tab_drag_kind == TabDragKind::kAllTabs;
-    if (is_dragging_window != was_dragging_window)
+    if (is_dragging_window != was_dragging_window) {
       x11_extension->SetOverrideRedirect(is_dragging_window);
+    }
   }
 
-  if (auto* wayland_extension = ui::GetWaylandExtension(*platform_window())) {
+  if (auto* wayland_extension =
+          ui::GetWaylandToplevelExtension(*platform_window())) {
     if (tab_drag_kind != TabDragKind::kNone) {
-      auto allow_system_drag = base::FeatureList::IsEnabled(
-          features::kAllowWindowDragUsingSystemDragDrop);
-      wayland_extension->StartWindowDraggingSessionIfNeeded(allow_system_drag);
+      if (auto event_source = GetCurrentTabDragEventSource()) {
+        const auto allow_system_drag = base::FeatureList::IsEnabled(
+            features::kAllowWindowDragUsingSystemDragDrop);
+        wayland_extension->StartWindowDraggingSessionIfNeeded(
+            *event_source, allow_system_drag);
+      }
     }
   }
 }
 
 bool BrowserDesktopWindowTreeHostLinux::SupportsClientFrameShadow() const {
   return platform_window()->CanSetDecorationInsets() &&
-         platform_window()->IsTranslucentWindowOpacitySupported();
+         views::Widget::IsWindowCompositingSupported();
 }
 
 void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
-  auto* view = static_cast<BrowserFrameViewLinux*>(
-      native_frame_->browser_frame()->GetFrameView());
-  auto* layout = view->layout();
   auto* window = platform_window();
+  auto window_state = window->GetPlatformWindowState();
   float scale = device_scale_factor();
-  bool showing_frame =
-      browser_frame_->native_browser_frame()->UseCustomFrame() &&
-      !view->IsFrameCondensed();
+  auto* view =
+      static_cast<BrowserNonClientFrameView*>(browser_frame_->GetFrameView());
   const gfx::Size widget_size =
       view->GetWidget()->GetWindowBoundsInScreen().size();
 
   if (SupportsClientFrameShadow()) {
-    // Set the frame decoration insets.
-    // For a window in maximised or minimised state, insets should be zero, see
-    // https://crbug.com/1281211.  However, if we also set zero insets when the
-    // window is being initialised and has unknown state, it will be inflated on
-    // later steps.
-    // See https://crbug.com/1287212 for details.
-    const auto window_state = window->GetPlatformWindowState();
-    const gfx::Insets insets =
-        (window_state == ui::PlatformWindowState::kUnknown ||
-         window_state == ui::PlatformWindowState::kNormal)
-            ? layout->MirroredFrameBorderInsets()
-            : gfx::Insets();
-    const gfx::Insets insets_px = gfx::ScaleToCeiledInsets(insets, scale);
-    window->SetDecorationInsets(showing_frame ? &insets_px : nullptr);
-
-    // Set the input region.
-    gfx::Rect input_bounds(widget_size);
-    input_bounds.Inset(insets + layout->GetInputInsets());
-    input_bounds = gfx::ScaleToEnclosingRect(input_bounds, scale);
-    window->SetInputRegion(showing_frame ? &input_bounds : nullptr);
+    auto insets = CalculateInsetsInDIP(window_state);
+    if (insets.IsEmpty()) {
+      window->SetInputRegion(std::nullopt);
+    } else {
+      gfx::Rect input_bounds(widget_size);
+      input_bounds.Inset(insets - view->GetInputInsets());
+      input_bounds = gfx::ScaleToEnclosingRect(input_bounds, scale);
+      window->SetInputRegion(
+          std::optional<std::vector<gfx::Rect>>({input_bounds}));
+    }
   }
 
-  if (window->IsTranslucentWindowOpacitySupported()) {
+  if (ui::OzonePlatform::GetInstance()->IsWindowCompositingSupported()) {
     // Set the opaque region.
     std::vector<gfx::Rect> opaque_region;
-    if (showing_frame) {
+    if (IsShowingFrame(browser_frame_->native_browser_frame()->UseCustomFrame(),
+                       window_state)) {
       // The opaque region is a list of rectangles that contain only fully
       // opaque pixels of the window.  We need to convert the clipping
       // rounded-rect into this format.
@@ -223,14 +262,25 @@ void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
         region.op(corner_rect, SkRegion::kDifference_Op);
       }
 
+      auto translucent_top_area_rect = SkIRect::MakeXYWH(
+          rect.x(), rect.y(), rect.width(),
+          std::ceil(view->GetTranslucentTopAreaHeight() * scale - rect.y()));
+      region.op(translucent_top_area_rect, SkRegion::kDifference_Op);
+
       // Convert the region to a list of rectangles.
-      for (SkRegion::Iterator i(region); !i.done(); i.next())
+      for (SkRegion::Iterator i(region); !i.done(); i.next()) {
         opaque_region.push_back(gfx::SkIRectToRect(i.rect()));
+      }
     } else {
-      // Set the entire window as opaque.
-      opaque_region.push_back({{}, widget_size});
+      // The entire window except for the translucent top is opaque.
+      gfx::Rect opaque_region_dip(widget_size);
+      gfx::Insets insets;
+      insets.set_top(view->GetTranslucentTopAreaHeight());
+      opaque_region_dip.Inset(insets);
+      opaque_region.push_back(
+          gfx::ScaleToEnclosingRect(opaque_region_dip, scale));
     }
-    window->SetOpaqueRegion(&opaque_region);
+    window->SetOpaqueRegion(opaque_region);
   }
 
   SizeConstraintsChanged();
@@ -267,8 +317,9 @@ void BrowserDesktopWindowTreeHostLinux::CloseNow() {
   DesktopWindowTreeHostLinux::CloseNow();
 }
 
-void BrowserDesktopWindowTreeHostLinux::Show(ui::WindowShowState show_state,
-                                             const gfx::Rect& restore_bounds) {
+void BrowserDesktopWindowTreeHostLinux::Show(
+    ui::mojom::WindowShowState show_state,
+    const gfx::Rect& restore_bounds) {
   DesktopWindowTreeHostLinux::Show(show_state, restore_bounds);
 
   const std::string& startup_id =
@@ -286,29 +337,57 @@ bool BrowserDesktopWindowTreeHostLinux::IsOverrideRedirect() const {
          x11_extension->CanResetOverrideRedirect();
 }
 
-void BrowserDesktopWindowTreeHostLinux::OnBoundsChanged(
-    const BoundsChange& change) {
-  DesktopWindowTreeHostLinux::OnBoundsChanged(change);
+gfx::Insets BrowserDesktopWindowTreeHostLinux::CalculateInsetsInDIP(
+    ui::PlatformWindowState window_state) const {
+  // If we are not showing frame, the insets should be zero.
+  if (!IsShowingFrame(browser_frame_->native_browser_frame()->UseCustomFrame(),
+                      window_state)) {
+    return gfx::Insets();
+  }
+
+  return static_cast<BrowserNonClientFrameView*>(browser_frame_->GetFrameView())
+      ->RestoredMirroredFrameBorderInsets();
+}
+
+void BrowserDesktopWindowTreeHostLinux::OnWindowStateChanged(
+    ui::PlatformWindowState old_state,
+    ui::PlatformWindowState new_state) {
+  DesktopWindowTreeHostLinux::OnWindowStateChanged(old_state, new_state);
+
+  bool fullscreen_changed = new_state == ui::PlatformWindowState::kFullScreen ||
+                            old_state == ui::PlatformWindowState::kFullScreen;
+  if (old_state != new_state && fullscreen_changed) {
+    // If the browser view initiated this state change,
+    // BrowserView::ProcessFullscreen will no-op, so this call is harmless.
+    browser_view_->FullscreenStateChanging();
+
+    // In sync fullscreen window state mode, the FullscreenStateChanged()
+    // is called just after requesting to set fullscreen property
+    // to the platform, so not to call here to avoid duplicated invocation.
+    if (base::FeatureList::IsEnabled(features::kAsyncFullscreenWindowState)) {
+      browser_view_->FullscreenStateChanged();
+    }
+  }
 
   UpdateFrameHints();
 }
 
-void BrowserDesktopWindowTreeHostLinux::OnWindowStateChanged(
-    ui::PlatformWindowState old_window_show_state,
-    ui::PlatformWindowState new_window_show_state) {
-  DesktopWindowTreeHostLinux::OnWindowStateChanged(old_window_show_state,
-                                                   new_window_show_state);
-
-  bool fullscreen_changed =
-      new_window_show_state == ui::PlatformWindowState::kFullScreen ||
-      old_window_show_state == ui::PlatformWindowState::kFullScreen;
-  if (old_window_show_state != new_window_show_state && fullscreen_changed) {
-    // If the browser view initiated this state change,
-    // BrowserView::ProcessFullscreen will no-op, so this call is harmless.
-    browser_view_->FullscreenStateChanging();
-  }
-
+void BrowserDesktopWindowTreeHostLinux::OnWindowTiledStateChanged(
+    ui::WindowTiledEdges new_tiled_edges) {
+  bool maximized = new_tiled_edges.top && new_tiled_edges.left &&
+                   new_tiled_edges.bottom && new_tiled_edges.right;
+  bool tiled = new_tiled_edges.top || new_tiled_edges.left ||
+               new_tiled_edges.bottom || new_tiled_edges.right;
+  browser_frame_->set_tiled(tiled && !maximized);
   UpdateFrameHints();
+  if (SupportsClientFrameShadow()) {
+    // Trigger a re-layout as the insets will change even if the bounds don't.
+    ScheduleRelayout();
+    if (GetWidget()->non_client_view()) {
+      // This is needed for the decorated regions, borders etc. to be repainted.
+      GetWidget()->non_client_view()->SchedulePaint();
+    }
+  }
 }
 
 void BrowserDesktopWindowTreeHostLinux::OnNativeThemeUpdated(

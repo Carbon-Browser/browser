@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <fuchsia/web/cpp/fidl.h>
 
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "fuchsia_web/webengine/web_engine_export.h"
 
@@ -38,8 +39,8 @@ class WEB_ENGINE_EXPORT NavigationPolicyThrottle
   content::NavigationThrottle::ThrottleCheckResult HandleNavigationPhase(
       fuchsia::web::NavigationPhase phase);
 
-  NavigationPolicyHandler* policy_handler_;
-  content::NavigationHandle* navigation_handle_;
+  raw_ptr<NavigationPolicyHandler> policy_handler_;
+  raw_ptr<content::NavigationHandle> navigation_handle_;
 
   // Indicates if the navigation is currently paused.
   bool is_paused_ = false;

@@ -1,12 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.system;
 
-/**
- * The different mojo result codes.
- */
+import org.chromium.build.annotations.NullMarked;
+
+/** The different mojo result codes. */
+@NullMarked
 public final class MojoResult {
     public static final int OK = 0;
     public static final int CANCELLED = 1;
@@ -27,15 +28,10 @@ public final class MojoResult {
     public static final int BUSY = 16;
     public static final int SHOULD_WAIT = 17;
 
-    /**
-     * never instantiate.
-     */
-    private MojoResult() {
-    }
+    /** never instantiate. */
+    private MojoResult() {}
 
-    /**
-     * Describes the given result code.
-     */
+    /** Describes the given result code. */
     public static String describe(int mCode) {
         switch (mCode) {
             case OK:
@@ -77,6 +73,5 @@ public final class MojoResult {
             default:
                 return "UNKNOWN";
         }
-
     }
 }

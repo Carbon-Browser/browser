@@ -1,13 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/compositing/adjust_mask_layer_geometry.h"
 
+#include <math.h>
 #include <algorithm>
-#include <cmath>
+
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/transform_paint_property_node.h"
+#include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
@@ -29,11 +31,11 @@ void AdjustMaskLayerGeometry(const TransformPaintPropertyNode& transform,
   // Map a screen pixel into the layer.
   GeometryMapper::SourceToDestinationRect(TransformPaintPropertyNode::Root(),
                                           transform, pixel_rect);
-  int outset =
-      std::ceilf(std::max(pixel_rect.width(), pixel_rect.height()) * 2);
   // Don't expand too far in extreme cases.
   constexpr int kMaxOutset = 1000;
-  outset = std::min(kMaxOutset, outset);
+  int outset =
+      ClampTo(std::ceil(std::max(pixel_rect.width(), pixel_rect.height()) * 2),
+              0, kMaxOutset);
   layer_offset -= gfx::Vector2dF(outset, outset);
   layer_bounds += gfx::Size(2 * outset, 2 * outset);
 }

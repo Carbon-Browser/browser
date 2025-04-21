@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
@@ -210,6 +210,7 @@ class AliveCheckerTest : public testing::Test {
 
   void ResetAliveCheckerOnAliveCheckerThread(base::WaitableEvent* done) {
     EXPECT_TRUE(alive_checker_thread_.task_runner()->BelongsToCurrentThread());
+    mock_power_observer_helper_ = nullptr;
     alive_checker_.reset();
     done->Signal();
   }

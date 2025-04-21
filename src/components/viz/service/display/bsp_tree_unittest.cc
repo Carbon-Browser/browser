@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/viz/service/display/bsp_tree.h"
 
@@ -11,6 +16,7 @@
 #include <utility>
 
 #include "base/containers/circular_deque.h"
+#include "base/memory/raw_ptr.h"
 #include "components/viz/service/display/bsp_walk_action.h"
 #include "components/viz/service/display/draw_polygon.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -39,7 +45,7 @@ class BspTreeTest {
       const std::vector<int>& compare_list) {
     BspTree bsp_tree(test_polygons);
 
-    std::vector<DrawPolygon*> sorted_list;
+    std::vector<raw_ptr<DrawPolygon, VectorExperimental>> sorted_list;
     BspWalkActionToVector action_handler(&sorted_list);
     bsp_tree.TraverseWithActionHandler(&action_handler);
 

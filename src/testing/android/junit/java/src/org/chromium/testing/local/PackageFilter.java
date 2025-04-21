@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,12 @@ package org.chromium.testing.local;
 import org.junit.runner.Description;
 import org.junit.runner.manipulation.Filter;
 
-/**
- *  Filters tests based on the package.
- */
+/** Filters tests based on the package. */
 class PackageFilter extends Filter {
 
     private final String mFilterString;
 
-    /**
-     *  Creates the filter.
-     */
+    /** Creates the filter. */
     public PackageFilter(String filterString) {
         mFilterString = filterString;
     }
@@ -30,12 +26,9 @@ class PackageFilter extends Filter {
         return description.getTestClass().getPackage().getName().equals(mFilterString);
     }
 
-    /**
-     *  Returns a description of this filter.
-     */
+    /** Returns a description of this filter. */
     @Override
     public String describe() {
         return "package-filter: " + mFilterString;
     }
-
 }

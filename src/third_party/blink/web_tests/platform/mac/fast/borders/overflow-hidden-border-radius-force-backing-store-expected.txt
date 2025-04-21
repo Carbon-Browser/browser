@@ -7,7 +7,7 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='inner'",
+      "name": "LayoutBlockFlow DIV id='inner'",
       "bounds": [285, 300],
       "drawsContent": false,
       "transform": 1
@@ -16,12 +16,18 @@
       "name": "VerticalScrollbar",
       "position": [285, 0],
       "bounds": [15, 300],
+      "contentsOpaque": true,
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='content'",
+      "name": "LayoutBlockFlow DIV id='inner'",
       "bounds": [285, 1000],
-      "contentsOpaque": true,
+      "drawsContent": false,
+      "transform": 1
+    },
+    {
+      "name": "LayoutBlockFlow DIV id='content'",
+      "bounds": [285, 1000],
       "transform": 1
     }
   ],

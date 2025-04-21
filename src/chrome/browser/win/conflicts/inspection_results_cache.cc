@@ -1,19 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/conflicts/inspection_results_cache.h"
 
-#include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
+#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/hash/md5.h"
 #include "base/pickle.h"
-#include "base/strings/string_piece.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 
 namespace {
@@ -119,7 +120,7 @@ base::Pickle SerializeInspectionResultsCache(
 
   // Append the md5 digest of the data to detect serializations errors.
   base::MD5Digest md5_digest;
-  base::MD5Sum(pickle.payload(), pickle.payload_size(), &md5_digest);
+  base::MD5Sum(pickle.payload_bytes(), &md5_digest);
   pickle.WriteBytes(&md5_digest, sizeof(md5_digest));
 
   return pickle;
@@ -167,10 +168,9 @@ ReadCacheResult DeserializeInspectionResultsCache(
 
   // Check if the md5 checksum matches.
   base::MD5Digest md5_digest;
-  base::MD5Sum(pickle.payload(), pickle.payload_size() - sizeof(md5_digest),
-               &md5_digest);
-  if (!std::equal(std::begin(read_md5_digest->a), std::end(read_md5_digest->a),
-                  std::begin(md5_digest.a), std::end(md5_digest.a)))
+  base::span<const uint8_t> payload = pickle.payload_bytes();
+  base::MD5Sum(payload.first(payload.size() - sizeof(md5_digest)), &md5_digest);
+  if (!base::ranges::equal(read_md5_digest->a, md5_digest.a))
     return ReadCacheResult::kFailInvalidMD5;
 
   return ReadCacheResult::kSuccess;
@@ -190,10 +190,10 @@ void AddInspectionResultToCache(
   DCHECK(insert_result.second);
 }
 
-absl::optional<ModuleInspectionResult> GetInspectionResultFromCache(
+std::optional<ModuleInspectionResult> GetInspectionResultFromCache(
     const ModuleInfoKey& module_key,
     InspectionResultsCache* inspection_results_cache) {
-  absl::optional<ModuleInspectionResult> inspection_result;
+  std::optional<ModuleInspectionResult> inspection_result;
 
   auto it = inspection_results_cache->find(module_key);
   if (it != inspection_results_cache->end()) {
@@ -209,14 +209,12 @@ ReadCacheResult ReadInspectionResultsCache(
     const base::FilePath& file_path,
     uint32_t min_time_stamp,
     InspectionResultsCache* inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return ReadCacheResult::kSuccess;
-
   std::string contents;
   if (!ReadFileToString(file_path, &contents))
     return ReadCacheResult::kFailReadFile;
 
-  base::Pickle pickle(contents.data(), contents.length());
+  base::Pickle pickle =
+      base::Pickle::WithUnownedBuffer(base::as_byte_span(contents));
   InspectionResultsCache temporary_result;
   ReadCacheResult read_result = DeserializeInspectionResultsCache(
       min_time_stamp, pickle, &temporary_result);
@@ -231,15 +229,11 @@ ReadCacheResult ReadInspectionResultsCache(
 bool WriteInspectionResultsCache(
     const base::FilePath& file_path,
     const InspectionResultsCache& inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return true;
-
   base::Pickle pickle =
       SerializeInspectionResultsCache(inspection_results_cache);
 
-  // TODO(1022041): Investigate if using WriteFileAtomically() in a
+  // TODO(crbug.com/40106434): Investigate if using WriteFileAtomically() in a
   // CONTINUE_ON_SHUTDOWN sequence can cause too many corrupted caches.
   return base::ImportantFileWriter::WriteFileAtomically(
-      file_path, base::StringPiece(static_cast<const char*>(pickle.data()),
-                                   pickle.size()));
+      file_path, std::string_view(pickle.data_as_char(), pickle.size()));
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,15 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "content/public/android/content_jni_headers/NavigationHandle_jni.h"
+#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/common/content_client.h"
 #include "net/http/http_response_headers.h"
 #include "url/android/gurl_android.h"
 #include "url/gurl.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/public/android/content_jni_headers/NavigationHandle_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaParamRef;
@@ -24,7 +28,15 @@ NavigationHandleProxy::NavigationHandleProxy(
   JNIEnv* env = AttachCurrentThread();
 
   java_navigation_handle_ = Java_NavigationHandle_Constructor(
-      env, reinterpret_cast<jlong>(this),
+      env, reinterpret_cast<jlong>(cpp_navigation_handle));
+}
+
+void NavigationHandleProxy::DidStart() {
+  JNIEnv* env = AttachCurrentThread();
+
+  // Set all these methods on the Java side over JNI with a new JNI method.
+  Java_NavigationHandle_initialize(
+      env, java_navigation_handle_, reinterpret_cast<jlong>(this),
       url::GURLAndroid::FromNativeGURL(env, cpp_navigation_handle_->GetURL()),
       url::GURLAndroid::FromNativeGURL(
           env, cpp_navigation_handle_->GetReferrer().url),
@@ -34,7 +46,7 @@ NavigationHandleProxy::NavigationHandleProxy(
       cpp_navigation_handle_->IsSameDocument(),
       cpp_navigation_handle_->IsRendererInitiated(),
       cpp_navigation_handle_->GetInitiatorOrigin()
-          ? cpp_navigation_handle_->GetInitiatorOrigin()->CreateJavaObject()
+          ? cpp_navigation_handle_->GetInitiatorOrigin()->ToJavaObject(env)
           : nullptr,
       cpp_navigation_handle_->GetPageTransition(),
       cpp_navigation_handle_->IsPost(),
@@ -43,7 +55,11 @@ NavigationHandleProxy::NavigationHandleProxy(
       cpp_navigation_handle_->IsExternalProtocol(),
       cpp_navigation_handle_->GetNavigationId(),
       cpp_navigation_handle_->IsPageActivation(),
-      cpp_navigation_handle_->GetReloadType() != content::ReloadType::NONE);
+      cpp_navigation_handle_->GetReloadType() != content::ReloadType::NONE,
+      cpp_navigation_handle_->IsPdf(),
+      base::android::ConvertUTF8ToJavaString(env, GetMimeType()),
+      GetContentClient()->browser()->IsSaveableNavigation(
+          cpp_navigation_handle_));
 }
 
 void NavigationHandleProxy::DidRedirect() {
@@ -69,12 +85,9 @@ void NavigationHandleProxy::DidFinish() {
   if (is_primary_main_frame_fragment_navigation &&
       cpp_navigation_handle_->HasCommitted()) {
     // See http://crbug.com/251330 for why it's determined this way.
-    GURL::Replacements replacements;
-    replacements.ClearRef();
     bool urls_same_ignoring_fragment =
-        cpp_navigation_handle_->GetURL().ReplaceComponents(replacements) ==
-        cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL()
-            .ReplaceComponents(replacements);
+        cpp_navigation_handle_->GetURL().EqualsIgnoringRef(
+            cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL());
     is_primary_main_frame_fragment_navigation = urls_same_ignoring_fragment;
   }
 
@@ -96,7 +109,11 @@ void NavigationHandleProxy::DidFinish() {
       cpp_navigation_handle_->GetResponseHeaders()
           ? cpp_navigation_handle_->GetResponseHeaders()->response_code()
           : 200,
-      cpp_navigation_handle_->IsExternalProtocol());
+      cpp_navigation_handle_->IsExternalProtocol(),
+      cpp_navigation_handle_->IsPdf(),
+      base::android::ConvertUTF8ToJavaString(env, GetMimeType()),
+      GetContentClient()->browser()->IsSaveableNavigation(
+          cpp_navigation_handle_));
 }
 
 NavigationHandleProxy::~NavigationHandleProxy() {
@@ -104,20 +121,12 @@ NavigationHandleProxy::~NavigationHandleProxy() {
   Java_NavigationHandle_release(env, java_navigation_handle_);
 }
 
-// Called from Java.
-void NavigationHandleProxy::SetRequestHeader(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& name,
-    const JavaParamRef<jstring>& value) {
-  cpp_navigation_handle_->SetRequestHeader(ConvertJavaStringToUTF8(name),
-                                           ConvertJavaStringToUTF8(value));
-}
-
-// Called from Java.
-void NavigationHandleProxy::RemoveRequestHeader(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& name) {
-  cpp_navigation_handle_->RemoveRequestHeader(ConvertJavaStringToUTF8(name));
+std::string NavigationHandleProxy::GetMimeType() const {
+  std::string mime_type;
+  if (cpp_navigation_handle_->GetResponseHeaders()) {
+    cpp_navigation_handle_->GetResponseHeaders()->GetMimeType(&mime_type);
+  }
+  return mime_type;
 }
 
 }  // namespace content

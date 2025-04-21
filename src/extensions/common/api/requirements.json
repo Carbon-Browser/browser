@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 [
   {
     "namespace": "requirements",
-    "description": "Stub namepsace for the 'requirements' manifest key.",
+    "description": "Stub namespace for the 'requirements' manifest key.",
     "compiler_options": {
       "generate_error_messages": true
     },
@@ -39,16 +39,6 @@
               "features": {
                 "type": "array",
                 "items": { "$ref": "3DFeature" }
-              }
-            }
-          },
-          "window": {
-            "type": "object",
-            "optional": true,
-            "properties": {
-              "shape": {
-                "type": "boolean",
-                "optional": true
               }
             }
           }

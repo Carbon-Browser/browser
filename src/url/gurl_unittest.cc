@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,16 @@
 
 #include <stddef.h>
 
+#include <array>
+
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl_abstract_tests.h"
 #include "url/origin.h"
 #include "url/url_canon.h"
+#include "url/url_features.h"
 #include "url/url_test_utils.h"
 
 namespace url {
@@ -85,6 +89,24 @@ TEST(GURLTest, Components) {
   EXPECT_EQ("%40!$&%27()*+,%3B%3D%3A", url_special_pass.password());
   EXPECT_EQ("google.com", url_special_pass.host());
   EXPECT_EQ("12345", url_special_pass.port());
+
+  // Test path collapsing.
+  GURL url_path_collapse("http://example.com/a/./b/c/d/../../e");
+  EXPECT_EQ("/a/b/e", url_path_collapse.path());
+
+  // Test an IDNA (Internationalizing Domain Names in Applications) host.
+  GURL url_idna("http://Bücher.exAMple/");
+  EXPECT_EQ("xn--bcher-kva.example", url_idna.host());
+
+  // Test non-ASCII characters, outside of the host (IDNA).
+  GURL url_non_ascii("http://example.com/foo/aβc%2Etxt?q=r🙂s");
+  EXPECT_EQ("/foo/a%CE%B2c.txt", url_non_ascii.path());
+  EXPECT_EQ("q=r%F0%9F%99%82s", url_non_ascii.query());
+
+  // Test already percent-escaped strings.
+  GURL url_percent_escaped("http://example.com/a/./%2e/i%2E%2F%2fj?q=r%2Es");
+  EXPECT_EQ("/a/i.%2F%2fj", url_percent_escaped.path());
+  EXPECT_EQ("q=r%2Es", url_percent_escaped.query());
 }
 
 TEST(GURLTest, Empty) {
@@ -209,7 +231,7 @@ TEST(GURLTest, CopyFileSystem) {
 }
 
 TEST(GURLTest, IsValid) {
-  const char* valid_cases[] = {
+  auto valid_cases = std::to_array<const char*>({
       "http://google.com",
       "unknown://google.com",
       "http://user:pass@google.com",
@@ -221,13 +243,13 @@ TEST(GURLTest, IsValid) {
       "http://user:pass@google.com:12345/path?k=v#fragment",
       "http:/path",
       "http:path",
-  };
+  });
   for (size_t i = 0; i < std::size(valid_cases); i++) {
     EXPECT_TRUE(GURL(valid_cases[i]).is_valid())
         << "Case: " << valid_cases[i];
   }
 
-  const char* invalid_cases[] = {
+  auto invalid_cases = std::to_array<const char*>({
       "http://?k=v",
       "http:://google.com",
       "http//google.com",
@@ -236,7 +258,7 @@ TEST(GURLTest, IsValid) {
       "file://server:0",
       "://google.com",
       "path",
-  };
+  });
   for (size_t i = 0; i < std::size(invalid_cases); i++) {
     EXPECT_FALSE(GURL(invalid_cases[i]).is_valid())
         << "Case: " << invalid_cases[i];
@@ -306,7 +328,8 @@ TEST(GURLTest, Resolve) {
     const char* relative;
     bool expected_valid;
     const char* expected;
-  } resolve_cases[] = {
+  };
+  auto resolve_cases = std::to_array<ResolveCase>({
       {"http://www.google.com/", "foo.html", true,
        "http://www.google.com/foo.html"},
       {"http://www.google.com/foo/", "bar", true,
@@ -323,10 +346,16 @@ TEST(GURLTest, Resolve) {
        "http://www.google.com/foo#com"},
       {"http://www.google.com/", "Https:images.google.com", true,
        "https://images.google.com/"},
-      // A non-standard base can be replaced with a standard absolute URL.
+      // An opaque path URL can be replaced with a special absolute URL.
       {"data:blahblah", "http://google.com/", true, "http://google.com/"},
       {"data:blahblah", "http:google.com", true, "http://google.com/"},
       {"data:blahblah", "https:google.com", true, "https://google.com/"},
+      // An opaque path URL can not be replaced with a relative URL.
+      {"git:opaque", "", false, ""},
+      {"git:opaque", "path", false, ""},
+      // A non-special URL which doesn't have a host can be replaced with a
+      // relative URL.
+      {"git:/a", "b", true, "git:/b"},
       // Filesystem URLs have different paths to test.
       {"filesystem:http://www.google.com/type/", "foo.html", true,
        "filesystem:http://www.google.com/type/foo.html"},
@@ -344,7 +373,7 @@ TEST(GURLTest, Resolve) {
       {"file:///some/dir/", "x-://host", true, "x-://host"},
       {"file:///some/dir/", "x!://host", true, "file:///some/dir/x!://host"},
       {"file:///some/dir/", "://host", true, "file:///some/dir/://host"},
-  };
+  });
 
   for (size_t i = 0; i < std::size(resolve_cases); i++) {
     // 8-bit code path.
@@ -364,11 +393,184 @@ TEST(GURLTest, Resolve) {
   }
 }
 
+class GURLTypedTest : public ::testing::TestWithParam<bool> {
+ public:
+  GURLTypedTest()
+      : use_standard_compliant_non_special_scheme_url_parsing_(GetParam()) {
+    if (use_standard_compliant_non_special_scheme_url_parsing_) {
+      scoped_feature_list_.InitAndEnableFeature(
+          kStandardCompliantNonSpecialSchemeURLParsing);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          kStandardCompliantNonSpecialSchemeURLParsing);
+    }
+  }
+
+ protected:
+  struct ResolveCase {
+    std::string_view base;
+    std::string_view relative;
+    std::optional<std::string_view> expected;
+  };
+
+  using ApplyReplacementsFunc = GURL(const GURL&);
+
+  struct ReplaceCase {
+    std::string_view base;
+    ApplyReplacementsFunc* apply_replacements;
+    std::string_view expected;
+  };
+
+  struct ReplaceHostCase {
+    std::string_view base;
+    std::string_view replacement_host;
+    std::string_view expected;
+  };
+
+  struct ReplacePathCase {
+    std::string_view base;
+    std::string_view replacement_path;
+    std::string_view expected;
+  };
+
+  void TestResolve(const ResolveCase& resolve_case) {
+    SCOPED_TRACE(testing::Message() << "base: " << resolve_case.base
+                                    << ", relative: " << resolve_case.relative);
+    GURL input(resolve_case.base);
+    GURL output = input.Resolve(resolve_case.relative);
+    if (resolve_case.expected) {
+      ASSERT_TRUE(output.is_valid());
+      EXPECT_EQ(output.spec(), *resolve_case.expected);
+    } else {
+      EXPECT_FALSE(output.is_valid());
+    }
+  }
+
+  void TestReplace(const ReplaceCase& replace) {
+    GURL output = replace.apply_replacements(GURL(replace.base));
+    EXPECT_EQ(output.spec(), replace.expected);
+  }
+
+  void TestReplaceHost(const ReplaceHostCase& replace) {
+    GURL url(replace.base);
+    GURL::Replacements replacements;
+    replacements.SetHostStr(replace.replacement_host);
+    GURL output = url.ReplaceComponents(replacements);
+    EXPECT_EQ(output.spec(), replace.expected);
+  }
+
+  void TestReplacePath(const ReplacePathCase& replace) {
+    GURL url(replace.base);
+    GURL::Replacements replacements;
+    replacements.SetPathStr(replace.replacement_path);
+    GURL output = url.ReplaceComponents(replacements);
+    EXPECT_EQ(output.spec(), replace.expected);
+  }
+
+  bool use_standard_compliant_non_special_scheme_url_parsing_;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_P(GURLTypedTest, Resolve) {
+  // Test flag-dependent behaviors.
+  // Existing tests in GURLTest::Resolve cover common cases.
+  if (use_standard_compliant_non_special_scheme_url_parsing_) {
+    ResolveCase cases[] = {
+        // Non-special base URLs whose paths are empty.
+        {"git://host", "", "git://host"},
+        {"git://host", ".", "git://host/"},
+        {"git://host", "..", "git://host/"},
+        {"git://host", "a", "git://host/a"},
+        {"git://host", "/a", "git://host/a"},
+
+        // Non-special base URLs whose paths are "/".
+        {"git://host/", "", "git://host/"},
+        {"git://host/", ".", "git://host/"},
+        {"git://host/", "..", "git://host/"},
+        {"git://host/", "a", "git://host/a"},
+        {"git://host/", "/a", "git://host/a"},
+
+        // Non-special base URLs whose hosts and paths are non-empty.
+        {"git://host/b", "a", "git://host/a"},
+        {"git://host/b/c", "a", "git://host/b/a"},
+        {"git://host/b/c", "../a", "git://host/a"},
+
+        // An opaque path can be specified.
+        {"git://host", "git:opaque", "git:opaque"},
+        {"git://host/path#ref", "git:opaque", "git:opaque"},
+        {"git:/path", "git:opaque", "git:opaque"},
+        {"https://host/path", "git:opaque", "git:opaque"},
+
+        // Path-only base URLs should remain path-only URLs unless a host is
+        // specified.
+        {"git:/", "", "git:/"},
+        {"git:/", ".", "git:/"},
+        {"git:/", "..", "git:/"},
+        {"git:/", "a", "git:/a"},
+        {"git:/", "/a", "git:/a"},
+        {"git:/#ref", "", "git:/"},
+        {"git:/#ref", "a", "git:/a"},
+
+        // Non-special base URLs whose hosts and path are both empty. The
+        // result's host should remain empty unless a relative URL specify a
+        // host.
+        {"git://", "", "git://"},
+        {"git://", ".", "git:///"},
+        {"git://", "..", "git:///"},
+        {"git://", "a", "git:///a"},
+        {"git://", "/a", "git:///a"},
+
+        // Non-special base URLs whose hosts are empty, but with non-empty path.
+        {"git:///", "", "git:///"},
+        {"git:///", ".", "git:///"},
+        {"git:///", "..", "git:///"},
+        {"git:///", "a", "git:///a"},
+        {"git:///", "/a", "git:///a"},
+        {"git:///#ref", "", "git:///"},
+        {"git:///#ref", "a", "git:///a"},
+
+        // Relative URLs can specify empty hosts for non-special base URLs.
+        // e.g. "///path"
+        {"git://host/", "//", "git://"},
+        {"git://host/", "//a", "git://a"},
+        {"git://host/", "///", "git:///"},
+        {"git://host/", "////", "git:////"},
+        {"git://host/", "////..", "git:///"},
+        {"git://host/", "////../..", "git:///"},
+        {"git://host/", "////../../..", "git:///"},
+    };
+    for (const auto& i : cases) {
+      TestResolve(i);
+    }
+  } else {
+    ResolveCase cases[] = {
+        {"git:/", "", "git:/"},
+        {"git:/", "a", "git:/a"},
+        {"git:/path", "a", "git:/a"},
+        // All non-special base URLs which don't start with a *single* slash
+        // can not be resolved with a relative URL.
+        {"git:", "", std::nullopt},
+        {"git://host", "", std::nullopt},
+        {"git://host", "a", std::nullopt},
+        {"git://", "", std::nullopt},
+        {"git:///", "", std::nullopt},
+    };
+    for (const auto& i : cases) {
+      TestResolve(i);
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(All, GURLTypedTest, ::testing::Bool());
+
 TEST(GURLTest, GetOrigin) {
   struct TestCase {
     const char* input;
     const char* expected;
-  } cases[] = {
+  };
+  auto cases = std::to_array<TestCase>({
       {"http://www.google.com", "http://www.google.com/"},
       {"javascript:window.alert(\"hello,world\");", ""},
       {"http://user:pass@www.google.com:21/blah#baz",
@@ -382,7 +584,7 @@ TEST(GURLTest, GetOrigin) {
        "http://google.com:21/"},
       {"blob:null/guid-goes-here", ""},
       {"blob:http://origin/guid-goes-here", "" /* should be http://origin/ */},
-  };
+  });
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
     GURL origin = url.DeprecatedGetOriginAsURL();
@@ -394,18 +596,21 @@ TEST(GURLTest, GetAsReferrer) {
   struct TestCase {
     const char* input;
     const char* expected;
-  } cases[] = {
-    {"http://www.google.com", "http://www.google.com/"},
-    {"http://user:pass@www.google.com:21/blah#baz", "http://www.google.com:21/blah"},
-    {"http://user@www.google.com", "http://www.google.com/"},
-    {"http://:pass@www.google.com", "http://www.google.com/"},
-    {"http://:@www.google.com", "http://www.google.com/"},
-    {"http://www.google.com/temp/foo?q#b", "http://www.google.com/temp/foo?q"},
-    {"not a url", ""},
-    {"unknown-scheme://foo.html", ""},
-    {"file:///tmp/test.html", ""},
-    {"https://www.google.com", "https://www.google.com/"},
   };
+  auto cases = std::to_array<TestCase>({
+      {"http://www.google.com", "http://www.google.com/"},
+      {"http://user:pass@www.google.com:21/blah#baz",
+       "http://www.google.com:21/blah"},
+      {"http://user@www.google.com", "http://www.google.com/"},
+      {"http://:pass@www.google.com", "http://www.google.com/"},
+      {"http://:@www.google.com", "http://www.google.com/"},
+      {"http://www.google.com/temp/foo?q#b",
+       "http://www.google.com/temp/foo?q"},
+      {"not a url", ""},
+      {"unknown-scheme://foo.html", ""},
+      {"file:///tmp/test.html", ""},
+      {"https://www.google.com", "https://www.google.com/"},
+  });
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
     GURL origin = url.GetAsReferrer();
@@ -417,13 +622,16 @@ TEST(GURLTest, GetWithEmptyPath) {
   struct TestCase {
     const char* input;
     const char* expected;
-  } cases[] = {
-    {"http://www.google.com", "http://www.google.com/"},
-    {"javascript:window.alert(\"hello, world\");", ""},
-    {"http://www.google.com/foo/bar.html?baz=22", "http://www.google.com/"},
-    {"filesystem:http://www.google.com/temporary/bar.html?baz=22", "filesystem:http://www.google.com/temporary/"},
-    {"filesystem:file:///temporary/bar.html?baz=22", "filesystem:file:///temporary/"},
   };
+  auto cases = std::to_array<TestCase>({
+      {"http://www.google.com", "http://www.google.com/"},
+      {"javascript:window.alert(\"hello, world\");", ""},
+      {"http://www.google.com/foo/bar.html?baz=22", "http://www.google.com/"},
+      {"filesystem:http://www.google.com/temporary/bar.html?baz=22",
+       "filesystem:http://www.google.com/temporary/"},
+      {"filesystem:file:///temporary/bar.html?baz=22",
+       "filesystem:file:///temporary/"},
+  });
 
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
@@ -436,45 +644,131 @@ TEST(GURLTest, GetWithoutFilename) {
   struct TestCase {
     const char* input;
     const char* expected;
-  } cases[] = {
-    // Common Standard URLs.
-    {"https://www.google.com",                    "https://www.google.com/"},
-    {"https://www.google.com/",                   "https://www.google.com/"},
-    {"https://www.google.com/maps.htm",           "https://www.google.com/"},
-    {"https://www.google.com/maps/",              "https://www.google.com/maps/"},
-    {"https://www.google.com/index.html",         "https://www.google.com/"},
-    {"https://www.google.com/index.html?q=maps",  "https://www.google.com/"},
-    {"https://www.google.com/index.html#maps/",   "https://www.google.com/"},
-    {"https://foo:bar@www.google.com/maps.htm",   "https://foo:bar@www.google.com/"},
-    {"https://www.google.com/maps/au/index.html", "https://www.google.com/maps/au/"},
-    {"https://www.google.com/maps/au/north",      "https://www.google.com/maps/au/"},
-    {"https://www.google.com/maps/au/north/",     "https://www.google.com/maps/au/north/"},
-    {"https://www.google.com/maps/au/index.html?q=maps#fragment/",     "https://www.google.com/maps/au/"},
-    {"http://www.google.com:8000/maps/au/index.html?q=maps#fragment/", "http://www.google.com:8000/maps/au/"},
-    {"https://www.google.com/maps/au/north/?q=maps#fragment",          "https://www.google.com/maps/au/north/"},
-    {"https://www.google.com/maps/au/north?q=maps#fragment",           "https://www.google.com/maps/au/"},
-    // Less common standard URLs.
-    {"filesystem:http://www.google.com/temporary/bar.html?baz=22", "filesystem:http://www.google.com/temporary/"},
-    {"file:///temporary/bar.html?baz=22","file:///temporary/"},
-    {"ftp://foo/test/index.html",        "ftp://foo/test/"},
-    {"gopher://foo/test/index.html",     "gopher://foo/test/"},
-    {"ws://foo/test/index.html",         "ws://foo/test/"},
-    // Non-standard, hierarchical URLs.
-    {"chrome://foo/bar.html", "chrome://foo/"},
-    {"httpa://foo/test/index.html", "httpa://foo/test/"},
-    // Non-standard, non-hierarchical URLs.
-    {"blob:https://foo.bar/test/index.html", ""},
-    {"about:blank", ""},
-    {"data:foobar", ""},
-    {"scheme:opaque_data", ""},
-    // Invalid URLs.
-    {"foobar", ""},
   };
+  auto cases = std::to_array<TestCase>({
+      // Common Standard URLs.
+      {"https://www.google.com", "https://www.google.com/"},
+      {"https://www.google.com/", "https://www.google.com/"},
+      {"https://www.google.com/maps.htm", "https://www.google.com/"},
+      {"https://www.google.com/maps/", "https://www.google.com/maps/"},
+      {"https://www.google.com/index.html", "https://www.google.com/"},
+      {"https://www.google.com/index.html?q=maps", "https://www.google.com/"},
+      {"https://www.google.com/index.html#maps/", "https://www.google.com/"},
+      {"https://foo:bar@www.google.com/maps.htm",
+       "https://foo:bar@www.google.com/"},
+      {"https://www.google.com/maps/au/index.html",
+       "https://www.google.com/maps/au/"},
+      {"https://www.google.com/maps/au/north",
+       "https://www.google.com/maps/au/"},
+      {"https://www.google.com/maps/au/north/",
+       "https://www.google.com/maps/au/north/"},
+      {"https://www.google.com/maps/au/index.html?q=maps#fragment/",
+       "https://www.google.com/maps/au/"},
+      {"http://www.google.com:8000/maps/au/index.html?q=maps#fragment/",
+       "http://www.google.com:8000/maps/au/"},
+      {"https://www.google.com/maps/au/north/?q=maps#fragment",
+       "https://www.google.com/maps/au/north/"},
+      {"https://www.google.com/maps/au/north?q=maps#fragment",
+       "https://www.google.com/maps/au/"},
+      // Less common standard URLs.
+      {"filesystem:http://www.google.com/temporary/bar.html?baz=22",
+       "filesystem:http://www.google.com/temporary/"},
+      {"file:///temporary/bar.html?baz=22", "file:///temporary/"},
+      {"ftp://foo/test/index.html", "ftp://foo/test/"},
+      {"gopher://foo/test/index.html", "gopher://foo/test/"},
+      {"ws://foo/test/index.html", "ws://foo/test/"},
+      // Non-standard, hierarchical URLs.
+      {"chrome://foo/bar.html", "chrome://foo/"},
+      {"httpa://foo/test/index.html", "httpa://foo/test/"},
+      // Non-standard, non-hierarchical URLs.
+      {"blob:https://foo.bar/test/index.html", ""},
+      {"about:blank", ""},
+      {"data:foobar", ""},
+      {"scheme:opaque_data", ""},
+      // Invalid URLs.
+      {"foobar", ""},
+  });
 
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
     GURL without_filename = url.GetWithoutFilename();
     EXPECT_EQ(cases[i].expected, without_filename.spec()) << i;
+  }
+}
+
+TEST(GURLTest, GetWithoutRef) {
+  struct TestCase {
+    const char* input;
+    const char* expected;
+  };
+  auto cases = std::to_array<TestCase>({
+      // Common Standard URLs.
+      {"https://www.google.com/index.html",
+       "https://www.google.com/index.html"},
+      {"https://www.google.com/index.html#maps/",
+       "https://www.google.com/index.html"},
+
+      {"https://foo:bar@www.google.com/maps.htm",
+       "https://foo:bar@www.google.com/maps.htm"},
+      {"https://foo:bar@www.google.com/maps.htm#fragment",
+       "https://foo:bar@www.google.com/maps.htm"},
+
+      {"https://www.google.com/maps/au/index.html?q=maps",
+       "https://www.google.com/maps/au/index.html?q=maps"},
+      {"https://www.google.com/maps/au/index.html?q=maps#fragment/",
+       "https://www.google.com/maps/au/index.html?q=maps"},
+
+      {"http://www.google.com:8000/maps/au/index.html?q=maps",
+       "http://www.google.com:8000/maps/au/index.html?q=maps"},
+      {"http://www.google.com:8000/maps/au/index.html?q=maps#fragment/",
+       "http://www.google.com:8000/maps/au/index.html?q=maps"},
+
+      {"https://www.google.com/maps/au/north/?q=maps",
+       "https://www.google.com/maps/au/north/?q=maps"},
+      {"https://www.google.com/maps/au/north?q=maps#fragment",
+       "https://www.google.com/maps/au/north?q=maps"},
+
+      // Less common standard URLs.
+      {"filesystem:http://www.google.com/temporary/bar.html?baz=22",
+       "filesystem:http://www.google.com/temporary/bar.html?baz=22"},
+      {"file:///temporary/bar.html?baz=22#fragment",
+       "file:///temporary/bar.html?baz=22"},
+
+      {"ftp://foo/test/index.html", "ftp://foo/test/index.html"},
+      {"ftp://foo/test/index.html#fragment", "ftp://foo/test/index.html"},
+
+      {"gopher://foo/test/index.html", "gopher://foo/test/index.html"},
+      {"gopher://foo/test/index.html#fragment", "gopher://foo/test/index.html"},
+
+      {"ws://foo/test/index.html", "ws://foo/test/index.html"},
+      {"ws://foo/test/index.html#fragment", "ws://foo/test/index.html"},
+
+      // Non-standard, hierarchical URLs.
+      {"chrome://foo/bar.html", "chrome://foo/bar.html"},
+      {"chrome://foo/bar.html#fragment", "chrome://foo/bar.html"},
+
+      {"httpa://foo/test/index.html", "httpa://foo/test/index.html"},
+      {"httpa://foo/test/index.html#fragment", "httpa://foo/test/index.html"},
+
+      // Non-standard, non-hierarchical URLs.
+      {"blob:https://foo.bar/test/index.html",
+       "blob:https://foo.bar/test/index.html"},
+      {"blob:https://foo.bar/test/index.html#fragment",
+       "blob:https://foo.bar/test/index.html"},
+
+      {"about:blank", "about:blank"},
+      {"about:blank#ref", "about:blank"},
+
+      {"data:foobar", "data:foobar"},
+      {"scheme:opaque_data", "scheme:opaque_data"},
+      // Invalid URLs.
+      {"foobar", ""},
+  });
+
+  for (size_t i = 0; i < std::size(cases); i++) {
+    GURL url(cases[i].input);
+    GURL without_ref = url.GetWithoutRef();
+    EXPECT_EQ(cases[i].expected, without_ref.spec());
   }
 }
 
@@ -499,21 +793,6 @@ TEST(GURLTest, Replacements) {
              return url.ReplaceComponents(replacements);
            },
        .expected = "http://www.google.com/"},
-      {.base = "http://www.google.com/foo/bar.html?foo#bar",
-       .apply_replacements =
-           +[](const GURL& url) {
-             GURL::Replacements replacements;
-             replacements.SetSchemeStr("javascript");
-             replacements.ClearUsername();
-             replacements.ClearPassword();
-             replacements.ClearHost();
-             replacements.ClearPort();
-             replacements.SetPathStr("window.open('foo');");
-             replacements.ClearQuery();
-             replacements.ClearRef();
-             return url.ReplaceComponents(replacements);
-           },
-       .expected = "javascript:window.open('foo');"},
       {.base = "file:///C:/foo/bar.txt",
        .apply_replacements =
            +[](const GURL& url) {
@@ -566,6 +845,18 @@ TEST(GURLTest, Replacements) {
              return url.ReplaceComponents(replacements);
            },
        .expected = "filesystem:http://www.google.com/foo/bar.html?foo#bar"},
+      // Regression test for https://crbug.com/375660989.
+      //
+      // "steam:" is explicitly registered as an opaque non-special scheme for
+      // compatibility reasons. See SchemeRegistry::opaque_non_special_schemes.
+      {.base = "steam:a",
+       .apply_replacements =
+           +[](const GURL& url) {
+             GURL::Replacements replacements;
+             replacements.SetPathStr("b");
+             return url.ReplaceComponents(replacements);
+           },
+       .expected = "steam:b"},
   };
 
   for (const ReplaceCase& c : replace_cases) {
@@ -583,7 +874,107 @@ TEST(GURLTest, Replacements) {
   }
 }
 
-TEST(GURLTest, ClearFragmentOnDataUrl) {
+TEST_P(GURLTypedTest, Replacements) {
+  // Test flag-dependent behavior.
+  // Existing tests in GURLTest::Replacements cover common cases.
+
+  if (use_standard_compliant_non_special_scheme_url_parsing_) {
+    ReplaceCase replace_cases[] = {
+        {.base = "git://a1/a2?a3=a4#a5",
+         .apply_replacements =
+             +[](const GURL& url) {
+               GURL::Replacements replacements;
+               replacements.SetHostStr("b1");
+               replacements.SetPortStr("99");
+               replacements.SetPathStr("b2");
+               replacements.SetQueryStr("b3=b4");
+               replacements.SetRefStr("b5");
+               return url.ReplaceComponents(replacements);
+             },
+         .expected = "git://b1:99/b2?b3=b4#b5"},
+        // URL Standard: https://url.spec.whatwg.org/#dom-url-username
+        // > 1. If this’s URL cannot have a username/password/port, then return.
+        {.base = "git:///",
+         .apply_replacements =
+             +[](const GURL& url) {
+               GURL::Replacements replacements;
+               replacements.SetUsernameStr("x");
+               return url.ReplaceComponents(replacements);
+             },
+         .expected = "git:///"},
+        // URL Standard: https://url.spec.whatwg.org/#dom-url-password
+        // > 1. If this’s URL cannot have a username/password/port, then return.
+        {.base = "git:///",
+         .apply_replacements =
+             +[](const GURL& url) {
+               GURL::Replacements replacements;
+               replacements.SetPasswordStr("x");
+               return url.ReplaceComponents(replacements);
+             },
+         .expected = "git:///"},
+        // URL Standard: https://url.spec.whatwg.org/#dom-url-port
+        // > 1. If this’s URL cannot have a username/password/port, then return.
+        {.base = "git:///",
+         .apply_replacements =
+             +[](const GURL& url) {
+               GURL::Replacements replacements;
+               replacements.SetPortStr("80");
+               return url.ReplaceComponents(replacements);
+             },
+         .expected = "git:///"}};
+
+    for (const ReplaceCase& c : replace_cases) {
+      TestReplace(c);
+    }
+
+    ReplaceHostCase replace_host_cases[] = {
+        {"git:/", "host", "git://host/"},
+        {"git:/a", "host", "git://host/a"},
+        {"git://", "host", "git://host"},
+        {"git:///", "host", "git://host/"},
+        {"git://h/a", "host", "git://host/a"},
+        // The following behavior is different from Web-facing URL APIs
+        // because DOMURLUtils::setHostname disallows setting an empty host.
+        //
+        // Web-facing URL API behavior is:
+        // > const url = new URL("git://u:p@h:80/");
+        // > url.hostname = "";
+        // > assertEquals(url.href, "git://u:p@h:80/");
+        {"git://u:p@h:80/", "", "git:///"}};
+    for (const ReplaceHostCase& c : replace_host_cases) {
+      TestReplaceHost(c);
+    }
+
+    ReplacePathCase replace_path_cases[] = {
+        {"git:/", "a", "git:/a"},
+        {"git:/", "", "git:/"},
+        {"git:/", "//a", "git:/.//a"},
+        {"git:/", "/.//a", "git:/.//a"},
+        {"git://", "a", "git:///a"},
+        {"git:///", "a", "git:///a"},
+        {"git://host", "a", "git://host/a"},
+        {"git://host/b", "a", "git://host/a"}};
+    for (const ReplacePathCase& c : replace_path_cases) {
+      TestReplacePath(c);
+    }
+  } else {
+    // Non-compliant behaviors.
+    ReplaceHostCase replace_host_cases[] = {
+        {"git://host", "h2", "git://host"},
+    };
+    for (const ReplaceHostCase& c : replace_host_cases) {
+      TestReplaceHost(c);
+    }
+
+    // Non-compliant behaviors.
+    ReplacePathCase replace_path_cases[] = {{"git://host", "path", "git:path"}};
+    for (const ReplacePathCase& c : replace_path_cases) {
+      TestReplacePath(c);
+    }
+  }
+}
+
+TEST(GURLTypedTest, ClearFragmentOnDataUrl) {
   // http://crbug.com/291747 - a data URL may legitimately have trailing
   // whitespace in the spec after the ref is cleared. Test this does not trigger
   // the Parsed importing validation DCHECK in GURL.
@@ -622,7 +1013,8 @@ TEST(GURLTest, PathForRequest) {
     const char* input;
     const char* expected;
     const char* inner_expected;
-  } cases[] = {
+  };
+  auto cases = std::to_array<TestCase>({
       {"http://www.google.com", "/", nullptr},
       {"http://www.google.com/", "/", nullptr},
       {"http://www.google.com/foo/bar.html?baz=22", "/foo/bar.html?baz=22",
@@ -634,7 +1026,7 @@ TEST(GURLTest, PathForRequest) {
        "/foo/bar.html?query", "/temporary"},
       {"filesystem:http://www.google.com/temporary/foo/bar.html?query",
        "/foo/bar.html?query", "/temporary"},
-  };
+  });
 
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
@@ -653,34 +1045,35 @@ TEST(GURLTest, EffectiveIntPort) {
   struct PortTest {
     const char* spec;
     int expected_int_port;
-  } port_tests[] = {
-    // http
-    {"http://www.google.com/", 80},
-    {"http://www.google.com:80/", 80},
-    {"http://www.google.com:443/", 443},
-
-    // https
-    {"https://www.google.com/", 443},
-    {"https://www.google.com:443/", 443},
-    {"https://www.google.com:80/", 80},
-
-    // ftp
-    {"ftp://www.google.com/", 21},
-    {"ftp://www.google.com:21/", 21},
-    {"ftp://www.google.com:80/", 80},
-
-    // file - no port
-    {"file://www.google.com/", PORT_UNSPECIFIED},
-    {"file://www.google.com:443/", PORT_UNSPECIFIED},
-
-    // data - no port
-    {"data:www.google.com:90", PORT_UNSPECIFIED},
-    {"data:www.google.com", PORT_UNSPECIFIED},
-
-    // filesystem - no port
-    {"filesystem:http://www.google.com:90/t/foo", PORT_UNSPECIFIED},
-    {"filesystem:file:///t/foo", PORT_UNSPECIFIED},
   };
+  auto port_tests = std::to_array<PortTest>({
+      // http
+      {"http://www.google.com/", 80},
+      {"http://www.google.com:80/", 80},
+      {"http://www.google.com:443/", 443},
+
+      // https
+      {"https://www.google.com/", 443},
+      {"https://www.google.com:443/", 443},
+      {"https://www.google.com:80/", 80},
+
+      // ftp
+      {"ftp://www.google.com/", 21},
+      {"ftp://www.google.com:21/", 21},
+      {"ftp://www.google.com:80/", 80},
+
+      // file - no port
+      {"file://www.google.com/", PORT_UNSPECIFIED},
+      {"file://www.google.com:443/", PORT_UNSPECIFIED},
+
+      // data - no port
+      {"data:www.google.com:90", PORT_UNSPECIFIED},
+      {"data:www.google.com", PORT_UNSPECIFIED},
+
+      // filesystem - no port
+      {"filesystem:http://www.google.com:90/t/foo", PORT_UNSPECIFIED},
+      {"filesystem:file:///t/foo", PORT_UNSPECIFIED},
+  });
 
   for (size_t i = 0; i < std::size(port_tests); i++) {
     GURL url(port_tests[i].spec);
@@ -692,16 +1085,17 @@ TEST(GURLTest, IPAddress) {
   struct IPTest {
     const char* spec;
     bool expected_ip;
-  } ip_tests[] = {
-    {"http://www.google.com/", false},
-    {"http://192.168.9.1/", true},
-    {"http://192.168.9.1.2/", false},
-    {"http://192.168.m.1/", false},
-    {"http://2001:db8::1/", false},
-    {"http://[2001:db8::1]/", true},
-    {"", false},
-    {"some random input!", false},
   };
+  auto ip_tests = std::to_array<IPTest>({
+      {"http://www.google.com/", false},
+      {"http://192.168.9.1/", true},
+      {"http://192.168.9.1.2/", false},
+      {"http://192.168.m.1/", false},
+      {"http://2001:db8::1/", false},
+      {"http://[2001:db8::1]/", true},
+      {"", false},
+      {"some random input!", false},
+  });
 
   for (size_t i = 0; i < std::size(ip_tests); i++) {
     GURL url(ip_tests[i].spec);
@@ -714,20 +1108,21 @@ TEST(GURLTest, HostNoBrackets) {
     const char* input;
     const char* expected_host;
     const char* expected_plainhost;
-  } cases[] = {
-    {"http://www.google.com", "www.google.com", "www.google.com"},
-    {"http://[2001:db8::1]/", "[2001:db8::1]", "2001:db8::1"},
-    {"http://[::]/", "[::]", "::"},
-
-    // Don't require a valid URL, but don't crash either.
-    {"http://[]/", "[]", ""},
-    {"http://[x]/", "[x]", "x"},
-    {"http://[x/", "[x", "[x"},
-    {"http://x]/", "x]", "x]"},
-    {"http://[/", "[", "["},
-    {"http://]/", "]", "]"},
-    {"", "", ""},
   };
+  auto cases = std::to_array<TestCase>({
+      {"http://www.google.com", "www.google.com", "www.google.com"},
+      {"http://[2001:db8::1]/", "[2001:db8::1]", "2001:db8::1"},
+      {"http://[::]/", "[::]", "::"},
+
+      // Don't require a valid URL, but don't crash either.
+      {"http://[]/", "[]", ""},
+      {"http://[x]/", "[x]", "x"},
+      {"http://[x/", "[x", "[x"},
+      {"http://x]/", "x]", "x]"},
+      {"http://[/", "[", "["},
+      {"http://]/", "]", "]"},
+      {"", "", ""},
+  });
   for (size_t i = 0; i < std::size(cases); i++) {
     GURL url(cases[i].input);
     EXPECT_EQ(cases[i].expected_host, url.host());
@@ -763,8 +1158,8 @@ TEST(GURLTest, DomainIs) {
 
   GURL url_with_escape_chars("https://www.,.test");
   EXPECT_TRUE(url_with_escape_chars.is_valid());
-  EXPECT_EQ(url_with_escape_chars.host(), "www.%2C.test");
-  EXPECT_TRUE(url_with_escape_chars.DomainIs("%2C.test"));
+  EXPECT_EQ(url_with_escape_chars.host(), "www.,.test");
+  EXPECT_TRUE(url_with_escape_chars.DomainIs(",.test"));
 }
 
 TEST(GURLTest, DomainIsTerminatingDotBehavior) {
@@ -907,7 +1302,6 @@ TEST(GURLTest, ContentForNonStandardURLs) {
       // content not the scheme.
       {"view-source:http://example.com/path", "http://example.com/path"},
       {"blob:http://example.com/GUID", "http://example.com/GUID"},
-      {"blob://http://example.com/GUID", "//http://example.com/GUID"},
       {"blob:http://user:password@example.com/GUID",
        "http://user:password@example.com/GUID"},
 
@@ -933,6 +1327,35 @@ TEST(GURLTest, ContentForNonStandardURLs) {
   }
 }
 
+TEST_P(GURLTypedTest, ContentForNonStandardURLs) {
+  struct TestCase {
+    const std::string_view url;
+    const std::string_view expected;
+  };
+
+  if (use_standard_compliant_non_special_scheme_url_parsing_) {
+    TestCase cases[] = {
+        {"blob://http://example.com/GUID", "http//example.com/GUID"},
+        {"git://host/path#fragment", "host/path"},
+    };
+    for (const auto& test : cases) {
+      GURL url(test.url);
+      EXPECT_EQ(url.GetContent(), test.expected) << test.url;
+      EXPECT_EQ(url.GetContentPiece(), test.expected) << test.url;
+    }
+  } else {
+    TestCase cases[] = {
+        {"blob://http://example.com/GUID", "//http://example.com/GUID"},
+        {"git://host/path#fragment", "//host/path"},
+    };
+    for (const auto& test : cases) {
+      GURL url(test.url);
+      EXPECT_EQ(url.GetContent(), test.expected) << test.url;
+      EXPECT_EQ(url.GetContentPiece(), test.expected) << test.url;
+    }
+  }
+}
+
 // Tests that the URL path is properly extracted for unusual URLs. This can be
 // complex in cases such as multiple schemes (view-source:http:) or when
 // octothorpes ('#') are involved.
@@ -946,7 +1369,6 @@ TEST(GURLTest, PathForNonStandardURLs) {
        "this is arbitrary content"},
       {"view-source:http://example.com/path", "http://example.com/path"},
       {"blob:http://example.com/GUID", "http://example.com/GUID"},
-      {"blob://http://example.com/GUID", "//http://example.com/GUID"},
       {"blob:http://user:password@example.com/GUID",
        "http://user:password@example.com/GUID"},
 
@@ -962,6 +1384,33 @@ TEST(GURLTest, PathForNonStandardURLs) {
   for (const auto& test : cases) {
     GURL url(test.url);
     EXPECT_EQ(test.expected, url.path()) << test.url;
+  }
+}
+
+TEST_P(GURLTypedTest, PathForNonStandardURLs) {
+  struct TestCase {
+    const std::string_view url;
+    const std::string_view expected;
+  };
+
+  if (use_standard_compliant_non_special_scheme_url_parsing_) {
+    TestCase cases[] = {
+        {"blob://http://example.com/GUID", "//example.com/GUID"},
+        {"git://host/path#fragment", "/path"},
+    };
+    for (const auto& test : cases) {
+      GURL url(test.url);
+      EXPECT_EQ(url.path(), test.expected) << test.url;
+    }
+  } else {
+    TestCase cases[] = {
+        {"blob://http://example.com/GUID", "//http://example.com/GUID"},
+        {"git://host/path#fragment", "//host/path"},
+    };
+    for (const auto& test : cases) {
+      GURL url(test.url);
+      EXPECT_EQ(url.path(), test.expected) << test.url;
+    }
   }
 }
 
@@ -1092,7 +1541,7 @@ class GURLTestTraits {
  public:
   using UrlType = GURL;
 
-  static UrlType CreateUrlFromString(base::StringPiece s) { return GURL(s); }
+  static UrlType CreateUrlFromString(std::string_view s) { return GURL(s); }
   static bool IsAboutBlank(const UrlType& url) { return url.IsAboutBlank(); }
   static bool IsAboutSrcdoc(const UrlType& url) { return url.IsAboutSrcdoc(); }
 

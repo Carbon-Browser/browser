@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -162,6 +162,15 @@ class AmbientBackendModelTestWithAnimationConfig
     AshTestBase::SetUp();
     ambient_backend_model_ = std::make_unique<AmbientBackendModel>(
         GenerateAnimationConfigWithNAssets(kNumAssetsInAnimation));
+  }
+};
+
+class AmbientBackendModelTestWithEmptyConfig : public AmbientBackendModelTest {
+ protected:
+  void SetUp() override {
+    AshTestBase::SetUp();
+    ambient_backend_model_ =
+        std::make_unique<AmbientBackendModel>(AmbientPhotoConfig());
   }
 };
 
@@ -403,6 +412,10 @@ TEST_F(AmbientBackendModelTestWithAnimationConfig, RotatesTopics) {
   EXPECT_THAT(ambient_backend_model_->all_decoded_topics(),
               ElementsAre(MatchesPhotosInTopic(topic_2),
                           MatchesPhotosInTopic(topic_3)));
+}
+
+TEST_F(AmbientBackendModelTestWithEmptyConfig, ImagesReadyImmediately) {
+  EXPECT_TRUE(ambient_backend_model_->ImagesReady());
 }
 
 }  // namespace ash

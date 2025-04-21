@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/paint_preview/player/android/javatests/paint_preview_test_service.h"
 
@@ -21,7 +26,6 @@
 #include "components/paint_preview/common/file_utils.h"
 #include "components/paint_preview/common/proto/paint_preview.pb.h"
 #include "components/paint_preview/common/version.h"
-#include "components/paint_preview/player/android/javatests_jni_headers/PaintPreviewTestService_jni.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkMatrix.h"
@@ -29,6 +33,9 @@
 #include "third_party/skia/include/core/SkPictureRecorder.h"
 #include "third_party/skia/include/core/SkRect.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/paint_preview/player/android/javatests_jni_headers/PaintPreviewTestService_jni.h"
 
 using base::android::JavaParamRef;
 

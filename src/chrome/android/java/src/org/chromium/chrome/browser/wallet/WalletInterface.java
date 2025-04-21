@@ -59,6 +59,8 @@ public interface WalletInterface {
 
   void onNavigateCustomTokens();
 
+  void onNavigateViewSeed();
+
   void onNavigateAddCustomToken();
 
   void exitWallet();

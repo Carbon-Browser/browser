@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_DISPLAY_MANAGER_TEST_TOUCH_TRANSFORM_CONTROLLER_TEST_API_H_
 #define UI_DISPLAY_MANAGER_TEST_TOUCH_TRANSFORM_CONTROLLER_TEST_API_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/display/manager/touch_transform_controller.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 class TouchTransformControllerTestApi {
  public:
@@ -27,10 +27,9 @@ class TouchTransformControllerTestApi {
   }
 
  private:
-  TouchTransformController* controller_ = nullptr;
+  raw_ptr<TouchTransformController> controller_ = nullptr;
 };
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test
 
 #endif  // UI_DISPLAY_MANAGER_TEST_TOUCH_TRANSFORM_CONTROLLER_TEST_API_H_

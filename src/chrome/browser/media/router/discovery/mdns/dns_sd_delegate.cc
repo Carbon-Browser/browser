@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 namespace media_router {
 
-DnsSdService::DnsSdService() {}
+DnsSdService::DnsSdService() = default;
 DnsSdService::DnsSdService(const DnsSdService& other) = default;
-DnsSdService::~DnsSdService() {}
+DnsSdService::~DnsSdService() = default;
 
 }  // namespace media_router

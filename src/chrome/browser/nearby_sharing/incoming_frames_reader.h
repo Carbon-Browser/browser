@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 #define CHROME_BROWSER_NEARBY_SHARING_INCOMING_FRAMES_READER_H_
 
 #include <map>
+#include <optional>
 #include <vector>
 
-#include "ash/services/nearby/public/cpp/nearby_process_manager.h"
-#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/nearby/public/cpp/nearby_process_manager.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 
 class NearbyConnection;
 
@@ -35,7 +36,7 @@ class IncomingFramesReader {
   // Note: Callers are expected wait for |callback| to be run before scheduling
   // subsequent calls to ReadFrame(..).
   virtual void ReadFrame(
-      base::OnceCallback<void(absl::optional<sharing::mojom::V1FramePtr>)>
+      base::OnceCallback<void(std::optional<sharing::mojom::V1FramePtr>)>
           callback);
 
   // Reads a frame of type |frame_type| from |connection|. |callback| is called
@@ -46,30 +47,29 @@ class IncomingFramesReader {
   // subsequent calls to ReadFrame(..).
   virtual void ReadFrame(
       sharing::mojom::V1Frame::Tag frame_type,
-      base::OnceCallback<void(absl::optional<sharing::mojom::V1FramePtr>)>
+      base::OnceCallback<void(std::optional<sharing::mojom::V1FramePtr>)>
           callback,
       base::TimeDelta timeout);
 
  private:
   void ReadNextFrame();
-  void OnDataReadFromConnection(absl::optional<std::vector<uint8_t>> bytes);
+  void OnDataReadFromConnection(std::optional<std::vector<uint8_t>> bytes);
   void OnFrameDecoded(sharing::mojom::FramePtr mojo_frame);
   void OnTimeout();
   void OnNearbyProcessStopped(
       ash::nearby::NearbyProcessManager::NearbyProcessShutdownReason
           shutdown_reason);
-  void Done(absl::optional<sharing::mojom::V1FramePtr> frame);
-  absl::optional<sharing::mojom::V1FramePtr> GetCachedFrame(
-      absl::optional<sharing::mojom::V1Frame::Tag> frame_type);
+  void Done(std::optional<sharing::mojom::V1FramePtr> frame);
+  std::optional<sharing::mojom::V1FramePtr> GetCachedFrame(
+      std::optional<sharing::mojom::V1Frame::Tag> frame_type);
   sharing::mojom::NearbySharingDecoder* GetOrStartNearbySharingDecoder();
 
-  ash::nearby::NearbyProcessManager* process_manager_;
+  raw_ptr<ash::nearby::NearbyProcessManager> process_manager_;
   std::unique_ptr<ash::nearby::NearbyProcessManager::NearbyProcessReference>
       process_reference_;
-  NearbyConnection* connection_;
-  absl::optional<sharing::mojom::V1Frame::Tag> frame_type_;
-  base::OnceCallback<void(absl::optional<sharing::mojom::V1FramePtr>)>
-      callback_;
+  raw_ptr<NearbyConnection> connection_;
+  std::optional<sharing::mojom::V1Frame::Tag> frame_type_;
+  base::OnceCallback<void(std::optional<sharing::mojom::V1FramePtr>)> callback_;
   base::CancelableOnceClosure timeout_callback_;
 
   // Caches frames read from NearbyConnection which are not used immediately.

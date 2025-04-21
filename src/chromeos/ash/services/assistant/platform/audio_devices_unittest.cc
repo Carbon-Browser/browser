@@ -1,21 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/platform/audio_devices.h"
 
-#include "ash/components/audio/audio_device.h"
-#include "ash/components/audio/cras_audio_handler.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/audio/audio_device.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -31,11 +30,11 @@ class FakeAudioDevicesObserver : public AudioDevices::Observer {
   ~FakeAudioDevicesObserver() override = default;
 
   // AudioDevices::Observer implementation
-  void SetDeviceId(const absl::optional<std::string>& device_id) override {
+  void SetDeviceId(const std::optional<std::string>& device_id) override {
     preferred_device_id_ = device_id;
   }
   void SetHotwordDeviceId(
-      const absl::optional<std::string>& device_id) override {
+      const std::optional<std::string>& device_id) override {
     hotword_device_id_ = device_id;
   }
 
@@ -48,8 +47,8 @@ class FakeAudioDevicesObserver : public AudioDevices::Observer {
   }
 
  private:
-  absl::optional<std::string> preferred_device_id_;
-  absl::optional<std::string> hotword_device_id_;
+  std::optional<std::string> preferred_device_id_;
+  std::optional<std::string> hotword_device_id_;
 };
 
 class DeviceBuilder {
@@ -98,7 +97,7 @@ class ScopedCrasAudioClientMock : public FakeCrasAudioClient {
               SetHotwordModel,
               (uint64_t node_id,
                const std::string& hotword_model,
-               VoidDBusMethodCallback callback));
+               chromeos::VoidDBusMethodCallback callback));
 };
 
 class ScopedCrasAudioHandler {
@@ -394,7 +393,7 @@ TEST_F(AssistantAudioDevicesTest, ShouldUseDefaultLocaleIfUserPrefIsRejected) {
   EXPECT_CALL(cras_audio_client_mock(),
               SetHotwordModel(_, "rejected_locale", _))
       .WillOnce([](uint64_t node_id, const std::string&,
-                   VoidDBusMethodCallback callback) {
+                   chromeos::VoidDBusMethodCallback callback) {
         // Report failure to change the locale
         std::move(callback).Run(/*success=*/false);
       });
@@ -419,7 +418,7 @@ TEST_F(AssistantAudioDevicesTest, ShouldDoNothingIfUserPrefIsAccepted) {
   EXPECT_CALL(cras_audio_client_mock(),
               SetHotwordModel(_, "accepted_locale", _))
       .WillOnce([](uint64_t node_id, const std::string&,
-                   VoidDBusMethodCallback callback) {
+                   chromeos::VoidDBusMethodCallback callback) {
         // Accept the change to the locale.
         std::move(callback).Run(/*success=*/true);
       });
@@ -431,5 +430,4 @@ TEST_F(AssistantAudioDevicesTest, ShouldDoNothingIfUserPrefIsAccepted) {
   audio_devices().SetLocale("accepted-LOCALE");
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/ac3/ac3_util.h"
 
@@ -73,7 +78,7 @@ Ac3Header::Ac3Header(const uint8_t* data, int size) {
   eac3_number_of_audio_block_code_ = ac3_frame_size_code_ >> 4;
 }
 
-// Search for next synchronization word, wihch is 0x0B-0x77.
+// Search for next synchronization word, which is 0x0B-0x77.
 const uint8_t* FindNextSyncWord(const uint8_t* const begin,
                                 const uint8_t* const end) {
   DCHECK(begin);

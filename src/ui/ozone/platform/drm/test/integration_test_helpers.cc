@@ -1,14 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/drm/test/integration_test_helpers.h"
 
 #include <fcntl.h>
+#include <unistd.h>
+
 #include <string>
 #include <utility>
 
-#include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
@@ -18,7 +19,7 @@
 
 namespace ui::test {
 
-PathAndFile FindDrmDriverOrDie(std::string name) {
+PathAndFd FindDrmDriverOrDie(std::string name) {
   constexpr char kDefaultGraphicsCardPattern[] = "/dev/dri/card%d";
 
   std::vector<std::string> seen_drivers;
@@ -43,7 +44,7 @@ PathAndFile FindDrmDriverOrDie(std::string name) {
       continue;
     }
 
-    return {base::FilePath(card_path), base::File(std::move(fd))};
+    return {base::FilePath(card_path), std::move(fd)};
   }
 }
 

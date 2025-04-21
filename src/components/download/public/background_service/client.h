@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "net/http/http_response_headers.h"
 #include "url/gurl.h"
 
@@ -27,7 +28,7 @@ using GetUploadDataCallback =
 // The Client interface required by any feature that wants to start a download
 // through the DownloadService.  Should be registered immediately at startup
 // when the DownloadService is created (see the factory).
-class Client {
+class COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE) Client {
  public:
   // Used by OnDownloadFailed to determine the reason of the abort.
   enum class FailureReason {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ TEST_F(VulkanImageTest, Create) {
 
 TEST_F(VulkanImageTest, CreateWithExternalMemory) {
   {
-    // TODO(crbug.com/1069516) : Fails on current driver version on this bot.
+    // TODO(crbug.com/40125946) : Fails on current driver version on this bot.
     if (GPUTestBotConfig::CurrentConfigMatches("Win10"))
       return;
   }

@@ -1,13 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sessions/core/command_storage_manager_test_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/sessions/core/command_storage_backend.h"
 #include "components/sessions/core/command_storage_manager.h"
 
@@ -27,7 +28,7 @@ void CommandStorageManagerTestHelper::RunTaskOnBackendThread(
 }
 
 void CommandStorageManagerTestHelper::RunMessageLoopUntilBackendDone() {
-  auto current_task_runner = base::ThreadTaskRunnerHandle::Get();
+  auto current_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   base::RunLoop run_loop;
   auto quit_closure = run_loop.QuitClosure();
   auto quit_from_backend =

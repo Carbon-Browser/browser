@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_AUTOFILL_ADDRESS_NORMALIZER_FACTORY_H_
 
 #include "base/lazy_instance.h"
-#include "components/autofill/core/browser/address_normalizer_impl.h"
+#include "components/autofill/core/browser/data_quality/addresses/address_normalizer_impl.h"
 
 namespace autofill {
 

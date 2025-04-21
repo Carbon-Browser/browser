@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "remoting/protocol/channel_multiplexer.h"
 #include "remoting/protocol/pseudotcp_channel_factory.h"
@@ -15,8 +15,7 @@
 #include "remoting/protocol/stream_message_pipe_adapter.h"
 #include "remoting/protocol/transport_context.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // Delay after candidate creation before sending transport-info message to
 // accumulate multiple candidates. This is an optimization to reduce number of
@@ -28,9 +27,7 @@ static const char kMuxChannelName[] = "mux";
 
 IceTransport::IceTransport(scoped_refptr<TransportContext> transport_context,
                            EventHandler* event_handler)
-    : transport_context_(transport_context), event_handler_(event_handler) {
-  transport_context->Prepare();
-}
+    : transport_context_(transport_context), event_handler_(event_handler) {}
 
 IceTransport::~IceTransport() {
   channel_multiplexer_.reset();
@@ -53,10 +50,12 @@ void IceTransport::Start(
                               weak_factory_.GetWeakPtr()));
 }
 
-bool IceTransport::ProcessTransportInfo(jingle_xmpp::XmlElement* transport_info_xml) {
+bool IceTransport::ProcessTransportInfo(
+    jingle_xmpp::XmlElement* transport_info_xml) {
   IceTransportInfo transport_info;
-  if (!transport_info.ParseXml(transport_info_xml))
+  if (!transport_info.ParseXml(transport_info_xml)) {
     return false;
+  }
 
   for (auto it = transport_info.ice_credentials.begin();
        it != transport_info.ice_credentials.end(); ++it) {
@@ -101,12 +100,27 @@ MessageChannelFactory* IceTransport::GetMultiplexedChannelFactory() {
   return mux_channel_factory_.get();
 }
 
+void IceTransport::ApplyNetworkSettings(const NetworkSettings& settings) {
+  DCHECK(!network_settings_);
+  network_settings_ = std::make_unique<NetworkSettings>(settings);
+  for (auto& [name, callback] : pending_channel_created_callbacks_) {
+    CreateChannel(name, std::move(callback));
+  }
+  pending_channel_created_callbacks_.clear();
+}
+
 void IceTransport::CreateChannel(const std::string& name,
                                  ChannelCreatedCallback callback) {
   DCHECK(!channels_[name]);
 
-  std::unique_ptr<IceTransportChannel> channel(
-      new IceTransportChannel(transport_context_));
+  if (!network_settings_) {
+    DCHECK(!pending_channel_created_callbacks_[name]);
+    pending_channel_created_callbacks_[name] = std::move(callback);
+    return;
+  }
+
+  auto channel = std::make_unique<IceTransportChannel>(transport_context_,
+                                                       *network_settings_);
   channel->Connect(name, this, std::move(callback));
   AddPendingRemoteTransportInfo(channel.get());
   channels_[name] = channel.release();
@@ -160,12 +174,13 @@ void IceTransport::OnChannelCandidate(IceTransportChannel* channel,
 
 void IceTransport::OnChannelRouteChange(IceTransportChannel* channel,
                                         const TransportRoute& route) {
-  if (event_handler_)
+  if (event_handler_) {
     event_handler_->OnIceTransportRouteChange(channel->name(), route);
+  }
 }
 
 void IceTransport::OnChannelFailed(IceTransportChannel* channel) {
-  event_handler_->OnIceTransportError(CHANNEL_CONNECTION_ERROR);
+  event_handler_->OnIceTransportError(ErrorCode::CHANNEL_CONNECTION_ERROR);
 }
 
 void IceTransport::OnChannelDeleted(IceTransportChannel* channel) {
@@ -201,8 +216,8 @@ void IceTransport::SendTransportInfo() {
 
 void IceTransport::OnChannelError(int error) {
   LOG(ERROR) << "Data channel failed, error=" << error;
-  event_handler_->OnIceTransportError(error ? CHANNEL_CONNECTION_ERROR : OK);
+  event_handler_->OnIceTransportError(
+      error ? ErrorCode::CHANNEL_CONNECTION_ERROR : ErrorCode::OK);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

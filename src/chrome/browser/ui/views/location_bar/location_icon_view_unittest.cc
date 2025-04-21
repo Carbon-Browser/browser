@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "chrome/grit/generated_resources.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/omnibox/browser/location_bar_model.h"
 #include "components/omnibox/browser/test_location_bar_model.h"
+#include "components/strings/grit/components_strings.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/widget/widget.h"
 
 namespace {
@@ -66,7 +70,8 @@ class LocationIconViewTest : public ChromeViewsTestBase {
 
     gfx::FontList font_list;
 
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
 
     location_bar_model_ = std::make_unique<TestLocationBarModel>();
     delegate_ =
@@ -94,8 +99,9 @@ class LocationIconViewTest : public ChromeViewsTestBase {
 
     std::u16string secure_display_text = std::u16string();
     if (level == security_state::SecurityLevel::DANGEROUS ||
-        level == security_state::SecurityLevel::WARNING)
+        level == security_state::SecurityLevel::WARNING) {
       secure_display_text = u"Insecure";
+    }
 
     location_bar_model()->set_secure_display_text(secure_display_text);
   }
@@ -106,7 +112,7 @@ class LocationIconViewTest : public ChromeViewsTestBase {
  private:
   std::unique_ptr<TestLocationBarModel> location_bar_model_;
   std::unique_ptr<TestLocationIconDelegate> delegate_;
-  raw_ptr<LocationIconView> view_;
+  raw_ptr<LocationIconView, DanglingUntriaged> view_;
   std::unique_ptr<views::Widget> widget_;
 };
 
@@ -149,4 +155,40 @@ TEST_F(LocationIconViewTest, ShouldNotAnimateWarningToDangerous) {
   SetSecurityLevel(security_state::SecurityLevel::DANGEROUS);
   view()->Update(/*suppress_animations=*/false);
   EXPECT_FALSE(view()->is_animating_label());
+}
+
+TEST_F(LocationIconViewTest, IconViewAccessibleNameAndRole) {
+  ui::AXNodeData data;
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedName(),
+            l10n_util::GetStringUTF16(IDS_TOOLTIP_LOCATION_ICON));
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            l10n_util::GetStringUTF16(IDS_TOOLTIP_LOCATION_ICON));
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kPopUpButton);
+  EXPECT_EQ(data.role, ax::mojom::Role::kPopUpButton);
+
+  delegate()->set_is_editing_or_empty(true);
+  view()->Update(/*suppress_animations=*/true);
+  data = ui::AXNodeData();
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedName(),
+            l10n_util::GetStringUTF16(IDS_ACC_SEARCH_ICON));
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            l10n_util::GetStringUTF16(IDS_ACC_SEARCH_ICON));
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kImage);
+  EXPECT_EQ(data.role, ax::mojom::Role::kImage);
+
+  delegate()->set_is_editing_or_empty(false);
+  SetSecurityLevel(security_state::SecurityLevel::WARNING);
+  view()->Update(/*suppress_animations=*/true);
+  data = ui::AXNodeData();
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedName(), u"Insecure");
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Insecure");
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kPopUpButton);
+  EXPECT_EQ(data.role, ax::mojom::Role::kPopUpButton);
 }

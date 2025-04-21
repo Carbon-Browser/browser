@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_PLATFORM_IMPL_DESKTOP_H_
 #define CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_PLATFORM_IMPL_DESKTOP_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "ui/views/widget/widget_observer.h"
@@ -60,9 +61,9 @@ class RelaunchNotificationControllerPlatformImpl : public views::WidgetObserver,
   // at |deadline|.
   void ShowRequiredNotification(Browser* browser, base::Time deadline);
 
-  // The widget hosting the bubble or dialog, or nullptr if neither is is
+  // The widget hosting the bubble or dialog, or nullptr if neither is
   // currently shown.
-  views::Widget* widget_ = nullptr;
+  raw_ptr<views::Widget> widget_ = nullptr;
 
   // A callback run when the relaunch required notification first becomes
   // visible to the user. This callback is valid only while the instance is

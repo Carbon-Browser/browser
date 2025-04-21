@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,10 +42,10 @@ void TextAnnotationSelector::FindRange(Document& document,
 
 void TextAnnotationSelector::DidFindMatch(const RangeInFlatTree& range,
                                           bool is_unique) {
+  was_unique_ = is_unique;
+
   DCHECK(finished_callback_);
   std::move(finished_callback_).Run(&range);
-
-  was_unique_ = is_unique;
 
   finder_.Clear();
 }

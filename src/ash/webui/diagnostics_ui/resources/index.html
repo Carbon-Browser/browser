@@ -1,4 +1,4 @@
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
+<!-- Copyright 2020 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 <!DOCTYPE html>
@@ -6,10 +6,11 @@
   <head>
     <meta charset="utf-8">
     <title></title>
+    <link rel="stylesheet" href="chrome://theme/typography.css">
+    <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
+    <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
+    <link rel="stylesheet" href="chrome://theme/colors.css?sets=legacy,sys">
   </head>
-  <link rel="stylesheet" href="chrome://resources/chromeos/colors/cros_styles.css">
-  <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
-  <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
   <style>
     /* The :not(body) selector allows the variable definitions below to 'win'
        against the shared ones. */
@@ -24,18 +25,19 @@
       background-color: var(--cros-bg-color);
     }
 
+    html:has(body.jelly-enabled) {
+      background-color: var(--cros-sys-app_base_shaded);
+    }
+
     html,
     body {
       height: 100%;
       margin: 0;
     }
   </style>
-  <body>
+  <body class="jelly-enabled">
     <diagnostics-app></diagnostics-app>
 
     <script type="module" src="diagnostics_app.js"></script>
-    <!-- Below mojo script required to run browser tests -->
-    <script src="chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js">
-    </script>
   </body>
 </html>

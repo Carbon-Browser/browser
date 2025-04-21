@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace media_control {
 // This class implements a blocking mode for web applications. Media is
 // unblocked by default.
 // This is currently used in Chromecast internal code.
-// TODO(crbug.com/1057860): Add comment about Fuchsia with implementation.
+// TODO(crbug.com/40120884): Add comment about Fuchsia with implementation.
 class MediaBlocker : public content::WebContentsObserver {
  public:
   // Observes WebContents.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "ash/constants/app_types.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "chromeos/ui/base/app_types.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/user_activity/user_activity_detector.h"
 #include "ui/base/user_activity/user_activity_observer.h"
@@ -133,7 +134,7 @@ class ASH_EXPORT DemoSessionMetricsRecorder
 
   // Records the specified app's launch, subject to the
   // restrictions of ShouldRecordAppLaunch().
-  void RecordAppLaunch(const std::string& id, AppType app_type);
+  void RecordAppLaunch(const std::string& id, chromeos::AppType app_type);
 
   // Emits various histograms for unique apps launched.
   void ReportUniqueAppsLaunched();
@@ -157,7 +158,7 @@ class ASH_EXPORT DemoSessionMetricsRecorder
   base::flat_set<std::string> unique_apps_launched_;
 
   // Used for subscribing to window activation events.
-  wm::ActivationClient* activation_client_ = nullptr;
+  raw_ptr<wm::ActivationClient> activation_client_ = nullptr;
 
   // How many periods have elapsed since the last user activity.
   int periods_since_activity_ = 0;

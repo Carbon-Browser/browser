@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/debug/asan_invalid_access.h"
 
@@ -10,6 +15,7 @@
 
 #include "base/check.h"
 #include "base/debug/alias.h"
+#include "base/immediate_crash.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -35,15 +41,16 @@ NOINLINE void CorruptMemoryBlock(bool induce_crash) {
   // This way the underflow won't be detected but the corruption will (as the
   // allocator will still be hooked).
   auto InterlockedIncrementFn =
-      reinterpret_cast<LONG (*)(LONG volatile * addend)>(
+      reinterpret_cast<LONG (*)(LONG volatile* addend)>(
           GetProcAddress(GetModuleHandle(L"kernel32"), "InterlockedIncrement"));
   CHECK(InterlockedIncrementFn);
 
   LONG volatile dummy = InterlockedIncrementFn(array - 1);
   base::debug::Alias(const_cast<LONG*>(&dummy));
 
-  if (induce_crash)
-    CHECK(false);
+  if (induce_crash) {
+    base::ImmediateCrash();
+  }
   delete[] array;
 }
 #endif  // BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)

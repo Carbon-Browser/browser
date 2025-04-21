@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "ash/ash_export.h"
 #include "ash/frame/frame_context_menu_controller.h"
 #include "ash/wm/overview/overview_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller_delegate.h"
 #include "ui/aura/window_observer.h"
@@ -16,6 +17,7 @@
 
 namespace chromeos {
 class ImmersiveFullscreenController;
+class HeaderView;
 }
 
 namespace views {
@@ -23,7 +25,6 @@ class Widget;
 }
 
 namespace ash {
-class HeaderView;
 
 // WideFrameView is used for the case where the widget's maximzed/fullscreen
 // doesn't cover the entire workarea/display area but the caption frame should
@@ -57,13 +58,13 @@ class ASH_EXPORT WideFrameView
   void SetCaptionButtonModel(
       std::unique_ptr<chromeos::CaptionButtonModel> mode);
 
-  HeaderView* header_view() { return header_view_; }
+  chromeos::HeaderView* header_view() { return header_view_; }
 
  private:
   static gfx::Rect GetFrameBounds(views::Widget* target);
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnMouseEvent(ui::MouseEvent* event) override;
 
   // aura::WindowObserver:
@@ -85,16 +86,16 @@ class ASH_EXPORT WideFrameView
   bool ShouldShowContextMenu(views::View* source,
                              const gfx::Point& screen_coords_point) override;
 
-  HeaderView* GetTargetHeaderView();
+  chromeos::HeaderView* GetTargetHeaderView();
 
   // The target widget this frame will control.
-  views::Widget* target_;
+  raw_ptr<views::Widget> target_;
 
   std::unique_ptr<views::Widget> widget_;
 
   display::ScopedDisplayObserver display_observer_{this};
 
-  HeaderView* header_view_ = nullptr;
+  raw_ptr<chromeos::HeaderView> header_view_ = nullptr;
 
   std::unique_ptr<FrameContextMenuController> frame_context_menu_controller_;
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,11 @@ AtomicString MediaControls::GetSizingCSSClass(
     MediaControlsSizingClass sizing_class) {
   switch (sizing_class) {
     case MediaControlsSizingClass::kSmall:
-      return kMediaControlsSizingSmallCSSClass;
+      return AtomicString(kMediaControlsSizingSmallCSSClass);
     case MediaControlsSizingClass::kMedium:
-      return kMediaControlsSizingMediumCSSClass;
+      return AtomicString(kMediaControlsSizingMediumCSSClass);
     case MediaControlsSizingClass::kLarge:
-      return kMediaControlsSizingLargeCSSClass;
+      return AtomicString(kMediaControlsSizingLargeCSSClass);
   }
 
   NOTREACHED();

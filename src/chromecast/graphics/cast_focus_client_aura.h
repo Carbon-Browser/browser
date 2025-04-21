@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,8 +67,7 @@ class CastFocusClientAura : public aura::WindowObserver,
   }
   const aura::Window* GetZOrderWindow(const aura::Window* window) const;
 
-  base::ObserverList<aura::client::FocusChangeObserver>::Unchecked
-      focus_observers_;
+  base::ObserverList<aura::client::FocusChangeObserver> focus_observers_;
 
   // Track the currently focused window, which isn't necessarily a top-level
   // window.

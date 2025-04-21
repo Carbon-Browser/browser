@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -202,6 +202,12 @@ int sys_fstatat64(int dirfd,
   RAW_CHECK(false);
   return -ENOSYS;
 #endif
+}
+
+int landlock_create_ruleset(const struct landlock_ruleset_attr* const attr,
+                            const size_t size,
+                            const uint32_t flags) {
+  return syscall(__NR_landlock_create_ruleset, attr, size, flags);
 }
 
 }  // namespace sandbox

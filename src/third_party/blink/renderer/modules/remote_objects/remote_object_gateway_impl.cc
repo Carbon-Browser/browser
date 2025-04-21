@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/remote_objects/remote_object_gateway_impl.h"
+
+#include "base/not_fatal_until.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -29,7 +31,8 @@ void RemoteObjectGatewayImpl::InjectNamed(const WTF::String& object_name,
   ScriptState::Scope scope(script_state);
   v8::Isolate* isolate = script_state->GetIsolate();
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, ToMicrotaskQueue(script_state),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Context> context = script_state->GetContext();
   if (context.IsEmpty())
     return;
@@ -104,7 +107,7 @@ void RemoteObjectGatewayImpl::RemoveNamedObject(const WTF::String& name) {
   // Removal becomes in effect on next reload. We simply remove the entry
   // from the map here.
   auto iter = named_objects_.find(name);
-  DCHECK(iter != named_objects_.end());
+  CHECK(iter != named_objects_.end(), base::NotFatalUntil::M130);
   named_objects_.erase(iter);
 }
 
@@ -117,7 +120,7 @@ void RemoteObjectGatewayImpl::BindRemoteObjectReceiver(
 void RemoteObjectGatewayImpl::ReleaseObject(int32_t object_id,
                                             RemoteObject* remote_object) {
   auto iter = remote_objects_.find(object_id);
-  DCHECK(iter != remote_objects_.end());
+  CHECK(iter != remote_objects_.end(), base::NotFatalUntil::M130);
   if (iter->value == remote_object)
     remote_objects_.erase(iter);
   object_host_->ReleaseObject(object_id);

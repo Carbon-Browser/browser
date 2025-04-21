@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,44 +7,18 @@
 #include <ostream>
 #include <sstream>
 
-#include "ash/components/audio/cras_audio_handler.h"
 #include "ash/public/cpp/accelerators.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/to_string.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 
 namespace ash {
 
-namespace {
-
-using chromeos::assistant::prefs::AssistantOnboardingMode;
-
-#define PRINT_VALUE(value) PrintValue(&result, #value, value())
-
-template <typename T, std::enable_if_t<std::is_enum<T>::value>* = nullptr>
-void PrintValue(std::stringstream* result, const absl::optional<T>& value) {
-  *result << base::NumberToString(static_cast<int>(value.value()));
-}
-
-template <typename T, std::enable_if_t<!std::is_enum<T>::value>* = nullptr>
-void PrintValue(std::stringstream* result, const absl::optional<T>& value) {
-  *result << value.value();
-}
-
-template <typename T>
-void PrintValue(std::stringstream* result,
-                const std::string& name,
-                const absl::optional<T>& value) {
-  *result << std::endl << "  " << name << ": ";
-  if (value.has_value())
-    PrintValue(result, value);
-  else
-    *result << ("(no value)");
-}
-
-}  // namespace
+using assistant::prefs::AssistantOnboardingMode;
 
 AssistantStateBase::AssistantStateBase() = default;
 
@@ -54,18 +28,15 @@ AssistantStateBase::~AssistantStateBase() {
 }
 
 std::string AssistantStateBase::ToString() const {
-  std::stringstream result;
-  result << "AssistantStatus: ";
-  result << assistant_status_;
-  PRINT_VALUE(settings_enabled);
-  PRINT_VALUE(context_enabled);
-  PRINT_VALUE(hotword_enabled);
-  PRINT_VALUE(allowed_state);
-  PRINT_VALUE(locale);
-  PRINT_VALUE(arc_play_store_enabled);
-  PRINT_VALUE(locked_full_screen_enabled);
-  PRINT_VALUE(onboarding_mode);
-  return result.str();
+#define STRINGIFY(field) \
+  #field, (field.has_value() ? base::ToString(field.value()) : "(no value)")
+  return base::StrCat(
+      {"AssistantStatus: ", base::ToString(assistant_status_),
+       STRINGIFY(settings_enabled()), STRINGIFY(context_enabled()),
+       STRINGIFY(hotword_enabled()), STRINGIFY(allowed_state()),
+       STRINGIFY(locale()), STRINGIFY(arc_play_store_enabled()),
+       STRINGIFY(locked_full_screen_enabled()), STRINGIFY(onboarding_mode())});
+#undef STRINGIFY
 }
 
 void AssistantStateBase::AddObserver(AssistantStateObserver* observer) {
@@ -87,35 +58,35 @@ void AssistantStateBase::RegisterPrefChanges(PrefService* pref_service) {
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
   pref_change_registrar_->Init(pref_service);
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantConsentStatus,
+      assistant::prefs::kAssistantConsentStatus,
       base::BindRepeating(&AssistantStateBase::UpdateConsentStatus,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantContextEnabled,
+      assistant::prefs::kAssistantContextEnabled,
       base::BindRepeating(&AssistantStateBase::UpdateContextEnabled,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantEnabled,
+      assistant::prefs::kAssistantEnabled,
       base::BindRepeating(&AssistantStateBase::UpdateSettingsEnabled,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantHotwordAlwaysOn,
+      assistant::prefs::kAssistantHotwordAlwaysOn,
       base::BindRepeating(&AssistantStateBase::UpdateHotwordAlwaysOn,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantHotwordEnabled,
+      assistant::prefs::kAssistantHotwordEnabled,
       base::BindRepeating(&AssistantStateBase::UpdateHotwordEnabled,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantLaunchWithMicOpen,
+      assistant::prefs::kAssistantLaunchWithMicOpen,
       base::BindRepeating(&AssistantStateBase::UpdateLaunchWithMicOpen,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantNotificationEnabled,
+      assistant::prefs::kAssistantNotificationEnabled,
       base::BindRepeating(&AssistantStateBase::UpdateNotificationEnabled,
                           base::Unretained(this)));
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantOnboardingMode,
+      assistant::prefs::kAssistantOnboardingMode,
       base::BindRepeating(&AssistantStateBase::UpdateOnboardingMode,
                           base::Unretained(this)));
 
@@ -130,8 +101,7 @@ void AssistantStateBase::RegisterPrefChanges(PrefService* pref_service) {
 }
 
 bool AssistantStateBase::IsScreenContextAllowed() const {
-  return allowed_state() ==
-             chromeos::assistant::AssistantAllowedState::ALLOWED &&
+  return allowed_state() == assistant::AssistantAllowedState::ALLOWED &&
          settings_enabled().value_or(false) &&
          context_enabled().value_or(false);
 }
@@ -139,7 +109,7 @@ bool AssistantStateBase::IsScreenContextAllowed() const {
 bool AssistantStateBase::HasAudioInputDevice() const {
   ash::AudioDeviceList devices;
   ash::CrasAudioHandler::Get()->GetAudioDevices(&devices);
-  for (const chromeos::AudioDevice& device : devices) {
+  for (const AudioDevice& device : devices) {
     if (device.is_input)
       return true;
   }
@@ -175,7 +145,7 @@ void AssistantStateBase::InitializeObserver(AssistantStateObserver* observer) {
 
 void AssistantStateBase::UpdateConsentStatus() {
   auto consent_status = pref_change_registrar_->prefs()->GetInteger(
-      chromeos::assistant::prefs::kAssistantConsentStatus);
+      assistant::prefs::kAssistantConsentStatus);
   if (consent_status_.has_value() &&
       consent_status_.value() == consent_status) {
     return;
@@ -187,7 +157,7 @@ void AssistantStateBase::UpdateConsentStatus() {
 
 void AssistantStateBase::UpdateContextEnabled() {
   auto context_enabled = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantContextEnabled);
+      assistant::prefs::kAssistantContextEnabled);
   if (context_enabled_.has_value() &&
       context_enabled_.value() == context_enabled) {
     return;
@@ -199,7 +169,7 @@ void AssistantStateBase::UpdateContextEnabled() {
 
 void AssistantStateBase::UpdateSettingsEnabled() {
   auto settings_enabled = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantEnabled);
+      assistant::prefs::kAssistantEnabled);
   if (settings_enabled_.has_value() &&
       settings_enabled_.value() == settings_enabled) {
     return;
@@ -211,7 +181,7 @@ void AssistantStateBase::UpdateSettingsEnabled() {
 
 void AssistantStateBase::UpdateHotwordAlwaysOn() {
   auto hotword_always_on = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantHotwordAlwaysOn);
+      assistant::prefs::kAssistantHotwordAlwaysOn);
   if (hotword_always_on_.has_value() &&
       hotword_always_on_.value() == hotword_always_on) {
     return;
@@ -223,7 +193,7 @@ void AssistantStateBase::UpdateHotwordAlwaysOn() {
 
 void AssistantStateBase::UpdateHotwordEnabled() {
   auto hotword_enabled = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantHotwordEnabled);
+      assistant::prefs::kAssistantHotwordEnabled);
   if (hotword_enabled_.has_value() &&
       hotword_enabled_.value() == hotword_enabled) {
     return;
@@ -235,7 +205,7 @@ void AssistantStateBase::UpdateHotwordEnabled() {
 
 void AssistantStateBase::UpdateLaunchWithMicOpen() {
   auto launch_with_mic_open = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantLaunchWithMicOpen);
+      assistant::prefs::kAssistantLaunchWithMicOpen);
   if (launch_with_mic_open_.has_value() &&
       launch_with_mic_open_.value() == launch_with_mic_open) {
     return;
@@ -247,7 +217,7 @@ void AssistantStateBase::UpdateLaunchWithMicOpen() {
 
 void AssistantStateBase::UpdateNotificationEnabled() {
   auto notification_enabled = pref_change_registrar_->prefs()->GetBoolean(
-      chromeos::assistant::prefs::kAssistantNotificationEnabled);
+      assistant::prefs::kAssistantNotificationEnabled);
   if (notification_enabled_.has_value() &&
       notification_enabled_.value() == notification_enabled) {
     return;
@@ -258,10 +228,9 @@ void AssistantStateBase::UpdateNotificationEnabled() {
 }
 
 void AssistantStateBase::UpdateOnboardingMode() {
-  AssistantOnboardingMode onboarding_mode =
-      chromeos::assistant::prefs::ToOnboardingMode(
-          pref_change_registrar_->prefs()->GetString(
-              chromeos::assistant::prefs::kAssistantOnboardingMode));
+  AssistantOnboardingMode onboarding_mode = assistant::prefs::ToOnboardingMode(
+      pref_change_registrar_->prefs()->GetString(
+          assistant::prefs::kAssistantOnboardingMode));
 
   if (onboarding_mode_ == onboarding_mode)
     return;
@@ -272,14 +241,14 @@ void AssistantStateBase::UpdateOnboardingMode() {
 }
 
 void AssistantStateBase::UpdateAssistantStatus(
-    chromeos::assistant::AssistantStatus status) {
+    assistant::AssistantStatus status) {
   assistant_status_ = status;
   for (auto& observer : observers_)
     observer.OnAssistantStatusChanged(assistant_status_);
 }
 
 void AssistantStateBase::UpdateFeatureAllowedState(
-    chromeos::assistant::AssistantAllowedState state) {
+    assistant::AssistantAllowedState state) {
   allowed_state_ = state;
   for (auto& observer : observers_)
     observer.OnAssistantFeatureAllowedChanged(allowed_state_.value());

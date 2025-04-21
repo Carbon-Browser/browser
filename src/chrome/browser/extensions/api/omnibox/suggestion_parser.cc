@@ -1,10 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/omnibox/suggestion_parser.h"
 
-#include "base/callback.h"
+#include <string_view>
+
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -31,17 +33,17 @@ std::string CheckedGetElementTag(const base::Value& node) {
 
 // Recursively walks an XML node, generating `result` as it goes along.
 void WalkNode(const base::Value& node, DescriptionAndStyles* result) {
-  const base::Value* children = data_decoder::GetXmlElementChildren(node);
+  const base::Value::List* children = data_decoder::GetXmlElementChildren(node);
   if (!children)
     return;
 
-  DCHECK(children->is_list());
-  for (const base::Value& child : children->GetListDeprecated()) {
+  for (const base::Value& child : *children) {
     // Append text nodes to our description.
     if (data_decoder::IsXmlElementOfType(
             child, data_decoder::mojom::XmlParser::kTextNodeType)) {
+      DCHECK(child.is_dict());
       const std::string* text =
-          child.FindStringPath(data_decoder::mojom::XmlParser::kTextKey);
+          child.GetDict().FindString(data_decoder::mojom::XmlParser::kTextKey);
       DCHECK(text);
       std::u16string sanitized_text = base::UTF8ToUTF16(*text);
       // Note: We unfortunately can't just use
@@ -70,7 +72,7 @@ void WalkNode(const base::Value& node, DescriptionAndStyles* result) {
     std::string tag = CheckedGetElementTag(child);
     omnibox::DescriptionStyleType style_type =
         omnibox::ParseDescriptionStyleType(tag);
-    if (style_type == omnibox::DESCRIPTION_STYLE_TYPE_NONE) {
+    if (style_type == omnibox::DescriptionStyleType::kNone) {
       // Unsupported style type. Even so, we walk all children in the node for
       // forward compatibility.
       WalkNode(child, result);
@@ -87,7 +89,7 @@ void WalkNode(const base::Value& node, DescriptionAndStyles* result) {
     result->styles[current_index].offset = offset;
     WalkNode(child, result);
     result->styles[current_index].length =
-        std::make_unique<int>(result->description.length() - offset);
+        result->description.length() - offset;
   }
 }
 
@@ -106,13 +108,13 @@ bool PopulateEntriesFromNode(const base::Value& root_node,
   if (CheckedGetElementTag(root_node) != "fragment")
     return false;
 
-  const base::Value* children = data_decoder::GetXmlElementChildren(root_node);
+  const base::Value::List* children =
+      data_decoder::GetXmlElementChildren(root_node);
   if (!children)
     return false;
 
-  DCHECK(children->is_list());
-  entries_out->reserve(children->GetListDeprecated().size());
-  for (const base::Value& child : children->GetListDeprecated()) {
+  entries_out->reserve(children->size());
+  for (const base::Value& child : *children) {
     if (!data_decoder::IsXmlElementOfType(
             child, data_decoder::mojom::XmlParser::kElementType)) {
       return false;
@@ -144,21 +146,19 @@ void ConstructResultFromValue(
     run_callback_with_error(std::move(value_or_error.error()));
     return;
   }
-
-  DCHECK(value_or_error.has_value());
+  const base::Value root_node = std::move(*value_or_error);
 
   // From this point on, we hope that everything is valid (e.g., that we don't
   // get non-dictionary values or unexpected top-level types. But, if we did,
   // emit a generic error.
   constexpr char kGenericError[] = "Invalid XML";
 
-  if (!value_or_error->is_dict()) {
+  if (!root_node.is_dict()) {
     run_callback_with_error(kGenericError);
     return;
   }
 
   std::vector<const base::Value*> entries;
-  const base::Value& root_node = *value_or_error;
   if (has_multiple_entries) {
     if (!PopulateEntriesFromNode(root_node, &entries)) {
       run_callback_with_error(kGenericError);
@@ -181,7 +181,7 @@ void ConstructResultFromValue(
 // A helper method for ParseDescriptionsAndStyles(). `contains_multiple_entries`
 // indicates whether `xml_input` contains a single suggestion or multiple
 // suggestions that have been wrapped in individual XML elements.
-void ParseDescriptionAndStylesImpl(base::StringPiece xml_input,
+void ParseDescriptionAndStylesImpl(std::string_view xml_input,
                                    bool contains_multiple_entries,
                                    DescriptionAndStylesCallback callback) {
   std::string wrapped_xml =
@@ -208,14 +208,14 @@ DescriptionAndStylesResult& DescriptionAndStylesResult::operator=(
     DescriptionAndStylesResult&&) = default;
 DescriptionAndStylesResult::~DescriptionAndStylesResult() = default;
 
-void ParseDescriptionAndStyles(base::StringPiece str,
+void ParseDescriptionAndStyles(std::string_view str,
                                DescriptionAndStylesCallback callback) {
   constexpr bool kContainsMultipleEntries = false;
   ParseDescriptionAndStylesImpl(str, kContainsMultipleEntries,
                                 std::move(callback));
 }
 
-void ParseDescriptionsAndStyles(const std::vector<base::StringPiece>& strs,
+void ParseDescriptionsAndStyles(const std::vector<std::string_view>& strs,
                                 DescriptionAndStylesCallback callback) {
   // When passed multiple suggestions, we synthesize them into a single XML
   // document. This allows us to parse all of them with a single call to the

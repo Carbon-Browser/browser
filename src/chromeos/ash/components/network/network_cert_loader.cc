@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "chromeos/ash/components/network/certificate_helper.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
@@ -28,7 +29,7 @@
 #include "net/cert/nss_cert_database_chromeos.h"
 #include "net/cert/x509_util_nss.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -176,8 +177,12 @@ class NetworkCertLoader::CertCache : public net::CertDatabase::Observer {
   net::NSSCertDatabase* nss_database() { return nss_database_; }
 
   // net::CertDatabase::Observer
-  void OnCertDBChanged() override {
-    VLOG(1) << "OnCertDBChanged";
+  void OnTrustStoreChanged() override {
+    VLOG(1) << "OnTrustStoreChanged";
+    LoadCertificates(/*initial_load=*/false);
+  }
+  void OnClientCertStoreChanged() override {
+    VLOG(1) << "OnClientCertStoreChanged";
     LoadCertificates(/*initial_load=*/false);
   }
 
@@ -270,7 +275,10 @@ class NetworkCertLoader::CertCache : public net::CertDatabase::Observer {
   bool certificates_update_required_ = false;
 
   // The NSS certificate database from which the certificates should be loaded.
-  net::NSSCertDatabase* nss_database_ = nullptr;
+  // Dangling during LoginIntegrationTest.TestLogin on
+  // chromeos-amd64-generic-rel-gtest.
+  raw_ptr<net::NSSCertDatabase, AcrossTasksDanglingUntriaged> nss_database_ =
+      nullptr;
 
   // The slot from which certificates are listed.
   crypto::ScopedPK11Slot slot_;
@@ -550,7 +558,7 @@ void NetworkCertLoader::UpdateCertificates() {
   // Only trigger a notification to observers if one of the |CertCache|s has
   // already loaded certificates. Don't trigger notifications if policy-provided
   // certificates change before that.
-  // TODO(https://crbug.com/888451): Now that we handle client and authority
+  // TODO(crbug.com/40595094): Now that we handle client and authority
   // certificates separately in NetworkCertLoader, we could fire different
   // notifications for policy-provided cert changes instead of holding back
   // notifications.
@@ -591,4 +599,4 @@ void NetworkCertLoader::OnPolicyProvidedCertsChanged() {
   UpdateCertificates();
 }
 
-}  // namespace chromeos
+}  // namespace ash

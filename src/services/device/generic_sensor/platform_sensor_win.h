@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class PlatformSensorWin final : public PlatformSensor,
   PlatformSensorWin(
       mojom::SensorType type,
       SensorReadingSharedBuffer* reading_buffer,
-      PlatformSensorProvider* provider,
+      base::WeakPtr<PlatformSensorProvider> provider,
       scoped_refptr<base::SingleThreadTaskRunner> sensor_thread_runner,
       std::unique_ptr<PlatformSensorReaderWinBase> sensor_reader);
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class VP8Picture : public CodecPicture {
 
   std::unique_ptr<Vp8FrameHeader> frame_hdr;
 
-  absl::optional<Vp8Metadata> metadata_for_encoding;
+  std::optional<Vp8Metadata> metadata_for_encoding;
 
  protected:
   ~VP8Picture() override;

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,8 @@ assert(is_chromeos, "Non-ChromeOS builds cannot depend on //chromeos")
 
 source_set("cpp") {
   sources = [
+    "ml_switches.cc",
+    "ml_switches.h",
     "service_connection.cc",
     "service_connection.h",
   ]
@@ -25,8 +27,8 @@ source_set("cpp") {
     ]
     deps += [
       "//ash/constants:constants",
-      "//chromeos/dbus/dlcservice",
-      "//chromeos/dbus/dlcservice:dlcservice_proto",
+      "//chromeos/ash/components/dbus/dlcservice",
+      "//chromeos/ash/components/dbus/dlcservice:dlcservice_proto",
       "//chromeos/dbus/machine_learning",
     ]
   } else if (is_chromeos_lacros) {
@@ -48,7 +50,6 @@ component("stub") {
   deps = [
     "//base",
     "//chromeos/services/machine_learning/public/mojom",
-    "//components/ml/mojom",
     "//mojo/public/cpp/bindings",
   ]
   public_deps = [ ":cpp" ]
@@ -63,7 +64,6 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//chromeos/dbus/machine_learning",
     "//chromeos/services/machine_learning/public/mojom",
-    "//components/ml/mojom",
     "//mojo/core/embedder",
     "//mojo/public/cpp/bindings",
     "//testing/gtest",
@@ -78,7 +78,7 @@ if (is_chromeos_ash) {
       ":cpp",
       "//ash/constants:constants",
       "//base/test:test_support",
-      "//chromeos/dbus/dlcservice",
+      "//chromeos/ash/components/dbus/dlcservice",
       "//chromeos/services/machine_learning/public/cpp:stub",
       "//testing/gtest",
     ]

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
 
 namespace chrome_browser_nearby_sharing_instantmessaging {
 
@@ -19,10 +19,10 @@ class ReceiveMessagesExpressRequest;
 chrome_browser_nearby_sharing_instantmessaging::SendMessageExpressRequest
 BuildSendRequest(const std::string& self_id,
                  const std::string& peer_id,
-                 sharing::mojom::LocationHintPtr hint);
+                 ::sharing::mojom::LocationHintPtr hint);
 
 chrome_browser_nearby_sharing_instantmessaging::ReceiveMessagesExpressRequest
 BuildReceiveRequest(const std::string& self_id,
-                    sharing::mojom::LocationHintPtr hint);
+                    ::sharing::mojom::LocationHintPtr hint);
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_WEBRTC_REQUEST_BUILDER_H_

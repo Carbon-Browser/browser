@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/chromeos_buildflags.h"
 #include "components/feedback/system_logs/system_logs_source.h"
 #include "extensions/browser/api/feedback_private/feedback_service.h"
@@ -19,9 +19,9 @@
 
 namespace extensions {
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 class LogSourceAccessManager;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 class FeedbackPrivateAPI : public BrowserContextKeyedAPI {
  public:
@@ -34,9 +34,9 @@ class FeedbackPrivateAPI : public BrowserContextKeyedAPI {
 
   scoped_refptr<FeedbackService> GetService() const;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   LogSourceAccessManager* GetLogSourceAccessManager() const;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Create a FeedbackInfo to be passed to UI/JS
   std::unique_ptr<api::feedback_private::FeedbackInfo> CreateFeedbackInfo(
@@ -49,7 +49,10 @@ class FeedbackPrivateAPI : public BrowserContextKeyedAPI {
       bool from_assistant,
       bool include_bluetooth_logs,
       bool show_questionnaire,
-      bool from_chrome_labs_or_kaleidoscope);
+      bool from_chrome_labs_or_kaleidoscope,
+      bool from_autofill,
+      const base::Value::Dict& autofill_metadata,
+      const base::Value::Dict& ai_metadata);
 
   // BrowserContextKeyedAPI implementation.
   static BrowserContextKeyedAPIFactory<FeedbackPrivateAPI>*
@@ -71,9 +74,9 @@ class FeedbackPrivateAPI : public BrowserContextKeyedAPI {
   const raw_ptr<content::BrowserContext> browser_context_;
   scoped_refptr<FeedbackService> service_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<LogSourceAccessManager> log_source_access_manager_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 
 class FeedbackPrivateGetUserEmailFunction : public ExtensionFunction {
@@ -112,11 +115,11 @@ class FeedbackPrivateReadLogSourceFunction : public ExtensionFunction {
   ~FeedbackPrivateReadLogSourceFunction() override {}
   ResponseAction Run() override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
  private:
   void OnCompleted(
       std::unique_ptr<api::feedback_private::ReadLogSourceResult> result);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 
 class FeedbackPrivateSendFeedbackFunction : public ExtensionFunction {
@@ -128,6 +131,16 @@ class FeedbackPrivateSendFeedbackFunction : public ExtensionFunction {
   ~FeedbackPrivateSendFeedbackFunction() override {}
   ResponseAction Run() override;
   void OnCompleted(api::feedback_private::LandingPageType type, bool success);
+};
+
+class FeedbackPrivateOpenFeedbackFunction : public ExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("feedbackPrivate.openFeedback",
+                             FEEDBACKPRIVATE_OPENFEEDBACK)
+
+ protected:
+  ~FeedbackPrivateOpenFeedbackFunction() override = default;
+  ResponseAction Run() override;
 };
 
 }  // namespace extensions

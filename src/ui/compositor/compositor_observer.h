@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,13 @@
 #include "base/containers/flat_set.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
+#include "ui/base/ozone_buildflags.h"
 #include "ui/compositor/compositor_export.h"
+
+namespace viz {
+class SurfaceInfo;
+}
 
 namespace gfx {
 class Size;
@@ -40,19 +44,23 @@ class COMPOSITOR_EXPORT CompositorObserver {
   virtual void OnCompositingStarted(Compositor* compositor,
                                     base::TimeTicks start_time) {}
 
-  // Called when compositing completes: the present to screen has completed.
-  virtual void OnCompositingEnded(Compositor* compositor) {}
+  // This is an inaccurate signal that has been used to represent that content
+  // was displayed. This actually maps to the removal of backpressure by the
+  // GPU. This can be signalled when the GPU attempts to Draw; when a submitted
+  // frame, that has not drawn, is being replaced by a newer one; or merged with
+  // future OnBeginFrames.
+  //
+  // To determine when presentation occurred see `OnDidPresentCompositorFrame`.
+  virtual void OnCompositingAckDeprecated(Compositor* compositor) {}
 
   // Called when a child of the compositor is resizing.
   virtual void OnCompositingChildResizing(Compositor* compositor) {}
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) && BUILDFLAG(IS_OZONE_X11)
   // Called when a swap with new size is completed.
   virtual void OnCompositingCompleteSwapWithNewSize(ui::Compositor* compositor,
                                                     const gfx::Size& size) {}
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) && BUILDFLAG(IS_OZONE_X11)
 
   // Called at the top of the compositor's destructor, to give observers a
   // chance to remove themselves.
@@ -63,11 +71,42 @@ class COMPOSITOR_EXPORT CompositorObserver {
       uint32_t frame_token,
       const gfx::PresentationFeedback& feedback) {}
 
+  // Called when first AnimationObserver was added to the compositor.
   virtual void OnFirstAnimationStarted(Compositor* compositor) {}
-  virtual void OnLastAnimationEnded(Compositor* compositor) {}
+
+  // Called on first BeginMainFrame after the last animation has finished.
+  // This presents "animations finished" event from user point of view.
+  // When animations are temporary stopped and restarted in between painting
+  // two frames technically animations have stopped, but users will never
+  // notice it because animations are immediately restarted. This way we delay
+  // "Last Animation Ended" notification to the BeginMainFrame stage so that it
+  // only fires if there was a frame painted without animations.
+  // See go/report-ux-metrics-at-painting for details.
+  virtual void OnFirstNonAnimatedFrameStarted(Compositor* compositor) {}
 
   virtual void OnFrameSinksToThrottleUpdated(
       const base::flat_set<viz::FrameSinkId>& ids) {}
+
+  // Called at the end of the BeginMainFrame.
+  virtual void OnDidBeginMainFrame(Compositor* compositor) {}
+
+  // Called when the compositor visibility is about to change, but before it is
+  // changed.
+  virtual void OnCompositorVisibilityChanging(Compositor* compositor,
+                                              bool visible) {}
+
+  // Called when the compositor visibility has changed.
+  virtual void OnCompositorVisibilityChanged(Compositor* compositor,
+                                             bool visible) {}
+
+  // Called when the compositor receives a new refresh rate preference.
+  virtual void OnSetPreferredRefreshRate(Compositor* compositor,
+                                         float refresh_rate) {}
+
+  // Called when a CompositorFrame with a new SurfaceId activates for the first
+  // time.
+  virtual void OnFirstSurfaceActivation(Compositor* compositor,
+                                        const viz::SurfaceInfo& surface_info) {}
 };
 
 }  // namespace ui

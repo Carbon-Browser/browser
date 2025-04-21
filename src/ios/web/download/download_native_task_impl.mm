@@ -1,25 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/download/download_native_task_impl.h"
 
-#import "base/bind.h"
-#import "base/callback.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/sequenced_task_runner.h"
 #import "ios/web/download/download_native_task_bridge.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
 DownloadNativeTaskImpl::DownloadNativeTaskImpl(
     WebState* web_state,
     const GURL& original_url,
+    NSString* originating_host,
     NSString* http_method,
     const std::string& content_disposition,
     int64_t total_bytes,
@@ -29,6 +26,7 @@ DownloadNativeTaskImpl::DownloadNativeTaskImpl(
     DownloadNativeTaskBridge* download)
     : DownloadTaskImpl(web_state,
                        original_url,
+                       originating_host,
                        http_method,
                        content_disposition,
                        total_bytes,
@@ -47,45 +45,33 @@ DownloadNativeTaskImpl::~DownloadNativeTaskImpl() {
 void DownloadNativeTaskImpl::StartInternal(const base::FilePath& path) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!path.empty());
+  DCHECK(download_bridge_);
 
-  if (@available(iOS 15, *)) {
-    DCHECK(download_bridge_);
+  NativeDownloadTaskProgressCallback progress_callback = base::BindRepeating(
+      &DownloadNativeTaskImpl::OnDownloadProgress, weak_factory_.GetWeakPtr());
 
-    NativeDownloadTaskProgressCallback progress_callback =
-        base::BindRepeating(&DownloadNativeTaskImpl::OnDownloadProgress,
-                            weak_factory_.GetWeakPtr());
+  NativeDownloadTaskResponseCallback response_callback = base::BindOnce(
+      &DownloadNativeTaskImpl::OnResponseReceived, weak_factory_.GetWeakPtr());
 
-    NativeDownloadTaskResponseCallback response_callback =
-        base::BindOnce(&DownloadNativeTaskImpl::OnResponseReceived,
-                       weak_factory_.GetWeakPtr());
+  NativeDownloadTaskCompleteCallback complete_callback = base::BindOnce(
+      &DownloadNativeTaskImpl::OnDownloadFinished, weak_factory_.GetWeakPtr());
 
-    NativeDownloadTaskCompleteCallback complete_callback =
-        base::BindOnce(&DownloadNativeTaskImpl::OnDownloadFinished,
-                       weak_factory_.GetWeakPtr());
-
-    [download_bridge_ startDownload:path
-                   progressCallback:std::move(progress_callback)
-                   responseCallback:std::move(response_callback)
-                   completeCallback:std::move(complete_callback)];
-  }
+  [download_bridge_ startDownload:path
+                 progressCallback:std::move(progress_callback)
+                 responseCallback:std::move(response_callback)
+                 completeCallback:std::move(complete_callback)];
 }
 
 void DownloadNativeTaskImpl::CancelInternal() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   weak_factory_.InvalidateWeakPtrs();
-  if (@available(iOS 15, *)) {
-    [download_bridge_ cancel];
-    download_bridge_ = nil;
-  }
+  [download_bridge_ cancel];
+  download_bridge_ = nil;
 }
 
 std::string DownloadNativeTaskImpl::GetSuggestedName() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (@available(iOS 15, *)) {
-    return base::SysNSStringToUTF8(download_bridge_.suggestedFilename);
-  }
-  NOTREACHED();
-  return std::string();
+  return base::SysNSStringToUTF8(download_bridge_.suggestedFilename);
 }
 
 void DownloadNativeTaskImpl::OnDownloadProgress(int64_t bytes_received,

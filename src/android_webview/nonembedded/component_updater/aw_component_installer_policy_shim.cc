@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ AwComponentInstallerPolicyShim::~AwComponentInstallerPolicyShim() = default;
 
 update_client::CrxInstaller::Result
 AwComponentInstallerPolicyShim::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return policy_->OnCustomInstall(manifest, install_dir);
 }
@@ -40,7 +40,7 @@ bool AwComponentInstallerPolicyShim::RequiresNetworkEncryption() const {
 }
 
 bool AwComponentInstallerPolicyShim::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   return policy_->VerifyInstallation(manifest, install_dir);
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,12 +65,12 @@ void TestBooleanCustomPropertySetting(ui_devtools::ViewElement* element,
 using ::testing::_;
 
 class MockNamedTestView : public views::View {
- public:
-  METADATA_HEADER(MockNamedTestView);
+  METADATA_HEADER(MockNamedTestView, views::View)
 
-  // For custom properties test.
-  std::u16string GetTooltipText(const gfx::Point& p) const override {
-    return u"This is the tooltip";
+ public:
+  MockNamedTestView() {
+    // For custom properties test.
+    SetCachedTooltipText(u"This is the tooltip");
   }
 
   int GetBoolProperty() const { return bool_property_; }
@@ -92,20 +92,21 @@ class MockNamedTestView : public views::View {
   SkColor color_property_ = SK_ColorGRAY;
 };
 
-BEGIN_METADATA(MockNamedTestView, views::View)
+BEGIN_METADATA(MockNamedTestView)
 ADD_PROPERTY_METADATA(bool, BoolProperty)
 ADD_PROPERTY_METADATA(SkColor, ColorProperty, ui::metadata::SkColorConverter)
 END_METADATA
 
 class AlwaysOnTopView : public views::View {
-  METADATA_HEADER(AlwaysOnTopView);
+  METADATA_HEADER(AlwaysOnTopView, views::View)
 };
-BEGIN_METADATA(AlwaysOnTopView, views::View)
+BEGIN_METADATA(AlwaysOnTopView)
 END_METADATA
 
 class SelfReorderingTestView : public views::View, public views::ViewObserver {
+  METADATA_HEADER(SelfReorderingTestView, views::View)
+
  public:
-  METADATA_HEADER(SelfReorderingTestView);
   SelfReorderingTestView()
       : always_on_top_view_(AddChildView(std::make_unique<AlwaysOnTopView>())) {
     AddObserver(this);
@@ -114,23 +115,23 @@ class SelfReorderingTestView : public views::View, public views::ViewObserver {
 
   // views::ViewObserver
   void OnChildViewAdded(View* observed_view, View* child) override {
-    ReorderChildView(always_on_top_view_, -1);
+    ReorderChildView(always_on_top_view_, children().size());
   }
 
  private:
   raw_ptr<views::View> always_on_top_view_;
 };
-BEGIN_METADATA(SelfReorderingTestView, views::View)
+BEGIN_METADATA(SelfReorderingTestView)
 END_METADATA
 
 class ViewElementTest : public views::ViewsTestBase {
  public:
-  ViewElementTest() {}
+  ViewElementTest() = default;
 
   ViewElementTest(const ViewElementTest&) = delete;
   ViewElementTest& operator=(const ViewElementTest&) = delete;
 
-  ~ViewElementTest() override {}
+  ~ViewElementTest() override = default;
 
  protected:
   void SetUp() override {
@@ -225,8 +226,8 @@ TEST_F(ViewElementTest, GetBounds) {
 
 TEST_F(ViewElementTest, GetAttributes) {
   std::vector<std::string> attrs = element()->GetAttributes();
-  EXPECT_THAT(attrs,
-              testing::ElementsAre("name", MockNamedTestView::kViewClassName));
+  EXPECT_THAT(attrs, testing::ElementsAre("class", "MockNamedTestView", "name",
+                                          "MockNamedTestView"));
 }
 
 TEST_F(ViewElementTest, GetCustomProperties) {
@@ -274,8 +275,8 @@ TEST_F(ViewElementTest, GetNodeWindowAndScreenBounds) {
   // a widget.
   auto widget = std::make_unique<views::Widget>();
   views::Widget::InitParams params =
-      CreateParams(views::Widget::InitParams::TYPE_WINDOW);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+      CreateParams(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                   views::Widget::InitParams::TYPE_WINDOW);
   widget->Init(std::move(params));
   widget->Show();
 
@@ -344,8 +345,8 @@ TEST_F(ViewElementTest, DispatchMouseEvent) {
   // The view must be in a widget in order to dispatch mouse event correctly.
   auto widget = std::make_unique<views::Widget>();
   views::Widget::InitParams params =
-      CreateParams(views::Widget::InitParams::TYPE_WINDOW);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+      CreateParams(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                   views::Widget::InitParams::TYPE_WINDOW);
   widget->Init(std::move(params));
   widget->GetContentsView()->AddChildView(view());
   widget->Show();
@@ -444,7 +445,7 @@ TEST_F(ViewElementTest, OutOfOrderObserverTest) {
   view->AddChildView(std::make_unique<views::View>());
   ASSERT_EQ(element->children().size(), 2u);
   auto attrs = element->children().at(1)->GetAttributes();
-  EXPECT_EQ(attrs[0], "name");
+  EXPECT_EQ(attrs[0], "class");
   std::string& name = attrs[1];
   EXPECT_EQ(name, "AlwaysOnTopView");
 }

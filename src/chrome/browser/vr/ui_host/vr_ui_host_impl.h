@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_VR_UI_HOST_VR_UI_HOST_IMPL_H_
 #define CHROME_BROWSER_VR_UI_HOST_VR_UI_HOST_IMPL_H_
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -25,17 +25,17 @@
 
 namespace vr {
 
-class VRBrowserRendererThreadWin;
+class VRBrowserRendererThread;
 
 // Concrete implementation of VRBrowserRendererHost, part of the "browser"
 // component. Used on the browser's main thread.
 class VRUiHostImpl : public content::VrUiHost,
                      public permissions::PermissionRequestManager::Observer,
-                     public content::BrowserXRRuntime::Observer,
                      public DesktopMediaPickerManager::DialogObserver {
  public:
-  VRUiHostImpl(device::mojom::XRDeviceId device_id,
-               mojo::PendingRemote<device::mojom::XRCompositorHost> compositor);
+  VRUiHostImpl(content::WebContents& contents,
+               const std::vector<device::mojom::XRViewPtr>& views,
+               mojo::PendingRemote<device::mojom::ImmersiveOverlay> overlay);
 
   VRUiHostImpl(const VRUiHostImpl&) = delete;
   VRUiHostImpl& operator=(const VRUiHostImpl&) = delete;
@@ -71,36 +71,26 @@ class VRUiHostImpl : public content::VrUiHost,
     raw_ptr<CapturingStateModel> active_capture_state_model_;  // Not owned.
   };
 
-  // content::BrowserXRRuntime::Observer implementation.
-  void WebXRWebContentsChanged(content::WebContents* contents) override;
+  // VrUiHost implementation.
   void WebXRFramesThrottledChanged(bool throttled) override;
-  void SetDefaultXrViews(
-      const std::vector<device::mojom::XRViewPtr>& views) override;
-
-  // Internal methods used to start/stop the UI rendering thread that is used
-  // for drawing browser UI (such as permission prompts) for display in VR.
-  void StartUiRendering();
-  void StopUiRendering();
 
   // PermissionRequestManager::Observer
-  void OnBubbleAdded() override;
-  void OnBubbleRemoved() override;
+  void OnPromptAdded() override;
+  void OnPromptRemoved() override;
 
   // DesktopMediaPickerManager::DialogObserver
   // These are dialogs displayed in response to getDisplayMedia()
-  void OnDialogOpened() override;
+  void OnDialogOpened(const DesktopMediaPicker::Params&) override;
   void OnDialogClosed() override;
 
   void ShowExternalNotificationPrompt();
   void RemoveHeadsetNotificationPrompt();
-  void SetLocationInfoOnUi();
 
   void InitCapturingStates();
   void PollCapturingState();
 
-  mojo::Remote<device::mojom::XRCompositorHost> compositor_;
-  std::unique_ptr<VRBrowserRendererThreadWin> ui_rendering_thread_;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  std::unique_ptr<VRBrowserRendererThread> ui_rendering_thread_;
+  base::WeakPtr<content::WebContents> web_contents_ = nullptr;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 
   base::CancelableOnceClosure external_prompt_timeout_task_;
@@ -115,7 +105,6 @@ class VRUiHostImpl : public content::VrUiHost,
   base::Time indicators_shown_start_time_;
   bool indicators_visible_ = false;
   bool indicators_showing_first_time_ = true;
-  bool frames_throttled_ = false;
   std::vector<device::mojom::XRViewPtr> default_views_;
 
   mojo::Remote<device::mojom::GeolocationConfig> geolocation_config_;

@@ -1,9 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_DISPLAY_SCREEN_INFO_H_
 #define UI_DISPLAY_SCREEN_INFO_H_
+
+#include <optional>
+#include <string>
 
 #include "ui/display/display_export.h"
 #include "ui/display/mojom/screen_orientation.mojom-shared.h"
@@ -33,10 +36,6 @@ struct DISPLAY_EXPORT ScreenInfo {
   // This can be true for black and white printers
   bool is_monochrome = false;
 
-  // The display frequency in Hz of the monitor. Set to 0 if it fails in the
-  // monitor frequency query.
-  int display_frequency = 0;
-
   // This is set from the rcMonitor member of MONITORINFOEX, to whit:
   //   "A RECT structure that specifies the display monitor rectangle,
   //   expressed in virtual-screen coordinates. Note that if the monitor
@@ -62,24 +61,20 @@ struct DISPLAY_EXPORT ScreenInfo {
 
   // This is the orientation angle of the displayed content in degrees.
   // It is the opposite of the physical rotation.
-  // TODO(crbug.com/840189): we should use an enum rather than a number here.
+  // TODO(crbug.com/41387359): we should use an enum rather than a number here.
   uint16_t orientation_angle = 0;
 
-  // Proposed: https://github.com/w3c/window-placement"
   // Whether this Screen is part of a multi-screen extended visual workspace.
   bool is_extended = false;
 
-  // Proposed: https://github.com/w3c/window-placement"
   // Whether this screen is designated as the 'primary' screen by the OS
   // (otherwise it is a 'secondary' screen).
   bool is_primary = false;
 
-  // Proposed: https://github.com/w3c/window-placement"
   // Whether this screen is an 'internal' panel built into the device, like a
   // laptop display (otherwise it is 'external', like a wired monitor).
   bool is_internal = false;
 
-  // Proposed: https://github.com/w3c/window-placement"
   // A user-friendly label for the screen, determined by the platform.
   std::string label;
 
@@ -95,6 +90,9 @@ struct DISPLAY_EXPORT ScreenInfo {
   ScreenInfo& operator=(const ScreenInfo& other);
   bool operator==(const ScreenInfo& other) const;
   bool operator!=(const ScreenInfo& other) const;
+
+  // Returns a string representation of the screen.
+  std::string ToString() const;
 };
 
 }  // namespace display

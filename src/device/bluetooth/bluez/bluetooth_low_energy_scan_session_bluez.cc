@@ -1,11 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/bluez/bluetooth_low_energy_scan_session_bluez.h"
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "device/bluetooth/bluez/bluetooth_adapter_bluez.h"
@@ -13,7 +15,6 @@
 #include "device/bluetooth/dbus/bluetooth_device_client.h"
 #include "device/bluetooth/dbus/bluez_dbus_manager.h"
 #include "device/bluetooth/public/cpp/bluetooth_address.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace bluez {
 
@@ -37,7 +38,7 @@ void BluetoothLowEnergyScanSessionBlueZ::OnActivate() {
     return;
   }
 
-  delegate_->OnSessionStarted(this, /*error_code=*/absl::nullopt);
+  delegate_->OnSessionStarted(this, /*error_code=*/std::nullopt);
 }
 
 void BluetoothLowEnergyScanSessionBlueZ::OnRelease() {

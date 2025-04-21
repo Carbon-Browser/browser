@@ -1,25 +1,27 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/updater/extension_update_client_base_browsertest.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/extensions/browsertest_util.h"
+#include "chrome/browser/profiles/profile.h"
+#include "components/update_client/crx_update_item.h"
 #include "components/update_client/net/url_loader_post_interceptor.h"
 #include "components/update_client/protocol_handler.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/updater/update_service.h"
 #include "extensions/browser/updater/update_service_factory.h"
 #include "extensions/common/extension_features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -34,7 +36,7 @@ class TestChromeUpdateClientConfig
   TestChromeUpdateClientConfig(content::BrowserContext* context,
                                const std::vector<GURL>& update_url,
                                const std::vector<GURL>& ping_url)
-      : extensions::ChromeUpdateClientConfig(context, absl::nullopt),
+      : extensions::ChromeUpdateClientConfig(context, std::nullopt),
         update_url_(update_url),
         ping_url_(ping_url) {}
 
@@ -48,6 +50,12 @@ class TestChromeUpdateClientConfig
   std::vector<GURL> PingUrl() const final { return ping_url_; }
 
   bool EnabledCupSigning() const final { return false; }
+
+  bool EnabledBackgroundDownloader() const final {
+    // Some tests rely on URLFetcher network interceptors, which won't intercept
+    // BITS requests.
+    return false;
+  }
 
   std::unique_ptr<update_client::ProtocolHandlerFactory>
   GetProtocolHandlerFactory() const final {
@@ -87,10 +95,7 @@ class TestChromeBrowserMainExtraParts : public ChromeBrowserMainExtraParts {
 class UpdateClientCompleteEventWaiter
     : public update_client::UpdateClient::Observer {
  public:
-  using UpdateClientEvents = update_client::UpdateClient::Observer::Events;
-
-  explicit UpdateClientCompleteEventWaiter(const std::string& id)
-      : id_(id), event_(UpdateClientEvents::COMPONENT_UPDATE_ERROR) {}
+  explicit UpdateClientCompleteEventWaiter(const std::string& id) : id_(id) {}
 
   UpdateClientCompleteEventWaiter(const UpdateClientCompleteEventWaiter&) =
       delete;
@@ -99,25 +104,25 @@ class UpdateClientCompleteEventWaiter
 
   ~UpdateClientCompleteEventWaiter() override = default;
 
-  void OnEvent(update_client::UpdateClient::Observer::Events event,
-               const std::string& id) final {
-    if (id_ == id &&
-        (event == UpdateClientEvents::COMPONENT_UPDATED ||
-         event == UpdateClientEvents::COMPONENT_ALREADY_UP_TO_DATE ||
-         event == UpdateClientEvents::COMPONENT_UPDATE_ERROR)) {
-      event_ = event;
+  void OnEvent(const update_client::CrxUpdateItem& item) final {
+    if (id_ == item.id &&
+        (item.state == update_client::ComponentState::kUpdated ||
+         item.state == update_client::ComponentState::kUpToDate ||
+         item.state == update_client::ComponentState::kUpdateError)) {
+      state_ = item.state;
       run_loop_.Quit();
     }
   }
 
-  UpdateClientEvents Wait() {
+  update_client::ComponentState Wait() {
     run_loop_.Run();
-    return event_;
+    return state_;
   }
 
  private:
   const std::string id_;
-  UpdateClientEvents event_;
+  update_client::ComponentState state_ =
+      update_client::ComponentState::kUpdateError;
   base::RunLoop run_loop_;
 };
 
@@ -201,7 +206,7 @@ void ExtensionUpdateClientBaseTest::SetUpNetworkInterceptors() {
           &ExtensionUpdateClientBaseTest::OnRequest, base::Unretained(this)));
 }
 
-update_client::UpdateClient::Observer::Events
+update_client::ComponentState
 ExtensionUpdateClientBaseTest::WaitOnComponentUpdaterCompleteEvent(
     const std::string& id) {
   UpdateClientCompleteEventWaiter waiter(id);
@@ -214,8 +219,9 @@ ExtensionUpdateClientBaseTest::WaitOnComponentUpdaterCompleteEvent(
 
 bool ExtensionUpdateClientBaseTest::OnRequest(
     content::URLLoaderInterceptor::RequestParams* params) {
-  if (params->url_request.url.host() != "localhost")
+  if (params->url_request.url.host() != "localhost") {
     return false;
+  }
 
   get_interceptor_count_++;
   return callback_ && callback_.Run(params);

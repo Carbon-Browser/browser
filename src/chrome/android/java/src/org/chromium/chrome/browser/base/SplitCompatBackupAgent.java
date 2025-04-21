@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@ import android.app.backup.BackupDataInput;
 import android.app.backup.BackupDataOutput;
 import android.content.Context;
 import android.os.ParcelFileDescriptor;
-
-import org.chromium.base.BundleUtils;
 
 import java.io.IOException;
 
@@ -27,16 +25,19 @@ public class SplitCompatBackupAgent extends BackupAgent {
     }
 
     @Override
-    protected void attachBaseContext(Context context) {
-        context = SplitCompatApplication.createChromeContext(context);
-        mImpl = (Impl) BundleUtils.newInstance(context, mBackupAgentClassName);
+    protected void attachBaseContext(Context baseContext) {
+        mImpl =
+                (Impl)
+                        SplitCompatUtils.loadClassAndAdjustContextChrome(
+                                baseContext, mBackupAgentClassName);
         mImpl.setBackupAgent(this);
-        super.attachBaseContext(context);
+        super.attachBaseContext(baseContext);
     }
 
     @Override
-    public void onBackup(ParcelFileDescriptor oldState, BackupDataOutput data,
-            ParcelFileDescriptor newState) throws IOException {
+    public void onBackup(
+            ParcelFileDescriptor oldState, BackupDataOutput data, ParcelFileDescriptor newState)
+            throws IOException {
         mImpl.onBackup(oldState, data, newState);
     }
 
@@ -61,9 +62,12 @@ public class SplitCompatBackupAgent extends BackupAgent {
             return mBackupAgent;
         }
 
-        public abstract void onBackup(ParcelFileDescriptor oldState, BackupDataOutput data,
-                ParcelFileDescriptor newState) throws IOException;
-        public abstract void onRestore(BackupDataInput data, int appVersionCode,
-                ParcelFileDescriptor newState) throws IOException;
+        public abstract void onBackup(
+                ParcelFileDescriptor oldState, BackupDataOutput data, ParcelFileDescriptor newState)
+                throws IOException;
+
+        public abstract void onRestore(
+                BackupDataInput data, int appVersionCode, ParcelFileDescriptor newState)
+                throws IOException;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@ struct EnumTraits<ui::mojom::AcceleratorKeyState, ui::Accelerator::KeyState> {
         return ui::mojom::AcceleratorKeyState::RELEASED;
     }
     NOTREACHED();
-    return ui::mojom::AcceleratorKeyState::PRESSED;
   }
 
   static bool FromMojom(ui::mojom::AcceleratorKeyState input,
@@ -38,7 +37,6 @@ struct EnumTraits<ui::mojom::AcceleratorKeyState, ui::Accelerator::KeyState> {
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

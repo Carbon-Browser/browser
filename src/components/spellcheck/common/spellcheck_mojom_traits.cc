@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@ EnumTraits<spellcheck::mojom::Decoration, SpellCheckResult::Decoration>::
       return spellcheck::mojom::Decoration::kGrammar;
   }
   NOTREACHED();
-  return spellcheck::mojom::Decoration::kSpelling;
 }
 
 bool EnumTraits<spellcheck::mojom::Decoration, SpellCheckResult::Decoration>::
@@ -33,7 +32,6 @@ bool EnumTraits<spellcheck::mojom::Decoration, SpellCheckResult::Decoration>::
       return true;
   }
   NOTREACHED();
-  return false;
 }
 
 bool StructTraits<

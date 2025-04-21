@@ -1,43 +1,57 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/chromedriver/chrome/web_view_impl.h"
 
 #include <stddef.h>
+
 #include <algorithm>
+#include <cstring>
+#include <map>
+#include <memory>
+#include <queue>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
+#include "base/strings/pattern.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/test/chromedriver/chrome/bidi_tracker.h"
 #include "chrome/test/chromedriver/chrome/browser_info.h"
 #include "chrome/test/chromedriver/chrome/cast_tracker.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/devtools_client_impl.h"
 #include "chrome/test/chromedriver/chrome/download_directory_override_manager.h"
+#include "chrome/test/chromedriver/chrome/fedcm_tracker.h"
 #include "chrome/test/chromedriver/chrome/frame_tracker.h"
 #include "chrome/test/chromedriver/chrome/geolocation_override_manager.h"
 #include "chrome/test/chromedriver/chrome/heap_snapshot_taker.h"
-#include "chrome/test/chromedriver/chrome/javascript_dialog_manager.h"
 #include "chrome/test/chromedriver/chrome/js.h"
 #include "chrome/test/chromedriver/chrome/mobile_emulation_override_manager.h"
 #include "chrome/test/chromedriver/chrome/navigation_tracker.h"
 #include "chrome/test/chromedriver/chrome/network_conditions_override_manager.h"
 #include "chrome/test/chromedriver/chrome/non_blocking_navigation_tracker.h"
 #include "chrome/test/chromedriver/chrome/page_load_strategy.h"
+#include "chrome/test/chromedriver/chrome/page_tracker.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/chrome/ui_events.h"
+#include "chrome/test/chromedriver/chrome/web_view.h"
 #include "chrome/test/chromedriver/net/timeout.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/keycodes/keyboard_code_conversion.h"
@@ -45,12 +59,81 @@
 namespace {
 
 const int kWaitForNavigationStopSeconds = 10;
+const char kElementKey[] = "ELEMENT";
+const char kElementKeyW3C[] = "element-6066-11e4-a52e-4f735466cecf";
+const char kShadowRootKey[] = "shadow-6066-11e4-a52e-4f735466cecf";
+const char kFrameKey[] = "frame-075b-4da1-b6ba-e579c2d3230a";
+const char kWindowKey[] = "window-fcc6-11e5-b4f8-330a88ab9d7f";
+
+const char kElementNotFoundMessage[] = "element not found";
+const char kShadowRootNotFoundMessage[] = "shadow root not found";
+const char kStaleElementMessage[] = "stale element not found";
+const char kDetachedShadowRootMessage[] = "detached shadow root not found";
+
+const char* GetDefaultMessage(StatusCode code) {
+  static const char kUnknownCodeMessage[] = "";
+  switch (code) {
+    case kNoSuchElement:
+      return kElementNotFoundMessage;
+    case kNoSuchShadowRoot:
+      return kShadowRootNotFoundMessage;
+    case kStaleElementReference:
+      return kStaleElementMessage;
+    case kDetachedShadowRoot:
+      return kDetachedShadowRootMessage;
+    default:
+      return kUnknownCodeMessage;
+  }
+}
+
+std::optional<std::string> GetElementIdKey(const base::Value::Dict& element,
+                                           bool w3c_compliant) {
+  std::string_view element_key = w3c_compliant ? kElementKeyW3C : kElementKey;
+  std::vector<std::string_view> keys = {
+      element_key,
+      kShadowRootKey,
+      kWindowKey,
+      kFrameKey,
+  };
+  for (const std::string_view& key : keys) {
+    if (element.contains(key)) {
+      return std::string(key);
+    }
+  }
+  return std::nullopt;
+}
+
+Status SplitElementId(const std::string& element_id,
+                      StatusCode no_such_element,
+                      std::string& frame_id,
+                      std::string& loader_id,
+                      int& backend_node_id) {
+  if (!base::MatchPattern(element_id, "f.*.d.*.e.*")) {
+    return Status{no_such_element, "the element id string is malformed"};
+  }
+
+  std::vector<std::string> components = base::SplitString(
+      element_id, ".", base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
+  if (components.size() != 6) {
+    return Status{no_such_element, "too many components in element id"};
+  }
+
+  std::string backend_node_id_str = components[5];
+  if (!base::StringToInt(backend_node_id_str, &backend_node_id)) {
+    return Status{no_such_element, "backendNodeId is not integer"};
+  }
+
+  frame_id = components[1];
+  loader_id = components[3];
+  return Status{kOk};
+}
 
 Status GetContextIdForFrame(WebViewImpl* web_view,
                             const std::string& frame,
                             std::string* context_id) {
   DCHECK(context_id);
-  if (frame.empty() || frame == web_view->GetId()) {
+
+  if (frame.empty()) {
     context_id->clear();
     return Status(kOk);
   }
@@ -59,14 +142,6 @@ Status GetContextIdForFrame(WebViewImpl* web_view,
   if (status.IsError())
     return status;
   return Status(kOk);
-}
-
-WebViewImpl* GetTargetForFrame(WebViewImpl* web_view,
-                               const std::string& frame) {
-  return frame.empty()
-             ? web_view
-             : static_cast<WebViewImpl*>(
-                   web_view->GetFrameTracker()->GetTargetForFrame(frame));
 }
 
 const char* GetAsString(MouseEventType type) {
@@ -141,101 +216,71 @@ const char* GetAsString(PointerType type) {
       return "pen";
     default:
       NOTREACHED();
-      return "";
   }
 }
 
-std::unique_ptr<base::DictionaryValue> GenerateTouchPoint(
-    const TouchEvent& event) {
-  std::unique_ptr<base::DictionaryValue> point(new base::DictionaryValue());
-  base::Value::Dict& dict = point->GetDict();
-  dict.Set("x", event.x);
-  dict.Set("y", event.y);
-  dict.Set("radiusX", event.radiusX);
-  dict.Set("radiusY", event.radiusY);
-  dict.Set("rotationAngle", event.rotationAngle);
-  dict.Set("force", event.force);
-  dict.Set("tangentialPressure", event.tangentialPressure);
-  dict.Set("tiltX", event.tiltX);
-  dict.Set("tiltY", event.tiltY);
-  dict.Set("twist", event.twist);
-  dict.Set("id", event.id);
+base::Value::Dict GenerateTouchPoint(const TouchEvent& event) {
+  base::Value::Dict point;
+  point.Set("x", event.x);
+  point.Set("y", event.y);
+  point.Set("radiusX", event.radiusX);
+  point.Set("radiusY", event.radiusY);
+  point.Set("rotationAngle", event.rotationAngle);
+  point.Set("force", event.force);
+  point.Set("tangentialPressure", event.tangentialPressure);
+  point.Set("tiltX", event.tiltX);
+  point.Set("tiltY", event.tiltY);
+  point.Set("twist", event.twist);
+  point.Set("id", event.id);
   return point;
 }
 
-Status ReleaseRemoteObject(DevToolsClient* client,
-                           const std::string& object_id) {
-  // Release the remote object before doing anything else.
-  base::DictionaryValue params;
-  params.GetDict().Set("objectId", object_id);
-  Status release_status = client->SendCommand("Runtime.releaseObject", params);
-  if (release_status.IsError()) {
-    LOG(ERROR) << "Failed to release remote object: "
-               << release_status.message();
-  }
-  return release_status;
-}
-
-class RemoteObjectReleaseGuard {
+class ObjectGroup {
  public:
-  RemoteObjectReleaseGuard(DevToolsClient* client, std::string object_id)
-      : client_(client), object_id_(object_id) {}
+  explicit ObjectGroup(DevToolsClient* client)
+      : client_(client),
+        object_group_name_(base::Uuid::GenerateRandomV4().AsLowercaseString()) {
+  }
 
-  ~RemoteObjectReleaseGuard() { ReleaseRemoteObject(client_, object_id_); }
+  ~ObjectGroup() {
+    if (is_empty_) {
+      return;
+    }
+    base::Value::Dict params;
+    params.Set("objectGroup", object_group_name_);
+    client_->SendCommandAndIgnoreResponse("Runtime.releaseObjectGroup", params);
+  }
+
+  bool IsEmpty() const { return is_empty_; }
+
+  void SetEmpty(bool value) { is_empty_ = value; }
+
+  const std::string& name() const { return object_group_name_; }
 
  private:
   raw_ptr<DevToolsClient> client_;
-  std::string object_id_;
+  std::string object_group_name_;
+  bool is_empty_ = false;
 };
 
-bool IsFencedFrameNode(const base::Value& node) {
-  if (!node.is_dict())
-    return false;
-  const std::string* nodeName = node.GetDict().FindString("nodeName");
-  return nodeName && *nodeName == "FENCEDFRAME";
-}
-
-const base::Value* GetFencedFrameUserAgentShadowRoot(const base::Value& node) {
-  DCHECK(IsFencedFrameNode(node));
-  const base::Value* shadow_roots = node.GetDict().Find("shadowRoots");
-  if (!shadow_roots)
-    return nullptr;
-
-  // Find user-agent shadow root inside fenced frame.
-  for (const base::Value& shadow_root : shadow_roots->GetList()) {
-    if (shadow_root.is_dict()) {
-      const std::string* shadow_root_type =
-          shadow_root.GetDict().FindString("shadowRootType");
-      if (shadow_root_type && *shadow_root_type == "user-agent") {
-        return &shadow_root;
-      }
-    }
-  }
-
-  return nullptr;
-}
-
 Status DescribeNode(DevToolsClient* client,
-                    const std::string& object_id,
+                    int backend_node_id,
                     int depth,
                     bool pierce,
                     base::Value* result_node) {
   DCHECK(result_node);
-  base::Value params(base::Value::Type::DICT);
-  base::Value cmd_result;
-  params.GetDict().Set("objectId", object_id);
-  params.GetDict().Set("depth", depth);
-  params.GetDict().Set("pierce", pierce);
-  Status status = client->SendCommandAndGetResult(
-      "DOM.describeNode", base::Value::AsDictionaryValue(params), &cmd_result);
-
+  base::Value::Dict params;
+  base::Value::Dict cmd_result;
+  params.Set("backendNodeId", backend_node_id);
+  params.Set("depth", depth);
+  params.Set("pierce", pierce);
+  Status status =
+      client->SendCommandAndGetResult("DOM.describeNode", params, &cmd_result);
   if (status.IsError()) {
     return status;
   }
 
-  DCHECK(cmd_result.is_dict());
-
-  base::Value* node = cmd_result.GetDict().Find("node");
+  base::Value* node = cmd_result.Find("node");
   if (!node || !node->is_dict()) {
     return Status(kUnknownError, "DOM.describeNode missing dictionary 'node'");
   }
@@ -245,21 +290,20 @@ Status DescribeNode(DevToolsClient* client,
   return status;
 }
 
-Status GetFrameIdForObjectId(DevToolsClient* client,
-                             const std::string& object_id,
-                             bool* found_node,
-                             std::string* frame_id) {
+Status GetFrameIdForBackendNodeId(DevToolsClient* client,
+                                  int backend_node_id,
+                                  bool* found_node,
+                                  std::string* frame_id) {
   DCHECK(frame_id);
   DCHECK(found_node);
-  base::DictionaryValue cmd_result;
 
   Status status{kOk};
 
   base::Value node;
-  status = DescribeNode(client, object_id, 0, false, &node);
-
-  if (status.IsError())
+  status = DescribeNode(client, backend_node_id, 0, false, &node);
+  if (status.IsError()) {
     return status;
+  }
 
   std::string* maybe_frame_id = node.GetIfDict()->FindString("frameId");
   if (maybe_frame_id) {
@@ -268,50 +312,151 @@ Status GetFrameIdForObjectId(DevToolsClient* client,
     return Status(kOk);
   }
 
-  if (IsFencedFrameNode(node)) {
-    status = DescribeNode(client, object_id, 3, true, &node);
-    if (status.IsError()) {
-      return status;
-    }
-    const base::Value* ua_shadow_root = GetFencedFrameUserAgentShadowRoot(node);
-    if (!ua_shadow_root)
-      return Status(kUnknownError, "Shadow not found in fenced frame");
-
-    if (ua_shadow_root->FindIntKey("childNodeCount").value_or(0) == 0)
-      return Status(kUnknownError,
-                    "Attribute childNodeCount not found in fenced frame");
-
-    // Find iframe inside fenced frame's shadow dom.
-    const base::Value* iframe_node = nullptr;
-    const base::Value* shadow_root_children =
-        ua_shadow_root->FindListKey("children");
-    if (!shadow_root_children)
-      return Status(kUnknownError,
-                    "Children attribute not found in fenced frame");
-
-    for (const base::Value& child : shadow_root_children->GetList()) {
-      if (*child.FindStringKey("nodeName") == "IFRAME") {
-        iframe_node = &child;
-        break;
-      }
-    }
-    if (!iframe_node)
-      return Status(kUnknownError, "IFrame child not found under fenced frame");
-
-    // Associate fenced frame element with nested iframe's frame id.
-    const std::string* child_frame_id =
-        iframe_node->GetDict().FindString("frameId");
-    if (child_frame_id) {
-      *frame_id = *child_frame_id;
-      *found_node = true;
-      return Status{kOk};
-    }
-  }
-
   return Status(kOk);
 }
 
+Status ResolveWeakReferences(base::Value::List& nodes) {
+  Status status{kOk};
+  std::map<int, int> ref_to_idx;
+  // Mapping
+  for (int k = 0; static_cast<size_t>(k) < nodes.size(); ++k) {
+    if (!nodes[k].is_dict()) {
+      continue;
+    }
+    const base::Value::Dict& node = nodes[k].GetDict();
+    std::optional<int> weak_node_ref =
+        node.FindIntByDottedPath("weakLocalObjectReference");
+    if (!weak_node_ref) {
+      continue;
+    }
+    std::optional<int> maybe_backend_node_id =
+        node.FindIntByDottedPath("value.backendNodeId");
+    if (!maybe_backend_node_id) {
+      continue;
+    }
+    ref_to_idx[weak_node_ref.value()] = k;
+  }
+  // Resolving
+  for (int k = 0; static_cast<size_t>(k) < nodes.size(); ++k) {
+    if (!nodes[k].is_dict()) {
+      continue;
+    }
+    const base::Value::Dict& node = nodes[k].GetDict();
+    std::optional<int> weak_node_ref =
+        node.FindIntByDottedPath("weakLocalObjectReference");
+    if (!weak_node_ref) {
+      continue;
+    }
+    std::optional<int> maybe_backend_node_id =
+        node.FindIntByDottedPath("value.backendNodeId");
+    if (maybe_backend_node_id) {
+      continue;
+    }
+    auto it = ref_to_idx.find(*weak_node_ref);
+    if (it == ref_to_idx.end()) {
+      return Status{
+          kUnknownError,
+          base::StringPrintf("Unable to resolve weakLocalObjectReference=%d",
+                             *weak_node_ref)};
+    }
+    nodes[k] = nodes[it->second].Clone();
+  }
+  return status;
+}
+
+class BidiTrackerGuard {
+ public:
+  explicit BidiTrackerGuard(DevToolsClient& client) : client_(client) {
+    client_->AddListener(&bidi_tracker_);
+  }
+
+  BidiTracker& Tracker() { return bidi_tracker_; }
+
+  const BidiTracker& Tracker() const { return bidi_tracker_; }
+
+  ~BidiTrackerGuard() { client_->RemoveListener(&bidi_tracker_); }
+
+ private:
+  base::raw_ref<DevToolsClient> client_;
+  BidiTracker bidi_tracker_;
+};
+
+Status ResolveNode(DevToolsClient& client,
+                   int backend_node_id,
+                   const std::string& object_group_name,
+                   const Timeout* timeout,
+                   std::string& object_id) {
+  base::Value::Dict params;
+  base::Value::Dict resolve_result;
+  params.Set("backendNodeId", backend_node_id);
+  // TODO(crbug.com/42323411): add support of uniqueContextId to
+  // DOM.resolveNode params.Set("uniqueContextId", context_id);
+  if (!object_group_name.empty()) {
+    params.Set("objectGroup", object_group_name);
+  }
+  Status status = client.SendCommandAndGetResultWithTimeout(
+      "DOM.resolveNode", params, timeout, &resolve_result);
+  if (status.IsError()) {
+    return status;
+  }
+  std::string* maybe_object_id =
+      resolve_result.FindStringByDottedPath("object.objectId");
+  if (!maybe_object_id) {
+    return Status{
+        kUnknownError,
+        "object.objectId is missing in the response to DOM.resolveNode"};
+  }
+  object_id = *maybe_object_id;
+  return status;
+}
+
+Status WrapIfTargetDetached(Status status, StatusCode new_code) {
+  if (status.code() == kTargetDetached) {
+    return Status{new_code, status};
+  }
+  return status;
+}
+
 }  // namespace
+
+std::unique_ptr<WebViewImpl> WebViewImpl::CreateServiceWorkerWebView(
+    const std::string& id,
+    const bool w3c_compliant,
+    const BrowserInfo* browser_info,
+    std::unique_ptr<DevToolsClient> client) {
+  return std::unique_ptr<WebViewImpl>(new WebViewImpl(
+      id, w3c_compliant, nullptr, browser_info, std::move(client)));
+}
+
+std::unique_ptr<WebViewImpl> WebViewImpl::CreateTabTargetWebView(
+    const std::string& id,
+    const bool w3c_compliant,
+    const BrowserInfo* browser_info,
+    std::unique_ptr<DevToolsClient> client,
+    std::optional<MobileDevice> mobile_device,
+    std::string page_load_strategy,
+    bool autoaccept_beforeunload,
+    raw_ptr<std::vector<std::unique_ptr<DevToolsEventListener>>>
+        devtools_listeners) {
+  return std::make_unique<WebViewImpl>(
+      id, w3c_compliant, browser_info, std::move(client),
+      /*is_tab_target=*/true, mobile_device, page_load_strategy,
+      autoaccept_beforeunload, devtools_listeners);
+}
+
+std::unique_ptr<WebViewImpl> WebViewImpl::CreateTopLevelWebView(
+    const std::string& id,
+    const bool w3c_compliant,
+    const WebViewImpl* tab,
+    const BrowserInfo* browser_info,
+    std::unique_ptr<DevToolsClient> client,
+    std::optional<MobileDevice> mobile_device,
+    std::string page_load_strategy,
+    bool autoaccept_beforeunload) {
+  return std::make_unique<WebViewImpl>(
+      id, w3c_compliant, nullptr, tab, browser_info, std::move(client),
+      std::move(mobile_device), page_load_strategy, autoaccept_beforeunload);
+}
 
 WebViewImpl::WebViewImpl(const std::string& id,
                          const bool w3c_compliant,
@@ -324,87 +469,210 @@ WebViewImpl::WebViewImpl(const std::string& id,
       is_locked_(false),
       is_detached_(false),
       parent_(parent),
+      tab_(nullptr),
       client_(std::move(client)),
       frame_tracker_(nullptr),
-      dialog_manager_(nullptr),
       mobile_emulation_override_manager_(nullptr),
       geolocation_override_manager_(nullptr),
       network_conditions_override_manager_(nullptr),
       heap_snapshot_taker_(nullptr),
-      is_service_worker_(true) {
+      is_service_worker_(true),
+      is_tab_target_(false) {
+  client_->SetOwner(this);
+}
+
+WebViewImpl::WebViewImpl(
+    const std::string& id,
+    const bool w3c_compliant,
+    const BrowserInfo* browser_info,
+    std::unique_ptr<DevToolsClient> client,
+    bool is_tab_target,
+    std::optional<MobileDevice> mobile_device,
+    std::string page_load_strategy,
+    bool autoaccept_beforeunload,
+    raw_ptr<std::vector<std::unique_ptr<DevToolsEventListener>>>
+        devtools_listeners)
+    : id_(id),
+      w3c_compliant_(w3c_compliant),
+      browser_info_(browser_info),
+      is_locked_(false),
+      is_detached_(false),
+      parent_(nullptr),
+      tab_(nullptr),
+      client_(std::move(client)),
+      frame_tracker_(nullptr),
+      page_tracker_(new PageTracker(client_.get(), this)),
+      mobile_emulation_override_manager_(nullptr),
+      geolocation_override_manager_(nullptr),
+      network_conditions_override_manager_(nullptr),
+      heap_snapshot_taker_(nullptr),
+      devtools_listeners_(devtools_listeners),
+      tab_mobile_device_(mobile_device),
+      tab_page_load_strategy_(page_load_strategy),
+      is_service_worker_(false),
+      is_tab_target_(is_tab_target),
+      autoaccept_beforeunload_(autoaccept_beforeunload) {
   client_->SetOwner(this);
 }
 
 WebViewImpl::WebViewImpl(const std::string& id,
                          const bool w3c_compliant,
                          const WebViewImpl* parent,
+                         const WebViewImpl* tab,
                          const BrowserInfo* browser_info,
                          std::unique_ptr<DevToolsClient> client,
-                         const DeviceMetrics* device_metrics,
-                         std::string page_load_strategy)
+                         std::optional<MobileDevice> mobile_device,
+                         std::string page_load_strategy,
+                         bool autoaccept_beforeunload)
     : id_(id),
       w3c_compliant_(w3c_compliant),
       browser_info_(browser_info),
       is_locked_(false),
       is_detached_(false),
       parent_(parent),
+      tab_(tab),
       client_(std::move(client)),
-      frame_tracker_(new FrameTracker(client_.get(), this, browser_info)),
-      dialog_manager_(new JavaScriptDialogManager(client_.get(), browser_info)),
+      frame_tracker_(new FrameTracker(client_.get(), this)),
       mobile_emulation_override_manager_(
-          new MobileEmulationOverrideManager(client_.get(), device_metrics)),
+          new MobileEmulationOverrideManager(client_.get(),
+                                             std::move(mobile_device),
+                                             browser_info->major_version)),
       geolocation_override_manager_(
           new GeolocationOverrideManager(client_.get())),
       network_conditions_override_manager_(
           new NetworkConditionsOverrideManager(client_.get())),
       heap_snapshot_taker_(new HeapSnapshotTaker(client_.get())),
-      is_service_worker_(false) {
+      devtools_listeners_(nullptr),
+      is_service_worker_(false),
+      is_tab_target_(false),
+      autoaccept_beforeunload_(autoaccept_beforeunload) {
+  client_->SetAutoAcceptBeforeunload(autoaccept_beforeunload_);
   // Downloading in headless mode requires the setting of
   // Browser.setDownloadBehavior. This is handled by the
   // DownloadDirectoryOverrideManager, which is only instantiated
   // in headless chrome.
-  if (browser_info->is_headless)
+  if (browser_info->is_headless_shell) {
     download_directory_override_manager_ =
         std::make_unique<DownloadDirectoryOverrideManager>(client_.get());
+  }
   // Child WebViews should not have their own navigation_tracker, but defer
   // all related calls to their parent. All WebViews must have either parent_
   // or navigation_tracker_
-  if (!parent_)
-    navigation_tracker_ = std::unique_ptr<PageLoadStrategy>(
-        PageLoadStrategy::Create(page_load_strategy, client_.get(), this,
-                                 browser_info, dialog_manager_.get()));
+  if (parent_ == nullptr) {
+    navigation_tracker_ = CreatePageLoadStrategy(page_load_strategy);
+  }
   client_->SetOwner(this);
 }
 
-WebViewImpl::~WebViewImpl() {}
+WebViewImpl::~WebViewImpl() = default;
+
+std::unique_ptr<PageLoadStrategy> WebViewImpl::CreatePageLoadStrategy(
+    const std::string& strategy) {
+  if (strategy == PageLoadStrategy::kNone) {
+    return std::make_unique<NonBlockingNavigationTracker>();
+  } else if (strategy == PageLoadStrategy::kNormal) {
+    return std::make_unique<NavigationTracker>(client_.get(), this, false);
+  } else if (strategy == PageLoadStrategy::kEager) {
+    return std::make_unique<NavigationTracker>(client_.get(), this, true);
+  } else {
+    NOTREACHED() << "invalid strategy '" << strategy << "'";
+  }
+}
+
+WebView* WebViewImpl::GetTargetForFrame(const std::string& frame) {
+  return frame.empty() ? this : GetFrameTracker()->GetTargetForFrame(frame);
+}
 
 bool WebViewImpl::IsServiceWorker() const {
   return is_service_worker_;
 }
 
-WebViewImpl* WebViewImpl::CreateChild(const std::string& session_id,
-                                      const std::string& target_id) const {
+bool WebViewImpl::IsTab() const {
+  return is_tab_target_;
+}
+
+std::unique_ptr<WebViewImpl> WebViewImpl::CreatePageWithinTab(
+    const std::string& session_id,
+    const std::string& target_id,
+    WebViewInfo::Type page_type) {
+  std::unique_ptr<DevToolsClientImpl> child_client =
+      std::make_unique<DevToolsClientImpl>(target_id, session_id);
+  child_client->SetMainPage(true);
+  if (devtools_listeners_ != nullptr) {
+    for (const auto& listener : *devtools_listeners_.get()) {
+      child_client->AddListener(listener.get());
+    }
+  }
+
+  std::optional<MobileDevice> mobile_device = tab_mobile_device_;
+  if (page_type == WebViewInfo::Type::kBackgroundPage) {
+    // Apps and extensions don't work on Android, so it doesn't make
+    // sense to provide mobile_device in mobile emulation mode, and can
+    // also potentially crash the renderer, for more details see:
+    // https://code.google.com/p/chromedriver/issues/detail?id=1205
+    mobile_device.reset();
+  }
+
+  std::unique_ptr<WebViewImpl> child = CreateTopLevelWebView(
+      target_id, w3c_compliant_, this, browser_info_, std::move(child_client),
+      mobile_device, tab_page_load_strategy_, autoaccept_beforeunload_);
+
+  const WebViewImpl* root_view = this;
+  while (root_view->parent_ != nullptr) {
+    root_view = root_view->parent_;
+  }
+
+  PageLoadStrategy* navigation_tracker = root_view->navigation_tracker_.get();
+  if (navigation_tracker && !navigation_tracker->IsNonBlocking()) {
+    // Find Navigation Tracker for the top of the WebViewImpl hierarchy
+    child->client_->AddListener(navigation_tracker);
+  }
+  return child;
+}
+
+std::string WebViewImpl::GetTabId() {
+  return GetTab()->id_;
+}
+
+const WebViewImpl* WebViewImpl::GetTab() const {
+  const WebViewImpl* root_view = this;
+  while (root_view->parent_ != nullptr) {
+    root_view = root_view->parent_;
+  }
+
+  // If we reached top level page.
+  if (root_view->tab_ != nullptr) {
+    return root_view->tab_;
+  }
+
+  // This webview is the tab itself.
+  return root_view;
+}
+
+Status WebViewImpl::GetActivePage(WebView** web_view) {
+  return GetTab()->GetPageTracker()->GetActivePage(web_view);
+}
+
+std::unique_ptr<WebViewImpl> WebViewImpl::CreateChild(
+    const std::string& session_id,
+    const std::string& target_id) const {
   // While there may be a deep hierarchy of WebViewImpl instances, the
   // hierarchy for DevToolsClientImpl is flat - there's a root which
   // sends/receives over the socket, and all child sessions are considered
   // its children (one level deep at most).
-  DevToolsClientImpl* root_client =
-      static_cast<DevToolsClientImpl*>(client_.get()->GetRootClient());
-  std::unique_ptr<DevToolsClient> child_client(
-      std::make_unique<DevToolsClientImpl>(session_id, session_id,
-                                           root_client));
-  WebViewImpl* child = new WebViewImpl(
-      target_id, w3c_compliant_, this, browser_info_, std::move(child_client),
-      nullptr,
-      IsNonBlocking() ? PageLoadStrategy::kNone : PageLoadStrategy::kNormal);
-  if (!IsNonBlocking()) {
+  std::unique_ptr<DevToolsClientImpl> child_client =
+      std::make_unique<DevToolsClientImpl>(session_id, session_id);
+  std::unique_ptr<WebViewImpl> child = std::make_unique<WebViewImpl>(
+      target_id, w3c_compliant_, this, tab_, browser_info_,
+      std::move(child_client), std::nullopt, "", autoaccept_beforeunload_);
+  const WebViewImpl* root_view = this;
+  while (root_view->parent_ != nullptr) {
+    root_view = root_view->parent_;
+  }
+  PageLoadStrategy* navigation_tracker = root_view->navigation_tracker_.get();
+  if (navigation_tracker && !navigation_tracker->IsNonBlocking()) {
     // Find Navigation Tracker for the top of the WebViewImpl hierarchy
-    const WebViewImpl* currentView = this;
-    while (currentView->parent_)
-      currentView = currentView->parent_;
-    PageLoadStrategy* pls = currentView->navigation_tracker_.get();
-    NavigationTracker* nt = static_cast<NavigationTracker*>(pls);
-    child->client_->AddListener(static_cast<DevToolsEventListener*>(nt));
+    child->client_->AddListener(navigation_tracker);
   }
   return child;
 }
@@ -413,16 +681,31 @@ std::string WebViewImpl::GetId() {
   return id_;
 }
 
+std::string WebViewImpl::GetSessionId() {
+  return client_->SessionId();
+}
+
 bool WebViewImpl::WasCrashed() {
   return client_->WasCrashed();
 }
 
-Status WebViewImpl::ConnectIfNecessary() {
-  return client_->ConnectIfNecessary();
+Status WebViewImpl::AttachTo(DevToolsClient* root_client) {
+  // Add this target holder to extend the lifetime of webview object.
+  WebViewImplHolder target_holder(this);
+  return client_->AttachTo(root_client);
 }
 
-Status WebViewImpl::SetUpDevTools() {
-  return client_->SetUpDevTools();
+Status WebViewImpl::AttachChildView(WebViewImpl* child) {
+  DevToolsClient* root_client = client_.get();
+  while (root_client->GetParentClient() != nullptr) {
+    root_client = root_client->GetParentClient();
+  }
+  return child->AttachTo(root_client);
+}
+
+Status WebViewImpl::HandleEventsUntil(const ConditionalFunc& conditional_func,
+                                      const Timeout& timeout) {
+  return client_->HandleEventsUntil(conditional_func, timeout);
 }
 
 Status WebViewImpl::HandleReceivedEvents() {
@@ -430,16 +713,16 @@ Status WebViewImpl::HandleReceivedEvents() {
 }
 
 Status WebViewImpl::GetUrl(std::string* url) {
-  base::DictionaryValue params;
-  base::DictionaryValue result;
+  base::Value::Dict params;
+  base::Value::Dict result;
   Status status = client_->SendCommandAndGetResult("Page.getNavigationHistory",
                                                    params, &result);
   if (status.IsError())
     return status;
-  absl::optional<int> current_index = result.GetDict().FindInt("currentIndex");
+  std::optional<int> current_index = result.FindInt("currentIndex");
   if (!current_index)
     return Status(kUnknownError, "navigation history missing currentIndex");
-  base::Value::List* entries = result.GetDict().FindList("entries");
+  base::Value::List* entries = result.FindList("entries");
   if (!entries)
     return Status(kUnknownError, "navigation history missing entries");
   if (static_cast<int>(entries->size()) <= *current_index ||
@@ -456,16 +739,17 @@ Status WebViewImpl::GetUrl(std::string* url) {
 Status WebViewImpl::Load(const std::string& url, const Timeout* timeout) {
   // Javascript URLs will cause a hang while waiting for the page to stop
   // loading, so just disallow.
-  if (base::StartsWith(url, "javascript:",
-                       base::CompareCase::INSENSITIVE_ASCII))
+  if (base::StartsWith(url,
+                       "javascript:", base::CompareCase::INSENSITIVE_ASCII)) {
     return Status(kUnknownError, "unsupported protocol");
-  base::DictionaryValue params;
-  params.GetDict().Set("url", url);
+  }
+  base::Value::Dict params;
+  params.Set("url", url);
   if (IsNonBlocking()) {
-    // With non-bloakcing navigation tracker, the previous navigation might
+    // With non-blocking navigation tracker, the previous navigation might
     // still be in progress, and this can cause the new navigate command to be
     // ignored on Chrome v63 and above. Stop previous navigation first.
-    client_->SendCommand("Page.stopLoading", base::DictionaryValue());
+    client_->SendCommand("Page.stopLoading", base::Value::Dict());
     // Use SendCommandAndIgnoreResponse to ensure no blocking occurs.
     return client_->SendCommandAndIgnoreResponse("Page.navigate", params);
   }
@@ -473,73 +757,121 @@ Status WebViewImpl::Load(const std::string& url, const Timeout* timeout) {
 }
 
 Status WebViewImpl::Reload(const Timeout* timeout) {
-  base::DictionaryValue params;
-  params.GetDict().Set("ignoreCache", false);
+  base::Value::Dict params;
+  params.Set("ignoreCache", false);
   return client_->SendCommandWithTimeout("Page.reload", params, timeout);
 }
 
 Status WebViewImpl::Freeze(const Timeout* timeout) {
-  base::DictionaryValue params;
-  params.GetDict().Set("state", "frozen");
+  base::Value::Dict params;
+  params.Set("state", "frozen");
   return client_->SendCommandWithTimeout("Page.setWebLifecycleState", params,
                                          timeout);
 }
 
 Status WebViewImpl::Resume(const Timeout* timeout) {
-  base::DictionaryValue params;
-  params.GetDict().Set("state", "active");
+  base::Value::Dict params;
+  params.Set("state", "active");
   return client_->SendCommandWithTimeout("Page.setWebLifecycleState", params,
                                          timeout);
 }
 
+Status WebViewImpl::StartBidiServer(std::string bidi_mapper_script) {
+  return client_->StartBidiServer(std::move(bidi_mapper_script));
+}
+
+Status WebViewImpl::PostBidiCommand(base::Value::Dict command) {
+  return client_->PostBidiCommand(std::move(command));
+}
+
+Status WebViewImpl::SendBidiCommand(base::Value::Dict command,
+                                    const Timeout& timeout,
+                                    base::Value::Dict& response) {
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+  BidiTrackerGuard bidi_tracker_guard(*client_);
+
+  base::Value* maybe_cmd_id = command.Find("id");
+  if (maybe_cmd_id == nullptr) {
+    return Status{kUnknownError, "BiDi command has no 'id' of type js-uint"};
+  }
+  base::Value expected_id = maybe_cmd_id->Clone();
+
+  std::string* maybe_channel = command.FindString("channel");
+  if (maybe_channel == nullptr || !maybe_channel->starts_with("/")) {
+    return Status{kUnknownError,
+                  "BiDi command does not contain a non-empty string 'channel' "
+                  "with a leading '/'"};
+  }
+  bidi_tracker_guard.Tracker().SetChannelSuffix(*maybe_channel);
+
+  base::Value::Dict tmp;
+  auto on_bidi_message = [](base::Value::Dict& destination,
+                            base::Value::Dict payload) {
+    destination = std::move(payload);
+    return Status{kOk};
+  };
+  bidi_tracker_guard.Tracker().SetBidiCallback(
+      base::BindRepeating(on_bidi_message, std::ref(tmp)));
+  status = client_->PostBidiCommand(std::move(command));
+  if (status.IsError()) {
+    return status;
+  }
+  auto response_is_received = [](const base::Value& expected_id,
+                                 const base::Value::Dict& destionation,
+                                 bool* is_condition_met) {
+    const base::Value* maybe_response_id = destionation.Find("id");
+    *is_condition_met =
+        (maybe_response_id != nullptr) && (expected_id == *maybe_response_id);
+    return Status{kOk};
+  };
+  status = client_->HandleEventsUntil(
+      base::BindRepeating(response_is_received, std::cref(expected_id),
+                          std::cref(tmp)),
+      timeout);
+  if (status.IsError()) {
+    return status;
+  }
+  response = std::move(tmp);
+  return status;
+}
+
 Status WebViewImpl::SendCommand(const std::string& cmd,
-                                const base::DictionaryValue& params) {
+                                const base::Value::Dict& params) {
   return client_->SendCommand(cmd, params);
 }
 
-Status WebViewImpl::SendCommandFromWebSocket(
-    const std::string& cmd,
-    const base::DictionaryValue& params,
-    const int client_cmd_id) {
+Status WebViewImpl::SendCommandFromWebSocket(const std::string& cmd,
+                                             const base::Value::Dict& params,
+                                             const int client_cmd_id) {
   return client_->SendCommandFromWebSocket(cmd, params, client_cmd_id);
 }
 
 Status WebViewImpl::SendCommandAndGetResult(
-        const std::string& cmd,
-        const base::DictionaryValue& params,
-        std::unique_ptr<base::Value>* value) {
-  std::unique_ptr<base::DictionaryValue> result =
-      std::make_unique<base::DictionaryValue>();
-  Status status = client_->SendCommandAndGetResult(cmd, params, result.get());
+    const std::string& cmd,
+    const base::Value::Dict& params,
+    std::unique_ptr<base::Value>* value) {
+  base::Value::Dict result;
+  Status status = client_->SendCommandAndGetResult(cmd, params, &result);
   if (status.IsError())
     return status;
-  *value = std::move(result);
+  *value = std::make_unique<base::Value>(std::move(result));
   return Status(kOk);
 }
 
 Status WebViewImpl::TraverseHistory(int delta, const Timeout* timeout) {
-  base::DictionaryValue params;
-  base::DictionaryValue result;
+  base::Value::Dict params;
+  base::Value::Dict result;
   Status status = client_->SendCommandAndGetResult("Page.getNavigationHistory",
                                                    params, &result);
-  if (status.IsError()) {
-    // TODO(samuong): remove this once we stop supporting WebView on KitKat.
-    // Older versions of WebView on Android (on KitKat and earlier) do not have
-    // the Page.getNavigationHistory DevTools command handler, so fall back to
-    // using JavaScript to navigate back and forward. WebView reports its build
-    // number as 0, so use the error status to detect if we can't use the
-    // DevTools command.
-    if (browser_info_->browser_name == "webview")
-      return TraverseHistoryWithJavaScript(delta);
-    else
-      return status;
-  }
+  if (status.IsError())
+    return status;
 
-  absl::optional<int> current_index = result.GetDict().FindInt("currentIndex");
+  std::optional<int> current_index = result.FindInt("currentIndex");
   if (!current_index)
     return Status(kUnknownError, "DevTools didn't return currentIndex");
 
-  base::Value::List* entries = result.GetDict().FindList("entries");
+  base::Value::List* entries = result.FindList("entries");
   if (!entries)
     return Status(kUnknownError, "DevTools didn't return entries");
 
@@ -553,145 +885,405 @@ Status WebViewImpl::TraverseHistory(int delta, const Timeout* timeout) {
   }
 
   base::Value& entry = (*entries)[*current_index + delta];
-  absl::optional<int> entry_id = entry.FindIntKey("id");
+  std::optional<int> entry_id = entry.GetDict().FindInt("id");
   if (!entry_id)
     return Status(kUnknownError, "history entry does not have an id");
-  params.GetDict().Set("entryId", *entry_id);
+  params.Set("entryId", *entry_id);
 
   return client_->SendCommandWithTimeout("Page.navigateToHistoryEntry", params,
                                          timeout);
 }
 
-Status WebViewImpl::TraverseHistoryWithJavaScript(int delta) {
-  std::unique_ptr<base::Value> value;
-  if (delta == -1)
-    return EvaluateScript(std::string(), "window.history.back();", false,
-                          &value);
-  else if (delta == 1)
-    return EvaluateScript(std::string(), "window.history.forward();", false,
-                          &value);
-  else
-    return Status(kUnknownError, "expected delta to be 1 or -1");
-}
+Status WebViewImpl::GetLoaderId(const std::string& frame_id,
+                                const Timeout& timeout,
+                                std::string& loader_id) {
+  Status status{kOk};
 
-Status WebViewImpl::EvaluateScriptWithTimeout(
-    const std::string& frame,
-    const std::string& expression,
-    const base::TimeDelta& timeout,
-    const bool awaitPromise,
-    std::unique_ptr<base::Value>* result) {
-  WebViewImpl* target = GetTargetForFrame(this, frame);
-  if (target != nullptr && target != this) {
-    if (target->IsDetached())
-      return Status(kTargetDetached);
-    WebViewImplHolder target_holder(target);
-    return target->EvaluateScriptWithTimeout(frame, expression, timeout,
-                                             awaitPromise, result);
+  base::Value::Dict frame_tree_result;
+  status = client_->SendCommandAndGetResultWithTimeout(
+      "Page.getFrameTree", base::Value::Dict(), &timeout, &frame_tree_result);
+  if (status.IsError()) {
+    return status;
   }
 
+  base::Value::Dict* maybe_frame_tree = frame_tree_result.FindDict("frameTree");
+  if (!maybe_frame_tree) {
+    return Status{kUnknownError,
+                  "no frameTree in the response to Page.getFrameTree"};
+  }
+  std::queue<base::Value::Dict*> q;
+  for (q.push(maybe_frame_tree); !q.empty(); q.pop()) {
+    base::Value::Dict* frame_tree = q.front();
+    std::string* current_frame_id =
+        frame_tree->FindStringByDottedPath("frame.id");
+    if (!current_frame_id) {
+      return Status{
+          kUnknownError,
+          "no frame.id in one of the nodes of the Page.getFrameTree response"};
+    }
+    std::string* current_loader_id =
+        frame_tree->FindStringByDottedPath("frame.loaderId");
+    if (!current_loader_id) {
+      return Status{kUnknownError,
+                    "no frame.loaderId in one of the nodes of the "
+                    "Page.getFrameTree response"};
+    }
+    if (current_loader_id->empty()) {
+      // There is probably an ongoing navigation. Giving up.
+      return Status{kAbortedByNavigation,
+                    "no loaderId found for the current frame"};
+    }
+
+    if (frame_id == *current_frame_id) {
+      loader_id = std::move(*current_loader_id);
+      break;
+    }
+
+    base::Value::List* child_frames = frame_tree->FindList("childFrames");
+    if (!child_frames) {
+      continue;
+    }
+
+    for (base::Value& item : (*child_frames)) {
+      if (!item.is_dict()) {
+        return Status{kUnknownError,
+                      "child frame is not a dictionary in one of the nodes of "
+                      "the Page.getFrameTree response"};
+      }
+      q.push(item.GetIfDict());
+    }
+  }
+  return status;
+}
+
+Status WebViewImpl::CallFunctionWithTimeoutInternal(
+    std::string frame,
+    std::string function,
+    base::Value::List args,
+    const base::TimeDelta& timeout,
+    bool include_shadow_root,
+    std::unique_ptr<base::Value>* result) {
+  Status status{kOk};
+
+  std::string frame_id = frame.empty() ? id_ : frame;
+
+  Timeout local_timeout(timeout);
+  std::string loader_id;
+
+  // The code below tries to detect if any navigation has happened during its
+  // execution. The navigation is detected if either loaderId or
+  // context_id has changed.
+
+  status = GetLoaderId(frame_id, local_timeout, loader_id);
+  if (status.IsError()) {
+    return WrapIfTargetDetached(status, kAbortedByNavigation);
+  }
   std::string context_id;
-  Status status = GetContextIdForFrame(this, frame, &context_id);
-  if (status.IsError())
+  status = GetFrameTracker()->GetContextIdForFrame(frame_id, &context_id);
+  if (status.IsError()) {
+    return WrapIfTargetDetached(status, kAbortedByNavigation);
+  }
+
+  ObjectGroup object_group(client_.get());
+
+  base::Value::List nodes;
+  // Resolving the references in the execution context obtained earlier.
+  status =
+      ResolveElementReferencesInPlace(frame_id, context_id, object_group.name(),
+                                      loader_id, local_timeout, args, nodes);
+  object_group.SetEmpty(nodes.empty());
+  // kNoSuchElement is handled in special way:
+  // If loader id has changed then the node was not resolved due to the
+  // navigation.
+  // Otherwise the user has sent us a node id that refers a non-existent node.
+  if (status.IsError() && status.code() != kNoSuchElement) {
+    return WrapIfTargetDetached(status, kAbortedByNavigation);
+  }
+
+  std::string new_loader_id;
+  Status new_status = GetLoaderId(frame_id, local_timeout, new_loader_id);
+  if (new_status.IsError()) {
+    return WrapIfTargetDetached(new_status, kAbortedByNavigation);
+  }
+  if (new_loader_id != loader_id) {
+    // A navigation has happened while resolving references. Giving up.
+    return Status{kAbortedByNavigation,
+                  "loader has changed while resolving nodes"};
+  }
+  // ResolveElementReferences returned kNoSuchElement.
+  // The loader did not change therefore the node indeed does not exist.
+  if (status.IsError()) {
     return status;
-  return internal::EvaluateScriptAndGetValue(
-      client_.get(), context_id, expression, timeout, awaitPromise, result);
+  }
+
+  std::string new_context_id;
+  status = GetFrameTracker()->GetContextIdForFrame(frame_id, &new_context_id);
+  if (status.IsError()) {
+    return WrapIfTargetDetached(status, kAbortedByNavigation);
+  }
+  if (context_id != new_context_id) {
+    return Status{kAbortedByNavigation,
+                  "context has changed while resolving nodes"};
+  }
+
+  // All BackendNodeId's have been resolved in the same context and using the
+  // same loader. The remote call will succeed if the execution context does not
+  // change in the mean time. This is detected by the remote code implementing
+  // Runtime.callFunctionOn.
+
+  std::string json;
+  base::JSONWriter::Write(args, &json);
+  std::string w3c = w3c_compliant_ ? "true" : "false";
+  // TODO(zachconrad): Second null should be array of shadow host ids.
+  std::string wrapper_function = base::StringPrintf(
+      "function(){ return (%s).apply(null, [%s, %s, %s, arguments]); }",
+      kCallFunctionScript, function.c_str(), json.c_str(), w3c.c_str());
+
+  base::Value::Dict params;
+  params.Set("functionDeclaration", wrapper_function);
+  if (!context_id.empty()) {
+    params.Set("uniqueContextId", context_id);
+  }
+  params.Set("arguments", std::move(nodes));
+  params.Set("awaitPromise", true);
+  if (!object_group.IsEmpty()) {
+    params.Set("objectGroup", object_group.name());
+  }
+
+  base::Value::Dict serialization_options;
+  serialization_options.Set("serialization", "deep");
+
+  params.Set("serializationOptions", std::move(serialization_options));
+
+  base::Value::Dict cmd_result;
+
+  status = client_->SendCommandAndGetResultWithTimeout(
+      "Runtime.callFunctionOn", params, &local_timeout, &cmd_result);
+  if (status.IsError()) {
+    return status;
+  }
+
+  if (cmd_result.contains("exceptionDetails")) {
+    std::string description = "unknown";
+    if (const std::string* maybe_description =
+            cmd_result.FindStringByDottedPath("result.description")) {
+      description = *maybe_description;
+    }
+    return Status(kUnknownError,
+                  "Runtime.callFunctionOn threw exception: " + description);
+  }
+
+  base::Value::List* maybe_received_list =
+      cmd_result.FindListByDottedPath("result.deepSerializedValue.value");
+  if (!maybe_received_list || maybe_received_list->empty()) {
+    return Status(kUnknownError,
+                  "result.deepSerializedValue.value list is missing or empty "
+                  "in Runtime.callFunctionOn response");
+  }
+  base::Value::List& received_list = *maybe_received_list;
+
+  if (!received_list[0].is_dict()) {
+    return Status(kUnknownError,
+                  "first element in result.deepSerializedValue.value list must "
+                  "be a dictionary");
+  }
+  std::string* serialized_value =
+      received_list[0].GetDict().FindString("value");
+  if (!serialized_value) {
+    return Status(kUnknownError,
+                  "first element in result.deepSerializedValue.value list must "
+                  "contain a string");
+  }
+  std::optional<base::Value> maybe_call_result =
+      base::JSONReader::Read(*serialized_value, base::JSON_PARSE_RFC);
+  if (!maybe_call_result) {
+    return Status{kUnknownError,
+                  "cannot deserialize the result value received from "
+                  "Runtime.callFunctionOn"};
+  }
+  received_list.erase(received_list.begin());
+  if (!maybe_call_result->is_dict()) {
+    return Status{
+        kUnknownError,
+        "deserialized Runtime.callFunctionOn result is not a dictionary"};
+  }
+  base::Value::Dict& call_result = maybe_call_result->GetDict();
+
+  std::optional<int> status_code = call_result.FindInt("status");
+  if (!status_code) {
+    return Status(kUnknownError, "call function result missing int 'status'");
+  }
+  if (*status_code != kOk) {
+    const std::string* message = call_result.FindString("value");
+    return Status(static_cast<StatusCode>(*status_code),
+                  message ? *message : "");
+  }
+  base::Value* call_result_value = call_result.Find("value");
+  if (call_result_value == nullptr) {
+    // Missing 'value' indicates the JavaScript code didn't return a value.
+    return Status(kOk);
+  }
+  status = ResolveWeakReferences(received_list);
+  if (!status.IsOk()) {
+    return status;
+  }
+  status = CreateElementReferences(frame_id, received_list, include_shadow_root,
+                                   *call_result_value);
+  if (!status.IsOk()) {
+    return status;
+  }
+
+  *result = std::make_unique<base::Value>(std::move(*call_result_value));
+  return status;
 }
 
 Status WebViewImpl::EvaluateScript(const std::string& frame,
                                    const std::string& expression,
-                                   const bool awaitPromise,
+                                   const bool await_promise,
                                    std::unique_ptr<base::Value>* result) {
-  return EvaluateScriptWithTimeout(frame, expression, base::TimeDelta::Max(),
-                                   awaitPromise, result);
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+
+  WebView* target = GetTargetForFrame(frame);
+  if (target != nullptr && target != this) {
+    if (target->IsDetached())
+      return Status(kTargetDetached);
+    return target->EvaluateScript(frame, expression, await_promise, result);
+  }
+
+  std::string context_id;
+  status = GetContextIdForFrame(this, frame, &context_id);
+  if (status.IsError())
+    return status;
+  // If the target associated with the current view or its ancestor is detached
+  // during the script execution we don't want deleting the current WebView
+  // because we are executing the code in its method.
+  // Instead we lock the WebView with target holder and only label the view as
+  // detached.
+  const base::TimeDelta& timeout = base::TimeDelta::Max();
+  return internal::EvaluateScriptAndGetValue(
+      client_.get(), context_id, expression, timeout, await_promise, result);
 }
 
 Status WebViewImpl::CallFunctionWithTimeout(
     const std::string& frame,
     const std::string& function,
-    const base::ListValue& args,
+    const base::Value::List& args,
     const base::TimeDelta& timeout,
+    const CallFunctionOptions& options,
     std::unique_ptr<base::Value>* result) {
-  std::string json;
-  base::JSONWriter::Write(args, &json);
-  std::string w3c = w3c_compliant_ ? "true" : "false";
-  // TODO(zachconrad): Second null should be array of shadow host ids.
-  std::string expression = base::StringPrintf(
-      "(%s).apply(null, [%s, %s, %s])",
-      kCallFunctionScript,
-      function.c_str(),
-      json.c_str(),
-      w3c.c_str());
-  std::unique_ptr<base::Value> temp_result;
-  Status status =
-      EvaluateScriptWithTimeout(frame, expression, timeout, true, &temp_result);
-  if (status.IsError())
-      return status;
-  return internal::ParseCallFunctionResult(*temp_result, result);
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+
+  WebView* target = GetTargetForFrame(frame);
+  if (target != nullptr && target != this) {
+    if (target->IsDetached()) {
+      return Status(kTargetDetached);
+    }
+    return target->CallFunctionWithTimeout(frame, function, args, timeout,
+                                           options, result);
+  }
+
+  return CallFunctionWithTimeoutInternal(frame, std::move(function),
+                                         args.Clone(), timeout,
+                                         options.include_shadow_root, result);
 }
 
 Status WebViewImpl::CallFunction(const std::string& frame,
                                  const std::string& function,
-                                 const base::ListValue& args,
+                                 const base::Value::List& args,
                                  std::unique_ptr<base::Value>* result) {
   // Timeout set to Max is treated as no timeout.
-  return CallFunctionWithTimeout(frame, function, args, base::TimeDelta::Max(),
-                                 result);
-}
 
-Status WebViewImpl::CallAsyncFunction(const std::string& frame,
-                                      const std::string& function,
-                                      const base::ListValue& args,
-                                      const base::TimeDelta& timeout,
-                                      std::unique_ptr<base::Value>* result) {
-  return CallAsyncFunctionInternal(
-      frame, function, args, false, timeout, result);
+  CallFunctionOptions options;
+  options.include_shadow_root = false;
+  return CallFunctionWithTimeout(frame, function, args, base::TimeDelta::Max(),
+                                 options, result);
 }
 
 Status WebViewImpl::CallUserSyncScript(const std::string& frame,
                                        const std::string& script,
-                                       const base::ListValue& args,
+                                       const base::Value::List& args,
                                        const base::TimeDelta& timeout,
                                        std::unique_ptr<base::Value>* result) {
-  base::ListValue sync_args;
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+
+  WebView* target = GetTargetForFrame(frame);
+  if (target != nullptr && target != this) {
+    if (target->IsDetached()) {
+      return Status(kTargetDetached);
+    }
+    return target->CallUserSyncScript(frame, script, args, timeout, result);
+  }
+
+  base::Value::List sync_args;
   sync_args.Append(script);
-  // Clone needed since Append only accepts Value as an rvalue.
   sync_args.Append(args.Clone());
-  return CallFunctionWithTimeout(frame, kExecuteScriptScript, sync_args,
-                                 timeout, result);
+
+  return CallFunctionWithTimeoutInternal(
+      frame, kExecuteScriptScript, sync_args.Clone(), timeout, false, result);
 }
 
 Status WebViewImpl::CallUserAsyncFunction(
     const std::string& frame,
     const std::string& function,
-    const base::ListValue& args,
+    const base::Value::List& args,
     const base::TimeDelta& timeout,
     std::unique_ptr<base::Value>* result) {
-  return CallAsyncFunctionInternal(
-      frame, function, args, true, timeout, result);
+  return CallAsyncFunctionInternal(frame, function, args, timeout, result);
 }
 
+// TODO (crbug.com/chromedriver/4364): Simplify this function
 Status WebViewImpl::GetFrameByFunction(const std::string& frame,
                                        const std::string& function,
-                                       const base::ListValue& args,
+                                       const base::Value::List& args,
                                        std::string* out_frame) {
-  WebViewImpl* target = GetTargetForFrame(this, frame);
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached())
       return Status(kTargetDetached);
-    WebViewImplHolder target_holder(target);
     return target->GetFrameByFunction(frame, function, args, out_frame);
   }
 
-  std::string context_id;
-  Status status = GetContextIdForFrame(this, frame, &context_id);
-  if (status.IsError())
+  std::unique_ptr<base::Value> result;
+  status = CallFunctionWithTimeoutInternal(
+      frame, function, args.Clone(), base::TimeDelta::Max(), false, &result);
+
+  if (status.IsError()) {
     return status;
+  }
+
+  if (!result->is_dict()) {
+    return Status{kNoSuchFrame};
+  }
+
+  const base::Value::Dict& element_dict = result->GetDict();
+
+  const std::string element_key = w3c_compliant_ ? kElementKeyW3C : kElementKey;
+  const std::string* element_id = element_dict.FindString(element_key);
+  if (element_id == nullptr) {
+    element_id = element_dict.FindString(kShadowRootKey);
+  }
+  if (element_id == nullptr) {
+    return Status{kNoSuchFrame, "invalid element id"};
+  }
+
+  std::string extracted_frame_id;
+  std::string extracted_loader_id;
+  int backend_node_id;
+  status = SplitElementId(*element_id, kNoSuchFrame, extracted_frame_id,
+                          extracted_loader_id, backend_node_id);
+  if (status.IsError()) {
+    return status;
+  }
+
   bool found_node = false;
-
-  status = internal::GetFrameIdFromFunction(client_.get(), context_id, function,
-                                            args, &found_node, out_frame,
-                                            w3c_compliant_);
-
+  status = GetFrameIdForBackendNodeId(client_.get(), backend_node_id,
+                                      &found_node, out_frame);
   if (status.IsError()) {
     return status;
   }
@@ -709,42 +1301,41 @@ Status WebViewImpl::DispatchTouchEventsForMouseEvents(
   // Touch events are filtered by the compositor if there are no touch listeners
   // on the page. Wait two frames for the compositor to sync with the main
   // thread to get consistent behavior.
-  base::DictionaryValue promise_params;
-  promise_params.GetDict().Set(
+  base::Value::Dict promise_params;
+  promise_params.Set(
       "expression",
       "new Promise(x => setTimeout(() => setTimeout(x, 20), 20))");
-  promise_params.GetDict().Set("awaitPromise", true);
+  promise_params.Set("awaitPromise", true);
   client_->SendCommand("Runtime.evaluate", promise_params);
-  for (auto it = events.begin(); it != events.end(); ++it) {
-    base::DictionaryValue params;
+  for (const MouseEvent& event : events) {
+    base::Value::Dict params;
 
-    switch (it->type) {
+    switch (event.type) {
       case kPressedMouseEventType:
-        params.GetDict().Set("type", "touchStart");
+        params.Set("type", "touchStart");
         break;
       case kReleasedMouseEventType:
-        params.GetDict().Set("type", "touchEnd");
+        params.Set("type", "touchEnd");
         break;
       case kMovedMouseEventType:
-        if (it->button == kNoneMouseButton)
+        if (event.button == kNoneMouseButton) {
           continue;
-        params.GetDict().Set("type", "touchMove");
+        }
+        params.Set("type", "touchMove");
         break;
       default:
         break;
     }
 
-    std::unique_ptr<base::ListValue> touchPoints(new base::ListValue);
-    if (it->type != kReleasedMouseEventType) {
-      std::unique_ptr<base::DictionaryValue> touchPoint(
-          new base::DictionaryValue);
-      touchPoint->GetDict().Set("x", it->x);
-      touchPoint->GetDict().Set("y", it->y);
-      touchPoints->Append(
-          base::Value::FromUniquePtrValue(std::move(touchPoint)));
+    base::Value::List touch_points;
+    if (event.type != kReleasedMouseEventType) {
+      base::Value::Dict touch_point;
+      touch_point.Set("x", event.x);
+      touch_point.Set("y", event.y);
+      touch_points.Append(std::move(touch_point));
     }
-    params.SetList("touchPoints", std::move(touchPoints));
-    params.GetDict().Set("modifiers", it->modifiers);
+    params.Set("touchPoints", std::move(touch_points));
+    params.Set("modifiers", event.modifiers);
     Status status = client_->SendCommand("Input.dispatchTouchEvent", params);
     if (status.IsError())
       return status;
@@ -755,30 +1346,30 @@ Status WebViewImpl::DispatchTouchEventsForMouseEvents(
 Status WebViewImpl::DispatchMouseEvents(const std::vector<MouseEvent>& events,
                                         const std::string& frame,
                                         bool async_dispatch_events) {
+  WebViewImplHolder target_holder(this);
   if (mobile_emulation_override_manager_->IsEmulatingTouch())
     return DispatchTouchEventsForMouseEvents(events, frame);
 
   Status status(kOk);
   for (auto it = events.begin(); it != events.end(); ++it) {
-    base::DictionaryValue params;
-    base::Value::Dict& dict = params.GetDict();
+    base::Value::Dict params;
     std::string type = GetAsString(it->type);
-    dict.Set("type", type);
-    dict.Set("x", it->x);
-    dict.Set("y", it->y);
-    dict.Set("modifiers", it->modifiers);
-    dict.Set("button", GetAsString(it->button));
-    dict.Set("buttons", it->buttons);
-    dict.Set("clickCount", it->click_count);
-    dict.Set("force", it->force);
-    dict.Set("tangentialPressure", it->tangentialPressure);
-    dict.Set("tiltX", it->tiltX);
-    dict.Set("tiltY", it->tiltY);
-    dict.Set("twist", it->twist);
-    dict.Set("pointerType", GetAsString(it->pointer_type));
+    params.Set("type", type);
+    params.Set("x", it->x);
+    params.Set("y", it->y);
+    params.Set("modifiers", it->modifiers);
+    params.Set("button", GetAsString(it->button));
+    params.Set("buttons", it->buttons);
+    params.Set("clickCount", it->click_count);
+    params.Set("force", it->force);
+    params.Set("tangentialPressure", it->tangentialPressure);
+    params.Set("tiltX", it->tiltX);
+    params.Set("tiltY", it->tiltY);
+    params.Set("twist", it->twist);
+    params.Set("pointerType", GetAsString(it->pointer_type));
     if (type == "mouseWheel") {
-      dict.Set("deltaX", it->delta_x);
-      dict.Set("deltaY", it->delta_y);
+      params.Set("deltaX", it->delta_x);
+      params.Set("deltaY", it->delta_y);
     }
 
     const bool last_event = (it == events.end() - 1);
@@ -797,16 +1388,16 @@ Status WebViewImpl::DispatchMouseEvents(const std::vector<MouseEvent>& events,
 
 Status WebViewImpl::DispatchTouchEvent(const TouchEvent& event,
                                        bool async_dispatch_events) {
-  base::DictionaryValue params;
+  base::Value::Dict params;
   std::string type = GetAsString(event.type);
-  params.GetDict().Set("type", type);
-  base::ListValue point_list;
+  params.Set("type", type);
+  base::Value::List point_list;
   Status status(kOk);
   if (type == "touchStart" || type == "touchMove") {
-    std::unique_ptr<base::DictionaryValue> point = GenerateTouchPoint(event);
-    point_list.Append(base::Value::FromUniquePtrValue(std::move(point)));
+    base::Value::Dict point = GenerateTouchPoint(event);
+    point_list.Append(std::move(point));
   }
-  params.GetDict().Set("touchPoints", std::move(point_list));
+  params.Set("touchPoints", std::move(point_list));
   if (async_dispatch_events) {
     status = client_->SendCommandAndIgnoreResponse("Input.dispatchTouchEvent",
                                                    params);
@@ -834,22 +1425,20 @@ Status WebViewImpl::DispatchTouchEventWithMultiPoints(
   if (events.size() == 0)
     return Status(kOk);
 
-  base::DictionaryValue params;
+  base::Value::Dict params;
   Status status(kOk);
   size_t touch_count = 1;
   for (const TouchEvent& event : events) {
-    base::ListValue point_list;
-    int32_t current_time =
-        (base::Time::Now() - base::Time::UnixEpoch()).InMilliseconds();
-    params.GetDict().Set("timestamp", current_time);
+    base::Value::List point_list;
+    double current_time = base::Time::Now().InSecondsFSinceUnixEpoch();
+    params.Set("timestamp", current_time);
     std::string type = GetAsString(event.type);
-    params.GetDict().Set("type", type);
+    params.Set("type", type);
     if (type == "touchCancel")
       continue;
 
-    point_list.Append(
-        base::Value::FromUniquePtrValue(GenerateTouchPoint(event)));
-    params.GetDict().Set("touchPoints", std::move(point_list));
+    point_list.Append(GenerateTouchPoint(event));
+    params.Set("touchPoints", std::move(point_list));
 
     if (async_dispatch_events || touch_count < events.size()) {
       status = client_->SendCommandAndIgnoreResponse("Input.dispatchTouchEvent",
@@ -869,18 +1458,17 @@ Status WebViewImpl::DispatchKeyEvents(const std::vector<KeyEvent>& events,
                                       bool async_dispatch_events) {
   Status status(kOk);
   for (auto it = events.begin(); it != events.end(); ++it) {
-    base::DictionaryValue params;
-    base::Value::Dict& dict = params.GetDict();
-    dict.Set("type", GetAsString(it->type));
+    base::Value::Dict params;
+    params.Set("type", GetAsString(it->type));
     if (it->modifiers & kNumLockKeyModifierMask) {
-      dict.Set("isKeypad", true);
-      dict.Set("modifiers", it->modifiers & ~kNumLockKeyModifierMask);
+      params.Set("isKeypad", true);
+      params.Set("modifiers", it->modifiers & ~kNumLockKeyModifierMask);
     } else {
-      dict.Set("modifiers", it->modifiers);
+      params.Set("modifiers", it->modifiers);
     }
-    dict.Set("text", it->modified_text);
-    dict.Set("unmodifiedText", it->unmodified_text);
-    dict.Set("windowsVirtualKeyCode", it->key_code);
+    params.Set("text", it->modified_text);
+    params.Set("unmodifiedText", it->unmodified_text);
+    params.Set("windowsVirtualKeyCode", it->key_code);
     std::string code;
     if (it->is_from_action) {
       code = it->code;
@@ -898,11 +1486,11 @@ Status WebViewImpl::DispatchKeyEvents(const std::vector<KeyEvent>& events,
       is_ctrl_cmd_key_down = true;
 #endif
     if (!code.empty())
-      dict.Set("code", code);
+      params.Set("code", code);
     if (!it->key.empty())
-      dict.Set("key", it->key);
+      params.Set("key", it->key);
     else if (it->is_from_action)
-      dict.Set("key", it->modified_text);
+      params.Set("key", it->modified_text);
 
     if (is_ctrl_cmd_key_down) {
       std::string command;
@@ -926,9 +1514,9 @@ Status WebViewImpl::DispatchKeyEvents(const std::vector<KeyEvent>& events,
           command = "Undo";
       }
 
-      std::unique_ptr<base::ListValue> command_list(new base::ListValue);
-      command_list->Append(command);
-      params.SetList("commands", std::move(command_list));
+      base::Value::List command_list;
+      command_list.Append(command);
+      params.Set("commands", std::move(command_list));
     }
 
     if (it->location != 0) {
@@ -936,9 +1524,9 @@ Status WebViewImpl::DispatchKeyEvents(const std::vector<KeyEvent>& events,
       // modifiers) and 2 (right modifiers). For location 3 (numeric keypad),
       // it is necessary to set the |isKeypad| parameter.
       if (it->location == 3)
-        dict.Set("isKeypad", true);
+        params.Set("isKeypad", true);
       else
-        dict.Set("location", it->location);
+        params.Set("location", it->location);
     }
 
     const bool last_event = (it == events.end() - 1);
@@ -957,13 +1545,13 @@ Status WebViewImpl::DispatchKeyEvents(const std::vector<KeyEvent>& events,
 
 Status WebViewImpl::GetCookies(base::Value* cookies,
                                const std::string& current_page_url) {
-  base::DictionaryValue params;
-  base::DictionaryValue result;
+  base::Value::Dict params;
+  base::Value::Dict result;
 
   if (browser_info_->browser_name != "webview") {
-    base::ListValue url_list;
+    base::Value::List url_list;
     url_list.Append(current_page_url);
-    params.GetDict().Set("urls", url_list.Clone());
+    params.Set("urls", std::move(url_list));
     Status status =
         client_->SendCommandAndGetResult("Network.getCookies", params, &result);
     if (status.IsError())
@@ -975,10 +1563,10 @@ Status WebViewImpl::GetCookies(base::Value* cookies,
       return status;
   }
 
-  base::Value* const cookies_tmp = result.FindListKey("cookies");
+  base::Value::List* const cookies_tmp = result.FindList("cookies");
   if (!cookies_tmp)
     return Status(kUnknownError, "DevTools didn't return cookies");
-  *cookies = cookies_tmp->Clone();
+  *cookies = base::Value(std::move(*cookies_tmp));
   return Status(kOk);
 }
 
@@ -986,13 +1574,12 @@ Status WebViewImpl::DeleteCookie(const std::string& name,
                                  const std::string& url,
                                  const std::string& domain,
                                  const std::string& path) {
-  base::DictionaryValue params;
-  base::Value::Dict& dict = params.GetDict();
-  dict.Set("url", url);
+  base::Value::Dict params;
+  params.Set("url", url);
   std::string command;
-  dict.Set("name", name);
-  dict.Set("domain", domain);
-  dict.Set("path", path);
+  params.Set("name", name);
+  params.Set("domain", domain);
+  params.Set("path", path);
   command = "Network.deleteCookies";
   return client_->SendCommand(command, params);
 }
@@ -1002,30 +1589,29 @@ Status WebViewImpl::AddCookie(const std::string& name,
                               const std::string& value,
                               const std::string& domain,
                               const std::string& path,
-                              const std::string& sameSite,
+                              const std::string& same_site,
                               bool secure,
-                              bool httpOnly,
+                              bool http_only,
                               double expiry) {
-  base::DictionaryValue params;
-  base::Value::Dict& dict = params.GetDict();
-  dict.Set("name", name);
-  dict.Set("url", url);
-  dict.Set("value", value);
-  dict.Set("domain", domain);
-  dict.Set("path", path);
-  dict.Set("secure", secure);
-  dict.Set("httpOnly", httpOnly);
-  if (!sameSite.empty())
-    dict.Set("sameSite", sameSite);
+  base::Value::Dict params;
+  params.Set("name", name);
+  params.Set("url", url);
+  params.Set("value", value);
+  params.Set("domain", domain);
+  params.Set("path", path);
+  params.Set("secure", secure);
+  params.Set("httpOnly", http_only);
+  if (!same_site.empty())
+    params.Set("sameSite", same_site);
   if (expiry >= 0)
-    dict.Set("expires", expiry);
+    params.Set("expires", expiry);
 
-  base::DictionaryValue result;
+  base::Value::Dict result;
   Status status =
       client_->SendCommandAndGetResult("Network.setCookie", params, &result);
   if (status.IsError())
     return Status(kUnableToSetCookie);
-  if (!result.FindBoolKey("success").value_or(false))
+  if (!result.FindBool("success").value_or(false))
     return Status(kUnableToSetCookie);
   return Status(kOk);
 }
@@ -1035,24 +1621,46 @@ Status WebViewImpl::WaitForPendingNavigations(const std::string& frame_id,
                                               bool stop_load_on_timeout) {
   // This function should not be called for child WebViews
   if (parent_ != nullptr)
-    return Status(kUnsupportedOperation,
+    return Status(kUnknownError,
                   "Call WaitForPendingNavigations only on the parent WebView");
   VLOG(0) << "Waiting for pending navigations...";
   const auto not_pending_navigation = base::BindRepeating(
-      &WebViewImpl::IsNotPendingNavigation, base::Unretained(this), frame_id,
-      base::Unretained(&timeout));
-  Status status = client_->HandleEventsUntil(not_pending_navigation, timeout);
+      &WebViewImpl::IsNotPendingNavigation, base::Unretained(this),
+      frame_id.empty() ? id_ : frame_id, base::Unretained(&timeout));
+  // If the target associated with the current view or its ancestor is detached
+  // while we are waiting for the pending navigation we don't want deleting the
+  // current WebView because we are executing the code in its method. Instead we
+  // lock the WebView with target holder and only label the view as detached.
+  WebViewImplHolder target_holder(this);
+  bool keep_waiting = true;
+  Status status{kOk};
+  while (keep_waiting) {
+    status = client_->HandleEventsUntil(not_pending_navigation, timeout);
+    keep_waiting = status.code() == kNoSuchExecutionContext ||
+                   status.code() == kAbortedByNavigation;
+  }
+  // if (status.code() == kTargetDetached) {
+  //   // TODO: Verify if this is okay to return Ok on target detached.
+  //   // probably need to check that it's part of an activation here.
+  //   return status;
+  // }
   if (status.code() == kTimeout && stop_load_on_timeout) {
     VLOG(0) << "Timed out. Stopping navigation...";
     navigation_tracker_->set_timed_out(true);
-    client_->SendCommand("Page.stopLoading", base::DictionaryValue());
+    client_->SendCommand("Page.stopLoading", base::Value::Dict());
     // We don't consider |timeout| here to make sure the navigation actually
     // stops and we cleanup properly after a command that caused a navigation
     // that timed out.  Otherwise we might have to wait for that before
     // executing the next command, and it will be counted towards its timeout.
-    Status new_status = client_->HandleEventsUntil(
-        not_pending_navigation,
-        Timeout(base::Seconds(kWaitForNavigationStopSeconds)));
+    Status new_status{kOk};
+    keep_waiting = true;
+    while (keep_waiting) {
+      new_status = client_->HandleEventsUntil(
+          not_pending_navigation,
+          Timeout(base::Seconds(kWaitForNavigationStopSeconds)));
+      keep_waiting = status.code() == kNoSuchExecutionContext ||
+                     status.code() == kAbortedByNavigation;
+    }
     navigation_tracker_->set_timed_out(false);
     if (new_status.IsError())
       status = new_status;
@@ -1062,16 +1670,69 @@ Status WebViewImpl::WaitForPendingNavigations(const std::string& frame_id,
   return status;
 }
 
-Status WebViewImpl::IsPendingNavigation(const Timeout* timeout,
-                                        bool* is_pending) const {
-  if (navigation_tracker_)
-    return navigation_tracker_->IsPendingNavigation(timeout, is_pending);
-  else
-    return parent_->IsPendingNavigation(timeout, is_pending);
+Status WebViewImpl::WaitForPendingActivePage(const Timeout& timeout) {
+  // This function should not be called for non-tab WebViews
+  if (!is_tab_target_) {
+    return Status(kUnknownError,
+                  "Call WaitForActivePage only on the parent WebView");
+  }
+  const auto not_pending_active_page =
+      base::BindRepeating(&WebViewImpl::IsNotPendingActivePage,
+                          base::Unretained(this), base::Unretained(&timeout));
+  // If the target associated with the current view or its ancestor is detached
+  // while we are waiting for the pending navigation we don't want deleting the
+  // current WebView because we are executing the code in its method. Instead we
+  // lock the WebView with target holder and only label the view as detached.
+  WebViewImplHolder target_holder(this);
+  bool keep_waiting = true;
+  Status status{kOk};
+  while (keep_waiting) {
+    status = client_->HandleEventsUntil(not_pending_active_page, timeout);
+    keep_waiting = status.code() == kNoSuchExecutionContext ||
+                   status.code() == kAbortedByNavigation;
+  }
+  return status;
 }
 
-JavaScriptDialogManager* WebViewImpl::GetJavaScriptDialogManager() {
-  return dialog_manager_.get();
+Status WebViewImpl::IsNotPendingActivePage(const Timeout* timeout,
+                                           bool* is_not_pending) const {
+  if (page_tracker_) {
+    bool is_pending = false;
+    Status status = page_tracker_->IsPendingActivePage(timeout, &is_pending);
+    *is_not_pending = !is_pending;
+    return status;
+  }
+  if (!parent_) {
+    *is_not_pending = false;
+    return Status(kOk);
+  }
+  return parent_->IsNotPendingActivePage(timeout, is_not_pending);
+}
+
+Status WebViewImpl::IsPendingNavigation(const Timeout* timeout,
+                                        bool* is_pending) {
+  if (navigation_tracker_) {
+    return navigation_tracker_->IsPendingNavigation(timeout, is_pending);
+  }
+
+  bool not_pending_active_page = true;
+  Status status =
+      GetTab()->IsNotPendingActivePage(timeout, &not_pending_active_page);
+  if (status.IsError()) {
+    return status;
+  }
+
+  if (!not_pending_active_page) {
+    *is_pending = true;
+    return Status(kOk);
+  }
+
+  WebView* active_page = nullptr;
+  status = GetActivePage(&active_page);
+  if (status.IsError()) {
+    return status;
+  }
+  return active_page->IsPendingNavigation(timeout, is_pending);
 }
 
 MobileEmulationOverrideManager* WebViewImpl::GetMobileEmulationOverrideManager()
@@ -1091,34 +1752,31 @@ Status WebViewImpl::OverrideNetworkConditions(
 
 Status WebViewImpl::OverrideDownloadDirectoryIfNeeded(
     const std::string& download_directory) {
-  if (download_directory_override_manager_)
+  if (download_directory_override_manager_) {
     return download_directory_override_manager_
         ->OverrideDownloadDirectoryWhenConnected(download_directory);
+  }
   return Status(kOk);
 }
 
-Status WebViewImpl::CaptureScreenshot(
-    std::string* screenshot,
-    const base::DictionaryValue& params) {
-  base::DictionaryValue result;
+Status WebViewImpl::CaptureScreenshot(std::string* screenshot,
+                                      const base::Value::Dict& params) {
+  base::Value::Dict result;
   Timeout timeout(base::Seconds(10));
   Status status = client_->SendCommandAndGetResultWithTimeout(
       "Page.captureScreenshot", params, &timeout, &result);
   if (status.IsError())
     return status;
-  if (!result.GetString("data", screenshot))
+  std::string* data = result.FindString("data");
+  if (!data)
     return Status(kUnknownError, "expected string 'data' in response");
+  *screenshot = std::move(*data);
   return Status(kOk);
 }
 
-Status WebViewImpl::PrintToPDF(const base::DictionaryValue& params,
+Status WebViewImpl::PrintToPDF(const base::Value::Dict& params,
                                std::string* pdf) {
-  // https://bugs.chromium.org/p/chromedriver/issues/detail?id=3517
-  if (!browser_info_->is_headless) {
-    return Status(kUnknownError,
-                  "PrintToPDF is only supported in headless mode");
-  }
-  base::DictionaryValue result;
+  base::Value::Dict result;
   Timeout timeout(base::Seconds(10));
   Status status = client_->SendCommandAndGetResultWithTimeout(
       "Page.printToPDF", params, &timeout, &result);
@@ -1128,143 +1786,182 @@ Status WebViewImpl::PrintToPDF(const base::DictionaryValue& params,
     }
     return status;
   }
-  if (!result.GetString("data", pdf))
+  std::string* data = result.FindString("data");
+  if (!data)
     return Status(kUnknownError, "expected string 'data' in response");
+  *pdf = std::move(*data);
   return Status(kOk);
 }
 
 Status WebViewImpl::GetBackendNodeIdByElement(const std::string& frame,
                                               const base::Value& element,
                                               int* backend_node_id) {
+  Status status{kOk};
+
+  WebView* target = GetTargetForFrame(frame);
+  if (target == nullptr || target->IsDetached()) {
+    return Status(kNoSuchWindow, "frame not found");
+  }
+
   if (!element.is_dict())
     return Status(kUnknownError, "'element' is not a dictionary");
-  std::string context_id;
-  Status status = GetContextIdForFrame(this, frame, &context_id);
-  if (status.IsError())
+
+  const base::Value::Dict& element_dict = element.GetDict();
+
+  const std::string element_key = w3c_compliant_ ? kElementKeyW3C : kElementKey;
+  StatusCode no_such_element = kNoSuchElement;
+  StatusCode stale_element = kStaleElementReference;
+  const std::string* element_id = element_dict.FindString(element_key);
+  if (element_id == nullptr) {
+    no_such_element = kNoSuchShadowRoot;
+    stale_element = kDetachedShadowRoot;
+    element_id = element_dict.FindString(kShadowRootKey);
+  }
+  if (element_id == nullptr) {
+    if (element_dict.contains(element_key) ||
+        element_dict.contains(kShadowRootKey)) {
+      return Status{kInvalidArgument, "invalid element id"};
+    }
+    return Status{kNoSuchElement,
+                  "element id does not refer an element or a shadow root"};
+  }
+
+  std::string extracted_frame_id;
+  std::string extracted_loader_id;
+  int extracted_backend_node_id;
+  status = SplitElementId(*element_id, no_such_element, extracted_frame_id,
+                          extracted_loader_id, extracted_backend_node_id);
+  if (status.IsError()) {
     return status;
-  base::ListValue args;
-  args.Append(element.Clone());
-  bool found_node = false;
-  status = internal::GetBackendNodeIdFromFunction(
-      client_.get(), context_id, "function(element) { return element; }", args,
-      &found_node, backend_node_id, w3c_compliant_);
-  if (status.IsError())
+  }
+
+  std::string frame_id = frame.empty() ? id_ : frame;
+  if (frame_id != extracted_frame_id) {
+    return Status{no_such_element, GetDefaultMessage(no_such_element)};
+  }
+  Timeout local_timeout(base::TimeDelta::Max());
+  std::string loader_id;
+  status = GetLoaderId(frame_id, local_timeout, loader_id);
+  if (status.IsError()) {
     return status;
-  if (!found_node)
-    return Status(kNoSuchElement, "no node ID for given element");
-  return Status(kOk);
+  }
+  if (loader_id != extracted_loader_id) {
+    return Status{stale_element, GetDefaultMessage(stale_element)};
+  }
+
+  *backend_node_id = extracted_backend_node_id;
+  return status;
 }
 
 Status WebViewImpl::SetFileInputFiles(const std::string& frame,
                                       const base::Value& element,
                                       const std::vector<base::FilePath>& files,
                                       const bool append) {
+  WebViewImplHolder target_holder(this);
+  Status status{kOk};
+
   if (!element.is_dict())
     return Status(kUnknownError, "'element' is not a dictionary");
-  WebViewImpl* target = GetTargetForFrame(this, frame);
+
+  WebView* target = GetTargetForFrame(frame);
   if (target != nullptr && target != this) {
     if (target->IsDetached())
       return Status(kTargetDetached);
-    WebViewImplHolder target_holder(target);
     return target->SetFileInputFiles(frame, element, files, append);
   }
 
   int backend_node_id;
-  Status status = GetBackendNodeIdByElement(frame, element, &backend_node_id);
+  status = GetBackendNodeIdByElement(frame, element, &backend_node_id);
   if (status.IsError())
     return status;
 
-  base::ListValue file_list;
+  base::Value::List file_list;
   // if the append flag is true, we need to retrieve the files that
   // already exist in the element and add them too.
   // Additionally, we need to add the old files first so that it looks
   // like we're appending files.
   if (append) {
     // Convert the node_id to a Runtime.RemoteObject
-    std::string inputRemoteObjectId;
-    {
-      base::DictionaryValue cmd_result;
-      base::DictionaryValue params;
-      params.GetDict().Set("backendNodeId", backend_node_id);
-      status = client_->SendCommandAndGetResult("DOM.resolveNode", params,
-                                                &cmd_result);
-      if (status.IsError())
-        return status;
-      if (!cmd_result.GetString("object.objectId", &inputRemoteObjectId))
-        return Status(kUnknownError, "DevTools didn't return objectId");
+    std::string inner_remote_object_id;
+    status = ResolveNode(*client_, backend_node_id, "", nullptr,
+                         inner_remote_object_id);
+    if (status.IsError()) {
+      return status;
     }
 
     // figure out how many files there are
-    absl::optional<int> numberOfFiles = 0;
+    std::optional<int> number_of_files;
     {
-      base::DictionaryValue cmd_result;
-      base::DictionaryValue params;
-      params.GetDict().Set("functionDeclaration",
-                           "function() { return this.files.length }");
-      params.GetDict().Set("objectId", inputRemoteObjectId);
+      base::Value::Dict cmd_result;
+      base::Value::Dict params;
+      params.Set("functionDeclaration",
+                 "function() { return this.files.length }");
+      params.Set("objectId", inner_remote_object_id);
       status = client_->SendCommandAndGetResult("Runtime.callFunctionOn",
                                                 params, &cmd_result);
       if (status.IsError())
         return status;
-      numberOfFiles = cmd_result.FindIntPath("result.value");
-      if (!numberOfFiles)
+      number_of_files = cmd_result.FindIntByDottedPath("result.value");
+      if (!number_of_files)
         return Status(kUnknownError, "DevTools didn't return value");
     }
 
     // Ask for each Runtime.RemoteObject and add them to the list
-    for (int i = 0; i < *numberOfFiles; i++) {
-      std::string fileObjectId;
+    for (int i = 0; i < *number_of_files; i++) {
+      std::string file_object_id;
       {
-        base::DictionaryValue cmd_result;
-        base::DictionaryValue params;
-        params.GetDict().Set(
-            "functionDeclaration",
-            "function() { return this.files[" + std::to_string(i) + "] }");
-        params.GetDict().Set("objectId", inputRemoteObjectId);
+        base::Value::Dict cmd_result;
+        base::Value::Dict params;
+        params.Set("functionDeclaration", "function() { return this.files[" +
+                                              base::NumberToString(i) + "] }");
+        params.Set("objectId", inner_remote_object_id);
 
         status = client_->SendCommandAndGetResult("Runtime.callFunctionOn",
                                                   params, &cmd_result);
         if (status.IsError())
           return status;
-        if (!cmd_result.GetString("result.objectId", &fileObjectId))
+        std::string* object_id =
+            cmd_result.FindStringByDottedPath("result.objectId");
+        if (!object_id)
           return Status(kUnknownError, "DevTools didn't return objectId");
+        file_object_id = std::move(*object_id);
       }
 
       // Now convert each RemoteObject into the full path
       {
-        base::DictionaryValue params;
-        params.GetDict().Set("objectId", fileObjectId);
-        base::DictionaryValue getFileInfoResult;
+        base::Value::Dict params;
+        params.Set("objectId", file_object_id);
+        base::Value::Dict get_file_info_result;
         status = client_->SendCommandAndGetResult("DOM.getFileInfo", params,
-                                                  &getFileInfoResult);
+                                                  &get_file_info_result);
         if (status.IsError())
           return status;
         // Add the full path to the file_list
-        std::string fullPath;
-        if (!getFileInfoResult.GetString("path", &fullPath))
+        std::string* full_path = get_file_info_result.FindString("path");
+        if (!full_path)
           return Status(kUnknownError, "DevTools didn't return path");
-        file_list.Append(fullPath);
+        file_list.Append(std::move(*full_path));
       }
     }
   }
 
   // Now add the new files
-  for (size_t i = 0; i < files.size(); ++i) {
-    if (!files[i].IsAbsolute()) {
+  for (const base::FilePath& file_path : files) {
+    if (!file_path.IsAbsolute()) {
       return Status(kUnknownError,
-                    "path is not absolute: " + files[i].AsUTF8Unsafe());
+                    "path is not absolute: " + file_path.AsUTF8Unsafe());
     }
-    if (files[i].ReferencesParent()) {
+    if (file_path.ReferencesParent()) {
       return Status(kUnknownError,
-                    "path is not canonical: " + files[i].AsUTF8Unsafe());
+                    "path is not canonical: " + file_path.AsUTF8Unsafe());
     }
-    file_list.Append(files[i].AsUTF8Unsafe());
+    file_list.Append(file_path.AsUTF8Unsafe());
   }
 
-  base::DictionaryValue setFilesParams;
-  setFilesParams.GetDict().Set("backendNodeId", backend_node_id);
-  setFilesParams.GetDict().Set("files", file_list.Clone());
-  return client_->SendCommand("DOM.setFileInputFiles", setFilesParams);
+  base::Value::Dict set_files_params;
+  set_files_params.Set("backendNodeId", backend_node_id);
+  set_files_params.Set("files", std::move(file_list));
+  return client_->SendCommand("DOM.setFileInputFiles", set_files_params);
 }
 
 Status WebViewImpl::TakeHeapSnapshot(std::unique_ptr<base::Value>* snapshot) {
@@ -1272,21 +1969,20 @@ Status WebViewImpl::TakeHeapSnapshot(std::unique_ptr<base::Value>* snapshot) {
 }
 
 Status WebViewImpl::InitProfileInternal() {
-  base::DictionaryValue params;
+  base::Value::Dict params;
 
   return client_->SendCommand("Profiler.enable", params);
 }
 
 Status WebViewImpl::StopProfileInternal() {
-  base::DictionaryValue params;
+  base::Value::Dict params;
   Status status_debug = client_->SendCommand("Debugger.disable", params);
   Status status_profiler = client_->SendCommand("Profiler.disable", params);
 
-  if (status_debug.IsError()) {
+  if (status_debug.IsError())
     return status_debug;
-  } else if (status_profiler.IsError()) {
+  if (status_profiler.IsError())
     return status_profiler;
-  }
 
   return Status(kOk);
 }
@@ -1297,28 +1993,25 @@ Status WebViewImpl::StartProfile() {
   if (status_init.IsError())
     return status_init;
 
-  base::DictionaryValue params;
+  base::Value::Dict params;
   return client_->SendCommand("Profiler.start", params);
 }
 
 Status WebViewImpl::EndProfile(std::unique_ptr<base::Value>* profile_data) {
-  base::DictionaryValue params;
-  std::unique_ptr<base::DictionaryValue> profile_result =
-      std::make_unique<base::DictionaryValue>();
+  base::Value::Dict params;
+  base::Value::Dict profile_result;
 
   Status status = client_->SendCommandAndGetResult("Profiler.stop", params,
-                                                   profile_result.get());
+                                                   &profile_result);
 
   if (status.IsError()) {
     Status disable_profile_status = StopProfileInternal();
-    if (disable_profile_status.IsError()) {
+    if (disable_profile_status.IsError())
       return disable_profile_status;
-    } else {
-      return status;
-    }
+    return status;
   }
 
-  *profile_data = std::move(profile_result);
+  *profile_data = std::make_unique<base::Value>(std::move(profile_result));
   return status;
 }
 
@@ -1326,13 +2019,12 @@ Status WebViewImpl::SynthesizeTapGesture(int x,
                                          int y,
                                          int tap_count,
                                          bool is_long_press) {
-  base::DictionaryValue params;
-  base::Value::Dict& dict = params.GetDict();
-  dict.Set("x", x);
-  dict.Set("y", y);
-  dict.Set("tapCount", tap_count);
+  base::Value::Dict params;
+  params.Set("x", x);
+  params.Set("y", y);
+  params.Set("tapCount", tap_count);
   if (is_long_press)
-    dict.Set("duration", 1500);
+    params.Set("duration", 1500);
   return client_->SendCommand("Input.synthesizeTapGesture", params);
 }
 
@@ -1340,86 +2032,62 @@ Status WebViewImpl::SynthesizeScrollGesture(int x,
                                             int y,
                                             int xoffset,
                                             int yoffset) {
-  base::DictionaryValue params;
-  base::Value::Dict& dict = params.GetDict();
-  dict.Set("x", x);
-  dict.Set("y", y);
+  base::Value::Dict params;
+  params.Set("x", x);
+  params.Set("y", y);
   // Chrome's synthetic scroll gesture is actually a "swipe" gesture, so the
   // direction of the swipe is opposite to the scroll (i.e. a swipe up scrolls
   // down, and a swipe left scrolls right).
-  dict.Set("xDistance", -xoffset);
-  dict.Set("yDistance", -yoffset);
+  params.Set("xDistance", -xoffset);
+  params.Set("yDistance", -yoffset);
   return client_->SendCommand("Input.synthesizeScrollGesture", params);
 }
 
 Status WebViewImpl::CallAsyncFunctionInternal(
     const std::string& frame,
     const std::string& function,
-    const base::ListValue& args,
-    bool is_user_supplied,
+    const base::Value::List& args,
     const base::TimeDelta& timeout,
     std::unique_ptr<base::Value>* result) {
-  base::ListValue async_args;
+  base::Value::List async_args;
   async_args.Append("return (" + function + ").apply(null, arguments);");
   async_args.Append(args.Clone());
-  async_args.Append(is_user_supplied);
+  /*is_user_supplied=*/
+  async_args.Append(true);
+  /*timeout=*/
+  async_args.Append(timeout.InMicrosecondsF());
   std::unique_ptr<base::Value> tmp;
   Timeout local_timeout(timeout);
-  Status status = CallFunctionWithTimeout(frame, kExecuteAsyncScriptScript,
-                                          async_args, timeout, &tmp);
-  if (status.IsError())
+  std::unique_ptr<base::Value> query_value;
+  CallFunctionOptions options;
+  options.include_shadow_root = false;
+  Status status =
+      CallFunctionWithTimeout(frame, kExecuteAsyncScriptScript, async_args,
+                              timeout, options, &query_value);
+  if (status.IsError()) {
     return status;
-
-  const char kDocUnloadError[] = "document unloaded while waiting for result";
-  std::string kQueryResult = base::StringPrintf(
-      "function() {"
-      "  var info = document.$chrome_asyncScriptInfo;"
-      "  if (!info)"
-      "    return {status: %d, value: '%s'};"
-      "  var result = info.result;"
-      "  if (!result)"
-      "    return {status: 0};"
-      "  delete info.result;"
-      "  return result;"
-      "}",
-      kJavaScriptError,
-      kDocUnloadError);
-  const base::TimeDelta kOneHundredMs = base::Milliseconds(100);
-
-  while (true) {
-    base::ListValue no_args;
-    std::unique_ptr<base::Value> query_value;
-    status = CallFunction(frame, kQueryResult, no_args, &query_value);
-    if (status.IsError()) {
-      if (status.code() == kNoSuchFrame)
-        return Status(kJavaScriptError, kDocUnloadError);
-      return status;
-    }
-
-    base::DictionaryValue* result_info = NULL;
-    if (!query_value->GetAsDictionary(&result_info))
-      return Status(kUnknownError, "async result info is not a dictionary");
-    absl::optional<int> status_code = result_info->FindIntKey("status");
-    if (!status_code)
-      return Status(kUnknownError, "async result info has no int 'status'");
-    if (*status_code != kOk) {
-      std::string message;
-      result_info->GetString("value", &message);
-      return Status(static_cast<StatusCode>(*status_code), message);
-    }
-
-    if (base::Value* value = result_info->FindKey("value")) {
-      *result = base::Value::ToUniquePtrValue(value->Clone());
-      return Status(kOk);
-    }
-
-    // Since async-scripts return immediately, need to time period here instead.
-    if (local_timeout.IsExpired())
-      return Status(kTimeout);
-
-    base::PlatformThread::Sleep(
-        std::min(kOneHundredMs, local_timeout.GetRemainingTime()));
   }
+
+  base::Value::Dict* result_info = query_value->GetIfDict();
+  if (!result_info) {
+    return Status(kUnknownError, "async result info is not a dictionary");
+  }
+  std::optional<int> status_code = result_info->FindInt("status");
+  if (!status_code) {
+    return Status(kUnknownError, "async result info has no int 'status'");
+  }
+  if (*status_code != kOk) {
+    const std::string* message = result_info->FindString("value");
+    return Status(static_cast<StatusCode>(*status_code),
+                  message ? *message : "");
+  }
+  base::Value* value = result_info->Find("value");
+  if (!value) {
+    return Status{kJavaScriptError,
+                  "no value field in Runtime.callFunctionOn result"};
+  }
+  *result = base::Value::ToUniquePtrValue(value->Clone());
+  return Status(kOk);
 }
 
 void WebViewImpl::SetFrame(const std::string& new_frame_id) {
@@ -1438,12 +2106,18 @@ Status WebViewImpl::IsNotPendingNavigation(const std::string& frame_id,
   bool is_pending = false;
   Status status =
       navigation_tracker_->IsPendingNavigation(timeout, &is_pending);
-  if (status.IsError())
+  if (status.IsError()) {
+    if (status.code() == kTargetDetached) {
+      // Special case handling: During MPArch activation, the frame is detached.
+      *is_not_pending = !is_pending;
+      return Status(kOk);
+    }
     return status;
+  }
   // An alert may block the pending navigation.
-  if (dialog_manager_->IsDialogOpen()) {
+  if (client_->IsDialogOpen()) {
     std::string alert_text;
-    status = dialog_manager_->GetDialogMessage(&alert_text);
+    status = client_->GetDialogMessage(alert_text);
     if (status.IsError())
       return Status(kUnexpectedAlertOpen);
     return Status(kUnexpectedAlertOpen, "{Alert text : " + alert_text + "}");
@@ -1456,12 +2130,28 @@ Status WebViewImpl::IsNotPendingNavigation(const std::string& frame_id,
 bool WebViewImpl::IsNonBlocking() const {
   if (navigation_tracker_)
     return navigation_tracker_->IsNonBlocking();
-  else
-    return parent_->IsNonBlocking();
+  return parent_->IsNonBlocking();
+}
+
+Status WebViewImpl::GetFedCmTracker(FedCmTracker** out_tracker) {
+  if (!fedcm_tracker_) {
+    fedcm_tracker_ = std::make_unique<FedCmTracker>(client_.get());
+    Status status = fedcm_tracker_->Enable(client_.get());
+    if (!status.IsOk()) {
+      fedcm_tracker_.reset();
+      return status;
+    }
+  }
+  *out_tracker = fedcm_tracker_.get();
+  return Status(kOk);
 }
 
 FrameTracker* WebViewImpl::GetFrameTracker() const {
   return frame_tracker_.get();
+}
+
+PageTracker* WebViewImpl::GetPageTracker() const {
+  return page_tracker_.get();
 }
 
 const WebViewImpl* WebViewImpl::GetParent() const {
@@ -1505,17 +2195,414 @@ std::unique_ptr<base::Value> WebViewImpl::GetCastIssueMessage() {
   return base::Value::ToUniquePtrValue(cast_tracker_->issue().Clone());
 }
 
+namespace {
+
+Status ResolveElementReferenceInPlace(DevToolsClient& client,
+                                      const std::string& expected_frame_id,
+                                      const std::string& context_id,
+                                      const std::string& object_group_name,
+                                      const std::string& expected_loader_id,
+                                      const std::string& key,
+                                      const Timeout& timeout,
+                                      base::Value::Dict& arg_dict,
+                                      base::Value::List& nodes) {
+  Status status{kOk};
+  const StatusCode no_such_element =
+      key == kShadowRootKey ? kNoSuchShadowRoot : kNoSuchElement;
+  const StatusCode stale_element =
+      key == kShadowRootKey ? kDetachedShadowRoot : kStaleElementReference;
+
+  const std::string* element_id = arg_dict.FindString(key);
+  if (element_id == nullptr) {
+    return Status{kInvalidArgument, "invalid element id"};
+  }
+
+  std::string frame_id;
+  std::string loader_id;
+  int backend_node_id;
+  status = SplitElementId(*element_id, no_such_element, frame_id, loader_id,
+                          backend_node_id);
+  if (status.IsError()) {
+    return status;
+  }
+
+  // The following two conditionals mimic a weak map without storing any
+  // returned references. If the reference was indeed returned in this or in a
+  // previous navigation of the current frame then its frame id must coincide
+  // with the current frame id. Otherwise the reference is unknown for this
+  // frame.
+  if (frame_id != expected_frame_id) {
+    return Status{no_such_element, GetDefaultMessage(no_such_element)};
+  }
+  // Any reference returned in the current navigation must have a matching
+  // loader id. Otherwise the reference is stale.
+  if (loader_id != expected_loader_id) {
+    return Status{stale_element, GetDefaultMessage(stale_element)};
+  }
+
+  std::string object_id;
+  status = ResolveNode(client, backend_node_id, object_group_name, &timeout,
+                       object_id);
+  if (status.IsError()) {
+    if (status.code() == kNoSuchElement) {
+      // If the node with given backend node id is not found then it was removed
+      // and therefore the reference is stale.
+      return Status{stale_element, GetDefaultMessage(stale_element)};
+    }
+    return status;
+  }
+
+  arg_dict.Set(std::move(key), static_cast<int>(nodes.size()));
+
+  base::Value::Dict node;
+  node.Set("objectId", std::move(object_id));
+  nodes.Append(std::move(node));
+  return status;
+}
+
+Status ResolveWindowReferenceInPlace(DevToolsClient& client,
+                                     const std::string& expected_frame_id,
+                                     const std::string& context_id,
+                                     const std::string& object_group_name,
+                                     const Timeout& timeout,
+                                     base::Value::Dict& arg_dict,
+                                     base::Value::List& nodes) {
+  Status status{kOk};
+
+  const std::string* element_id = arg_dict.FindString(kWindowKey);
+  if (element_id == nullptr) {
+    return Status{kInvalidArgument, "invalid element id"};
+  }
+
+  const std::string& frame_id = *element_id;
+
+  if (frame_id != expected_frame_id) {
+    // (crbug.com/372153090) References on dynamic windows are not yet
+    // supported
+    return Status(kNoSuchWindow, "Window with such id was not found");
+  }
+
+  base::Value::Dict params;
+  params.Set("objectGroup", object_group_name);
+  params.Set("expression", "window");
+  params.Set("awaitPromise", true);
+  if (!context_id.empty()) {
+    params.Set("uniqueContextId", context_id);
+  }
+  base::Value::Dict evaluate_result;
+  status = client.SendCommandAndGetResultWithTimeout(
+      "Runtime.evaluate", params, &timeout, &evaluate_result);
+  if (status.IsError()) {
+    return status;
+  }
+  std::string* object_id =
+      evaluate_result.FindStringByDottedPath("result.objectId");
+  if (!object_id) {
+    return Status{
+        kUnknownError,
+        "object.objectId is missing in the response to Runtime.evaluate"};
+  }
+
+  arg_dict.Set(kWindowKey, static_cast<int>(nodes.size()));
+
+  base::Value::Dict node;
+  node.Set("objectId", std::move(*object_id));
+  nodes.Append(std::move(node));
+  return status;
+}
+
+Status ResolveFrameReferenceInPlace(DevToolsClient& client,
+                                    const std::string& expected_frame_id,
+                                    const std::string& context_id,
+                                    const std::string& object_group_name,
+                                    const Timeout& timeout,
+                                    base::Value::Dict& arg_dict,
+                                    base::Value::List& nodes) {
+  Status status{kOk};
+
+  const std::string* element_id = arg_dict.FindString(kFrameKey);
+  if (element_id == nullptr) {
+    return Status{kInvalidArgument, "invalid element id"};
+  }
+
+  const std::string& frame_id = *element_id;
+
+  base::Value::Dict params;
+  base::Value::Dict get_frame_owner_result;
+  params.Set("frameId", frame_id);
+  status = client.SendCommandAndGetResultWithTimeout(
+      "DOM.getFrameOwner", params, &timeout, &get_frame_owner_result);
+  if (status.IsError()) {
+    return status;
+  }
+  std::optional<int> maybe_backend_node_id =
+      get_frame_owner_result.FindInt("backendNodeId");
+  if (!maybe_backend_node_id.has_value()) {
+    return Status{kUnknownError, "Unable to find backendNodeId for the frame"};
+  }
+  int backend_node_id = maybe_backend_node_id.value();
+
+  std::string object_id;
+  status = ResolveNode(client, backend_node_id, object_group_name, &timeout,
+                       object_id);
+  if (status.IsError()) {
+    if (status.code() == kNoSuchElement) {
+      // If the node with given backend node id is not found then it was removed
+      // and therefore the reference is stale.
+      status =
+          Status{kNoSuchFrame, "frame was deleted while being dereferenced"};
+    }
+    return status;
+  }
+
+  arg_dict.Set(kFrameKey, static_cast<int>(nodes.size()));
+
+  base::Value::Dict node;
+  node.Set("objectId", std::move(object_id));
+  nodes.Append(std::move(node));
+  return status;
+}
+
+}  // namespace
+
+Status WebViewImpl::ResolveElementReferencesInPlace(
+    const std::string& expected_frame_id,
+    const std::string& context_id,
+    const std::string& object_group_name,
+    const std::string& expected_loader_id,
+    const Timeout& timeout,
+    base::Value::Dict& arg_dict,
+    base::Value::List& nodes) {
+  if (arg_dict.contains(kElementKeyW3C)) {
+    return ResolveElementReferenceInPlace(
+        *client_, expected_frame_id, context_id, object_group_name,
+        expected_loader_id, kElementKeyW3C, timeout, arg_dict, nodes);
+  }
+  if (arg_dict.contains(kElementKey)) {
+    return ResolveElementReferenceInPlace(
+        *client_, expected_frame_id, context_id, object_group_name,
+        expected_loader_id, kElementKey, timeout, arg_dict, nodes);
+  }
+  if (arg_dict.contains(kShadowRootKey)) {
+    return ResolveElementReferenceInPlace(
+        *client_, expected_frame_id, context_id, object_group_name,
+        expected_loader_id, kShadowRootKey, timeout, arg_dict, nodes);
+  }
+  if (arg_dict.contains(kWindowKey)) {
+    return ResolveWindowReferenceInPlace(*client_, expected_frame_id,
+                                         context_id, object_group_name, timeout,
+                                         arg_dict, nodes);
+  }
+  if (arg_dict.contains(kFrameKey)) {
+    return ResolveFrameReferenceInPlace(*client_, expected_frame_id, context_id,
+                                        object_group_name, timeout, arg_dict,
+                                        nodes);
+  }
+
+  Status status{kOk};
+  for (auto it = arg_dict.begin(); status.IsOk() && it != arg_dict.end();
+       ++it) {
+    status = ResolveElementReferencesInPlace(
+        expected_frame_id, context_id, object_group_name, expected_loader_id,
+        timeout, it->second, nodes);
+  }
+  return status;
+}
+
+Status WebViewImpl::ResolveElementReferencesInPlace(
+    const std::string& expected_frame_id,
+    const std::string& context_id,
+    const std::string& object_group_name,
+    const std::string& expected_loader_id,
+    const Timeout& timeout,
+    base::Value::List& arg_list,
+    base::Value::List& nodes) {
+  Status status{kOk};
+  for (auto it = arg_list.begin(); status.IsOk() && it != arg_list.end();
+       ++it) {
+    status = ResolveElementReferencesInPlace(
+        expected_frame_id, context_id, object_group_name, expected_loader_id,
+        timeout, *it, nodes);
+  }
+  return status;
+}
+
+Status WebViewImpl::ResolveElementReferencesInPlace(
+    const std::string& expected_frame_id,
+    const std::string& context_id,
+    const std::string& object_group_name,
+    const std::string& expected_loader_id,
+    const Timeout& timeout,
+    base::Value& arg,
+    base::Value::List& nodes) {
+  if (arg.is_list()) {
+    return ResolveElementReferencesInPlace(
+        expected_frame_id, context_id, object_group_name, expected_loader_id,
+        timeout, arg.GetList(), nodes);
+  }
+  if (arg.is_dict()) {
+    return ResolveElementReferencesInPlace(
+        expected_frame_id, context_id, object_group_name, expected_loader_id,
+        timeout, arg.GetDict(), nodes);
+  }
+  return Status{kOk};
+}
+
+Status WebViewImpl::CreateElementReferences(const std::string& frame_id,
+                                            const base::Value::List& nodes,
+                                            bool include_shadow_root,
+                                            base::Value& res) {
+  Status status{kOk};
+  if (res.is_list()) {
+    base::Value::List& list = res.GetList();
+    for (base::Value& elem : list) {
+      status =
+          CreateElementReferences(frame_id, nodes, include_shadow_root, elem);
+      if (status.IsError()) {
+        return status;
+      }
+    }
+    return status;
+  }
+
+  if (!res.is_dict()) {
+    return status;
+  }
+
+  base::Value::Dict& dict = res.GetDict();
+  std::optional<std::string> maybe_key = GetElementIdKey(dict, w3c_compliant_);
+
+  if (!maybe_key) {
+    for (auto p : dict) {
+      status = CreateElementReferences(frame_id, nodes, include_shadow_root,
+                                       p.second);
+      if (status.IsError()) {
+        return status;
+      }
+    }
+    return status;
+  }
+
+  std::optional<int> maybe_node_idx = dict.FindInt(*maybe_key);
+  if (!maybe_node_idx) {
+    return Status{kUnknownError, "node index is missing"};
+  }
+  if (*maybe_node_idx < 0 ||
+      static_cast<size_t>(*maybe_node_idx) >= nodes.size()) {
+    return Status{kUnknownError, "node index is out of range"};
+  }
+  if (!nodes[*maybe_node_idx].is_dict()) {
+    return Status{kUnknownError, "serialized node is not a dictionary"};
+  }
+  const base::Value::Dict& node = nodes[*maybe_node_idx].GetDict();
+
+  if (*maybe_key == kWindowKey) {
+    const std::string* context = node.FindStringByDottedPath("value.context");
+    if (!context) {
+      return Status{kUnknownError, "context is missing in a node"};
+    }
+    dict.Remove(*maybe_key);
+    if (*context == client_->GetId() ||
+        GetTargetForFrame(*context) == nullptr) {
+      // The reference either points to the top level window/tab or to some
+      // dynamically created window.
+      dict.Set(kWindowKey, *context);
+    } else {
+      dict.Set(kFrameKey, *context);
+    }
+    return status;
+  }
+
+  std::optional<int> maybe_backend_node_id =
+      node.FindIntByDottedPath("value.backendNodeId");
+  if (!maybe_backend_node_id) {
+    return Status{kUnknownError, "backendNodeId is missing in the node"};
+  }
+  const std::string* maybe_loader_id =
+      node.FindStringByDottedPath("value.loaderId");
+  if (maybe_loader_id == nullptr) {
+    return Status{kUnknownError, "loaderId is missing in the node"};
+  }
+
+  std::string shared_id =
+      base::StringPrintf("f.%s.d.%s.e.%d", frame_id.c_str(),
+                         maybe_loader_id->c_str(), *maybe_backend_node_id);
+
+  dict.Set(*maybe_key, std::move(shared_id));
+
+  const base::Value::Dict* shadow_root =
+      node.FindDictByDottedPath("value.shadowRoot");
+  if (include_shadow_root && shadow_root) {
+    maybe_backend_node_id =
+        shadow_root->FindIntByDottedPath("value.backendNodeId");
+    if (!maybe_backend_node_id) {
+      return Status{kUnknownError,
+                    "backendNodeId is missing in the node's shadowRoot"};
+    }
+    maybe_loader_id = shadow_root->FindStringByDottedPath("value.loaderId");
+    if (maybe_loader_id == nullptr) {
+      return Status{kUnknownError,
+                    "loaderId is missing in the node's shadowRoot"};
+    }
+    shared_id =
+        base::StringPrintf("f.%s.d.%s.e.%d", frame_id.c_str(),
+                           maybe_loader_id->c_str(), *maybe_backend_node_id);
+    base::Value::Dict shadow_root_dict;
+    shadow_root_dict.Set(kShadowRootKey, std::move(shared_id));
+    dict.Set("shadowRoot", std::move(shadow_root_dict));
+  }
+
+  return status;
+}
+
+bool WebViewImpl::IsDialogOpen() const {
+  return client_->IsDialogOpen();
+}
+
+Status WebViewImpl::GetDialogMessage(std::string& message) const {
+  return client_->GetDialogMessage(message);
+}
+
+Status WebViewImpl::GetTypeOfDialog(std::string& type) const {
+  return client_->GetTypeOfDialog(type);
+}
+
+Status WebViewImpl::HandleDialog(bool accept,
+                                 const std::optional<std::string>& text) {
+  return client_->HandleDialog(accept, text);
+}
+
+WebView* WebViewImpl::FindContainerForFrame(const std::string& frame_id) {
+  return GetTargetForFrame(frame_id);
+}
+
 WebViewImplHolder::WebViewImplHolder(WebViewImpl* web_view) {
   // Lock input web view and all its parents, to prevent them from being
   // deleted while still in use. Inside |items_|, each web view must appear
   // before its parent. This ensures the destructor unlocks the web views in
   // the right order.
+
+  // Get hold of the tab this frame belongs to.
+  raw_ptr<WebViewImpl> tab_view = nullptr;
+  if (web_view != nullptr) {
+    tab_view = const_cast<WebViewImpl*>(web_view->GetTab());
+  }
+
+  // Walk up the web_view parents and lock each.
   while (web_view != nullptr) {
     Item item;
     item.web_view = web_view;
     item.was_locked = web_view->Lock();
     items_.push_back(item);
     web_view = const_cast<WebViewImpl*>(web_view->GetParent());
+  }
+
+  // Finally, lock the tab view.
+  if (tab_view) {
+    Item item;
+    item.web_view = tab_view;
+    item.was_locked = tab_view->Lock();
+    items_.push_back(item);
   }
 }
 
@@ -1526,11 +2613,20 @@ WebViewImplHolder::~WebViewImplHolder() {
     if (item.was_locked)
       break;
     WebViewImpl* web_view = item.web_view;
-    if (!web_view->IsDetached())
+    if (!web_view->IsDetached()) {
       web_view->Unlock();
-    else if (web_view->GetParent() != nullptr)
+    } else if (web_view->GetParent() != nullptr) {
+      item.web_view = nullptr;
       web_view->GetParent()->GetFrameTracker()->DeleteTargetForFrame(
           web_view->GetId());
+    } else {
+      item.web_view = nullptr;
+      if (const WebView* tab_view = web_view->GetTab()) {
+        PageTracker* page_tracker = tab_view->GetPageTracker();
+        CHECK(page_tracker != nullptr);
+        page_tracker->DeletePage(web_view->GetId());
+      }
+    }
   }
 }
 
@@ -1539,216 +2635,92 @@ namespace internal {
 Status EvaluateScript(DevToolsClient* client,
                       const std::string& context_id,
                       const std::string& expression,
-                      EvaluateScriptReturnType return_type,
                       const base::TimeDelta& timeout,
-                      const bool awaitPromise,
-                      std::unique_ptr<base::DictionaryValue>* result) {
-  base::DictionaryValue params;
-  base::Value::Dict& dict = params.GetDict();
-  dict.Set("expression", expression);
+                      const bool await_promise,
+                      base::Value::Dict& result) {
+  Status status{kOk};
+  base::Value::Dict params;
+  params.Set("expression", expression);
   if (!context_id.empty()) {
-    dict.Set("uniqueContextId", context_id);
+    params.Set("uniqueContextId", context_id);
   }
-  dict.Set("returnByValue", return_type == ReturnByValue);
-  dict.Set("awaitPromise", awaitPromise);
-  base::Value cmd_result;
+  params.Set("returnByValue", true);
+  params.Set("awaitPromise", await_promise);
+  base::Value::Dict cmd_result;
 
   Timeout local_timeout(timeout);
-  Status status = client->SendCommandAndGetResultWithTimeout(
+  status = client->SendCommandAndGetResultWithTimeout(
       "Runtime.evaluate", params, &local_timeout, &cmd_result);
   if (status.IsError())
     return status;
 
-  if (cmd_result.is_dict() && cmd_result.FindKey("exceptionDetails")) {
+  if (cmd_result.contains("exceptionDetails")) {
     std::string description = "unknown";
     if (const std::string* maybe_description =
-            cmd_result.FindStringPath("result.description")) {
+            cmd_result.FindStringByDottedPath("result.description")) {
       description = *maybe_description;
     }
     return Status(kUnknownError,
                   "Runtime.evaluate threw exception: " + description);
   }
 
-  base::Value* unscoped_result = cmd_result.FindDictKey("result");
+  base::Value::Dict* unscoped_result = cmd_result.FindDict("result");
   if (!unscoped_result)
     return Status(kUnknownError, "evaluate missing dictionary 'result'");
-  auto result_value = base::Value::ToUniquePtrValue(unscoped_result->Clone());
-  *result = base::DictionaryValue::From(std::move(result_value));
-  return Status(kOk);
-}
+  result = std::move(*unscoped_result);
 
-Status EvaluateScriptAndGetObject(DevToolsClient* client,
-                                  const std::string& context_id,
-                                  const std::string& expression,
-                                  const base::TimeDelta& timeout,
-                                  const bool awaitPromise,
-                                  bool* got_object,
-                                  std::string* object_id) {
-  std::unique_ptr<base::DictionaryValue> result;
-  Status status = EvaluateScript(client, context_id, expression, ReturnByObject,
-                                 timeout, awaitPromise, &result);
-  if (status.IsError())
-    return status;
-  const base::Value* object_id_val = result->FindKey("objectId");
-  if (!object_id_val) {
-    *got_object = false;
-    return Status(kOk);
-  }
-  if (!object_id_val->is_string())
-    return Status(kUnknownError, "evaluate has invalid 'objectId'");
-  *object_id = object_id_val->GetString();
-  *got_object = true;
-  return Status(kOk);
+  return status;
 }
 
 Status EvaluateScriptAndGetValue(DevToolsClient* client,
                                  const std::string& context_id,
                                  const std::string& expression,
                                  const base::TimeDelta& timeout,
-                                 const bool awaitPromise,
+                                 const bool await_promise,
                                  std::unique_ptr<base::Value>* result) {
-  std::unique_ptr<base::DictionaryValue> temp_result;
-  Status status = EvaluateScript(client, context_id, expression, ReturnByValue,
-                                 timeout, awaitPromise, &temp_result);
+  base::Value::Dict temp_result;
+  Status status = EvaluateScript(client, context_id, expression, timeout,
+                                 await_promise, temp_result);
   if (status.IsError())
     return status;
 
-  std::string type;
-  if (!temp_result->GetString("type", &type))
+  std::string* type = temp_result.FindString("type");
+  if (!type)
     return Status(kUnknownError, "Runtime.evaluate missing string 'type'");
 
-  if (type == "undefined") {
+  if (*type == "undefined") {
     *result = std::make_unique<base::Value>();
   } else {
-    base::Value* value = temp_result->FindKey("value");
-    if (value == nullptr)
+    std::optional<base::Value> value = temp_result.Extract("value");
+    if (!value)
       return Status(kUnknownError, "Runtime.evaluate missing 'value'");
-    *result = base::Value::ToUniquePtrValue(value->Clone());
+    *result = base::Value::ToUniquePtrValue(std::move(*value));
   }
   return Status(kOk);
 }
 
 Status ParseCallFunctionResult(const base::Value& temp_result,
                                std::unique_ptr<base::Value>* result) {
-  const base::DictionaryValue* dict;
-  if (!temp_result.GetAsDictionary(&dict))
+  const base::Value::Dict* dict = temp_result.GetIfDict();
+  if (!dict)
     return Status(kUnknownError, "call function result must be a dictionary");
-  absl::optional<int> status_code = dict->FindIntKey("status");
+  std::optional<int> status_code = dict->FindInt("status");
   if (!status_code) {
     return Status(kUnknownError,
                   "call function result missing int 'status'");
   }
   if (*status_code != kOk) {
-    std::string message;
-    dict->GetString("value", &message);
-    return Status(static_cast<StatusCode>(*status_code), message);
+    const std::string* message = dict->FindString("value");
+    return Status(static_cast<StatusCode>(*status_code),
+                  message ? *message : "");
   }
-  const base::Value* unscoped_value = dict->FindKey("value");
+  const base::Value* unscoped_value = dict->Find("value");
   if (unscoped_value == nullptr) {
     // Missing 'value' indicates the JavaScript code didn't return a value.
     return Status(kOk);
   }
   *result = base::Value::ToUniquePtrValue(unscoped_value->Clone());
   return Status(kOk);
-}
-
-Status GetBackendNodeIdFromFunction(DevToolsClient* client,
-                                    const std::string& context_id,
-                                    const std::string& function,
-                                    const base::ListValue& args,
-                                    bool* found_node,
-                                    int* backend_node_id,
-                                    bool w3c_compliant) {
-  DCHECK(found_node);
-  DCHECK(backend_node_id);
-  std::string json;
-  base::JSONWriter::Write(args, &json);
-  std::string w3c = w3c_compliant ? "true" : "false";
-  // TODO(zachconrad): Second null should be array of shadow host ids.
-  std::string expression = base::StringPrintf(
-      "(%s).apply(null, [%s, %s, %s, true])",
-      kCallFunctionScript,
-      function.c_str(),
-      json.c_str(),
-      w3c.c_str());
-
-  bool got_object = false;
-  std::string element_id;
-  Status status = internal::EvaluateScriptAndGetObject(
-      client, context_id, expression, base::TimeDelta::Max(), true, &got_object,
-      &element_id);
-
-  if (status.IsError())
-    return status;
-
-  if (!got_object) {
-    *found_node = false;
-
-    return Status(kOk);
-  }
-
-  RemoteObjectReleaseGuard releaseGuard(client, element_id);
-
-  base::DictionaryValue cmd_result;
-  {
-    base::DictionaryValue params;
-    params.GetDict().Set("objectId", element_id);
-    status = client->SendCommandAndGetResult("DOM.describeNode", params,
-                                             &cmd_result);
-  }
-  if (status.IsError())
-    return status;
-
-  DCHECK(cmd_result.is_dict());
-
-  base::Value* node = cmd_result.GetDict().Find("node");
-  if (!node || !node->is_dict()) {
-    return Status(kUnknownError, "Dom.describeNode missing dictionary 'node'");
-  }
-
-  absl::optional<int> maybe_node_id = node->GetDict().FindInt("backendNodeId");
-  if (!maybe_node_id)
-    return Status(kUnknownError, "DOM.requestNode missing int 'backendNodeId'");
-
-  // Note that this emulates the previous Deprecated GetInteger behavior, but
-  // should likely be changed.
-  *backend_node_id = *maybe_node_id;
-  *found_node = true;
-  return Status(kOk);
-}
-
-Status GetFrameIdFromFunction(DevToolsClient* client,
-                              const std::string& context_id,
-                              const std::string& function,
-                              const base::ListValue& args,
-                              bool* found_node,
-                              std::string* frame_id,
-                              bool w3c_compliant) {
-  DCHECK(found_node);
-  DCHECK(frame_id);
-  std::string json;
-  base::JSONWriter::Write(args, &json);
-  std::string w3c = w3c_compliant ? "true" : "false";
-  // TODO(zachconrad): Second null should be array of shadow host ids.
-  std::string expression = base::StringPrintf(
-      "(%s).apply(null, [%s, %s, %s, true])", kCallFunctionScript,
-      function.c_str(), json.c_str(), w3c.c_str());
-
-  bool got_object = false;
-  std::string element_id;
-  Status status = internal::EvaluateScriptAndGetObject(
-      client, context_id, expression, base::TimeDelta::Max(), true, &got_object,
-      &element_id);
-  if (status.IsError())
-    return status;
-  if (!got_object) {
-    *found_node = false;
-    return Status(kOk);
-  }
-
-  RemoteObjectReleaseGuard guard(client, element_id);
-
-  return GetFrameIdForObjectId(client, element_id, found_node, frame_id);
 }
 
 }  // namespace internal

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/class_properties.h"
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(const char*)
-DEFINE_UI_CLASS_PROPERTY_TYPE(int)
 
 namespace {
 
@@ -75,13 +75,10 @@ class AssignableTestProperty {
   bool was_move_assigned_ = false;
 };
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(TestProperty, kOwnedKey, nullptr)
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(AssignableTestProperty,
-                                   kAssignableKey,
-                                   nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(TestProperty, kOwnedKey)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(AssignableTestProperty, kAssignableKey)
 DEFINE_CASCADING_OWNED_UI_CLASS_PROPERTY_KEY(TestCascadingProperty,
-                                             kCascadingOwnedKey,
-                                             nullptr)
+                                             kCascadingOwnedKey)
 
 }  // namespace
 
@@ -115,9 +112,11 @@ class TestPropertyHandler : public PropertyHandler {
 const int kDefaultIntValue = -2;
 const char* kDefaultStringValue = "squeamish";
 const char* kTestStringValue = "ossifrage";
+const float kDefaultFloatValue = 3.0;
 
 DEFINE_UI_CLASS_PROPERTY_KEY(int, kIntKey, kDefaultIntValue)
 DEFINE_UI_CLASS_PROPERTY_KEY(const char*, kStringKey, kDefaultStringValue)
+DEFINE_UI_CLASS_PROPERTY_KEY(float, kFloatKey, kDefaultFloatValue)
 }
 
 TEST(PropertyTest, Property) {
@@ -126,6 +125,7 @@ TEST(PropertyTest, Property) {
   // Non-existent properties should return the default values.
   EXPECT_EQ(kDefaultIntValue, h.GetProperty(kIntKey));
   EXPECT_EQ(std::string(kDefaultStringValue), h.GetProperty(kStringKey));
+  EXPECT_EQ(kDefaultFloatValue, h.GetProperty(kFloatKey));
 
   // A set property value should be returned again (even if it's the default
   // value).
@@ -142,6 +142,13 @@ TEST(PropertyTest, Property) {
   EXPECT_EQ(std::string(kDefaultStringValue), h.GetProperty(kStringKey));
   h.SetProperty(kStringKey, kTestStringValue);
   EXPECT_EQ(std::string(kTestStringValue), h.GetProperty(kStringKey));
+
+  h.SetProperty(kFloatKey, 3.14f);
+  EXPECT_EQ(3.14f, h.GetProperty(kFloatKey));
+  h.SetProperty(kFloatKey, kDefaultFloatValue);
+  EXPECT_EQ(kDefaultFloatValue, h.GetProperty(kFloatKey));
+  h.SetProperty(kFloatKey, -234.5678f);
+  EXPECT_EQ(-234.5678f, h.GetProperty(kFloatKey));
 
   // ClearProperty should restore the default value.
   h.ClearProperty(kIntKey);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,9 @@ class IdentityManagerAsh : public mojom::IdentityManager {
                        GetAccountImageCallback callback) override;
   void GetAccountEmail(const std::string& gaia_id,
                        GetAccountEmailCallback callback) override;
+  void HasAccountWithPersistentError(
+      const std::string& gaia_id,
+      HasAccountWithPersistentErrorCallback callback) override;
 
  private:
   mojo::ReceiverSet<mojom::IdentityManager> receivers_;

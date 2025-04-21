@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_BLOCKED_CONTENT_POPUP_NAVIGATION_DELEGATE_H_
 #define COMPONENTS_BLOCKED_CONTENT_POPUP_NAVIGATION_DELEGATE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
 
@@ -32,16 +34,17 @@ class PopupNavigationDelegate {
   virtual bool GetOriginalUserGesture() = 0;
 
   // Gets the URL to be loaded.
-  virtual const GURL& GetURL() = 0;
+  virtual GURL GetURL() = 0;
 
   // Performs the navigation.
   struct NavigateResult {
-    content::WebContents* navigated_or_inserted_contents = nullptr;
+    raw_ptr<content::WebContents, DanglingUntriaged>
+        navigated_or_inserted_contents = nullptr;
     WindowOpenDisposition disposition = WindowOpenDisposition::UNKNOWN;
   };
   virtual NavigateResult NavigateWithGesture(
       const blink::mojom::WindowFeatures& window_features,
-      absl::optional<WindowOpenDisposition> updated_disposition) = 0;
+      std::optional<WindowOpenDisposition> updated_disposition) = 0;
 
   // Called when the navigation represented by this class was blocked.
   virtual void OnPopupBlocked(content::WebContents* web_contents,

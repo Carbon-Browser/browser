@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@ ShareTarget::ShareTarget(
     std::vector<FileAttachment> file_attachments,
     std::vector<WifiCredentialsAttachment> wifi_credentials_attachments,
     bool is_incoming,
-    absl::optional<std::string> full_name,
+    std::optional<std::string> full_name,
     bool is_known,
-    absl::optional<std::string> device_id,
+    std::optional<std::string> device_id,
     bool for_self_share)
     : device_name(std::move(device_name)),
       image_url(std::move(image_url)),
@@ -56,4 +56,10 @@ std::vector<int64_t> ShareTarget::GetAttachmentIds() const {
   }
 
   return attachment_ids;
+}
+
+bool ShareTarget::CanAutoAccept() const {
+  // Only Self Shares can be auto accepted. Additionally, Wi-Fi credentials
+  // cannot be auto accepted due to the security risk.
+  return for_self_share && wifi_credentials_attachments.empty();
 }

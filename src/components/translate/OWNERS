@@ -1,15 +1,13 @@
 # Subject matter experts:
-#   Componentization and iOS: droger@chromium.org
-#                             jzw@chromium.org
+#   Componentization and iOS: jzw@chromium.org
 #   "Bubble" UI and translate internals: megjablon@chromium.org
 #   CSP and isolated worlds: toyoshim@chromium.org
-anthonyvd@chromium.org
-droger@chromium.org
-jds@google.com
+basiaz@google.com
+cuianthony@chromium.org
+iwells@chromium.org
 jzw@chromium.org
 megjablon@chromium.org
 perrier@chromium.org
-sclittle@chromium.org
 toyoshim@chromium.org
 
 # Specialized reviewers

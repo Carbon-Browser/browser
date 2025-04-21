@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/offline_pages/download_archive_manager.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -22,7 +23,7 @@ DownloadArchiveManager::DownloadArchiveManager(
                      task_runner),
       prefs_(prefs) {}
 
-DownloadArchiveManager::~DownloadArchiveManager() {}
+DownloadArchiveManager::~DownloadArchiveManager() = default;
 
 const base::FilePath& DownloadArchiveManager::GetPublicArchivesDir() {
   if (prefs_) {

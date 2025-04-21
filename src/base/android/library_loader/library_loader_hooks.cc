@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,17 @@
 #include "base/android/orderfile/orderfile_buildflags.h"
 #include "base/android/sys_utils.h"
 #include "base/at_exit.h"
-#include "base/base_jni_headers/LibraryLoader_jni.h"
 #include "base/base_switches.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "build/robolectric_buildflags.h"
+
+#if BUILDFLAG(IS_ROBOLECTRIC)
+#include "base/base_robolectric_jni/LibraryLoader_jni.h"  // nogncheck
+#else
+#include "base/library_loader_jni/LibraryLoader_jni.h"
+#endif
 
 #if BUILDFLAG(ORDERFILE_INSTRUMENTATION)
 #include "base/android/orderfile/orderfile_instrumentation.h"
@@ -30,7 +36,6 @@ namespace {
 base::AtExitManager* g_at_exit_manager = nullptr;
 LibraryLoadedHook* g_registration_callback = nullptr;
 NativeInitializationHook* g_native_initialization_hook = nullptr;
-NonMainDexJniRegistrationHook* g_jni_registration_hook = nullptr;
 LibraryProcessType g_library_process_type = PROCESS_UNINITIALIZED;
 
 }  // namespace
@@ -52,19 +57,12 @@ void SetNativeInitializationHook(
   g_native_initialization_hook = native_initialization_hook;
 }
 
-void SetNonMainDexJniRegistrationHook(
-    NonMainDexJniRegistrationHook jni_registration_hook) {
-  DCHECK(!g_jni_registration_hook);
-  g_jni_registration_hook = jni_registration_hook;
-}
-
 void SetLibraryLoadedHook(LibraryLoadedHook* func) {
   g_registration_callback = func;
 }
 
-static jboolean JNI_LibraryLoader_LibraryLoaded(
-    JNIEnv* env,
-    jint library_process_type) {
+static jboolean JNI_LibraryLoader_LibraryLoaded(JNIEnv* env,
+                                                jint library_process_type) {
   DCHECK_EQ(g_library_process_type, PROCESS_UNINITIALIZED);
   g_library_process_type =
       static_cast<LibraryProcessType>(library_process_type);
@@ -84,8 +82,9 @@ static jboolean JNI_LibraryLoader_LibraryLoaded(
 
   if (g_native_initialization_hook &&
       !g_native_initialization_hook(
-          static_cast<LibraryProcessType>(library_process_type)))
+          static_cast<LibraryProcessType>(library_process_type))) {
     return false;
+  }
   if (g_registration_callback &&
       !g_registration_callback(
           env, nullptr,
@@ -93,12 +92,6 @@ static jboolean JNI_LibraryLoader_LibraryLoaded(
     return false;
   }
   return true;
-}
-
-static void JNI_LibraryLoader_RegisterNonMainDexJni(JNIEnv* env) {
-  if (g_jni_registration_hook) {
-    g_jni_registration_hook();
-  }
 }
 
 void LibraryLoaderExitHook() {

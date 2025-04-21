@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ struct PrinterProviderPrintJob {
   std::u16string job_title;
 
   // The print job ticket.
-  base::Value ticket;
+  base::Value::Dict ticket;
 
   // Content type of the document that should be printed.
   std::string content_type;

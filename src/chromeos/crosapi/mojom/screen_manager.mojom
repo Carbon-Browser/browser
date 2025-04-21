@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,33 @@ import "chromeos/crosapi/mojom/video_capture.mojom";
 import "skia/public/mojom/bitmap.mojom";
 
 // A unique identifier and title for a window (or screen).
-[Stable, RenamedFrom="crosapi.mojom.WindowDetails"]
+[RenamedFrom="crosapi.mojom.WindowDetails"]
 struct SnapshotSource {
-  // Guaranteed to be unique and never reused.
+  // Guaranteed to be unique and never reused. This represents an ID that is
+  // only significant to the SnapshotCapturer, and may not have meaning for
+  // identifying any shared windows. (e.g. windows that are Lacros-owned).
   uint64 id@0;
 
   // The user-visible name of the window or screen in UTF-8 encoding.
   string title@1;
+
+  // The unique id assigned to the window. This ID is shared between
+  // Lacros-chrome and Ash-chrome and will thus only be set for Lacros-owned
+  // windows, but will allow looking up which owned window this source
+  // corresponds to. Will only be set for Lacros-owned windows.
+  [MinVersion=1]
+  string? window_unique_id@2;
+
+  // Display specific unique identifier that can be used to connect a
+  // |SnapshotSource| representing a display to other subsystems like
+  // the window placement API.
+  [MinVersion=2]
+  int64 display_id@3;
 };
 
 // This interface is used to capture bitmap snapshots of screens or windows.
 // See ScreenManager methods used to create instances of this interface.
-[Stable, Uuid="90487679-7dc8-40ad-a1e4-e741def0d79f"]
+[Uuid="90487679-7dc8-40ad-a1e4-e741def0d79f"]
 interface SnapshotCapturer {
   // Returns list of screens or windows that can be captured.
   [Sync]
@@ -42,10 +57,10 @@ interface SnapshotCapturer {
 // introduce another protocol would require careful synchronization between the
 // two, which we'd like to avoid.
 //
-// TODO(https://crbug.com/1094460): This is a very simple interface. We will
+// TODO(crbug.com/40135428): This is a very simple interface. We will
 // likely want to replace it with a more feature-complete and performant
 // interface in the future.
-[Stable, Uuid="95c3035c-5c63-45e3-8ec8-dd2a344c7dc2"]
+[Uuid="95c3035c-5c63-45e3-8ec8-dd2a344c7dc2"]
 interface ScreenManager {
   // DEPRECATED. Unimplemented and unused. Delete this once deletion is
   // supported. https://crbug.com/1156872.

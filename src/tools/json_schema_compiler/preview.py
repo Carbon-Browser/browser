@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Server for viewing the compiled C++ code from tools/json_schema_compiler.
 """
 
-from __future__ import print_function
-
 import cc_generator
-import code
+import code_util
 import cpp_type_generator
 import cpp_util
 import h_generator
@@ -19,8 +17,8 @@ import optparse
 import os
 import shlex
 import urlparse
-from highlighters import (
-    pygments_highlighter, none_highlighter, hilite_me_highlighter)
+from highlighters import (pygments_highlighter, none_highlighter,
+                          hilite_me_highlighter)
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from cpp_namespace_environment import CppNamespaceEnvironment
 from namespace_resolver import NamespaceResolver
@@ -29,17 +27,18 @@ from namespace_resolver import NamespaceResolver
 class CompilerHandler(BaseHTTPRequestHandler):
   """A HTTPRequestHandler that outputs the result of tools/json_schema_compiler.
   """
+
   def do_GET(self):
     parsed_url = urlparse.urlparse(self.path)
     request_path = self._GetRequestPath(parsed_url)
 
     chromium_favicon = 'http://codereview.chromium.org/static/favicon.ico'
 
-    head = code.Code()
+    head = code_util.Code()
     head.Append('<link rel="icon" href="%s">' % chromium_favicon)
     head.Append('<link rel="shortcut icon" href="%s">' % chromium_favicon)
 
-    body = code.Code()
+    body = code_util.Code()
 
     try:
       if os.path.isdir(request_path):
@@ -66,38 +65,36 @@ class CompilerHandler(BaseHTTPRequestHandler):
 
     Code panes are populated via XHR after links in the nav pane are clicked.
     """
-    (head.Append('<style>')
-         .Append('body {')
-         .Append('  margin: 0;')
-         .Append('}')
-         .Append('.pane {')
-         .Append('  height: 100%;')
-         .Append('  overflow-x: auto;')
-         .Append('  overflow-y: scroll;')
-         .Append('  display: inline-block;')
-         .Append('}')
-         .Append('#nav_pane {')
-         .Append('  width: 20%;')
-         .Append('}')
-         .Append('#nav_pane ul {')
-         .Append('  list-style-type: none;')
-         .Append('  padding: 0 0 0 1em;')
-         .Append('}')
-         .Append('#cc_pane {')
-         .Append('  width: 40%;')
-         .Append('}')
-         .Append('#h_pane {')
-         .Append('  width: 40%;')
-         .Append('}')
+    (head.Append('<style>') \
+         .Append('body {') \
+         .Append('  margin: 0;') \
+         .Append('}') \
+         .Append('.pane {') \
+         .Append('  height: 100%;') \
+         .Append('  overflow-x: auto;') \
+         .Append('  overflow-y: scroll;') \
+         .Append('  display: inline-block;') \
+         .Append('}') \
+         .Append('#nav_pane {') \
+         .Append('  width: 20%;') \
+         .Append('}') \
+         .Append('#nav_pane ul {') \
+         .Append('  list-style-type: none;') \
+         .Append('  padding: 0 0 0 1em;') \
+         .Append('}') \
+         .Append('#cc_pane {') \
+         .Append('  width: 40%;') \
+         .Append('}') \
+         .Append('#h_pane {') \
+         .Append('  width: 40%;') \
+         .Append('}') \
          .Append('</style>')
     )
 
-    body.Append(
-        '<div class="pane" id="nav_pane">%s</div>'
-        '<div class="pane" id="h_pane"></div>'
-        '<div class="pane" id="cc_pane"></div>' %
-        self._RenderNavPane(parsed_url.path[1:])
-    )
+    body.Append('<div class="pane" id="nav_pane">%s</div>'
+                '<div class="pane" id="h_pane"></div>'
+                '<div class="pane" id="cc_pane"></div>' %
+                self._RenderNavPane(parsed_url.path[1:]))
 
     # The Javascript that interacts with the nav pane and panes to show the
     # compiled files as the URL or highlighting options change.
@@ -189,41 +186,39 @@ updateEverything();
     (file_root, file_ext) = os.path.splitext(request_path)
     (filedir, filename) = os.path.split(file_root)
 
-    namespace_resolver = NamespaceResolver("./",
-                                           filedir,
+    namespace_resolver = NamespaceResolver("./", filedir,
                                            self.server.include_rules,
                                            self.server.cpp_namespace_pattern)
     try:
       # Get main file.
       namespace = namespace_resolver.ResolveNamespace(filename)
       type_generator = cpp_type_generator.CppTypeGenerator(
-           api_model,
-           namespace_resolver,
-           namespace)
+          api_model, namespace_resolver, namespace)
 
       # Generate code
       if file_ext == '.h':
-        cpp_code = (h_generator.HGenerator(type_generator)
-            .Generate(namespace).Render())
+        cpp_code = (
+            h_generator.HGenerator(type_generator).Generate(namespace).Render())
       elif file_ext == '.cc':
-        cpp_code = (cc_generator.CCGenerator(type_generator)
-            .Generate(namespace).Render())
+        cpp_code = (cc_generator.CCGenerator(type_generator).Generate(
+            namespace).Render())
       else:
         self.send_error(404, "File not found: %s" % request_path)
         return
 
       # Do highlighting on the generated code
       (highlighter_param, style_param) = self._GetHighlighterParams(parsed_url)
-      head.Append('<style>' +
+      head.Append(
+          '<style>' +
           self.server.highlighters[highlighter_param].GetCSS(style_param) +
           '</style>')
-      body.Append(self.server.highlighters[highlighter_param]
-          .GetCodeElement(cpp_code, style_param))
+      body.Append(self.server.highlighters[highlighter_param].GetCodeElement(
+          cpp_code, style_param))
     except IOError:
       self.send_error(404, "File not found: %s" % request_path)
       return
-    except (TypeError, KeyError, AttributeError,
-        AssertionError, NotImplementedError) as error:
+    except (TypeError, KeyError, AttributeError, AssertionError,
+            NotImplementedError) as error:
       body.Append('<pre>')
       body.Append('compiler error: %s' % error)
       body.Append('Check server log for more details')
@@ -235,7 +230,7 @@ updateEverything();
     """
     query_dict = urlparse.parse_qs(parsed_url.query)
     return (query_dict.get('highlighter', ['pygments'])[0],
-        query_dict.get('style', ['colorful'])[0])
+            query_dict.get('style', ['colorful'])[0])
 
   def _RenderNavPane(self, path):
     """Renders an HTML nav pane.
@@ -244,13 +239,13 @@ updateEverything();
     files at |path| with the appropriate onclick handlers to open either
     subdirectories or JSON files.
     """
-    html = code.Code()
+    html = code_util.Code()
 
     # Highlighter chooser.
     html.Append('<select id="highlighters" onChange="updateEverything()">')
     for name, highlighter in self.server.highlighters.items():
       html.Append('<option value="%s">%s</option>' %
-          (name, highlighter.DisplayName()))
+                  (name, highlighter.DisplayName()))
     html.Append('</select>')
 
     html.Append('<br/>')
@@ -291,8 +286,7 @@ updateEverything();
         html.Append('<li><a href="/%s/">%s/</a>' % (full_path, filename))
       elif file_ext in ['.json', '.idl']:
         # cc/h panes will automatically update via the hash change event.
-        html.Append('<li><a href="#%s">%s</a>' %
-            (filename, filename))
+        html.Append('<li><a href="#%s">%s</a>' % (filename, filename))
 
     html.Append('</ul>')
 
@@ -300,11 +294,8 @@ updateEverything();
 
 
 class PreviewHTTPServer(HTTPServer, object):
-  def __init__(self,
-               server_address,
-               handler,
-               highlighters,
-               include_rules,
+
+  def __init__(self, server_address, handler, highlighters, include_rules,
                cpp_namespace_pattern):
     super(PreviewHTTPServer, self).__init__(server_address, handler)
     self.highlighters = highlighters
@@ -316,11 +307,18 @@ if __name__ == '__main__':
   parser = optparse.OptionParser(
       description='Runs a server to preview the json_schema_compiler output.',
       usage='usage: %prog [option]...')
-  parser.add_option('-p', '--port', default='8000',
-      help='port to run the server on')
-  parser.add_option('-n', '--namespace', default='generated_api_schemas',
+  parser.add_option('-p',
+                    '--port',
+                    default='8000',
+                    help='port to run the server on')
+  parser.add_option(
+      '-n',
+      '--namespace',
+      default='generated_api_schemas',
       help='C++ namespace for generated files. e.g extensions::api.')
-  parser.add_option('-I', '--include-rules',
+  parser.add_option(
+      '-I',
+      '--include-rules',
       help='A list of paths to include when searching for referenced objects,'
       ' with the namespace separated by a \':\'. Example: '
       '/foo/bar:Foo::Bar::%(namespace)s')
@@ -346,19 +344,16 @@ if __name__ == '__main__':
     print('')
 
     highlighters = {
-      'hilite': hilite_me_highlighter.HiliteMeHighlighter(),
-      'none': none_highlighter.NoneHighlighter()
+        'hilite': hilite_me_highlighter.HiliteMeHighlighter(),
+        'none': none_highlighter.NoneHighlighter()
     }
     try:
       highlighters['pygments'] = pygments_highlighter.PygmentsHighlighter()
     except ImportError as e:
       pass
 
-    server = PreviewHTTPServer(('', int(opts.port)),
-                               CompilerHandler,
-                               highlighters,
-                               include_rules,
-                               opts.namespace)
+    server = PreviewHTTPServer(('', int(opts.port)), CompilerHandler,
+                               highlighters, include_rules, opts.namespace)
     server.serve_forever()
   except KeyboardInterrupt:
     server.socket.close()

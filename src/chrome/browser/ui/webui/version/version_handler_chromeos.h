@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 
 #include "base/memory/weak_ptr.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/webui/version/version_handler.h"
-#include "chromeos/dbus/util/version_loader.h"
 
 // VersionHandlerChromeOS is responsible for loading the Chrome OS
 // version.
@@ -25,18 +25,15 @@ class VersionHandlerChromeOS : public VersionHandler {
   // VersionHandler overrides:
   void OnJavascriptDisallowed() override;
   void HandleRequestVersionInfo(const base::Value::List& args) override;
-  void RegisterMessages() override;
 
   // Callbacks from chromeos::VersionLoader.
-  void OnVersion(const std::string& version);
-  void OnOSFirmware(const std::string& version);
-  void OnARCVersion(const std::string& version);
-
-  // Callback for the "crosUrlVersionRedirect" message.
-  void HandleCrosUrlVersionRedirect(const base::Value::List& args);
+  void OnPlatformVersion(const std::optional<std::string>& version);
+  void OnFirmwareVersion(const std::string& version);
+  void OnArcAndArcAndroidSdkVersions(const std::string& version);
 
  private:
   base::WeakPtrFactory<VersionHandlerChromeOS> weak_factory_{this};
+  static std::string GetArcAndArcAndroidSdkVersions();
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_VERSION_VERSION_HANDLER_CHROMEOS_H_

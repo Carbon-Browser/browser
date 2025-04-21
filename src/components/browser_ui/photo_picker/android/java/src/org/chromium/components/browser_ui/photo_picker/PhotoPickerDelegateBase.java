@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,28 @@ import org.chromium.ui.base.PhotoPickerDelegate;
 /**
  * A shared base implementation of {@link PhotoPickerDelegate}.
  *
- * Routes video support queries to the feature flag.
+ * <p>Routes queries, of which flavor of the Media Picker to run, to the feature flag params.
  */
 public abstract class PhotoPickerDelegateBase implements PhotoPickerDelegate {
     protected PhotoPickerDelegateBase() {}
 
     @Override
-    public boolean supportsVideos() {
-        return PhotoPickerFeatures.PHOTO_PICKER_VIDEO_SUPPORT.isEnabled();
+    public boolean launchViaActionGetContent() {
+        return PhotoPickerFeatures.launchViaActionGetContent();
     }
 
     @Override
-    public boolean preferAndroidMediaPicker() {
-        return PhotoPickerFeatures.ANDROID_MEDIA_PICKER_SUPPORT.isEnabled();
+    public boolean launchViaActionPickImages() {
+        return PhotoPickerFeatures.launchViaActionPickImages();
+    }
+
+    @Override
+    public boolean launchViaActionPickImagesPlus() {
+        return PhotoPickerFeatures.launchViaActionPickImagesPlus();
+    }
+
+    @Override
+    public boolean launchRegularWithoutBrowse() {
+        return PhotoPickerFeatures.launchRegularWithoutBrowse();
     }
 }

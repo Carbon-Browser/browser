@@ -1,6 +1,11 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/proxy_config/proxy_prefs.h"
 
@@ -67,7 +72,6 @@ std::string ConfigStateToDebugString(ConfigState state) {
       return "config_unset";
   }
   NOTREACHED();
-  return "";
 }
 
 }  // namespace ProxyPrefs

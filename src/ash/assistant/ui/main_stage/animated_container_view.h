@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 #include "ash/assistant/ui/base/assistant_scroll_view.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ui {
@@ -60,10 +61,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AnimatedContainerView
       public AssistantControllerObserver,
       public AssistantInteractionModelObserver,
       public AssistantResponseObserver {
- public:
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
+  METADATA_HEADER(AnimatedContainerView, AssistantScrollView)
 
-  METADATA_HEADER(AnimatedContainerView);
+ public:
+  using AssistantSuggestion = assistant::AssistantSuggestion;
 
   explicit AnimatedContainerView(AssistantViewDelegate* delegate);
   AnimatedContainerView(const AnimatedContainerView&) = delete;
@@ -144,7 +145,8 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AnimatedContainerView
       const base::WeakPtr<AnimatedContainerView>& weak_ptr,
       const ui::CallbackLayerAnimationObserver& observer);
 
-  AssistantViewDelegate* const delegate_;  // Owned by AssistantController.
+  const raw_ptr<AssistantViewDelegate>
+      delegate_;  // Owned by AssistantController.
 
   // The animators used to trigger the animations of the individual views.
   std::vector<std::unique_ptr<ElementAnimator>> animators_;

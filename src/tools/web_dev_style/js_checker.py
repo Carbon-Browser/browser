@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -37,10 +37,6 @@ class JSChecker(object):
         '    // <include src="...">\n' +
         '    // <if expr="chromeos">\n' +
         "    // </if>\n")
-
-  def DebuggerCheck(self, i, line):
-    return self.RegexCheck(i, line, r"^\s*(debugger);",
-                           "Debugger statements should be removed")
 
   def EndJsDocCommentCheck(self, i, line):
     msg = "End JSDoc comments with */ instead of **/"
@@ -124,7 +120,7 @@ class JSChecker(object):
     affected_files = self.input_api.AffectedFiles(file_filter=self.file_filter,
                                                   include_deletes=False)
     affected_js_files = [
-        f for f in affected_files if f.LocalPath().endswith((".js", "ts"))
+        f for f in affected_files if f.LocalPath().endswith((".js", ".ts"))
     ]
 
     if affected_js_files:
@@ -138,8 +134,6 @@ class JSChecker(object):
             _f for _f in [
                 self.BindThisCheck(i, line),
                 self.ChromeSendCheck(i, line),
-                self.CommentIfAndIncludeCheck(i, line),
-                self.DebuggerCheck(i, line),
                 self.EndJsDocCommentCheck(i, line),
                 self.ExtraDotInGenericCheck(i, line),
                 self.InheritDocCheck(i, line),
@@ -147,6 +141,16 @@ class JSChecker(object):
                 self.VariableNameCheck(i, line),
             ] if _f
         ]
+
+      if not f.LocalPath().endswith((".html.js", ".html.ts")):
+        # Exclude JS/TS files holding HTML strings from
+        # CommentIfAndIncludeCheck().
+        for i, line in f.ChangedContents():
+          error_lines += [
+              _f for _f in [
+                  self.CommentIfAndIncludeCheck(i, line),
+              ] if _f
+          ]
 
       if error_lines:
         error_lines = [

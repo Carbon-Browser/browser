@@ -1,26 +1,31 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import './advanced_settings_item.js';
 import './print_preview_search_box.js';
 import './print_preview_shared.css.js';
 import './print_preview_vars.css.js';
-import '../strings.m.js';
+import '/strings.m.js';
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {removeHighlights} from 'chrome://resources/js/search_highlight_utils.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Destination} from '../data/destination.js';
+// <if expr="not is_chromeos">
+import type {Destination} from '../data/destination.js';
+// </if>
+// <if expr="is_chromeos">
+import type {Destination} from '../data/destination_cros.js';
+// </if>
 import {MetricsContext, PrintSettingsUiBucket} from '../metrics.js';
 
 import {getTemplate} from './advanced_settings_dialog.html.js';
-import {PrintPreviewSearchBoxElement} from './print_preview_search_box.js';
+import type {PrintPreviewSearchBoxElement} from './print_preview_search_box.js';
 import {SettingsMixin} from './settings_mixin.js';
 
 export interface PrintPreviewAdvancedSettingsDialogElement {
@@ -123,7 +128,7 @@ export class PrintPreviewAdvancedSettingsDialogElement extends
     this.bubbles_.clear();
 
     const listItems = this.shadowRoot!.querySelectorAll(
-        'print-preview-advanced-settings-item')!;
+        'print-preview-advanced-settings-item');
     let hasMatch = false;
     listItems.forEach(item => {
       const matches = item.hasMatch(this.searchQuery_);

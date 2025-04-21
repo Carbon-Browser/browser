@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,8 @@ class WebRtcDataChannelTest : public WebRtcContentBrowserTestBase {
   void SetUpCommandLine(base::CommandLine* command_line) override {
     WebRtcContentBrowserTestBase::SetUpCommandLine(command_line);
     AppendUseFakeUIForMediaStreamFlag();
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        blink::switches::kJavaScriptFlags, kJavaScriptFeaturesNeeded);
+    command_line->AppendSwitchASCII(blink::switches::kJavaScriptFlags,
+                                    kJavaScriptFeaturesNeeded);
   }
 };
 

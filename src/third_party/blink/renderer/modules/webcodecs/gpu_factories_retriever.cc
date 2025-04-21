@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,17 @@
 
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
+
+// Define a function that is allowed to access MainThreadTaskRunnerRestricted.
+MainThreadTaskRunnerRestricted AccessMainThreadForGpuFactories() {
+  return {};
+}
 
 namespace {
 
@@ -26,11 +31,13 @@ void RetrieveGpuFactories(OutputCB result_callback) {
     return;
   }
 
-  Thread::MainThread()->GetTaskRunner()->PostTaskAndReplyWithResult(
-      FROM_HERE,
-      ConvertToBaseOnceCallback(
-          CrossThreadBindOnce(&GetGpuFactoriesOnMainThread)),
-      ConvertToBaseOnceCallback(std::move(result_callback)));
+  Thread::MainThread()
+      ->GetTaskRunner(AccessMainThreadForGpuFactories())
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          ConvertToBaseOnceCallback(
+              CrossThreadBindOnce(&GetGpuFactoriesOnMainThread)),
+          ConvertToBaseOnceCallback(std::move(result_callback)));
 }
 
 void OnSupportKnown(OutputCB result_cb,

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,20 +16,28 @@ import org.chromium.chrome.browser.download.DirectoryOption;
 
 import java.util.ArrayList;
 
-/**
- * Unit test for {@link DownloadDialogUtils}.
- */
+/** Unit test for {@link DownloadDialogUtils}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class DownloadDialogUtilsUnitTest {
-    private final DirectoryOption mInternalSmallOption = new DirectoryOption(
-            "/internal", 301, 1000, DirectoryOption.DownloadLocationDirectoryType.DEFAULT);
-    private final DirectoryOption mInternalLargeOption = new DirectoryOption(
-            "/internal", 600, 1000, DirectoryOption.DownloadLocationDirectoryType.DEFAULT);
-    private final DirectoryOption mExternalSmallOption = new DirectoryOption(
-            "/sd_card", 100, 2000, DirectoryOption.DownloadLocationDirectoryType.ADDITIONAL);
-    private final DirectoryOption mExternalLargeOption = new DirectoryOption(
-            "/sd_card", 1000, 2000, DirectoryOption.DownloadLocationDirectoryType.ADDITIONAL);
+    private final DirectoryOption mInternalSmallOption =
+            new DirectoryOption(
+                    "/internal", 301, 1000, DirectoryOption.DownloadLocationDirectoryType.DEFAULT);
+    private final DirectoryOption mInternalLargeOption =
+            new DirectoryOption(
+                    "/internal", 600, 1000, DirectoryOption.DownloadLocationDirectoryType.DEFAULT);
+    private final DirectoryOption mExternalSmallOption =
+            new DirectoryOption(
+                    "/sd_card",
+                    100,
+                    2000,
+                    DirectoryOption.DownloadLocationDirectoryType.ADDITIONAL);
+    private final DirectoryOption mExternalLargeOption =
+            new DirectoryOption(
+                    "/sd_card",
+                    1000,
+                    2000,
+                    DirectoryOption.DownloadLocationDirectoryType.ADDITIONAL);
     private final String mDefaultLocation = "/internal";
 
     @Test

@@ -33,13 +33,14 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/exported/web_frame_serializer_test_helper.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
 #include "third_party/blink/renderer/core/frame/frame_test_helpers.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 
@@ -96,13 +97,15 @@ class WebFrameSerializerSanitizationTest : public testing::Test {
   ShadowRoot* SetShadowContent(
       TreeScope& scope,
       const char* host,
-      ShadowRootType shadow_type,
+      ShadowRootMode shadow_type,
       const char* shadow_content,
       FocusDelegation focus_delegation = FocusDelegation::kNone) {
     Element* host_element = scope.getElementById(AtomicString::FromUTF8(host));
     ShadowRoot* shadow_root;
-    shadow_root =
-        &host_element->AttachShadowRootInternal(shadow_type, focus_delegation);
+    shadow_root = &host_element->AttachShadowRootInternal(
+        shadow_type, focus_delegation, SlotAssignmentMode::kNamed,
+        /*registry*/ nullptr, /*serializable*/ false, /*clonable*/ false,
+        /*reference_target*/ g_null_atom);
     shadow_root->SetDelegatesFocus(focus_delegation ==
                                    FocusDelegation::kDelegateFocus);
     shadow_root->setInnerHTML(String::FromUTF8(shadow_content),
@@ -125,6 +128,7 @@ class WebFrameSerializerSanitizationTest : public testing::Test {
   WebLocalFrameImpl* MainFrameImpl() { return helper_.LocalMainFrame(); }
 
  private:
+  test::TaskEnvironment task_environment_;
   frame_test_helpers::WebViewHelper helper_;
 };
 
@@ -206,7 +210,7 @@ TEST_F(WebFrameSerializerSanitizationTest, FromBrokenImageDocument) {
   // is simpler to not generate only that instead of the full MHTML.
   String mhtml =
       GenerateMHTMLPartsFromPng("http://www.test.com", "broken-image.png");
-  EXPECT_TRUE(mhtml.IsEmpty());
+  EXPECT_TRUE(mhtml.empty());
 }
 
 TEST_F(WebFrameSerializerSanitizationTest, ImageLoadedFromSrcsetForHiDPI) {
@@ -332,9 +336,9 @@ TEST_F(WebFrameSerializerSanitizationTest, ShadowDOM) {
   LoadFrame("http://www.test.com", "shadow_dom.html", "text/html");
   Document* document = MainFrameImpl()->GetFrame()->GetDocument();
   ShadowRoot* shadowRoot = SetShadowContent(
-      *document, "h2", ShadowRootType::kOpen,
+      *document, "h2", ShadowRootMode::kOpen,
       "Parent shadow\n<p id=\"h3\">Foo</p>", FocusDelegation::kDelegateFocus);
-  SetShadowContent(*shadowRoot, "h3", ShadowRootType::kClosed, "Nested shadow");
+  SetShadowContent(*shadowRoot, "h3", ShadowRootMode::kClosed, "Nested shadow");
   String mhtml = WebFrameSerializerTestHelper::GenerateMHTML(MainFrameImpl());
 
   // Template with special attribute should be created for each shadow DOM tree.

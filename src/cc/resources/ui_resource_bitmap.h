@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/memory/ref_counted.h"
+#include "base/containers/span.h"
 #include "cc/cc_export.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -46,11 +46,13 @@ class CC_EXPORT UIResourceBitmap {
   UIResourceBitmap(const UIResourceBitmap& other);
   ~UIResourceBitmap();
 
-  const uint8_t* GetPixels() const {
-    return static_cast<const uint8_t*>(pixel_ref_->pixels());
-  }
+  base::span<const uint8_t> GetPixels() const;
   size_t SizeInBytes() const;
   size_t row_bytes() const { return pixel_ref_ ? pixel_ref_->rowBytes() : 0; }
+
+  bool IsUniquelyOwned() const { return pixel_ref_->unique(); }
+
+  SkBitmap GetBitmapForTesting() const;
 
  private:
   friend class AutoLockUIResourceBitmap;

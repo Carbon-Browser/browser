@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ using bookmarks::BookmarkModel;
 
 namespace extensions {
 
-using ContextType = ExtensionApiTest::ContextType;
+using ContextType = extensions::browser_test_util::ContextType;
 
 class BookmarksApiTest : public ExtensionApiTest,
                          public testing::WithParamInterface<ContextType> {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,10 +39,10 @@ const struct wl_compositor_interface kTestCompositorImpl = {
     CreateRegion,   // create_region
 };
 
-TestCompositor::TestCompositor(uint32_t intended_version)
+TestCompositor::TestCompositor(TestCompositor::Version intended_version)
     : GlobalObject(&wl_compositor_interface,
                    &kTestCompositorImpl,
-                   intended_version),
+                   static_cast<uint32_t>(intended_version)),
       version_(intended_version) {}
 
 TestCompositor::~TestCompositor() = default;

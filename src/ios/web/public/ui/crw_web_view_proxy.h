@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 // Provides an interface for embedders to access the WebState's web view in a
 // limited and controlled manner.
-// TODO(crbug.com/546152): rename protocol to CRWContentViewProxy.
+// TODO(crbug.com/41211285): rename protocol to CRWContentViewProxy.
 @protocol CRWWebViewProxy <NSObject>
 
 // The web view's bounding rectangle (relative to its parent).
@@ -28,8 +28,8 @@
 // via resizing a subview's frame. Changing this property may impact performance
 // if implementation resizes its subview. Can be used as a workaround for
 // WKWebView bug, where UIScrollView.content inset does not work
-// (rdar://23584409). TODO(crbug.com/569349) remove this property once radar is
-// fixed.
+// (rdar://23584409). TODO(crbug.com/41228596) remove this property once radar
+// is fixed.
 @property(nonatomic, assign) UIEdgeInsets contentInset;
 
 // Gives the embedder access to the web view's UIScrollView in a limited and
@@ -43,14 +43,11 @@
 // Returns the webview's gesture recognizers.
 @property(nonatomic, readonly) NSArray* gestureRecognizers;
 
-// Adds a webview gesture recognizers.
-- (void)addGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
-
-// Removes a webview gesture recognizers.
-- (void)removeGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
+// A Boolean value indicating whether or not the web page is in fullscreen mode.
+@property(nonatomic, readonly) BOOL isWebPageInFullscreenMode;
 
 // Whether or not the content view should use the content inset when setting
-// |contentInset|. Implementations may or may not respect the setting of this
+// `contentInset`. Implementations may or may not respect the setting of this
 // property.
 @property(nonatomic, assign) BOOL shouldUseViewContentInset;
 
@@ -63,15 +60,11 @@
 // Wrapper around the addSubview method of the webview.
 - (void)addSubview:(UIView*)view;
 
-// Returns the currently visible keyboard accessory, or nil.
-- (UIView*)keyboardAccessory;
+// YES if the keyboard is currently visible for use in the web view.
+@property(nonatomic, readonly, getter=isKeyboardVisible) BOOL keyboardVisible;
 
 // Wrapper around the becomeFirstResponder method of the webview.
 - (BOOL)becomeFirstResponder;
-
-// Notifies the web view controller that the surface size has changed due to
-// multiwindow action or orientation change.
-- (void)surfaceSizeChanged;
 
 @end
 

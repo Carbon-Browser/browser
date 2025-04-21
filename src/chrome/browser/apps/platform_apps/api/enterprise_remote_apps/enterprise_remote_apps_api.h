@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,51 @@ class EnterpriseRemoteAppsDeleteAppFunction : public ExtensionFunction {
   // ExtensionFunction:
   ResponseAction Run() override;
 
-  void OnResult(const absl::optional<std::string>& error);
+  void OnResult(const std::optional<std::string>& error);
+};
+
+class EnterpriseRemoteAppsSortLauncherFunction : public ExtensionFunction {
+ public:
+  EnterpriseRemoteAppsSortLauncherFunction();
+
+  EnterpriseRemoteAppsSortLauncherFunction(
+      const EnterpriseRemoteAppsSortLauncherFunction&) = delete;
+
+  EnterpriseRemoteAppsSortLauncherFunction& operator=(
+      const EnterpriseRemoteAppsSortLauncherFunction&) = delete;
+
+  DECLARE_EXTENSION_FUNCTION("enterprise.remoteApps.sortLauncher",
+                             ENTERPRISE_REMOTEAPPS_SORTLAUNCHER)
+
+ protected:
+  ~EnterpriseRemoteAppsSortLauncherFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+
+  void OnResult(const std::optional<std::string>& error);
+};
+
+class EnterpriseRemoteAppsSetPinnedAppsFunction : public ExtensionFunction {
+ public:
+  EnterpriseRemoteAppsSetPinnedAppsFunction();
+
+  EnterpriseRemoteAppsSetPinnedAppsFunction(
+      const EnterpriseRemoteAppsSetPinnedAppsFunction&) = delete;
+
+  EnterpriseRemoteAppsSortLauncherFunction& operator=(
+      const EnterpriseRemoteAppsSetPinnedAppsFunction&) = delete;
+
+  DECLARE_EXTENSION_FUNCTION("enterprise.remoteApps.setPinnedApps",
+                             ENTERPRISE_REMOTEAPPS_SETPINNEDAPPS)
+
+ protected:
+  ~EnterpriseRemoteAppsSetPinnedAppsFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+
+  void OnResult(const std::optional<std::string>& error);
 };
 
 }  // namespace chrome_apps::api

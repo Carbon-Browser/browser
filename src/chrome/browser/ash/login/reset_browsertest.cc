@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,9 @@
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_screen_test_api.h"
-#include "ash/public/cpp/test/shell_test_api.h"
 #include "base/command_line.h"
-#include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/reset_screen.h"
-#include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
@@ -21,27 +18,21 @@
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/test/oobe_window_visibility_waiter.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/ui/webui_login_view.h"
-#include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_type_checker.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/reset_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
-#include "chrome/common/chrome_switches.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/webui/ash/login/reset_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
-#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_launcher.h"
-#include "content/public/test/test_utils.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace ash {
 namespace {
@@ -121,12 +112,23 @@ void ExpectConfirmationDialogClosed() {
 
 class ResetTest : public OobeBaseTest, public LocalStateMixin::Delegate {
  public:
-  ResetTest() = default;
+  ResetTest() {
+    fake_statistics_provider_.SetVpdStatus(
+        system::StatisticsProvider::VpdStatus::kValid);
+  }
 
   ResetTest(const ResetTest&) = delete;
   ResetTest& operator=(const ResetTest&) = delete;
 
   ~ResetTest() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    // TODO(b/353731379): Remove when removing legacy state determination code.
+    command_line->AppendSwitchASCII(
+        switches::kEnterpriseEnableUnifiedStateDetermination,
+        policy::AutoEnrollmentTypeChecker::kUnifiedStateDeterminationNever);
+    OobeBaseTest::SetUpCommandLine(command_line);
+  }
 
   // Simulates reset screen request from views based login.
   void InvokeResetScreen() {
@@ -146,13 +148,17 @@ class ResetTest : public OobeBaseTest, public LocalStateMixin::Delegate {
 
  private:
   LoginManagerMixin::TestUserInfo test_user_{
-      AccountId::FromUserEmailGaiaId(kTestUser1, kTestUser1GaiaId)};
+      AccountId::FromUserEmailGaiaId(kTestUser1, GaiaId(kTestUser1GaiaId))};
   LoginManagerMixin login_manager_mixin_{&mixin_host_, {test_user_}};
+  system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 };
 
 class ResetOobeTest : public OobeBaseTest {
  public:
-  ResetOobeTest() = default;
+  ResetOobeTest() {
+    fake_statistics_provider_.SetVpdStatus(
+        system::StatisticsProvider::VpdStatus::kValid);
+  }
 
   ResetOobeTest(const ResetOobeTest&) = delete;
   ResetOobeTest& operator=(const ResetOobeTest&) = delete;
@@ -161,6 +167,10 @@ class ResetOobeTest : public OobeBaseTest {
 
   // OobeBaseTest:
   void SetUpCommandLine(base::CommandLine* command_line) override {
+    // TODO(b/353731379): Remove when removing legacy state determination code.
+    command_line->AppendSwitchASCII(
+        switches::kEnterpriseEnableUnifiedStateDetermination,
+        policy::AutoEnrollmentTypeChecker::kUnifiedStateDeterminationNever);
     command_line->AppendSwitch(switches::kFirstExecAfterBoot);
     OobeBaseTest::SetUpCommandLine(command_line);
   }
@@ -172,6 +182,9 @@ class ResetOobeTest : public OobeBaseTest {
     EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
     ExpectConfirmationDialogClosed();
   }
+
+ private:
+  system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 };
 
 class ResetFirstAfterBootTest : public ResetTest {
@@ -290,12 +303,14 @@ IN_PROC_BROWSER_TEST_F(ResetTest, RestartBeforePowerwash) {
 
   InvokeResetScreen();
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
 
   ClickRestartButton();
 
-  ASSERT_EQ(1, FakePowerManagerClient::Get()->num_request_restart_calls());
+  ASSERT_EQ(
+      1, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   ASSERT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
 
   EXPECT_TRUE(prefs->GetBoolean(prefs::kFactoryResetRequested));
@@ -303,26 +318,28 @@ IN_PROC_BROWSER_TEST_F(ResetTest, RestartBeforePowerwash) {
 }
 
 IN_PROC_BROWSER_TEST_F(ResetOobeTest, ResetOnWelcomeScreen) {
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
   InvokeResetScreen();
 
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(1, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
 }
 
 IN_PROC_BROWSER_TEST_F(ResetOobeTest, RequestAndCancleResetOnWelcomeScreen) {
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
   InvokeResetScreen();
 
   ClickCancelButton();
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
 }
@@ -381,13 +398,15 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTest, ShowAfterBootIfRequested) {
 IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTest, RollbackUnavailable) {
   InvokeResetScreen();
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   InvokeResetAccelerator();  // No changes
   ClickToConfirmButton();
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(1, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   CloseResetScreenAndWait();
@@ -398,7 +417,8 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTest, RollbackUnavailable) {
   InvokeResetScreen();
   ClickToConfirmButton();
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(2, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   CloseResetScreenAndWait();
@@ -413,12 +433,14 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback, RollbackAvailable) {
 
   EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   ClickToConfirmButton();
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(1, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   CloseResetScreenAndWait();
@@ -435,7 +457,8 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback, RollbackAvailable) {
   InvokeResetScreen();
   ClickToConfirmButton();
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(2, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   CloseResetScreenAndWait();
@@ -445,7 +468,8 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback, RollbackAvailable) {
   InvokeResetAccelerator();  // Shows rollback.
   ClickToConfirmButton();
   ClickResetButton();
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(2, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(1, update_engine_client()->rollback_call_count());
 }
@@ -454,16 +478,20 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback,
                        ErrorOnRollbackRequested) {
   OobeScreenWaiter(ResetView::kScreenId).Wait();
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
   test::OobeJS().ExpectHasNoClass("revert-promise-view", {kResetScreen});
 
   InvokeResetAccelerator();
   ClickToConfirmButton();
+  WaitForConfirmationDialogToOpen();
   ClickResetButton();
+  WaitForConfirmationDialogToClose();
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(1, update_engine_client()->rollback_call_count());
   test::OobeJS().ExpectHasClass("revert-promise-view", {kResetScreen});
@@ -471,12 +499,14 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback,
   update_engine::StatusResult error_update_status;
   error_update_status.set_current_operation(update_engine::Operation::ERROR);
   update_engine_client()->NotifyObserversThatStatusChanged(error_update_status);
-  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  test::OobeJS()
+      .CreateVisibilityWaiter(true, {kResetScreen, "rollbackError"})
+      ->Wait();
 
   // Clicking 'ok' on the error screen will either show the previous OOBE screen
   // or show the login screen. Here login screen should appear because there's
   // no previous screen.
-  test::OobeJS().TapOnPath({"error-message", "okButton"});
+  test::OobeJS().TapOnPath({kResetScreen, "okButton"});
 
   OobeWindowVisibilityWaiter(false).Wait();
 }
@@ -484,7 +514,8 @@ IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback,
 IN_PROC_BROWSER_TEST_F(ResetFirstAfterBootTestWithRollback, RevertAfterCancel) {
   OobeScreenWaiter(ResetView::kScreenId).Wait();
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_EQ(0, FakeSessionManagerClient::Get()->start_device_wipe_call_count());
   EXPECT_EQ(0, update_engine_client()->rollback_call_count());
 

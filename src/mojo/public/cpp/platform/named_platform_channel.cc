@@ -1,11 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "mojo/public/cpp/platform/named_platform_channel.h"
 
 #include "base/check.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 
@@ -22,14 +21,14 @@ NamedPlatformChannel::NamedPlatformChannel(const Options& options) {
 NamedPlatformChannel::NamedPlatformChannel(NamedPlatformChannel&& other) =
     default;
 
-NamedPlatformChannel::~NamedPlatformChannel() = default;
-
 NamedPlatformChannel& NamedPlatformChannel::operator=(
     NamedPlatformChannel&& other) = default;
 
+NamedPlatformChannel::~NamedPlatformChannel() = default;
+
 // static
 NamedPlatformChannel::ServerName NamedPlatformChannel::ServerNameFromUTF8(
-    base::StringPiece name) {
+    std::string_view name) {
 #if BUILDFLAG(IS_WIN)
   return base::UTF8ToWide(name);
 #else

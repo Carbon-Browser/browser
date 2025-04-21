@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <map>
 #include <memory>
 
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -18,7 +20,7 @@ namespace history {
 class FakeBookmarkDatabase
     : public base::RefCountedThreadSafe<FakeBookmarkDatabase> {
  public:
-  FakeBookmarkDatabase() {}
+  FakeBookmarkDatabase() = default;
 
   FakeBookmarkDatabase(const FakeBookmarkDatabase&) = delete;
   FakeBookmarkDatabase& operator=(const FakeBookmarkDatabase&) = delete;
@@ -33,7 +35,7 @@ class FakeBookmarkDatabase
  private:
   friend class base::RefCountedThreadSafe<FakeBookmarkDatabase>;
 
-  ~FakeBookmarkDatabase() {}
+  ~FakeBookmarkDatabase() = default;
 
   base::Lock lock_;
   std::map<GURL, std::u16string> bookmarks_;
@@ -153,8 +155,9 @@ void HistoryClientFakeBookmarks::OnHistoryServiceCreated(
 void HistoryClientFakeBookmarks::Shutdown() {
 }
 
-bool HistoryClientFakeBookmarks::CanAddURL(const GURL& url) {
-  return url.is_valid();
+CanAddURLCallback HistoryClientFakeBookmarks::GetThreadSafeCanAddURLCallback()
+    const {
+  return base::BindRepeating([](const GURL& url) { return url.is_valid(); });
 }
 
 void HistoryClientFakeBookmarks::NotifyProfileError(

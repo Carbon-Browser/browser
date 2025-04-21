@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -400,6 +400,29 @@ MOJO_SYSTEM_EXPORT MojoResult MojoDestroyMessage(MojoMessageHandle message);
 MOJO_SYSTEM_EXPORT MojoResult
 MojoSerializeMessage(MojoMessageHandle message,
                      const struct MojoSerializeMessageOptions* options);
+
+// Reserves capacity within a message object.
+//
+// `message`: The message.
+// `payload_buffer_size`: The number of bytes to preallocate for the payload
+//     of the message.
+//
+// NOTE: Can only be called on a newly-created message, before serialization
+// begins.
+//
+// If this call succeeds, if `buffer_size` was non-null then `*buffer_size`
+// will contain the storage capacity.
+//
+// Returns:
+//   `MOJO_RESULT_OK` upon success. The message's payload capacity is stored
+//       into `*buffer_size`.
+//   `MOJO_RESULT_INVALID_ARGUMENT` if `message` is not a valid message object.
+//   `MOJO_RESULT_FAILED_PRECONDITION` if `message` has a context attached,
+//       or if the `message` is already partly or fully serialized.
+MOJO_SYSTEM_EXPORT MojoResult
+MojoReserveMessageCapacity(MojoMessageHandle message,
+                           uint32_t payload_buffer_size,
+                           uint32_t* buffer_size);
 
 // Appends data to a message object.
 //

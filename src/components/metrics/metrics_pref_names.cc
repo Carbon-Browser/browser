@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,20 @@ const char kMetricsInitialLogs[] = "user_experience_metrics.initial_logs2";
 // metrics at the next browser starts up.
 const char kMetricsInitialLogsMetadata[] =
     "user_experience_metrics.unsent_log_metadata.initial_logs";
+
+// A serialized representation of a base::UnguessableToken, used for randomizing
+// limited entropy field trials.
+const char kMetricsLimitedEntropyRandomizationSource[] =
+    "user_experience_metrics.limited_entropy_randomization_source";
+
+// A counter tracking the most recently used finalized log record id. Increment
+// this value by one (1) for each finalized log.
+const char kMetricsLogFinalizedRecordId[] =
+    "user_experience_metrics.log_finalized_record_id";
+
+// A counter tracking the most recently used log record id. Increment this value
+// by one (1) for each newly created log.
+const char kMetricsLogRecordId[] = "user_experience_metrics.log_record_id";
 
 // Low entropy source values. The new source (with suffix "3") was created
 // because the old source (with suffix "2") is biased in the wild. Clients which

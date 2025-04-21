@@ -1,24 +1,23 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/core/user_cloud_policy_token_forwarder.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
-#include "content/public/browser/notification_source.h"
 #include "google_apis/gaia/gaia_constants.h"
 
 namespace policy {
@@ -56,7 +55,7 @@ UserCloudPolicyTokenForwarder::UserCloudPolicyTokenForwarder(
   }
 }
 
-UserCloudPolicyTokenForwarder::~UserCloudPolicyTokenForwarder() {}
+UserCloudPolicyTokenForwarder::~UserCloudPolicyTokenForwarder() = default;
 
 void UserCloudPolicyTokenForwarder::Shutdown() {
   access_token_fetcher_.reset();
@@ -77,11 +76,11 @@ bool UserCloudPolicyTokenForwarder::IsTokenRefreshScheduledForTesting() const {
   return refresh_oauth_token_timer_ && refresh_oauth_token_timer_->IsRunning();
 }
 
-absl::optional<base::TimeDelta>
+std::optional<base::TimeDelta>
 UserCloudPolicyTokenForwarder::GetTokenRefreshDelayForTesting() const {
   return IsTokenRefreshScheduledForTesting()
              ? refresh_oauth_token_timer_->GetCurrentDelay()
-             : absl::optional<base::TimeDelta>();
+             : std::optional<base::TimeDelta>();
 }
 
 void UserCloudPolicyTokenForwarder::OverrideTimeForTesting(
@@ -165,6 +164,10 @@ void UserCloudPolicyTokenForwarder::OnAccessTokenFetchCompleted(
       FROM_HERE, time_to_next_refresh,
       base::BindRepeating(&UserCloudPolicyTokenForwarder::StartRequest,
                           weak_ptr_factory_.GetWeakPtr()));
+}
+
+std::string_view UserCloudPolicyTokenForwarder::name() const {
+  return "UserCloudPolicyTokenForwarder";
 }
 
 }  // namespace policy

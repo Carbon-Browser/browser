@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,10 @@
 #include <stddef.h>
 
 #include <memory>
+#include <string_view>
 
 #include "build/build_config.h"
 #include "content/child/blink_platform_impl.h"
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#include "components/services/font/public/cpp/font_loader.h"
-#include "third_party/skia/include/core/SkRefCnt.h"
-#endif
 
 namespace content {
 
@@ -33,17 +29,15 @@ class PpapiBlinkPlatformImpl : public BlinkPlatformImpl {
 
   // BlinkPlatformImpl methods:
   blink::WebSandboxSupport* GetSandboxSupport() override;
-  uint64_t VisitedLinkHash(const char* canonical_url, size_t length) override;
+  uint64_t VisitedLinkHash(std::string_view canonical_url) override;
   bool IsLinkVisited(uint64_t link_hash) override;
+  void AddOrUpdateVisitedLinkSalt(const url::Origin& origin,
+                                  uint64_t salt) override;
   blink::WebString DefaultLocale() override;
 
  private:
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
   std::unique_ptr<blink::WebSandboxSupport> sandbox_support_;
-#endif
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  sk_sp<font_service::FontLoader> font_loader_;
 #endif
 };
 

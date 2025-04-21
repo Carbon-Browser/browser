@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/compositor/layer_animation_element.h"
@@ -47,7 +48,8 @@ class COMPOSITOR_EXPORT LayerAnimationObserver  {
       LayerAnimationSequence* sequence) = 0;
 
  protected:
-  typedef std::set<LayerAnimationSequence*> AttachedSequences;
+  typedef std::set<raw_ptr<LayerAnimationSequence, SetExperimental>>
+      AttachedSequences;
 
   LayerAnimationObserver();
   virtual ~LayerAnimationObserver();

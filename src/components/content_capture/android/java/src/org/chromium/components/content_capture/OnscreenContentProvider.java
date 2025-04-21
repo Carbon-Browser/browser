@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@ import android.os.Build;
 import android.view.View;
 import android.view.ViewStructure;
 
+import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.content_public.browser.RenderCoordinates;
 import org.chromium.content_public.browser.WebContents;
 
@@ -23,9 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * This class receives captured content from native and forwards to ContetnCaptureConsumer.
- */
+/** This class receives captured content from native and forwards to ContentCaptureConsumer. */
 @JNINamespace("content_capture")
 public class OnscreenContentProvider {
     private static final String TAG = "ContentCapture";
@@ -33,14 +33,13 @@ public class OnscreenContentProvider {
 
     private long mNativeOnscreenContentProviderAndroid;
 
-    private ArrayList<ContentCaptureConsumer> mContentCaptureConsumers =
-            new ArrayList<ContentCaptureConsumer>();
+    private ArrayList<ContentCaptureConsumer> mContentCaptureConsumers = new ArrayList<>();
 
     private WeakReference<WebContents> mWebContents;
 
     public OnscreenContentProvider(
             Context context, View view, ViewStructure structure, WebContents webContents) {
-        mWebContents = new WeakReference<WebContents>(webContents);
+        mWebContents = new WeakReference<>(webContents);
         if (sDump == null) sDump = ContentCaptureFeatures.isDumpForTestingEnabled();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -91,10 +90,10 @@ public class OnscreenContentProvider {
     }
 
     public void onWebContentsChanged(WebContents current) {
-        mWebContents = new WeakReference<WebContents>(current);
+        mWebContents = new WeakReference<>(current);
         if (mNativeOnscreenContentProviderAndroid != 0) {
-            OnscreenContentProviderJni.get().onWebContentsChanged(
-                    mNativeOnscreenContentProviderAndroid, current);
+            OnscreenContentProviderJni.get()
+                    .onWebContentsChanged(mNativeOnscreenContentProviderAndroid, current);
         }
     }
 
@@ -203,12 +202,12 @@ public class OnscreenContentProvider {
         return result;
     }
 
-    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     public List<ContentCaptureConsumer> getConsumersForTesting() {
         return mContentCaptureConsumers;
     }
 
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
+    @RequiresApi(Build.VERSION_CODES.Q)
     public void removePlatformConsumerForTesting() {
         for (ContentCaptureConsumer consumer : mContentCaptureConsumers) {
             if (consumer instanceof PlatformContentCaptureConsumer) {
@@ -219,10 +218,13 @@ public class OnscreenContentProvider {
     }
 
     @NativeMethods
-    interface Natives {
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public interface Natives {
         long init(OnscreenContentProvider caller, WebContents webContents);
+
         void onWebContentsChanged(
                 long nativeOnscreenContentProviderAndroid, WebContents webContents);
+
         void destroy(long nativeOnscreenContentProviderAndroid);
     }
 }

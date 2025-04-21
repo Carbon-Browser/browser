@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,7 +62,6 @@ source_set("motion_interchange_objc") {
   ]
   configs += [
     ":private_config",
-    "//build/config/compiler:enable_arc",
     "//build/config/compiler:no_chromium_code",
     "//build/config/gcc:symbol_visibility_default",
   ]

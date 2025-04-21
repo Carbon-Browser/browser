@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,14 @@ class VIZ_SERVICE_EXPORT NullRenderer : public DirectRenderer {
                OverlayProcessorInterface* overlay_processor);
   ~NullRenderer() override;
 
+ protected:
+  void SetRenderPassBackingDrawnRect(
+      const AggregatedRenderPassId& render_pass_id,
+      const gfx::Rect& drawn_rect) override {}
+
+  gfx::Rect GetRenderPassBackingDrawnRect(
+      const AggregatedRenderPassId& render_pass_id) const override;
+
  private:
   void SwapBuffers(SwapFrameData swap_frame_data) override;
   bool CanPartialSwap() override;
@@ -36,23 +44,19 @@ class VIZ_SERVICE_EXPORT NullRenderer : public DirectRenderer {
       const AggregatedRenderPassId& render_pass_id) const override;
   gfx::Size GetRenderPassBackingPixelSize(
       const AggregatedRenderPassId& render_pass_id) override;
-  void BindFramebufferToOutputSurface() override {}
-  void BindFramebufferToTexture(
-      const AggregatedRenderPassId render_pass_id) override {}
   void SetScissorTestRect(const gfx::Rect& scissor_rect) override {}
-  void PrepareSurfaceForPass(SurfaceInitializationMode initialization_mode,
-                             const gfx::Rect& render_pass_scissor) override {}
+  void BeginDrawingRenderPass(const AggregatedRenderPass* render_pass,
+                              bool needs_clear,
+                              const gfx::Rect& render_pass_update_rect,
+                              const gfx::Size& viewport_size) override {}
   void DoDrawQuad(const DrawQuad* quad,
                   const gfx::QuadF* clip_region) override {}
   void BeginDrawingFrame() override;
   void FinishDrawingFrame() override {}
-  bool FlippedFramebuffer() const override;
-  void EnsureScissorTestEnabled() override {}
   void EnsureScissorTestDisabled() override {}
   void DidChangeVisibility() override {}
   void CopyDrawnRenderPass(const copy_output::RenderPassGeometry& geometry,
                            std::unique_ptr<CopyOutputRequest> request) override;
-  void GenerateMipmap() override {}
 };
 
 }  // namespace viz

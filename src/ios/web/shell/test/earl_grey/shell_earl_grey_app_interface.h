@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,27 +7,19 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/compiler_specific.h"
-
 // Test methods that perform actions on Web Shell. These methods may read or
 // alter Web Shell's internal state programmatically or via the UI, but in both
 // cases will properly synchronize the UI for Earl Grey tests.
 @interface ShellEarlGreyAppInterface : NSObject
 
-// Loads |URL| in the current WebState with transition of type
+// Loads `spec` as an URL in the current WebState with transition of type
 // ui::PAGE_TRANSITION_TYPED and returns without waiting for the page to load.
 + (void)startLoadingURL:(NSString*)spec;
 
 // Returns YES if the current WebState is loading.
 + (BOOL)isCurrentWebStateLoading [[nodiscard]];
 
-// Waits until the windowID is injected into the current web state. Returns nil
-// on success, or else an NSError indicating why the operation failed.
-// Immediately returns if the WebState contains content that does not require
-// windowID injection.
-+ (NSError*)waitForWindowIDInjectedInCurrentWebState [[nodiscard]];
-
-// Returns YES if the current WebState contains the given |text|.
+// Returns YES if the current WebState contains the given `text`.
 + (BOOL)currentWebStateContainsText:(NSString*)text [[nodiscard]];
 
 @end

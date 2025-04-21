@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,11 @@ class VIZ_SERVICE_EXPORT OverlayProcessorOzone
   // Override OverlayProcessorUsingStrategy.
   void SetDisplayTransformHint(gfx::OverlayTransform transform) override {}
   void SetViewportSize(const gfx::Size& size) override {}
+  bool SupportsFlipRotateTransform() const override;
+  void NotifyOverlayPromotion(
+      DisplayResourceProvider* display_resource_provider,
+      const OverlayCandidateList& candidate_list,
+      const QuadList& quad_list) override;
 
   void CheckOverlaySupportImpl(
       const OverlayProcessorInterface::OutputSurfaceOverlayPlane* primary_plane,
@@ -48,6 +53,10 @@ class VIZ_SERVICE_EXPORT OverlayProcessorOzone
   gfx::Rect GetOverlayDamageRectForOutputSurface(
       const OverlayCandidate& candidate) const override;
   void RegisterOverlayRequirement(bool requires_overlay) override;
+
+  // Forwards this message to the OverlayCandidates, which can react to swap
+  // result accordingly.
+  void OnSwapBuffersComplete(gfx::SwapResult swap_result) override;
 
  private:
   // Populates |native_pixmap| and |native_pixmap_unique_id| in |candidate|

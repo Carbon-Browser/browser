@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/notreached.h"
@@ -208,7 +209,7 @@ FileHandle LoggingOpenFileForReadAndWrite(const base::FilePath& path,
   return fd;
 }
 
-#if !BUILDFLAG(IS_FUCHSIA)
+#if CRASHPAD_FLOCK_ALWAYS_SUPPORTED
 
 FileLockingResult LoggingLockFile(FileHandle file,
                                   FileLocking locking,
@@ -234,7 +235,7 @@ bool LoggingUnlockFile(FileHandle file) {
   return rv == 0;
 }
 
-#endif  // !BUILDFLAG(IS_FUCHSIA)
+#endif  // CRASHPAD_FLOCK_ALWAYS_SUPPORTED
 
 FileOffset LoggingSeekFile(FileHandle file, FileOffset offset, int whence) {
   off_t rv = lseek(file, offset, whence);
@@ -276,7 +277,6 @@ FileHandle StdioFileHandle(StdioStream stdio_stream) {
   }
 
   NOTREACHED();
-  return kInvalidFileHandle;
 }
 
 }  // namespace crashpad

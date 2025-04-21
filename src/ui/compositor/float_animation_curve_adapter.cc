@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,12 @@ float FloatAnimationCurveAdapter::GetValue(base::TimeDelta t) const {
   return gfx::Tween::FloatValueBetween(
       gfx::Tween::CalculateValue(tween_type_, t / duration_), initial_value_,
       target_value_);
+}
+
+float FloatAnimationCurveAdapter::GetTransformedValue(
+    base::TimeDelta t,
+    gfx::TimingFunction::LimitDirection) const {
+  return GetValue(t);
 }
 
 }  // namespace ui

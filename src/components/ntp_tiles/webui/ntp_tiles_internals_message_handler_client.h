@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 #include "components/ntp_tiles/tile_source.h"
 
@@ -33,28 +34,25 @@ class NTPTilesInternalsMessageHandlerClient {
   // False if in a browser mode (e.g. incognito) where tiles aren't supported.
   virtual bool SupportsNTPTiles() = 0;
 
-  // Returns true if the given source is enabled (even if, in practice, none of
-  // the tiles would come from it).
-  virtual bool DoesSourceExist(TileSource source) = 0;
-
   // Creates a new MostVisitedSites based on the context pf the WebUI page.
   virtual std::unique_ptr<ntp_tiles::MostVisitedSites>
   MakeMostVisitedSites() = 0;
 
   // Registers a callback in Javascript. See content::WebUI and web::WebUIIOS.
   virtual void RegisterMessageCallback(
-      const std::string& message,
+      std::string_view message,
       base::RepeatingCallback<void(const base::Value::List&)> callback) = 0;
 
   // Invokes a function in Javascript. See content::WebUI and web::WebUIIOS.
-  virtual void CallJavascriptFunctionVector(
-      const std::string& name,
-      const std::vector<const base::Value*>& values) = 0;
+  virtual void CallJavascriptFunctionSpan(
+      std::string_view name,
+      base::span<const base::ValueView> values) = 0;
 
-  // Convenience function for CallJavascriptFunctionVector().
+  // Convenience function for CallJavascriptFunctionSpan().
   template <typename... Arg>
-  void CallJavascriptFunction(const std::string& name, const Arg&... arg) {
-    CallJavascriptFunctionVector(name, {&arg...});
+  void CallJavascriptFunction(std::string_view name, const Arg&... arg) {
+    base::ValueView args[] = {arg...};
+    CallJavascriptFunctionSpan(name, args);
   }
 
  protected:

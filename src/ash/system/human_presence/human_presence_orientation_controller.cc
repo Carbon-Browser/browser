@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "ash/public/cpp/tablet_mode_observer.h"
 #include "ash/shell.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/scoped_observation.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "ui/display/display.h"
@@ -89,7 +89,7 @@ void HumanPresenceOrientationController::LidEventReceived(
 }
 
 void HumanPresenceOrientationController::OnReceiveSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
+    std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
   if (switch_states.has_value()) {
     const bool lid_closed = switch_states->lid_state !=
                             chromeos::PowerManagerClient::LidState::OPEN;

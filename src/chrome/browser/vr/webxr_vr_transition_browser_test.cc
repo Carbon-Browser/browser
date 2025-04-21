@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -153,7 +153,7 @@ IN_PROC_BROWSER_TEST_F(WebXrVrOpenXrBrowserTest, TestVisibilityChanged) {
   event_data.type = device_test::mojom::EventType::kVisibilityVisibleBlurred;
   transition_mock.PopulateEvent(event_data);
 
-  // TODO(crbug.com/1002742): visible-blurred is forced to hidden in WebXR
+  // TODO(crbug.com/40646813): visible-blurred is forced to hidden in WebXR
   this->PollJavaScriptBooleanOrFail("isVisibilityEqualTo('hidden')",
                                     this->kPollTimeoutMedium);
   this->RunJavaScriptOrFail("done()");

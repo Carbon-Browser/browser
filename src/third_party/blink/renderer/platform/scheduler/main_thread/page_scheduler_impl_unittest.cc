@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_param_associator.h"
@@ -22,6 +22,8 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_task_queue_controller.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
@@ -41,6 +43,9 @@ namespace scheduler {
 namespace page_scheduler_impl_unittest {
 
 namespace {
+
+constexpr base::TimeDelta kEpsilon = base::Milliseconds(1);
+
 void IncrementCounter(int* counter) {
   ++*counter;
 }
@@ -50,10 +55,9 @@ void IncrementCounter(int* counter) {
 std::unique_ptr<PageSchedulerImpl> CreatePageScheduler(
     PageScheduler::Delegate* page_scheduler_delegate,
     MainThreadSchedulerImpl* scheduler,
-    WebAgentGroupScheduler& agent_group_scheduler) {
+    AgentGroupScheduler& agent_group_scheduler) {
   std::unique_ptr<PageScheduler> page_scheduler =
-      agent_group_scheduler.AsAgentGroupScheduler().CreatePageScheduler(
-          page_scheduler_delegate);
+      agent_group_scheduler.CreatePageScheduler(page_scheduler_delegate);
   std::unique_ptr<PageSchedulerImpl> page_scheduler_impl(
       static_cast<PageSchedulerImpl*>(page_scheduler.release()));
   return page_scheduler_impl;
@@ -64,11 +68,10 @@ std::unique_ptr<PageSchedulerImpl> CreatePageScheduler(
 std::unique_ptr<FrameSchedulerImpl> CreateFrameScheduler(
     PageSchedulerImpl* page_scheduler,
     FrameScheduler::Delegate* delegate,
-    blink::BlameContext* blame_context,
     bool is_in_embedded_frame_tree,
     FrameScheduler::FrameType frame_type) {
   auto frame_scheduler = page_scheduler->CreateFrameScheduler(
-      delegate, blame_context, is_in_embedded_frame_tree, frame_type);
+      delegate, is_in_embedded_frame_tree, frame_type);
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler_impl(
       static_cast<FrameSchedulerImpl*>(frame_scheduler.release()));
   return frame_scheduler_impl;
@@ -83,7 +86,6 @@ class MockPageSchedulerDelegate : public PageScheduler::Delegate {
   MockPageSchedulerDelegate() {}
 
  private:
-  void ReportIntervention(const WTF::String&) override {}
   bool RequestBeginMainFrameNotExpected(bool) override { return false; }
   void OnSetPageFrozen(bool is_frozen) override {}
   bool IsOrdinary() const override { return true; }
@@ -95,8 +97,8 @@ class PageSchedulerImplTest : public testing::Test {
     feature_list_.InitAndEnableFeature(blink::features::kStopInBackground);
   }
 
-  PageSchedulerImplTest(std::vector<base::Feature> enabled_features,
-                        std::vector<base::Feature> disabled_features) {
+  PageSchedulerImplTest(std::vector<base::test::FeatureRef> enabled_features,
+                        std::vector<base::test::FeatureRef> disabled_features) {
     feature_list_.InitWithFeatures(enabled_features, disabled_features);
   }
 
@@ -110,14 +112,17 @@ class PageSchedulerImplTest : public testing::Test {
     test_task_runner_->AdvanceMockTickClock(base::Milliseconds(5));
     scheduler_ = std::make_unique<MainThreadSchedulerImpl>(
         base::sequence_manager::SequenceManagerForTest::Create(
-            nullptr, test_task_runner_, test_task_runner_->GetMockTickClock()));
+            nullptr, test_task_runner_, test_task_runner_->GetMockTickClock(),
+            base::sequence_manager::SequenceManager::Settings::Builder()
+                .SetPrioritySettings(CreatePrioritySettings())
+                .Build()));
     agent_group_scheduler_ = scheduler_->CreateAgentGroupScheduler();
     page_scheduler_delegate_ = std::make_unique<MockPageSchedulerDelegate>();
     page_scheduler_ =
         CreatePageScheduler(page_scheduler_delegate_.get(), scheduler_.get(),
                             *agent_group_scheduler_);
     frame_scheduler_ =
-        CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+        CreateFrameScheduler(page_scheduler_.get(), nullptr,
                              /*is_in_embedded_frame_tree=*/false,
                              FrameScheduler::FrameType::kSubframe);
   }
@@ -125,7 +130,7 @@ class PageSchedulerImplTest : public testing::Test {
   void TearDown() override {
     frame_scheduler_.reset();
     page_scheduler_.reset();
-    agent_group_scheduler_.reset();
+    agent_group_scheduler_ = nullptr;
     scheduler_->Shutdown();
     scheduler_.reset();
   }
@@ -189,8 +194,6 @@ class PageSchedulerImplTest : public testing::Test {
   scoped_refptr<MainThreadTaskQueue> UnpausableTaskQueue() {
     return GetTaskQueue(FrameSchedulerImpl::UnpausableTaskQueueTraits());
   }
-
-  bool ShouldFreezePage() { return page_scheduler_->ShouldFreezePage(); }
 
   // Verifies that freezing the PageScheduler prevents tasks from running. Then
   // set the page as visible or unfreezes it while still hidden (depending on
@@ -258,7 +261,7 @@ class PageSchedulerImplTest : public testing::Test {
 
   scoped_refptr<base::TestMockTimeTaskRunner> test_task_runner_;
   std::unique_ptr<MainThreadSchedulerImpl> scheduler_;
-  std::unique_ptr<WebAgentGroupScheduler> agent_group_scheduler_;
+  Persistent<AgentGroupScheduler> agent_group_scheduler_;
   std::unique_ptr<PageSchedulerImpl> page_scheduler_;
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler_;
   std::unique_ptr<MockPageSchedulerDelegate> page_scheduler_delegate_;
@@ -270,22 +273,22 @@ class PageSchedulerImplTest : public testing::Test {
 TEST_F(PageSchedulerImplTest, TestDestructionOfFrameSchedulersBefore) {
   std::unique_ptr<blink::FrameScheduler> frame1(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   std::unique_ptr<blink::FrameScheduler> frame2(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
 }
 
 TEST_F(PageSchedulerImplTest, TestDestructionOfFrameSchedulersAfter) {
   std::unique_ptr<blink::FrameScheduler> frame1(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   std::unique_ptr<blink::FrameScheduler> frame2(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   page_scheduler_.reset();
 }
@@ -373,7 +376,7 @@ TEST_F(PageSchedulerImplTest, RepeatingTimers_OneBackgroundOneForeground) {
   std::unique_ptr<PageSchedulerImpl> page_scheduler2 =
       CreatePageScheduler(nullptr, scheduler_.get(), *agent_group_scheduler_);
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler2 =
-      CreateFrameScheduler(page_scheduler2.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler2.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -401,6 +404,32 @@ TEST_F(PageSchedulerImplTest, RepeatingTimers_OneBackgroundOneForeground) {
   test_task_runner_->FastForwardBy(base::Seconds(1));
   EXPECT_EQ(50, run_count1);
   EXPECT_EQ(1, run_count2);
+}
+
+TEST_F(PageSchedulerImplTest, IsLoadingTest) {
+  // 1st Page is loaded.
+  EXPECT_FALSE(page_scheduler_->IsLoading());
+
+  std::unique_ptr<PageSchedulerImpl> page_scheduler2 =
+      CreatePageScheduler(nullptr, scheduler_.get(), *agent_group_scheduler_);
+  std::unique_ptr<FrameSchedulerImpl> frame_scheduler2 =
+      CreateFrameScheduler(page_scheduler2.get(), nullptr,
+                           /*is_in_embedded_frame_tree=*/false,
+                           FrameScheduler::FrameType::kMainFrame);
+
+  // 1st Page is loaded. 2nd page is loading.
+  EXPECT_FALSE(page_scheduler_->IsLoading());
+  EXPECT_TRUE(page_scheduler2->IsLoading());
+
+  // 2nd page finishes loading.
+  frame_scheduler2->OnFirstContentfulPaintInMainFrame();
+  frame_scheduler2->OnFirstMeaningfulPaint(
+      base::TimeTicks::Now() -
+      GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaint());
+
+  // Both pages are loaded.
+  EXPECT_FALSE(page_scheduler_->IsLoading());
+  EXPECT_FALSE(page_scheduler2->IsLoading());
 }
 
 namespace {
@@ -663,7 +692,7 @@ TEST_F(PageSchedulerImplTest, VirtualTimeSettings_NewFrameScheduler) {
   vtc->SetVirtualTimePolicy(VirtualTimePolicy::kPause);
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -675,7 +704,7 @@ TEST_F(PageSchedulerImplTest, VirtualTimeSettings_NewFrameScheduler) {
           base::Milliseconds(1));
 
   test_task_runner_->FastForwardUntilNoTasksRemain();
-  EXPECT_TRUE(run_order.IsEmpty());
+  EXPECT_TRUE(run_order.empty());
 
   vtc->SetVirtualTimePolicy(VirtualTimePolicy::kAdvance);
   test_task_runner_->FastForwardUntilNoTasksRemain();
@@ -695,7 +724,7 @@ base::OnceClosure MakeDeletionTask(T* obj) {
 TEST_F(PageSchedulerImplTest, DeleteFrameSchedulers_InTask) {
   for (int i = 0; i < 10; i++) {
     FrameSchedulerImpl* frame_scheduler =
-        CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+        CreateFrameScheduler(page_scheduler_.get(), nullptr,
                              /*is_in_embedded_frame_tree=*/false,
                              FrameScheduler::FrameType::kSubframe)
             .release();
@@ -717,7 +746,7 @@ TEST_F(PageSchedulerImplTest, DeleteThrottledQueue_InTask) {
   page_scheduler_->SetPageVisible(false);
 
   FrameSchedulerImpl* frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe)
           .release();
@@ -772,7 +801,7 @@ TEST_F(PageSchedulerImplTest,
   vtc->SetVirtualTimePolicy(VirtualTimePolicy::kDeterministicLoading);
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -839,7 +868,7 @@ TEST_F(PageSchedulerImplTest,
   base::TimeTicks time_second_task;
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -874,7 +903,7 @@ TEST_F(PageSchedulerImplTest,
   vtc->SetVirtualTimePolicy(VirtualTimePolicy::kDeterministicLoading);
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -923,7 +952,7 @@ TEST_F(PageSchedulerImplTest, PauseTimersWhileVirtualTimeIsPaused) {
   Vector<int> run_order;
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler_.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
   VirtualTimeController* vtc = page_scheduler_->GetVirtualTimeController();
@@ -936,7 +965,7 @@ TEST_F(PageSchedulerImplTest, PauseTimersWhileVirtualTimeIsPaused) {
                                            base::Unretained(&run_order)));
 
   test_task_runner_->FastForwardUntilNoTasksRemain();
-  EXPECT_TRUE(run_order.IsEmpty());
+  EXPECT_TRUE(run_order.empty());
 
   vtc->SetVirtualTimePolicy(VirtualTimePolicy::kAdvance);
   test_task_runner_->FastForwardUntilNoTasksRemain();
@@ -1143,10 +1172,9 @@ TEST_F(PageSchedulerImplTest, BackgroundTimerThrottling) {
   base::TimeTicks start_time = test_task_runner_->NowTicks();
 
   Vector<base::TimeTicks> run_times;
-  frame_scheduler_ =
-      CreateFrameScheduler(page_scheduler_.get(), nullptr, nullptr,
-                           /*is_in_embedded_frame_tree=*/false,
-                           FrameScheduler::FrameType::kSubframe);
+  frame_scheduler_ = CreateFrameScheduler(page_scheduler_.get(), nullptr,
+                                          /*is_in_embedded_frame_tree=*/false,
+                                          FrameScheduler::FrameType::kSubframe);
   page_scheduler_->SetPageVisible(true);
   EXPECT_FALSE(page_scheduler_->IsCPUTimeThrottled());
 
@@ -1204,11 +1232,11 @@ TEST_F(PageSchedulerImplTest, OpenWebSocketExemptsFromBudgetThrottling) {
   Vector<base::TimeTicks> run_times;
 
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler1 =
-      CreateFrameScheduler(page_scheduler.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler2 =
-      CreateFrameScheduler(page_scheduler.get(), nullptr, nullptr,
+      CreateFrameScheduler(page_scheduler.get(), nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            FrameScheduler::FrameType::kSubframe);
 
@@ -1362,6 +1390,55 @@ TEST_F(PageSchedulerImplTest, AudiblePagesAreNotThrottled) {
   EXPECT_TRUE(ThrottleableTaskQueue()->IsThrottled());
 }
 
+// Regression test for crbug.com/1431695. Test freezing and state changes work
+// correctly if the OnAudioSilent timer fires after the page is frozen.
+TEST_F(PageSchedulerImplTest, FreezingRecentlyAudiblePage) {
+  page_scheduler_->AudioStateChanged(true);
+  EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
+
+  page_scheduler_->AudioStateChanged(false);
+  // The page is audible for a certain period after raw signal disappearing.
+  EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
+
+  page_scheduler_->SetPageVisible(false);
+  // Freeze the page from the external entrypoint. This should transition the
+  // page to silent and frozen.
+  page_scheduler_->SetPageFrozen(true);
+  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
+  EXPECT_TRUE(page_scheduler_->IsFrozen());
+
+  // Fast-forwarding past the recent audio delay should not affect the state.
+  test_task_runner_->FastForwardBy(recent_audio_delay() +
+                                   base::Milliseconds(10));
+  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
+  EXPECT_TRUE(page_scheduler_->IsFrozen());
+}
+
+// Regression test for crbug.com/1431695. Test freezing and state changes work
+// correctly if the AudioStateChanged notification occurs after the page is
+// frozen.
+TEST_F(PageSchedulerImplTest, FreezingAudiblePage) {
+  page_scheduler_->AudioStateChanged(true);
+  EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
+
+  page_scheduler_->SetPageVisible(false);
+  page_scheduler_->SetPageFrozen(true);
+  EXPECT_TRUE(page_scheduler_->IsFrozen());
+
+  EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
+  page_scheduler_->AudioStateChanged(false);
+  // The page should become silent immediately.
+  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
+  // And the page should still be frozen.
+  EXPECT_TRUE(page_scheduler_->IsFrozen());
+
+  // Fast-forwarding past the recent audio delay should not affect the state.
+  test_task_runner_->FastForwardBy(recent_audio_delay() +
+                                   base::Milliseconds(10));
+  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
+  EXPECT_TRUE(page_scheduler_->IsFrozen());
+}
+
 TEST_F(PageSchedulerImplTest, BudgetBasedThrottlingForPageScheduler) {
   page_scheduler_->SetPageVisible(false);
 }
@@ -1421,24 +1498,22 @@ TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileAudioSilent) {
   page_scheduler_->AudioStateChanged(true);
   page_scheduler_->SetPageVisible(false);
   EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
-  EXPECT_FALSE(ShouldFreezePage());
   EXPECT_FALSE(page_scheduler_->IsFrozen());
 
   page_scheduler_->AudioStateChanged(false);
   // We are audible for a certain period after raw signal disappearing. The page
   // should not be eligible to freeze until after this delay.
   EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
-  EXPECT_FALSE(ShouldFreezePage());
-
-  test_task_runner_->FastForwardBy(recent_audio_delay() +
-                                   base::Milliseconds(100));
-  // Audio is finally silent. The page should be eligible for freezing.
-  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
-  EXPECT_TRUE(ShouldFreezePage());
   EXPECT_FALSE(page_scheduler_->IsFrozen());
 
-  test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() +
-                                   base::Milliseconds(100));
+  test_task_runner_->FastForwardBy(recent_audio_delay());
+  // Audio is finally silent. The page should be eligible for freezing.
+  EXPECT_FALSE(page_scheduler_->IsAudioPlaying());
+  EXPECT_FALSE(page_scheduler_->IsFrozen());
+  test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() -
+                                   kEpsilon);
+  EXPECT_FALSE(page_scheduler_->IsFrozen());
+  test_task_runner_->FastForwardBy(kEpsilon);
   EXPECT_TRUE(page_scheduler_->IsFrozen());
 
   // Page should unfreeze if audio starts playing.
@@ -1448,14 +1523,14 @@ TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileAudioSilent) {
 
 TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileNotVisible) {
   page_scheduler_->SetPageVisible(true);
-  EXPECT_FALSE(ShouldFreezePage());
   EXPECT_FALSE(page_scheduler_->IsFrozen());
 
   // Page should freeze after delay.
   page_scheduler_->SetPageVisible(false);
-  EXPECT_TRUE(ShouldFreezePage());
-  test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() +
-                                   base::Milliseconds(100));
+  test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() -
+                                   kEpsilon);
+  EXPECT_FALSE(page_scheduler_->IsFrozen());
+  test_task_runner_->FastForwardBy(kEpsilon);
   EXPECT_TRUE(page_scheduler_->IsFrozen());
 
   // Page should unfreeze when it becomes visible.
@@ -1465,13 +1540,12 @@ TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileNotVisible) {
   // If the page becomes visible before the freezing delay expires, it should
   // not freeze after the delay elapses.
   page_scheduler_->SetPageVisible(false);
-  EXPECT_TRUE(ShouldFreezePage());
   test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() -
-                                   base::Milliseconds(100));
+                                   kEpsilon);
   EXPECT_FALSE(page_scheduler_->IsFrozen());
   page_scheduler_->SetPageVisible(true);
   test_task_runner_->FastForwardBy(delay_for_background_tab_freezing() +
-                                   base::Milliseconds(100));
+                                   kEpsilon);
   EXPECT_FALSE(page_scheduler_->IsFrozen());
 }
 

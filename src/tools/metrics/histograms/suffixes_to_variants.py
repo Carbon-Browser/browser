@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Migrates histogram_suffixes to patterned histograms"""
@@ -16,23 +16,6 @@ import path_util
 
 HISTOGRAM_SUFFIXES_LIST_PATH = path_util.GetInputFile(
     'tools/metrics/histograms/metadata/histogram_suffixes_list.xml')
-
-
-def _ExtractObsoleteNode(node, recursive=True):
-  """Extracts obsolete child from |node|. Returns None if not exists."""
-  if not recursive:
-    obsolete = [
-        element for element in node.getElementsByTagName('obsolete')
-        if element.parentNode == node
-    ]
-  else:
-    obsolete = node.getElementsByTagName('obsolete')
-  if not obsolete:
-    return None
-  assert len(obsolete) == 1, (
-      'Node %s should at most contain one obsolete node.' %
-      node.getAttribute('name'))
-  return obsolete[0]
 
 
 def _ExtractOwnerNodes(node):
@@ -115,9 +98,6 @@ def _GetSuffixesDict(nodes, all_histograms):
 def _GetBaseVariant(doc, histogram):
   """Returns a <variant> node whose name is an empty string as the base variant.
 
-  If histogram has attribute `base = True`, it means that the base histogram
-  should be marked as obsolete.
-
   Args:
     doc: A Document object which is used to create a new <variant> node.
     histogram: The <histogram> node to check whether its base is true or not.
@@ -131,12 +111,6 @@ def _GetBaseVariant(doc, histogram):
     histogram.removeAttribute('base')
   base_variant = doc.createElement('variant')
   base_variant.setAttribute('name', '')
-  if is_base:
-    base_obsolete_node = doc.createElement('obsolete')
-    base_obsolete_node.appendChild(
-        doc.createTextNode(
-            extract_histograms.DEFAULT_BASE_HISTOGRAM_OBSOLETE_REASON))
-    base_variant.appendChild(base_obsolete_node)
   return base_variant
 
 
@@ -160,9 +134,6 @@ def _PopulateVariantsWithSuffixes(doc, node, histogram_suffixes):
   separator = histogram_suffixes.getAttribute('separator')
   suffixes_owners = _ExtractOwnerNodes(histogram_suffixes)
   suffixes_name = histogram_suffixes.getAttribute('name')
-  # Check if <histogram_suffixes> node has its own <obsolete> node.
-  obsolete_histogram_suffix_node = _ExtractObsoleteNode(histogram_suffixes,
-                                                        False)
   for suffix in histogram_suffixes.getElementsByTagName('suffix'):
     # The base suffix is a much more complicated case. It might require manual
     # effort to migrate them so skip this case for now.
@@ -189,12 +160,6 @@ def _PopulateVariantsWithSuffixes(doc, node, histogram_suffixes):
       variant.setAttribute('name', separator + suffix_name)
     if suffix.hasAttribute('label'):
       variant.setAttribute('summary', suffix.getAttribute('label'))
-    # Obsolete the obsolete node from suffix to the new variant. The obsolete
-    # node for each suffix should override the obsolete node, if exists,
-    # in the histogram_suffixes node.
-    obsolete = _ExtractObsoleteNode(suffix) or obsolete_histogram_suffix_node
-    if obsolete:
-      variant.appendChild(obsolete.cloneNode(deep=True))
     # Populate owner's node from histogram suffixes to each new variant.
     for owner in suffixes_owners:
       variant.appendChild(owner.cloneNode(deep=True))
@@ -297,9 +262,6 @@ def ChooseFiles(args):
       name = os.path.basename(os.path.dirname(path))
       if args.start <= name[0] <= args.end:
         paths.append(path)
-
-  if args.obsolete:
-    paths.append(histogram_paths.OBSOLETE_XML)
   return paths
 
 
@@ -349,9 +311,6 @@ if __name__ == '__main__':
   parser.add_argument('--end',
                       help='End migration at a certain character (inclusive).',
                       default='z')
-  parser.add_argument('--obsolete',
-                      help='Whether to migrate obsolete_histograms.xml',
-                      default=False)
   args = parser.parse_args()
   assert len(args.start) == 1 and len(args.end) == 1, (
       'start and end flag should only contain a single letter.')

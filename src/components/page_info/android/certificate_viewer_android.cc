@@ -1,11 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_string.h"
-#include "components/page_info/android/jni_headers/CertificateViewer_jni.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/page_info/android/jni_headers/CertificateViewer_jni.h"
 
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaParamRef;
@@ -78,9 +80,10 @@ JNI_CertificateViewer_GetCertSHA256FingerprintText(JNIEnv* env) {
 }
 
 static ScopedJavaLocalRef<jstring>
-JNI_CertificateViewer_GetCertSHA1FingerprintText(JNIEnv* env) {
+JNI_CertificateViewer_GetCertSHA256SPKIFingerprintText(JNIEnv* env) {
   return ConvertUTF8ToJavaString(
-      env, l10n_util::GetStringUTF8(IDS_CERT_INFO_SHA1_FINGERPRINT_LABEL));
+      env,
+      l10n_util::GetStringUTF8(IDS_CERT_INFO_SHA256_SPKI_FINGERPRINT_LABEL));
 }
 
 static ScopedJavaLocalRef<jstring> JNI_CertificateViewer_GetCertExtensionText(

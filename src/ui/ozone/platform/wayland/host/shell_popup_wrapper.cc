@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/wayland/host/shell_popup_wrapper.h"
+
+#include <optional>
 
 #include "base/check_op.h"
 #include "base/command_line.h"
@@ -11,8 +13,7 @@
 #include "base/logging.h"
 #include "base/nix/xdg_util.h"
 #include "base/notreached.h"
-#include "build/chromeos_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/owned_window_anchor.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_popup.h"
@@ -26,13 +27,11 @@ namespace ui {
 
 namespace {
 
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 bool IsGnomeShell() {
   auto env = base::Environment::Create();
   return base::nix::GetDesktopEnvironment(env.get()) ==
          base::nix::DESKTOP_ENVIRONMENT_GNOME;
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 }  // namespace
 
@@ -65,13 +64,16 @@ void ShellPopupWrapper::FillAnchorData(
   *constraints = OwnedWindowConstraintAdjustment::kAdjustmentFlipY;
 }
 
-void ShellPopupWrapper::GrabIfPossible(WaylandConnection* connection,
-                                       WaylandWindow* parent_window) {
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+XDGPopupWrapperImpl* ShellPopupWrapper::AsXDGPopupWrapper() {
+  return nullptr;
+}
+
+void ShellPopupWrapper::GrabIfPossible(
+    WaylandConnection* connection,
+    std::optional<bool> parent_shell_popup_has_grab) {
   base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
   if (!cmd_line->HasSwitch(switches::kUseWaylandExplicitGrab))
     return;
-#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // When drag process starts, as described the protocol -
   // https://goo.gl/1Mskq3, the client must have an active implicit grab. If
@@ -92,15 +94,12 @@ void ShellPopupWrapper::GrabIfPossible(WaylandConnection* connection,
   // The parent of a grabbing popup must either be an xdg_toplevel surface or
   // another xdg_popup with an explicit grab. If it is a popup that did not take
   // an explicit grab, an error will be raised, so early out if that's the case.
-  auto* parent_popup = parent_window->AsWaylandPopup();
-  if (parent_popup && !parent_popup->shell_popup()->has_grab_) {
+  if (!parent_shell_popup_has_grab.value_or(true)) {
     return;
   }
 
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
   if (serial->type == wl::SerialType::kTouchPress && IsGnomeShell())
     return;
-#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
   Grab(serial->value);
   has_grab_ = true;

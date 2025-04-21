@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/user_private_token_kpm_service_factory.h"
 
 class KeyedService;
@@ -37,7 +38,8 @@ class FakeUserPrivateTokenKeyPermissionsManagerService
   void Shutdown() override;
 
  private:
-  platform_keys::KeyPermissionsManager* key_permissions_manager_ = nullptr;
+  raw_ptr<platform_keys::KeyPermissionsManager, DanglingUntriaged>
+      key_permissions_manager_ = nullptr;
 };
 
 std::unique_ptr<KeyedService>

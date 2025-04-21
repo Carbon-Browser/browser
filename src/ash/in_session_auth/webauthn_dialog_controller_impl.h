@@ -1,15 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_IN_SESSION_AUTH_WEBAUTHN_DIALOG_CONTROLLER_IMPL_H_
 #define ASH_IN_SESSION_AUTH_WEBAUTHN_DIALOG_CONTROLLER_IMPL_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
 
 #include "ash/in_session_auth/in_session_auth_dialog.h"
+#include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/webauthn_dialog_controller.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/aura/window_tracker.h"
 
@@ -51,6 +55,10 @@ class WebAuthNDialogControllerImpl : public WebAuthNDialogController {
 
  private:
   bool IsFingerprintAvailable(const AccountId& account_id);
+  void CheckAuthFactorAvailability(const AccountId& account_id,
+                                   const std::string& origin_name,
+                                   uint32_t auth_methods,
+                                   aura::Window* source_window);
   void OnStartFingerprintAuthSession(AccountId account_id,
                                      uint32_t auth_methods,
                                      aura::Window* source_window,
@@ -69,10 +77,13 @@ class WebAuthNDialogControllerImpl : public WebAuthNDialogController {
       bool success,
       FingerprintState fingerprint_state);
 
+  // Process final cleanup tasks.
+  void ProcessFinalCleanups();
+
   // Called when auth succeeds to close the dialog and report success.
   void OnAuthSuccess();
 
-  InSessionAuthDialogClient* client_ = nullptr;
+  raw_ptr<InSessionAuthDialogClient> client_ = nullptr;
 
   // Callback to provide result of the entire authentication flow to
   // UserAuthenticationServiceProvider.

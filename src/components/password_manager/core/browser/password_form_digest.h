@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "url/gurl.h"
 
 namespace autofill {
-struct FormData;
+class FormData;
 }  // namespace autofill
 
 namespace password_manager {
@@ -27,8 +27,9 @@ struct PasswordFormDigest {
   PasswordFormDigest(PasswordFormDigest&& other);
   PasswordFormDigest& operator=(const PasswordFormDigest& other);
   PasswordFormDigest& operator=(PasswordFormDigest&& other);
-  bool operator==(const PasswordFormDigest& other) const;
-  bool operator!=(const PasswordFormDigest& other) const;
+
+  friend bool operator==(const PasswordFormDigest&,
+                         const PasswordFormDigest&) = default;
 
   PasswordForm::Scheme scheme;
   std::string signon_realm;

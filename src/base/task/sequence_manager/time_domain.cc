@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/time_domain.h"
 
+#include <optional>
+
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/threading/thread_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 namespace sequence_manager {

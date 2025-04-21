@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "components/messages/android/message_dispatcher_bridge.h"
 #include "components/resources/android/theme_resources.h"
 #include "components/strings/grit/components_strings.h"
-#include "components/webxr/android/ar_jni_headers/ArCoreInstallUtils_jni.h"
 #include "components/webxr/android/webxr_utils.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/webxr/android/xr_jni_headers/ArCoreInstallUtils_jni.h"
 
 using base::android::AttachCurrentThread;
 
@@ -106,7 +108,6 @@ void ArCoreInstallHelper::ShowMessage(int render_process_id,
     }
     case ArCoreAvailability::kSupportedInstalled:
       NOTREACHED();
-      break;
   }
 
   DCHECK_NE(-1, message_title);

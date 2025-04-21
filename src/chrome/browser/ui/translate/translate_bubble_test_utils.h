@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_TRANSLATE_TRANSLATE_BUBBLE_TEST_UTILS_H_
 
 #include <string>
-
 
 class TranslateBubbleModel;
 class Browser;

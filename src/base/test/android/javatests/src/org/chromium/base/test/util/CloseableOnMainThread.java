@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.test.util;
 
-import android.support.test.InstrumentationRegistry;
+import androidx.test.InstrumentationRegistry;
 
 import org.chromium.base.StrictModeContext;
 
@@ -29,13 +29,15 @@ public final class CloseableOnMainThread implements Closeable {
      * @throws Exception Thrown if the initializer throws Exception
      */
     public CloseableOnMainThread(Callable<Closeable> initializer) throws Exception {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            try {
-                mCloseable = initializer.call();
-            } catch (Exception e) {
-                mException = e;
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            try {
+                                mCloseable = initializer.call();
+                            } catch (Exception e) {
+                                mException = e;
+                            }
+                        });
         if (mException != null) {
             throw new Exception(mException.getCause());
         }
@@ -48,13 +50,15 @@ public final class CloseableOnMainThread implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            try {
-                mCloseable.close();
-            } catch (IOException e) {
-                mException = e;
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        () -> {
+                            try {
+                                mCloseable.close();
+                            } catch (IOException e) {
+                                mException = e;
+                            }
+                        });
         if (mException != null) {
             throw new IOException(mException.getCause());
         }
@@ -85,14 +89,17 @@ public final class CloseableOnMainThread implements Closeable {
          */
         public static CloseableOnMainThread allowAllThreadPolicies() throws Exception {
             return new CloseableOnMainThread(
-                    () -> { return StrictModeContext.allowAllThreadPolicies(); });
+                    () -> {
+                        return StrictModeContext.allowAllThreadPolicies();
+                    });
         }
 
-        /**
-         * Convenience method for disabling StrictMode for disk-writes with try-with-resources.
-         */
+        /** Convenience method for disabling StrictMode for disk-writes with try-with-resources. */
         public static CloseableOnMainThread allowDiskWrites() throws Exception {
-            return new CloseableOnMainThread(() -> { return StrictModeContext.allowDiskWrites(); });
+            return new CloseableOnMainThread(
+                    () -> {
+                        return StrictModeContext.allowDiskWrites();
+                    });
         }
     }
 }

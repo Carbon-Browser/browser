@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -16,7 +17,6 @@
 #include "device/bluetooth/bluetooth_common.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -105,8 +105,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDiscoveryFilter {
       const device::BluetoothDiscoveryFilter* filter_b);
 
  private:
-  absl::optional<int16_t> rssi_;
-  absl::optional<uint16_t> pathloss_;
+  std::optional<int16_t> rssi_;
+  std::optional<uint16_t> pathloss_;
   BluetoothTransport transport_;
   base::flat_set<DeviceInfoFilter> device_filters_;
 };

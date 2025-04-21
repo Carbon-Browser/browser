@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,35 +20,32 @@ TEST(TextEncoding, NonByteBased) {
 }
 
 TEST(TextEncoding, ClosestByteBased) {
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-8").ClosestByteBasedEquivalent().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16").ClosestByteBasedEquivalent().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16le").ClosestByteBasedEquivalent().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16be").ClosestByteBasedEquivalent().GetName());
-  EXPECT_STREQ(
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-8").ClosestByteBasedEquivalent().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16").ClosestByteBasedEquivalent().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16le").ClosestByteBasedEquivalent().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16be").ClosestByteBasedEquivalent().GetName());
+  EXPECT_EQ(
       "windows-1252",
       TextEncoding("windows-1252").ClosestByteBasedEquivalent().GetName());
-  EXPECT_STREQ("GBK",
-               TextEncoding("gbk").ClosestByteBasedEquivalent().GetName());
+  EXPECT_EQ("GBK", TextEncoding("gbk").ClosestByteBasedEquivalent().GetName());
 }
 
 TEST(TextEncoding, EncodingForFormSubmission) {
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-8").EncodingForFormSubmission().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16").EncodingForFormSubmission().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16le").EncodingForFormSubmission().GetName());
-  EXPECT_STREQ("UTF-8",
-               TextEncoding("utf-16be").EncodingForFormSubmission().GetName());
-  EXPECT_STREQ(
-      "windows-1252",
-      TextEncoding("windows-1252").EncodingForFormSubmission().GetName());
-  EXPECT_STREQ("GBK",
-               TextEncoding("gbk").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-8").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16le").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("UTF-8",
+            TextEncoding("utf-16be").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("windows-1252",
+            TextEncoding("windows-1252").EncodingForFormSubmission().GetName());
+  EXPECT_EQ("GBK", TextEncoding("gbk").EncodingForFormSubmission().GetName());
 }
 }
 }

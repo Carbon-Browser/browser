@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/layout_manager.h"
 
 namespace ash {
@@ -36,8 +37,8 @@ class RootWindowLayoutManager : public aura::LayoutManager {
   void AddContainer(aura::Window* window);
 
  private:
-  aura::Window* owner_;
-  std::vector<aura::Window*> containers_;
+  raw_ptr<aura::Window> owner_;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> containers_;
 };
 
 }  // namespace ash

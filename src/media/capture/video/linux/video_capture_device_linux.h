@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,16 +14,21 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "media/capture/video/linux/v4l2_capture_device_impl.h"
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video_capture_types.h"
+
+namespace base {
+class WaitableEvent;
+}
 
 namespace media {
 
 class V4L2CaptureDelegate;
 
 // Linux V4L2 implementation of VideoCaptureDevice.
-class VideoCaptureDeviceLinux : public VideoCaptureDevice {
+class CAPTURE_EXPORT VideoCaptureDeviceLinux : public VideoCaptureDevice {
  public:
   static VideoPixelFormat V4l2FourCcToChromiumPixelFormat(uint32_t v4l2_fourcc);
   static std::vector<uint32_t> GetListOfUsableFourCCs(bool favour_mjpeg);
@@ -54,6 +59,8 @@ class VideoCaptureDeviceLinux : public VideoCaptureDevice {
   const VideoCaptureDeviceDescriptor device_descriptor_;
 
  private:
+  void StopAndDeAllocateInternal(base::WaitableEvent* waiter);
+
   const scoped_refptr<V4L2CaptureDevice> v4l2_;
 
   // Internal delegate doing the actual capture setting, buffer allocation and

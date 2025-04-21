@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This is a library for working with test executables in a way that is
@@ -26,7 +26,6 @@ Example usage:
             test_executable_wrappers, parsed_cmdline_args, os.environ)
 """
 
-import argparse
 import time
 
 import test_filtering

@@ -1,10 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/channel_mixing_matrix.h"
 
 #include <stddef.h>
+
+#include <array>
 
 #include "base/strings/stringprintf.h"
 #include "media/base/channel_mixer.h"
@@ -33,14 +35,12 @@ TEST(ChannelMixingMatrixTest, ConstructAllPossibleLayouts) {
         continue;
       }
 
-      SCOPED_TRACE(base::StringPrintf(
-          "Input Layout: %d, Output Layout: %d", input_layout, output_layout));
-      ChannelMixingMatrix matrix_builder(
-          input_layout,
-          ChannelLayoutToChannelCount(input_layout),
-          output_layout,
-          ChannelLayoutToChannelCount(output_layout));
+      SCOPED_TRACE(base::StringPrintf("Input Layout: %d, Output Layout: %d",
+                                      input_layout, output_layout));
       std::vector<std::vector<float>> matrix;
+      ChannelMixingMatrix matrix_builder(
+          input_layout, ChannelLayoutToChannelCount(input_layout),
+          output_layout, ChannelLayoutToChannelCount(output_layout));
       matrix_builder.CreateTransformationMatrix(&matrix);
     }
   }
@@ -50,12 +50,10 @@ TEST(ChannelMixingMatrixTest, ConstructAllPossibleLayouts) {
 TEST(ChannelMixingMatrixTest, StereoToMono) {
   ChannelLayout input_layout = CHANNEL_LAYOUT_STEREO;
   ChannelLayout output_layout = CHANNEL_LAYOUT_MONO;
-  ChannelMixingMatrix matrix_builder(
-      input_layout,
-      ChannelLayoutToChannelCount(input_layout),
-      output_layout,
-      ChannelLayoutToChannelCount(output_layout));
   std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
   bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
 
   //                      Input: stereo
@@ -69,15 +67,37 @@ TEST(ChannelMixingMatrixTest, StereoToMono) {
   EXPECT_EQ(0.5f, matrix[0][1]);
 }
 
+TEST(ChannelMixingMatrixTest, StereoTo1Point1) {
+  ChannelLayout input_layout = CHANNEL_LAYOUT_STEREO;
+  ChannelLayout output_layout = CHANNEL_LAYOUT_1_1;
+  std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
+  bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
+
+  //                     Input: stereo
+  //                     LEFT   RIGHT
+  // Output: 1.1 CENTER  0.5    0.5
+  //             LFE     0      0
+  //
+  EXPECT_FALSE(remapping);
+  EXPECT_EQ(2u, matrix.size());
+  EXPECT_EQ(2u, matrix[0].size());
+  EXPECT_EQ(0.5f, matrix[0][0]);
+  EXPECT_EQ(0.5f, matrix[0][1]);
+  EXPECT_EQ(2u, matrix[1].size());
+  EXPECT_EQ(0.0f, matrix[1][0]);
+  EXPECT_EQ(0.0f, matrix[1][1]);
+}
+
 TEST(ChannelMixingMatrixTest, MonoToStereo) {
   ChannelLayout input_layout = CHANNEL_LAYOUT_MONO;
   ChannelLayout output_layout = CHANNEL_LAYOUT_STEREO;
-  ChannelMixingMatrix matrix_builder(
-      input_layout,
-      ChannelLayoutToChannelCount(input_layout),
-      output_layout,
-      ChannelLayoutToChannelCount(output_layout));
   std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
   bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
 
   //                       Input: mono
@@ -93,23 +113,47 @@ TEST(ChannelMixingMatrixTest, MonoToStereo) {
   EXPECT_EQ(1.0f, matrix[1][0]);
 }
 
-TEST(ChannelMixingMatrixTest, MonoToSurround) {
-  ChannelLayout input_layout = CHANNEL_LAYOUT_MONO;
-  ChannelLayout output_layout = CHANNEL_LAYOUT_5_1;
+TEST(ChannelMixingMatrixTest, 1Point1ToStereo) {
+  ChannelLayout input_layout = CHANNEL_LAYOUT_1_1;
+  ChannelLayout output_layout = CHANNEL_LAYOUT_STEREO;
+  std::vector<std::vector<float>> matrix;
   ChannelMixingMatrix matrix_builder(
       input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
       ChannelLayoutToChannelCount(output_layout));
+  bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
+
+  //                       Input: 1.1
+  //                       CENTER  LFE
+  // Output: stereo LEFT   1       0.707107
+  //                RIGHT  1       0.707107
+  //
+  EXPECT_FALSE(remapping);
+  EXPECT_EQ(2u, matrix.size());
+  EXPECT_EQ(2u, matrix[0].size());
+  EXPECT_EQ(1.0f, matrix[0][0]);
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][1]);
+  EXPECT_EQ(2u, matrix[1].size());
+  EXPECT_EQ(1.0f, matrix[1][0]);
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[1][1]);
+}
+
+TEST(ChannelMixingMatrixTest, MonoTo5Point1) {
+  ChannelLayout input_layout = CHANNEL_LAYOUT_MONO;
+  ChannelLayout output_layout = CHANNEL_LAYOUT_5_1;
   std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
   bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
 
   //                       Input: mono
   //                       CENTER
-  // Output: surround LEFT   1
-  //                  RIGHT  1
-  //                  CENTER 0
-  //                  LFE    0
-  //                  SL     0
-  //                  SR     0
+  // Output: 5.1    LEFT   1
+  //                RIGHT  1
+  //                CENTER 0
+  //                LFE    0
+  //                SL     0
+  //                SR     0
   //
   EXPECT_FALSE(remapping);
   EXPECT_EQ(6u, matrix.size());
@@ -123,22 +167,59 @@ TEST(ChannelMixingMatrixTest, MonoToSurround) {
   }
 }
 
-TEST(ChannelMixingMatrixTest, FiveOneToMono) {
+TEST(ChannelMixingMatrixTest, 1Point1To5Point1) {
+  ChannelLayout input_layout = CHANNEL_LAYOUT_1_1;
+  ChannelLayout output_layout = CHANNEL_LAYOUT_5_1;
+  std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
+  bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
+
+  //                       Input: 1.1
+  //                       CENTER  LFE
+  // Output: 5.1    LEFT   1       0
+  //                RIGHT  1       0
+  //                CENTER 0       0
+  //                LFE    0       1
+  //                SL     0       0
+  //                SR     0       0
+  //
+  EXPECT_FALSE(remapping);
+  EXPECT_EQ(6u, matrix.size());
+  EXPECT_EQ(2u, matrix[0].size());
+  EXPECT_EQ(1.0f, matrix[0][0]);
+  EXPECT_EQ(0.0f, matrix[0][1]);
+  EXPECT_EQ(2u, matrix[1].size());
+  EXPECT_EQ(1.0f, matrix[1][0]);
+  EXPECT_EQ(0.0f, matrix[1][1]);
+  EXPECT_EQ(2u, matrix[2].size());
+  EXPECT_EQ(0.0f, matrix[2][0]);
+  EXPECT_EQ(0.0f, matrix[2][1]);
+  EXPECT_EQ(2u, matrix[2].size());
+  EXPECT_EQ(0.0f, matrix[3][0]);
+  EXPECT_EQ(1.0f, matrix[3][1]);
+  for (size_t i = 4; i < 6; i++) {
+    EXPECT_EQ(2u, matrix[i].size());
+    EXPECT_EQ(0.0f, matrix[i][0]);
+    EXPECT_EQ(0.0f, matrix[i][1]);
+  }
+}
+
+TEST(ChannelMixingMatrixTest, 5Point1ToMono) {
   ChannelLayout input_layout = CHANNEL_LAYOUT_5_1;
   ChannelLayout output_layout = CHANNEL_LAYOUT_MONO;
-  ChannelMixingMatrix matrix_builder(
-      input_layout,
-      ChannelLayoutToChannelCount(input_layout),
-      output_layout,
-      ChannelLayoutToChannelCount(output_layout));
   std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
   bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
 
   // Note: 1/sqrt(2) is shown as 0.707.
   //
-  //                      Input: 5.1
-  //                      LEFT   RIGHT  CENTER  LFE    SIDE_LEFT  SIDE_RIGHT
-  // Output: mono CENTER  0.707  0.707  1       0.707  0.707      0.707
+  //                       Input: 5.1
+  //                       LEFT   RIGHT  CENTER  LFE    SIDE_LEFT  SIDE_RIGHT
+  // Output: mono  CENTER  0.707  0.707  1       0.707  0.707      0.707
   //
   EXPECT_FALSE(remapping);
   EXPECT_EQ(1u, matrix.size());
@@ -152,22 +233,59 @@ TEST(ChannelMixingMatrixTest, FiveOneToMono) {
   EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][5]);
 }
 
+TEST(ChannelMixingMatrixTest, 5Point1To1Point1) {
+  ChannelLayout input_layout = CHANNEL_LAYOUT_5_1;
+  ChannelLayout output_layout = CHANNEL_LAYOUT_1_1;
+  std::vector<std::vector<float>> matrix;
+  ChannelMixingMatrix matrix_builder(
+      input_layout, ChannelLayoutToChannelCount(input_layout), output_layout,
+      ChannelLayoutToChannelCount(output_layout));
+  bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
+
+  // Note: 1/sqrt(2) is shown as 0.707.
+  //
+  //                      Input: 5.1
+  //                      LEFT   RIGHT  CENTER  LFE    SIDE_LEFT  SIDE_RIGHT
+  // Output: 1.1  CENTER  0.707  0.707  1       0      0.707      0.707
+  //              LFE     0      0      0       1      0          0
+  //
+  EXPECT_FALSE(remapping);
+  EXPECT_EQ(2u, matrix.size());
+  EXPECT_EQ(6u, matrix[0].size());
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][0]);
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][1]);
+  // The center channel will be mixed at scale 1.
+  EXPECT_EQ(1.0f, matrix[0][2]);
+  EXPECT_EQ(0.0f, matrix[0][3]);
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][4]);
+  EXPECT_FLOAT_EQ(ChannelMixer::kHalfPower, matrix[0][5]);
+  EXPECT_EQ(6u, matrix[1].size());
+  EXPECT_EQ(0.0f, matrix[1][0]);
+  EXPECT_EQ(0.0f, matrix[1][1]);
+  EXPECT_EQ(0.0f, matrix[1][2]);
+  EXPECT_EQ(1.0f, matrix[1][3]);
+  EXPECT_EQ(0.0f, matrix[1][4]);
+  EXPECT_EQ(0.0f, matrix[1][5]);
+}
+
 TEST(ChannelMixingMatrixTest, DiscreteToDiscrete) {
-  const struct {
+  struct TestCase {
     int input_channels;
     int output_channels;
-  } test_case[] = {
-    {2, 2}, {2, 5}, {5, 2},
   };
+  const auto test_case = std::to_array<TestCase>({
+      {2, 2},
+      {2, 5},
+      {5, 2},
+  });
 
   for (size_t n = 0; n < std::size(test_case); n++) {
     int input_channels = test_case[n].input_channels;
     int output_channels = test_case[n].output_channels;
-    ChannelMixingMatrix matrix_builder(CHANNEL_LAYOUT_DISCRETE,
-                                       input_channels,
+    std::vector<std::vector<float>> matrix;
+    ChannelMixingMatrix matrix_builder(CHANNEL_LAYOUT_DISCRETE, input_channels,
                                        CHANNEL_LAYOUT_DISCRETE,
                                        output_channels);
-    std::vector<std::vector<float>> matrix;
     bool remapping = matrix_builder.CreateTransformationMatrix(&matrix);
     EXPECT_TRUE(remapping);
     EXPECT_EQ(static_cast<size_t>(output_channels), matrix.size());

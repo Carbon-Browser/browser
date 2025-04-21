@@ -1,12 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/css/cssom/inline_style_property_map.h"
 
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
-#include "third_party/blink/renderer/core/css/css_variable_reference_value.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/style_property_serializer.h"
 
 namespace blink {
@@ -42,20 +41,22 @@ bool InlineStylePropertyMap::SetShorthandProperty(
     const String& value,
     SecureContextMode secure_context_mode) {
   DCHECK(CSSProperty::Get(property_id).IsShorthand());
-  const auto result = owner_element_->EnsureMutableInlineStyle().SetProperty(
-      property_id, value, false /* important */, secure_context_mode);
+  const auto result =
+      owner_element_->EnsureMutableInlineStyle().ParseAndSetProperty(
+          property_id, value, false /* important */, secure_context_mode);
   return result != MutableCSSPropertyValueSet::kParseError;
 }
 
 void InlineStylePropertyMap::SetCustomProperty(
     const AtomicString& property_name,
     const CSSValue& value) {
-  DCHECK(value.IsVariableReferenceValue());
-  auto* variable_data =
-      To<CSSVariableReferenceValue>(value).VariableDataValue();
+  DCHECK(value.IsUnparsedDeclaration());
+  const auto& variable_value = To<CSSUnparsedDeclarationValue>(value);
+  CSSVariableData* variable_data = variable_value.VariableDataValue();
   owner_element_->SetInlineStyleProperty(
       CSSPropertyName(property_name),
-      *MakeGarbageCollected<CSSCustomPropertyDeclaration>(variable_data));
+      *MakeGarbageCollected<CSSUnparsedDeclarationValue>(
+          variable_data, variable_value.ParserContext()));
   owner_element_->NotifyInlineStyleMutation();
 }
 
@@ -72,13 +73,11 @@ void InlineStylePropertyMap::RemoveAllProperties() {
   owner_element_->RemoveAllInlineStyleProperties();
 }
 
-void InlineStylePropertyMap::ForEachProperty(
-    const IterationCallback& callback) {
+void InlineStylePropertyMap::ForEachProperty(IterationFunction visitor) {
   CSSPropertyValueSet& inline_style_set =
       owner_element_->EnsureMutableInlineStyle();
-  for (unsigned i = 0; i < inline_style_set.PropertyCount(); i++) {
-    const auto& property_reference = inline_style_set.PropertyAt(i);
-    callback(property_reference.Name(), property_reference.Value());
+  for (const CSSPropertyValue& property : inline_style_set.Properties()) {
+    visitor(property.Name(), property.Value());
   }
 }
 

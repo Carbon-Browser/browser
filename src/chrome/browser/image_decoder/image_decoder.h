@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -118,7 +118,7 @@ class ImageDecoder {
 
  private:
   friend base::NoDestructor<ImageDecoder>;
-  using RequestMap = std::map<int, ImageRequest*>;
+  using RequestMap = std::map<int, raw_ptr<ImageRequest, CtnExperimental>>;
 
   ImageDecoder();
   ~ImageDecoder() = delete;

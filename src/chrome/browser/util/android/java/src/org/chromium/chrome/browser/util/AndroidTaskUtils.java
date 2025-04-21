@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
+import android.os.Build.VERSION;
+import android.os.Build.VERSION_CODES;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
+
+import androidx.annotation.Nullable;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.PackageManagerUtils;
@@ -24,9 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Deals with Document-related API calls.
- */
+/** Deals with Document-related API calls. */
 public class AndroidTaskUtils {
     public static final String TAG = "DocumentUtilities";
 
@@ -184,5 +186,28 @@ public class AndroidTaskUtils {
             }
         }
         return matchingInfos;
+    }
+
+    /**
+     * Get the {@link AppTask} for a given taskId.
+     *
+     * @param context The activity context.
+     * @param taskId The id of the task whose AppTask will be returned.
+     * @return The {@link AppTask} for a given taskId if found, {@code null} otherwise.
+     */
+    public static @Nullable AppTask getAppTaskFromId(Context context, int taskId) {
+        ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        for (var appTask : am.getAppTasks()) {
+            var taskInfo = appTask.getTaskInfo();
+            if (taskInfo == null) continue;
+            int taskInfoId = taskInfo.id;
+            if (VERSION.SDK_INT >= VERSION_CODES.Q) {
+                taskInfoId = taskInfo.taskId;
+            }
+            if (taskInfoId == taskId) {
+                return appTask;
+            }
+        }
+        return null;
     }
 }

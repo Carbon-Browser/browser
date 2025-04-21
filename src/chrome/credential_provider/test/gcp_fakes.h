@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,9 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/win/scoped_handle.h"
 #include "chrome/credential_provider/extension/extension_utils.h"
@@ -120,9 +122,11 @@ class FakeOSUserManager : public OSUserManager {
                            const wchar_t* password,
                            bool interactive,
                            base::win::ScopedHandle* token) override;
+
   HRESULT GetUserSID(const wchar_t* domain,
                      const wchar_t* username,
                      PSID* sid) override;
+
   HRESULT FindUserBySID(const wchar_t* sid,
                         wchar_t* username,
                         DWORD username_size,
@@ -294,7 +298,7 @@ class FakeScopedUserProfileFactory {
 
 class FakeScopedUserProfile : public ScopedUserProfile {
  public:
-  HRESULT SaveAccountInfo(const base::Value& properties) override;
+  HRESULT SaveAccountInfo(const base::Value::Dict& properties) override;
 
  private:
   friend class FakeScopedUserProfileFactory;
@@ -580,7 +584,7 @@ class FakeEventLoggingApiManager : public EventLoggingApiManager {
  private:
   raw_ptr<EventLoggingApiManager> original_manager_ = nullptr;
 
-  const std::vector<EventLogEntry>& logs_;
+  const raw_ref<const std::vector<EventLogEntry>> logs_;
   EVT_HANDLE query_handle_, publisher_metadata_, render_context_;
   DWORD last_error_;
   size_t next_event_idx_;

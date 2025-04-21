@@ -1,13 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/url_rewrite/common/url_loader_throttle.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -34,8 +34,7 @@ class URLLoaderThrottleTest : public testing::Test {
   URLLoaderThrottle::IsHeaderCorsExemptCallback CreateCorsExemptHeadersCallback(
       std::vector<std::string> cors_exempt_headers) {
     return base::BindLambdaForTesting(
-        [cors_exempt_headers](base::StringPiece header) {
-          LOG(INFO) << "HEADER: " << header;
+        [cors_exempt_headers](std::string_view header) {
           for (const auto& exempt_header : cors_exempt_headers) {
             if (base::EqualsCaseInsensitiveASCII(header, exempt_header)) {
               return true;
@@ -59,7 +58,7 @@ TEST_F(URLLoaderThrottleTest, WildcardHosts) {
   std::vector<mojom::UrlRequestActionPtr> actions;
   actions.push_back(std::move(rewrite));
   mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
-  rule->hosts_filter = absl::optional<std::vector<std::string>>({"*.test.net"});
+  rule->hosts_filter = std::optional<std::vector<std::string>>({"*.test.net"});
   rule->actions = std::move(actions);
   mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
   rules->rules.push_back(std::move(rule));
@@ -110,7 +109,7 @@ TEST_F(URLLoaderThrottleTest, CorsAwareHeaders) {
   std::vector<mojom::UrlRequestActionPtr> actions;
   actions.push_back(std::move(rewrite));
   mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
-  rule->hosts_filter = absl::optional<std::vector<std::string>>({"*.test.net"});
+  rule->hosts_filter = std::optional<std::vector<std::string>>({"*.test.net"});
   rule->actions = std::move(actions);
 
   mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
@@ -146,7 +145,7 @@ TEST_F(URLLoaderThrottleTest, CorsAwareHeaders) {
 // Tests URL replacement rules that replace to a data URL do not append query or
 // ref from the original URL.
 TEST_F(URLLoaderThrottleTest, DataReplacementUrl) {
-  const char kCssDataURI[] = "data:text/css,";
+  constexpr char kCssDataURI[] = "data:text/css,";
 
   mojom::UrlRequestRewriteReplaceUrlPtr replace_url =
       mojom::UrlRequestRewriteReplaceUrl::New();
@@ -157,7 +156,7 @@ TEST_F(URLLoaderThrottleTest, DataReplacementUrl) {
   std::vector<mojom::UrlRequestActionPtr> actions;
   actions.push_back(std::move(rewrite));
   mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
-  rule->hosts_filter = absl::optional<std::vector<std::string>>({"*.test.net"});
+  rule->hosts_filter = std::optional<std::vector<std::string>>({"*.test.net"});
   rule->actions = std::move(actions);
 
   mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
@@ -171,7 +170,119 @@ TEST_F(URLLoaderThrottleTest, DataReplacementUrl) {
   network::ResourceRequest request;
   request.url = GURL("http://test.net/style.css?query#ref");
   throttle.WillStartRequest(&request, &defer);
-  EXPECT_EQ(request.url, base::StringPiece(kCssDataURI));
+  EXPECT_EQ(request.url, std::string_view(kCssDataURI));
+}
+
+// Tests URL replacement rules do not apply more than once in a redirect chain
+// on the same host.
+TEST_F(URLLoaderThrottleTest, RedirectsToSameHost) {
+  constexpr char kAppendQueryString[] = "foo=1&bar=2";
+  constexpr char kBaseUrl[] = "http://test.net";
+  constexpr char kUrlWithQueryString[] = "http://test.net?foo=1&bar=2";
+
+  mojom::UrlRequestRewriteAppendToQueryPtr append_query =
+      mojom::UrlRequestRewriteAppendToQuery::New(kAppendQueryString);
+  std::vector<mojom::UrlRequestActionPtr> actions;
+  actions.push_back(
+      mojom::UrlRequestAction::NewAppendToQuery(std::move(append_query)));
+
+  mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
+  rule->hosts_filter = std::optional<std::vector<std::string>>({"*.test.net"});
+  rule->actions = std::move(actions);
+
+  mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
+  rules->rules.push_back(std::move(rule));
+
+  URLLoaderThrottle throttle(
+      base::MakeRefCounted<UrlRequestRewriteRules>(std::move(rules)),
+      CreateCorsExemptHeadersCallback({}));
+  bool defer = false;
+
+  network::ResourceRequest request;
+  request.url = GURL(kBaseUrl);
+  request.navigation_redirect_chain = {GURL(kBaseUrl)};
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kUrlWithQueryString));
+
+  request.url = GURL(kUrlWithQueryString);
+  request.navigation_redirect_chain = {GURL(kBaseUrl),
+                                       GURL(kUrlWithQueryString)};
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kUrlWithQueryString));
+}
+
+// Tests URL replacement rules do not apply when redirecting.
+TEST_F(URLLoaderThrottleTest, RedirectsFromDifferentHost) {
+  constexpr char kAppendQueryString[] = "foo=1&bar=2";
+  constexpr char kBaseUrl1[] = "http://a.com";
+  constexpr char kBaseUrl2[] = "http://b.com";
+
+  mojom::UrlRequestRewriteAppendToQueryPtr append_query =
+      mojom::UrlRequestRewriteAppendToQuery::New(kAppendQueryString);
+  std::vector<mojom::UrlRequestActionPtr> actions;
+  actions.push_back(
+      mojom::UrlRequestAction::NewAppendToQuery(std::move(append_query)));
+
+  mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
+  rule->hosts_filter = std::optional<std::vector<std::string>>({"*.b.com"});
+  rule->actions = std::move(actions);
+
+  mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
+  rules->rules.push_back(std::move(rule));
+
+  URLLoaderThrottle throttle(
+      base::MakeRefCounted<UrlRequestRewriteRules>(std::move(rules)),
+      CreateCorsExemptHeadersCallback({}));
+  bool defer = false;
+
+  network::ResourceRequest request;
+  request.url = GURL(kBaseUrl1);
+  request.navigation_redirect_chain = {GURL(kBaseUrl1)};
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kBaseUrl1));
+
+  request.url = GURL(kBaseUrl2);
+  request.navigation_redirect_chain = {GURL(kBaseUrl1), GURL(kBaseUrl2)};
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kBaseUrl2));
+}
+
+// Tests URL replacement rules do not apply more than once when redirecting to a
+// different host that the rule applies to.
+TEST_F(URLLoaderThrottleTest, RedirectsToDifferentHost) {
+  constexpr char kAppendQueryString[] = "foo=1&bar=2";
+  constexpr char kBaseUrl1[] = "http://a.com";
+  constexpr char kBaseUrl2[] = "http://b.com";
+  constexpr char kUrl1WithQueryString[] = "http://a.com?foo=1&bar=2";
+
+  mojom::UrlRequestRewriteAppendToQueryPtr append_query =
+      mojom::UrlRequestRewriteAppendToQuery::New(kAppendQueryString);
+  std::vector<mojom::UrlRequestActionPtr> actions;
+  actions.push_back(
+      mojom::UrlRequestAction::NewAppendToQuery(std::move(append_query)));
+
+  mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
+  rule->hosts_filter =
+      std::optional<std::vector<std::string>>({"*.a.com", "*.b.com"});
+  rule->actions = std::move(actions);
+
+  mojom::UrlRequestRewriteRulesPtr rules = mojom::UrlRequestRewriteRules::New();
+  rules->rules.push_back(std::move(rule));
+
+  URLLoaderThrottle throttle(
+      base::MakeRefCounted<UrlRequestRewriteRules>(std::move(rules)),
+      CreateCorsExemptHeadersCallback({}));
+  bool defer = false;
+
+  network::ResourceRequest request;
+  request.url = GURL(kBaseUrl1);
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kUrl1WithQueryString));
+
+  request.url = GURL(kBaseUrl2);
+  request.navigation_redirect_chain = {GURL(kBaseUrl1), GURL(kBaseUrl2)};
+  throttle.WillStartRequest(&request, &defer);
+  EXPECT_EQ(request.url, GURL(kBaseUrl2));
 }
 
 class TestThrottleDelegate : public blink::URLLoaderThrottle::Delegate {
@@ -180,7 +291,7 @@ class TestThrottleDelegate : public blink::URLLoaderThrottle::Delegate {
   ~TestThrottleDelegate() override = default;
 
   bool canceled() const { return canceled_; }
-  base::StringPiece cancel_reason() const { return cancel_reason_; }
+  std::string_view cancel_reason() const { return cancel_reason_; }
 
   void Reset() {
     canceled_ = false;
@@ -189,7 +300,7 @@ class TestThrottleDelegate : public blink::URLLoaderThrottle::Delegate {
 
   // URLLoaderThrottle::Delegate implementation.
   void CancelWithError(int error_code,
-                       base::StringPiece custom_reason) override {
+                       std::string_view custom_reason) override {
     canceled_ = true;
     cancel_reason_ = std::string(custom_reason);
   }
@@ -207,7 +318,7 @@ TEST_F(URLLoaderThrottleTest, AllowAndDeny) {
 
   {
     mojom::UrlRequestRulePtr rule = mojom::UrlRequestRule::New();
-    rule->hosts_filter = absl::optional<std::vector<std::string>>({"test.net"});
+    rule->hosts_filter = std::optional<std::vector<std::string>>({"test.net"});
     rule->actions.push_back(mojom::UrlRequestAction::NewPolicy(
         mojom::UrlRequestAccessPolicy::kAllow));
     rules->rules.push_back(std::move(rule));

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define CONTENT_BROWSER_PRELOADING_PRERENDER_PRERENDER_SUBFRAME_NAVIGATION_THROTTLE_H_
 
 #include "base/scoped_observation.h"
+#include "content/browser/preloading/prerender/prerender_final_status.h"
 #include "content/browser/preloading/prerender/prerender_host.h"
 #include "content/public/browser/navigation_throttle.h"
+#include "content/public/browser/web_contents_observer.h"
 
 namespace content {
 
@@ -33,10 +35,11 @@ class PrerenderSubframeNavigationThrottle : public NavigationThrottle,
   ThrottleCheckResult WillStartRequest() override;
   ThrottleCheckResult WillRedirectRequest() override;
   ThrottleCheckResult WillProcessResponse() override;
+  ThrottleCheckResult WillCommitWithoutUrlLoader() override;
 
   // PrerenderHost::Observer
   void OnActivated() override;
-  void OnHostDestroyed() override;
+  void OnHostDestroyed(PrerenderFinalStatus final_status) override;
 
   // WebContentsObserver:
   void DidFinishNavigation(NavigationHandle* nav_handle) override;
@@ -51,7 +54,7 @@ class PrerenderSubframeNavigationThrottle : public NavigationThrottle,
       const FrameTreeNode& frame_tree_node);
 
   bool is_deferred_ = false;
-  const int prerender_root_ftn_id_;
+  const FrameTreeNodeId prerender_root_ftn_id_;
   base::ScopedObservation<PrerenderHost, PrerenderHost::Observer> observation_{
       this};
 };

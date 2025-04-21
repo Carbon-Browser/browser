@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/guid.h"
 #include "base/i18n/string_search.h"
+#include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/time/time.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
@@ -21,6 +21,21 @@
 #include "url/gurl.h"
 
 namespace power_bookmarks {
+
+namespace {
+
+// Backfill old shopping_specifics field to the new one. This is necessary
+// as we're transitioning from oneof powers to allowing multiple.
+// TODO(crbug.com/40233844): Also invoke this in meta updates once available.
+void BackfillShoppingSpecifics(PowerBookmarkMeta* meta) {
+  if (meta->has_old_shopping_specifics() && !meta->has_shopping_specifics()) {
+    meta->mutable_shopping_specifics()->CopyFrom(
+        meta->old_shopping_specifics());
+    meta->clear_old_shopping_specifics();
+  }
+}
+
+}  // namespace
 
 const char kPowerBookmarkMetaKey[] = "power_bookmark_meta";
 
@@ -44,6 +59,8 @@ std::unique_ptr<PowerBookmarkMeta> GetNodePowerBookmarkMeta(
     DeleteNodePowerBookmarkMeta(model, node);
   }
 
+  BackfillShoppingSpecifics(meta.get());
+
   return meta;
 }
 
@@ -54,6 +71,8 @@ void SetNodePowerBookmarkMeta(bookmarks::BookmarkModel* model,
     return;
 
   CHECK(meta);
+
+  BackfillShoppingSpecifics(meta.get());
 
   std::string data;
   EncodeMetaForStorage(*meta.get(), &data);
@@ -88,13 +107,14 @@ bool DoBookmarkTagsContainWords(const std::unique_ptr<PowerBookmarkMeta>& meta,
 }
 
 template <class type>
-void GetBookmarksMatchingPropertiesImpl(
+std::vector<const bookmarks::BookmarkNode*> GetBookmarksMatchingPropertiesImpl(
     type& iterator,
     bookmarks::BookmarkModel* model,
     const PowerBookmarkQueryFields& query,
     const std::vector<std::u16string>& query_words,
-    size_t max_count,
-    std::vector<const bookmarks::BookmarkNode*>* nodes) {
+    size_t max_count) {
+  std::vector<const bookmarks::BookmarkNode*> nodes;
+
   while (iterator.has_next()) {
     const bookmarks::BookmarkNode* node = iterator.Next();
 
@@ -110,11 +130,22 @@ void GetBookmarksMatchingPropertiesImpl(
     bool tags_match_query =
         query_words.empty() || DoBookmarkTagsContainWords(meta, query_words);
 
+    // Add vertical-specific support by adding a case below.
     if (query.type.has_value()) {
-      if (!meta || (meta->type() != query.type.value() &&
-                    query.type.value() != PowerBookmarkType::UNSPECIFIED)) {
+      if (!meta)
         continue;
+
+      bool type_present = false;
+      switch (query.type.value()) {
+        case PowerBookmarkType::SHOPPING:
+          type_present = meta->has_shopping_specifics();
+          break;
+        default:
+          NOTREACHED();
       }
+
+      if (!type_present)
+        continue;
     }
 
     if (!title_or_url_match_query && !tags_match_query)
@@ -153,23 +184,26 @@ void GetBookmarksMatchingPropertiesImpl(
         continue;
     }
 
-    nodes->push_back(node);
-    if (nodes->size() == max_count)
-      return;
+    nodes.push_back(node);
+    if (nodes.size() == max_count) {
+      break;
+    }
   }
+
+  return nodes;
 }
 
-void GetBookmarksMatchingProperties(
+std::vector<const bookmarks::BookmarkNode*> GetBookmarksMatchingProperties(
     bookmarks::BookmarkModel* model,
     const PowerBookmarkQueryFields& query,
-    size_t max_count,
-    std::vector<const bookmarks::BookmarkNode*>* nodes) {
+    size_t max_count) {
   // ParseBookmarkQuery and some of the other util methods come from
   // bookmark_utils.
   std::vector<std::u16string> query_words =
       bookmarks::ParseBookmarkQuery(query);
-  if (query.word_phrase_query && query_words.empty() && query.tags.empty())
-    return;
+  if (query.word_phrase_query && query_words.empty() && query.tags.empty()) {
+    return {};
+  }
 
   const bookmarks::BookmarkNode* search_folder = model->root_node();
   if (query.folder && query.folder->is_folder())
@@ -178,24 +212,26 @@ void GetBookmarksMatchingProperties(
   if (query.url) {
     // Shortcut into the BookmarkModel if searching for URL.
     GURL url(*query.url);
-    std::vector<const bookmarks::BookmarkNode*> url_matched_nodes;
-    if (url.is_valid())
-      model->GetNodesByURL(url, &url_matched_nodes);
+    std::vector<raw_ptr<const bookmarks::BookmarkNode, VectorExperimental>>
+        url_matched_nodes;
+    if (url.is_valid()) {
+      url_matched_nodes = model->GetNodesByURL(url);
+    }
     bookmarks::VectorIterator iterator(&url_matched_nodes);
-    GetBookmarksMatchingPropertiesImpl<bookmarks::VectorIterator>(
-        iterator, model, query, query_words, max_count, nodes);
-  } else {
-    ui::TreeNodeIterator<const bookmarks::BookmarkNode> iterator(search_folder);
-    GetBookmarksMatchingPropertiesImpl<
-        ui::TreeNodeIterator<const bookmarks::BookmarkNode>>(
-        iterator, model, query, query_words, max_count, nodes);
+    return GetBookmarksMatchingPropertiesImpl<bookmarks::VectorIterator>(
+        iterator, model, query, query_words, max_count);
   }
+
+  ui::TreeNodeIterator<const bookmarks::BookmarkNode> iterator(search_folder);
+  return GetBookmarksMatchingPropertiesImpl<
+      ui::TreeNodeIterator<const bookmarks::BookmarkNode>>(
+      iterator, model, query, query_words, max_count);
 }
 
 void EncodeMetaForStorage(const PowerBookmarkMeta& meta, std::string* out) {
   std::string data;
   meta.SerializeToString(&data);
-  base::Base64Encode(data, out);
+  *out = base::Base64Encode(data);
 }
 
 bool DecodeMetaFromStorage(const std::string& data, PowerBookmarkMeta* out) {

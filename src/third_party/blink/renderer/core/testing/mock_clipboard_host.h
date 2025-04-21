@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,12 @@ class MockClipboardHost : public mojom::blink::ClipboardHost {
   // Clears all clipboard data.
   void Reset();
 
+  // These write methods exist only in the mock class because
+  // mojom::ClipboardHost does not provide equivalent methods.  These are here
+  // to simplify testing of the system clipboard.
+  void WriteRtf(const String& rtf_text);
+  void WriteFiles(mojom::blink::ClipboardFilesPtr files);
+
  private:
   // mojom::ClipboardHost
   void GetSequenceNumber(mojom::ClipboardBuffer clipboard_buffer,
@@ -46,14 +52,16 @@ class MockClipboardHost : public mojom::blink::ClipboardHost {
                ReadPngCallback callback) override;
   void ReadFiles(mojom::ClipboardBuffer clipboard_buffer,
                  ReadFilesCallback callback) override;
-  void ReadCustomData(mojom::ClipboardBuffer clipboard_buffer,
-                      const String& type,
-                      ReadCustomDataCallback callback) override;
+  void ReadDataTransferCustomData(
+      mojom::ClipboardBuffer clipboard_buffer,
+      const String& type,
+      ReadDataTransferCustomDataCallback callback) override;
   void WriteText(const String& text) override;
   void WriteHtml(const String& markup, const KURL& url) override;
   void WriteSvg(const String& markup) override;
   void WriteSmartPasteMarker() override;
-  void WriteCustomData(const HashMap<String, String>& data) override;
+  void WriteDataTransferCustomData(
+      const HashMap<String, String>& data) override;
   void WriteBookmark(const String& url, const String& title) override;
   void WriteImage(const SkBitmap& bitmap) override;
   void CommitWrite() override;
@@ -74,6 +82,8 @@ class MockClipboardHost : public mojom::blink::ClipboardHost {
   String plain_text_ = g_empty_string;
   String html_text_ = g_empty_string;
   String svg_text_ = g_empty_string;
+  String rtf_text_ = g_empty_string;
+  mojom::blink::ClipboardFilesPtr files_ = mojom::blink::ClipboardFiles::New();
   KURL url_;
   Vector<uint8_t> png_;
   // TODO(asully): Remove `image_` once ReadImage() path is removed.

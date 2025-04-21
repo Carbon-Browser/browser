@@ -1,17 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
 package org.chromium.base.test.util;
 
+import android.os.Build;
 import android.os.Debug;
-import android.os.SystemClock;
 
-/**
- * Encapsulates timeout logic, and disables timeouts when debugger is attached.
- */
+/** Encapsulates timeout logic, and disables timeouts when debugger is attached. */
 public class TimeoutTimer {
-    private final long mEndTimeMs;
+    private static final long MS_TO_NANO = 1000000;
+    // The fingerprint is null under Robolectric because BaseRobolectricAndroidConfigurer marks
+    // TimeoutTimer as "DoNotAcquire" (so that System.nanoTime() will not return a fake time), and
+    // so the class resolves to the Android stubs jar.
+    private static final boolean IS_ROBOLECTRIC =
+            Build.FINGERPRINT == null || "robolectric".equals(Build.FINGERPRINT);
+
+    private final long mEndTimeNano;
     private final long mTimeoutMs;
 
     /**
@@ -19,7 +24,7 @@ public class TimeoutTimer {
      */
     public TimeoutTimer(long timeoutMs) {
         mTimeoutMs = ScalableTimeout.scaleTimeout(timeoutMs);
-        mEndTimeMs = SystemClock.uptimeMillis() + mTimeoutMs;
+        mEndTimeNano = System.nanoTime() + mTimeoutMs * MS_TO_NANO;
     }
 
     /** Whether this timer has expired. */
@@ -27,14 +32,24 @@ public class TimeoutTimer {
         return getRemainingMs() == 0;
     }
 
+    private static boolean shouldPauseTimeouts() {
+        if (!IS_ROBOLECTRIC) {
+            return Debug.isDebuggerConnected();
+        }
+        // Our test runner sets this when --wait-for-java-debugger is passed.
+        // This will cause tests to never time out since the value is not updated when debugger
+        // detaches (oh well).
+        return "true".equals(System.getProperty("chromium.jdwp_active"));
+    }
+
     /** Returns how much time is left in milliseconds. */
     public long getRemainingMs() {
-        if (Debug.isDebuggerConnected()) {
+        if (shouldPauseTimeouts()) {
             // Never decreases, but still short enough that it's safe to wait() on and have a
             // timeout happen once the debugger detaches.
             return mTimeoutMs;
         }
-        long ret = mEndTimeMs - SystemClock.uptimeMillis();
-        return ret < 0 ? 0 : ret;
+        long ret = mEndTimeNano - System.nanoTime();
+        return ret < 0 ? 0 : ret / MS_TO_NANO;
     }
 }

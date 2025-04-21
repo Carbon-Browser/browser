@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ chrome.test.getConfig(function(config) {
       };
     } else if (wantThumbnail) {
       callback = function(thumbnail) {
-        chrome.test.assertFalse(thumbnail === undefined);
+        chrome.test.assertNe(undefined, thumbnail);
         var buffer = new Uint8Array(thumbnail);
         chrome.test.assertTrue(buffer.length > 0);
         chrome.test.succeed("setWallpaper replied successfully.");

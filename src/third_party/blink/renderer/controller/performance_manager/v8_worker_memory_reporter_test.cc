@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,12 @@ class V8WorkerMemoryReporterTest : public ::testing::Test {
 };
 
 class V8WorkerMemoryReporterTestWithDedicatedWorker
-    : public DedicatedWorkerTest {};
+    : public DedicatedWorkerTest {
+ public:
+  V8WorkerMemoryReporterTestWithDedicatedWorker()
+      : DedicatedWorkerTest(
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+};
 
 class V8WorkerMemoryReporterTestWithMockPlatform
     : public V8WorkerMemoryReporterTestWithDedicatedWorker {
@@ -72,9 +77,12 @@ class MemoryUsageChecker {
     }
     called_ = true;
     if (callback_action_ == CallbackAction::kExitRunLoop) {
-      test::ExitRunLoop();
+      loop_.Quit();
     }
   }
+
+  void Run() { loop_.Run(); }
+
   bool IsCalled() { return called_; }
 
  private:
@@ -82,12 +90,13 @@ class MemoryUsageChecker {
   size_t worker_count_;
   size_t bytes_per_worker_lower_bound_;
   CallbackAction callback_action_;
+  base::RunLoop loop_;
 };
 
 TEST_F(V8WorkerMemoryReporterTest, OnMeasurementSuccess) {
   MockCallback mock_callback;
   V8WorkerMemoryReporter reporter(
-      WTF::Bind(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
+      WTF::BindOnce(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
   reporter.SetWorkerCount(6);
   Result result = {Vector<WorkerMemoryUsage>(
       {WorkerMemoryUsage{WorkerToken(DedicatedWorkerToken()), 1},
@@ -106,7 +115,7 @@ TEST_F(V8WorkerMemoryReporterTest, OnMeasurementSuccess) {
 TEST_F(V8WorkerMemoryReporterTest, OnMeasurementFailure) {
   MockCallback mock_callback;
   V8WorkerMemoryReporter reporter(
-      WTF::Bind(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
+      WTF::BindOnce(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
   reporter.SetWorkerCount(3);
   Result result = {Vector<WorkerMemoryUsage>(
       {WorkerMemoryUsage{WorkerToken(DedicatedWorkerToken()), 1},
@@ -123,7 +132,7 @@ TEST_F(V8WorkerMemoryReporterTest, OnMeasurementFailure) {
 TEST_F(V8WorkerMemoryReporterTest, OnTimeout) {
   MockCallback mock_callback;
   V8WorkerMemoryReporter reporter(
-      WTF::Bind(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
+      WTF::BindOnce(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
   reporter.SetWorkerCount(4);
   Result result = {Vector<WorkerMemoryUsage>(
       {WorkerMemoryUsage{WorkerToken(DedicatedWorkerToken()), 1},
@@ -144,7 +153,7 @@ TEST_F(V8WorkerMemoryReporterTest, OnTimeout) {
 TEST_F(V8WorkerMemoryReporterTest, OnTimeoutNoop) {
   MockCallback mock_callback;
   V8WorkerMemoryReporter reporter(
-      WTF::Bind(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
+      WTF::BindOnce(&MockCallback::Callback, WTF::Unretained(&mock_callback)));
   reporter.SetWorkerCount(2);
   Result result = {Vector<WorkerMemoryUsage>(
       {WorkerMemoryUsage{WorkerToken(DedicatedWorkerToken()), 1},
@@ -168,9 +177,9 @@ TEST_F(V8WorkerMemoryReporterTestWithDedicatedWorker, GetMemoryUsage) {
   MemoryUsageChecker checker(1, kBytesPerArrayElement * kArrayLength,
                              MemoryUsageChecker::CallbackAction::kExitRunLoop);
   V8WorkerMemoryReporter::GetMemoryUsage(
-      WTF::Bind(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
+      WTF::BindOnce(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
       v8::MeasureMemoryExecution::kEager);
-  test::EnterRunLoop();
+  checker.Run();
   EXPECT_TRUE(checker.IsCalled());
 }
 
@@ -182,10 +191,10 @@ TEST_F(V8WorkerMemoryReporterTestWithMockPlatform, GetMemoryUsageTimeout) {
   // we cannot call WaitUntilWorkerIsRunning here as that would block.
   MemoryUsageChecker checker(0, 0, MemoryUsageChecker::CallbackAction::kNone);
   V8WorkerMemoryReporter::GetMemoryUsage(
-      WTF::Bind(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
+      WTF::BindOnce(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
       v8::MeasureMemoryExecution::kEager);
-  platform()->RunForPeriodSeconds(V8WorkerMemoryReporter::kTimeout.InSeconds() +
-                                  1);
+  FastForwardBy(
+      base::Seconds(V8WorkerMemoryReporter::kTimeout.InSeconds() + 1));
   EXPECT_TRUE(checker.IsCalled());
 }
 

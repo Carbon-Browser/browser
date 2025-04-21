@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ int ScoreToProbability(float score) {
 void ExecuteCallback(const double threshold,
                      DimDecisionCallback decision_callback,
                      ExecuteResult result,
-                     absl::optional<std::vector<TensorPtr>> outputs) {
+                     std::optional<std::vector<TensorPtr>> outputs) {
   UserActivityEvent::ModelPrediction prediction;
 
   if (result != ExecuteResult::OK) {

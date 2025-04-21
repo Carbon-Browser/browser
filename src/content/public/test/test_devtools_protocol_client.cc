@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/test_devtools_protocol_client.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/auto_reset.h"
 #include "base/json/json_reader.h"
@@ -46,8 +47,7 @@ const base::Value::Dict* TestDevToolsProtocolClient::SendSessionCommand(
 
   std::string json_command;
   base::JSONWriter::Write(base::Value(std::move(command)), &json_command);
-  agent_host_->DispatchProtocolMessage(
-      this, base::as_bytes(base::make_span(json_command)));
+  agent_host_->DispatchProtocolMessage(this, base::as_byte_span(json_command));
   // Some messages are dispatched synchronously.
   // Only run loop if we are not finished yet.
   if (in_dispatch_ && wait)
@@ -65,6 +65,11 @@ void TestDevToolsProtocolClient::AttachToWebContents(WebContents* wc) {
   agent_host_->AttachClient(this);
 }
 
+void TestDevToolsProtocolClient::AttachToTabTarget(WebContents* wc) {
+  agent_host_ = DevToolsAgentHost::GetOrCreateForTab(wc);
+  agent_host_->AttachClient(this);
+}
+
 void TestDevToolsProtocolClient::AttachToBrowserTarget() {
   // Tethering domain is not used in tests.
   agent_host_ = DevToolsAgentHost::CreateForBrowser(
@@ -74,9 +79,18 @@ void TestDevToolsProtocolClient::AttachToBrowserTarget() {
 
 bool TestDevToolsProtocolClient::HasExistingNotification(
     const std::string& search) const {
+  return HasExistingNotificationMatching(
+      [&search](const base::Value::Dict& notification) {
+        return *notification.FindString(kMethodParam) == search;
+      });
+}
+
+bool TestDevToolsProtocolClient::HasExistingNotificationMatching(
+    base::FunctionRef<bool(const base::Value::Dict&)> pred) const {
   for (const auto& notification : notifications_) {
-    if (*notification.FindString(kMethodParam) == search)
+    if (pred(notification)) {
       return true;
+    }
   }
   return false;
 }
@@ -110,7 +124,7 @@ base::Value::Dict TestDevToolsProtocolClient::WaitForMatchingNotification(
     base::Value* params = it->Find(kParamsParam);
     if (!params || !matcher.Run(params->GetDict()))
       continue;
-    base::Value::Dict result = std::move(params->GetDict());
+    base::Value::Dict result = std::move(*params).TakeDict();
     notifications_.erase(it);
     return result;
   }
@@ -138,12 +152,12 @@ void TestDevToolsProtocolClient::RunLoopUpdatingQuitClosure() {
 void TestDevToolsProtocolClient::DispatchProtocolMessage(
     DevToolsAgentHost* agent_host,
     base::span<const uint8_t> message) {
-  base::StringPiece message_str(reinterpret_cast<const char*>(message.data()),
-                                message.size());
+  std::string_view message_str(reinterpret_cast<const char*>(message.data()),
+                               message.size());
   base::Value parsed = *base::JSONReader::Read(message_str);
-  if (absl::optional<int> id = parsed.GetDict().FindInt("id")) {
+  if (std::optional<int> id = parsed.GetDict().FindInt("id")) {
     received_responses_count_++;
-    response_ = std::move(parsed.GetDict());
+    response_ = std::move(parsed).TakeDict();
     in_dispatch_ = false;
     if (*id && *id == waiting_for_command_result_id_) {
       waiting_for_command_result_id_ = 0;
@@ -151,7 +165,7 @@ void TestDevToolsProtocolClient::DispatchProtocolMessage(
     }
   } else {
     const std::string* notification = parsed.GetDict().FindString("method");
-    notifications_.push_back(std::move(parsed.GetDict()));
+    notifications_.push_back(std::move(parsed).TakeDict());
     if (waiting_for_notification_ != *notification)
       return;
     const base::Value* params = notifications_.back().Find(kParamsParam);
@@ -167,8 +181,9 @@ void TestDevToolsProtocolClient::DispatchProtocolMessage(
 
 void TestDevToolsProtocolClient::AgentHostClosed(
     DevToolsAgentHost* agent_host) {
-  if (!agent_host_can_close_)
+  if (!agent_host_can_close_) {
     NOTREACHED();
+  }
 }
 
 bool TestDevToolsProtocolClient::AllowUnsafeOperations() {
@@ -183,7 +198,16 @@ bool TestDevToolsProtocolClient::MayReadLocalFiles() {
   return may_read_local_files_;
 }
 
-absl::optional<url::Origin>
+bool TestDevToolsProtocolClient::MayWriteLocalFiles() {
+  return may_write_local_files_;
+}
+
+bool TestDevToolsProtocolClient::MayAttachToURL(const GURL& url,
+                                                bool is_webui) {
+  return not_attachable_hosts_.find(url.host()) == not_attachable_hosts_.end();
+}
+
+std::optional<url::Origin>
 TestDevToolsProtocolClient::GetNavigationInitiatorOrigin() {
   return navigation_initiator_origin_;
 }

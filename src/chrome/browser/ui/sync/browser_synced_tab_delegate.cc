@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,14 @@ SessionID BrowserSyncedTabDelegate::GetSessionId() const {
 
 bool BrowserSyncedTabDelegate::IsPlaceholderTab() const {
   return false;
+}
+
+std::unique_ptr<sync_sessions::SyncedTabDelegate>
+BrowserSyncedTabDelegate::ReadPlaceholderTabSnapshotIfItShouldSync(
+    sync_sessions::SyncSessionsClient* sessions_client) {
+  NOTREACHED()
+      << "ReadPlaceholderTabSnapshotIfItShouldSync is not supported on "
+         "desktop platforms.";
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(BrowserSyncedTabDelegate);

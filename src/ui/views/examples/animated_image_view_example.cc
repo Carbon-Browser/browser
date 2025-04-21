@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "cc/paint/skottie_wrapper.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/lottie/animation.h"
 #include "ui/views/border.h"
@@ -40,6 +43,8 @@ namespace {
 // it in a view as AnimatedImageView.
 // See https://skia.org/user/modules/skottie for more info on skottie.
 class AnimationGallery : public BoxLayoutView, public TextfieldController {
+  METADATA_HEADER(AnimationGallery, BoxLayoutView)
+
  public:
   AnimationGallery() {
     View* image_view_container = nullptr;
@@ -106,7 +111,7 @@ class AnimationGallery : public BoxLayoutView, public TextfieldController {
     base::FilePath path(base::UTF16ToWide(file_chooser_->GetText()));
 #endif  // BUILDFLAG(IS_POSIX)
     if (base::ReadFileToString(path, &json)) {
-      auto skottie = cc::SkottieWrapper::CreateSerializable(
+      auto skottie = cc::SkottieWrapper::UnsafeCreateSerializable(
           std::vector<uint8_t>(json.begin(), json.end()));
       animated_image_view_->SetAnimatedImage(
           std::make_unique<lottie::Animation>(skottie));
@@ -117,19 +122,23 @@ class AnimationGallery : public BoxLayoutView, public TextfieldController {
 
  private:
   void Update() {
-    if (size_ > 24)
+    if (size_ > 24) {
       animated_image_view_->SetImageSize(gfx::Size(size_, size_));
-    else
+    } else {
       animated_image_view_->ResetImageSize();
+    }
     InvalidateLayout();
   }
 
-  AnimatedImageView* animated_image_view_ = nullptr;
-  Textfield* size_input_ = nullptr;
-  Textfield* file_chooser_ = nullptr;
+  raw_ptr<AnimatedImageView> animated_image_view_ = nullptr;
+  raw_ptr<Textfield> size_input_ = nullptr;
+  raw_ptr<Textfield> file_chooser_ = nullptr;
 
   int size_ = 0;
 };
+
+BEGIN_METADATA(AnimationGallery)
+END_METADATA
 
 }  // namespace
 

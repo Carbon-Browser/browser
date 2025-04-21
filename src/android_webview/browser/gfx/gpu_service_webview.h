@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@
 #include "gpu/config/gpu_preferences.h"
 
 namespace gpu {
-class MailboxManager;
-class SyncPointManager;
+class Scheduler;
 class SharedImageManager;
+class SyncPointManager;
 }  // namespace gpu
 
 namespace android_webview {
@@ -25,6 +25,8 @@ namespace android_webview {
 // This class acts like GpuServiceImpl for WebView. It owns gpu service objects
 // and provides handle to these gpu objects for WebView. There is only one copy
 // of this class in WebView.
+//
+// Lifetime: Singleton
 class GpuServiceWebView {
  public:
   // This static function makes sure there is a single copy of this class.
@@ -39,13 +41,11 @@ class GpuServiceWebView {
     return sync_point_manager_.get();
   }
 
-  gpu::MailboxManager* mailbox_manager() const {
-    return mailbox_manager_.get();
-  }
-
   gpu::SharedImageManager* shared_image_manager() const {
     return shared_image_manager_.get();
   }
+
+  gpu::Scheduler* scheduler() const { return scheduler_.get(); }
 
   const gpu::GPUInfo& gpu_info() const { return gpu_info_; }
 
@@ -63,15 +63,15 @@ class GpuServiceWebView {
   static GpuServiceWebView* CreateGpuServiceWebView();
   GpuServiceWebView(
       std::unique_ptr<gpu::SyncPointManager> sync_pointer_manager,
-      std::unique_ptr<gpu::MailboxManager> mailbox_manager,
       std::unique_ptr<gpu::SharedImageManager> shared_image_manager,
+      std::unique_ptr<gpu::Scheduler> scheduler,
       const gpu::GPUInfo& gpu_info,
       const gpu::GpuPreferences& gpu_preferences,
       const gpu::GpuFeatureInfo& gpu_feature_info);
 
   std::unique_ptr<gpu::SyncPointManager> sync_point_manager_;
-  std::unique_ptr<gpu::MailboxManager> mailbox_manager_;
   std::unique_ptr<gpu::SharedImageManager> shared_image_manager_;
+  std::unique_ptr<gpu::Scheduler> scheduler_;
 
   gpu::GPUInfo gpu_info_;
   gpu::GpuPreferences gpu_preferences_;

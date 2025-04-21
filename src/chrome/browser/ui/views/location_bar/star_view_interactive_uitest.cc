@@ -1,18 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "chrome/browser/ui/views/location_bar/star_view.h"
 
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_bubble_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/location_bar/star_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/pref_names.h"
@@ -29,7 +29,7 @@
 #include "ui/base/ui_base_switches.h"
 #include "ui/events/event_utils.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/test/button_test_api.h"
 
 namespace {
@@ -64,12 +64,14 @@ IN_PROC_BROWSER_TEST_F(StarViewTest, BookmarksUrlOnPress) {
   EXPECT_FALSE(bookmark_model->IsBookmarked(current_url));
   EXPECT_FALSE(star_icon->GetActive());
 
-  ui::MouseEvent pressed_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                               ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+  ui::MouseEvent pressed_event(ui::EventType::kMousePressed, gfx::Point(),
+                               gfx::Point(), ui::EventTimeForNow(),
+                               ui::EF_LEFT_MOUSE_BUTTON,
                                ui::EF_LEFT_MOUSE_BUTTON);
-  ui::MouseEvent released_event(
-      ui::ET_MOUSE_RELEASED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON);
+  ui::MouseEvent released_event(ui::EventType::kMouseReleased, gfx::Point(),
+                                gfx::Point(), ui::EventTimeForNow(),
+                                ui::EF_LEFT_MOUSE_BUTTON,
+                                ui::EF_LEFT_MOUSE_BUTTON);
 
   static_cast<views::View*>(star_icon)->OnMousePressed(pressed_event);
   static_cast<views::View*>(star_icon)->OnMouseReleased(released_event);
@@ -83,12 +85,14 @@ IN_PROC_BROWSER_TEST_F(StarViewTest, BookmarksUrlOnPress) {
 IN_PROC_BROWSER_TEST_F(StarViewTest, HideOnSecondClick) {
   views::View* star_icon = GetStarIcon();
 
-  ui::MouseEvent pressed_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                               ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+  ui::MouseEvent pressed_event(ui::EventType::kMousePressed, gfx::Point(),
+                               gfx::Point(), ui::EventTimeForNow(),
+                               ui::EF_LEFT_MOUSE_BUTTON,
                                ui::EF_LEFT_MOUSE_BUTTON);
-  ui::MouseEvent released_event(
-      ui::ET_MOUSE_RELEASED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON);
+  ui::MouseEvent released_event(ui::EventType::kMouseReleased, gfx::Point(),
+                                gfx::Point(), ui::EventTimeForNow(),
+                                ui::EF_LEFT_MOUSE_BUTTON,
+                                ui::EF_LEFT_MOUSE_BUTTON);
 
   // Verify that clicking once shows the bookmark bubble.
   EXPECT_FALSE(BookmarkBubbleView::bookmark_bubble());

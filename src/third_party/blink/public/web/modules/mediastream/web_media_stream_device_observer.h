@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,15 +36,31 @@ class BLINK_MODULES_EXPORT WebMediaStreamDeviceObserver {
   using OnDeviceRequestStateChangeCb = base::RepeatingCallback<void(
       const MediaStreamDevice& device,
       const mojom::MediaStreamStateChange new_state)>;
+  using OnDeviceCaptureConfigurationChangeCb =
+      base::RepeatingCallback<void(const MediaStreamDevice& device)>;
   using OnDeviceCaptureHandleChangeCb =
       base::RepeatingCallback<void(const MediaStreamDevice& device)>;
-  void AddStreams(
-      const WebString& label,
-      const mojom::blink::StreamDevicesSet& stream_devices_set,
-      OnDeviceStoppedCb on_device_stopped_cb,
-      OnDeviceChangedCb on_device_changed_cb,
-      OnDeviceRequestStateChangeCb on_device_request_state_change_cb,
-      OnDeviceCaptureHandleChangeCb on_device_capture_handle_change_cb);
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+  using OnZoomLevelChangeCb =
+      base::RepeatingCallback<void(const MediaStreamDevice& device,
+                                   int zoom_level)>;
+#endif
+
+  struct StreamCallbacks {
+    OnDeviceStoppedCb on_device_stopped_cb;
+    OnDeviceChangedCb on_device_changed_cb;
+    OnDeviceRequestStateChangeCb on_device_request_state_change_cb;
+    OnDeviceCaptureConfigurationChangeCb
+        on_device_capture_configuration_change_cb;
+    OnDeviceCaptureHandleChangeCb on_device_capture_handle_change_cb;
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+    OnZoomLevelChangeCb on_zoom_level_change_cb;
+#endif
+  };
+
+  void AddStreams(const WebString& label,
+                  const mojom::blink::StreamDevicesSet& stream_devices_set,
+                  const StreamCallbacks& stream_callbacks);
   void AddStream(const WebString& label, const MediaStreamDevice& device);
   bool RemoveStreams(const WebString& label);
   void RemoveStreamDevice(const MediaStreamDevice& device);

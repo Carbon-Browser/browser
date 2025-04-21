@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,26 +22,6 @@ bool VulkanImage::InitializeFromGpuMemoryBufferHandle(
     uint32_t queue_family_index) {
   NOTIMPLEMENTED();
   return false;
-}
-
-zx::vmo VulkanImage::GetMemoryZirconHandle() {
-  DCHECK(handle_types_ & VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA);
-  VkMemoryGetZirconHandleInfoFUCHSIA get_handle_info = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_GET_ZIRCON_HANDLE_INFO_FUCHSIA,
-      .memory = device_memory_,
-      .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA,
-  };
-
-  VkDevice device = device_queue_->GetVulkanDevice();
-  zx::vmo vmo;
-  VkResult result = vkGetMemoryZirconHandleFUCHSIA(device, &get_handle_info,
-                                                   vmo.reset_and_get_address());
-  if (result != VK_SUCCESS) {
-    DLOG(ERROR) << "vkGetMemoryFuchsiaHandleKHR failed: " << result;
-    vmo.reset();
-  }
-
-  return vmo;
 }
 
 }  // namespace gpu

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -182,7 +182,6 @@ const base::TimeDelta GServicesSettings::MinimumCheckinInterval() {
 
 // static
 std::string GServicesSettings::CalculateDigest(const SettingsMap& settings) {
-  unsigned char hash[base::kSHA1Length];
   std::string data;
   for (SettingsMap::const_iterator iter = settings.begin();
        iter != settings.end();
@@ -192,11 +191,9 @@ std::string GServicesSettings::CalculateDigest(const SettingsMap& settings) {
     data += iter->second;
     data += '\0';
   }
-  base::SHA1HashBytes(
-      reinterpret_cast<const unsigned char*>(&data[0]), data.size(), hash);
-  std::string digest =
-      kDigestVersionPrefix + base::HexEncode(hash, base::kSHA1Length);
-  digest = base::ToLowerASCII(digest);
+  std::string digest = kDigestVersionPrefix;
+  digest += base::ToLowerASCII(
+      base::HexEncode(base::SHA1Hash(base::as_byte_span(data))));
   return digest;
 }
 

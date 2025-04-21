@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,11 +13,11 @@ corresponding attribute on `defaults` that is a `lucicfg.var` that can be used
 to set the default value. Can also be accessed through `ci.defaults`.
 """
 
+load("//project.star", "settings")
 load("./args.star", "args")
 load("./branches.star", "branches")
 load("./builder_config.star", "builder_config")
-load("./builders.star", "builders", "os", "os_category")
-load("//project.star", "settings")
+load("./builders.star", "builders", "os")
 
 defaults = args.defaults(
     extends = builders.defaults,
@@ -31,16 +31,14 @@ defaults = args.defaults(
 def ci_builder(
         *,
         name,
-        branch_selector = branches.MAIN,
+        branch_selector = branches.selector.MAIN,
         console_view_entry = None,
         main_console_view = args.DEFAULT,
         cq_mirrors_console_view = args.DEFAULT,
-        sheriff_rotations = None,
+        gardener_rotations = None,
         tree_closing = args.DEFAULT,
         tree_closing_notifiers = None,
-        notifies = None,
         resultdb_bigquery_exports = None,
-        experiments = None,
         **kwargs):
     """Define a CI builder.
 
@@ -63,11 +61,11 @@ def ci_builder(
         default that defaults to None. An entry will be added only if
         `console_view_entry` is provided and the first entry's branch
         selector causes the entry to be defined.
-      sheriff_rotations: The name(s) of any sheriff rotations that the builder
+      gardener_rotations: The name(s) of any gardener rotations that the builder
         should be added to. On branches, all CI builders will be added to the
-        `chrome_browser_release` sheriff rotation.
+        `chrome_browser_release` gardener rotation.
       tree_closing: If true, failed builds from this builder that meet certain
-        criteria will close the tree and email the sheriff. See the
+        criteria will close the tree and email the gardener. See the
         'chromium-tree-closer' config in notifiers.star for the full criteria.
       tree_closing_notifiers: A list of notifiers that will be notified when
         tree closing criteria are met by a build of this builder. Supports a
@@ -79,8 +77,6 @@ def ci_builder(
         specified by the list's elements:
           chrome-luci-data.chromium.ci_test_results
           chrome-luci-data.chromium.gpu_ci_test_results
-      experiments: a dict of experiment name to the percentage chance (0-100)
-        that it will apply to builds generated from this builder.
       **kwargs: Additional keyword arguments that will be forwarded on to
         `builders.builder`.
     """
@@ -91,61 +87,50 @@ def ci_builder(
     if try_only_kwargs:
         fail("CI builders cannot specify the following try-only arguments: {}".format(try_only_kwargs))
 
+    notifies = kwargs.get("notifies", [])
     tree_closing = defaults.get_value("tree_closing", tree_closing)
     if tree_closing:
         tree_closing_notifiers = defaults.get_value("tree_closing_notifiers", tree_closing_notifiers, merge = args.MERGE_LIST)
         tree_closing_notifiers = args.listify("chromium-tree-closer", "chromium-tree-closer-email", tree_closing_notifiers)
+        if notifies != None:
+            notifies = args.listify(notifies, tree_closing_notifiers)
 
-        notifies = args.listify(notifies, tree_closing_notifiers)
+    kwargs["notifies"] = notifies
 
+    bq_dataset_name = "chrome"
+    if settings.project.startswith("chromium"):
+        bq_dataset_name = "chromium"
     merged_resultdb_bigquery_exports = [
         resultdb.export_test_results(
-            bq_table = "chrome-luci-data.chromium.ci_test_results",
+            bq_table = "chrome-luci-data.{}.ci_test_results".format(bq_dataset_name),
         ),
         resultdb.export_test_results(
-            bq_table = "chrome-luci-data.chromium.gpu_ci_test_results",
+            bq_table = "chrome-luci-data.{}.gpu_ci_test_results".format(bq_dataset_name),
             predicate = resultdb.test_result_predicate(
                 # Only match the telemetry_gpu_integration_test target and its
                 # Fuchsia and Android variants that have a suffix added to the
-                # end. Those are caught with [^/]*.
-                test_id_regexp = "ninja://chrome/test:telemetry_gpu_integration_test[^/]*/.+",
+                # end. Those are caught with [^/]*. The Fuchsia version is in
+                # //content/test since Fuchsia cannot depend on //chrome.
+                test_id_regexp = "ninja://(chrome|content)/test:telemetry_gpu_integration_test[^/]*/.+",
             ),
         ),
         resultdb.export_test_results(
-            bq_table = "chrome-luci-data.chromium.blink_web_tests_ci_test_results",
+            bq_table = "chrome-luci-data.{}.blink_web_tests_ci_test_results".format(bq_dataset_name),
             predicate = resultdb.test_result_predicate(
                 # Match the "blink_web_tests" target and all of its
                 # flag-specific versions, e.g. "vulkan_swiftshader_blink_web_tests".
-                test_id_regexp = "ninja://[^/]*blink_web_tests/.+",
+                test_id_regexp = "(ninja://[^/]*blink_web_tests/.+)|(ninja://[^/]*_wpt_tests/.+)|(ninja://[^/]*headless_shell_wpt/.+)",
             ),
         ),
     ]
     merged_resultdb_bigquery_exports.extend(resultdb_bigquery_exports or [])
 
-    sheriff_rotations = args.listify(
-        sheriff_rotations,
-        # All CI builders on standard branches should be part of the
-        # chrome_browser_release sheriff rotation
-        branches.value({branches.STANDARD_BRANCHES: "chrome_browser_release"}),
-    )
-
-    # All builders that are selected for extended stable should be part of the
-    # chrome_browser_release sheriff rotation (this is less straightforward than
-    # above because desktop extended stable can coexist with CrOS LTS and we
-    # don't want the CrOS LTS builders to appear in the chrome_browser_release
-    # tree)
-    if branches.matches(branch_selector, target = branches.DESKTOP_EXTENDED_STABLE_BRANCHES):
-        sheriff_rotations = args.listify(sheriff_rotations, branches.value({
-            branches.DESKTOP_EXTENDED_STABLE_BRANCHES: "chrome_browser_release",
-        }))
-
-    goma_enable_ats = defaults.get_value_from_kwargs("goma_enable_ats", kwargs)
-    if goma_enable_ats == args.COMPUTE:
-        os = defaults.get_value_from_kwargs("os", kwargs)
-
-        # in CI, enable ATS on windows.
-        if os and os.category == os_category.WINDOWS:
-            kwargs["goma_enable_ats"] = True
+    branch_gardener_rotations = list({
+        platform_settings.gardener_rotation: None
+        for platform, platform_settings in settings.platforms.items()
+        if branches.matches(branch_selector, platform = platform)
+    })
+    gardener_rotations = args.listify(gardener_rotations, branch_gardener_rotations)
 
     # Define the builder first so that any validation of luci.builder arguments
     # (e.g. bucket) occurs before we try to use it
@@ -154,14 +139,12 @@ def ci_builder(
         branch_selector = branch_selector,
         console_view_entry = console_view_entry,
         resultdb_bigquery_exports = merged_resultdb_bigquery_exports,
-        sheriff_rotations = sheriff_rotations,
-        notifies = notifies,
-        experiments = experiments,
-        resultdb_index_by_timestamp = True,
+        gardener_rotations = gardener_rotations,
+        resultdb_index_by_timestamp = settings.project.startswith("chromium"),
         **kwargs
     )
 
-    if console_view_entry:
+    if console_view_entry and settings.project.startswith("chromium"):
         # builder didn't fail, we're guaranteed that console_view_entry is
         # either a single console_view_entry or a list of them and that they are valid
         if type(console_view_entry) == type(struct()):
@@ -172,6 +155,8 @@ def ci_builder(
         if branches.matches(entry.branch_selector):
             console_view = entry.console_view
             if console_view == None:
+                console_view = defaults.console_view.get()
+            if console_view == args.COMPUTE:
                 console_view = defaults.get_value_from_kwargs("builder_group", kwargs)
 
             bucket = defaults.get_value_from_kwargs("bucket", kwargs)
@@ -222,6 +207,7 @@ def _gpu_mac_builder(*, name, **kwargs):
     """
     kwargs.setdefault("builderless", True)
     kwargs.setdefault("os", os.MAC_ANY)
+    kwargs.setdefault("reclient_scandeps_server", True)
     return ci.builder(name = name, **kwargs)
 
 def _gpu_windows_builder(*, name, **kwargs):
@@ -266,8 +252,7 @@ def thin_tester(
     if builder_spec and builder_spec.execution_mode != builder_config.execution_mode.TEST:
         fail("thin testers with builder specs must have TEST execution mode")
     cores = defaults.get_value("thin_tester_cores", cores)
-    kwargs.setdefault("goma_backend", None)
-    kwargs.setdefault("reclient_instance", None)
+    kwargs.setdefault("siso_project", None)
     kwargs.setdefault("os", builders.os.LINUX_DEFAULT)
     return ci.builder(
         name = name,
@@ -287,8 +272,10 @@ ci = struct(
     # CONSTANTS
     DEFAULT_EXECUTABLE = "recipe:chromium",
     DEFAULT_EXECUTION_TIMEOUT = 3 * time.hour,
+    DEFAULT_FYI_PRIORITY = 35,
     DEFAULT_POOL = "luci.chromium.ci",
     DEFAULT_SERVICE_ACCOUNT = "chromium-ci-builder@chops-service-accounts.iam.gserviceaccount.com",
+    DEFAULT_SHADOW_SERVICE_ACCOUNT = "chromium-try-builder@chops-service-accounts.iam.gserviceaccount.com",
 
     # Functions and constants for the GPU-related builder groups
     gpu = struct(
@@ -297,6 +284,7 @@ ci = struct(
         windows_builder = _gpu_windows_builder,
         POOL = "luci.chromium.gpu.ci",
         SERVICE_ACCOUNT = "chromium-ci-gpu-builder@chops-service-accounts.iam.gserviceaccount.com",
+        SHADOW_SERVICE_ACCOUNT = "chromium-try-gpu-builder@chops-service-accounts.iam.gserviceaccount.com",
         TREE_CLOSING_NOTIFIERS = ["gpu-tree-closer-email"],
     ),
 )

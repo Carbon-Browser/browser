@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,13 +18,14 @@ TEST_F(CastViewsTest, ProgressBar) {
       std::make_unique<CastWindowManagerAura>(true /* enable input */);
   gfx::Rect bounds = window_manager->GetRootWindow()->bounds();
 
-  views::ProgressBar* progress_bar = new views::ProgressBar(bounds.height());
+  views::ProgressBar* progress_bar = new views::ProgressBar();
+  progress_bar->SetPreferredHeight(bounds.height());
   progress_bar->SetValue(0.5);
 
   // Create the window.  We close the window by deleting it, so we take
   // ownership of the widget + native widget.
-  views::Widget::InitParams params;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   params.context = window_manager->GetRootWindow();
   params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;

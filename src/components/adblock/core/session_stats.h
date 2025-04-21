@@ -32,11 +32,9 @@ namespace adblock {
  */
 class SessionStats : public KeyedService {
  public:
-  virtual std::map<GURL, long> GetSessionAllowedAdsCount() const = 0;
+  virtual std::map<GURL, long> GetSessionAllowedResourcesCount() const = 0;
 
-  virtual std::map<GURL, long> GetSessionBlockedAdsCount() const = 0;
-
-  virtual void StartCollectingStats() = 0;
+  virtual std::map<GURL, long> GetSessionBlockedResourcesCount() const = 0;
 };
 
 }  // namespace adblock

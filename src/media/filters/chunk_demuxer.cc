@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/location.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/bind_post_task.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_decoder_config.h"
-#include "media/base/bind_to_current_loop.h"
+#include "media/base/demuxer.h"
 #include "media/base/media_tracks.h"
 #include "media/base/mime_util.h"
+#include "media/base/stream_parser.h"
 #include "media/base/stream_parser_buffer.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_codecs.h"
@@ -27,7 +28,6 @@
 #include "media/filters/frame_processor.h"
 #include "media/filters/source_buffer_stream.h"
 #include "media/filters/stream_parser_factory.h"
-
 
 namespace {
 
@@ -81,7 +81,7 @@ void ChunkDemuxerStream::AbortReads() {
   base::AutoLock auto_lock(lock_);
   ChangeState_Locked(RETURNING_ABORT_FOR_READS);
   if (read_cb_)
-    std::move(read_cb_).Run(kAborted, nullptr);
+    std::move(read_cb_).Run(kAborted, {});
 }
 
 void ChunkDemuxerStream::CompletePendingReadIfPossible() {
@@ -101,17 +101,12 @@ void ChunkDemuxerStream::Shutdown() {
   // data will be sent.
   if (read_cb_) {
     std::move(read_cb_).Run(DemuxerStream::kOk,
-                            StreamParserBuffer::CreateEOSBuffer());
+                            {StreamParserBuffer::CreateEOSBuffer()});
   }
 }
 
 bool ChunkDemuxerStream::IsSeekWaitingForData() const {
   base::AutoLock auto_lock(lock_);
-
-  // This method should not be called for text tracks. See the note in
-  // SourceBufferState::IsSeekWaitingForData().
-  DCHECK_NE(type_, DemuxerStream::TEXT);
-
   return stream_->IsSeekPending();
 }
 
@@ -191,16 +186,6 @@ Ranges<base::TimeDelta> ChunkDemuxerStream::GetBufferedRanges(
     base::TimeDelta duration) const {
   base::AutoLock auto_lock(lock_);
 
-  if (type_ == TEXT) {
-    // Since text tracks are discontinuous and the lack of cues should not block
-    // playback, report the buffered range for text tracks as [0, |duration|) so
-    // that intesections with audio & video tracks are computed correctly when
-    // no cues are present.
-    Ranges<base::TimeDelta> text_range;
-    text_range.Add(base::TimeDelta(), duration);
-    return text_range;
-  }
-
   Ranges<base::TimeDelta> range = stream_->GetBufferedTime();
 
   if (range.size() == 0u)
@@ -210,8 +195,13 @@ Ranges<base::TimeDelta> ChunkDemuxerStream::GetBufferedRanges(
   // This can be done by intersecting the stream's range with the valid time
   // range.
   Ranges<base::TimeDelta> valid_time_range;
-  valid_time_range.Add(range.start(0), duration);
+  valid_time_range.Add(range.start(0), range.start(0) + duration);
   return range.IntersectionWith(valid_time_range);
+}
+
+base::TimeDelta ChunkDemuxerStream::GetLowestPresentationTimestamp() const {
+  base::AutoLock auto_lock(lock_);
+  return stream_->GetLowestPresentationTimestamp();
 }
 
 base::TimeDelta ChunkDemuxerStream::GetHighestPresentationTimestamp() const {
@@ -224,9 +214,9 @@ base::TimeDelta ChunkDemuxerStream::GetBufferedDuration() const {
   return stream_->GetBufferedDuration();
 }
 
-size_t ChunkDemuxerStream::GetBufferedSize() const {
+size_t ChunkDemuxerStream::GetMemoryUsage() const {
   base::AutoLock auto_lock(lock_);
-  return stream_->GetBufferedSize();
+  return stream_->GetMemoryUsage();
 }
 
 void ChunkDemuxerStream::OnStartOfCodedFrameGroup(DecodeTimestamp start_dts,
@@ -273,15 +263,6 @@ bool ChunkDemuxerStream::UpdateVideoConfig(const VideoDecoderConfig& config,
   return stream_->UpdateVideoConfig(config, allow_codec_change);
 }
 
-void ChunkDemuxerStream::UpdateTextConfig(const TextTrackConfig& config,
-                                          MediaLog* media_log) {
-  DCHECK_EQ(type_, TEXT);
-  base::AutoLock auto_lock(lock_);
-  DCHECK(!stream_);
-  DCHECK_EQ(state_, UNINITIALIZED);
-  stream_ = std::make_unique<SourceBufferStream>(config, media_log);
-}
-
 void ChunkDemuxerStream::MarkEndOfStream() {
   base::AutoLock auto_lock(lock_);
   stream_->MarkEndOfStream();
@@ -293,16 +274,18 @@ void ChunkDemuxerStream::UnmarkEndOfStream() {
 }
 
 // DemuxerStream methods.
-void ChunkDemuxerStream::Read(ReadCB read_cb) {
+void ChunkDemuxerStream::Read(uint32_t count, ReadCB read_cb) {
   base::AutoLock auto_lock(lock_);
   DCHECK_NE(state_, UNINITIALIZED);
   DCHECK(!read_cb_);
 
-  read_cb_ = BindToCurrentLoop(std::move(read_cb));
+  read_cb_ = base::BindPostTaskToCurrentDefault(std::move(read_cb));
+  requested_buffer_count_ = count;
 
   if (!is_enabled_) {
     DVLOG(1) << "Read from disabled stream, returning EOS";
-    std::move(read_cb_).Run(kOk, StreamParserBuffer::CreateEOSBuffer());
+    std::move(read_cb_).Run(DemuxerStream::kOk,
+                            {StreamParserBuffer::CreateEOSBuffer()});
     return;
   }
 
@@ -351,14 +334,8 @@ void ChunkDemuxerStream::SetEnabled(bool enabled, base::TimeDelta timestamp) {
     stream_->Seek(timestamp);
   } else if (read_cb_) {
     DVLOG(1) << "Read from disabled stream, returning EOS";
-    std::move(read_cb_).Run(kOk, StreamParserBuffer::CreateEOSBuffer());
+    std::move(read_cb_).Run(kOk, {StreamParserBuffer::CreateEOSBuffer()});
   }
-}
-
-TextTrackConfig ChunkDemuxerStream::text_track_config() {
-  CHECK_EQ(type_, TEXT);
-  base::AutoLock auto_lock(lock_);
-  return stream_->GetCurrentTextTrackConfig();
 }
 
 void ChunkDemuxerStream::SetStreamMemoryLimit(size_t memory_limit) {
@@ -385,57 +362,102 @@ void ChunkDemuxerStream::CompletePendingReadIfPossible_Locked() {
   lock_.AssertAcquired();
   DCHECK(read_cb_);
 
-  DemuxerStream::Status status = DemuxerStream::kAborted;
-  scoped_refptr<StreamParserBuffer> buffer;
-
   switch (state_) {
     case UNINITIALIZED:
       NOTREACHED();
-      return;
-    case RETURNING_DATA_FOR_READS:
-      switch (stream_->GetNextBuffer(&buffer)) {
-        case SourceBufferStreamStatus::kSuccess:
-          status = DemuxerStream::kOk;
-          DVLOG(2) << __func__ << ": returning kOk, type " << type_ << ", dts "
-                   << buffer->GetDecodeTimestamp().InSecondsF() << ", pts "
-                   << buffer->timestamp().InSecondsF() << ", dur "
-                   << buffer->duration().InSecondsF() << ", key "
-                   << buffer->is_key_frame();
-          break;
-        case SourceBufferStreamStatus::kNeedBuffer:
-          // Return early without calling |read_cb_| since we don't have
-          // any data to return yet.
-          DVLOG(2) << __func__ << ": returning kNeedBuffer, type " << type_;
-          return;
-        case SourceBufferStreamStatus::kEndOfStream:
-          status = DemuxerStream::kOk;
-          buffer = StreamParserBuffer::CreateEOSBuffer();
-          DVLOG(2) << __func__ << ": returning kOk with EOS buffer, type "
-                   << type_;
-          break;
-        case SourceBufferStreamStatus::kConfigChange:
-          status = kConfigChanged;
-          buffer = nullptr;
-          DVLOG(2) << __func__ << ": returning kConfigChange, type " << type_;
-          break;
-      }
-      break;
     case RETURNING_ABORT_FOR_READS:
       // Null buffers should be returned in this state since we are waiting
       // for a seek. Any buffers in the SourceBuffer should NOT be returned
       // because they are associated with the seek.
-      status = DemuxerStream::kAborted;
-      buffer = nullptr;
+      requested_buffer_count_ = 0;
+      std::move(read_cb_).Run(kAborted, {});
       DVLOG(2) << __func__ << ": returning kAborted, type " << type_;
-      break;
+      return;
     case SHUTDOWN:
-      status = DemuxerStream::kOk;
-      buffer = StreamParserBuffer::CreateEOSBuffer();
+      requested_buffer_count_ = 0;
+      std::move(read_cb_).Run(kOk, {StreamParserBuffer::CreateEOSBuffer()});
       DVLOG(2) << __func__ << ": returning kOk with EOS buffer, type " << type_;
+      return;
+    case RETURNING_DATA_FOR_READS:
       break;
   }
+  DCHECK(state_ == RETURNING_DATA_FOR_READS);
 
-  std::move(read_cb_).Run(status, buffer);
+  auto [status, buffers] = GetPendingBuffers_Locked();
+
+  // If the status from |stream_| is kNeedBuffer and there's no buffers,
+  // then after ChunkDemuxerStream::Append, try to read data again,
+  // 'requested_buffer_count_' does not need to be cleared to 0.
+  if (status == SourceBufferStreamStatus::kNeedBuffer && buffers.empty()) {
+    return;
+  }
+  // If the status from |stream_| is kConfigChange, the vector muse be
+  // empty, then need to notify new config by running |read_cb_|.
+  if (status == SourceBufferStreamStatus::kConfigChange) {
+    DCHECK(buffers.empty());
+    requested_buffer_count_ = 0;
+    std::move(read_cb_).Run(kConfigChanged, std::move(buffers));
+    return;
+  }
+  // Other cases are kOk and just return the buffers.
+  DCHECK(!buffers.empty());
+  requested_buffer_count_ = 0;
+  std::move(read_cb_).Run(kOk, std::move(buffers));
+}
+
+std::pair<SourceBufferStreamStatus, DemuxerStream::DecoderBufferVector>
+ChunkDemuxerStream::GetPendingBuffers_Locked() {
+  lock_.AssertAcquired();
+  DemuxerStream::DecoderBufferVector output_buffers;
+  for (uint32_t i = 0; i < requested_buffer_count_; ++i) {
+    // This aims to avoid send out buffers with different config. To
+    // simply the config change handling on renderer(receiver) side, prefer to
+    // send out buffers before config change happens.
+    if (stream_->IsNextBufferConfigChanged() && !output_buffers.empty()) {
+      DVLOG(3) << __func__ << " status=0"
+               << ", type=" << type_ << ", req_size=" << requested_buffer_count_
+               << ", out_size=" << output_buffers.size();
+      return {SourceBufferStreamStatus::kSuccess, std::move(output_buffers)};
+    }
+
+    scoped_refptr<StreamParserBuffer> buffer;
+    SourceBufferStreamStatus status = stream_->GetNextBuffer(&buffer);
+    switch (status) {
+      case SourceBufferStreamStatus::kSuccess:
+        output_buffers.emplace_back(buffer);
+        break;
+      case SourceBufferStreamStatus::kNeedBuffer:
+        // Return early with calling |read_cb_| if output_buffers has buffers
+        // since there is no more readable data.
+        DVLOG(3) << __func__ << " status=" << (int)status << ", type=" << type_
+                 << ", req_size=" << requested_buffer_count_
+                 << ", out_size=" << output_buffers.size();
+        return {status, std::move(output_buffers)};
+      case SourceBufferStreamStatus::kEndOfStream:
+        output_buffers.emplace_back(StreamParserBuffer::CreateEOSBuffer());
+        DVLOG(3) << __func__ << " status=" << (int)status << ", type=" << type_
+                 << ", req_size=" << requested_buffer_count_
+                 << ", out_size=" << output_buffers.size();
+        return {status, std::move(output_buffers)};
+      case SourceBufferStreamStatus::kConfigChange:
+        // Since IsNextBufferConfigChanged has detected config change happen and
+        // send out buffers if |output_buffers| has buffer. When confige
+        // change actually happen it should be the first time run this |for
+        // loop|, i.e. output_buffers should be empty.
+        DCHECK(output_buffers.empty());
+        DVLOG(3) << __func__ << " status=" << (int)status << ", type=" << type_
+                 << ", req_size=" << requested_buffer_count_
+                 << ", out_size=" << output_buffers.size();
+        return {status, std::move(output_buffers)};
+    }
+  }
+
+  DCHECK_EQ(output_buffers.size(),
+            static_cast<size_t>(requested_buffer_count_));
+  DVLOG(3) << __func__ << " status are always kSuccess"
+           << ", type=" << type_ << ", req_size=" << requested_buffer_count_
+           << ", out_size=" << output_buffers.size();
+  return {SourceBufferStreamStatus::kSuccess, std::move(output_buffers)};
 }
 
 ChunkDemuxer::ChunkDemuxer(
@@ -443,15 +465,10 @@ ChunkDemuxer::ChunkDemuxer(
     base::RepeatingClosure progress_cb,
     EncryptedMediaInitDataCB encrypted_media_init_data_cb,
     MediaLog* media_log)
-    : state_(WAITING_FOR_INIT),
-      cancel_next_seek_(false),
-      host_(nullptr),
-      open_cb_(std::move(open_cb)),
+    : open_cb_(std::move(open_cb)),
       progress_cb_(std::move(progress_cb)),
       encrypted_media_init_data_cb_(std::move(encrypted_media_init_data_cb)),
-      media_log_(media_log),
-      duration_(kNoTimestamp),
-      user_specified_duration_(-1) {
+      media_log_(media_log) {
   DCHECK(open_cb_);
   DCHECK(encrypted_media_init_data_cb_);
   MEDIA_LOG(INFO, media_log_) << GetDisplayName();
@@ -459,6 +476,10 @@ ChunkDemuxer::ChunkDemuxer(
 
 std::string ChunkDemuxer::GetDisplayName() const {
   return "ChunkDemuxer";
+}
+
+DemuxerType ChunkDemuxer::GetDemuxerType() const {
+  return DemuxerType::kChunkDemuxer;
 }
 
 void ChunkDemuxer::Initialize(DemuxerHost* host,
@@ -473,7 +494,7 @@ void ChunkDemuxer::Initialize(DemuxerHost* host,
     base::AutoLock auto_lock(lock_);
     if (state_ == SHUTDOWN) {
       // Init cb must only be run after this method returns, so post.
-      init_cb_ = BindToCurrentLoop(std::move(init_cb));
+      init_cb_ = base::BindPostTaskToCurrentDefault(std::move(init_cb));
       RunInitCB_Locked(DEMUXER_ERROR_COULD_NOT_OPEN);
       return;
     }
@@ -506,7 +527,7 @@ void ChunkDemuxer::Seek(base::TimeDelta time, PipelineStatusCallback cb) {
   base::AutoLock auto_lock(lock_);
   DCHECK(!seek_cb_);
 
-  seek_cb_ = BindToCurrentLoop(std::move(cb));
+  seek_cb_ = base::BindPostTaskToCurrentDefault(std::move(cb));
   if (state_ != INITIALIZED && state_ != ENDED) {
     RunSeekCB_Locked(PIPELINE_ERROR_INVALID_STATE);
     return;
@@ -527,6 +548,10 @@ void ChunkDemuxer::Seek(base::TimeDelta time, PipelineStatusCallback cb) {
   }
 
   RunSeekCB_Locked(PIPELINE_OK);
+}
+
+bool ChunkDemuxer::IsSeekable() const {
+  return true;
 }
 
 // Demuxer implementation.
@@ -568,15 +593,15 @@ int64_t ChunkDemuxer::GetMemoryUsage() const {
   base::AutoLock auto_lock(lock_);
   int64_t mem = 0;
   for (const auto& s : audio_streams_)
-    mem += s->GetBufferedSize();
+    mem += s->GetMemoryUsage();
   for (const auto& s : video_streams_)
-    mem += s->GetBufferedSize();
+    mem += s->GetMemoryUsage();
   return mem;
 }
 
-absl::optional<container_names::MediaContainerName>
+std::optional<container_names::MediaContainerName>
 ChunkDemuxer::GetContainerForMetrics() const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void ChunkDemuxer::AbortPendingReads() {
@@ -641,8 +666,10 @@ ChunkDemuxer::Status ChunkDemuxer::AddId(
   if (!audio_config->IsValidConfig())
     return ChunkDemuxer::kNotSupported;
 
-  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) || IsValidId(id))
+  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) ||
+      IsValidId_Locked(id)) {
     return kReachedIdLimit;
+  }
 
   DCHECK(init_cb_);
 
@@ -667,8 +694,10 @@ ChunkDemuxer::Status ChunkDemuxer::AddId(
   if (!video_config->IsValidConfig())
     return ChunkDemuxer::kNotSupported;
 
-  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) || IsValidId(id))
+  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) ||
+      IsValidId_Locked(id)) {
     return kReachedIdLimit;
+  }
 
   DCHECK(init_cb_);
 
@@ -687,8 +716,10 @@ ChunkDemuxer::Status ChunkDemuxer::AddId(const std::string& id,
            << " codecs=" << codecs;
   base::AutoLock auto_lock(lock_);
 
-  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) || IsValidId(id))
+  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) ||
+      IsValidId_Locked(id)) {
     return kReachedIdLimit;
+  }
 
   // TODO(wolenetz): Change to DCHECK once less verification in release build is
   // needed. See https://crbug.com/786975.
@@ -706,12 +737,37 @@ ChunkDemuxer::Status ChunkDemuxer::AddId(const std::string& id,
                        ExpectedCodecs(content_type, codecs));
 }
 
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+ChunkDemuxer::Status ChunkDemuxer::AddAutoDetectedCodecsId(
+    const std::string& id,
+    RelaxedParserSupportedType mime_type) {
+  DVLOG(1) << __func__ << " id=" << id
+           << " content_type=" << static_cast<int>(mime_type);
+  base::AutoLock auto_lock(lock_);
+  if ((state_ != WAITING_FOR_INIT && state_ != INITIALIZING) ||
+      IsValidId_Locked(id)) {
+    return kReachedIdLimit;
+  }
+
+  CHECK(init_cb_);
+
+  std::unique_ptr<media::StreamParser> stream_parser =
+      StreamParserFactory::CreateRelaxedParser(mime_type);
+  if (!stream_parser) {
+    DVLOG(1) << __func__ << " failed: unsupported mime type for relaxed parser";
+    return kNotSupported;
+  }
+
+  return AddIdInternal(id, std::move(stream_parser), std::nullopt);
+}
+#endif
+
 ChunkDemuxer::Status ChunkDemuxer::AddIdInternal(
     const std::string& id,
     std::unique_ptr<media::StreamParser> stream_parser,
-    std::string expected_codecs) {
+    std::optional<std::string_view> expected_codecs) {
   DVLOG(2) << __func__ << " id=" << id
-           << " expected_codecs=" << expected_codecs;
+           << " expected_codecs=" << expected_codecs.value_or("None");
   lock_.AssertAcquired();
 
   std::unique_ptr<FrameProcessor> frame_processor =
@@ -738,21 +794,20 @@ ChunkDemuxer::Status ChunkDemuxer::AddIdInternal(
 
   source_state->Init(base::BindOnce(&ChunkDemuxer::OnSourceInitDone,
                                     base::Unretained(this), id),
-                     expected_codecs, encrypted_media_init_data_cb_,
-                     base::NullCallback());
+                     expected_codecs, encrypted_media_init_data_cb_);
 
   // TODO(wolenetz): Change to DCHECKs once less verification in release build
   // is needed. See https://crbug.com/786975.
-  CHECK(!IsValidId(id));
+  CHECK(!IsValidId_Locked(id));
   source_state_map_[id] = std::move(source_state);
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   return kOk;
 }
 
 void ChunkDemuxer::SetTracksWatcher(const std::string& id,
                                     MediaTracksUpdatedCB tracks_updated_cb) {
   base::AutoLock auto_lock(lock_);
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   source_state_map_[id]->SetTracksWatcher(std::move(tracks_updated_cb));
 }
 
@@ -760,14 +815,14 @@ void ChunkDemuxer::SetParseWarningCallback(
     const std::string& id,
     SourceBufferParseWarningCB parse_warning_cb) {
   base::AutoLock auto_lock(lock_);
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   source_state_map_[id]->SetParseWarningCallback(std::move(parse_warning_cb));
 }
 
 void ChunkDemuxer::RemoveId(const std::string& id) {
   DVLOG(1) << __func__ << " id=" << id;
   base::AutoLock auto_lock(lock_);
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
 
   source_state_map_.erase(id);
   pending_source_init_ids_.erase(id);
@@ -804,8 +859,19 @@ Ranges<base::TimeDelta> ChunkDemuxer::GetBufferedRanges(
 
   auto itr = source_state_map_.find(id);
 
-  DCHECK(itr != source_state_map_.end());
+  CHECK(itr != source_state_map_.end(), base::NotFatalUntil::M130);
   return itr->second->GetBufferedRanges(duration_, state_ == ENDED);
+}
+
+base::TimeDelta ChunkDemuxer::GetLowestPresentationTimestamp(
+    const std::string& id) const {
+  base::AutoLock auto_lock(lock_);
+  DCHECK(!id.empty());
+
+  auto itr = source_state_map_.find(id);
+
+  CHECK(itr != source_state_map_.end(), base::NotFatalUntil::M130);
+  return itr->second->GetLowestPresentationTimestamp();
 }
 
 base::TimeDelta ChunkDemuxer::GetHighestPresentationTimestamp(
@@ -815,7 +881,7 @@ base::TimeDelta ChunkDemuxer::GetHighestPresentationTimestamp(
 
   auto itr = source_state_map_.find(id);
 
-  DCHECK(itr != source_state_map_.end());
+  CHECK(itr != source_state_map_.end(), base::NotFatalUntil::M130);
   return itr->second->GetHighestPresentationTimestamp();
 }
 
@@ -855,7 +921,7 @@ void ChunkDemuxer::FindAndEnableProperTracks(
 
   std::vector<DemuxerStream*> streams(enabled_streams.begin(),
                                       enabled_streams.end());
-  std::move(change_completed_cb).Run(track_type, streams);
+  std::move(change_completed_cb).Run(streams);
 }
 
 void ChunkDemuxer::OnEnabledAudioTracksChanged(
@@ -872,6 +938,10 @@ void ChunkDemuxer::OnSelectedVideoTrackChanged(
     TrackChangeCB change_completed_cb) {
   FindAndEnableProperTracks(track_ids, curr_time, DemuxerStream::VIDEO,
                             std::move(change_completed_cb));
+}
+
+void ChunkDemuxer::DisableCanChangeType() {
+  supports_change_type_ = false;
 }
 
 void ChunkDemuxer::OnMemoryPressure(
@@ -908,18 +978,74 @@ bool ChunkDemuxer::EvictCodedFrames(const std::string& id,
   return itr->second->EvictCodedFrames(currentMediaTime, newDataSize);
 }
 
-bool ChunkDemuxer::AppendData(const std::string& id,
-                              const uint8_t* data,
-                              size_t length,
-                              base::TimeDelta append_window_start,
-                              base::TimeDelta append_window_end,
-                              base::TimeDelta* timestamp_offset) {
-  DVLOG(1) << "AppendData(" << id << ", " << length << ")";
+bool ChunkDemuxer::AppendToParseBuffer(const std::string& id,
+                                       base::span<const uint8_t> data) {
+  DVLOG(1) << "AppendToParseBuffer(" << id << ", " << data.size() << ")";
+
+  DCHECK(!id.empty());
+
+  if (data.empty()) {
+    // We don't DCHECK that |state_| != ENDED here, since |state_| is protected
+    // by |lock_|. However, transition into ENDED can happen only on
+    // MarkEndOfStream called by the MediaSource object on parse failure or on
+    // app calling endOfStream(). In case that contract is violated for
+    // nonzero-length appends, we still DCHECK within the lock, below.
+    return true;
+  }
+
+  {
+    base::AutoLock auto_lock(lock_);
+    DCHECK_NE(state_, ENDED);
+
+    switch (state_) {
+      case INITIALIZING:
+      case INITIALIZED:
+        DCHECK(IsValidId_Locked(id));
+        if (!source_state_map_[id]->AppendToParseBuffer(data)) {
+          // Just indicate that the append failed. Let the caller give app an
+          // error so that it may adapt. This is different from
+          // RunSegmentParserLoop(), where fatal MediaSource failure should
+          // occur if the underlying parse fails.
+          return false;
+        }
+        break;
+
+      case PARSE_ERROR:
+      case WAITING_FOR_INIT:
+      case ENDED:
+      case SHUTDOWN:
+        DVLOG(1) << "AppendToParseBuffer(): called in unexpected state "
+                 << state_;
+        // To preserve previous app-visible behavior in this hopefully
+        // never-encountered path, report no failure to caller due to being in
+        // invalid underlying state. If caller then proceeds with async parse
+        // (via RunSegmentParserLoop, below), they will get the expected parse
+        // failure for this set of states. If, instead, we returned false here,
+        // then caller would instead tell app QuotaExceededErr synchronous with
+        // the app's appendBuffer() call, instead of async decode error during
+        // async parse.
+        // TODO(crbug.com/40244241): Instrument this path to see if it can be
+        // changed to just NOTREACHED() << state_.
+        return true;
+    }
+  }
+
+  return true;
+}
+
+StreamParser::ParseStatus ChunkDemuxer::RunSegmentParserLoop(
+    const std::string& id,
+    base::TimeDelta append_window_start,
+    base::TimeDelta append_window_end,
+    base::TimeDelta* timestamp_offset) {
+  DVLOG(1) << "RunSegmentParserLoop(" << id << ")";
 
   DCHECK(!id.empty());
   DCHECK(timestamp_offset);
 
   Ranges<base::TimeDelta> ranges;
+
+  StreamParser::ParseStatus result = StreamParser::ParseStatus::kFailed;
 
   {
     base::AutoLock auto_lock(lock_);
@@ -929,20 +1055,15 @@ bool ChunkDemuxer::AppendData(const std::string& id,
     // parsing.
     bool old_waiting_for_data = IsSeekWaitingForData_Locked();
 
-    if (length == 0u)
-      return true;
-
-    DCHECK(data);
-
     switch (state_) {
       case INITIALIZING:
       case INITIALIZED:
-        DCHECK(IsValidId(id));
-        if (!source_state_map_[id]->Append(data, length, append_window_start,
-                                           append_window_end,
-                                           timestamp_offset)) {
+        DCHECK(IsValidId_Locked(id));
+        result = source_state_map_[id]->RunSegmentParserLoop(
+            append_window_start, append_window_end, timestamp_offset);
+        if (result == StreamParser::ParseStatus::kFailed) {
           ReportError_Locked(CHUNK_DEMUXER_ERROR_APPEND_FAILED);
-          return false;
+          return result;
         }
         break;
 
@@ -950,22 +1071,25 @@ bool ChunkDemuxer::AppendData(const std::string& id,
       case WAITING_FOR_INIT:
       case ENDED:
       case SHUTDOWN:
-        DVLOG(1) << "AppendData(): called in unexpected state " << state_;
-        return false;
+        DVLOG(1) << "RunSegmentParserLoop(): called in unexpected state "
+                 << state_;
+        return StreamParser::ParseStatus::kFailed;
     }
 
-    // Check to see if data was appended at the pending seek point. This
+    // Check to see if newly parsed data was at the pending seek point. This
     // indicates we have parsed enough data to complete the seek. Work is still
     // in progress at this point, but it's okay since |seek_cb_| will post.
-    if (old_waiting_for_data && !IsSeekWaitingForData_Locked() && seek_cb_)
+    if (old_waiting_for_data && !IsSeekWaitingForData_Locked() && seek_cb_) {
       RunSeekCB_Locked(PIPELINE_OK);
+    }
 
     ranges = GetBufferedRanges_Locked();
   }
 
+  DCHECK_NE(StreamParser::ParseStatus::kFailed, result);
   host_->OnBufferedTimeRangesChanged(ranges);
   progress_cb_.Run();
-  return true;
+  return result;
 }
 
 bool ChunkDemuxer::AppendChunks(
@@ -997,7 +1121,7 @@ bool ChunkDemuxer::AppendChunks(
     switch (state_) {
       case INITIALIZING:
       case INITIALIZED:
-        DCHECK(IsValidId(id));
+        DCHECK(IsValidId_Locked(id));
         if (!source_state_map_[id]->AppendChunks(
                 std::move(buffer_queue), append_window_start, append_window_end,
                 timestamp_offset)) {
@@ -1035,7 +1159,7 @@ void ChunkDemuxer::ResetParserState(const std::string& id,
   DVLOG(1) << "ResetParserState(" << id << ")";
   base::AutoLock auto_lock(lock_);
   DCHECK(!id.empty());
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   bool old_waiting_for_data = IsSeekWaitingForData_Locked();
   source_state_map_[id]->ResetParserState(append_window_start,
                                           append_window_end,
@@ -1054,7 +1178,7 @@ void ChunkDemuxer::Remove(const std::string& id,
   base::AutoLock auto_lock(lock_);
 
   DCHECK(!id.empty());
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   DCHECK(start >= base::TimeDelta()) << start.InSecondsF();
   DCHECK(start < end) << "start " << start.InSecondsF()
                       << " end " << end.InSecondsF();
@@ -1085,7 +1209,11 @@ bool ChunkDemuxer::CanChangeType(const std::string& id,
            << " codecs=" << codecs;
   base::AutoLock auto_lock(lock_);
 
-  DCHECK(IsValidId(id));
+  DCHECK(IsValidId_Locked(id));
+
+  if (!supports_change_type_) {
+    return false;
+  }
 
   // CanChangeType() doesn't care if there has or hasn't been received a first
   // initialization segment for the source buffer corresponding to |id|.
@@ -1104,7 +1232,7 @@ void ChunkDemuxer::ChangeType(const std::string& id,
   base::AutoLock auto_lock(lock_);
 
   DCHECK(state_ == INITIALIZING || state_ == INITIALIZED) << state_;
-  DCHECK(IsValidId(id));
+  DCHECK(IsValidId_Locked(id));
 
   std::unique_ptr<media::StreamParser> stream_parser(
       CreateParserForTypeAndCodecs(content_type, codecs, media_log_));
@@ -1181,7 +1309,7 @@ void ChunkDemuxer::SetDuration(double duration) {
 bool ChunkDemuxer::IsParsingMediaSegment(const std::string& id) {
   base::AutoLock auto_lock(lock_);
   DVLOG(1) << "IsParsingMediaSegment(" << id << ")";
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
 
   return source_state_map_[id]->parsing_media_segment();
 }
@@ -1189,7 +1317,7 @@ bool ChunkDemuxer::IsParsingMediaSegment(const std::string& id) {
 bool ChunkDemuxer::GetGenerateTimestampsFlag(const std::string& id) {
   base::AutoLock auto_lock(lock_);
   DVLOG(1) << "GetGenerateTimestampsFlag(" << id << ")";
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
 
   return source_state_map_[id]->generate_timestamps_flag();
 }
@@ -1198,7 +1326,7 @@ void ChunkDemuxer::SetSequenceMode(const std::string& id,
                                    bool sequence_mode) {
   base::AutoLock auto_lock(lock_);
   DVLOG(1) << "SetSequenceMode(" << id << ", " << sequence_mode << ")";
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   DCHECK_NE(state_, ENDED);
 
   source_state_map_[id]->SetSequenceMode(sequence_mode);
@@ -1210,7 +1338,7 @@ void ChunkDemuxer::SetGroupStartTimestampIfInSequenceMode(
   base::AutoLock auto_lock(lock_);
   DVLOG(1) << "SetGroupStartTimestampIfInSequenceMode(" << id << ", "
            << timestamp_offset.InSecondsF() << ")";
-  CHECK(IsValidId(id));
+  CHECK(IsValidId_Locked(id));
   DCHECK_NE(state_, ENDED);
 
   source_state_map_[id]->SetGroupStartTimestampIfInSequenceMode(
@@ -1362,7 +1490,7 @@ void ChunkDemuxer::OnSourceInitDone(
   // TODO(wolenetz): Change these to DCHECKs once less verification in release
   // build is needed. See https://crbug.com/786975.
   CHECK(!pending_source_init_ids_.empty());
-  CHECK(IsValidId(source_id));
+  CHECK(IsValidId_Locked(source_id));
   CHECK(pending_source_init_ids_.find(source_id) !=
         pending_source_init_ids_.end());
   CHECK(init_cb_);
@@ -1424,7 +1552,7 @@ ChunkDemuxerStream* ChunkDemuxer::CreateDemuxerStream(
     DemuxerStream::Type type) {
   // New ChunkDemuxerStreams can be created only during initialization segment
   // processing, which happens when a new chunk of data is appended and the
-  // lock_ must be held by ChunkDemuxer::AppendData/Chunks.
+  // lock_ must be held by ChunkDemuxer::RunSegmentParserLoop/AppendChunks.
   lock_.AssertAcquired();
 
   MediaTrack::Id media_track_id = GenerateMediaTrackId();
@@ -1439,13 +1567,8 @@ ChunkDemuxerStream* ChunkDemuxer::CreateDemuxerStream(
       owning_vector = &video_streams_;
       break;
 
-    case DemuxerStream::TEXT:
-      owning_vector = &text_streams_;
-      break;
-
     case DemuxerStream::UNKNOWN:
       NOTREACHED();
-      return nullptr;
   }
 
   std::unique_ptr<ChunkDemuxerStream> stream =
@@ -1459,7 +1582,7 @@ ChunkDemuxerStream* ChunkDemuxer::CreateDemuxerStream(
   return owning_vector->back().get();
 }
 
-bool ChunkDemuxer::IsValidId(const std::string& source_id) const {
+bool ChunkDemuxer::IsValidId_Locked(const std::string& source_id) const {
   lock_.AssertAcquired();
   return source_state_map_.count(source_id) > 0u;
 }

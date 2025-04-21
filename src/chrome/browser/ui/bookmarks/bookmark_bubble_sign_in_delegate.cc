@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ BookmarkBubbleSignInDelegate::BookmarkBubbleSignInDelegate(Profile* profile)
 
 BookmarkBubbleSignInDelegate::~BookmarkBubbleSignInDelegate() = default;
 
-void BookmarkBubbleSignInDelegate::OnEnableSync(const AccountInfo& account) {
+void BookmarkBubbleSignInDelegate::OnSignIn(const AccountInfo& account) {
   signin_ui_util::EnableSyncFromSingleAccountPromo(
       profile_, account,
       signin_metrics::AccessPoint::ACCESS_POINT_BOOKMARK_BUBBLE);

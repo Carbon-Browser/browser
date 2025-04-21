@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 // Defines all the command-line switches used by ui/gl.
 
+#include <stddef.h>
+
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "ui/gl/gl_export.h"
@@ -14,8 +16,6 @@
 namespace gl {
 
 // The GL implementation names that can be passed to --use-gl.
-GL_EXPORT extern const char kGLImplementationDesktopName[];
-GL_EXPORT extern const char kGLImplementationAppleName[];
 GL_EXPORT extern const char kGLImplementationEGLName[];
 GL_EXPORT extern const char kGLImplementationANGLEName[];
 GL_EXPORT extern const char kGLImplementationMockName[];
@@ -49,14 +49,12 @@ GL_EXPORT extern const char kCmdDecoderPassthroughName[];
 GL_EXPORT extern const char kSwapChainFormatNV12[];
 GL_EXPORT extern const char kSwapChainFormatYUY2[];
 GL_EXPORT extern const char kSwapChainFormatBGRA[];
+GL_EXPORT extern const char kSwapChainFormatP010[];
 
 }  // namespace gl
 
 namespace switches {
 
-GL_EXPORT extern const char kDisableD3D11[];
-GL_EXPORT extern const char kDisableES3GLContext[];
-GL_EXPORT extern const char kDisableES3GLContextForTesting[];
 GL_EXPORT extern const char kDisableGpuDriverBugWorkarounds[];
 GL_EXPORT extern const char kDisableGpuVsync[];
 GL_EXPORT extern const char kEnableGPUServiceLogging[];
@@ -73,12 +71,10 @@ GL_EXPORT extern const char kUseGpuInTests[];
 GL_EXPORT extern const char kEnableSgiVideoSync[];
 GL_EXPORT extern const char kDisableGLExtensions[];
 GL_EXPORT extern const char kEnableSwapBuffersWithBounds[];
-GL_EXPORT extern const char kDisableDirectComposition[];
 GL_EXPORT extern const char kEnableDirectCompositionVideoOverlays[];
-GL_EXPORT extern const char kDisableDirectCompositionVideoOverlays[];
 GL_EXPORT extern const char kUseAdapterLuid[];
+GL_EXPORT extern const char kEnableUnsafeSwiftShader[];
 
-GL_EXPORT extern const char kDirectCompositionForceFullDamageForTesting[];
 GL_EXPORT extern const char kDirectCompositionVideoSwapChainFormat[];
 
 // These flags are used by the test harness code, not passed in by users.
@@ -86,32 +82,40 @@ GL_EXPORT extern const char kDisableGLDrawingForTests[];
 GL_EXPORT extern const char kOverrideUseSoftwareGLForTests[];
 
 GL_EXPORT extern const char* const kGLSwitchesCopiedFromGpuProcessHost[];
-GL_EXPORT extern const int kGLSwitchesCopiedFromGpuProcessHostNumSwitches;
+GL_EXPORT extern const size_t kGLSwitchesCopiedFromGpuProcessHostNumSwitches;
+
+#if BUILDFLAG(IS_ANDROID)
+GL_EXPORT extern const char kDisableAndroidNativeFenceSyncForTesting[];
+#endif
 
 }  // namespace switches
 
 namespace features {
 
-GL_EXPORT extern const base::Feature kDCompTripleBufferRootSwapChain;
-GL_EXPORT extern const base::Feature kDCompTripleBufferVideoSwapChain;
-GL_EXPORT extern const base::Feature kDirectCompositionForceFullDamage;
-GL_EXPORT extern const base::Feature kDirectCompositionGpuVSync;
-GL_EXPORT extern const base::Feature kDirectCompositionLowLatencyPresentation;
-GL_EXPORT extern const base::Feature kDirectCompositionVerifyDrawOffset;
-GL_EXPORT extern const base::FeatureParam<int> kVerifyDrawOffsetX;
-GL_EXPORT extern const base::FeatureParam<int> kVerifyDrawOffsetY;
-GL_EXPORT extern const base::Feature kDirectCompositionSoftwareOverlays;
-GL_EXPORT extern const base::Feature kIntelVpSuperResolution;
-GL_EXPORT extern const base::Feature kDefaultANGLEOpenGL;
-GL_EXPORT extern const base::Feature kDefaultANGLEMetal;
-GL_EXPORT extern const base::Feature kDefaultANGLEVulkan;
-GL_EXPORT extern const base::Feature kTrackCurrentShaders;
-GL_EXPORT extern const base::Feature kVulkanFromANGLE;
-GL_EXPORT extern const base::Feature kDXGIWaitableSwapChain;
+GL_EXPORT BASE_DECLARE_FEATURE(kDCompDebugVisualization);
+GL_EXPORT BASE_DECLARE_FEATURE(kDCompTripleBufferRootSwapChain);
+GL_EXPORT BASE_DECLARE_FEATURE(kDCompTripleBufferVideoSwapChain);
+GL_EXPORT BASE_DECLARE_FEATURE(kDirectCompositionSoftwareOverlays);
+GL_EXPORT BASE_DECLARE_FEATURE(kDirectCompositionLetterboxVideoOptimization);
+GL_EXPORT BASE_DECLARE_FEATURE(kDirectCompositionUnlimitedOverlays);
+GL_EXPORT BASE_DECLARE_FEATURE(kEGLDualGPURendering);
+GL_EXPORT BASE_DECLARE_FEATURE(kIntelVpSuperResolution);
+GL_EXPORT BASE_DECLARE_FEATURE(kNvidiaVpSuperResolution);
+GL_EXPORT BASE_DECLARE_FEATURE(kNvidiaVpTrueHDR);
+GL_EXPORT BASE_DECLARE_FEATURE(kDefaultANGLEOpenGL);
+GL_EXPORT BASE_DECLARE_FEATURE(kDefaultANGLEMetal);
+GL_EXPORT BASE_DECLARE_FEATURE(kDefaultANGLEVulkan);
+GL_EXPORT BASE_DECLARE_FEATURE(kTrackCurrentShaders);
+GL_EXPORT BASE_DECLARE_FEATURE(kVulkanFromANGLE);
+GL_EXPORT BASE_DECLARE_FEATURE(kDXGIWaitableSwapChain);
+GL_EXPORT BASE_DECLARE_FEATURE(kGpuVsync);
 GL_EXPORT extern const base::FeatureParam<int>
     kDXGIWaitableSwapChainMaxQueuedFrames;
+GL_EXPORT BASE_DECLARE_FEATURE(kDXGISwapChainPresentInterval0);
 
 GL_EXPORT bool IsDefaultANGLEVulkan();
+
+GL_EXPORT bool SupportsEGLDualGPURendering();
 
 }  // namespace features
 

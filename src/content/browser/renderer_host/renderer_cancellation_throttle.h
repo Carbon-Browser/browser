@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,13 +60,12 @@ class CONTENT_EXPORT RendererCancellationThrottle : public NavigationThrottle {
 
  private:
   NavigationThrottle::ThrottleCheckResult WillProcessResponse() override;
+  NavigationThrottle::ThrottleCheckResult WillCommitWithoutUrlLoader() override;
   const char* GetNameForLogging() override;
 
+  NavigationThrottle::ThrottleCheckResult WaitForRendererCancellationIfNeeded();
   void OnTimeout();
   void RestartTimeout();
-
-  // The time WillProcessResponse() was called.
-  base::TimeTicks will_process_response_time_;
 
   base::OneShotTimer renderer_cancellation_timeout_timer_;
 

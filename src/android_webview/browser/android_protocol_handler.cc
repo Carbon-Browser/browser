@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <memory>
 #include <utility>
 
-#include "android_webview/browser_jni_headers/AndroidProtocolHandler_jni.h"
 #include "android_webview/common/url_constants.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
@@ -21,6 +20,9 @@
 #include "url/android/gurl_android.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/AndroidProtocolHandler_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::ClearException;
@@ -55,24 +57,40 @@ bool GetInputStreamMimeType(JNIEnv* env,
                             std::string* mime_type) {
   // Query the mime type from the Java side. It is possible for the query to
   // fail, as the mime type cannot be determined for all supported schemes.
-  ScopedJavaLocalRef<jstring> returned_type =
+  std::string returned_type =
       android_webview::Java_AndroidProtocolHandler_getMimeType(
           env, stream->jobj(), url::GURLAndroid::FromNativeGURL(env, url));
-  if (!returned_type)
+  if (returned_type.empty()) {
     return false;
+  }
 
-  *mime_type = base::android::ConvertJavaStringToUTF8(returned_type);
+  *mime_type = returned_type;
   return true;
 }
 
-static ScopedJavaLocalRef<jstring>
-JNI_AndroidProtocolHandler_GetAndroidAssetPath(JNIEnv* env) {
-  return ConvertUTF8ToJavaString(env, android_webview::kAndroidAssetPath);
+static std::string JNI_AndroidProtocolHandler_GetAndroidAssetPath(JNIEnv* env) {
+  return android_webview::kAndroidAssetPath;
 }
 
-static ScopedJavaLocalRef<jstring>
-JNI_AndroidProtocolHandler_GetAndroidResourcePath(JNIEnv* env) {
-  return ConvertUTF8ToJavaString(env, android_webview::kAndroidResourcePath);
+static std::string JNI_AndroidProtocolHandler_GetAndroidResourcePath(
+    JNIEnv* env) {
+  return android_webview::kAndroidResourcePath;
+}
+
+// Returns the mime type, or returns empty string if a mime type was not found.
+static std::string JNI_AndroidProtocolHandler_GetWellKnownMimeType(
+    JNIEnv* env,
+    std::string& path) {
+  std::string mime_type;
+
+  std::string ext = base::FilePath(path).Extension();
+
+  if (!ext.empty() &&
+      net::GetWellKnownMimeTypeFromExtension(ext.substr(1), &mime_type)) {
+    return mime_type;
+  }
+
+  return "";
 }
 
 }  // namespace android_webview

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace media::cast {
 
-// TODO(https://crbug.com/1343116): this typedef should be removed and
+// TODO(crbug.com/40231271): this typedef should be removed and
 // the openscreen type used directly.
 using RtpTimeDelta = openscreen::cast::RtpTimeDelta;
 using RtpTimeTicks = openscreen::cast::RtpTimeTicks;

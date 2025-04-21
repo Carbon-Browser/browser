@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
@@ -61,6 +61,31 @@ void DocumentResourceCoordinator::SetHadFormInteraction() {
   had_form_interaction_ = true;
 }
 
+void DocumentResourceCoordinator::SetHadUserEdits() {
+  // Only send this signal for the first interaction as it doesn't get cleared
+  // for the lifetime of the frame and it's inefficient to send this message
+  // for every keystroke.
+  if (!had_user_edits_) {
+    service_->SetHadUserEdits();
+  }
+  had_user_edits_ = true;
+}
+
+void DocumentResourceCoordinator::OnStartedUsingWebRTC() {
+  ++num_web_rtc_usage_;
+  if (num_web_rtc_usage_ == 1) {
+    service_->OnStartedUsingWebRTC();
+  }
+}
+
+void DocumentResourceCoordinator::OnStoppedUsingWebRTC() {
+  --num_web_rtc_usage_;
+  CHECK_GE(num_web_rtc_usage_, 0);
+  if (num_web_rtc_usage_ == 0) {
+    service_->OnStoppedUsingWebRTC();
+  }
+}
+
 void DocumentResourceCoordinator::OnFirstContentfulPaint(
     base::TimeDelta time_since_navigation_start) {
   service_->OnFirstContentfulPaint(time_since_navigation_start);
@@ -70,6 +95,10 @@ void DocumentResourceCoordinator::OnWebMemoryMeasurementRequested(
     WebMemoryMeasurementMode mode,
     OnWebMemoryMeasurementRequestedCallback callback) {
   service_->OnWebMemoryMeasurementRequested(mode, std::move(callback));
+}
+
+void DocumentResourceCoordinator::OnFreezingOriginTrialOptOut() {
+  service_->OnFreezingOriginTrialOptOut();
 }
 
 }  // namespace blink

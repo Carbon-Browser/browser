@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@ enum class SecureDnsPolicy {
   // This request is part of the Secure DNS bootstrap process.
   kBootstrap,
 };
+
+const char* SecureDnsPolicyToDebugString(SecureDnsPolicy secure_dns_policy);
 
 }  // namespace net
 

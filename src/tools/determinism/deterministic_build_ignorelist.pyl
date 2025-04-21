@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -108,6 +108,10 @@
 
     # https://crbug.com/1093166
     'test_data/ppapi/tests/extensions/packaged_app/pnacl/ppapi_tests_extensions_packaged_app_newlib_pnacl.pexe',
+
+    # TODO(hans): Remove once clang is fixed.
+    # https://crbug.com/1373836
+    'swiftshader_reactor_llvm_unittests',
   ],
 
   # TODO(thakis): Move mac det bots to use two distinct build dirs,
@@ -195,7 +199,15 @@
     'previous_version_mini_installer.exe',
 
     # These probably have mtimes in the zip headers and the scripts creating
-    # them probably should use build_utils.ZipDir() instead.
+    # them probably should use zip_helpers.zip_directory() instead.
     'mini_installer_tests.zip',
+
+    # TODO(crbug.com/40271942): Upstream fixes are happening to fix Windows exe
+    # determinisim from Rust (it produces non-reproducible paths in the linker
+    # command line which then is recorded in the PDB).
+    'test_control_flow_guard.exe',
+    'test_control_flow_guard.exe.pdb',
+    'cloud_authenticator_test_service.exe',
+    'cloud_authenticator_test_service.exe.pdb',
   ],
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,14 @@ PointerType GetPrimaryPointerType(int available_pointer_types) {
 HoverType GetPrimaryHoverType(int available_hover_types) {
   // Assume a non-touch-device with a mouse
   return HOVER_TYPE_HOVER;
+}
+
+std::optional<PointerDevice> GetPointerDevice(PointerDevice::Key key) {
+  return std::nullopt;
+}
+
+std::vector<PointerDevice> GetPointerDevices() {
+  return {};
 }
 
 }  // namespace ui

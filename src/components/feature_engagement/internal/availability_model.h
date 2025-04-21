@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,10 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
-namespace base {
-struct Feature;
-}  // namespace base
+#include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 
 namespace feature_engagement {
 
@@ -41,7 +39,7 @@ class AvailabilityModel {
   // Returns the day number since epoch (1970-01-01) in the local timezone for
   // when the particular |feature| was made available.
   // See TimeProvider::GetCurrentDay().
-  virtual absl::optional<uint32_t> GetAvailability(
+  virtual std::optional<uint32_t> GetAvailability(
       const base::Feature& feature) const = 0;
 
  protected:

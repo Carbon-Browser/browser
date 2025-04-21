@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define UI_VIEWS_CONTROLS_LINK_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/views/controls/label.h"
@@ -28,9 +28,9 @@ namespace views {
 //
 ////////////////////////////////////////////////////////////////////////////////
 class VIEWS_EXPORT Link : public Label {
- public:
-  METADATA_HEADER(Link);
+  METADATA_HEADER(Link, Label)
 
+ public:
   // A callback to be called when the link is clicked.  Closures are also
   // accepted; see below.
   using ClickedCallback = base::RepeatingCallback<void(const ui::Event& event)>;
@@ -75,7 +75,6 @@ class VIEWS_EXPORT Link : public Label {
   bool OnKeyPressed(const ui::KeyEvent& event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   bool SkipDefaultKeyEventProcessing(const ui::KeyEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnFocus() override;
   void OnBlur() override;
   void SetFontList(const gfx::FontList& font_list) override;
@@ -99,13 +98,13 @@ class VIEWS_EXPORT Link : public Label {
   bool pressed_ = false;
 
   // The color when the link is neither pressed nor disabled.
-  absl::optional<SkColor> requested_enabled_color_;
+  std::optional<SkColor> requested_enabled_color_;
 
   base::CallbackListSubscription enabled_changed_subscription_;
 
   // Whether the link text should use underline style regardless of enabled or
   // focused state.
-  bool force_underline_ = false;
+  bool force_underline_ = true;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, Link, Label)

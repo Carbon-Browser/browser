@@ -1,11 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // This makes sure we only enable the page action once per tab.
 var hasEnabled = {};
 
-chrome.extension.onRequest.addListener(function(request, sender) {
+chrome.runtime.onMessage.addListener(function(request, sender) {
   if (request.msg == "feedIcon") {
     console.log('url: ' + sender.tab.url);
 

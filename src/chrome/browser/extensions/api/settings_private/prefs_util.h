@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_EXTENSIONS_API_SETTINGS_PRIVATE_PREFS_UTIL_H_
 
 #include <map>
-#include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -40,9 +40,9 @@ class PrefsUtil {
   api::settings_private::PrefType GetAllowlistedPrefType(
       const std::string& pref_name);
 
-  // Gets the value of the pref with the given |name|. Returns a pointer to an
-  // empty PrefObject if no pref is found for |name|.
-  virtual std::unique_ptr<api::settings_private::PrefObject> GetPref(
+  // Gets the value of the pref with the given |name|. Returns a nullopt if no
+  // pref is found for |name|.
+  virtual std::optional<api::settings_private::PrefObject> GetPref(
       const std::string& name);
 
   // Sets the pref with the given name and value in the proper PrefService.
@@ -70,7 +70,7 @@ class PrefsUtil {
   // Returns whether |pref_name| corresponds to a pref whose type is URL.
   bool IsPrefTypeURL(const std::string& pref_name);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Returns whether |pref_name| corresponds to a pref that is enterprise
   // managed.
   bool IsPrefEnterpriseManaged(const std::string& pref_name);
@@ -99,7 +99,7 @@ class PrefsUtil {
   api::settings_private::PrefType GetType(const std::string& name,
                                           base::Value::Type type);
 
-  std::unique_ptr<api::settings_private::PrefObject> GetCrosSettingsPref(
+  std::optional<api::settings_private::PrefObject> GetCrosSettingsPref(
       const std::string& name);
 
   settings_private::SetPrefResult SetCrosSettingsPref(const std::string& name,

@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <sstream>
+#include <string_view>
 
 #include "base/android/jni_android.h"
 #include "base/files/file.h"
@@ -59,7 +60,8 @@ JNI_ServicificationBackgroundService_TestPersistentHistogramsOnDiskSystemProfile
   // Map the file and validate it.
   std::unique_ptr<base::FilePersistentMemoryAllocator> memory_allocator =
       std::make_unique<base::FilePersistentMemoryAllocator>(
-          std::move(mapped), 0, 0, base::StringPiece(), /* read_only */ true);
+          std::move(mapped), 0, 0, std::string_view(),
+          base::FilePersistentMemoryAllocator::kReadOnly);
   if (memory_allocator->GetMemoryState() ==
       base::PersistentMemoryAllocator::MEMORY_DELETED) {
     LOG(ERROR) << "The memory allocator state shouldn't be MEMORY_DELETED!";
@@ -100,6 +102,8 @@ JNI_ServicificationBackgroundService_TestPersistentHistogramsOnDiskSystemProfile
   }
 
   std::vector<variations::ActiveGroupId> field_trial_ids;
+  // The persistent histograms on disk do not include low anonymity trials (as
+  // we do not include those in metrics reports).
   variations::GetFieldTrialActiveGroupIds("", &field_trial_ids);
   int expected_size = static_cast<int>(field_trial_ids.size());
 

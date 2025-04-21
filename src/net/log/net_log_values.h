@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,24 +8,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/containers/span.h"
-#include "base/strings/string_piece_forward.h"
-#include "net/base/net_export.h"
+#include <string_view>
 
-namespace base {
-class Value;
-}
+#include "base/containers/span.h"
+#include "base/values.h"
+#include "net/base/net_export.h"
 
 namespace net {
 
 // Helpers to construct dictionaries with a single key and value. Useful for
 // building parameters to include in a NetLog.
-NET_EXPORT base::Value NetLogParamsWithInt(base::StringPiece name, int value);
-NET_EXPORT base::Value NetLogParamsWithInt64(base::StringPiece name,
-                                             int64_t value);
-NET_EXPORT base::Value NetLogParamsWithBool(base::StringPiece name, bool value);
-NET_EXPORT base::Value NetLogParamsWithString(base::StringPiece name,
-                                              base::StringPiece value);
+NET_EXPORT base::Value::Dict NetLogParamsWithInt(std::string_view name,
+                                                 int value);
+NET_EXPORT base::Value::Dict NetLogParamsWithInt64(std::string_view name,
+                                                   int64_t value);
+NET_EXPORT base::Value::Dict NetLogParamsWithBool(std::string_view name,
+                                                  bool value);
+NET_EXPORT base::Value::Dict NetLogParamsWithString(std::string_view name,
+                                                    std::string_view value);
 
 // Creates a base::Value() to represent the byte string |raw| when adding it to
 // the NetLog.
@@ -37,7 +37,7 @@ NET_EXPORT base::Value NetLogParamsWithString(base::StringPiece name,
 // This wrapper exists because base::Value strings are required to be UTF-8.
 // Often times NetLog consumers just want to log a std::string, and that string
 // may not be UTF-8.
-NET_EXPORT base::Value NetLogStringValue(base::StringPiece raw);
+NET_EXPORT base::Value NetLogStringValue(std::string_view raw);
 
 // Creates a base::Value() to represent the octets |bytes|. This should be
 // used when adding binary data (i.e. not an ASCII or UTF-8 string) to the

@@ -1,4 +1,6 @@
 include_rules = [
+  "+cc/paint",
+  "+chromeos/constants",
   "+components/media_message_center",
   "+components/strings",
   "+components/vector_icons",

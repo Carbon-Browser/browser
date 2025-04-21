@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
+#include "content/public/browser/frame_tree_node_id.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
 
@@ -24,7 +25,7 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
   NetworkServiceDevToolsObserver(
       base::PassKey<NetworkServiceDevToolsObserver> pass_key,
       const std::string& devtools_agent_id,
-      int frame_tree_node_id);
+      FrameTreeNodeId frame_tree_node_id);
   ~NetworkServiceDevToolsObserver() override;
 
   static mojo::PendingRemote<network::mojom::DevToolsObserver> MakeSelfOwned(
@@ -39,19 +40,25 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
       const net::CookieAccessResultList& request_cookie_list,
       std::vector<network::mojom::HttpRawHeaderPairPtr> request_headers,
       const base::TimeTicks timestamp,
-      network::mojom::ClientSecurityStatePtr security_state) override;
+      network::mojom::ClientSecurityStatePtr security_state,
+      network::mojom::OtherPartitionInfoPtr other_partition_info) override;
   void OnRawResponse(
       const std::string& devtools_request_id,
       const net::CookieAndLineAccessResultList& response_cookie_list,
       std::vector<network::mojom::HttpRawHeaderPairPtr> response_headers,
-      const absl::optional<std::string>& response_headers_text,
+      const std::optional<std::string>& response_headers_text,
       network::mojom::IPAddressSpace resource_address_space,
-      int32_t http_status_code) override;
+      int32_t http_status_code,
+      const std::optional<net::CookiePartitionKey>& cookie_partition_key)
+      override;
+  void OnEarlyHintsResponse(
+      const std::string& devtools_request_id,
+      std::vector<network::mojom::HttpRawHeaderPairPtr> headers) override;
   void OnTrustTokenOperationDone(
       const std::string& devtools_request_id,
       network::mojom::TrustTokenOperationResultPtr result) override;
   void OnPrivateNetworkRequest(
-      const absl::optional<std::string>& devtools_request_id,
+      const std::optional<std::string>& devtools_request_id,
       const GURL& url,
       bool is_warning,
       network::mojom::IPAddressSpace resource_address_space,
@@ -69,12 +76,14 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
   void OnCorsPreflightRequestCompleted(
       const base::UnguessableToken& devtools_request_id,
       const network::URLLoaderCompletionStatus& status) override;
-  void OnCorsError(const absl::optional<std::string>& devtool_request_id,
-                   const absl::optional<::url::Origin>& initiator_origin,
+  void OnCorsError(const std::optional<std::string>& devtool_request_id,
+                   const std::optional<::url::Origin>& initiator_origin,
                    network::mojom::ClientSecurityStatePtr client_security_state,
                    const GURL& url,
                    const network::CorsErrorStatus& status,
                    bool is_warning) override;
+  void OnOrbError(const std::optional<std::string>& devtools_request_id,
+                  const GURL& url) override;
   void OnSubresourceWebBundleMetadata(const std::string& devtools_request_id,
                                       const std::vector<GURL>& urls) override;
   void OnSubresourceWebBundleMetadataError(
@@ -83,12 +92,16 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
   void OnSubresourceWebBundleInnerResponse(
       const std::string& inner_request_devtools_id,
       const GURL& url,
-      const absl::optional<std::string>& bundle_request_devtools_id) override;
+      const std::optional<std::string>& bundle_request_devtools_id) override;
   void OnSubresourceWebBundleInnerResponseError(
       const std::string& inner_request_devtools_id,
       const GURL& url,
       const std::string& error_message,
-      const absl::optional<std::string>& bundle_request_devtools_id) override;
+      const std::optional<std::string>& bundle_request_devtools_id) override;
+  void OnSharedDictionaryError(
+      const std::string& devtool_request_id,
+      const GURL& url,
+      network::mojom::SharedDictionaryError error) override;
   void Clone(mojo::PendingReceiver<network::mojom::DevToolsObserver> listener)
       override;
 
@@ -99,8 +112,8 @@ class NetworkServiceDevToolsObserver : public network::mojom::DevToolsObserver {
   const std::string devtools_agent_id_;
 
   // This will be set for devtools observers that are created with a frame
-  // context, otherwise it will be kFrameTreeNodeInvalidId.
-  const int frame_tree_node_id_;
+  // context, otherwise it will be unset.
+  const FrameTreeNodeId frame_tree_node_id_;
 };
 
 }  // namespace content

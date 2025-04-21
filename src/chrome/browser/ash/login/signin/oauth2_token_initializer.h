@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/login/signin/oauth2_token_fetcher.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 
 namespace ash {
 
@@ -42,11 +42,5 @@ class OAuth2TokenInitializer final : public OAuth2TokenFetcher::Delegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OAuth2TokenInitializer;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_TOKEN_INITIALIZER_H_

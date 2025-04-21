@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,10 @@
 namespace media {
 
 ChannelMixer::ChannelMixer(ChannelLayout input_layout,
-                           ChannelLayout output_layout) {
-  Initialize(input_layout,
-             ChannelLayoutToChannelCount(input_layout),
-             output_layout,
-             ChannelLayoutToChannelCount(output_layout));
+                           int input_channels,
+                           ChannelLayout output_layout,
+                           int output_channels) {
+  Initialize(input_layout, input_channels, output_layout, output_channels);
 }
 
 ChannelMixer::ChannelMixer(

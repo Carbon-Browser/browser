@@ -1,13 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/win/device_enumeration_win.h"
 
-#include <MMDeviceAPI.h>
-#include <mmsystem.h>
 #include <objbase.h>
-#include <Functiondiscoverykeys_devpkey.h>  // MMDeviceAPI.h must come first
+
+#include <MMDeviceAPI.h>
+
+#include <Functiondiscoverykeys_devpkey.h>
+#include <mmsystem.h>
 #include <stddef.h>
 #include <wrl/client.h>
 

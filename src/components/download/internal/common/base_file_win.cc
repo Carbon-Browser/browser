@@ -1,14 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/download/public/common/base_file.h"
 
+#include <objbase.h>
+
+#include <shobjidl.h>
 #include <windows.h>
 
-#include <objbase.h>
 #include <shellapi.h>
-#include <shobjidl.h>
 #include <wrl/client.h>
 #include <wrl/implements.h>
 
@@ -130,7 +131,6 @@ DownloadInterruptReason HRESULTToDownloadInterruptReason(HRESULT hr) {
   }
 
   if (reason != DOWNLOAD_INTERRUPT_REASON_NONE) {
-    RecordWinFileMoveError(HRESULT_CODE(hr));
     return reason;
   }
 

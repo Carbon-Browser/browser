@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace base {
 enum {
   PATH_ANDROID_START = 300,
 
-  DIR_ANDROID_APP_DATA,  // Directory where to put Android app's data.
+  DIR_ANDROID_APP_DATA,          // Directory where to put Android app's data.
   DIR_ANDROID_EXTERNAL_STORAGE,  // Android external storage directory.
 
   PATH_ANDROID_END

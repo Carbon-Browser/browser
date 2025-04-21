@@ -1,11 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/mac/initial_prefs.h"
 
+#include "base/apple/foundation_util.h"
 #include "base/files/file_util.h"
-#include "base/mac/foundation_util.h"
 #include "build/branding_buildflags.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_paths_internal.h"
@@ -67,8 +67,9 @@ base::FilePath InitialPrefsPath() {
   // On chromium builds, try
   // /Library/Application Support/Chromium/Chromium Master Preferences
   base::FilePath search_path;
-  if (!base::mac::GetLocalDirectory(kSearchPath, &search_path))
+  if (!base::apple::GetLocalDirectory(kSearchPath, &search_path)) {
     return base::FilePath();
+  }
 
   base::FilePath new_path = search_path.Append(kInitialPreferencesDirectory)
                                 .Append(kInitialPreferencesFileName);

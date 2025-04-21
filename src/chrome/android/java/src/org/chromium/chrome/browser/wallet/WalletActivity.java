@@ -19,10 +19,9 @@ import wallet.core.jni.HDWallet;
 import wallet.core.jni.PrivateKey;
 import wallet.core.java.AnySigner;
 import wallet.core.jni.proto.Ethereum;
-import wallet.core.jni.BitcoinScript;
-import wallet.core.jni.BitcoinSigHashType;
-import wallet.core.jni.proto.Bitcoin;
-import wallet.core.jni.proto.Common;
+// import wallet.core.jni.BitcoinScript;
+// import wallet.core.jni.BitcoinSigHashType;
+// import wallet.core.jni.Bitcoin;
 import wallet.core.jni.StoredKey;
 
 import com.google.protobuf.ByteString;
@@ -32,7 +31,6 @@ import java.math.BigDecimal;
 import wallet.core.jni.CoinType;
 import wallet.core.jni.HDWallet;
 import wallet.core.jni.PrivateKey;
-import wallet.core.jni.proto.Ethereum;
 
 import org.chromium.chrome.browser.pininput.data.EncryptSharedPreferences;
 import org.chromium.chrome.browser.pininput.PinCodeFragment;
@@ -58,6 +56,8 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import org.bouncycastle.jcajce.provider.digest.Keccak;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class WalletActivity extends ChromeBaseAppCompatActivity implements WalletInterface {
 
@@ -99,34 +99,60 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private void getTokenTrx() {
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
-
         ArrayList<TokenObj> mTokenArray = getTokenList();
-        try {
-            for (int i = 0; i != mTokenArray.size(); i++) {
-                TokenObj token = mTokenArray.get(i);
 
-                // TODO tidy this up, we don't need to store the nonce for all bep20/erc20 tokens. Just one nonce each for ethereum and smartchain
-                if (token.isCustomType) {
-                    if (token.chainName.equals("BEP20")) {
-                        mCryptoAPIHelper.getBEPTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.chain, token.ticker, token.decimals);
-                        mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "BSC");
-                    } else {
-                        mCryptoAPIHelper.getERCTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), token.chain, token.ticker, token.decimals);
-                        mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), "ETH");
-                    }
-                } else if (token.ticker.equals("ETH")) {
-                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), true, token.ticker, token.decimals);
-                    mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), "ETH");
-                } else if (token.ticker.equals("BSC")) {
-                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), false, token.ticker, token.decimals);
-                    mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "BSC");
-                } else {
-                    // btc
+        // Use a single-thread executor to process tasks sequentially but asynchronously
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        for (TokenObj token : mTokenArray) {
+            executor.execute(() -> {
+                try {
+                      // Handle non-custom token types
+                      switch (token.ticker) {
+                          case "ETH":
+                              mCryptoAPIHelper.getBSCETHTrx(
+                                  mWallet.getAddressForCoin(CoinType.ETHEREUM),
+                                  true,
+                                  token.ticker,
+                                  token.decimals
+                              );
+                              mCryptoAPIHelper.getTokenNonce(
+                                  "ERC20",
+                                  mWallet.getAddressForCoin(CoinType.ETHEREUM),
+                                  "ETH"
+                              );
+                              break;
+
+                          case "BSC":
+                              mCryptoAPIHelper.getBSCETHTrx(
+                                  mWallet.getAddressForCoin(CoinType.SMARTCHAIN),
+                                  false,
+                                  token.ticker,
+                                  token.decimals
+                              );
+                              mCryptoAPIHelper.getTokenNonce(
+                                  "BEP20",
+                                  mWallet.getAddressForCoin(CoinType.SMARTCHAIN),
+                                  "BSC"
+                              );
+                              break;
+
+                          default:
+                              // Handle other token types (e.g., BTC)
+                              break;
+                        }
+
+                    // Simulate a delay of 2 seconds between tasks
+                    Thread.sleep(3500);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            }
-        } catch (Exception ignore) {
-
+            });
         }
+
+        // Shutdown executor after all tasks are submitted
+        executor.shutdown();
     }
 
     private void fetchLatestPrices() {
@@ -322,7 +348,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
                     Ethereum.SigningInput signerInput = signerInputBuilder.build();
 
-                    Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
+                    Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign(signerInput, coinType, Ethereum.SigningOutput.parser());
                     mCryptoAPIHelper.sendTransaction(mPendingTrx.chainType, toHexString(signerOutput.getEncoded().toByteArray(), true),  mPendingTrx.tokenTicker, callback);
                 } else {
                     // BEP/ERC20
@@ -340,7 +366,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
                     Ethereum.SigningInput signerInput = signerInputBuilder.build();
 
-                    Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
+                    Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign(signerInput, coinType, Ethereum.SigningOutput.parser());
                     mCryptoAPIHelper.sendTransaction(mPendingTrx.chainType, toHexString(signerOutput.getEncoded().toByteArray(), true),  mPendingTrx.tokenTicker, callback);
                 }
             // }
@@ -603,7 +629,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     private void fetchWallet() {
         if (mSharedPreferences == null) mSharedPreferences = new EncryptSharedPreferences(this).getSharedPreferences();
         String mnemonic = mSharedPreferences.getString("MNEMONIC_KEY", "");
-        mWallet = new HDWallet(mnemonic, "");
+        mWallet = new HDWallet(mnemonic, "", false);
 
         fetchBalance();
 
@@ -619,7 +645,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private void importWallet() {
         try {
-            mWallet = new HDWallet(mMnemonicString, "", true);
+            mWallet = new HDWallet(mMnemonicString, "", false);
 
             if (mSharedPreferences == null) mSharedPreferences = new EncryptSharedPreferences(this).getSharedPreferences();
             mSharedPreferences.edit().putString("MNEMONIC_KEY", mWallet.mnemonic()).commit();
@@ -647,7 +673,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     }
 
     private void createWallet() {
-        mWallet = new HDWallet(mWallet.mnemonic(), "");
+        mWallet = new HDWallet(mWallet.mnemonic(), "", false);
 
         if (mSharedPreferences == null) mSharedPreferences = new EncryptSharedPreferences(this).getSharedPreferences();
         mSharedPreferences.edit().putString("MNEMONIC_KEY", mWallet.mnemonic()).commit();
@@ -681,6 +707,14 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         getSupportFragmentManager().beginTransaction()
                 .addToBackStack(null)
                 .replace(R.id.wallet_fragment_container_view, WalletPreferencesAddCustomToken.class, null)
+                .commit();
+    }
+
+    @Override
+    public void onNavigateViewSeed() {
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
+                .replace(R.id.wallet_fragment_container_view, WalletViewSeed.class, null)
                 .commit();
     }
 

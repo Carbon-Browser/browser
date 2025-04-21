@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,15 @@
 
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
-using base::UTF8ToUTF16;
-
 namespace autofill {
-
 namespace {
+
+using base::UTF8ToUTF16;
 
 const char kTestString[] = "Message";  // Corresponds to STRING_MESSAGE.
 
@@ -36,8 +35,6 @@ class TestLogger : public SavePasswordProgressLogger {
 
   std::string accumulated_log_;
 };
-
-}  // namespace
 
 TEST(SavePasswordProgressLoggerTest, LogHTMLForm) {
   TestLogger logger;
@@ -120,4 +117,5 @@ TEST(SavePasswordProgressLoggerTest, NoFullStops) {
   }
 }
 
+}  // namespace
 }  // namespace autofill

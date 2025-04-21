@@ -1,13 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_SYSTEM_INFO_SYSTEM_INFO_PROVIDER_H_
 #define EXTENSIONS_BROWSER_API_SYSTEM_INFO_SYSTEM_INFO_PROVIDER_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 
 namespace base {

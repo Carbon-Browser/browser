@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 // Implement UserInterfaceItemCommandHandler by validating items using global
 // chrome:: functions and executing commands with chrome::ExecuteCommand().
 @interface BrowserWindowCommandHandler
-    : NSObject<UserInterfaceItemCommandHandler>
+    : NSObject <UserInterfaceItemCommandHandler>
 @end
 
 #endif  // CHROME_BROWSER_UI_COCOA_BROWSER_WINDOW_COMMAND_HANDLER_H_

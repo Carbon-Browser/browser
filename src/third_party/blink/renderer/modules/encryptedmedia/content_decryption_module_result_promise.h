@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 
 namespace blink {
 
-ExceptionCode WebCdmExceptionToExceptionCode(
-    WebContentDecryptionModuleException);
+void WebCdmExceptionToPromiseRejection(ScriptPromiseResolverBase*,
+                                       WebContentDecryptionModuleException,
+                                       const String& message);
 
 // This class wraps the promise resolver to simplify creation of
 // ContentDecryptionModuleResult objects. The default implementations of the
@@ -38,7 +39,7 @@ class ContentDecryptionModuleResultPromise
   // ContentDecryptionModuleResult implementation.
   void Complete() override;
   void CompleteWithContentDecryptionModule(
-      WebContentDecryptionModule*) override;
+      std::unique_ptr<WebContentDecryptionModule>) override;
   void CompleteWithSession(
       WebContentDecryptionModuleResult::SessionStatus) override;
   void CompleteWithKeyStatus(
@@ -47,37 +48,35 @@ class ContentDecryptionModuleResultPromise
                          uint32_t system_code,
                          const WebString&) override;
 
-  // It is only valid to call this before completion.
-  ScriptPromise Promise();
-
   void Trace(Visitor*) const override;
 
  protected:
   // |interface_name| and |property_name| must have static life time.
-  ContentDecryptionModuleResultPromise(ScriptState*,
+  ContentDecryptionModuleResultPromise(ScriptPromiseResolverBase*,
                                        const MediaKeysConfig&,
                                        EmeApiType api_type);
 
   // Resolves the promise with |value|. Used by subclasses to resolve the
   // promise.
-  template <typename... T>
-  void Resolve(T... value) {
+  template <typename IDLType, typename... BlinkType>
+  void Resolve(BlinkType&&... value) {
     DCHECK(IsValidToFulfillPromise());
 
-    resolver_->Resolve(value...);
+    resolver_->DowncastTo<IDLType>()->Resolve(
+        std::forward<BlinkType>(value)...);
     resolver_.Clear();
   }
-
-  // Rejects the promise with a DOMException.
-  void Reject(ExceptionCode, const String& error_message);
 
   ExecutionContext* GetExecutionContext() const;
 
   // Determine if it's OK to resolve/reject this promise.
   bool IsValidToFulfillPromise();
 
+  // Returns |config_|.
+  MediaKeysConfig GetMediaKeysConfig();
+
  private:
-  Member<ScriptPromiseResolver> resolver_;
+  Member<ScriptPromiseResolverBase> resolver_;
   const MediaKeysConfig config_;
   const EmeApiType api_type_;
 };

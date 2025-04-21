@@ -1,6 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/test/base/in_process_browser_test.h"
 
@@ -29,6 +34,8 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/browser_app_menu_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view.h"
 #endif
@@ -88,10 +95,8 @@ IN_PROC_BROWSER_TEST_F(InProcessBrowserTest, ExternalConnectionFail) {
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
 
-  const char* const kURLs[] = {
-    "http://www.google.com/",
-    "http://www.cnn.com/"
-  };
+  const char* const kURLs[] = {"https://www.google.com/",
+                               "https://www.cnn.com/"};
   for (size_t i = 0; i < std::size(kURLs); ++i) {
     GURL url(kURLs[i]);
     LoadFailObserver observer(contents);
@@ -119,8 +124,8 @@ class SingleProcessBrowserTest : public InProcessBrowserTest {
   }
 };
 
-// TODO(https://crbug.com/1231009): Flaky / times out on windows bots.
-#if BUILDFLAG(IS_WIN)
+// TODO(crbug.com/40190525): Flaky / times out on many bots.
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_Test DISABLED_Test
 #else
 #define MAYBE_Test Test
@@ -136,6 +141,8 @@ IN_PROC_BROWSER_TEST_F(SingleProcessBrowserTest, MAYBE_Test) {
 namespace {
 
 class LayoutTrackingView : public views::View {
+  METADATA_HEADER(LayoutTrackingView, views::View)
+
  public:
   LayoutTrackingView() = default;
   ~LayoutTrackingView() override = default;
@@ -144,14 +151,17 @@ class LayoutTrackingView : public views::View {
   int layout_count() const { return layout_count_; }
 
   // views::View:
-  void Layout() override {
+  void Layout(PassKey) override {
     ++layout_count_;
-    views::View::Layout();
+    LayoutSuperclass<views::View>(this);
   }
 
  private:
   int layout_count_ = 0;
 };
+
+BEGIN_METADATA(LayoutTrackingView)
+END_METADATA
 
 }  // namespace
 

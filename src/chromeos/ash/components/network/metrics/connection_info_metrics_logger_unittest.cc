@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,21 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/metrics/connection_results.h"
 #include "chromeos/ash/components/network/metrics/network_metrics_helper.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -30,6 +31,11 @@ const char kCellularConnectResultAllHistogram[] =
     "Network.Ash.Cellular.ConnectionResult.All";
 const char kWifiConnectResultAllHistogram[] =
     "Network.Ash.WiFi.ConnectionResult.All";
+
+const char kCellularConnectResultNonUserInitiatedHistogram[] =
+    "Network.Ash.Cellular.ConnectionResult.NonUserInitiated";
+const char kWifiConnectResultNonUserInitiatedHistogram[] =
+    "Network.Ash.WiFi.ConnectionResult.NonUserInitiated";
 
 const char kCellularConnectResultUserInitiatedHistogram[] =
     "Network.Ash.Cellular.ConnectionResult.UserInitiated";
@@ -109,14 +115,20 @@ class ConnectionInfoMetricsLoggerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
+  void TriggerUserInitiatedConnectRequested(const std::string& service_path) {
+    NetworkHandler::Get()
+        ->connection_info_metrics_logger_->ConnectToNetworkRequested(
+            service_path);
+  }
+
   void TriggerUserInitiatedConnectSuccess(const std::string& service_path) {
-    chromeos::NetworkHandler::Get()
+    NetworkHandler::Get()
         ->connection_info_metrics_logger_->ConnectSucceeded(service_path);
   }
 
   void TriggerUserInitiatedConnectFailure(const std::string& service_path,
                                           const std::string& error_name) {
-    chromeos::NetworkHandler::Get()
+    NetworkHandler::Get()
         ->connection_info_metrics_logger_->ConnectFailed(service_path,
                                                          error_name);
   }
@@ -125,7 +137,8 @@ class ConnectionInfoMetricsLoggerTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
-  ShillServiceClient::TestInterface* shill_service_client_;
+  raw_ptr<ShillServiceClient::TestInterface, DanglingUntriaged>
+      shill_service_client_;
   TestingPrefServiceSimple profile_prefs_;
   TestingPrefServiceSimple local_state_;
 };
@@ -160,10 +173,19 @@ TEST_F(ConnectionInfoMetricsLoggerTest, ConnectionState) {
       kWifiConnectionStateHistogram,
       NetworkMetricsHelper::ConnectionState::kConnected, 1);
 
-  // Disconnecting Wifi because of an error.
+  // Disconnecting Wifi due to suspend, state changes to idle with Shill error.
   SetShillError(kWifiServicePath, shill::kErrorConnectFailed);
   SetShillState(kWifiServicePath, shill::kStateIdle);
-  histogram_tester_->ExpectTotalCount(kWifiConnectionStateHistogram, 2);
+  histogram_tester_->ExpectTotalCount(kWifiConnectionStateHistogram, 1);
+  histogram_tester_->ExpectBucketCount(
+      kWifiConnectionStateHistogram,
+      NetworkMetricsHelper::ConnectionState::kDisconnectedWithoutUserAction, 0);
+
+  // Disconnecting Wifi due to some system error, state changes to failure with
+  // Shill error.
+  SetShillState(kWifiServicePath, shill::kStateOnline);
+  SetShillError(kWifiServicePath, shill::kErrorConnectFailed);
+  SetShillState(kWifiServicePath, shill::kStateFailure);
   histogram_tester_->ExpectBucketCount(
       kWifiConnectionStateHistogram,
       NetworkMetricsHelper::ConnectionState::kDisconnectedWithoutUserAction, 1);
@@ -171,27 +193,47 @@ TEST_F(ConnectionInfoMetricsLoggerTest, ConnectionState) {
 
 TEST_F(ConnectionInfoMetricsLoggerTest, UserInitiatedConnectDisconnect) {
   SetUpGenericCellularNetwork();
+  SetShillState(kCellularServicePath, shill::kStateIdle);
   SetUpGenericWifiNetwork();
+  SetShillState(kWifiServicePath, shill::kStateIdle);
   histogram_tester_->ExpectTotalCount(
       kCellularConnectResultUserInitiatedHistogram, 0);
 
+  TriggerUserInitiatedConnectRequested(kCellularServicePath);
+  SetShillState(kCellularServicePath, shill::kStateAssociation);
+  SetShillState(kCellularServicePath, shill::kStateOnline);
   TriggerUserInitiatedConnectSuccess(kCellularServicePath);
   histogram_tester_->ExpectTotalCount(
       kCellularConnectResultUserInitiatedHistogram, 1);
+  histogram_tester_->ExpectTotalCount(
+      kCellularConnectResultNonUserInitiatedHistogram, 0);
 
+  // Auto connect followed by user-initiated connect.
+  SetShillState(kCellularServicePath, shill::kStateIdle);
+  SetShillState(kCellularServicePath, shill::kStateOnline);
+  histogram_tester_->ExpectTotalCount(
+      kCellularConnectResultUserInitiatedHistogram, 1);
+  histogram_tester_->ExpectTotalCount(
+      kCellularConnectResultNonUserInitiatedHistogram, 1);
+
+  TriggerUserInitiatedConnectRequested(kWifiServicePath);
   TriggerUserInitiatedConnectSuccess(kWifiServicePath);
   histogram_tester_->ExpectTotalCount(kWifiConnectResultUserInitiatedHistogram,
                                       1);
 
+  TriggerUserInitiatedConnectRequested(kCellularServicePath);
   TriggerUserInitiatedConnectFailure(
       kCellularServicePath, NetworkConnectionHandler::kErrorConnectFailed);
   histogram_tester_->ExpectTotalCount(
       kCellularConnectResultUserInitiatedHistogram, 2);
 
+  TriggerUserInitiatedConnectRequested(kWifiServicePath);
   TriggerUserInitiatedConnectFailure(
       kWifiServicePath, NetworkConnectionHandler::kErrorConnectFailed);
   histogram_tester_->ExpectTotalCount(kWifiConnectResultUserInitiatedHistogram,
                                       2);
+  histogram_tester_->ExpectTotalCount(
+      kWifiConnectResultNonUserInitiatedHistogram, 0);
 }
 
 TEST_F(ConnectionInfoMetricsLoggerTest, AutoStatusTransitions) {
@@ -204,6 +246,11 @@ TEST_F(ConnectionInfoMetricsLoggerTest, AutoStatusTransitions) {
   histogram_tester_->ExpectTotalCount(kCellularConnectResultAllHistogram, 1);
   histogram_tester_->ExpectBucketCount(kCellularConnectResultAllHistogram,
                                        ShillConnectResult::kSuccess, 1);
+  histogram_tester_->ExpectTotalCount(
+      kCellularConnectResultNonUserInitiatedHistogram, 1);
+  histogram_tester_->ExpectBucketCount(
+      kCellularConnectResultNonUserInitiatedHistogram,
+      ShillConnectResult::kSuccess, 1);
 
   // Successful connect from connecting to connected.
   SetShillState(kCellularServicePath, shill::kStateAssociation);
@@ -212,11 +259,16 @@ TEST_F(ConnectionInfoMetricsLoggerTest, AutoStatusTransitions) {
   histogram_tester_->ExpectTotalCount(kCellularConnectResultAllHistogram, 2);
   histogram_tester_->ExpectBucketCount(kCellularConnectResultAllHistogram,
                                        ShillConnectResult::kSuccess, 2);
+  histogram_tester_->ExpectTotalCount(
+      kCellularConnectResultNonUserInitiatedHistogram, 2);
+  histogram_tester_->ExpectBucketCount(
+      kCellularConnectResultNonUserInitiatedHistogram,
+      ShillConnectResult::kSuccess, 2);
 
   // Fail to connect from connecting to disconnecting, no valid shill error.
   SetShillState(kCellularServicePath, shill::kStateAssociation);
   histogram_tester_->ExpectTotalCount(kCellularConnectResultAllHistogram, 2);
-  SetShillState(kCellularServicePath, shill::kStateDisconnect);
+  SetShillState(kCellularServicePath, shill::kStateDisconnecting);
   histogram_tester_->ExpectTotalCount(kCellularConnectResultAllHistogram, 2);
 
   // Fail to connect from disconnecting to disconnected.
@@ -257,4 +309,4 @@ TEST_F(ConnectionInfoMetricsLoggerTest, MultipleNetworksStatusRecorded) {
                                        ShillConnectResult::kSuccess, 1);
 }
 
-}  // namespace chromeos
+}  // namespace ash

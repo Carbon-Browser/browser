@@ -1,17 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_PARSER_LITERAL_BUFFER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_PARSER_LITERAL_BUFFER_H_
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 #include <type_traits>
 
-#include "base/bits.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
+#include "base/containers/checked_iterators.h"
+#include "base/containers/span.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_encoding.h"
@@ -26,12 +33,6 @@
 #define BUFFER_INLINE_CAPACITY kInlineSize
 #endif
 
-// Controls whether strings created by LiteralBuffer have an encoding specified.
-// Specifying the encoding may avoid unnecessary allocations and checks to
-// determine encoding, and allows for a fast path when copying UChars to
-// LChars.
-CORE_EXPORT extern bool g_literal_buffer_create_string_with_encoding;
-
 // LiteralBufferBase is an optimized version of Vector for LChar and UChar
 // characters. In particular `AddChar` is faster than `push_back`, since
 // it avoids unnecessary register spills. See https://crbug.com/1205338.
@@ -43,6 +44,8 @@ class LiteralBufferBase {
                 "T must be a character type");
 
  public:
+  using iterator = base::CheckedContiguousIterator<const T>;
+
   ~LiteralBufferBase() {
     if (!is_stored_inline())
       WTF::Partitions::BufferFree(begin_);
@@ -53,7 +56,12 @@ class LiteralBufferBase {
     return base::checked_cast<wtf_size_t>(end_ - begin_);
   }
 
-  ALWAYS_INLINE bool IsEmpty() const { return size() == 0; }
+  // Iterators, so this type meets the requirements of
+  // `std::ranges::contiguous_range`.
+  ALWAYS_INLINE iterator begin() const { return iterator(begin_, end_); }
+  ALWAYS_INLINE iterator end() const { return iterator(begin_, end_, end_); }
+
+  ALWAYS_INLINE bool IsEmpty() const { return begin_ == end_; }
 
   ALWAYS_INLINE const T& operator[](wtf_size_t index) const {
     CHECK_GT(size(), index);
@@ -67,8 +75,9 @@ class LiteralBufferBase {
   ALWAYS_INLINE void ClearImpl() { end_ = begin_; }
 
   ALWAYS_INLINE void AddCharImpl(T val) {
-    if (UNLIKELY(end_ == end_of_storage_))
+    if (end_ == end_of_storage_) [[unlikely]] {
       end_ = Grow();
+    }
     *end_++ = val;
   }
 
@@ -136,7 +145,7 @@ class LiteralBufferBase {
     DCHECK_LE(value, size_t{1} << (digits - 1));
     if (value)
       --value;
-    return size_t{1} << (digits - base::bits::CountLeadingZeroBits(value));
+    return size_t{1} << (digits - std::countl_zero(value));
   }
 
   // Grows the backing store by a factor of two. Returns the new end of the used
@@ -171,7 +180,7 @@ class LiteralBufferBase {
 };
 
 template <wtf_size_t kInlineSize>
-class LCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
+class LCharLiteralBuffer : public LiteralBufferBase<LChar, kInlineSize> {
  public:
   LCharLiteralBuffer() = default;
   LCharLiteralBuffer(const LCharLiteralBuffer& other) { *this = other; }
@@ -198,7 +207,7 @@ class LCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
 
   ALWAYS_INLINE void AddChar(LChar val) { this->AddCharImpl(val); }
 
-  String AsString() const { return String(this->data(), this->size()); }
+  String AsString() const { return String(*this); }
 };
 
 template <wtf_size_t kInlineSize>
@@ -214,6 +223,14 @@ class UCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
   UCharLiteralBuffer& operator=(
       const UCharLiteralBuffer<kOtherInlineSize>& other) {
     if (this->data() == other.data())
+      return *this;
+    this->Copy(other);
+    is_8bit_ = other.is_8bit_;
+    return *this;
+  }
+
+  UCharLiteralBuffer& operator=(const UCharLiteralBuffer& other) {
+    if (this == &other)
       return *this;
     this->Copy(other);
     is_8bit_ = other.is_8bit_;
@@ -246,21 +263,20 @@ class UCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
   }
 
   String AsString() const {
-    if (g_literal_buffer_create_string_with_encoding && Is8Bit())
-      return String::Make8BitFrom16BitSource(this->data(), this->size());
-    return String(this->data(), this->size());
+    if (Is8Bit()) {
+      return String::Make8BitFrom16BitSource(base::span(*this));
+    }
+    return String(*this);
   }
 
   String AsString8() const {
-    return String::Make8BitFrom16BitSource(this->data(), this->size());
+    return String::Make8BitFrom16BitSource(base::span(*this));
   }
 
   AtomicString AsAtomicString() const {
-    if (!g_literal_buffer_create_string_with_encoding)
-      return AtomicString(this->data(), this->size());
-    return AtomicString(this->data(), this->size(),
-                        Is8Bit() ? WTF::AtomicStringUCharEncoding::kIs8Bit
-                                 : WTF::AtomicStringUCharEncoding::kIs16Bit);
+    return AtomicString(*this, Is8Bit()
+                                   ? WTF::AtomicStringUCharEncoding::kIs8Bit
+                                   : WTF::AtomicStringUCharEncoding::kIs16Bit);
   }
 
   ALWAYS_INLINE bool Is8Bit() const { return is_8bit_; }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class NoOpkeyboardVisibilityDelegate extends KeyboardVisibilityDelegate {
     }
 
     @Override
-    public int calculateKeyboardHeight(View view) {
+    public int calculateTotalKeyboardHeight(View view) {
         return 0;
     }
 

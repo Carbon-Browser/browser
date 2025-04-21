@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE_BLOB_CONTEXT_GETTER_FACTORY_H_
 #define COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE_BLOB_CONTEXT_GETTER_FACTORY_H_
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 
 namespace storage {
@@ -19,7 +20,8 @@ using BlobContextGetter =
 using BlobContextGetterCallback = base::OnceCallback<void(BlobContextGetter)>;
 
 // Retrieves a blob storage context getter on main thread.
-class BlobContextGetterFactory {
+class COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    BlobContextGetterFactory {
  public:
   virtual void RetrieveBlobContextGetter(
       BlobContextGetterCallback callback) = 0;

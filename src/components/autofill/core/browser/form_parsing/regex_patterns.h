@@ -1,17 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_PARSING_REGEX_PATTERNS_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_PARSING_REGEX_PATTERNS_H_
 
+#include <optional>
+#include <string_view>
+
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_parsing/autofill_parsing_utils.h"
 #include "components/autofill/core/browser/form_parsing/buildflags.h"
 #include "components/autofill/core/common/language_code.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace autofill {
 
@@ -34,15 +35,15 @@ class MatchPatternRef {
   // apply to the field's HTML name, not to the field's user-visible label.
   //
   // We use this for English patterns: we augment non-English languages with the
-  // English patterns, restricted to the Attribute::kName. The motivation is
-  // that the coding language also of non-English pages is often English.
+  // English patterns, restricted to the MatchAttribute::kName. The motivation
+  // is that the coding language also of non-English pages is often English.
   //
   // Representing the distinction between ordinary and supplementary patterns in
   // MatchPatternRef saves us from storing the supplementary MatchingPatterns
   // explicitly and saves some binary size.
   //
   // The dereferencing operator implements the restriction to
-  // MatchFieldType::kName of supplementary MatchPatternRef.
+  // MatchAttribute::kName of supplementary MatchPatternRef.
 
   // We choose a small integer to save memory in the generated arrays.
   // Since the generated code passes integer literals to the constructor, the
@@ -67,31 +68,23 @@ class MatchPatternRef {
   UnderlyingType value_;
 };
 
-// The different sets of patterns that are available.
+// The different sets of patterns available for parsing.
 // Each enum constant corresponds to a JSON file.
-enum class PatternSource {
-#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+enum class PatternFile : uint8_t {
+#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
   // Patterns whose stability is above suspicion.
   kLegacy,
   kMaxValue = kLegacy
 #else
-  // Patterns whose stability is above suspicion.
-  kLegacy,
-  // The patterns applied for most users.
   kDefault,
-  // Patterns that are being verified experimentally.
-  kExperimental,
-  // One step before `kExperimental`. These patterns are used only for
-  // non-user-visible metrics.
-  kNextGen,
-  kMaxValue = kNextGen
+  kAutofillAi,
+  kMaxValue = kAutofillAi
 #endif
 };
 
-// The active pattern and the available patterns depend on the build config and
-// the Finch config.
-PatternSource GetActivePatternSource();
-DenseSet<PatternSource> GetNonActivePatternSources();
+// The active file depend on the build config and enabled features. If the
+// active `HeuristicSource` is not based on a JSON file, nullopt is returned.
+std::optional<PatternFile> GetActivePatternFile();
 
 // Looks up the patterns for the given name and language.
 // The name is typically a field type.
@@ -104,14 +97,18 @@ DenseSet<PatternSource> GetNonActivePatternSources();
 // The returned patterns are sorted by their MatchingPattern::positive_score in
 // decreasing order.
 base::span<const MatchPatternRef> GetMatchPatterns(
-    base::StringPiece name,
-    absl::optional<LanguageCode> language,
-    PatternSource pattern_source);
+    std::string_view name,
+    std::optional<LanguageCode> language_code,
+    PatternFile pattern_file);
 
 base::span<const MatchPatternRef> GetMatchPatterns(
-    ServerFieldType type,
-    absl::optional<LanguageCode> language,
-    PatternSource pattern_source);
+    FieldType type,
+    std::optional<LanguageCode> language_code,
+    PatternFile pattern_file);
+
+// Returns true iff there at least one pattern for some PatternSource and
+// pattern name.
+bool IsSupportedLanguageCode(LanguageCode language_code);
 
 }  // namespace autofill
 

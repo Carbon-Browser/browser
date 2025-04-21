@@ -1,6 +1,8 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chromeos/components/onc/onc_validator.h"
 
 #include <stddef.h>
 
@@ -13,9 +15,9 @@
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/values.h"
 #include "chromeos/components/onc/onc_signature.h"
-#include "chromeos/components/onc/onc_validator.h"
 
 // TODO Check why this file do not fail on default trybots
 // http://crbug.com/543919
@@ -63,14 +65,16 @@ void PrintHelp() {
           "  onc_validator [OPTION]... [TYPE] onc_file\n"
           "\n"
           "Valid TYPEs are:\n");
-  for (size_t i = 0; i < std::size(kTypes); ++i)
-    fprintf(stderr, "  %s\n", kTypes[i]);
+  for (auto& type : kTypes) {
+    fprintf(stderr, "  %s\n", type);
+  }
 
   fprintf(stderr,
           "\n"
           "Valid OPTIONs are:\n");
-  for (size_t i = 0; i < std::size(kSwitches); ++i)
-    fprintf(stderr, "  --%s\n", kSwitches[i]);
+  for (auto& switch_val : kSwitches) {
+    fprintf(stderr, "  --%s\n", switch_val);
+  }
 
   fprintf(stderr,
           "\n"
@@ -88,30 +92,27 @@ void PrintHelp() {
           kStatusArgumentError);
 }
 
-std::unique_ptr<base::DictionaryValue> ReadDictionary(
-    const std::string& filename) {
+std::optional<base::Value::Dict> ReadDictionary(const std::string& filename) {
   base::FilePath path(filename);
   JSONFileValueDeserializer deserializer(path,
                                          base::JSON_ALLOW_TRAILING_COMMAS);
 
   std::string json_error;
   std::unique_ptr<base::Value> value =
-      deserializer.Deserialize(NULL, &json_error);
+      deserializer.Deserialize(nullptr, &json_error);
   if (!value) {
     LOG(ERROR) << "Couldn't json-deserialize file '" << filename
                << "': " << json_error;
-    return nullptr;
+    return std::nullopt;
   }
 
-  std::unique_ptr<base::DictionaryValue> dict =
-      base::DictionaryValue::From(std::move(value));
-  if (!dict) {
+  if (!value->is_dict()) {
     LOG(ERROR) << "File '" << filename
                << "' does not contain a dictionary as expected, but type "
-               << value->GetType();
+               << base::Value::GetTypeName(value->type());
   }
 
-  return dict;
+  return std::move(*value).TakeDict();
 }
 
 int main(int argc, const char* argv[]) {
@@ -125,10 +126,11 @@ int main(int argc, const char* argv[]) {
     return kStatusArgumentError;
   }
 
-  std::unique_ptr<base::DictionaryValue> onc_object = ReadDictionary(args[1]);
+  std::optional<base::Value::Dict> onc_object = ReadDictionary(args[1]);
 
-  if (!onc_object)
+  if (!onc_object) {
     return kStatusJsonError;
+  }
 
   chromeos::onc::Validator validator(
       command_line.HasSwitch(kSwitchErrorOnUnknownField),
@@ -144,7 +146,7 @@ int main(int argc, const char* argv[]) {
     validator.SetOncSource(::onc::ONC_SOURCE_USER_IMPORT);
 
   std::string type_arg(args[0]);
-  const chromeos::onc::OncValueSignature* signature = NULL;
+  const chromeos::onc::OncValueSignature* signature = nullptr;
   if (type_arg == kToplevelConfiguration) {
     signature = &chromeos::onc::kToplevelConfigurationSignature;
   } else if (type_arg == kNetworkConfiguration) {
@@ -157,7 +159,7 @@ int main(int argc, const char* argv[]) {
   }
 
   chromeos::onc::Validator::Result result;
-  validator.ValidateAndRepairObject(signature, *onc_object, &result);
+  validator.ValidateAndRepairObject(signature, onc_object.value(), &result);
 
   switch (result) {
     case chromeos::onc::Validator::VALID:
@@ -167,6 +169,6 @@ int main(int argc, const char* argv[]) {
     case chromeos::onc::Validator::INVALID:
       return kStatusInvalid;
     default:
-      CHECK(false);
+      NOTREACHED();
   }
 }

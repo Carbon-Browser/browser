@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_UI_SCREEN_INFO_METRICS_PROVIDER_H_
 #define COMPONENTS_METRICS_UI_SCREEN_INFO_METRICS_PROVIDER_H_
 
+#include <optional>
+
 #include "components/metrics/metrics_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace metrics {
@@ -30,7 +31,7 @@ class ScreenInfoMetricsProvider : public MetricsProvider {
   // Exposed for the sake of mocking in test code.
 
   // Returns the screen size for the primary monitor if available.
-  virtual absl::optional<gfx::Size> GetScreenSize() const;
+  virtual std::optional<gfx::Size> GetScreenSize() const;
 
   // Returns the device scale factor for the primary monitor.
   virtual float GetScreenDeviceScaleFactor() const;

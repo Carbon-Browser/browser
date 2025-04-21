@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -21,7 +21,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -37,9 +36,13 @@
 #include "extensions/common/extension_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 namespace extensions {
@@ -48,17 +51,15 @@ class FullStreamUIPolicyTest : public testing::Test {
  public:
   FullStreamUIPolicyTest()
       : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    test_user_manager_ = std::make_unique<ash::ScopedTestUserManager>();
-#endif
     base::CommandLine no_program_command_line(base::CommandLine::NO_PROGRAM);
     profile_ = std::make_unique<TestingProfile>();
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
     command_line->AppendSwitch(switches::kEnableExtensionActivityLogging);
     command_line->AppendSwitch(switches::kEnableExtensionActivityLogTesting);
-    extension_service_ = static_cast<TestExtensionSystem*>(
-        ExtensionSystem::Get(profile_.get()))->CreateExtensionService
-            (&no_program_command_line, base::FilePath(), false);
+    extension_service_ =
+        static_cast<TestExtensionSystem*>(ExtensionSystem::Get(profile_.get()))
+            ->CreateExtensionService(&no_program_command_line, base::FilePath(),
+                                     false);
 
     // Run pending async tasks resulting from profile construction to ensure
     // these are complete before the test begins.
@@ -66,11 +67,12 @@ class FullStreamUIPolicyTest : public testing::Test {
   }
 
   ~FullStreamUIPolicyTest() override {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    test_user_manager_.reset();
+#if BUILDFLAG(IS_CHROMEOS)
+    user_manager_.Reset();
 #endif
     base::RunLoop().RunUntilIdle();
-    profile_.reset(NULL);
+    extension_service_ = nullptr;
+    profile_.reset();
     base::RunLoop().RunUntilIdle();
   }
 
@@ -99,22 +101,23 @@ class FullStreamUIPolicyTest : public testing::Test {
     // Submit a request to the policy to read back some data, and call the
     // checker function when results are available.  This will happen on the
     // database thread.
+    base::RunLoop run_loop;
     policy->ReadFilteredData(
         extension_id, type, api_name, page_url, arg_url, days_ago,
         base::BindOnce(&FullStreamUIPolicyTest::CheckWrapper,
-                       std::move(checker),
-                       base::RunLoop::QuitCurrentWhenIdleClosureDeprecated()));
+                       std::move(checker), run_loop.QuitClosure()));
 
     // Set up a timeout for receiving results; if we haven't received anything
     // when the timeout triggers then assume that the test is broken.
     base::CancelableOnceClosure timeout(
-        base::BindOnce(&FullStreamUIPolicyTest::TimeoutCallback));
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::BindOnce(&FullStreamUIPolicyTest::TimeoutCallback,
+                       run_loop.QuitWhenIdleClosure()));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, timeout.callback(), TestTimeouts::action_timeout());
 
     // Wait for results; either the checker or the timeout callbacks should
     // cause the main loop to exit.
-    base::RunLoop().Run();
+    run_loop.Run();
 
     timeout.Cancel();
   }
@@ -127,8 +130,8 @@ class FullStreamUIPolicyTest : public testing::Test {
     std::move(done).Run();
   }
 
-  static void TimeoutCallback() {
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  static void TimeoutCallback(base::OnceClosure quit_closure) {
+    std::move(quit_closure).Run();
     FAIL() << "Policy test timed out waiting for results";
   }
 
@@ -327,13 +330,17 @@ class FullStreamUIPolicyTest : public testing::Test {
   }
 
  protected:
-  raw_ptr<ExtensionService> extension_service_;
+  raw_ptr<ExtensionService> extension_service_ = nullptr;
   std::unique_ptr<TestingProfile> profile_;
   content::BrowserTaskEnvironment task_environment_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  std::unique_ptr<ash::ScopedTestUserManager> test_user_manager_;
+  user_manager::ScopedUserManager user_manager_{
+      std::make_unique<user_manager::UserManagerImpl>(
+          std::make_unique<ash::UserManagerDelegateImpl>(),
+          g_browser_process->local_state(),
+          ash::CrosSettings::Get())};
 #endif
 };
 
@@ -342,17 +349,15 @@ TEST_F(FullStreamUIPolicyTest, Construct) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
-  scoped_refptr<Action> action = new Action(extension->id(),
-                                            base::Time::Now(),
-                                            Action::ACTION_API_CALL,
-                                            "tabs.testMethod");
+  scoped_refptr<Action> action =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_API_CALL,
+                 "tabs.testMethod");
   action->set_args(base::Value::List());
   policy->ProcessAction(action);
   policy->Close();
@@ -363,27 +368,24 @@ TEST_F(FullStreamUIPolicyTest, LogAndFetchActions) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
   GURL gurl("http://www.google.com");
 
   // Write some API calls
-  scoped_refptr<Action> action_api = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_API_CALL,
-                                                "tabs.testMethod");
+  scoped_refptr<Action> action_api =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_API_CALL,
+                 "tabs.testMethod");
   action_api->set_args(base::Value::List());
   policy->ProcessAction(action_api);
 
-  scoped_refptr<Action> action_dom = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_DOM_ACCESS,
-                                                "document.write");
+  scoped_refptr<Action> action_dom =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_DOM_ACCESS,
+                 "document.write");
   action_dom->set_args(base::Value::List());
   action_dom->set_page_url(gurl);
   policy->ProcessAction(action_dom);
@@ -401,27 +403,24 @@ TEST_F(FullStreamUIPolicyTest, LogAndFetchFilteredActions) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
   GURL gurl("http://www.google.com");
 
   // Write some API calls
-  scoped_refptr<Action> action_api = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_API_CALL,
-                                                "tabs.testMethod");
+  scoped_refptr<Action> action_api =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_API_CALL,
+                 "tabs.testMethod");
   action_api->set_args(base::Value::List());
   policy->ProcessAction(action_api);
 
-  scoped_refptr<Action> action_dom = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_DOM_ACCESS,
-                                                "document.write");
+  scoped_refptr<Action> action_dom =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_DOM_ACCESS,
+                 "document.write");
   action_dom->set_args(base::Value::List());
   action_dom->set_page_url(gurl);
   policy->ProcessAction(action_dom);
@@ -481,21 +480,18 @@ TEST_F(FullStreamUIPolicyTest, LogWithArguments) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
 
-  base::Value::List args;
-  args.Append("hello");
+  auto args = base::Value::List().Append("hello");
   args.Append("world");
-  scoped_refptr<Action> action = new Action(extension->id(),
-                                            base::Time::Now(),
-                                            Action::ACTION_API_CALL,
-                                            "extension.connect");
+  scoped_refptr<Action> action =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_API_CALL,
+                 "extension.connect");
   action->set_args(std::move(args));
 
   policy->ProcessAction(action);
@@ -748,18 +744,17 @@ TEST_F(FullStreamUIPolicyTest, CapReturns) {
 
   for (int i = 0; i < 305; i++) {
     scoped_refptr<Action> action =
-        new Action("punky",
-                   base::Time::Now(),
-                   Action::ACTION_API_CALL,
+        new Action("punky", base::Time::Now(), Action::ACTION_API_CALL,
                    base::StringPrintf("apicall_%d", i));
     policy->ProcessAction(action);
   }
 
   policy->Flush();
-  GetActivityLogTaskRunner()->PostTaskAndReply(
-      FROM_HERE, base::DoNothing(),
-      base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
-  base::RunLoop().Run();
+  base::RunLoop run_loop;
+  GetActivityLogTaskRunner()->PostTaskAndReply(FROM_HERE, base::DoNothing(),
+                                               run_loop.QuitClosure());
+
+  run_loop.Run();
 
   CheckReadFilteredData(
       policy, "punky", Action::ACTION_ANY, "", "", "", -1,
@@ -773,27 +768,24 @@ TEST_F(FullStreamUIPolicyTest, DeleteDatabase) {
   policy->Init();
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test extension")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   extension_service_->AddExtension(extension.get());
   GURL gurl("http://www.google.com");
 
   // Write some API calls.
-  scoped_refptr<Action> action_api = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_API_CALL,
-                                                "tabs.testMethod");
+  scoped_refptr<Action> action_api =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_API_CALL,
+                 "tabs.testMethod");
   action_api->set_args(base::Value::List());
   policy->ProcessAction(action_api);
 
-  scoped_refptr<Action> action_dom = new Action(extension->id(),
-                                                base::Time::Now(),
-                                                Action::ACTION_DOM_ACCESS,
-                                                "document.write");
+  scoped_refptr<Action> action_dom =
+      new Action(extension->id(), base::Time::Now(), Action::ACTION_DOM_ACCESS,
+                 "document.write");
   action_dom->set_args(base::Value::List());
   action_dom->set_page_url(gurl);
   policy->ProcessAction(action_dom);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,8 +66,9 @@ TEST(RemoteInputFilterTest, NoLocalActivity) {
 
   EXPECT_CALL(mock_stub, InjectMouseEvent(_)).Times(10);
 
-  for (int i = 0; i < 10; ++i)
+  for (int i = 0; i < 10; ++i) {
     input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
+  }
 }
 
 // Verify that events get through until there is local activity.
@@ -80,9 +81,10 @@ TEST(RemoteInputFilterTest, MismatchedLocalActivity) {
 
   for (int i = 0; i < 10; ++i) {
     input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
-    if (i == 4)
+    if (i == 4) {
       input_filter.LocalPointerMoved(webrtc::DesktopVector(1, 1),
-                                     ui::ET_MOUSE_MOVED);
+                                     ui::EventType::kMouseMoved);
+    }
   }
 }
 
@@ -96,7 +98,7 @@ TEST(RemoteInputFilterTest, TouchEventsAreNotCheckedForEcho) {
 
   input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
   input_filter.LocalPointerMoved(webrtc::DesktopVector(0, 0),
-                                 ui::ET_TOUCH_MOVED);
+                                 ui::EventType::kTouchMoved);
   input_filter.InjectMouseEvent(MouseMoveEvent(1, 1));
 }
 
@@ -111,7 +113,7 @@ TEST(RemoteInputFilterTest, LocalEchoesOfRemoteActivity) {
   for (int i = 0; i < 10; ++i) {
     input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
     input_filter.LocalPointerMoved(webrtc::DesktopVector(0, 0),
-                                   ui::ET_MOUSE_MOVED);
+                                   ui::EventType::kMouseMoved);
   }
 }
 
@@ -126,10 +128,11 @@ TEST(RemoteInputFilterTest, LocalEchosAndLocalActivity) {
   for (int i = 0; i < 10; ++i) {
     input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
     input_filter.LocalPointerMoved(webrtc::DesktopVector(0, 0),
-                                   ui::ET_MOUSE_MOVED);
-    if (i == 4)
+                                   ui::EventType::kMouseMoved);
+    if (i == 4) {
       input_filter.LocalPointerMoved(webrtc::DesktopVector(1, 1),
-                                     ui::ET_MOUSE_MOVED);
+                                     ui::EventType::kMouseMoved);
+    }
   }
 }
 
@@ -211,10 +214,11 @@ TEST(RemoteInputFilterTest, LocalActivityReleasesAll) {
   for (int i = 0; i < 10; ++i) {
     input_filter.InjectMouseEvent(MouseMoveEvent(0, 0));
     input_filter.LocalPointerMoved(webrtc::DesktopVector(0, 0),
-                                   ui::ET_MOUSE_MOVED);
-    if (i == 4)
+                                   ui::EventType::kMouseMoved);
+    if (i == 4) {
       input_filter.LocalPointerMoved(webrtc::DesktopVector(1, 1),
-                                     ui::ET_MOUSE_MOVED);
+                                     ui::EventType::kMouseMoved);
+    }
   }
 }
 

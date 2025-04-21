@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,8 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/bytes_consumer.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "v8/include/v8.h"
 
 using blink::mojom::ServiceWorkerResponseError;
@@ -71,7 +73,6 @@ const String GetMessageForResponseError(ServiceWorkerResponseError error,
       break;
     case ServiceWorkerResponseError::kResponseTypeNotBasicOrDefault:
       NOTREACHED();
-      break;
     case ServiceWorkerResponseError::kBodyUsed:
       error_message =
           error_message +
@@ -140,12 +141,15 @@ class FetchLoaderClient final : public GarbageCollected<FetchLoaderClient>,
                                 public FetchDataLoader::Client {
  public:
   FetchLoaderClient(
-      std::unique_ptr<ServiceWorkerEventQueue::StayAwakeToken> token)
-      : token_(std::move(token)) {
+      std::unique_ptr<ServiceWorkerEventQueue::StayAwakeToken> token,
+      ServiceWorkerGlobalScope* service_worker,
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+      : callback_(service_worker), token_(std::move(token)) {
     // We need to make |callback_| callable in the first place because some
     // DidFetchDataLoadXXX() accessing it may be called synchronously from
     // StartLoading().
-    callback_receiver_ = callback_.BindNewPipeAndPassReceiver();
+    callback_receiver_ =
+        callback_.BindNewPipeAndPassReceiver(std::move(task_runner));
   }
 
   FetchLoaderClient(const FetchLoaderClient&) = delete;
@@ -181,6 +185,7 @@ class FetchLoaderClient final : public GarbageCollected<FetchLoaderClient>,
   }
 
   void Trace(Visitor* visitor) const override {
+    visitor->Trace(callback_);
     FetchDataLoader::Client::Trace(visitor);
   }
 
@@ -189,7 +194,7 @@ class FetchLoaderClient final : public GarbageCollected<FetchLoaderClient>,
   mojo::PendingReceiver<mojom::blink::ServiceWorkerStreamCallback>
       callback_receiver_;
 
-  mojo::Remote<mojom::blink::ServiceWorkerStreamCallback> callback_;
+  HeapMojoRemote<mojom::blink::ServiceWorkerStreamCallback> callback_;
   std::unique_ptr<ServiceWorkerEventQueue::StayAwakeToken> token_;
 };
 
@@ -197,21 +202,36 @@ class UploadingCompletionObserver
     : public GarbageCollected<UploadingCompletionObserver>,
       public BytesUploader::Client {
  public:
-  explicit UploadingCompletionObserver(ScriptPromiseResolver* resolver)
-      : resolver_(resolver) {}
+  explicit UploadingCompletionObserver(
+      int fetch_event_id,
+      ScriptPromiseResolver<IDLUndefined>* resolver,
+      ServiceWorkerGlobalScope* service_worker_global_scope)
+      : fetch_event_id_(fetch_event_id),
+        resolver_(resolver),
+        service_worker_global_scope_(service_worker_global_scope) {}
+
   ~UploadingCompletionObserver() override = default;
 
-  void OnComplete() override { resolver_->Resolve(); }
+  void OnComplete() override {
+    resolver_->Resolve();
+    service_worker_global_scope_->OnStreamingUploadCompletion(fetch_event_id_);
+  }
 
-  void OnError() override { resolver_->Reject(); }
+  void OnError() override {
+    resolver_->Reject();
+    service_worker_global_scope_->OnStreamingUploadCompletion(fetch_event_id_);
+  }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(resolver_);
+    visitor->Trace(service_worker_global_scope_);
     BytesUploader::Client::Trace(visitor);
   }
 
  private:
-  const Member<ScriptPromiseResolver> resolver_;
+  const int fetch_event_id_;
+  const Member<ScriptPromiseResolver<IDLUndefined>> resolver_;
+  Member<ServiceWorkerGlobalScope> service_worker_global_scope_;
 };
 
 }  // namespace
@@ -240,17 +260,9 @@ void FetchRespondWithObserver::OnResponseRejected(
   event_->RejectHandledPromise(error_message);
 }
 
-void FetchRespondWithObserver::OnResponseFulfilled(
-    ScriptState* script_state,
-    const ScriptValue& value,
-    const ExceptionContext& exception_context) {
+void FetchRespondWithObserver::OnResponseFulfilled(ScriptState* script_state,
+                                                   Response* response) {
   DCHECK(GetExecutionContext());
-  if (!V8Response::HasInstance(value.V8Value(), script_state->GetIsolate())) {
-    OnResponseRejected(ServiceWorkerResponseError::kNoV8Instance);
-    return;
-  }
-  Response* response = V8Response::ToImplWithTypeCheck(
-      script_state->GetIsolate(), value.V8Value());
   // "If one of the following conditions is true, return a network error:
   //   - |response|'s type is |error|.
   //   - |request|'s mode is |same-origin| and |response|'s type is |cors|.
@@ -341,12 +353,12 @@ void FetchRespondWithObserver::OnResponseFulfilled(
     // drained or loading begins.
     fetch_api_response->side_data_blob = buffer->TakeSideDataBlob();
 
-    ExceptionState exception_state(script_state->GetIsolate(),
-                                   exception_context);
+    ExceptionState exception_state(script_state->GetIsolate());
 
     scoped_refptr<BlobDataHandle> blob_data_handle =
         buffer->DrainAsBlobDataHandle(
-            BytesConsumer::BlobSizePolicy::kAllowBlobWithInvalidSize);
+            BytesConsumer::BlobSizePolicy::kAllowBlobWithInvalidSize,
+            exception_state);
 
     if (blob_data_handle) {
       // Handle the blob response body.
@@ -363,7 +375,8 @@ void FetchRespondWithObserver::OnResponseFulfilled(
     // handle will be passed to the FetchLoaderClient on start.
     FetchLoaderClient* fetch_loader_client =
         MakeGarbageCollected<FetchLoaderClient>(
-            service_worker_global_scope->CreateStayAwakeToken());
+            service_worker_global_scope->CreateStayAwakeToken(),
+            service_worker_global_scope, task_runner_);
     buffer->StartLoading(FetchDataLoader::CreateLoaderAsDataPipe(task_runner_),
                          fetch_loader_client, exception_state);
     if (exception_state.HadException()) {
@@ -400,8 +413,10 @@ void FetchRespondWithObserver::OnNoResponse(ScriptState* script_state) {
         WebFeature::kFetchRespondWithNoResponseWithUsedRequestBody);
   }
 
+  ServiceWorkerGlobalScope* service_worker_global_scope =
+      To<ServiceWorkerGlobalScope>(GetExecutionContext());
   auto* body_buffer = event_->request()->BodyBuffer();
-  absl::optional<network::DataElementChunkedDataPipe> request_body_to_pass;
+  std::optional<network::DataElementChunkedDataPipe> request_body_to_pass;
   if (body_buffer && !request_body_has_source_) {
     auto* body_stream = body_buffer->Stream();
     if (body_stream->IsLocked() || body_stream->IsDisturbed()) {
@@ -412,10 +427,11 @@ void FetchRespondWithObserver::OnNoResponse(ScriptState* script_state) {
 
     // Keep the service worker alive as long as we are reading from the request
     // body.
-    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    auto* resolver =
+        MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(script_state);
     WaitUntil(script_state, resolver->Promise(), ASSERT_NO_EXCEPTION);
-    auto* observer =
-        MakeGarbageCollected<UploadingCompletionObserver>(resolver);
+    auto* observer = MakeGarbageCollected<UploadingCompletionObserver>(
+        event_id_, resolver, service_worker_global_scope);
     mojo::PendingRemote<network::mojom::blink::ChunkedDataPipeGetter> remote;
     body_buffer->DrainAsChunkedDataPipeGetter(
         script_state, remote.InitWithNewPipeAndPassReceiver(), observer);
@@ -424,11 +440,10 @@ void FetchRespondWithObserver::OnNoResponse(ScriptState* script_state) {
         network::DataElementChunkedDataPipe::ReadOnlyOnce(true));
   }
 
-  ServiceWorkerGlobalScope* service_worker_global_scope =
-      To<ServiceWorkerGlobalScope>(GetExecutionContext());
   service_worker_global_scope->RespondToFetchEventWithNoResponse(
-      event_id_, request_url_, range_request_, std::move(request_body_to_pass),
-      event_dispatch_time_, base::TimeTicks::Now());
+      event_id_, event_.Get(), request_url_, range_request_,
+      std::move(request_body_to_pass), event_dispatch_time_,
+      base::TimeTicks::Now());
   event_->ResolveHandledPromise();
 }
 

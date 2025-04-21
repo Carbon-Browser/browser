@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 
@@ -96,7 +97,7 @@ void VendorTagOpsDelegate::OnGotAllTags(size_t tag_count,
 
 void VendorTagOpsDelegate::OnGotSectionName(
     uint32_t tag,
-    const absl::optional<std::string>& section_name) {
+    const std::optional<std::string>& section_name) {
   DCHECK(ipc_task_runner_->RunsTasksInCurrentSequence());
   if (!section_name.has_value()) {
     LOG(ERROR) << "Failed to get section name of tag " << std::hex
@@ -113,7 +114,7 @@ void VendorTagOpsDelegate::OnGotSectionName(
 
 void VendorTagOpsDelegate::OnGotTagName(
     uint32_t tag,
-    const absl::optional<std::string>& tag_name) {
+    const std::optional<std::string>& tag_name) {
   DCHECK(ipc_task_runner_->RunsTasksInCurrentSequence());
   if (!tag_name.has_value()) {
     LOG(ERROR) << "Failed to get tag name of tag " << std::hex << std::showbase

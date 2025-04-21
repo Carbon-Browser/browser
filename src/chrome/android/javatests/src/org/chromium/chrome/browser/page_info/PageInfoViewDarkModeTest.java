@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,34 +22,41 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.app.ChromeActivity;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.night_mode.ChromeNightModeTestUtils;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.components.page_info.PageInfoController;
 import org.chromium.components.page_info.PageInfoController.OpenedFromSource;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.common.ContentSwitches;
 import org.chromium.net.test.EmbeddedTestServerRule;
+import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.test.util.RenderTestRule;
 
 import java.io.IOException;
 
 /**
- * Tests for PageInfoView. Uses pixel tests to ensure the UI handles different
- * configurations correctly. These tests are not batched because theme changes
- * don't seem to work with batched tests even with RequiresRestart as it results
- * in the current {@link Tab} in the {@link ChromeTabbedActivityTestRule} to be null.
+ * Tests for PageInfoView. Uses pixel tests to ensure the UI handles different configurations
+ * correctly. These tests are not batched because theme changes don't seem to work with batched
+ * tests even with RequiresRestart as it results in the current {@link Tab} in the {@link
+ * ChromeTabbedActivityTestRule} to be null.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@CommandLineFlags.
-Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE, ChromeSwitches.DISABLE_STARTUP_PROMOS,
-        ContentSwitches.HOST_RESOLVER_RULES + "=MAP * 127.0.0.1"})
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    ChromeSwitches.DISABLE_STARTUP_PROMOS,
+    ContentSwitches.HOST_RESOLVER_RULES + "=MAP * 127.0.0.1"
+})
+@DisableIf.Device(DeviceFormFactor.TABLET) // crbug.com/338978357, crbug.com/384775466
 public class PageInfoViewDarkModeTest {
     private static final String sSimpleHtml = "/chrome/test/data/android/simple.html";
 
@@ -57,8 +64,7 @@ public class PageInfoViewDarkModeTest {
     public final ChromeTabbedActivityTestRule mActivityTestRule =
             new ChromeTabbedActivityTestRule();
 
-    @Rule
-    public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
+    @Rule public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
 
     @Rule
     public RenderTestRule mRenderTestRule =
@@ -75,12 +81,21 @@ public class PageInfoViewDarkModeTest {
     private void openPageInfo() {
         ChromeActivity activity = mActivityTestRule.getActivity();
         Tab tab = activity.getActivityTab();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            new ChromePageInfo(activity.getModalDialogManagerSupplier(), null,
-                    OpenedFromSource.TOOLBAR, null, null)
-                    .show(tab, ChromePageInfoHighlight.noHighlight());
-        });
-        onViewWaiting(allOf(withId(R.id.page_info_url_wrapper), isDisplayed()));
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    new ChromePageInfo(
+                                    activity.getModalDialogManagerSupplier(),
+                                    null,
+                                    OpenedFromSource.TOOLBAR,
+                                    null,
+                                    null,
+                                    null)
+                            .show(tab, ChromePageInfoHighlight.noHighlight());
+                });
+        onViewWaiting(
+                allOf(withId(R.id.page_info_url_wrapper), isDisplayed()),
+                true // Put Focus on dialog to fix flakiness in api 29+ with espresso 3.2.
+                );
     }
 
     private View getPageInfoView() {
@@ -97,33 +112,34 @@ public class PageInfoViewDarkModeTest {
         mTestServerRule.setServerPort(424242);
         mTestServerRule.setServerUsesHttps(true);
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ChromeNightModeTestUtils.setUpNightModeForChromeActivity(/*nightModeEnabled=*/true);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeNightModeTestUtils.setUpNightModeForChromeActivity(
+                            /* nightModeEnabled= */ true);
+                });
         mActivityTestRule.startMainActivityOnBlankPage();
     }
 
     @After
     public void tearDown() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ChromeNightModeTestUtils.setUpNightModeForChromeActivity(/*nightModeEnabled=*/false);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeNightModeTestUtils.setUpNightModeForChromeActivity(
+                            /* nightModeEnabled= */ false);
+                });
     }
 
-    /**
-     * Tests the PageInfo UI on a secure website in dark mode.
-     */
+    /** Tests the PageInfo UI on a secure website in dark mode. */
     @Test
     @MediumTest
     @Feature({"RenderTest"})
+    @DisableFeatures(ChromeFeatureList.TRACKING_PROTECTION_3PCD)
     public void testShowOnSecureWebsiteDark() throws IOException {
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         mRenderTestRule.render(getPageInfoView(), "PageInfo_SecureWebsiteDark");
     }
 
-    /**
-     * Tests PageInfo on internal page.
-     */
+    /** Tests PageInfo on internal page. */
     @Test
     @MediumTest
     @Feature({"RenderTest"})

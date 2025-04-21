@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,10 +80,10 @@ void CopyPreventionSettingsPolicyHandler::ApplyPolicySettings(
 
   // The min data size field is optional. Default to 100 bytes if it's not
   // present.
-  absl::optional<int> min_data_size = value->FindIntKey(
+  std::optional<int> min_data_size = value->GetDict().FindInt(
       enterprise::content::kCopyPreventionSettingsMinDataSizeFieldName);
   if (!min_data_size) {
-    processed_value.SetIntKey(
+    processed_value.GetDict().Set(
         enterprise::content::kCopyPreventionSettingsMinDataSizeFieldName,
         kMinDataSizeDefault);
   }

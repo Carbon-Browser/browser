@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,31 +6,26 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/threading/thread_restrictions.h"
+#include "gpu/config/gpu_finch_features.h"
 #include "gpu/ipc/common/gpu_memory_buffer_impl.h"
+#include "gpu/ipc/common/gpu_memory_buffer_impl_shared_memory.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "mojo/public/cpp/system/buffer.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "ui/gfx/buffer_format_util.h"
 
 namespace viz {
-namespace {
-
-void NotifyDestructionOnCorrectThread(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-    gpu::GpuMemoryBufferImpl::DestructionCallback callback,
-    const gpu::SyncToken& sync_token) {
-  task_runner->PostTask(FROM_HERE,
-                        base::BindOnce(std::move(callback), sync_token));
-}
-
-}  // namespace
 
 ClientGpuMemoryBufferManager::ClientGpuMemoryBufferManager(
-    mojo::PendingRemote<mojom::GpuMemoryBufferFactory> gpu)
+    mojo::PendingRemote<gpu::mojom::ClientGmbInterface> gpu_direct)
     : thread_("GpuMemoryThread"),
       gpu_memory_buffer_support_(
           std::make_unique<gpu::GpuMemoryBufferSupport>()),
@@ -40,7 +35,7 @@ ClientGpuMemoryBufferManager::ClientGpuMemoryBufferManager(
   // the object has been destroyed. So Unretained() is safe.
   thread_.task_runner()->PostTask(
       FROM_HERE, base::BindOnce(&ClientGpuMemoryBufferManager::InitThread,
-                                base::Unretained(this), std::move(gpu)));
+                                base::Unretained(this), std::move(gpu_direct)));
 }
 
 ClientGpuMemoryBufferManager::~ClientGpuMemoryBufferManager() {
@@ -51,11 +46,11 @@ ClientGpuMemoryBufferManager::~ClientGpuMemoryBufferManager() {
 }
 
 void ClientGpuMemoryBufferManager::InitThread(
-    mojo::PendingRemote<mojom::GpuMemoryBufferFactory> gpu_remote) {
-  gpu_.Bind(std::move(gpu_remote));
-  gpu_.set_disconnect_handler(
-      base::BindOnce(&ClientGpuMemoryBufferManager::DisconnectGpuOnThread,
-                     base::Unretained(this)));
+    mojo::PendingRemote<gpu::mojom::ClientGmbInterface> gpu_direct_remote) {
+    gpu_direct_.Bind(std::move(gpu_direct_remote));
+    gpu_direct_.set_disconnect_handler(
+        base::BindOnce(&ClientGpuMemoryBufferManager::DisconnectGpuOnThread,
+                       base::Unretained(this)));
   weak_ptr_ = weak_ptr_factory_.GetWeakPtr();
 }
 
@@ -65,11 +60,10 @@ void ClientGpuMemoryBufferManager::TearDownThread() {
 }
 
 void ClientGpuMemoryBufferManager::DisconnectGpuOnThread() {
-  if (!gpu_.is_bound())
-    return;
-  gpu_.reset();
-  for (auto* waiter : pending_allocation_waiters_)
+  gpu_direct_.reset();
+  for (base::WaitableEvent* waiter : pending_allocation_waiters_) {
     waiter->Signal();
+  }
   pending_allocation_waiters_.clear();
 }
 
@@ -81,22 +75,22 @@ void ClientGpuMemoryBufferManager::AllocateGpuMemoryBufferOnThread(
     base::WaitableEvent* wait) {
   DCHECK(thread_.task_runner()->BelongsToCurrentThread());
 
-  if (!gpu_) {
-    // The Gpu interface may have been disconnected, in which case we can't
-    // fulfill the request.
-    wait->Signal();
-    return;
-  }
-
   // |handle| and |wait| are both on the stack, and will be alive until |wait|
   // is signaled. So it is safe for OnGpuMemoryBufferAllocated() to operate on
   // these.
+  if (gpu_direct_) {
+    gpu_direct_->CreateGpuMemoryBuffer(
+        gfx::GpuMemoryBufferId(++counter_), size, format, usage,
+        gpu::kNullSurfaceHandle,
+        base::BindOnce(
+            &ClientGpuMemoryBufferManager::OnGpuMemoryBufferAllocatedOnThread,
+            base::Unretained(this), handle, wait));
+  } else {
+    // If the interface are disconnected, we can't fulfill the request.
+    wait->Signal();
+    return;
+  }
   pending_allocation_waiters_.insert(wait);
-  gpu_->CreateGpuMemoryBuffer(
-      gfx::GpuMemoryBufferId(++counter_), size, format, usage,
-      base::BindOnce(
-          &ClientGpuMemoryBufferManager::OnGpuMemoryBufferAllocatedOnThread,
-          base::Unretained(this), handle, wait));
 }
 
 void ClientGpuMemoryBufferManager::OnGpuMemoryBufferAllocatedOnThread(
@@ -104,7 +98,7 @@ void ClientGpuMemoryBufferManager::OnGpuMemoryBufferAllocatedOnThread(
     base::WaitableEvent* wait,
     gfx::GpuMemoryBufferHandle handle) {
   auto it = pending_allocation_waiters_.find(wait);
-  DCHECK(it != pending_allocation_waiters_.end());
+  CHECK(it != pending_allocation_waiters_.end(), base::NotFatalUntil::M130);
   pending_allocation_waiters_.erase(it);
 
   *ret_handle = std::move(handle);
@@ -112,18 +106,17 @@ void ClientGpuMemoryBufferManager::OnGpuMemoryBufferAllocatedOnThread(
 }
 
 void ClientGpuMemoryBufferManager::DeletedGpuMemoryBuffer(
-    gfx::GpuMemoryBufferId id,
-    const gpu::SyncToken& sync_token) {
+    gfx::GpuMemoryBufferId id) {
   if (!thread_.task_runner()->BelongsToCurrentThread()) {
     thread_.task_runner()->PostTask(
         FROM_HERE,
         base::BindOnce(&ClientGpuMemoryBufferManager::DeletedGpuMemoryBuffer,
-                       base::Unretained(this), id, sync_token));
+                       base::Unretained(this), id));
     return;
   }
-
-  if (gpu_)
-    gpu_->DestroyGpuMemoryBuffer(id, sync_token);
+  if (gpu_direct_) {
+    gpu_direct_->DestroyGpuMemoryBuffer(id);
+  }
 }
 
 std::unique_ptr<gfx::GpuMemoryBuffer>
@@ -135,6 +128,11 @@ ClientGpuMemoryBufferManager::CreateGpuMemoryBuffer(
     base::WaitableEvent* shutdown_event) {
   // Note: this can be called from multiple threads at the same time. Some of
   // those threads may not have a TaskRunner set.
+  // One of such threads is a WebRTC encoder thread.
+  // That thread is not owned by chromium and therefore doesn't have any
+  // blocking scope machinery. But the workload there is supposed to happen
+  // synchronously, because this is how the WebRTC architecture is designed.
+  base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow;
   DCHECK_EQ(gpu::kNullSurfaceHandle, surface_handle);
   CHECK(!thread_.task_runner()->BelongsToCurrentThread());
   gfx::GpuMemoryBufferHandle gmb_handle;
@@ -156,21 +154,13 @@ ClientGpuMemoryBufferManager::CreateGpuMemoryBuffer(
   std::unique_ptr<gpu::GpuMemoryBufferImpl> buffer =
       gpu_memory_buffer_support_->CreateGpuMemoryBufferImplFromHandle(
           std::move(gmb_handle), size, format, usage,
-          base::BindOnce(&NotifyDestructionOnCorrectThread,
-                         thread_.task_runner(), std::move(callback)),
-          this, pool_);
+          base::BindPostTask(thread_.task_runner(), std::move(callback)), this,
+          pool_);
   if (!buffer) {
-    DeletedGpuMemoryBuffer(gmb_handle_id, gpu::SyncToken());
+    DeletedGpuMemoryBuffer(gmb_handle_id);
     return nullptr;
   }
   return std::move(buffer);
-}
-
-void ClientGpuMemoryBufferManager::SetDestructionSyncToken(
-    gfx::GpuMemoryBuffer* buffer,
-    const gpu::SyncToken& sync_token) {
-  static_cast<gpu::GpuMemoryBufferImpl*>(buffer)->set_destruction_sync_token(
-      sync_token);
 }
 
 void ClientGpuMemoryBufferManager::CopyGpuMemoryBufferAsync(
@@ -186,25 +176,18 @@ void ClientGpuMemoryBufferManager::CopyGpuMemoryBufferAsync(
     return;
   }
 
-  gpu_->CopyGpuMemoryBuffer(std::move(buffer_handle), std::move(memory_region),
-                            std::move(callback));
+  if (!gpu_direct_) {
+    std::move(callback).Run(false);
+    return;
+  }
+  gpu_direct_->CopyGpuMemoryBuffer(
+      std::move(buffer_handle), std::move(memory_region),
+      mojo::WrapCallbackWithDefaultInvokeIfNotRun(std::move(callback),
+                                                  /*result=*/false));
 }
 
-bool ClientGpuMemoryBufferManager::CopyGpuMemoryBufferSync(
-    gfx::GpuMemoryBufferHandle buffer_handle,
-    base::UnsafeSharedMemoryRegion memory_region) {
-  base::WaitableEvent event;
-  bool mapping_result = false;
-  CopyGpuMemoryBufferAsync(
-      std::move(buffer_handle), std::move(memory_region),
-      base::BindOnce(
-          [](base::WaitableEvent* event, bool* result_ptr, bool result) {
-            *result_ptr = result;
-            event->Signal();
-          },
-          &event, &mapping_result));
-  event.Wait();
-  return mapping_result;
+bool ClientGpuMemoryBufferManager::IsConnected() {
+  return static_cast<bool>(gpu_direct_);
 }
 
 }  // namespace viz

@@ -43,7 +43,7 @@ void FileWriterSync::write(Blob* data, ExceptionState& exception_state) {
   DCHECK(complete_);
 
   PrepareForWrite();
-  Write(position(), data->Uuid());
+  Write(position(), *data);
   DCHECK(complete_);
   if (error_) {
     file_error::ThrowDOMException(exception_state, error_);
@@ -103,20 +103,20 @@ void FileWriterSync::DoTruncate(const KURL& path, int64_t offset) {
   FileSystemDispatcher::From(GetExecutionContext())
       .TruncateSync(
           path, offset,
-          WTF::Bind(&FileWriterSync::DidFinish, WrapWeakPersistent(this)));
+          WTF::BindOnce(&FileWriterSync::DidFinish, WrapWeakPersistent(this)));
 }
 
 void FileWriterSync::DoWrite(const KURL& path,
-                             const String& blob_id,
+                             const Blob& blob,
                              int64_t offset) {
   if (!GetExecutionContext())
     return;
   FileSystemDispatcher::From(GetExecutionContext())
       .WriteSync(
-          path, blob_id, offset,
+          path, blob, offset,
           WTF::BindRepeating(&FileWriterSync::DidWrite,
                              WrapWeakPersistent(this)),
-          WTF::Bind(&FileWriterSync::DidFinish, WrapWeakPersistent(this)));
+          WTF::BindOnce(&FileWriterSync::DidFinish, WrapWeakPersistent(this)));
 }
 
 void FileWriterSync::DoCancel() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,9 @@ class TestUkmRecorder : public ukm::UkmRecorder {
   void AddEntry(ukm::mojom::UkmEntryPtr entry) override {
     entries_.emplace_back(std::move(entry));
   }
+  void RecordWebDXFeatures(ukm::SourceId source_id,
+                           const std::set<int32_t>& features,
+                           const size_t max_feature_value) override {}
   void UpdateSourceURL(ukm::SourceId, const GURL&) override {}
   void UpdateAppURL(ukm::SourceId, const GURL&, const ukm::AppType) override {}
   void RecordNavigation(ukm::SourceId,

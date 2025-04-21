@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,8 +69,9 @@ void RealEGLApi::SetDisabledExtensions(const std::string& disabled_extensions) {
         base::SplitString(disabled_extensions, ", ;", base::KEEP_WHITESPACE,
                           base::SPLIT_WANT_NONEMPTY);
     for (const auto& ext : candidates) {
-      if (!base::StartsWith(ext, "EGL_", base::CompareCase::SENSITIVE))
+      if (!ext.starts_with("EGL_")) {
         continue;
+      }
       // For the moment, only the following two extensions can be disabled.
       // See DriverEGL::UpdateConditionalExtensionBindings().
       DCHECK(ext == "EGL_KHR_fence_sync" || ext == "EGL_KHR_wait_sync");

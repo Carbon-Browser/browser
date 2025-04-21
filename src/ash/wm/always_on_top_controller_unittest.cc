@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,7 +83,7 @@ TEST_F(AlwaysOnTopControllerTest, NotifyKeyboardBoundsChanging) {
   EXPECT_FALSE(manager->keyboard_displacing_bounds_changed());
 
   keyboard_controller->ShowKeyboard(true /* locked */);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
 
   // Verify that test manager was notified of bounds change.
   EXPECT_TRUE(manager->keyboard_displacing_bounds_changed());

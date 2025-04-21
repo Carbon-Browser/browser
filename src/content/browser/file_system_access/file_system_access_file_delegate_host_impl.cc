@@ -1,24 +1,30 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/browser/file_system_access/file_system_access_file_delegate_host_impl.h"
 
 #include <cstdint>
 
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/numerics/safe_math.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/big_io_buffer.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/base/big_buffer.h"
 #include "net/base/io_buffer.h"
+#include "partition_alloc/partition_alloc_constants.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/file_system_url.h"
@@ -113,7 +119,7 @@ void FileSystemAccessFileDelegateHostImpl::Read(int64_t offset,
       FROM_HERE,
       base::BindOnce(
           &ReadOnIOThread, base::WrapRefCounted(file_system_context()), url(),
-          offset, buffer, base::SequencedTaskRunnerHandle::Get(),
+          offset, buffer, base::SequencedTaskRunner::GetCurrentDefault(),
           base::BindOnce(&FileSystemAccessFileDelegateHostImpl::DidRead,
                          weak_factory_.GetWeakPtr(), buffer,
                          std::move(callback))));
@@ -126,7 +132,7 @@ void FileSystemAccessFileDelegateHostImpl::DidRead(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (rv < 0) {
-    std::move(callback).Run(absl::optional<mojo_base::BigBuffer>(),
+    std::move(callback).Run(std::optional<mojo_base::BigBuffer>(),
                             storage::NetErrorToFileError(rv),
                             /*bytes_read=*/0);
     return;
@@ -196,7 +202,9 @@ void FileSystemAccessFileDelegateHostImpl::GetLength(
             std::move(callback).Run(file_error, 0);
           },
           std::move(callback)),
-      url(), storage::FileSystemOperation::GET_METADATA_FIELD_SIZE);
+      url(),
+      storage::FileSystemOperation::GetMetadataFieldSet(
+          {storage::FileSystemOperation::GetMetadataField::kSize}));
 }
 
 void FileSystemAccessFileDelegateHostImpl::SetLength(

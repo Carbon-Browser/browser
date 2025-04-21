@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/test_support/fully_initialized_assistant_state.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 FullyInitializedAssistantState::FullyInitializedAssistantState() {
   InitializeAllValues();
@@ -16,6 +15,10 @@ void FullyInitializedAssistantState::SetAssistantEnabled(bool enabled) {
 
   for (auto& observer : observers_)
     observer.OnAssistantSettingsEnabled(settings_enabled_.value());
+}
+
+void FullyInitializedAssistantState::SetContextEnabled(bool enabled) {
+  context_enabled_ = enabled;
 }
 
 void FullyInitializedAssistantState::InitializeAllValues() {
@@ -32,5 +35,4 @@ void FullyInitializedAssistantState::InitializeAllValues() {
   locked_full_screen_enabled_ = true;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

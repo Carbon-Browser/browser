@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 namespace optimization_guide_internals {
 
 // The host of the optimization guide internals page URL.
-extern const char kChromeUIOptimizationGuideInternalsHost[];
+inline constexpr char kChromeUIOptimizationGuideInternalsHost[] =
+    "optimization-guide-internals";
 
 }  // namespace optimization_guide_internals
 

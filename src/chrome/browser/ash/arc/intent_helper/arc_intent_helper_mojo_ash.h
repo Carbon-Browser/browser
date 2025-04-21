@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/arc/intent_helper/arc_intent_helper_mojo_delegate.h"
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
 #include "base/memory/weak_ptr.h"
-#include "components/arc/common/intent_helper/arc_intent_helper_mojo_delegate.h"
 #include "ui/base/resource/resource_scale_factor.h"
 
 namespace arc {

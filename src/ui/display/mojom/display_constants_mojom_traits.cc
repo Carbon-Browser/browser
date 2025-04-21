@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,6 @@ display::mojom::DisplayConnectionType EnumTraits<
           DISPLAY_CONNECTION_TYPE_NETWORK;
   }
   NOTREACHED();
-  return display::mojom::DisplayConnectionType::DISPLAY_CONNECTION_TYPE_NONE;
 }
 
 bool EnumTraits<display::mojom::DisplayConnectionType,
@@ -87,7 +86,6 @@ EnumTraits<display::mojom::HDCPState, display::HDCPState>::ToMojom(
       return display::mojom::HDCPState::HDCP_STATE_ENABLED;
   }
   NOTREACHED();
-  return display::mojom::HDCPState::HDCP_STATE_UNDESIRED;
 }
 
 // static
@@ -127,8 +125,6 @@ display::mojom::ContentProtectionMethod EnumTraits<
           CONTENT_PROTECTION_METHOD_HDCP_TYPE_1;
   }
   NOTREACHED();
-  return display::mojom::ContentProtectionMethod::
-      CONTENT_PROTECTION_METHOD_NONE;
 }
 
 // static
@@ -170,7 +166,6 @@ display::mojom::PanelOrientation EnumTraits<
       return display::mojom::PanelOrientation::RIGHT_UP;
   }
   NOTREACHED();
-  return display::mojom::PanelOrientation::NORMAL;
 }
 
 // static
@@ -211,7 +206,6 @@ display::mojom::PrivacyScreenState EnumTraits<
       return display::mojom::PrivacyScreenState::NOT_SUPPORTED;
   }
   NOTREACHED();
-  return display::mojom::PrivacyScreenState::NOT_SUPPORTED;
 }
 
 // static
@@ -237,6 +231,49 @@ bool EnumTraits<display::mojom::PrivacyScreenState,
       return true;
   }
   return false;
+}
+
+// static
+display::mojom::VariableRefreshRateState
+EnumTraits<display::mojom::VariableRefreshRateState,
+           display::VariableRefreshRateState>::
+    ToMojom(display::VariableRefreshRateState state) {
+  switch (state) {
+    case display::VariableRefreshRateState::kVrrDisabled:
+      return display::mojom::VariableRefreshRateState::kVrrDisabled;
+    case display::VariableRefreshRateState::kVrrEnabled:
+      return display::mojom::VariableRefreshRateState::kVrrEnabled;
+    case display::VariableRefreshRateState::kVrrNotCapable:
+      return display::mojom::VariableRefreshRateState::kVrrNotCapable;
+  }
+  NOTREACHED();
+}
+
+// static
+bool EnumTraits<display::mojom::VariableRefreshRateState,
+                display::VariableRefreshRateState>::
+    FromMojom(display::mojom::VariableRefreshRateState state,
+              display::VariableRefreshRateState* out) {
+  switch (state) {
+    case display::mojom::VariableRefreshRateState::kVrrDisabled:
+      *out = display::VariableRefreshRateState::kVrrDisabled;
+      return true;
+    case display::mojom::VariableRefreshRateState::kVrrEnabled:
+      *out = display::VariableRefreshRateState::kVrrEnabled;
+      return true;
+    case display::mojom::VariableRefreshRateState::kVrrNotCapable:
+      *out = display::VariableRefreshRateState::kVrrNotCapable;
+      return true;
+  }
+  return false;
+}
+
+// static
+bool StructTraits<display::mojom::ModesetFlagsDataView, display::ModesetFlags>::
+    Read(display::mojom::ModesetFlagsDataView data,
+         display::ModesetFlags* out_flags) {
+  *out_flags = display::ModesetFlags::FromEnumBitmask(data.bitmask());
+  return true;
 }
 
 }  // namespace mojo

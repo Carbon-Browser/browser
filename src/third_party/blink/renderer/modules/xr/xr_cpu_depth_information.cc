@@ -1,16 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/xr/xr_cpu_depth_information.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
-#include "base/cxx17_backports.h"
+#include "base/numerics/byte_conversions.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/ostream_operators.h"
-#include "device/vr/public/mojom/vr_service.mojom-blink.h"
+#include "device/vr/public/mojom/xr_session.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -23,14 +24,27 @@ constexpr char kOutOfBoundsAccess[] =
 constexpr char kArrayBufferDetached[] =
     "Attempted to access data from a detached data buffer.";
 
-size_t GetBytesPerElement(device::mojom::XRDepthDataFormat data_format) {
+constexpr size_t GetBytesPerElement(
+    device::mojom::XRDepthDataFormat data_format) {
   switch (data_format) {
     case device::mojom::XRDepthDataFormat::kLuminanceAlpha:
+    case device::mojom::XRDepthDataFormat::kUnsignedShort:
       return 2;
     case device::mojom::XRDepthDataFormat::kFloat32:
       return 4;
   }
 }
+
+// We have to use the type names below, this enables us to ensure that we are
+// using them properly in a switch statement.
+static_assert(
+    GetBytesPerElement(device::mojom::XRDepthDataFormat::kLuminanceAlpha) ==
+    sizeof(uint16_t));
+static_assert(
+    GetBytesPerElement(device::mojom::XRDepthDataFormat::kUnsignedShort) ==
+    sizeof(uint16_t));
+static_assert(GetBytesPerElement(device::mojom::XRDepthDataFormat::kFloat32) ==
+              sizeof(float));
 }  // namespace
 
 namespace blink {
@@ -62,7 +76,7 @@ DOMArrayBuffer* XRCPUDepthInformation::data(
     return nullptr;
   }
 
-  return data_;
+  return data_.Get();
 }
 
 float XRCPUDepthInformation::getDepthInMeters(
@@ -92,20 +106,17 @@ float XRCPUDepthInformation::getDepthInMeters(
     return 0.0;
   }
 
-  // Those coordinates are actually `norm_view_coordinates` before a series of
-  // transforms is applied, but they are modified in-place, so the name's in
-  // anticipation of those transforms.
-  gfx::Point3F depth_coordinates(x, y, 0.0);
+  gfx::PointF norm_view_coordinates(x, y);
 
-  // `norm_view_coordinates` becomes `norm_depth_coordinates`:
-  norm_depth_buffer_from_norm_view_.TransformPoint(&depth_coordinates);
+  gfx::PointF norm_depth_coordinates =
+      norm_depth_buffer_from_norm_view_.MapPoint(norm_view_coordinates);
 
-  // `norm_depth_coordinates` becomes `depth_coordinates`:
-  depth_coordinates.Scale(size_.width(), size_.height(), 1.0);
+  gfx::PointF depth_coordinates =
+      gfx::ScalePoint(norm_depth_coordinates, size_.width(), size_.height());
 
-  uint32_t column = base::clamp<uint32_t>(
+  uint32_t column = std::clamp<uint32_t>(
       static_cast<uint32_t>(depth_coordinates.x()), 0, size_.width() - 1);
-  uint32_t row = base::clamp<uint32_t>(
+  uint32_t row = std::clamp<uint32_t>(
       static_cast<uint32_t>(depth_coordinates.y()), 0, size_.height() - 1);
 
   auto checked_index =
@@ -126,26 +137,23 @@ float XRCPUDepthInformation::GetItem(size_t index) const {
 
   CHECK(!data_->IsDetached());
 
+  // This generates a non-fixed span of size `bytes_per_element_`. We will need
+  // to use the templated version of `first` below once we know the type to
+  // generate a fixed span, which we unfortunately cannot do at this time.
+  const auto offset = index * bytes_per_element_;
+  auto value = data_->ByteSpan().subspan(offset).first(bytes_per_element_);
+
   switch (data_format_) {
+    case device::mojom::XRDepthDataFormat::kUnsignedShort:
     case device::mojom::XRDepthDataFormat::kLuminanceAlpha: {
-      // Luminance-alpha is 2 bytes per entry & base::make_span expects the
-      // length to be provided in the number of elements. The constructor
-      // enforces that |data_|'s byte length matches the size of the array,
-      // taking into account the number of bytes per element.
-      base::span<const uint16_t> array =
-          base::make_span(reinterpret_cast<const uint16_t*>(data_->Data()),
-                          data_->ByteLength() / bytes_per_element_);
-      return array[index];
+      // This should also be guaranteed by that static_asserts above.
+      CHECK_EQ(bytes_per_element_, sizeof(uint16_t));
+      return base::U16FromNativeEndian(value.first<sizeof(uint16_t)>());
     }
     case device::mojom::XRDepthDataFormat::kFloat32: {
-      // Float32 is 4 bytes per entry & base::make_span expects the length to be
-      // provided in the number of elements. The constructor enforces that
-      // |data_|'s byte length matches the size of the array, taking into
-      // account the number of bytes per element.
-      base::span<const float> array =
-          base::make_span(reinterpret_cast<const float*>(data_->Data()),
-                          data_->ByteLength() / bytes_per_element_);
-      return array[index];
+      // This should also be guaranteed by that static_asserts above.
+      CHECK_EQ(bytes_per_element_, sizeof(float));
+      return base::FloatFromNativeEndian(value.first<sizeof(float)>());
     }
   }
 }

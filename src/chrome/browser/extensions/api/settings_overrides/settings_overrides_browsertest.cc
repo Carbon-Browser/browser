@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <memory>
 
@@ -8,18 +13,22 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "chrome/browser/extensions/api/settings_overrides/settings_overrides_api.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/search.h"
+#include "chrome/browser/search_engine_choice/search_engine_choice_service_factory.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/search_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/default_search_manager.h"
+#include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
 #include "components/search_engines/search_engines_test_util.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
@@ -36,11 +45,29 @@ namespace extensions {
 
 namespace {
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-// Prepopulated id hardcoded in test_extension.
-const int kTestExtensionPrepopulatedId = 3;
+// Prepopulated id hardcoded in test_extension. We select it to be a
+// prepopulated ID unlikely to match an engine that is part of the TopEngines
+// tier for the environments where the test run, but still matches some
+// known engine (context around these requirements: https://crbug.com/1500526).
+// The default set of engines (when no country is available) has ids 1, 2
+// and 3. The ID 83 is associated with mail.ru, chosen because it's not part
+// of the prepopulated set where we run tests.
+// TODO(crbug.com/40940777): Update the test to fix the country in such a way
+// that we have more control on what is in the prepopulated set or not.
+const int kTestExtensionPrepopulatedId = 83;
 // TemplateURLData with search engines settings from test extension manifest.
 // chrome/test/data/extensions/settings_override/manifest.json
-std::unique_ptr<TemplateURLData> TestExtensionSearchEngine(PrefService* prefs) {
+std::unique_ptr<TemplateURLData> TestExtensionSearchEngine(Profile* profile) {
+  PrefService* prefs = profile->GetPrefs();
+  search_engines::SearchEngineChoiceService* search_engine_choice_service =
+      search_engines::SearchEngineChoiceServiceFactory::GetForProfile(profile);
+  // Enforcing that `kTestExtensionPrepopulatedId` is not part of the
+  // prepopulated set for the current profile's country.
+  for (auto& data : TemplateURLPrepopulateData::GetPrepopulatedEngines(
+           prefs, search_engine_choice_service)) {
+    EXPECT_NE(data->prepopulate_id, kTestExtensionPrepopulatedId);
+  }
+
   auto result = std::make_unique<TemplateURLData>();
   result->SetShortName(u"name.de");
   result->SetKeyword(u"keyword.de");
@@ -56,12 +83,14 @@ std::unique_ptr<TemplateURLData> TestExtensionSearchEngine(PrefService* prefs) {
   result->input_encodings.push_back("UTF-8");
 
   std::unique_ptr<TemplateURLData> prepopulated =
-      TemplateURLPrepopulateData::GetPrepopulatedEngine(
-          prefs, kTestExtensionPrepopulatedId);
+      TemplateURLPrepopulateData::GetPrepopulatedEngineFromFullList(
+          prefs, search_engine_choice_service, kTestExtensionPrepopulatedId);
+  EXPECT_TRUE(prepopulated);
   // Values below do not exist in extension manifest and are taken from
   // prepopulated engine with prepopulated_id set in extension manifest.
   result->contextual_search_url = prepopulated->contextual_search_url;
   result->new_tab_url = prepopulated->new_tab_url;
+
   return result;
 }
 
@@ -131,7 +160,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, OverrideDSE) {
   EXPECT_EQ(TemplateURL::NORMAL_CONTROLLED_BY_EXTENSION, current_dse->type());
 
   std::unique_ptr<TemplateURLData> extension_dse =
-      TestExtensionSearchEngine(prefs);
+      TestExtensionSearchEngine(profile());
   ExpectSimilar(extension_dse.get(), &current_dse->data());
 
   UnloadExtension(extension->id());
@@ -167,7 +196,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, PRE_OverridenDSEPersists) {
 IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, OverridenDSEPersists) {
   Profile* profile = browser()->profile();
   DefaultSearchManager default_manager(
-      profile->GetPrefs(), DefaultSearchManager::ObserverCallback());
+      profile->GetPrefs(),
+      search_engines::SearchEngineChoiceServiceFactory::GetForProfile(profile),
+      DefaultSearchManager::ObserverCallback());
 
   DefaultSearchManager::Source source;
   const TemplateURLData* current_dse =
@@ -175,11 +206,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, OverridenDSEPersists) {
 
   ASSERT_TRUE(current_dse);
   std::unique_ptr<TemplateURLData> extension_dse =
-      TestExtensionSearchEngine(profile->GetPrefs());
+      TestExtensionSearchEngine(profile);
   ExpectSimilar(extension_dse.get(), current_dse);
   EXPECT_EQ(DefaultSearchManager::FROM_EXTENSION, source);
 
   // Check that new tab url is correctly overriden by extension.
+  std::string actual_new_tab_url = search::GetNewTabPageURL(profile).spec();
+  EXPECT_FALSE(actual_new_tab_url.empty());
   TemplateURL ext_turl(*extension_dse,
                        TemplateURL::NORMAL_CONTROLLED_BY_EXTENSION);
 
@@ -187,7 +220,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, OverridenDSEPersists) {
       TemplateURLRef::SearchTermsArgs(std::u16string()),
       UIThreadSearchTermsData());
 
-  EXPECT_EQ(new_tab_url_ext, search::GetNewTabPageURL(profile).spec());
+  // A custom NTP URL from the prepopulated data is used.
+  EXPECT_NE(actual_new_tab_url, chrome::kChromeUINewTabPageThirdPartyURL);
+  EXPECT_EQ(actual_new_tab_url, new_tab_url_ext);
 
   // Check that after template url service is loaded, extension dse persists.
   TemplateURLService* url_service =
@@ -203,8 +238,6 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, OverridenDSEPersists) {
 // This test checks that an extension overriding the default search engine can
 // be correctly loaded before the TemplateURLService is loaded.
 IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, BeforeTemplateUrlServiceLoad) {
-  PrefService* prefs = profile()->GetPrefs();
-  ASSERT_TRUE(prefs);
   TemplateURLService* url_service =
       TemplateURLServiceFactory::GetForProfile(profile());
   ASSERT_TRUE(url_service);
@@ -218,7 +251,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, BeforeTemplateUrlServiceLoad) {
   EXPECT_TRUE(url_service->IsExtensionControlledDefaultSearch());
 
   std::unique_ptr<TemplateURLData> extension_dse =
-      TestExtensionSearchEngine(prefs);
+      TestExtensionSearchEngine(profile());
   ExpectSimilar(extension_dse.get(), &current_dse->data());
 
   UnloadExtension(extension->id());

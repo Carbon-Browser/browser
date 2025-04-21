@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,77 +9,28 @@
 import {loadTimeData} from '../i18n_setup.js';
 import {NewTabPageProxy} from '../new_tab_page_proxy.js';
 
-import {chromeCartDescriptor} from './cart/module.js';
-import {chromeCartDescriptor as chromeCartV2Descriptor} from './cart_v2/module.js';
-import {driveDescriptor} from './drive/module.js';
-import {driveDescriptor as driveV2Descriptor} from './drive_v2/module.js';
-// <if expr="not is_official_build">
-import {dummyV2Descriptor, dummyV2Descriptor02, dummyV2Descriptor03, dummyV2Descriptor04, dummyV2Descriptor05, dummyV2Descriptor06, dummyV2Descriptor07, dummyV2Descriptor08, dummyV2Descriptor09, dummyV2Descriptor10, dummyV2Descriptor11, dummyV2Descriptor12} from './dummy_v2/module.js';
-// </if>
-import {feedDescriptor, feedV2Descriptor} from './feed/module.js';
-import {ModuleDescriptor, ModuleDescriptorV2} from './module_descriptor.js';
+import type {ModuleDescriptor} from './module_descriptor.js';
 import {ModuleRegistry} from './module_registry.js';
-import {photosDescriptor} from './photos/module.js';
-import {recipeTasksDescriptor as recipeTasksV2Descriptor} from './recipes_v2/module.js';
-import {recipeTasksDescriptor} from './task_module/module.js';
+import {microsoftAuthModuleDescriptor} from './v2/authentication/microsoft_auth_module.js';
+import {googleCalendarDescriptor} from './v2/calendar/google_calendar_module.js';
+import {outlookCalendarDescriptor} from './v2/calendar/outlook_calendar_module.js';
+// <if expr="not is_official_build">
+import {dummyV2Descriptor} from './v2/dummy/module.js';
+// </if>
+import {driveModuleV2Descriptor} from './v2/file_suggestion/drive_module.js';
+import {sharepointModuleDescriptor} from './v2/file_suggestion/sharepoint_module.js';
+import {mostRelevantTabResumptionDescriptor} from './v2/most_relevant_tab_resumption/module.js';
 
 export const descriptors: ModuleDescriptor[] = [];
-
-export const descriptorsV2: ModuleDescriptorV2[] = [];
-
-if (loadTimeData.getBoolean('recipeTasksModuleEnabled')) {
-  if (loadTimeData.getBoolean('modulesRedesignedEnabled')) {
-    descriptorsV2.push(recipeTasksV2Descriptor);
-  } else {
-    descriptors.push(recipeTasksDescriptor);
-  }
-}
-
-if (loadTimeData.getBoolean('chromeCartModuleEnabled')) {
-  if (loadTimeData.getBoolean('modulesRedesignedEnabled')) {
-    descriptorsV2.push(chromeCartV2Descriptor);
-  } else {
-    descriptors.push(chromeCartDescriptor);
-  }
-}
-
-if (loadTimeData.getBoolean('driveModuleEnabled')) {
-  if (loadTimeData.getBoolean('modulesRedesignedEnabled')) {
-    descriptorsV2.push(driveV2Descriptor);
-  } else {
-    descriptors.push(driveDescriptor);
-  }
-}
-
-if (loadTimeData.getBoolean('photosModuleEnabled')) {
-  descriptors.push(photosDescriptor);
-}
-
-if (loadTimeData.getBoolean('feedModuleEnabled')) {
-  if (loadTimeData.getBoolean('modulesRedesignedEnabled')) {
-    descriptorsV2.push(feedV2Descriptor);
-  } else {
-    descriptors.push(feedDescriptor);
-  }
-}
+descriptors.push(mostRelevantTabResumptionDescriptor);
+descriptors.push(driveModuleV2Descriptor);
+descriptors.push(googleCalendarDescriptor);
+descriptors.push(microsoftAuthModuleDescriptor);
+descriptors.push(outlookCalendarDescriptor);
+descriptors.push(sharepointModuleDescriptor);
 
 // <if expr="not is_official_build">
-if (loadTimeData.getBoolean('dummyModulesEnabled')) {
-  if (loadTimeData.getBoolean('modulesRedesignedEnabled')) {
-    descriptorsV2.push(dummyV2Descriptor);
-    descriptorsV2.push(dummyV2Descriptor02);
-    descriptorsV2.push(dummyV2Descriptor03);
-    descriptorsV2.push(dummyV2Descriptor04);
-    descriptorsV2.push(dummyV2Descriptor05);
-    descriptorsV2.push(dummyV2Descriptor06);
-    descriptorsV2.push(dummyV2Descriptor07);
-    descriptorsV2.push(dummyV2Descriptor08);
-    descriptorsV2.push(dummyV2Descriptor09);
-    descriptorsV2.push(dummyV2Descriptor10);
-    descriptorsV2.push(dummyV2Descriptor11);
-    descriptorsV2.push(dummyV2Descriptor12);
-  }
-}
+descriptors.push(dummyV2Descriptor);
 // </if>
 
 export async function counterfactualLoad() {
@@ -90,7 +41,8 @@ export async function counterfactualLoad() {
     const modules = await ModuleRegistry.getInstance().initializeModules(
         loadTimeData.getInteger('modulesLoadTimeout'));
     if (modules) {
-      NewTabPageProxy.getInstance().handler.onModulesLoadedWithData();
+      NewTabPageProxy.getInstance().handler.onModulesLoadedWithData(
+          modules.map(module => module.descriptor.id));
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 
 namespace apps {
 
-// TODO(crbug.com/1203666): Remove when Lacros is permanently enabled.
+// TODO(crbug.com/40179639): Remove when Lacros is permanently enabled.
 class DigitalGoodsImpl : public content::DocumentUserData<DigitalGoodsImpl>,
                          public payments::mojom::DigitalGoods {
  public:

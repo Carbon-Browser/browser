@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,27 +11,32 @@
 // the content public API.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/renderer_host/back_forward_cache_metrics.h"
-#include "content/public/browser/devtools_agent_host.h"
+#include "content/browser/renderer_host/navigation_type.h"
+#include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/javascript_dialog_manager.h"
-#include "content/public/browser/navigation_type.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
+#include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "mojo/public/cpp/test_support/test_utils.h"
+#include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
 #include "third_party/blink/public/mojom/choosers/popup_menu.mojom.h"
+#include "third_party/blink/public/mojom/frame/frame.mojom-test-utils.h"
 #include "third_party/blink/public/mojom/page/widget.mojom-test-utils.h"
 #include "url/gurl.h"
 
@@ -43,6 +48,7 @@ class RenderFrameHostImpl;
 class RenderWidgetHostImpl;
 class Shell;
 class SiteInstance;
+class SiteInstanceGroup;
 class ToRenderFrameHost;
 
 // Navigates the frame represented by |node| to |url|, blocking until the
@@ -76,11 +82,24 @@ RenderFrameHost* ConvertToRenderFrameHost(FrameTreeNode* frame_tree_node);
 // the main frame's document, waiting until the RenderFrameHostCreated
 // notification is received by the browser. If |wait_for_navigation| is true,
 // will also wait for the first navigation in the iframe to finish. Returns the
-// RenderFrameHost of the iframe.
+// RenderFrameHost of the iframe. |extra_params| is a struct that allows
+// for optional parameters to be specified for the subframe.
+struct ExtraParams {
+  std::string sandbox_flags = "";
+};
 RenderFrameHost* CreateSubframe(WebContentsImpl* web_contents,
                                 std::string frame_id,
                                 const GURL& url,
                                 bool wait_for_navigation);
+RenderFrameHost* CreateSubframe(RenderFrameHost* parent,
+                                std::string frame_id,
+                                const GURL& url,
+                                bool wait_for_navigation);
+RenderFrameHost* CreateSubframe(RenderFrameHost* parent,
+                                std::string frame_id,
+                                const GURL& url,
+                                bool wait_for_navigation,
+                                ExtraParams extra_params);
 
 // Returns the frames visited by |RenderFrameHostImpl::ForEachRenderFrameHost|
 // in the same order.
@@ -110,22 +129,37 @@ Shell* OpenWindow(WebContentsImpl* web_contents, const GURL& url);
 // is appropriate for use in assertions.
 //
 // The diagrams show frame tree structure, the SiteInstance of current frames,
-// presence of pending frames, and the SiteInstances of any and all proxies.
-// They look like this:
+// presence of pending frames, and the SiteInstanceGroups of any and all
+// proxies. They look like this:
 //
-//        Site A (D pending) -- proxies for B C
-//          |--Site B --------- proxies for A C
+//        Site A (D pending) -- proxies for B {C,E}
+//          |--Site B --------- proxies for A {C,E}
 //          +--Site C --------- proxies for B A
-//               |--Site A ---- proxies for B
-//               +--Site A ---- proxies for B
-//                    +--Site A -- proxies for B
+//               |--Site A ---- proxies for B {C,E}
+//               +--Site A ---- proxies for B {C,E}
+//                    +--Site E -- proxies for A B
 //       Where A = http://127.0.0.1/
 //             B = http://foo.com/ (no process)
 //             C = http://bar.com/
 //             D = http://next.com/
+//             E = data:nonce_E
 //
 // SiteInstances are assigned single-letter names (A, B, C) which are remembered
-// across invocations of the pretty-printer.
+// across invocations of the pretty-printer. Port numbers are excluded from the
+// descriptions by default for DepictFrameTree. Isolated sandboxed SiteInstances
+// are denoted with "(sandboxed)".
+//
+// SiteInstanceGroups with more than once SiteInstance are denoted as a set of
+// the SiteInstances in the group. See comment for `GetGroupName`. In this case,
+// E is in C's SiteInstanceGroup, denoted {C,E}. Note that SiteInstanceGroups
+// may show SiteInstances that are no longer in the FrameTree. For example, if a
+// subframe B does a same-SiteInstanceGroup navigation to data:nonce_C, B's
+// SiteInstance is kept alive by a FrameNavigationEntry, and it retains its
+// group and process because the active frame count is tracked on the
+// SiteInstanceGroup (shared with data:nonce_C) and not the B SiteInstance
+// itself. (This is not necessary but has no impact outside of DepictFrameTree
+// output). That means it still exists from the perspective
+// of DepictFrameTree.
 class FrameTreeVisualizer {
  public:
   FrameTreeVisualizer();
@@ -141,6 +175,21 @@ class FrameTreeVisualizer {
  private:
   // Assign or retrive the abbreviated short name (A, B, C) for a site instance.
   std::string GetName(SiteInstance* site_instance);
+
+  // Assign the name for a SiteInstanceGroup. A group's name is denoted as a set
+  // containing all the SiteInstances in the group, using their abbreviated
+  // names. For example, if a group contains foo.com and bar.com, which are
+  // assigned A and B respectively, the group name will be {A,B}. If there is
+  // only one SiteInstance in the group, it is directly depicted as the short
+  // name without set notation to minimize changes to existing tests. E.g.
+  // SiteInstanceGroup that contains only SiteInstance A is depicted as A rather
+  // than {A}.
+  // TODO(crbug.com/40176090): Always use set notation, to indicate that proxies
+  // are associated with SiteInstanceGroups rather than SiteInstances.
+  std::string GetGroupName(SiteInstanceGroup* group);
+
+  // Returns an identical URL except the port, if any, has been removed.
+  GURL GetUrlWithoutPort(const GURL& url);
 
   // Elements are site instance ids. The index of the SiteInstance in the vector
   // determines the abbreviated name (0->A, 1->B) for that SiteInstance.
@@ -176,9 +225,14 @@ Shell* OpenPopup(const ToRenderFrameHost& opener,
 class FileChooserDelegate : public WebContentsDelegate {
  public:
   // Constructs a WebContentsDelegate that mocks a file dialog.
-  // The mocked file dialog will always reply that the user selected |file|.
-  // |callback| is invoked when RunFileChooser() is called.
+  // The mocked file dialog will always reply that the user selected |file| or
+  // |files|. |callback| is invoked when RunFileChooser() is called.
   FileChooserDelegate(const base::FilePath& file, base::OnceClosure callback);
+  // |base_dir| must be set to the folder being uploaded in |kUploadFolder|
+  // mode, and must be empty in all other modes.
+  FileChooserDelegate(std::vector<base::FilePath> files,
+                      const base::FilePath& base_dir,
+                      base::OnceClosure callback);
   ~FileChooserDelegate() override;
 
   // Implementation of WebContentsDelegate::RunFileChooser.
@@ -190,7 +244,8 @@ class FileChooserDelegate : public WebContentsDelegate {
   const blink::mojom::FileChooserParams& params() const { return *params_; }
 
  private:
-  base::FilePath file_;
+  std::vector<base::FilePath> files_;
+  const base::FilePath base_dir_;
   base::OnceClosure callback_;
   blink::mojom::FileChooserParamsPtr params_;
 };
@@ -199,7 +254,7 @@ class FileChooserDelegate : public WebContentsDelegate {
 // the given frame tree node.
 class FrameTestNavigationManager : public TestNavigationManager {
  public:
-  FrameTestNavigationManager(int frame_tree_node_id,
+  FrameTestNavigationManager(FrameTreeNodeId frame_tree_node_id,
                              WebContents* web_contents,
                              const GURL& url);
 
@@ -212,7 +267,7 @@ class FrameTestNavigationManager : public TestNavigationManager {
   bool ShouldMonitorNavigation(NavigationHandle* handle) override;
 
   // Notifications are filtered so only this frame is monitored.
-  int filtering_frame_tree_node_id_;
+  FrameTreeNodeId filtering_frame_tree_node_id_;
 };
 
 // An observer that can wait for a specific URL to be committed in a specific
@@ -233,7 +288,7 @@ class UrlCommitObserver : WebContentsObserver {
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
 
   // The id of the FrameTreeNode in which navigations are peformed.
-  int frame_tree_node_id_;
+  FrameTreeNodeId frame_tree_node_id_;
 
   // The URL this observer is expecting to be committed.
   GURL url_;
@@ -265,12 +320,40 @@ class RenderProcessHostBadIpcMessageWaiter {
       const RenderProcessHostBadIpcMessageWaiter&) = delete;
 
   // Waits until the renderer process exits.  Returns the bad message that made
-  // //content kill the renderer.  |absl::nullopt| is returned if the renderer
+  // //content kill the renderer.  |std::nullopt| is returned if the renderer
   // was killed outside of //content or exited normally.
-  [[nodiscard]] absl::optional<bad_message::BadMessageReason> Wait();
+  [[nodiscard]] std::optional<bad_message::BadMessageReason> Wait();
 
  private:
   RenderProcessHostKillWaiter internal_waiter_;
+};
+
+// One-shot helper that listens for creation of a new popup widget.
+class CreateNewPopupWidgetInterceptor
+    : public blink::mojom::LocalFrameHostInterceptorForTesting {
+ public:
+  explicit CreateNewPopupWidgetInterceptor(
+      RenderFrameHostImpl* rfh,
+      base::OnceCallback<void(RenderWidgetHostImpl*)> did_create_callback);
+
+  ~CreateNewPopupWidgetInterceptor() override;
+
+  // LocalFrameHost overrides:
+  void CreateNewPopupWidget(
+      mojo::PendingAssociatedReceiver<blink::mojom::PopupWidgetHost>
+          blink_popup_widget_host,
+      mojo::PendingAssociatedReceiver<blink::mojom::WidgetHost>
+          blink_widget_host,
+      mojo::PendingAssociatedRemote<blink::mojom::Widget> blink_widget)
+      override;
+
+  // LocalFrameHostInterceptorForTesting overrides:
+  blink::mojom::LocalFrameHost* GetForwardingInterface() override;
+
+ private:
+  mojo::test::ScopedSwapImplForTesting<blink::mojom::LocalFrameHost>
+      swapped_impl_;
+  base::OnceCallback<void(RenderWidgetHostImpl*)> did_create_callback_;
 };
 
 class ShowPopupWidgetWaiter
@@ -291,12 +374,40 @@ class ShowPopupWidgetWaiter
   // Waits until a popup request is received.
   void Wait();
 
-  // Stops observing new messages.
-  void Stop();
-
  private:
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-  void ShowPopupMenu(const gfx::Rect& bounds);
+  // Helper that waits for a `ShowPopupMenu()` call and then invokes the
+  // observer callback with the requested bounds.  The actual call to show the
+  // popup menu is treated as if it were cancelled.
+  class ShowPopupMenuInterceptor
+      : public blink::mojom::LocalFrameHostInterceptorForTesting {
+   public:
+    explicit ShowPopupMenuInterceptor(RenderFrameHostImpl* rfh,
+                                      base::OnceCallback<void(const gfx::Rect&)>
+                                          did_show_popup_menu_callback);
+    ~ShowPopupMenuInterceptor() override;
+
+    // LocalFrameHost overrides:
+    void ShowPopupMenu(
+        mojo::PendingRemote<blink::mojom::PopupMenuClient> popup_client,
+        const gfx::Rect& bounds,
+        int32_t item_height,
+        double font_size,
+        int32_t selected_item,
+        std::vector<blink::mojom::MenuItemPtr> menu_items,
+        bool right_aligned,
+        bool allow_multiple_selection) override;
+
+    // LocalFrameHostInterceptorForTesting overrides:
+    blink::mojom::LocalFrameHost* GetForwardingInterface() override;
+
+   private:
+    mojo::test::ScopedSwapImplForTesting<blink::mojom::LocalFrameHost>
+        swapped_impl_;
+    base::OnceCallback<void(const gfx::Rect&)> did_show_popup_menu_callback_;
+  };
+
+  void DidShowPopupMenu(const gfx::Rect& bounds);
 #endif
 
   // Callback bound for creating a popup widget.
@@ -308,60 +419,15 @@ class ShowPopupWidgetWaiter
                  const gfx::Rect& initial_anchor_rect,
                  ShowPopupCallback callback) override;
 
+  CreateNewPopupWidgetInterceptor create_new_popup_widget_interceptor_;
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+  ShowPopupMenuInterceptor show_popup_menu_interceptor_;
+#endif
   base::RunLoop run_loop_;
   gfx::Rect initial_rect_;
   int32_t routing_id_ = MSG_ROUTING_NONE;
   int32_t process_id_ = 0;
-  raw_ptr<RenderFrameHostImpl> frame_host_;
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-  raw_ptr<WebContentsImpl> web_contents_;
-#endif
-};
-
-// A BrowserMessageFilter that drops a pre-specified message.
-class DropMessageFilter : public BrowserMessageFilter {
- public:
-  DropMessageFilter(uint32_t message_class, uint32_t drop_message_id);
-
-  DropMessageFilter(const DropMessageFilter&) = delete;
-  DropMessageFilter& operator=(const DropMessageFilter&) = delete;
-
- protected:
-  ~DropMessageFilter() override;
-
- private:
-  // BrowserMessageFilter:
-  bool OnMessageReceived(const IPC::Message& message) override;
-
-  const uint32_t drop_message_id_;
-};
-
-// A BrowserMessageFilter that observes a message without handling it, and
-// reports when it was seen.
-class ObserveMessageFilter : public BrowserMessageFilter {
- public:
-  ObserveMessageFilter(uint32_t message_class, uint32_t watch_message_id);
-
-  ObserveMessageFilter(const ObserveMessageFilter&) = delete;
-  ObserveMessageFilter& operator=(const ObserveMessageFilter&) = delete;
-
-  bool has_received_message() { return received_; }
-
-  // Spins a RunLoop until the message is observed.
-  void Wait();
-
- protected:
-  ~ObserveMessageFilter() override;
-
-  // BrowserMessageFilter:
-  bool OnMessageReceived(const IPC::Message& message) override;
-
- private:
-  void QuitWait();
-
-  const uint32_t watch_message_id_;
-  bool received_ = false;
-  base::OnceClosure quit_closure_;
+  const raw_ptr<RenderFrameHostImpl> frame_host_;
 };
 
 // This observer waits until WebContentsObserver::OnRendererUnresponsive
@@ -405,6 +471,8 @@ class BeforeUnloadBlockingDelegate : public JavaScriptDialogManager,
   JavaScriptDialogManager* GetJavaScriptDialogManager(
       WebContents* source) override;
 
+  bool IsBackForwardCacheSupported(WebContents& web_contents) override;
+
   // JavaScriptDialogManager
 
   void RunJavaScriptDialog(WebContents* web_contents,
@@ -432,27 +500,6 @@ class BeforeUnloadBlockingDelegate : public JavaScriptDialogManager,
   DialogClosedCallback callback_;
 
   std::unique_ptr<base::RunLoop> run_loop_ = std::make_unique<base::RunLoop>();
-};
-
-// A helper class to get DevTools inspector log messages (e.g. network errors).
-class DevToolsInspectorLogWatcher : public DevToolsAgentHostClient {
- public:
-  explicit DevToolsInspectorLogWatcher(WebContents* web_contents);
-  ~DevToolsInspectorLogWatcher() override;
-
-  void FlushAndStopWatching();
-  std::string last_message() { return last_message_; }
-
-  // DevToolsAgentHostClient:
-  void DispatchProtocolMessage(DevToolsAgentHost* host,
-                               base::span<const uint8_t> message) override;
-  void AgentHostClosed(DevToolsAgentHost* host) override;
-
- private:
-  scoped_refptr<DevToolsAgentHost> host_;
-  base::RunLoop run_loop_enable_log_;
-  base::RunLoop run_loop_disable_log_;
-  std::string last_message_;
 };
 
 // Captures various properties of the NavigationHandle on DidFinishNavigation.
@@ -541,7 +588,7 @@ class FrameNavigateParamsCapturer : public WebContentsObserver {
   // The id of the FrameTreeNode whose navigations to observe. If this is not
   // set, then this FrameNavigateParamsCapturer observes all navigations that
   // happen in the observed WebContents.
-  absl::optional<int> frame_tree_node_id_;
+  std::optional<FrameTreeNodeId> frame_tree_node_id_;
 
   // How many navigations remain to capture.
   int navigations_remaining_ = 1;
@@ -602,7 +649,7 @@ class RenderFrameHostCreatedObserver : public WebContentsObserver {
   base::RunLoop run_loop_;
 
   // The last RenderFrameHost created.
-  raw_ptr<RenderFrameHost, DanglingUntriaged> last_rfh_ = nullptr;
+  raw_ptr<RenderFrameHost, AcrossTasksDanglingUntriaged> last_rfh_ = nullptr;
 
   // The callback to call when a RenderFrameCreated call is observed.
   OnRenderFrameHostCreatedCallback on_rfh_created_;
@@ -678,8 +725,114 @@ class InactiveRenderFrameHostDeletionObserver : public WebContentsObserver {
   void CheckCondition();
 
   std::unique_ptr<base::RunLoop> loop_;
-  std::set<RenderFrameHost*> inactive_rfhs_;
+  std::set<raw_ptr<RenderFrameHost, SetExperimental>> inactive_rfhs_;
 };
+
+class TestNavigationObserverInternal : public TestNavigationObserver {
+ public:
+  using TestNavigationObserver::TestNavigationObserver;
+  ~TestNavigationObserverInternal() override = default;
+
+  // TestNavigationObserver:
+  void OnDidFinishNavigation(NavigationHandle* navigation_handle) override;
+  // Return the NavigationType of the last navigation.
+  NavigationType last_navigation_type() const { return last_navigation_type_; }
+
+ private:
+  NavigationType last_navigation_type_ = NAVIGATION_TYPE_UNKNOWN;
+};
+
+// Return the descendant of `rfh` found by selecting children according to
+// `descendant_indices`. E.g. `DescendantRenderFrameHostImplAt(rfh, {0, 1}) will
+// return the child at index 1 of the child at index 0 of `rfh`.
+RenderFrameHostImpl* DescendantRenderFrameHostImplAt(
+    const ToRenderFrameHost& adapter,
+    std::vector<size_t> descendant_indices);
+
+class EffectiveURLContentBrowserTestContentBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
+ public:
+  explicit EffectiveURLContentBrowserTestContentBrowserClient(
+      bool requires_dedicated_process);
+  EffectiveURLContentBrowserTestContentBrowserClient(
+      const GURL& url_to_modify,
+      const GURL& url_to_return,
+      bool requires_dedicated_process);
+  ~EffectiveURLContentBrowserTestContentBrowserClient() override;
+
+  // Adds effective URL translation from |url_to_modify| to |url_to_return|.
+  void AddTranslation(const GURL& url_to_modify, const GURL& url_to_return);
+
+ private:
+  GURL GetEffectiveURL(BrowserContext* browser_context,
+                       const GURL& url) override;
+  bool DoesSiteRequireDedicatedProcess(BrowserContext* browser_context,
+                                       const GURL& effective_site_url) override;
+
+  EffectiveURLContentBrowserClientHelper helper_;
+};
+
+// Class that requests that all pages belonging to the provided site get loaded
+// in a non-default StoragePartition.
+class CustomStoragePartitionBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
+ public:
+  explicit CustomStoragePartitionBrowserClient(const GURL& site_to_isolate);
+
+  StoragePartitionConfig GetStoragePartitionConfigForSite(
+      BrowserContext* browser_context,
+      const GURL& site) override;
+
+ private:
+  GURL site_to_isolate_;
+};
+
+// Helper that waits for a request from the specified `RenderFrameHost` to send
+// `CommitNavigation()` to the browser.
+class CommitNavigationPauser
+    : public RenderFrameHostImpl::CommitCallbackInterceptor {
+ public:
+  explicit CommitNavigationPauser(RenderFrameHostImpl* rfh);
+  ~CommitNavigationPauser() override;
+
+  void WaitForCommitAndPause();
+
+  // Once a `CommitNavigation()` call has been paused, these two methods may be
+  // used to resume or discard the commit as appropriate.
+  void ResumePausedCommit();
+  void DiscardPausedCommit();
+
+ private:
+  // CommitCallbackInterceptor overrides:
+  bool WillProcessDidCommitNavigation(
+      NavigationRequest* request,
+      mojom::DidCommitProvisionalLoadParamsPtr* params,
+      mojom::DidCommitProvisionalLoadInterfaceParamsPtr* interface_params)
+      override;
+
+  base::RunLoop loop_;
+
+  // The parameters to resume a previously paused `CommitNavigation()`.
+  base::WeakPtr<NavigationRequest> paused_request_;
+  mojom::DidCommitProvisionalLoadParamsPtr paused_params_;
+  mojom::DidCommitProvisionalLoadInterfaceParamsPtr paused_interface_params_;
+};
+
+// Blocks the current execution until the renderer main thread in the main frame
+// is in a steady state, so the caller can issue an `viz::CopyOutputRequest`
+// against the current `WebContents`.
+void WaitForCopyableViewInWebContents(WebContents* web_contents);
+
+// Blocks the current execution until the renderer main thread in the subframe
+// is in a steady state, so the caller can issue an `viz::CopyOutputRequest`
+// against its view.
+void WaitForCopyableViewInFrame(RenderFrameHost* render_frame_host);
+
+// Sets up a /redirect-on-second-navigation?url endpoint on the provided
+// `server`, which will return a 200 OK response for the first request, and
+// redirect the second request to `url` provided in the query param. This should
+// be called before starting `server`.
+void AddRedirectOnSecondNavigationHandler(net::EmbeddedTestServer* server);
 
 }  // namespace content
 

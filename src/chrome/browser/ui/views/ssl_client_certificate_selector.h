@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace net {
 class SSLCertRequestInfo;
 }
 
-class SSLClientCertificateSelector : public chrome::CertificateSelector {
+class SSLClientCertificateSelector : public CertificateSelector {
  public:
   // Writes a callback to the output parameter |cancellation_callback|. The
   // callback expects to be invoked on the UI thread and will invoke this
@@ -40,7 +40,7 @@ class SSLClientCertificateSelector : public chrome::CertificateSelector {
   void Init();
   void CloseDialog();
 
-  // chrome::CertificateSelector:
+  // CertificateSelector:
   void AcceptCertificate(
       std::unique_ptr<net::ClientCertIdentity> identity) override;
 

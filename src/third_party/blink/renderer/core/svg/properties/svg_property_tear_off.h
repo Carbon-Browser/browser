@@ -44,6 +44,17 @@ class SVGElement;
 
 enum PropertyIsAnimValType { kPropertyIsNotAnimVal, kPropertyIsAnimVal };
 
+enum class SVGPropertyCommitReason {
+  // The property was updated.
+  kUpdated,
+
+  // The property was updated in such a way that the corresponding content
+  // attribute should be removed. This is usually (right now: only) the case
+  // when a list-property has its last item removed (i.e by clear(), or by
+  // removeItem() removing the last item).
+  kListCleared,
+};
+
 class SVGPropertyTearOffBase : public ScriptWrappable {
  public:
   ~SVGPropertyTearOffBase() override = default;
@@ -55,10 +66,10 @@ class SVGPropertyTearOffBase : public ScriptWrappable {
   bool IsAnimVal() const { return property_is_anim_val_ == kPropertyIsAnimVal; }
   bool IsImmutable() const { return IsAnimVal(); }
 
-  virtual void CommitChange();
+  virtual void CommitChange(SVGPropertyCommitReason reason);
 
-  SVGAnimatedPropertyBase* GetBinding() { return binding_; }
-  SVGElement* ContextElement() const { return context_element_; }
+  SVGAnimatedPropertyBase* GetBinding() { return binding_.Get(); }
+  SVGElement* ContextElement() const { return context_element_.Get(); }
 
   void Bind(SVGAnimatedPropertyBase* binding);
 

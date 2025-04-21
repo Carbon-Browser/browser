@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
@@ -129,7 +129,7 @@ void MouseRawInputHandlerWin::OnInputEvent(const RAWINPUT* input) {
 
   caller_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(on_mouse_move_, std::move(new_position),
-                                ui::ET_MOUSE_MOVED));
+                                ui::EventType::kMouseMoved));
 }
 
 void MouseRawInputHandlerWin::OnError() {

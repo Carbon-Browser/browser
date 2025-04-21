@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,8 @@
 #include "extensions/browser/api/declarative/rules_registry_service.h"
 #include "extensions/browser/api/declarative_content/content_rules_registry.h"
 #include "extensions/browser/renderer_startup_helper.h"
-#include "extensions/common/extension_messages.h"
+#include "extensions/common/extension_id.h"
+#include "extensions/common/mojom/host_id.mojom.h"
 #include "extensions/common/mojom/renderer.mojom.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -57,34 +58,38 @@ class InterceptingRendererStartupHelper : public RendererStartupHelper,
 
  private:
   // mojom::Renderer implementation:
-  void ActivateExtension(const std::string& extension_id) override {}
+  void ActivateExtension(const ExtensionId& extension_id) override {}
   void SetActivityLoggingEnabled(bool enabled) override {}
   void LoadExtensions(
       std::vector<mojom::ExtensionLoadedParamsPtr> loaded_extensions) override {
   }
-  void UnloadExtension(const std::string& extension_id) override {}
+  void UnloadExtension(const ExtensionId& extension_id) override {}
   void SuspendExtension(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       mojom::Renderer::SuspendExtensionCallback callback) override {
     std::move(callback).Run();
   }
-  void CancelSuspendExtension(const std::string& extension_id) override {}
+  void CancelSuspendExtension(const ExtensionId& extension_id) override {}
   void SetDeveloperMode(bool current_developer_mode) override {}
   void SetSessionInfo(version_info::Channel channel,
-                      mojom::FeatureSessionType session,
-                      bool is_lock_screen_context) override {}
+                      mojom::FeatureSessionType session) override {}
   void SetSystemFont(const std::string& font_family,
                      const std::string& font_size) override {}
   void SetWebViewPartitionID(const std::string& partition_id) override {}
   void SetScriptingAllowlist(
-      const std::vector<std::string>& extension_ids) override {}
+      const std::vector<ExtensionId>& extension_ids) override {}
+  void UpdateUserScriptWorlds(
+      std::vector<mojom::UserScriptWorldInfoPtr> info) override {}
+  void ClearUserScriptWorldConfig(
+      const std::string& extension_id,
+      const std::optional<std::string>& world_id) override {}
   void ShouldSuspend(ShouldSuspendCallback callback) override {
     std::move(callback).Run();
   }
   void TransferBlobs(TransferBlobsCallback callback) override {
     std::move(callback).Run();
   }
-  void UpdatePermissions(const std::string& extension_id,
+  void UpdatePermissions(const ExtensionId& extension_id,
                          PermissionSet active_permissions,
                          PermissionSet withheld_permissions,
                          URLPatternSet policy_blocked_hosts,
@@ -95,14 +100,14 @@ class InterceptingRendererStartupHelper : public RendererStartupHelper,
       URLPatternSet default_policy_allowed_hosts) override {}
   void UpdateUserHostRestrictions(URLPatternSet user_blocked_hosts,
                                   URLPatternSet user_allowed_hosts) override {}
-  void UpdateTabSpecificPermissions(const std::string& extension_id,
+  void UpdateTabSpecificPermissions(const ExtensionId& extension_id,
                                     URLPatternSet new_hosts,
                                     int tab_id,
                                     bool update_origin_allowlist) override {}
   void UpdateUserScripts(base::ReadOnlySharedMemoryRegion shared_memory,
                          mojom::HostIDPtr host_id) override {}
   void ClearTabSpecificPermissions(
-      const std::vector<std::string>& extension_ids,
+      const std::vector<ExtensionId>& extension_ids,
       int tab_id,
       bool update_origin_allowlist) override {}
   void WatchPages(const std::vector<std::string>& css_selectors) override {
@@ -136,8 +141,9 @@ class DeclarativeContentCssConditionTrackerTest
   }
 
   TestingProfile::TestingFactories GetTestingFactories() const override {
-    return {{RendererStartupHelperFactory::GetInstance(),
-             base::BindRepeating(&BuildFakeRendererStartupHelper)}};
+    return {TestingProfile::TestingFactory{
+        RendererStartupHelperFactory::GetInstance(),
+        base::BindRepeating(&BuildFakeRendererStartupHelper)}};
   }
 
   void SimulateRenderProcessCreated(content::RenderProcessHost* rph) {

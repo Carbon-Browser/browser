@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class KEYED_SERVICE_EXPORT BrowserStateKeyedServiceFactory
   // A callback that supplies the instance of a KeyedService for a given
   // BrowserState. This is used primarily for testing, where we want to feed
   // a specific test double into the BSKSF system.
-  using TestingFactory = base::RepeatingCallback<std::unique_ptr<KeyedService>(
+  using TestingFactory = base::OnceCallback<std::unique_ptr<KeyedService>(
       web::BrowserState* context)>;
 
   BrowserStateKeyedServiceFactory(const BrowserStateKeyedServiceFactory&) =
@@ -45,12 +45,6 @@ class KEYED_SERVICE_EXPORT BrowserStateKeyedServiceFactory
   // SetTestingFactory() are allowed; previous services will be shut down.
   void SetTestingFactory(web::BrowserState* context,
                          TestingFactory testing_factory);
-
-  // Associates |testing_factory| with |context| and immediately returns the
-  // created KeyedService. Since the factory will be used immediately, it may
-  // not be empty.
-  KeyedService* SetTestingFactoryAndUse(web::BrowserState* context,
-                                        TestingFactory testing_factory);
 
  protected:
   // BrowserStateKeyedServiceFactories must communicate with a
@@ -122,7 +116,6 @@ class KEYED_SERVICE_EXPORT BrowserStateKeyedServiceFactory
   // KeyedServiceFactory:
   std::unique_ptr<KeyedService> BuildServiceInstanceFor(
       void* context) const final;
-  bool IsOffTheRecord(void* context) const final;
 
   // KeyedServiceBaseFactory:
   void* GetContextToUse(void* context) const final;

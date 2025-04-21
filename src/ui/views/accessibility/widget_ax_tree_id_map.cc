@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 namespace views {
 
-WidgetAXTreeIDMap::WidgetAXTreeIDMap() {}
+WidgetAXTreeIDMap::WidgetAXTreeIDMap() = default;
 
-WidgetAXTreeIDMap::~WidgetAXTreeIDMap() {}
+WidgetAXTreeIDMap::~WidgetAXTreeIDMap() = default;
 
 // static
 WidgetAXTreeIDMap& WidgetAXTreeIDMap::GetInstance() {
@@ -36,8 +36,9 @@ void WidgetAXTreeIDMap::RemoveWidget(Widget* widget) {
 
 ui::AXTreeID WidgetAXTreeIDMap::GetWidgetTreeID(Widget* widget) {
   DCHECK(widget);
-  if (!base::Contains(widget_map_, widget))
+  if (!base::Contains(widget_map_, widget)) {
     return ui::AXTreeIDUnknown();
+  }
 
   return widget_map_.at(widget);
 }
@@ -46,8 +47,9 @@ const std::vector<Widget*> WidgetAXTreeIDMap::GetWidgets() const {
   std::vector<Widget*> widgets;
   widgets.reserve(widget_map_.size());
 
-  for (auto iter : widget_map_)
+  for (auto iter : widget_map_) {
     widgets.push_back(iter.first);
+  }
 
   return widgets;
 }

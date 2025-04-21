@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/invalidation/impl/status.h"
 #include "components/invalidation/public/invalidation_util.h"
@@ -29,7 +29,7 @@ class PerUserTopicSubscriptionRequest {
   using CompletedCallback =
       base::OnceCallback<void(const Status& status,
                               const std::string& topic_name)>;
-  enum RequestType { SUBSCRIBE, UNSUBSCRIBE };
+  enum class RequestType { kSubscribe, kUnsubscribe };
 
   // Builds authenticated PerUserTopicSubscriptionRequests.
   class Builder {
@@ -115,7 +115,7 @@ class PerUserTopicSubscriptionRequest {
   // Note: This callback should only be invoked from
   // RunCompletedCallbackAndMaybeDie(), as invoking it has the potential to
   // destroy this object per this class's contract.
-  // TODO(crbug.com/1054759): find a way to avoid this fragile logic.
+  // TODO(crbug.com/40675891): find a way to avoid this fragile logic.
   CompletedCallback request_completed_callback_;
 
   // Full URL. Used in tests only.

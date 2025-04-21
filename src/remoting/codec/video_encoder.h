@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ class VideoEncoder {
  public:
   virtual ~VideoEncoder() {}
 
-  // Request that the encoder provide lossless encoding, or color, if possible.
-  virtual void SetLosslessEncode(bool want_lossless) {}
+  // Request that the encoder provide lossless color, if possible.
   virtual void SetLosslessColor(bool want_lossless) {}
 
   // Encode an image stored in |frame|. If |frame.updated_region()| is empty

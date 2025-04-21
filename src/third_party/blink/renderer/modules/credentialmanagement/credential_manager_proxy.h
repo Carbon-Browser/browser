@@ -1,15 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_CREDENTIALMANAGEMENT_CREDENTIAL_MANAGER_PROXY_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_CREDENTIALMANAGEMENT_CREDENTIAL_MANAGER_PROXY_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/blink/public/mojom/credentialmanagement/credential_manager.mojom-blink.h"
 #include "third_party/blink/public/mojom/payments/payment_credential.mojom-blink.h"
 #include "third_party/blink/public/mojom/sms/webotp_service.mojom-blink.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom-blink.h"
+#include "third_party/blink/public/mojom/webid/digital_identity_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/webid/federated_auth_request.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -52,27 +53,31 @@ class MODULES_EXPORT CredentialManagerProxy
 
   mojom::blink::FederatedAuthRequest* FederatedAuthRequest();
 
-  mojom::blink::FederatedAuthRequest* FedCmLogoutRpsRequest();
+  mojom::blink::DigitalIdentityRequest* DigitalIdentityRequest();
 
   void Trace(Visitor*) const override;
 
   // Must be called only with argument representing a valid
   // context corresponding to an attached window.
   static CredentialManagerProxy* From(ScriptState*);
+  static CredentialManagerProxy* From(ExecutionContext*);
+
+  static CredentialManagerProxy* From(LocalDOMWindow*);
 
  private:
   template <typename Interface>
   void BindRemoteForFedCm(HeapMojoRemote<Interface>& remote,
                           base::OnceClosure disconnect_closure);
   void OnFederatedAuthRequestConnectionError();
-  void OnFedCmLogoutConnectionError();
+  void OnDigitalIdentityRequestConnectionError();
 
   HeapMojoRemote<mojom::blink::Authenticator> authenticator_;
   HeapMojoRemote<mojom::blink::CredentialManager> credential_manager_;
   HeapMojoRemote<mojom::blink::WebOTPService> webotp_service_;
   HeapMojoRemote<payments::mojom::blink::PaymentCredential> payment_credential_;
   HeapMojoRemote<mojom::blink::FederatedAuthRequest> federated_auth_request_;
-  HeapMojoRemote<mojom::blink::FederatedAuthRequest> fedcm_logout_request_;
+  HeapMojoRemote<mojom::blink::DigitalIdentityRequest>
+      digital_identity_request_;
 };
 
 }  // namespace blink

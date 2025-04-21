@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/omnibox/omnibox_theme.h"
-#include "ui/accessibility/ax_node_data.h"
+#include "chrome/browser/ui/views/location_bar/location_bar_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer_animator.h"
@@ -52,7 +52,15 @@ constexpr int kIconLabelBubbleSpaceBesideSeparator = 8;
 constexpr int kIconLabelBubbleFadeInDurationMs = 250;
 constexpr int kIconLabelBubbleFadeOutDurationMs = 175;
 
+// The length of the label fade in and out animations.
+constexpr int kIconLabelAnimationDurationMs = 600;
+
 }  // namespace
+
+SkAlpha IconLabelBubbleView::Delegate::GetIconLabelBubbleSeparatorAlpha()
+    const {
+  return 0x69;
+}
 
 SkColor IconLabelBubbleView::Delegate::GetIconLabelBubbleInkDropColor() const {
   return GetIconLabelBubbleSurroundingForegroundColor();
@@ -72,7 +80,8 @@ void IconLabelBubbleView::SeparatorView::OnPaint(gfx::Canvas* canvas) {
   // IconLabelBubbleView has been emphasized (e.g. red text for a security
   // error) the separator will still blend into the background.
   const SkColor separator_color = SkColorSetA(
-      owner_->delegate_->GetIconLabelBubbleSurroundingForegroundColor(), 0x69);
+      owner_->delegate_->GetIconLabelBubbleSurroundingForegroundColor(),
+      owner_->delegate_->GetIconLabelBubbleSeparatorAlpha());
   const float x = GetLocalBounds().right() -
                   owner_->GetEndPaddingWithSeparator() -
                   1.0f / canvas->image_scale();
@@ -86,8 +95,9 @@ void IconLabelBubbleView::SeparatorView::OnThemeChanged() {
 }
 
 void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
-  if (!GetVisible())
+  if (!GetVisible()) {
     return;
+  }
 
   // When using focus rings are visible we should hide the separator instantly
   // when the IconLabelBubbleView is focused. Otherwise we should follow the
@@ -119,9 +129,7 @@ void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
   layer()->SetOpacity(opacity);
 }
 
-using SeparatorView = IconLabelBubbleView::SeparatorView;
-
-BEGIN_METADATA(SeparatorView, views::View)
+BEGIN_METADATA(IconLabelBubbleView, SeparatorView)
 END_METADATA
 
 class IconLabelBubbleView::HighlightPathGenerator
@@ -186,7 +194,7 @@ IconLabelBubbleView::IconLabelBubbleView(const gfx::FontList& font_list,
   GetViewAccessibility().AddVirtualChildView(std::move(alert_view));
 }
 
-IconLabelBubbleView::~IconLabelBubbleView() {}
+IconLabelBubbleView::~IconLabelBubbleView() = default;
 
 void IconLabelBubbleView::InkDropAnimationStarted() {
   separator_view_->UpdateOpacity();
@@ -196,19 +204,81 @@ void IconLabelBubbleView::InkDropRippleAnimationEnded(
     views::InkDropState state) {}
 
 bool IconLabelBubbleView::ShouldShowLabel() const {
-  if (slide_animation_.is_animating() || is_animation_paused_)
-    return !IsShrinking() || (width() > image()->GetPreferredSize().width());
+  if (slide_animation_.is_animating() || is_animation_paused_) {
+    return !IsShrinking() ||
+           (width() > image_container_view()->GetPreferredSize().width());
+  }
   return label()->GetVisible() && !label()->GetText().empty();
 }
 
-void IconLabelBubbleView::SetPaintLabelOverSolidBackground(
-    bool paint_label_over_solid_backround) {
-  paint_label_over_solid_backround_ = paint_label_over_solid_backround;
+void IconLabelBubbleView::Layout(PassKey) {
+  ink_drop_container()->SetBoundsRect(GetLocalBounds());
+
+  // We may not have horizontal room for both the image and the trailing
+  // padding. When the view is expanding (or showing-label steady state), the
+  // image. When the view is contracting (or hidden-label steady state), whittle
+  // away at the trailing padding instead.
+  int bubble_trailing_padding = GetEndPaddingWithSeparator();
+  int image_width = image_container_view()->GetPreferredSize().width();
+  const int space_shortage = image_width + bubble_trailing_padding - width();
+  if (space_shortage > 0) {
+    if (ShouldShowLabel()) {
+      image_width -= space_shortage;
+    } else {
+      bubble_trailing_padding -= space_shortage;
+    }
+  }
+  image_container_view()->SetBounds(GetInsets().left(), 0, image_width,
+                                    height());
+
+  // Compute the label bounds. The label gets whatever size is left over after
+  // accounting for the preferred image width and padding amounts. Note that if
+  // the label has zero size it doesn't actually matter what we compute its X
+  // value to be, since it won't be visible.
+  const int label_x =
+      image_container_view()->bounds().right() + GetInternalSpacing();
+  int label_width = std::max(0, width() - label_x - bubble_trailing_padding -
+                                    GetWidthBetweenIconAndSeparator());
+  label()->SetBounds(label_x, 0, label_width, height());
+
+  // The separator should be the same height as the icons.
+  const int separator_height = GetLayoutConstant(LOCATION_BAR_ICON_SIZE);
+  gfx::Rect separator_bounds(label()->bounds());
+  separator_bounds.Inset(
+      gfx::Insets::VH((separator_bounds.height() - separator_height) / 2, 0));
+
+  float separator_width =
+      GetWidthBetweenIconAndSeparator() + GetEndPaddingWithSeparator();
+  int separator_x = label()->GetText().empty()
+                        ? image_container_view()->bounds().right()
+                        : label()->bounds().right();
+  separator_view_->SetBounds(separator_x, separator_bounds.y(), separator_width,
+                             separator_height);
+
+  if (views::FocusRing::Get(this)) {
+    views::FocusRing::Get(this)->DeprecatedLayoutImmediately();
+    views::FocusRing::Get(this)->SchedulePaint();
+  }
+}
+
+void IconLabelBubbleView::SetBackgroundVisibility(
+    BackgroundVisibility background_visibility) {
+  background_visibility_ = background_visibility;
   UpdateBackground();
 }
 
 void IconLabelBubbleView::SetLabel(const std::u16string& label_text) {
-  SetAccessibleName(label_text);
+  SetLabel(label_text, label_text);
+}
+
+void IconLabelBubbleView::SetLabel(const std::u16string& label_text,
+                                   const std::u16string& accessible_name) {
+  // TODO(crbug.com/40890218): Under what conditions, if any, will the text be
+  // empty? Read the description of the bug and update accordingly.
+  GetViewAccessibility().SetName(
+      accessible_name, accessible_name.empty()
+                           ? ax::mojom::NameFrom::kAttributeExplicitlyEmpty
+                           : ax::mojom::NameFrom::kAttribute);
   label()->SetText(label_text);
   separator_view_->SetVisible(ShouldShowSeparator());
   separator_view_->UpdateOpacity();
@@ -218,36 +288,109 @@ void IconLabelBubbleView::SetFontList(const gfx::FontList& font_list) {
   label()->SetFontList(font_list);
 }
 
+SkColor IconLabelBubbleView::GetBackgroundColor() const {
+  ui::ColorId background_color_id = ui::kUiColorsStart;
+  if (background_color_id_.has_value()) {
+    background_color_id = background_color_id_.value();
+  } else if (PaintedOnSolidBackground()) {
+    background_color_id = use_tonal_color_when_expanded_
+                              ? kColorOmniboxIconBackgroundTonal
+                              : kColorOmniboxIconBackground;
+  } else {
+    // If background is not explicitly specified or we are not painting over a
+    // solid background, seek the background color from the icon view's context.
+    return delegate_->GetIconLabelBubbleBackgroundColor();
+  }
+  return GetColorProvider()->GetColor(background_color_id);
+}
+
 SkColor IconLabelBubbleView::GetForegroundColor() const {
-  return delegate_->GetIconLabelBubbleSurroundingForegroundColor();
+  ui::ColorId foreground_color_id = ui::kUiColorsStart;
+  if (foreground_color_id_.has_value()) {
+    foreground_color_id = foreground_color_id_.value();
+  } else if (PaintedOnSolidBackground()) {
+    foreground_color_id = use_tonal_color_when_expanded_
+                              ? kColorOmniboxIconForegroundTonal
+                              : kColorOmniboxIconForeground;
+  } else {
+    // If foreground is not explicitly specified or we are not painting over a
+    // solid background, seek the foreground color from the icon view's context.
+    return delegate_->GetIconLabelBubbleSurroundingForegroundColor();
+  }
+  return GetColorProvider()->GetColor(foreground_color_id);
+}
+
+bool IconLabelBubbleView::IconColorShouldMatchForeground() const {
+  // Icons should match the label foreground color if the foreground color is
+  // explicitly overridden or solid backgrounds are used.
+  return foreground_color_id_.has_value() || PaintedOnSolidBackground();
+}
+
+void IconLabelBubbleView::SetCustomForegroundColorId(
+    const ui::ColorId color_id) {
+  if (foreground_color_id_ == color_id) {
+    return;
+  }
+  foreground_color_id_ = color_id;
+}
+
+void IconLabelBubbleView::SetCustomBackgroundColorId(
+    const ui::ColorId color_id) {
+  if (background_color_id_ == color_id) {
+    return;
+  }
+  background_color_id_ = color_id;
 }
 
 void IconLabelBubbleView::UpdateLabelColors() {
   SetEnabledTextColors(GetForegroundColor());
-  label()->SetBackgroundColor(delegate_->GetIconLabelBubbleBackgroundColor());
+  label()->SetBackgroundColor(GetBackgroundColor());
 }
 
 void IconLabelBubbleView::UpdateBackground() {
+  if (!GetWidget()) {
+    return;
+  }
+
   // If the label is showing we must ensure the icon label is painted over a
   // solid background.
-  SetBackground(paint_label_over_solid_backround_ && ShouldShowLabel()
-                    ? views::CreateThemedRoundedRectBackground(
-                          kColorToolbar, GetPreferredSize().height())
+  const bool painted_on_solid_background = PaintedOnSolidBackground();
+  SetBackground(painted_on_solid_background
+                    ? views::CreateRoundedRectBackground(GetBackgroundColor(),
+                                                         GetCornerRadii())
                     : nullptr);
+  // TODO(pbos): Consider renaming kOmniboxIcon/kOmniboxActionIcon color IDs to
+  // share the same prefix. Here OmniboxIcon assumes to have a background and
+  // OmniboxActionIcon assumes to not have one.
+  ConfigureInkDropForRefresh2023(this,
+                                 painted_on_solid_background
+                                     ? kColorOmniboxIconHover
+                                     : kColorOmniboxActionIconHover,
+                                 kColorOmniboxIconPressed);
+}
+
+void IconLabelBubbleView::SetUseTonalColorsWhenExpanded(bool use_tonal_colors) {
+  use_tonal_color_when_expanded_ = use_tonal_colors;
 }
 
 bool IconLabelBubbleView::ShouldShowSeparator() const {
   return ShouldShowLabel();
 }
 
-int IconLabelBubbleView::GetWidthBetween(int min, int max) const {
-  // TODO(https://crbug.com/8944): Disable animations globally instead of having
-  // piecemeal opt ins for respecting prefers reduced motion.
-  if (gfx::Animation::PrefersReducedMotion())
-    return max;
+bool IconLabelBubbleView::ShouldShowLabelAfterAnimation() const {
+  return ShouldShowSeparator();
+}
 
-  if (!slide_animation_.is_animating() && !is_animation_paused_)
+int IconLabelBubbleView::GetWidthBetween(int min, int max) const {
+  // TODO(crbug.com/41420184): Disable animations globally instead of having
+  // piecemeal opt ins for respecting prefers reduced motion.
+  if (gfx::Animation::PrefersReducedMotion()) {
     return max;
+  }
+
+  if (!slide_animation_.is_animating() && !is_animation_paused_) {
+    return max;
+  }
 
   double progress = is_animation_paused_ ? pause_animation_state_
                                          : slide_animation_.GetCurrentValue();
@@ -259,18 +402,22 @@ int IconLabelBubbleView::GetWidthBetween(int min, int max) const {
     return gfx::Tween::IntValueBetween(state, min, max);
   }
 
-  if (progress <= (1 - open_state_fraction_))
+  if (progress <= (1 - open_state_fraction_)) {
     return max;
+  }
 
+  // Clamp value to 1.0 to handle floating arithmetic rounding errors.
   double state = gfx::Tween::CalculateValue(
-      kTween, (progress - (1 - open_state_fraction_)) / open_state_fraction_);
+      kTween, std::min(1.0, (progress - (1 - open_state_fraction_)) /
+                                open_state_fraction_));
   // Note |min| and |max| are reversed.
   return gfx::Tween::IntValueBetween(state, max, min);
 }
 
 bool IconLabelBubbleView::IsShrinking() const {
-  if (!slide_animation_.is_animating() || is_animation_paused_)
+  if (!slide_animation_.is_animating() || is_animation_paused_) {
     return false;
+  }
   return slide_animation_.IsClosing() ||
          (open_state_fraction_ < 1.0 &&
           slide_animation_.GetCurrentValue() > (1.0 - open_state_fraction_));
@@ -289,58 +436,17 @@ void IconLabelBubbleView::OnTouchUiChanged() {
 
   // PreferredSizeChanged() incurs an expensive layout of the location bar, so
   // only call it when this view is showing.
-  if (GetVisible())
+  if (GetVisible()) {
     PreferredSizeChanged();
+  }
 }
 
-gfx::Size IconLabelBubbleView::CalculatePreferredSize() const {
-  return GetSizeForLabelWidth(label()->GetPreferredSize().width());
-}
-
-void IconLabelBubbleView::Layout() {
-  ink_drop_container()->SetBoundsRect(GetLocalBounds());
-
-  // We may not have horizontal room for both the image and the trailing
-  // padding. When the view is expanding (or showing-label steady state), the
-  // image. When the view is contracting (or hidden-label steady state), whittle
-  // away at the trailing padding instead.
-  int bubble_trailing_padding = GetEndPaddingWithSeparator();
-  int image_width = image()->GetPreferredSize().width();
-  const int space_shortage = image_width + bubble_trailing_padding - width();
-  if (space_shortage > 0) {
-    if (ShouldShowLabel())
-      image_width -= space_shortage;
-    else
-      bubble_trailing_padding -= space_shortage;
-  }
-  image()->SetBounds(GetInsets().left(), 0, image_width, height());
-
-  // Compute the label bounds. The label gets whatever size is left over after
-  // accounting for the preferred image width and padding amounts. Note that if
-  // the label has zero size it doesn't actually matter what we compute its X
-  // value to be, since it won't be visible.
-  const int label_x = image()->bounds().right() + GetInternalSpacing();
-  int label_width = std::max(0, width() - label_x - bubble_trailing_padding -
-                                    GetWidthBetweenIconAndSeparator());
-  label()->SetBounds(label_x, 0, label_width, height());
-
-  // The separator should be the same height as the icons.
-  const int separator_height = GetLayoutConstant(LOCATION_BAR_ICON_SIZE);
-  gfx::Rect separator_bounds(label()->bounds());
-  separator_bounds.Inset(
-      gfx::Insets::VH((separator_bounds.height() - separator_height) / 2, 0));
-
-  float separator_width =
-      GetWidthBetweenIconAndSeparator() + GetEndPaddingWithSeparator();
-  int separator_x = label()->GetText().empty() ? image()->bounds().right()
-                                               : label()->bounds().right();
-  separator_view_->SetBounds(separator_x, separator_bounds.y(), separator_width,
-                             separator_height);
-
-  if (views::FocusRing::Get(this)) {
-    views::FocusRing::Get(this)->Layout();
-    views::FocusRing::Get(this)->SchedulePaint();
-  }
+gfx::Size IconLabelBubbleView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  return GetSizeForLabelWidth(
+      label()
+          ->GetPreferredSize(views::SizeBounds(label()->width(), {}))
+          .width());
 }
 
 bool IconLabelBubbleView::OnMousePressed(const ui::MouseEvent& event) {
@@ -356,11 +462,13 @@ void IconLabelBubbleView::OnThemeChanged() {
   label()->SetBackground(nullptr);
 
   UpdateLabelColors();
+  UpdateBackground();
 }
 
 bool IconLabelBubbleView::IsTriggerableEvent(const ui::Event& event) {
-  if (event.IsMouseEvent())
+  if (event.IsMouseEvent()) {
     return !IsBubbleShowing() && !suppress_button_release_;
+  }
 
   return true;
 }
@@ -387,13 +495,16 @@ void IconLabelBubbleView::OnBlur() {
 }
 
 void IconLabelBubbleView::AnimationEnded(const gfx::Animation* animation) {
-  if (animation != &slide_animation_)
+  if (animation != &slide_animation_) {
     return views::LabelButton::AnimationEnded(animation);
+  }
 
   if (!is_animation_paused_) {
-    // If there is no separator to show, then that means we want the text to
-    // disappear after animating.
-    ResetSlideAnimation(/*show_label=*/ShouldShowSeparator());
+    // In some cases we want the text to disappear even after animating.
+    // Subclasses override `ShouldShowLabelAfterAnimation` for custom behavior.
+    // Default behavior is when we do not show separator, the label should
+    // collapse.
+    ResetSlideAnimation(/*show=*/ShouldShowLabelAfterAnimation());
     PreferredSizeChanged();
   }
 
@@ -401,27 +512,27 @@ void IconLabelBubbleView::AnimationEnded(const gfx::Animation* animation) {
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnFocus(
       !views::FocusRing::Get(this));
   UpdateBackground();
+  UpdateBorder();
 }
 
 void IconLabelBubbleView::AnimationProgressed(const gfx::Animation* animation) {
-  if (animation != &slide_animation_)
+  if (animation != &slide_animation_) {
     return views::LabelButton::AnimationProgressed(animation);
+  }
 
-  if (!is_animation_paused_)
+  if (!is_animation_paused_) {
     PreferredSizeChanged();
+  }
+
+  UpdateBorder();
 }
 
 void IconLabelBubbleView::AnimationCanceled(const gfx::Animation* animation) {
-  if (animation != &slide_animation_)
+  if (animation != &slide_animation_) {
     return views::LabelButton::AnimationCanceled(animation);
+  }
 
   AnimationEnded(animation);
-}
-
-void IconLabelBubbleView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  LabelButton::GetAccessibleNodeData(node_data);
-  if (GetAccessibleName().empty())
-    node_data->SetNameExplicitlyEmpty();
 }
 
 void IconLabelBubbleView::SetImageModel(const ui::ImageModel& image_model) {
@@ -429,8 +540,21 @@ void IconLabelBubbleView::SetImageModel(const ui::ImageModel& image_model) {
   LabelButton::SetImageModel(STATE_NORMAL, image_model);
 }
 
+gfx::RoundedCornersF IconLabelBubbleView::GetCornerRadii() const {
+  if (radii_.has_value()) {
+    return radii_.value();
+  }
+  return gfx::RoundedCornersF(GetPreferredSize().height() / 2);
+}
+
+void IconLabelBubbleView::SetCornerRadii(const gfx::RoundedCornersF& radii) {
+  radii_ = radii;
+  UpdateBackground();
+  UpdateBorder();
+}
+
 gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
-  gfx::Size image_size = image()->GetPreferredSize();
+  gfx::Size image_size = image_container_view()->GetPreferredSize();
   image_size.Enlarge(GetInsets().left() + GetWidthBetweenIconAndSeparator() +
                          GetEndPaddingWithSeparator(),
                      GetInsets().height());
@@ -440,8 +564,9 @@ gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
   // even after the label is not visible in order to slide the icon into its
   // final position. Therefore it is necessary to calculate additional width
   // even when the label is hidden as long as the animation is still shrinking.
-  if (!ShouldShowLabel() && !shrinking)
+  if (!ShouldShowLabel() && !shrinking) {
     return image_size;
+  }
 
   const int min_width =
       shrinking ? image_size.width() : grow_animation_starting_width_;
@@ -450,10 +575,27 @@ gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
   return gfx::Size(GetWidthBetween(min_width, max_width), image_size.height());
 }
 
+void IconLabelBubbleView::UpdateBorder() {
+  // Bubbles are given the full internal height of the location bar so that all
+  // child views in the location bar have the same height. The visible height of
+  // the bubble should be smaller, so use an empty border to shrink down the
+  // content bounds so the background gets painted correctly.
+  SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
+      GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
+      GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
+}
+
 int IconLabelBubbleView::GetInternalSpacing() const {
-  if (image()->GetPreferredSize().IsEmpty())
+  if (image_container_view()->GetPreferredSize().IsEmpty()) {
     return 0;
-  return (ui::TouchUiController::Get()->touch_ui() ? 10 : 8) +
+  }
+
+  constexpr int kDefaultInternalSpacingTouchUI = 10;
+  constexpr int kDefaultInternalSpacingChromeRefresh = 4;
+
+  return (ui::TouchUiController::Get()->touch_ui()
+              ? kDefaultInternalSpacingTouchUI
+              : kDefaultInternalSpacingChromeRefresh) +
          GetExtraInternalSpacing();
 }
 
@@ -468,8 +610,9 @@ int IconLabelBubbleView::GetWidthBetweenIconAndSeparator() const {
 int IconLabelBubbleView::GetEndPaddingWithSeparator() const {
   int end_padding = ShouldShowSeparator() ? kIconLabelBubbleSpaceBesideSeparator
                                           : GetInsets().right();
-  if (ShouldShowSeparator())
+  if (ShouldShowSeparator()) {
     end_padding += kIconLabelBubbleSeparatorWidth;
+  }
   return end_padding;
 }
 
@@ -482,19 +625,21 @@ void IconLabelBubbleView::SetUpForAnimation() {
   open_state_fraction_ = 1.0;
 }
 
-void IconLabelBubbleView::SetUpForInOutAnimation() {
+void IconLabelBubbleView::SetUpForInOutAnimation(base::TimeDelta duration) {
   SetUpForAnimation();
   // The duration of the slide includes the appearance of the label (600ms),
   // statically showing the label (1800ms), and hiding the label (600ms). The
   // proportion of time spent in each portion of the animation is controlled by
-  // kIconLabelBubbleOpenTimeFraction.
-  slide_animation_.SetSlideDuration(base::Milliseconds(3000));
+  // open_state_fraction_.
+  slide_animation_.SetSlideDuration(
+      duration + 2 * base::Milliseconds(kIconLabelAnimationDurationMs));
   // The tween is calculated in GetWidthBetween().
   slide_animation_.SetTweenType(gfx::Tween::LINEAR);
-  open_state_fraction_ = 0.2;
+  open_state_fraction_ = static_cast<float>(kIconLabelAnimationDurationMs) /
+                         duration.InMilliseconds();
 }
 
-void IconLabelBubbleView::AnimateIn(absl::optional<int> string_id) {
+void IconLabelBubbleView::AnimateIn(std::optional<int> string_id) {
   if (!label()->GetVisible()) {
     // Start animation from the current width, otherwise the icon will also be
     // included if visible.
@@ -510,7 +655,12 @@ void IconLabelBubbleView::AnimateIn(absl::optional<int> string_id) {
       // instance anyway.
       alert_virtual_view_->GetCustomData().RemoveState(
           ax::mojom::State::kInvisible);
-      alert_virtual_view_->GetCustomData().SetName(label);
+
+      // A valid role must be set prior to setting the name.
+      // TODO(crbug.com/40863593): Consider using AnnounceText instead of a
+      // virtual view.
+      alert_virtual_view_->GetCustomData().role = ax::mojom::Role::kAlert;
+      alert_virtual_view_->GetCustomData().SetNameChecked(label);
       alert_virtual_view_->NotifyAccessibilityEvent(ax::mojom::Event::kAlert);
     }
     label()->SetVisible(true);
@@ -581,30 +731,36 @@ void IconLabelBubbleView::HideAnimation() {
   UpdateBackground();
 }
 
+// TODO(crbug.com/378108580): Refactor using addCircle().
 SkPath IconLabelBubbleView::GetHighlightPath() const {
   gfx::Rect highlight_bounds = GetLocalBounds();
-  if (ShouldShowSeparator())
+  if (ShouldShowSeparator()) {
     highlight_bounds.Inset(
         gfx::Insets::TLBR(0, 0, 0, GetEndPaddingWithSeparator()));
+  }
   highlight_bounds = GetMirroredRect(highlight_bounds);
 
-  const float corner_radius = highlight_bounds.height() / 2.f;
   const SkRect rect = RectToSkRect(highlight_bounds);
+  gfx::RoundedCornersF radii = GetCornerRadii();
+  const SkScalar sk_radii[8] = {
+      SkIntToScalar(radii.upper_left()),  SkIntToScalar(radii.upper_left()),
+      SkIntToScalar(radii.upper_right()), SkIntToScalar(radii.upper_right()),
+      SkIntToScalar(radii.lower_right()), SkIntToScalar(radii.lower_right()),
+      SkIntToScalar(radii.lower_left()),  SkIntToScalar(radii.lower_left())};
 
-  return SkPath().addRoundRect(rect, corner_radius, corner_radius);
+  return SkPath().addRoundRect(rect, sk_radii);
 }
 
-void IconLabelBubbleView::UpdateBorder() {
-  // Bubbles are given the full internal height of the location bar so that all
-  // child views in the location bar have the same height. The visible height of
-  // the bubble should be smaller, so use an empty border to shrink down the
-  // content bounds so the background gets painted correctly.
-  SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
-      GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
-      GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
+bool IconLabelBubbleView::PaintedOnSolidBackground() const {
+  // If the label is showing we must ensure the icon label is painted over a
+  // solid background.
+  return (background_visibility_ == BackgroundVisibility::kAlways) ||
+         ((background_visibility_ == BackgroundVisibility::kWithLabel) &&
+          ShouldShowLabel()) ||
+         background_color_id_.has_value();
 }
 
-BEGIN_METADATA(IconLabelBubbleView, views::LabelButton)
+BEGIN_METADATA(IconLabelBubbleView)
 ADD_READONLY_PROPERTY_METADATA(SkColor,
                                ForegroundColor,
                                ui::metadata::SkColorConverter)

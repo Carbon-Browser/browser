@@ -1,17 +1,25 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/page_load_metrics/browser/fake_page_load_metrics_observer_delegate.h"
 #include "base/time/default_tick_clock.h"
+#include "components/page_load_metrics/common/page_load_metrics.mojom.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 
 namespace page_load_metrics {
+
+namespace {
+static int g_next_navigation_id_ = 1;
+}
 
 FakePageLoadMetricsObserverDelegate::FakePageLoadMetricsObserverDelegate()
     : user_initiated_info_(UserInitiatedInfo::NotUserInitiated()),
       page_end_user_initiated_info_(UserInitiatedInfo::NotUserInitiated()),
       visibility_tracker_(base::DefaultTickClock::GetInstance(),
-                          /*is_shown=*/true) {}
+                          /*is_shown=*/true),
+      navigation_id_(g_next_navigation_id_++),
+      navigation_start_(base::TimeTicks::Now()) {}
 FakePageLoadMetricsObserverDelegate::~FakePageLoadMetricsObserverDelegate() =
     default;
 
@@ -22,17 +30,37 @@ content::WebContents* FakePageLoadMetricsObserverDelegate::GetWebContents()
 
 base::TimeTicks FakePageLoadMetricsObserverDelegate::GetNavigationStart()
     const {
-  return base::TimeTicks();
+  return navigation_start_;
 }
 
-absl::optional<base::TimeDelta>
-FakePageLoadMetricsObserverDelegate::GetTimeToFirstBackground() const {
-  return absl::optional<base::TimeDelta>();
+std::optional<base::TimeDelta> TimeDiff(
+    const std::optional<base::TimeTicks>& time,
+    const base::TimeTicks& origin) {
+  if (!time.has_value())
+    return std::nullopt;
+
+  DCHECK_GE(time.value(), origin);
+  return time.value() - origin;
 }
 
-absl::optional<base::TimeDelta>
+std::optional<base::TimeDelta>
 FakePageLoadMetricsObserverDelegate::GetTimeToFirstForeground() const {
-  return absl::optional<base::TimeDelta>();
+  return std::nullopt;
+}
+
+std::optional<base::TimeDelta>
+FakePageLoadMetricsObserverDelegate::GetTimeToFirstBackground() const {
+  return TimeDiff(first_background_time_, navigation_start_);
+}
+
+PrerenderingState FakePageLoadMetricsObserverDelegate::GetPrerenderingState()
+    const {
+  return prerendering_state_;
+}
+
+std::optional<base::TimeDelta>
+FakePageLoadMetricsObserverDelegate::GetActivationStart() const {
+  return activation_start_;
 }
 
 const PageLoadMetricsObserverDelegate::BackForwardCacheRestore&
@@ -42,12 +70,17 @@ FakePageLoadMetricsObserverDelegate::GetBackForwardCacheRestore(
 }
 
 bool FakePageLoadMetricsObserverDelegate::StartedInForeground() const {
-  return true;
+  return started_in_foreground_;
+}
+
+PageVisibility FakePageLoadMetricsObserverDelegate::GetVisibilityAtActivation()
+    const {
+  return visibility_at_activation_;
 }
 
 bool FakePageLoadMetricsObserverDelegate::
     WasPrerenderedThenActivatedInForeground() const {
-  return false;
+  return GetVisibilityAtActivation() == PageVisibility::kForeground;
 }
 
 const UserInitiatedInfo&
@@ -76,9 +109,9 @@ FakePageLoadMetricsObserverDelegate::GetPageEndUserInitiatedInfo() const {
   return page_end_user_initiated_info_;
 }
 
-absl::optional<base::TimeDelta>
+std::optional<base::TimeDelta>
 FakePageLoadMetricsObserverDelegate::GetTimeToPageEnd() const {
-  return absl::optional<base::TimeDelta>();
+  return std::nullopt;
 }
 
 const base::TimeTicks& FakePageLoadMetricsObserverDelegate::GetPageEndTime()
@@ -107,10 +140,20 @@ FakePageLoadMetricsObserverDelegate::GetNormalizedCLSData(
   return normalized_cls_data_;
 }
 
-const NormalizedResponsivenessMetrics&
-FakePageLoadMetricsObserverDelegate::GetNormalizedResponsivenessMetrics()
+const NormalizedCLSData& FakePageLoadMetricsObserverDelegate::
+    GetSoftNavigationIntervalNormalizedCLSData() const {
+  return normalized_cls_data_;
+}
+
+const ResponsivenessMetricsNormalization&
+FakePageLoadMetricsObserverDelegate::GetResponsivenessMetricsNormalization()
     const {
-  return normalized_responsiveness_metrics_;
+  return responsiveness_metrics_normalization_;
+}
+
+const ResponsivenessMetricsNormalization& FakePageLoadMetricsObserverDelegate::
+    GetSoftNavigationIntervalResponsivenessMetricsNormalization() const {
+  return responsiveness_metrics_normalization_;
 }
 
 const mojom::InputTiming&
@@ -118,9 +161,9 @@ FakePageLoadMetricsObserverDelegate::GetPageInputTiming() const {
   return page_input_timing_;
 }
 
-const absl::optional<blink::MobileFriendliness>&
-FakePageLoadMetricsObserverDelegate::GetMobileFriendliness() const {
-  return mobile_friendliness_;
+const std::optional<blink::SubresourceLoadMetrics>&
+FakePageLoadMetricsObserverDelegate::GetSubresourceLoadMetrics() const {
+  return subresource_load_metrics_;
 }
 
 const PageRenderData&
@@ -152,13 +195,42 @@ ukm::SourceId FakePageLoadMetricsObserverDelegate::GetPageUkmSourceId() const {
   return ukm::kInvalidSourceId;
 }
 
-uint32_t FakePageLoadMetricsObserverDelegate::GetSoftNavigationCount() const {
-  return 0;
+mojom::SoftNavigationMetrics&
+FakePageLoadMetricsObserverDelegate::GetSoftNavigationMetrics() const {
+  return *mojom::SoftNavigationMetrics::New();
+}
+
+ukm::SourceId
+FakePageLoadMetricsObserverDelegate::GetUkmSourceIdForSoftNavigation() const {
+  return ukm::kInvalidSourceId;
+}
+
+ukm::SourceId
+FakePageLoadMetricsObserverDelegate::GetPreviousUkmSourceIdForSoftNavigation()
+    const {
+  return ukm::kInvalidSourceId;
 }
 
 bool FakePageLoadMetricsObserverDelegate::IsFirstNavigationInWebContents()
     const {
   return false;
+}
+
+bool FakePageLoadMetricsObserverDelegate::IsOriginVisit() const {
+  return false;
+}
+
+bool FakePageLoadMetricsObserverDelegate::IsTerminalVisit() const {
+  return false;
+}
+
+bool FakePageLoadMetricsObserverDelegate::ShouldObserveScheme(
+    std::string_view scheme) const {
+  return false;
+}
+
+int64_t FakePageLoadMetricsObserverDelegate::GetNavigationId() const {
+  return navigation_id_;
 }
 
 void FakePageLoadMetricsObserverDelegate::AddBackForwardCacheRestore(

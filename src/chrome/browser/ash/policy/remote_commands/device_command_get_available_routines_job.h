@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,16 +29,12 @@ class DeviceCommandGetAvailableRoutinesJob : public RemoteCommandJob {
   enterprise_management::RemoteCommand_Type GetType() const override;
 
  private:
-  class Payload;
-
   // RemoteCommandJob:
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
   void OnCrosHealthdResponseReceived(
-      CallbackWithResult succeeded_callback,
-      CallbackWithResult failed_callback,
-      const std::vector<chromeos::cros_healthd::mojom::DiagnosticRoutineEnum>&
+      CallbackWithResult result_callback,
+      const std::vector<ash::cros_healthd::mojom::DiagnosticRoutineEnum>&
           available_routines);
 
   base::WeakPtrFactory<DeviceCommandGetAvailableRoutinesJob> weak_ptr_factory_{

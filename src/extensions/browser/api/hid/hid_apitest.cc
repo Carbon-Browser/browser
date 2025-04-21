@@ -1,36 +1,35 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <iterator>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/api/device_permissions_prompt.h"
 #include "extensions/browser/api/hid/hid_device_manager.h"
 #include "extensions/shell/browser/shell_extensions_api_client.h"
 #include "extensions/shell/test/shell_apitest.h"
 #include "extensions/test/extension_test_message_listener.h"
-#include "services/device/public/cpp/hid/fake_hid_manager.h"
 #include "services/device/public/cpp/hid/hid_report_descriptor.h"
+#include "services/device/public/cpp/test/fake_hid_manager.h"
 #include "services/device/public/mojom/hid.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/dbus/permission_broker/fake_permission_broker_client.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace extensions {
 
 namespace {
 
-using ::base::ThreadTaskRunnerHandle;
 using ::device::FakeHidManager;
 using ::device::HidReportDescriptor;
 
@@ -136,7 +135,7 @@ class TestExtensionsAPIClient : public ShellExtensionsAPIClient {
 class HidApiTest : public ShellApiTest {
  public:
   HidApiTest() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     // Required for DevicePermissionsPrompt:
     chromeos::PermissionBrokerClient::InitializeFake();
 #endif
@@ -151,7 +150,7 @@ class HidApiTest : public ShellApiTest {
 
   ~HidApiTest() override {
     HidDeviceManager::OverrideHidManagerBinderForTesting(base::NullCallback());
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     chromeos::PermissionBrokerClient::Shutdown();
 #endif
   }
@@ -175,12 +174,13 @@ class HidApiTest : public ShellApiTest {
                  std::string serial_number) {
     std::vector<uint8_t> report_descriptor;
     if (report_id) {
-      report_descriptor.insert(
-          report_descriptor.begin(), kReportDescriptorWithIDs,
-          kReportDescriptorWithIDs + sizeof(kReportDescriptorWithIDs));
+      report_descriptor.insert(report_descriptor.begin(),
+                               std::begin(kReportDescriptorWithIDs),
+                               std::end(kReportDescriptorWithIDs));
     } else {
-      report_descriptor.insert(report_descriptor.begin(), kReportDescriptor,
-                               kReportDescriptor + sizeof(kReportDescriptor));
+      report_descriptor.insert(report_descriptor.begin(),
+                               std::begin(kReportDescriptor),
+                               std::end(kReportDescriptor));
     }
 
     std::vector<device::mojom::HidCollectionInfoPtr> collections;
@@ -252,23 +252,6 @@ IN_PROC_BROWSER_TEST_F(HidApiTest, OnDeviceRemoved) {
   EXPECT_EQ("success", result_listener.message());
 }
 
-IN_PROC_BROWSER_TEST_F(HidApiTest, GetUserSelectedDevices) {
-  ExtensionTestMessageListener open_listener("opened_device");
-
-  TestExtensionsAPIClient test_api_client;
-  ASSERT_TRUE(LoadApp("api_test/hid/get_user_selected_devices"));
-  ASSERT_TRUE(open_listener.WaitUntilSatisfied());
-
-  ExtensionTestMessageListener remove_listener("removed");
-  GetFakeHidManager()->RemoveDevice(kTestDeviceGuids[0]);
-  ASSERT_TRUE(remove_listener.WaitUntilSatisfied());
-
-  ExtensionTestMessageListener add_listener("added");
-  AddDevice(kTestDeviceGuids[0], kTestPhysicalDeviceIds[0], kTestVendorId,
-            kTestProductId, true, "A");
-  ASSERT_TRUE(add_listener.WaitUntilSatisfied());
-}
-
 namespace {
 
 device::mojom::HidDeviceInfoPtr CreateDeviceWithOneCollection(
@@ -280,6 +263,8 @@ device::mojom::HidDeviceInfoPtr CreateDeviceWithOneCollection(
   auto collection = device::mojom::HidCollectionInfo::New();
   collection->usage =
       device::mojom::HidUsageAndPage::New(1, device::mojom::kPageVendor);
+  auto report = device::mojom::HidReportDescription::New();
+  collection->input_reports.push_back(std::move(report));
   device_info->collections.push_back(std::move(collection));
   return device_info;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 #include <map>
 #include <unordered_map>
 
-#include "ui/gfx/gfx_export.h"
+#include "base/component_export.h"
 
 namespace ui {
 
 // This is used to generate a series of sequential ID numbers in a way that a
 // new ID is always the lowest possible ID in the sequence.
-class GFX_EXPORT SequentialIDGenerator {
+class COMPONENT_EXPORT(GFX) SequentialIDGenerator {
  public:
    // Creates a new generator with the specified lower bound for the IDs.
   explicit SequentialIDGenerator(uint32_t min_id);

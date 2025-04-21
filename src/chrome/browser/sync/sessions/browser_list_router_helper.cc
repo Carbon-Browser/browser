@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,22 +46,26 @@ void BrowserListRouterHelper::OnTabStripModelChanged(
     const TabStripModelChange& change,
     const TabStripSelectionChange& selection) {
   std::vector<content::WebContents*> web_contents;
-  if (change.type() == TabStripModelChange::kInserted) {
-    for (const TabStripModelChange::ContentsWithIndex& contents :
-         change.GetInsert()->contents) {
-      web_contents.push_back(contents.contents);
-    }
-  } else if (change.type() == TabStripModelChange::kReplaced) {
-    web_contents.push_back(change.GetReplace()->new_contents);
-  } else {
-    return;
+  switch (change.type()) {
+    case TabStripModelChange::kInserted:
+      for (const TabStripModelChange::ContentsWithIndex& contents :
+           change.GetInsert()->contents) {
+        web_contents.push_back(contents.contents);
+      }
+      break;
+    case TabStripModelChange::kReplaced:
+      web_contents.push_back(change.GetReplace()->new_contents);
+      break;
+    case TabStripModelChange::kRemoved:
+      router_->NotifyTabClosed();
+      return;
+    case TabStripModelChange::kSelectionOnly:
+    case TabStripModelChange::kMoved:
+      return;
   }
 
   for (content::WebContents* contents : web_contents) {
-    if (Profile::FromBrowserContext(contents->GetBrowserContext()) ==
-        profile_) {
-      router_->NotifyTabModified(contents, false);
-    }
+    router_->NotifyTabModified(contents, false);
   }
 }
 

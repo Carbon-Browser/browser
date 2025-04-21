@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "components/reporting/metrics/fake_reporting_settings.h"
+#include "components/reporting/metrics/fakes/fake_reporting_settings.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace reporting {

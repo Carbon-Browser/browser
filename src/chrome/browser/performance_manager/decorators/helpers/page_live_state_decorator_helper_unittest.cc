@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/performance_manager/decorators/helpers/page_live_state_decorator_helper.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/performance_manager/embedder/performance_manager_registry.h"
 #include "components/performance_manager/performance_manager_impl.h"
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
@@ -17,6 +19,10 @@
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/test/base/browser_with_test_window_test.h"
+#endif
 
 namespace performance_manager {
 
@@ -81,12 +87,13 @@ void PageLiveStateDecoratorHelperTest::EndToEndStreamPropertyTest(
   device.display_media_info = std::move(display_media_info);
 
   blink::mojom::StreamDevices devices;
-  if (blink::IsAudioInputMediaType(device.type))
+  if (blink::IsAudioInputMediaType(device.type)) {
     devices.audio_device = device;
-  else if (blink::IsVideoInputMediaType(device.type))
+  } else if (blink::IsVideoInputMediaType(device.type)) {
     devices.video_device = device;
-  else
+  } else {
     NOTREACHED();
+  }
 
   std::unique_ptr<content::MediaStreamUI> ui =
       indicator()->RegisterMediaStream(web_contents(), devices);
@@ -141,7 +148,8 @@ TEST_F(PageLiveStateDecoratorHelperTest, OnIsCapturingDisplayChanged) {
       media::mojom::DisplayMediaInformation::New(
           media::mojom::DisplayCaptureSurfaceType::MONITOR,
           /*logical_surface=*/true, media::mojom::CursorCaptureType::NEVER,
-          /*capture_handle=*/nullptr),
+          /*capture_handle=*/nullptr,
+          /*initial_zoom_level=*/100),
       &PageLiveStateDecorator::Data::IsCapturingDisplay);
 }
 
@@ -159,6 +167,42 @@ TEST_F(PageLiveStateDecoratorHelperTest, IsConnectedToBluetoothDevice) {
   testing::TestPageNodePropertyOnPMSequence(
       web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
       &PageLiveStateDecorator::Data::IsConnectedToBluetoothDevice, false);
+}
+
+TEST_F(PageLiveStateDecoratorHelperTest, IsConnectedToUsbDevice) {
+  EXPECT_FALSE(web_contents()->IsCapabilityActive(
+      content::WebContents::CapabilityType::kUSB));
+  testing::TestPageNodePropertyOnPMSequence(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, false);
+  content::WebContentsTester::For(web_contents())
+      ->TestIncrementUsbActiveFrameCount();
+  EXPECT_TRUE(web_contents()->IsCapabilityActive(
+      content::WebContents::CapabilityType::kUSB));
+  testing::TestPageNodePropertyOnPMSequence(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, true);
+  content::WebContentsTester::For(web_contents())
+      ->TestIncrementUsbActiveFrameCount();
+  EXPECT_TRUE(web_contents()->IsCapabilityActive(
+      content::WebContents::CapabilityType::kUSB));
+  testing::TestPageNodePropertyOnPMSequence(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, true);
+  content::WebContentsTester::For(web_contents())
+      ->TestDecrementUsbActiveFrameCount();
+  EXPECT_TRUE(web_contents()->IsCapabilityActive(
+      content::WebContents::CapabilityType::kUSB));
+  testing::TestPageNodePropertyOnPMSequence(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, true);
+  content::WebContentsTester::For(web_contents())
+      ->TestDecrementUsbActiveFrameCount();
+  EXPECT_FALSE(web_contents()->IsCapabilityActive(
+      content::WebContents::CapabilityType::kUSB));
+  testing::TestPageNodePropertyOnPMSequence(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, false);
 }
 
 // Create many WebContents to exercice the code that maintains the linked list
@@ -180,5 +224,85 @@ TEST_F(PageLiveStateDecoratorHelperTest, ManyPageNodes) {
   // This deletes remaining WebContentsObservers.
   ResetHelper();
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+// The behavior tested here isn't yet available on Android
+class PageLiveStateDecoratorHelperTabsTest : public BrowserWithTestWindowTest {
+ private:
+  void SetUp() override {
+    BrowserWithTestWindowTest::SetUp();
+    pm_harness_.SetUp();
+    helper_ = std::make_unique<PageLiveStateDecoratorHelper>();
+  }
+
+  void TearDown() override {
+    helper_.reset();
+    pm_harness_.TearDown();
+    BrowserWithTestWindowTest::TearDown();
+  }
+
+  PerformanceManagerTestHarnessHelper pm_harness_;
+  std::unique_ptr<PageLiveStateDecoratorHelper> helper_;
+};
+
+TEST_F(PageLiveStateDecoratorHelperTabsTest, IsActiveTab) {
+  // Create a tab, it's associated PageNode should be the active one.
+  AddTab(browser(), GURL("http://foo/1"));
+  content::WebContents* contents =
+      browser()->tab_strip_model()->GetWebContentsAt(0);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, true);
+
+  // Create another tab. This immediately makes it the active tab. Note that
+  // `AddTab` inserts in front of the list, so the newly created tab is at index
+  // 0.
+  AddTab(browser(), GURL("http://foo/2"));
+  content::WebContents* other_contents =
+      browser()->tab_strip_model()->GetWebContentsAt(0);
+  EXPECT_NE(contents, other_contents);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, false);
+  testing::TestPageNodePropertyOnPMSequence(
+      other_contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, true);
+
+  // Reactivate the initial tab, the previously active tab is now inactive.
+  browser()->tab_strip_model()->ActivateTabAt(1);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, true);
+  testing::TestPageNodePropertyOnPMSequence(
+      other_contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, false);
+
+  // Deleting a tab automatically makes another one active.
+  browser()->tab_strip_model()->DetachAndDeleteWebContentsAt(1);
+  testing::TestPageNodePropertyOnPMSequence(
+      other_contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab, true);
+}
+
+TEST_F(PageLiveStateDecoratorHelperTabsTest, IsPinnedTab) {
+  // Create a tab, it's associated PageNode should be the active one.
+  AddTab(browser(), GURL("http://foo/1"));
+  content::WebContents* contents =
+      browser()->tab_strip_model()->GetWebContentsAt(0);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, false);
+
+  browser()->tab_strip_model()->SetTabPinned(0, true);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, true);
+
+  browser()->tab_strip_model()->SetTabPinned(0, false);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, false);
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace performance_manager

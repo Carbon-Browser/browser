@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ ExtensionTask::ExtensionTask(content::WebContents* web_contents,
   LoadExtensionIcon(extension);
 }
 
-ExtensionTask::~ExtensionTask() {
-}
+ExtensionTask::~ExtensionTask() = default;
 
 void ExtensionTask::UpdateTitle() {
   // The title of the extension should not change as a result of title change

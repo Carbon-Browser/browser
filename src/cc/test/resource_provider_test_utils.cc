@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 
 namespace cc {
 
@@ -17,7 +17,7 @@ const std::
         const std::vector<viz::ResourceId>& resource_ids,
         viz::DisplayResourceProvider* resource_provider,
         viz::ClientResourceProvider* child_resource_provider,
-        viz::ContextProvider* child_context_provider) {
+        viz::RasterContextProvider* child_context_provider) {
   DCHECK(resource_provider);
   DCHECK(child_resource_provider);
   // Transfer resources to the parent.

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/download/public/common/download_features.h"
+#include "components/download/public/common/download_utils.h"
 #include "components/download/public/common/stream_handle_input_stream.h"
+#include "components/download/public/common/url_download_handler.h"
 #include "components/download/public/common/url_loader_factory_provider.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace download {
@@ -31,15 +35,19 @@ class URLLoaderStatusMonitor : public network::mojom::URLLoaderClient {
   ~URLLoaderStatusMonitor() override = default;
 
   // network::mojom::URLLoaderClient
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
-                         mojo::ScopedDataPipeConsumerHandle body) override {}
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      std::optional<mojo_base::BigBuffer> cached_metadata) override {}
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override {}
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback callback) override {}
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override {}
-  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {}
+  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
+    network::RecordOnTransferSizeUpdatedUMA(
+        network::OnTransferSizeUpdatedFrom::kURLLoaderStatusMonitor);
+  }
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
  private:
@@ -98,7 +106,8 @@ void ResourceDownloader::InterceptNavigationResponse(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const URLSecurityPolicy& url_security_policy,
     mojo::PendingRemote<device::mojom::WakeLockProvider> wake_lock_provider,
-    const scoped_refptr<base::SingleThreadTaskRunner>& task_runner) {
+    const scoped_refptr<base::SingleThreadTaskRunner>& task_runner,
+    bool is_transient) {
   auto downloader = std::make_unique<ResourceDownloader>(
       delegate, std::move(resource_request), render_process_id, render_frame_id,
       serialized_embedder_download_data, tab_url, tab_referrer_url, true,
@@ -111,10 +120,12 @@ void ResourceDownloader::InterceptNavigationResponse(
           &UrlDownloadHandler::Delegate::OnUrlDownloadHandlerCreated, delegate,
           UrlDownloadHandler::UniqueUrlDownloadHandlerPtr(
               std::move(downloader).release(),
-              base::OnTaskRunnerDeleter(base::ThreadTaskRunnerHandle::Get()))));
+              base::OnTaskRunnerDeleter(
+                  base::SingleThreadTaskRunner::GetCurrentDefault()))));
   raw_downloader->InterceptResponse(
       std::move(url_chain), cert_status, std::move(response_head),
-      std::move(response_body), std::move(url_loader_client_endpoints));
+      std::move(response_body), std::move(url_loader_client_endpoints),
+      is_transient);
 }
 
 ResourceDownloader::ResourceDownloader(
@@ -198,16 +209,20 @@ void ResourceDownloader::InterceptResponse(
     net::CertStatus cert_status,
     network::mojom::URLResponseHeadPtr response_head,
     mojo::ScopedDataPipeConsumerHandle response_body,
-    network::mojom::URLLoaderClientEndpointsPtr endpoints) {
+    network::mojom::URLLoaderClientEndpointsPtr endpoints,
+    bool is_transient) {
   // Set the URLLoader.
   url_loader_.Bind(std::move(endpoints->url_loader));
+
+#if BUILDFLAG(IS_ANDROID)
+  is_must_download_ = IsContentDispositionAttachmentInHead(*response_head);
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // Create the new URLLoaderClient that will intercept the navigation.
   url_loader_client_ = std::make_unique<DownloadResponseHandler>(
       resource_request_.get(), this, std::make_unique<DownloadSaveInfo>(),
-      false, /* is_parallel_request */
-      false, /* is_transient */
-      false, /* fetch_error_body */
+      false,               /* is_parallel_request */
+      is_transient, false, /* fetch_error_body */
       network::mojom::RedirectMode::kFollow,
       download::DownloadUrlParameters::RequestHeadersType(),
       std::string(),                              /* request_origin */
@@ -217,7 +232,7 @@ void ResourceDownloader::InterceptResponse(
   // Simulate on the new URLLoaderClient calls that happened on the old client.
   response_head->cert_status = cert_status;
   url_loader_client_->OnReceiveResponse(std::move(response_head),
-                                        std::move(response_body));
+                                        std::move(response_body), std::nullopt);
 
   // Bind the new client.
   url_loader_client_receiver_ =
@@ -240,6 +255,9 @@ void ResourceDownloader::OnResponseStarted(
   download_create_info->is_content_initiated = is_content_initiated_;
   download_create_info->transition_type =
       ui::PageTransitionFromInt(resource_request_->transition_type);
+#if BUILDFLAG(IS_ANDROID)
+  download_create_info->is_must_download = is_must_download_;
+#endif  // BUILDFLAG(IS_ANDROID)
 
   delegate_task_runner_->PostTask(
       FROM_HERE,
@@ -249,8 +267,9 @@ void ResourceDownloader::OnResponseStarted(
           std::make_unique<StreamHandleInputStream>(std::move(stream_handle)),
           URLLoaderFactoryProvider::URLLoaderFactoryProviderPtr(
               new URLLoaderFactoryProvider(url_loader_factory_),
-              base::OnTaskRunnerDeleter(base::ThreadTaskRunnerHandle::Get())),
-          this, std::move(callback_)));
+              base::OnTaskRunnerDeleter(
+                  base::SingleThreadTaskRunner::GetCurrentDefault())),
+          reinterpret_cast<UrlDownloadHandlerID>(this), std::move(callback_)));
 }
 
 void ResourceDownloader::OnReceiveRedirect() {
@@ -258,7 +277,7 @@ void ResourceDownloader::OnReceiveRedirect() {
       std::vector<std::string>() /* removed_headers */,
       net::HttpRequestHeaders() /* modified_headers */,
       net::HttpRequestHeaders() /* modified_cors_exempt_headers */,
-      absl::nullopt);
+      std::nullopt);
 }
 
 void ResourceDownloader::OnResponseCompleted() {
@@ -282,10 +301,11 @@ void ResourceDownloader::OnUploadProgress(uint64_t bytes_uploaded) {
 void ResourceDownloader::Destroy() {
   if (wake_lock_)
     wake_lock_->CancelWakeLock();
+  // TODO(crbug.com/40248618): Use Weak Pointers instead.
   delegate_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&UrlDownloadHandler::Delegate::OnUrlDownloadStopped,
-                     delegate_, this));
+                     delegate_, reinterpret_cast<UrlDownloadHandlerID>(this)));
 }
 
 void ResourceDownloader::RequestWakeLock(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
+#include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context.h"
 #include "third_party/blink/renderer/core/testing/origin_trials_test.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
@@ -24,7 +25,7 @@ OriginTrialsTest* WorkerInternals::originTrialsTest() const {
 void WorkerInternals::countFeature(ScriptState* script_state,
                                    uint32_t feature,
                                    ExceptionState& exception_state) {
-  if (static_cast<int32_t>(WebFeature::kNumberOfFeatures) <= feature) {
+  if (feature > static_cast<int32_t>(WebFeature::kMaxValue)) {
     exception_state.ThrowTypeError(
         "The given feature does not exist in WebFeature.");
     return;
@@ -36,7 +37,7 @@ void WorkerInternals::countFeature(ScriptState* script_state,
 void WorkerInternals::countDeprecation(ScriptState* script_state,
                                        uint32_t feature,
                                        ExceptionState& exception_state) {
-  if (static_cast<int32_t>(WebFeature::kNumberOfFeatures) <= feature) {
+  if (feature > static_cast<int32_t>(WebFeature::kMaxValue)) {
     exception_state.ThrowTypeError(
         "The given feature does not exist in WebFeature.");
     return;
@@ -48,6 +49,10 @@ void WorkerInternals::countDeprecation(ScriptState* script_state,
 void WorkerInternals::collectGarbage(ScriptState* script_state) {
   script_state->GetIsolate()->RequestGarbageCollectionForTesting(
       v8::Isolate::kFullGarbageCollection);
+}
+
+void WorkerInternals::forceLoseCanvasContext(CanvasRenderingContext* ctx) {
+  ctx->LoseContext(CanvasRenderingContext::kSyntheticLostContext);
 }
 
 }  // namespace blink

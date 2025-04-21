@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_HEAP_ALLOCATOR_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_HEAP_ALLOCATOR_IMPL_H_
 
+#include "base/bits.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_table_backing.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector_backing.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -16,6 +17,7 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h"
 #include "v8/include/cppgc/explicit-management.h"
 #include "v8/include/cppgc/heap-consistency.h"
+#include "v8/include/cppgc/internal/api-constants.h"
 #include "v8/include/cppgc/trace-trait.h"
 #include "v8/include/cppgc/visitor.h"
 
@@ -60,8 +62,12 @@ class PLATFORM_EXPORT HeapAllocator {
   static size_t QuantizedSize(size_t count) {
     CHECK_LE(count, MaxElementCountInBackingStore<T>());
     // Oilpan's internal size is independent of MaxElementCountInBackingStore()
-    // and the required size to match capacity needs.
-    return count * sizeof(T);
+    // and the required size to match capacity needs. Align the size by Oilpan
+    // allocation granularity. This also helps us with ASAN API for container
+    // annotation, which requires 8-byte alignment for the range.
+    return base::bits::AlignUp<size_t>(
+        count * sizeof(T),
+        cppgc::internal::api_constants::kAllocationGranularity);
   }
 
   template <typename T>
@@ -153,8 +159,9 @@ class PLATFORM_EXPORT HeapAllocator {
   }
 
   template <typename T>
-  static void BackingWriteBarrier(T** slot) {
-    WriteBarrier::DispatchForObject(slot);
+  static void BackingWriteBarrier(T** backing_pointer_slot) {
+    WriteBarrier::DispatchForUncompressedSlot(backing_pointer_slot,
+                                              *backing_pointer_slot);
   }
 
   template <typename T>
@@ -192,7 +199,9 @@ class PLATFORM_EXPORT HeapAllocator {
   }
 
   template <typename T, typename Traits>
-  static void NotifyNewObjects(T* first_element, size_t length) {
+  static void NotifyNewObjects(base::span<T> objects) {
+    T* first_element = &objects.front();
+    size_t length = objects.size();
     HeapConsistency::WriteBarrierParams params;
     // `first_element` points into a backing store and T is not necessarily a
     // garbage collected type but may be kept inline.
@@ -218,17 +227,22 @@ class PLATFORM_EXPORT HeapAllocator {
 
   template <typename T, typename Traits>
   static void Trace(Visitor* visitor, const T& t) {
-    TraceCollectionIfEnabled<WTF::WeakHandlingTrait<T>::value, T,
-                             Traits>::Trace(visitor, &t);
+    TraceCollectionIfEnabled<WTF::kWeakHandlingTrait<T>, T, Traits>::Trace(
+        visitor, &t);
   }
 
   template <typename T>
   static void TraceVectorBacking(Visitor* visitor,
                                  const T* backing,
                                  const T* const* backing_slot) {
-    visitor->RegisterMovableReference(const_cast<const HeapVectorBacking<T>**>(
-        reinterpret_cast<const HeapVectorBacking<T>* const*>(backing_slot)));
-    visitor->Trace(reinterpret_cast<const HeapVectorBacking<T>*>(backing));
+    using BackingType = HeapVectorBacking<T>;
+
+    if constexpr (BackingType::TraitsType::kCanMoveWithMemcpy) {
+      visitor->RegisterMovableReference(const_cast<const BackingType**>(
+          reinterpret_cast<const BackingType* const*>(backing_slot)));
+    }
+    visitor->TraceStrongContainer(
+        reinterpret_cast<const BackingType*>(backing));
   }
 
   template <typename T, typename HashTable>
@@ -239,7 +253,7 @@ class PLATFORM_EXPORT HeapAllocator {
         const_cast<const HeapHashTableBacking<HashTable>**>(
             reinterpret_cast<const HeapHashTableBacking<HashTable>* const*>(
                 backing_slot)));
-    visitor->Trace(
+    visitor->TraceStrongContainer(
         reinterpret_cast<const HeapHashTableBacking<HashTable>*>(backing));
   }
 

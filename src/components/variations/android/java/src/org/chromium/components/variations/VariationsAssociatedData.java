@@ -1,22 +1,22 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.variations;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.build.annotations.NullMarked;
 
 import java.util.HashMap;
 
-/**
- * Wrapper for variations.
- */
+/** Wrapper for variations. */
 @JNINamespace("variations::android")
+@NullMarked
 public final class VariationsAssociatedData {
 
-    private VariationsAssociatedData() {
-    }
+    private VariationsAssociatedData() {}
 
     /**
      * @param trialName The name of the trial to get the param value for.
@@ -49,7 +49,9 @@ public final class VariationsAssociatedData {
     @NativeMethods
     interface Natives {
         String getVariationParamValue(String trialName, String paramName);
+
         String getFeedbackVariations();
+
         String getGoogleAppVariations();
     }
 }

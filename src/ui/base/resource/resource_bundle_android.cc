@@ -1,9 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/resource/resource_bundle_android.h"
 
+#include <memory>
+#include <string>
 #include <utility>
 
 #include "base/android/apk_assets.h"
@@ -16,8 +18,11 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/data_pack.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/base/ui_base_jni_headers/ResourceBundle_jni.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/base/ui_base_paths.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "ui/base/ui_base_jni_headers/ResourceBundle_jni.h"
 
 namespace ui {
 
@@ -46,13 +51,15 @@ bool LoadFromApkOrFile(const char* apk_path,
   }
   // For unit tests, the file exists on disk.
   if (*out_fd < 0 && disk_path != nullptr) {
-    int flags = base::File::FLAG_OPEN | base::File::FLAG_READ;
+    auto flags =
+        static_cast<uint32_t>(base::File::FLAG_OPEN | base::File::FLAG_READ);
     *out_fd = base::File(*disk_path, flags).TakePlatformFile();
     *out_region = base::MemoryMappedFile::Region::kWholeFile;
   }
   bool success = *out_fd >= 0;
   if (!success) {
     LOG(ERROR) << "Failed to open pak file: " << apk_path;
+    base::android::DumpLastOpenApkAssetFailure();
   }
   return success;
 }
@@ -73,11 +80,8 @@ std::unique_ptr<DataPack> LoadDataPackFromLocalePak(
     int locale_pack_fd,
     const base::MemoryMappedFile::Region& region) {
   auto data_pack = std::make_unique<DataPack>(k100Percent);
-  if (!data_pack->LoadFromFileRegion(base::File(locale_pack_fd), region)) {
-    LOG(WARNING) << "failed to load locale.pak";
-    NOTREACHED();
-    return nullptr;
-  }
+  CHECK(data_pack->LoadFromFileRegion(base::File(locale_pack_fd), region))
+      << "failed to load locale.pak";
   return data_pack;
 }
 
@@ -183,7 +187,8 @@ std::string ResourceBundle::LoadLocaleResources(const std::string& pref_locale,
         LOG(WARNING) << "locale_file_path.empty() for locale " << app_locale;
         return std::string();
       }
-      int flags = base::File::FLAG_OPEN | base::File::FLAG_READ;
+      auto flags =
+          static_cast<uint32_t>(base::File::FLAG_OPEN | base::File::FLAG_READ);
       g_locale_pack_fd = base::File(locale_file_path, flags).TakePlatformFile();
       g_locale_pack_region = base::MemoryMappedFile::Region::kWholeFile;
     }

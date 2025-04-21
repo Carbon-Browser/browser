@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@ GuestTask::GuestTask(content::WebContents* web_contents)
                    GetFaviconFromWebContents(web_contents),
                    web_contents) {}
 
-GuestTask::~GuestTask() {
-}
+GuestTask::~GuestTask() = default;
 
 void GuestTask::UpdateTitle() {
   set_title(GetCurrentTitle(web_contents()));

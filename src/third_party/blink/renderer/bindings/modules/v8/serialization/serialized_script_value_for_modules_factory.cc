@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ SerializedScriptValueForModulesFactory::Create(
     const SerializedScriptValue::SerializeOptions& options,
     ExceptionState& exception_state) {
   TRACE_EVENT0("blink", "SerializedScriptValueFactory::create");
-  V8ScriptValueSerializerForModules serializer(ScriptState::Current(isolate),
-                                               options);
+  V8ScriptValueSerializerForModules serializer(
+      ScriptState::ForCurrentRealm(isolate), options);
   return serializer.Serialize(value, exception_state);
 }
 
@@ -38,7 +38,7 @@ v8::Local<v8::Value> SerializedScriptValueForModulesFactory::Deserialize(
     const SerializedScriptValue::DeserializeOptions& options) {
   TRACE_EVENT0("blink", "SerializedScriptValueFactory::deserialize");
   V8ScriptValueDeserializerForModules deserializer(
-      ScriptState::Current(isolate), std::move(value), options);
+      ScriptState::ForCurrentRealm(isolate), std::move(value), options);
   return deserializer.Deserialize();
 }
 
@@ -48,8 +48,15 @@ v8::Local<v8::Value> SerializedScriptValueForModulesFactory::Deserialize(
     const SerializedScriptValue::DeserializeOptions& options) {
   TRACE_EVENT0("blink", "SerializedScriptValueFactory::deserialize");
   V8ScriptValueDeserializerForModules deserializer(
-      ScriptState::Current(isolate), value, options);
+      ScriptState::ForCurrentRealm(isolate), value, options);
   return deserializer.Deserialize();
+}
+
+bool SerializedScriptValueForModulesFactory::ExecutionContextExposesInterface(
+    ExecutionContext* execution_context,
+    SerializationTag interface_tag) {
+  return V8ScriptValueDeserializerForModules::ExecutionContextExposesInterface(
+      execution_context, interface_tag);
 }
 
 }  // namespace blink

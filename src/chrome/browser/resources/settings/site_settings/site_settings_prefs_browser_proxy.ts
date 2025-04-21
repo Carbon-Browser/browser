@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,162 +8,214 @@
  */
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-import {ChooserType,ContentSetting,ContentSettingsTypes,SiteSettingSource} from './constants.js';
+import type {ChooserType,ContentSetting,ContentSettingsTypes,SiteSettingSource} from './constants.js';
 // clang-format on
 
 /**
  * The handler will send a policy source that is similar, but not exactly the
- * same as a ControlledBy value. If the ContentSettingProvider is omitted it
+ * same as a ControlledBy value. If the DefaultSettingSource is omitted it
  * should be treated as 'default'.
+ * Should be kept in sync with values returned by C++ function
+ * `ProviderToDefaultSettingSourceString`.
  */
-export enum ContentSettingProvider {
+export enum DefaultSettingSource {
   POLICY = 'policy',
   SUPERVISED_USER = 'supervised_user',
   EXTENSION = 'extension',
-  INSTALLED_WEBAPP_PROVIDER = 'installed_webapp_provider',
-  NOTIFICATION_ANDROID = 'notification_android',
-  EPHEMERAL = 'ephemeral',
   PREFERENCE = 'preference',
   DEFAULT = 'default',
-  TESTS = 'tests',
-  TESTS_OTHER = 'tests_other'
 }
 
 /**
  * Stores information about if a content setting is valid, and why.
  */
-type IsValid = {
-  isValid: boolean,
-  reason: string|null,
-};
+interface IsValid {
+  isValid: boolean;
+  reason: string|null;
+}
 
 /**
  * Stores origin information. The |hasPermissionSettings| will be set to true
  * when this origin has permissions or when there is a pattern permission
  * affecting this origin.
  */
-export type OriginInfo = {
-  origin: string,
-  engagement: number,
-  usage: number,
-  numCookies: number,
-  hasPermissionSettings: boolean,
-  isInstalled: boolean,
-  isPartitioned: boolean,
-};
+export interface OriginInfo {
+  origin: string;
+  engagement: number;
+  usage: number;
+  numCookies: number;
+  hasPermissionSettings: boolean;
+  isInstalled: boolean;
+  isPartitioned: boolean;
+}
 
 /**
- * Represents a list of sites, grouped under the same eTLD+1. For example, an
- * origin "https://www.example.com" would be grouped together with
- * "https://login.example.com" and "http://example.com" under a common eTLD+1 of
- * "example.com".
+ * Represents a list of related sites, grouped by 'groupingKey', which will be
+ * an eTLD+1 for HTTP(S) sites, or an origin for other schemes. 'groupingKey'
+ * will be unique for each SiteGroup, but should be treated as an opaque token
+ * in UI code.
  */
-export type SiteGroup = {
-  etldPlus1: string,
-  numCookies: number,
-  origins: OriginInfo[],
-  hasInstalledPWA: boolean,
-};
+export interface SiteGroup {
+  groupingKey: string;
+  displayName: string;
+  numCookies: number;
+  origins: OriginInfo[];
+  etldPlus1?: string;
+  rwsOwner?: string;
+  rwsNumMembers?: number;
+  rwsEnterpriseManaged?: boolean;
+  hasInstalledPWA: boolean;
+}
 
 /**
  * The site exception information passed from the C++ handler.
  * See also: SiteException.
  */
-export type RawSiteException = {
-  embeddingOrigin: string,
-  incognito: boolean,
-  isEmbargoed: boolean,
-  origin: string,
-  displayName: string,
-  type: string,
-  setting: ContentSetting,
-  source: SiteSettingSource,
-};
+export interface RawSiteException {
+  embeddingOrigin: string;
+  incognito: boolean;
+  isEmbargoed: boolean;
+  origin: string;
+  displayName: string;
+  type: string;
+  description?: string;
+  setting: ContentSetting;
+  source: SiteSettingSource;
+}
 
 /**
  * The site exception after it has been converted/filtered for UI use.
  * See also: RawSiteException.
  */
-export type SiteException = {
-  category: ContentSettingsTypes,
-  embeddingOrigin: string,
-  incognito: boolean,
-  isEmbargoed: boolean,
-  origin: string,
-  displayName: string,
-  setting: ContentSetting,
-  enforcement: chrome.settingsPrivate.Enforcement|null,
-  controlledBy: chrome.settingsPrivate.ControlledBy,
-  // <if expr="chromeos_ash">
-  showAndroidSmsNote?: boolean,
-  // </if>
-};
+export interface SiteException {
+  category: ContentSettingsTypes;
+  embeddingOrigin: string;
+  incognito: boolean;
+  isEmbargoed: boolean;
+  origin: string;
+  displayName: string;
+  setting: ContentSetting;
+  description?: string;
+  enforcement: chrome.settingsPrivate.Enforcement|null;
+  controlledBy: chrome.settingsPrivate.ControlledBy;
+}
+
+/**
+ * A group of storage access site exceptions with the same origin for UI use.
+ * See also: StorageAccessEmbeddingException.
+ */
+export interface StorageAccessSiteException {
+  origin: string;
+  displayName: string;
+  setting: ContentSetting;
+
+  // Information needed for a static row.
+  description?: string;
+  incognito?: boolean;
+
+  // Information needed for a grouped row.
+  closeDescription?: string;
+  openDescription?: string;
+
+  exceptions: StorageAccessEmbeddingException[];
+}
+
+/**
+ * A storage access site exception for UI use. To be always used within
+ * StorageAccessSiteException.
+ */
+export interface StorageAccessEmbeddingException {
+  embeddingOrigin: string;
+  embeddingDisplayName: string;
+  description?: string;  // includes case for embargoed exception.
+  incognito: boolean;
+}
 
 /**
  * Represents a list of exceptions recently configured for a site, where recent
  * is defined by the maximum number of sources parameter passed to
  * GetRecentSitePermissions.
  */
-export type RecentSitePermissions = {
-  origin: string,
-  incognito: boolean,
-  recentPermissions: RawSiteException[],
-};
+export interface RecentSitePermissions {
+  origin: string;
+  displayName: string;
+  incognito: boolean;
+  recentPermissions: RawSiteException[];
+}
 
 /**
  * The chooser exception information passed from the C++ handler.
  * See also: ChooserException.
  */
-export type RawChooserException = {
-  chooserType: ChooserType,
-  displayName: string,
-  object: Object,
-  sites: RawSiteException[],
-};
+export interface RawChooserException {
+  chooserType: ChooserType;
+  displayName: string;
+  object: Object;
+  sites: RawSiteException[];
+}
 
 /**
  * The chooser exception after it has been converted/filtered for UI use.
  * See also: RawChooserException.
  */
-export type ChooserException = {
-  chooserType: ChooserType,
-  displayName: string,
-  object: Object,
-  sites: SiteException[],
-};
-
-export type DefaultContentSetting = {
-  setting: ContentSetting,
-  source: ContentSettingProvider,
-};
-
-/**
- * The primary cookie setting states that are possible. Must be kept in sync
- * with the C++ enum of the same name in
- * chrome/browser/content_settings/generated_cookie_prefs.h
- */
-export enum CookiePrimarySetting {
-  ALLOW_ALL = 0,
-  BLOCK_THIRD_PARTY_INCOGNITO = 1,
-  BLOCK_THIRD_PARTY = 2,
-  BLOCK_ALL = 3,
+export interface ChooserException {
+  chooserType: ChooserType;
+  displayName: string;
+  object: Object;
+  sites: SiteException[];
 }
 
-export type MediaPickerEntry = {
-  name: string,
-  id: string,
-};
+export interface DefaultContentSetting {
+  setting: ContentSetting;
+  source: DefaultSettingSource;
+}
 
-export type ZoomLevelEntry = {
-  displayName: string,
-  origin: string,
-  originForFavicon: string,
-  setting: string,
-  source: string,
-  zoom: string,
-};
+export interface MediaPickerEntry {
+  name: string;
+  id: string;
+}
+
+export interface ZoomLevelEntry {
+  displayName: string;
+  hostOrSpec: string;
+  originForFavicon: string;
+  zoom: string;
+}
+
+export interface FileSystemGrant {
+  filePath: string;
+  displayName: string;
+  isDirectory: boolean;
+}
+
+export interface OriginFileSystemGrants {
+  origin: string;
+  viewGrants: FileSystemGrant[];
+  editGrants: FileSystemGrant[];
+}
+
+export interface OriginWithDisplayName {
+  origin: string;
+  displayName: string;
+}
+
+export interface SmartCardReaderGrants {
+  readerName: string;
+  origins: OriginWithDisplayName[];
+}
+
+/**
+ * Must be kept in sync with the C++ enum of the same name in
+ * chrome/browser/content_settings/generated_cookie_prefs.h
+ */
+// LINT.IfChange(ThirdPartyCookieBlockingSetting)
+export enum ThirdPartyCookieBlockingSetting {
+  BLOCK_THIRD_PARTY = 0,
+  INCOGNITO_ONLY = 1,
+}
+// LINT.ThenChange(/chrome/browser/content_settings/generated_cookie_prefs.h:ThirdPartyCookieBlockingSetting)
 
 export interface SiteSettingsPrefsBrowserProxy {
   /**
@@ -195,11 +247,6 @@ export interface SiteSettingsPrefsBrowserProxy {
   getCategoryList(origin: string): Promise<ContentSettingsTypes[]>;
 
   /**
-   * Get the string which describes the current effective cookie setting.
-   */
-  getCookieSettingDescription(): Promise<string>;
-
-  /**
    * Gets most recently changed permissions grouped by host and limited to
    * numSources different origin/profile (inconigto/regular) pairings.
    * This includes permissions adjusted by embargo, but excludes any set
@@ -228,6 +275,36 @@ export interface SiteSettingsPrefsBrowserProxy {
    */
   getExceptionList(contentType: ContentSettingsTypes):
       Promise<RawSiteException[]>;
+
+  getStorageAccessExceptionList(categorySubtype: ContentSetting):
+      Promise<StorageAccessSiteException[]>;
+
+  /**
+   * Gets the File System Access permission grants, grouped by origin.
+   */
+  getFileSystemGrants(): Promise<OriginFileSystemGrants[]>;
+
+  revokeFileSystemGrant(origin: string, filePath: string): void;
+
+  revokeFileSystemGrants(origin: string): void;
+
+  /**
+   * Gets the persistent Smart Card Reader permission grants, grouped by reader
+   * name.
+   */
+  getSmartCardReaderGrants(): Promise<SmartCardReaderGrants[]>;
+
+  /**
+   * Revokes all Smart Card Reader permission grants.
+   */
+  revokeAllSmartCardReadersGrants(): void;
+
+  /**
+   * Revokes a particular persistent Smart Card Reader permission grant.
+   * @param reader The smart card reader name.
+   * @param origin URL of the site that was granted the permission.
+   */
+  revokeSmartCardReaderGrant(reader: string, origin: string): void;
 
   /**
    * Gets a list of category permissions for a given origin. Note that this
@@ -274,12 +351,10 @@ export interface SiteSettingsPrefsBrowserProxy {
    * origin.
    * @param chooserType The chooser exception type
    * @param origin The origin to look up the permission for.
-   * @param embeddingOrigin the embedding origin to look up.
    * @param exception The exception to revoke permission for.
    */
   resetChooserExceptionForSite(
-      chooserType: ChooserType, origin: string, embeddingOrigin: string,
-      exception: Object): void;
+      chooserType: ChooserType, origin: string, exception: Object): void;
 
   /**
    * Sets the category permission for a given origin (expressed as primary and
@@ -312,18 +387,18 @@ export interface SiteSettingsPrefsBrowserProxy {
       Promise<IsValid>;
 
   /**
-   * Gets the list of default capture devices for a given type of media. List
-   * is returned through a JS call to updateDevicesMenu.
+   * Requests initialization of the capture device list. The list is returned
+   * through a JS call to updateDevicesMenu.
    * @param type The type to look up.
    */
-  getDefaultCaptureDevices(type: string): void;
+  initializeCaptureDevices(type: string): void;
 
   /**
-   * Sets a default devices for a given type of media.
+   * Sets a preferred device for the given type of media.
    * @param type The type of media to configure.
    * @param defaultValue The id of the media device to set.
    */
-  setDefaultCaptureDevice(type: string, defaultValue: string): void;
+  setPreferredCaptureDevice(type: string, defaultValue: string): void;
 
   /**
    * observes _all_ of the the protocol handler state, which includes a list
@@ -413,10 +488,10 @@ export interface SiteSettingsPrefsBrowserProxy {
   fetchBlockAutoplayStatus(): void;
 
   /**
-   * Clears all the web storage data and cookies for a given etld+1.
-   * @param etldPlus1 The etld+1 to clear data from.
+   * Clears all the web storage data and cookies for a given site group.
+   * @param groupingKey The group to clear data from.
    */
-  clearEtldPlus1DataAndCookies(etldPlus1: string): void;
+  clearSiteGroupDataAndCookies(groupingKey: string): void;
 
   /**
    * Clears all the unpartitioned web storage data and cookies for a given
@@ -426,17 +501,46 @@ export interface SiteSettingsPrefsBrowserProxy {
   clearUnpartitionedOriginDataAndCookies(origin: string): void;
 
   /**
-   * Clears all the storage for |origin| which is partitioned on |etldPlus1|.
+   * Clears all the storage for |origin| which is partitioned on |groupingKey|.
    * @param origin The origin to clear data from.
-   * @param etldPlus1 The etld+1 which the data is partitioned for.
+   * @param groupingKey The groupingKey which the data is partitioned for.
    */
-  clearPartitionedOriginDataAndCookies(origin: string, etldPlus1: string): void;
+  clearPartitionedOriginDataAndCookies(origin: string, groupingKey: string):
+      void;
 
   /**
    * Record All Sites Page action for metrics.
    * @param action number.
    */
   recordAction(action: number): void;
+
+  /**
+   * Gets display string for RWS information of owner and member count.
+   * @param rwsNumMembers The number of members in the related website set.
+   * @param rwsOwner The eTLD+1 for the related website set owner.
+   */
+  getRwsMembershipLabel(rwsNumMembers: number, rwsOwner: string):
+      Promise<string>;
+
+  /**
+   * Gets the plural string for a given number of cookies.
+   * @param numCookies The number of cookies.
+   */
+  getNumCookiesString(numCookies: number): Promise<string>;
+
+  /**
+   * Gets the warning messages for the permissions types blocked at the OS
+   * level.
+   */
+  getSystemDeniedPermissions(): Promise<ContentSettingsTypes[]>;
+
+  /**
+   * Attempts to open a system setting page that allows to modify the system
+   * wide block for a given permission type. If this is not possible, the call
+   * will fail silently and no window will open.
+   * @param contentType The permission type.
+   */
+  openSystemPermissionSettings(contentType: string): void;
 }
 
 export class SiteSettingsPrefsBrowserProxyImpl implements
@@ -457,10 +561,6 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
     return sendWithPromise('getCategoryList', origin);
   }
 
-  getCookieSettingDescription() {
-    return sendWithPromise('getCookieSettingDescription');
-  }
-
   getRecentSitePermissions(numSources: number) {
     return sendWithPromise('getRecentSitePermissions', numSources);
   }
@@ -475,6 +575,34 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
 
   getExceptionList(contentType: ContentSettingsTypes) {
     return sendWithPromise('getExceptionList', contentType);
+  }
+
+  getStorageAccessExceptionList(categorySubtype: ContentSetting) {
+    return sendWithPromise('getStorageAccessExceptionList', categorySubtype);
+  }
+
+  getFileSystemGrants() {
+    return sendWithPromise('getFileSystemGrants');
+  }
+
+  revokeFileSystemGrant(origin: string, filePath: string) {
+    chrome.send('revokeFileSystemGrant', [origin, filePath]);
+  }
+
+  revokeFileSystemGrants(origin: string) {
+    chrome.send('revokeFileSystemGrants', [origin]);
+  }
+
+  getSmartCardReaderGrants() {
+    return sendWithPromise('getSmartCardReaderGrants');
+  }
+
+  revokeAllSmartCardReadersGrants() {
+    chrome.send('revokeAllSmartCardReadersGrants');
+  }
+
+  revokeSmartCardReaderGrant(reader: string, origin: string) {
+    chrome.send('revokeSmartCardReaderGrant', [reader, origin]);
   }
 
   getOriginPermissions(origin: string, contentTypes: ContentSettingsTypes[]) {
@@ -496,11 +624,9 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
   }
 
   resetChooserExceptionForSite(
-      chooserType: ChooserType, origin: string, embeddingOrigin: string,
-      exception: Object) {
+      chooserType: ChooserType, origin: string, exception: Object) {
     chrome.send(
-        'resetChooserExceptionForSite',
-        [chooserType, origin, embeddingOrigin, exception]);
+        'resetChooserExceptionForSite', [chooserType, origin, exception]);
   }
 
   setCategoryPermissionForPattern(
@@ -519,12 +645,12 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
     return sendWithPromise('isPatternValidForType', pattern, category);
   }
 
-  getDefaultCaptureDevices(type: string) {
-    chrome.send('getDefaultCaptureDevices', [type]);
+  initializeCaptureDevices(type: string) {
+    chrome.send('initializeCaptureDevices', [type]);
   }
 
-  setDefaultCaptureDevice(type: string, defaultValue: string) {
-    chrome.send('setDefaultCaptureDevice', [type, defaultValue]);
+  setPreferredCaptureDevice(type: string, defaultValue: string) {
+    chrome.send('setPreferredCaptureDevice', [type, defaultValue]);
   }
 
   observeProtocolHandlers() {
@@ -575,20 +701,36 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
     chrome.send('fetchBlockAutoplayStatus');
   }
 
-  clearEtldPlus1DataAndCookies(etldPlus1: string) {
-    chrome.send('clearEtldPlus1DataAndCookies', [etldPlus1]);
+  clearSiteGroupDataAndCookies(groupingKey: string) {
+    chrome.send('clearSiteGroupDataAndCookies', [groupingKey]);
   }
 
   clearUnpartitionedOriginDataAndCookies(origin: string) {
     chrome.send('clearUnpartitionedUsage', [origin]);
   }
 
-  clearPartitionedOriginDataAndCookies(origin: string, etldPlus1: string) {
-    chrome.send('clearPartitionedUsage', [origin, etldPlus1]);
+  clearPartitionedOriginDataAndCookies(origin: string, groupingKey: string) {
+    chrome.send('clearPartitionedUsage', [origin, groupingKey]);
   }
 
   recordAction(action: number) {
     chrome.send('recordAction', [action]);
+  }
+
+  getRwsMembershipLabel(rwsNumMembers: number, rwsOwner: string) {
+    return sendWithPromise('getRwsMembershipLabel', rwsNumMembers, rwsOwner);
+  }
+
+  getNumCookiesString(numCookies: number) {
+    return sendWithPromise('getNumCookiesString', numCookies);
+  }
+
+  getSystemDeniedPermissions() {
+    return sendWithPromise('getSystemDeniedPermissions');
+  }
+
+  openSystemPermissionSettings(contentType: string) {
+    chrome.send('openSystemPermissionSettings', [contentType]);
   }
 
   static getInstance(): SiteSettingsPrefsBrowserProxy {

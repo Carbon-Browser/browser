@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/widget/widget.h"
 
 namespace views {
@@ -45,28 +46,29 @@ constexpr float kSliderRoundedRadius = 2.f;
 // The padding used to hide the slider underneath the thumb.
 constexpr int kSliderPadding = 2;
 
-// The radius of the thumb and the highlighted thumb of the slider,
-// respectively.
-constexpr float kThumbRadius = 4.f;
-constexpr float kThumbWidth = 2 * kThumbRadius;
+// The radius of the highlighted thumb of the slider
 constexpr float kThumbHighlightRadius = 12.f;
 
 float GetNearestAllowedValue(const base::flat_set<float>& allowed_values,
                              float suggested_value) {
-  if (allowed_values.empty())
+  if (allowed_values.empty()) {
     return suggested_value;
+  }
 
   const base::flat_set<float>::const_iterator greater =
       allowed_values.upper_bound(suggested_value);
-  if (greater == allowed_values.end())
+  if (greater == allowed_values.end()) {
     return *allowed_values.rbegin();
+  }
 
-  if (greater == allowed_values.begin())
+  if (greater == allowed_values.begin()) {
     return *allowed_values.cbegin();
+  }
 
   // Select a value nearest to the |suggested_value|.
-  if ((*greater - suggested_value) > (suggested_value - *std::prev(greater)))
+  if ((*greater - suggested_value) > (suggested_value - *std::prev(greater))) {
     return *std::prev(greater);
+  }
 
   return *greater;
 }
@@ -76,6 +78,7 @@ float GetNearestAllowedValue(const base::flat_set<float>& allowed_values,
 Slider::Slider(SliderListener* listener) : listener_(listener) {
   highlight_animation_.SetSlideDuration(base::Milliseconds(150));
   SetFlipCanvasOnPaintForRTLUI(true);
+
 #if BUILDFLAG(IS_MAC)
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
 #else
@@ -83,6 +86,9 @@ Slider::Slider(SliderListener* listener) : listener_(listener) {
 #endif
 
   SchedulePaint();
+  GetViewAccessibility().SetRole(ax::mojom::Role::kSlider);
+  GetViewAccessibility().AddAction(ax::mojom::Action::kIncrement);
+  GetViewAccessibility().AddAction(ax::mojom::Action::kDecrement);
 }
 
 Slider::~Slider() = default;
@@ -95,13 +101,22 @@ void Slider::SetValue(float value) {
   SetValueInternal(value, SliderChangeReason::kByApi);
 }
 
+float Slider::GetValueIndicatorRadius() const {
+  return value_indicator_radius_;
+}
+
+void Slider::SetValueIndicatorRadius(float radius) {
+  value_indicator_radius_ = radius;
+}
+
 bool Slider::GetEnableAccessibilityEvents() const {
   return accessibility_events_enabled_;
 }
 
 void Slider::SetEnableAccessibilityEvents(bool enabled) {
-  if (accessibility_events_enabled_ == enabled)
+  if (accessibility_events_enabled_ == enabled) {
     return;
+  }
   accessibility_events_enabled_ = enabled;
   OnPropertyChanged(&accessibility_events_enabled_, kPropertyEffectsNone);
 }
@@ -131,8 +146,9 @@ void Slider::SetAllowedValues(const base::flat_set<float>* allowed_values) {
   const float new_value = (position == allowed_values_.end())
                               ? *allowed_values_.cbegin()
                               : *position;
-  if (new_value != value_)
+  if (new_value != value_) {
     SetValue(new_value);
+  }
 }
 
 float Slider::GetAnimatingValue() const {
@@ -143,10 +159,11 @@ float Slider::GetAnimatingValue() const {
 }
 
 void Slider::SetHighlighted(bool is_highlighted) {
-  if (is_highlighted)
+  if (is_highlighted) {
     highlight_animation_.Show();
-  else
+  } else {
     highlight_animation_.Hide();
+  }
 }
 
 void Slider::AnimationProgressed(const gfx::Animation* animation) {
@@ -170,17 +187,20 @@ void Slider::SetValueInternal(float value, SliderChangeReason reason) {
   bool old_value_valid = value_is_valid_;
 
   value_is_valid_ = true;
-  if (value < 0.0)
+  if (value < 0.0) {
     value = 0.0;
-  else if (value > 1.0)
+  } else if (value > 1.0) {
     value = 1.0;
+  }
   value = GetNearestAllowedValue(allowed_values_, value);
-  if (value_ == value)
+  if (value_ == value) {
     return;
+  }
   float old_value = value_;
   value_ = value;
-  if (listener_)
+  if (listener_) {
     listener_->SliderValueChanged(this, value_, old_value, reason);
+  }
 
   if (old_value_valid && base::CurrentThread::Get()) {
     // Do not animate when setting the value of the slider for the first time.
@@ -212,12 +232,14 @@ void Slider::PrepareForMove(const int new_x) {
   gfx::Rect content = GetContentsBounds();
   float value = GetAnimatingValue();
 
-  const int thumb_x = value * (content.width() - kThumbWidth);
+  const int thumb_x = value * (content.width() - 2 * value_indicator_radius_);
   const int candidate_x = GetMirroredXInView(new_x - inset.left()) - thumb_x;
-  if (candidate_x >= 0 && candidate_x < kThumbWidth)
+  if (candidate_x >= value_indicator_radius_ - kThumbRadius &&
+      candidate_x < value_indicator_radius_ + kThumbRadius) {
     initial_button_offset_ = candidate_x;
-  else
-    initial_button_offset_ = kThumbRadius;
+  } else {
+    initial_button_offset_ = value_indicator_radius_;
+  }
 }
 
 void Slider::MoveButtonTo(const gfx::Point& point) {
@@ -226,33 +248,38 @@ void Slider::MoveButtonTo(const gfx::Point& point) {
   int amount = base::i18n::IsRTL()
                    ? width() - inset.left() - point.x() - initial_button_offset_
                    : point.x() - inset.left() - initial_button_offset_;
-  SetValueInternal(
-      static_cast<float>(amount) / (width() - inset.width() - kThumbWidth),
-      SliderChangeReason::kByUser);
+  SetValueInternal(static_cast<float>(amount) /
+                       (width() - inset.width() - 2 * value_indicator_radius_),
+                   SliderChangeReason::kByUser);
 }
 
 void Slider::OnSliderDragStarted() {
   SetHighlighted(true);
-  if (listener_)
+  if (listener_) {
     listener_->SliderDragStarted(this);
+  }
 }
 
 void Slider::OnSliderDragEnded() {
   SetHighlighted(false);
-  if (listener_)
+  if (listener_) {
     listener_->SliderDragEnded(this);
+  }
 }
 
-gfx::Size Slider::CalculatePreferredSize() const {
+gfx::Size Slider::CalculatePreferredSize(
+    const SizeBounds& available_size) const {
   constexpr int kSizeMajor = 200;
   constexpr int kSizeMinor = 40;
 
-  return gfx::Size(std::max(width(), kSizeMajor), kSizeMinor);
+  return gfx::Size(std::max(available_size.width().value_or(0), kSizeMajor),
+                   kSizeMinor);
 }
 
 bool Slider::OnMousePressed(const ui::MouseEvent& event) {
-  if (!event.IsOnlyLeftMouseButton())
+  if (!event.IsOnlyLeftMouseButton()) {
     return false;
+  }
   OnSliderDragStarted();
   PrepareForMove(event.location().x());
   MoveButtonTo(event.location());
@@ -314,11 +341,9 @@ bool Slider::OnKeyPressed(const ui::KeyEvent& event) {
 }
 
 void Slider::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kSlider;
+  View::GetAccessibleNodeData(node_data);
   node_data->SetValue(base::UTF8ToUTF16(
       base::StringPrintf("%d%%", static_cast<int>(value_ * 100 + 0.5))));
-  node_data->AddAction(ax::mojom::Action::kIncrement);
-  node_data->AddAction(ax::mojom::Action::kDecrement);
 }
 
 bool Slider::HandleAccessibleAction(const ui::AXActionData& action_data) {
@@ -393,13 +418,15 @@ void Slider::OnBlur() {
 }
 
 void Slider::VisibilityChanged(View* starting_from, bool is_visible) {
-  if (is_visible)
+  if (is_visible) {
     NotifyPendingAccessibilityValueChanged();
+  }
 }
 
 void Slider::AddedToWidget() {
-  if (GetWidget()->IsVisible())
+  if (GetWidget()->IsVisible()) {
     NotifyPendingAccessibilityValueChanged();
+  }
 }
 
 void Slider::NotifyPendingAccessibilityValueChanged() {
@@ -413,21 +440,22 @@ void Slider::NotifyPendingAccessibilityValueChanged() {
 void Slider::OnGestureEvent(ui::GestureEvent* event) {
   switch (event->type()) {
     // In a multi point gesture only the touch point will generate
-    // an ET_GESTURE_TAP_DOWN event.
-    case ui::ET_GESTURE_TAP_DOWN:
+    // an EventType::kGestureTapDown event.
+    case ui::EventType::kGestureTapDown:
       OnSliderDragStarted();
       PrepareForMove(event->location().x());
       [[fallthrough]];
-    case ui::ET_GESTURE_SCROLL_BEGIN:
-    case ui::ET_GESTURE_SCROLL_UPDATE:
+    case ui::EventType::kGestureScrollBegin:
+    case ui::EventType::kGestureScrollUpdate:
       MoveButtonTo(event->location());
       event->SetHandled();
       break;
-    case ui::ET_GESTURE_END:
+    case ui::EventType::kGestureEnd:
       MoveButtonTo(event->location());
       event->SetHandled();
-      if (event->details().touch_points() <= 1)
+      if (event->details().touch_points() <= 1) {
         OnSliderDragEnded();
+      }
       break;
     default:
       break;
@@ -463,9 +491,10 @@ int Slider::GetSliderExtraPadding() const {
   }
 }
 
-BEGIN_METADATA(Slider, View)
+BEGIN_METADATA(Slider)
 ADD_PROPERTY_METADATA(float, Value)
 ADD_PROPERTY_METADATA(bool, EnableAccessibilityEvents)
+ADD_PROPERTY_METADATA(float, ValueIndicatorRadius)
 END_METADATA
 
 }  // namespace views

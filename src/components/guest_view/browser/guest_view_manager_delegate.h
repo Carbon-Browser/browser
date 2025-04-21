@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@
 
 #include "base/values.h"
 
-namespace base {
-class DictionaryValue;
-}  // namespace base
-
 namespace content {
 class WebContents;
 }  // namespace content
@@ -21,6 +17,7 @@ class WebContents;
 namespace guest_view {
 
 class GuestViewBase;
+class GuestViewManager;
 
 // A GuestViewManagerDelegate interface allows GuestViewManager to delegate
 // responsibilities to other modules in Chromium. Different builds of Chromium
@@ -39,20 +36,23 @@ class GuestViewManagerDelegate {
   // Dispatches the event with |name| with the provided |args| to the embedder
   // of the given |guest| with |instance_id| for routing.
   virtual void DispatchEvent(const std::string& event_name,
-                             std::unique_ptr<base::DictionaryValue> args,
+                             base::Value::Dict args,
                              GuestViewBase* guest,
                              int instance_id) {}
 
   // Indicates whether the |guest| can be used within the context of where it
   // was created.
-  virtual bool IsGuestAvailableToContext(GuestViewBase* guest);
+  virtual bool IsGuestAvailableToContext(const GuestViewBase* guest) const;
 
   // Indicates whether the |guest| is owned by an extension or Chrome App.
-  virtual bool IsOwnedByExtension(GuestViewBase* guest);
+  virtual bool IsOwnedByExtension(const GuestViewBase* guest);
+
+  // Indicates whether the |guest| is owned by a Controlled Frame embedder.
+  virtual bool IsOwnedByControlledFrameEmbedder(const GuestViewBase* guest);
 
   // Registers additional GuestView types the delegator (GuestViewManger) can
   // create.
-  virtual void RegisterAdditionalGuestViewTypes() {}
+  virtual void RegisterAdditionalGuestViewTypes(GuestViewManager* manager) {}
 };
 
 }  // namespace guest_view

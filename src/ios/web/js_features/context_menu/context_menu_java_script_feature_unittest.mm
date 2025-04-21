@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,11 @@
 
 #import <CoreGraphics/CoreGraphics.h>
 
-#include "base/test/ios/wait_util.h"
+#import "base/test/ios/wait_util.h"
 #import "ios/web/js_messaging/java_script_feature_manager.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "ios/web/public/ui/context_menu_params.h"
 #import "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
@@ -38,7 +34,6 @@ TEST_F(ContextMenuJavaScriptFeatureTest, FetchLinkElement) {
   ContextMenuJavaScriptFeature::FromBrowserState(GetBrowserState())
       ->GetElementAtPoint(
           web_state(), request_id, CGPointMake(10.0, 10.0),
-          CGSizeMake(100.0, 100.0),
           base::BindOnce(^(const std::string& callback_request_id,
                            const web::ContextMenuParams& params) {
             EXPECT_EQ(request_id, callback_request_id);
@@ -72,7 +67,6 @@ TEST_F(ContextMenuJavaScriptFeatureTest, FetchImageElement) {
   ContextMenuJavaScriptFeature::FromBrowserState(GetBrowserState())
       ->GetElementAtPoint(
           web_state(), request_id, CGPointMake(10.0, 10.0),
-          CGSizeMake(100.0, 100.0),
           base::BindOnce(^(const std::string& callback_request_id,
                            const web::ContextMenuParams& params) {
             EXPECT_EQ(request_id, callback_request_id);

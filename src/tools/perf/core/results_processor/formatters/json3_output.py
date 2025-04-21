@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -98,7 +98,7 @@ def Convert(test_results, base_dir, test_path_format):
 
 
 def _DedupedStatus(values):
-  # TODO(crbug.com/754825): The following logic is a workaround for how the
+  # TODO(crbug.com/40534832): The following logic is a workaround for how the
   # flakiness dashboard determines whether a test is flaky. As a test_case
   # (i.e. story) may be run multiple times, we squash as sequence of PASS
   # results to a single one. Note this does not affect the total number of

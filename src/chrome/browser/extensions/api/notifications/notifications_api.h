@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "chrome/common/extensions/api/notifications.h"
 #include "extensions/browser/extension_function.h"
 #include "ui/message_center/public/cpp/notification_types.h"
@@ -75,7 +74,7 @@ class NotificationsCreateFunction : public NotificationsApiFunction {
   ~NotificationsCreateFunction() override;
 
  private:
-  std::unique_ptr<api::notifications::Create::Params> params_;
+  std::optional<api::notifications::Create::Params> params_;
 
   DECLARE_EXTENSION_FUNCTION("notifications.create", NOTIFICATIONS_CREATE)
 };
@@ -91,7 +90,7 @@ class NotificationsUpdateFunction : public NotificationsApiFunction {
   ~NotificationsUpdateFunction() override;
 
  private:
-  std::unique_ptr<api::notifications::Update::Params> params_;
+  std::optional<api::notifications::Update::Params> params_;
 
   DECLARE_EXTENSION_FUNCTION("notifications.update", NOTIFICATIONS_UPDATE)
 };
@@ -107,7 +106,7 @@ class NotificationsClearFunction : public NotificationsApiFunction {
   ~NotificationsClearFunction() override;
 
  private:
-  std::unique_ptr<api::notifications::Clear::Params> params_;
+  std::optional<api::notifications::Clear::Params> params_;
 
   DECLARE_EXTENSION_FUNCTION("notifications.clear", NOTIFICATIONS_CLEAR)
 };

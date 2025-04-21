@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,8 @@ enum InsetsMetric {
   // The margins around the icon/title of a dialog. The bottom margin is implied
   // by the content insets and the other margins overlap with INSETS_DIALOG.
   INSETS_DIALOG_TITLE,
+  // The margins for the dialog footnote content.
+  INSETS_DIALOG_FOOTNOTE,
   // The margins around the edges of a tooltip bubble.
   INSETS_TOOLTIP_BUBBLE,
   // Padding to add to vector image buttons to increase their click and touch
@@ -40,6 +42,8 @@ enum InsetsMetric {
   INSETS_VECTOR_IMAGE_BUTTON,
   // Padding used in a label button.
   INSETS_LABEL_BUTTON,
+  // Padding used in icon buttons.
+  INSETS_ICON_BUTTON,
 
   // Embedders must start Insets enum values from this value.
   VIEWS_INSETS_END,
@@ -82,6 +86,14 @@ enum DistanceMetric {
   // The distance between the bottom of a dialog's title and the top of the
   // dialog's content, when the first content element is text.
   DISTANCE_DIALOG_CONTENT_MARGIN_TOP_TEXT,
+  // Width of the space in a dropdown button between its label and down arrow.
+  DISTANCE_DROPDOWN_BUTTON_LABEL_ARROW_SPACING,
+  // Width of the horizontal padding in a dropdown button between the down arrow
+  // and the button's border.
+  DISTANCE_DROPDOWN_BUTTON_RIGHT_MARGIN,
+  // Width of the horizontal padding in a dropdown button between the button's
+  // left border and the label.
+  DISTANCE_DROPDOWN_BUTTON_LEFT_MARGIN,
   // Width of modal dialogs unless the content is too wide to make that
   // feasible.
   DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH,
@@ -99,12 +111,19 @@ enum DistanceMetric {
   // Height to stop at when expanding a scrollable area in a dialog to
   // accommodate its content.
   DISTANCE_DIALOG_SCROLLABLE_AREA_MAX_HEIGHT,
+  // Height to stop at when expanding a scrollable area in a modal dialog to
+  // accomodate its content.
+  DISTANCE_MODAL_DIALOG_SCROLLABLE_AREA_MAX_HEIGHT,
   // Horizontal margin between a table cell and its contents.
   DISTANCE_TABLE_CELL_HORIZONTAL_MARGIN,
   // Horizontal padding applied to text in a textfield.
   DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING,
+  // Horizontal spacing between controls that are logically unrelated.
+  DISTANCE_UNRELATED_CONTROL_HORIZONTAL,
   // Vertical spacing between controls that are logically unrelated.
   DISTANCE_UNRELATED_CONTROL_VERTICAL,
+  // Padding in vector icons. This is a general number for more vector icons.
+  DISTANCE_VECTOR_ICON_PADDING,
 
   // Embedders must start DistanceMetric enum values from here.
   VIEWS_DISTANCE_END,
@@ -131,6 +150,41 @@ enum class Emphasis {
   kMaximum,
 };
 
+// ShapeContextTokens are enums specific to the context of a Views object.
+// This includes components such as Buttons, Labels, Textfields, Dropdowns, etc.
+// These context tokens are granular to the entire client and will map to
+// sys token values (see below).
+enum class ShapeContextTokens {
+  kBadgeRadius,
+  kButtonRadius,
+  kComboboxRadius,
+  kDialogRadius,
+  kFindBarViewRadius,
+  kMenuRadius,
+  kMenuAuxRadius,
+  kMenuTouchRadius,
+  kOmniboxExpandedRadius,
+  kTextfieldRadius,
+  kSidePanelContentRadius,
+  kSidePanelPageContentRadius,
+};
+
+// ShapeSysTokens are tokens that map to a fixed value that aligns with UX/UI.
+// Different from context tokens that will expand, sys tokens are more selective
+// and are not used by the client. Context tokens will be mapped to a
+// Sys token which then will fetch the corresponding fixed value.
+enum class ShapeSysTokens {
+  // Default token should never be used and signals a missing shaping token
+  // mapping.
+  kDefault,
+  kXSmall,
+  kSmall,
+  kMediumSmall,
+  kMedium,
+  kLarge,
+  kFull,
+};
+
 class VIEWS_EXPORT LayoutProvider {
  public:
   LayoutProvider();
@@ -141,7 +195,7 @@ class VIEWS_EXPORT LayoutProvider {
   virtual ~LayoutProvider();
 
   // This should never return nullptr.
-  // TODO(crbug.com/1200584): Replace callers of this with
+  // TODO(crbug.com/40178332): Replace callers of this with
   // View::GetLayoutProvider().
   static LayoutProvider* Get();
 
@@ -159,7 +213,7 @@ class VIEWS_EXPORT LayoutProvider {
   virtual int GetDistanceMetric(int metric) const;
 
   // Returns the TypographyProvider, used to configure text properties such as
-  // font, weight, color, size, and line height. Never null.
+  // font, weight, color, size, and line height.
   virtual const TypographyProvider& GetTypographyProvider() const;
 
   // Returns the actual width to use for a dialog that requires at least
@@ -172,15 +226,24 @@ class VIEWS_EXPORT LayoutProvider {
   gfx::Insets GetDialogInsetsForContentType(DialogContentType leading,
                                             DialogContentType trailing) const;
 
-  // TODO(https://crbug.com/822000): Possibly combine the following two
+  // TODO(crbug.com/41376600): Possibly combine the following two
   // functions into a single function returning a struct.
 
   // Returns the corner radius specific to the given emphasis.
   virtual int GetCornerRadiusMetric(Emphasis emphasis,
-                                    const gfx::Size& size = gfx::Size()) const;
+                                    const gfx::Size& size) const;
+  int GetCornerRadiusMetric(Emphasis emphasis) const {
+    return GetCornerRadiusMetric(emphasis, gfx::Size());
+  }
 
   // Returns the shadow elevation metric for the given emphasis.
   virtual int GetShadowElevationMetric(Emphasis emphasis) const;
+
+  // Returns the corner radius related to a specific context token.
+  // TODO(crbug.com/40255130): Replace GetCornerRadiusMetric(Emphasis...) with
+  // context tokens.
+  int GetCornerRadiusMetric(ShapeContextTokens token,
+                            const gfx::Size& size = gfx::Size()) const;
 
  protected:
   static constexpr int kSmallDialogWidth = 320;

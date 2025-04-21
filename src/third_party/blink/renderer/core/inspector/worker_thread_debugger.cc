@@ -30,7 +30,6 @@
 
 #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
 
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_script_runner.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/events/error_event.h"
@@ -39,11 +38,13 @@
 #include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
 #include "third_party/blink/renderer/core/inspector/v8_inspector_string.h"
 #include "third_party/blink/renderer/core/inspector/worker_inspector_controller.h"
+#include "third_party/blink/renderer/core/shadow_realm/shadow_realm_global_scope.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "v8/include/v8.h"
@@ -65,11 +66,11 @@ WorkerThreadDebugger* WorkerThreadDebugger::From(v8::Isolate* isolate) {
 }
 
 WorkerThreadDebugger::WorkerThreadDebugger(v8::Isolate* isolate)
-    : ThreadDebugger(isolate),
+    : ThreadDebuggerCommonImpl(isolate),
       paused_context_group_id_(kInvalidContextGroupId) {}
 
 WorkerThreadDebugger::~WorkerThreadDebugger() {
-  DCHECK(worker_threads_.IsEmpty());
+  DCHECK(worker_threads_.empty());
 }
 
 void WorkerThreadDebugger::ReportConsoleMessage(
@@ -80,7 +81,14 @@ void WorkerThreadDebugger::ReportConsoleMessage(
     SourceLocation* location) {
   if (!context)
     return;
-  To<WorkerOrWorkletGlobalScope>(context)
+
+  ExecutionContext* root_worker_context =
+      context->IsShadowRealmGlobalScope()
+          ? To<ShadowRealmGlobalScope>(context)
+                ->GetRootInitiatorExecutionContext()
+          : context;
+
+  To<WorkerOrWorkletGlobalScope>(root_worker_context)
       ->GetThread()
       ->GetWorkerReportingProxy()
       .ReportConsoleMessage(source, level, message, location);
@@ -238,8 +246,7 @@ void WorkerThreadDebugger::consoleAPIMessage(
   std::unique_ptr<SourceLocation> location = std::make_unique<SourceLocation>(
       ToCoreString(url), String(), line_number, column_number,
       stack_trace ? stack_trace->clone() : nullptr, 0);
-  worker_thread->GetWorkerReportingProxy().ReportConsoleMessage(
-      mojom::ConsoleMessageSource::kConsoleApi,
+  worker_thread->GlobalScope()->OnConsoleApiMessage(
       V8MessageLevelToMessageLevel(level), ToCoreString(message),
       location.get());
 }
@@ -255,7 +262,6 @@ v8::MaybeLocal<v8::Value> WorkerThreadDebugger::memoryInfo(
     v8::Isolate*,
     v8::Local<v8::Context>) {
   NOTREACHED();
-  return v8::MaybeLocal<v8::Value>();
 }
 
 }  // namespace blink

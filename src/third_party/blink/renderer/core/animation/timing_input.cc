@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,35 +8,67 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_animation_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_effect_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_optional_effect_timing.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_string_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeanimationoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeeffectoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/animation/animation_effect.h"
 #include "third_party/blink/renderer/core/animation/animation_input_helpers.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/css/css_value_list.h"
+#include "third_party/blink/renderer/core/css/cssom/css_unit_values.h"
+#include "third_party/blink/renderer/core/css/properties/css_property.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/geometry/calculation_value.h"
 
 namespace blink {
 namespace {
 
-Timing::PlaybackDirection ConvertPlaybackDirection(const String& direction) {
-  if (direction == "reverse")
-    return Timing::PlaybackDirection::REVERSE;
-  if (direction == "alternate")
-    return Timing::PlaybackDirection::ALTERNATE_NORMAL;
-  if (direction == "alternate-reverse")
-    return Timing::PlaybackDirection::ALTERNATE_REVERSE;
-  DCHECK_EQ(direction, "normal");
-  return Timing::PlaybackDirection::NORMAL;
+Timing::PlaybackDirection ConvertPlaybackDirection(
+    V8PlaybackDirection::Enum direction) {
+  switch (direction) {
+    case V8PlaybackDirection::Enum::kReverse:
+      return Timing::PlaybackDirection::REVERSE;
+    case V8PlaybackDirection::Enum::kAlternate:
+      return Timing::PlaybackDirection::ALTERNATE_NORMAL;
+    case V8PlaybackDirection::Enum::kAlternateReverse:
+      return Timing::PlaybackDirection::ALTERNATE_REVERSE;
+    case V8PlaybackDirection::Enum::kNormal:
+      return Timing::PlaybackDirection::NORMAL;
+  }
 }
 
-absl::optional<AnimationTimeDelta> ConvertIterationDuration(
+std::optional<AnimationTimeDelta> ConvertIterationDuration(
     const V8UnionCSSNumericValueOrStringOrUnrestrictedDouble* duration) {
   if (duration->IsUnrestrictedDouble()) {
     return ANIMATION_TIME_DELTA_FROM_MILLISECONDS(
         duration->GetAsUnrestrictedDouble());
   }
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+Timing::Delay ConvertDelay(const Timing::V8Delay* delay,
+                           double default_percent,
+                           ExceptionState& exception_state) {
+  Timing::Delay result;
+  if (delay->IsDouble()) {
+    double delay_in_ms = delay->GetAsDouble();
+    DCHECK(std::isfinite(delay_in_ms));
+    result.time_delay = ANIMATION_TIME_DELTA_FROM_MILLISECONDS(delay_in_ms);
+  } else {
+    CSSNumericValue* numeric_value = delay->GetAsCSSNumericValue();
+    CSSUnitValue* unit_value =
+        numeric_value->to(CSSPrimitiveValue::UnitType::kPercentage);
+    if (!unit_value) {
+      exception_state.ThrowTypeError(
+          "Delay must be a finite double or percentage for animation delay.");
+      return result;
+    }
+    result.relative_delay = 0.01 * unit_value->value();
+  }
+  return result;
 }
 
 Timing ConvertEffectTiming(const EffectTiming* timing_input,
@@ -89,7 +121,6 @@ Timing TimingInput::Convert(
     }
   }
   NOTREACHED();
-  return Timing();
 }
 
 Timing TimingInput::Convert(
@@ -120,7 +151,6 @@ Timing TimingInput::Convert(
     }
   }
   NOTREACHED();
-  return Timing();
 }
 
 template <class InputTiming>
@@ -192,22 +222,19 @@ bool TimingInput::Update(Timing& timing,
   // of effect as follows:
   bool changed = false;
   if (input->hasDelay()) {
-    DCHECK(std::isfinite(input->delay()));
     changed |= UpdateValueIfChanged(
-        timing.start_delay,
-        ANIMATION_TIME_DELTA_FROM_MILLISECONDS(input->delay()));
+        timing.start_delay, ConvertDelay(input->delay(), 0, exception_state));
     timing.SetTimingOverride(Timing::kOverrideStartDelay);
   }
   if (input->hasEndDelay()) {
-    DCHECK(std::isfinite(input->endDelay()));
     changed |= UpdateValueIfChanged(
         timing.end_delay,
-        ANIMATION_TIME_DELTA_FROM_MILLISECONDS(input->endDelay()));
+        ConvertDelay(input->endDelay(), 100, exception_state));
     timing.SetTimingOverride(Timing::kOverrideEndDelay);
   }
   if (input->hasFill()) {
-    changed |= UpdateValueIfChanged(timing.fill_mode,
-                                    Timing::StringToFillMode(input->fill()));
+    changed |= UpdateValueIfChanged(
+        timing.fill_mode, Timing::EnumToFillMode(input->fill().AsEnum()));
     timing.SetTimingOverride(Timing::kOverideFillMode);
   }
   if (input->hasIterationStart()) {
@@ -227,7 +254,8 @@ bool TimingInput::Update(Timing& timing,
   }
   if (input->hasDirection()) {
     changed |= UpdateValueIfChanged(
-        timing.direction, ConvertPlaybackDirection(input->direction()));
+        timing.direction,
+        ConvertPlaybackDirection(input->direction().AsEnum()));
     timing.SetTimingOverride(Timing::kOverrideDirection);
   }
   if (timing_function) {

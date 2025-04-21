@@ -1,11 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "content/browser/attribution_reporting/attribution_internals_ui.h"
 
+#include "base/containers/span.h"
 #include "content/browser/attribution_reporting/attribution_internals_handler_impl.h"
-#include "content/grit/dev_ui_content_resources.h"
+#include "content/grit/attribution_internals_resources.h"
+#include "content/grit/attribution_internals_resources_map.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -20,24 +27,16 @@ AttributionInternalsUI::AttributionInternalsUI(WebUI* web_ui)
     : WebUIController(web_ui) {
   // Initialize the UI with no bindings. Mojo bindings will be separately
   // granted to frames within this WebContents.
-  web_ui->SetBindings(BINDINGS_POLICY_NONE);
+  web_ui->SetBindings(BindingsPolicySet());
   WebUIDataSource* source = WebUIDataSource::CreateAndAdd(
       web_ui->GetWebContents()->GetBrowserContext(),
       kChromeUIAttributionInternalsHost);
 
-  source->AddResourcePath("attribution_internals.mojom-webui.js",
-                          IDR_ATTRIBUTION_INTERNALS_MOJOM_JS);
-  source->AddResourcePath("attribution_internals.js",
-                          IDR_ATTRIBUTION_INTERNALS_JS);
-  source->AddResourcePath("attribution_internals_table.js",
-                          IDR_ATTRIBUTION_INTERNALS_TABLE_JS);
-  source->AddResourcePath("attribution_internals_table.html.js",
-                          IDR_ATTRIBUTION_INTERNALS_TABLE_HTML_JS);
-  source->AddResourcePath("table_model.js",
-                          IDR_ATTRIBUTION_INTERNALS_TABLE_MODEL_JS);
-  source->AddResourcePath("attribution_internals.css",
-                          IDR_ATTRIBUTION_INTERNALS_CSS);
-  source->SetDefaultResource(IDR_ATTRIBUTION_INTERNALS_HTML);
+  source->AddResourcePaths(kAttributionInternalsResources);
+
+  source->SetDefaultResource(
+      IDR_ATTRIBUTION_INTERNALS_ATTRIBUTION_INTERNALS_HTML);
+
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::TrustedTypes,
       "trusted-types static-types;");
@@ -54,9 +53,16 @@ void AttributionInternalsUI::WebUIRenderFrameCreated(RenderFrameHost* rfh) {
 }
 
 void AttributionInternalsUI::BindInterface(
-    mojo::PendingReceiver<attribution_internals::mojom::Handler> receiver) {
+    mojo::PendingReceiver<attribution_internals::mojom::Factory> factory) {
+  factory_.reset();
+  factory_.Bind(std::move(factory));
+}
+
+void AttributionInternalsUI::Create(
+    mojo::PendingRemote<attribution_internals::mojom::Observer> observer,
+    mojo::PendingReceiver<attribution_internals::mojom::Handler> handler) {
   ui_handler_ = std::make_unique<AttributionInternalsHandlerImpl>(
-      web_ui(), std::move(receiver));
+      web_ui(), std::move(observer), std::move(handler));
 }
 
 }  // namespace content

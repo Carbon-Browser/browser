@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/no_destructor.h"
@@ -70,10 +69,9 @@ class VolumeControlInternal {
                  float level) {
     if (type == AudioContentType::kOther) {
       NOTREACHED() << "Can't set volume for content type kOther";
-      return;
     }
 
-    level = base::clamp(level, 0.0f, 1.0f);
+    level = std::clamp(level, 0.0f, 1.0f);
     thread_.task_runner()->PostTask(
         FROM_HERE, base::BindOnce(&VolumeControlInternal::SetVolumeOnThread,
                                   base::Unretained(this), source, type, level));
@@ -89,7 +87,6 @@ class VolumeControlInternal {
                 bool muted) {
     if (type == AudioContentType::kOther) {
       NOTREACHED() << "Can't set mute state for content type kOther";
-      return;
     }
 
     thread_.task_runner()->PostTask(
@@ -206,13 +203,13 @@ void VolumeControl::SetOutputLimit(AudioContentType type, float limit) {}
 
 // static
 float VolumeControl::VolumeToDbFS(float volume) {
-  volume = base::clamp(volume, 0.0f, 1.0f);
+  volume = std::clamp(volume, 0.0f, 1.0f);
   return kMinVolumeDbfs + volume * (kMaxVolumeDbfs - kMinVolumeDbfs);
 }
 
 // static
 float VolumeControl::DbFSToVolume(float db) {
-  db = base::clamp(db, kMinVolumeDbfs, kMaxVolumeDbfs);
+  db = std::clamp(db, kMinVolumeDbfs, kMaxVolumeDbfs);
   return (db - kMinVolumeDbfs) / (kMaxVolumeDbfs - kMinVolumeDbfs);
 }
 

@@ -1,15 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/audio_thread_impl.h"
 
+#include <optional>
+
 #include "base/message_loop/message_pump_type.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "build/build_config.h"
 #include "media/audio/audio_thread_hang_monitor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -29,7 +30,7 @@ AudioThreadImpl::AudioThreadImpl()
 #if BUILDFLAG(IS_MAC)
   // On Mac, the audio task runner must belong to the main thread.
   // See http://crbug.com/158170.
-  task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 #else
   task_runner_ = thread_.task_runner();
 #endif
@@ -40,7 +41,7 @@ AudioThreadImpl::AudioThreadImpl()
   // https://crbug.com/946968: The hang monitor possibly causes crashes on
   // Android
   hang_monitor_ = AudioThreadHangMonitor::Create(
-      AudioThreadHangMonitor::HangAction::kDoNothing, absl::nullopt,
+      AudioThreadHangMonitor::HangAction::kDoNothing, std::nullopt,
       base::DefaultTickClock::GetInstance(), task_runner_);
 #endif
 }

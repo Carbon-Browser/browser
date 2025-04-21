@@ -1,8 +1,9 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/process/process_iterator.h"
+
 #include "build/build_config.h"
 
 namespace base {
@@ -18,8 +19,9 @@ const ProcessEntry* ProcessIterator::NextProcessEntry() {
   do {
     result = CheckForNextProcess();
   } while (result && !IncludeEntry());
-  if (result)
+  if (result) {
     return &entry_;
+  }
   return nullptr;
 }
 
@@ -37,8 +39,11 @@ bool ProcessIterator::IncludeEntry() {
 
 NamedProcessIterator::NamedProcessIterator(
     const FilePath::StringType& executable_name,
-    const ProcessFilter* filter) : ProcessIterator(filter),
-                                   executable_name_(executable_name) {
+    const ProcessFilter* filter,
+    bool use_prefix_match)
+    : ProcessIterator(filter),
+      executable_name_(executable_name),
+      use_prefix_match_(use_prefix_match) {
 #if BUILDFLAG(IS_ANDROID)
   // On Android, the process name contains only the last 15 characters, which
   // is in file /proc/<pid>/stat, the string between open parenthesis and close
@@ -58,8 +63,9 @@ int GetProcessCount(const FilePath::StringType& executable_name,
                     const ProcessFilter* filter) {
   int count = 0;
   NamedProcessIterator iter(executable_name, filter);
-  while (iter.NextProcessEntry())
+  while (iter.NextProcessEntry()) {
     ++count;
+  }
   return count;
 }
 

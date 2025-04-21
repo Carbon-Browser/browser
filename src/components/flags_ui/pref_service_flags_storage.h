@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/flags_ui/flags_storage.h"
 
 class PrefService;
@@ -37,15 +36,19 @@ class PrefServiceFlagsStorage : public FlagsStorage {
       const std::string& internal_entry_name) const override;
   void SetOriginListFlag(const std::string& internal_entry_name,
                          const std::string& origin_list_value) override;
+  std::string GetStringFlag(
+      const std::string& internal_entry_name) const override;
+  void SetStringFlag(const std::string& internal_entry_name,
+                     const std::string& string_value) override;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  private:
-  raw_ptr<PrefService> prefs_;
+  raw_ptr<PrefService, DanglingUntriaged> prefs_;
 };
 
 }  // namespace flags_ui

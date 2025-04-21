@@ -1,31 +1,81 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "pdf/pdf_features.h"
 
-namespace chrome_pdf {
-namespace features {
+#include "base/feature_list.h"
+#include "pdf/buildflags.h"
 
-const base::Feature kAccessiblePDFForm = {"AccessiblePDFForm",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+namespace chrome_pdf::features {
+
+namespace {
+bool g_is_oopif_pdf_policy_enabled = true;
+}  // namespace
+
+BASE_FEATURE(kAccessiblePDFForm,
+             "AccessiblePDFForm",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfCr23, "PdfCr23", base::FEATURE_DISABLED_BY_DEFAULT);
 
 // "Incremental loading" refers to loading the PDF as it arrives.
-// TODO(crbug.com/1064175): Remove this once incremental loading is fixed.
-const base::Feature kPdfIncrementalLoading = {
-    "PdfIncrementalLoading", base::FEATURE_DISABLED_BY_DEFAULT};
+// TODO(crbug.com/40123601): Remove this once incremental loading is fixed.
+BASE_FEATURE(kPdfIncrementalLoading,
+             "PdfIncrementalLoading",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfOopif, "PdfOopif", base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Kill switch in case this goes horribly wrong.
+// TODO(crbug.com/40216952): Remove after this lands safely in a Stable release.
+BASE_FEATURE(kPdfPaintManagerDrawsBackground,
+             "PdfPaintManagerDrawsBackground",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // "Partial loading" refers to loading only specific parts of the PDF.
-// TODO(crbug.com/1064175): Remove this once partial loading is fixed.
-const base::Feature kPdfPartialLoading = {"PdfPartialLoading",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+// TODO(crbug.com/40123601): Remove this once partial loading is fixed.
+BASE_FEATURE(kPdfPartialLoading,
+             "PdfPartialLoading",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfPortfolio, "PdfPortfolio", base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfSearchify, "PdfSearchify", base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfSearchifySave,
+             "PdfSearchifySave",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfUseShowSaveFilePicker,
+             "PdfUseShowSaveFilePicker",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfUseSkiaRenderer,
+             "PdfUseSkiaRenderer",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Feature has no effect if Chrome is built with no XFA support.
-const base::Feature kPdfXfaSupport = {"PdfXfaSupport",
-                                      base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kPdfXfaSupport,
+             "PdfXfaSupport",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kTabAcrossPDFAnnotations = {
-    "TabAcrossPDFAnnotations", base::FEATURE_ENABLED_BY_DEFAULT};
+#if BUILDFLAG(ENABLE_PDF_INK2)
+BASE_FEATURE(kPdfInk2, "PdfInk2", base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
-}  // namespace features
-}  // namespace chrome_pdf
+void SetIsOopifPdfPolicyEnabled(bool is_oopif_pdf_policy_enabled) {
+  g_is_oopif_pdf_policy_enabled = is_oopif_pdf_policy_enabled;
+}
+
+bool IsOopifPdfEnabled() {
+  return g_is_oopif_pdf_policy_enabled &&
+         base::FeatureList::IsEnabled(kPdfOopif);
+}
+
+bool IsPdfSearchifySaveEnabled() {
+  return base::FeatureList::IsEnabled(kPdfSearchify) &&
+         base::FeatureList::IsEnabled(kPdfSearchifySave);
+}
+
+}  // namespace chrome_pdf::features

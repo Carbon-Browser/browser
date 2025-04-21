@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "components/sync/model/syncable_service.h"
 #include "extensions/browser/api/storage/settings_observer.h"
 #include "extensions/browser/api/storage/value_store_cache.h"
+#include "extensions/common/extension_id.h"
 
 namespace base {
 class FilePath;
@@ -44,13 +45,13 @@ class SyncValueStoreCache : public ValueStoreCache {
   ~SyncValueStoreCache() override;
 
   base::WeakPtr<SyncValueStoreCache> AsWeakPtr();
-  syncer::SyncableService* GetSyncableService(syncer::ModelType type);
+  syncer::SyncableService* GetSyncableService(syncer::DataType type);
 
   // ValueStoreCache implementation:
   void RunWithValueStoreForExtension(
       StorageCallback callback,
       scoped_refptr<const Extension> extension) override;
-  void DeleteStorageSoon(const std::string& extension_id) override;
+  void DeleteStorageSoon(const ExtensionId& extension_id) override;
 
  private:
   void InitOnBackend(scoped_refptr<value_store::ValueStoreFactory> factory,

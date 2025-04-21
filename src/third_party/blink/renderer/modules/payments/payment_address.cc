@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@ PaymentAddress::PaymentAddress(
 
 PaymentAddress::~PaymentAddress() = default;
 
-ScriptValue PaymentAddress::toJSONForBinding(ScriptState* script_state) const {
+ScriptObject PaymentAddress::toJSONForBinding(ScriptState* script_state) const {
   V8ObjectBuilder result(script_state);
   result.AddString("country", country());
-  result.Add("addressLine", addressLine());
+  result.AddVector<IDLString>("addressLine", addressLine());
   result.AddString("region", region());
   result.AddString("city", city());
   result.AddString("dependentLocality", dependentLocality());
@@ -36,7 +36,7 @@ ScriptValue PaymentAddress::toJSONForBinding(ScriptState* script_state) const {
   result.AddString("organization", organization());
   result.AddString("recipient", recipient());
   result.AddString("phone", phone());
-  return result.GetScriptValue();
+  return result.ToScriptObject();
 }
 
 }  // namespace blink

@@ -1,36 +1,33 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_ANDROID_AUTOFILL_BROWSER_ANDROID_AUTOFILL_MANAGER_H_
 #define COMPONENTS_ANDROID_AUTOFILL_BROWSER_ANDROID_AUTOFILL_MANAGER_H_
 
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/autofill/core/browser/autofill_manager.h"
+#include "base/notreached.h"
+#include "components/autofill/core/browser/crowdsourcing/autofill_crowdsourcing_manager.h"
+#include "components/autofill/core/browser/foundations/autofill_manager.h"
 #include "components/autofill/core/common/dense_set.h"
 
 namespace autofill {
 
 class AutofillProvider;
-class ContentAutofillDriver;
-
-// Creates an AndroidAutofillManager and attaches it to the `driver`.
-//
-// This hook is to be passed to CreateForWebContentsAndDelegate().
-// It is the glue between ContentAutofillDriver[Factory] and
-// AndroidAutofillManager.
-//
-// Other embedders (which don't want to use AndroidAutofillManager) shall use
-// other implementations.
-void AndroidDriverInitHook(
-    AutofillClient* client,
-    AutofillManager::EnableDownloadManager enable_download_manager,
-    ContentAutofillDriver* driver);
+class AndroidFormEventLogger;
 
 // This class forwards AutofillManager calls to AutofillProvider.
-class AndroidAutofillManager : public AutofillManager {
+class AndroidAutofillManager : public AutofillManager,
+                               public AutofillManager::Observer {
  public:
+  explicit AndroidAutofillManager(AutofillDriver* driver);
+
   AndroidAutofillManager(const AndroidAutofillManager&) = delete;
   AndroidAutofillManager& operator=(const AndroidAutofillManager&) = delete;
 
@@ -41,122 +38,108 @@ class AndroidAutofillManager : public AutofillManager {
   }
 
   base::WeakPtr<AutofillManager> GetWeakPtr() override;
-  AutofillOfferManager* GetOfferManager() override;
-  CreditCardAccessManager* GetCreditCardAccessManager() override;
 
   bool ShouldClearPreviewedForm() override;
 
-  void FillCreditCardFormImpl(const FormData& form,
-                              const FormFieldData& field,
-                              const CreditCard& credit_card,
-                              const std::u16string& cvc,
-                              int query_id) override;
-  void FillProfileFormImpl(const FormData& form,
-                           const FormFieldData& field,
-                           const autofill::AutofillProfile& profile) override;
-
-  void OnFocusNoLongerOnFormImpl(bool had_interacted_form) override;
+  void OnFocusOnNonFormFieldImpl() override;
 
   void OnDidFillAutofillFormDataImpl(const FormData& form,
                                      const base::TimeTicks timestamp) override;
 
-  void OnDidPreviewAutofillFormDataImpl() override {}
   void OnDidEndTextFieldEditingImpl() override {}
   void OnHidePopupImpl() override;
   void OnSelectFieldOptionsDidChangeImpl(const FormData& form) override {}
 
-  void Reset() override;
-
   void ReportAutofillWebOTPMetrics(bool used_web_otp) override {}
 
-  bool has_server_prediction() const { return has_server_prediction_; }
+  bool has_server_prediction(FormGlobalId form) const {
+    return forms_with_server_predictions_.contains(form);
+  }
+
+  FieldTypeGroup ComputeFieldTypeGroupForField(const FormGlobalId& form_id,
+                                               const FieldGlobalId& field_id);
 
   // Send the |form| to the renderer for the specified |action|.
-  void FillOrPreviewForm(int query_id,
-                         mojom::RendererFormDataAction action,
-                         const FormData& form);
-
-  void SetProfileFillViaAutofillAssistantIntent(
-      const autofill_assistant::AutofillAssistantIntent intent) override;
-
-  void SetCreditCardFillViaAutofillAssistantIntent(
-      const autofill_assistant::AutofillAssistantIntent intent) override;
+  //
+  // |triggered_origin| is the origin of the field from which the autofill is
+  // triggered; this affects the security policy for cross-frame fills. See
+  // AutofillDriver::FillOrPreviewForm() for further details.
+  void FillOrPreviewForm(mojom::ActionPersistence action_persistence,
+                         FormData form,
+                         const FieldTypeGroup field_type_group,
+                         const url::Origin& triggered_origin);
 
  protected:
-  friend void AndroidDriverInitHook(
-      AutofillClient* client,
-      AutofillManager::EnableDownloadManager enable_download_manager,
-      ContentAutofillDriver* driver);
-
-  AndroidAutofillManager(
-      AutofillDriver* driver,
-      AutofillClient* client,
-      AutofillManager::EnableDownloadManager enable_download_manager);
+  void Reset() override;
 
   void OnFormSubmittedImpl(const FormData& form,
-                           bool known_success,
                            mojom::SubmissionSource source) override;
 
+  void OnCaretMovedInFormFieldImpl(const FormData& form,
+                                   const FieldGlobalId& field_id,
+                                   const gfx::Rect& caret_bounds) override {}
+
   void OnTextFieldDidChangeImpl(const FormData& form,
-                                const FormFieldData& field,
-                                const gfx::RectF& bounding_box,
+                                const FieldGlobalId& field_id,
                                 const base::TimeTicks timestamp) override;
 
   void OnTextFieldDidScrollImpl(const FormData& form,
-                                const FormFieldData& field,
-                                const gfx::RectF& bounding_box) override;
+                                const FieldGlobalId& field_id) override;
 
   void OnAskForValuesToFillImpl(
       const FormData& form,
-      const FormFieldData& field,
-      const gfx::RectF& bounding_box,
-      int query_id,
-      bool autoselect_first_suggestion,
-      TouchToFillEligible touch_to_fill_eligible) override;
+      const FieldGlobalId& field_id,
+      const gfx::Rect& caret_bounds,
+      AutofillSuggestionTriggerSource trigger_source) override;
 
   void OnFocusOnFormFieldImpl(const FormData& form,
-                              const FormFieldData& field,
-                              const gfx::RectF& bounding_box) override;
+                              const FieldGlobalId& field_id) override;
 
   void OnSelectControlDidChangeImpl(const FormData& form,
-                                    const FormFieldData& field,
-                                    const gfx::RectF& bounding_box) override;
+                                    const FieldGlobalId& field_id) override;
 
-  void OnJavaScriptChangedAutofilledValueImpl(
-      const FormData& form,
-      const FormFieldData& field,
-      const std::u16string& old_value) override {}
+  void OnJavaScriptChangedAutofilledValueImpl(const FormData& form,
+                                              const FieldGlobalId& field_id,
+                                              const std::u16string& old_value,
+                                              bool formatting_only) override {}
 
-  bool ShouldParseForms(const std::vector<FormData>& forms) override;
+  bool ShouldParseForms() override;
 
   void OnBeforeProcessParsedForms() override {}
 
   void OnFormProcessed(const FormData& form,
-                       const FormStructure& form_structure) override {}
-
-  void OnAfterProcessParsedForms(
-      const DenseSet<FormType>& form_types) override {}
-
-  void PropagateAutofillPredictions(
-      const std::vector<FormStructure*>& forms) override;
-
-  void OnServerRequestError(FormSignature form_signature,
-                            AutofillDownloadManager::RequestType request_type,
-                            int http_error) override;
-
- protected:
-#ifdef UNIT_TEST
-  // For the unit tests where WebContents isn't available.
-  void set_autofill_provider_for_testing(AutofillProvider* autofill_provider) {
-    autofill_provider_for_testing_ = autofill_provider;
-  }
-#endif  // UNIT_TEST
+                       const FormStructure& form_structure) override;
 
  private:
+  // AutofillManager::Observer:
+  void OnFieldTypesDetermined(AutofillManager& manager,
+                              FormGlobalId form,
+                              FieldTypeSource source) override;
+
   AutofillProvider* GetAutofillProvider();
 
-  bool has_server_prediction_ = false;
-  raw_ptr<AutofillProvider> autofill_provider_for_testing_ = nullptr;
+  // Records metrics for loggers and creates new logging session.
+  void StartNewLoggingSession();
+
+  // Returns logger associated with the passed-in `form_id` and `field_id`.
+  AndroidFormEventLogger* GetEventFormLogger(const FormGlobalId& form_id,
+                                             const FieldGlobalId& field_id);
+
+  // Returns logger associated with the passed-in `field_type_group`.
+  AndroidFormEventLogger* GetEventFormLogger(FieldTypeGroup field_type_group);
+
+  // Returns logger associated with the passed-in `form_type`.
+  AndroidFormEventLogger* GetEventFormLogger(FormType form_type);
+
+  // The forms that have received server predictions.
+  base::flat_set<FormGlobalId> forms_with_server_predictions_;
+  std::unique_ptr<AndroidFormEventLogger> address_logger_;
+  std::unique_ptr<AndroidFormEventLogger> payments_logger_;
+  std::unique_ptr<AndroidFormEventLogger> password_logger_;
+
+  base::ScopedObservation<AutofillManager, AutofillManager::Observer>
+      autofill_manager_observation{this};
+
   base::WeakPtrFactory<AndroidAutofillManager> weak_ptr_factory_{this};
 };
 

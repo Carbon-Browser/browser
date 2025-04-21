@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -137,10 +137,11 @@ SyncStatusCode ApiErrorCodeToSyncStatusCode(google_apis::ApiErrorCode error) {
     case google_apis::PARSE_ERROR:
     case google_apis::DRIVE_RESPONSE_TOO_LARGE:
     case google_apis::OTHER_ERROR:
+    case google_apis::YOUTUBE_MUSIC_UPDATE_REQUIRED:
       return SYNC_STATUS_FAILED;
   }
 
-  NOTREACHED();
+  DUMP_WILL_BE_NOTREACHED();
   return SYNC_STATUS_FAILED;
 }
 

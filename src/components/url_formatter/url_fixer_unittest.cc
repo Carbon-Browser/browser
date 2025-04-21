@@ -1,12 +1,18 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/url_formatter/url_fixer.h"
 
 #include <stddef.h>
 #include <stdlib.h>
 
+#include <array>
 #include <string>
 
 #include "base/base_paths.h"
@@ -34,7 +40,7 @@ struct SegmentCase {
   const url::Component ref;
 };
 
-static const SegmentCase segment_cases[] = {
+const auto segment_cases = std::to_array<SegmentCase>({
     {
         "http://www.google.com/", "http", url::Component(0, 4),  // scheme
         url::Component(),                                        // username
@@ -106,6 +112,17 @@ static const SegmentCase segment_cases[] = {
         url::Component(),       // path
         url::Component(23, 3),  // query
         url::Component(27, 0),  // ref
+    },
+    {
+        " \u00A0 www.google.com", "http",
+        url::Component(),       // scheme
+        url::Component(),       // username
+        url::Component(),       // password
+        url::Component(4, 14),  // host
+        url::Component(),       // port
+        url::Component(),       // path
+        url::Component(),       // query
+        url::Component(),       // ref
     },
     {
         "user@www.google.com", "http",
@@ -252,7 +269,7 @@ static const SegmentCase segment_cases[] = {
         url::Component(43, 17),            // query
         url::Component(),                  // ref
     },
-};
+});
 
 typedef testing::Test URLFixerTest;
 
@@ -286,24 +303,27 @@ static bool MakeTempFile(const base::FilePath& dir,
                          const base::FilePath& file_name,
                          base::FilePath* full_path) {
   *full_path = dir.Append(file_name);
-  return base::WriteFile(*full_path, "", 0) == 0;
+  return base::WriteFile(*full_path, "");
 }
 
 // Returns true if the given URL is a file: URL that matches the given file
 static bool IsMatchingFileURL(const std::string& url,
                               const base::FilePath& full_file_path) {
-  if (url.length() <= 8)
+  if (url.length() <= 8) {
     return false;
-  if (std::string("file:///") != url.substr(0, 8))
+  }
+  if (std::string("file:///") != url.substr(0, 8)) {
     return false;  // no file:/// prefix
-  if (url.find('\\') != std::string::npos)
+  }
+  if (url.find('\\') != std::string::npos) {
     return false;  // contains backslashes
+  }
 
   base::FilePath derived_path;
   net::FileURLToFilePath(GURL(url), &derived_path);
 
   return base::FilePath::CompareEqualIgnoreCase(derived_path.value(),
-                                          full_file_path.value());
+                                                full_file_path.value());
 }
 
 struct FixupCase {
@@ -357,15 +377,15 @@ struct FixupCase {
      "http://example.com/s?q=%F0%90%80%A0"},
     // URLs containing Unicode non-characters.
     {"http://example.com/s?q=\xEF\xB7\x90",  // U+FDD0
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%B7%90"},
     {"http://example.com/s?q=\xEF\xBF\xBE",  // U+FFFE
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%BF%BE"},
     {"http://example.com/s?q=\xEF\xBF\xBF",  // U+FFFF
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%EF%BF%BF"},
     {"http://example.com/s?q=\xF4\x8F\xBF\xBE",  // U+10FFFE
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%F4%8F%BF%BE"},
     {"http://example.com/s?q=\xF4\x8F\xBF\xBF",  // U+10FFFF
-     "http://example.com/s?q=%EF%BF%BD"},
+     "http://example.com/s?q=%F4%8F%BF%BF"},
 
     // URLs containing IPv6 literals.
     {"[2001:db8::2]", "http://[2001:db8::2]/"},
@@ -380,14 +400,14 @@ struct FixupCase {
     {"http;//www.google.com/", "http://www.google.com/"},
     {"about;help", "chrome://help/"},
     // Semicolon in non-standard schemes is not replaced by colon.
-    {"whatsup;//fool", "http://whatsup%3B//fool"},
+    {"whatsup;//fool", "http://whatsup;//fool"},
     // Semicolon left as-is in URL itself.
     {"http://host/port?query;moar", "http://host/port?query;moar"},
     // Fewer slashes than expected.
     {"http;www.google.com/", "http://www.google.com/"},
     {"http;/www.google.com/", "http://www.google.com/"},
     // Semicolon at start.
-    {";http://www.google.com/", "http://%3Bhttp//www.google.com/"},
+    {";http://www.google.com/", "http://;http//www.google.com/"},
     // DevTools scheme.
     {"devtools://bundled/devtools/node.html",
      "devtools://bundled/devtools/node.html"},
@@ -427,8 +447,9 @@ TEST(URLFixerTest, FixupURL) {
         << "input: " << value.input;
 
     // Fixup URL should never translate a valid GURL into an invalid one.
-    if (GURL(value.input).is_valid())
+    if (GURL(value.input).is_valid()) {
       EXPECT_TRUE(actual_output.is_valid());
+    }
   }
 
   // Check the TLD-appending functionality.
@@ -505,31 +526,32 @@ TEST(URLFixerTest, FixupFile) {
   EXPECT_EQ(golden, url_formatter::FixupURL(cur, std::string()));
 
   FixupCase cases[] = {
-    {"c:\\Non-existent%20file.txt", "file:///C:/Non-existent%2520file.txt"},
+      {"c:\\Non-existent%20file.txt", "file:///C:/Non-existent%2520file.txt"},
 
-    // \\foo\bar.txt -> file://foo/bar.txt
-    // UNC paths, this file won't exist, but since there are no escapes, it
-    // should be returned just converted to a file: URL.
-    {"\\\\NonexistentHost\\foo\\bar.txt", "file://nonexistenthost/foo/bar.txt"},
-    // We do this strictly, like IE8, which only accepts this form using
-    // backslashes and not forward ones.  Turning "//foo" into "http" matches
-    // Firefox and IE, silly though it may seem (it falls out of adding "http"
-    // as the default protocol if you haven't entered one).
-    {"//NonexistentHost\\foo/bar.txt", "http://nonexistenthost/foo/bar.txt"},
-    {"file:///C:/foo/bar", "file:///C:/foo/bar"},
+      // \\foo\bar.txt -> file://foo/bar.txt
+      // UNC paths, this file won't exist, but since there are no escapes, it
+      // should be returned just converted to a file: URL.
+      {"\\\\NonexistentHost\\foo\\bar.txt",
+       "file://nonexistenthost/foo/bar.txt"},
+      // We do this strictly, like IE8, which only accepts this form using
+      // backslashes and not forward ones.  Turning "//foo" into "http" matches
+      // Firefox and IE, silly though it may seem (it falls out of adding "http"
+      // as the default protocol if you haven't entered one).
+      {"//NonexistentHost\\foo/bar.txt", "http://nonexistenthost/foo/bar.txt"},
+      {"file:///C:/foo/bar", "file:///C:/foo/bar"},
 
-    // Much of the work here comes from GURL's canonicalization stage.
-    {"file://C:/foo/bar", "file:///C:/foo/bar"},
-    {"file:c:", "file:///C:"},
-    {"file:c:WINDOWS", "file:///C:/WINDOWS"},
-    {"file:c|Program Files", "file:///C:/Program%20Files"},
-    {"file:/file", "file://file/"},
-    {"file:////////c:\\foo", "file:///C:/foo"},
-    {"file://server/folder/file", "file://server/folder/file"},
+      // Much of the work here comes from GURL's canonicalization stage.
+      {"file://C:/foo/bar", "file:///C:/foo/bar"},
+      {"file:c:", "file:///C:"},
+      {"file:c:WINDOWS", "file:///C:/WINDOWS"},
+      {"file:c|Program Files", "file:///C:/Program%20Files"},
+      {"file:/file", "file://file/"},
+      {"file:////////c:\\foo", "file:///C:/foo"},
+      {"file://server/folder/file", "file://server/folder/file"},
 
-    // These are fixups we don't do, but could consider:
-    //   {"file:///foo:/bar", "file://foo/bar"},
-    //   {"file:/\\/server\\folder/file", "file://server/folder/file"},
+      // These are fixups we don't do, but could consider:
+      //   {"file:///foo:/bar", "file://foo/bar"},
+      //   {"file:/\\/server\\folder/file", "file://server/folder/file"},
   };
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
@@ -540,18 +562,18 @@ TEST(URLFixerTest, FixupFile) {
 #endif
   url_formatter::home_directory_override = "/foo";
   FixupCase cases[] = {
-    // File URLs go through GURL, which tries to escape intelligently.
-    {"/A%20non-existent file.txt", "file:///A%2520non-existent%20file.txt"},
-    // A plain "/" refers to the root.
-    {"/", "file:///"},
+      // File URLs go through GURL, which tries to escape intelligently.
+      {"/A%20non-existent file.txt", "file:///A%2520non-existent%20file.txt"},
+      // A plain "/" refers to the root.
+      {"/", "file:///"},
 
-    // These rely on the above home_directory_override.
-    {"~", "file:///foo"},
-    {"~/bar", "file:///foo/bar"},
+      // These rely on the above home_directory_override.
+      {"~", "file:///foo"},
+      {"~/bar", "file:///foo/bar"},
 
-    // References to other users' homedirs.
-    {"~foo", "file://" HOME "foo"},
-    {"~x/blah", "file://" HOME "x/blah"},
+      // References to other users' homedirs.
+      {"~foo", "file://" HOME "foo"},
+      {"~x/blah", "file://" HOME "x/blah"},
   };
 #endif
 
@@ -620,10 +642,10 @@ TEST(URLFixerTest, FixupRelativeFile) {
       full_path));
 
   // test file in the subdir with different slashes and escaping.
-  base::FilePath::StringType relative_file_str = sub_dir.value() +
-      FILE_PATH_LITERAL("/") + sub_file.value();
-  base::ReplaceSubstringsAfterOffset(&relative_file_str, 0,
-      FILE_PATH_LITERAL(" "), FILE_PATH_LITERAL("%20"));
+  base::FilePath::StringType relative_file_str =
+      sub_dir.value() + FILE_PATH_LITERAL("/") + sub_file.value();
+  base::ReplaceSubstringsAfterOffset(
+      &relative_file_str, 0, FILE_PATH_LITERAL(" "), FILE_PATH_LITERAL("%20"));
   EXPECT_TRUE(IsMatchingFileURL(
       url_formatter::FixupRelativeFile(temp_dir_.GetPath(),
                                        base::FilePath(relative_file_str))
@@ -633,7 +655,8 @@ TEST(URLFixerTest, FixupRelativeFile) {
   // test relative directories and duplicate slashes
   // (should resolve to the same file as above)
   relative_file_str = sub_dir.value() + FILE_PATH_LITERAL("/../") +
-      sub_dir.value() + FILE_PATH_LITERAL("///./") + sub_file.value();
+                      sub_dir.value() + FILE_PATH_LITERAL("///./") +
+                      sub_file.value();
   EXPECT_TRUE(IsMatchingFileURL(
       url_formatter::FixupRelativeFile(temp_dir_.GetPath(),
                                        base::FilePath(relative_file_str))

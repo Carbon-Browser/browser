@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ using KeyAndData = std::pair<std::string, std::unique_ptr<EntityData>>;
 // Interface used by the processor to read data requested from the service.
 class DataBatch {
  public:
-  DataBatch() {}
-  virtual ~DataBatch() {}
+  DataBatch() = default;
+  virtual ~DataBatch() = default;
 
   // Returns if the data batch has another pair or not.
   virtual bool HasNext() const = 0;

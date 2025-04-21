@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,30 +59,31 @@ class PaymentHandlerWebFlowViewController
   ~PaymentHandlerWebFlowViewController() override;
 
  private:
+  class RoundedCornerViewClipper;
+
   // PaymentRequestSheetController:
   std::u16string GetSheetTitle() override;
   void FillContentView(views::View* content_view) override;
   bool ShouldShowPrimaryButton() override;
   bool ShouldShowSecondaryButton() override;
-  std::unique_ptr<views::View> CreateHeaderContentView(
-      views::View* header_view) override;
-  std::unique_ptr<views::Background> GetHeaderBackground(
-      views::View* header_view) override;
+  void PopulateSheetHeaderView(views::View* view) override;
   bool GetSheetId(DialogViewID* sheet_id) override;
   bool DisplayDynamicBorderForHiddenContents() override;
+  bool CanContentViewBeScrollable() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
   // content::WebContentsDelegate:
   void VisibleSecurityStateChanged(content::WebContents* source) override;
-  void AddNewContents(content::WebContents* source,
-                      std::unique_ptr<content::WebContents> new_contents,
-                      const GURL& target_url,
-                      WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
-                      bool user_gesture,
-                      bool* was_blocked) override;
-  bool HandleKeyboardEvent(
+  content::WebContents* AddNewContents(
       content::WebContents* source,
-      const content::NativeWebKeyboardEvent& event) override;
+      std::unique_ptr<content::WebContents> new_contents,
+      const GURL& target_url,
+      WindowOpenDisposition disposition,
+      const blink::mojom::WindowFeatures& window_features,
+      bool user_gesture,
+      bool* was_blocked) override;
+  bool HandleKeyboardEvent(content::WebContents* source,
+                           const input::NativeWebKeyboardEvent& event) override;
 
   // content::WebContentsObserver:
   void DidFinishNavigation(
@@ -92,11 +93,16 @@ class PaymentHandlerWebFlowViewController
 
   void AbortPayment();
 
+  // Calculates the header background based on the web contents theme, if any,
+  // otherwise the Chrome theme.
+  std::unique_ptr<views::Background> GetHeaderBackground(
+      views::View* header_view);
+
   DeveloperConsoleLogger log_;
   raw_ptr<Profile> profile_;
   GURL target_;
-  raw_ptr<views::ProgressBar> progress_bar_ = nullptr;
-  raw_ptr<views::View> separator_ = nullptr;
+  raw_ptr<views::ProgressBar, DanglingUntriaged> progress_bar_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> separator_ = nullptr;
   PaymentHandlerOpenWindowCallback first_navigation_complete_callback_;
   // Used to present modal dialog triggered from the payment handler web view,
   // e.g. an authenticator dialog.
@@ -104,6 +110,16 @@ class PaymentHandlerWebFlowViewController
   // A handler to handle unhandled keyboard messages coming back from the
   // renderer process.
   views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
+
+  // Helper which clips the views::WebView created by this class so that it has
+  // rounded corners matching its parent dialog.
+  //
+  // TODO(crbug.com/344626785): Remove once WebViews obey parent clips.
+  std::unique_ptr<RoundedCornerViewClipper> rounded_corner_clipper_;
+
+  // Must be the last member of a leaf class.
+  base::WeakPtrFactory<PaymentHandlerWebFlowViewController> weak_ptr_factory_{
+      this};
 };
 
 }  // namespace payments

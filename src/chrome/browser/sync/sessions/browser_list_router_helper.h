@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,11 +40,11 @@ class BrowserListRouterHelper : public BrowserListObserver,
       const TabStripSelectionChange& selection) override;
 
   // |router_| owns |this|.
-  raw_ptr<SyncSessionsWebContentsRouter> router_;
+  const raw_ptr<SyncSessionsWebContentsRouter> router_;
 
-  raw_ptr<Profile> profile_;
+  const raw_ptr<Profile> profile_;
 
-  std::set<Browser*> attached_browsers_;
+  std::set<raw_ptr<Browser, SetExperimental>> attached_browsers_;
 };
 
 }  // namespace sync_sessions

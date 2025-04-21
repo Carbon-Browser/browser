@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "components/update_client/update_client.h"
 
 namespace base {
@@ -19,7 +19,6 @@ class SequencedTaskRunner;
 
 namespace update_client {
 
-// TODO(sorin): consider reducing the number of the installer mocks.
 // A TestInstaller is an installer that does nothing for installation except
 // increment a counter.
 class TestInstaller : public CrxInstaller {
@@ -34,8 +33,8 @@ class TestInstaller : public CrxInstaller {
                ProgressCallback progress_callback,
                Callback callback) override;
 
-  bool GetInstalledFile(const std::string& file,
-                        base::FilePath* installed_file) override;
+  std::optional<base::FilePath> GetInstalledFile(
+      const std::string& file) override;
 
   bool Uninstall() override;
 
@@ -50,6 +49,10 @@ class TestInstaller : public CrxInstaller {
     installer_progress_samples_.swap(installer_progress_samples);
   }
 
+  void set_install_error(InstallError install_error) {
+    install_error_ = install_error;
+  }
+
  protected:
   ~TestInstaller() override;
 
@@ -61,6 +64,9 @@ class TestInstaller : public CrxInstaller {
   int install_count_;
 
  private:
+  // Contains the error code returned by the installer when it completes.
+  InstallError install_error_;
+
   // Contains the |unpack_path| argument of the Install call.
   base::FilePath unpack_path_;
 
@@ -79,8 +85,8 @@ class ReadOnlyTestInstaller : public TestInstaller {
  public:
   explicit ReadOnlyTestInstaller(const base::FilePath& installed_path);
 
-  bool GetInstalledFile(const std::string& file,
-                        base::FilePath* installed_file) override;
+  std::optional<base::FilePath> GetInstalledFile(
+      const std::string& file) override;
 
  private:
   ~ReadOnlyTestInstaller() override;
@@ -100,8 +106,8 @@ class VersionedTestInstaller : public TestInstaller {
                ProgressCallback progress_callback,
                Callback callback) override;
 
-  bool GetInstalledFile(const std::string& file,
-                        base::FilePath* installed_file) override;
+  std::optional<base::FilePath> GetInstalledFile(
+      const std::string& file) override;
 
  private:
   ~VersionedTestInstaller() override;

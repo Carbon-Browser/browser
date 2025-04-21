@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {LifetimeBrowserProxyImpl} from '/shared/settings/lifetime_browser_proxy.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LifetimeBrowserProxyImpl} from './lifetime_browser_proxy.js';
 import {getTemplate} from './relaunch_confirmation_dialog.html.js';
 import {RestartType} from './relaunch_mixin.js';
 
@@ -55,17 +55,25 @@ export class RelaunchConfirmationDialogElement extends PolymerElement {
       relaunchConfirmationDialogDesc: String,
 
       restartType: Object,
+
+      //  Boolean that defines if the confirmation dialog is opened for browser
+      //  version update.
+      isVersionUpdate: {
+        type: Boolean,
+        value: false,
+      },
     };
   }
 
   relaunchConfirmationDialogDesc: string|null;
   restartType: RestartType;
+  isVersionUpdate: boolean;
 
   override async connectedCallback() {
     super.connectedCallback();
     this.relaunchConfirmationDialogDesc =
         await LifetimeBrowserProxyImpl.getInstance()
-            .getRelaunchConfirmationDialogDescription();
+            .getRelaunchConfirmationDialogDescription(this.isVersionUpdate);
   }
 
   private onDialogCancel_() {

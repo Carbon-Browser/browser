@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/renderers/decrypting_renderer.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/cdm_context.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_log.h"
@@ -19,7 +20,7 @@ namespace media {
 DecryptingRenderer::DecryptingRenderer(
     std::unique_ptr<Renderer> renderer,
     MediaLog* media_log,
-    const scoped_refptr<base::SingleThreadTaskRunner> media_task_runner)
+    const scoped_refptr<base::SequencedTaskRunner> media_task_runner)
     : renderer_(std::move(renderer)),
       media_log_(media_log),
       media_task_runner_(media_task_runner),
@@ -44,12 +45,12 @@ DecryptingRenderer::~DecryptingRenderer() {}
 void DecryptingRenderer::Initialize(MediaResource* media_resource,
                                     RendererClient* client,
                                     PipelineStatusCallback init_cb) {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(media_resource);
   DCHECK(client);
 
   // Using |this| with a MediaResource::Type::URL will result in a crash.
-  DCHECK_EQ(media_resource->GetType(), MediaResource::Type::STREAM);
+  DCHECK_EQ(media_resource->GetType(), MediaResource::Type::kStream);
 
   media_resource_ = media_resource;
   client_ = client;
@@ -75,7 +76,7 @@ void DecryptingRenderer::Initialize(MediaResource* media_resource,
 
 void DecryptingRenderer::SetCdm(CdmContext* cdm_context,
                                 CdmAttachedCB cdm_attached_cb) {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
 
   if (cdm_context_) {
     DVLOG(1) << "Switching CDM not supported.";
@@ -107,7 +108,7 @@ void DecryptingRenderer::SetCdm(CdmContext* cdm_context,
 }
 
 void DecryptingRenderer::SetLatencyHint(
-    absl::optional<base::TimeDelta> latency_hint) {
+    std::optional<base::TimeDelta> latency_hint) {
   renderer_->SetLatencyHint(latency_hint);
 }
 
@@ -115,9 +116,10 @@ void DecryptingRenderer::SetPreservesPitch(bool preserves_pitch) {
   renderer_->SetPreservesPitch(preserves_pitch);
 }
 
-void DecryptingRenderer::SetWasPlayedWithUserActivation(
-    bool was_played_with_user_activation) {
-  renderer_->SetWasPlayedWithUserActivation(was_played_with_user_activation);
+void DecryptingRenderer::SetWasPlayedWithUserActivationAndHighMediaEngagement(
+    bool was_played_with_user_activation_and_high_media_engagement) {
+  renderer_->SetWasPlayedWithUserActivationAndHighMediaEngagement(
+      was_played_with_user_activation_and_high_media_engagement);
 }
 
 void DecryptingRenderer::Flush(base::OnceClosure flush_cb) {
@@ -154,8 +156,13 @@ void DecryptingRenderer::OnEnabledAudioTracksChanged(
                                          std::move(change_completed_cb));
 }
 
+RendererType DecryptingRenderer::GetRendererType() {
+  // DecryptingRenderer is a thin wrapping layer; return the underlying type.
+  return renderer_->GetRendererType();
+}
+
 void DecryptingRenderer::CreateAndInitializeDecryptingMediaResource() {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(init_cb_);
 
   decrypting_media_resource_ = std::make_unique<DecryptingMediaResource>(
@@ -168,7 +175,7 @@ void DecryptingRenderer::CreateAndInitializeDecryptingMediaResource() {
 }
 
 void DecryptingRenderer::InitializeRenderer(bool success) {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
 
   if (!success) {
     std::move(init_cb_).Run(PIPELINE_ERROR_INITIALIZATION_FAILED);
@@ -185,9 +192,9 @@ void DecryptingRenderer::InitializeRenderer(bool success) {
 }
 
 bool DecryptingRenderer::HasEncryptedStream() {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
 
-  for (auto* stream : media_resource_->GetAllStreams()) {
+  for (media::DemuxerStream* stream : media_resource_->GetAllStreams()) {
     if ((stream->type() == DemuxerStream::AUDIO &&
          stream->audio_decoder_config().is_encrypted()) ||
         (stream->type() == DemuxerStream::VIDEO &&
@@ -204,7 +211,7 @@ bool DecryptingRenderer::HasDecryptingMediaResourceForTesting() const {
 }
 
 void DecryptingRenderer::OnWaiting(WaitingReason reason) {
-  DCHECK(media_task_runner_->BelongsToCurrentThread());
+  DCHECK(media_task_runner_->RunsTasksInCurrentSequence());
   client_->OnWaiting(reason);
 }
 

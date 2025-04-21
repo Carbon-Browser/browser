@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 
 #include <stdint.h>
 
+#include <compare>
 #include <iosfwd>
 #include <string>
-#include <tuple>
+#include <string_view>
 
 #include "base/hash/hash.h"
-#include "base/strings/string_piece.h"
+#include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "components/viz/common/viz_common_export.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_proto.h"
 
 namespace viz {
 
@@ -49,22 +51,17 @@ class VIZ_COMMON_EXPORT FrameSinkId {
 
   constexpr uint32_t sink_id() const { return sink_id_; }
 
-  bool operator==(const FrameSinkId& other) const {
-    return client_id_ == other.client_id_ && sink_id_ == other.sink_id_;
-  }
-
-  bool operator!=(const FrameSinkId& other) const { return !(*this == other); }
-
-  bool operator<(const FrameSinkId& other) const {
-    return std::tie(client_id_, sink_id_) <
-           std::tie(other.client_id_, other.sink_id_);
-  }
+  friend std::strong_ordering operator<=>(const FrameSinkId&,
+                                          const FrameSinkId&) = default;
 
   size_t hash() const { return base::HashInts(client_id_, sink_id_); }
 
   std::string ToString() const;
 
-  std::string ToString(base::StringPiece debug_label) const;
+  std::string ToString(std::string_view debug_label) const;
+
+  using TraceProto = perfetto::protos::pbzero::FrameSinkId;
+  void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const;
 
  private:
   uint32_t client_id_;

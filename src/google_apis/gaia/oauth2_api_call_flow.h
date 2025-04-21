@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/component_export.h"
 #include "base/memory/scoped_refptr.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
@@ -26,7 +27,7 @@ class HttpRequestHeaders;
 // given an access token to the service.  This class abstracts the basic steps
 // and exposes template methods for sub-classes to implement for API specific
 // details.
-class OAuth2ApiCallFlow {
+class COMPONENT_EXPORT(GOOGLE_APIS) OAuth2ApiCallFlow {
  public:
   OAuth2ApiCallFlow();
 
@@ -46,6 +47,8 @@ class OAuth2ApiCallFlow {
   // Methods to help create the API request.
   virtual GURL CreateApiCallUrl() = 0;
   virtual net::HttpRequestHeaders CreateApiCallHeaders();
+  virtual std::string CreateAuthorizationHeaderValue(
+      const std::string& access_token);
   virtual std::string CreateApiCallBody() = 0;
   virtual std::string CreateApiCallBodyContentType();
 

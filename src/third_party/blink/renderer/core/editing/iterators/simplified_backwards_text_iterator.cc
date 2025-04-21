@@ -40,7 +40,7 @@
 namespace blink {
 
 static int CollapsedSpaceLength(LayoutText* layout_text, int text_end) {
-  const String& text = layout_text->GetText();
+  const String& text = layout_text->TransformedText();
   int length = text.length();
   for (int i = text_end; i < length; ++i) {
     if (!layout_text->Style()->IsCollapsibleWhiteSpace(text[i]))
@@ -147,13 +147,15 @@ void SimplifiedBackwardsTextIteratorAlgorithm<Strategy>::Advance() {
           node_->getNodeType() == Node::kTextNode) {
         // FIXME: What about kCdataSectionNode?
         if (layout_object->Style()->Visibility() == EVisibility::kVisible &&
-            offset_ > 0)
+            offset_ > 0) {
           handled_node_ = HandleTextNode();
+        }
       } else if (layout_object && (layout_object->IsLayoutEmbeddedContent() ||
                                    TextIterator::SupportsAltText(*node_))) {
         if (layout_object->Style()->Visibility() == EVisibility::kVisible &&
-            offset_ > 0)
+            offset_ > 0) {
           handled_node_ = HandleReplacedElement();
+        }
       } else {
         handled_node_ = HandleNonTextNode();
       }
@@ -219,7 +221,7 @@ bool SimplifiedBackwardsTextIteratorAlgorithm<Strategy>::HandleTextNode() {
   if (!layout_object)
     return true;
 
-  String text = layout_object->GetText();
+  String text = layout_object->TransformedText();
 
   if (behavior_.EmitsSpaceForNbsp())
     text.Replace(kNoBreakSpaceCharacter, kSpaceCharacter);

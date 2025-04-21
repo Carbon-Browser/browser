@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
@@ -21,7 +22,6 @@
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
 
 namespace blink {
@@ -43,7 +43,7 @@ class ProcessMemoryDump;
 namespace storage {
 
 using LegacyDomStorageValuesMap =
-    std::map<std::u16string, absl::optional<std::u16string>>;
+    std::map<std::u16string, std::optional<std::u16string>>;
 
 // A legacy implementation of Session Storage used only in tests to provide
 // coverage of session storage migration code.

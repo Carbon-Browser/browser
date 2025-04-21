@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,16 @@
 #include "base/check_op.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 TestWidgetObserver::TestWidgetObserver(Widget* widget) : widget_(widget) {
   widget_->AddObserver(this);
 }
 
 TestWidgetObserver::~TestWidgetObserver() {
-  if (widget_)
+  if (widget_) {
     widget_->RemoveObserver(this);
+  }
   CHECK(!IsInObserverList());
 }
 
@@ -25,5 +25,4 @@ void TestWidgetObserver::OnWidgetDestroying(Widget* widget) {
   widget_ = nullptr;
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

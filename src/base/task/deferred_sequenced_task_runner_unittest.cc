@@ -1,11 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/deferred_sequenced_task_runner.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -13,7 +13,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,17 +23,15 @@ class DeferredSequencedTaskRunnerTest : public testing::Test {
  public:
   class ExecuteTaskOnDestructor : public RefCounted<ExecuteTaskOnDestructor> {
    public:
-    ExecuteTaskOnDestructor(
-        DeferredSequencedTaskRunnerTest* executor,
-        int task_id)
-        : executor_(executor),
-          task_id_(task_id) {
-    }
-  private:
-   friend class RefCounted<ExecuteTaskOnDestructor>;
-   virtual ~ExecuteTaskOnDestructor() { executor_->ExecuteTask(task_id_); }
-   raw_ptr<DeferredSequencedTaskRunnerTest> executor_;
-   int task_id_;
+    ExecuteTaskOnDestructor(DeferredSequencedTaskRunnerTest* executor,
+                            int task_id)
+        : executor_(executor), task_id_(task_id) {}
+
+   private:
+    friend class RefCounted<ExecuteTaskOnDestructor>;
+    virtual ~ExecuteTaskOnDestructor() { executor_->ExecuteTask(task_id_); }
+    raw_ptr<DeferredSequencedTaskRunnerTest> executor_;
+    int task_id_;
   };
 
   void ExecuteTask(int task_id) {
@@ -48,17 +45,14 @@ class DeferredSequencedTaskRunnerTest : public testing::Test {
                                Unretained(this), task_id));
   }
 
-  void StartRunner() {
-    runner_->Start();
-  }
+  void StartRunner() { runner_->Start(); }
 
-  void DoNothing(ExecuteTaskOnDestructor* object) {
-  }
+  void DoNothing(ExecuteTaskOnDestructor* object) {}
 
  protected:
   DeferredSequencedTaskRunnerTest()
-      : runner_(
-            new DeferredSequencedTaskRunner(ThreadTaskRunnerHandle::Get())) {}
+      : runner_(new DeferredSequencedTaskRunner(
+            SingleThreadTaskRunner::GetCurrentDefault())) {}
 
   test::TaskEnvironment task_environment_;
   scoped_refptr<DeferredSequencedTaskRunner> runner_;
@@ -70,49 +64,65 @@ TEST_F(DeferredSequencedTaskRunnerTest, Stopped) {
   PostExecuteTask(1);
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre());
+  EXPECT_FALSE(runner_->Started());
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, Start) {
+  EXPECT_FALSE(runner_->Started());
   StartRunner();
+  EXPECT_TRUE(runner_->Started());
   PostExecuteTask(1);
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre(1));
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, StartWithMultipleElements) {
+  EXPECT_FALSE(runner_->Started());
   StartRunner();
-  for (int i = 1; i < 5; ++i)
+  EXPECT_TRUE(runner_->Started());
+  for (int i = 1; i < 5; ++i) {
     PostExecuteTask(i);
+  }
 
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre(1, 2, 3, 4));
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, DeferredStart) {
+  EXPECT_FALSE(runner_->Started());
   PostExecuteTask(1);
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre());
+  EXPECT_FALSE(runner_->Started());
 
   StartRunner();
+  EXPECT_TRUE(runner_->Started());
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre(1));
+  EXPECT_TRUE(runner_->Started());
 
   PostExecuteTask(2);
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre(1, 2));
+  EXPECT_TRUE(runner_->Started());
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, DeferredStartWithMultipleElements) {
-  for (int i = 1; i < 5; ++i)
+  for (int i = 1; i < 5; ++i) {
     PostExecuteTask(i);
+  }
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre());
+  EXPECT_FALSE(runner_->Started());
 
   StartRunner();
-  for (int i = 5; i < 9; ++i)
+  EXPECT_TRUE(runner_->Started());
+  for (int i = 5; i < 9; ++i) {
     PostExecuteTask(i);
+  }
   RunLoop().RunUntilIdle();
   EXPECT_THAT(executed_task_ids_, testing::ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  EXPECT_TRUE(runner_->Started());
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, DeferredStartWithMultipleThreads) {
@@ -128,6 +138,9 @@ TEST_F(DeferredSequencedTaskRunnerTest, DeferredStartWithMultipleThreads) {
       thread2.task_runner()->PostTask(
           FROM_HERE, BindOnce(&DeferredSequencedTaskRunnerTest::PostExecuteTask,
                               Unretained(this), 2 * i + 1));
+      if (i <= 2) {
+        EXPECT_FALSE(runner_->Started());
+      }
       if (i == 2) {
         thread1.task_runner()->PostTask(
             FROM_HERE, BindOnce(&DeferredSequencedTaskRunnerTest::StartRunner,
@@ -137,8 +150,9 @@ TEST_F(DeferredSequencedTaskRunnerTest, DeferredStartWithMultipleThreads) {
   }
 
   RunLoop().RunUntilIdle();
-  EXPECT_THAT(executed_task_ids_,
-      testing::WhenSorted(testing::ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)));
+  EXPECT_TRUE(runner_->Started());
+  EXPECT_THAT(executed_task_ids_, testing::WhenSorted(testing::ElementsAre(
+                                      0, 1, 2, 3, 4, 5, 6, 7, 8, 9)));
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, ObjectDestructionOrder) {
@@ -161,6 +175,7 @@ TEST_F(DeferredSequencedTaskRunnerTest, ObjectDestructionOrder) {
       // task |2 * i + 1| is executed.
       PostExecuteTask(2 * i + 1);
     }
+    EXPECT_FALSE(runner_->Started());
     StartRunner();
   }
 
@@ -168,6 +183,7 @@ TEST_F(DeferredSequencedTaskRunnerTest, ObjectDestructionOrder) {
   // |2 * i + 1| is executed.
   EXPECT_THAT(executed_task_ids_,
               testing::ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
+  EXPECT_TRUE(runner_->Started());
 }
 
 void GetRunsTasksInCurrentSequence(bool* result,
@@ -192,6 +208,7 @@ TEST_F(DeferredSequencedTaskRunnerTest, RunsTasksInCurrentSequence) {
                runner, run_loop.QuitClosure()));
   run_loop.Run();
   EXPECT_FALSE(runs_task_in_current_thread);
+  EXPECT_FALSE(runner->Started());
 }
 
 TEST_F(DeferredSequencedTaskRunnerTest, StartWithTaskRunner) {
@@ -206,7 +223,9 @@ TEST_F(DeferredSequencedTaskRunnerTest, StartWithTaskRunner) {
                          std::move(quit_closure).Run();
                        },
                        &run_called, run_loop.QuitClosure()));
-  runner->StartWithTaskRunner(ThreadTaskRunnerHandle::Get());
+  EXPECT_FALSE(runner->Started());
+  runner->StartWithTaskRunner(SingleThreadTaskRunner::GetCurrentDefault());
+  EXPECT_TRUE(runner->Started());
   run_loop.Run();
   EXPECT_TRUE(run_called);
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,12 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockAudioFocusManager
   MOCK_METHOD(void,
               RequestIdReleased,
               (const base::UnguessableToken& request_id));
+  MOCK_METHOD(
+      void,
+      StartDuckingAllAudio,
+      (const std::optional<base::UnguessableToken>& exempted_request_id));
+  MOCK_METHOD(void, StopDuckingAllAudio, ());
+  MOCK_METHOD(void, FlushForTesting, (FlushForTestingCallback));
 
  private:
   mojo::Receiver<mojom::AudioFocusManager> receiver_{this};

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_registrar.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,8 +22,7 @@
 
 namespace ash {
 
-SystemWebAppIntegrationTest::SystemWebAppIntegrationTest()
-    : SystemWebAppManagerBrowserTest(false /* install_mock */) {}
+SystemWebAppIntegrationTest::SystemWebAppIntegrationTest() = default;
 
 SystemWebAppIntegrationTest::~SystemWebAppIntegrationTest() = default;
 
@@ -37,17 +38,17 @@ void SystemWebAppIntegrationTest::ExpectSystemWebAppValid(
 
   // Launch but don't wait for page load here because we want to check the
   // browser window's title is set before the page loads.
-  // TODO(crbug.com/1107285): This isn't a strong guarantee that we check the
+  // TODO(crbug.com/40140789): This isn't a strong guarantee that we check the
   // title before the page loads. We should improve this.
   Browser* app_browser;
   LaunchAppWithoutWaiting(app_type, &app_browser);
 
-  web_app::AppId app_id = app_browser->app_controller()->app_id();
+  webapps::AppId app_id = app_browser->app_controller()->app_id();
   EXPECT_EQ(GetManager().GetAppIdForSystemApp(app_type), app_id);
   EXPECT_TRUE(GetManager().IsSystemWebApp(app_id));
 
   web_app::WebAppRegistrar& registrar =
-      web_app::WebAppProvider::GetForTest(profile())->registrar();
+      web_app::WebAppProvider::GetForTest(profile())->registrar_unsafe();
   EXPECT_EQ(title, registrar.GetAppShortName(app_id));
   EXPECT_EQ(base::ASCIIToUTF16(title),
             app_browser->window()->GetNativeWindow()->GetTitle());
@@ -81,12 +82,13 @@ content::WebContents* SystemWebAppIntegrationTest::LaunchAppWithFile(
   return LaunchApp(std::move(params));
 }
 
-void SystemWebAppIntegrationTest::LaunchAppWithFileWithoutWaiting(
+content::WebContents*
+SystemWebAppIntegrationTest::LaunchAppWithFileWithoutWaiting(
     ash::SystemWebAppType type,
     const base::FilePath& file_path) {
   apps::AppLaunchParams params = LaunchParamsForApp(type);
   params.launch_files.push_back(file_path);
-  LaunchAppWithoutWaiting(std::move(params));
+  return LaunchAppWithoutWaiting(std::move(params));
 }
 
 }  // namespace ash

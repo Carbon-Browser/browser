@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,17 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "ash/public/cpp/assistant/controller/assistant_screen_context_controller.h"
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/assistant/assistant_host.h"
@@ -25,27 +27,24 @@
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/conversation_observer.h"
 #include "chromeos/ash/services/assistant/public/cpp/device_actions.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/service_controller.mojom-forward.h"
 #include "chromeos/services/assistant/public/shared/utils.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom.h"
-#include "chromeos/services/libassistant/public/mojom/service_controller.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/battery_monitor.mojom.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_assistant_structure.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
 
 namespace ash {
+
 class AssistantNotificationController;
 class AssistantStateBase;
-}  // namespace ash
 
-namespace chromeos {
 namespace assistant {
 
 class AssistantHost;
@@ -75,8 +74,8 @@ enum class AssistantQueryResponseType {
   // doesn't know what to do.
   kSearchFallback = 3,
   // Query results in specific actions (e.g. opening a web app such as YouTube
-  // or Facebook, some deeplink actions such as taking a screenshot or opening
-  // chrome settings page), indicating that Assistant knows what to do.
+  // or Facebook, some deeplink actions such as opening chrome settings page),
+  // indicating that Assistant knows what to do.
   kTargetedAction = 4,
   // Special enumerator value used by histogram macros.
   kMaxValue = kTargetedAction
@@ -93,7 +92,7 @@ enum class AssistantQueryResponseType {
 class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
     : public AssistantManagerService,
       public AppListEventSubscriber,
-      private chromeos::libassistant::mojom::StateObserver,
+      private libassistant::mojom::StateObserver,
       public ConversationObserver {
  public:
   // |callback| is called when AssistantManagerServiceImpl got initialized
@@ -107,8 +106,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
       ServiceContext* context,
       std::unique_ptr<network::PendingSharedURLLoaderFactory>
           pending_url_loader_factory,
-      absl::optional<std::string> s3_server_uri_override,
-      absl::optional<std::string> device_id_override,
+      std::optional<std::string> s3_server_uri_override,
+      std::optional<std::string> device_id_override,
       // Allows to inect a custom |LibassistantServiceHost| during unittests.
       std::unique_ptr<LibassistantServiceHost> libassistant_service_host =
           nullptr);
@@ -120,11 +119,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   ~AssistantManagerServiceImpl() override;
 
   // assistant::AssistantManagerService overrides:
-  void Start(const absl::optional<UserInfo>& user,
-             bool enable_hotword) override;
+  void Start(const std::optional<UserInfo>& user, bool enable_hotword) override;
   void Stop() override;
   State GetState() const override;
-  void SetUser(const absl::optional<UserInfo>& user) override;
+  void SetUser(const std::optional<UserInfo>& user) override;
   void EnableListening(bool enable) override;
   void EnableHotword(bool enable) override;
   void SetArcPlayStoreEnabled(bool enable) override;
@@ -142,8 +140,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
 
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
                             AssistantQuerySource source,
                             bool allow_tts) override;
@@ -164,10 +160,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   void RemoveAlarmOrTimer(const std::string& id) override;
   void ResumeTimer(const std::string& id) override;
   void AddRemoteConversationObserver(ConversationObserver* observer) override;
-  mojo::PendingReceiver<chromeos::libassistant::mojom::NotificationDelegate>
+  mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
   GetPendingNotificationDelegate() override;
 
-  // chromeos::assistant::ConversationObserver overrides:
+  // ConversationObserver overrides:
   void OnInteractionStarted(
       const AssistantInteractionMetadata& metadata) override;
   void OnInteractionFinished(
@@ -181,24 +177,20 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   void OnAndroidAppListRefreshed(
       const std::vector<AndroidAppInfo>& apps_info) override;
 
+  // libassistant::mojom::StateObserver implementation:
+  void OnStateChanged(libassistant::mojom::ServiceState new_state) override;
+
   void SetMicState(bool mic_open);
 
   base::Thread& GetBackgroundThreadForTesting();
 
  private:
-  // chromeos::libassistant::mojom::StateObserver implementation:
-  void OnStateChanged(
-      chromeos::libassistant::mojom::ServiceState new_state) override;
-
-  void OnInstallDlcComplete(
-      const absl::optional<UserInfo>& user,
-      const chromeos::DlcserviceClient::InstallResult& result);
-
-  // Optional `dlc_path`, where the DLC libassistant.so is mounted.
-  void InitAssistant(const absl::optional<UserInfo>& user,
-                     const absl::optional<std::string>& dlc_path);
+  void Initialize();
+  void InitAssistant(const std::optional<UserInfo>& user);
   void OnServiceStarted();
   void OnServiceRunning();
+  void OnServiceStopped();
+  void OnServiceDisconnected();
   bool IsServiceStarted() const;
 
   mojo::PendingRemote<network::mojom::URLLoaderFactory> BindURLLoaderFactory();
@@ -228,22 +220,23 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
                                 const std::string& description,
                                 bool is_user_initiated);
 
-  ash::AssistantNotificationController* assistant_notification_controller();
-  ash::AssistantScreenContextController* assistant_screen_context_controller();
-  ash::AssistantStateBase* assistant_state();
+  AssistantNotificationController* assistant_notification_controller();
+  AssistantStateBase* assistant_state();
   DeviceActions* device_actions();
   scoped_refptr<base::SequencedTaskRunner> main_task_runner();
 
-  chromeos::libassistant::mojom::ConversationController&
-  conversation_controller();
-  chromeos::libassistant::mojom::DisplayController& display_controller();
-  chromeos::libassistant::mojom::ServiceController& service_controller();
-  chromeos::libassistant::mojom::SettingsController& settings_controller();
+  libassistant::mojom::ConversationController& conversation_controller();
+  libassistant::mojom::DisplayController& display_controller();
+  libassistant::mojom::ServiceController& service_controller();
+  libassistant::mojom::SettingsController& settings_controller();
   base::Thread& background_thread();
 
   void SetStateAndInformObservers(State new_state);
 
+  void ClearAfterStop();
+
   State state_ = State::STOPPED;
+
   std::unique_ptr<AssistantSettingsImpl> assistant_settings_;
 
   std::unique_ptr<AssistantHost> assistant_host_;
@@ -253,7 +246,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   base::ObserverList<AssistantInteractionSubscriber> interaction_subscribers_;
 
   // Owned by the parent |Service| which will destroy |this| before |context_|.
-  ServiceContext* const context_;
+  const raw_ptr<ServiceContext> context_;
 
   std::unique_ptr<LibassistantServiceHost> libassistant_service_host_;
   std::unique_ptr<DeviceSettingsHost> device_settings_host_;
@@ -262,8 +255,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   std::unique_ptr<AudioOutputDelegateImpl> audio_output_delegate_;
   std::unique_ptr<SpeechRecognitionObserverWrapper>
       speech_recognition_observer_;
-  mojo::Receiver<chromeos::libassistant::mojom::StateObserver>
-      state_observer_receiver_{this};
+  mojo::Receiver<libassistant::mojom::StateObserver> state_observer_receiver_{
+      this};
 
   bool spoken_feedback_enabled_ = false;
   bool dark_mode_enabled_ = false;
@@ -274,16 +267,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
   std::string receive_url_response_;
 
   // Configuration passed to libassistant.
-  chromeos::libassistant::mojom::BootupConfigPtr bootup_config_;
+  libassistant::mojom::BootupConfigPtr bootup_config_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
-  // Mounted path of libassistant.so. Will not change within a chrome session.
-  absl::optional<std::string> dlc_path_;
-
-  base::ScopedObservation<DeviceActions,
-                          AppListEventSubscriber,
-                          &DeviceActions::AddAndFireAppListEventSubscriber,
-                          &DeviceActions::RemoveAppListEventSubscriber>
+  base::ScopedObservation<DeviceActions, AppListEventSubscriber>
       scoped_app_list_event_subscriber_{this};
   base::ObserverList<AssistantManagerService::StateObserver> state_observers_;
 
@@ -291,6 +278,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerServiceImpl
 };
 
 }  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_ASSISTANT_MANAGER_SERVICE_IMPL_H_

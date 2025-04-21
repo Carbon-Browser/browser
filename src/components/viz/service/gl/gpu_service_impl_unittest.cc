@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,36 +8,65 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
+#include "components/viz/common/resources/peak_gpu_memory_tracker_util.h"
+#include "components/viz/service/input/peak_gpu_memory_tracker_impl.h"
 #include "gpu/config/gpu_info.h"
-#include "gpu/ipc/service/display_context.h"
 #include "gpu/ipc/service/gpu_watchdog_thread.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/viz/public/mojom/gpu.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/init/gl_factory.h"
 
 namespace viz {
+
 namespace {
 
-class MockDisplayContext : public gpu::DisplayContext {
- public:
-  MockDisplayContext() = default;
-  ~MockDisplayContext() override = default;
-
-  // gpu::DisplayContext implementation.
-  MOCK_METHOD0(MarkContextLost, void());
-};
+const uint64_t kPeakMemoryMB = 42u;
+const uint64_t kPeakMemory = kPeakMemoryMB * 1048576u;
 
 }  // namespace
+
+class MockGpuServiceImpl : public GpuServiceImpl {
+ public:
+  explicit MockGpuServiceImpl(
+      const gpu::GpuPreferences& gpu_preferences,
+      const gpu::GPUInfo& gpu_info,
+      const gpu::GpuFeatureInfo& gpu_feature_info,
+      const std::optional<gpu::GPUInfo>& gpu_info_for_hardware_gpu,
+      const std::optional<gpu::GpuFeatureInfo>&
+          gpu_feature_info_for_hardware_gpu,
+      const gfx::GpuExtraInfo& gpu_extra_info,
+      InitParams init_params)
+      : GpuServiceImpl(gpu_preferences,
+                       gpu_info,
+                       gpu_feature_info,
+                       gpu_info_for_hardware_gpu,
+                       gpu_feature_info_for_hardware_gpu,
+                       gpu_extra_info,
+                       std::move(init_params)) {}
+  ~MockGpuServiceImpl() override = default;
+
+  MOCK_METHOD(void,
+              StartPeakMemoryMonitor,
+              (uint32_t sequence_num),
+              (override));
+
+  MOCK_METHOD(void,
+              GetPeakMemoryUsageOnMainThread,
+              (uint32_t sequence_num, GetPeakMemoryUsageCallback callback),
+              (override));
+};
 
 class GpuServiceTest : public testing::Test {
  public:
@@ -49,8 +78,11 @@ class GpuServiceTest : public testing::Test {
   GpuServiceTest(const GpuServiceTest&) = delete;
   GpuServiceTest& operator=(const GpuServiceTest&) = delete;
 
-  ~GpuServiceTest() override {}
+  ~GpuServiceTest() override = default;
 
+  MockGpuServiceImpl* mock_gpu_service() {
+    return static_cast<MockGpuServiceImpl*>(gpu_service_.get());
+  }
   GpuServiceImpl* gpu_service() { return gpu_service_.get(); }
 
   void DestroyService() { gpu_service_ = nullptr; }
@@ -75,12 +107,12 @@ class GpuServiceTest : public testing::Test {
     ASSERT_TRUE(io_thread_.Start());
     gpu::GPUInfo gpu_info;
     gpu_info.in_process_gpu = false;
-    gpu_service_ = std::make_unique<GpuServiceImpl>(
-        gpu_info, /*watchdog_thread=*/nullptr, io_thread_.task_runner(),
-        gpu::GpuFeatureInfo(), gpu::GpuPreferences(), gpu::GPUInfo(),
-        gpu::GpuFeatureInfo(), gfx::GpuExtraInfo(),
-        /*vulkan_implementation=*/nullptr,
-        /*exit_callback=*/base::DoNothing());
+    GpuServiceImpl::InitParams init_params;
+    init_params.io_runner = io_thread_.task_runner();
+    init_params.exit_callback = base::DoNothing();
+    gpu_service_ = std::make_unique<testing::NiceMock<MockGpuServiceImpl>>(
+        gpu::GpuPreferences(), gpu_info, gpu::GpuFeatureInfo(), gpu::GPUInfo(),
+        gpu::GpuFeatureInfo(), gfx::GpuExtraInfo(), std::move(init_params));
   }
 
   void TearDown() override {
@@ -90,7 +122,7 @@ class GpuServiceTest : public testing::Test {
     io_thread_.Stop();
   }
 
-  absl::optional<bool> visible_;
+  std::optional<bool> visible_;
 
  private:
   base::Thread io_thread_;
@@ -132,30 +164,14 @@ TEST_F(GpuServiceTest, LoseAllContexts) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
-      gl::init::CreateOffscreenGLSurface(gfx::Size()),
-      /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
-      /*shutdown_event=*/nullptr);
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
+      mojom::GpuServiceCreationParams::New());
   gpu_service_remote.FlushForTesting();
 
-  MockDisplayContext display_context;
-  gpu_service()->RegisterDisplayContext(&display_context);
-
-  // Verify that |display_context| is told to lose it's context.
-  EXPECT_CALL(display_context, MarkContextLost());
-  gpu_service()->LoseAllContexts();
-  testing::Mock::VerifyAndClearExpectations(&display_context);
-
-  gpu_service()->MaybeExitOnContextLost();
+  gpu_service()->MaybeExitOnContextLost(
+      /*synthetic_loss=*/false, gpu::error::ContextLostReason::kUnknown);
   EXPECT_TRUE(gpu_service()->IsExiting());
-
-  // Verify that if GPU process is already exiting then |display_context| won't
-  // be told to lose it's context.
-  EXPECT_CALL(display_context, MarkContextLost()).Times(0);
-  gpu_service()->LoseAllContexts();
-  testing::Mock::VerifyAndClearExpectations(&display_context);
-
-  gpu_service()->UnregisterDisplayContext(&display_context);
 }
 
 // Tests that the visibility callback gets called when visibility changes.
@@ -166,10 +182,9 @@ TEST_F(GpuServiceTest, VisibilityCallbackCalled) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
-      gl::init::CreateOffscreenGLSurface(gfx::Size()),
-      /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
-      /*shutdown_event=*/nullptr);
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
+      mojom::GpuServiceCreationParams::New());
   gpu_service_remote.FlushForTesting();
 
   gpu_service()->SetVisibilityChangedCallback(base::BindRepeating(
@@ -188,6 +203,54 @@ TEST_F(GpuServiceTest, VisibilityCallbackCalled) {
 
   EXPECT_TRUE(visible_.has_value());
   EXPECT_FALSE(*visible_);
+}
+
+// Tests that when a PeakGpuMemoryTracker is destroyed, GpuService properly
+// updates the histograms.
+TEST_F(GpuServiceTest, PeakGpuMemoryCallback) {
+  mojo::Remote<mojom::GpuService> gpu_service_remote;
+  gpu_service()->Bind(gpu_service_remote.BindNewPipeAndPassReceiver());
+
+  mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
+  std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
+  gpu_service()->InitializeWithHost(
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
+      mojom::GpuServiceCreationParams::New());
+  gpu_service_remote.FlushForTesting();
+
+  ON_CALL(*mock_gpu_service(), GetPeakMemoryUsageOnMainThread)
+      .WillByDefault(testing::Invoke(
+          [](uint32_t sequence_num,
+             GpuServiceImpl::GetPeakMemoryUsageCallback callback) {
+            ASSERT_EQ(GetPeakMemoryUsageRequestLocation(sequence_num),
+                      SequenceLocation::kGpuProcess);
+            base::flat_map<gpu::GpuPeakMemoryAllocationSource, uint64_t>
+                allocation_per_source;
+            allocation_per_source[gpu::GpuPeakMemoryAllocationSource::UNKNOWN] =
+                kPeakMemory;
+            std::move(callback).Run(kPeakMemory, allocation_per_source);
+          }));
+
+  base::HistogramTester histogram;
+  auto tracker = std::make_unique<PeakGpuMemoryTrackerImpl>(
+      PeakGpuMemoryTracker::Usage::PAGE_LOAD, gpu_service());
+
+  // No report in response to creation.
+  histogram.ExpectTotalCount("Memory.GPU.PeakMemoryUsage2.PageLoad", 0);
+  histogram.ExpectTotalCount(
+      "Memory.GPU.PeakMemoryAllocationSource.PageLoad.Unknown", 0);
+
+  // Deleting the tracker should start a request for peak Gpu memory usage,
+  // with the callback being a posted task.
+  tracker.reset();
+  gpu_service_remote.FlushForTesting();
+
+  histogram.ExpectUniqueSample("Memory.GPU.PeakMemoryUsage2.PageLoad",
+                               kPeakMemoryMB, 1);
+  histogram.ExpectUniqueSample(
+      "Memory.GPU.PeakMemoryAllocationSource2.PageLoad.Unknown", kPeakMemoryMB,
+      1);
 }
 
 }  // namespace viz

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -149,7 +149,8 @@ IN_PROC_BROWSER_TEST_F(CustomTabsHeaderPrendering, Prerender) {
 
   const GURL prerender_url = CreateURL();
   // Loads a page in the prerender.
-  int host_id = prerender_helper()->AddPrerender(prerender_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::RenderFrameHost* prerender_rfh =
       prerender_helper()->GetPrerenderedMainFrameHost(host_id);
   EXPECT_TRUE(WaitForRenderFrameReady(prerender_rfh));

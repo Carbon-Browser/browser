@@ -1,23 +1,34 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/rejecting_authenticator.h"
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
-RejectingAuthenticator::RejectingAuthenticator(RejectionReason rejection_reason)
-    : rejection_reason_(rejection_reason) {
-}
+RejectingAuthenticator::RejectingAuthenticator(
+    RejectionReason rejection_reason,
+    std::string_view rejection_message,
+    const base::Location& rejection_location)
+    : rejection_reason_(rejection_reason),
+      rejection_details_{std::string(rejection_message), rejection_location} {}
 
 RejectingAuthenticator::~RejectingAuthenticator() = default;
+
+CredentialsType RejectingAuthenticator::credentials_type() const {
+  return CredentialsType::UNKNOWN;
+}
+
+const Authenticator& RejectingAuthenticator::implementing_authenticator()
+    const {
+  return *this;
+}
 
 Authenticator::State RejectingAuthenticator::state() const {
   return state_;
@@ -26,10 +37,16 @@ bool RejectingAuthenticator::started() const {
   return true;
 }
 
-Authenticator::RejectionReason
-RejectingAuthenticator::rejection_reason() const {
+Authenticator::RejectionReason RejectingAuthenticator::rejection_reason()
+    const {
   DCHECK_EQ(state_, REJECTED);
   return rejection_reason_;
+}
+
+Authenticator::RejectionDetails RejectingAuthenticator::rejection_details()
+    const {
+  DCHECK_EQ(state_, REJECTED);
+  return rejection_details_;
 }
 
 void RejectingAuthenticator::ProcessMessage(
@@ -40,21 +57,22 @@ void RejectingAuthenticator::ProcessMessage(
   std::move(resume_callback).Run();
 }
 
-std::unique_ptr<jingle_xmpp::XmlElement> RejectingAuthenticator::GetNextMessage() {
+std::unique_ptr<jingle_xmpp::XmlElement>
+RejectingAuthenticator::GetNextMessage() {
   NOTREACHED();
-  return nullptr;
 }
 
 const std::string& RejectingAuthenticator::GetAuthKey() const {
   NOTREACHED();
-  return auth_key_;
+}
+
+const SessionPolicies* RejectingAuthenticator::GetSessionPolicies() const {
+  NOTREACHED();
 }
 
 std::unique_ptr<ChannelAuthenticator>
 RejectingAuthenticator::CreateChannelAuthenticator() const {
   NOTREACHED();
-  return nullptr;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

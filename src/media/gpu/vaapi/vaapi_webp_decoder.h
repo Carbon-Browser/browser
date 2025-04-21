@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,10 @@ class VaapiWebPDecoder : public VaapiImageDecoder {
   // VaapiImageDecoder implementation.
   gpu::ImageDecodeAcceleratorType GetType() const override;
   SkYUVColorSpace GetYUVColorSpace() const override;
+
+  // Returns the image profile supported.
+  static std::optional<gpu::ImageDecodeAcceleratorSupportedProfile>
+  GetSupportedProfile();
 
  private:
   // VaapiImageDecoder implementation.

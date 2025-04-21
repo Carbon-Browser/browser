@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_obb_mounter_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -34,7 +35,7 @@ class ArcObbMounterClientImpl : public ArcObbMounterClient {
   void MountObb(const std::string& obb_file,
                 const std::string& mount_path,
                 int32_t owner_gid,
-                VoidDBusMethodCallback callback) override {
+                chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(arc::obb_mounter::kArcObbMounterInterface,
                                  arc::obb_mounter::kMountObbMethod);
     dbus::MessageWriter writer(&method_call);
@@ -48,7 +49,7 @@ class ArcObbMounterClientImpl : public ArcObbMounterClient {
   }
 
   void UnmountObb(const std::string& mount_path,
-                  VoidDBusMethodCallback callback) override {
+                  chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(arc::obb_mounter::kArcObbMounterInterface,
                                  arc::obb_mounter::kUnmountObbMethod);
     dbus::MessageWriter writer(&method_call);
@@ -59,7 +60,7 @@ class ArcObbMounterClientImpl : public ArcObbMounterClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  // DBusClient override.
+  // chromeos::DBusClient override.
   void Init(dbus::Bus* bus) override {
     proxy_ = bus->GetObjectProxy(
         arc::obb_mounter::kArcObbMounterServiceName,
@@ -68,12 +69,12 @@ class ArcObbMounterClientImpl : public ArcObbMounterClient {
 
  private:
   // Runs the callback with the method call result.
-  void OnVoidDBusMethod(VoidDBusMethodCallback callback,
+  void OnVoidDBusMethod(chromeos::VoidDBusMethodCallback callback,
                         dbus::Response* response) {
     std::move(callback).Run(response != nullptr);
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<ArcObbMounterClientImpl> weak_ptr_factory_{this};
 };

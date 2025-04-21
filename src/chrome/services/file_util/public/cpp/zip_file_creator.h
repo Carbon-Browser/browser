@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/services/file_util/public/mojom/file_util_service.mojom.h"
 #include "chrome/services/file_util/public/mojom/zip_file_creator.mojom.h"

@@ -1,16 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.h"
 
+#include <cstring>
 #include <limits>
 #include <memory>
 
 #include "base/compiler_specific.h"
 #include "base/numerics/checked_math.h"
 #include "build/build_config.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/arm/webgl_image_conversion_neon.h"
+#include "third_party/blink/renderer/platform/graphics/cpu/loongarch64/webgl_image_conversion_lsx.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/mips/webgl_image_conversion_msa.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/x86/webgl_image_conversion_sse.h"
 #include "third_party/blink/renderer/platform/graphics/image_observer.h"
@@ -416,7 +424,8 @@ const unsigned char g_shift_table[512] = {
     24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 13};
 
 uint16_t ConvertFloatToHalfFloat(float f) {
-  unsigned temp = *(reinterpret_cast<unsigned*>(&f));
+  unsigned temp;
+  std::memcpy(&temp, &f, 4);
   uint16_t signexp = (temp >> 23) & 0x1ff;
   return g_base_table[signexp] +
          ((temp & 0x007fffff) >> g_shift_table[signexp]);
@@ -834,7 +843,9 @@ float ConvertHalfFloatToFloat(uint16_t half) {
   uint32_t temp =
       g_mantissa_table[g_offset_table[half >> 10] + (half & 0x3ff)] +
       g_exponent_table[half >> 10];
-  return *(reinterpret_cast<float*>(&temp));
+  float ret;
+  std::memcpy(&ret, &temp, 4);
+  return ret;
 }
 
 /* BEGIN CODE SHARED WITH MOZILLA FIREFOX */
@@ -898,6 +909,10 @@ void Unpack<WebGLImageConversion::kDataFormatBGRA8, uint8_t, uint8_t>(
   simd::unpackOneRowOfBGRA8LittleToRGBA8MSA(source32, destination32,
                                             pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfBGRA8LittleToRGBA8(source32, destination32,
+                                         pixels_per_row);
+#endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint32_t bgra = source32[i];
 #if defined(ARCH_CPU_BIG_ENDIAN)
@@ -928,6 +943,10 @@ void Unpack<WebGLImageConversion::kDataFormatRGBA5551, uint16_t, uint8_t>(
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::unpackOneRowOfRGBA5551ToRGBA8MSA(source, destination, pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfRGBA5551LittleToRGBA8(source, destination,
+                                            pixels_per_row);
+#endif
 
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint16_t packed_value = source[0];
@@ -957,6 +976,10 @@ void Unpack<WebGLImageConversion::kDataFormatRGBA4444, uint16_t, uint8_t>(
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::unpackOneRowOfRGBA4444ToRGBA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfRGBA4444LittleToRGBA8(source, destination,
+                                            pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint16_t packed_value = source[0];
@@ -1272,6 +1295,9 @@ void Pack<WebGLImageConversion::kDataFormatR8,
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToR8MSA(source, destination, pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToR8(source, destination, pixels_per_row);
+#endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
     uint8_t source_r =
@@ -1373,6 +1399,9 @@ void Pack<WebGLImageConversion::kDataFormatRA8,
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToRA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToRA8(source, destination, pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
@@ -1566,6 +1595,9 @@ void Pack<WebGLImageConversion::kDataFormatRGBA8,
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToRGBA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToRGBA8(source, destination, pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
@@ -3277,6 +3309,7 @@ void FormatConverter::Convert(WebGLImageConversion::DataFormat src_format,
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatRA8)
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatRA32F)
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatRGBA8)
+    FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatRGBA16)
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatARGB8)
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatABGR8)
     FORMATCONVERTER_CASE_SRCFORMAT(WebGLImageConversion::kDataFormatAR8)
@@ -3388,13 +3421,11 @@ void FormatConverter::Convert() {
   if (SrcFormat == DstFormat &&
       alphaOp == WebGLImageConversion::kAlphaDoNothing) {
     NOTREACHED();
-    return;
   }
   // Note that ImageBitmaps with SrcFormat==kDataFormatRGBA16F return
   // false for IsFloatFormat since the input data is uint16_t.
   if (!IsFloatFormat<DstFormat>::value && IsFloatFormat<SrcFormat>::value) {
     NOTREACHED();
-    return;
   }
 
   // Only textures uploaded from DOM elements or ImageData can allow DstFormat
@@ -3404,25 +3435,21 @@ void FormatConverter::Convert() {
   if (!src_format_comes_from_dom_element_or_image_data &&
       SrcFormat != DstFormat) {
     NOTREACHED();
-    return;
   }
   // Likewise, only textures uploaded from DOM elements or ImageData can
   // possibly need to be unpremultiplied.
   if (!src_format_comes_from_dom_element_or_image_data &&
       alphaOp == WebGLImageConversion::kAlphaDoUnmultiply) {
     NOTREACHED();
-    return;
   }
   if (src_format_comes_from_dom_element_or_image_data &&
       alphaOp == WebGLImageConversion::kAlphaDoUnmultiply &&
       !SupportsConversionFromDomElements<DstFormat>::value) {
     NOTREACHED();
-    return;
   }
   if ((!HasAlpha(SrcFormat) || !HasColor(SrcFormat) || !HasColor(DstFormat)) &&
       alphaOp != WebGLImageConversion::kAlphaDoNothing) {
     NOTREACHED();
-    return;
   }
   // If converting DOM element data to UNSIGNED_INT_5_9_9_9_REV or
   // UNSIGNED_INT_10F_11F_11F_REV, we should always switch to FLOAT instead to
@@ -3432,7 +3459,6 @@ void FormatConverter::Convert() {
       (DstFormat == WebGLImageConversion::kDataFormatRGB5999 ||
        DstFormat == WebGLImageConversion::kDataFormatRGB10F11F11F)) {
     NOTREACHED();
-    return;
   }
 
   typedef typename DataTypeForFormat<SrcFormat>::Type SrcType;
@@ -3508,11 +3534,6 @@ void FormatConverter::Convert() {
   return;
 }
 
-bool FrameIsValid(const SkBitmap& frame_bitmap) {
-  return !frame_bitmap.isNull() && !frame_bitmap.empty() &&
-         frame_bitmap.colorType() == kN32_SkColorType;
-}
-
 }  // anonymous namespace
 
 WebGLImageConversion::PixelStoreParams::PixelStoreParams()
@@ -3538,7 +3559,6 @@ WebGLImageConversion::DataFormat WebGLImageConversion::SkColorTypeToDataFormat(
       return kDataFormatRGBA32F;
     default:
       NOTREACHED();
-      return kDataFormatNumFormats;
   }
 }
 
@@ -3756,73 +3776,6 @@ GLenum WebGLImageConversion::ComputeImageSizeInBytes(
   if (!checked_value.IsValid())
     return GL_INVALID_VALUE;
   return GL_NO_ERROR;
-}
-
-WebGLImageConversion::ImageExtractor::ImageExtractor(
-    Image* image,
-    bool premultiply_alpha,
-    sk_sp<SkColorSpace> target_color_space) {
-  if (!image)
-    return;
-
-  sk_sp<SkImage> skia_image = image->PaintImageForCurrentFrame().GetSwSkImage();
-  if (skia_image && !skia_image->colorSpace())
-    skia_image = skia_image->reinterpretColorSpace(SkColorSpace::MakeSRGB());
-
-  if (image->HasData()) {
-    bool has_alpha = skia_image ? !skia_image->isOpaque() : true;
-    bool need_unpremultiplied = has_alpha && !premultiply_alpha;
-    bool need_color_conversion =
-        skia_image && target_color_space &&
-        !SkColorSpace::Equals(skia_image->colorSpace(),
-                              target_color_space.get());
-    if (!skia_image || !target_color_space || need_unpremultiplied ||
-        need_color_conversion) {
-      // Attempt to get raw unpremultiplied image data.
-      const bool data_complete = true;
-      // Always decode as unpremultiplied. If premultiplication is desired, it
-      // will be applied later.
-      const auto alpha_option = ImageDecoder::kAlphaNotPremultiplied;
-      // Decode to the default 8-bit depth (as opposed to floating-point).
-      // TODO(1320812): This is not always the correct choice.
-      auto bit_depth = ImageDecoder::kDefaultBitDepth;
-      // If we are not ignoring the color space, then tag the image with the
-      // target color space. It will be converted later on.
-      auto color_behavior =
-          target_color_space ? ColorBehavior::Tag() : ColorBehavior::Ignore();
-      std::unique_ptr<ImageDecoder> decoder(
-          ImageDecoder::Create(image->Data(), data_complete, alpha_option,
-                               bit_depth, color_behavior));
-      if (!decoder || !decoder->FrameCount())
-        return;
-      ImageFrame* frame = decoder->DecodeFrameBufferAtIndex(0);
-      if (!frame || frame->GetStatus() != ImageFrame::kFrameComplete)
-        return;
-      has_alpha = frame->HasAlpha();
-      SkBitmap bitmap = frame->Bitmap();
-      if (!FrameIsValid(bitmap))
-        return;
-
-      // TODO(fmalita): Partial frames are not supported currently: only fully
-      // decoded frames make it through.  We could potentially relax this and
-      // use SkImage::MakeFromBitmap(bitmap) to make a copy.
-      skia_image = frame->FinalizePixelsAndGetImage();
-    }
-  }
-
-  if (!skia_image)
-    return;
-
-  DCHECK(skia_image->width());
-  DCHECK(skia_image->height());
-
-  // Fail if the image was downsampled because of memory limits.
-  if (skia_image->width() != image->width() ||
-      skia_image->height() != image->height()) {
-    return;
-  }
-
-  sk_image_ = std::move(skia_image);
 }
 
 unsigned WebGLImageConversion::GetChannelBitsByFormat(GLenum format) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ std::set<std::string> GetDistinctHosts(const URLPatternSet& host_patterns,
                                        bool exclude_file_scheme) {
   // Each item is a host split into two parts: host without RCDs and
   // current best RCD.
-  typedef base::StringPairs HostVector;
+  using HostVector = base::StringPairs;
   HostVector hosts_best_rcd;
   for (const URLPattern& pattern : host_patterns) {
     if (exclude_file_scheme && pattern.scheme() == url::kFileScheme)

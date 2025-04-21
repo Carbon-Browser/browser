@@ -1,11 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/public/cpp/rounded_image_view.h"
 
 #include "skia/ext/image_operations.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/image_skia_operations.h"
@@ -61,7 +67,8 @@ void RoundedImageView::SetCornerRadius(int corner_radius) {
   SetCornerRadii(corner_radius, corner_radius, corner_radius, corner_radius);
 }
 
-gfx::Size RoundedImageView::CalculatePreferredSize() const {
+gfx::Size RoundedImageView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   return gfx::Size(GetImageSize().width() + GetInsets().width(),
                    GetImageSize().height() + GetInsets().height());
 }
@@ -111,12 +118,11 @@ void RoundedImageView::OnPaint(gfx::Canvas* canvas) {
                           drawn_image_bounds.y(), path, flags);
 }
 
-const char* RoundedImageView::GetClassName() const {
-  return "RoundedImageView";
-}
-
 gfx::Size RoundedImageView::GetImageSize() const {
   return resized_image_.size();
 }
+
+BEGIN_METADATA(RoundedImageView)
+END_METADATA
 
 }  // namespace ash

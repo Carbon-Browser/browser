@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -212,7 +212,6 @@ void HostGlobals::ModuleDeleted(PP_Module module) {
   auto found = module_map_.find(module);
   if (found == module_map_.end()) {
     NOTREACHED();
-    return;
   }
   module_map_.erase(found);
 }

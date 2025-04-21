@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ bool ServiceWorkerContentSettingsProxy::AllowStorageAccessSync(
     return result;
   } else if (storage_type == StorageType::kFileSystem) {
     NOTREACHED();
-    return false;
   } else {
     // TODO(shuagga@microsoft.com): Revisit this default in the future.
     return true;

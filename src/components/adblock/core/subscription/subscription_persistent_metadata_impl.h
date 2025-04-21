@@ -20,6 +20,7 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "components/adblock/core/subscription/subscription_persistent_metadata.h"
 #include "components/prefs/pref_service.h"
 
@@ -34,6 +35,7 @@ class SubscriptionPersistentMetadataImpl final
 
   void SetExpirationInterval(const GURL& subscription_url,
                              base::TimeDelta expires_in) final;
+  void SetLastInstallationTime(const GURL& subscription_url) final;
   void SetVersion(const GURL& subscription_url, std::string version) final;
   void IncrementDownloadSuccessCount(const GURL& subscription_url) final;
   void IncrementDownloadErrorCount(const GURL& subscription_url) final;
@@ -44,6 +46,11 @@ class SubscriptionPersistentMetadataImpl final
   int GetDownloadSuccessCount(const GURL& subscription_url) const final;
   int GetDownloadErrorCount(const GURL& subscription_url) const final;
 
+  void SetAutoInstalledExpirationInterval(const GURL& subscription_url,
+                                          base::TimeDelta expires_in) final;
+  bool IsAutoInstalled(const GURL& subscription_url) const final;
+  bool IsAutoInstalledExpired(const GURL& subscription_url) const final;
+
   void RemoveMetadata(const GURL& subscription_url) final;
 
  private:
@@ -52,7 +59,7 @@ class SubscriptionPersistentMetadataImpl final
   void UpdatePrefs();
   void LoadFromPrefs();
 
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
   MetadataMap metadata_map_;
 };
 

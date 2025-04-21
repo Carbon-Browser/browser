@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,6 @@ class CONTROLLER_EXPORT RendererResourceCoordinatorImpl final
                                     const HTMLFrameOwnerElement& owner) final;
   void OnBeforeContentFrameDetached(const Frame& frame,
                                     const HTMLFrameOwnerElement& owner) final;
-  void FireBackgroundTracingTrigger(const String& trigger_name) final;
 
  private:
   friend class RendererResourceCoordinatorImplTest;
@@ -62,6 +61,7 @@ class CONTROLLER_EXPORT RendererResourceCoordinatorImpl final
 
   mojo::Remote<performance_manager::mojom::blink::ProcessCoordinationUnit>
       service_;
+  scoped_refptr<base::SequencedTaskRunner> service_task_runner_;
 };
 
 }  // namespace blink

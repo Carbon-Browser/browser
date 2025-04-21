@@ -1,11 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/wrong_hwid_screen.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ui/webui/chromeos/login/wrong_hwid_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/wrong_hwid_screen_handler.h"
 
 namespace ash {
 namespace {

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,10 @@
 
 namespace blink {
 
-ScriptPromise ShapeDetector::detect(ScriptState* script_state,
-                                    const V8ImageBitmapSource* image_source,
-                                    ExceptionState& exception_state) {
+std::optional<SkBitmap> ShapeDetector::GetBitmapFromSource(
+    ScriptState* script_state,
+    const V8ImageBitmapSource* image_source,
+    ExceptionState& exception_state) {
   DCHECK(image_source);
 
   CanvasImageSource* canvas_image_source = nullptr;
@@ -51,7 +52,7 @@ ScriptPromise ShapeDetector::detect(ScriptState* script_state,
       break;
     case V8ImageBitmapSource::ContentType::kImageData:
       // ImageData cannot be tainted by definition.
-      return DetectShapesOnImageData(
+      return GetBitmapFromImageData(
           script_state, image_source->GetAsImageData(), exception_state);
     case V8ImageBitmapSource::ContentType::kOffscreenCanvas:
       canvas_image_source = image_source->GetAsOffscreenCanvas();
@@ -61,23 +62,23 @@ ScriptPromise ShapeDetector::detect(ScriptState* script_state,
     case V8ImageBitmapSource::ContentType::kVideoFrame:
       exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                         "Unsupported source.");
-      return ScriptPromise();
+      return std::nullopt;
   }
   DCHECK(canvas_image_source);
 
   if (canvas_image_source->IsNeutered()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The image source is detached.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
   if (canvas_image_source->WouldTaintOrigin()) {
     exception_state.ThrowSecurityError("Source would taint origin.", "");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
   if (image_source->IsHTMLImageElement()) {
-    return DetectShapesOnImageElement(
+    return GetBitmapFromImageElement(
         script_state, image_source->GetAsHTMLImageElement(), exception_state);
   }
 
@@ -90,78 +91,74 @@ ScriptPromise ShapeDetector::detect(ScriptState* script_state,
       canvas_image_source->ElementSize(gfx::SizeF(), kRespectImageOrientation);
 
   SourceImageStatus source_image_status = kInvalidSourceImageStatus;
-  scoped_refptr<Image> image =
-      canvas_image_source->GetSourceImageForCanvas(&source_image_status, size);
+  scoped_refptr<Image> image = canvas_image_source->GetSourceImageForCanvas(
+      FlushReason::kShapeDetector, &source_image_status, size,
+      kPremultiplyAlpha);
   if (!image || source_image_status != kNormalSourceImageStatus) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Invalid element or state.");
-    return ScriptPromise();
+    return std::nullopt;
   }
   if (size.IsEmpty()) {
-    return ScriptPromise::Cast(script_state,
-                               ToV8Traits<IDLSequence<DOMRect>>::ToV8(
-                                   script_state, HeapVector<Member<DOMRect>>())
-                                   .ToLocalChecked());
+    return SkBitmap();
   }
 
   // GetSwSkImage() will make a raster copy of PaintImageForCurrentFrame()
-  // if needed, otherwise returning the original SkImage.
+  // if needed, otherwise returning the original SkImage. May return nullptr
+  // if resource allocation failed.
   const sk_sp<SkImage> sk_image =
       image->PaintImageForCurrentFrame().GetSwSkImage();
 
   SkBitmap sk_bitmap;
   SkBitmap n32_bitmap;
-  if (!sk_image->asLegacyBitmap(&sk_bitmap) ||
+  if (!sk_image || !sk_image->asLegacyBitmap(&sk_bitmap) ||
       !skia::SkBitmapToN32OpaqueOrPremul(sk_bitmap, &n32_bitmap)) {
-    // TODO(mcasas): retrieve the pixels from elsewhere.
-    NOTREACHED();
+    // TODO(crbug.com/1467598): retrieve the pixels from elsewhere.
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to get pixels for current frame.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
-  return DoDetect(script_state, std::move(n32_bitmap), exception_state);
+  return std::move(n32_bitmap);
 }
 
-ScriptPromise ShapeDetector::DetectShapesOnImageData(
+std::optional<SkBitmap> ShapeDetector::GetBitmapFromImageData(
     ScriptState* script_state,
     ImageData* image_data,
     ExceptionState& exception_state) {
   if (image_data->Size().IsZero()) {
-    return ScriptPromise::Cast(script_state,
-                               ToV8Traits<IDLSequence<DOMRect>>::ToV8(
-                                   script_state, HeapVector<Member<DOMRect>>())
-                                   .ToLocalChecked());
+    return SkBitmap();
   }
 
   if (image_data->IsBufferBaseDetached()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The image data has been detached.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
   SkPixmap image_data_pixmap = image_data->GetSkPixmap();
   SkBitmap sk_bitmap;
+  // Pass 0 for rowBytes to have SkBitmap calculate minimum valid size.
   if (!sk_bitmap.tryAllocPixels(
           image_data_pixmap.info().makeColorType(kN32_SkColorType),
-          image_data_pixmap.rowBytes())) {
+          /*rowBytes=*/0)) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to allocate pixels for current frame.");
-    return ScriptPromise();
+    return std::nullopt;
   }
   if (!sk_bitmap.writePixels(image_data_pixmap, 0, 0)) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to copy pixels for current frame.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
-  return DoDetect(script_state, std::move(sk_bitmap), exception_state);
+  return std::move(sk_bitmap);
 }
 
-ScriptPromise ShapeDetector::DetectShapesOnImageElement(
+std::optional<SkBitmap> ShapeDetector::GetBitmapFromImageElement(
     ScriptState* script_state,
     const HTMLImageElement* img,
     ExceptionState& exception_state) {
@@ -171,21 +168,18 @@ ScriptPromise ShapeDetector::DetectShapesOnImageElement(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to load or decode HTMLImageElement.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
   if (!image_content->HasImage()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Failed to get image from resource.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
   Image* const blink_image = image_content->GetImage();
   if (blink_image->Size().IsZero()) {
-    return ScriptPromise::Cast(script_state,
-                               ToV8Traits<IDLSequence<DOMRect>>::ToV8(
-                                   script_state, HeapVector<Member<DOMRect>>())
-                                   .ToLocalChecked());
+    return SkBitmap();
   }
 
   // The call to asLegacyBitmap() below forces a readback so getting SwSkImage
@@ -200,10 +194,10 @@ ScriptPromise ShapeDetector::DetectShapesOnImageElement(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to get image from current frame.");
-    return ScriptPromise();
+    return std::nullopt;
   }
 
-  return DoDetect(script_state, std::move(sk_bitmap), exception_state);
+  return std::move(sk_bitmap);
 }
 
 }  // namespace blink

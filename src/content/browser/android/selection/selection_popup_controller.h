@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,19 @@ class SelectionPopupController : public RenderWidgetHostConnector {
                            const base::android::JavaParamRef<jobject>& obj,
                            WebContents* web_contents);
 
+  void SetTextHandlesHiddenForDropdownMenu(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj,
+      jboolean hidden);
+
   void SetTextHandlesTemporarilyHidden(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj,
       jboolean hidden);
+
+  base::android::ScopedJavaLocalRef<jobjectArray> GetTouchHandleRects(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj);
 
   // RendetWidgetHostConnector implementation.
   void UpdateRenderProcessConnection(
@@ -48,10 +57,16 @@ class SelectionPopupController : public RenderWidgetHostConnector {
   bool ShowSelectionMenu(RenderFrameHost* render_frame_host,
                          const ContextMenuParams& params,
                          int handle_height);
-  void OnSelectAroundCaretAck(blink::mojom::SelectAroundCaretResultPtr result);
+  void OnSelectAroundCaretAck(int startOffset,
+                              int endOffset,
+                              int surroundingTextLength,
+                              blink::mojom::SelectAroundCaretResultPtr result);
   void HidePopupsAndPreserveSelection();
   void RestoreSelectionPopupsIfNecessary();
-  std::unique_ptr<ui::TouchHandleDrawable> CreateTouchHandleDrawable();
+  void ChildLocalSurfaceIdChanged();
+  std::unique_ptr<ui::TouchHandleDrawable> CreateTouchHandleDrawable(
+      gfx::NativeView parent_native_view,
+      cc::slim::Layer* parent_layer);
   void MoveRangeSelectionExtent(const gfx::PointF& extent);
 
   void SelectBetweenCoordinates(const gfx::PointF& base,

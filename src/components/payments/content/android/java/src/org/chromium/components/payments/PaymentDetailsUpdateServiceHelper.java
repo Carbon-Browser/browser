@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.components.payments.intent.WebPaymentIntentHelperType.PaymentHandlerMethodData;
 import org.chromium.components.payments.intent.WebPaymentIntentHelperType.PaymentRequestDetailsUpdate;
 
@@ -26,23 +27,20 @@ import java.util.Arrays;
 public class PaymentDetailsUpdateServiceHelper {
     private static final String TAG = "PaymentDetailsUpdate";
 
-    @Nullable
-    private IPaymentDetailsUpdateServiceCallback mCallback;
-    @Nullable
-    private PaymentRequestUpdateEventListener mListener;
-    @Nullable
-    private PackageInfo mInvokedAppPackageInfo;
-    @Nullable
-    private PackageManagerDelegate mPackageManagerDelegate;
+    @Nullable private IPaymentDetailsUpdateServiceCallback mCallback;
+    @Nullable private PaymentRequestUpdateEventListener mListener;
+    @Nullable private PackageInfo mInvokedAppPackageInfo;
+    @Nullable private PackageManagerDelegate mPackageManagerDelegate;
 
     // Singleton instance.
     private static PaymentDetailsUpdateServiceHelper sInstance;
-    private PaymentDetailsUpdateServiceHelper(){};
+
+    private PaymentDetailsUpdateServiceHelper() {}
 
     /**
-     * Returns the singleton instance, lazily creating one if needed.
-     * The instance is only useful after its listener is set which happens when a native android app
-     * gets invoked.
+     * Returns the singleton instance, lazily creating one if needed. The instance is only useful
+     * after its listener is set which happens when a native android app gets invoked.
+     *
      * @return The singleton instance.
      */
     public static PaymentDetailsUpdateServiceHelper getInstance() {
@@ -59,8 +57,10 @@ public class PaymentDetailsUpdateServiceHelper {
      * @param listener The listener for payment method, shipping address, and shipping option
      *         changes.
      */
-    public void initialize(PackageManagerDelegate packageManagerDelegate,
-            String invokedAppPackageName, PaymentRequestUpdateEventListener listener) {
+    public void initialize(
+            PackageManagerDelegate packageManagerDelegate,
+            String invokedAppPackageName,
+            PaymentRequestUpdateEventListener listener) {
         ThreadUtils.assertOnUiThread();
         assert mListener == null;
         mListener = listener;
@@ -71,13 +71,16 @@ public class PaymentDetailsUpdateServiceHelper {
 
     /**
      * Called to notify the merchant that the user has selected a different payment method.
+     *
      * @param paymentHandlerMethodData The data containing the selected payment method's name and
-     *         optional stringified details.
+     *     optional stringified details.
      * @param callback The callback used to notify the invoked app about updated payment details.
      */
     public void changePaymentMethod(
             Bundle paymentHandlerMethodData, IPaymentDetailsUpdateServiceCallback callback) {
         ThreadUtils.assertOnUiThread();
+        RecordHistogram.recordBooleanHistogram(
+                "PaymentRequest.PaymentDetailsUpdateService.ChangePaymentMethod", true);
         if (paymentHandlerMethodData == null) {
             runCallbackWithError(ErrorStrings.METHOD_DATA_REQUIRED, callback);
             return;
@@ -89,9 +92,12 @@ public class PaymentDetailsUpdateServiceHelper {
             return;
         }
 
-        String stringifiedDetails = paymentHandlerMethodData.getString(
-                PaymentHandlerMethodData.EXTRA_STRINGIFIED_DETAILS, /*defaultValue=*/"{}");
-        if (isWaitingForPaymentDetailsUpdate() || mListener == null
+        String stringifiedDetails =
+                paymentHandlerMethodData.getString(
+                        PaymentHandlerMethodData.EXTRA_STRINGIFIED_DETAILS,
+                        /* defaultValue= */ "{}");
+        if (isWaitingForPaymentDetailsUpdate()
+                || mListener == null
                 || !mListener.changePaymentMethodFromInvokedApp(methodName, stringifiedDetails)) {
             runCallbackWithError(ErrorStrings.INVALID_STATE, callback);
             return;
@@ -101,18 +107,22 @@ public class PaymentDetailsUpdateServiceHelper {
 
     /**
      * Called to notify the merchant that the user has selected a different shipping option.
+     *
      * @param shippingOptionId The identifier of the selected shipping option.
      * @param callback The callback used to notify the invoked app about updated payment details.
      */
     public void changeShippingOption(
             String shippingOptionId, IPaymentDetailsUpdateServiceCallback callback) {
         ThreadUtils.assertOnUiThread();
+        RecordHistogram.recordBooleanHistogram(
+                "PaymentRequest.PaymentDetailsUpdateService.ChangeShippingOption", true);
         if (TextUtils.isEmpty(shippingOptionId)) {
             runCallbackWithError(ErrorStrings.SHIPPING_OPTION_ID_REQUIRED, callback);
             return;
         }
 
-        if (isWaitingForPaymentDetailsUpdate() || mListener == null
+        if (isWaitingForPaymentDetailsUpdate()
+                || mListener == null
                 || !mListener.changeShippingOptionFromInvokedApp(shippingOptionId)) {
             runCallbackWithError(ErrorStrings.INVALID_STATE, callback);
             return;
@@ -122,12 +132,15 @@ public class PaymentDetailsUpdateServiceHelper {
 
     /**
      * Called to notify the merchant that the user has selected a different shipping address.
+     *
      * @param shippingAddress The selected shipping address
      * @param callback The callback used to notify the invoked app about updated payment details.
      */
     public void changeShippingAddress(
             Bundle shippingAddress, IPaymentDetailsUpdateServiceCallback callback) {
         ThreadUtils.assertOnUiThread();
+        RecordHistogram.recordBooleanHistogram(
+                "PaymentRequest.PaymentDetailsUpdateService.ChangeShippingAddress", true);
         if (shippingAddress == null || shippingAddress.isEmpty()) {
             runCallbackWithError(ErrorStrings.SHIPPING_ADDRESS_INVALID, callback);
             return;
@@ -139,7 +152,8 @@ public class PaymentDetailsUpdateServiceHelper {
             return;
         }
 
-        if (isWaitingForPaymentDetailsUpdate() || mListener == null
+        if (isWaitingForPaymentDetailsUpdate()
+                || mListener == null
                 || !mListener.changeShippingAddressFromInvokedApp(
                         PaymentAddressTypeConverter.convertAddressToMojoPaymentAddress(address))) {
             runCallbackWithError(ErrorStrings.INVALID_STATE, callback);
@@ -148,9 +162,7 @@ public class PaymentDetailsUpdateServiceHelper {
         mCallback = callback;
     }
 
-    /**
-     * Resets the singleton instance.
-     */
+    /** Resets the singleton instance. */
     public void reset() {
         ThreadUtils.assertOnUiThread();
         sInstance = null;
@@ -213,13 +225,14 @@ public class PaymentDetailsUpdateServiceHelper {
         }
         PackageInfo callerPackageInfo =
                 mPackageManagerDelegate.getPackageInfoWithSignatures(callerUid);
-        if (mInvokedAppPackageInfo == null || callerPackageInfo == null
+        if (mInvokedAppPackageInfo == null
+                || callerPackageInfo == null
                 || !mInvokedAppPackageInfo.packageName.equals(callerPackageInfo.packageName)) {
             Log.e(TAG, ErrorStrings.UNATHORIZED_SERVICE_REQUEST);
             return false;
         }
 
-        // TODO(https://crbug.com/1086485): signatures field is deprecated in API level 28.
+        // TODO(crbug.com/40694276): signatures field is deprecated in API level 28.
         Signature[] callerSignatures = callerPackageInfo.signatures;
         Signature[] invokedAppSignatures = mInvokedAppPackageInfo.signatures;
 

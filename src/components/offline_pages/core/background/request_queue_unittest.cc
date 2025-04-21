@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/background/device_conditions.h"
 #include "components/offline_pages/core/background/offliner_policy.h"
 #include "components/offline_pages/core/background/request_coordinator.h"
@@ -145,7 +145,8 @@ class RequestQueueTest : public testing::Test {
   std::unique_ptr<RequestQueue> queue_;
   raw_ptr<TestRequestQueueStore> store_;  // Owned by queue_.
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      task_runner_current_default_handle_;
 };
 
 RequestQueueTest::RequestQueueTest()
@@ -153,9 +154,9 @@ RequestQueueTest::RequestQueueTest()
       last_update_result_(UpdateRequestResult::STORE_FAILURE),
       last_get_requests_result_(GetRequestsResult::STORE_FAILURE),
       task_runner_(new base::TestMockTimeTaskRunner),
-      task_runner_handle_(task_runner_) {}
+      task_runner_current_default_handle_(task_runner_) {}
 
-RequestQueueTest::~RequestQueueTest() {}
+RequestQueueTest::~RequestQueueTest() = default;
 
 void RequestQueueTest::SetUp() {
   auto store = std::make_unique<TestRequestQueueStore>();
@@ -570,9 +571,8 @@ TEST_F(RequestQueueTest, CleanStaleRequests) {
   OfflinerPolicy policy;
   RequestNotifierStub notifier;
   RequestCoordinatorEventLogger event_logger;
-  std::unique_ptr<CleanupTaskFactory> cleanup_factory(
-      new CleanupTaskFactory(&policy, &notifier, &event_logger));
-  queue()->SetCleanupFactory(std::move(cleanup_factory));
+  queue()->SetCleanupFactory(
+      std::make_unique<CleanupTaskFactory>(&policy, &notifier, &event_logger));
 
   // Do a pick and clean operation, which will remove stale entries.
   DeviceConditions conditions;
@@ -593,6 +593,7 @@ TEST_F(RequestQueueTest, CleanStaleRequests) {
   this->PumpLoop();
   ASSERT_EQ(GetRequestsResult::SUCCESS, this->last_get_requests_result());
   ASSERT_TRUE(this->last_requests().empty());
+  queue()->SetCleanupFactory(nullptr);
 }
 
 }  // namespace offline_pages

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_DRAG_DROP_DRAG_DROP_CAPTURE_DELEGATE_H_
 
 #include "ash/ash_export.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/events/gestures/gesture_types.h"
 
 namespace aura {
@@ -42,7 +42,7 @@ class ASH_EXPORT DragDropCaptureDelegate {
   // once that can be processed by the drag and drop controller.
   //
   // This should only be called on events if TakeCapture returned true at the
-  // start of a drag and drop session.
+  // start of a drag and drop session. Returns nullptr after `ReleaseCapture`.
   aura::Window* GetTarget(const ui::LocatedEvent& event);
 
   // Converts an event that was dispatched against a capture window to once
@@ -50,12 +50,16 @@ class ASH_EXPORT DragDropCaptureDelegate {
   // returned via GetTarget.
   //
   // This should only be called on events if TakeCapture returned true at the
-  // start of a drag and drop session.
+  // start of a drag and drop session. Returns nullptr after `ReleaseCapture`.
   std::unique_ptr<ui::LocatedEvent> ConvertEvent(aura::Window* target,
                                                  const ui::LocatedEvent& event);
 
-  // Return the capture window used if TakeCapture returns true.
+  // Return the capture window used if TakeCapture returns true. Returns nullptr
+  // after `ReleaseCapture`.
   aura::Window* capture_window();
+
+  // Stop capturing input events.
+  void ReleaseCapture();
 
  private:
   std::unique_ptr<DragDropTracker> drag_drop_tracker_;

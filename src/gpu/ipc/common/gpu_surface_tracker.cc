@@ -1,38 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/ipc/common/gpu_surface_tracker.h"
 
-#include "base/check.h"
-#include "build/build_config.h"
+#include <utility>
 
-#if BUILDFLAG(IS_ANDROID)
-#include <android/native_window_jni.h>
+#include "base/check.h"
+#include "base/containers/contains.h"
+#include "base/functional/overloaded.h"
+#include "build/build_config.h"
 #include "ui/gl/android/scoped_java_surface.h"
-#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace gpu {
-
-#if BUILDFLAG(IS_ANDROID)
-GpuSurfaceTracker::SurfaceRecord::SurfaceRecord(
-    gfx::AcceleratedWidget widget,
-    const base::android::JavaRef<jobject>& j_surface,
-    bool can_be_used_with_surface_control)
-    : widget(widget),
-      can_be_used_with_surface_control(can_be_used_with_surface_control) {
-  // TODO(liberato): It would be nice to assert |surface|, but we
-  // can't.  in_process_context_factory.cc (for tests) actually calls us without
-  // a Surface from java.  Presumably, nobody uses it.  crbug.com/712717 .
-  if (j_surface)
-    surface = gl::ScopedJavaSurface::AcquireExternalSurface(j_surface);
-}
-#else   // BUILDFLAG(IS_ANDROID)
-GpuSurfaceTracker::SurfaceRecord::SurfaceRecord(gfx::AcceleratedWidget widget)
-    : widget(widget) {}
-#endif  // !BUILDFLAG(IS_ANDROID)
-
-GpuSurfaceTracker::SurfaceRecord::SurfaceRecord(SurfaceRecord&&) = default;
 
 GpuSurfaceTracker::GpuSurfaceTracker()
     : next_surface_handle_(1) {
@@ -57,50 +37,36 @@ int GpuSurfaceTracker::AddSurfaceForNativeWidget(SurfaceRecord record) {
 bool GpuSurfaceTracker::IsValidSurfaceHandle(
     gpu::SurfaceHandle surface_handle) const {
   base::AutoLock lock(surface_map_lock_);
-  return surface_map_.find(surface_handle) != surface_map_.end();
+  return base::Contains(surface_map_, surface_handle);
 }
 
 void GpuSurfaceTracker::RemoveSurface(gpu::SurfaceHandle surface_handle) {
   base::AutoLock lock(surface_map_lock_);
-  DCHECK(surface_map_.find(surface_handle) != surface_map_.end());
+  DCHECK(base::Contains(surface_map_, surface_handle));
   surface_map_.erase(surface_handle);
 }
 
-gfx::AcceleratedWidget GpuSurfaceTracker::AcquireNativeWidget(
-    gpu::SurfaceHandle surface_handle,
-    bool* can_be_used_with_surface_control) {
-  base::AutoLock lock(surface_map_lock_);
-  SurfaceMap::iterator it = surface_map_.find(surface_handle);
-  if (it == surface_map_.end())
-    return gfx::kNullAcceleratedWidget;
-
-#if BUILDFLAG(IS_ANDROID)
-  if (it->second.widget != gfx::kNullAcceleratedWidget)
-    ANativeWindow_acquire(it->second.widget);
-  *can_be_used_with_surface_control =
-      it->second.can_be_used_with_surface_control;
-#endif  // BUILDFLAG(IS_ANDROID)
-
-  return it->second.widget;
-}
-
-#if BUILDFLAG(IS_ANDROID)
-gl::ScopedJavaSurface GpuSurfaceTracker::AcquireJavaSurface(
-    gpu::SurfaceHandle surface_handle,
-    bool* can_be_used_with_surface_control) {
+SurfaceRecord GpuSurfaceTracker::AcquireJavaSurface(
+    gpu::SurfaceHandle surface_handle) {
   base::AutoLock lock(surface_map_lock_);
   SurfaceMap::const_iterator it = surface_map_.find(surface_handle);
   if (it == surface_map_.end())
-    return gl::ScopedJavaSurface();
+    return SurfaceRecord(gl::ScopedJavaSurface(),
+                         /*can_be_used_with_surface_control=*/false);
 
-  const gl::ScopedJavaSurface& j_surface = it->second.surface;
-  DCHECK(j_surface.IsValid());
-
-  *can_be_used_with_surface_control =
-      it->second.can_be_used_with_surface_control;
-  return gl::ScopedJavaSurface::AcquireExternalSurface(j_surface.j_surface());
+  return absl::visit(
+      base::Overloaded{
+          [&](const gl::ScopedJavaSurface& surface) {
+            DCHECK(surface.IsValid());
+            return SurfaceRecord(surface.CopyRetainOwnership(),
+                                 it->second.can_be_used_with_surface_control,
+                                 it->second.host_input_token);
+          },
+          [&](const gl::ScopedJavaSurfaceControl& surface_control) {
+            return SurfaceRecord(surface_control.CopyRetainOwnership());
+          }},
+      it->second.surface_variant);
 }
-#endif
 
 std::size_t GpuSurfaceTracker::GetSurfaceCount() {
   base::AutoLock lock(surface_map_lock_);

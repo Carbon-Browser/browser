@@ -1,21 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_FAMILY_USER_METRICS_PROVIDER_H_
 #define CHROME_BROWSER_METRICS_FAMILY_USER_METRICS_PROVIDER_H_
 
+#include <optional>
+
 #include "base/scoped_multi_source_observation.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
-
-namespace metrics {
-class ChromeUserMetricsExtension;
-}  // namespace metrics
 
 // Categorizes the current user into a family user type for UMA dashboard
 // filtering. This metrics provider is ChromeOS specific.
@@ -57,8 +54,7 @@ class FamilyUserMetricsProvider
   ~FamilyUserMetricsProvider() override;
 
   // MetricsProvider:
-  void ProvideCurrentSessionData(
-      metrics::ChromeUserMetricsExtension* uma_proto_unused) override;
+  bool ProvideHistograms() override;
 
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;
@@ -81,7 +77,7 @@ class FamilyUserMetricsProvider
   // The only way the |family_user_log_segment_| can change during a ChromeOS
   // session is if a child user adds or removes an EDU secondary account. Since
   // this action doesn't happen often, cache the log segment.
-  absl::optional<FamilyUserLogSegment> family_user_log_segment_;
+  std::optional<FamilyUserLogSegment> family_user_log_segment_;
   int num_secondary_accounts_ = -1;
 
   base::ScopedMultiSourceObservation<signin::IdentityManager,

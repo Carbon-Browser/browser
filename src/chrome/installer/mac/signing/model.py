@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Signing Model Objects
@@ -11,7 +11,7 @@ import os.path
 import re
 import string
 
-from . import commands
+from signing import commands
 
 
 def _get_identity_hash(identity):
@@ -216,22 +216,15 @@ class NotarizeAndStapleLevel(enum.Enum):
     def should_staple(self):
         return self.value > self.WAIT_NOSTAPLE.value
 
-    @classmethod
-    def valid_strings(cls):
-        return tuple(level.name.lower().replace('_', '-') for level in cls)
+    def __str__(self):
+        return self.name.lower().replace('_', '-')
 
     @classmethod
     def from_string(cls, str):
-        return cls[str.upper().replace('-', '_')]
-
-
-class NotarizationTool(enum.Enum):
-    """The tool to use for submitting notarization requests."""
-    ALTOOL = 'altool'
-    NOTARYTOOL = 'notarytool'
-
-    def __str__(self):
-        return self.value
+        try:
+            return cls[str.upper().replace('-', '_')]
+        except KeyError:
+            raise ValueError(f'Invalid NotarizeAndStapleLevel: {str}')
 
 
 class Distribution(object):
@@ -252,6 +245,7 @@ class Distribution(object):
                  channel_customize=False,
                  package_as_dmg=True,
                  package_as_pkg=False,
+                 package_as_zip=False,
                  inflation_kilobytes=0):
         """Creates a new Distribution object. All arguments are optional.
 
@@ -282,6 +276,8 @@ class Distribution(object):
                 the product.
             package_as_pkg: If True, then a .pkg file will be created containing
                 the product.
+            package_as_zip: If True, then a .zip file will be created containing
+                the product.
             inflation_kilobytes: If non-zero, a blob of this size will be
                 inserted into the DMG. Incompatible with package_as_pkg = True.
         """
@@ -300,6 +296,7 @@ class Distribution(object):
         self.product_dirname = product_dirname
         self.creator_code = creator_code
         self.channel_customize = channel_customize
+        self.package_as_zip = package_as_zip
         self.package_as_dmg = package_as_dmg
         self.package_as_pkg = package_as_pkg
         self.inflation_kilobytes = inflation_kilobytes
@@ -317,7 +314,8 @@ class Distribution(object):
         return Distribution(self.channel, None, self.app_name_fragment,
                             self.packaging_name_fragment, self.product_dirname,
                             self.creator_code, self.channel_customize,
-                            self.package_as_dmg, self.package_as_pkg)
+                            self.package_as_dmg, self.package_as_pkg,
+                            self.package_as_zip)
 
     def to_config(self, base_config):
         """Produces a derived |config.CodeSignConfig| for the Distribution.
@@ -381,11 +379,8 @@ class Distribution(object):
                              self).packaging_basename
 
         return DistributionCodeSignConfig(
-            **pick(base_config, ('identity', 'installer_identity',
-                                 'notary_user', 'notary_password',
-                                 'notary_asc_provider', 'notary_team_id',
-                                 'codesign_requirements_basic',
-                                 'notarization_tool')))
+            **pick(base_config, ('invoker', 'identity', 'installer_identity',
+                                 'codesign_requirements_basic')))
 
 
 class Paths(object):

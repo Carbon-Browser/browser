@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ size_t FakeTileManagerClient::GetFrameIndexForImage(
 }
 
 int FakeTileManagerClient::GetMSAASampleCountForRaster(
-    const scoped_refptr<DisplayItemList>& display_list) {
+    const DisplayItemList& display_list) const {
   return 0;
 }
 

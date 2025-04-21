@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,10 @@ bool BindSensorHalClient(mojo::PendingRemote<mojom::SensorHalClient> remote) {
     return false;
   }
 
-  if (!lacros_service->IsSensorHalClientAvailable())
+  if (!lacros_service
+           ->IsSupported<chromeos::sensors::mojom::SensorHalClient>()) {
     return false;
+  }
 
   lacros_service->BindSensorHalClient(std::move(remote));
   return true;

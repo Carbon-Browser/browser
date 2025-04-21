@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -124,7 +124,7 @@ class LevelDBSiteDataStoreTest : public ::testing::Test {
     bool success = false;
     auto init_callback = base::BindOnce(
         [](SiteDataProto* receiving_proto, bool* success,
-           absl::optional<SiteDataProto> proto_opt) {
+           std::optional<SiteDataProto> proto_opt) {
           *success = proto_opt.has_value();
           if (proto_opt)
             receiving_proto->CopyFrom(proto_opt.value());
@@ -211,8 +211,8 @@ TEST_F(LevelDBSiteDataStoreTest, GetDatabaseSize) {
   std::vector<url::Origin> site_origins = AddDummyEntriesToDB(200);
 
   auto size_callback =
-      base::BindLambdaForTesting([&](absl::optional<int64_t> num_rows,
-                                     absl::optional<int64_t> on_disk_size_kb) {
+      base::BindLambdaForTesting([&](std::optional<int64_t> num_rows,
+                                     std::optional<int64_t> on_disk_size_kb) {
         EXPECT_TRUE(num_rows);
         // The DB contains an extra row for metadata.
         int64_t expected_rows = site_origins.size() + 1;
@@ -240,17 +240,16 @@ TEST_F(LevelDBSiteDataStoreTest, DatabaseRecoveryTest) {
   EXPECT_TRUE(leveldb_chrome::CorruptClosedDBForTesting(GetDBPath()));
 
   base::HistogramTester histogram_tester;
-  histogram_tester.ExpectTotalCount("ResourceCoordinator.LocalDB.DatabaseInit",
+  histogram_tester.ExpectTotalCount("PerformanceManager.SiteDB.DatabaseInit",
                                     0);
   // Open the corrupt DB and ensure that the appropriate histograms gets
   // updated.
   OpenDB();
   EXPECT_TRUE(DbIsInitialized());
+  histogram_tester.ExpectUniqueSample("PerformanceManager.SiteDB.DatabaseInit",
+                                      1 /* kInitStatusCorruption */, 1);
   histogram_tester.ExpectUniqueSample(
-      "ResourceCoordinator.LocalDB.DatabaseInit", 1 /* kInitStatusCorruption */,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "ResourceCoordinator.LocalDB.DatabaseInitAfterRepair",
+      "PerformanceManager.SiteDB.DatabaseInitAfterRepair",
       0 /* kInitStatusOk */, 1);
 
   // TODO(sebmarchand): try to induce an I/O error by deleting one of the
@@ -258,7 +257,7 @@ TEST_F(LevelDBSiteDataStoreTest, DatabaseRecoveryTest) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314084): Re-enable when DatabaseOpeningFailure works on
+// TODO(crbug.com/40221281): Re-enable when DatabaseOpeningFailure works on
 // Fuchsia.
 #define MAYBE_DatabaseOpeningFailure DISABLED_DatabaseOpeningFailure
 #else

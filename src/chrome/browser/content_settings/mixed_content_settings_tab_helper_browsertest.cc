@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,7 +124,7 @@ class MixedContentSettingsTabHelperPrerenderBrowserTest
       const MixedContentSettingsTabHelperPrerenderBrowserTest&) = delete;
 
   void SetUp() override {
-    prerender_helper_.SetUp(test_server());
+    prerender_helper_.RegisterServerRequestMonitor(test_server());
     MixedContentSettingsTabHelperBrowserTest::SetUp();
   }
 
@@ -170,7 +170,8 @@ IN_PROC_BROWSER_TEST_F(MixedContentSettingsTabHelperPrerenderBrowserTest,
   // Loads a page in the prerendering.
   GURL prerender_url(test_server()->GetURL(
       "/content_setting_bubble/mixed_script.html?prerendering"));
-  const int host_id = prerender_helper()->AddPrerender(prerender_url);
+  const content::FrameTreeNodeId host_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::RenderFrameHost* prerender_rfh =
       prerender_helper()->GetPrerenderedMainFrameHost(host_id);
 
@@ -205,7 +206,8 @@ IN_PROC_BROWSER_TEST_F(MixedContentSettingsTabHelperPrerenderBrowserTest,
   // Loads a page in the prerendering.
   GURL prerender_url(
       test_server()->GetURL("/content_setting_bubble/mixed_script.html"));
-  const int host_id = prerender_helper()->AddPrerender(prerender_url);
+  const content::FrameTreeNodeId host_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::RenderFrameHost* prerender_rfh =
       prerender_helper()->GetPrerenderedMainFrameHost(host_id);
 
@@ -245,7 +247,8 @@ IN_PROC_BROWSER_TEST_F(MixedContentSettingsTabHelperPrerenderBrowserTest,
   // Loads a page in the prerendering.
   GURL prerender_url(
       test_server()->GetURL("/content_setting_bubble/mixed_script.html"));
-  int host_id = prerender_helper()->AddPrerender(prerender_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::RenderFrameHost* prerender_rfh =
       prerender_helper()->GetPrerenderedMainFrameHost(host_id);
 

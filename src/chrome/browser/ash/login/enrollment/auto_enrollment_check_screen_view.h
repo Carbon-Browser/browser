@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 namespace ash {
 
 // Interface between auto-enrollment check screen and its representation.
-class AutoEnrollmentCheckScreenView
-    : public base::SupportsWeakPtr<AutoEnrollmentCheckScreenView> {
+class AutoEnrollmentCheckScreenView {
  public:
   inline constexpr static StaticOobeScreenId kScreenId{
       "auto-enrollment-check", "AutoEnrollmentCheckScreen"};
@@ -20,14 +19,9 @@ class AutoEnrollmentCheckScreenView
   virtual ~AutoEnrollmentCheckScreenView() = default;
 
   virtual void Show() = 0;
+  virtual base::WeakPtr<AutoEnrollmentCheckScreenView> AsWeakPtr() = 0;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::AutoEnrollmentCheckScreenView;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_ENROLLMENT_AUTO_ENROLLMENT_CHECK_SCREEN_VIEW_H_

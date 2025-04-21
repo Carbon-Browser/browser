@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.net.NetError;
 
-/**
- * Used in {@link CronetBidirectionalStream}. Implements {@link NetworkExceptionImpl}.
- */
+/** Used in {@link CronetBidirectionalStream}. Implements {@link NetworkExceptionImpl}. */
 @VisibleForTesting
 public class BidirectionalStreamNetworkException extends NetworkExceptionImpl {
     public BidirectionalStreamNetworkException(

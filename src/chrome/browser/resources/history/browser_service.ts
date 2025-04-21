@@ -1,20 +1,21 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+
 import {RESULTS_PER_PAGE} from './constants.js';
-import {ForeignSession, HistoryEntry, HistoryQuery} from './externs.js';
+import type {ForeignSession, HistoryEntry, HistoryQuery} from './externs.js';
 
 export type RemoveVisitsRequest = Array<{
   url: string,
   timestamps: number[],
 }>;
 
-export type QueryResult = {
-  info: HistoryQuery,
-  value: HistoryEntry[],
-};
+export interface QueryResult {
+  info: HistoryQuery;
+  value: HistoryEntry[];
+}
 
 /**
  * @fileoverview Defines a singleton object, history.BrowserService, which
@@ -25,9 +26,9 @@ export interface BrowserService {
   getForeignSessions(): Promise<ForeignSession[]>;
   removeBookmark(url: string): void;
   removeVisits(removalList: RemoveVisitsRequest): Promise<void>;
+  setLastSelectedTab(lastSelectedTab: number): void;
   openForeignSessionAllTabs(sessionTag: string): void;
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent): void;
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent): void;
   deleteForeignSession(sessionTag: string): void;
   openClearBrowsingData(): void;
   recordHistogram(histogram: string, value: number, max: number): void;
@@ -37,7 +38,7 @@ export interface BrowserService {
   navigateToUrl(url: string, target: string, e: MouseEvent): void;
   otherDevicesInitialized(): void;
   queryHistoryContinuation(): Promise<QueryResult>;
-  queryHistory(searchTerm: string): Promise<QueryResult>;
+  queryHistory(searchTerm: string, beginTime?: number): Promise<QueryResult>;
   startTurnOnSyncFlow(): void;
 }
 
@@ -58,15 +59,17 @@ export class BrowserServiceImpl implements BrowserService {
     return sendWithPromise('removeVisits', removalList);
   }
 
-  openForeignSessionAllTabs(sessionTag: string) {
-    chrome.send('openForeignSession', [sessionTag]);
+  setLastSelectedTab(lastSelectedTab: number) {
+    chrome.send('setLastSelectedTab', [lastSelectedTab]);
   }
 
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent) {
-    chrome.send('openForeignSession', [
+  openForeignSessionAllTabs(sessionTag: string) {
+    chrome.send('openForeignSessionAllTabs', [sessionTag]);
+  }
+
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent) {
+    chrome.send('openForeignSessionTab', [
       sessionTag,
-      String(windowId),
       String(tabId),
       e.button || 0,
       e.altKey,
@@ -124,8 +127,9 @@ export class BrowserServiceImpl implements BrowserService {
     return sendWithPromise('queryHistoryContinuation');
   }
 
-  queryHistory(searchTerm: string) {
-    return sendWithPromise('queryHistory', searchTerm, RESULTS_PER_PAGE);
+  queryHistory(searchTerm: string, beginTime?: number) {
+    return sendWithPromise(
+        'queryHistory', searchTerm, RESULTS_PER_PAGE, beginTime);
   }
 
   startTurnOnSyncFlow() {

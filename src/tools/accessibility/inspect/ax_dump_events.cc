@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,13 +54,13 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  absl::optional<ui::AXInspectScenario> scenario =
+  std::optional<ui::AXInspectScenario> scenario =
       tools::ScenarioFromCommandLine(*command_line);
   if (!scenario) {
     return 1;
   }
 
-  absl::optional<AXTreeSelector> selector =
+  std::optional<AXTreeSelector> selector =
       tools::TreeSelectorFromCommandLine(*command_line);
 
   if (!selector || selector->empty()) {
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
   // A future patch will update mac and linux to use selector->widget and remove
   // the `pid` argument.
   unsigned int pid = 0;
-#if defined(USE_OZONE) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_MAC)
   pid = selector->widget;
 #endif
   const auto server =

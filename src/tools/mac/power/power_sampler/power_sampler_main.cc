@@ -1,7 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <signal.h>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -10,14 +11,14 @@
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
+#include "base/power_monitor/iopm_power_source_sampling_event_source.h"
+#include "base/power_monitor/timer_sampling_event_source.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/time/time.h"
-#include "components/power_metrics/iopm_power_source_sampling_event_source.h"
-#include "components/power_metrics/timer_sampling_event_source.h"
 #include "tools/mac/power/power_sampler/battery_sampler.h"
 #include "tools/mac/power/power_sampler/csv_exporter.h"
 #include "tools/mac/power/power_sampler/json_exporter.h"
@@ -37,7 +38,6 @@ void InitLogging() {
   logging::LoggingSettings settings;
   settings.logging_dest =
       logging::LOG_TO_SYSTEM_DEBUG_LOG | logging::LOG_TO_STDERR;
-  settings.log_file_path = nullptr;
   settings.lock_log = logging::DONT_LOCK_LOG_FILE;
   settings.delete_old = logging::APPEND_TO_OLD_LOG_FILE;
   bool logging_res = logging::InitLogging(settings);
@@ -46,6 +46,7 @@ void InitLogging() {
 
 constexpr char kSwitchHelp[] = "h";
 constexpr char kSwitchSamplers[] = "samplers";
+constexpr char kSwitchInitialSample[] = "initial-sample";
 constexpr char kSwitchSampleInterval[] = "sample-interval";
 constexpr char kSwitchSampleCount[] = "sample-count";
 constexpr char kSwitchTimeout[] = "timeout";
@@ -61,9 +62,10 @@ in CSV or JSON format.
 
 Options:
   --samplers=<samplers>           Comma separated list of samplers.
+  --initial-sample                Sample on launch.
   --sample-interval=<num>         Sample on a <num> second interval.
-  --sample-on-notification        Sample on power manager notifications.
-      Note that interval and event notifications are mutually exclusive.
+  --sample-on-notification        Sample on power manager notification.
+      Sampling on interval or on notification are mutually exclusive.
   --sample-count=<num>            Collect <num> samples before exiting.
   --no-samplers                   Use no samplers.
   --timeout=<num>                 Stops the sampler after <num> seconds.
@@ -114,6 +116,11 @@ bool ConsumeSamplerName(const std::string& sampler_name,
     return true;
   }
   return false;
+}
+
+std::atomic<bool> should_quit_{false};
+void quit_signal_handler(int signal) {
+  should_quit_ = true;
 }
 
 int main(int argc, char** argv) {
@@ -171,7 +178,7 @@ int main(int argc, char** argv) {
 
     std::string sample_count_switch =
         command_line.GetSwitchValueASCII(kSwitchSampleCount);
-    if (!base::StringToInt64(sample_count_switch, &sample_count) &&
+    if (!base::StringToInt64(sample_count_switch, &sample_count) ||
         sample_count < 1) {
       PrintUsage("sample-count must be numeric and larger than 0.");
       return kStatusInvalidParam;
@@ -205,16 +212,16 @@ int main(int argc, char** argv) {
     }
   }
 
-  std::unique_ptr<power_metrics::SamplingEventSource> event_source;
+  std::unique_ptr<base::SamplingEventSource> event_source;
   if (command_line.HasSwitch(kSwitchSampleOnNotification)) {
-    event_source =
-        std::make_unique<power_metrics::IOPMPowerSourceSamplingEventSource>();
+    event_source = std::make_unique<base::IOPMPowerSourceSamplingEventSource>();
   } else {
-    event_source = std::make_unique<power_metrics::TimerSamplingEventSource>(
-        sampling_interval);
+    event_source =
+        std::make_unique<base::TimerSamplingEventSource>(sampling_interval);
   }
 
   base::SingleThreadTaskExecutor executor(base::MessagePumpType::NS_RUNLOOP);
+
   power_sampler::SamplingController controller;
 
   std::unique_ptr<power_sampler::UserActiveSimulator> user_active_simulator;
@@ -330,18 +337,51 @@ int main(int argc, char** argv) {
                                             timeout);
   }
 
-  if (!event_source->Start(BindRepeating(
-          [](power_sampler::SamplingController* controller,
-             base::OnceClosure quit_closure) {
-            if (controller->OnSamplingEvent())
-              std::move(quit_closure).Run();
+  // Install signal handler for on-demand quitting. When no samplers are used
+  // there is no need to "gracefully quit". In that case no handlers need to be
+  // installed.
+  if (controller.HasSamplers()) {
+    struct sigaction new_action;
+    new_action.sa_handler = quit_signal_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGTERM, &new_action, NULL);
+    sigaction(SIGINT, &new_action, NULL);
+  }
+
+  base::RepeatingTimer quit_timer;
+  quit_timer.Start(
+      FROM_HERE, base::Seconds(1),
+      BindRepeating(
+          [](base::RepeatingTimer* quit_timer) {
+            if (should_quit_.load()) {
+              std::cerr << "The application is waiting for the last-sample"
+                        << std::endl;
+              quit_timer->Stop();
+            }
           },
-          base::Unretained(&controller), run_loop.QuitClosure()))) {
+          base::Unretained(&quit_timer)));
+
+  auto sample_closure = BindRepeating(
+      [](power_sampler::SamplingController* controller,
+         base::OnceClosure quit_closure, base::RepeatingTimer* quit_timer) {
+        if (controller->OnSamplingEvent() || !quit_timer->IsRunning()) {
+          std::move(quit_closure).Run();
+        }
+      },
+      base::Unretained(&controller), run_loop.QuitClosure(),
+      base::Unretained(&quit_timer));
+
+  controller.StartSession();
+
+  if (!event_source->Start(sample_closure)) {
     PrintUsage("Could not start the sampling event source.");
     return kStatusRuntimeError;
   }
 
-  controller.StartSession();
+  if (command_line.HasSwitch(kSwitchInitialSample)) {
+    sample_closure.Run();
+  }
 
   run_loop.Run();
 

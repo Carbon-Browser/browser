@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,9 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
 #include "content/browser/devtools/protocol/protocol.h"
 #include "content/public/browser/devtools_agent_host_client_channel.h"
 #include "content/public/browser/devtools_external_agent_proxy.h"
@@ -32,6 +34,7 @@ namespace protocol {
 class DevToolsDomainHandler;
 class AuditsHandler;
 class DOMHandler;
+class DeviceOrientationHandler;
 class EmulationHandler;
 class InputHandler;
 class InspectorHandler;
@@ -52,8 +55,26 @@ class DevToolsSession : public protocol::FrontendChannel,
                         public DevToolsExternalAgentProxy,
                         public content::DevToolsAgentHostClientChannel {
  public:
-  DevToolsSession(DevToolsAgentHostClient* client,
-                  const std::string& session_id);
+  // For sessions attached to the Tab target, the mode is set to TabTarget.
+  // For other sessions, the mode is inherited from the parent.
+  // This is used as an indication that the client has opted in into using
+  // tab targets and lets backend use the new logic of target discovery:
+  //  - auto-attach on frame targets will not auto-attach subframes (these
+  //      will be instead attached to the Tab targets)
+  //  - certain features that depend on MPArch support will not be disabled
+  //      (BFCache, Prerender)
+  enum class Mode {
+    kSupportsTabTarget,
+    kDoesNotSupportTabTarget,
+  };
+
+  class ChildObserver : public base::CheckedObserver {
+   public:
+    virtual void SessionAttached(DevToolsSession& session) = 0;
+  };
+
+  // For root sessions (see also private constructor for children).
+  DevToolsSession(DevToolsAgentHostClient* client, Mode mode);
   ~DevToolsSession() override;
 
   void SetAgentHost(DevToolsAgentHostImpl* agent_host);
@@ -98,9 +119,15 @@ class DevToolsSession : public protocol::FrontendChannel,
 
   DevToolsSession* AttachChildSession(const std::string& session_id,
                                       DevToolsAgentHostImpl* agent_host,
-                                      DevToolsAgentHostClient* client);
+                                      DevToolsAgentHostClient* client,
+                                      Mode mode,
+                                      base::OnceClosure resume_callback);
   void DetachChildSession(const std::string& session_id);
   bool HasChildSession(const std::string& session_id);
+  Mode session_mode() const { return mode_; }
+
+  void AddObserver(ChildObserver* obs);
+  void RemoveObserver(ChildObserver* obs);
 
  private:
   struct PendingMessage {
@@ -118,6 +145,12 @@ class DevToolsSession : public protocol::FrontendChannel,
                    crdtp::span<uint8_t> payload);
     ~PendingMessage();
   };
+
+  // For child sessions.
+  DevToolsSession(DevToolsAgentHostClient* client,
+                  const std::string& session_id,
+                  DevToolsSession* parent,
+                  Mode mode);
 
   void MojoConnectionDestroyed();
   void DispatchToAgent(const PendingMessage& message);
@@ -159,33 +192,40 @@ class DevToolsSession : public protocol::FrontendChannel,
 
   template <typename T>
   bool IsDomainAvailableToUntrustedClient() {
-    return std::disjunction_v<std::is_same<T, protocol::AuditsHandler>,
-                              std::is_same<T, protocol::DOMHandler>,
-                              std::is_same<T, protocol::EmulationHandler>,
-                              std::is_same<T, protocol::InputHandler>,
-                              std::is_same<T, protocol::InspectorHandler>,
-                              std::is_same<T, protocol::IOHandler>,
-                              std::is_same<T, protocol::OverlayHandler>,
-                              std::is_same<T, protocol::NetworkHandler>,
-                              std::is_same<T, protocol::FetchHandler>,
-                              std::is_same<T, protocol::StorageHandler>,
-                              std::is_same<T, protocol::TargetHandler>,
-                              std::is_same<T, protocol::PageHandler>,
-                              std::is_same<T, protocol::TracingHandler>,
-                              std::is_same<T, protocol::LogHandler>,
-                              std::is_same<T, protocol::WebAuthnHandler>>;
+    return std::disjunction_v<
+        std::is_same<T, protocol::AuditsHandler>,
+        std::is_same<T, protocol::DOMHandler>,
+        std::is_same<T, protocol::DeviceOrientationHandler>,
+        std::is_same<T, protocol::EmulationHandler>,
+        std::is_same<T, protocol::InputHandler>,
+        std::is_same<T, protocol::InspectorHandler>,
+        std::is_same<T, protocol::IOHandler>,
+        std::is_same<T, protocol::OverlayHandler>,
+        std::is_same<T, protocol::NetworkHandler>,
+        std::is_same<T, protocol::FetchHandler>,
+        std::is_same<T, protocol::StorageHandler>,
+        std::is_same<T, protocol::TargetHandler>,
+        std::is_same<T, protocol::PageHandler>,
+        std::is_same<T, protocol::TracingHandler>,
+        std::is_same<T, protocol::LogHandler>,
+        std::is_same<T, protocol::WebAuthnHandler>>;
   }
   void AddHandler(std::unique_ptr<protocol::DevToolsDomainHandler> handler);
+
+  const raw_ptr<DevToolsAgentHostClient> client_;
+  const raw_ptr<DevToolsSession> root_session_ = nullptr;
+  const std::string session_id_;  // empty if this is the root session.
+  const Mode mode_;
 
   mojo::AssociatedReceiver<blink::mojom::DevToolsSessionHost> receiver_{this};
   mojo::AssociatedRemote<blink::mojom::DevToolsSession> session_;
   mojo::Remote<blink::mojom::DevToolsSession> io_session_;
   bool use_io_session_{false};
-  DevToolsAgentHostImpl* agent_host_ = nullptr;
-  DevToolsAgentHostClient* client_;
+  raw_ptr<DevToolsAgentHostImpl> agent_host_ = nullptr;
   bool browser_only_ = false;
   HandlersMap handlers_;
-  std::unique_ptr<protocol::UberDispatcher> dispatcher_;
+  std::unique_ptr<protocol::UberDispatcher> dispatcher_{
+      new protocol::UberDispatcher(this)};
 
   bool suspended_sending_messages_to_agent_ = false;
 
@@ -200,11 +240,11 @@ class DevToolsSession : public protocol::FrontendChannel,
   // |session_state_cookie_| is nullptr before first attach.
   blink::mojom::DevToolsSessionStatePtr session_state_cookie_;
 
-  DevToolsSession* root_session_ = nullptr;
-  std::string session_id_;  // empty if this is the root session.
-  base::flat_map<std::string, DevToolsSession*> child_sessions_;
+  base::flat_map<std::string, raw_ptr<DevToolsSession, CtnExperimental>>
+      child_sessions_;
   base::OnceClosure runtime_resume_;
-  DevToolsExternalAgentProxyDelegate* proxy_delegate_ = nullptr;
+  raw_ptr<DevToolsExternalAgentProxyDelegate> proxy_delegate_ = nullptr;
+  base::ObserverList<ChildObserver, true, false> child_observers_;
 
   base::WeakPtrFactory<DevToolsSession> weak_factory_{this};
 };

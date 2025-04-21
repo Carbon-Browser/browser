@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -21,6 +21,7 @@
 #include "ui/gfx/geometry/vector3d_f.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/animation/animation_sequence_block.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_painted_layer_delegates.h"
 #include "ui/views/style/platform_style.h"
 #include "ui/views/view.h"
@@ -116,15 +117,20 @@ enum InkDropSubAnimations {
 constexpr float kQuickActionBurstScale = 1.3f;
 
 // Returns the InkDropState sub animation duration for the given |state|.
-base::TimeDelta GetAnimationDuration(InkDropSubAnimations state) {
-  if (!PlatformStyle::kUseRipples ||
-      !gfx::Animation::ShouldRenderRichAnimation()) {
+base::TimeDelta GetAnimationDuration(InkDropHost* ink_drop_host,
+                                     InkDropSubAnimations state) {
+  if constexpr (!PlatformStyle::kUseRipples) {
+    return base::TimeDelta();
+  }
+  if (!gfx::Animation::ShouldRenderRichAnimation() ||
+             (ink_drop_host && ink_drop_host->GetMode() ==
+                                   InkDropHost::InkDropMode::ON_NO_ANIMATE)) {
     return base::TimeDelta();
   }
 
   // Duration constants for InkDropStateSubAnimations. See the
   // InkDropStateSubAnimations enum documentation for more info.
-  constexpr base::TimeDelta kAnimationDuration[] = {
+  constexpr auto kAnimationDuration = std::to_array<base::TimeDelta>({
       base::Milliseconds(150),  // HIDDEN_FADE_OUT
       base::Milliseconds(200),  // HIDDEN_TRANSFORM
       base::TimeDelta(),        // ACTION_PENDING_FADE_IN
@@ -138,20 +144,21 @@ base::TimeDelta GetAnimationDuration(InkDropSubAnimations state) {
       base::Milliseconds(160),  // ACTIVATED_RECT_TRANSFORM
       base::Milliseconds(150),  // DEACTIVATED_FADE_OUT
       base::Milliseconds(200),  // DEACTIVATED_TRANSFORM
-  };
+  });
   return kAnimationDuration[state];
 }
 
 }  // namespace
 
-SquareInkDropRipple::SquareInkDropRipple(const gfx::Size& large_size,
+SquareInkDropRipple::SquareInkDropRipple(InkDropHost* ink_drop_host,
+                                         const gfx::Size& large_size,
                                          int large_corner_radius,
                                          const gfx::Size& small_size,
                                          int small_corner_radius,
                                          const gfx::Point& center_point,
                                          SkColor color,
                                          float visible_opacity)
-    : activated_shape_(ActivatedShape::kRoundedRect),
+    : InkDropRipple(ink_drop_host),
       visible_opacity_(visible_opacity),
       large_size_(large_size),
       large_corner_radius_(large_corner_radius),
@@ -166,8 +173,9 @@ SquareInkDropRipple::SquareInkDropRipple(const gfx::Size& large_size,
       root_layer_(ui::LAYER_NOT_DRAWN) {
   root_layer_.SetName("SquareInkDropRipple:ROOT_LAYER");
 
-  for (int i = 0; i < PAINTED_SHAPE_COUNT; ++i)
+  for (size_t i = 0; i < PAINTED_SHAPE_COUNT; ++i) {
     AddPaintLayer(static_cast<PaintedShape>(i));
+  }
 
   root_layer_.SetMasksToBounds(false);
   root_layer_.SetBounds(gfx::Rect(large_size_));
@@ -184,14 +192,6 @@ SquareInkDropRipple::~SquareInkDropRipple() {
   // Explicitly aborting all the animations ensures all callbacks are invoked
   // while this instance still exists.
   AbortAllAnimations();
-}
-
-void SquareInkDropRipple::SnapToActivated() {
-  InkDropRipple::SnapToActivated();
-  SetOpacity(visible_opacity_);
-  InkDropTransforms transforms;
-  GetActivatedTargetTransforms(&transforms);
-  SetTransforms(transforms);
 }
 
 ui::Layer* SquareInkDropRipple::GetRootLayer() {
@@ -218,7 +218,6 @@ std::string SquareInkDropRipple::ToLayerName(PaintedShape painted_shape) {
       return "VERTICAL_RECT";
     case PAINTED_SHAPE_COUNT:
       NOTREACHED() << "The PAINTED_SHAPE_COUNT value should never be used.";
-      return "PAINTED_SHAPE_COUNT";
   }
   return "UNKNOWN";
 }
@@ -227,6 +226,7 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
                                              InkDropState new_ink_drop_state) {
   InkDropTransforms transforms;
   AnimationBuilder builder;
+  InkDropHost* host = GetInkDropHost();
   builder
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
@@ -236,20 +236,21 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
       [this](AnimationSequenceBlock& sequence,
              const InkDropTransforms& transforms,
              gfx::Tween::Type tween) -> AnimationSequenceBlock& {
-    for (int i = 0; i < PAINTED_SHAPE_COUNT; ++i)
+    for (size_t i = 0; i < PAINTED_SHAPE_COUNT; ++i) {
       sequence.SetTransform(painted_layers_[i].get(), transforms[i], tween);
+    }
     return sequence;
   };
 
   auto pending_animation =
-      [this, &animate_to_transforms](
+      [this, &animate_to_transforms, host](
           AnimationSequenceBlock& sequence,
           const InkDropTransforms& transforms) -> AnimationSequenceBlock& {
     auto& new_sequence =
-        sequence.SetDuration(GetAnimationDuration(ACTION_PENDING_FADE_IN))
+        sequence.SetDuration(GetAnimationDuration(host, ACTION_PENDING_FADE_IN))
             .SetOpacity(&root_layer_, visible_opacity_, gfx::Tween::EASE_IN)
             .Then()
-            .SetDuration(GetAnimationDuration(ACTION_PENDING_TRANSFORM))
+            .SetDuration(GetAnimationDuration(host, ACTION_PENDING_TRANSFORM))
             .SetOpacity(&root_layer_, visible_opacity_, gfx::Tween::EASE_IN);
     animate_to_transforms(new_sequence, transforms, gfx::Tween::EASE_IN_OUT);
     return new_sequence;
@@ -264,17 +265,18 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
         CalculateCircleTransforms(small_size_, &transforms);
         auto& sequence =
             builder.GetCurrentSequence()
-                .SetDuration(GetAnimationDuration(HIDDEN_FADE_OUT))
+                .SetDuration(GetAnimationDuration(host, HIDDEN_FADE_OUT))
                 .SetOpacity(&root_layer_, kHiddenOpacity,
                             gfx::Tween::EASE_IN_OUT)
                 .At(base::TimeDelta())
-                .SetDuration(GetAnimationDuration(HIDDEN_TRANSFORM));
+                .SetDuration(GetAnimationDuration(host, HIDDEN_TRANSFORM));
         animate_to_transforms(sequence, transforms, gfx::Tween::EASE_IN_OUT);
       }
       break;
     case InkDropState::ACTION_PENDING: {
-      if (old_ink_drop_state == new_ink_drop_state)
+      if (old_ink_drop_state == new_ink_drop_state) {
         return;
+      }
       DLOG_IF(WARNING, InkDropState::HIDDEN != old_ink_drop_state)
           << "Invalid InkDropState transition. old_ink_drop_state="
           << ToString(old_ink_drop_state)
@@ -299,10 +301,10 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
         builder.SetPreemptionStrategy(ui::LayerAnimator::ENQUEUE_NEW_ANIMATION);
       }
       builder.GetCurrentSequence()
-          .SetDuration(GetAnimationDuration(ACTION_TRIGGERED_FADE_OUT))
+          .SetDuration(GetAnimationDuration(host, ACTION_TRIGGERED_FADE_OUT))
           .SetOpacity(&root_layer_, kHiddenOpacity, gfx::Tween::EASE_IN_OUT)
           .Offset(base::TimeDelta())
-          .SetDuration(GetAnimationDuration(ACTION_TRIGGERED_TRANSFORM));
+          .SetDuration(GetAnimationDuration(host, ACTION_TRIGGERED_TRANSFORM));
       animate_to_transforms(builder.GetCurrentSequence(), transforms,
                             gfx::Tween::EASE_IN_OUT);
       break;
@@ -316,7 +318,7 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
       CalculateRectTransforms(small_size_, small_corner_radius_, &transforms);
       animate_to_transforms(
           builder.GetCurrentSequence()
-              .SetDuration(GetAnimationDuration(ALTERNATE_ACTION_PENDING))
+              .SetDuration(GetAnimationDuration(host, ALTERNATE_ACTION_PENDING))
               .SetOpacity(&root_layer_, visible_opacity_, gfx::Tween::EASE_IN),
           transforms, gfx::Tween::EASE_IN_OUT);
       break;
@@ -329,19 +331,19 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
           << " new_ink_drop_state=" << ToString(new_ink_drop_state);
 
       base::TimeDelta visible_duration =
-          GetAnimationDuration(ALTERNATE_ACTION_TRIGGERED_TRANSFORM) -
-          GetAnimationDuration(ALTERNATE_ACTION_TRIGGERED_FADE_OUT);
+          GetAnimationDuration(host, ALTERNATE_ACTION_TRIGGERED_TRANSFORM) -
+          GetAnimationDuration(host, ALTERNATE_ACTION_TRIGGERED_FADE_OUT);
       CalculateRectTransforms(large_size_, large_corner_radius_, &transforms);
       builder.GetCurrentSequence()
           .SetDuration(visible_duration)
           .SetOpacity(&root_layer_, visible_opacity_, gfx::Tween::EASE_IN_OUT)
           .Then()
           .SetDuration(
-              GetAnimationDuration(ALTERNATE_ACTION_TRIGGERED_FADE_OUT))
+              GetAnimationDuration(host, ALTERNATE_ACTION_TRIGGERED_FADE_OUT))
           .SetOpacity(&root_layer_, kHiddenOpacity, gfx::Tween::EASE_IN_OUT)
           .At(base::TimeDelta())
           .SetDuration(
-              GetAnimationDuration(ALTERNATE_ACTION_TRIGGERED_TRANSFORM));
+              GetAnimationDuration(host, ALTERNATE_ACTION_TRIGGERED_TRANSFORM));
       animate_to_transforms(builder.GetCurrentSequence(), transforms,
                             gfx::Tween::EASE_IN_OUT);
       break;
@@ -358,7 +360,7 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
         CalculateCircleTransforms(large_size_, &transforms);
         animate_to_transforms(
             builder.GetCurrentSequence().SetDuration(
-                GetAnimationDuration(ACTIVATED_CIRCLE_TRANSFORM)),
+                GetAnimationDuration(host, ACTIVATED_CIRCLE_TRANSFORM)),
             transforms, gfx::Tween::EASE_IN_OUT)
             .Then();
       } else if (old_ink_drop_state == InkDropState::ACTION_PENDING) {
@@ -366,29 +368,39 @@ void SquareInkDropRipple::AnimateStateChange(InkDropState old_ink_drop_state,
       }
 
       GetActivatedTargetTransforms(&transforms);
-      animate_to_transforms(builder.GetCurrentSequence().SetDuration(
-                                GetAnimationDuration(ACTIVATED_RECT_TRANSFORM)),
-                            transforms, gfx::Tween::EASE_IN_OUT);
+      animate_to_transforms(
+          builder.GetCurrentSequence().SetDuration(
+              GetAnimationDuration(host, ACTIVATED_RECT_TRANSFORM)),
+          transforms, gfx::Tween::EASE_IN_OUT);
       break;
     }
     case InkDropState::DEACTIVATED: {
       base::TimeDelta visible_duration =
-          GetAnimationDuration(DEACTIVATED_TRANSFORM) -
-          GetAnimationDuration(DEACTIVATED_FADE_OUT);
+          GetAnimationDuration(host, DEACTIVATED_TRANSFORM) -
+          GetAnimationDuration(host, DEACTIVATED_FADE_OUT);
       GetDeactivatedTargetTransforms(&transforms);
       builder.GetCurrentSequence()
           .SetDuration(visible_duration)
           .SetOpacity(&root_layer_, visible_opacity_, gfx::Tween::EASE_IN_OUT)
           .Then()
-          .SetDuration(GetAnimationDuration(DEACTIVATED_FADE_OUT))
+          .SetDuration(GetAnimationDuration(host, DEACTIVATED_FADE_OUT))
           .SetOpacity(&root_layer_, kHiddenOpacity, gfx::Tween::EASE_IN_OUT)
           .At(base::TimeDelta());
-      animate_to_transforms(builder.GetCurrentSequence().SetDuration(
-                                GetAnimationDuration(DEACTIVATED_TRANSFORM)),
-                            transforms, gfx::Tween::EASE_IN_OUT);
+      animate_to_transforms(
+          builder.GetCurrentSequence().SetDuration(
+              GetAnimationDuration(host, DEACTIVATED_TRANSFORM)),
+          transforms, gfx::Tween::EASE_IN_OUT);
       break;
     }
   }
+}
+
+void SquareInkDropRipple::SetStateToActivated() {
+  root_layer_.SetVisible(true);
+  SetOpacity(visible_opacity_);
+  InkDropTransforms transforms;
+  GetActivatedTargetTransforms(&transforms);
+  SetTransforms(transforms);
 }
 
 void SquareInkDropRipple::SetStateToHidden() {
@@ -402,13 +414,15 @@ void SquareInkDropRipple::SetStateToHidden() {
 
 void SquareInkDropRipple::AbortAllAnimations() {
   root_layer_.GetAnimator()->AbortAllAnimations();
-  for (auto& painted_layer : painted_layers_)
+  for (auto& painted_layer : painted_layers_) {
     painted_layer->GetAnimator()->AbortAllAnimations();
+  }
 }
 
 void SquareInkDropRipple::SetTransforms(const InkDropTransforms transforms) {
-  for (int i = 0; i < PAINTED_SHAPE_COUNT; ++i)
+  for (size_t i = 0; i < PAINTED_SHAPE_COUNT; ++i) {
     painted_layers_[i]->SetTransform(transforms[i]);
+  }
 }
 
 void SquareInkDropRipple::SetOpacity(float opacity) {
@@ -442,7 +456,7 @@ void SquareInkDropRipple::CalculateRectTransforms(
                                           desired_size.width() / 2.0f));
     ripple_bounds.Scale(dsf);
     ripple_bounds = gfx::RectF(gfx::ToEnclosingRect(ripple_bounds));
-    ripple_bounds.Scale(1.0f / dsf);
+    ripple_bounds.InvScale(dsf);
     size = ripple_bounds.size();
   }
 
@@ -511,8 +525,9 @@ gfx::Transform SquareInkDropRipple::CalculateRectTransform(
 
 void SquareInkDropRipple::GetCurrentTransforms(
     InkDropTransforms* transforms_out) const {
-  for (int i = 0; i < PAINTED_SHAPE_COUNT; ++i)
+  for (size_t i = 0; i < PAINTED_SHAPE_COUNT; ++i) {
     (*transforms_out)[i] = painted_layers_[i]->transform();
+  }
 }
 
 void SquareInkDropRipple::GetActivatedTargetTransforms(
@@ -556,7 +571,6 @@ void SquareInkDropRipple::AddPaintLayer(PaintedShape painted_shape) {
       break;
     case PAINTED_SHAPE_COUNT:
       NOTREACHED() << "PAINTED_SHAPE_COUNT is not an actual shape type.";
-      break;
   }
 
   ui::Layer* layer = new ui::Layer();

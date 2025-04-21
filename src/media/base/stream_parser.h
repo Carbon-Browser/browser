@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <map>
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
-#include "base/memory/ref_counted.h"
+#include "base/containers/flat_map.h"
+#include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/eme_constants.h"
@@ -25,28 +26,41 @@ namespace media {
 class MediaLog;
 class MediaTracks;
 class StreamParserBuffer;
-class TextTrackConfig;
 
 // Abstract interface for parsing media byte streams.
 class MEDIA_EXPORT StreamParser {
  public:
   using BufferQueue = base::circular_deque<scoped_refptr<StreamParserBuffer>>;
 
-  // Range of |TrackId| is dependent upon stream parsers. It is currently
-  // the key for the buffer's text track config in the applicable
-  // TextTrackConfigMap (which is passed in StreamParser::NewConfigCB), or
-  // 0 for other media types that currently allow at most one track.
-  // WebMTracksParser uses -1 as an invalid text track number.
-  // It is also the key for BufferQueueMap structure returned by stream parsers.
-  // TODO(servolk/wolenetz): Change to size_type or unsigned after fixing track
-  // id handling in FrameProcessor.
-  typedef int TrackId;
-
-  // Map of text track ID to the track configuration.
-  typedef std::map<TrackId, TextTrackConfig> TextTrackConfigMap;
+  // Range of |TrackId| is dependent upon stream parsers.
+  // It is the key for BufferQueueMap structure returned by stream parsers.
+  using TrackId = int;
 
   // Map of track ID to decode-timestamp-ordered buffers for the track.
-  using BufferQueueMap = std::map<TrackId, BufferQueue>;
+  using BufferQueueMap = base::flat_map<TrackId, BufferQueue>;
+
+  // With incremental parsing, parse can succeed yet also still indicate there
+  // is more uninspected data to parse. This enum identifies the possible
+  // results of incremental parsing by a StreamParser.
+  // TODO:(crbug.com/1378678): Investigate usage of TypeStatus<T>::Or<U> where
+  // this is used.
+  enum class ParseStatus {
+    kFailed,
+    kSuccess,
+    kSuccessHasMoreData,
+  };
+
+  // Incremental parse of a potentially large pending data considers up to this
+  // many further bytes from the pending bytes during the Parse() call. Moved
+  // from older incremental append+parse logic in SourceBuffer, this size value
+  // was originally chosen as 128KiB to not block the renderer event loop very
+  // long. This value had been selected by looking at YouTube SourceBuffer usage
+  // across a variety of bitrates, to allow relatively large appendBuffer()
+  // calls while keeping each parse iteration's duration within ~5-15ms range.
+  // This value may change in future updates as platform capabilities have
+  // generally improved.
+  // TODO(crbug.com/40244251): Tune this experimentally.
+  static constexpr int kMaxPendingBytesPerParse = 128 * 1024;  // 128KiB
 
   // Stream parameters passed in InitCB.
   struct MEDIA_EXPORT InitParameters {
@@ -64,9 +78,8 @@ class MEDIA_EXPORT StreamParser {
 
     // Counts of tracks detected by type within this stream. Not all of these
     // tracks may be selected for use by the parser.
-    int detected_audio_track_count;
-    int detected_video_track_count;
-    int detected_text_track_count;
+    int detected_audio_track_count = 0;
+    int detected_video_track_count = 0;
   };
 
   // Indicates completion of parser initialization.
@@ -77,13 +90,10 @@ class MEDIA_EXPORT StreamParser {
   // First parameter - An object containing information about media tracks as
   //                   well as audio/video decoder configs associated with each
   //                   track the parser will use from the stream.
-  // Second parameter - The new text tracks configuration.  If the map is empty,
-  //                    then no text tracks were parsed for use from the stream.
   // Return value - True if the new configurations are accepted.
   //                False if the new configurations are not supported
   //                and indicates that a parsing error should be signalled.
-  typedef base::RepeatingCallback<bool(std::unique_ptr<MediaTracks>,
-                                       const TextTrackConfigMap&)>
+  typedef base::RepeatingCallback<bool(std::unique_ptr<MediaTracks>)>
       NewConfigCB;
 
   // New stream buffers have been parsed.
@@ -115,22 +125,20 @@ class MEDIA_EXPORT StreamParser {
   virtual ~StreamParser();
 
   // Initializes the parser with necessary callbacks. Must be called before any
-  // data is passed to Parse(). |init_cb| will be called once enough data has
-  // been parsed to determine the initial stream configurations, presentation
-  // start time, and duration. If |ignore_text_track| is true, then no text
-  // buffers should be passed later by the parser to |new_buffers_cb|.
-  virtual void Init(
-      InitCB init_cb,
-      const NewConfigCB& config_cb,
-      const NewBuffersCB& new_buffers_cb,
-      bool ignore_text_track,
-      const EncryptedMediaInitDataCB& encrypted_media_init_data_cb,
-      const NewMediaSegmentCB& new_segment_cb,
-      const EndMediaSegmentCB& end_of_segment_cb,
-      MediaLog* media_log) = 0;
+  // data is passed to AppendToParseBuffer() or any call to Parse() or
+  // ProcessChunks(). `init_cb` will be called once enough data has been parsed
+  // to determine the initial stream configurations, presentation start time,
+  // and duration.
+  virtual void Init(InitCB init_cb,
+                    NewConfigCB config_cb,
+                    NewBuffersCB new_buffers_cb,
+                    EncryptedMediaInitDataCB encrypted_media_init_data_cb,
+                    NewMediaSegmentCB new_segment_cb,
+                    EndMediaSegmentCB end_of_segment_cb,
+                    MediaLog* media_log) = 0;
 
-  // Called during the reset parser state algorithm.  This flushes the current
-  // parser and puts the parser in a state where it can receive data.  This
+  // Called during the reset parser state algorithm. This flushes the current
+  // parser and puts the parser in a state where it can receive data. This
   // method does not need to invoke the EndMediaSegmentCB since the parser reset
   // algorithm already resets the segment parsing state.
   virtual void Flush() = 0;
@@ -139,22 +147,47 @@ class MEDIA_EXPORT StreamParser {
   // for the byte stream corresponding to this parser.
   virtual bool GetGenerateTimestampsFlag() const = 0;
 
-  // Called when there is new data to parse.
-  //
-  // Returns true if the parse succeeds.
+  // Called when there is new data to parse. Any previously provided data must
+  // have been fully attempted to be parsed (by one or more calls to Parse()
+  // until kSuccess results) or has been Flush()'ed. Returns true if the parser
+  // successfully copied the data from `buf` for use in future Parse() calls.
+  // Returns false if the parser was unable to allocate resources; content in
+  // `buf` is not copied as a result, and this failure is reported (through
+  // various layers) up to the SourceBuffer's implementation of appendBuffer(),
+  // which should then notify the app of append failure using a
+  // `QuotaExceededErr` exception per the MSE specification. App could use a
+  // back-off and retry strategy or otherwise alter their behavior to attempt to
+  // buffer media for further playback.
+  [[nodiscard]] virtual bool AppendToParseBuffer(
+      base::span<const uint8_t> buf) = 0;
+
+  // Attempts to parse more data previously provided via AppendToParseBuffer().
+  // May not attempt to parse all of it in one pass;
+  // `max_pending_bytes_to_inspect` should normally be set to
+  // kMaxPendingBytesPerParse, except if the caller needs to use a different
+  // amount (for example, a file verification parse or a test case that needs to
+  // involve a larger or smaller amount of the pending data in one call to
+  // Parse()).
+  // Returns kSuccess if the parse succeeded and all previously provided data
+  // from AppendToParseBuffer() has been inspected.
+  // Returns kSuccessHasMoreData if the parse succeeded, yet there remains
+  // uninspected data remaining from AppendToParseBuffer(); more call(s) to this
+  // method are necessary for the parser to attempt inspection of that data.
+  // Returns kFailed if there was a parse error.
   //
   // Regular "bytestream-formatted" StreamParsers should fully implement
   // Parse(), but WebCodecsEncodedChunkStreamParsers should instead fully
   // implement ProcessChunks().
-  virtual bool Parse(const uint8_t* buf, int size) = 0;
-  virtual bool ProcessChunks(std::unique_ptr<BufferQueue> buffer_queue);
+  [[nodiscard]] virtual ParseStatus Parse(int max_pending_bytes_to_inspect) = 0;
+  [[nodiscard]] virtual bool ProcessChunks(
+      std::unique_ptr<BufferQueue> buffer_queue);
 };
 
 // Appends to |merged_buffers| the provided buffers in decode-timestamp order.
 // Any previous contents of |merged_buffers| is assumed to have lower
 // decode timestamps versus the provided buffers. All provided buffer queues
 // are assumed to already be in decode-timestamp order.
-// Returns false if any of the provided audio/video/text buffers are found
+// Returns false if any of the provided audio/video buffers are found
 // to not be in decode timestamp order, or have a decode timestamp less than
 // the last buffer, if any, in |merged_buffers|. Partial results may exist
 // in |merged_buffers| in this case. Returns true on success.

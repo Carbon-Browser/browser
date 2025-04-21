@@ -1,15 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/speech/speech_recognition_service_factory.h"
 
 #include "base/no_destructor.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/chrome_speech_recognition_service.h"
 #include "chrome/browser/speech/speech_recognition_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 speech::SpeechRecognitionService*
@@ -26,20 +24,29 @@ SpeechRecognitionServiceFactory::GetInstance() {
 }
 
 SpeechRecognitionServiceFactory::SpeechRecognitionServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SpeechRecognitionService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          // Incognito profiles should use their own instance of the browser
+          // context.
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 SpeechRecognitionServiceFactory::~SpeechRecognitionServiceFactory() = default;
 
-KeyedService* SpeechRecognitionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SpeechRecognitionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new speech::ChromeSpeechRecognitionService(context);
+  return std::make_unique<speech::ChromeSpeechRecognitionService>(context);
 }
 
-// Incognito profiles should use their own instance of the browser context.
-content::BrowserContext*
-SpeechRecognitionServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+// static
+void SpeechRecognitionServiceFactory::EnsureFactoryBuilt() {
+  SpeechRecognitionServiceFactory::GetInstance();
 }

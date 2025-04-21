@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_file_stream_writer.h"
 
@@ -9,9 +14,10 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "content/public/browser/browser_thread.h"
@@ -25,11 +31,12 @@ namespace arc {
 namespace {
 
 // Calls base::File::WriteAtCurrentPosNoBestEffort with the given buffer.
-// Returns the number of bytes written, or -1 on error.
-int WriteFile(base::File* file,
-              scoped_refptr<net::IOBuffer> buffer,
-              int buffer_length) {
-  return file->WriteAtCurrentPosNoBestEffort(buffer->data(), buffer_length);
+// Returns the number of bytes written, or std::nullopt on error.
+std::optional<size_t> WriteFile(base::File* file,
+                                scoped_refptr<net::IOBuffer> buffer,
+                                int buffer_length) {
+  return file->WriteAtCurrentPosNoBestEffort(
+      buffer->span().first(base::checked_cast<size_t>(buffer_length)));
 }
 
 // Seeks the file, returns 0 on success, or errno on an error.
@@ -100,6 +107,7 @@ int ArcContentFileSystemFileStreamWriter::Cancel(
 }
 
 int ArcContentFileSystemFileStreamWriter::Flush(
+    storage::FlushMode /*flush_mode*/,
     net::CompletionOnceCallback callback) {
   DCHECK(!has_pending_operation_);
   DCHECK(cancel_callback_.is_null());
@@ -112,8 +120,8 @@ int ArcContentFileSystemFileStreamWriter::Flush(
 
   // |file_| is alive on FlushFile(), since the destructor will destruct
   // |task_runner_| along with |file_| and FlushFile() won't be called.
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE, base::BindOnce(&FlushFile, file_.get()),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&FlushFile, file_.get()),
       base::BindOnce(&ArcContentFileSystemFileStreamWriter::OnFlushFile,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   return net::ERR_IO_PENDING;
@@ -140,8 +148,8 @@ void ArcContentFileSystemFileStreamWriter::WriteInternal(
 
   // |file_| is alive on WriteFile(), since the destructor will destruct
   // |task_runner_| along with |file_| and WriteFile() won't be called.
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&WriteFile, file_.get(), base::WrapRefCounted(buffer),
                      buffer_length),
       base::BindOnce(&ArcContentFileSystemFileStreamWriter::OnWrite,
@@ -150,18 +158,20 @@ void ArcContentFileSystemFileStreamWriter::WriteInternal(
 
 void ArcContentFileSystemFileStreamWriter::OnWrite(
     net::CompletionOnceCallback callback,
-    int result) {
+    std::optional<size_t> result) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   DCHECK(has_pending_operation_);
 
-  if (CancelIfRequested())
+  if (CancelIfRequested()) {
     return;
-
-  has_pending_operation_ = false;
-  if (result < 0) {
-    CloseInternal(CloseStatus::kStatusError);
   }
-  std::move(callback).Run(result < 0 ? net::ERR_FAILED : result);
+  has_pending_operation_ = false;
+  if (!result.has_value()) {
+    CloseInternal(CloseStatus::kStatusError);
+    std::move(callback).Run(net::ERR_FAILED);
+    return;
+  }
+  std::move(callback).Run(result.value());
 }
 
 void ArcContentFileSystemFileStreamWriter::OnOpenFileSession(
@@ -203,9 +213,8 @@ void ArcContentFileSystemFileStreamWriter::OnOpenFileSession(
   }
   // |file_| is alive on SeekFile(), since the destructor will destruct
   // |task_runner_| along with |file_| and SeekFile() won't be called.
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&SeekFile, file_.get(), offset_),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&SeekFile, file_.get(), offset_),
       base::BindOnce(&ArcContentFileSystemFileStreamWriter::OnSeekFile,
                      weak_ptr_factory_.GetWeakPtr(), buf, buffer_length,
                      std::move(callback)));

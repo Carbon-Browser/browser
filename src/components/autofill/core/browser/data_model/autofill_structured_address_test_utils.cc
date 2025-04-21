@@ -1,16 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/data_model/autofill_structured_address_test_utils.h"
 
 #include <ostream>
+
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/data_model/autofill_structured_address_component_test_api.h"
 
 namespace autofill {
-namespace structured_address {
 
 using AddressComponentTestValues = std::vector<AddressComponentTestValue>;
 
@@ -19,7 +20,7 @@ std::ostream& operator<<(std::ostream& out, const AddressComponent& component) {
       << ", value=" << base::UTF16ToUTF8(component.GetValue())
       << ", status=" << static_cast<int>(component.GetVerificationStatus())
       << std::endl;
-  for (const auto* sub_component : component.Subcomponents()) {
+  for (const AddressComponent* sub_component : component.Subcomponents()) {
     out << "\t" << *sub_component;
   }
   return out;
@@ -32,7 +33,7 @@ void TestMerging(
     bool is_mergeable,
     int merge_modes,
     bool newer_was_more_recently_used) {
-  older_component->SetMergeModeForTesting(merge_modes);
+  test_api(*older_component).SetMergeMode(merge_modes);
 
   SCOPED_TRACE(is_mergeable);
   SCOPED_TRACE(merge_modes);
@@ -50,9 +51,9 @@ void SetTestValues(AddressComponent* component,
                    const AddressComponentTestValues& test_values,
                    bool finalize) {
   for (const auto& test_value : test_values) {
-    component->SetValueForTypeIfPossible(test_value.type,
-                                         base::UTF8ToUTF16(test_value.value),
-                                         test_value.status);
+    component->SetValueForType(test_value.type,
+                               base::UTF8ToUTF16(test_value.value),
+                               test_value.status);
   }
   if (finalize)
     component->CompleteFullTree();
@@ -61,10 +62,10 @@ void SetTestValues(AddressComponent* component,
 void VerifyTestValues(AddressComponent* component,
                       const AddressComponentTestValues test_values) {
   for (const auto& test_value : test_values) {
-    SCOPED_TRACE(base::StringPrintf(
-        "Failed type=%s, value=%s, status=%d",
-        AutofillType(test_value.type).ToString().c_str(),
-        test_value.value.c_str(), static_cast<int>(test_value.status)));
+    SCOPED_TRACE(base::StringPrintf("Failed type=%s, value=%s, status=%d",
+                                    FieldTypeToString(test_value.type).c_str(),
+                                    test_value.value.c_str(),
+                                    static_cast<int>(test_value.status)));
 
     EXPECT_EQ(base::UTF16ToUTF8(component->GetValueForType(test_value.type)),
               test_value.value);
@@ -77,5 +78,4 @@ void VerifyTestValues(AddressComponent* component,
   }
 }
 
-}  // namespace structured_address
 }  // namespace autofill

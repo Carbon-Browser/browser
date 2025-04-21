@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,37 @@
 #include <string>
 
 #include "ash/constants/ash_switches.h"
+#include "ash/shelf/desk_button_widget.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_tooltip_bubble.h"
 #include "ash/shelf/shelf_tooltip_delegate.h"
-#include "ash/shelf/shelf_tooltip_preview_bubble.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "ash/wm/desks/desk_button/desk_button_container.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
+#include "chromeos/ash/components/growth/campaigns_constants.h"
+#include "chromeos/ash/components/growth/campaigns_manager.h"
 #include "ui/aura/window.h"
 #include "ui/events/event.h"
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/wm/core/window_animations.h"
 
 namespace ash {
 namespace {
 
 const int kTooltipAppearanceDelay = 250;  // msec
+
+void RecordGrowthCampaignsHoverEvent() {
+  auto* campaigns_manager = growth::CampaignsManager::Get();
+  // Campaigns manager may be null in tests.
+  if (campaigns_manager) {
+    campaigns_manager->RecordEvent(growth::kGrowthCampaignsEventHotseatHover,
+                                   /*trigger_campaigns=*/true);
+  }
+}
 
 }  // namespace
 
@@ -63,6 +75,10 @@ views::View* ShelfTooltipManager::GetCurrentAnchorView() const {
 }
 
 void ShelfTooltipManager::ShowTooltip(views::View* view) {
+  if (!IsVisible()) {
+    RecordGrowthCampaignsHoverEvent();
+  }
+
   // Hide the old bubble immediately, skipping the typical closing animation.
   Close(false /*animate*/);
 
@@ -73,13 +89,19 @@ void ShelfTooltipManager::ShowTooltip(views::View* view) {
       shelf_tooltip_delegate_->GetOpenWindowsForView(view);
 
   const ShelfAlignment alignment = shelf_->alignment();
-  if (switches::ShouldShowShelfHoverPreviews() && open_windows.size() > 0) {
-    bubble_ =
-        new ShelfTooltipPreviewBubble(view, open_windows, this, alignment);
-  } else {
-    bubble_ = new ShelfTooltipBubble(
-        view, alignment, shelf_tooltip_delegate_->GetTitleForView(view));
+
+  // In vertical shelf, the desk button tooltip bubble should still be centered
+  // above the respective view.
+  std::optional<views::BubbleBorder::Arrow> forced_arrow_position;
+  if (DeskButtonWidget* desk_button_widget = shelf_->desk_button_widget()) {
+    if (view->parent() == desk_button_widget->GetDeskButtonContainer()) {
+      forced_arrow_position = views::BubbleBorder::Arrow::BOTTOM_CENTER;
+    }
   }
+
+  bubble_ = new ShelfTooltipBubble(
+      view, alignment, shelf_tooltip_delegate_->GetTitleForView(view),
+      forced_arrow_position);
 
   aura::Window* window = bubble_->GetWidget()->GetNativeWindow();
   ::wm::SetWindowVisibilityAnimationType(
@@ -99,12 +121,12 @@ void ShelfTooltipManager::ShowTooltipWithDelay(views::View* view) {
 }
 
 void ShelfTooltipManager::OnMouseEvent(ui::MouseEvent* event) {
-  if (bubble_ && event->type() == ui::ET_MOUSE_PRESSED) {
+  if (bubble_ && event->type() == ui::EventType::kMousePressed) {
     ProcessPressedEvent(*event);
     return;
   }
 
-  if (bubble_ && event->type() == ui::ET_MOUSE_EXITED &&
+  if (bubble_ && event->type() == ui::EventType::kMouseExited &&
       bubble_->ShouldCloseOnMouseExit()) {
     Close();
     return;
@@ -118,7 +140,7 @@ void ShelfTooltipManager::OnMouseEvent(ui::MouseEvent* event) {
   views::View* delegate_view = shelf_tooltip_delegate_->GetViewForEvent(*event);
 
   // The code below handles mouse move events within the shelf window.
-  if (event->type() != ui::ET_MOUSE_MOVED || !delegate_view) {
+  if (event->type() != ui::EventType::kMouseMoved || !delegate_view) {
     // Don't show delayed tooltips if the mouse is being active elsewhere.
     timer_.Stop();
     return;
@@ -130,17 +152,20 @@ void ShelfTooltipManager::OnMouseEvent(ui::MouseEvent* event) {
   const bool should_show = ShouldShowTooltipForView(view);
 
   timer_.Stop();
-  if (IsVisible() && should_show && bubble_->GetAnchorView() != view)
+  if (IsVisible() && should_show && bubble_->GetAnchorView() != view) {
     ShowTooltip(view);
-  else if (!IsVisible() && should_show)
+  } else if (!IsVisible() && should_show) {
     ShowTooltipWithDelay(view);
-  else if (IsVisible() && shelf_tooltip_delegate_->ShouldHideTooltip(point))
+  } else if (IsVisible() &&
+             shelf_tooltip_delegate_->ShouldHideTooltip(point, delegate_view)) {
     Close();
+  }
 }
 
 void ShelfTooltipManager::OnTouchEvent(ui::TouchEvent* event) {
-  if (bubble_ && event->type() == ui::ET_TOUCH_PRESSED)
+  if (bubble_ && event->type() == ui::EventType::kTouchPressed) {
     ProcessPressedEvent(*event);
+  }
 }
 
 void ShelfTooltipManager::OnScrollEvent(ui::ScrollEvent* event) {
@@ -153,7 +178,7 @@ void ShelfTooltipManager::OnKeyEvent(ui::KeyEvent* event) {
   Close();
 }
 
-void ShelfTooltipManager::WillChangeVisibilityState(
+void ShelfTooltipManager::OnShelfVisibilityStateChanged(
     ShelfVisibilityState new_state) {
   if (new_state == SHELF_HIDDEN)
     Close();

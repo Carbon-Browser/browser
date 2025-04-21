@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ ProxyResolvingClientSocketFactory::ProxyResolvingClientSocketFactory(
   session_context.cert_verifier = request_context->cert_verifier();
   session_context.transport_security_state =
       request_context->transport_security_state();
-  session_context.ct_policy_enforcer = request_context->ct_policy_enforcer();
   session_context.sct_auditing_delegate =
       request_context->sct_auditing_delegate();
   session_context.proxy_resolution_service =
@@ -53,12 +52,26 @@ ProxyResolvingClientSocketFactory::ProxyResolvingClientSocketFactory(
         reference_params->testing_fixed_http_port;
     session_params.testing_fixed_https_port =
         reference_params->testing_fixed_https_port;
-    session_params.enable_http2 = reference_params->enable_http2;
-    session_params.enable_http2_alternative_service =
-        reference_params->enable_http2_alternative_service;
+
+    // Disable H2 negotiation via ALPN.
+    //
+    // TODO(crbug.com/40946183): Should this be allowed for proxies, but
+    // not for direct connections?
+    session_params.enable_http2 = false;
+
+    // Disable H2 alternative service as well. It's not supported for proxies,
+    // unlike ALPN, so no concerns with completely disabling it.
+    session_params.enable_http2_alternative_service = false;
+
     // Note that ProxyResolvingClientSocket does not use QUIC, so enabling QUIC
     // won't do anything here.
   }
+
+  // Disable early data. When early data is enabled, replay protection is not
+  // enabled until partway through the connection, so callers are expected to
+  // call `ConfirmHandshake` before performing replay-sensitive operations.
+  // These sockets bypass the HTTP-specific logic that handles this.
+  session_params.enable_early_data = false;
 
   // TODO(mmenke): Is a new HttpNetworkSession still needed?
   // ProxyResolvingClientSocket doesn't use socket pools, just the
@@ -76,7 +89,7 @@ ProxyResolvingClientSocketFactory::~ProxyResolvingClientSocketFactory() {}
 std::unique_ptr<ProxyResolvingClientSocket>
 ProxyResolvingClientSocketFactory::CreateSocket(
     const GURL& url,
-    const net::NetworkIsolationKey& network_isolation_key,
+    const net::NetworkAnonymizationKey& network_anonymization_key,
     bool use_tls) {
   // |request_context|'s HttpAuthCache might have updates. For example, a user
   // might have since entered proxy credentials. Clear the http auth of
@@ -98,7 +111,7 @@ ProxyResolvingClientSocketFactory::CreateSocket(
   network_session_->http_auth_cache()->CopyProxyEntriesFrom(*other_auth_cache);
   return std::make_unique<ProxyResolvingClientSocket>(
       network_session_.get(), common_connect_job_params_.get(), url,
-      network_isolation_key, use_tls, connect_job_factory_.get());
+      network_anonymization_key, use_tls, connect_job_factory_.get());
 }
 
 }  // namespace network

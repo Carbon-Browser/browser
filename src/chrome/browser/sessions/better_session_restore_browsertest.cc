@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_impl.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/sessions/session_data_service.h"
 #include "chrome/browser/sessions/session_data_service_factory.h"
@@ -62,7 +61,7 @@
 #include "services/network/test/test_utils.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -589,7 +588,7 @@ class RestartTest : public BetterSessionRestoreTest {
  protected:
   void Restart() {
     // Simulate restarting the browser, but let the test exit peacefully.
-    for (auto* browser : *BrowserList::GetInstance()) {
+    for (Browser* browser : *BrowserList::GetInstance()) {
       browser->profile()->SaveSessionState();
       SessionDataServiceFactory::GetForProfile(browser->profile())
           ->SetForceKeepSessionState();
@@ -780,56 +779,6 @@ IN_PROC_BROWSER_TEST_F(NoSessionRestoreTest, PRE_LocalStorageClearedOnStartup) {
 IN_PROC_BROWSER_TEST_F(NoSessionRestoreTest, LocalStorageClearedOnStartup) {
   // Check that the deletion is performed on startup instead.
   StoreDataWithPage("local_storage.html");
-}
-
-class NoSessionRestoreTestWithStartupDeletionDisabled
-    : public NoSessionRestoreTest {
- public:
-  NoSessionRestoreTestWithStartupDeletionDisabled() {
-    feature_list_.InitAndDisableFeature(kDeleteSessionOnlyDataOnStartup);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(NoSessionRestoreTestWithStartupDeletionDisabled,
-                       PRE_CookiesClearedOnStartup) {
-  // Normally cookies are restored.
-  StoreDataWithPage("cookies.html");
-  content::EnsureCookiesFlushed(browser()->profile());
-  // ... but not if the content setting is set to clear on exit.
-  CookieSettingsFactory::GetForProfile(browser()->profile())
-      ->SetDefaultCookieSetting(CONTENT_SETTING_SESSION_ONLY);
-
-  // Disable cookie and storage deletion handling on shutdown to simulate the
-  // process being killed before cleanup is finished.
-  browser()->profile()->SaveSessionState();
-}
-
-IN_PROC_BROWSER_TEST_F(NoSessionRestoreTestWithStartupDeletionDisabled,
-                       CookiesClearedOnStartup) {
-  // Check that the deletion is not performed when the feature is disabled.
-  NavigateAndCheckStoredData("cookies.html");
-}
-
-IN_PROC_BROWSER_TEST_F(NoSessionRestoreTestWithStartupDeletionDisabled,
-                       PRE_LocalStorageClearedOnStartup) {
-  // Normally localStorage is persisted.
-  StoreDataWithPage("local_storage.html");
-  // ... but not if it's set to clear on exit.
-  CookieSettingsFactory::GetForProfile(browser()->profile())
-      ->SetDefaultCookieSetting(CONTENT_SETTING_SESSION_ONLY);
-
-  // Disable cookie and storage deletion handling on shutdown to simulate the
-  // process being killed before cleanup is finished.
-  browser()->profile()->SaveSessionState();
-}
-
-IN_PROC_BROWSER_TEST_F(NoSessionRestoreTestWithStartupDeletionDisabled,
-                       LocalStorageClearedOnStartup) {
-  // Check that the deletion is not performed when the feature is disabled.
-  NavigateAndCheckStoredData("local_storage.html");
 }
 
 // Tests that session cookies are not cleared when only a popup window is open.

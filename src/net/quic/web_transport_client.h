@@ -1,20 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_QUIC_WEB_TRANSPORT_CLIENT_H_
 #define NET_QUIC_WEB_TRANSPORT_CLIENT_H_
 
+#include <optional>
+#include <string_view>
 #include <vector>
 
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/quic/web_transport_error.h"
 #include "net/third_party/quiche/src/quiche/quic/core/crypto/web_transport_fingerprint_proof_verifier.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_types.h"
 #include "net/third_party/quiche/src/quiche/quic/core/web_transport_interface.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -55,7 +55,7 @@ NET_EXPORT std::ostream& operator<<(std::ostream& os, WebTransportState state);
 // https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3/#section-5
 struct NET_EXPORT WebTransportCloseInfo final {
   WebTransportCloseInfo();
-  WebTransportCloseInfo(uint32_t code, base::StringPiece reason);
+  WebTransportCloseInfo(uint32_t code, std::string_view reason);
   ~WebTransportCloseInfo();
 
   uint32_t code = 0;
@@ -81,17 +81,17 @@ class NET_EXPORT WebTransportClientVisitor {
   virtual void OnConnectionFailed(const WebTransportError& error) = 0;
   // CONNECTED -> CLOSED
   virtual void OnClosed(
-      const absl::optional<WebTransportCloseInfo>& close_info) = 0;
+      const std::optional<WebTransportCloseInfo>& close_info) = 0;
   // CONNECTED -> FAILED
   virtual void OnError(const WebTransportError& error) = 0;
 
   virtual void OnIncomingBidirectionalStreamAvailable() = 0;
   virtual void OnIncomingUnidirectionalStreamAvailable() = 0;
-  virtual void OnDatagramReceived(base::StringPiece datagram) = 0;
+  virtual void OnDatagramReceived(std::string_view datagram) = 0;
   virtual void OnCanCreateNewOutgoingBidirectionalStream() = 0;
   virtual void OnCanCreateNewOutgoingUnidirectionalStream() = 0;
   virtual void OnDatagramProcessed(
-      absl::optional<quic::MessageStatus> status) = 0;
+      std::optional<quic::MessageStatus> status) = 0;
 };
 
 // Parameters that determine the way WebTransport session is established.
@@ -103,7 +103,6 @@ struct NET_EXPORT WebTransportParameters {
 
   bool allow_pooling = false;
 
-  bool enable_quic_transport = false;
   bool enable_web_transport_http3 = false;
 
   // A vector of fingerprints for expected server certificates, as described in
@@ -127,22 +126,22 @@ class NET_EXPORT WebTransportClient {
   // when the state is CONNECTED. The associated visitor is still waiting for
   // OnClosed or OnError to be called.
   virtual void Close(
-      const absl::optional<WebTransportCloseInfo>& close_info) = 0;
+      const std::optional<WebTransportCloseInfo>& close_info) = 0;
 
   // session() can be nullptr in states other than CONNECTED.
   virtual quic::WebTransportSession* session() = 0;
 };
 
 // Creates a WebTransport client for |url| accessed from |origin| with the
-// provided |isolation_key|; |visitor| is associated with the resulting object.
-// This method never returns nullptr; in case of error, the resulting client
-// will be in the error state.
+// provided |anonymization_key|; |visitor| is associated with the resulting
+// object. This method never returns nullptr; in case of error, the resulting
+// client will be in the error state.
 NET_EXPORT
 std::unique_ptr<WebTransportClient> CreateWebTransportClient(
     const GURL& url,
     const url::Origin& origin,
     WebTransportClientVisitor* visitor,
-    const NetworkIsolationKey& isolation_key,
+    const NetworkAnonymizationKey& anonymization_key,
     URLRequestContext* context,
     const WebTransportParameters& parameters);
 

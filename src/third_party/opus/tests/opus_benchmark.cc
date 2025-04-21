@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <ctime>
 #include <limits>
 
+#include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/path_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -24,7 +25,7 @@ constexpr int MAX_FRAME_SAMP = 5760;  // 120ms * 48kHz
 
 base::FilePath GetDataPath(const std::string& filename) {
   base::FilePath path;
-  DCHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &path));
+  DCHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path));
   return path.AppendASCII("third_party")
       .AppendASCII("opus")
       .AppendASCII("tests")

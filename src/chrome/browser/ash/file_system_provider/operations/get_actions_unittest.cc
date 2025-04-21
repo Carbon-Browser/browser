@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
@@ -24,9 +24,7 @@
 #include "storage/browser/file_system/async_file_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -47,7 +45,7 @@ class CallbackLogger {
     Event(const Event&) = delete;
     Event& operator=(const Event&) = delete;
 
-    virtual ~Event() {}
+    virtual ~Event() = default;
 
     const Actions& actions() const { return actions_; }
     base::File::Error result() const { return result_; }
@@ -57,12 +55,12 @@ class CallbackLogger {
     base::File::Error result_;
   };
 
-  CallbackLogger() {}
+  CallbackLogger() = default;
 
   CallbackLogger(const CallbackLogger&) = delete;
   CallbackLogger& operator=(const CallbackLogger&) = delete;
 
-  virtual ~CallbackLogger() {}
+  virtual ~CallbackLogger() = default;
 
   void OnGetActions(const Actions& actions, base::File::Error result) {
     events_.push_back(std::make_unique<Event>(actions, result));
@@ -75,8 +73,7 @@ class CallbackLogger {
 };
 
 // Returns the request value as |result| in case of successful parse.
-void CreateRequestValueFromJSON(const std::string& json,
-                                std::unique_ptr<RequestValue>* result) {
+void CreateRequestValueFromJSON(const std::string& json, RequestValue* result) {
   using extensions::api::file_system_provider_internal::
       GetActionsRequestedSuccess::Params;
 
@@ -84,27 +81,27 @@ void CreateRequestValueFromJSON(const std::string& json,
   ASSERT_TRUE(parsed_json.has_value()) << parsed_json.error().message;
 
   ASSERT_TRUE(parsed_json->is_list());
-  std::unique_ptr<Params> params(Params::Create(parsed_json->GetList()));
-  ASSERT_TRUE(params.get());
-  *result = RequestValue::CreateForGetActionsSuccess(std::move(params));
-  ASSERT_TRUE(result->get());
+  std::optional<Params> params = Params::Create(parsed_json->GetList());
+  ASSERT_TRUE(params.has_value());
+  *result = RequestValue::CreateForGetActionsSuccess(std::move(*params));
+  ASSERT_TRUE(result->is_valid());
 }
 
 }  // namespace
 
 class FileSystemProviderOperationsGetActionsTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsGetActionsTest() {}
-  ~FileSystemProviderOperationsGetActionsTest() override {}
+  FileSystemProviderOperationsGetActionsTest() = default;
+  ~FileSystemProviderOperationsGetActionsTest() override = default;
 
   void SetUp() override {
     file_system_info_ = ProvidedFileSystemInfo(
-        kExtensionId, MountOptions(kFileSystemId, "" /* display_name */),
-        base::FilePath(), false /* configurable */, true /* watchable */,
+        kExtensionId, MountOptions(kFileSystemId, /*display_name=*/""),
+        base::FilePath(), /*configurable=*/false, /*watchable=*/true,
         extensions::SOURCE_FILE, IconSet());
     entry_paths_.clear();
-    entry_paths_.push_back(base::FilePath(kDirectoryPath));
-    entry_paths_.push_back(base::FilePath(kFilePath));
+    entry_paths_.emplace_back(kDirectoryPath);
+    entry_paths_.emplace_back(kFilePath);
   }
 
   ProvidedFileSystemInfo file_system_info_;
@@ -114,15 +111,12 @@ class FileSystemProviderOperationsGetActionsTest : public testing::Test {
 TEST_F(FileSystemProviderOperationsGetActionsTest, Execute) {
   using extensions::api::file_system_provider::GetActionsRequestedOptions;
 
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   CallbackLogger callback_logger;
 
-  GetActions get_actions(NULL, file_system_info_, entry_paths_,
+  GetActions get_actions(&dispatcher, file_system_info_, entry_paths_,
                          base::BindOnce(&CallbackLogger::OnGetActions,
                                         base::Unretained(&callback_logger)));
-  get_actions.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(get_actions.Execute(kRequestId));
 
@@ -137,40 +131,34 @@ TEST_F(FileSystemProviderOperationsGetActionsTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  GetActionsRequestedOptions options;
-  ASSERT_TRUE(
-      GetActionsRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  ASSERT_EQ(entry_paths_.size(), options.entry_paths.size());
-  EXPECT_EQ(entry_paths_[0].value(), options.entry_paths[0]);
-  EXPECT_EQ(entry_paths_[1].value(), options.entry_paths[1]);
+  auto options =
+      GetActionsRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  ASSERT_EQ(entry_paths_.size(), options->entry_paths.size());
+  EXPECT_EQ(entry_paths_[0].value(), options->entry_paths[0]);
+  EXPECT_EQ(entry_paths_[1].value(), options->entry_paths[1]);
 }
 
 TEST_F(FileSystemProviderOperationsGetActionsTest, Execute_NoListener) {
-  util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/false);
   CallbackLogger callback_logger;
 
-  GetActions get_actions(NULL, file_system_info_, entry_paths_,
+  GetActions get_actions(&dispatcher, file_system_info_, entry_paths_,
                          base::BindOnce(&CallbackLogger::OnGetActions,
                                         base::Unretained(&callback_logger)));
-  get_actions.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(get_actions.Execute(kRequestId));
 }
 
 TEST_F(FileSystemProviderOperationsGetActionsTest, OnSuccess) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   CallbackLogger callback_logger;
 
-  GetActions get_actions(NULL, file_system_info_, entry_paths_,
+  GetActions get_actions(&dispatcher, file_system_info_, entry_paths_,
                          base::BindOnce(&CallbackLogger::OnGetActions,
                                         base::Unretained(&callback_logger)));
-  get_actions.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(get_actions.Execute(kRequestId));
 
@@ -196,7 +184,7 @@ TEST_F(FileSystemProviderOperationsGetActionsTest, OnSuccess) {
       "  ],\n"
       "  0\n"  // execution_time
       "]\n";
-  std::unique_ptr<RequestValue> request_value;
+  RequestValue request_value;
   ASSERT_NO_FATAL_FAILURE(CreateRequestValueFromJSON(input, &request_value));
 
   const bool has_more = false;
@@ -221,19 +209,16 @@ TEST_F(FileSystemProviderOperationsGetActionsTest, OnSuccess) {
 }
 
 TEST_F(FileSystemProviderOperationsGetActionsTest, OnError) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   CallbackLogger callback_logger;
 
-  GetActions get_actions(NULL, file_system_info_, entry_paths_,
+  GetActions get_actions(&dispatcher, file_system_info_, entry_paths_,
                          base::BindOnce(&CallbackLogger::OnGetActions,
                                         base::Unretained(&callback_logger)));
-  get_actions.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(get_actions.Execute(kRequestId));
 
-  get_actions.OnError(kRequestId, std::make_unique<RequestValue>(),
+  get_actions.OnError(kRequestId, RequestValue(),
                       base::File::FILE_ERROR_TOO_MANY_OPENED);
 
   ASSERT_EQ(1u, callback_logger.events().size());
@@ -242,6 +227,4 @@ TEST_F(FileSystemProviderOperationsGetActionsTest, OnError) {
   ASSERT_EQ(0u, event->actions().size());
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/shape_detection/public/mojom/textdetection.mojom.h"
 #include "services/shape_detection/text_detection_impl.h"
@@ -55,27 +54,22 @@ class TextDetectionImplWinTest : public testing::Test {
 };
 
 TEST_F(TextDetectionImplWinTest, ScanOnce) {
-  // OCR not supported before Windows 10
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
-
   mojo::Remote<mojom::TextDetection> text_service;
   TextDetectionImpl::Create(text_service.BindNewPipeAndPassReceiver());
 
   // Load image data from test directory.
   base::FilePath image_path;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &image_path));
+  ASSERT_TRUE(
+      base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &image_path));
   image_path = image_path.Append(FILE_PATH_LITERAL("services"))
                    .Append(FILE_PATH_LITERAL("test"))
                    .Append(FILE_PATH_LITERAL("data"))
                    .Append(FILE_PATH_LITERAL("text_detection.png"));
   ASSERT_TRUE(base::PathExists(image_path));
-  std::string image_data;
-  ASSERT_TRUE(base::ReadFileToString(image_path, &image_data));
 
-  SkBitmap bitmap;
-  gfx::PNGCodec::Decode(reinterpret_cast<const uint8_t*>(image_data.data()),
-                        image_data.size(), &bitmap);
+  SkBitmap bitmap =
+      gfx::PNGCodec::Decode(base::ReadFileToBytes(image_path).value());
+  ASSERT_FALSE(bitmap.isNull());
 
   const gfx::Size size(bitmap.width(), bitmap.height());
   const uint32_t num_bytes = size.GetArea() * 4 /* bytes per pixel */;

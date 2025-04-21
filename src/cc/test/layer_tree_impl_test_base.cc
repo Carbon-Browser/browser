@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "cc/layers/append_quads_data.h"
 #include "cc/test/animation_test_common.h"
 #include "cc/test/fake_layer_tree_frame_sink.h"
-#include "cc/test/mock_occlusion_tracker.h"
 #include "cc/test/property_tree_test_utils.h"
 #include "cc/trees/draw_property_utils.h"
 #include "ui/gfx/geometry/point_conversions.h"
@@ -23,11 +22,11 @@
 namespace cc {
 
 LayerTreeImplTestBase::LayerTreeImplTestBase()
-    : LayerTreeImplTestBase(LayerListSettings()) {}
+    : LayerTreeImplTestBase(CommitToPendingTreeLayerListSettings()) {}
 
 LayerTreeImplTestBase::LayerTreeImplTestBase(
     std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink)
-    : LayerTreeImplTestBase(LayerListSettings(),
+    : LayerTreeImplTestBase(CommitToPendingTreeLayerListSettings(),
                             std::move(layer_tree_frame_sink)) {}
 
 LayerTreeImplTestBase::LayerTreeImplTestBase(const LayerTreeSettings& settings)
@@ -37,7 +36,7 @@ LayerTreeImplTestBase::LayerTreeImplTestBase(
     const LayerTreeSettings& settings,
     std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink)
     : layer_tree_frame_sink_(std::move(layer_tree_frame_sink)),
-      animation_host_(AnimationHost::CreateForTesting(ThreadInstance::MAIN)),
+      animation_host_(AnimationHost::CreateForTesting(ThreadInstance::kMain)),
       host_(FakeLayerTreeHost::Create(&client_,
                                       &task_graph_runner_,
                                       animation_host_.get(),
@@ -85,6 +84,13 @@ LayerImpl* LayerTreeImplTestBase::EnsureRootLayerInPendingTree() {
 void LayerTreeImplTestBase::CalcDrawProps(const gfx::Size& viewport_size) {
   host_impl()->active_tree()->SetDeviceViewportRect(gfx::Rect(viewport_size));
   UpdateDrawProperties(host_impl()->active_tree());
+}
+
+void LayerTreeImplTestBase::AppendQuads(LayerImpl* layer_impl) {
+  AppendQuadsData data;
+  render_pass_->quad_list.clear();
+  render_pass_->shared_quad_state_list.clear();
+  layer_impl->AppendQuads(render_pass_.get(), &data);
 }
 
 void LayerTreeImplTestBase::AppendQuadsWithOcclusion(

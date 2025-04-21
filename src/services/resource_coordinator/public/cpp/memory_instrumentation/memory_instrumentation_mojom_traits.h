@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -114,8 +114,6 @@ struct COMPONENT_EXPORT(RESOURCE_COORDINATOR_PUBLIC_MOJOM) UnionTraits<
             RawAllocatorDumpEntryValueDataView::Tag::kValueString;
     }
     NOTREACHED();
-    return memory_instrumentation::mojom::RawAllocatorDumpEntryValueDataView::
-        Tag::kValueUint64;
   }
 
   static uint64_t value_uint64(
@@ -168,7 +166,7 @@ struct COMPONENT_EXPORT(RESOURCE_COORDINATOR_PUBLIC_MOJOM)
   }
   static bool weak(
       const std::unique_ptr<base::trace_event::MemoryAllocatorDump>& mad) {
-    return mad->flags() & base::trace_event::MemoryAllocatorDump::WEAK;
+    return mad->flags() & base::trace_event::MemoryAllocatorDump::kWeak;
   }
   static base::trace_event::MemoryDumpLevelOfDetail level_of_detail(
       const std::unique_ptr<base::trace_event::MemoryAllocatorDump>& mad) {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ const int kSnappedHeightStep = 90;
 // The minimum amount of decrease in area between consecutive snapped frame
 // sizes.  This matters externally, where the end-to-end system is hunting for a
 // capture size that works within all resource bottlenecks.  If the snapped
-// frame sizes are too-close together, the end-to-end system cannot stablize.
+// frame sizes are too-close together, the end-to-end system cannot stabilize.
 // If they are too-far apart, quality is being sacrificed.
 const int kMinAreaDecreasePercent = 15;
 

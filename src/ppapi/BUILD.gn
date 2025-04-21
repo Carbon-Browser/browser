@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,6 +14,10 @@ if (is_mac) {
 }
 
 assert(enable_ppapi)
+
+# PPAPI is not supported (e.g. there is no effective sandbox) and must not be
+# shipped for Chrome on Windows.
+assert(!(is_win && is_official_build))
 
 # Test files shared between several targets below.
 #
@@ -180,7 +184,6 @@ source_set("ppapi_tests_sources") {
     "tests/test_tcp_socket_private_trusted.h",
     "tests/test_url_util.cc",
     "tests/test_url_util.h",
-    "tests/test_utils.h",
     "tests/test_video_decoder_dev.cc",
     "tests/test_video_decoder_dev.h",
     "tests/test_x509_certificate_private.cc",

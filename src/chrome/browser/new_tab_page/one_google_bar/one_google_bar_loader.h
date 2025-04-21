@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEW_TAB_PAGE_ONE_GOOGLE_BAR_ONE_GOOGLE_BAR_LOADER_H_
 #define CHROME_BROWSER_NEW_TAB_PAGE_ONE_GOOGLE_BAR_ONE_GOOGLE_BAR_LOADER_H_
 
-#include "base/callback_forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
 
 class GURL;
 struct OneGoogleBarData;
@@ -26,7 +27,7 @@ class OneGoogleBarLoader {
     FATAL_ERROR
   };
   using OneGoogleCallback =
-      base::OnceCallback<void(Status, const absl::optional<OneGoogleBarData>&)>;
+      base::OnceCallback<void(Status, const std::optional<OneGoogleBarData>&)>;
 
   virtual ~OneGoogleBarLoader() = default;
 

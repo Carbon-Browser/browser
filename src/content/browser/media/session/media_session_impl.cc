@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
@@ -18,6 +17,7 @@
 #include "build/build_config.h"
 #include "components/url_formatter/url_formatter.h"
 #include "content/browser/media/session/audio_focus_delegate.h"
+#include "content/browser/media/session/media_players_callback_aggregator.h"
 #include "content/browser/media/session/media_session_controller.h"
 #include "content/browser/media/session/media_session_player_observer.h"
 #include "content/browser/media/session/media_session_service_impl.h"
@@ -27,6 +27,7 @@
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/media_session.h"
+#include "content/public/browser/media_session_client.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
@@ -37,6 +38,7 @@
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "services/media_session/public/cpp/media_image_manager.h"
 #include "services/media_session/public/mojom/audio_focus.mojom.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "ui/gfx/favicon_size.h"
@@ -45,10 +47,13 @@
 #include "content/browser/media/session/media_session_android.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(IS_WIN)
+#include "content/public/common/content_features.h"
+#endif  // BUILDFLAG(IS_WIN)
+
 namespace content {
 
 using blink::mojom::MediaSessionPlaybackState;
-using MediaSessionUserAction = MediaSessionUmaHelper::MediaSessionUserAction;
 using media_session::mojom::MediaAudioVideoState;
 using media_session::mojom::MediaPlaybackState;
 using media_session::mojom::MediaSessionImageType;
@@ -64,9 +69,6 @@ const char kDebugInfoOwnerSeparator[] = " - ";
 using MapRenderFrameHostToDepth = std::map<RenderFrameHost*, size_t>;
 
 using media_session::mojom::AudioFocusType;
-
-using MediaSessionSuspendedSource =
-    MediaSessionUmaHelper::MediaSessionSuspendedSource;
 
 const char kMediaSessionDataName[] = "MediaSessionDataName";
 
@@ -114,50 +116,6 @@ size_t ComputeFrameDepth(RenderFrameHost* rfh,
   return depth;
 }
 
-MediaSessionUserAction MediaSessionActionToUserAction(
-    media_session::mojom::MediaSessionAction action) {
-  switch (action) {
-    case media_session::mojom::MediaSessionAction::kPlay:
-      return MediaSessionUserAction::kPlay;
-    case media_session::mojom::MediaSessionAction::kPause:
-      return MediaSessionUserAction::kPause;
-    case media_session::mojom::MediaSessionAction::kPreviousTrack:
-      return MediaSessionUserAction::kPreviousTrack;
-    case media_session::mojom::MediaSessionAction::kNextTrack:
-      return MediaSessionUserAction::kNextTrack;
-    case media_session::mojom::MediaSessionAction::kSeekBackward:
-      return MediaSessionUserAction::kSeekBackward;
-    case media_session::mojom::MediaSessionAction::kSeekForward:
-      return MediaSessionUserAction::kSeekForward;
-    case media_session::mojom::MediaSessionAction::kSkipAd:
-      return MediaSessionUserAction::kSkipAd;
-    case media_session::mojom::MediaSessionAction::kStop:
-      return MediaSessionUserAction::kStop;
-    case media_session::mojom::MediaSessionAction::kSeekTo:
-      return MediaSessionUserAction::kSeekTo;
-    case media_session::mojom::MediaSessionAction::kScrubTo:
-      return MediaSessionUserAction::kScrubTo;
-    case media_session::mojom::MediaSessionAction::kEnterPictureInPicture:
-      return MediaSessionUserAction::kEnterPictureInPicture;
-    case media_session::mojom::MediaSessionAction::kExitPictureInPicture:
-      return MediaSessionUserAction::kExitPictureInPicture;
-    case media_session::mojom::MediaSessionAction::kSwitchAudioDevice:
-      return MediaSessionUserAction::kSwitchAudioDevice;
-    case media_session::mojom::MediaSessionAction::kToggleMicrophone:
-      return MediaSessionUserAction::kToggleMicrophone;
-    case media_session::mojom::MediaSessionAction::kToggleCamera:
-      return MediaSessionUserAction::kToggleCamera;
-    case media_session::mojom::MediaSessionAction::kHangUp:
-      return MediaSessionUserAction::kHangUp;
-    case media_session::mojom::MediaSessionAction::kRaise:
-      return MediaSessionUserAction::kRaise;
-    case media_session::mojom::MediaSessionAction::kSetMute:
-      return MediaSessionUserAction::kSetMute;
-  }
-  NOTREACHED();
-  return MediaSessionUserAction::kPlay;
-}
-
 // If the string is not empty then push it to the back of a vector.
 void MaybePushBackString(std::vector<std::string>& vector,
                          const std::string& str) {
@@ -182,7 +140,7 @@ bool IsSizesAtLeast(const std::vector<gfx::Size>& sizes, int min_size) {
   return check_size;
 }
 
-std::u16string SanitizeMediaTitle(const std::u16string title) {
+std::u16string SanitizeMediaTitle(const std::u16string& title) {
   std::u16string out;
   base::TrimString(title, u" ", &out);
   return out;
@@ -218,6 +176,11 @@ bool MediaSessionImpl::PlayerIdentifier::operator<(
 // static
 MediaSession* MediaSession::Get(WebContents* web_contents) {
   return MediaSessionImpl::Get(web_contents);
+}
+
+// static
+MediaSession* MediaSession::GetIfExists(WebContents* contents) {
+  return MediaSessionImpl::FromWebContents(contents);
 }
 
 // static
@@ -262,12 +225,20 @@ const base::UnguessableToken& MediaSession::GetRequestIdFromWebContents(
 }
 
 // static
+void MediaSession::FlushObserversForTesting(WebContents* web_contents) {
+  DCHECK(web_contents);
+  MediaSessionImpl* session = MediaSessionImpl::FromWebContents(web_contents);
+  session->flush_observers_for_testing();  // IN-TEST
+}
+
+// static
 MediaSessionImpl* MediaSessionImpl::Get(WebContents* web_contents) {
   MediaSessionImpl* session = FromWebContents(web_contents);
   if (!session) {
     CreateForWebContents(web_contents);
     session = FromWebContents(web_contents);
     session->Initialize();
+    static_cast<WebContentsImpl*>(web_contents)->MediaSessionCreated(session);
   }
   return session;
 }
@@ -302,8 +273,12 @@ void MediaSessionImpl::WebContentsDestroyed() {
   normal_players_.clear();
   pepper_players_.clear();
   one_shot_players_.clear();
+  ambient_players_.clear();
 
   AbandonSystemAudioFocusIfNeeded();
+
+  GetContentClient()->browser()->RemovePresentationObserver(this,
+                                                            web_contents());
 }
 
 void MediaSessionImpl::RenderFrameDeleted(RenderFrameHost* rfh) {
@@ -384,11 +359,26 @@ void MediaSessionImpl::DidUpdateFaviconURL(
     icons.push_back(image);
   }
 
+  bool should_update_observers = true;
   auto it = images_.find(MediaSessionImageType::kSourceIcon);
-  if (it != images_.end() && it->second == icons)
-    return;
+  if (it != images_.end() && it->second == icons) {
+    should_update_observers = false;
+  }
 
   images_.insert_or_assign(MediaSessionImageType::kSourceIcon, icons);
+
+  // Notify the VideoPictureInPictureWindowControllerImpl regardless of whether
+  // or not the images have actually changed, since there may or may not have
+  // been a picture-in-picture window last time we updated.
+  if (auto* pip_window_controller_ =
+          VideoPictureInPictureWindowControllerImpl::FromWebContents(
+              web_contents())) {
+    pip_window_controller_->MediaSessionImagesChanged(images_);
+  }
+
+  if (!should_update_observers) {
+    return;
+  }
 
   for (auto& observer : observers_)
     observer->MediaSessionImagesChanged(this->images_);
@@ -397,6 +387,7 @@ void MediaSessionImpl::DidUpdateFaviconURL(
 void MediaSessionImpl::MediaPictureInPictureChanged(
     bool is_picture_in_picture) {
   RebuildAndNotifyMediaSessionInfoChanged();
+  RebuildAndNotifyActionsChanged();
 }
 
 void MediaSessionImpl::RenderFrameHostStateChanged(
@@ -445,17 +436,20 @@ bool MediaSessionImpl::AddPlayer(MediaSessionPlayerObserver* observer,
                                  int player_id) {
   media::MediaContentType media_content_type = observer->GetMediaContentType();
 
-  if (media_content_type == media::MediaContentType::OneShot)
+  if (media_content_type == media::MediaContentType::kOneShot) {
     return AddOneShotPlayer(observer, player_id);
-  if (media_content_type == media::MediaContentType::Pepper)
+  } else if (media_content_type == media::MediaContentType::kPepper) {
     return AddPepperPlayer(observer, player_id);
+  } else if (media_content_type == media::MediaContentType::kAmbient) {
+    return AddAmbientPlayer(observer, player_id);
+  }
 
   observer->OnSetVolumeMultiplier(player_id, GetVolumeMultiplier());
   if (audio_device_id_for_origin_)
     observer->OnSetAudioSinkId(player_id, audio_device_id_for_origin_.value());
 
   AudioFocusType required_audio_focus_type;
-  if (media_content_type == media::MediaContentType::Persistent)
+  if (media_content_type == media::MediaContentType::kPersistent)
     required_audio_focus_type = AudioFocusType::kGain;
   else
     required_audio_focus_type = AudioFocusType::kGainTransientMayDuck;
@@ -467,7 +461,7 @@ bool MediaSessionImpl::AddPlayer(MediaSessionPlayerObserver* observer,
   // also transient, there is also nothing to do. Otherwise, the session needs
   // to request audio focus again.
   if (audio_focus_state_ == State::ACTIVE) {
-    absl::optional<AudioFocusType> current_focus_type =
+    std::optional<AudioFocusType> current_focus_type =
         delegate_->GetCurrentFocusType();
     if (current_focus_type == AudioFocusType::kGain ||
         current_focus_type == required_audio_focus_type) {
@@ -485,16 +479,32 @@ bool MediaSessionImpl::AddPlayer(MediaSessionPlayerObserver* observer,
     }
   }
 
-  State old_audio_focus_state = audio_focus_state_;
-  RequestSystemAudioFocus(required_audio_focus_type);
+  // If this player is paused, then don't actually request audio focus on its
+  // behalf.  Otherwise, we might take focus away from something else, even
+  // though we don't really need it right now.  Note that we don't abandon focus
+  // when playback is paused; we will continue to hold it.  However, if we have
+  // given it up, e.g. when playback is suspended, or lost it to some other
+  // request, then we don't want to take it back for a paused player.
+  // Otherwise, any random update to the player (e.g., metadata as in
+  // b/40946745) will re-request focus even while paused.
+  if (!observer->IsPaused(player_id)) {
+    State old_audio_focus_state = audio_focus_state_;
+    RequestSystemAudioFocus(required_audio_focus_type);
 
-  if (audio_focus_state_ != State::ACTIVE)
-    return false;
+    if (audio_focus_state_ != State::ACTIVE) {
+      return false;
+    }
 
-  // The session should be reset if a player is starting while all players are
-  // suspended.
-  if (old_audio_focus_state != State::ACTIVE)
-    normal_players_.clear();
+    // The session should be reset if a player is starting while all players
+    // are suspended.
+    if (old_audio_focus_state != State::ACTIVE) {
+      normal_players_.clear();
+    }
+  } else if (audio_focus_state_ == State::INACTIVE) {
+    // We switch from `INACTIVE` to `SUSPENDED` to indicate that we want to have
+    // the focus, but don't right now.  This makes the session controllable.
+    audio_focus_state_ = State::SUSPENDED;
+  }
 
   auto iter = normal_players_.find(key);
   if (iter == normal_players_.end())
@@ -516,6 +526,7 @@ void MediaSessionImpl::RemovePlayer(MediaSessionPlayerObserver* observer,
   normal_players_.erase(identifier);
   pepper_players_.erase(identifier);
   one_shot_players_.erase(identifier);
+  ambient_players_.erase(identifier);
   hidden_players_.erase(identifier);
 
   if (guarding_player_id_ && *guarding_player_id_ == identifier)
@@ -530,26 +541,21 @@ void MediaSessionImpl::RemovePlayer(MediaSessionPlayerObserver* observer,
 }
 
 void MediaSessionImpl::RemovePlayers(MediaSessionPlayerObserver* observer) {
-  for (auto it = normal_players_.begin(); it != normal_players_.end();) {
-    if (it->first.observer == observer)
-      normal_players_.erase(it++);
-    else
-      ++it;
-  }
+  std::erase_if(normal_players_, [observer](const auto& player) {
+    return player.first.observer == observer;
+  });
 
-  for (auto it = pepper_players_.begin(); it != pepper_players_.end();) {
-    if (it->observer == observer)
-      pepper_players_.erase(it++);
-    else
-      ++it;
-  }
+  base::EraseIf(pepper_players_, [observer](const auto& player) {
+    return player.observer == observer;
+  });
 
-  for (auto it = one_shot_players_.begin(); it != one_shot_players_.end();) {
-    if (it->observer == observer)
-      one_shot_players_.erase(it++);
-    else
-      ++it;
-  }
+  base::EraseIf(one_shot_players_, [observer](const auto& player) {
+    return player.observer == observer;
+  });
+
+  base::EraseIf(ambient_players_, [observer](const auto& player) {
+    return player.observer == observer;
+  });
 
   if (guarding_player_id_ && guarding_player_id_->observer == observer)
     ResetDurationUpdateGuard();
@@ -562,11 +568,6 @@ void MediaSessionImpl::RemovePlayers(MediaSessionPlayerObserver* observer) {
   RebuildAndNotifyMediaPositionChanged();
 }
 
-void MediaSessionImpl::RecordSessionDuck() {
-  uma_helper_.RecordSessionSuspended(
-      MediaSessionSuspendedSource::kSystemTransientDuck);
-}
-
 void MediaSessionImpl::OnPlayerPaused(MediaSessionPlayerObserver* observer,
                                       int player_id) {
   // If a playback is completed, BrowserMediaPlayerManager will call
@@ -577,7 +578,8 @@ void MediaSessionImpl::OnPlayerPaused(MediaSessionPlayerObserver* observer,
   PlayerIdentifier identifier(observer, player_id);
   if (!normal_players_.count(identifier) &&
       !pepper_players_.count(identifier) &&
-      !one_shot_players_.count(identifier)) {
+      !one_shot_players_.count(identifier) &&
+      !ambient_players_.count(identifier)) {
     return;
   }
 
@@ -595,13 +597,21 @@ void MediaSessionImpl::OnPlayerPaused(MediaSessionPlayerObserver* observer,
     return;
   }
 
+  // If the player is an ambient player, just remove it since it is not expected
+  // to resume an ambient player via resuming MediaSession.
+  if (ambient_players_.count(identifier)) {
+    RemovePlayer(observer, player_id);
+    return;
+  }
+
   // Otherwise, suspend the session.
-  DCHECK(IsActive());
+  // The session might not have audio focus if it was paused prior to being
+  // suspended, which is fine.
   OnSuspendInternal(SuspendType::kContent, State::SUSPENDED);
 }
 
 void MediaSessionImpl::RebuildAndNotifyMediaPositionChanged() {
-  absl::optional<media_session::MediaPosition> position;
+  std::optional<media_session::MediaPosition> position;
 
   // If there was a position specified from Blink then we should use that.
   if (routed_service_ && routed_service_->position()) {
@@ -629,35 +639,44 @@ void MediaSessionImpl::RebuildAndNotifyMediaPositionChanged() {
     }
   }
 
+  // Notify the VideoPictureInPictureWindowControllerImpl regardless of whether
+  // or not the position has actually changed, since there may or may not have
+  // been a picture-in-picture window last time we updated.
+  if (auto* pip_window_controller_ =
+          VideoPictureInPictureWindowControllerImpl::FromWebContents(
+              web_contents())) {
+    pip_window_controller_->MediaSessionPositionChanged(position);
+  }
+
   if (position == position_)
     return;
 
   position_ = position;
 
-  if (auto* pip_window_controller_ =
-          VideoPictureInPictureWindowControllerImpl::FromWebContents(
-              web_contents())) {
-    pip_window_controller_->MediaSessionPositionChanged(position_);
-  }
 
   for (auto& observer : observers_)
     observer->MediaSessionPositionChanged(position_);
+
+  const bool is_considered_live =
+      position_.has_value() && position_->duration().is_max();
+  if (is_considered_live == is_considered_live_) {
+    return;
+  }
+
+  // The available actions can be different depending on whether we're
+  // considered live or not, so if that has changed we must re-notify for the
+  // new state.
+  is_considered_live_ = is_considered_live;
+  RebuildAndNotifyActionsChanged();
 }
 
 void MediaSessionImpl::Resume(SuspendType suspend_type) {
-  if (!IsSuspended())
+  // If the site has registered an action handler for play, we should pass it to
+  // the site and let them handle it.
+  if (suspend_type == SuspendType::kUI &&
+      ShouldRouteAction(media_session::mojom::MediaSessionAction::kPlay)) {
+    DidReceiveAction(media_session::mojom::MediaSessionAction::kPlay);
     return;
-
-  if (suspend_type == SuspendType::kUI) {
-    // If the site has registered an action handler for play then we should
-    // pass it to the site and let them handle it.
-    if (ShouldRouteAction(media_session::mojom::MediaSessionAction::kPlay)) {
-      DidReceiveAction(media_session::mojom::MediaSessionAction::kPlay);
-      return;
-    }
-
-    MediaSessionUmaHelper::RecordMediaSessionUserAction(
-        MediaSessionUmaHelper::MediaSessionUserAction::kPlayDefault, focused_);
   }
 
   // When the resume requests comes from another source than system, audio focus
@@ -675,6 +694,12 @@ void MediaSessionImpl::Resume(SuspendType suspend_type) {
 
     if (audio_focus_state_ != State::ACTIVE)
       return;
+  } else {
+    // System resume implies that we have the focus and should start playing if
+    // the system was what suspended us.  Otherwise, we're suspended.
+    SetAudioFocusState((suspend_type_ == SuspendType::kSystem)
+                           ? State::ACTIVE
+                           : State::SUSPENDED);
   }
 
   OnResumeInternal(suspend_type);
@@ -691,9 +716,6 @@ void MediaSessionImpl::Suspend(SuspendType suspend_type) {
       DidReceiveAction(media_session::mojom::MediaSessionAction::kPause);
       return;
     }
-
-    MediaSessionUmaHelper::RecordMediaSessionUserAction(
-        MediaSessionUserAction::kPauseDefault, focused_);
   }
 
   OnSuspendInternal(suspend_type, State::SUSPENDED);
@@ -709,10 +731,6 @@ void MediaSessionImpl::Stop(SuspendType suspend_type) {
     // notify the site but continue stopping the media session.
     if (ShouldRouteAction(media_session::mojom::MediaSessionAction::kStop)) {
       DidReceiveAction(media_session::mojom::MediaSessionAction::kStop);
-    } else {
-      MediaSessionUmaHelper::RecordMediaSessionUserAction(
-          MediaSessionUmaHelper::MediaSessionUserAction::kStopDefault,
-          focused_);
     }
   }
 
@@ -767,8 +785,9 @@ void MediaSessionImpl::Seek(base::TimeDelta seek_time) {
 }
 
 bool MediaSessionImpl::IsControllable() const {
-  if (audio_focus_state_ == State::INACTIVE || HasOnlyOneShotPlayers())
+  if (audio_focus_state_ == State::INACTIVE || HasOnlyOneShotPlayers()) {
     return false;
+  }
 
 #if !BUILDFLAG(IS_ANDROID)
   if (routed_service_ && routed_service_->playback_state() !=
@@ -781,7 +800,7 @@ bool MediaSessionImpl::IsControllable() const {
 }
 
 void MediaSessionImpl::SetDuckingVolumeMultiplier(double multiplier) {
-  ducking_volume_multiplier_ = base::clamp(multiplier, 0.0, 1.0);
+  ducking_volume_multiplier_ = std::clamp(multiplier, 0.0, 1.0);
 }
 
 void MediaSessionImpl::SetAudioFocusGroupId(
@@ -789,7 +808,15 @@ void MediaSessionImpl::SetAudioFocusGroupId(
   audio_focus_group_id_ = group_id;
 }
 
+RenderFrameHost* MediaSessionImpl::GetRoutedFrame() {
+  if (!routed_service_) {
+    return nullptr;
+  }
+  return routed_service_->GetRenderFrameHost();
+}
+
 void MediaSessionImpl::StartDucking() {
+  should_unduck_on_focus_gained_ = false;
   if (is_ducking_)
     return;
   is_ducking_ = true;
@@ -798,6 +825,7 @@ void MediaSessionImpl::StartDucking() {
 }
 
 void MediaSessionImpl::StopDucking() {
+  should_unduck_on_focus_gained_ = true;
   if (!is_ducking_)
     return;
   is_ducking_ = false;
@@ -811,8 +839,17 @@ void MediaSessionImpl::UpdateVolumeMultiplier() {
                                              GetVolumeMultiplier());
   }
 
-  for (const auto& it : pepper_players_)
+  for (const auto& it : one_shot_players_) {
     it.observer->OnSetVolumeMultiplier(it.player_id, GetVolumeMultiplier());
+  }
+
+  for (const auto& it : pepper_players_) {
+    it.observer->OnSetVolumeMultiplier(it.player_id, GetVolumeMultiplier());
+  }
+
+  for (const auto& it : ambient_players_) {
+    it.observer->OnSetVolumeMultiplier(it.player_id, GetVolumeMultiplier());
+  }
 }
 
 double MediaSessionImpl::GetVolumeMultiplier() const {
@@ -849,6 +886,7 @@ void MediaSessionImpl::RemoveAllPlayersForTest() {
   normal_players_.clear();
   pepper_players_.clear();
   one_shot_players_.clear();
+  ambient_players_.clear();
   AbandonSystemAudioFocusIfNeeded();
 }
 
@@ -896,9 +934,9 @@ void MediaSessionImpl::OnImageDownloadComplete(
 }
 
 void MediaSessionImpl::OnSystemAudioFocusRequested(bool result) {
-  uma_helper_.RecordRequestAudioFocusResult(result);
-  if (result)
+  if (result && should_unduck_on_focus_gained_) {
     StopDucking();
+  }
 }
 
 void MediaSessionImpl::OnSuspendInternal(SuspendType suspend_type,
@@ -909,35 +947,12 @@ void MediaSessionImpl::OnSuspendInternal(SuspendType suspend_type,
   // UI suspend cannot use State::INACTIVE.
   DCHECK(suspend_type == SuspendType::kSystem || new_state == State::SUSPENDED);
 
-  if (HasOnlyOneShotPlayers())
+  if (HasOnlyOneShotPlayers()) {
     return;
+  }
 
   if (audio_focus_state_ != State::ACTIVE)
     return;
-
-  switch (suspend_type) {
-    case SuspendType::kUI:
-      uma_helper_.RecordSessionSuspended(MediaSessionSuspendedSource::kUI);
-      break;
-    case SuspendType::kSystem:
-      switch (new_state) {
-        case State::SUSPENDED:
-          uma_helper_.RecordSessionSuspended(
-              MediaSessionSuspendedSource::kSystemTransient);
-          break;
-        case State::INACTIVE:
-          uma_helper_.RecordSessionSuspended(
-              MediaSessionSuspendedSource::kSystemPermanent);
-          break;
-        case State::ACTIVE:
-          NOTREACHED();
-          break;
-      }
-      break;
-    case SuspendType::kContent:
-      uma_helper_.RecordSessionSuspended(MediaSessionSuspendedSource::kCONTENT);
-      break;
-  }
 
   SetAudioFocusState(new_state);
   suspend_type_ = suspend_type;
@@ -960,8 +975,6 @@ void MediaSessionImpl::OnSuspendInternal(SuspendType suspend_type,
 void MediaSessionImpl::OnResumeInternal(SuspendType suspend_type) {
   if (suspend_type == SuspendType::kSystem && suspend_type_ != suspend_type)
     return;
-
-  SetAudioFocusState(State::ACTIVE);
 
   for (const auto& it : normal_players_)
     it.first.observer->OnResume(it.first.player_id);
@@ -999,6 +1012,13 @@ void MediaSessionImpl::Initialize() {
   DCHECK(web_contents());
   DidUpdateFaviconURL(web_contents()->GetPrimaryMainFrame(),
                       web_contents()->GetFaviconURLs());
+
+  GetContentClient()->browser()->AddPresentationObserver(this, web_contents());
+}
+
+void MediaSessionImpl::OnPresentationsChanged(bool has_presentation) {
+  has_presentation_ = has_presentation;
+  RebuildAndNotifyMediaSessionInfoChanged();
 }
 
 AudioFocusDelegate::AudioFocusResult MediaSessionImpl::RequestSystemAudioFocus(
@@ -1006,6 +1026,8 @@ AudioFocusDelegate::AudioFocusResult MediaSessionImpl::RequestSystemAudioFocus(
   // |kGainTransient| is not used in MediaSessionImpl.
   DCHECK_NE(media_session::mojom::AudioFocusType::kGainTransient,
             audio_focus_type);
+
+  should_unduck_on_focus_gained_ = true;
 
   AudioFocusDelegate::AudioFocusResult result =
       delegate_->RequestAudioFocus(audio_focus_type);
@@ -1069,6 +1091,23 @@ MediaSessionImpl::GetMediaSessionInfoSync() {
   // If we have Pepper players then we should force ducking.
   info->force_duck = HasPepper();
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+  // If this is a webapp, and instanced media controls are on, mark this session
+  // as a pwa session so that the browser sessions can stay isolated. This is
+  // used to differentiate webapp sessions for different handling.
+  auto* web_contents_delegate = web_contents()->GetDelegate();
+  info->ignore_for_active_session =
+      base::FeatureList::IsEnabled(features::kWebAppSystemMediaControls) &&
+      web_contents_delegate &&
+      web_contents_delegate->ShouldUseInstancedSystemMediaControls();
+#else
+  info->ignore_for_active_session = false;
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+
+  if (always_ignore_for_active_session_for_testing_) {
+    info->ignore_for_active_session = true;
+  }
+
   // The playback state should use |IsActive| to determine whether we are
   // playing or not. However, if there is a |routed_service_| which is playing
   // then we should force the playback state to be playing.
@@ -1082,11 +1121,9 @@ MediaSessionImpl::GetMediaSessionInfoSync() {
   info->audio_video_states = GetMediaAudioVideoStates();
   info->is_controllable = IsControllable();
 
-  // If the browser context is off the record then it should be sensitive.
-  info->is_sensitive = web_contents()->GetBrowserContext()->IsOffTheRecord();
-
   info->picture_in_picture_state =
-      web_contents()->HasPictureInPictureVideo()
+      web_contents()->HasPictureInPictureVideo() ||
+              web_contents()->HasPictureInPictureDocument()
           ? media_session::mojom::MediaPictureInPictureState::
                 kInPictureInPicture
           : media_session::mojom::MediaPictureInPictureState::
@@ -1107,6 +1144,22 @@ MediaSessionImpl::GetMediaSessionInfoSync() {
   }
 
   info->muted = is_muted_;
+  info->has_presentation = has_presentation_;
+
+  // Disable Remote Playback by passing empty RemotePlaybackMetadata when there
+  // are multiple media players.
+  info->remote_playback_metadata = remote_playback_metadata_.Clone();
+  if (normal_players_.size() > 1u && info->remote_playback_metadata) {
+    info->remote_playback_metadata->remote_playback_disabled = true;
+  }
+
+  MediaSessionClient* media_session_client = MediaSessionClient::Get();
+  info->hide_metadata = media_session_client
+                            ? media_session_client->ShouldHideMetadata(
+                                  web_contents()->GetBrowserContext())
+                            : false;
+
+  info->meets_visibility_threshold = HasSufficientlyVisibleVideo();
 
   return info;
 }
@@ -1152,10 +1205,11 @@ void MediaSessionImpl::FinishSystemAudioFocusRequest(
         OnSuspendInternal(SuspendType::kSystem, State::SUSPENDED);
         break;
       case AudioFocusType::kAmbient:
-      case AudioFocusType::kGainTransient:
-        // MediaSessionImpl does not use |kGainTransient| or |kAmbient|.
-        NOTREACHED();
+        // There's nothing to do if an ambient request fails.
         break;
+      case AudioFocusType::kGainTransient:
+        // MediaSessionImpl does not use |kGainTransient|.
+        NOTREACHED();
       case AudioFocusType::kGainTransientMayDuck:
         // The focus request failed, we should suspend any players that have
         // the same audio focus type.
@@ -1178,6 +1232,14 @@ void MediaSessionImpl::NextTrack() {
 
 void MediaSessionImpl::SkipAd() {
   DidReceiveAction(media_session::mojom::MediaSessionAction::kSkipAd);
+}
+
+void MediaSessionImpl::PreviousSlide() {
+  DidReceiveAction(media_session::mojom::MediaSessionAction::kPreviousSlide);
+}
+
+void MediaSessionImpl::NextSlide() {
+  DidReceiveAction(media_session::mojom::MediaSessionAction::kNextSlide);
 }
 
 void MediaSessionImpl::SeekTo(base::TimeDelta seek_time) {
@@ -1211,10 +1273,14 @@ void MediaSessionImpl::ScrubTo(base::TimeDelta seek_time) {
 }
 
 void MediaSessionImpl::EnterPictureInPicture() {
-  if (ShouldRouteAction(
+  if (base::FeatureList::IsEnabled(
+          blink::features::kMediaSessionEnterPictureInPicture) &&
+      ShouldRouteAction(
           media_session::mojom::MediaSessionAction::kEnterPictureInPicture)) {
     DidReceiveAction(
         media_session::mojom::MediaSessionAction::kEnterPictureInPicture);
+    uma_helper_.RecordEnterPictureInPicture(
+        MediaSessionUmaHelper::EnterPictureInPictureType::kRegisteredManual);
     return;
   }
 
@@ -1222,23 +1288,31 @@ void MediaSessionImpl::EnterPictureInPicture() {
   DCHECK_EQ(normal_players_.size(), 1u);
   normal_players_.begin()->first.observer->OnEnterPictureInPicture(
       normal_players_.begin()->first.player_id);
+  uma_helper_.RecordEnterPictureInPicture(
+      MediaSessionUmaHelper::EnterPictureInPictureType::kDefaultHandler);
 }
 
 void MediaSessionImpl::ExitPictureInPicture() {
-  if (ShouldRouteAction(
-          media_session::mojom::MediaSessionAction::kExitPictureInPicture)) {
-    DidReceiveAction(
-        media_session::mojom::MediaSessionAction::kExitPictureInPicture);
+  static_cast<WebContentsImpl*>(web_contents())->ExitPictureInPicture();
+}
+
+void MediaSessionImpl::EnterAutoPictureInPicture() {
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kMediaSessionEnterPictureInPicture)) {
+    return;
+  }
+  if (!ShouldRouteAction(
+          media_session::mojom::MediaSessionAction::kEnterPictureInPicture)) {
     return;
   }
 
-  // There should be one and only one player when we exit picture-in-picture.
-  DCHECK_EQ(normal_players_.size(), 1u);
-  normal_players_.begin()->first.observer->OnExitPictureInPicture(
-      normal_players_.begin()->first.player_id);
+  DidReceiveAction(
+      media_session::mojom::MediaSessionAction::kEnterPictureInPicture);
+  uma_helper_.RecordEnterPictureInPicture(
+      MediaSessionUmaHelper::EnterPictureInPictureType::kRegisteredAutomatic);
 }
 
-void MediaSessionImpl::SetAudioSinkId(const absl::optional<std::string>& id) {
+void MediaSessionImpl::SetAudioSinkId(const std::optional<std::string>& id) {
   audio_device_id_for_origin_ = id;
 
   for (const auto& it : normal_players_) {
@@ -1274,12 +1348,28 @@ void MediaSessionImpl::SetMute(bool mute) {
       normal_players_.begin()->first.player_id, mute);
 }
 
+void MediaSessionImpl::RequestMediaRemoting() {
+  DCHECK_EQ(normal_players_.size(), 1u);
+  normal_players_.begin()->first.observer->OnRequestMediaRemoting(
+      normal_players_.begin()->first.player_id);
+}
+
 void MediaSessionImpl::GetMediaImageBitmap(
     const media_session::MediaImage& image,
     int minimum_size_px,
     int desired_size_px,
     GetMediaImageBitmapCallback callback) {
-  // We should make sure |image| is in |images_|.
+// We want to hide the media image from ChromeOS' media controls.
+#if BUILDFLAG(IS_CHROMEOS)
+  if (session_info_ && session_info_->hide_metadata) {
+    MediaSessionClient* media_session_client = MediaSessionClient::Get();
+    CHECK(media_session_client);
+    std::move(callback).Run(media_session_client->GetThumbnailPlaceholder());
+    return;
+  }
+#endif
+
+  // We should make sure `image` is in `images_`.
   bool found = false;
   bool source_icon = false;
   for (auto& image_type : images_) {
@@ -1289,6 +1379,17 @@ void MediaSessionImpl::GetMediaImageBitmap(
       if (image_type.first ==
           media_session::mojom::MediaSessionImageType::kSourceIcon) {
         source_icon = true;
+      }
+      break;
+    }
+  }
+
+  // Or the `image` is in chapters.
+  if (!found) {
+    for (auto& chapter : metadata_.chapters) {
+      if (base::Contains(chapter.artwork(), image)) {
+        found = true;
+        break;
       }
     }
   }
@@ -1320,7 +1421,8 @@ void MediaSessionImpl::GetMediaImageBitmap(
 
 void MediaSessionImpl::AbandonSystemAudioFocusIfNeeded() {
   if (audio_focus_state_ == State::INACTIVE || !normal_players_.empty() ||
-      !pepper_players_.empty() || !one_shot_players_.empty()) {
+      !pepper_players_.empty() || !one_shot_players_.empty() ||
+      !ambient_players_.empty()) {
     return;
   }
   delegate_->AbandonAudioFocus();
@@ -1376,6 +1478,15 @@ void MediaSessionImpl::RebuildAndNotifyMediaSessionInfoChanged() {
   delegate_->MediaSessionInfoChanged(current_info);
 
   session_info_ = std::move(current_info);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // If we need to hide the metadata, then we need to notify the metadata
+  // observers with the hidden metadata. They might have received the metadata
+  // before the info has been updated.
+  if (session_info_->hide_metadata) {
+    RebuildAndNotifyMetadataChanged();
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 bool MediaSessionImpl::AddPepperPlayer(MediaSessionPlayerObserver* observer,
@@ -1412,6 +1523,32 @@ bool MediaSessionImpl::AddOneShotPlayer(MediaSessionPlayerObserver* observer,
   RebuildAndNotifyMediaPositionChanged();
 
   return true;
+}
+
+bool MediaSessionImpl::AddAmbientPlayer(MediaSessionPlayerObserver* observer,
+                                        int player_id) {
+#if BUILDFLAG(IS_ANDROID)
+  // Ambient players are completely ignored for Android audio focus.
+  return true;
+#else
+  // If we're currently ducking, ensure the new player is also ducked.
+  observer->OnSetVolumeMultiplier(player_id, GetVolumeMultiplier());
+
+  // Request audio focus only if we're entirely inactive (i.e. don't request to
+  // un-suspend for an ambient player).
+  if (audio_focus_state_ == State::INACTIVE) {
+    if (RequestSystemAudioFocus(AudioFocusType::kAmbient) ==
+        AudioFocusDelegate::AudioFocusResult::kFailed) {
+      return false;
+    }
+  }
+
+  // If we have audio focus, then add this to the list of ambient players, but
+  // we don't need to update any info or metadata as they are unaffected by
+  // ambient players.
+  ambient_players_.insert(PlayerIdentifier(observer, player_id));
+  return true;
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 // MediaSessionService-related methods
@@ -1471,9 +1608,6 @@ void MediaSessionImpl::DidReceiveAction(
 void MediaSessionImpl::DidReceiveAction(
     media_session::mojom::MediaSessionAction action,
     blink::mojom::MediaSessionActionDetailsPtr details) {
-  MediaSessionUmaHelper::RecordMediaSessionUserAction(
-      MediaSessionActionToUserAction(action), focused_);
-
   // Pause all players in non-routed frames if the action is PAUSE.
   //
   // This is the default PAUSE action handler per Media Session API spec. The
@@ -1579,6 +1713,24 @@ MediaSessionServiceImpl* MediaSessionImpl::ComputeServiceForRouting() {
     min_depth = depth;
   }
 
+  // If we don't have a suitable frame yet, then take the topmost frame that has
+  // a MediaSessionService.
+  if (!best_frame && base::FeatureList::IsEnabled(
+                         blink::features::kMediaSessionEnterPictureInPicture)) {
+    // `FrameTree::Nodes()` iterates in breadth-first order, so this is
+    // guaranteed to find the topmost (or tied topmost) frame with an active
+    // MediaSessionService.
+    for (FrameTreeNode* node : static_cast<WebContentsImpl*>(web_contents())
+                                   ->GetPrimaryFrameTree()
+                                   .Nodes()) {
+      RenderFrameHost* rfh = node->current_frame_host();
+      if (IsServiceActiveForRenderFrameHost(rfh)) {
+        best_frame = rfh;
+        break;
+      }
+    }
+  }
+
   return best_frame ? services_[best_frame->GetGlobalId()] : nullptr;
 }
 
@@ -1607,6 +1759,19 @@ void MediaSessionImpl::OnAudioOutputSinkChangingDisabled() {
   RebuildAndNotifyMediaSessionInfoChanged();
 }
 
+void MediaSessionImpl::OnVideoVisibilityChanged() {
+  if (normal_players_.size() == 0) {
+    return;
+  }
+  RebuildAndNotifyMediaSessionInfoChanged();
+}
+
+void MediaSessionImpl::SetRemotePlaybackMetadata(
+    media_session::mojom::RemotePlaybackMetadataPtr metadata) {
+  remote_playback_metadata_ = std::move(metadata);
+  RebuildAndNotifyMediaSessionInfoChanged();
+}
+
 bool MediaSessionImpl::ShouldRouteAction(
     media_session::mojom::MediaSessionAction action) const {
   return routed_service_ && base::Contains(routed_service_->actions(), action);
@@ -1619,6 +1784,19 @@ const base::UnguessableToken& MediaSessionImpl::GetSourceId() const {
 
 const base::UnguessableToken& MediaSessionImpl::GetRequestId() const {
   return delegate_->request_id();
+}
+
+void MediaSessionImpl::UpdateVideoPictureInPictureWindowController(
+    VideoPictureInPictureWindowControllerImpl* pip_controller) const {
+  pip_controller->MediaSessionActionsChanged(actions_);
+  pip_controller->MediaSessionImagesChanged(images_);
+  pip_controller->MediaSessionPositionChanged(position_);
+  pip_controller->MediaSessionInfoChanged(session_info_);
+  pip_controller->MediaSessionMetadataChanged(metadata_);
+}
+
+base::WeakPtr<MediaSessionImpl> MediaSessionImpl::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 void MediaSessionImpl::RebuildAndNotifyActionsChanged() {
@@ -1640,17 +1818,43 @@ void MediaSessionImpl::RebuildAndNotifyActionsChanged() {
     actions.insert(media_session::mojom::MediaSessionAction::kPlay);
     actions.insert(media_session::mojom::MediaSessionAction::kPause);
     actions.insert(media_session::mojom::MediaSessionAction::kStop);
-    actions.insert(media_session::mojom::MediaSessionAction::kSeekTo);
-    actions.insert(media_session::mojom::MediaSessionAction::kScrubTo);
+
+    // Support seeking as long as this isn't live media.
+    if (!is_considered_live_) {
+      actions.insert(media_session::mojom::MediaSessionAction::kSeekTo);
+      actions.insert(media_session::mojom::MediaSessionAction::kScrubTo);
+      actions.insert(media_session::mojom::MediaSessionAction::kSeekForward);
+      actions.insert(media_session::mojom::MediaSessionAction::kSeekBackward);
+    }
+  }
+
+  // If the website has specified an action handler for 'enterpictureinpicture',
+  // then we should expose EnterAutoPictureInPicture as an available action.
+  if (base::FeatureList::IsEnabled(
+          blink::features::kMediaSessionEnterPictureInPicture) &&
+      base::Contains(
+          actions,
+          media_session::mojom::MediaSessionAction::kEnterPictureInPicture)) {
+    actions.insert(
+        media_session::mojom::MediaSessionAction::kEnterAutoPictureInPicture);
+    actions.insert(
+        media_session::mojom::MediaSessionAction::kExitPictureInPicture);
   }
 
   if (base::FeatureList::IsEnabled(
-          media::kGlobalMediaControlsPictureInPicture) &&
-      IsPictureInPictureAvailable()) {
-    actions.insert(
-        media_session::mojom::MediaSessionAction::kEnterPictureInPicture);
-    actions.insert(
-        media_session::mojom::MediaSessionAction::kExitPictureInPicture);
+          media::kGlobalMediaControlsPictureInPicture)) {
+    if (IsPictureInPictureAvailable()) {
+      actions.insert(
+          media_session::mojom::MediaSessionAction::kEnterPictureInPicture);
+      actions.insert(
+          media_session::mojom::MediaSessionAction::kExitPictureInPicture);
+    } else if (web_contents()->HasPictureInPictureVideo() ||
+               web_contents()->HasPictureInPictureDocument()) {
+      // If the media is already in the picture-in-picture state, we allow the
+      // player to exit it.
+      actions.insert(
+          media_session::mojom::MediaSessionAction::kExitPictureInPicture);
+    }
   }
 
   if (base::FeatureList::IsEnabled(
@@ -1674,22 +1878,93 @@ void MediaSessionImpl::RebuildAndNotifyActionsChanged() {
 void MediaSessionImpl::RebuildAndNotifyMetadataChanged() {
   std::vector<media_session::MediaImage> artwork;
   media_session::MediaMetadata metadata;
+  BuildMetadata(metadata, artwork);
+
+  // If we have no artwork in |images_| or the arwork has changed then we should
+  // update it with the latest artwork from the routed service.
+  auto it = images_.find(MediaSessionImageType::kArtwork);
+  bool images_changed = it == images_.end() || it->second != artwork;
+  if (images_changed) {
+    images_.insert_or_assign(MediaSessionImageType::kArtwork, artwork);
+  }
+  bool metadata_changed = metadata_ != metadata;
+  if (metadata_changed) {
+    metadata_ = metadata;
+  }
+
+  if (!images_changed && !metadata_changed) {
+    return;
+  }
+  for (auto& observer : observers_) {
+    if (metadata_changed) {
+      observer->MediaSessionMetadataChanged(this->metadata_);
+    }
+
+    if (images_changed) {
+      observer->MediaSessionImagesChanged(this->images_);
+    }
+  }
+  if (auto* pip_window_controller =
+          VideoPictureInPictureWindowControllerImpl::FromWebContents(
+              web_contents())) {
+    pip_window_controller->MediaSessionMetadataChanged(metadata_);
+  }
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
+void MediaSessionImpl::BuildPlaceholderMetadata(
+    media_session::MediaMetadata& metadata,
+    std::vector<media_session::MediaImage>& artwork) {
+  if ((routed_service_ && routed_service_->metadata()) ||
+      !metadata_.IsEmpty()) {
+    MediaSessionClient* media_session_client = MediaSessionClient::Get();
+    CHECK(media_session_client);
+
+    metadata.title = media_session_client->GetTitlePlaceholder();
+    metadata.artist = media_session_client->GetArtistPlaceholder();
+    metadata.album = media_session_client->GetAlbumPlaceholder();
+    metadata.source_title = media_session_client->GetSourceTitlePlaceholder();
+
+    // Always make sure the metadata replacement is accompanied by the thumbnail
+    // replacement.
+    // An empty `MediaImage` so `GetMediaImageBitmap` is eventually triggered.
+    // That is where we replace the artwork with the placeholder `Bitmap`.
+    artwork.push_back(media_session::MediaImage());
+  }
+}
+#endif
+
+void MediaSessionImpl::BuildMetadata(
+    media_session::MediaMetadata& metadata,
+    std::vector<media_session::MediaImage>& artwork) {
+  // We need to hide the metadata for ChromeOS here because the
+  // `MediaNotificationItem` lives in //components which cannot depend on
+  // //content. For other platforms, metadata is hidden in the
+  // `SystemMediaControlsNotifier`.
+#if BUILDFLAG(IS_CHROMEOS)
+  if (session_info_ && session_info_->hide_metadata) {
+    BuildPlaceholderMetadata(metadata, artwork);
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   if (routed_service_ && routed_service_->metadata()) {
     metadata.title = routed_service_->metadata()->title;
     metadata.artist = routed_service_->metadata()->artist;
     metadata.album = routed_service_->metadata()->album;
+    metadata.chapters = routed_service_->metadata()->chapterInfo;
     artwork = routed_service_->metadata()->artwork;
   }
 
-  if (metadata.title.empty())
+  if (metadata.title.empty()) {
     metadata.title = SanitizeMediaTitle(web_contents()->GetTitle());
+  }
 
-  ContentClient* content_client = content::GetContentClient();
+  ContentClient* content_client = GetContentClient();
   const GURL& url = web_contents()->GetLastCommittedURL();
 
-  // If |url| wraps a chrome extension ID or System Web App, we can display the
-  // extension or app name instead, which is more human-readable.
+  // If |url| wraps a chrome extension ID or System Web App, we can display
+  // the extension or app name instead, which is more human-readable.
   std::u16string source_title;
   WebContentsDelegate* delegate = web_contents()->GetDelegate();
   if (delegate) {
@@ -1711,27 +1986,6 @@ void MediaSessionImpl::RebuildAndNotifyMetadataChanged() {
   }
 
   metadata.source_title = source_title;
-
-  // If we have no artwork in |images_| or the arwork has changed then we should
-  // update it with the latest artwork from the routed service.
-  auto it = images_.find(MediaSessionImageType::kArtwork);
-  bool images_changed = it == images_.end() || it->second != artwork;
-  if (images_changed)
-    images_.insert_or_assign(MediaSessionImageType::kArtwork, artwork);
-
-  bool metadata_changed = metadata_ != metadata;
-  if (metadata_changed)
-    metadata_ = metadata;
-
-  if (!images_changed && !metadata_changed)
-    return;
-  for (auto& observer : observers_) {
-    if (metadata_changed)
-      observer->MediaSessionMetadataChanged(this->metadata_);
-
-    if (images_changed)
-      observer->MediaSessionImagesChanged(this->images_);
-  }
 }
 
 bool MediaSessionImpl::IsPictureInPictureAvailable() const {
@@ -1742,17 +1996,46 @@ bool MediaSessionImpl::IsPictureInPictureAvailable() const {
   return first.observer->IsPictureInPictureAvailable(first.player_id);
 }
 
+bool MediaSessionImpl::HasSufficientlyVisibleVideo() const {
+  for (const auto& player : normal_players_) {
+    if (player.first.observer->HasSufficientlyVisibleVideo(
+            player.first.player_id)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void MediaSessionImpl::GetVisibility(
+    GetVisibilityCallback get_visibility_callback) {
+  if (normal_players_.empty()) {
+    std::move(get_visibility_callback).Run(false);
+    return;
+  }
+
+  scoped_refptr<MediaPlayersCallbackAggregator> aggregator =
+      MakeRefCounted<MediaPlayersCallbackAggregator>(
+          std::move(get_visibility_callback));
+  for (const auto& player : normal_players_) {
+    if (player.first.observer->IsPaused(player.first.player_id)) {
+      continue;
+    }
+    player.first.observer->OnRequestVisibility(
+        player.first.player_id, aggregator->CreateVisibilityCallback());
+  }
+}
+
 std::string MediaSessionImpl::GetSharedAudioOutputDeviceId() const {
   if (normal_players_.empty())
     return media::AudioDeviceDescription::kDefaultDeviceId;
 
   auto& first = normal_players_.begin()->first;
   const auto& first_id = first.observer->GetAudioOutputSinkId(first.player_id);
-  if (std::all_of(normal_players_.cbegin(), normal_players_.cend(),
-                  [&first_id](const auto& player) {
-                    return player.first.observer->GetAudioOutputSinkId(
-                               player.first.player_id) == first_id;
-                  })) {
+  if (base::ranges::all_of(normal_players_, [&first_id](const auto& player) {
+        return player.first.observer->GetAudioOutputSinkId(
+                   player.first.player_id) == first_id;
+      })) {
     return first_id;
   }
 
@@ -1809,9 +2092,9 @@ void MediaSessionImpl::ForAllPlayers(
     callback.Run(player);
 }
 
-absl::optional<media_session::MediaPosition>
+std::optional<media_session::MediaPosition>
 MediaSessionImpl::MaybeGuardDurationUpdate(
-    absl::optional<media_session::MediaPosition> position) {
+    std::optional<media_session::MediaPosition> position) {
   if (!position) {
     // |position| should never go back to unset state once it's
     // set. Therefore it's safe to return it here when it's unset.

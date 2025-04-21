@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/signin/core/browser/account_reconcilor.h"
 
 namespace signin {
@@ -40,15 +39,17 @@ bool MirrorAccountReconcilorDelegate::ShouldAbortReconcileIfPrimaryHasError()
 
 ConsentLevel MirrorAccountReconcilorDelegate::GetConsentLevelForPrimaryAccount()
     const {
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
-  return ConsentLevel::kSignin;
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
+  // TODO(crbug.com/40067189): Migrate away from `ConsentLevel::kSync` on
+  // Ash.
+  return ConsentLevel::kSync;
+#else
+  // For mobile (iOS, Android) and Lacros.
+  //
   // Whenever Mirror is enabled on a Lacros Profile, the Primary Account may or
   // may not have consented to Chrome Sync. But we want to enable
   // `AccountReconcilor` regardless - for minting Gaia cookies.
   return ConsentLevel::kSignin;
-#else
-  return ConsentLevel::kSync;
 #endif
 }
 
@@ -72,8 +73,9 @@ void MirrorAccountReconcilorDelegate::OnPrimaryAccountChanged(
   // DisableReconcile logs out all accounts even if it was already disabled.
   bool should_enable_reconcile =
       identity_manager_->HasPrimaryAccount(GetConsentLevelForPrimaryAccount());
-  if (reconcile_enabled_ == should_enable_reconcile)
+  if (reconcile_enabled_ == should_enable_reconcile) {
     return;
+  }
 
   reconcile_enabled_ = should_enable_reconcile;
   if (should_enable_reconcile) {

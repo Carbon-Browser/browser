@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,12 +35,11 @@ class VirtualDeviceEnabledDeviceFactory : public DeviceFactory {
   // DeviceFactory implementation.
   void GetDeviceInfos(GetDeviceInfosCallback callback) override;
   void CreateDevice(const std::string& device_id,
-                    mojo::PendingReceiver<mojom::Device> device_receiver,
                     CreateDeviceCallback callback) override;
+  void StopDevice(const std::string device_id) override;
   void AddSharedMemoryVirtualDevice(
       const media::VideoCaptureDeviceInfo& device_info,
       mojo::PendingRemote<mojom::Producer> producer,
-      bool send_buffer_handles_to_producer_as_raw_file_descriptors,
       mojo::PendingReceiver<mojom::SharedMemoryVirtualDevice>
           virtual_device_receiver) override;
   void AddTextureVirtualDevice(

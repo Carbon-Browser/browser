@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "base/test/values_test_util.h"
 #include "components/media_router/browser/media_routes_observer.h"
 #include "components/media_router/browser/media_sinks_observer.h"

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,15 @@ import android.view.View;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.infobar.InfoBarIdentifier;
 import org.chromium.components.infobars.InfoBar;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.List;
 
-/**
- * Utility functions for dealing with InfoBars.
- */
+/** Utility functions for dealing with InfoBars. */
 public class InfoBarUtil {
     /**
      * Finds, and optionally clicks, the button with the specified ID in the given InfoBar.
@@ -29,7 +27,10 @@ public class InfoBarUtil {
         final View button = infoBar.getView().findViewById(buttonId);
         if (button == null) return false;
         if (click) {
-            TestThreadUtils.runOnUiThreadBlocking(() -> { button.performClick(); });
+            ThreadUtils.runOnUiThreadBlocking(
+                    () -> {
+                        button.performClick();
+                    });
         }
         return true;
     }
@@ -74,9 +75,7 @@ public class InfoBarUtil {
         return findButton(infoBar, R.id.button_secondary, true);
     }
 
-    /**
-     * Waits until the specified InfoBar list contains no info bars.
-     */
+    /** Waits until the specified InfoBar list contains no info bars. */
     public static void waitUntilNoInfoBarsExist(final List<InfoBar> infoBars) {
         CriteriaHelper.pollUiThread(infoBars::isEmpty);
     }

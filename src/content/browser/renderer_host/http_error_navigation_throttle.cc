@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/http_error_navigation_throttle.h"
 
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/public/common/content_client.h"
 
@@ -24,7 +24,7 @@ HttpErrorNavigationThrottle::MaybeCreateThrottleFor(
 HttpErrorNavigationThrottle::HttpErrorNavigationThrottle(
     NavigationHandle& navigation_handle)
     : NavigationThrottle(&navigation_handle),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       body_consumer_watcher_(FROM_HERE,
                              mojo::SimpleWatcher::ArmingPolicy::MANUAL,
                              task_runner_) {}
@@ -68,9 +68,9 @@ void HttpErrorNavigationThrottle::OnBodyReadable(MojoResult) {
       NavigationRequest::From(navigation_handle())->response_body();
   // See how many bytes are in the body, without consuming anything from the
   // response body data pipe.
-  uint32_t num_bytes = 0;
-  MojoResult result =
-      body.ReadData(nullptr, &num_bytes, MOJO_READ_DATA_FLAG_QUERY);
+  size_t num_bytes = 0;
+  MojoResult result = body.ReadData(MOJO_READ_DATA_FLAG_QUERY,
+                                    base::span<uint8_t>(), num_bytes);
 
   switch (result) {
     case MOJO_RESULT_OK:
@@ -86,7 +86,6 @@ void HttpErrorNavigationThrottle::OnBodyReadable(MojoResult) {
       return;
     default:
       NOTREACHED();
-      return;
   }
 
   // Stop watching for signals.

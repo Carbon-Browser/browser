@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -132,7 +132,8 @@ ScopedVertexAttribArray::ScopedVertexAttribArray(unsigned int index,
     glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_TYPE, &type_);
     glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &normalized_);
     glGetVertexAttribiv(index, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &stride_);
-    glGetVertexAttribPointerv(index, GL_VERTEX_ATTRIB_ARRAY_POINTER, &pointer_);
+    glGetVertexAttribPointerv(index, GL_VERTEX_ATTRIB_ARRAY_POINTER,
+                              &pointer_.AsEphemeralRawAddr());
   }
 
   glEnableVertexAttribArray(index);
@@ -186,7 +187,7 @@ ScopedBufferBinder::~ScopedBufferBinder() {
 }
 
 ScopedViewport::ScopedViewport(int x, int y, int width, int height) {
-  glGetIntegerv(GL_VIEWPORT, data_);
+  glGetIntegerv(GL_VIEWPORT, data_.data());
   glViewport(x, y, width, height);
 }
 
@@ -195,7 +196,7 @@ ScopedViewport::~ScopedViewport() {
 }
 
 ScopedColorMask::ScopedColorMask(char red, char green, char blue, char alpha) {
-  glGetBooleanv(GL_COLOR_WRITEMASK, colors_);
+  glGetBooleanv(GL_COLOR_WRITEMASK, colors_.data());
   glColorMask(red, green, blue, alpha);
 }
 

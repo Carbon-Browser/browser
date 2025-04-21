@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace extensions {
 class ChromeGuestViewManagerDelegate
     : public ExtensionsGuestViewManagerDelegate {
  public:
-  explicit ChromeGuestViewManagerDelegate(content::BrowserContext* context);
+  ChromeGuestViewManagerDelegate();
 
   ChromeGuestViewManagerDelegate(const ChromeGuestViewManagerDelegate&) =
       delete;
@@ -27,6 +27,8 @@ class ChromeGuestViewManagerDelegate
 
   // GuestViewManagerDelegate:
   void OnGuestAdded(content::WebContents* guest_web_contents) const override;
+  bool IsOwnedByControlledFrameEmbedder(
+      const guest_view::GuestViewBase* guest) override;
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,7 @@ void PrintTo(const SignedTreeHead& sth, std::ostream* os) {
         << "\t\"tree_size\": " << sth.tree_size << ",\n"
         << "\t\"sha256_root_hash\": \""
         << base::HexEncode(sth.sha256_root_hash, kSthRootHashLength)
-        << "\",\n\t\"log_id\": \""
-        << base::HexEncode(sth.log_id.data(), sth.log_id.size()) << "\"\n"
+        << "\",\n\t\"log_id\": \"" << base::HexEncode(sth.log_id) << "\"\n"
         << "}";
 }
 

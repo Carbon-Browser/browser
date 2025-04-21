@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,7 +102,7 @@ class MIDI_EXPORT MidiManagerAlsa final : public MidiManager {
     ~MidiPort();
 
     // Gets a Value representation of this object, suitable for serialization.
-    std::unique_ptr<base::Value> Value() const;
+    std::unique_ptr<base::Value::Dict> Value() const;
 
     // Gets a string version of Value in JSON format.
     std::string JSONValue() const;

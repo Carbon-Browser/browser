@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -100,6 +100,8 @@ class IdleManagerTest : public RenderViewHostTestHarness {
   }
 
   void TearDown() override {
+    permission_manager_ = nullptr;
+    idle_time_provider_ = nullptr;
     scoped_idle_time_provider_.reset();
     idle_manager_.reset();
     RenderViewHostTestHarness::TearDown();
@@ -110,7 +112,8 @@ class IdleManagerTest : public RenderViewHostTestHarness {
   void SetPermissionStatus(blink::mojom::PermissionStatus permission_status) {
     ON_CALL(*permission_manager_,
             GetPermissionStatusForCurrentDocument(
-                blink::PermissionType::IDLE_DETECTION, main_rfh()))
+                blink::PermissionType::IDLE_DETECTION, main_rfh(),
+                /*should_include_device_status*/ false))
         .WillByDefault(Return(permission_status));
   }
 

@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/locks/lock.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -18,12 +19,7 @@
 
 namespace blink {
 
-namespace {
-const char* kLockModeNameExclusive = "exclusive";
-const char* kLockModeNameShared = "shared";
-}  // namespace
-
-class Lock::ThenFunction final : public ScriptFunction::Callable {
+class Lock::ThenFunction final : public ThenCallable<IDLAny, ThenFunction> {
  public:
   enum ResolveType {
     kFulfilled,
@@ -35,19 +31,20 @@ class Lock::ThenFunction final : public ScriptFunction::Callable {
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(lock_);
-    ScriptFunction::Callable::Trace(visitor);
+    ThenCallable<IDLAny, ThenFunction>::Trace(visitor);
   }
 
-  ScriptValue Call(ScriptState*, ScriptValue value) override {
+  void React(ScriptState*, ScriptValue value) {
     DCHECK(lock_);
     DCHECK(resolve_type_ == kFulfilled || resolve_type_ == kRejected);
     lock_->ReleaseIfHeld();
-    if (resolve_type_ == kFulfilled)
+    if (resolve_type_ == kFulfilled) {
       lock_->resolver_->Resolve(value);
-    else
+      lock_ = nullptr;
+    } else {
       lock_->resolver_->Reject(value);
-    lock_ = nullptr;
-    return value;
+      lock_ = nullptr;
+    }
   }
 
  private:
@@ -72,16 +69,17 @@ Lock::Lock(ScriptState* script_state,
   handle_.Bind(std::move(handle), task_runner);
   lock_lifetime_.Bind(std::move(lock_lifetime), task_runner);
   handle_.set_disconnect_handler(
-      WTF::Bind(&Lock::OnConnectionError, WrapWeakPersistent(this)));
+      WTF::BindOnce(&Lock::OnConnectionError, WrapWeakPersistent(this)));
 }
 
 Lock::~Lock() = default;
 
-String Lock::mode() const {
-  return ModeToString(mode_);
+V8LockMode Lock::mode() const {
+  return V8LockMode(ModeToEnum(mode_));
 }
 
-void Lock::HoldUntil(ScriptPromise promise, ScriptPromiseResolver* resolver) {
+void Lock::HoldUntil(ScriptPromise<IDLAny> promise,
+                     ScriptPromiseResolver<IDLAny>* resolver) {
   DCHECK(!resolver_);
 
   // Note that it is possible for the ExecutionContext that this Lock lives in
@@ -92,34 +90,32 @@ void Lock::HoldUntil(ScriptPromise promise, ScriptPromiseResolver* resolver) {
 
   ScriptState* script_state = resolver->GetScriptState();
   resolver_ = resolver;
-  promise.Then(MakeGarbageCollected<ScriptFunction>(
-                   script_state, MakeGarbageCollected<ThenFunction>(
-                                     this, ThenFunction::kFulfilled)),
-               MakeGarbageCollected<ScriptFunction>(
-                   script_state, MakeGarbageCollected<ThenFunction>(
-                                     this, ThenFunction::kRejected)));
+  promise.Then(
+      script_state,
+      MakeGarbageCollected<ThenFunction>(this, ThenFunction::kFulfilled),
+      MakeGarbageCollected<ThenFunction>(this, ThenFunction::kRejected));
 }
 
 // static
-mojom::blink::LockMode Lock::StringToMode(const String& string) {
-  if (string == kLockModeNameShared)
-    return mojom::blink::LockMode::SHARED;
-  if (string == kLockModeNameExclusive)
-    return mojom::blink::LockMode::EXCLUSIVE;
-  NOTREACHED();
-  return mojom::blink::LockMode::SHARED;
-}
-
-// static
-String Lock::ModeToString(mojom::blink::LockMode mode) {
+mojom::blink::LockMode Lock::EnumToMode(V8LockMode::Enum mode) {
   switch (mode) {
-    case mojom::blink::LockMode::SHARED:
-      return kLockModeNameShared;
-    case mojom::blink::LockMode::EXCLUSIVE:
-      return kLockModeNameExclusive;
+    case V8LockMode::Enum::kShared:
+      return mojom::blink::LockMode::SHARED;
+    case V8LockMode::Enum::kExclusive:
+      return mojom::blink::LockMode::EXCLUSIVE;
   }
   NOTREACHED();
-  return g_empty_string;
+}
+
+// static
+V8LockMode::Enum Lock::ModeToEnum(mojom::blink::LockMode mode) {
+  switch (mode) {
+    case mojom::blink::LockMode::SHARED:
+      return V8LockMode::Enum::kShared;
+    case mojom::blink::LockMode::EXCLUSIVE:
+      return V8LockMode::Enum::kExclusive;
+  }
+  NOTREACHED();
 }
 
 void Lock::ContextDestroyed() {

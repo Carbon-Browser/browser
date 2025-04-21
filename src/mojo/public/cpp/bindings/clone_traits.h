@@ -1,17 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MOJO_PUBLIC_CPP_BINDINGS_CLONE_TRAITS_H_
 #define MOJO_PUBLIC_CPP_BINDINGS_CLONE_TRAITS_H_
 
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "mojo/public/cpp/bindings/lib/template_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 
@@ -40,12 +40,12 @@ struct CloneTraits {
 };
 
 template <typename T>
-struct CloneTraits<absl::optional<T>> {
-  static absl::optional<T> Clone(const absl::optional<T>& input) {
+struct CloneTraits<std::optional<T>> {
+  static std::optional<T> Clone(const std::optional<T>& input) {
     if (!input)
-      return absl::nullopt;
+      return std::nullopt;
 
-    return absl::optional<T>(mojo::Clone(*input));
+    return std::optional<T>(mojo::Clone(*input));
   }
 };
 

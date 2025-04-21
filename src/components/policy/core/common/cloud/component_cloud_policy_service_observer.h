@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,9 @@ class POLICY_EXPORT ComponentCloudPolicyServiceObserver
  public:
   ~ComponentCloudPolicyServiceObserver() override = default;
 
-  // Called on changes to store->policy() and/or store->policy_map(). The
-  // values in the `policy` map are the JSON data received from the server.
+  // Called on changes to store->policy(). The
+  // values in the `component_policy` map are the JSON data received from the
+  // server.
   virtual void OnComponentPolicyUpdated(
       const ComponentPolicyMap& component_policy) = 0;
   virtual void OnComponentPolicyServiceDestruction(

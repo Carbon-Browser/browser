@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -152,7 +152,7 @@ struct COMPONENT_EXPORT(SERVICE_MANAGER_CPP) Manifest {
     // if |execution_mode| is |kOutOfProcessBuiltin| or
     // |kStandaloneExecutable|.
     //
-    // TODO(https://crbug.com/915806): Make this field a
+    // TODO(crbug.com/40606841): Make this field a
     // sandbox::mojom::Sandbox enum.
     std::string sandbox_type{"utility"};
   };

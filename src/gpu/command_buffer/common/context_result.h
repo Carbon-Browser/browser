@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,6 @@ namespace gpu {
 // steps which bubble up to the final result. If any fatal error occurs, the
 // entire result should be fatal - as any attempt to retry is expected to get
 // the same fatal result.
-// Note: This enum is used to back an UMA histogram. Therefore these values
-// should never be reordered, renumbered, or reused.
 enum class ContextResult {
   // The context was created and initialized successfully.
   kSuccess,

@@ -1,15 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/network_service_proxy_delegate.h"
-#include "base/bind.h"
+
+#include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/strings/strcat.h"
+#include "net/base/features.h"
+#include "net/base/proxy_chain.h"
+#include "net/base/proxy_server.h"
 #include "net/base/url_util.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
 #include "net/proxy_resolution/proxy_info.h"
 #include "net/proxy_resolution/proxy_resolution_service.h"
+#include "net/proxy_resolution/proxy_retry_info.h"
 #include "services/network/url_loader.h"
 #include "url/url_constants.h"
 
@@ -21,20 +29,21 @@ bool ApplyProxyConfigToProxyInfo(const net::ProxyConfig::ProxyRules& rules,
                                  const GURL& url,
                                  net::ProxyInfo* proxy_info) {
   DCHECK(proxy_info);
-  if (rules.empty())
+  if (rules.empty()) {
     return false;
+  }
 
   rules.Apply(url, proxy_info);
-  proxy_info->DeprioritizeBadProxies(proxy_retry_info);
-  return !proxy_info->is_empty() && !proxy_info->proxy_server().is_direct();
+  proxy_info->DeprioritizeBadProxyChains(proxy_retry_info);
+  return !proxy_info->is_empty() && !proxy_info->is_direct();
 }
 
 // Checks if |target_proxy| is in |proxy_list|.
 bool CheckProxyList(const net::ProxyList& proxy_list,
                     const net::ProxyServer& target_proxy) {
-  for (const auto& proxy : proxy_list.GetAll()) {
-    if (!proxy.is_direct() &&
-        proxy.host_port_pair().Equals(target_proxy.host_port_pair())) {
+  for (const auto& proxy_chain : proxy_list.AllChains()) {
+    if (proxy_chain.is_single_proxy() &&
+        proxy_chain.First().host_port_pair() == target_proxy.host_port_pair()) {
       return true;
     }
   }
@@ -59,7 +68,6 @@ bool RulesContainsProxy(const net::ProxyConfig::ProxyRules& proxy_rules,
   }
 
   NOTREACHED();
-  return false;
 }
 
 bool IsValidCustomProxyConfig(const mojom::CustomProxyConfig& config) {
@@ -76,7 +84,6 @@ bool IsValidCustomProxyConfig(const mojom::CustomProxyConfig& config) {
   }
 
   NOTREACHED();
-  return false;
 }
 
 // Merges headers from |in| to |out|. If the header already exists in |out| they
@@ -84,9 +91,9 @@ bool IsValidCustomProxyConfig(const mojom::CustomProxyConfig& config) {
 void MergeRequestHeaders(net::HttpRequestHeaders* out,
                          const net::HttpRequestHeaders& in) {
   for (net::HttpRequestHeaders::Iterator it(in); it.GetNext();) {
-    std::string old_value;
-    if (out->GetHeader(it.name(), &old_value)) {
-      out->SetHeader(it.name(), old_value + ", " + it.value());
+    std::optional<std::string> old_value = out->GetHeader(it.name());
+    if (old_value) {
+      out->SetHeader(it.name(), *old_value + ", " + it.value());
     } else {
       out->SetHeader(it.name(), it.value());
     }
@@ -118,15 +125,17 @@ NetworkServiceProxyDelegate::NetworkServiceProxyDelegate(
   }
 }
 
-NetworkServiceProxyDelegate::~NetworkServiceProxyDelegate() {}
+NetworkServiceProxyDelegate::~NetworkServiceProxyDelegate() = default;
 
 void NetworkServiceProxyDelegate::OnResolveProxy(
     const GURL& url,
+    const net::NetworkAnonymizationKey& network_anonymization_key,
     const std::string& method,
     const net::ProxyRetryInfoMap& proxy_retry_info,
     net::ProxyInfo* result) {
-  if (!EligibleForProxy(*result, method))
+  if (!EligibleForProxy(*result, method)) {
     return;
+  }
 
   net::ProxyInfo proxy_info;
   if (ApplyProxyConfigToProxyInfo(proxy_config_->rules, proxy_retry_info, url,
@@ -136,30 +145,43 @@ void NetworkServiceProxyDelegate::OnResolveProxy(
   }
 }
 
-void NetworkServiceProxyDelegate::OnFallback(const net::ProxyServer& bad_proxy,
+void NetworkServiceProxyDelegate::OnSuccessfulRequestAfterFailures(
+    const net::ProxyRetryInfoMap& proxy_retry_info) {}
+
+void NetworkServiceProxyDelegate::OnFallback(const net::ProxyChain& bad_chain,
                                              int net_error) {
   if (observer_) {
-    observer_->OnFallback(bad_proxy, net_error);
+    observer_->OnFallback(bad_chain, net_error);
   }
 }
 
-void NetworkServiceProxyDelegate::OnBeforeTunnelRequest(
-    const net::ProxyServer& proxy_server,
+net::Error NetworkServiceProxyDelegate::OnBeforeTunnelRequest(
+    const net::ProxyChain& proxy_chain,
+    size_t chain_index,
     net::HttpRequestHeaders* extra_headers) {
-  if (IsInProxyConfig(proxy_server))
+  if (IsInProxyConfig(proxy_chain)) {
     MergeRequestHeaders(extra_headers, proxy_config_->connect_tunnel_headers);
+  }
+  return net::OK;
 }
 
 net::Error NetworkServiceProxyDelegate::OnTunnelHeadersReceived(
-    const net::ProxyServer& proxy_server,
+    const net::ProxyChain& proxy_chain,
+    size_t chain_index,
     const net::HttpResponseHeaders& response_headers) {
   if (observer_) {
     // Copy the response headers since mojo expects a ref counted object.
     observer_->OnTunnelHeadersReceived(
-        proxy_server, base::MakeRefCounted<net::HttpResponseHeaders>(
-                          response_headers.raw_headers()));
+        proxy_chain, chain_index,
+        base::MakeRefCounted<net::HttpResponseHeaders>(
+            response_headers.raw_headers()));
   }
   return net::OK;
+}
+
+void NetworkServiceProxyDelegate::SetProxyResolutionService(
+    net::ProxyResolutionService* proxy_resolution_service) {
+  proxy_resolution_service_ = proxy_resolution_service;
 }
 
 void NetworkServiceProxyDelegate::OnCustomProxyConfigUpdated(
@@ -170,47 +192,19 @@ void NetworkServiceProxyDelegate::OnCustomProxyConfigUpdated(
   std::move(callback).Run();
 }
 
-void NetworkServiceProxyDelegate::MarkProxiesAsBad(
-    base::TimeDelta bypass_duration,
-    const net::ProxyList& bad_proxies_list,
-    MarkProxiesAsBadCallback callback) {
-  std::vector<net::ProxyServer> bad_proxies = bad_proxies_list.GetAll();
-
-  // Synthesize a suitable |ProxyInfo| to add the proxies to the
-  // |ProxyRetryInfoMap| of the proxy service.
-  //
-  // TODO(eroman): Support this more directly on ProxyResolutionService.
-  net::ProxyList proxy_list;
-  for (const auto& bad_proxy : bad_proxies)
-    proxy_list.AddProxyServer(bad_proxy);
-  proxy_list.AddProxyServer(net::ProxyServer::Direct());
-
-  net::ProxyInfo proxy_info;
-  proxy_info.UseProxyList(proxy_list);
-
-  proxy_resolution_service_->MarkProxiesAsBadUntil(
-      proxy_info, bypass_duration, bad_proxies, net::NetLogWithSource());
-
-  std::move(callback).Run();
-}
-
-void NetworkServiceProxyDelegate::ClearBadProxiesCache() {
-  proxy_resolution_service_->ClearBadProxiesCache();
-}
-
 bool NetworkServiceProxyDelegate::IsInProxyConfig(
-    const net::ProxyServer& proxy_server) const {
-  if (!proxy_server.is_valid() || proxy_server.is_direct())
+    const net::ProxyChain& proxy_chain) const {
+  if (!proxy_chain.IsValid() || proxy_chain.is_direct()) {
     return false;
+  }
 
-  if (RulesContainsProxy(proxy_config_->rules, proxy_server))
+  // TODO(crbug.com/40284947): Support nested proxies.
+  if (proxy_chain.is_single_proxy() &&
+      RulesContainsProxy(proxy_config_->rules, proxy_chain.First())) {
     return true;
+  }
 
   return false;
-}
-
-bool NetworkServiceProxyDelegate::MayProxyURL(const GURL& url) const {
-  return !proxy_config_->rules.empty();
 }
 
 bool NetworkServiceProxyDelegate::EligibleForProxy(
@@ -218,8 +212,10 @@ bool NetworkServiceProxyDelegate::EligibleForProxy(
     const std::string& method) const {
   bool has_existing_config =
       !proxy_info.is_direct() || proxy_info.proxy_list().size() > 1u;
-  if (!proxy_config_->should_override_existing_config && has_existing_config)
+
+  if (!proxy_config_->should_override_existing_config && has_existing_config) {
     return false;
+  }
 
   if (!proxy_config_->allow_non_idempotent_methods &&
       !net::HttpUtil::IsMethodIdempotent(method)) {

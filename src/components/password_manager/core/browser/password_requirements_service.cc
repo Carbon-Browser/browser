@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/password_requirements_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
@@ -113,8 +113,9 @@ void PasswordRequirementsService::AddSpec(
   auto iter_by_domain = specs_for_domains_.Get(main_frame_domain);
   if (iter_by_domain != specs_for_domains_.end()) {
     PasswordRequirementsSpec& existing_spec = iter_by_domain->second;
-    if (existing_spec.priority() > spec.priority())
+    if (existing_spec.priority() > spec.priority()) {
       return;
+    }
   }
   specs_for_domains_.Put(main_frame_domain, spec);
 }

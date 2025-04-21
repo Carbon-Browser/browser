@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/command_line.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/common/extensions/manifest_tests/chrome_manifest_test.h"
@@ -17,6 +18,7 @@
 #include "extensions/common/permissions/permissions_info.h"
 #include "extensions/common/permissions/settings_override_permission.h"
 #include "extensions/common/permissions/usb_device_permission.h"
+#include "extensions/common/switches.h"
 #include "extensions/common/url_pattern_set.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -40,7 +42,7 @@ class ChromePermissionMessageProviderUnittest : public ChromeManifestTest {
   ChromePermissionMessageProviderUnittest& operator=(
       const ChromePermissionMessageProviderUnittest&) = delete;
 
-  ~ChromePermissionMessageProviderUnittest() override {}
+  ~ChromePermissionMessageProviderUnittest() override = default;
 
  protected:
   PermissionMessages GetMessages(const APIPermissionSet& permissions,
@@ -80,6 +82,13 @@ class ChromePermissionMessageProviderUnittest : public ChromeManifestTest {
   }
 
  private:
+  void SetUp() override {
+    auto* command_line = base::CommandLine::ForCurrentProcess();
+    command_line->AppendSwitchASCII(
+        extensions::switches::kAllowlistedExtensionID,
+        "ddchlicdkolnonkihahngkmmmjnjlkkf");
+  }
+
   std::unique_ptr<ChromePermissionMessageProvider> message_provider_;
 };
 
@@ -131,12 +140,12 @@ TEST_F(ChromePermissionMessageProviderUnittest,
   std::unique_ptr<UsbDevicePermission> usb(
       new UsbDevicePermission(PermissionsInfo::GetInstance()->GetByID(
           mojom::APIPermissionID::kUsbDevice)));
-  std::unique_ptr<base::ListValue> devices_list(new base::ListValue());
-  devices_list->Append(base::Value::FromUniquePtrValue(
+  base::Value devices_list(base::Value::Type::LIST);
+  devices_list.GetList().Append(base::Value::FromUniquePtrValue(
       UsbDevicePermissionData(0x02ad, 0x138c, -1, -1).ToValue()));
-  devices_list->Append(base::Value::FromUniquePtrValue(
+  devices_list.GetList().Append(base::Value::FromUniquePtrValue(
       UsbDevicePermissionData(0x02ad, 0x138d, -1, -1).ToValue()));
-  ASSERT_TRUE(usb->FromValue(devices_list.get(), nullptr, nullptr));
+  ASSERT_TRUE(usb->FromValue(&devices_list, nullptr, nullptr));
   permissions.insert(std::move(usb));
 
   PermissionMessages messages =
@@ -231,22 +240,6 @@ TEST_F(ChromePermissionMessageProviderUnittest, PowerfulPermissions) {
     EXPECT_EQ(
         l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_WARNING_FULL_ACCESS),
         messages[1].message());
-  }
-  {
-    scoped_refptr<Extension> extension = ManifestTest::LoadAndExpectSuccess(
-        "automation_all_hosts_interact_true.json");
-    ASSERT_TRUE(extension.get());
-    ManifestPermissionSet manifest_permissions = extension->permissions_data()
-                                                     ->active_permissions()
-                                                     .manifest_permissions()
-                                                     .Clone();
-    APIPermissionSet permissions;
-    permissions.insert(APIPermissionID::kTab);
-    PermissionMessages messages = GetManagementUIPermissionIDs(
-        permissions, manifest_permissions, Manifest::TYPE_EXTENSION);
-    ASSERT_EQ(1U, messages.size());
-    EXPECT_EQ(l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_WARNING_ALL_HOSTS),
-              messages.front().message());
   }
 }
 

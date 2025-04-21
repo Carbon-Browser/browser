@@ -1,6 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "content/shell/browser/shell.h"
 
@@ -12,19 +16,24 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "components/adblock/content/browser/adblock_webcontents_observer.h"
+#include "components/adblock/content/browser/factories/embedding_utils.h"
 #include "components/custom_handlers/protocol_handler.h"
 #include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/color_chooser.h"
 #include "content/public/browser/devtools_agent_host.h"
+#include "content/public/browser/document_picture_in_picture_window_controller.h"
+#include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
@@ -36,6 +45,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "content/shell/app/resource.h"
+#include "content/shell/browser/shell_browser_context.h"
 #include "content/shell/browser/shell_content_browser_client.h"
 #include "content/shell/browser/shell_devtools_frontend.h"
 #include "content/shell/browser/shell_javascript_dialog_manager.h"
@@ -43,15 +53,20 @@
 #include "media/media_buildflags.h"
 #include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
+#include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
+#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 
 namespace content {
 
 namespace {
 // Null until/unless the default main message loop is running.
-base::NoDestructor<base::OnceClosure> g_quit_main_message_loop;
+base::OnceClosure& GetMainMessageLoopQuitClosure() {
+  static base::NoDestructor<base::OnceClosure> closure;
+  return *closure;
+}
 
-const int kDefaultTestWindowWidthDip = 800;
-const int kDefaultTestWindowHeightDip = 600;
+constexpr int kDefaultTestWindowWidthDip = 800;
+constexpr int kDefaultTestWindowHeightDip = 600;
 
 // Owning pointer. We can not use unique_ptr as a global. That introduces a
 // static constructor/destructor.
@@ -75,6 +90,12 @@ Shell::Shell(std::unique_ptr<WebContents> web_contents,
   }
 
   windows_.push_back(this);
+
+  content::BrowserContext* browser_context =
+      ShellContentBrowserClient::Get()->browser_context();
+  adblock::EnsureBackgroundServicesStarted(browser_context);
+  adblock::RegisterAdblockWebContentObserver<
+      adblock::AdblockWebContentObserver>(web_contents_.get(), browser_context);
 
   if (shell_created_callback_)
     std::move(shell_created_callback_).Run(this);
@@ -115,8 +136,8 @@ Shell* Shell::CreateShell(std::unique_ptr<WebContents> web_contents,
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kForceWebRtcIPHandlingPolicy)) {
     raw_web_contents->GetMutableRendererPrefs()->webrtc_ip_handling_policy =
-        command_line->GetSwitchValueASCII(
-            switches::kForceWebRtcIPHandlingPolicy);
+        blink::ToWebRTCIPHandlingPolicy(command_line->GetSwitchValueASCII(
+            switches::kForceWebRtcIPHandlingPolicy));
   }
 
   g_platform->SetContents(shell);
@@ -133,13 +154,14 @@ Shell* Shell::CreateShell(std::unique_ptr<WebContents> web_contents,
 
 // static
 void Shell::SetMainMessageLoopQuitClosure(base::OnceClosure quit_closure) {
-  *g_quit_main_message_loop = std::move(quit_closure);
+  GetMainMessageLoopQuitClosure() = std::move(quit_closure);
 }
 
 // static
 void Shell::QuitMainMessageLoopForTesting() {
-  if (*g_quit_main_message_loop)
-    std::move(*g_quit_main_message_loop).Run();
+  auto& quit_loop = GetMainMessageLoopQuitClosure();
+  if (quit_loop)
+    std::move(quit_loop).Run();
 }
 
 // static
@@ -189,8 +211,9 @@ void Shell::Shutdown() {
        it.Advance()) {
     it.GetCurrentValue()->DisableRefCounts();
   }
-  if (*g_quit_main_message_loop)
-    std::move(*g_quit_main_message_loop).Run();
+  auto& quit_loop = GetMainMessageLoopQuitClosure();
+  if (quit_loop)
+    std::move(quit_loop).Run();
 
   // Pump the message loop to allow window teardown tasks to run.
   base::RunLoop().RunUntilIdle();
@@ -210,8 +233,7 @@ Shell* Shell::CreateNewWindow(BrowserContext* browser_context,
   WebContents::CreateParams create_params(browser_context, site_instance);
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kForcePresentationReceiverForTesting)) {
-    create_params.starting_sandbox_flags =
-        content::kPresentationReceiverSandboxFlags;
+    create_params.starting_sandbox_flags = kPresentationReceiverSandboxFlags;
   }
   std::unique_ptr<WebContents> web_contents =
       WebContents::Create(create_params);
@@ -269,14 +291,14 @@ void Shell::LoadDataWithBaseURLInternal(const GURL& url,
   DCHECK(!load_as_string);  // Only supported on Android.
 #endif
 
-  NavigationController::LoadURLParams params(GURL::EmptyGURL());
+  NavigationController::LoadURLParams params{GURL()};
   const std::string data_url_header = "data:text/html;charset=utf-8,";
   if (load_as_string) {
     params.url = GURL(data_url_header);
     std::string data_url_as_string = data_url_header + data;
 #if BUILDFLAG(IS_ANDROID)
-    params.data_url_as_string =
-        base::RefCountedString::TakeString(&data_url_as_string);
+    params.data_url_as_string = base::MakeRefCounted<base::RefCountedString>(
+        std::move(data_url_as_string));
 #endif
   } else {
     params.url = GURL(data_url_header + data);
@@ -284,21 +306,35 @@ void Shell::LoadDataWithBaseURLInternal(const GURL& url,
 
   params.load_type = NavigationController::LOAD_TYPE_DATA;
   params.base_url_for_data_url = base_url;
-  params.virtual_url_for_data_url = url;
+  params.virtual_url_for_special_cases = url;
   params.override_user_agent = NavigationController::UA_OVERRIDE_FALSE;
   web_contents_->GetController().LoadURLWithParams(params);
 }
 
-void Shell::AddNewContents(WebContents* source,
-                           std::unique_ptr<WebContents> new_contents,
-                           const GURL& target_url,
-                           WindowOpenDisposition disposition,
-                           const gfx::Rect& initial_rect,
-                           bool user_gesture,
-                           bool* was_blocked) {
+WebContents* Shell::AddNewContents(
+    WebContents* source,
+    std::unique_ptr<WebContents> new_contents,
+    const GURL& target_url,
+    WindowOpenDisposition disposition,
+    const blink::mojom::WindowFeatures& window_features,
+    bool user_gesture,
+    bool* was_blocked) {
+#if !BUILDFLAG(IS_ANDROID)
+  // If the shell is opening a document picture-in-picture window, it needs to
+  // inform the DocumentPictureInPictureWindowController.
+  if (disposition == WindowOpenDisposition::NEW_PICTURE_IN_PICTURE) {
+    DocumentPictureInPictureWindowController* controller =
+        PictureInPictureWindowController::
+            GetOrCreateDocumentPictureInPictureController(source);
+    controller->SetChildWebContents(new_contents.get());
+    controller->Show();
+  }
+#endif  // !BUILDFLAG(IS_ANDROID)
+
   CreateShell(
-      std::move(new_contents), AdjustWindowSize(initial_rect.size()),
+      std::move(new_contents), AdjustWindowSize(window_features.bounds.size()),
       !delay_popup_contents_delegate_for_testing_ /* should_set_delegate */);
+  return nullptr;
 }
 
 void Shell::GoBackOrForward(int offset) {
@@ -352,7 +388,7 @@ void Shell::ResizeWebContentForTests(const gfx::Size& content_size) {
 
 gfx::NativeView Shell::GetContentView() {
   if (!web_contents_)
-    return nullptr;
+    return gfx::NativeView();
   return web_contents_->GetNativeView();
 }
 
@@ -390,8 +426,11 @@ void Shell::URLEntered(const std::string& url_string) {
 }
 #endif
 
-WebContents* Shell::OpenURLFromTab(WebContents* source,
-                                   const OpenURLParams& params) {
+WebContents* Shell::OpenURLFromTab(
+    WebContents* source,
+    const OpenURLParams& params,
+    base::OnceCallback<void(content::NavigationHandle&)>
+        navigation_handle_callback) {
   WebContents* target = nullptr;
   switch (params.disposition) {
     case WindowOpenDisposition::CURRENT_TAB:
@@ -434,8 +473,14 @@ WebContents* Shell::OpenURLFromTab(WebContents* source,
       return nullptr;
   }
 
-  target->GetController().LoadURLWithParams(
-      NavigationController::LoadURLParams(params));
+  base::WeakPtr<NavigationHandle> navigation_handle =
+      target->GetController().LoadURLWithParams(
+          NavigationController::LoadURLParams(params));
+
+  if (navigation_handle_callback && navigation_handle) {
+    std::move(navigation_handle_callback).Run(*navigation_handle);
+  }
+
   return target;
 }
 
@@ -464,7 +509,7 @@ void Shell::ExitFullscreenModeForTab(WebContents* web_contents) {
 
 void Shell::ToggleFullscreenModeForTab(WebContents* web_contents,
                                        bool enter_fullscreen) {
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   g_platform->ToggleFullscreenModeForTab(this, web_contents, enter_fullscreen);
 #endif
   if (is_fullscreen_ != enter_fullscreen) {
@@ -477,7 +522,7 @@ void Shell::ToggleFullscreenModeForTab(WebContents* web_contents,
 }
 
 bool Shell::IsFullscreenForTabOrPending(const WebContents* web_contents) {
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   return g_platform->IsFullscreenForTabOrPending(this, web_contents);
 #else
   return is_fullscreen_;
@@ -499,7 +544,7 @@ void Shell::RegisterProtocolHandler(RenderFrameHost* requesting_frame,
                                     const std::string& protocol,
                                     const GURL& url,
                                     bool user_gesture) {
-  content::BrowserContext* context = requesting_frame->GetBrowserContext();
+  BrowserContext* context = requesting_frame->GetBrowserContext();
   if (context->IsOffTheRecord())
     return;
 
@@ -537,18 +582,21 @@ void Shell::RegisterProtocolHandler(RenderFrameHost* requesting_frame,
 
   // TODO(jfernandez): Are we interested at all on using the
   // PermissionRequestManager in the ContentShell ?
-  registry->OnAcceptRegisterProtocolHandler(handler);
+  if (registry->registration_mode() ==
+      custom_handlers::RphRegistrationMode::kAutoAccept) {
+    registry->OnAcceptRegisterProtocolHandler(handler);
+  }
 }
 #endif
 
-void Shell::RequestToLockMouse(WebContents* web_contents,
+void Shell::RequestPointerLock(WebContents* web_contents,
                                bool user_gesture,
                                bool last_unlocked_by_target) {
   // Give the platform a chance to handle the lock request, if it doesn't
   // indicate it handled it, allow the request.
-  if (!g_platform->HandleRequestToLockMouse(this, web_contents, user_gesture,
+  if (!g_platform->HandlePointerLockRequest(this, web_contents, user_gesture,
                                             last_unlocked_by_target)) {
-    web_contents->GotResponseToLockMouseRequest(
+    web_contents->GotResponseToPointerLockRequest(
         blink::mojom::PointerLockResult::kSuccess);
   }
 }
@@ -588,12 +636,13 @@ JavaScriptDialogManager* Shell::GetJavaScriptDialogManager(
 }
 
 #if BUILDFLAG(IS_MAC)
-void Shell::DidNavigatePrimaryMainFramePostCommit(WebContents* contents) {
-  g_platform->DidNavigatePrimaryMainFramePostCommit(this, contents);
+void Shell::PrimaryPageChanged(Page& page) {
+  g_platform->DidNavigatePrimaryMainFramePostCommit(
+      this, WebContents::FromRenderFrameHost(&page.GetMainDocument()));
 }
 
 bool Shell::HandleKeyboardEvent(WebContents* source,
-                                const NativeWebKeyboardEvent& event) {
+                                const input::NativeWebKeyboardEvent& event) {
   return g_platform->HandleKeyboardEvent(this, source, event);
 }
 #endif
@@ -604,10 +653,6 @@ bool Shell::DidAddMessageToConsole(WebContents* source,
                                    int32_t line_no,
                                    const std::u16string& source_id) {
   return switches::IsRunWebTestsSwitchPresent();
-}
-
-void Shell::PortalWebContentsCreated(WebContents* portal_web_contents) {
-  g_platform->DidCreateOrAttachWebContents(this, portal_web_contents);
 }
 
 void Shell::RendererUnresponsive(
@@ -630,25 +675,45 @@ void Shell::ActivateContents(WebContents* contents) {
 #endif
 }
 
-bool Shell::IsBackForwardCacheSupported() {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+std::unique_ptr<ColorChooser> Shell::OpenColorChooser(
+    WebContents* web_contents,
+    SkColor color,
+    const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions) {
+  return g_platform->OpenColorChooser(web_contents, color, suggestions);
+}
+#endif
+
+void Shell::RunFileChooser(RenderFrameHost* render_frame_host,
+                           scoped_refptr<FileSelectListener> listener,
+                           const blink::mojom::FileChooserParams& params) {
+  run_file_chooser_count_++;
+  if (hold_file_chooser_) {
+    held_file_chooser_listener_ = std::move(listener);
+  } else {
+    g_platform->RunFileChooser(render_frame_host, std::move(listener), params);
+  }
+}
+
+void Shell::EnumerateDirectory(WebContents* web_contents,
+                               scoped_refptr<FileSelectListener> listener,
+                               const base::FilePath& path) {
+  run_file_chooser_count_++;
+  if (hold_file_chooser_) {
+    held_file_chooser_listener_ = std::move(listener);
+  } else {
+    listener->FileSelectionCanceled();
+  }
+}
+
+bool Shell::IsBackForwardCacheSupported(WebContents& web_contents) {
   return true;
 }
 
-bool Shell::IsPrerender2Supported(WebContents& web_contents) {
-  return true;
-}
-
-std::unique_ptr<WebContents> Shell::ActivatePortalWebContents(
-    WebContents* predecessor_contents,
-    std::unique_ptr<WebContents> portal_contents) {
-  DCHECK_EQ(predecessor_contents, web_contents_.get());
-  portal_contents->SetDelegate(this);
-  web_contents_->SetDelegate(nullptr);
-  std::swap(web_contents_, portal_contents);
-  g_platform->SetContents(this);
-  g_platform->SetAddressBarURL(this, web_contents_->GetVisibleURL());
-  LoadingStateChanged(web_contents_.get(), true);
-  return portal_contents;
+PreloadingEligibility Shell::IsPrerender2Supported(
+    WebContents& web_contents,
+    PreloadingTriggerType trigger_type) {
+  return PreloadingEligibility::kEligible;
 }
 
 namespace {
@@ -663,20 +728,6 @@ class PendingCallback : public base::RefCounted<PendingCallback> {
   base::OnceCallback<void()> callback_;
 };
 }  // namespace
-
-void Shell::UpdateInspectedWebContentsIfNecessary(
-    content::WebContents* old_contents,
-    content::WebContents* new_contents,
-    base::OnceCallback<void()> callback) {
-  scoped_refptr<PendingCallback> pending_callback =
-      base::MakeRefCounted<PendingCallback>(std::move(callback));
-  for (auto* shell_devtools_bindings :
-       ShellDevToolsBindings::GetInstancesForWebContents(old_contents)) {
-    shell_devtools_bindings->UpdateInspectedWebContents(
-        new_contents, base::BindOnce([](scoped_refptr<PendingCallback>) {},
-                                     pending_callback));
-  }
-}
 
 bool Shell::ShouldAllowRunningInsecureContent(WebContents* web_contents,
                                               bool allowed_per_prefs,

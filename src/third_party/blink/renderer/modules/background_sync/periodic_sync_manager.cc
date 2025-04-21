@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/background_sync/periodic_sync_manager.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "base/task/sequenced_task_runner.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -26,7 +27,7 @@ PeriodicSyncManager::PeriodicSyncManager(
   DCHECK(registration_);
 }
 
-ScriptPromise PeriodicSyncManager::registerPeriodicSync(
+ScriptPromise<IDLUndefined> PeriodicSyncManager::registerPeriodicSync(
     ScriptState* script_state,
     const String& tag,
     const BackgroundSyncOptions* options,
@@ -35,7 +36,7 @@ ScriptPromise PeriodicSyncManager::registerPeriodicSync(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Registration failed - no active Service Worker");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
@@ -43,67 +44,72 @@ ScriptPromise PeriodicSyncManager::registerPeriodicSync(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotAllowedError,
         "Periodic Background Sync is not allowed in fenced frames.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+      script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
 
   mojom::blink::SyncRegistrationOptionsPtr sync_registration =
       mojom::blink::SyncRegistrationOptions::New(tag, options->minInterval());
 
   GetBackgroundSyncServiceRemote()->Register(
       std::move(sync_registration), registration_->RegistrationId(),
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
           &PeriodicSyncManager::RegisterCallback, WrapPersistent(this))));
 
   return promise;
 }
 
-ScriptPromise PeriodicSyncManager::getTags(ScriptState* script_state) {
+ScriptPromise<IDLSequence<IDLString>> PeriodicSyncManager::getTags(
+    ScriptState* script_state) {
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
   if (execution_context->IsInFencedFrame()) {
-    return ScriptPromise::RejectWithDOMException(
+    return ScriptPromise<IDLSequence<IDLString>>::RejectWithDOMException(
         script_state,
         MakeGarbageCollected<DOMException>(
             DOMExceptionCode::kNotAllowedError,
             "Periodic Background Sync is not allowed in fenced frames."));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLSequence<IDLString>>>(
+          script_state);
+  auto promise = resolver->Promise();
 
   // Creating a Periodic Background Sync registration requires an activated
   // service worker, so if |registration_| has not been activated yet, we can
   // skip the Mojo roundtrip.
   if (!registration_->active()) {
-    return ScriptPromise::Cast(script_state,
-                               v8::Array::New(script_state->GetIsolate()));
+    resolver->Resolve(Vector<String>());
+  } else {
+    // TODO(crbug.com/932591): Optimize this to only get the tags from the
+    // browser process instead of the registrations themselves.
+    GetBackgroundSyncServiceRemote()->GetRegistrations(
+        registration_->RegistrationId(),
+        resolver->WrapCallbackInScriptScope(
+            WTF::BindOnce(&PeriodicSyncManager::GetRegistrationsCallback,
+                          WrapPersistent(this))));
   }
-
-  // TODO(crbug.com/932591): Optimize this to only get the tags from the browser
-  // process instead of the registrations themselves.
-  GetBackgroundSyncServiceRemote()->GetRegistrations(
-      registration_->RegistrationId(),
-      resolver->WrapCallbackInScriptScope(
-          WTF::Bind(&PeriodicSyncManager::GetRegistrationsCallback,
-                    WrapPersistent(this))));
   return promise;
 }
 
-ScriptPromise PeriodicSyncManager::unregister(ScriptState* script_state,
-                                              const String& tag) {
+ScriptPromise<IDLUndefined> PeriodicSyncManager::unregister(
+    ScriptState* script_state,
+    const String& tag) {
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
   if (execution_context->IsInFencedFrame()) {
-    return ScriptPromise::RejectWithDOMException(
+    return ScriptPromise<IDLUndefined>::RejectWithDOMException(
         script_state,
         MakeGarbageCollected<DOMException>(
             DOMExceptionCode::kNotAllowedError,
             "Periodic Background Sync is not allowed in fenced frames."));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(script_state);
+  auto promise = resolver->Promise();
 
   // Silently succeed if there's no active service worker registration.
   if (!registration_->active()) {
@@ -113,7 +119,7 @@ ScriptPromise PeriodicSyncManager::unregister(ScriptState* script_state,
 
   GetBackgroundSyncServiceRemote()->Unregister(
       registration_->RegistrationId(), tag,
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
           &PeriodicSyncManager::UnregisterCallback, WrapPersistent(this))));
   return promise;
 }
@@ -130,7 +136,7 @@ PeriodicSyncManager::GetBackgroundSyncServiceRemote() {
 }
 
 void PeriodicSyncManager::RegisterCallback(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLUndefined>* resolver,
     mojom::blink::BackgroundSyncError error,
     mojom::blink::SyncRegistrationOptionsPtr options) {
   switch (error) {
@@ -139,7 +145,6 @@ void PeriodicSyncManager::RegisterCallback(
       break;
     case mojom::blink::BackgroundSyncError::NOT_FOUND:
       NOTREACHED();
-      break;
     case mojom::blink::BackgroundSyncError::STORAGE:
       resolver->Reject(V8ThrowDOMException::CreateOrDie(
           resolver->GetScriptState()->GetIsolate(),
@@ -167,15 +172,16 @@ void PeriodicSyncManager::RegisterCallback(
 }
 
 void PeriodicSyncManager::GetRegistrationsCallback(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLSequence<IDLString>>* resolver,
     mojom::blink::BackgroundSyncError error,
     WTF::Vector<mojom::blink::SyncRegistrationOptionsPtr> registrations) {
   switch (error) {
     case mojom::blink::BackgroundSyncError::NONE: {
       Vector<String> tags;
-      for (const auto& registration : registrations)
+      for (const auto& registration : registrations) {
         tags.push_back(registration->tag);
-      resolver->Resolve(tags);
+      }
+      resolver->Resolve(std::move(tags));
       break;
     }
     case mojom::blink::BackgroundSyncError::NOT_FOUND:
@@ -184,7 +190,6 @@ void PeriodicSyncManager::GetRegistrationsCallback(
       // These errors should never be returned from
       // BackgroundSyncManager::GetPeriodicSyncRegistrations
       NOTREACHED();
-      break;
     case mojom::blink::BackgroundSyncError::STORAGE:
       resolver->Reject(V8ThrowDOMException::CreateOrDie(
           resolver->GetScriptState()->GetIsolate(),
@@ -199,7 +204,7 @@ void PeriodicSyncManager::GetRegistrationsCallback(
 }
 
 void PeriodicSyncManager::UnregisterCallback(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLUndefined>* resolver,
     mojom::blink::BackgroundSyncError error) {
   switch (error) {
     case mojom::blink::BackgroundSyncError::NONE:
@@ -219,7 +224,6 @@ void PeriodicSyncManager::UnregisterCallback(
     case mojom::blink::BackgroundSyncError::NOT_ALLOWED:
     case mojom::BackgroundSyncError::PERMISSION_DENIED:
       NOTREACHED();
-      break;
   }
 }
 

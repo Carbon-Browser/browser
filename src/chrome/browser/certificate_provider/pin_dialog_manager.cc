@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/certificate_provider/pin_dialog_manager.h"
 
-#include "base/bind.h"
+#include <vector>
+
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 namespace chromeos {
@@ -21,7 +22,7 @@ PinDialogManager::~PinDialogManager() = default;
 void PinDialogManager::AddSignRequestId(
     const std::string& extension_id,
     int sign_request_id,
-    const absl::optional<AccountId>& authenticating_user_account_id) {
+    const std::optional<AccountId>& authenticating_user_account_id) {
   ExtensionNameRequestIdPair key(extension_id, sign_request_id);
   sign_requests_.insert(
       std::make_pair(key, SignRequestState(/*begin_time=*/base::Time::Now(),
@@ -180,12 +181,12 @@ void PinDialogManager::RemovePinDialogHost(
   if (active_dialog_state_ && active_dialog_state_->host == pin_dialog_host)
     CloseActiveDialog();
   DCHECK(base::Contains(added_dialog_hosts_, pin_dialog_host));
-  base::Erase(added_dialog_hosts_, pin_dialog_host);
+  std::erase(added_dialog_hosts_, pin_dialog_host);
 }
 
 PinDialogManager::SignRequestState::SignRequestState(
     base::Time begin_time,
-    const absl::optional<AccountId>& authenticating_user_account_id)
+    const std::optional<AccountId>& authenticating_user_account_id)
     : begin_time(begin_time),
       authenticating_user_account_id(authenticating_user_account_id) {}
 

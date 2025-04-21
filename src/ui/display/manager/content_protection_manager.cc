@@ -1,15 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/manager/content_protection_manager.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "base/check.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "ui/display/manager/apply_content_protection_task.h"
 #include "ui/display/manager/display_layout_manager.h"
 #include "ui/display/manager/query_content_protection_task.h"
@@ -38,7 +37,7 @@ ContentProtectionManager::~ContentProtectionManager() {
 
 ContentProtectionManager::ClientId ContentProtectionManager::RegisterClient() {
   if (disabled())
-    return absl::nullopt;
+    return std::nullopt;
 
   ClientId client_id = next_client_id_++;
   bool success = requests_.emplace(*client_id, ContentProtections()).second;
@@ -58,7 +57,7 @@ void ContentProtectionManager::UnregisterClient(ClientId client_id) {
       layout_manager_, native_display_delegate_, AggregateContentProtections(),
       base::BindOnce(&ContentProtectionManager::OnContentProtectionApplied,
                      weak_ptr_factory_.GetWeakPtr(),
-                     ApplyContentProtectionCallback(), absl::nullopt)));
+                     ApplyContentProtectionCallback(), std::nullopt)));
 
   ToggleDisplaySecurityPolling();
 }
@@ -108,18 +107,20 @@ void ContentProtectionManager::ApplyContentProtection(
 
   if (HasExternalDisplaysWithContentProtection()) {
     hdcp_key_manager_.SetKeyIfRequired(
-        layout_manager_->GetDisplayStates(), native_display_delegate_,
+        layout_manager_->GetDisplayStates(), display_id,
         base::BindOnce(&ContentProtectionManager::QueueContentProtectionTask,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback),
                        client_id));
   } else {
-    QueueContentProtectionTask(std::move(callback), client_id);
+    QueueContentProtectionTask(std::move(callback), client_id,
+                               /* is_key_set=*/false);
   }
 }
 
 void ContentProtectionManager::QueueContentProtectionTask(
     ApplyContentProtectionCallback callback,
-    ClientId client_id) {
+    ClientId client_id,
+    bool) {
   QueueTask(std::make_unique<ApplyContentProtectionTask>(
       layout_manager_, native_display_delegate_, AggregateContentProtections(),
       base::BindOnce(&ContentProtectionManager::OnContentProtectionApplied,
@@ -227,12 +228,12 @@ void ContentProtectionManager::OnContentProtectionApplied(
     DequeueTask();
 }
 
-void ContentProtectionManager::OnDisplayModeChanged(
+void ContentProtectionManager::OnDisplayConfigurationChanged(
     const DisplayConfigurator::DisplayStateList&) {
   KillTasks();
 }
 
-void ContentProtectionManager::OnDisplayModeChangeFailed(
+void ContentProtectionManager::OnDisplayConfigurationChangeFailed(
     const DisplayConfigurator::DisplayStateList&,
     MultipleDisplayState) {
   KillTasks();
@@ -241,18 +242,16 @@ void ContentProtectionManager::OnDisplayModeChangeFailed(
 bool ContentProtectionManager::HasExternalDisplaysWithContentProtection()
     const {
   const auto displays = layout_manager_->GetDisplayStates();
-  if (std::all_of(displays.begin(), displays.end(),
-                  [](const DisplaySnapshot* display) {
-                    return display->type() == DISPLAY_CONNECTION_TYPE_INTERNAL;
-                  })) {
+  if (base::ranges::all_of(displays, [](const DisplaySnapshot* display) {
+        return display->type() == DISPLAY_CONNECTION_TYPE_INTERNAL;
+      })) {
     return false;
   }
 
   const auto protections = AggregateContentProtections();
-  return std::any_of(protections.begin(), protections.end(),
-                     [](const auto& pair) {
-                       return pair.second != CONTENT_PROTECTION_METHOD_NONE;
-                     });
+  return base::ranges::any_of(protections, [](const auto& pair) {
+    return pair.second != CONTENT_PROTECTION_METHOD_NONE;
+  });
 }
 
 void ContentProtectionManager::ToggleDisplaySecurityPolling() {
@@ -307,7 +306,7 @@ void ContentProtectionManager::OnDisplaySecurityQueried(
                          connection_mask == DISPLAY_CONNECTION_TYPE_INTERNAL);
 
     for (Observer& observer : observers_)
-      observer.OnDisplaySecurityChanged(display_id, secure);
+      observer.OnDisplaySecurityMaybeChanged(display_id, secure);
   }
 
   if (status != Task::Status::KILLED)

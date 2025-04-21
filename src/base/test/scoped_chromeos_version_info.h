@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_TEST_SCOPED_CHROMEOS_VERSION_INFO_H_
 #define BASE_TEST_SCOPED_CHROMEOS_VERSION_INFO_H_
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/time/time.h"
 
 namespace base {
@@ -20,7 +21,8 @@ class ScopedChromeOSVersionInfo {
   // simulate a specific OS version. Note that |lsb_release| must contain
   // CHROMEOS_RELEASE_NAME to make base::SysInfo::IsRunningOnChromeOS() return
   // true.
-  ScopedChromeOSVersionInfo(StringPiece lsb_release, Time lsb_release_time);
+  ScopedChromeOSVersionInfo(std::string_view lsb_release,
+                            Time lsb_release_time);
   ScopedChromeOSVersionInfo(const ScopedChromeOSVersionInfo&) = delete;
   ScopedChromeOSVersionInfo& operator=(const ScopedChromeOSVersionInfo&) =
       delete;

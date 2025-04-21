@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
@@ -56,7 +57,6 @@ class ScopedExperimentalStateToggle {
 
       case base::FeatureList::OVERRIDE_USE_DEFAULT:
         NOTREACHED();
-        break;
     }
   }
 
@@ -73,7 +73,7 @@ class ScopedExperimentalStateToggle {
 };
 
 void ExpectAndRetrieveExactlyOneEnabledConfig(Configuration* actual_config) {
-  DCHECK(actual_config);
+  CHECK(actual_config);
   const auto config_list = GetEnabledConfigurations();
   ASSERT_EQ(1u, config_list->configs_by_decreasing_priority().size());
   *actual_config = config_list->configs_by_decreasing_priority().front();
@@ -81,7 +81,7 @@ void ExpectAndRetrieveExactlyOneEnabledConfig(Configuration* actual_config) {
 
 void ExpectAndRetrieveExactlyOneExtraEnabledConfig(
     Configuration* actual_config) {
-  DCHECK(actual_config);
+  CHECK(actual_config);
   const auto config_list = GetEnabledConfigurations();
   ASSERT_EQ(4u, config_list->configs_by_decreasing_priority().size());
   *actual_config = config_list->configs_by_decreasing_priority().back();
@@ -119,13 +119,13 @@ void ExpectParamsGeneratePreset(
 
 class SubresourceFilterFeaturesTest : public ::testing::Test {
  public:
-  SubresourceFilterFeaturesTest() {}
+  SubresourceFilterFeaturesTest() = default;
 
   SubresourceFilterFeaturesTest(const SubresourceFilterFeaturesTest&) = delete;
   SubresourceFilterFeaturesTest& operator=(
       const SubresourceFilterFeaturesTest&) = delete;
 
-  ~SubresourceFilterFeaturesTest() override {}
+  ~SubresourceFilterFeaturesTest() override = default;
 
   void SetUp() override {
     // Reset the global configuration at the start so tests start without a

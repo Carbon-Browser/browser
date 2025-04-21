@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,7 @@
 #include "chromeos/ash/components/local_search_service/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
 
@@ -86,7 +85,7 @@ void FindAndCheckResults(LinearMapSearch* index,
       base::BindOnce(
           [](bool* callback_done, ResponseStatus* status,
              std::vector<Result>* results, ResponseStatus status_callback,
-             const absl::optional<std::vector<Result>>& results_callback) {
+             const std::optional<std::vector<Result>>& results_callback) {
             *callback_done = true;
             *status = status_callback;
             if (results_callback.has_value())
@@ -186,7 +185,7 @@ TEST_F(LinearMapSearchTest, RelevanceThreshold) {
   }
   {
     SearchParams search_params;
-    search_params.relevance_threshold = 0.9;
+    search_params.relevance_threshold = 0.95;
     index_->SetSearchParams(search_params);
 
     FindAndCheckResults(index_.get(), "wifi",
@@ -281,5 +280,4 @@ TEST_F(LinearMapSearchTest, UpdateDocuments) {
   GetSizeAndCheckResults(index_.get(), 1u);
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

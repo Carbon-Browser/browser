@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
  * @fileoverview Tests for the Phone as a Security Key settings page.
  */
 
-import {CrInputElement, SecurityKeysPhone, SecurityKeysPhonesBrowserProxy, SecurityKeysPhonesBrowserProxyImpl, SecurityKeysPhonesList, SecurityKeysPhonesSubpageElement} from 'chrome://settings/lazy_load.js';
+import type {CrInputElement, SecurityKeysPhone, SecurityKeysPhonesBrowserProxy, SecurityKeysPhonesList, SecurityKeysPhonesSubpageElement} from 'chrome://settings/lazy_load.js';
+import {SecurityKeysPhonesBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
 import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {flushTasks} from 'chrome://webui-test/test_util.js';
 
 class TestSecurityKeysPhonesBrowserProxy extends TestBrowserProxy implements
     SecurityKeysPhonesBrowserProxy {
@@ -137,7 +138,7 @@ suite('SecurityKeysPhonesSubpage', function() {
   setup(async function() {
     browserProxy = new TestSecurityKeysPhonesBrowserProxy();
     SecurityKeysPhonesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('security-keys-phones-subpage');
 
     browserProxy.setNextPhonesList(initialSynced, initialLinked);

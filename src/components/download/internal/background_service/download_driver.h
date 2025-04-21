@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define COMPONENTS_DOWNLOAD_INTERNAL_BACKGROUND_SERVICE_DOWNLOAD_DRIVER_H_
 
 #include <stddef.h>
+
+#include <optional>
 #include <set>
 #include <string>
 
 #include "components/download/internal/background_service/driver_entry.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
@@ -109,7 +110,7 @@ class DownloadDriver {
   virtual void Resume(const std::string& guid) = 0;
 
   // Finds a download record from low level download library.
-  virtual absl::optional<DriverEntry> Find(const std::string& guid) = 0;
+  virtual std::optional<DriverEntry> Find(const std::string& guid) = 0;
 
   // Called to query the current set of active downloads.  This doesn't
   // necessarily mean downloads started by the service.

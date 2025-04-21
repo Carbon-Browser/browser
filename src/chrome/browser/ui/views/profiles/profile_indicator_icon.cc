@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,12 @@ ProfileIndicatorIcon::ProfileIndicatorIcon() {
   SetFlipCanvasOnPaintForRTLUI(true);
 }
 
-ProfileIndicatorIcon::~ProfileIndicatorIcon() {}
+ProfileIndicatorIcon::~ProfileIndicatorIcon() = default;
 
 void ProfileIndicatorIcon::OnPaint(gfx::Canvas* canvas) {
-  if (base_icon_.IsEmpty())
+  if (base_icon_.IsEmpty()) {
     return;
+  }
 
   if (old_height_ != height() || modified_icon_.isNull()) {
     old_height_ = height();
@@ -54,5 +55,5 @@ void ProfileIndicatorIcon::SetIcon(const gfx::Image& icon) {
   SchedulePaint();
 }
 
-BEGIN_METADATA(ProfileIndicatorIcon, views::View)
+BEGIN_METADATA(ProfileIndicatorIcon)
 END_METADATA

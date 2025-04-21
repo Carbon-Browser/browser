@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,14 +19,13 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.components.search_engines.TemplateUrl;
 import org.chromium.components.search_engines.TemplateUrlService;
 
-/**
- * Unit tests for {@link SearchEngineChoiceMetrics}.
- */
+/** Unit tests for {@link SearchEngineChoiceMetrics}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class SearchEngineChoiceMetricsTest {
@@ -36,19 +35,17 @@ public final class SearchEngineChoiceMetricsTest {
     private static final String HISTOGRAM_AFTER_CHOICE =
             "Android.SearchEngineChoice.ChosenSearchEngine";
 
-    @Mock
-    private TemplateUrlService mTemplateUrlService;
-    @Mock
-    private TemplateUrl mInitialSearchEngine;
-    @Mock
-    private TemplateUrl mAlternativeSearchEngine;
+    @Mock private TemplateUrlService mTemplateUrlService;
+    @Mock private TemplateUrl mInitialSearchEngine;
+    @Mock private TemplateUrl mAlternativeSearchEngine;
+    @Mock private Profile mProfile;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        UmaRecorderHolder.resetForTesting();
 
         // Sets up appropriate responses from Template URL service.
+        ProfileManager.setLastUsedProfileForTesting(mProfile);
         TemplateUrlServiceFactory.setInstanceForTesting(mTemplateUrlService);
         doReturn(TEST_ALTERNATIVE_ENGINE).when(mAlternativeSearchEngine).getKeyword();
         doReturn(SearchEngineType.SEARCH_ENGINE_DUCKDUCKGO)
@@ -70,7 +67,8 @@ public final class SearchEngineChoiceMetricsTest {
                 .when(mTemplateUrlService)
                 .getDefaultSearchEngineTemplateUrl();
         SearchEngineChoiceMetrics.recordSearchEngineTypeBeforeChoice();
-        assertEquals(1,
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "Android.SearchEngineChoice.SearchEngineBeforeChoicePrompt",
                         SearchEngineType.SEARCH_ENGINE_GOOGLE));
@@ -79,7 +77,8 @@ public final class SearchEngineChoiceMetricsTest {
                 .when(mTemplateUrlService)
                 .getDefaultSearchEngineTemplateUrl();
         SearchEngineChoiceMetrics.recordSearchEngineTypeBeforeChoice();
-        assertEquals(1,
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "Android.SearchEngineChoice.SearchEngineBeforeChoicePrompt",
                         SearchEngineType.SEARCH_ENGINE_DUCKDUCKGO));
@@ -98,7 +97,8 @@ public final class SearchEngineChoiceMetricsTest {
                 .getDefaultSearchEngineTemplateUrl();
 
         SearchEngineChoiceMetrics.recordSearchEngineTypeAfterChoice();
-        assertEquals(1,
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         HISTOGRAM_AFTER_CHOICE, SearchEngineType.SEARCH_ENGINE_DUCKDUCKGO));
     }
@@ -113,10 +113,12 @@ public final class SearchEngineChoiceMetricsTest {
                 SearchEngineChoiceMetrics.getDefaultSearchEngineType());
 
         SearchEngineChoiceMetrics.recordSearchEngineTypeAfterChoice();
-        assertEquals(0,
+        assertEquals(
+                0,
                 RecordHistogram.getHistogramValueCountForTesting(
                         HISTOGRAM_AFTER_CHOICE, SearchEngineType.SEARCH_ENGINE_GOOGLE));
-        assertEquals(0,
+        assertEquals(
+                0,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "Android.SearchEngineChoice.EventsV2",
                         SearchEngineChoiceMetrics.Events.SEARCH_ENGINE_CHANGED));
@@ -128,13 +130,15 @@ public final class SearchEngineChoiceMetricsTest {
         doReturn(mInitialSearchEngine)
                 .when(mTemplateUrlService)
                 .getDefaultSearchEngineTemplateUrl();
-        assertEquals(SearchEngineType.SEARCH_ENGINE_GOOGLE,
+        assertEquals(
+                SearchEngineType.SEARCH_ENGINE_GOOGLE,
                 SearchEngineChoiceMetrics.getDefaultSearchEngineType());
 
         doReturn(mAlternativeSearchEngine)
                 .when(mTemplateUrlService)
                 .getDefaultSearchEngineTemplateUrl();
-        assertEquals(SearchEngineType.SEARCH_ENGINE_DUCKDUCKGO,
+        assertEquals(
+                SearchEngineType.SEARCH_ENGINE_DUCKDUCKGO,
                 SearchEngineChoiceMetrics.getDefaultSearchEngineType());
     }
 
@@ -163,7 +167,8 @@ public final class SearchEngineChoiceMetricsTest {
     public void recordEventV2_sanityCheck() {
         SearchEngineChoiceMetrics.recordEventV2(
                 SearchEngineChoiceMetrics.EventsV2.CHOICE_REQUEST_VALID);
-        assertEquals(1,
+        assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "Android.SearchEngineChoice.EventsV2",
                         SearchEngineChoiceMetrics.EventsV2.CHOICE_REQUEST_VALID));

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,6 @@ public interface Serializer<T> {
     @Nullable
     T get();
 
-    /**
-     * Prepares data for serialization. Must be called from the UI thread.
-     */
+    /** Prepares data for serialization. Must be called from the UI thread. */
     default void preSerialize() {}
 }

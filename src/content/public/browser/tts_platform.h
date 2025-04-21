@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,9 +36,10 @@ class CONTENT_EXPORT TtsPlatform {
   // the engine finishes loading.
   virtual void LoadBuiltInTtsEngine(BrowserContext* browser_context) = 0;
 
-  // Speak the given utterance with the given parameters if possible,
-  // and return true on success. Utterance will always be nonempty.
-  // If rate, pitch, or volume are -1.0, they will be ignored.
+  // Speak the given utterance using the native voice provided by the platform
+  // with the given parameters if possible.
+  // Utterance will always be nonempty. If rate, pitch, or volume are -1.0,
+  // they will be ignored.
   //
   // The TtsController will only try to speak one utterance at
   // a time. If it wants to interrupt speech, it will always call Stop
@@ -64,15 +65,6 @@ class CONTENT_EXPORT TtsPlatform {
   // Append information about voices provided by this platform implementation
   // to |out_voices|.
   virtual void GetVoices(std::vector<VoiceData>* out_voices) = 0;
-
-  // Returns a list of all available voices for |browser_context|, including
-  // the native voice, if supported, and all voices registered by engines.
-  // |source_url| will be used for policy decisions by engines to determine
-  // which voices to return.
-  virtual void GetVoicesForBrowserContext(
-      BrowserContext* browser_context,
-      const GURL& source_url,
-      std::vector<VoiceData>* out_voices) = 0;
 
   // Pause the current utterance, if any, until a call to Resume,
   // Speak, or StopSpeaking.

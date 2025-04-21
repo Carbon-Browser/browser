@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 #define ASH_WM_WINDOW_DIMMER_H_
 
 #include "ash/ash_export.h"
-#include "base/callback_helpers.h"
-#include "third_party/skia/include/core/SkColor.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider_source_observer.h"
+#include "ui/wm/public/activation_delegate.h"
 
 namespace ash {
 
@@ -23,7 +25,9 @@ namespace ash {
 // deleted out from under it (this generally happens if the parent of the
 // window is deleted). If WindowDimmer is deleted and the window it created is
 // still valid, then WindowDimmer deletes the window.
-class ASH_EXPORT WindowDimmer : public aura::WindowObserver {
+class ASH_EXPORT WindowDimmer : public wm::ActivationDelegate,
+                                public aura::WindowObserver,
+                                public ui::ColorProviderSourceObserver {
  public:
   // Defines an interface for an optional delegate to the WindowDimmer, which
   // will be notified with certain events happening to the window being dimmed.
@@ -58,7 +62,6 @@ class ASH_EXPORT WindowDimmer : public aura::WindowObserver {
 
   ~WindowDimmer() override;
 
-  aura::Window* parent() { return parent_; }
   aura::Window* window() { return window_; }
 
   // Set the opacity value of the default dimming color which is Black. If it's
@@ -66,9 +69,12 @@ class ASH_EXPORT WindowDimmer : public aura::WindowObserver {
   // SetDimColor().
   void SetDimOpacity(float target_opacity);
 
-  // Sets the color of the dimming |window_|'s layer. This color must not be
-  // opaque.
-  void SetDimColor(SkColor dimming_color);
+  // Sets the color of the dimming `window_`'s layer based on the given
+  // `color_id`. This color must not be opaque.
+  void SetDimColor(ui::ColorId color_id);
+
+  // wm::ActivationDelegate:
+  bool ShouldActivate() const override;
 
   // NOTE: WindowDimmer is an observer for both |parent_| and |window_|.
   // aura::WindowObserver:
@@ -80,13 +86,25 @@ class ASH_EXPORT WindowDimmer : public aura::WindowObserver {
   void OnWindowHierarchyChanging(const HierarchyChangeParams& params) override;
   void OnWindowParentChanged(aura::Window* window,
                              aura::Window* parent) override;
+  void OnWindowAddedToRootWindow(aura::Window* window) override;
+
+  // ui::ColorProviderSourceObserver:
+  void OnColorProviderChanged() override;
 
  private:
-  aura::Window* parent_;
-  // See class description for details on ownership.
-  aura::Window* window_;
+  // Sets / updates the color of the dimming `window_`'s layer based on
+  // `dim_color_type_`.
+  void UpdateDimColor();
 
-  Delegate* delegate_;  // Not owned.
+  raw_ptr<aura::Window> parent_;
+  // See class description for details on ownership.
+  raw_ptr<aura::Window, DanglingUntriaged> window_;
+
+  raw_ptr<Delegate> delegate_;  // Not owned.
+
+  // Used to get the color for the dimming `window_`'s layer. It's updated
+  // through `SetDimColor`. It will be reset when SetDimOpacity() is called.
+  std::optional<ui::ColorId> dim_color_type_;
 };
 
 }  // namespace ash

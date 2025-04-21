@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class SyntheticGestureTargetMac : public SyntheticGestureTargetBase {
   RenderWidgetHostViewMac* GetView() const;
   bool PointIsWithinContents(RenderWidgetHostView* view,
                              const gfx::PointF& point);
-  RenderWidgetHostViewCocoa* cocoa_view_;
+  RenderWidgetHostViewCocoa* __strong cocoa_view_;
 };
 
 }  // namespace content

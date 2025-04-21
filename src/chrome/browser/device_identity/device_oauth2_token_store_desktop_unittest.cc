@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "components/os_crypt/os_crypt.h"
-#include "components/os_crypt/os_crypt_mocker.h"
+#include "components/os_crypt/sync/os_crypt.h"
+#include "components/os_crypt/sync/os_crypt_mocker.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -80,8 +80,7 @@ TEST_F(DeviceOAuth2TokenStoreDesktopTest, InitWithSavedToken) {
   std::string encrypted_token;
   OSCrypt::EncryptString(token, &encrypted_token);
 
-  std::string encoded;
-  base::Base64Encode(encrypted_token, &encoded);
+  std::string encoded = base::Base64Encode(encrypted_token);
 
   scoped_testing_local_state()->Get()->SetString(
       kCBCMServiceAccountRefreshToken, encoded);
@@ -109,8 +108,7 @@ TEST_F(DeviceOAuth2TokenStoreDesktopTest, ObserverNotifiedWhenAccountChanges) {
   std::string encrypted_token;
   OSCrypt::EncryptString(token, &encrypted_token);
 
-  std::string encoded;
-  base::Base64Encode(encrypted_token, &encoded);
+  std::string encoded = base::Base64Encode(encrypted_token);
 
   scoped_testing_local_state()->Get()->SetString(
       kCBCMServiceAccountRefreshToken, encoded);

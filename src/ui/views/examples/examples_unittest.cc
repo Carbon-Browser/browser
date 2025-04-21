@@ -1,20 +1,31 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "build/build_config.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/views/examples/ax_example.h"
 #include "ui/views/examples/examples_exit_code.h"
 #include "ui/views/examples/examples_main_proc.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 TEST(ExamplesTest, TestViewsExamplesLaunches) {
-  const ExamplesExitCode exit_code = ExamplesMainProc(true);
+  const ExamplesExitCode exit_code = ExamplesMainProc(/*under_test=*/true);
   // Check the status of the Skia Gold comparison.
-  EXPECT_EQ(ExamplesExitCode::kSucceeded, exit_code);
+  EXPECT_THAT(exit_code, testing::AnyOf(ExamplesExitCode::kSucceeded,
+                                        ExamplesExitCode::kNone));
 }
 
-}  // namespace examples
-}  // namespace views
+TEST(ExamplesTest, TestViewsExamplesLaunchesWithArgs) {
+  views::examples::ExampleVector examples;
+  examples.push_back(std::make_unique<AxExample>());
+  const ExamplesExitCode exit_code =
+      ExamplesMainProc(/*under_test=*/true, std::move(examples));
+  // Check the status of the Skia Gold comparison.
+  EXPECT_THAT(exit_code, testing::AnyOf(ExamplesExitCode::kSucceeded,
+                                        ExamplesExitCode::kNone));
+}
+
+}  // namespace views::examples

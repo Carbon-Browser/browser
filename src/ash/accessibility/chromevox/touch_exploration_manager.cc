@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/chromevox/touch_exploration_controller.h"
 #include "ash/accessibility/ui/accessibility_focus_ring_controller_impl.h"
-#include "ash/components/audio/cras_audio_handler.h"
-#include "ash/components/audio/sounds.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/accessibility_focus_ring_info.h"
@@ -20,6 +18,8 @@
 #include "ash/wm/window_util.h"
 #include "base/command_line.h"
 #include "base/metrics/histogram_functions.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/audio/sounds.h"
 #include "extensions/common/constants.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/aura/client/aura_constants.h"
@@ -30,7 +30,7 @@ namespace ash {
 
 namespace {
 
-AccessibilityControllerImpl* GetA11yController() {
+AccessibilityController* GetA11yController() {
   return Shell::Get()->accessibility_controller();
 }
 
@@ -146,22 +146,6 @@ void TouchExplorationManager::OnDisplayMetricsChanged(
           root_window_controller_->GetRootWindow());
   if (this_display.id() == display.id())
     UpdateTouchExplorationState();
-}
-
-void TouchExplorationManager::OnTwoFingerTouchStart() {
-  GetA11yController()->OnTwoFingerTouchStart();
-}
-
-void TouchExplorationManager::OnTwoFingerTouchStop() {
-  // Can be null during shutdown.
-  if (AccessibilityControllerImpl* controller = GetA11yController())
-    controller->OnTwoFingerTouchStop();
-}
-
-void TouchExplorationManager::PlaySpokenFeedbackToggleCountdown(
-    int tick_count) {
-  if (GetA11yController()->ShouldToggleSpokenFeedbackViaTouch())
-    GetA11yController()->PlaySpokenFeedbackToggleCountdown(tick_count);
 }
 
 void TouchExplorationManager::PlayTouchTypeEarcon() {

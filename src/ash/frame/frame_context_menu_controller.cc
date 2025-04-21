@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "chromeos/ui/frame/desks/move_to_desks_menu_delegate.h"
 #include "chromeos/ui/frame/desks/move_to_desks_menu_model.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
@@ -21,7 +22,7 @@ FrameContextMenuController::~FrameContextMenuController() = default;
 void FrameContextMenuController::ShowContextMenuForViewImpl(
     views::View* source,
     const gfx::Point& point,
-    ui::MenuSourceType source_type) {
+    ui::mojom::MenuSourceType source_type) {
   if (!chromeos::MoveToDesksMenuDelegate::ShouldShowMoveToDesksMenu(
           frame_->GetNativeWindow())) {
     return;

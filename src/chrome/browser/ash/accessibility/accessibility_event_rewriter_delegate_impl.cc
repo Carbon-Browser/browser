@@ -1,10 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/accessibility/accessibility_event_rewriter_delegate_impl.h"
 
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/public/cpp/event_rewriter_controller.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -12,14 +11,15 @@
 #include "chrome/browser/ui/aura/accessibility/automation_manager_aura.h"
 #include "chrome/common/extensions/api/accessibility_private.h"
 #include "chrome/common/extensions/extension_constants.h"
+#include "components/input/native_web_keyboard_event.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/common/constants.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/events/event.h"
+#include "ui/events/event_constants.h"
 
 namespace ash {
 namespace {
@@ -28,17 +28,16 @@ std::string ToString(SwitchAccessCommand command) {
   switch (command) {
     case SwitchAccessCommand::kSelect:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::SWITCH_ACCESS_COMMAND_SELECT);
+          extensions::api::accessibility_private::SwitchAccessCommand::kSelect);
     case SwitchAccessCommand::kNext:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::SWITCH_ACCESS_COMMAND_NEXT);
+          extensions::api::accessibility_private::SwitchAccessCommand::kNext);
     case SwitchAccessCommand::kPrevious:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::
-              SWITCH_ACCESS_COMMAND_PREVIOUS);
+          extensions::api::accessibility_private::SwitchAccessCommand::
+              kPrevious);
     case SwitchAccessCommand::kNone:
       NOTREACHED();
-      return "";
   }
 }
 
@@ -46,19 +45,19 @@ std::string ToString(MagnifierCommand command) {
   switch (command) {
     case MagnifierCommand::kMoveStop:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVESTOP);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveStop);
     case MagnifierCommand::kMoveUp:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVEUP);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveUp);
     case MagnifierCommand::kMoveDown:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVEDOWN);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveDown);
     case MagnifierCommand::kMoveLeft:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVELEFT);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveLeft);
     case MagnifierCommand::kMoveRight:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVERIGHT);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveRight);
   }
 
   return "";
@@ -92,19 +91,22 @@ void AccessibilityEventRewriterDelegateImpl::DispatchMouseEvent(
     std::unique_ptr<ui::Event> event) {
   ax::mojom::Event event_type;
 
+  bool is_synthesized = event->IsSynthesized() ||
+                        event->source_device_id() == ui::ED_UNKNOWN_DEVICE;
+
   switch (event->type()) {
-    case ui::ET_MOUSE_MOVED:
+    case ui::EventType::kMouseMoved:
       event_type = ax::mojom::Event::kMouseMoved;
       break;
-    case ui::ET_MOUSE_DRAGGED:
+    case ui::EventType::kMouseDragged:
       event_type = ax::mojom::Event::kMouseDragged;
       break;
     default:
       NOTREACHED();
-      return;
   }
 
-  AutomationManagerAura::GetInstance()->HandleEvent(event_type);
+  AutomationManagerAura::GetInstance()->HandleEvent(
+      event_type, /*from_user=*/!is_synthesized);
 }
 
 void AccessibilityEventRewriterDelegateImpl::SendSwitchAccessCommand(
@@ -129,9 +131,9 @@ void AccessibilityEventRewriterDelegateImpl::SendPointScanPoint(
   extensions::EventRouter* event_router =
       extensions::EventRouter::Get(AccessibilityManager::Get()->profile());
 
-  base::Value point_dict(base::Value::Type::DICTIONARY);
-  point_dict.SetDoubleKey("x", point.x());
-  point_dict.SetDoubleKey("y", point.y());
+  base::Value::Dict point_dict;
+  point_dict.Set("x", point.x());
+  point_dict.Set("y", point.y());
 
   base::Value::List event_args;
   event_args.Append(std::move(point_dict));
@@ -170,8 +172,8 @@ void AccessibilityEventRewriterDelegateImpl::OnUnhandledSpokenFeedbackEvent(
 
 bool AccessibilityEventRewriterDelegateImpl::HandleKeyboardEvent(
     content::WebContents* source,
-    const content::NativeWebKeyboardEvent& event) {
-  OnUnhandledSpokenFeedbackEvent(ui::Event::Clone(*event.os_event));
+    const input::NativeWebKeyboardEvent& event) {
+  OnUnhandledSpokenFeedbackEvent(event.os_event->Clone());
   return true;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,11 +38,11 @@ class SurfaceFactoryCast : public SurfaceFactoryOzone {
       gfx::AcceleratedWidget widget) override;
   scoped_refptr<gfx::NativePixmap> CreateNativePixmap(
       gfx::AcceleratedWidget widget,
-      VkDevice vk_device,
+      gpu::VulkanDeviceQueue* device_queue,
       gfx::Size size,
       gfx::BufferFormat format,
       gfx::BufferUsage usage,
-      absl::optional<gfx::Size> framebuffer_size = absl::nullopt) override;
+      std::optional<gfx::Size> framebuffer_size = std::nullopt) override;
 
  private:
   std::unique_ptr<GLOzoneEglCast> egl_implementation_;

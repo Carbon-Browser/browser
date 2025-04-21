@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ int main(int argc, const char* argv[]) {
   }
 
   // If populated, EmbeddedTestServer is used instead of the SpawnedTestServer.
-  absl::optional<net::EmbeddedTestServer::Type> embedded_test_server_type;
+  std::optional<net::EmbeddedTestServer::Type> embedded_test_server_type;
 
   net::SpawnedTestServer::Type server_type;
   if (command_line->HasSwitch("http")) {

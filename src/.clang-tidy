@@ -4,14 +4,24 @@
   Checks:          '-*,
                     bugprone-argument-comment,
                     bugprone-assert-side-effect,
+                    bugprone-bool-pointer-implicit-conversion,
                     bugprone-dangling-handle,
+                    bugprone-forward-declaration-namespace,
                     bugprone-inaccurate-erase,
                     bugprone-string-constructor,
                     bugprone-string-integer-assignment,
+                    bugprone-undefined-memory-manipulation,
+                    bugprone-unique-ptr-array-mismatch,
                     bugprone-unused-raii,
                     bugprone-use-after-move,
+                    bugprone-virtual-near-miss,
                     google-build-explicit-make-pair,
+                    google-default-arguments,
                     google-explicit-constructor,
+                    google-objc-avoid-nsobject-new,
+                    google-upgrade-googletest-case,
+                    misc-misleading-identifier,
+                    misc-homoglyph,
                     modernize-avoid-bind,
                     modernize-concat-nested-namespaces,
                     modernize-loop-convert,
@@ -48,4 +58,22 @@
     # https://groups.google.com/a/chromium.org/g/cxx/c/noMMTNYiM0w .
     - key:          modernize-use-emplace.IgnoreImplicitConstructors
       value:        1
+    # Use of `std::ranges::reverse_view` is inconsistent with
+    # Chromium style. Recommend `base::Reversed` instead.
+    - key:          modernize-loop-convert.MakeReverseRangeFunction
+      value:        base::Reversed
+    - key:          modernize-loop-convert.MakeReverseRangeHeader
+      value:        base/containers/adapters.h
+    # Exclude some third_party headers from modification as file paths are not
+    # starting from repository root in replacement suggestion.
+    # 'build/linux/debian' excludes system headers as they don't have
+    # appropriate IWYU pragmas.
+    # https://clang.llvm.org/extra/clang-tidy/checks/misc/include-cleaner.html
+    - key: misc-include-cleaner.IgnoreHeaders
+      value:        (gmock/gmock|gtest/gtest|third_party|build/linux/debian).*
+
+  ExtraArgs:
+    # b/382774818: disable unknown pragma warnings until we can figure out why
+    # unknown pragmas are being warned about.
+    - -Wno-unknown-pragmas
 ...

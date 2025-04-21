@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import org.chromium.components.browser_ui.widget.listmenu.ListMenuButton;
-import org.chromium.components.browser_ui.widget.listmenu.ListMenuButtonDelegate;
+import org.chromium.ui.listmenu.ListMenuButton;
+import org.chromium.ui.listmenu.ListMenuDelegate;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
@@ -48,7 +48,7 @@ class InstanceSwitcherItemViewBinder {
             view.setOnClickListener(model.get(InstanceSwitcherItemProperties.CLICK_LISTENER));
 
         } else if (InstanceSwitcherItemProperties.MORE_MENU == propertyKey) {
-            ListMenuButtonDelegate delegate = model.get(InstanceSwitcherItemProperties.MORE_MENU);
+            ListMenuDelegate delegate = model.get(InstanceSwitcherItemProperties.MORE_MENU);
             ((ListMenuButton) view.findViewById(R.id.more)).setDelegate(delegate);
 
         } else if (InstanceSwitcherItemProperties.ENABLE_COMMAND == propertyKey) {

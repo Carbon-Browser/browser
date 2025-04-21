@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Presubmit script for //ui/file_manager/base/gn.
@@ -9,7 +9,6 @@ for more details on the presubmit API built into depot_tools.
 
 import sys
 
-USE_PYTHON3 = True
 PRESUBMIT_VERSION = '2.0.0'
 
 
@@ -27,7 +26,7 @@ def _load_json_data(input_api, file_path):
                                             'third_party', 'pyjson5', 'src')
         sys.path.append(json5_path)
         import json5
-        return json5.load(open(file_path))
+        return json5.load(open(file_path, encoding='utf-8'))
     finally:
         # Restore sys.path to what it was before.
         sys.path.remove(json5_path)

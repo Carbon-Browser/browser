@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,9 @@ namespace {
 
 void AddHashes(const std::vector<std::string>& hashes,
                em::DeviceAutoEnrollmentResponse* response) {
-  for (const std::string& hash : hashes)
+  for (const std::string& hash : hashes) {
     *response->add_hashes() = hash;
+  }
 }
 
 }  // namespace
@@ -74,8 +75,7 @@ std::unique_ptr<HttpResponse> RequestHandlerForAutoEnrollment::HandleRequest(
       break;
   }
 
-  return CreateHttpResponse(net::HTTP_OK,
-                            device_management_response.SerializeAsString());
+  return CreateHttpResponse(net::HTTP_OK, device_management_response);
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/win/com_init_util.h"
 #include "base/win/post_async_results.h"
@@ -54,8 +55,8 @@ using ABI::Windows::Foundation::IAsyncOperation;
 using Microsoft::WRL::ComPtr;
 
 void PostTask(BluetoothPairingWinrt::ConnectCallback callback,
-              absl::optional<BluetoothDevice::ConnectErrorCode> error_code) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+              std::optional<BluetoothDevice::ConnectErrorCode> error_code) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), error_code));
 }
 
@@ -70,6 +71,40 @@ HRESULT CompleteDeferral(
   base::win::AssertComApartmentType(base::win::ComApartmentType::MTA);
   return deferral->Complete();
 }
+
+// TODO: https://crbug.com/1345471, once we refactor the
+// BluetoothDevice::ConfirmPasskey() to use std::u16string instead of uint32_t
+// we can then get rid of HstringToUint32()
+bool HstringToUint32(HSTRING in, uint32_t& out) {
+  if (!in) {
+    DVLOG(2) << "HstringToUint32: HSTRING PIN is NULL.";
+    return false;
+  }
+
+  base::win::ScopedHString scoped_hstring{in};
+  std::string str = scoped_hstring.GetAsUTF8();
+
+  // PIN has to be <= 6 digits
+  if (str.length() > 6) {
+    DVLOG(2) << "HstringToUint32: PIN code = " << str
+             << " which is more than 6 digits.";
+    return false;
+  }
+
+  // Remove leading '0' before being converted into uint32_t
+  str.erase(0, str.find_first_not_of('0'));
+
+  // If we failed to convert str into unsigned int we cancel pairing by return
+  // false
+  if (base::StringToUint(str, &out)) {
+    return true;
+  } else {
+    DVLOG(2) << "HstringToUint32: failed to convert pin = " << str
+             << " into uint32_t";
+    return false;
+  }
+}
+
 }  // namespace
 
 BluetoothPairingWinrt::BluetoothPairingWinrt(
@@ -160,7 +195,7 @@ void BluetoothPairingWinrt::OnConfirmPairingDeferralCompletion(HRESULT hr) {
   }
 }
 
-void BluetoothPairingWinrt::SetPinCode(base::StringPiece pin_code) {
+void BluetoothPairingWinrt::SetPinCode(std::string_view pin_code) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOG(2) << "BluetoothPairingWinrt::SetPinCode(" << pin_code << ")";
   auto pin_hstring = base::win::ScopedHString::Create(pin_code);
@@ -302,6 +337,29 @@ void BluetoothPairingWinrt::OnPairingRequested(
                     "enable-web-bluetooth-confirm-pairing-support";
       }
       break;
+    case DevicePairingKinds_ConfirmPinMatch:
+      if (base::FeatureList::IsEnabled(
+              features::kWebBluetoothConfirmPairingSupport)) {
+        pairing_requested_ = pairing_requested;
+
+        HSTRING hstring_pin;
+        pairing_requested->get_Pin(&hstring_pin);
+
+        uint32_t pin;
+        if (HstringToUint32(hstring_pin, pin)) {
+          pairing_delegate_->ConfirmPasskey(device_, pin);
+          return;
+        } else {
+          DVLOG(2) << "DevicePairingKind = " << static_cast<int>(pairing_kind)
+                   << " has invalid PIN to display, cancel pairing procedure.";
+        }
+
+      } else {
+        DVLOG(2) << "DevicePairingKind = " << static_cast<int>(pairing_kind)
+                 << " is not enabled by "
+                    "enable-web-bluetooth-confirm-pairing-support";
+      }
+      break;
     default:
       DVLOG(2) << "Unsupported DevicePairingKind = "
                << static_cast<int>(pairing_kind);
@@ -333,7 +391,7 @@ void BluetoothPairingWinrt::OnPair(
   switch (status) {
     case DevicePairingResultStatus_AlreadyPaired:
     case DevicePairingResultStatus_Paired:
-      std::move(callback_).Run(/*error_code=*/absl::nullopt);
+      std::move(callback_).Run(/*error_code=*/std::nullopt);
       return;
     case DevicePairingResultStatus_PairingCanceled:
       std::move(callback_).Run(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,12 +27,6 @@ class PasswordCSVWriter {
   // password.
   static std::string SerializePasswords(
       const std::vector<CredentialUIEntry>& credentials);
-
- private:
-  // Converts |credential| into a single line in the CSV format. Metadata are
-  // lost, see SerializePasswords.
-  static std::map<std::string, std::string> PasswordFormToRecord(
-      const CredentialUIEntry& credential);
 };
 
 }  // namespace password_manager

@@ -1,14 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/shell/browser/shell_native_app_window.h"
 
 #include "extensions/shell/browser/desktop_controller.h"
+#include "third_party/blink/public/mojom/page/draggable_region.mojom.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace extensions {
@@ -43,8 +46,8 @@ gfx::Rect ShellNativeAppWindow::GetRestoredBounds() const {
   return GetBounds();
 }
 
-ui::WindowShowState ShellNativeAppWindow::GetRestoredState() const {
-  return ui::SHOW_STATE_NORMAL;
+ui::mojom::WindowShowState ShellNativeAppWindow::GetRestoredState() const {
+  return ui::mojom::WindowShowState::kNormal;
 }
 
 void ShellNativeAppWindow::ShowInactive() {
@@ -82,7 +85,7 @@ void ShellNativeAppWindow::SetZOrderLevel(ui::ZOrderLevel level) {
 
 gfx::NativeView ShellNativeAppWindow::GetHostView() const {
   NOTIMPLEMENTED();
-  return NULL;
+  return nullptr;
 }
 
 gfx::Point ShellNativeAppWindow::GetDialogPosition(const gfx::Size& size) {
@@ -122,14 +125,14 @@ void ShellNativeAppWindow::UpdateWindowTitle() {
   // No window title to update.
 }
 
-void ShellNativeAppWindow::UpdateDraggableRegions(
-    const std::vector<DraggableRegion>& regions) {
+void ShellNativeAppWindow::DraggableRegionsChanged(
+    const std::vector<blink::mojom::DraggableRegionPtr>& regions) {
   NOTIMPLEMENTED();
 }
 
 SkRegion* ShellNativeAppWindow::GetDraggableRegion() {
   NOTIMPLEMENTED();
-  return NULL;
+  return nullptr;
 }
 
 void ShellNativeAppWindow::UpdateShape(std::unique_ptr<ShapeRects> rects) {
@@ -137,7 +140,7 @@ void ShellNativeAppWindow::UpdateShape(std::unique_ptr<ShapeRects> rects) {
 }
 
 bool ShellNativeAppWindow::HandleKeyboardEvent(
-    const content::NativeWebKeyboardEvent& event) {
+    const input::NativeWebKeyboardEvent& event) {
   // No special handling. The WebContents will handle it.
   return false;
 }
@@ -161,6 +164,10 @@ SkColor ShellNativeAppWindow::InactiveFrameColor() const {
 
 gfx::Insets ShellNativeAppWindow::GetFrameInsets() const {
   return gfx::Insets();
+}
+
+gfx::RoundedCornersF ShellNativeAppWindow::GetWindowRadii() const {
+  return gfx::RoundedCornersF();
 }
 
 void ShellNativeAppWindow::SetContentSizeConstraints(

@@ -1,11 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://personalization/strings.m.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
-import {emptyState, SetSelectedImageAction, WallpaperActionName, WallpaperObserver} from 'chrome://personalization/trusted/personalization_app.js';
+import {emptyState, FullscreenPreviewState, setFullscreenStateAction, setSelectedImageAction, SetSelectedImageAction, WallpaperActionName, WallpaperObserver} from 'chrome://personalization/js/personalization_app.js';
 import {assertDeepEquals, assertEquals} from 'chrome://webui-test/chai_assert.js';
 
 import {baseSetup} from './personalization_app_test_utils.js';
@@ -54,17 +53,35 @@ suite('WallpaperObserverTest', function() {
     assertDeepEquals(wallpaperProvider.currentWallpaper, image);
   });
 
-  test('skips updating OnWallpaperChange while in fullscreen', async () => {
-    personalizationStore.data.wallpaper.fullscreen = true;
+  test('sets selected wallpaper if null', async () => {
+    // Make sure state starts as expected.
+    assertDeepEquals(emptyState(), personalizationStore.data);
 
-    personalizationStore.resetLastAction();
+    personalizationStore.expectAction(WallpaperActionName.SET_SELECTED_IMAGE);
+    wallpaperProvider.wallpaperObserverRemote!.onWallpaperChanged(null);
+
+    const {image} =
+        await personalizationStore.waitForAction(
+            WallpaperActionName.SET_SELECTED_IMAGE) as SetSelectedImageAction;
+    assertEquals(null, image);
+  });
+
+  test('OnWallpaperChange updates fullscreen state from loading', async () => {
+    personalizationStore.data.wallpaper.fullscreen =
+        FullscreenPreviewState.LOADING;
+
+    personalizationStore.expectAction(WallpaperActionName.SET_FULLSCREEN_STATE);
 
     wallpaperProvider.wallpaperObserverRemote!.onWallpaperChanged(
         wallpaperProvider.currentWallpaper);
 
-    assertEquals(null, personalizationStore.lastAction);
+    assertDeepEquals(
+        setFullscreenStateAction(FullscreenPreviewState.VISIBLE),
+        await personalizationStore.waitForAction(
+            WallpaperActionName.SET_FULLSCREEN_STATE),
+        'full screen set to visible');
 
-    personalizationStore.data.wallpaper.fullscreen = false;
+    personalizationStore.data.wallpaper.fullscreen = FullscreenPreviewState.OFF;
     personalizationStore.notifyObservers();
 
     personalizationStore.expectAction(WallpaperActionName.SET_SELECTED_IMAGE);
@@ -72,14 +89,11 @@ suite('WallpaperObserverTest', function() {
     wallpaperProvider.wallpaperObserverRemote!.onWallpaperChanged(
         wallpaperProvider.currentWallpaper);
 
-    const action = await personalizationStore.waitForAction(
-        WallpaperActionName.SET_SELECTED_IMAGE);
 
     assertDeepEquals(
-        {
-          name: WallpaperActionName.SET_SELECTED_IMAGE,
-          image: wallpaperProvider.currentWallpaper,
-        },
-        action);
+        setSelectedImageAction(wallpaperProvider.currentWallpaper),
+        await personalizationStore.waitForAction(
+            WallpaperActionName.SET_SELECTED_IMAGE),
+        `${WallpaperActionName.SET_SELECTED_IMAGE} action sent`);
   });
 });

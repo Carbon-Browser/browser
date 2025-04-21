@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
@@ -18,6 +19,7 @@ class WebUI;
 }  // namespace content
 
 namespace ash {
+
 class FakeUpdateEngineClient;
 class LoginOrLockScreenVisibleWaiter;
 
@@ -36,7 +38,6 @@ class OobeBaseTest : public MixinBasedInProcessBrowserTest {
   virtual void RegisterAdditionalRequestHandlers();
 
   static OobeScreenId GetFirstSigninScreen();
-  static OobeScreenId GetScreenAfterNetworkScreen();
 
  protected:
   // MixinBasedInProcessBrowserTest::
@@ -74,28 +75,24 @@ class OobeBaseTest : public MixinBasedInProcessBrowserTest {
   bool needs_background_networking_ = false;
 
   // Whether to use network screeen skip check or not. Note this is only
-  // effective when it is set before SetUpCommandLine is invoked.
+  // effective when it is set before SetUpCommandLine is invoked. Setting it to
+  // `true` also prevents default Shill environment from being set.
   bool needs_network_screen_skip_check_ = false;
 
   std::string gaia_frame_parent_ = "signin-frame";
-  std::string authenticator_id_ = "$('gaia-signin').authenticator_";
+  std::string authenticator_id_ = "$('gaia-signin').authenticator";
   EmbeddedTestServerSetupMixin embedded_test_server_{&mixin_host_,
                                                      embedded_test_server()};
   // Waits for login_screen_load_observer_ and resets it afterwards.
   void MaybeWaitForLoginScreenLoad();
 
  private:
-  FakeUpdateEngineClient* update_engine_client_ = nullptr;
+  raw_ptr<FakeUpdateEngineClient, DanglingUntriaged> update_engine_client_ =
+      nullptr;
 
   std::unique_ptr<LoginOrLockScreenVisibleWaiter> login_screen_load_observer_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OobeBaseTest;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_OOBE_BASE_TEST_H_

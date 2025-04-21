@@ -22,16 +22,17 @@
 #include <vector>
 
 #include "base/observer_list.h"
-#include "components/adblock/content/common/mojom/adblock.mojom.h"
+#include "components/adblock/content/browser/adblock_filter_match.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "components/adblock/core/common/content_type.h"
-#include "components/adblock/core/subscription/subscription_collection.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "components/keyed_service/core/keyed_service.h"
-
+#include "services/network/public/mojom/network_param.mojom.h"
 #include "url/gurl.h"
 
 namespace content {
 class RenderFrameHost;
-}
+}  // namespace content
 namespace adblock {
 
 /**
@@ -45,55 +46,59 @@ class ResourceClassificationRunner : public KeyedService {
   class Observer : public base::CheckedObserver {
    public:
     // Will only be called when |match_result| is BLOCK_RULE or ALLOW_RULE.
-    virtual void OnAdMatched(const GURL& url,
-                             mojom::FilterMatchResult match_result,
-                             const std::vector<GURL>& parent_frame_urls,
-                             ContentType content_type,
-                             content::RenderFrameHost* render_frame_host,
-                             const GURL& subscription) = 0;
+    virtual void OnRequestMatched(const GURL& url,
+                                  FilterMatchResult match_result,
+                                  const std::vector<GURL>& parent_frame_urls,
+                                  ContentType content_type,
+                                  content::RenderFrameHost* render_frame_host,
+                                  const GURL& subscription,
+                                  const std::string& configuration_name) = 0;
     virtual void OnPageAllowed(const GURL& url,
                                content::RenderFrameHost* render_frame_host,
-                               const GURL& subscription) = 0;
+                               const GURL& subscription,
+                               const std::string& configuration_name) = 0;
     virtual void OnPopupMatched(const GURL& url,
-                                mojom::FilterMatchResult match_result,
+                                FilterMatchResult match_result,
                                 const GURL& opener_url,
                                 content::RenderFrameHost* render_frame_host,
-                                const GURL& subscription) = 0;
+                                const GURL& subscription,
+                                const std::string& configuration_name) = 0;
   };
   virtual void AddObserver(Observer* observer) = 0;
   virtual void RemoveObserver(Observer* observer) = 0;
 
   // Performs a *synchronous* check, this can block the UI for a while!
-  virtual mojom::FilterMatchResult ShouldBlockPopup(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
-      const GURL& opener,
+  virtual FilterMatchResult ShouldBlockPopup(
+      const SubscriptionService::Snapshot& subscription_collections,
       const GURL& popup_url,
       content::RenderFrameHost* render_frame_host) = 0;
-
+  virtual void CheckPopupFilterMatch(
+      SubscriptionService::Snapshot subscription_collections,
+      const GURL& popup_url,
+      content::RenderFrameHost& render_frame_host,
+      CheckFilterMatchCallback callback) = 0;
   virtual void CheckRequestFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
-      int32_t resource_type,
-      int32_t process_id,
-      int32_t render_frame_id,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) = 0;
-  virtual void CheckRequestFilterMatchForWebSocket(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      ContentType adblock_resource_type,
+      const RequestInitiator& request_initiator,
+      CheckFilterMatchCallback callback) = 0;
+  // No callback, just notify observers
+  virtual void CheckDocumentAllowlisted(
+      SubscriptionService::Snapshot subscription_collection,
       const GURL& request_url,
-      content::RenderFrameHost* render_frame_host,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) = 0;
+      const RequestInitiator& request_initiator) = 0;
   virtual void CheckResponseFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& response_url,
-      int32_t process_id,
-      int32_t render_frame_id,
+      ContentType adblock_resource_type,
+      const RequestInitiator& request_initiator,
       const scoped_refptr<net::HttpResponseHeaders>& headers,
-      mojom::AdblockInterface::CheckFilterMatchCallback callback) = 0;
+      CheckFilterMatchCallback callback) = 0;
   virtual void CheckRewriteFilterMatch(
-      std::unique_ptr<SubscriptionCollection> subscription_collection,
+      SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
-      int32_t process_id,
-      int32_t render_frame_id,
+      const RequestInitiator& request_initiator,
       base::OnceCallback<void(const absl::optional<GURL>&)> result) = 0;
 };
 

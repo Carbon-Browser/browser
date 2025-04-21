@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/screen_orientation/screen_orientation.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -15,7 +16,7 @@
 namespace blink {
 
 LockOrientationCallback::LockOrientationCallback(
-    ScriptPromiseResolver* resolver)
+    ScriptPromiseResolver<IDLUndefined>* resolver)
     : resolver_(resolver) {}
 
 LockOrientationCallback::~LockOrientationCallback() = default;
@@ -26,11 +27,12 @@ void LockOrientationCallback::OnSuccess() {
   // resolving the promise.
   resolver_->GetExecutionContext()
       ->GetTaskRunner(TaskType::kMiscPlatformAPI)
-      ->PostTask(FROM_HERE, WTF::Bind(
-                                [](ScriptPromiseResolver* resolver) {
-                                  resolver->Resolve();
-                                },
-                                std::move(resolver_)));
+      ->PostTask(FROM_HERE,
+                 WTF::BindOnce(
+                     [](ScriptPromiseResolver<IDLUndefined>* resolver) {
+                       resolver->Resolve();
+                     },
+                     std::move(resolver_)));
 }
 
 void LockOrientationCallback::OnError(WebLockOrientationError error) {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,6 @@
 
 SpellCheckHostImpl::SpellCheckHostImpl() = default;
 SpellCheckHostImpl::~SpellCheckHostImpl() = default;
-
-void SpellCheckHostImpl::RequestDictionary() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-
-  // This API requires Chrome-only features.
-  return;
-}
 
 void SpellCheckHostImpl::NotifyChecked(const std::u16string& word,
                                        bool misspelled) {
@@ -44,7 +37,6 @@ void SpellCheckHostImpl::CallSpellingService(
 
 #if BUILDFLAG(USE_BROWSER_SPELLCHECKER) && !BUILDFLAG(ENABLE_SPELLING_SERVICE)
 void SpellCheckHostImpl::RequestTextCheck(const std::u16string& text,
-                                          int route_id,
                                           RequestTextCheckCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
@@ -56,29 +48,11 @@ void SpellCheckHostImpl::RequestTextCheck(const std::u16string& text,
   session_bridge_.RequestTextCheck(text, std::move(callback));
 }
 
-void SpellCheckHostImpl::CheckSpelling(const std::u16string& word,
-                                       int route_id,
-                                       CheckSpellingCallback callback) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  NOTREACHED();
-  std::move(callback).Run(false);
-}
-
-void SpellCheckHostImpl::FillSuggestionList(
-    const std::u16string& word,
-    FillSuggestionListCallback callback) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  NOTREACHED();
-  std::move(callback).Run({});
-}
-
 #if BUILDFLAG(IS_WIN)
 void SpellCheckHostImpl::InitializeDictionaries(
     InitializeDictionariesCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   NOTREACHED();
-  std::move(callback).Run(/*dictionaries=*/{}, /*custom_words=*/{},
-                          /*enable=*/false);
 }
 #endif  // BUILDFLAG(IS_WIN)
 #endif  //  BUILDFLAG(USE_BROWSER_SPELLCHECKER) &&

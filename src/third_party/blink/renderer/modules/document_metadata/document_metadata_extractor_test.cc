@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -634,6 +634,35 @@ TEST_F(DocumentMetadataExtractorTest, ignorePropertyWithEmptyArray) {
       "\n"
       "{\"@type\": \"Restaurant\","
       "\"name\": []"
+      "}\n"
+      "\n"
+      "</script>"
+      "</body>");
+  SetURL("http://www.test.com/");
+  SetTitle("My neat website about cool stuff");
+
+  WebPagePtr extracted = Extract();
+  ASSERT_FALSE(extracted.is_null());
+
+  WebPagePtr expected =
+      CreateWebPage("http://www.test.com/", "My neat website about cool stuff");
+
+  EntityPtr restaurant = Entity::New();
+  restaurant->type = "Restaurant";
+
+  expected->entities.push_back(std::move(restaurant));
+
+  EXPECT_EQ(expected, extracted);
+}
+
+TEST_F(DocumentMetadataExtractorTest, ignoreNullProperty) {
+  SetHTMLInnerHTML(
+      "<body>"
+      "<script type=\"application/ld+json\">"
+      "\n"
+      "\n"
+      "{\"@type\": \"Restaurant\","
+      "\"name\": null"
       "}\n"
       "\n"
       "</script>"

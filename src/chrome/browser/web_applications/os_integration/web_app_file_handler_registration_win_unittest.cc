@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,22 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
+#include "base/test/bind.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/test/test_timeouts.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/web_applications/chrome_pwa_launcher/chrome_pwa_launcher_util.h"
 #include "chrome/browser/web_applications/os_integration/web_app_handler_registration_utils_win.h"
-#include "chrome/browser/web_applications/test/fake_web_app_file_handler_manager.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/installer/util/shell_util.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -56,7 +56,7 @@ constexpr char kAppName[] = "app name";
 
 class WebAppFileHandlerRegistrationWinTest : public testing::Test {
  protected:
-  WebAppFileHandlerRegistrationWinTest() {}
+  WebAppFileHandlerRegistrationWinTest() = default;
 
   void SetUp() override {
     // Set up fake windows registry
@@ -86,7 +86,7 @@ class WebAppFileHandlerRegistrationWinTest : public testing::Test {
   TestingProfileManager* testing_profile_manager() {
     return testing_profile_manager_.get();
   }
-  const AppId& app_id() const { return app_id_; }
+  const webapps::AppId& app_id() const { return app_id_; }
 
   const std::wstring file_handler1_prog_id() { return file_handler1_prog_id_; }
   const std::wstring file_handler2_prog_id() { return file_handler2_prog_id_; }
@@ -125,11 +125,14 @@ class WebAppFileHandlerRegistrationWinTest : public testing::Test {
     const std::wstring file_handler2_prog_id =
         GetProgIdForAppFileHandler(profile->GetPath(), app_id(), {".doc"});
 
-    RegisterFileHandlersWithOs(app_id(), app_name, profile, file_handlers);
-
-    base::ThreadPoolInstance::Get()->FlushForTesting();
-    base::RunLoop().RunUntilIdle();
-    base::ThreadPoolInstance::Get()->FlushForTesting();
+    base::RunLoop run_loop;
+    RegisterFileHandlersWithOs(app_id(), app_name, profile->GetPath(),
+                               file_handlers,
+                               base::BindLambdaForTesting([&](Result result) {
+                                 EXPECT_EQ(result, Result::kOk);
+                                 run_loop.Quit();
+                               }));
+    run_loop.Run();
 
     base::FilePath registered_app_path =
         ShellUtil::GetApplicationPathForProgId(file_handler1_prog_id);
@@ -148,17 +151,15 @@ class WebAppFileHandlerRegistrationWinTest : public testing::Test {
       const std::string& sanitized_app_name) {
     base::FilePath app_specific_launcher_filepath(
         base::ASCIIToWide(sanitized_app_name));
-    if (base::win::GetVersion() > base::win::Version::WIN7) {
-      app_specific_launcher_filepath =
-          app_specific_launcher_filepath.AddExtension(L"exe");
-    }
+    app_specific_launcher_filepath =
+        app_specific_launcher_filepath.AddExtension(L"exe");
     return app_specific_launcher_filepath;
   }
 
   // Returns the expected app launcher path inside the subdirectory for
   // |app_id|.
   base::FilePath GetLauncherPathForApp(Profile* profile,
-                                       const AppId app_id,
+                                       const webapps::AppId app_id,
                                        const std::string& sanitized_app_name) {
     base::FilePath web_app_dir(GetOsIntegrationResourcesDirectoryForApp(
         profile->GetPath(), app_id, GURL()));
@@ -175,7 +176,7 @@ class WebAppFileHandlerRegistrationWinTest : public testing::Test {
       content::BrowserTaskEnvironment::IO_MAINLOOP};
   raw_ptr<TestingProfile> profile_ = nullptr;
   std::unique_ptr<TestingProfileManager> testing_profile_manager_;
-  const AppId app_id_ = "app_id";
+  const webapps::AppId app_id_ = "app_id";
   // These are set in SetUp() and are the ProgIds for file handlers in the
   // default profile.
   std::wstring file_handler1_prog_id_;
@@ -258,10 +259,13 @@ TEST_F(WebAppFileHandlerRegistrationWinTest,
   const std::wstring profile2_file_handler2_prog_id =
       GetProgIdForAppFileHandler(profile2->GetPath(), app_id(), {".doc"});
 
-  UnregisterFileHandlersWithOs(app_id(), profile(), base::DoNothing());
-  base::ThreadPoolInstance::Get()->FlushForTesting();
-  base::RunLoop().RunUntilIdle();
-  base::ThreadPoolInstance::Get()->FlushForTesting();
+  base::RunLoop run_loop;
+  UnregisterFileHandlersWithOs(app_id(), profile()->GetPath(),
+                               base::BindLambdaForTesting([&](Result result) {
+                                 EXPECT_EQ(result, Result::kOk);
+                                 run_loop.Quit();
+                               }));
+  run_loop.Run();
   EXPECT_FALSE(base::PathExists(app_specific_launcher_path));
   // Verify that "(Profile 2)" was removed from the web app launcher and
   // file association registry entries.
@@ -304,10 +308,13 @@ TEST_F(WebAppFileHandlerRegistrationWinTest,
   ASSERT_EQ(3u, storage.GetNumberOfProfiles());
   AddAndVerifyFileAssociations(profile3, kAppName, " (Profile 3)");
 
-  UnregisterFileHandlersWithOs(app_id(), profile(), base::DoNothing());
-  base::ThreadPoolInstance::Get()->FlushForTesting();
-  base::RunLoop().RunUntilIdle();
-  base::ThreadPoolInstance::Get()->FlushForTesting();
+  base::RunLoop run_loop;
+  UnregisterFileHandlersWithOs(app_id(), profile()->GetPath(),
+                               base::BindLambdaForTesting([&](Result result) {
+                                 EXPECT_EQ(result, Result::kOk);
+                                 run_loop.Quit();
+                               }));
+  run_loop.Run();
   EXPECT_FALSE(base::PathExists(app_specific_launcher_path));
   // Verify that "(Profile 2)" was not removed from the web app launcher and
   // file association registry entries.
@@ -334,9 +341,13 @@ TEST_F(WebAppFileHandlerRegistrationWinTest, UnregisterFileHandlersForWebApp) {
   const base::FilePath app_specific_launcher_path =
       ShellUtil::GetApplicationPathForProgId(file_handler1_prog_id());
 
-  UnregisterFileHandlersWithOs(app_id(), profile(), base::DoNothing());
-  base::ThreadPoolInstance::Get()->FlushForTesting();
-  base::RunLoop().RunUntilIdle();
+  base::RunLoop run_loop;
+  UnregisterFileHandlersWithOs(app_id(), profile()->GetPath(),
+                               base::BindLambdaForTesting([&](Result result) {
+                                 EXPECT_EQ(result, Result::kOk);
+                                 run_loop.Quit();
+                               }));
+  run_loop.Run();
   EXPECT_FALSE(base::PathExists(app_specific_launcher_path));
   EXPECT_FALSE(
       ProgIdRegisteredForFileExtension(".txt", file_handler1_prog_id()));

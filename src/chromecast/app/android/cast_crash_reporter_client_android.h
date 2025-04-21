@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,9 @@ class CastCrashReporterClientAndroid
                                       base::FilePath* crash_dir);
 
   // crash_reporter::CrashReporterClient implementation:
-  void GetProductNameAndVersion(std::string* product_name,
-                                std::string* version,
-                                std::string* channel) override;
+  void GetProductInfo(ProductInfo* product_info) override;
   base::FilePath GetReporterLogFilename() override;
   bool GetCrashDumpLocation(base::FilePath* crash_dir) override;
-  int GetAndroidMinidumpDescriptor() override;
   bool EnableBreakpadForProcess(const std::string& process_type) override;
 
  private:

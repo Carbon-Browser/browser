@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <stdint.h>
 
+#include <string_view>
+
 #include "base/containers/flat_map.h"
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/dispatcher.h"
 #include "mojo/core/ports/port_ref.h"
@@ -27,9 +28,9 @@ class MOJO_SYSTEM_IMPL_EXPORT InvitationDispatcher : public Dispatcher {
   // Dispatcher:
   Type GetType() const override;
   MojoResult Close() override;
-  MojoResult AttachMessagePipe(base::StringPiece name,
+  MojoResult AttachMessagePipe(std::string_view name,
                                ports::PortRef remote_peer_port) override;
-  MojoResult ExtractMessagePipe(base::StringPiece name,
+  MojoResult ExtractMessagePipe(std::string_view name,
                                 MojoHandle* message_pipe_handle) override;
 
   using PortMapping = base::flat_map<std::string, ports::PortRef>;

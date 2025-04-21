@@ -30,7 +30,6 @@
 
 #include "third_party/blink/renderer/core/svg/svg_geometry_element.h"
 
-#include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_path.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_shape.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_layout_support.h"
@@ -61,15 +60,12 @@ SVGGeometryElement::SVGGeometryElement(const QualifiedName& tag_name,
                                        Document& document,
                                        ConstructionType construction_type)
     : SVGGraphicsElement(tag_name, document, construction_type),
-      path_length_(MakeGarbageCollected<SVGAnimatedPathLength>(this)) {
-  AddToPropertyMap(path_length_);
-}
+      path_length_(MakeGarbageCollected<SVGAnimatedPathLength>(this)) {}
 
 void SVGGeometryElement::SvgAttributeChanged(
     const SvgAttributeChangedParams& params) {
   const QualifiedName& attr_name = params.name;
   if (attr_name == svg_names::kPathLengthAttr) {
-    SVGElement::InvalidationGuard invalidation_guard(this);
     if (LayoutObject* layout_object = GetLayoutObject())
       MarkForLayoutAndParentResourceInvalidation(*layout_object);
     return;
@@ -122,7 +118,7 @@ bool SVGGeometryElement::isPointInStroke(SVGPointTearOff* point) const {
     // Un-scale to get back to the root-transform (cheaper than re-computing
     // the root transform from scratch).
     root_transform.Scale(layout_shape.StyleRef().EffectiveZoom())
-        .Multiply(transform);
+        .PreConcat(transform);
   } else {
     root_transform = layout_shape.ComputeRootTransform();
   }
@@ -230,29 +226,41 @@ float SVGGeometryElement::PathLengthScaleFactor(float computed_path_length,
   // However, since 0 * Infinity is not zero (but rather NaN) per
   // IEEE, we need to make sure to clamp the result below - avoiding
   // the actual Infinity (and using max()) instead.
-  return ClampTo<float>(computed_path_length / author_path_length);
+  return ClampTo<float>(computed_path_length / std::fabs(author_path_length));
 }
 
 void SVGGeometryElement::GeometryPresentationAttributeChanged(
-    const QualifiedName& attr_name) {
-  InvalidateSVGPresentationAttributeStyle();
-  SetNeedsStyleRecalc(kLocalStyleChange,
-                      StyleChangeReasonForTracing::FromAttribute(attr_name));
+    const SVGAnimatedPropertyBase& property) {
+  UpdatePresentationAttributeStyle(property);
   GeometryAttributeChanged();
 }
 
 void SVGGeometryElement::GeometryAttributeChanged() {
-  SVGElement::InvalidationGuard invalidation_guard(this);
   if (auto* layout_object = To<LayoutSVGShape>(GetLayoutObject())) {
     layout_object->SetNeedsShapeUpdate();
     MarkForLayoutAndParentResourceInvalidation(*layout_object);
   }
+  NotifyResourceClients();
 }
 
-LayoutObject* SVGGeometryElement::CreateLayoutObject(const ComputedStyle&,
-                                                     LegacyLayout) {
+LayoutObject* SVGGeometryElement::CreateLayoutObject(const ComputedStyle&) {
   // By default, any subclass is expected to do path-based drawing.
   return MakeGarbageCollected<LayoutSVGPath>(this);
+}
+
+SVGAnimatedPropertyBase* SVGGeometryElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kPathLengthAttr) {
+    return path_length_.Get();
+  } else {
+    return SVGGraphicsElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGGeometryElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{path_length_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGGraphicsElement::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

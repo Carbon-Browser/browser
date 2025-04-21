@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/components/network/network_device_handler_impl.h"
 
@@ -12,26 +17,27 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_device_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_ipconfig_client.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/dbus/shill/shill_device_client.h"
-#include "chromeos/dbus/shill/shill_ipconfig_client.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -57,10 +63,10 @@ std::string GetErrorNameForShillError(const std::string& shill_error_name) {
 
 void GetPropertiesCallback(const std::string& device_path,
                            network_handler::ResultCallback callback,
-                           absl::optional<base::Value> result) {
+                           std::optional<base::Value::Dict> result) {
   if (!result) {
     NET_LOG(ERROR) << "GetProperties failed: " << NetworkPathId(device_path);
-    std::move(callback).Run(device_path, absl::nullopt);
+    std::move(callback).Run(device_path, std::nullopt);
     return;
   }
   std::move(callback).Run(device_path, std::move(result));
@@ -96,19 +102,22 @@ void SetDevicePropertyInternal(const std::string& device_path,
 
 void HandleSimPinOperationSuccess(
     const CellularMetricsLogger::SimPinOperation& pin_operation,
+    const bool allow_cellular_sim_lock,
     base::OnceClosure callback) {
-  CellularMetricsLogger::RecordSimPinOperationResult(pin_operation);
+  CellularMetricsLogger::RecordSimPinOperationResult(pin_operation,
+                                                     allow_cellular_sim_lock);
   std::move(callback).Run();
 }
 
 void HandleSimPinOperationFailure(
     const CellularMetricsLogger::SimPinOperation& pin_operation,
+    const bool allow_cellular_sim_lock,
     const std::string& device_path,
     network_handler::ErrorCallback error_callback,
     const std::string& shill_error_name,
     const std::string& shill_error_message) {
-  CellularMetricsLogger::RecordSimPinOperationResult(pin_operation,
-                                                     shill_error_message);
+  CellularMetricsLogger::RecordSimPinOperationResult(
+      pin_operation, allow_cellular_sim_lock, shill_error_name);
   HandleShillCallFailure(device_path, std::move(error_callback),
                          shill_error_name, shill_error_message);
 }
@@ -184,8 +193,9 @@ void NetworkDeviceHandlerImpl::RequirePin(
   ShillDeviceClient::Get()->RequirePin(
       dbus::ObjectPath(device_path), pin, require_pin,
       base::BindOnce(&HandleSimPinOperationSuccess, pin_operation,
-                     std::move(callback)),
-      base::BindOnce(&HandleSimPinOperationFailure, pin_operation, device_path,
+                     allow_cellular_sim_lock_, std::move(callback)),
+      base::BindOnce(&HandleSimPinOperationFailure, pin_operation,
+                     allow_cellular_sim_lock_, device_path,
                      std::move(error_callback)));
 }
 
@@ -194,22 +204,18 @@ void NetworkDeviceHandlerImpl::EnterPin(
     const std::string& pin,
     base::OnceClosure callback,
     network_handler::ErrorCallback error_callback) {
-  if (!allow_cellular_sim_lock_) {
-    // Remove the PIN lock requirement.
-    RequirePin(device_path, /*require_pin=*/false, pin, std::move(callback),
-               std::move(error_callback));
-    return;
-  }
-
   NET_LOG(USER) << "Device.EnterPin: " << device_path;
+
   ShillDeviceClient::Get()->EnterPin(
       dbus::ObjectPath(device_path), pin,
-      base::BindOnce(&HandleSimPinOperationSuccess,
+      base::BindOnce(&NetworkDeviceHandlerImpl::OnPinValidationSuccess,
+                     weak_ptr_factory_.GetWeakPtr(), device_path, pin,
                      CellularMetricsLogger::SimPinOperation::kUnlock,
                      std::move(callback)),
       base::BindOnce(&HandleSimPinOperationFailure,
                      CellularMetricsLogger::SimPinOperation::kUnlock,
-                     device_path, std::move(error_callback)));
+                     allow_cellular_sim_lock_, device_path,
+                     std::move(error_callback)));
 }
 
 void NetworkDeviceHandlerImpl::UnblockPin(
@@ -225,26 +231,32 @@ void NetworkDeviceHandlerImpl::UnblockPin(
   const std::string pin = allow_cellular_sim_lock_ ? new_pin : kDefaultSimPin;
   ShillDeviceClient::Get()->UnblockPin(
       dbus::ObjectPath(device_path), puk, pin,
-      base::BindOnce(&NetworkDeviceHandlerImpl::OnUnblockPinSuccess,
+      base::BindOnce(&NetworkDeviceHandlerImpl::OnPinValidationSuccess,
                      weak_ptr_factory_.GetWeakPtr(), device_path, pin,
+                     CellularMetricsLogger::SimPinOperation::kUnblock,
                      std::move(callback)),
       base::BindOnce(&HandleSimPinOperationFailure,
                      CellularMetricsLogger::SimPinOperation::kUnblock,
-                     device_path, std::move(error_callback)));
+                     allow_cellular_sim_lock_, device_path,
+                     std::move(error_callback)));
 }
 
-void NetworkDeviceHandlerImpl::OnUnblockPinSuccess(
+void NetworkDeviceHandlerImpl::OnPinValidationSuccess(
     const std::string& device_path,
     const std::string& pin,
+    const CellularMetricsLogger::SimPinOperation& pin_operation,
     base::OnceClosure callback) {
   if (allow_cellular_sim_lock_) {
-    HandleSimPinOperationSuccess(
-        CellularMetricsLogger::SimPinOperation::kUnblock, std::move(callback));
+    HandleSimPinOperationSuccess(pin_operation, allow_cellular_sim_lock_,
+                                 std::move(callback));
     return;
   }
 
   // Disable the SIM PIN lock setting.
-  RequirePin(device_path, false, pin, std::move(callback), base::DoNothing());
+  RequirePin(device_path, false, pin,
+             base::BindOnce(&HandleSimPinOperationSuccess, pin_operation,
+                            allow_cellular_sim_lock_, std::move(callback)),
+             base::DoNothing());
 }
 
 void NetworkDeviceHandlerImpl::ChangePin(
@@ -263,10 +275,11 @@ void NetworkDeviceHandlerImpl::ChangePin(
       dbus::ObjectPath(device_path), old_pin, new_pin,
       base::BindOnce(&HandleSimPinOperationSuccess,
                      CellularMetricsLogger::SimPinOperation::kChange,
-                     std::move(callback)),
+                     allow_cellular_sim_lock_, std::move(callback)),
       base::BindOnce(&HandleSimPinOperationFailure,
                      CellularMetricsLogger::SimPinOperation::kChange,
-                     device_path, std::move(error_callback)));
+                     allow_cellular_sim_lock_, device_path,
+                     std::move(error_callback)));
 }
 
 void NetworkDeviceHandlerImpl::SetAllowCellularSimLock(
@@ -301,7 +314,6 @@ void NetworkDeviceHandlerImpl::DeviceListChanged() {
   ApplyCellularAllowRoamingToShill();
   ApplyMACAddressRandomizationToShill();
   ApplyUsbEthernetMacAddressSourceToShill();
-  ApplyUseAttachApnToShill();
   ApplyWakeOnWifiAllowedToShill();
 }
 
@@ -314,7 +326,7 @@ void NetworkDeviceHandlerImpl::Init(
     NetworkStateHandler* network_state_handler) {
   DCHECK(network_state_handler);
   network_state_handler_ = network_state_handler;
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 }
 
 void NetworkDeviceHandlerImpl::ApplyCellularAllowRoamingToShill() {
@@ -370,12 +382,12 @@ void NetworkDeviceHandlerImpl::HandleWifiFeatureSupportedProperty(
     std::string support_property_name,
     WifiFeatureSupport* feature_support_to_set,
     const std::string& device_path,
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties) {
     return;
   }
-  absl::optional<bool> supported_val =
-      properties->FindBoolKey(support_property_name);
+  std::optional<bool> supported_val =
+      properties->FindBool(support_property_name);
   if (!supported_val.has_value()) {
     if (base::SysInfo::IsRunningOnChromeOS()) {
       NET_LOG(ERROR) << "Failed to get support property "
@@ -406,7 +418,7 @@ void NetworkDeviceHandlerImpl::ApplyMACAddressRandomizationToShill() {
 void NetworkDeviceHandlerImpl::ApplyWakeOnWifiAllowedToShill() {
   // Get the setting from feature flags.
   wake_on_wifi_allowed_ =
-      base::FeatureList::IsEnabled(chromeos::features::kWakeOnWifiAllowed);
+      base::FeatureList::IsEnabled(features::kWakeOnWifiAllowed);
   ApplyWifiFeatureToShillIfSupported(
       shill::kWakeOnWiFiAllowedProperty, wake_on_wifi_allowed_,
       shill::kWakeOnWiFiSupportedProperty, &wake_on_wifi_supported_);
@@ -446,25 +458,6 @@ void NetworkDeviceHandlerImpl::ApplyUsbEthernetMacAddressSourceToShill() {
           usb_ethernet_mac_address_source_, network_handler::ErrorCallback()));
 }
 
-void NetworkDeviceHandlerImpl::ApplyUseAttachApnToShill() {
-  NetworkStateHandler::DeviceStateList list;
-  network_state_handler_->GetDeviceListByType(NetworkTypePattern::Cellular(),
-                                              &list);
-  if (list.empty()) {
-    NET_LOG(DEBUG) << "No cellular device available.";
-    return;
-  }
-  for (NetworkStateHandler::DeviceStateList::const_iterator it = list.begin();
-       it != list.end(); ++it) {
-    const DeviceState* device_state = *it;
-
-    SetDevicePropertyInternal(
-        device_state->path(), shill::kUseAttachAPNProperty,
-        base::Value(features::ShouldUseAttachApn()), base::DoNothing(),
-        network_handler::ErrorCallback());
-  }
-}
-
 void NetworkDeviceHandlerImpl::OnSetUsbEthernetMacAddressSourceError(
     const std::string& device_path,
     const std::string& device_mac_address,
@@ -486,8 +479,8 @@ bool NetworkDeviceHandlerImpl::IsUsbEnabledDevice(
   return device_state && device_state->link_up() &&
          device_state->Matches(NetworkTypePattern::Ethernet()) &&
          device_state->device_bus_type() == shill::kDeviceBusTypeUsb &&
-         mac_address_change_not_supported_.find(device_state->mac_address()) ==
-             mac_address_change_not_supported_.end();
+         !base::Contains(mac_address_change_not_supported_,
+                         device_state->mac_address());
 }
 
 void NetworkDeviceHandlerImpl::UpdatePrimaryEnabledUsbEthernetDevice() {
@@ -568,4 +561,4 @@ const DeviceState* NetworkDeviceHandlerImpl::GetWifiDeviceState() {
       NetworkTypePattern::WiFi());
 }
 
-}  // namespace chromeos
+}  // namespace ash

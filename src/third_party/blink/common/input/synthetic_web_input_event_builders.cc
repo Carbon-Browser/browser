@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -118,6 +118,13 @@ WebGestureEvent SyntheticWebGestureEventBuilder::BuildScrollUpdate(
                                  source_device, modifiers);
   result.data.scroll_update.delta_x = dx;
   result.data.scroll_update.delta_y = dy;
+  return result;
+}
+
+WebGestureEvent SyntheticWebGestureEventBuilder::BuildScrollEnd(
+    blink::WebGestureDevice source_device) {
+  WebGestureEvent result =
+      Build(WebInputEvent::Type::kGestureScrollEnd, source_device);
   return result;
 }
 

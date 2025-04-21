@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/protocol/fake_desktop_capturer.h"
 
@@ -8,15 +13,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // FakeDesktopCapturer generates a white picture of size kWidth x kHeight
 // with a rectangle of size kBoxWidth x kBoxHeight. The rectangle moves kSpeed
@@ -29,7 +33,7 @@ static const int kSpeed = 20;
 
 static_assert(kBoxWidth < kWidth && kBoxHeight < kHeight, "bad box size");
 static_assert((kBoxWidth % kSpeed == 0) && (kWidth % kSpeed == 0) &&
-              (kBoxHeight % kSpeed == 0) && (kHeight % kSpeed == 0),
+                  (kBoxHeight % kSpeed == 0) && (kHeight % kSpeed == 0),
               "sizes must be multiple of kSpeed");
 
 namespace {
@@ -79,13 +83,15 @@ std::unique_ptr<webrtc::DesktopFrame> DefaultFrameGenerator::GenerateFrame(
   // Move the box.
   bool old_box_pos_x = box_pos_x_;
   box_pos_x_ += box_speed_x_;
-  if (box_pos_x_ + kBoxWidth >= kWidth || box_pos_x_ == 0)
+  if (box_pos_x_ + kBoxWidth >= kWidth || box_pos_x_ == 0) {
     box_speed_x_ = -box_speed_x_;
+  }
 
   bool old_box_pos_y = box_pos_y_;
   box_pos_y_ += box_speed_y_;
-  if (box_pos_y_ + kBoxHeight >= kHeight || box_pos_y_ == 0)
+  if (box_pos_y_ + kBoxHeight >= kHeight || box_pos_y_ == 0) {
     box_speed_y_ = -box_speed_y_;
+  }
 
   memset(frame->data(), 0xff, kHeight * frame->stride());
 
@@ -124,8 +130,7 @@ std::unique_ptr<webrtc::DesktopFrame> DefaultFrameGenerator::GenerateFrame(
 
 }  // namespace
 
-FakeDesktopCapturer::FakeDesktopCapturer()
-    : callback_(nullptr) {
+FakeDesktopCapturer::FakeDesktopCapturer() : callback_(nullptr) {
   frame_generator_ =
       base::BindRepeating(&DefaultFrameGenerator::GenerateFrame,
                           base::MakeRefCounted<DefaultFrameGenerator>());
@@ -164,7 +169,7 @@ void FakeDesktopCapturer::CaptureFrame() {
   // directly also leads to issues when testing with shared memory regions and
   // IPC as the callback invocation will occur before the shared region can be
   // set up.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&webrtc::DesktopCapturer::Callback::OnCaptureResult,
                      base::Unretained(callback_), result, std::move(frame)));
@@ -180,5 +185,4 @@ bool FakeDesktopCapturer::SelectSource(SourceId id) {
   return false;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,35 +55,21 @@ PopupTracker::PopupTracker(content::WebContents* contents,
   if (auto* popup_opener = PopupOpenerTabHelper::FromWebContents(opener))
     popup_opener->OnOpenedPopup(this);
 
-  auto* observation_manager =
+  // A popup tracker may be constructed before `contents` has been added to its
+  // owning tab strip, and as such tab helpers for `contents` may not yet have
+  // been initialized. Explicitly instantiate SubresourceFilterObserverManager
+  // if necessary for `contents` if necessary to ensure the popup registers the
+  // observation.
+  subresource_filter::SubresourceFilterObserverManager::CreateForWebContents(
+      contents);
+  scoped_observation_.Observe(
       subresource_filter::SubresourceFilterObserverManager::FromWebContents(
-          contents);
-  if (observation_manager) {
-    scoped_observation_.Observe(observation_manager);
-  }
+          contents));
 }
 
 void PopupTracker::WebContentsDestroyed() {
   base::TimeDelta total_foreground_duration =
       visibility_tracker_.GetForegroundDuration();
-  if (first_load_visible_time_start_) {
-    base::TimeDelta first_load_visible_time =
-        first_load_visible_time_
-            ? *first_load_visible_time_
-            : total_foreground_duration - *first_load_visible_time_start_;
-    UMA_HISTOGRAM_LONG_TIMES(
-        "ContentSettings.Popups.FirstDocumentEngagementTime2",
-        first_load_visible_time);
-  }
-  UMA_HISTOGRAM_CUSTOM_TIMES("ContentSettings.Popups.EngagementTime",
-                             total_foreground_duration, base::Milliseconds(1),
-                             base::Hours(6), 50);
-  if (web_contents()->GetClosedByUserGesture()) {
-    UMA_HISTOGRAM_CUSTOM_TIMES(
-        "ContentSettings.Popups.EngagementTime.GestureClose",
-        total_foreground_duration, base::Milliseconds(1), base::Hours(6), 50);
-  }
-
   if (opener_source_id_ != ukm::kInvalidSourceId) {
     const int kMaxInteractions = 100;
     const int kMaxSubcatagoryInteractions = 50;

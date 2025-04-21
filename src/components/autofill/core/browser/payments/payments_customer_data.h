@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,7 @@ struct PaymentsCustomerData {
   explicit PaymentsCustomerData(const std::string& customer_id)
       : customer_id(customer_id) {}
 
-  bool operator==(const PaymentsCustomerData& other) const {
-    return customer_id == other.customer_id;
-  }
-  bool operator!=(const PaymentsCustomerData& other) const {
-    return !(*this == other);
-  }
+  bool operator==(const PaymentsCustomerData&) const = default;
 
   // The identifier by which a Google Payments account is identified.
   std::string customer_id;

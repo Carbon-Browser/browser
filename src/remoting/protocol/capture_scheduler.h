@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/tick_clock.h"
@@ -112,7 +112,7 @@ class CaptureScheduler : public VideoFeedbackStub {
   // Frame ID to be assigned to the next outgoing video frame.
   uint32_t next_frame_id_;
 
-  base::ThreadChecker thread_checker_;
+  THREAD_CHECKER(thread_checker_);
 };
 
 }  // namespace protocol

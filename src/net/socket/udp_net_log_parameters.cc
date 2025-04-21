@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,27 +15,24 @@ namespace net {
 
 namespace {
 
-base::Value NetLogUDPDataTransferParams(int byte_count,
-                                        const char* bytes,
-                                        const IPEndPoint* address,
-                                        NetLogCaptureMode capture_mode) {
-  base::Value::Dict dict;
-  dict.Set("byte_count", byte_count);
+base::Value::Dict NetLogUDPDataTransferParams(int byte_count,
+                                              const char* bytes,
+                                              const IPEndPoint* address,
+                                              NetLogCaptureMode capture_mode) {
+  auto dict = base::Value::Dict().Set("byte_count", byte_count);
   if (NetLogCaptureIncludesSocketBytes(capture_mode))
     dict.Set("bytes", NetLogBinaryValue(bytes, byte_count));
   if (address)
     dict.Set("address", address->ToString());
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogUDPConnectParams(
-    const IPEndPoint& address,
-    NetworkChangeNotifier::NetworkHandle network) {
-  base::Value::Dict dict;
-  dict.Set("address", address.ToString());
-  if (network != NetworkChangeNotifier::kInvalidNetworkHandle)
+base::Value::Dict NetLogUDPConnectParams(const IPEndPoint& address,
+                                         handles::NetworkHandle network) {
+  auto dict = base::Value::Dict().Set("address", address.ToString());
+  if (network != handles::kInvalidNetworkHandle)
     dict.Set("bound_to_network", static_cast<int>(network));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace
@@ -52,9 +49,8 @@ void NetLogUDPDataTransfer(const NetLogWithSource& net_log,
   });
 }
 
-base::Value CreateNetLogUDPConnectParams(
-    const IPEndPoint& address,
-    NetworkChangeNotifier::NetworkHandle network) {
+base::Value::Dict CreateNetLogUDPConnectParams(const IPEndPoint& address,
+                                               handles::NetworkHandle network) {
   return NetLogUDPConnectParams(address, network);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,12 +44,16 @@ struct AX_BASE_EXPORT AXNodeData {
   // kInvalidAXID.
   static constexpr AXID kInvalidAXID = kInvalidAXNodeID;
 
+  static constexpr bool kDefaultBoolValue = false;
+  static constexpr int kDefaultIntValue = 0;
+  static constexpr int kDefaultFloatValue = 0;
+
   AXNodeData();
   virtual ~AXNodeData();
 
   AXNodeData(const AXNodeData& other);
   AXNodeData(AXNodeData&& other);
-  AXNodeData& operator=(AXNodeData other);
+  AXNodeData& operator=(const AXNodeData& other);
 
   // Accessing accessibility attributes:
   //
@@ -68,44 +72,32 @@ struct AX_BASE_EXPORT AXNodeData {
 
   bool HasBoolAttribute(ax::mojom::BoolAttribute attribute) const;
   bool GetBoolAttribute(ax::mojom::BoolAttribute attribute) const;
-  bool GetBoolAttribute(ax::mojom::BoolAttribute attribute, bool* value) const;
 
   bool HasFloatAttribute(ax::mojom::FloatAttribute attribute) const;
   float GetFloatAttribute(ax::mojom::FloatAttribute attribute) const;
-  bool GetFloatAttribute(ax::mojom::FloatAttribute attribute,
-                         float* value) const;
 
   bool HasIntAttribute(ax::mojom::IntAttribute attribute) const;
   int GetIntAttribute(ax::mojom::IntAttribute attribute) const;
-  bool GetIntAttribute(ax::mojom::IntAttribute attribute, int* value) const;
 
   bool HasStringAttribute(ax::mojom::StringAttribute attribute) const;
   const std::string& GetStringAttribute(
       ax::mojom::StringAttribute attribute) const;
-  bool GetStringAttribute(ax::mojom::StringAttribute attribute,
-                          std::string* value) const;
 
   std::u16string GetString16Attribute(
       ax::mojom::StringAttribute attribute) const;
-  bool GetString16Attribute(ax::mojom::StringAttribute attribute,
-                            std::u16string* value) const;
 
   bool HasIntListAttribute(ax::mojom::IntListAttribute attribute) const;
   const std::vector<int32_t>& GetIntListAttribute(
       ax::mojom::IntListAttribute attribute) const;
-  bool GetIntListAttribute(ax::mojom::IntListAttribute attribute,
-                           std::vector<int32_t>* value) const;
 
   bool HasStringListAttribute(ax::mojom::StringListAttribute attribute) const;
   const std::vector<std::string>& GetStringListAttribute(
       ax::mojom::StringListAttribute attribute) const;
-  bool GetStringListAttribute(ax::mojom::StringListAttribute attribute,
-                              std::vector<std::string>* value) const;
 
   bool HasHtmlAttribute(const char* attribute) const;
-  bool GetHtmlAttribute(const char* attribute, std::string* value) const;
-  std::u16string GetHtmlAttribute(const char* attribute) const;
-  bool GetHtmlAttribute(const char* attribute, std::u16string* value) const;
+  const std::string& GetHtmlAttribute(const char* attribute) const;
+  std::u16string GetHtmlAttributeUTF16(const char* attribute) const;
+  const std::string* FindHtmlAttribute(const char* attribute) const;
 
   //
   // Setting accessibility attributes.
@@ -116,7 +108,7 @@ struct AX_BASE_EXPORT AXNodeData {
   //
 
   void AddBoolAttribute(ax::mojom::BoolAttribute attribute, bool value);
-  void AddChildTreeId(const ui::AXTreeID& tree_id);
+  void AddChildTreeId(const AXTreeID& tree_id);
   void AddIntAttribute(ax::mojom::IntAttribute attribute, int32_t value);
   void AddFloatAttribute(ax::mojom::FloatAttribute attribute, float value);
   // This method cannot be used to set kChildTreeId due to a common
@@ -149,17 +141,66 @@ struct AX_BASE_EXPORT AXNodeData {
   // Convenience functions.
   //
 
+  // Return the DOMNodeID, if this object was associated with a DOM Node in
+  // an HTML renderer, otherwise return 0.
+  int GetDOMNodeId() const;
+
   // Adds the name attribute or replaces it if already present. Also sets the
   // NameFrom attribute if not already set.
+  //
+  // [[deprecated("Replaced by `SetNameChecked` and `SetNameExplicitlyEmpty`")]]
+  // See `SetNameChecked` and `SetNameExplicitlyEmpty` which have DCHECKs for
+  // conditions expected to be true, which in reality are not always true.
+  // Tracked by crbug.com/1348081.
   void SetName(const std::string& name);
+  // [[deprecated("Replaced by `SetNameChecked` and `SetNameExplicitlyEmpty`")]]
+  // See `SetNameChecked` and `SetNameExplicitlyEmpty` which have DCHECKs for
+  // conditions expected to be true, which in reality are not always true.
+  // Tracked by crbug.com/1348081.
   void SetName(const std::u16string& name);
 
-  // Allows nameless objects to pass accessibility checks.
+  // Adds the accessible name attribute or replaces it if already present, and
+  // also sets the NameFrom attribute if not already set.
+  //
+  // The value of the accessible name is a localized, end-user-consumable string
+  // which may be derived from visible information (e.g. the text on a button)
+  // or invisible information (e.g. the alternative text describing an icon).
+  // In the case of focusable objects, the name will be presented by the screen
+  // reader when that object gains focus and is critical to understanding the
+  // purpose of that object non-visually.
+  //
+  // Note that `SetNameChecked` must only be used to set a non-empty name, a
+  // condition enforced by a DCHECK. This is done to prevent UI from
+  // accidentally being given an empty name because, as a general rule, nameless
+  // controls tend to be inaccessible. However, because there can be valid
+  // reasons to remove or prevent naming of an item `SetNameExplicitlyEmpty`
+  // provides a means for developers to do so.
+  void SetNameChecked(const std::string& name);
+  void SetNameChecked(const std::u16string& name);
+
+  // Indicates this object should not have an accessible name. One use case is
+  // to prevent screen readers from speaking redundant information, for instance
+  // if the parent View has the same name as this View, causing the screen
+  // reader to speak the name twice. This function can also be used to allow
+  // focusable nameless objects to pass accessibility checks in tests, a
+  // practice that should not be applied in production code.
   void SetNameExplicitlyEmpty();
 
-  // Adds the description attribute or replaces it if already present.
+  // Adds the description attribute or replaces it if already present. Also
+  // sets the DescriptionFrom attribute if not already set. Note that
+  // `SetDescription` must only be used to set a non-empty description, a
+  // condition enforced by a DCHECK. If an object should not have an accessible
+  // description in order to improve the user experience, use
+  // `SetDescriptionExplicitlyEmpty`.
   void SetDescription(const std::string& description);
   void SetDescription(const std::u16string& description);
+
+  // Indicates this object should not have an accessible description. One use
+  // case is to prevent screen readers from speaking redundant information, for
+  // instance if a View's description comes from a tooltip whose content is
+  // similar to that View's accessible name, the screen reader presentation may
+  // be overly verbose.
+  void SetDescriptionExplicitlyEmpty();
 
   // Adds the value attribute or replaces it if already present.
   void SetValue(const std::string& value);
@@ -169,16 +210,13 @@ struct AX_BASE_EXPORT AXNodeData {
   bool HasState(ax::mojom::State state) const;
   bool HasAction(ax::mojom::Action action) const;
   bool HasTextStyle(ax::mojom::TextStyle text_style) const;
-  // aria-dropeffect is deprecated in WAI-ARIA 1.1.
-  bool HasDropeffect(ax::mojom::Dropeffect dropeffect) const;
 
   // Set or remove bits in the given enum's corresponding bitfield.
   void AddState(ax::mojom::State state);
   void RemoveState(ax::mojom::State state);
   void AddAction(ax::mojom::Action action);
+  void RemoveAction(ax::mojom::Action action);
   void AddTextStyle(ax::mojom::TextStyle text_style);
-  // aria-dropeffect is deprecated in WAI-ARIA 1.1.
-  void AddDropeffect(ax::mojom::Dropeffect dropeffect);
 
   // Helper functions to get or set some common int attributes with some
   // specific enum types. To remove an attribute, set it to None.
@@ -191,12 +229,16 @@ struct AX_BASE_EXPORT AXNodeData {
   void SetDefaultActionVerb(ax::mojom::DefaultActionVerb default_action_verb);
   ax::mojom::HasPopup GetHasPopup() const;
   void SetHasPopup(ax::mojom::HasPopup has_popup);
+  ax::mojom::IsPopup GetIsPopup() const;
+  void SetIsPopup(ax::mojom::IsPopup is_popup);
   ax::mojom::InvalidState GetInvalidState() const;
   void SetInvalidState(ax::mojom::InvalidState invalid_state);
   ax::mojom::NameFrom GetNameFrom() const;
   void SetNameFrom(ax::mojom::NameFrom name_from);
   ax::mojom::DescriptionFrom GetDescriptionFrom() const;
   void SetDescriptionFrom(ax::mojom::DescriptionFrom description_from);
+  ax::mojom::DetailsFrom GetDetailsFrom() const;
+  void SetDetailsFrom(ax::mojom::DetailsFrom details_from);
   ax::mojom::TextPosition GetTextPosition() const;
   void SetTextPosition(ax::mojom::TextPosition text_position);
   ax::mojom::Restriction GetRestriction() const;
@@ -279,11 +321,12 @@ struct AX_BASE_EXPORT AXNodeData {
   // attribute.
   bool IsNonAtomicTextField() const;
 
-  // Some spinners are text fields, and some are not. For example, an ordinary
-  // <input type="number"> allows caret movement and behaves like a textfield,
-  // but the <input type="number"> used inside date, datetime, datetime-local,
-  // month, time, and week types does not allow this. In either type, pressing
-  // up/down arrow will change the value to the previous/next allowed value.
+  // Any element that has `spinbutton` set on the root editable element should
+  // be treated as a SpinnerTextField.
+  // For example, <input type="text" role=spinbutton> is a spinner text field.
+  // Richly editable elements should be treated as spinners when they have
+  // their roles set to `spinbutton` and when they are not the descendant of a
+  // <contenteditable> element.
   bool IsSpinnerTextField() const;
 
   // Helper to determine if the data belongs to a node that supports
@@ -294,8 +337,28 @@ struct AX_BASE_EXPORT AXNodeData {
   // expand/collapse.
   bool SupportsExpandCollapse() const;
 
+  bool HasChildTreeID() const;
+  std::optional<AXTreeID> GetChildTreeID() const;
+
   // Return a string representation of this data, for debugging.
-  virtual std::string ToString() const;
+  virtual std::string ToString(bool verbose = true) const;
+
+  // Returns the approximate size in bytes.
+  size_t ByteSize() const;
+
+  struct AX_BASE_EXPORT AXNodeDataSize {
+    size_t int_attribute_size = 0;
+    size_t float_attribute_size = 0;
+    size_t bool_attribute_size = 0;
+    size_t string_attribute_size = 0;
+    size_t int_list_attribhute_size = 0;
+    size_t string_list_attribute_size = 0;
+    size_t html_attribute_size = 0;
+    size_t child_ids_size = 0;
+
+    size_t ByteSize() const;
+  };
+  void AccumulateSize(AXNodeDataSize& node_data_size) const;
 
   // Return a string representation of |aria-dropeffect| values, for testing
   // and debugging.

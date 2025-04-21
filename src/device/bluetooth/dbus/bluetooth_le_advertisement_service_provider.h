@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/bus.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -64,12 +65,13 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLEAdvertisementServiceProvider {
       dbus::Bus* bus,
       const dbus::ObjectPath& object_path,
       Delegate* delegate,
+      bool adapter_support_ext_adv,
       AdvertisementType type,
-      std::unique_ptr<UUIDList> service_uuids,
-      std::unique_ptr<ManufacturerData> manufacturer_data,
-      std::unique_ptr<UUIDList> solicit_uuids,
-      std::unique_ptr<ServiceData> service_data,
-      std::unique_ptr<ScanResponseData> scan_response_data);
+      std::optional<UUIDList> service_uuids,
+      std::optional<ManufacturerData> manufacturer_data,
+      std::optional<UUIDList> solicit_uuids,
+      std::optional<ServiceData> service_data,
+      std::optional<ScanResponseData> scan_response_data);
 
  protected:
   BluetoothLEAdvertisementServiceProvider();

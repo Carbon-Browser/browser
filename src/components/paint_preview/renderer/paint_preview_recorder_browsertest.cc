@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,9 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/public/web/web_testing_support.h"
+#include "third_party/blink/public/web/web_view.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkPicture.h"
@@ -58,10 +60,10 @@ class PaintPreviewRecorderRenderViewTest
       public ::testing::WithParamInterface<bool> {
  public:
   PaintPreviewRecorderRenderViewTest() {
-    std::vector<base::Feature> enabled;
-    // TODO(crbug/1022398): This is required to bypass a seemingly unrelated
-    // DCHECK for |use_overlay_scrollbars_| in NativeThemeAura on ChromeOS when
-    // painting scrollbars when first calling LoadHTML().
+    std::vector<base::test::FeatureRef> enabled;
+    // TODO(crbug.com/40106592): This is required to bypass a seemingly
+    // unrelated DCHECK for |use_overlay_scrollbars_| in NativeThemeAura on
+    // ChromeOS when painting scrollbars when first calling LoadHTML().
     feature_list_.InitAndDisableFeature(features::kOverlayScrollbar);
     blink::WebTestingSupport::SaveRuntimeFeatures();
     blink::WebRuntimeFeatures::EnableFeatureFromString(kCompositeAfterPaint,
@@ -76,6 +78,8 @@ class PaintPreviewRecorderRenderViewTest
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     RenderViewTest::SetUp();
+    // Hide scrollbars so that they don't affect the bitmap color results.
+    web_view_->GetSettings()->SetHideScrollbars(true);
   }
 
   base::FilePath MakeTestFilePath(const std::string& filename) {

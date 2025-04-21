@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -87,8 +87,8 @@ void DesktopNotificationHandler::OnClick(
     Profile* profile,
     const GURL& origin,
     const std::string& notification_id,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     base::OnceClosure completed_closure) {
   if (notification_id.find(kDesktopNotificationSharedPrefix)) {
     // Launch a new tab for the notification's |origin|,
@@ -130,7 +130,8 @@ void DesktopNotificationHandler::DisplaySendingConfirmation(
 void DesktopNotificationHandler::DisplayFailureMessage(const GURL& url) {
   message_center::Notification notification(
       message_center::NOTIFICATION_TYPE_SIMPLE,
-      kDesktopNotificationSharedPrefix + base::GenerateGUID(),
+      kDesktopNotificationSharedPrefix +
+          base::Uuid::GenerateRandomV4().AsLowercaseString(),
       l10n_util::GetStringUTF16(
           IDS_MESSAGE_NOTIFICATION_SEND_TAB_TO_SELF_CONFIRMATION_FAILURE_TITLE),
       l10n_util::GetStringUTF16(

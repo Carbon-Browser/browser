@@ -41,8 +41,8 @@ void SVGMarkerDataBuilder::Build(const Path& path) {
 }
 
 void SVGMarkerDataBuilder::UpdateFromPathElement(void* info,
-                                                 const PathElement* element) {
-  static_cast<SVGMarkerDataBuilder*>(info)->UpdateFromPathElement(*element);
+                                                 const PathElement& element) {
+  static_cast<SVGMarkerDataBuilder*>(info)->UpdateFromPathElement(element);
 }
 
 namespace {
@@ -96,7 +96,7 @@ void MarkerPathSegmentProcessor::EmitSegment(
   if (segment.command == kPathSegArcAbs) {
     // Decompose and then pass/emit a synthesized cubic with matching tangents.
     Vector<PathSegmentData> decomposed_arc_curves = DecomposeArc(segment);
-    if (decomposed_arc_curves.IsEmpty()) {
+    if (decomposed_arc_curves.empty()) {
       segment.command = kPathSegLineToAbs;
     } else {
       // Use the first control point from the first curve and the second and
@@ -121,31 +121,35 @@ void SVGMarkerDataBuilder::Build(const SVGPathByteStream& stream) {
 }
 
 void SVGMarkerDataBuilder::EmitSegment(const PathSegmentData& segment) {
-  PathElement element;
-  gfx::PointF points[3];
-  element.points = points;
+  PathElementType type;
+  std::array<gfx::PointF, 3> points;
+  size_t count;
   switch (segment.command) {
     case kPathSegClosePath:
-      element.type = kPathElementCloseSubpath;
+      type = kPathElementCloseSubpath;
+      count = 0;
       break;
     case kPathSegMoveToAbs:
-      element.type = kPathElementMoveToPoint;
-      element.points[0] = segment.target_point;
+      type = kPathElementMoveToPoint;
+      count = 1;
+      points[0] = segment.target_point;
       break;
     case kPathSegLineToAbs:
-      element.type = kPathElementAddLineToPoint;
-      element.points[0] = segment.target_point;
+      type = kPathElementAddLineToPoint;
+      count = 1;
+      points[0] = segment.target_point;
       break;
     case kPathSegCurveToCubicAbs:
-      element.type = kPathElementAddCurveToPoint;
-      element.points[0] = segment.point1;
-      element.points[1] = segment.point2;
-      element.points[2] = segment.target_point;
+      type = kPathElementAddCurveToPoint;
+      count = 3;
+      points[0] = segment.point1;
+      points[1] = segment.point2;
+      points[2] = segment.target_point;
       break;
     default:
       NOTREACHED();
   }
-  UpdateFromPathElement(element);
+  UpdateFromPathElement({type, base::span(points).first(count)});
 }
 
 double SVGMarkerDataBuilder::CurrentAngle(AngleType type) const {
@@ -210,7 +214,7 @@ SVGMarkerDataBuilder::SegmentData
 SVGMarkerDataBuilder::ExtractPathElementFeatures(
     const PathElement& element) const {
   SegmentData data;
-  const gfx::PointF* points = element.points;
+  const base::span<const gfx::PointF> points = element.points;
   switch (element.type) {
     case kPathElementAddCurveToPoint:
       data.position = points[2];
@@ -231,11 +235,19 @@ SVGMarkerDataBuilder::ExtractPathElementFeatures(
       data.start_tangent = data.position - origin_;
       data.end_tangent = data.position - origin_;
       break;
-    case kPathElementCloseSubpath:
+    case kPathElementCloseSubpath: {
+      gfx::Vector2dF tangent = subpath_start_ - origin_;
+      // If the current point equals the start point of the subpath, and this
+      // not a subpath with just a 'moveto', then use the saved tangent from
+      // the start of the subpath.
+      if (last_element_type_ != kPathElementMoveToPoint && tangent.IsZero()) {
+        tangent = last_moveto_out_slope_;
+      }
       data.position = subpath_start_;
-      data.start_tangent = data.position - origin_;
-      data.end_tangent = data.position - origin_;
+      data.start_tangent = tangent;
+      data.end_tangent = tangent;
       break;
+    }
   }
   return data;
 }
@@ -252,7 +264,7 @@ void SVGMarkerDataBuilder::UpdateFromPathElement(const PathElement& element) {
 
   // Record the angle for the previous element.
   bool starts_new_subpath = element.type == kPathElementMoveToPoint;
-  if (!positions_.IsEmpty())
+  if (!positions_.empty())
     UpdateAngle(starts_new_subpath);
 
   // Update the incoming slope for this marker position.
@@ -266,8 +278,6 @@ void SVGMarkerDataBuilder::UpdateFromPathElement(const PathElement& element) {
   if (starts_new_subpath) {
     subpath_start_ = element.points[0];
     last_moveto_index_ = positions_.size();
-  } else if (element.type == kPathElementCloseSubpath) {
-    subpath_start_ = gfx::PointF();
   }
 
   last_element_type_ = element.type;
@@ -275,12 +285,12 @@ void SVGMarkerDataBuilder::UpdateFromPathElement(const PathElement& element) {
   // Output a marker for this element. The angle will be computed at a later
   // stage. Similarly for 'end' markers the marker type will be updated at a
   // later stage.
-  SVGMarkerType marker_type = positions_.IsEmpty() ? kStartMarker : kMidMarker;
+  SVGMarkerType marker_type = positions_.empty() ? kStartMarker : kMidMarker;
   positions_.push_back(MarkerPosition(marker_type, origin_, 0));
 }
 
 void SVGMarkerDataBuilder::Flush() {
-  if (positions_.IsEmpty())
+  if (positions_.empty())
     return;
   const bool kEndsSubpath = true;
   UpdateAngle(kEndsSubpath);

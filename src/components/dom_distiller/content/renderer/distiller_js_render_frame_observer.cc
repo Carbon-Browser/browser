@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/dom_distiller/core/url_utils.h"
 #include "content/public/renderer/render_frame.h"
 #include "v8/include/v8.h"
@@ -21,11 +21,11 @@ DistillerJsRenderFrameObserver::DistillerJsRenderFrameObserver(
       distiller_isolated_world_id_(distiller_isolated_world_id),
       is_distiller_page_(false) {}
 
-DistillerJsRenderFrameObserver::~DistillerJsRenderFrameObserver() {}
+DistillerJsRenderFrameObserver::~DistillerJsRenderFrameObserver() = default;
 
 void DistillerJsRenderFrameObserver::DidStartNavigation(
     const GURL& url,
-    absl::optional<blink::WebNavigationType> navigation_type) {
+    std::optional<blink::WebNavigationType> navigation_type) {
   is_distiller_page_ = url_utils::IsDistilledPage(url);
 }
 

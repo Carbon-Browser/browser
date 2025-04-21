@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROME_TEST_CHROMEDRIVER_LOG_REPLAY_REPLAY_HTTP_CLIENT_H_
@@ -14,11 +14,9 @@
 #include "chrome/test/chromedriver/log_replay/devtools_log_reader.h"
 #include "chrome/test/chromedriver/net/sync_websocket_factory.h"
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class URLLoaderFactory;
-}
-}  // namespace network
+}  // namespace network::mojom
 
 // Subclass of DevToolsHttpClient that redirects communication
 // that would happen with Chrome to a DevToolsLogReader (i.e. a ChromeDriver
@@ -29,7 +27,6 @@ class ReplayHttpClient : public DevToolsHttpClient {
   // Initializes a DevToolsLogReader with the given log file.
   ReplayHttpClient(const DevToolsEndpoint& endpoint,
                    network::mojom::URLLoaderFactory* factory,
-                   std::unique_ptr<std::set<WebViewInfo::Type>> window_types,
                    const base::FilePath& log_file);
   ~ReplayHttpClient() override;
 

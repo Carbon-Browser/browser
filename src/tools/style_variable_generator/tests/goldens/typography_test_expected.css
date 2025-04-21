@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium Authors. All rights reserved.
+/* Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
@@ -9,8 +9,17 @@
   color-scheme: light dark;
 }
 
-html:not(body) {}
+@font-face {
+  font-family: "GSR";
+  src: local("Google Sans Regular");
+}
 
+@font-face {
+  font-family: "GSTM";
+  src: local("Google Sans Text Medium");
+}
+
+html:not(body) {}
 html {
   /* font families */
   --cros-font-family-test: 'Google Sans', 'Noto Sans', sans-serif;
@@ -22,5 +31,6 @@ html {
   --cros-headline-1-font-size: 15px;
   --cros-headline-1-font-weight: 500;
   --cros-headline-1-line-height: 22px;
+
 
 }

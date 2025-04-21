@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <mferror.h>
 #include <mfmediaengine.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/thread_pool.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/cdm_config.h"
 #include "media/base/key_systems.h"
 #include "media/base/win/mf_helpers.h"
@@ -90,12 +90,13 @@ void MediaFoundationCdmFactory::OnCdmOriginIdObtained(
     const std::unique_ptr<MediaFoundationCdmData> media_foundation_cdm_data) {
   if (!media_foundation_cdm_data) {
     std::move(cdm_created_cb)
-        .Run(nullptr, "Failed to get the CDM preference data.");
+        .Run(nullptr, CreateCdmStatus::kGetCdmPrefDataFailed);
     return;
   }
 
   if (media_foundation_cdm_data->origin_id.is_empty()) {
-    std::move(cdm_created_cb).Run(nullptr, "Failed to get the CDM origin ID.");
+    std::move(cdm_created_cb)
+        .Run(nullptr, CreateCdmStatus::kGetCdmOriginIdFailed);
     return;
   }
 
@@ -123,7 +124,8 @@ void MediaFoundationCdmFactory::OnCdmOriginIdObtained(
       session_expiration_update_cb);
 
   // `cdm_created_cb` should always be run asynchronously.
-  auto bound_cdm_created_cb = BindToCurrentLoop(std::move(cdm_created_cb));
+  auto bound_cdm_created_cb =
+      base::BindPostTaskToCurrentDefault(std::move(cdm_created_cb));
 
   HRESULT hr = cdm->Initialize();
 
@@ -136,11 +138,11 @@ void MediaFoundationCdmFactory::OnCdmOriginIdObtained(
   if (FAILED(hr)) {
     base::UmaHistogramSparse(uma_prefix + "Initialize", hr);
     std::move(bound_cdm_created_cb)
-        .Run(nullptr, "Failed to initialize CDM: " + PrintHr(hr));
+        .Run(nullptr, CreateCdmStatus::kInitCdmFailed);
     return;
   }
 
-  std::move(bound_cdm_created_cb).Run(cdm, "");
+  std::move(bound_cdm_created_cb).Run(cdm, CreateCdmStatus::kSuccess);
 }
 
 HRESULT MediaFoundationCdmFactory::GetCdmFactory(
@@ -150,9 +152,7 @@ HRESULT MediaFoundationCdmFactory::GetCdmFactory(
   auto itr = create_cdm_factory_cbs_for_testing_.find(key_system);
   if (itr != create_cdm_factory_cbs_for_testing_.end()) {
     auto& create_cdm_factory_cb = itr->second;
-    if (!create_cdm_factory_cb)
-      return E_FAIL;
-
+    DCHECK(create_cdm_factory_cb);
     RETURN_IF_FAILED(create_cdm_factory_cb.Run(cdm_factory));
     return S_OK;
   }
@@ -189,14 +189,14 @@ void MediaFoundationCdmFactory::StoreClientToken(
   helper_->SetCdmClientToken(client_token);
 }
 
-void MediaFoundationCdmFactory::OnCdmEvent(CdmEvent event) {
-  helper_->OnCdmEvent(event);
+void MediaFoundationCdmFactory::OnCdmEvent(CdmEvent event, HRESULT hresult) {
+  helper_->OnCdmEvent(event, hresult);
 }
 
 void MediaFoundationCdmFactory::CreateMfCdm(
     const CdmConfig& cdm_config,
     const base::UnguessableToken& cdm_origin_id,
-    const absl::optional<std::vector<uint8_t>>& cdm_client_token,
+    const std::optional<std::vector<uint8_t>>& cdm_client_token,
     const base::FilePath& cdm_store_path_root,
     HRESULT& hresult,
     Microsoft::WRL::ComPtr<IMFContentDecryptionModule>& mf_cdm) {

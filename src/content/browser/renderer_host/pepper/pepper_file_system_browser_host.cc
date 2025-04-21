@@ -1,22 +1,22 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/pepper/pepper_file_system_browser_host.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/renderer_host/pepper/pepper_file_io_host.h"
 #include "content/browser/renderer_host/pepper/quota_reservation.h"
 #include "content/common/pepper_file_util.h"
 #include "content/public/browser/browser_ppapi_host.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/plugin_service.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
-#include "content/public/common/pepper_plugin_info.h"
+#include "content/public/common/content_plugin_info.h"
 #include "net/base/mime_util.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/host/dispatch_host_message.h"
@@ -75,7 +75,7 @@ PepperFileSystemBrowserHost::IOThreadState::IOThreadState(
     PP_FileSystemType type,
     base::WeakPtr<PepperFileSystemBrowserHost> host)
     : type_(type),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       host_(host) {}
 
 PepperFileSystemBrowserHost::IOThreadState::~IOThreadState() {
@@ -127,12 +127,13 @@ void PepperFileSystemBrowserHost::IOThreadState::OpenFileSystem(
 
   SetFileSystemContext(file_system_context);
 
-  // TODO(https://crbug.com/1236243): figure out if StorageKey conversion
+  // TODO(crbug.com/40782681): figure out if StorageKey conversion
   // should replaced with a third-party value: is ppapi only limited to
   // first-party contexts? If so, the implementation below is correct.
   file_system_context_->OpenFileSystem(
-      blink::StorageKey(url::Origin::Create(origin)), /*bucket=*/absl::nullopt,
-      file_system_type, storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(origin)),
+      /*bucket=*/std::nullopt, file_system_type,
+      storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
       base::BindOnce(&IOThreadState::OpenFileSystemComplete, this,
                      reply_context));
 }
@@ -164,8 +165,6 @@ void PepperFileSystemBrowserHost::IOThreadState::OpenIsolatedFileSystem(
       return;
     default:
       NOTREACHED();
-      SendReplyForIsolatedFileSystem(reply_context, fsid, PP_ERROR_BADARGUMENT);
-      return;
   }
 }
 
@@ -178,7 +177,7 @@ void PepperFileSystemBrowserHost::IOThreadState::OpenFileSystemComplete(
   int32_t pp_error = ppapi::FileErrorToPepperError(error);
   if (pp_error == PP_OK) {
     opened_ = true;
-    // TODO(crbug.com/1323925): Store and use FileSystemURL instead.
+    // TODO(crbug.com/40838958): Store and use FileSystemURL instead.
     root_url_ = root.ToGURL();
 
     ShouldCreateQuotaReservation(base::BindOnce(
@@ -283,9 +282,9 @@ void PepperFileSystemBrowserHost::IOThreadState::ShouldCreateQuotaReservation(
   storage::FileSystemType file_system_type =
       PepperFileSystemTypeToFileSystemType(type_);
   quota_manager_proxy->IsStorageUnlimited(
-      blink::StorageKey(url::Origin::Create(root_url_)),
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(root_url_)),
       storage::FileSystemTypeToQuotaStorageType(file_system_type),
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(
           [](base::OnceCallback<void(bool)> callback,
              bool is_storage_unlimited) {
@@ -298,8 +297,8 @@ void PepperFileSystemBrowserHost::IOThreadState::CreateQuotaReservation(
     base::OnceClosure callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK(root_url_.is_valid());
-  base::PostTaskAndReplyWithResult(
-      file_system_context_->default_file_task_runner(), FROM_HERE,
+  file_system_context_->default_file_task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&QuotaReservation::Create, file_system_context_,
                      root_url_.DeprecatedGetOriginAsURL(),
                      PepperFileSystemTypeToFileSystemType(type_)),
@@ -406,14 +405,15 @@ void PepperFileSystemBrowserHost::OpenQuotaFile(
       files_.insert(std::make_pair(id, file_io_host));
   if (!insert_result.second) {
     NOTREACHED();
-    return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      io_thread_state_->file_system_context()->default_file_task_runner(),
-      FROM_HERE,
-      base::BindOnce(&QuotaReservation::OpenFile, quota_reservation_, id, url),
-      base::BindOnce(RunOpenQuotaCallbackOnUI, std::move(callback)));
+  io_thread_state_->file_system_context()
+      ->default_file_task_runner()
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          base::BindOnce(&QuotaReservation::OpenFile, quota_reservation_, id,
+                         url),
+          base::BindOnce(RunOpenQuotaCallbackOnUI, std::move(callback)));
 }
 
 void PepperFileSystemBrowserHost::CloseQuotaFile(
@@ -425,7 +425,6 @@ void PepperFileSystemBrowserHost::CloseQuotaFile(
     files_.erase(it);
   } else {
     NOTREACHED();
-    return;
   }
 
   io_thread_state_->file_system_context()->default_file_task_runner()->PostTask(
@@ -568,8 +567,8 @@ void PepperFileSystemBrowserHost::GotReservedQuota(
 
 std::string PepperFileSystemBrowserHost::GetPluginMimeType() const {
   base::FilePath plugin_path = browser_ppapi_host_->GetPluginPath();
-  const PepperPluginInfo* info =
-      PluginService::GetInstance()->GetRegisteredPpapiPluginInfo(plugin_path);
+  const ContentPluginInfo* info =
+      PluginService::GetInstance()->GetRegisteredPluginInfo(plugin_path);
   if (!info || info->mime_types.empty())
     return std::string();
   // Use the first element in |info->mime_types| even if several elements exist.

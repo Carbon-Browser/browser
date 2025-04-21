@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -76,7 +76,7 @@ LogoMetadata GetExampleMetadata2() {
 
 base::RefCountedString* CreateExampleImage(size_t num_bytes) {
   base::RefCountedString* encoded_image_str = new base::RefCountedString();
-  std::string& str = encoded_image_str->data();
+  std::string& str = encoded_image_str->as_string();
   str.resize(num_bytes);
   for (size_t i = 0; i < num_bytes; ++i)
     str[i] = static_cast<char>(i);

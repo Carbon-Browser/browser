@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include "base/containers/contains.h"
 #include "base/debug/debugger.h"
 #include "base/debug/stack_trace.h"
-#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/i18n/icu_util.h"
 #include "base/logging.h"
+#include "base/metrics/field_trial.h"
 #include "base/process/launch.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
@@ -23,7 +23,7 @@
 #include "services/service_manager/public/mojom/service.mojom.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -91,7 +91,16 @@ int main(int argc, char** argv) {
 #endif
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  base::FeatureList::InitializeInstance(
+  std::unique_ptr<base::FieldTrialList> field_trial_list =
+      std::make_unique<base::FieldTrialList>();
+  // Create field trials according to --force-fieldtrials param.
+  base::FieldTrialList::CreateTrialsFromString(
+      command_line->GetSwitchValueASCII(::switches::kForceFieldTrials));
+  // Enable and disable features according to --enable-features and
+  // --disable-features.
+  std::unique_ptr<base::FeatureList> feature_list =
+      std::make_unique<base::FeatureList>();
+  feature_list->InitFromCommandLine(
       command_line->GetSwitchValueASCII(switches::kEnableFeatures),
       command_line->GetSwitchValueASCII(switches::kDisableFeatures));
 

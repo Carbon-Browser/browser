@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,9 @@ base::FilePath GetInputPathInSys(const base::FilePath& path) {
 
 InputDeviceType GetInputDeviceTypeFromPath(const base::FilePath& path) {
   std::string event_node = path.BaseName().value();
-  if (event_node.empty() ||
-      !base::StartsWith(event_node, "event", base::CompareCase::SENSITIVE))
+  if (event_node.empty() || !event_node.starts_with("event")) {
     return InputDeviceType::INPUT_DEVICE_UNKNOWN;
+  }
 
   base::FilePath sysfs_path = GetInputPathInSys(path);
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "device/fido/fido_parsing_utils.h"
 #include "device/fido/hid/fido_hid_discovery.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -79,7 +79,7 @@ void MockFidoHidConnection::ExpectWriteHidInit(
             ASSERT_EQ(64u, buffer.size());
             // First 7 bytes are 4 bytes of channel id, one byte representing
             // HID command, 2 bytes for payload length.
-            SetNonce(base::make_span(buffer).subspan(7, 8));
+            SetNonce(base::span(buffer).subspan<7, 8>());
             std::move(*cb).Run(true);
           }));
 }

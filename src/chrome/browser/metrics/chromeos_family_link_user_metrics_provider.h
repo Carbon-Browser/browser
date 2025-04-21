@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,12 @@
 #define CHROME_BROWSER_METRICS_CHROMEOS_FAMILY_LINK_USER_METRICS_PROVIDER_H_
 
 #include <memory>
+#include <optional>
 
 #include "components/metrics/metrics_provider.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "google_apis/gaia/google_service_auth_error.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace metrics {
-class ChromeUserMetricsExtension;
-}  // namespace metrics
 
 namespace signin {
 class PrimaryAccountAccessTokenFetcher;
@@ -55,8 +51,7 @@ class ChromeOSFamilyLinkUserMetricsProvider
   ~ChromeOSFamilyLinkUserMetricsProvider() override;
 
   // metrics::MetricsProvider:
-  void ProvideCurrentSessionData(
-      metrics::ChromeUserMetricsExtension* uma_proto_unused) override;
+  bool ProvideHistograms() override;
 
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;
@@ -76,7 +71,7 @@ class ChromeOSFamilyLinkUserMetricsProvider
 
   // Cache the log segment because it won't change during the session once
   // assigned.
-  absl::optional<LogSegment> log_segment_;
+  std::optional<LogSegment> log_segment_;
 };
 
 #endif  // CHROME_BROWSER_METRICS_CHROMEOS_FAMILY_LINK_USER_METRICS_PROVIDER_H_

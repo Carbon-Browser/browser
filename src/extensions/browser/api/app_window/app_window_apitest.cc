@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/containers/contains.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
@@ -23,10 +24,6 @@
 #include "net/base/filename_util.h"
 #include "ui/base/base_window.h"
 #include "ui/gfx/geometry/rect.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "ui/base/win/shell.h"
-#endif
 
 namespace extensions {
 
@@ -50,14 +47,11 @@ IN_PROC_BROWSER_TEST_F(ExperimentalAppWindowApiTest, SetIcon) {
   while (app_window->custom_app_icon().IsEmpty())
     base::RunLoop().RunUntilIdle();
 
-  EXPECT_NE(std::string::npos,
-            app_window->app_icon_url().spec().find("icon.png"));
+  EXPECT_TRUE(base::Contains(app_window->app_icon_url().spec(), "icon.png"));
 }
 
-// TODO(crbug.com/794771): These fail on Linux with HEADLESS env var set.
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/40554643): These fail on Linux with HEADLESS env var set.
+#if BUILDFLAG(IS_LINUX)
 #define MAYBE_OnMinimizedEvent DISABLED_OnMinimizedEvent
 #define MAYBE_OnMaximizedEvent DISABLED_OnMaximizedEvent
 #define MAYBE_OnRestoredEvent DISABLED_OnRestoredEvent
@@ -65,7 +59,7 @@ IN_PROC_BROWSER_TEST_F(ExperimentalAppWindowApiTest, SetIcon) {
 #define MAYBE_OnMinimizedEvent OnMinimizedEvent
 #define MAYBE_OnMaximizedEvent OnMaximizedEvent
 #define MAYBE_OnRestoredEvent OnRestoredEvent
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_LINUX)
 
 IN_PROC_BROWSER_TEST_F(AppWindowApiTest, MAYBE_OnMinimizedEvent) {
   EXPECT_TRUE(RunExtensionTest("platform_apps/windows_api_properties",
@@ -131,7 +125,7 @@ IN_PROC_BROWSER_TEST_F(AppWindowApiTest, SetShapeNoPerm) {
 }
 
 // Fails on Ozone/X11.  https://crbug.com/1109112
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_AlphaEnabledHasPermissions DISABLED_AlphaEnabledHasPermissions
 #else
 #define MAYBE_AlphaEnabledHasPermissions AlphaEnabledHasPermissions
@@ -143,17 +137,9 @@ IN_PROC_BROWSER_TEST_F(AppWindowApiTest, MAYBE_AlphaEnabledHasPermissions) {
       "platform_apps/windows_api_alpha_enabled/has_permissions_has_alpha";
   const char* test_dir = kNoAlphaDir;
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if defined(USE_AURA) && !(BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
+#if defined(USE_AURA) && !BUILDFLAG(IS_LINUX)
   test_dir = kHasAlphaDir;
-
-#if BUILDFLAG(IS_WIN)
-  if (!ui::win::IsAeroGlassEnabled()) {
-    test_dir = kNoAlphaDir;
-  }
-#endif  // BUILDFLAG(IS_WIN)
-#endif  // USE_AURA && !(OS_LINUX || IS_CHROMEOS_LACROS)
+#endif  // USE_AURA && !BUILDFLAG(IS_LINUX)
 
   EXPECT_TRUE(RunExtensionTest(test_dir, {.launch_as_platform_app = true}))
       << message_;
@@ -181,6 +167,13 @@ IN_PROC_BROWSER_TEST_F(AppWindowApiTest, AlphaEnabledWrongFrameType) {
   EXPECT_TRUE(RunExtensionTest(
       "platform_apps/windows_api_alpha_enabled/wrong_frame_type",
       {.launch_as_platform_app = true}))
+      << message_;
+}
+
+IN_PROC_BROWSER_TEST_F(AppWindowApiTest, CrossOriginIsolation) {
+  EXPECT_TRUE(
+      RunExtensionTest("platform_apps/window_api_cross_origin_isolation",
+                       {.launch_as_platform_app = true}))
       << message_;
 }
 
@@ -214,7 +207,7 @@ IN_PROC_BROWSER_TEST_F(AppWindowApiTest, OpeningAbsoluteURLs) {
   EXPECT_FALSE(app_window_contents->GetPrimaryMainFrame()->IsErrorDocument());
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(AppWindowApiTest, ImeWindowHasPermissions) {
   EXPECT_TRUE(
       RunExtensionTest("platform_apps/windows_api_ime/has_permissions_allowed",
@@ -250,6 +243,6 @@ IN_PROC_BROWSER_TEST_F(AppWindowApiTest, ImeWindowNotFullscreen) {
       {.load_as_component = true}))
       << message_;
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "services/media_session/public/mojom/constants.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,13 +27,13 @@ constexpr base::TimeDelta kDefaultSeekSeconds =
 
 class MockMediaController : public media_router::mojom::MediaController {
  public:
-  MOCK_METHOD0(Play, void());
-  MOCK_METHOD0(Pause, void());
-  MOCK_METHOD1(SetMute, void(bool));
-  MOCK_METHOD1(SetVolume, void(float));
-  MOCK_METHOD1(Seek, void(base::TimeDelta));
-  MOCK_METHOD0(NextTrack, void());
-  MOCK_METHOD0(PreviousTrack, void());
+  MOCK_METHOD(void, Play, ());
+  MOCK_METHOD(void, Pause, ());
+  MOCK_METHOD(void, SetMute, (bool));
+  MOCK_METHOD(void, SetVolume, (float));
+  MOCK_METHOD(void, Seek, (base::TimeDelta));
+  MOCK_METHOD(void, NextTrack, ());
+  MOCK_METHOD(void, PreviousTrack, ());
 };
 
 class CastMediaSessionControllerTest : public testing::Test {

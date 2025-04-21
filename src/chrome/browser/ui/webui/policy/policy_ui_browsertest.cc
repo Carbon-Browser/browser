@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,34 +8,44 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/cfi_buildflags.h"
 #include "base/containers/flat_map.h"
+#include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "build/android_buildflags.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chrome/browser/policy/profile_policy_connector_builder.h"
 #include "chrome/browser/policy/schema_registry_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/chrome_test_utils.h"
+#include "chrome/test/base/platform_browser_test.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/browser/webui/policy_status_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_refresh_scheduler.h"
+#include "components/policy/core/common/cloud/enterprise_metrics.h"
 #include "components/policy/core/common/external_data_fetcher.h"
+#include "components/policy/core/common/management/scoped_management_service_override_for_testing.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/core/common/schema.h"
 #include "components/policy/policy_constants.h"
@@ -56,16 +66,16 @@
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/install_verifier.h"
 #include "chrome/browser/extensions/test_extension_system.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/account_id/account_id.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/features/simple_feature.h"
-#include "ui/shell_dialogs/select_file_dialog.h"          // nogncheck
-#include "ui/shell_dialogs/select_file_dialog_factory.h"  // nogncheck
-#include "ui/shell_dialogs/select_file_policy.h"          // nogncheck
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 using testing::_;
@@ -92,8 +102,9 @@ class PolicySchemaAvailableWaiter : public policy::SchemaRegistry::Observer {
   // |policy_namespace_| that has been passed to the constructor. Returns
   // immediately if the policy schema is already available.
   void Wait() {
-    if (RegistryHasSchemaForNamespace())
+    if (RegistryHasSchemaForNamespace()) {
       return;
+    }
     registry_->AddObserver(this);
     run_loop_.Run();
   }
@@ -102,15 +113,17 @@ class PolicySchemaAvailableWaiter : public policy::SchemaRegistry::Observer {
   bool RegistryHasSchemaForNamespace() {
     const policy::ComponentMap* map =
         registry_->schema_map()->GetComponents(policy_namespace_.domain);
-    if (!map)
+    if (!map) {
       return false;
+    }
     return map->find(policy_namespace_.component_id) != map->end();
   }
 
   // policy::SchemaRegistry::Observer:
   void OnSchemaRegistryUpdated(bool has_new_schemas) override {
-    if (RegistryHasSchemaForNamespace())
+    if (RegistryHasSchemaForNamespace()) {
       run_loop_.Quit();
+    }
   }
 
   const raw_ptr<policy::SchemaRegistry> registry_;
@@ -156,58 +169,15 @@ std::vector<std::string> PopulateExpectedPolicy(
   }
 
   // Populate expected status.
-  if (unknown)
+  if (unknown) {
     expected_policy.push_back(l10n_util::GetStringUTF8(IDS_POLICY_LABEL_ERROR));
-  else if (!policy_map_entry)
+  } else if (!policy_map_entry) {
     expected_policy.push_back(l10n_util::GetStringUTF8(IDS_POLICY_UNSET));
-  else
+  } else {
     expected_policy.push_back(l10n_util::GetStringUTF8(IDS_POLICY_OK));
+  }
   return expected_policy;
 }
-
-#if !BUILDFLAG(IS_ANDROID)
-void SetChromeMetaData(base::DictionaryValue* expected) {
-  // Only set the expected keys and types and not the values since
-  // these can vary greatly on the platform, OS, architecture
-  // that is running.
-  constexpr char prefix[] = "chromeMetadata";
-  expected->SetPath({prefix, "application"}, base::Value(""));
-  expected->SetPath({prefix, "version"}, base::Value(""));
-  expected->SetPath({prefix, "revision"}, base::Value(""));
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  expected->SetPath({prefix, "platform"}, base::Value(""));
-#else
-  expected->SetPath({prefix, "OS"}, base::Value(""));
-#endif
-}
-
-void SetExpectedPolicy(base::DictionaryValue* expected,
-                       const std::string& name,
-                       const std::string& level,
-                       const std::string& scope,
-                       const std::string& source,
-                       const std::string& error,
-                       const std::string& warning,
-                       bool ignored,
-                       const base::Value& value) {
-  const char prefix[] = "chromePolicies";
-  expected->SetPath({prefix, name.c_str(), "level"}, base::Value(level));
-  expected->SetPath({prefix, name.c_str(), "scope"}, base::Value(scope));
-  expected->SetPath({prefix, name.c_str(), "source"}, base::Value(source));
-  if (!error.empty())
-    expected->SetPath({prefix, name.c_str(), "error"}, base::Value(error));
-  if (!warning.empty())
-    expected->SetPath({prefix, name.c_str(), "warning"}, base::Value(warning));
-  if (ignored)
-    expected->SetPath({prefix, name.c_str(), "ignored"}, base::Value(ignored));
-  expected->SetPath({prefix, name.c_str(), "value"}, value.Clone());
-}
-#endif  // !BUILDFLAG(IS_ANDROID)
-
-// The temporary directory and file paths for policy saving.
-base::ScopedTempDir export_policies_test_dir;
-base::FilePath export_policies_test_file_path;
-
 }  // namespace
 
 class PolicyUITest : public PlatformBrowserTest {
@@ -231,7 +201,7 @@ class PolicyUITest : public PlatformBrowserTest {
 
   void VerifyPolicies(const std::vector<std::vector<std::string>>& expected);
 
-  void VerifyExportingPolicies(const base::DictionaryValue& expected);
+  void VerifyReportButton(bool visible);
 
   content::WebContents* web_contents() {
     return chrome_test_utils::GetActiveWebContents(this);
@@ -239,49 +209,6 @@ class PolicyUITest : public PlatformBrowserTest {
 
   testing::NiceMock<policy::MockConfigurationPolicyProvider> provider_;
 };
-
-#if !BUILDFLAG(IS_ANDROID)
-// An artificial SelectFileDialog that immediately returns the location of test
-// file instead of showing the UI file picker.
-class TestSelectFileDialog : public ui::SelectFileDialog {
- public:
-  TestSelectFileDialog(ui::SelectFileDialog::Listener* listener,
-                       std::unique_ptr<ui::SelectFilePolicy> policy)
-      : ui::SelectFileDialog(listener, std::move(policy)) {}
-
-  void SelectFileImpl(Type type,
-                      const std::u16string& title,
-                      const base::FilePath& default_path,
-                      const FileTypeInfo* file_types,
-                      int file_type_index,
-                      const base::FilePath::StringType& default_extension,
-                      gfx::NativeWindow owning_window,
-                      void* params) override {
-    listener_->FileSelected(export_policies_test_file_path, 0, nullptr);
-  }
-
-  bool IsRunning(gfx::NativeWindow owning_window) const override {
-    return false;
-  }
-
-  void ListenerDestroyed() override {}
-
-  bool HasMultipleFileTypeChoicesImpl() override { return false; }
-
- private:
-  ~TestSelectFileDialog() override = default;
-};
-
-// A factory associated with the artificial file picker.
-class TestSelectFileDialogFactory : public ui::SelectFileDialogFactory {
- private:
-  ui::SelectFileDialog* Create(
-      ui::SelectFileDialog::Listener* listener,
-      std::unique_ptr<ui::SelectFilePolicy> policy) override {
-    return new TestSelectFileDialog(listener, std::move(policy));
-  }
-};
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 PolicyUITest::PolicyUITest() = default;
 
@@ -292,20 +219,13 @@ void PolicyUITest::SetUpInProcessBrowserTestFixture() {
                               /*is_first_policy_load_complete_return=*/true);
   policy::BrowserPolicyConnector::SetPolicyProviderForTesting(&provider_);
   policy::PushProfilePolicyConnectorProviderForTesting(&provider_);
-
-  // Create a directory for testing exporting policies.
-  ASSERT_TRUE(export_policies_test_dir.CreateUniqueTempDir());
-  const std::string filename = "policy.json";
-  export_policies_test_file_path =
-      export_policies_test_dir.GetPath().AppendASCII(filename);
 }
 
 void PolicyUITest::UpdateProviderPolicyForNamespace(
     const policy::PolicyNamespace& policy_namespace,
     const policy::PolicyMap& policy) {
-  std::unique_ptr<policy::PolicyBundle> bundle =
-      std::make_unique<policy::PolicyBundle>();
-  bundle->Get(policy_namespace) = policy.Clone();
+  policy::PolicyBundle bundle;
+  bundle.Get(policy_namespace) = policy.Clone();
   provider_.UpdatePolicy(std::move(bundle));
 }
 
@@ -329,193 +249,42 @@ void PolicyUITest::VerifyPolicies(
       "    policies.push(values);"
       "  }"
       "}"
-      "domAutomationController.send(JSON.stringify(policies));";
-  std::string json;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(web_contents(), javascript,
-                                                     &json));
-  absl::optional<base::Value> value_ptr = base::JSONReader::Read(json);
+      "JSON.stringify(policies);";
+  std::string json =
+      content::EvalJs(web_contents(), javascript).ExtractString();
+  std::optional<base::Value> value_ptr = base::JSONReader::Read(json);
   ASSERT_TRUE(value_ptr);
   ASSERT_TRUE(value_ptr->is_list());
-  base::Value::ConstListView actual_policies = value_ptr->GetListDeprecated();
+  const base::Value::List& actual_policies = value_ptr->GetList();
 
   // Verify that the cells contain the expected strings for all policies.
   ASSERT_EQ(expected_policies.size(), actual_policies.size());
   for (size_t i = 0; i < expected_policies.size(); ++i) {
     const std::vector<std::string> expected_policy = expected_policies[i];
     ASSERT_TRUE(actual_policies[i].is_list());
-    base::Value::ConstListView actual_policy =
-        actual_policies[i].GetListDeprecated();
+    const base::Value::List& actual_policy = actual_policies[i].GetList();
     ASSERT_EQ(expected_policy.size(), actual_policy.size());
     for (size_t j = 0; j < expected_policy.size(); ++j) {
       const std::string* value = actual_policy[j].GetIfString();
       ASSERT_TRUE(value);
-      if (expected_policy[j] != *value)
+      if (expected_policy[j] != *value) {
         EXPECT_EQ(expected_policy[j], *value);
+      }
     }
   }
 }
 
-#if !BUILDFLAG(IS_ANDROID)
-void PolicyUITest::VerifyExportingPolicies(
-    const base::DictionaryValue& expected) {
-  // Set SelectFileDialog to use our factory.
-  ui::SelectFileDialog::SetFactory(new TestSelectFileDialogFactory());
-
-  // Navigate to the about:policy page.
-  ASSERT_TRUE(
-      content::NavigateToURL(web_contents(), GURL(chrome::kChromeUIPolicyURL)));
-
-  // Click on 'save policies' button.
-  const std::string javascript =
-      "document.getElementById('export-policies').click()";
-  EXPECT_TRUE(content::ExecuteScript(web_contents(), javascript));
-
-  base::ThreadPoolInstance::Get()->FlushForTesting();
-  // Open the created file.
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  std::string file_contents;
-  EXPECT_TRUE(
-      base::ReadFileToString(export_policies_test_file_path, &file_contents));
-
-  absl::optional<base::Value> value_ptr = base::JSONReader::Read(file_contents);
-
-  // Check that the file contains a valid dictionary.
-  EXPECT_TRUE(value_ptr);
-  EXPECT_TRUE(value_ptr->is_dict());
-
-  // Since Chrome Metadata has a lot of variations based on platform, OS,
-  // architecture and version, it is difficult to test for exact values. Test
-  // instead that the same keys exist in the meta data and also that the type of
-  // all the keys is a string. The incoming |expected| value should already be
-  // filled with the expected keys.
-  base::Value* chrome_metadata =
-      value_ptr->FindKeyOfType("chromeMetadata", base::Value::Type::DICTIONARY);
-  EXPECT_NE(chrome_metadata, nullptr);
-
-  EXPECT_TRUE(chrome_metadata->is_dict());
-
-  // The |chrome_metadata| we compare against will have the actual values so
-  // those will be cleared to empty values so that the equals comparison below
-  // will just compare key existence and value types.
-  for (auto key_value : chrome_metadata->DictItems())
-    key_value.second = base::Value(key_value.second.type());
-
-  // Since policy management status can have variable information based on the
-  // test bot(e.g., AD joined bot can have updater domain information), it is
-  // difficult to test for exact values. Test instead that the same key,
-  // "status" exist and also that the type of it is a dictionary. The incoming
-  // |expected| value should already have a "status" key with an empty
-  // dictionary value.
-  base::Value* status =
-      value_ptr->FindKeyOfType("status", base::Value::Type::DICTIONARY);
-  EXPECT_NE(status, nullptr);
-  status->DictClear();
-
-  // Check that this dictionary is the same as expected.
-  EXPECT_EQ(expected, *value_ptr);
-}
-
-#if !defined(NDEBUG)
-// Slow and hangs often in debug builds. https://crbug.com/1338642
-#define MAYBE_WritePoliciesToJSONFile DISABLED_WritePoliciesToJSONFile
-#else
-#define MAYBE_WritePoliciesToJSONFile WritePoliciesToJSONFile
-#endif
-IN_PROC_BROWSER_TEST_F(PolicyUITest, MAYBE_WritePoliciesToJSONFile) {
-  // Set policy values and generate expected dictionary.
-  policy::PolicyMap values;
-  base::DictionaryValue expected_values;
-
-  SetChromeMetaData(&expected_values);
-
-  base::ListValue popups_blocked_for_urls;
-  popups_blocked_for_urls.Append("aaa");
-  popups_blocked_for_urls.Append("bbb");
-  popups_blocked_for_urls.Append("ccc");
-  values.Set(policy::key::kPopupsBlockedForUrls, policy::POLICY_LEVEL_MANDATORY,
-             policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-             popups_blocked_for_urls.Clone(), nullptr);
-  SetExpectedPolicy(&expected_values, policy::key::kPopupsBlockedForUrls,
-                    "mandatory", "machine", "platform", std::string(),
-                    std::string(), false, popups_blocked_for_urls);
-
-  values.Set(policy::key::kDefaultImagesSetting, policy::POLICY_LEVEL_MANDATORY,
-             policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_CLOUD,
-             base::Value(2), nullptr);
-  SetExpectedPolicy(&expected_values, policy::key::kDefaultImagesSetting,
-                    "mandatory", "machine", "cloud", std::string(),
-                    std::string(), false, base::Value(2));
-
-  // This also checks that we save complex policies correctly.
-  base::Value unknown_policy(base::Value::Type::DICTIONARY);
-  base::Value* body =
-      unknown_policy.SetKey("body", base::Value(base::Value::Type::DICTIONARY));
-  body->SetIntKey("first", 0);
-  body->SetBoolKey("second", true);
-  unknown_policy.SetIntKey("head", 12);
-  const std::string kUnknownPolicy = "NoSuchThing";
-  values.Set(kUnknownPolicy, policy::POLICY_LEVEL_RECOMMENDED,
-             policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-             unknown_policy.Clone(), nullptr);
-  SetExpectedPolicy(&expected_values, kUnknownPolicy, "recommended", "user",
-                    "cloud", l10n_util::GetStringUTF8(IDS_POLICY_UNKNOWN),
-                    std::string(), false, unknown_policy);
-
-  // Set the extension policies to an empty dictionary as we haven't added any
-  // such policies.
-  expected_values.SetKey("extensionPolicies",
-                         base::Value(base::Value::Type::DICTIONARY));
-  expected_values.SetKey("status", base::Value(base::Value::Type::DICTIONARY));
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  expected_values.SetKey("loginScreenExtensionPolicies",
-                         base::Value(base::Value::Type::DICTIONARY));
-  expected_values.SetKey("deviceLocalAccountPolicies",
-                         base::Value(base::Value::Type::DICTIONARY));
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-  provider_.UpdateChromePolicy(values);
-
-  // Check writing those policies to a newly created file.
-  VerifyExportingPolicies(expected_values);
-
-  // Change policy values.
-  values.Erase(policy::key::kDefaultImagesSetting);
-  expected_values.RemovePath(std::string("chromePolicies.") +
-                             std::string(policy::key::kDefaultImagesSetting));
-
-  popups_blocked_for_urls.Append("ddd");
-  values.Set(policy::key::kPopupsBlockedForUrls, policy::POLICY_LEVEL_MANDATORY,
-             policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-             popups_blocked_for_urls.Clone(), nullptr);
-  SetExpectedPolicy(&expected_values, policy::key::kPopupsBlockedForUrls,
-                    "mandatory", "machine", "platform", std::string(),
-                    std::string(), false, popups_blocked_for_urls);
-
-  provider_.UpdateChromePolicy(values);
-
-  // Check writing changed policies to the same file (should overwrite the
-  // contents).
-  VerifyExportingPolicies(expected_values);
+void PolicyUITest::VerifyReportButton(bool visible) {
+  const std::string kJavaScript = "getReportButtonVisibility();";
+  std::string ret =
+      content::EvalJs(web_contents(), kJavaScript).ExtractString();
 
 #if !BUILDFLAG(IS_CHROMEOS)
-  // This also checks that we do not bypass the policy that blocks file
-  // selection dialogs. This is a desktop only policy.
-  values.Set(policy::key::kAllowFileSelectionDialogs,
-             policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
-             policy::POLICY_SOURCE_PLATFORM, base::Value(false), nullptr);
-
-  popups_blocked_for_urls.Append("eeeeee");
-  values.Set(policy::key::kPopupsBlockedForUrls, policy::POLICY_LEVEL_MANDATORY,
-             policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-             popups_blocked_for_urls.Clone(), nullptr);
-  provider_.UpdateChromePolicy(values);
-
-  // Check writing changed policies did not overwrite the exported policies
-  // because the file selection dialog is not allowed.
-  VerifyExportingPolicies(expected_values);
+  EXPECT_EQ(visible, ret != "none");
+#else
+  EXPECT_FALSE(ret != "none");
 #endif
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 class PolicyUIStatusTest : public MixinBasedInProcessBrowserTest {
@@ -535,69 +304,78 @@ class PolicyUIStatusTest : public MixinBasedInProcessBrowserTest {
   bool ReadStatusFor(const std::string& policy_legend,
                      base::flat_map<std::string, std::string>* policy_status);
   bool ReloadPolicies();
+  bool ReloadPolicies(content::WebContents* contents);
 
  protected:
-  chromeos::DeviceStateMixin device_state_{
+  ash::DeviceStateMixin device_state_{
       &mixin_host_,
       ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
-  chromeos::LoggedInUserMixin logged_in_user_mixin_{
-      &mixin_host_,
-      chromeos::LoggedInUserMixin::LogInType::kRegular,
-      embedded_test_server(),
-      this,
-      /*should_launch_browser=*/true,
-      AccountId::FromUserEmailGaiaId(policy::PolicyBuilder::kFakeUsername,
-                                     policy::PolicyBuilder::kFakeGaiaId)};
+  ash::LoggedInUserMixin logged_in_user_mixin_{
+      &mixin_host_, /*test_base=*/this, embedded_test_server(),
+      ash::LoggedInUserMixin::LogInType::kManaged};
 };
 
 bool PolicyUIStatusTest::ReadStatusFor(
     const std::string& policy_legend,
     base::flat_map<std::string, std::string>* policy_status) {
-  // Retrieve the text contents of the status table with specified legend.
+  // Retrieve the text contents of the status table with specified heading.
   const std::string javascript = R"JS(
     (function() {
       function readStatus() {
         // Wait for the status box to appear in case page just loaded.
         const statusSection = document.getElementById('status-section');
         if (statusSection.hidden) {
-          window.requestIdleCallback(readStatus);
-          return;
+          return new Promise(resolve => {
+            window.requestIdleCallback(resolve);
+          }).then(readStatus);
         }
 
         const policies = getPolicyFieldsets();
         const statuses = {};
         for (let i = 0; i < policies.length; ++i) {
-          const legend = policies[i].querySelector('legend').textContent;
+          const statusHeading = policies[i]
+            .querySelector('.status-box-heading').textContent;
           const entries = {};
           const rows = policies[i]
             .querySelectorAll('.status-entry div:nth-child(2)');
           for (let j = 0; j < rows.length; ++j) {
-            entries[rows[j].className] = rows[j].textContent.trim();
+            entries[rows[j].className.split(' ')[0]] = rows[j].textContent
+              .trim();
           }
-          statuses[legend.trim()] = entries;
+          statuses[statusHeading.trim()] = entries;
         }
-        domAutomationController.send(JSON.stringify(statuses));
-      }
-      window.requestIdleCallback(readStatus);
+        return JSON.stringify(statuses);
+      };
+      return new Promise(resolve => {
+        window.requestIdleCallback(resolve);
+      }).then(readStatus);
     })();
   )JS";
   content::WebContents* contents =
       chrome_test_utils::GetActiveWebContents(this);
-  std::string json;
-  if (!content::ExecuteScriptAndExtractString(contents, javascript, &json))
+  std::string json = content::EvalJs(contents, javascript).ExtractString();
+  std::optional<base::Value> statuses = base::JSONReader::Read(json);
+  if (!statuses.has_value() || !statuses->is_dict()) {
     return false;
-  absl::optional<base::Value> statuses = base::JSONReader::Read(json);
-  if (!statuses.has_value() || !statuses->is_dict())
+  }
+  const base::Value::Dict& status_dict = statuses->GetDict();
+  const base::Value::Dict* actual_entries = status_dict.FindDict(policy_legend);
+  if (!actual_entries) {
     return false;
-  const base::Value* actual_entries = statuses->FindDictKey(policy_legend);
-  if (!actual_entries || !actual_entries->is_dict())
-    return false;
-  for (const auto entry : actual_entries->DictItems())
+  }
+  for (const auto entry : *actual_entries) {
     policy_status->insert_or_assign(entry.first, entry.second.GetString());
+  }
   return true;
 }
 
 bool PolicyUIStatusTest::ReloadPolicies() {
+  content::WebContents* contents =
+      chrome_test_utils::GetActiveWebContents(this);
+  return ReloadPolicies(contents);
+}
+
+bool PolicyUIStatusTest::ReloadPolicies(content::WebContents* contents) {
   const std::string javascript = R"JS(
     (function() {
       const reloadPoliciesBtn = document.getElementById('reload-policies');
@@ -605,19 +383,32 @@ bool PolicyUIStatusTest::ReloadPolicies() {
       // Wait until reload button becomes enabled again, i.e. policies reloaded.
       function waitForPoliciesToReload() {
         if (reloadPoliciesBtn.disabled) {
-          window.requestIdleCallback(waitForPoliciesToReload);
+          return new Promise(resolve => {
+            window.requestIdleCallback(resolve);
+          }).then(waitForPoliciesToReload);
         } else {
-          domAutomationController.send(true);
+          return true;
         }
       }
-      window.requestIdleCallback(waitForPoliciesToReload);
+      return new Promise(resolve => {
+        window.requestIdleCallback(resolve);
+      }).then(waitForPoliciesToReload);
     })();
   )JS";
-  content::WebContents* contents =
-      chrome_test_utils::GetActiveWebContents(this);
-  bool ignored;
-  return content::ExecuteScriptAndExtractBool(contents, javascript, &ignored);
+  return content::ExecJs(contents, javascript);
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+IN_PROC_BROWSER_TEST_F(PolicyUIStatusTest, CheckPolicyUiInGuestProfile) {
+  // Verifies that the page opens in guest session.
+  const Browser* policy_browser = OpenURLOffTheRecord(
+      browser()->profile(), GURL(chrome::kChromeUIPolicyURL));
+  ASSERT_TRUE(policy_browser);
+  content::WebContents* contents =
+      policy_browser->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(ReloadPolicies(contents));
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 IN_PROC_BROWSER_TEST_F(PolicyUIStatusTest,
                        ShowsZeroSecondsSinceRefreshAfterReloadingPolicies) {
@@ -758,7 +549,13 @@ IN_PROC_BROWSER_TEST_F(PolicyUITest, SendPolicyNames) {
   VerifyPolicies(expected_policies);
 }
 
-IN_PROC_BROWSER_TEST_F(PolicyUITest, SendPolicyValues) {
+// TODO(crbug.com/384989795): Fails on desktop android, see bug.
+#if BUILDFLAG(IS_DESKTOP_ANDROID)
+#define MAYBE_SendPolicyValues DISABLED_SendPolicyValues
+#else
+#define MAYBE_SendPolicyValues SendPolicyValues
+#endif
+IN_PROC_BROWSER_TEST_F(PolicyUITest, MAYBE_SendPolicyValues) {
   // Verifies that policy values are sent to the UI and processed there
   // correctly by setting the values of four known and one unknown policy and
   // checking that the policy table contains the policy names, values and
@@ -767,14 +564,15 @@ IN_PROC_BROWSER_TEST_F(PolicyUITest, SendPolicyValues) {
   std::map<std::string, std::string> expected_values;
 
   // Set the values of four existing policies.
-  base::Value blocked_urls(base::Value::Type::LIST);
+  base::Value::List blocked_urls;
   blocked_urls.Append("site1.com");
   blocked_urls.Append("site2.com");
   blocked_urls.Append("site3.com");
   values.Set(policy::key::kURLBlocklist, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-             std::move(blocked_urls), nullptr);
-  expected_values[policy::key::kURLBlocklist] = "site1.com,site2.com,site3.com";
+             base::Value(std::move(blocked_urls)), nullptr);
+  expected_values[policy::key::kURLBlocklist] =
+      R"(["site1.com","site2.com","site3.com"])";
   values.Set(policy::key::kHomepageLocation, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_CLOUD,
              base::Value("http://google.com"), nullptr);
@@ -847,6 +645,52 @@ IN_PROC_BROWSER_TEST_F(PolicyUITest, SendPolicyValues) {
   VerifyPolicies(expected_policies);
 }
 
+IN_PROC_BROWSER_TEST_F(PolicyUITest, ReportButton) {
+  ASSERT_TRUE(
+      content::NavigateToURL(web_contents(), GURL(chrome::kChromeUIPolicyURL)));
+
+  // Hide by default.
+  VerifyReportButton(/*visible=*/false);
+
+  // Turn on with the policy
+  policy::PolicyMap policy_map;
+  policy_map.Set(policy::key::kCloudReportingEnabled,
+                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
+                 policy::POLICY_SOURCE_CLOUD, base::Value(true), nullptr);
+  provider_.UpdateChromePolicy(policy_map);
+  VerifyReportButton(/*visible=*/true);
+
+  // Hide while policy is off.
+  policy_map.Set(policy::key::kCloudReportingEnabled,
+                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
+                 policy::POLICY_SOURCE_CLOUD, base::Value(false), nullptr);
+  provider_.UpdateChromePolicy(policy_map);
+  VerifyReportButton(/*visible=*/false);
+}
+
+IN_PROC_BROWSER_TEST_F(PolicyUITest, ReportButtonWithProfileReporting) {
+  ASSERT_TRUE(
+      content::NavigateToURL(web_contents(), GURL(chrome::kChromeUIPolicyURL)));
+
+  // Hide by default.
+  VerifyReportButton(/*visible=*/false);
+
+  // Turn on with the policy
+  policy::PolicyMap policy_map;
+  policy_map.Set(policy::key::kCloudProfileReportingEnabled,
+                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
+                 policy::POLICY_SOURCE_CLOUD, base::Value(true), nullptr);
+  provider_.UpdateChromePolicy(policy_map);
+  VerifyReportButton(/*visible=*/true);
+
+  // Hide while policy is off.
+  policy_map.Set(policy::key::kCloudProfileReportingEnabled,
+                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
+                 policy::POLICY_SOURCE_CLOUD, base::Value(false), nullptr);
+  provider_.UpdateChromePolicy(policy_map);
+  VerifyReportButton(/*visible=*/false);
+}
+
 #if !BUILDFLAG(IS_CHROMEOS)
 class PolicyPrecedenceUITest
     : public PolicyUITest,
@@ -888,7 +732,7 @@ class PolicyPrecedenceUITest
   // Used to retrieve the contents of the policy precedence rows.
   const std::string kJavaScript =
       "var precedence_row = getPrecedenceRowValue();"
-      "domAutomationController.send(precedence_row.textContent);";
+      "precedence_row.textContent;";
 };
 
 // Verify that the precedence order displayed in the Policy Precedence table is
@@ -919,9 +763,8 @@ IN_PROC_BROWSER_TEST_P(PolicyPrecedenceUITest, PrecedenceOrder) {
   // Retrieve the contents of the policy precedence rows.
   ASSERT_TRUE(
       content::NavigateToURL(web_contents(), GURL(chrome::kChromeUIPolicyURL)));
-  std::string precedence_row_value;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents(), kJavaScript, &precedence_row_value));
+  std::string precedence_row_value =
+      content::EvalJs(web_contents(), kJavaScript).ExtractString();
 
   ValidatePrecedenceValue(precedence_row_value);
 }
@@ -953,7 +796,7 @@ class ExtensionPolicyUITest : public PolicyUITest,
   }
 };
 
-// TODO(https://crbug.com/911661) Flaky time outs on Linux Chromium OS ASan
+// TODO(crbug.com/41429868) Flaky time outs on Linux Chromium OS ASan
 // LSan bot.
 #if defined(ADDRESS_SANITIZER)
 #define MAYBE_ExtensionLoadAndSendPolicy DISABLED_ExtensionLoadAndSendPolicy
@@ -1017,18 +860,17 @@ IN_PROC_BROWSER_TEST_P(ExtensionPolicyUITest,
   base::WriteFile(schema_path, json_data);
 
   // Build extension that contains the policy schema.
-  extensions::DictionaryBuilder storage;
-  storage.Set("managed_schema", schema_file);
+  auto storage = base::Value::Dict().Set("managed_schema", schema_file);
 
-  extensions::DictionaryBuilder manifest;
-  manifest.Set("name", "test")
-      .Set("version", "1")
-      .Set("manifest_version", 2)
-      .Set("storage", storage.Build());
+  auto manifest = base::Value::Dict()
+                      .Set("name", "test")
+                      .Set("version", "1")
+                      .Set("manifest_version", 2)
+                      .Set("storage", std::move(storage));
 
   extensions::ExtensionBuilder builder;
   builder.SetPath(temp_dir_.GetPath());
-  builder.SetManifest(manifest.Build());
+  builder.SetManifest(std::move(manifest));
   builder.SetLocation(
       extensions::mojom::ManifestLocation::kExternalPolicyDownload);
 
@@ -1095,9 +937,9 @@ IN_PROC_BROWSER_TEST_P(ExtensionPolicyUITest,
   // Verify if policy UI includes policy that extension have.
   VerifyPolicies(expected_policies);
 
-  base::Value object_value(base::Value::Type::DICTIONARY);
-  object_value.SetBoolKey("objectProperty", true);
-  base::Value array_value(base::Value::Type::LIST);
+  base::Value::Dict object_value;
+  object_value.Set("objectProperty", true);
+  base::Value::List array_value;
   array_value.Append(true);
 
   policy::PolicyMap values;
@@ -1106,7 +948,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionPolicyUITest,
              base::Value(true), nullptr);
   values.Set(kSensitiveArrayPolicy, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-             std::move(array_value), nullptr);
+             base::Value(std::move(array_value)), nullptr);
   values.Set(kSensitiveBooleanPolicy, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
              base::Value(true), nullptr);
@@ -1118,7 +960,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionPolicyUITest,
              base::Value(3.141), nullptr);
   values.Set(kSensitiveObjectPolicy, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-             std::move(object_value), nullptr);
+             base::Value(std::move(object_value)), nullptr);
   values.Set(kSensitiveStringPolicy, policy::POLICY_LEVEL_MANDATORY,
              policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
              base::Value("value"), nullptr);
@@ -1161,4 +1003,281 @@ INSTANTIATE_TEST_SUITE_P(All,
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 );
 
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+#if !BUILDFLAG(IS_ANDROID)
+
+class PolicyUIManagedStatusTest : public PolicyUITest,
+                                  public ::testing::WithParamInterface<bool> {
+ public:
+  PolicyUIManagedStatusTest() {
+    if (GetParam()) {
+      scoped_feature_list_.InitAndEnableFeature(
+          features::kEnablePolicyPromotionBanner);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          features::kEnablePolicyPromotionBanner);
+    }
+  }
+  bool isFeatureEnabled() { return GetParam(); }
+  PolicyUIManagedStatusTest(const PolicyUIManagedStatusTest&) = delete;
+  PolicyUIManagedStatusTest& operator=(const PolicyUIManagedStatusTest&) =
+      delete;
+
+  ~PolicyUIManagedStatusTest() override = default;
+
+  void SetUpOnMainThread() override { PolicyUITest::SetUpOnMainThread(); }
+
+  static constexpr std::string_view kPromotionBannerVisibilityJavaScript = R"(
+    (function () {
+      const element =
+        document.getElementsByTagName('promotion-banner-section-container')[0];
+      return element ? 'visible' : 'hidden';
+    })();
+  )";
+
+  static constexpr std::string_view kPromotionBannerDismissJavaScript = R"(
+    const promotionContainer =
+      document.getElementsByTagName('promotion-banner-section-container')[0];
+    if (promotionContainer){
+      const dismissButton =
+        promotionContainer.shadowRoot.getElementById('promotion-dismiss-button');
+      dismissButton.click();
+    }
+  )";
+
+  static constexpr std::string_view kPromotionBannerRedirectJavaScript = R"(
+    const promotionContainer =
+      document.getElementsByTagName('promotion-banner-section-container')[0];
+    if (promotionContainer){
+      const redirectButton =
+        promotionContainer.shadowRoot.getElementById(
+          'promotion-redirect-button'
+        );
+      if (redirectButton){
+        redirectButton.click();
+      }
+    }
+  )";
+
+  static constexpr std::string_view kBannerVisible = "visible";
+  static constexpr std::string_view kBannerHidden = "hidden";
+
+  // The browser's locale needs to be "en-US" to be able to see the banner
+  static constexpr std::string_view kValidLocale = "en-US";
+  static constexpr std::string_view kInvalidLocale = "en-AU";
+
+ protected:
+  void SetPromotionBannerDismissedPref(bool is_dismissed) {
+    auto* prefs = browser()->profile()->GetPrefs();
+    prefs->SetBoolean(
+        policy::policy_prefs::kHasDismissedPolicyPagePromotionBanner,
+        is_dismissed);
+  }
+
+  void SetBrowserLocale(std::string_view locale) {
+    g_browser_process->SetApplicationLocale(std::string(locale));
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HandleGetShowPromotionTestShown) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  auto result = EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                       kPromotionBannerVisibilityJavaScript)
+                    .ExtractString();
+
+  if (isFeatureEnabled()) {
+    EXPECT_EQ(result, kBannerVisible);
+  } else {
+    EXPECT_EQ(result, kBannerHidden);
+  }
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HandleGetShowPromotionNotManagedHidden) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::NONE);
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+  auto result = EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                       kPromotionBannerVisibilityJavaScript)
+                    .ExtractString();
+
+  EXPECT_EQ(result, kBannerHidden);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HandleGetShowPromotionDismisseddHidden) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(true);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+  auto result = EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                       kPromotionBannerVisibilityJavaScript)
+                    .ExtractString();
+
+  EXPECT_EQ(result, kBannerHidden);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HandleSetBannerDismissedHidden) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  EXPECT_TRUE(ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                     kPromotionBannerDismissJavaScript));
+
+  auto result = EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                       kPromotionBannerVisibilityJavaScript)
+                    .ExtractString();
+  EXPECT_EQ(result, kBannerHidden);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest, HandleLocaleNotEnUSHidden) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kInvalidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  auto result = EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                       kPromotionBannerVisibilityJavaScript)
+                    .ExtractString();
+  EXPECT_EQ(result, kBannerHidden);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HistogramRecordedWhenBannerDisplayed) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+
+  base::HistogramTester histogram_tester;
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  const bool expected_bucket = isFeatureEnabled() ? true : false;
+  histogram_tester.ExpectBucketCount(
+      "Enterprise.PolicyPromotionBannerDisplayed", expected_bucket, 1);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HistogramRecordedWhenBannerDismissedNotDisplayed) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  SetBrowserLocale(kValidLocale);
+
+  // Banner will not be displayed if it has been dismissed
+  SetPromotionBannerDismissedPref(true);
+
+  base::HistogramTester histogram_tester;
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  histogram_tester.ExpectBucketCount(
+      "Enterprise.PolicyPromotionBannerDisplayed", false, 1);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HistogramRecordedWhenBannerDismissed) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  if (!isFeatureEnabled()) {
+    GTEST_SKIP() << "Test only relevant when feature is enabled";
+  }
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+
+  base::HistogramTester histogram_tester;
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  EXPECT_TRUE(ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                     kPromotionBannerDismissJavaScript));
+
+  histogram_tester.ExpectBucketCount(
+      "Enterprise.PolicyPromotionBannerAction",
+      policy::PolicyPromotionBannerAction::kBannerDismissed, 1);
+}
+
+IN_PROC_BROWSER_TEST_P(PolicyUIManagedStatusTest,
+                       HistoramRecordedWhenBannerRedirected) {
+  policy::ScopedManagementServiceOverrideForTesting browser_management(
+      policy::ManagementServiceFactory::GetForProfile(browser()->profile()),
+      policy::EnterpriseManagementAuthority::CLOUD);
+
+  if (!isFeatureEnabled()) {
+    GTEST_SKIP() << "Test only relevant when feature is enabled";
+  }
+
+  SetBrowserLocale(kValidLocale);
+
+  SetPromotionBannerDismissedPref(false);
+
+  base::HistogramTester histogram_tester;
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUIPolicyURL)));
+
+  EXPECT_TRUE(ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                     kPromotionBannerRedirectJavaScript));
+
+  histogram_tester.ExpectBucketCount(
+      "Enterprise.PolicyPromotionBannerAction",
+      policy::PolicyPromotionBannerAction::kBannerRedirected, 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(PolicyManagedUITestInstance,
+                         PolicyUIManagedStatusTest,
+                         ::testing::Values(false, true));
 #endif  // !BUILDFLAG(IS_ANDROID)

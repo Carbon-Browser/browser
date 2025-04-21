@@ -1,23 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/wifi_lan_socket.h"
 
-#include "ash/services/nearby/public/cpp/fake_tcp_connected_socket.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_restrictions.h"
+#include "chromeos/ash/services/nearby/public/cpp/fake_tcp_connected_socket.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 class WifiLanSocketTest : public ::testing::Test {
  public:
@@ -63,7 +62,8 @@ class WifiLanSocketTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   mojo::ScopedDataPipeProducerHandle receive_stream_;
   mojo::ScopedDataPipeConsumerHandle send_stream_;
-  ash::nearby::FakeTcpConnectedSocket* fake_tcp_connected_socket_;
+  raw_ptr<ash::nearby::FakeTcpConnectedSocket, DanglingUntriaged>
+      fake_tcp_connected_socket_;
   mojo::SelfOwnedReceiverRef<network::mojom::TCPConnectedSocket>
       tcp_connected_socket_self_owned_receiver_ref_;
   std::unique_ptr<WifiLanSocket> wifi_lan_socket_;
@@ -125,6 +125,4 @@ TEST_F(WifiLanSocketTest, Disconnect) {
   EXPECT_TRUE(wifi_lan_socket_->IsClosed());
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

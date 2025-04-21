@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
@@ -21,17 +23,15 @@
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
-namespace gfx {
-class Size;
-}
-
 namespace blink {
+
 class AudioCaptureSettings;
 class LocalFrame;
 class MediaStreamAudioSource;
@@ -40,6 +40,17 @@ class VideoCaptureSettings;
 class WebMediaStreamDeviceObserver;
 class WebMediaStreamSource;
 class WebString;
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class CameraCaptureCapability {
+  kHdAndFullHdMissing = 0,
+  kHdOrFullHd = 1,
+  kHdOrFullHd_360p = 2,
+  kHdOrFullHd_480p = 3,
+  kHdOrFullHd_360p_480p = 4,
+  kMaxValue = kHdOrFullHd_360p_480p,
+};
 
 // UserMediaProcessor is responsible for processing getUserMedia() requests.
 // It also keeps tracks of all sources used by streams created with
@@ -50,9 +61,13 @@ class WebString;
 // render thread. There should be only one UserMediaProcessor per frame.
 class MODULES_EXPORT UserMediaProcessor
     : public GarbageCollected<UserMediaProcessor> {
+  USING_PRE_FINALIZER(UserMediaProcessor, StopAllProcessing);
+
  public:
   using MediaDevicesDispatcherCallback = base::RepeatingCallback<
       blink::mojom::blink::MediaDevicesDispatcherHost*()>;
+  using KeepDeviceAliveForTransferCallback = base::OnceCallback<void(bool)>;
+
   // |frame| must outlive this instance.
   UserMediaProcessor(LocalFrame* frame,
                      MediaDevicesDispatcherCallback media_devices_dispatcher_cb,
@@ -90,7 +105,7 @@ class MODULES_EXPORT UserMediaProcessor
 
   bool HasActiveSources() const;
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   void FocusCapturedSurface(const String& label, bool focus);
 #endif
 
@@ -100,13 +115,22 @@ class MODULES_EXPORT UserMediaProcessor
   void OnDeviceRequestStateChange(
       const MediaStreamDevice& device,
       const mojom::blink::MediaStreamStateChange new_state);
+  void OnDeviceCaptureConfigurationChange(const MediaStreamDevice& device);
   void OnDeviceCaptureHandleChange(const MediaStreamDevice& device);
-
+  void OnZoomLevelChange(const MediaStreamDevice& device, int zoom_level);
   void set_media_stream_dispatcher_host_for_testing(
       mojo::PendingRemote<blink::mojom::blink::MediaStreamDispatcherHost>
           dispatcher_host) {
     dispatcher_host_.Bind(std::move(dispatcher_host), task_runner_);
   }
+
+  // Ensure the MediaStreamDevice underlying a source is not closed even if
+  // there are no remaining usages from this frame, as it's in the process of
+  // being transferred.
+  void KeepDeviceAliveForTransfer(
+      base::UnguessableToken session_id,
+      base::UnguessableToken transfer_id,
+      KeepDeviceAliveForTransferCallback keep_alive_cb);
 
   virtual void Trace(Visitor*) const;
 
@@ -133,7 +157,11 @@ class MODULES_EXPORT UserMediaProcessor
 
   // Intended to be used only for testing.
   const blink::AudioCaptureSettings& AudioCaptureSettingsForTesting() const;
+  const Vector<blink::AudioCaptureSettings>&
+  EligibleAudioCaptureSettingsForTesting() const;
   const blink::VideoCaptureSettings& VideoCaptureSettingsForTesting() const;
+  const Vector<blink::VideoCaptureSettings>&
+  EligibleVideoCaptureSettingsForTesting() const;
 
   void SetMediaStreamDeviceObserverForTesting(
       WebMediaStreamDeviceObserver* media_stream_device_observer);
@@ -145,7 +173,7 @@ class MODULES_EXPORT UserMediaProcessor
                            TiltConstraintRequestPanTiltZoomPermission);
   FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest,
                            ZoomConstraintRequestPanTiltZoomPermission);
-  FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest, MultiDeviceOnStreamGenerated);
+  FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest, MultiDeviceOnStreamsGenerated);
   class RequestInfo;
   using LocalStreamSources = HeapVector<Member<MediaStreamSource>>;
 
@@ -153,19 +181,17 @@ class MODULES_EXPORT UserMediaProcessor
                      blink::mojom::blink::MediaStreamRequestResult result,
                      blink::mojom::blink::GetOpenDeviceResponsePtr response);
 
-  void OnStreamGenerated(int32_t request_id,
-                         blink::mojom::blink::MediaStreamRequestResult result,
-                         const String& label,
-                         mojom::blink::StreamDevicesSetPtr stream_devices_set,
-                         bool pan_tilt_zoom_allowed);
+  void OnStreamsGenerated(int32_t request_id,
+                          blink::mojom::blink::MediaStreamRequestResult result,
+                          const String& label,
+                          mojom::blink::StreamDevicesSetPtr stream_devices_set,
+                          bool pan_tilt_zoom_allowed);
 
   void GotAllVideoInputFormatsForDevice(
       UserMediaRequest* user_media_request,
       const String& label,
       const Vector<String>& device_ids,
       const Vector<media::VideoCaptureFormat>& formats);
-
-  gfx::Size GetScreenSize();
 
   void OnStreamGenerationFailed(
       int32_t request_id,
@@ -198,10 +224,10 @@ class MODULES_EXPORT UserMediaProcessor
   void StartTracks(const String& label);
 
   blink::MediaStreamComponent* CreateVideoTrack(
-      const absl::optional<blink::MediaStreamDevice>& device);
+      const std::optional<blink::MediaStreamDevice>& device);
 
   blink::MediaStreamComponent* CreateAudioTrack(
-      const absl::optional<blink::MediaStreamDevice>& device);
+      const std::optional<blink::MediaStreamDevice>& device);
 
   // Callback function triggered when all native versions of the
   // underlying media sources and tracks have been created and started.
@@ -225,6 +251,10 @@ class MODULES_EXPORT UserMediaProcessor
       blink::WebPlatformMediaStreamSource* source,
       blink::mojom::blink::MediaStreamRequestResult result,
       const String& result_name);
+
+  void OnVideoSourceStarted(
+      blink::WebPlatformMediaStreamSource* source,
+      blink::mojom::blink::MediaStreamRequestResult result);
 
   void NotifyCurrentRequestInfoOfAudioSourceStarted(
       blink::WebPlatformMediaStreamSource* source,
@@ -282,19 +312,21 @@ class MODULES_EXPORT UserMediaProcessor
       const blink::VideoCaptureSettings& settings);
   void SelectVideoContentSettings();
 
-  absl::optional<base::UnguessableToken> DetermineExistingAudioSessionId();
+  std::optional<base::UnguessableToken> DetermineExistingAudioSessionId(
+      const blink::AudioCaptureSettings& settings);
+
+  WTF::HashMap<String, base::UnguessableToken>
+  DetermineExistingAudioSessionIds();
 
   void GenerateStreamForCurrentRequestInfo(
-      absl::optional<base::UnguessableToken>
-          requested_audio_capture_session_id = absl::nullopt,
-      blink::mojom::StreamSelectionStrategy strategy =
-          blink::mojom::StreamSelectionStrategy::SEARCH_BY_DEVICE_ID);
+      WTF::HashMap<String, base::UnguessableToken>
+          requested_audio_capture_session_ids = {});
 
   WebMediaStreamDeviceObserver* GetMediaStreamDeviceObserver();
 
   // Owned by the test.
-  WebMediaStreamDeviceObserver* media_stream_device_observer_for_testing_ =
-      nullptr;
+  raw_ptr<WebMediaStreamDeviceObserver, DanglingUntriaged>
+      media_stream_device_observer_for_testing_ = nullptr;
 
   LocalStreamSources local_sources_;
   LocalStreamSources pending_local_sources_;

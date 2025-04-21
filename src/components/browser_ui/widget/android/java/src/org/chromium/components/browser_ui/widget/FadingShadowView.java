@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,13 @@ import android.graphics.Canvas;
 import android.util.AttributeSet;
 import android.view.View;
 
-/**
- * A class that encapsulates {@link FadingShadow} as a self-contained view.
- */
+/** A class that encapsulates {@link FadingShadow} as a self-contained view. */
 public class FadingShadowView extends View {
     private FadingShadow mFadingShadow;
     private int mPosition;
     private float mStrength = 1f;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public FadingShadowView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }

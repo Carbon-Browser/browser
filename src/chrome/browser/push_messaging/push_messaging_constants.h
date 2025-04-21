@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,9 @@
 #include "base/time/time.h"
 
 extern const char kPushMessagingGcmEndpoint[];
+
+// The GCM endpoint to use on non-Stable channels.
+extern const char kPushMessagingStagingGcmEndpoint[];
 
 // The tag of the notification that will be automatically shown if a webapp
 // receives a push message then fails to show a notification.

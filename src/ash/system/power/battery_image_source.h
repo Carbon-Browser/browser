@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,7 @@ class ASH_EXPORT BatteryImageSource : public gfx::CanvasImageSource {
  public:
   BatteryImageSource(const PowerStatus::BatteryImageInfo& info,
                      int height,
-                     SkColor bg_color,
-                     SkColor fg_color,
-                     absl::optional<SkColor> badge_color);
+                     const BatteryColors& colors);
 
   BatteryImageSource(BatteryImageSource&) = delete;
   BatteryImageSource operator=(BatteryImageSource&) = delete;
@@ -31,9 +29,7 @@ class ASH_EXPORT BatteryImageSource : public gfx::CanvasImageSource {
 
  private:
   PowerStatus::BatteryImageInfo info_;
-  const SkColor bg_color_;
-  const SkColor fg_color_;
-  const SkColor badge_color_;
+  BatteryColors resolved_colors_;
 };
 
 }  // namespace ash

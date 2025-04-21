@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/process/current_process.h"
+#include "base/strings/pattern.h"
 #include "build/build_config.h"
 #include "content/child/child_thread_impl.h"
 #include "content/public/utility/utility_thread.h"
@@ -19,7 +21,6 @@ class ServiceFactory;
 }
 
 namespace content {
-class UtilityServiceFactory;
 
 // This class represents the background thread where the utility task runs.
 class UtilityThreadImpl : public UtilityThread,
@@ -57,24 +58,23 @@ class UtilityThreadImpl : public UtilityThread,
   void EnsureBlinkInitializedInternal(bool sandbox_support);
   void Init();
 
-  // ChildThreadImpl:
-  void RunServiceDeprecated(
-      const std::string& service_name,
-      mojo::ScopedMessagePipeHandle service_pipe) override;
-
   // blink::Platform implementation if needed.
   std::unique_ptr<blink::Platform> blink_platform_impl_;
-
-  // Helper to handle incoming RunServiceDeprecated calls. Note that this is
-  // deprecated and only remains in support of some embedders which haven't
-  // migrated away from Service Manager-based services yet.
-  std::unique_ptr<UtilityServiceFactory> service_factory_;
 
   // The ServiceFactory used to handle incoming service requests from a
   // browser-side ServiceProcessHost. Any service registered here will run on
   // the main thread of its service process.
   std::unique_ptr<mojo::ServiceFactory> main_thread_services_;
 };
+
+using CurrentProcessType = base::CurrentProcessType;
+
+struct ServiceCurrentProcessType {
+  const char* name;
+  CurrentProcessType type;
+};
+
+CurrentProcessType GetCurrentProcessType(const std::string& name);
 
 }  // namespace content
 

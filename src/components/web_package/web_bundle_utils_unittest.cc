@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,6 @@ TEST(WebBundleUtilsTest, IsValidUuidInPackageURL) {
       GURL("urn:guid:00000000-0000-0000-0000-000000000000")));
   ASSERT_FALSE(IsValidUuidInPackageURL(
       GURL("uri:uuid:00000000-0000-0000-0000-000000000000")));
-  ASSERT_FALSE(IsValidUuidInPackageURL(
-      GURL("urn://uuid:00000000-0000-0000-0000-000000000000")));
   ASSERT_TRUE(IsValidUuidInPackageURL(
       GURL("uuid-in-package:F81D4FAE-7DEC-11D0-A765-00A0C91E6BF6")));
   ASSERT_TRUE(IsValidUuidInPackageURL(

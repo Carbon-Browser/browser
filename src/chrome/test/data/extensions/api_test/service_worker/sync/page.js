@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,23 +20,25 @@ var getOnSyncWorkerPromise = function() {
 };
 
 window.runServiceWorker = function() {
-  getOnSyncWorkerPromise().then(function(serviceWorker) {
+  return getOnSyncWorkerPromise().then(function(serviceWorker) {
     var mc = new MessageChannel();
     // Called when ServiceWorker.onsync fires.
-    mc.port1.onmessage = function(e) {
-      if (e.data == 'connected') {
-        window.domAutomationController.send('SERVICE_WORKER_READY');
-        return;
-      }
-      if (e.data != 'SYNC: send-chats') {
-        console.log('SW returned incorrect data: ' + e.data);
-        chrome.test.sendMessage('FAIL');  // Fails the test fast.
-        return;
-      }
-      chrome.test.sendMessage(e.data);
-    };
-    serviceWorker.postMessage('connect', [mc.port2]);
+    return new Promise(resolve => {
+      mc.port1.onmessage = function(e) {
+        if (e.data == 'connected') {
+          resolve('SERVICE_WORKER_READY');
+          return;
+        }
+        if (e.data != 'SYNC: send-chats') {
+          console.log('SW returned incorrect data: ' + e.data);
+          chrome.test.sendMessage('FAIL');  // Fails the test fast.
+          return;
+        }
+        chrome.test.sendMessage(e.data);
+      };
+      serviceWorker.postMessage('connect', [mc.port2]);
+    });
   }).catch(function(err) {
-    window.domAutomationController.send(err);
+    return err;
   });
 };

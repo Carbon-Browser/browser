@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,18 @@ class AndroidBrowserTest : public content::BrowserTestBase {
   void PreRunTestOnMainThread() override;
   void PostRunTestOnMainThread() override;
 
+  // Counts the number of "PRE_" prefixes in the test name. This is used to
+  // differentiate between different PRE tests in browser test constructors
+  // and setup functions.
+  static size_t GetTestPreCount();
+
+  // Returns the test data path used by the embedded test server.
+  base::FilePath GetChromeTestDataDir() const;
+
  private:
   // Temporary user data directory. Used only when a user data directory is not
   // specified in the command line.
   base::ScopedTempDir temp_user_data_dir_;
 };
-
-// When including either android_browser_test.h or in_process_browser_test.h
-// depending on the platform, use this type alias as the test base class.
-using PlatformBrowserTest = AndroidBrowserTest;
 
 #endif  // CHROME_TEST_BASE_ANDROID_ANDROID_BROWSER_TEST_H_

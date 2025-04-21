@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/window_controller_list.h"
 #include "chrome/browser/extensions/window_controller_list_observer.h"
@@ -26,10 +27,6 @@
 #endif
 
 class Profile;
-
-namespace base {
-class ListValue;
-}
 
 namespace extensions {
 
@@ -59,10 +56,10 @@ class WindowsEventRouter : public AppWindowRegistry::Observer,
   void OnActiveWindowChanged(WindowController* window_controller);
 
  private:
-  // extensions::AppWindowRegistry::Observer:
-  void OnAppWindowAdded(extensions::AppWindow* app_window) override;
-  void OnAppWindowRemoved(extensions::AppWindow* app_window) override;
-  void OnAppWindowActivated(extensions::AppWindow* app_window) override;
+  // AppWindowRegistry::Observer:
+  void OnAppWindowAdded(AppWindow* app_window) override;
+  void OnAppWindowRemoved(AppWindow* app_window) override;
+  void OnAppWindowActivated(AppWindow* app_window) override;
 
   // WindowControllerListObserver methods:
   void OnWindowControllerAdded(WindowController* window_controller) override;
@@ -81,17 +78,17 @@ class WindowsEventRouter : public AppWindowRegistry::Observer,
   void DispatchEvent(events::HistogramValue histogram_value,
                      const std::string& event_name,
                      WindowController* window_controller,
-                     std::unique_ptr<base::ListValue> args);
+                     base::Value::List args);
   bool HasEventListener(const std::string& event_name);
-  void AddAppWindow(extensions::AppWindow* app_window);
+  void AddAppWindow(AppWindow* app_window);
 
   // The main profile that owns this event router.
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // The profile the currently focused window belongs to; either the main or
   // incognito profile or NULL (none of the above). We remember this in order
   // to correctly handle focus changes between non-OTR and OTR windows.
-  raw_ptr<Profile> focused_profile_;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> focused_profile_;
 
   // The currently focused window. We keep this so as to avoid sending multiple
   // windows.onFocusChanged events with the same windowId.

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/events/event_utils.h"
 #include "ui/gfx/color_palette.h"
@@ -36,17 +37,18 @@ const char16_t kBodyText[] = u"Body";
 const char16_t kActionButtonText[] = u"Action";
 const char16_t kDismissButtonText[] = u"Dismiss";
 const char16_t kExtraViewText[] = u"Learn";
-const char16_t kItemListText[] = u"Item 1\nItem2";
 
 }  // namespace
 
 class ToolbarActionsBarBubbleViewsTest : public ChromeViewsTestBase {
- protected:
-  ToolbarActionsBarBubbleViewsTest() {}
+ public:
   ToolbarActionsBarBubbleViewsTest(const ToolbarActionsBarBubbleViewsTest&) =
       delete;
   ToolbarActionsBarBubbleViewsTest& operator=(
       const ToolbarActionsBarBubbleViewsTest&) = delete;
+
+ protected:
+  ToolbarActionsBarBubbleViewsTest() = default;
   ~ToolbarActionsBarBubbleViewsTest() override = default;
 
   void TearDown() override {
@@ -56,7 +58,8 @@ class ToolbarActionsBarBubbleViewsTest : public ChromeViewsTestBase {
 
   std::unique_ptr<views::Widget> CreateAnchorWidget() {
     std::unique_ptr<views::Widget> anchor_widget =
-        CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                         views::Widget::InitParams::TYPE_WINDOW);
     anchor_widget->Show();
     return anchor_widget;
   }
@@ -87,7 +90,7 @@ class ToolbarActionsBarBubbleViewsTest : public ChromeViewsTestBase {
 
     ASSERT_TRUE(button);
     const gfx::Point point(10, 10);
-    const ui::MouseEvent event(ui::ET_MOUSE_PRESSED, point, point,
+    const ui::MouseEvent event(ui::EventType::kMousePressed, point, point,
                                ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
                                ui::EF_LEFT_MOUSE_BUTTON);
     button->OnMousePressed(event);
@@ -101,8 +104,8 @@ class ToolbarActionsBarBubbleViewsTest : public ChromeViewsTestBase {
 
  private:
   std::unique_ptr<views::Widget> anchor_widget_;
-  raw_ptr<views::Widget> bubble_widget_ = nullptr;
-  raw_ptr<ToolbarActionsBarBubbleViews> bubble_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> bubble_widget_ = nullptr;
+  raw_ptr<ToolbarActionsBarBubbleViews, DanglingUntriaged> bubble_ = nullptr;
 };
 
 TEST_F(ToolbarActionsBarBubbleViewsTest, TestBubbleLayoutActionButton) {
@@ -170,22 +173,6 @@ TEST_F(ToolbarActionsBarBubbleViewsTest,
   CloseBubble();
 }
 
-TEST_F(ToolbarActionsBarBubbleViewsTest, TestBubbleLayoutListView) {
-  TestToolbarActionsBarBubbleDelegate delegate(kHeadingText, kBodyText,
-                                               kActionButtonText);
-  delegate.set_item_list_text(kItemListText);
-  ShowBubble(&delegate);
-
-  EXPECT_TRUE(bubble()->GetOkButton());
-  EXPECT_EQ(bubble()->GetOkButton()->GetText(), kActionButtonText);
-  EXPECT_FALSE(bubble()->GetCancelButton());
-  EXPECT_FALSE(bubble()->learn_more_button());
-  EXPECT_TRUE(bubble()->item_list());
-  EXPECT_EQ(bubble()->item_list()->GetText(), kItemListText);
-
-  CloseBubble();
-}
-
 TEST_F(ToolbarActionsBarBubbleViewsTest, TestBubbleLayoutNoBodyText) {
   TestToolbarActionsBarBubbleDelegate delegate(kHeadingText, std::u16string(),
                                                kActionButtonText);
@@ -204,7 +191,7 @@ TEST_F(ToolbarActionsBarBubbleViewsTest, TestBubbleLayoutNoBodyText) {
 TEST_F(ToolbarActionsBarBubbleViewsTest, TestBubbleDefaultDialogButtons) {
   TestToolbarActionsBarBubbleDelegate delegate(
       kHeadingText, kBodyText, kActionButtonText, kDismissButtonText);
-  delegate.set_default_dialog_button(ui::DIALOG_BUTTON_OK);
+  delegate.set_default_dialog_button(ui::mojom::DialogButton::kOk);
   ShowBubble(&delegate);
 
   ASSERT_TRUE(bubble()->GetOkButton());
@@ -301,21 +288,6 @@ TEST_F(ToolbarActionsBarBubbleViewsTest, TestCloseOnDeactivation) {
   EXPECT_EQ(ToolbarActionsBarBubbleDelegate::CLOSE_DISMISS_DEACTIVATION,
             *delegate.close_action());
   EXPECT_TRUE(bubble_observer.widget_closed());
-}
-
-TEST_F(ToolbarActionsBarBubbleViewsTest, TestDontCloseOnDeactivation) {
-  TestToolbarActionsBarBubbleDelegate delegate(kHeadingText, kBodyText,
-                                               kActionButtonText);
-  delegate.set_close_on_deactivate(false);
-  ShowBubble(&delegate);
-  views::test::TestWidgetObserver bubble_observer(bubble_widget());
-
-  EXPECT_FALSE(delegate.close_action());
-  // Activate another widget. The bubble shouldn't close.
-  anchor_widget()->Activate();
-  base::RunLoop().RunUntilIdle();
-  EXPECT_FALSE(delegate.close_action());
-  CloseBubble();
 }
 
 TEST_F(ToolbarActionsBarBubbleViewsTest, TestNullExtraView) {

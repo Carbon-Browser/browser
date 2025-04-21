@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,4 +40,4 @@ class ClientSecurityStateBuilder {
 };
 }  // namespace network
 
-#endif  // SERVICES_NETWORK_TEST_TEST_CLIENT_SECURITY_STATE_BUILDER_H_
+#endif  // SERVICES_NETWORK_TEST_CLIENT_SECURITY_STATE_BUILDER_H_

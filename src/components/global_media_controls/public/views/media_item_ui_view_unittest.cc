@@ -1,14 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/global_media_controls/public/views/media_item_ui_view.h"
 
-#include <memory>
-#include <utility>
-
-#include "base/containers/flat_set.h"
-#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "components/global_media_controls/public/test/mock_media_item_manager.h"
 #include "components/global_media_controls/public/test/mock_media_item_ui_device_selector.h"
@@ -17,10 +12,10 @@
 #include "components/media_message_center/mock_media_notification_item.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/display/test/test_screen.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/views/controls/scroll_view.h"
 #include "ui/views/test/button_test_api.h"
 #include "ui/views/test/view_metadata_test_utils.h"
 #include "ui/views/test/views_test_base.h"
@@ -42,29 +37,35 @@ const char kOtherTestNotificationId[] = "othertestid";
 
 class MediaItemUIViewTest : public views::ViewsTestBase {
  public:
-  MediaItemUIViewTest() : screen_override_(&fake_screen_) {}
+  MediaItemUIViewTest() { display::Screen::SetScreenInstance(&fake_screen_); }
   MediaItemUIViewTest(const MediaItemUIViewTest&) = delete;
   MediaItemUIViewTest& operator=(const MediaItemUIViewTest&) = delete;
-  ~MediaItemUIViewTest() override = default;
+  ~MediaItemUIViewTest() override {
+    display::Screen::SetScreenInstance(nullptr);
+  }
 
   // views::ViewsTestBase:
   void SetUp() override {
     views::ViewsTestBase::SetUp();
     item_ = std::make_unique<
         NiceMock<media_message_center::test::MockMediaNotificationItem>>();
-    widget_ = CreateTestWidget();
+    widget_ = CreateTestWidget(views::Widget::InitParams::CLIENT_OWNS_WIDGET);
 
     auto footer = std::make_unique<NiceMock<test::MockMediaItemUIFooter>>();
-    footer_ = footer.get();
+    auto* footer_ptr = footer.get();
 
     auto device_selector =
         std::make_unique<NiceMock<test::MockMediaItemUIDeviceSelector>>();
-    device_selector_ = device_selector.get();
-    device_selector_->SetPreferredSize(gfx::Size(400, 50));
+    device_selector->SetPreferredSize(gfx::Size(400, 50));
+    auto* device_selector_ptr = device_selector.get();
 
     item_ui_ = widget_->SetContentsView(std::make_unique<MediaItemUIView>(
         kTestNotificationId, item_->GetWeakPtr(), std::move(footer),
         std::move(device_selector)));
+
+    EXPECT_EQ(footer_ptr, item_ui_->footer_view_for_testing());
+    EXPECT_EQ(device_selector_ptr,
+              item_ui_->device_selector_view_for_testing());
 
     observer_ = std::make_unique<
         NiceMock<global_media_controls::test::MockMediaItemUIObserver>>();
@@ -77,14 +78,9 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
 
   void TearDown() override {
     item_ui_->RemoveObserver(observer_.get());
-    widget_.reset();
+    item_ui_ = nullptr;
+    widget_->Close();
     ViewsTestBase::TearDown();
-  }
-
-  void SimulateItemUISwipedToDismiss() {
-    // When the item ui is swiped, the SlideOutController sends this to the
-    // MediaItemUIView.
-    item_ui()->OnSlideOut();
   }
 
   bool IsDismissButtonVisible() { return GetDismissButton()->IsDrawn(); }
@@ -93,8 +89,8 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
     fake_screen_.set_cursor_screen_point(
         item_ui_->GetBoundsInScreen().CenterPoint());
 
-    ui::MouseEvent event(ui::ET_MOUSE_ENTERED, gfx::Point(), gfx::Point(),
-                         ui::EventTimeForNow(), 0, 0);
+    ui::MouseEvent event(ui::EventType::kMouseEntered, gfx::Point(),
+                         gfx::Point(), ui::EventTimeForNow(), 0, 0);
     item_ui_->OnMouseEntered(event);
   }
 
@@ -104,27 +100,27 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
         container_bounds.bottom_right() + gfx::Vector2d(1, 1);
     fake_screen_.set_cursor_screen_point(point_outside_container);
 
-    ui::MouseEvent event(ui::ET_MOUSE_EXITED, gfx::Point(), gfx::Point(),
-                         ui::EventTimeForNow(), 0, 0);
+    ui::MouseEvent event(ui::EventType::kMouseExited, gfx::Point(),
+                         gfx::Point(), ui::EventTimeForNow(), 0, 0);
     item_ui_->OnMouseExited(event);
   }
 
   void SimulateItemUIClicked() {
-    ui::MouseEvent event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                         ui::EventTimeForNow(), 0, 0);
+    ui::MouseEvent event(ui::EventType::kMousePressed, gfx::Point(),
+                         gfx::Point(), ui::EventTimeForNow(), 0, 0);
     views::test::ButtonTestApi(item_ui_).NotifyClick(event);
   }
 
   void SimulateHeaderClicked() {
-    ui::MouseEvent event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                         ui::EventTimeForNow(), 0, 0);
+    ui::MouseEvent event(ui::EventType::kMousePressed, gfx::Point(),
+                         gfx::Point(), ui::EventTimeForNow(), 0, 0);
     views::test::ButtonTestApi(GetView()->GetHeaderRowForTesting())
         .NotifyClick(event);
   }
 
   void SimulateDismissButtonClicked() {
-    ui::MouseEvent event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                         ui::EventTimeForNow(), 0, 0);
+    ui::MouseEvent event(ui::EventType::kMousePressed, gfx::Point(),
+                         gfx::Point(), ui::EventTimeForNow(), 0, 0);
     views::test::ButtonTestApi(GetDismissButton()).NotifyClick(event);
   }
 
@@ -230,8 +226,6 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<test::MockMediaItemUIFooter> footer_ = nullptr;
-  raw_ptr<test::MockMediaItemUIDeviceSelector> device_selector_ = nullptr;
   raw_ptr<MediaItemUIView> item_ui_ = nullptr;
   std::unique_ptr<global_media_controls::test::MockMediaItemUIObserver>
       observer_;
@@ -241,13 +235,7 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
   base::flat_set<MediaSessionAction> actions_;
 
   display::test::TestScreen fake_screen_;
-  display::test::ScopedScreenOverride screen_override_;
 };
-
-TEST_F(MediaItemUIViewTest, SwipeToDismiss) {
-  EXPECT_CALL(observer(), OnMediaItemUIDismissed(kTestNotificationId));
-  SimulateItemUISwipedToDismiss();
-}
 
 TEST_F(MediaItemUIViewTest, ClickToDismiss) {
   // Ensure that the mouse is not over the container and that nothing is
@@ -343,19 +331,37 @@ TEST_F(MediaItemUIViewTest, SendsDestroyedUpdates) {
 
 TEST_F(MediaItemUIViewTest, SendsClicks) {
   // When the container is clicked directly, it should notify its observers.
-  EXPECT_CALL(observer(), OnMediaItemUIClicked(kTestNotificationId));
+  EXPECT_CALL(observer(),
+              OnMediaItemUIClicked(kTestNotificationId,
+                                   /*activate_original_media=*/true));
   SimulateItemUIClicked();
   testing::Mock::VerifyAndClearExpectations(&observer());
 
   // It should also notify its observers when the header is clicked.
-  EXPECT_CALL(observer(), OnMediaItemUIClicked(kTestNotificationId));
+  EXPECT_CALL(observer(),
+              OnMediaItemUIClicked(kTestNotificationId,
+                                   /*activate_original_media=*/true));
   SimulateHeaderClicked();
+  testing::Mock::VerifyAndClearExpectations(&observer());
 }
 
 TEST_F(MediaItemUIViewTest, MetadataTest) {
   auto container_view = std::make_unique<MediaItemUIView>(
       kOtherTestNotificationId, notification_item(), nullptr, nullptr);
   views::test::TestViewMetadata(container_view.get());
+}
+
+TEST_F(MediaItemUIViewTest, UpdateView) {
+  auto footer_view = std::make_unique<NiceMock<test::MockMediaItemUIFooter>>();
+  auto* footer_ptr = footer_view.get();
+  item_ui()->UpdateFooterView(std::move(footer_view));
+  EXPECT_EQ(footer_ptr, item_ui()->footer_view_for_testing());
+
+  auto device_selector_view =
+      std::make_unique<NiceMock<test::MockMediaItemUIDeviceSelector>>();
+  auto* device_selector_ptr = device_selector_view.get();
+  item_ui()->UpdateDeviceSelector(std::move(device_selector_view));
+  EXPECT_EQ(device_selector_ptr, item_ui()->device_selector_view_for_testing());
 }
 
 }  // namespace global_media_controls

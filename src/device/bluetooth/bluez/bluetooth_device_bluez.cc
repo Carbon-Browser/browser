@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/device_event_log/device_event_log.h"
 #include "dbus/bus.h"
 #include "device/bluetooth/bluetooth_socket.h"
@@ -108,18 +109,34 @@ void ParseModalias(const dbus::ObjectPath& object_path,
 BluetoothDevice::ConnectErrorCode DBusErrorToConnectError(
     const std::string& error_name) {
   BluetoothDevice::ConnectErrorCode error_code = BluetoothDevice::ERROR_UNKNOWN;
-  if (error_name == bluetooth_device::kErrorConnectionAttemptFailed) {
-    error_code = BluetoothDevice::ERROR_FAILED;
+  if (error_name == bluetooth_device::kErrorNotReady) {
+    error_code = BluetoothDevice::ERROR_DEVICE_NOT_READY;
   } else if (error_name == bluetooth_device::kErrorFailed) {
     error_code = BluetoothDevice::ERROR_FAILED;
-  } else if (error_name == bluetooth_device::kErrorAuthenticationFailed) {
-    error_code = BluetoothDevice::ERROR_AUTH_FAILED;
+  } else if (error_name == bluetooth_device::kErrorInProgress) {
+    error_code = BluetoothDevice::ERROR_INPROGRESS;
+  } else if (error_name == bluetooth_device::kErrorAlreadyConnected) {
+    error_code = BluetoothDevice::ERROR_ALREADY_CONNECTED;
+  } else if (error_name == bluetooth_device::kErrorAlreadyExists) {
+    error_code = BluetoothDevice::ERROR_DEVICE_ALREADY_EXISTS;
+  } else if (error_name == bluetooth_device::kErrorNotConnected) {
+    error_code = BluetoothDevice::ERROR_DEVICE_UNCONNECTED;
+  } else if (error_name == bluetooth_device::kErrorDoesNotExist) {
+    error_code = BluetoothDevice::ERROR_DOES_NOT_EXIST;
+  } else if (error_name == bluetooth_device::kErrorInvalidArguments) {
+    error_code = BluetoothDevice::ERROR_INVALID_ARGS;
+  } else if (error_name == bluetooth_device::kErrorNotSupported) {
+    error_code = BluetoothDevice::ERROR_UNSUPPORTED_DEVICE;
   } else if (error_name == bluetooth_device::kErrorAuthenticationCanceled) {
     error_code = BluetoothDevice::ERROR_AUTH_CANCELED;
+  } else if (error_name == bluetooth_device::kErrorAuthenticationFailed) {
+    error_code = BluetoothDevice::ERROR_AUTH_FAILED;
   } else if (error_name == bluetooth_device::kErrorAuthenticationRejected) {
     error_code = BluetoothDevice::ERROR_AUTH_REJECTED;
   } else if (error_name == bluetooth_device::kErrorAuthenticationTimeout) {
     error_code = BluetoothDevice::ERROR_AUTH_TIMEOUT;
+  } else if (error_name == bluetooth_device::kErrorConnectionAttemptFailed) {
+    error_code = BluetoothDevice::ERROR_FAILED;
   }
   return error_code;
 }
@@ -224,11 +241,10 @@ device::BluetoothTransport BluetoothDeviceBlueZ::GetType() const {
   }
 
   NOTREACHED();
-  return device::BLUETOOTH_TRANSPORT_INVALID;
 }
 
 void BluetoothDeviceBlueZ::CreateGattConnectionImpl(
-    absl::optional<BluetoothUUID> service_uuid) {
+    std::optional<BluetoothUUID> service_uuid) {
 // Once ConnectLE is supported on Linux, this buildflag will not be necessary
 // (this bluez code is only run on Chrome OS and Linux).
 #if BUILDFLAG(IS_CHROMEOS)
@@ -282,7 +298,7 @@ void BluetoothDeviceBlueZ::DisconnectGatt() {
 
   // IsPaired() returns true if we've connected to the device before. So we
   // check the dbus property directly.
-  // TODO(crbug.com/649651): Use IsPaired once it returns true only for paired
+  // TODO(crbug.com/40486156): Use IsPaired once it returns true only for paired
   // devices.
   bluez::BluetoothDeviceClient::Properties* properties =
       bluez::BluezDBusManager::Get()->GetBluetoothDeviceClient()->GetProperties(
@@ -388,7 +404,7 @@ uint16_t BluetoothDeviceBlueZ::GetAppearance() const {
   return properties->appearance.value();
 }
 
-absl::optional<std::string> BluetoothDeviceBlueZ::GetName() const {
+std::optional<std::string> BluetoothDeviceBlueZ::GetName() const {
   bluez::BluetoothDeviceClient::Properties* properties =
       bluez::BluezDBusManager::Get()->GetBluetoothDeviceClient()->GetProperties(
           object_path_);
@@ -397,7 +413,7 @@ absl::optional<std::string> BluetoothDeviceBlueZ::GetName() const {
   if (properties->name.is_valid())
     return properties->name.value();
   else
-    return absl::nullopt;
+    return std::nullopt;
 }
 
 bool BluetoothDeviceBlueZ::IsPaired() const {
@@ -406,20 +422,28 @@ bool BluetoothDeviceBlueZ::IsPaired() const {
           object_path_);
   DCHECK(properties);
 
-  // The Paired property reflects the successful pairing for BR/EDR/LE. The
-  // value of the Paired property is always false for the devices that don't
-  // support pairing. Once a device is paired successfully, both Paired and
-  // Trusted properties will be set to true.
+  // The "paired" property reflects the successful pairing for BR/EDR/LE. The
+  // value of the "paired" property is always false for the devices that don't
+  // support pairing. Once a device is paired successfully, both the "paired"
+  // and the "trusted" properties will be set to true.
   return properties->paired.value();
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
 bool BluetoothDeviceBlueZ::IsBonded() const {
-  // TODO(b/217464014): Update to retrieve whether the peripheral is bonded to
-  // the device when this information is available from the platform.
-  return IsPaired();
+  bluez::BluetoothDeviceClient::Properties* properties =
+      bluez::BluezDBusManager::Get()->GetBluetoothDeviceClient()->GetProperties(
+          object_path_);
+  DCHECK(properties);
+
+  // The "bonded" property reflects the successful pairing for BR/EDR/LE, where
+  // the information required to initiate and authenticate connections is stored
+  // on-device. The value of the "bonded" property is always false for the
+  // devices that don't support pairing. Once a device is bonded successfully,
+  // the "bonded", "paired", and "trusted" properties will be set to true.
+  return properties->bonded.value();
 }
-#endif  // BUILDFLAG(IS_CHROMEOS)
+#endif
 
 bool BluetoothDeviceBlueZ::IsConnected() const {
   bluez::BluetoothDeviceClient::Properties* properties =
@@ -467,14 +491,14 @@ BluetoothDevice::UUIDSet BluetoothDeviceBlueZ::GetUUIDs() const {
   return device_uuids_.GetUUIDs();
 }
 
-absl::optional<int8_t> BluetoothDeviceBlueZ::GetInquiryRSSI() const {
+std::optional<int8_t> BluetoothDeviceBlueZ::GetInquiryRSSI() const {
   bluez::BluetoothDeviceClient::Properties* properties =
       bluez::BluezDBusManager::Get()->GetBluetoothDeviceClient()->GetProperties(
           object_path_);
   DCHECK(properties);
 
   if (!properties->rssi.is_valid())
-    return absl::nullopt;
+    return std::nullopt;
 
   // BlueZ uses int16_t because there is no int8_t for DBus, so we should never
   // get an int16_t that cannot be represented by an int8_t. But just in case
@@ -482,14 +506,14 @@ absl::optional<int8_t> BluetoothDeviceBlueZ::GetInquiryRSSI() const {
   return ClampPower(properties->rssi.value());
 }
 
-absl::optional<int8_t> BluetoothDeviceBlueZ::GetInquiryTxPower() const {
+std::optional<int8_t> BluetoothDeviceBlueZ::GetInquiryTxPower() const {
   bluez::BluetoothDeviceClient::Properties* properties =
       bluez::BluezDBusManager::Get()->GetBluetoothDeviceClient()->GetProperties(
           object_path_);
   DCHECK(properties);
 
   if (!properties->tx_power.is_valid())
-    return absl::nullopt;
+    return std::nullopt;
 
   // BlueZ uses int16_t because there is no int8_t for DBus, so we should never
   // get an int16_t that cannot be represented by an int8_t. But just in case
@@ -544,7 +568,6 @@ void BluetoothDeviceBlueZ::SetConnectionLatency(
       break;
     default:
       NOTREACHED();
-      break;
   }
 
   BLUETOOTH_LOG(EVENT) << "Setting LE connection parameters: min="
@@ -1100,9 +1123,13 @@ void BluetoothDeviceBlueZ::OnConnect(ConnectCallback callback) {
   BLUETOOTH_LOG(EVENT) << object_path_.value() << ": Connected, "
                        << num_connecting_calls_ << " still in progress";
 
+  // For CrOS, set trusted upon outgoing connection established.
+  // No-op for non-CrOS since Chrome is not part of the OS.
+#if BUILDFLAG(IS_CHROMEOS)
   SetTrusted();
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-  std::move(callback).Run(/*error_code=*/absl::nullopt);
+  std::move(callback).Run(/*error_code=*/std::nullopt);
 }
 
 void BluetoothDeviceBlueZ::OnConnectError(ConnectCallback callback,
@@ -1122,14 +1149,7 @@ void BluetoothDeviceBlueZ::OnConnectError(ConnectCallback callback,
                        << " still in progress";
 
   // Determine the error code from error_name.
-  ConnectErrorCode error_code = ERROR_UNKNOWN;
-  if (error_name == bluetooth_device::kErrorFailed) {
-    error_code = ERROR_FAILED;
-  } else if (error_name == bluetooth_device::kErrorInProgress) {
-    error_code = ERROR_INPROGRESS;
-  } else if (error_name == bluetooth_device::kErrorNotSupported) {
-    error_code = ERROR_UNSUPPORTED_DEVICE;
-  }
+  ConnectErrorCode error_code = DBusErrorToConnectError(error_name);
 
   std::move(callback).Run(error_code);
 }
@@ -1178,7 +1198,7 @@ void BluetoothDeviceBlueZ::OnPairDuringConnectError(
 void BluetoothDeviceBlueZ::OnPair(ConnectCallback callback) {
   BLUETOOTH_LOG(EVENT) << object_path_.value() << ": Paired";
   EndPairing();
-  std::move(callback).Run(/*error_code=*/absl::nullopt);
+  std::move(callback).Run(/*error_code=*/std::nullopt);
 }
 
 void BluetoothDeviceBlueZ::OnPairError(ConnectCallback callback,

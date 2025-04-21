@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/sync/sessions/sync_sessions_web_contents_router.h"
@@ -36,6 +36,8 @@ class TestLocalSessionEventHandler
       std::move(quit_closure_).Run();
     }
   }
+
+  void OnLocalTabClosed() override { OnLocalTabModified(nullptr); }
 
   bool local_tab_updated() { return local_tab_updated_; }
   void reset_local_tab_updated() { local_tab_updated_ = false; }
@@ -87,7 +89,7 @@ class SyncSessionsRouterTabHelperBrowserTest : public InProcessBrowserTest {
   ~SyncSessionsRouterTabHelperBrowserTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -108,7 +110,7 @@ class SyncSessionsRouterTabHelperBrowserTest : public InProcessBrowserTest {
   }
 
   void RemoveLanguageDetectionObserver() {
-    observer_.SetInterestedURL(GURL::EmptyGURL());
+    observer_.SetInterestedURL(GURL());
     ChromeTranslateClient* chrome_translate_client =
         ChromeTranslateClient::FromWebContents(web_contents());
     if (!chrome_translate_client) {
@@ -129,7 +131,8 @@ class SyncSessionsRouterTabHelperBrowserTest : public InProcessBrowserTest {
 
  protected:
  private:
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
   content::test::PrerenderTestHelper prerender_helper_;
   TestLocalSessionEventHandler handler;
   TestTranslateDriverObserver observer_;
@@ -162,7 +165,8 @@ IN_PROC_BROWSER_TEST_F(SyncSessionsRouterTabHelperBrowserTest,
   // it, SyncSessionsRouterTabHelper doesn't trigger OnLocalTabModified() on
   // prerendering.
   GURL prerender_url = embedded_test_server()->GetURL("/title1.html");
-  int prerender_id = prerender_helper()->AddPrerender(prerender_url);
+  content::FrameTreeNodeId prerender_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::test::PrerenderHostObserver host_observer(*web_contents(),
                                                      prerender_id);
   // Make sure that OnLocalTabModified() is not called.

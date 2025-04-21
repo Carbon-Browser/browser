@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/test/begin_frame_args_test.h"
 
 #include <stdint.h>
+#include <ostream>
 
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"

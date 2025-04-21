@@ -1,30 +1,36 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBGPU_GPU_SUPPORTED_LIMITS_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBGPU_GPU_SUPPORTED_LIMITS_H_
 
-#include <dawn/webgpu.h>
-
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-
+#include "third_party/blink/renderer/platform/graphics/gpu/webgpu_cpp.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
-#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
-class DOMException;
+class V8UnionUndefinedOrUnsignedLongLongEnforceRange;
 
 class GPUSupportedLimits final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  explicit GPUSupportedLimits(const WGPUSupportedLimits& limits);
+  explicit GPUSupportedLimits(const wgpu::SupportedLimits& limits);
 
-  static void MakeUndefined(WGPURequiredLimits* out);
-  static DOMException* Populate(WGPURequiredLimits* out,
-                                const Vector<std::pair<String, uint64_t>>& in);
+  static void MakeUndefined(wgpu::RequiredLimits* out);
+  // Returns true if populated, false if not and the ScriptPromiseResolverBase
+  // has been rejected.
+  static bool Populate(
+      wgpu::RequiredLimits* out,
+      const HeapVector<
+          std::pair<String,
+                    Member<V8UnionUndefinedOrUnsignedLongLongEnforceRange>>>&
+          in,
+      ScriptPromiseResolverBase*);
 
   GPUSupportedLimits(const GPUSupportedLimits&) = delete;
   GPUSupportedLimits& operator=(const GPUSupportedLimits&) = delete;
@@ -34,6 +40,8 @@ class GPUSupportedLimits final : public ScriptWrappable {
   unsigned maxTextureDimension3D() const;
   unsigned maxTextureArrayLayers() const;
   unsigned maxBindGroups() const;
+  unsigned maxBindGroupsPlusVertexBuffers() const;
+  unsigned maxBindingsPerBindGroup() const;
   unsigned maxDynamicUniformBuffersPerPipelineLayout() const;
   unsigned maxDynamicStorageBuffersPerPipelineLayout() const;
   unsigned maxSampledTexturesPerShaderStage() const;
@@ -46,20 +54,31 @@ class GPUSupportedLimits final : public ScriptWrappable {
   unsigned minUniformBufferOffsetAlignment() const;
   unsigned minStorageBufferOffsetAlignment() const;
   unsigned maxVertexBuffers() const;
+  uint64_t maxBufferSize() const;
   unsigned maxVertexAttributes() const;
   unsigned maxVertexBufferArrayStride() const;
   unsigned maxInterStageShaderComponents() const;
   unsigned maxInterStageShaderVariables() const;
   unsigned maxColorAttachments() const;
+  unsigned maxColorAttachmentBytesPerSample() const;
   unsigned maxComputeWorkgroupStorageSize() const;
   unsigned maxComputeInvocationsPerWorkgroup() const;
   unsigned maxComputeWorkgroupSizeX() const;
   unsigned maxComputeWorkgroupSizeY() const;
   unsigned maxComputeWorkgroupSizeZ() const;
   unsigned maxComputeWorkgroupsPerDimension() const;
+  unsigned minSubgroupSize() const;
+  unsigned maxSubgroupSize() const;
+  unsigned maxStorageBuffersInFragmentStage() const;
+  unsigned maxStorageTexturesInFragmentStage() const;
+  unsigned maxStorageBuffersInVertexStage() const;
+  unsigned maxStorageTexturesInVertexStage() const;
 
  private:
-  WGPULimits limits_;
+  wgpu::Limits limits_;
+
+  bool subgroup_limits_initialized_;
+  wgpu::DawnExperimentalSubgroupLimits subgroup_limits_;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,10 +37,15 @@ UpgradeParams::UpgradeParams()
       skip_gms_core_cache(base::CommandLine::ForCurrentProcess()->HasSwitch(
           ash::switches::kArcDisableGmsCoreCache)),
       skip_tts_cache(base::CommandLine::ForCurrentProcess()->HasSwitch(
-                         ash::switches::kArcDisableTtsCache) ||
-                     !base::FeatureList::IsEnabled(arc::kEnableTTSCacheSetup)),
-      enable_arc_nearby_share(
-          base::FeatureList::IsEnabled(arc::kEnableArcNearbyShare)) {}
+          ash::switches::kArcDisableTtsCache)),
+      skip_dexopt_cache(base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kArcDisableDexOptCache)),
+      enable_priority_app_lmk_delay(
+          base::FeatureList::IsEnabled(kPriorityAppLmkDelay)),
+      priority_app_lmk_delay_second(kPriorityAppLmkDelaySecond.Get()),
+      priority_app_lmk_delay_list(kPriorityAppLmkDelayList.Get()),
+      enable_lmk_perceptible_min_state_update(
+          base::FeatureList::IsEnabled(kLmkPerceptibleMinStateUpdate)) {}
 
 UpgradeParams::UpgradeParams(const UpgradeParams& other) = default;
 UpgradeParams::UpgradeParams(UpgradeParams&& other) = default;

@@ -59,9 +59,10 @@ class ExecutionContext;
 class ExceptionState;
 class LocalDOMWindow;
 class ServiceWorkerErrorForUpdate;
+class ServiceWorkerRegistration;
 
 class MODULES_EXPORT ServiceWorkerContainer final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public Supplement<LocalDOMWindow>,
       public ExecutionContextLifecycleObserver,
       public WebServiceWorkerProviderClient {
@@ -84,14 +85,18 @@ class MODULES_EXPORT ServiceWorkerContainer final
 
   void Trace(Visitor*) const override;
 
-  ServiceWorker* controller() { return controller_; }
-  ScriptPromise ready(ScriptState*, ExceptionState&);
+  ServiceWorker* controller() { return controller_.Get(); }
+  ScriptPromise<ServiceWorkerRegistration> ready(ScriptState*, ExceptionState&);
 
-  ScriptPromise registerServiceWorker(ScriptState*,
-                                      const String& pattern,
-                                      const RegistrationOptions*);
-  ScriptPromise getRegistration(ScriptState*, const String& document_url);
-  ScriptPromise getRegistrations(ScriptState*);
+  ScriptPromise<ServiceWorkerRegistration> registerServiceWorker(
+      ScriptState*,
+      const String& pattern,
+      const RegistrationOptions*);
+  ScriptPromise<ServiceWorkerRegistration> getRegistration(
+      ScriptState*,
+      const String& document_url);
+  ScriptPromise<IDLSequence<ServiceWorkerRegistration>> getRegistrations(
+      ScriptState*);
 
   void startMessages();
 
@@ -130,16 +135,15 @@ class MODULES_EXPORT ServiceWorkerContainer final
   void RegisterServiceWorkerInternal(
       const KURL& scope_url,
       const KURL& script_url,
-      absl::optional<mojom::blink::ScriptType> script_type,
+      std::optional<mojom::blink::ScriptType> script_type,
       mojom::blink::ServiceWorkerUpdateViaCache update_via_cache,
       WebFetchClientSettingsObject fetch_client_settings_object,
       std::unique_ptr<CallbackPromiseAdapter<ServiceWorkerRegistration,
                                              ServiceWorkerErrorForUpdate>>
           callbacks);
 
-  using ReadyProperty =
-      ScriptPromiseProperty<Member<ServiceWorkerRegistration>,
-                            Member<ServiceWorkerRegistration>>;
+  using ReadyProperty = ScriptPromiseProperty<ServiceWorkerRegistration,
+                                              ServiceWorkerRegistration>;
   ReadyProperty* CreateReadyProperty();
 
   void EnableClientMessageQueue();
@@ -156,15 +160,13 @@ class MODULES_EXPORT ServiceWorkerContainer final
   // ServiceWorkerRegistration object in current execution context.
   HeapHashMap<int64_t,
               WeakMember<ServiceWorkerRegistration>,
-              WTF::IntHash<int64_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<int64_t>>
+              IntWithZeroKeyHashTraits<int64_t>>
       service_worker_registration_objects_;
   // Map from service worker version id to JavaScript ServiceWorker object in
   // current execution context.
   HeapHashMap<int64_t,
               WeakMember<ServiceWorker>,
-              WTF::IntHash<int64_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<int64_t>>
+              IntWithZeroKeyHashTraits<int64_t>>
       service_worker_objects_;
 
   // For https://w3c.github.io/ServiceWorker/#dfn-client-message-queue

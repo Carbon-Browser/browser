@@ -1,16 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/cast_browser_interface_binders.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromecast/browser/application_media_capabilities.h"
 #include "chromecast/browser/application_media_info_manager.h"
 #include "chromecast/browser/audio_socket_broker.h"
 #include "chromecast/browser/cast_navigation_ui_data.h"
 #include "chromecast/browser/cast_web_contents.h"
-#include "chromecast/common/mojom/accessibility.mojom.h"
 #include "chromecast/common/mojom/activity_window.mojom.h"
 #include "chromecast/common/mojom/application_media_capabilities.mojom.h"
 #include "chromecast/common/mojom/assistant_messenger.mojom.h"
@@ -129,8 +128,6 @@ void PopulateCastFrameBinders(
       &BindFromCastWebContents<::chromecast::mojom::GestureSource>));
   binder_map->Add<::chromecast::mojom::SettingsPlatform>(base::BindRepeating(
       &BindFromCastWebContents<::chromecast::mojom::SettingsPlatform>));
-  binder_map->Add<mojom::CastAccessibilityService>(base::BindRepeating(
-      &BindFromCastWebContents<mojom::CastAccessibilityService>));
   binder_map->Add<mojom::CastDemo>(
       base::BindRepeating(&BindFromCastWebContents<mojom::CastDemo>));
 

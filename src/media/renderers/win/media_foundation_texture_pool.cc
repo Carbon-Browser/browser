@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ MediaFoundationTexturePool::TextureInfo::operator=(
 MediaFoundationTexturePool::MediaFoundationTexturePool() = default;
 MediaFoundationTexturePool::~MediaFoundationTexturePool() = default;
 
-// TODO(crbug.com/1278157): The pool should release the textures when the media
+// TODO(crbug.com/40810044): The pool should release the textures when the media
 // engine is idling to save resources.
 HRESULT MediaFoundationTexturePool::Initialize(
     ID3D11Device* device,
@@ -50,8 +50,8 @@ HRESULT MediaFoundationTexturePool::Initialize(
       static_cast<UINT>(frame_size.height()),
       1,
       1,
-      // TODO(crbug.com/1276134): Need to handle higher bit-depths like HDR.
-      DXGI_FORMAT_R8G8B8A8_UNORM,
+      // TODO(crbug.com/40808700): Need to handle higher bit-depths like HDR.
+      DXGI_FORMAT_B8G8R8A8_UNORM,
       {1, 0},
       D3D11_USAGE_DEFAULT,
       D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,

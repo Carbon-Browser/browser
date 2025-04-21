@@ -1,17 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef UI_GFX_LINEAR_GRADIENT_H_
-#define UI_GFX_LINEAR_GRADIENT_H_
+#ifndef UI_GFX_GEOMETRY_LINEAR_GRADIENT_H_
+#define UI_GFX_GEOMETRY_LINEAR_GRADIENT_H_
+
+#include <stdint.h>
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
-#include "ui/gfx/geometry/geometry_skia_export.h"
+#include "base/component_export.h"
 
 namespace gfx {
 
+class AxisTransform2d;
 class Transform;
 
 // A class that defines a linear gradient mask.
@@ -23,17 +28,17 @@ class Transform;
 // gradient.AddStep(30, 255);
 // gradient.AddStep(70, 255);
 // gradient.AddStep(80, 0);
-class GEOMETRY_SKIA_EXPORT LinearGradient {
+class COMPONENT_EXPORT(GEOMETRY_SKIA) LinearGradient {
  public:
   struct Step {
-    // Percent that defines a position in diagonal, from 0 to 100.
-    float percent = 0;
+    // Fraction that defines a position in diagonal, from 0 to 1.
+    float fraction = 0;
     // Alpha, from 0 to 255.
     uint8_t alpha = 0;
   };
   static LinearGradient& GetEmpty();
 
-  static constexpr size_t kMaxStepSize = 6;
+  static constexpr size_t kMaxStepSize = 8;
   using StepArray = std::array<Step, kMaxStepSize>;
 
   LinearGradient();
@@ -44,7 +49,7 @@ class GEOMETRY_SKIA_EXPORT LinearGradient {
   bool IsEmpty() const { return !step_count_; }
 
   // Add a new step. Adding more than 6 results in DCHECK or ignored.
-  void AddStep(float percent, uint8_t alpha);
+  void AddStep(float fraction, uint8_t alpha);
 
   // Get step information.
   const StepArray& steps() const { return steps_; }
@@ -59,7 +64,8 @@ class GEOMETRY_SKIA_EXPORT LinearGradient {
   void ReverseSteps();
 
   // Transform the angle.
-  void Transform(const gfx::Transform& transform);
+  void ApplyTransform(const Transform& transform);
+  void ApplyTransform(const AxisTransform2d& transform);
 
   std::string ToString() const;
 
@@ -72,7 +78,7 @@ class GEOMETRY_SKIA_EXPORT LinearGradient {
 
 inline bool operator==(const LinearGradient::Step& lhs,
                        const LinearGradient::Step& rhs) {
-  return lhs.percent == rhs.percent && lhs.alpha == rhs.alpha;
+  return lhs.fraction == rhs.fraction && lhs.alpha == rhs.alpha;
 }
 
 inline bool operator==(const LinearGradient& lhs, const LinearGradient& rhs) {
@@ -86,4 +92,4 @@ inline bool operator!=(const LinearGradient& lhs, const LinearGradient& rhs) {
 
 }  // namespace gfx
 
-#endif  // UI_GFX_LINEAR_GRADIENT_H_
+#endif  // UI_GFX_GEOMETRY_LINEAR_GRADIENT_H_

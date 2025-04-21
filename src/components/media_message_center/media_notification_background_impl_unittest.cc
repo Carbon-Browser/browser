@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/test/scoped_command_line.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/gfx/color_analysis.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/views/test/test_views.h"
@@ -97,11 +96,11 @@ class MediaNotificationBackgroundImplTest : public views::ViewsTestBase {
     return background_.get();
   }
 
-  absl::optional<SkColor> GetBackgroundColor() const {
+  std::optional<SkColor> GetBackgroundColor() const {
     return background_->background_color_;
   }
 
-  absl::optional<SkColor> GetForegroundColor() const {
+  std::optional<SkColor> GetForegroundColor() const {
     return background_->foreground_color_;
   }
 
@@ -211,7 +210,8 @@ TEST_F(MediaNotificationBackgroundImplTest,
 }
 
 TEST_F(MediaNotificationBackgroundImplTest, GetBackgroundColorRespectsTheme) {
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   auto* theme = widget->GetNativeTheme();
   theme->set_use_dark_colors(false);
   auto* owner = widget->SetContentsView(std::make_unique<views::View>());

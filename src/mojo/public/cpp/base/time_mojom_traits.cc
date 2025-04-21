@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,18 @@ bool StructTraits<mojo_base::mojom::TimeDataView, base::Time>::Read(
     mojo_base::mojom::TimeDataView data,
     base::Time* time) {
   *time = base::Time() + base::Microseconds(data.internal_value());
+  return true;
+}
+
+double StructTraits<mojo_base::mojom::JSTimeDataView, base::Time>::msec(
+    const base::Time& time) {
+  return time.InMillisecondsFSinceUnixEpochIgnoringNull();
+}
+
+bool StructTraits<mojo_base::mojom::JSTimeDataView, base::Time>::Read(
+    mojo_base::mojom::JSTimeDataView data,
+    base::Time* time) {
+  *time = base::Time::FromMillisecondsSinceUnixEpoch(data.msec());
   return true;
 }
 

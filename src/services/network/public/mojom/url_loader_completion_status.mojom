@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ struct URLLoaderCompletionStatus {
 
   // A copy of the data requested exists in the disk cache and/or the in-memory
   // cache.
-  // TODO(https://crbug.com/1339708): Rename this field to `exists_in_any_cache`
+  // TODO(crbug.com/40230090): Rename this field to `exists_in_any_cache`
   // to represent what this field actually means.
   bool exists_in_cache = false;
 
@@ -48,6 +48,23 @@ struct URLLoaderCompletionStatus {
   // Optional CORS error details.
   CorsErrorStatus? cors_error_status;
 
+  // Information about any preflight request sent for Private Network Access
+  // as part of this load, that was not previously reported in
+  // `URLResponseHead`.
+  //
+  // Invariant: if `error_code` is 0/`OK`, then this is `kNone`. Indeed, in that
+  // case a `URLResponseHead` must have been previously sent to
+  // `URLLoaderClient`, in which the preflight result was reported already. In
+  // other words, this is only populated if the request failed before receiving
+  // headers.
+  //
+  // This is used to record metrics in the client for compatibility risk
+  // analysis and rollout monitoring. See https://crbug.com/1427470.
+  //
+  // TODO(crbug.com/40204695): Remove this once preflights are enforced.
+  PrivateNetworkAccessPreflightResult private_network_access_preflight_result =
+      PrivateNetworkAccessPreflightResult.kNone;
+
   // Optional Trust Tokens (https://github.com/wicg/trust-token-api) error
   // details.
   //
@@ -67,19 +84,13 @@ struct URLLoaderCompletionStatus {
   // Only set when |error_code| is |ERR_BLOCKED_BY_RESPONSE|.
   BlockedByResponseReasonWrapper? blocked_by_response_reason;
 
-  // Set when response blocked by CORB needs to be reported to the DevTools
+  // Set when response blocked by ORB needs to be reported to the DevTools
   // console.
-  bool should_report_corb_blocking = false;
-
-  // The proxy server used for this request, if any.
-  ProxyServer proxy_server;
+  bool should_report_orb_blocking = false;
 
   // Host resolution error info for this request.
   ResolveErrorInfo resolve_error_info;
 
   // Whether the initiator of this request should be collapsed.
   bool should_collapse_initiator = false;
-
-  // Whether a pervasive payload is requested.
-  bool pervasive_payload_requested = false;
 };

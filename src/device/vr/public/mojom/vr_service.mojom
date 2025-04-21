@@ -1,15 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module device.mojom;
 
 import "device/gamepad/public/mojom/gamepad.mojom";
+import "device/vr/public/mojom/xr_hand_tracking_data.mojom";
+import "device/vr/public/mojom/xr_session.mojom";
 import "mojo/public/mojom/base/big_buffer.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "gpu/ipc/common/exported_shared_image.mojom";
+import "gpu/ipc/common/shared_image_metadata.mojom";
 import "gpu/ipc/common/mailbox_holder.mojom";
 import "gpu/ipc/common/sync_token.mojom";
-import "skia/public/mojom/bitmap.mojom";
 import "ui/display/mojom/display.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "ui/gfx/mojom/gpu_fence_handle.mojom";
@@ -21,21 +24,6 @@ import "ui/gfx/mojom/transform.mojom";
 
 // Note on terminology: unless otherwise noted, all poses passed across mojo are
 // expressed in device space, aka mojo space, aka world space.
-
-// TODO(https://crbug.com/966099): Use EnableIf to only define values on
-// platforms that have implementations.
-// XRDeviceId is used in metrics, so don't reorder or reuse.
-enum XRDeviceId {
-  WEB_TEST_DEVICE_ID = 0, // Fake device used by web_tests.
-  FAKE_DEVICE_ID = 1, // Fake device used in unit tests.
-  ORIENTATION_DEVICE_ID = 2,
-  GVR_DEVICE_ID = 3,
-  // OPENVR_DEVICE_ID = 4,
-  // OCULUS_DEVICE_ID = 5,
-  // WINDOWS_MIXED_REALITY_ID = 6,
-  ARCORE_DEVICE_ID = 7,
-  [EnableIf=enable_openxr] OPENXR_DEVICE_ID = 8,
-};
 
 enum XRHandedness {
   NONE = 0,
@@ -49,27 +37,6 @@ enum XRTargetRayMode {
   TAPPING = 3
 };
 
-// These correspond with the features from the WebXR Spec:
-// https://immersive-web.github.io/webxr/#feature-descriptor
-enum XRSessionFeature {
-  REF_SPACE_VIEWER = 1,
-  REF_SPACE_LOCAL = 2,
-  REF_SPACE_LOCAL_FLOOR = 3,
-  REF_SPACE_BOUNDED_FLOOR = 4,
-  REF_SPACE_UNBOUNDED = 5,
-
-  DOM_OVERLAY = 6,
-  HIT_TEST = 7,
-  LIGHT_ESTIMATION = 8,
-  ANCHORS = 9,
-  CAMERA_ACCESS = 10,
-  PLANE_DETECTION = 11,
-  DEPTH = 12,
-  IMAGE_TRACKING = 13,
-  HAND_INPUT = 14,
-  SECONDARY_VIEWS = 15,
-};
-
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 // This enum corresponds to 'XRFeatureRequestStatus' in
@@ -79,16 +46,6 @@ enum XRSessionFeatureRequestStatus {
   kRequired = 1,
   kOptionalAccepted = 2,
   kOptionalRejected = 3,
-};
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-// These enum names come from the WebXR spec:
-// https://immersive-web.github.io/webxr/#xrsessionmode-enum
-enum XRSessionMode {
-  kInline = 1,
-  kImmersiveVr = 2,
-  kImmersiveAr = 3,
 };
 
 // These enum names come from the WebXR spec:
@@ -102,16 +59,6 @@ enum XREnvironmentBlendMode {
   kAdditive = 3,
 };
 
-enum XRDepthUsage {
-  kCPUOptimized = 1,
-  kGPUOptimized = 2,
-};
-
-enum XRDepthDataFormat {
-  kLuminanceAlpha = 1,
-  kFloat32 = 2,
-};
-
 // These enum names come from the WebXR spec:
 // https://immersive-web.github.io/webxr-ar-module/#enumdef-xrinteractionmode
 // The interactionMode attribute describes the best space
@@ -122,55 +69,6 @@ enum XRInteractionMode {
   kWorldSpace = 2,
 };
 
-struct XRTrackedImage {
-  skia.mojom.BitmapN32 bitmap;
-  gfx.mojom.Size size_in_pixels;
-  float width_in_meters;
-};
-
-// Structure used to configure depth sensing API at session creation.
-// If the device is unable to create the session given the preferences expressed
-// in the options, the session will not have depth sensing API enabled. In case
-// it was a required feature, this means that session creation will fail.
-struct XRDepthOptions {
-  // Ordered array of depth sensing usage preferences. At session creation,
-  // the device will pick the depth sensing usage value that it supports,
-  /// starting from the lowest-indexed one. `kNone` entry is not allowed to
-  // appear in this array, and the array should not be empty.
-  array<XRDepthUsage> usage_preferences;
-  // Ordered array of depth sensing data format preferences. At session
-  // creation, the device will pick the depth sensing data format value that it
-  // supports, starting from the lowest-indexed one. `kNone` entry is not
-  // allowed to appear in this array, and the array should not be empty.
-  // The data format selection happens after the device has selected depth
-  // sensing usage.
-  array<XRDepthDataFormat> data_format_preferences;
-};
-
-struct XRSessionOptions {
-  // Represents the type of session that is being requested.
-  XRSessionMode mode;
-
-  // Represents the set of requested features that have been marked "required",
-  // if any of these features are missing, a session will not be created.
-  array<XRSessionFeature> required_features;
-
-  // Represents the set of requested features that have been marked "optional",
-  // if any of these features are missing, a session will still be created, but
-  // the feature will not be added to the enabled_features set on the XRSession
-  // struct that is returned.
-  array<XRSessionFeature> optional_features;
-
-  array<XRTrackedImage> tracked_images;
-
-  // Must be present if either optional or required features contain
-  // depth sensing API.
-  XRDepthOptions? depth_options;
-
-  // ID of this request, used for tracing.
-  uint64 trace_id;
-};
-
 struct XRDepthConfig {
   XRDepthUsage depth_usage;
   XRDepthDataFormat depth_data_format;
@@ -179,10 +77,6 @@ struct XRDepthConfig {
 // This structure contains a description of the device's active configuration
 // for the session being established.
 struct XRSessionDeviceConfig {
-  // Indicates whether the device backing this session sends input events solely
-  // via eventing (as opposed to polling).
-  bool uses_input_eventing;
-
   // The default scale that should be applied to the native framebuffer size
   // unless overridden by the developer.
   float default_framebuffer_scale = 1.0;
@@ -266,53 +160,6 @@ struct XRInputSourceDescription {
   // spaces and has separate words concatenated with a "-". These names are
   // sorted in descending order of specificity.
   array<string> profiles;
-};
-
-// Sourced from https://immersive-web.github.io/webxr-hand-input/#idl-index
-enum XRHandJoint {
-  kWrist = 0,
-  kThumbMetacarpal = 1,
-  kThumbPhalanxProximal = 2,
-  kThumbPhalanxDistal = 3,
-  kThumbTip = 4,
-  kIndexFingerMetacarpal = 5,
-  kIndexFingerPhalanxProximal = 6,
-  kIndexFingerPhalanxIntermediate = 7,
-  kIndexFingerPhalanxDistal = 8,
-  kIndexFingerTip = 9,
-  kMiddleFingerMetacarpal = 10,
-  kMiddleFingerPhalanxProximal = 11,
-  kMiddleFingerPhalanxIntermediate = 12,
-  kMiddleFingerPhalanxDistal = 13,
-  kMiddleFingerTip = 14,
-  kRingFingerMetacarpal = 15,
-  kRingFingerPhalanxProximal = 16,
-  kRingFingerPhalanxIntermediate = 17,
-  kRingFingerPhalanxDistal = 18,
-  kRingFingerTip = 19,
-  kPinkyFingerMetacarpal = 20,
-  kPinkyFingerPhalanxProximal = 21,
-  kPinkyFingerPhalanxIntermediate = 22,
-  kPinkyFingerPhalanxDistal = 23,
-  kPinkyFingerTip = 24,
-};
-
-// This struct contains joint data and the associated joint for which the data
-// corresponds.
-// For each hand joint we are required to supply a transform and a radius.
-struct XRHandJointData {
-  // Which joint this data is for denoted by the XRHandJoint enum.
-  XRHandJoint joint;
-  // The transform of pose of this joint in mojo space.
-  gfx.mojom.Transform? mojo_from_joint;
-  // The radius of the joint in meters.
-  float radius;
-};
-
-// The list of joint data. Must have data for each of the 25 joints.
-struct XRHandTrackingData {
-  // The transforms and radii of the joints
-  array<XRHandJointData> hand_joint_data;
 };
 
 struct XRInputSourceState {
@@ -427,7 +274,7 @@ struct XRHitResult {
   Pose mojo_from_result;  // Pose of the result (aka intersection point).
   uint64 plane_id;  // If the hit test result was computed based off of a plane,
                     // the plane ID will be stored here. 0 signifies no plane.
-                    // TODO(https://crbug.com/657632) - make it optional once
+                    // TODO(crbug.com/40489779) - make it optional once
                     // mojo supports optional numeric types.
 };
 
@@ -454,7 +301,7 @@ struct XRView {
   // and GVR only expose the head pose (aka. mojo_from_viewer) and the
   // head-from-eye pose (viewer_from_view), so this calculation needs to be
   // done in the XR process before sending to the renderer.
-  // TODO(https://crbug.com/1070380): All of the runtimes currently assume mojo
+  // TODO(crbug.com/40684534): All of the runtimes currently assume mojo
   // and local space are equivalent, so this is the same as local_from_view.
   // Instead, send this in mojo space and send the relevant transforms to other
   // spaces in XRFrameData so the clients can calculate them as needed.
@@ -464,6 +311,12 @@ struct XRView {
   // API should use to render this view.
   // See https://immersive-web.github.io/webxr/#xrviewport
   gfx.mojom.Rect viewport;
+
+  // Depth data (if the device supports it and the environment integration is
+  // enabled). This assumes that depth information is provided from a single
+  // sensor. If for any reason the latest depth data could not be obtained, it
+  // will be set to null.
+  XRDepthData? depth_data;
 
   // A first person observer view is a secondary view typically used when
   // capturing from the camera of an AR device.
@@ -745,10 +598,10 @@ struct XRDepthDataStillValid {};
 // Structure that signifies that the Depth data was updated. Provides
 // information about current depth data. See |XRDepthData| for more details.
 struct XRDepthDataUpdated {
-  // Timestamp of the returned data, in unspecified base.
-  mojo_base.mojom.TimeDelta time_delta;
-  // Array of 16-bit numbers representing depth in millimeters from the camera
-  // plane.
+  // Array of numbers representing depth from the camera plane.
+  // Size of the number is determined by the `XRDepthDataFormat` sent at session
+  // creation. The numbers can be converted to meters by multiplying by
+  // `raw_value_to_meters`.
   mojo_base.mojom.BigBuffer pixel_data;
   // Transform that needs to be applied when indexing into pixel_data when using
   // normalized view coordinates (with origin at bottom left corner of the
@@ -810,21 +663,17 @@ struct XRFrameData {
   VRPose? mojo_from_viewer;
   // Time delta from an unspecified origin.
   mojo_base.mojom.TimeDelta time_delta;
-  // The buffer_holder is used for sending imagery data back and forth across
-  // the process boundary.
-  gpu.mojom.MailboxHolder? buffer_holder;
+  // The buffer_shared_image is used for sending imagery data back and forth
+  // across the process boundary.
+  gpu.mojom.ExportedSharedImage? buffer_shared_image;
+  gpu.mojom.SyncToken? buffer_sync_token;
 
-  // The camera_image_buffer_holder is used to send a copy of the camera image
-  // across the process boundary for immersive-ar sessions. This assumes that
-  // there exists a single camera.
-  gpu.mojom.MailboxHolder? camera_image_buffer_holder;
+  // The camera_image_buffer_shared_image is used to send a copy of the camera
+  // image across the process boundary for immersive-ar sessions. This assumes
+  // that there exists a single camera.
+  gpu.mojom.ExportedSharedImage? camera_image_buffer_shared_image;
+  gpu.mojom.SyncToken? camera_image_buffer_sync_token;
   gfx.mojom.Size? camera_image_size;
-
-  // Depth data (if the device supports it and the environment integration is
-  // enabled). This assumes that depth information is provided from a single
-  // sensor. If for any reason the latest depth data could not be obtained, it
-  // will be set to null.
-  XRDepthData? depth_data;
 
   // Indicates that there has been a significant discontinuity in the mojo space
   // coordinate system, and that poses from this point forward with the same
@@ -852,10 +701,7 @@ struct XRFrameData {
   array<XRView> views;
 
   // For immersive sessions only, reports the state of all active input devices
-  // at the time of this frame. If a session has indicated that it
-  // |uses_input_eventing|, then these input states should not fire select,
-  // squeeze, or similar events, but all controller state, including current
-  // button states, should still be updated.
+  // at the time of this frame. all controller state, including current
   array<XRInputSourceState>? input_state;
 
   // Stage parameters may be provided per-frame, or only re-computed
@@ -891,46 +737,17 @@ struct XRFrameData {
   XRTrackedImagesData? tracked_images;
 };
 
-// Used primarily in logging to indicate why a session was rejecting to aid
-// developer debuggability. To this end, rather than re-using an existing enum
-// value, if it doesn't match your error case, a new value should be added.
-// Note that this is converted to a console log, and thus the numbers can still
-// be re-arranged as needed (e.g. if a value should be removed).
-enum RequestSessionError {
-  // Indicates that another session is already using the hardware that a new
-  // session would need exclusive control over.
-  EXISTING_IMMERSIVE_SESSION = 1,
-  // Used to indicate that something happened to the connection between either
-  // renderer and browser or browser and device processes, and thus a session
-  // could not be brokered.
-  INVALID_CLIENT = 2,
-  // The user denied consent for one or more required features in the session
-  // configuration (or the mode).
-  USER_DENIED_CONSENT = 3,
-  // No runtime was present which supported both the requested mode and all
-  // required features.
-  NO_RUNTIME_FOUND = 4,
-  // The runtime could not successfully create a session.
-  UNKNOWN_RUNTIME_ERROR = 5,
-  // The runtime requires additional installation which could not be completed.
-  RUNTIME_INSTALL_FAILURE = 6,
-  // While processing/creating a session the "best fit" runtime changed (either
-  // a better runtime was added or the only supported runtime was removed).
-  RUNTIMES_CHANGED = 7,
-  // Something prevented the session from entering fullscreen, which was
-  // required by part of the session configuration.
-  FULLSCREEN_ERROR = 8,
-  // We are unable to determine why the request failed. This should be used very
-  // sparingly, (e.g. Crashes, destructors, etc.)
-  UNKNOWN_FAILURE = 9,
-};
-
 struct RequestSessionSuccess {
   XRSession session;
-
+  // The ID provided by VRServiceImpl and used by WebXRLoggerManager to
+  // identify the session that XRFrameDataProvider is sending.
+  uint64 trace_id;
   // Used to report metrics during the session to the browser process.
   // See the note on |XRSessionMetricsRecorder| for context.
   pending_remote<XRSessionMetricsRecorder> metrics_recorder;
+  // Used to report statistics about the session to the browser process.
+  // Null if not an immersive session
+  pending_remote<WebXrInternalsRendererListener>? xr_internals_listener;
 };
 
 union RequestSessionResult {
@@ -1089,7 +906,7 @@ interface XREnvironmentIntegrationProvider {
     XRNativeOriginInformation native_origin_information,
     Pose native_origin_from_anchor)
       => (CreateAnchorResult result, uint64 anchor_id);
-  // TODO(https://crbug.com/657632): Switch anchor_id to nullable integer once
+  // TODO(crbug.com/40489779): Switch anchor_id to nullable integer once
   // that's available. This will allow us to remove CreateAnchorResult if we're
   // not interested in obtaining detailed error information from the device.
 
@@ -1105,19 +922,12 @@ interface XREnvironmentIntegrationProvider {
     Pose native_origin_from_anchor,
     uint64 plane_id)
       => (CreateAnchorResult result, uint64 anchor_id);
-  // TODO(https://crbug.com/657632): Ditto - make anchor_id a nullable integer.
+  // TODO(crbug.com/40489779): Ditto - make anchor_id a nullable integer.
 
   // Detaches an existing anchor. The |anchor_id| must be a valid id of an
   // anchor created by one of the CreateAnchor calls, otherwise the call will be
   // ignored.
   DetachAnchor(uint64 anchor_id);
-};
-
-// Provides a mechanism for a channel to plumb up any button click events
-// separately from polling, to provide better latency/position tracking for
-// those events.
-interface XRInputSourceButtonListener {
-  OnButtonEvent(XRInputSourceState input_source);
 };
 
 struct XRFrameDataRequestOptions {
@@ -1144,8 +954,6 @@ interface XRFrameDataProvider {
   GetEnvironmentIntegrationProvider(
       pending_associated_receiver<XREnvironmentIntegrationProvider>
           environment_provider);
-  SetInputSourceButtonListener(
-      pending_associated_remote<XRInputSourceButtonListener>? event_listener);
 };
 
 // Provides the necessary functionality for sending frames to a headset.
@@ -1229,4 +1037,16 @@ interface XRSessionClient {
   OnExitPresent();
   // Indicates a change in the visibility of the WebXR content.
   OnVisibilityStateChanged(XRVisibilityState visibility_state);
+};
+
+// Functions for pushing frame data to the sessions.
+// This interface is hosted in the Browser process, and called by the
+// renderer for use by debug WebUI.
+interface WebXrInternalsRendererListener {
+    // Called when the renderer has new frame data to send to the session.
+    OnFrameData(device.mojom.XrFrameStatistics xrframe_statistics);
+
+    // Called when the renderer has new console log data to send to the
+    // session.
+    OnConsoleLog(device.mojom.XrLogMessage xrlogging_statistics);
 };

@@ -1,8 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 23
+// Next MinVersion: 26
 
 module arc.mojom;
 
@@ -11,10 +11,16 @@ import "ash/components/arc/mojom/bitmap.mojom";
 import "ash/components/arc/mojom/gfx.mojom";
 import "ash/components/arc/mojom/intent_common.mojom";
 import "ash/components/arc/mojom/video_common.mojom";
+import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "mojo/public/mojom/base/token.mojom";
 import "url/mojom/url.mojom";
 
 // TODO(b/193097194): Use structured types (e.g., url.mojom.Url for URLs).
+
+// Reminder: The input strings from ARC (e.g., authority, root_id and
+// document_id) cannot be trusted and must NOT be used without appropriate
+// escaping or validation, especially when constructing file paths from them.
 
 // Represents a document in Android DocumentsProvider.
 // See Android docs of DocumentsContract.Document for details.
@@ -34,7 +40,7 @@ struct Document {
 
   // Timestamp when the document was modified last time, in milliseconds
   // since UNIX epoch.
-  // TODO(crbug.com/672737): Use mojo_base.mojom.Time once the type is
+  // TODO(crbug.com/40497368): Use mojo_base.mojom.Time once the type is
   // converted to a non-native type so that it can be used from Java.
   uint64 last_modified;
 
@@ -201,6 +207,9 @@ struct DocumentPath {
   // List of document ID from the root document to the child document.
   // This should at least contain root document ID.
   array<string> path;
+
+  // Root ID where the path resides.
+  [MinVersion=24] string? root_id;
 };
 
 // Result for SelectFilesRequest.
@@ -284,7 +293,29 @@ struct FileSession {
   handle fd;
 };
 
-// Next method ID: 12
+// Representation of an entry in the MediaStore downloads collection.
+struct MediaStoreDownloadMetadata {
+  // The display name of the download including its extension (e.g. "foo.pdf").
+  string display_name;
+
+  // The package name that contributed the download (e.g. "com.bar.foo").
+  string owner_package_name;
+
+  // The relative path of the download within the Download/ directory (e.g.
+  // "Download/foo/bar/"). The method implementation must verify that the
+  // `relative_path` is in fact within the Download/ directory, treating ARC as
+  // an untrusted source.
+  mojo_base.mojom.FilePath relative_path;
+};
+
+// Representation of an entry in a MediaStore collection.
+[Extensible]
+union MediaStoreMetadata {
+  [Default] uint8 unknown; // Actual value is ignored and is just a placeholder.
+  MediaStoreDownloadMetadata download;
+};
+
+// Next method ID: 15
 interface FileSystemHost {
   // Returns the name of the file specified by the URL.
   // When an error occurs, returns null value.
@@ -336,11 +367,32 @@ interface FileSystemHost {
   [MinVersion=11] GetFileSelectorElements@8(
       GetFileSelectorElementsRequest request) =>
       (FileSelectorElements elements);
+
+  // Invoked when the specified |uri| has been added to a MediaStore collection
+  // with the given |metadata|.
+  [MinVersion=23] OnMediaStoreUriAdded@12(
+      url.mojom.Url uri, MediaStoreMetadata metadata);
+
+  // Creates a Fusebox Moniker associated with the given content URI, shares the
+  // Moniker's path with the guest via seneschal, and returns the Moniker. A
+  // null value is returned on failure. On success, the caller is responsible
+  // for releasing the Moniker by calling DestroyMoniker() after they have
+  // finished using it.
+  [MinVersion=25] CreateMoniker@13(url.mojom.Url content_uri, bool read_only) =>
+      (mojo_base.mojom.Token? moniker);
+
+  // Destroys the given Fusebox Moniker and resources accosiated with it.
+  // Returns true when the Moniker and the resources have been successfully
+  // released. Otherwise false is returned, which indicates that the given
+  // Moniker has already been destroyed via DestroyMoniker(), or it is not the
+  // one created by ArcFileSystemBridge.
+  [MinVersion=25] DestroyMoniker@14(mojo_base.mojom.Token moniker) =>
+      (bool success);
 };
 
 // The browser process is using this interface in ArcFileSystemOperationRunner,
 // the ARC process implements this interface used by ArcFileSystemService.
-// Deprecated method IDs: 2, 5, 18
+// Deprecated method IDs: 2, 5, 11, 18
 // Next method ID: 27
 interface FileSystemInstance {
   // Notes about Android Documents Provider:
@@ -499,10 +551,6 @@ interface FileSystemInstance {
   // Searches for the removed files/directories under the given
   // |directory_paths| (non-recursively) in MediaStore and removes them.
   [MinVersion=14] RequestFileRemovalScan@20(array<string> directory_paths);
-
-  // DEPRECATED. Use OpenUrlsWithPermissionAndWindowInfo() instead.
-  [MinVersion=8] DEPRECATED_OpenUrlsWithPermission@11(OpenUrlsRequest request)
-      => ();
 
   // Opens URLs by sending an intent to the specified activity with a specific
   // launch window info.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ class RouteRequestResult;
 //
 // Use the following command to run e2e browser tests:
 // ./out/Default/browser_tests --user-data-dir=<empty user data dir>
-//   --extension-unpacked=<mr extension dir>
 //   --receiver=<chromecast device name>
 //   --enable-pixel-output-in-tests --run-manual
 //   --gtest_filter=MediaRouterE2EBrowserTest.<test case name>
@@ -31,13 +30,17 @@ class RouteRequestResult;
 //   --ui-test-action-timeout=200000
 class MediaRouterE2EBrowserTest : public MediaRouterIntegrationBrowserTest {
  public:
-  MediaRouterE2EBrowserTest();
+  MediaRouterE2EBrowserTest(
+      UiForBrowserTest test_ui_type = UiForBrowserTest::kGmc);
   ~MediaRouterE2EBrowserTest() override;
 
  protected:
   // InProcessBrowserTest Overrides
   void SetUpOnMainThread() override;
   void TearDownOnMainThread() override;
+
+  // MediaRouterIntegrationBrowserTest Overrides
+  bool RequiresMediaRouteProviders() const override;
 
   // Callback from MediaRouter when a response to a media route request is
   // received.

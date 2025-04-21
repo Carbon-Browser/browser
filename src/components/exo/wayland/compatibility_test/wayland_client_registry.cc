@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ WaylandClientRegistry::WaylandClientRegistry(wl_display* display)
 
 WaylandClientRegistry::~WaylandClientRegistry() = default;
 
-absl::optional<WaylandClientRegistry::Entry> WaylandClientRegistry::GetEntry(
+std::optional<WaylandClientRegistry::Entry> WaylandClientRegistry::GetEntry(
     const char* interface_name) const noexcept {
   DCHECK(registry_);
   if (!registry_)

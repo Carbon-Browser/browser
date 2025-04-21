@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include <map>
+#include <optional>
 #include <set>
 
 #include "android_webview/browser/gfx/begin_frame_source_webview.h"
@@ -15,15 +16,15 @@
 #include "android_webview/browser/gfx/compositor_frame_producer.h"
 #include "android_webview/browser/gfx/parent_compositor_draw_constraints.h"
 #include "android_webview/browser/gfx/root_frame_sink_proxy.h"
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "content/public/browser/android/synchronous_compositor.h"
 #include "content/public/browser/android/synchronous_compositor_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect.h"
@@ -46,6 +47,8 @@ class RootFrameSinkProxy;
 
 // Interface for all the WebView-specific content rendering operations.
 // Provides software and hardware rendering and the Capture Picture API.
+//
+// Lifetime: WebView
 class BrowserViewRenderer : public content::SynchronousCompositorClient,
                             public CompositorFrameProducer,
                             public RootFrameSinkProxyClient {
@@ -56,7 +59,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
 
   BrowserViewRenderer(
       BrowserViewRendererClient* client,
-      const scoped_refptr<base::SingleThreadTaskRunner>& ui_task_runner);
+      const scoped_refptr<base::SingleThreadTaskRunner>& ui_task_runner,
+      const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner);
 
   BrowserViewRenderer(const BrowserViewRenderer&) = delete;
   BrowserViewRenderer& operator=(const BrowserViewRenderer&) = delete;
@@ -83,6 +87,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   // frame is produced.
   bool OnDrawHardware();
   bool OnDrawSoftware(SkCanvas* canvas);
+
+  float GetVelocityInPixelsPerSecond();
 
   bool NeedToDrawBackgroundColor();
 
@@ -159,6 +165,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
 
   void AddBeginFrameCompletionCallback(base::OnceClosure callback) override;
 
+  void SetThreads(const std::vector<viz::Thread>& threads) override;
+
   // CompositorFrameProducer overrides
   base::WeakPtr<CompositorFrameProducer> GetWeakPtr() override;
   void RemoveCompositorFrameConsumer(
@@ -208,6 +216,7 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   void ReleaseHardware();
   bool DoUpdateParentDrawData();
   void UpdateBeginFrameSource();
+  void UpdateForegroundForGpuResources();
 
   gfx::Point max_scroll_offset() const;
 
@@ -219,6 +228,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   // For debug tracing or logging. Return the string representation of this
   // view renderer's state.
   std::string ToString() const;
+
+  void SetBrowserIOThreadId(base::PlatformThreadId thread_id);
 
   const raw_ptr<BrowserViewRendererClient> client_;
   const scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
@@ -232,7 +243,9 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   // A map from compositor's per-WebView unique ID to the compositor's raw
   // pointer. A raw pointer here is fine because the entry will be erased when
   // a compositor is destroyed.
-  std::map<viz::FrameSinkId, content::SynchronousCompositor*> compositor_map_;
+  std::map<viz::FrameSinkId,
+           raw_ptr<content::SynchronousCompositor, CtnExperimental>>
+      compositor_map_;
 
   bool is_paused_;
   bool view_visible_;
@@ -246,6 +259,8 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   float max_page_scale_factor_;
   bool on_new_picture_enable_;
   bool clear_view_;
+
+  bool foreground_for_gpu_resources_ = false;
 
   // Used for metrics, indicates if we called invalidate since last draw.
   bool did_invalidate_since_last_draw_ = false;
@@ -276,13 +291,16 @@ class BrowserViewRenderer : public content::SynchronousCompositorClient,
   gfx::Vector2dF overscroll_rounding_error_;
 
   // The scroll to apply after the next scroll state update.
-  absl::optional<gfx::Point> scroll_on_scroll_state_update_;
+  std::optional<gfx::Point> scroll_on_scroll_state_update_;
 
   ParentCompositorDrawConstraints external_draw_constraints_;
 
   std::unique_ptr<BeginFrameSourceWebView> begin_frame_source_;
 
-  base::WeakPtrFactory<CompositorFrameProducer> weak_ptr_factory_{this};
+  std::vector<viz::Thread> renderer_threads_;
+  base::PlatformThreadId browser_io_thread_id_ = base::kInvalidThreadId;
+
+  base::WeakPtrFactory<BrowserViewRenderer> weak_ptr_factory_{this};
 };
 
 }  // namespace android_webview

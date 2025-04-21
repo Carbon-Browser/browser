@@ -1,4 +1,4 @@
-" Copyright 2014 The Chromium Authors. All rights reserved.
+" Copyright 2014 The Chromium Authors
 " Use of this source code is governed by a BSD-style license that can be
 " found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 " current line.)
 
 let s:script = expand('<sfile>:p:h') .
-  \'/../../buildtools/clang_format/script/clang-format.py'
+  \'/../../third_party/clang-format/script/clang-format.py'
 let s:shortcut = has('mac') ? "<D-I>" : "<C-I>"
 let s:pyf = has("python3") ? ":py3f" : ":pyf"
 

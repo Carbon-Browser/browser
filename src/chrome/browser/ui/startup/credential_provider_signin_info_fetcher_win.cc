@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ui/startup/credential_provider_signin_info_fetcher_win.h"
 
 #include <memory>
 #include <utility>
 #include <vector>
-
-#include "chrome/browser/ui/startup/credential_provider_signin_info_fetcher_win.h"
 
 #include "base/logging.h"
 #include "base/strings/string_split.h"
@@ -63,21 +63,29 @@ void CredentialProviderSigninInfoFetcher::SetCompletionCallbackAndStart(
 }
 
 void CredentialProviderSigninInfoFetcher::OnGetTokenInfoResponse(
-    std::unique_ptr<base::DictionaryValue> token_info) {
+    const base::Value::Dict& token_info) {
   DCHECK(token_handle_.empty());
-  bool has_error = !token_info->GetString("token_handle", &token_handle_) ||
-                   token_handle_.empty();
+  if (const std::string* token_handle = token_info.FindString("token_handle");
+      token_handle) {
+    token_handle_ = *token_handle;
+  }
+  bool has_error = token_handle_.empty();
   WriteResultsIfFinished(has_error);
 }
 
 void CredentialProviderSigninInfoFetcher::OnGetUserInfoResponse(
-    std::unique_ptr<base::DictionaryValue> user_info) {
+    const base::Value::Dict& user_info) {
   DCHECK(!mdm_access_token_.empty());
   DCHECK(!mdm_id_token_.empty());
   DCHECK(full_name_.empty());
-  bool has_error =
-      !user_info->GetString("name", &full_name_) || full_name_.empty();
-  user_info->GetString("picture", &picture_url_);
+  if (const std::string* full_name = user_info.FindString("name"); full_name) {
+    full_name_ = *full_name;
+  }
+  if (const std::string* picture_url = user_info.FindString("picture");
+      picture_url) {
+    picture_url_ = *picture_url;
+  }
+  bool has_error = full_name_.empty();
   WriteResultsIfFinished(has_error);
 }
 
@@ -132,20 +140,16 @@ void CredentialProviderSigninInfoFetcher::WriteResultsIfFinished(
     return;
   }
 
-  base::Value fetch_result(base::Value::Type::DICTIONARY);
+  base::Value::Dict fetch_result;
   if (!has_error) {
-    fetch_result.SetKey(credential_provider::kKeyMdmAccessToken,
-                        base::Value(mdm_access_token_));
-    fetch_result.SetKey(credential_provider::kKeyMdmIdToken,
-                        base::Value(mdm_id_token_));
-    fetch_result.SetKey(credential_provider::kKeyFullname,
-                        base::Value(full_name_));
+    fetch_result.Set(credential_provider::kKeyMdmAccessToken,
+                     mdm_access_token_);
+    fetch_result.Set(credential_provider::kKeyMdmIdToken, mdm_id_token_);
+    fetch_result.Set(credential_provider::kKeyFullname, full_name_);
     if (!picture_url_.empty()) {
-      fetch_result.SetKey(credential_provider::kKeyPicture,
-                          base::Value(picture_url_));
+      fetch_result.Set(credential_provider::kKeyPicture, picture_url_);
     }
-    fetch_result.SetKey(credential_provider::kKeyTokenHandle,
-                        base::Value(token_handle_));
+    fetch_result.Set(credential_provider::kKeyTokenHandle, token_handle_);
   }
 
   std::move(completion_callback_).Run(std::move(fetch_result));

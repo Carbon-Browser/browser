@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -377,7 +377,7 @@ TEST(FilesystemTest, DISABLED_DevUrandom) {
   const int kSampleBatchSize = 1000;
   const int kTotalSamples = kSampleBatches * kSampleBatchSize;
 
-  int byte_count[256] = {0};
+  int byte_count[256] = {};
 
   unsigned char buffer[kSampleBatchSize];
   for (int batch = 0; batch < kSampleBatches; ++batch) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,35 @@ struct DinoGameWidget: Widget {
     )
     .description(Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_DESCRIPTION"))
     .supportedFamilies([.systemSmall])
+    .crDisfavoredLocations()
+    .crContentMarginsDisabled()
+    .crContainerBackgroundRemovable(false)
   }
 }
+
+#if IOS_ENABLE_WIDGETS_FOR_MIM
+  @available(iOS 17, *)
+  struct DinoGameWidgetConfigurable: Widget {
+    // Changing `kind` or deleting this widget will cause all installed instances of this widget to
+    // stop updating and show the placeholder state.
+    let kind: String = "DinoGameWidget"
+    var body: some WidgetConfiguration {
+      AppIntentConfiguration(
+        kind: kind, intent: SelectProfileIntent.self, provider: ConfigurableProvider()
+      ) { entry in
+        DinoGameWidgetEntryView(entry: entry)
+      }
+      .configurationDisplayName(
+        Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_DISPLAY_NAME")
+      )
+      .description(Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_DESCRIPTION"))
+      .supportedFamilies([.systemSmall])
+      .crDisfavoredLocations()
+      .crContentMarginsDisabled()
+      .crContainerBackgroundRemovable(false)
+    }
+  }
+#endif
 
 struct DinoGameWidgetEntryView: View {
   let background = "widget_dino_background"
@@ -53,6 +80,9 @@ struct DinoGameWidgetEntryView: View {
     }
     .widgetURL(WidgetConstants.DinoGameWidget.url)
     .accessibility(
-      label: Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_A11Y_LABEL"))
+      label: Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_A11Y_LABEL")
+    )
+    // Background is not used as the image takes the whole widget.
+    .crContainerBackground(Color("widget_background_color").unredacted())
   }
 }

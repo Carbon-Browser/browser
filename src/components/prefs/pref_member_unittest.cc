@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
@@ -62,7 +62,7 @@ class GetPrefValueHelper
 
  private:
   friend class base::RefCountedThreadSafe<GetPrefValueHelper>;
-  ~GetPrefValueHelper() {}
+  ~GetPrefValueHelper() = default;
 
   void GetPrefValue(base::WaitableEvent* event) {
     value_ = pref_.GetValue();
@@ -213,7 +213,7 @@ TEST_F(PrefMemberTest, BasicGetAndSet) {
   string_list.Init(kStringListPref, &prefs);
 
   // Check the defaults
-  EXPECT_EQ(expected_list, prefs.GetValueList(kStringListPref));
+  EXPECT_EQ(expected_list, prefs.GetList(kStringListPref));
   EXPECT_EQ(expected_vector, string_list.GetValue());
   EXPECT_EQ(expected_vector, *string_list);
   EXPECT_TRUE(string_list.IsDefaultValue());
@@ -223,7 +223,7 @@ TEST_F(PrefMemberTest, BasicGetAndSet) {
   expected_vector.push_back("foo");
   string_list.SetValue(expected_vector);
 
-  EXPECT_EQ(expected_list, prefs.GetValueList(kStringListPref));
+  EXPECT_EQ(expected_list, prefs.GetList(kStringListPref));
   EXPECT_EQ(expected_vector, string_list.GetValue());
   EXPECT_EQ(expected_vector, *string_list);
   EXPECT_FALSE(string_list.IsDefaultValue());
@@ -233,7 +233,7 @@ TEST_F(PrefMemberTest, BasicGetAndSet) {
   expected_vector.push_back("bar");
   prefs.SetList(kStringListPref, expected_list.Clone());
 
-  EXPECT_EQ(expected_list, prefs.GetValueList(kStringListPref));
+  EXPECT_EQ(expected_list, prefs.GetList(kStringListPref));
   EXPECT_EQ(expected_vector, string_list.GetValue());
   EXPECT_EQ(expected_vector, *string_list);
   EXPECT_FALSE(string_list.IsDefaultValue());
@@ -243,7 +243,7 @@ TEST_F(PrefMemberTest, BasicGetAndSet) {
   expected_vector.erase(expected_vector.begin());
   prefs.SetList(kStringListPref, expected_list.Clone());
 
-  EXPECT_EQ(expected_list, prefs.GetValueList(kStringListPref));
+  EXPECT_EQ(expected_list, prefs.GetList(kStringListPref));
   EXPECT_EQ(expected_vector, string_list.GetValue());
   EXPECT_EQ(expected_vector, *string_list);
   EXPECT_FALSE(string_list.IsDefaultValue());
@@ -256,13 +256,13 @@ TEST_F(PrefMemberTest, InvalidList) {
 
   // Try to add a valid list first.
   base::Value list(base::Value::Type::LIST);
-  list.Append("foo");
+  list.GetList().Append("foo");
   std::vector<std::string> vector;
   EXPECT_TRUE(subtle::PrefMemberVectorStringUpdate(list, &vector));
   EXPECT_EQ(expected_vector, vector);
 
   // Now try to add an invalid list.  |vector| should not be changed.
-  list.Append(0);
+  list.GetList().Append(0);
   EXPECT_FALSE(subtle::PrefMemberVectorStringUpdate(list, &vector));
   EXPECT_EQ(expected_vector, vector);
 }

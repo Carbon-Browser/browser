@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,9 @@
 
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/common/chrome_version.h"
 
 #define FPL FILE_PATH_LITERAL
-
-#if BUILDFLAG(IS_MAC)
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#define PRODUCT_STRING "Google Chrome"
-#elif BUILDFLAG(CHROMIUM_BRANDING)
-#define PRODUCT_STRING "Chromium"
-#else
-#error Unknown branding
-#endif
-#endif  // BUILDFLAG(IS_MAC)
 
 namespace chrome {
 
@@ -49,9 +38,9 @@ const base::FilePath::CharType kHelperProcessExecutableName[] =
     FPL("chrome.exe");
 #elif BUILDFLAG(IS_MAC)
 const base::FilePath::CharType kBrowserProcessExecutableName[] =
-    FPL(PRODUCT_STRING);
+    FPL(PRODUCT_FULLNAME_STRING);
 const base::FilePath::CharType kHelperProcessExecutableName[] =
-    FPL(PRODUCT_STRING " Helper");
+    FPL(PRODUCT_FULLNAME_STRING " Helper");
 #elif BUILDFLAG(IS_ANDROID)
 // NOTE: Keep it synced with the process names defined in AndroidManifest.xml.
 const base::FilePath::CharType kBrowserProcessExecutableName[] = FPL("chrome");
@@ -71,9 +60,18 @@ const base::FilePath::CharType kHelperProcessExecutablePath[] =
     FPL("chrome.exe");
 #elif BUILDFLAG(IS_MAC)
 const base::FilePath::CharType kBrowserProcessExecutablePath[] =
-    FPL(PRODUCT_STRING ".app/Contents/MacOS/" PRODUCT_STRING);
+    FPL(PRODUCT_FULLNAME_STRING ".app/Contents/MacOS/" PRODUCT_FULLNAME_STRING);
+const base::FilePath::CharType
+    kGoogleChromeForTestingBrowserProcessExecutablePath[] =
+        FPL("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for "
+            "Testing");
+const base::FilePath::CharType kGoogleChromeBrowserProcessExecutablePath[] =
+    FPL("Google Chrome.app/Contents/MacOS/Google Chrome");
+const base::FilePath::CharType kChromiumBrowserProcessExecutablePath[] =
+    FPL("Chromium.app/Contents/MacOS/Chromium");
 const base::FilePath::CharType kHelperProcessExecutablePath[] =
-    FPL(PRODUCT_STRING " Helper.app/Contents/MacOS/" PRODUCT_STRING " Helper");
+    FPL(PRODUCT_FULLNAME_STRING
+        " Helper.app/Contents/MacOS/" PRODUCT_FULLNAME_STRING " Helper");
 #elif BUILDFLAG(IS_ANDROID)
 const base::FilePath::CharType kBrowserProcessExecutablePath[] = FPL("chrome");
 const base::FilePath::CharType kHelperProcessExecutablePath[] = FPL("chrome");
@@ -84,9 +82,9 @@ const base::FilePath::CharType kHelperProcessExecutablePath[] = FPL("chrome");
 
 #if BUILDFLAG(IS_MAC)
 const base::FilePath::CharType kFrameworkName[] =
-    FPL(PRODUCT_STRING " Framework.framework");
+    FPL(PRODUCT_FULLNAME_STRING " Framework.framework");
 const base::FilePath::CharType kFrameworkExecutableName[] =
-    FPL(PRODUCT_STRING " Framework");
+    FPL(PRODUCT_FULLNAME_STRING " Framework");
 const char kMacHelperSuffixAlerts[] = " (Alerts)";
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -103,12 +101,16 @@ const base::FilePath::CharType kGuestProfileDir[] = FPL("Guest Profile");
 const base::FilePath::CharType kSystemProfileDir[] = FPL("System Profile");
 
 // filenames
+const base::FilePath::CharType kAccountPreferencesFilename[] =
+    FPL("AccountPreferences");
 const base::FilePath::CharType kCacheDirname[] = FPL("Cache");
 const base::FilePath::CharType kCookieFilename[] = FPL("Cookies");
 const base::FilePath::CharType kCRLSetFilename[] =
     FPL("Certificate Revocation Lists");
 const base::FilePath::CharType kCustomDictionaryFileName[] =
     FPL("Custom Dictionary.txt");
+const base::FilePath::CharType kDeviceBoundSessionsFilename[] =
+    FPL("Device Bound Sessions");
 const base::FilePath::CharType kDownloadServiceStorageDirname[] =
     FPL("Download Service");
 const base::FilePath::CharType kExtensionActivityLogFilename[] =
@@ -151,8 +153,6 @@ const base::FilePath::CharType kSingletonCookieFilename[] =
 const base::FilePath::CharType kSingletonLockFilename[] = FPL("SingletonLock");
 const base::FilePath::CharType kSingletonSocketFilename[] =
     FPL("SingletonSocket");
-const base::FilePath::CharType kSupervisedUserSettingsFilename[] =
-    FPL("Managed Mode Settings");
 const base::FilePath::CharType kThemePackFilename[] = FPL("Cached Theme.pak");
 const base::FilePath::CharType kTransportSecurityPersisterFilename[] =
     FPL("TransportSecurity");
@@ -171,14 +171,11 @@ const base::FilePath::CharType kJumpListIconDirname[] = FPL("JumpListIcons");
 // directory names
 #if BUILDFLAG(IS_WIN)
 const wchar_t kUserDataDirname[] = L"User Data";
+#elif BUILDFLAG(IS_ANDROID)
+const base::FilePath::CharType kOTRTempStateDirname[] = FPL("OTRTempState");
 #endif
 
 const float kMaxShareOfExtensionProcesses = 0.30f;
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-const char kLockScreenAppProfile[] = "LockScreenAppsProfile";
-const char kLockScreenProfile[] = "LockScreenProfile";
-#endif
 
 // This GUID is associated with any 'don't ask me again' settings that the
 // user can select for different file types.

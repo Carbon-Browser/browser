@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,20 +43,48 @@ class SpeechRecognitionClientBrowserInterface
   void BindSpeechRecognitionBrowserObserver(
       mojo::PendingRemote<media::mojom::SpeechRecognitionBrowserObserver>
           pending_remote) override;
+  void REMOVED_1() override;
 
+  // BabelOrca feature methods are chromeos only.
+#if BUILDFLAG(IS_CHROMEOS)
+  void BindBabelOrcaSpeechRecognitionBrowserObserver(
+      mojo::PendingRemote<media::mojom::SpeechRecognitionBrowserObserver>
+          pending_remote) override;
+  void ChangeBabelOrcaSpeechRecognitionAvailability(bool enabled);
+#endif
   // SodaInstaller::Observer:
   void OnSodaInstalled(speech::LanguageCode language_code) override;
   void OnSodaProgress(speech::LanguageCode language_code,
                       int progress) override {}
-  void OnSodaError(speech::LanguageCode language_code) override {}
+  void OnSodaInstallError(
+      speech::LanguageCode language_code,
+      speech::SodaInstaller::ErrorCode error_code) override {}
 
  private:
-  void OnSpeechRecognitionAvailabilityChanged();
-  void OnSpeechRecognitionLanguageChanged();
-  void NotifyObservers(bool enabled);
+  void OnSpeechRecognitionMaskOffensiveWordsChanged();
+
+  // Live Caption Event handling
+  void OnLiveCaptionAvailabilityChanged();
+  void OnLiveCaptionLanguageChanged();
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void OnBabelOrcaLanguageChanged();
+  void OnBabelOrcaAvailabilityChanged(bool enabled);
+  void NotifyBabelOrcaCaptionObservers(bool enabled);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  void NotifyLiveCaptionObservers(bool enabled);
+
+  bool waiting_on_live_caption_ = false;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  bool waiting_on_babel_orca_ = false;
+  bool babel_orca_enabled_ = false;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   mojo::RemoteSet<media::mojom::SpeechRecognitionBrowserObserver>
-      speech_recognition_availibility_observers_;
+      live_caption_availibility_observers_;
+
+  mojo::RemoteSet<media::mojom::SpeechRecognitionBrowserObserver>
+      babel_orca_availability_observers_;
 
   mojo::ReceiverSet<media::mojom::SpeechRecognitionClientBrowserInterface>
       speech_recognition_client_browser_interface_;

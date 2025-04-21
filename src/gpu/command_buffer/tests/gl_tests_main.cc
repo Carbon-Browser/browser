@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/test/launcher/unit_test_launcher.h"
@@ -16,7 +16,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 
 namespace {
@@ -42,11 +42,13 @@ int main(int argc, char** argv) {
   base::CommandLine::Init(argc, argv);
   mojo::core::Init();
 
+  // GoogleMock alters the command line, so ensure we initialize it
+  // before passing it into the test suite
+  testing::InitGoogleMock(&argc, argv);
   GlTestsSuite gl_tests_suite(argc, argv);
 #if BUILDFLAG(IS_MAC)
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif
-  testing::InitGoogleMock(&argc, argv);
   return base::LaunchUnitTestsSerially(
       argc, argv,
       base::BindOnce(&GlTestsSuite::Run, base::Unretained(&gl_tests_suite)));

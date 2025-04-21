@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ using ::offline_pages::auto_fetch_internal::RequestInfo;
 using ::offline_pages::auto_fetch_internal::TabInfo;
 using ::testing::_;
 
-const int kDefaultTabId = 123;
-const base::Time kEpoch = base::Time::FromDoubleT(1.0e6);
+constexpr int kDefaultTabId = 123;
 
 GURL TestURL() {
   return GURL("http://www.url.com");
@@ -64,7 +63,7 @@ class MockAutoFetchNotifier : public AutoFetchNotifier {
 
 class FakeInternalImplDelegate : public InternalImpl::Delegate {
  public:
-  ~FakeInternalImplDelegate() override {}
+  ~FakeInternalImplDelegate() override = default;
   void SetNotificationStateToShown(int64_t request_id) override {
     set_notification_state_requests.push_back(request_id);
   }
@@ -81,7 +80,7 @@ class FakeInternalImplDelegate : public InternalImpl::Delegate {
 // tab information.
 class StubTabFinder : public AutoFetchPageLoadWatcher::AndroidTabFinder {
  public:
-  ~StubTabFinder() override {}
+  ~StubTabFinder() override = default;
 
   // AutoFetchPageLoadWatcher::AndroidTabFinder.
   std::map<int, TabInfo> FindAndroidTabs(
@@ -95,10 +94,10 @@ class StubTabFinder : public AutoFetchPageLoadWatcher::AndroidTabFinder {
     return result;
   }
 
-  absl::optional<TabInfo> FindNavigationTab(
+  std::optional<TabInfo> FindNavigationTab(
       content::WebContents* web_contents) override {
     if (!tabs_.count(current_tab_id_))
-      return absl::nullopt;
+      return std::nullopt;
     return TabInfo{current_tab_id_, tabs_[current_tab_id_]};
   }
 

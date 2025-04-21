@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,15 +68,6 @@ void AppBannerController::BannerPromptRequest(
   // TODO(hajimehoshi): Add tests for the case the frame is detached.
   // TODO(http://crbug/1289079): Test that prompt() behaves correctly when
   // called in pagehide().
-
-  if (!base::FeatureList::IsEnabled(features::kBackForwardCacheAppBanner)) {
-    // With the current implementation, bfcache could cause prompt() event to be
-    // lost if called after being put into the cache, and the banner will not be
-    // hidden properly. We disable bfcache to avoid these issues.
-    GetSupplementable()->GetFrame()->GetFrameScheduler()->RegisterStickyFeature(
-        blink::SchedulingPolicy::Feature::kAppBanner,
-        {blink::SchedulingPolicy::DisableBackForwardCache()});
-  }
 
   mojom::AppBannerPromptReply reply =
       GetSupplementable()->DispatchEvent(*BeforeInstallPromptEvent::Create(

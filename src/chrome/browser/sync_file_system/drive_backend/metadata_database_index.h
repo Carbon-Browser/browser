@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,7 +88,6 @@ class MetadataDatabaseIndex : public MetadataDatabaseIndexInterface {
   int64_t PickDirtyTracker() const override;
   void DemoteDirtyTracker(int64_t tracker_id) override;
   bool HasDemotedDirtyTracker() const override;
-  bool IsDemotedDirtyTracker(int64_t tracker_id) const override;
   void PromoteDemotedDirtyTracker(int64_t tracker_id) override;
   bool PromoteDemotedDirtyTrackers() override;
   size_t CountDirtyTracker() const override;
@@ -103,8 +102,6 @@ class MetadataDatabaseIndex : public MetadataDatabaseIndexInterface {
   int64_t GetLargestChangeID() const override;
   int64_t GetNextTrackerID() const override;
   std::vector<std::string> GetRegisteredAppIDs() const override;
-  std::vector<int64_t> GetAllTrackerIDs() const override;
-  std::vector<std::string> GetAllMetadataIDs() const override;
 
  private:
   typedef std::unordered_map<std::string, std::unique_ptr<FileMetadata>>
@@ -149,7 +146,7 @@ class MetadataDatabaseIndex : public MetadataDatabaseIndexInterface {
   void RemoveFromDirtyTrackerIndexes(const FileTracker& tracker);
 
   std::unique_ptr<ServiceMetadata> service_metadata_;
-  raw_ptr<LevelDBWrapper> db_;  // Not owned
+  raw_ptr<LevelDBWrapper, DanglingUntriaged> db_;  // Not owned
 
   MetadataByID metadata_by_id_;
   TrackerByID tracker_by_id_;

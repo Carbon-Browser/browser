@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,39 +7,32 @@ package org.chromium.midi;
 import android.media.midi.MidiDevice;
 import android.media.midi.MidiOutputPort;
 import android.media.midi.MidiReceiver;
-import android.os.Build;
 
-import androidx.annotation.RequiresApi;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.io.IOException;
 
 // Note "InputPort" is named in the Web MIDI manner. It corresponds to MidiOutputPort class in the
 // Android API.
-/**
- * A MidiInputPortAndroid provides data to the associated midi::MidiInputPortAndroid object.
- */
+/** A MidiInputPortAndroid provides data to the associated midi::MidiInputPortAndroid object. */
 @JNINamespace("midi")
-@RequiresApi(Build.VERSION_CODES.M)
+@NullMarked
 class MidiInputPortAndroid {
-    /**
-     * The underlying port.
-     */
-    private MidiOutputPort mPort;
-    /**
-     * A pointer to a midi::MidiInputPortAndroid object.
-     */
+    /** The underlying port. */
+    private @Nullable MidiOutputPort mPort;
+
+    /** A pointer to a midi::MidiInputPortAndroid object. */
     private long mNativeReceiverPointer;
-    /**
-     * The device this port belongs to.
-     */
+
+    /** The device this port belongs to. */
     private final MidiDevice mDevice;
-    /**
-     * The index of the port in the associated device.
-     */
+
+    /** The index of the port in the associated device. */
     private final int mIndex;
 
     /**
@@ -68,24 +61,23 @@ class MidiInputPortAndroid {
             return false;
         }
         mNativeReceiverPointer = nativeReceiverPointer;
-        mPort.connect(new MidiReceiver() {
-            @Override
-            public void onSend(byte[] bs, int offset, int count, long timestamp) {
-                synchronized (MidiInputPortAndroid.this) {
-                    if (mPort == null) {
-                        return;
+        mPort.connect(
+                new MidiReceiver() {
+                    @Override
+                    public void onSend(byte[] bs, int offset, int count, long timestamp) {
+                        synchronized (MidiInputPortAndroid.this) {
+                            if (mPort == null) {
+                                return;
+                            }
+                            MidiInputPortAndroidJni.get()
+                                    .onData(mNativeReceiverPointer, bs, offset, count, timestamp);
+                        }
                     }
-                    MidiInputPortAndroidJni.get().onData(
-                            mNativeReceiverPointer, bs, offset, count, timestamp);
-                }
-            }
-        });
+                });
         return true;
     }
 
-    /**
-     * Closes the port.
-     */
+    /** Closes the port. */
     @CalledByNative
     synchronized void close() {
         if (mPort == null) {

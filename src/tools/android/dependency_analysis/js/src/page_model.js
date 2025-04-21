@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ class PageModel {
 
     /**
      * The data for the selected node details UI component.
-     * @typedef {Object} SelectedNodeDetailsData
+     *
+     * @typedef {object} SelectedNodeDetailsData
      * @property {?Node} selectedNode The selected node, if it exists.
      */
     /** @public {!SelectedNodeDetailsData} */
@@ -29,6 +30,7 @@ class PageModel {
 
   /**
    * Gets the ids of all the nodes in the graph.
+   *
    * @return {!Array<string>} An array with the all node ids.
    */
   getNodeIds() {

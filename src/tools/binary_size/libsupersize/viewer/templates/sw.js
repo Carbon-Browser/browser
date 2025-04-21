@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,18 +11,24 @@ const filesToCache = [
   'auth-consts.js',
   'caspian_web.js',
   'caspian_web.wasm',
+  'dom.js',
   'favicon.ico',
   'viewer.html',
   'infocard-ui.js',
   'infocard.css',
   'main.css',
   'manifest.json',
+  'metadata-tree-ui.js',
+  'metrics-tree-ui.js',
   'options.css',
   'shared.js',
   'start-worker.js',
   'state.js',
+  'symbol-tree-ui.js',
   'tree-ui.js',
   'tree-worker-wasm.js',
+  'ui-base.js',
+  'ui-main.js',
 ];
 
 // On install, cache the items in the `filesToCache` list

@@ -1,25 +1,29 @@
 /*
- * Copyright 2019 The Chromium Authors. All rights reserved.
+ * Copyright 2019 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-var gPaymentResponse = null;
-var gRetryPromise = null;
+let gPaymentResponse = null;
+let gRetryPromise = null;
+
+const bobPayMethod = Object.freeze({
+  supportedMethods: 'https://bobpay.test',
+});
 
 /**
  * Launches the PaymentRequest UI
  */
-function buy() { // eslint-disable-line no-unused-vars
-  var options = {
+function buy() {
+  const options = {
     requestPayerEmail: true,
     requestPayerName: true,
     requestPayerPhone: true,
   };
-  getPaymentResponse(options)
+  getPaymentResponseWithMethod(options, [bobPayMethod])
       .then(function(response) {
         gPaymentResponse = response;
-        var eventPromise = new Promise(function(resolve) {
+        const eventPromise = new Promise(function(resolve) {
           gPaymentResponse.addEventListener('payerdetailchange', function(e) {
             e.updateWith({});
             resolve();
@@ -39,7 +43,7 @@ function buy() { // eslint-disable-line no-unused-vars
  *
  * @param {PaymentValidationErrors} validationErrors Represent validation errors
  */
-function retry(validationErrors) { // eslint-disable-line no-unused-vars
+function retry(validationErrors) {
   if (gPaymentResponse == null) {
     return;
   }

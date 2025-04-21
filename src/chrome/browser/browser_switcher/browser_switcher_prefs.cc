@@ -1,19 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/browser_switcher/browser_switcher_prefs.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <string_view>
+
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_switcher/browser_switcher_sitelist.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
@@ -35,7 +37,7 @@ std::vector<std::string> GetListPref(PrefService* prefs,
   std::vector<std::string> list;
   if (pref_name.empty())
     return list;
-  for (const auto& value : prefs->GetValueList(pref_name))
+  for (const auto& value : prefs->GetList(pref_name))
     list.push_back(value.GetString());
   return list;
 }
@@ -69,20 +71,20 @@ void SetCachedRules(PrefService* prefs,
 }  // namespace
 
 NoCopyUrl::NoCopyUrl(const GURL& original) : original_(original) {
-  spec_without_port_ = original_.spec();
+  spec_without_port_ = original_->spec();
 
-  int int_port = original_.IntPort();
+  int int_port = original_->IntPort();
   std::string port_suffix;
   if (int_port != url::PORT_UNSPECIFIED) {
     port_suffix = base::StrCat({":", base::NumberToString(int_port)});
     base::ReplaceSubstringsAfterOffset(&spec_without_port_, 0, port_suffix,
-                                       base::StringPiece());
+                                       std::string_view());
   }
 
   host_and_port_ = base::StrCat({original.host(), port_suffix});
 }
 
-Rule::Rule(base::StringPiece original_rule)
+Rule::Rule(std::string_view original_rule)
     : priority_(original_rule.size()),
       inverted_(base::StartsWith(original_rule, "!")) {}
 
@@ -296,7 +298,7 @@ void BrowserSwitcherPrefs::OnPolicyUpdated(const policy::PolicyNamespace& ns,
                                            const policy::PolicyMap& current) {
   // Let all the other policy observers run first, so that prefs are up-to-date
   // when we run our own callbacks.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BrowserSwitcherPrefs::RunCallbacksIfDirty,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -329,7 +331,7 @@ void BrowserSwitcherPrefs::AlternativeBrowserParametersChanged() {
   if (!prefs_->IsManagedPreference(prefs::kAlternativeBrowserParameters))
     return;
   const base::Value::List& params =
-      prefs_->GetValueList(prefs::kAlternativeBrowserParameters);
+      prefs_->GetList(prefs::kAlternativeBrowserParameters);
   for (const auto& param : params) {
     std::string param_string = param.GetString();
     alt_browser_params_.push_back(param_string);
@@ -362,10 +364,10 @@ void BrowserSwitcherPrefs::UrlListChanged() {
     return;
 
   UMA_HISTOGRAM_COUNTS_100000("BrowserSwitcher.UrlListSize",
-                              prefs_->GetValueList(prefs::kUrlList).size());
+                              prefs_->GetList(prefs::kUrlList).size());
 
   bool has_wildcard = false;
-  for (const auto& url : prefs_->GetValueList(prefs::kUrlList)) {
+  for (const auto& url : prefs_->GetList(prefs::kUrlList)) {
     std::unique_ptr<Rule> rule =
         CanonicalizeRule(url.GetString(), parsing_mode_);
     if (rule)
@@ -384,8 +386,7 @@ void BrowserSwitcherPrefs::GreylistChanged() {
   if (!prefs_->IsManagedPreference(prefs::kUrlGreylist))
     return;
 
-  const base::Value::List& url_gray_list =
-      prefs_->GetValueList(prefs::kUrlGreylist);
+  const base::Value::List& url_gray_list = prefs_->GetList(prefs::kUrlGreylist);
   UMA_HISTOGRAM_COUNTS_100000("BrowserSwitcher.GreylistSize",
                               url_gray_list.size());
 
@@ -420,8 +421,7 @@ void BrowserSwitcherPrefs::ChromeParametersChanged() {
   chrome_params_.clear();
   if (!prefs_->IsManagedPreference(prefs::kChromeParameters))
     return;
-  const base::Value::List& params =
-      prefs_->GetValueList(prefs::kChromeParameters);
+  const base::Value::List& params = prefs_->GetList(prefs::kChromeParameters);
   for (const auto& param : params) {
     std::string param_string = param.GetString();
     chrome_params_.push_back(param_string);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/values.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/browser/website_settings_info.h"
 #include "components/content_settings/core/common/content_settings.h"
@@ -51,7 +52,7 @@ TEST_F(WebsiteSettingsRegistryTest, GetByName) {
   registry()->Register(static_cast<ContentSettingsType>(10), "test",
                        base::Value(), WebsiteSettingsInfo::UNSYNCABLE,
                        WebsiteSettingsInfo::LOSSY,
-                       WebsiteSettingsInfo::SINGLE_ORIGIN_ONLY_SCOPE,
+                       WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
                        WebsiteSettingsRegistry::ALL_PLATFORMS,
                        WebsiteSettingsInfo::INHERIT_IN_INCOGNITO);
   info = registry()->GetByName("test");
@@ -62,7 +63,7 @@ TEST_F(WebsiteSettingsRegistryTest, GetByName) {
 }
 
 TEST_F(WebsiteSettingsRegistryTest, GetPlatformDependent) {
-#if BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(USE_BLINK)
   // App banner shouldn't be registered on iOS.
   EXPECT_FALSE(registry()->Get(ContentSettingsType::APP_BANNER));
 #else
@@ -91,7 +92,7 @@ TEST_F(WebsiteSettingsRegistryTest, Properties) {
   registry()->Register(static_cast<ContentSettingsType>(10), "test",
                        base::Value(999), WebsiteSettingsInfo::SYNCABLE,
                        WebsiteSettingsInfo::LOSSY,
-                       WebsiteSettingsInfo::SINGLE_ORIGIN_ONLY_SCOPE,
+                       WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
                        WebsiteSettingsRegistry::ALL_PLATFORMS,
                        WebsiteSettingsInfo::INHERIT_IN_INCOGNITO);
   info = registry()->Get(static_cast<ContentSettingsType>(10));
@@ -108,8 +109,7 @@ TEST_F(WebsiteSettingsRegistryTest, Properties) {
                 user_prefs::PrefRegistrySyncable::SYNCABLE_PREF,
             info->GetPrefRegistrationFlags());
 #endif
-  EXPECT_EQ(WebsiteSettingsInfo::SINGLE_ORIGIN_ONLY_SCOPE,
-            info->scoping_type());
+  EXPECT_EQ(WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE, info->scoping_type());
   EXPECT_EQ(WebsiteSettingsInfo::INHERIT_IN_INCOGNITO,
             info->incognito_behavior());
 }
@@ -118,7 +118,7 @@ TEST_F(WebsiteSettingsRegistryTest, Iteration) {
   registry()->Register(static_cast<ContentSettingsType>(10), "test",
                        base::Value(999), WebsiteSettingsInfo::SYNCABLE,
                        WebsiteSettingsInfo::LOSSY,
-                       WebsiteSettingsInfo::SINGLE_ORIGIN_ONLY_SCOPE,
+                       WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
                        WebsiteSettingsRegistry::ALL_PLATFORMS,
                        WebsiteSettingsInfo::INHERIT_IN_INCOGNITO);
 

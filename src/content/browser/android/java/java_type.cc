@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -156,7 +156,6 @@ std::string JavaType::JNIName() const {
       return class_jni_name;
   }
   NOTREACHED();
-  return std::string();
 }
 
 std::string JavaType::JNISignature() const {

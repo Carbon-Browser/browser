@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list_threadsafe.h"
@@ -54,6 +54,8 @@ class ActivityLog : public BrowserContextKeyedAPI,
     virtual void OnExtensionActivity(scoped_refptr<Action> activity) = 0;
   };
 
+  explicit ActivityLog(content::BrowserContext* context);
+  ~ActivityLog() override;
   ActivityLog(const ActivityLog&) = delete;
   ActivityLog& operator=(const ActivityLog&) = delete;
 
@@ -144,9 +146,6 @@ class ActivityLog : public BrowserContextKeyedAPI,
   friend class ActivityLogTest;
   friend class BrowserContextKeyedAPIFactory<ActivityLog>;
 
-  explicit ActivityLog(content::BrowserContext* context);
-  ~ActivityLog() override;
-
   // Specifies if the Watchdog app is active (installed & enabled).
   // If so, we need to log to the database and stream to the API.
   // TODO(kelvinjiang): eliminate this check if possible to simplify logic and
@@ -193,7 +192,7 @@ class ActivityLog : public BrowserContextKeyedAPI,
   // The database policy object takes care of recording & looking up data:
   // data summarization, compression, and logging. There should only be a
   // database_policy_ if the Watchdog app is installed or flag is set.
-  raw_ptr<ActivityLogDatabasePolicy> database_policy_;
+  raw_ptr<ActivityLogDatabasePolicy, DanglingUntriaged> database_policy_;
   ActivityLogPolicy::PolicyType database_policy_type_;
 
   raw_ptr<Profile> profile_;

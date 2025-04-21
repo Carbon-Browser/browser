@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ TEST(ProtoEnumConversionsTest, GetAppListItemTypeString) {
 }
 
 TEST(ProtoEnumConversionsTest, GetBrowserTypeString) {
-  TestEnumStringsNonEmpty(sync_pb::SessionWindow::BrowserType);
+  TestEnumStringsNonEmpty(sync_pb::SyncEnums::BrowserType);
 }
 
 TEST(ProtoEnumConversionsTest, GetPageTransitionString) {
@@ -67,10 +67,6 @@ TEST(ProtoEnumConversionsTest, GetWifiConfigurationProxyOptionString) {
       sync_pb::WifiConfigurationSpecifics::ProxyConfiguration::ProxyOption);
 }
 
-TEST(ProtoEnumConversionsTest, GetUpdatesSourceString) {
-  TestEnumStringsNonEmpty(sync_pb::GetUpdatesCallerInfo::GetUpdatesSource);
-}
-
 TEST(ProtoEnumConversionsTest, GetUpdatesOriginString) {
   TestEnumStringsNonEmpty(sync_pb::SyncEnums::GetUpdatesOrigin);
 }
@@ -89,6 +85,63 @@ TEST(ProtoEnumConversionsTest, GetActionString) {
 
 TEST(ProtoEnumConversionsTest, GetConsentStatusString) {
   TestEnumStringsNonEmpty(sync_pb::UserConsentTypes::ConsentStatus);
+}
+
+TEST(ProtoEnumConversionsTest, GetVirtualCardEnrollmentTypeString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::WalletMaskedCreditCard::VirtualCardEnrollmentType);
+}
+
+TEST(ProtoEnumConversionsTest, GetSavedTabGroupColorString) {
+  TestEnumStringsNonEmpty(sync_pb::SavedTabGroup::SavedTabGroupColor);
+}
+
+TEST(ProtoEnumConversionsTest, GetSharedTabGroupColorString) {
+  TestEnumStringsNonEmpty(sync_pb::SharedTabGroup::Color);
+}
+
+TEST(ProtoEnumConversionsTest, GetIssuerString) {
+  TestEnumStringsNonEmpty(sync_pb::CardIssuer::Issuer);
+}
+
+TEST(ProtoEnumConversionsTest, GetPowerBookmakrPowerTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::PowerBookmarkSpecifics::PowerType);
+}
+
+TEST(ProtoEnumConversionsTest, GetNoteTargetTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::NoteEntity::TargetType);
+}
+
+TEST(ProtoEnumConversionsTest, GetInitialSyncStateString) {
+  TestEnumStringsNonEmpty(sync_pb::DataTypeState::InitialSyncState);
+}
+
+TEST(ProtoEnumConversionsTest, GetCategoryBenefitTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::CardBenefit::CategoryBenefitType);
+}
+
+TEST(ProtoEnumConversionsTest,
+     GetTrustedVaultAutoUpgradeExperimentGroupTypeString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::TrustedVaultAutoUpgradeExperimentGroup::Type);
+}
+
+TEST(ProtoEnumConversionsTest, GetBrowserColorVariantString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::ThemeSpecifics::UserColorTheme::BrowserColorVariant);
+}
+
+TEST(ProtoEnumConversionsTest, GetBrowserColorSchemeString) {
+  TestEnumStringsNonEmpty(sync_pb::ThemeSpecifics::BrowserColorScheme);
+}
+
+TEST(ProtoEnumConversionsTest, GetContactInfoAddressType) {
+  TestEnumStringsNonEmpty(sync_pb::ContactInfoSpecifics::AddressType);
+}
+
+TEST(ProtoEnumConversionsTest, GetCardInfoRetrievalEnrollmentStateString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::WalletMaskedCreditCard::CardInfoRetrievalEnrollmentState);
 }
 
 }  // namespace

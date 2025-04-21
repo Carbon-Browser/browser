@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,10 @@
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBSOCKETS_WEBSOCKET_COMMON_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBSOCKETS_WEBSOCKET_COMMON_H_
+
+#include <stdint.h>
+
+#include <optional>
 
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
@@ -45,7 +49,7 @@ class MODULES_EXPORT WebSocketCommon {
                         ExceptionState&);
 
   // Closes the connection if |code| and |reason| are valid.
-  void CloseInternal(int code,
+  void CloseInternal(std::optional<uint16_t> code,
                      const String& reason,
                      WebSocketChannel*,
                      ExceptionState&);
@@ -67,6 +71,15 @@ class MODULES_EXPORT WebSocketCommon {
   // between each string.
   static String JoinStrings(const Vector<String>& strings,
                             const char* separator);
+
+  // Determines if `code` and `reason` are valid and throws an exception if not.
+  // Returns `code` if supplied, otherwise std::nullopt if
+  // `reason` is empty and kCloseEventCodeNormalClosure otherwise. `reason` is
+  // expected to be a USVString, ie. no unmatched surrogates.
+  static std::optional<uint16_t> ValidateCloseCodeAndReason(
+      std::optional<uint16_t> code,
+      const String& reason,
+      ExceptionState&);
 
  private:
   // Returns true if |character| is allowed in a WebSocket subprotocol name.

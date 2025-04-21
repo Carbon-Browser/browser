@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,12 @@ namespace sync_file_system {
 
 class SyncEventObserver {
  public:
-  SyncEventObserver() {}
+  SyncEventObserver() = default;
 
   SyncEventObserver(const SyncEventObserver&) = delete;
   SyncEventObserver& operator=(const SyncEventObserver&) = delete;
 
-  virtual ~SyncEventObserver() {}
+  virtual ~SyncEventObserver() = default;
 
   // Reports there was a state change in the sync file system backend.
   // If |app_origin| is empty, then broadcast to all registered apps.

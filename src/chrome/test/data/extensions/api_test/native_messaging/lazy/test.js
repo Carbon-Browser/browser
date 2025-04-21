@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ chrome.test.getConfig(function(config) {
     // The goal of this test is just not to crash.
     function sendMessageWithoutCallback() {
       var message = {'text': 'Hi there!', 'number': 3};
-      chrome.extension.sendNativeMessage(appName, message);
+      chrome.runtime.sendNativeMessage(appName, message);
       chrome.test.succeed();  // Mission Complete
     },
 
@@ -61,6 +61,18 @@ chrome.test.getConfig(function(config) {
           appName, message,
           chrome.test.callbackFail(
               'Error when communicating with the native messaging host.',
+              function(response) {
+                chrome.test.assertEq(undefined, response);
+              }));
+    },
+
+    function invalidMessage() {
+      // Create a special message that's not valid JSON.
+      var message = {sendInvalidResponse: true};
+      chrome.runtime.sendNativeMessage(
+          appName, message,
+          chrome.test.callbackFail(
+              'The sender sent an invalid JSON message; message ignored.',
               function(response) {
                 chrome.test.assertEq(undefined, response);
               }));

@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_raster_invalidator.h"
 
-#include "base/callback_helpers.h"
+#include <array>
+
+#include "base/functional/callback_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_artifact.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_controller_test.h"
@@ -18,39 +20,44 @@ namespace blink {
 using ::testing::UnorderedElementsAre;
 
 class DisplayItemRasterInvalidatorTest : public PaintControllerTestBase,
-                                         public PaintTestConfigurations {
+                                         public PaintTestConfigurations,
+                                         public RasterInvalidator::Callback {
  protected:
   DisplayItemRasterInvalidatorTest() = default;
 
   Vector<RasterInvalidationInfo> GetRasterInvalidations() {
-    if (invalidator_.GetTracking())
-      return invalidator_.GetTracking()->Invalidations();
+    if (invalidator_->GetTracking()) {
+      return invalidator_->GetTracking()->Invalidations();
+    }
     return Vector<RasterInvalidationInfo>();
   }
 
+  void InvalidateRect(const gfx::Rect&) override {}
+
   // In this file, DisplayItemRasterInvalidator is tested through
   // RasterInvalidator.
-  RasterInvalidator invalidator_;
+  Persistent<RasterInvalidator> invalidator_ =
+      MakeGarbageCollected<RasterInvalidator>(*this);
 };
 
-class RasterInvalidationCycleScope : public PaintControllerCycleScope {
+class RasterInvalidationPaintController : public PaintControllerForTest {
+  STACK_ALLOCATED();
+
  public:
-  RasterInvalidationCycleScope(PaintController& controller,
-                               RasterInvalidator& invalidator)
-      : PaintControllerCycleScope(controller, true),
-        invalidator_(invalidator) {}
-  ~RasterInvalidationCycleScope() {
+  RasterInvalidationPaintController(
+      PaintControllerPersistentData& persistent_data,
+      RasterInvalidator& invalidator)
+      : PaintControllerForTest(persistent_data), invalidator_(invalidator) {}
+  ~RasterInvalidationPaintController() {
     ++sequence_number_;
-    for (auto* controller : controllers_) {
-      controller->CommitNewDisplayItems();
-      invalidator_.Generate(
-          base::DoNothing(),
-          PaintChunkSubset(controller->GetPaintArtifactShared()),
-          // The layer bounds are big enough not to clip display item raster
-          // invalidation rects in the tests.
-          gfx::Vector2dF(), gfx::Size(20000, 20000), PropertyTreeState::Root());
-      for (auto& chunk : controller->PaintChunks())
-        chunk.properties.ClearChangedToRoot(sequence_number_);
+    const auto& paint_artifact = CommitNewDisplayItems();
+    invalidator_.Generate(PaintChunkSubset(paint_artifact),
+                          // The layer bounds are big enough not to clip display
+                          // item raster invalidation rects in the tests.
+                          gfx::Vector2dF(), gfx::Size(20000, 20000),
+                          PropertyTreeState::Root());
+    for (auto& chunk : paint_artifact.GetPaintChunks()) {
+      chunk.properties.ClearChangedToRoot(sequence_number_);
     }
   }
 
@@ -59,33 +66,32 @@ class RasterInvalidationCycleScope : public PaintControllerCycleScope {
   static int sequence_number_;
 };
 
-int RasterInvalidationCycleScope::sequence_number_ = 1;
+int RasterInvalidationPaintController::sequence_number_ = 1;
 
 INSTANTIATE_PAINT_TEST_SUITE_P(DisplayItemRasterInvalidatorTest);
 
-TEST_P(DisplayItemRasterInvalidatorTest,
-       FullInvalidationWithoutGeometryChange) {
+TEST_P(DisplayItemRasterInvalidatorTest, FullInvalidationWithoutLayoutChange) {
   FakeDisplayItemClient& first =
       *MakeGarbageCollected<FakeDisplayItemClient>("first");
   FakeDisplayItemClient& second =
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 150, 300, 300));
   }
 
-  first.Invalidate(PaintInvalidationReason::kStyle);
-  invalidator_.SetTracksRasterInvalidations(true);
+  first.Invalidate();
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 150, 300, 300));
@@ -94,8 +100,8 @@ TEST_P(DisplayItemRasterInvalidatorTest,
   EXPECT_THAT(GetRasterInvalidations(),
               UnorderedElementsAre(RasterInvalidationInfo{
                   first.Id(), "first", gfx::Rect(100, 100, 300, 350),
-                  PaintInvalidationReason::kStyle}));
-  invalidator_.SetTracksRasterInvalidations(false);
+                  PaintInvalidationReason::kLayout}));
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, FullInvalidationWithGeometryChange) {
@@ -103,23 +109,23 @@ TEST_P(DisplayItemRasterInvalidatorTest, FullInvalidationWithGeometryChange) {
       *MakeGarbageCollected<FakeDisplayItemClient>("first");
   FakeDisplayItemClient& second =
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 150, 300, 300));
   }
 
-  first.Invalidate(PaintInvalidationReason::kStyle);
-  invalidator_.SetTracksRasterInvalidations(true);
+  first.Invalidate();
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(200, 100, 300, 300));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
     DrawRect(context, first, kForegroundType, gfx::Rect(200, 150, 300, 300));
@@ -129,11 +135,11 @@ TEST_P(DisplayItemRasterInvalidatorTest, FullInvalidationWithGeometryChange) {
               UnorderedElementsAre(
                   RasterInvalidationInfo{first.Id(), "first",
                                          gfx::Rect(100, 100, 300, 350),
-                                         PaintInvalidationReason::kStyle},
+                                         PaintInvalidationReason::kLayout},
                   RasterInvalidationInfo{first.Id(), "first",
                                          gfx::Rect(200, 100, 300, 350),
-                                         PaintInvalidationReason::kStyle}));
-  invalidator_.SetTracksRasterInvalidations(false);
+                                         PaintInvalidationReason::kLayout}));
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, RemoveItemInMiddle) {
@@ -141,22 +147,22 @@ TEST_P(DisplayItemRasterInvalidatorTest, RemoveItemInMiddle) {
       *MakeGarbageCollected<FakeDisplayItemClient>("first");
   FakeDisplayItemClient& second =
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 300, 300));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 300, 300));
   }
@@ -165,7 +171,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, RemoveItemInMiddle) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   second.Id(), "second", gfx::Rect(100, 100, 200, 200),
                   PaintInvalidationReason::kDisappeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrder) {
@@ -175,12 +181,11 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrder) {
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
   FakeDisplayItemClient& unaffected =
       *MakeGarbageCollected<FakeDisplayItemClient>("unaffected");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
@@ -189,11 +194,12 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrder) {
     DrawRect(context, unaffected, kForegroundType, gfx::Rect(300, 300, 10, 10));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
@@ -206,7 +212,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrder) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   first.Id(), "first", gfx::Rect(100, 100, 100, 100),
                   PaintInvalidationReason::kReordered}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateFirst) {
@@ -216,22 +222,22 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateFirst) {
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
   FakeDisplayItemClient& unaffected =
       *MakeGarbageCollected<FakeDisplayItemClient>("unaffected");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     first.Invalidate(PaintInvalidationReason::kOutline);
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
@@ -242,7 +248,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateFirst) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   first.Id(), "first", gfx::Rect(100, 100, 100, 100),
                   PaintInvalidationReason::kOutline}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateSecond) {
@@ -252,22 +258,22 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateSecond) {
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
   FakeDisplayItemClient& unaffected =
       *MakeGarbageCollected<FakeDisplayItemClient>("unaffected");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     second.Invalidate(PaintInvalidationReason::kOutline);
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
@@ -278,7 +284,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderAndInvalidateSecond) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   second.Id(), "second", gfx::Rect(100, 100, 50, 200),
                   PaintInvalidationReason::kOutline}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithIncrementalInvalidation) {
@@ -288,22 +294,22 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithIncrementalInvalidation) {
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
   FakeDisplayItemClient& unaffected =
       *MakeGarbageCollected<FakeDisplayItemClient>("unaffected");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     first.Invalidate(PaintInvalidationReason::kIncremental);
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
@@ -315,7 +321,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithIncrementalInvalidation) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   first.Id(), "first", gfx::Rect(100, 100, 100, 100),
                   PaintInvalidationReason::kReordered}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, NewItemInMiddle) {
@@ -325,21 +331,21 @@ TEST_P(DisplayItemRasterInvalidatorTest, NewItemInMiddle) {
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
   FakeDisplayItemClient& third =
       *MakeGarbageCollected<FakeDisplayItemClient>("third");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
     DrawRect(context, third, kBackgroundType, gfx::Rect(125, 100, 200, 50));
     DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
@@ -349,36 +355,40 @@ TEST_P(DisplayItemRasterInvalidatorTest, NewItemInMiddle) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   third.Id(), "third", gfx::Rect(125, 100, 200, 50),
                   PaintInvalidationReason::kAppeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, Incremental) {
   gfx::Rect initial_rect(100, 100, 100, 100);
-  Persistent<FakeDisplayItemClient> clients[6];
+  std::array<Persistent<FakeDisplayItemClient>, 6> clients;
   for (size_t i = 0; i < std::size(clients); i++) {
     clients[i] =
         MakeGarbageCollected<FakeDisplayItemClient>(String::Format("%zu", i));
   }
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
 
     for (auto& client : clients)
       DrawRect(context, *client, kBackgroundType, gfx::Rect(initial_rect));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
-    gfx::Rect visual_rects[] = {
-        gfx::Rect(100, 100, 150, 100), gfx::Rect(100, 100, 100, 150),
-        gfx::Rect(100, 100, 150, 80),  gfx::Rect(100, 100, 80, 150),
-        gfx::Rect(100, 100, 150, 150), gfx::Rect(100, 100, 80, 80)};
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
+    auto visual_rects = std::to_array<gfx::Rect>({
+        gfx::Rect(100, 100, 150, 100),
+        gfx::Rect(100, 100, 100, 150),
+        gfx::Rect(100, 100, 150, 80),
+        gfx::Rect(100, 100, 80, 150),
+        gfx::Rect(100, 100, 150, 150),
+        gfx::Rect(100, 100, 80, 80),
+    });
     for (size_t i = 0; i < std::size(clients); i++) {
       clients[i]->Invalidate(PaintInvalidationReason::kIncremental);
       DrawRect(context, *clients[i], kBackgroundType,
@@ -418,7 +428,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, Incremental) {
                   RasterInvalidationInfo{
                       clients[5]->Id(), "5", gfx::Rect(100, 180, 100, 20),
                       PaintInvalidationReason::kIncremental}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, AddRemoveFirstAndInvalidateSecond) {
@@ -426,28 +436,28 @@ TEST_P(DisplayItemRasterInvalidatorTest, AddRemoveFirstAndInvalidateSecond) {
       *MakeGarbageCollected<FakeDisplayItemClient>("first");
   FakeDisplayItemClient& second =
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, second, kBackgroundType, gfx::Rect(200, 200, 50, 50));
     DrawRect(context, second, kForegroundType, gfx::Rect(200, 200, 50, 50));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     first.Invalidate();
     second.Invalidate();
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 150, 150));
     DrawRect(context, second, kBackgroundType, gfx::Rect(150, 250, 100, 100));
     DrawRect(context, second, kForegroundType, gfx::Rect(150, 250, 100, 100));
-    EXPECT_EQ(0u, NumCachedNewItems());
+    EXPECT_EQ(0u, NumCachedNewItems(paint_controller));
   }
 
   EXPECT_THAT(GetRasterInvalidations(),
@@ -457,17 +467,18 @@ TEST_P(DisplayItemRasterInvalidatorTest, AddRemoveFirstAndInvalidateSecond) {
                                          PaintInvalidationReason::kAppeared},
                   RasterInvalidationInfo{second.Id(), "second",
                                          gfx::Rect(200, 200, 50, 50),
-                                         PaintInvalidationReason::kFull},
+                                         PaintInvalidationReason::kLayout},
                   RasterInvalidationInfo{second.Id(), "second",
                                          gfx::Rect(150, 250, 100, 100),
-                                         PaintInvalidationReason::kFull}));
-  invalidator_.SetTracksRasterInvalidations(false);
+                                         PaintInvalidationReason::kLayout}));
+  invalidator_->SetTracksRasterInvalidations(false);
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, second, kBackgroundType, gfx::Rect(150, 250, 100, 100));
     DrawRect(context, second, kForegroundType, gfx::Rect(150, 250, 100, 100));
   }
@@ -476,7 +487,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, AddRemoveFirstAndInvalidateSecond) {
               UnorderedElementsAre(RasterInvalidationInfo{
                   first.Id(), "first", gfx::Rect(100, 100, 150, 150),
                   PaintInvalidationReason::kDisappeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, InvalidateFirstAndAddRemoveSecond) {
@@ -484,21 +495,21 @@ TEST_P(DisplayItemRasterInvalidatorTest, InvalidateFirstAndAddRemoveSecond) {
       *MakeGarbageCollected<FakeDisplayItemClient>("first");
   FakeDisplayItemClient& second =
       *MakeGarbageCollected<FakeDisplayItemClient>("second");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
     DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 150, 150));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     first.Invalidate();
     second.Invalidate();
     DrawRect(context, first, kBackgroundType, gfx::Rect(150, 150, 100, 100));
@@ -511,17 +522,18 @@ TEST_P(DisplayItemRasterInvalidatorTest, InvalidateFirstAndAddRemoveSecond) {
               UnorderedElementsAre(
                   RasterInvalidationInfo{first.Id(), "first",
                                          gfx::Rect(100, 100, 150, 150),
-                                         PaintInvalidationReason::kFull},
+                                         PaintInvalidationReason::kLayout},
                   RasterInvalidationInfo{second.Id(), "second",
                                          gfx::Rect(200, 200, 50, 50),
                                          PaintInvalidationReason::kAppeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     first.Invalidate();
     second.Invalidate();
     DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
@@ -532,11 +544,11 @@ TEST_P(DisplayItemRasterInvalidatorTest, InvalidateFirstAndAddRemoveSecond) {
               UnorderedElementsAre(
                   RasterInvalidationInfo{first.Id(), "first",
                                          gfx::Rect(100, 100, 150, 150),
-                                         PaintInvalidationReason::kFull},
+                                         PaintInvalidationReason::kLayout},
                   RasterInvalidationInfo{
                       second.Id(), "second", gfx::Rect(200, 200, 50, 50),
                       PaintInvalidationReason::kDisappeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildren) {
@@ -548,12 +560,11 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildren) {
       *MakeGarbageCollected<FakeDisplayItemClient>("container2");
   FakeDisplayItemClient& content2 =
       *MakeGarbageCollected<FakeDisplayItemClient>("content2");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, container1, kBackgroundType,
              gfx::Rect(100, 100, 100, 100));
     DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
@@ -570,11 +581,12 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildren) {
 
   // Simulate the situation when |container1| gets a z-index that is greater
   // than that of |container2|.
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, container2, kBackgroundType,
              gfx::Rect(100, 200, 100, 100));
     DrawRect(context, content2, kBackgroundType, gfx::Rect(100, 200, 50, 200));
@@ -597,7 +609,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildren) {
                   RasterInvalidationInfo{content1.Id(), "content1",
                                          gfx::Rect(100, 100, 50, 200),
                                          PaintInvalidationReason::kReordered}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildrenAndInvalidation) {
@@ -609,12 +621,11 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildrenAndInvalidation) {
       *MakeGarbageCollected<FakeDisplayItemClient>("container2");
   FakeDisplayItemClient& content2 =
       *MakeGarbageCollected<FakeDisplayItemClient>("content2");
-  GraphicsContext context(GetPaintController());
-
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, container1, kBackgroundType,
              gfx::Rect(100, 100, 100, 100));
     DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
@@ -629,11 +640,12 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildrenAndInvalidation) {
              gfx::Rect(100, 200, 100, 100));
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     // Simulate the situation when |container1| gets a z-index that is greater
     // than that of |container2|, and |container1| is invalidated.
     container2.Invalidate();
@@ -661,8 +673,8 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderWithChildrenAndInvalidation) {
                                          PaintInvalidationReason::kReordered},
                   RasterInvalidationInfo{container2.Id(), "container2",
                                          gfx::Rect(100, 200, 100, 100),
-                                         PaintInvalidationReason::kFull}));
-  invalidator_.SetTracksRasterInvalidations(false);
+                                         PaintInvalidationReason::kLayout}));
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderCrossingChunks) {
@@ -674,27 +686,27 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderCrossingChunks) {
       *MakeGarbageCollected<FakeDisplayItemClient>("container2");
   FakeDisplayItemClient& content2 =
       *MakeGarbageCollected<FakeDisplayItemClient>("content2");
-  GraphicsContext context(GetPaintController());
 
-  auto container1_effect = CreateOpacityEffect(e0(), 0.5);
+  auto* container1_effect = CreateOpacityEffect(e0(), 0.5);
   auto container1_properties = DefaultPaintChunkProperties();
   container1_properties.SetEffect(*container1_effect);
 
-  auto container2_effect = CreateOpacityEffect(e0(), 0.5);
+  auto* container2_effect = CreateOpacityEffect(e0(), 0.5);
   auto container2_properties = DefaultPaintChunkProperties();
   container2_properties.SetEffect(*container2_effect);
 
   PaintChunk::Id container1_id(container1.Id(), kBackgroundType);
   PaintChunk::Id container2_id(container2.Id(), kBackgroundType);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    GetPaintController().UpdateCurrentPaintChunkProperties(
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    paint_controller.UpdateCurrentPaintChunkProperties(
         container1_id, container1, container1_properties);
     DrawRect(context, container1, kBackgroundType,
              gfx::Rect(100, 100, 100, 100));
     DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    GetPaintController().UpdateCurrentPaintChunkProperties(
+    paint_controller.UpdateCurrentPaintChunkProperties(
         container2_id, container2, container2_properties);
     DrawRect(context, container2, kBackgroundType,
              gfx::Rect(100, 200, 100, 100));
@@ -702,17 +714,18 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderCrossingChunks) {
   }
 
   // Move content2 into container1, without invalidation.
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    GetPaintController().UpdateCurrentPaintChunkProperties(
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    paint_controller.UpdateCurrentPaintChunkProperties(
         container1_id, container1, container1_properties);
     DrawRect(context, container1, kBackgroundType,
              gfx::Rect(100, 100, 100, 100));
     DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
     DrawRect(context, content2, kBackgroundType, gfx::Rect(100, 200, 50, 200));
-    GetPaintController().UpdateCurrentPaintChunkProperties(
+    paint_controller.UpdateCurrentPaintChunkProperties(
         container2_id, container2, container2_properties);
     DrawRect(context, container2, kBackgroundType,
              gfx::Rect(100, 200, 100, 100));
@@ -726,7 +739,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, SwapOrderCrossingChunks) {
                   RasterInvalidationInfo{content2.Id(), "content2",
                                          gfx::Rect(100, 200, 50, 200),
                                          PaintInvalidationReason::kAppeared}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, SkipCache) {
@@ -734,57 +747,59 @@ TEST_P(DisplayItemRasterInvalidatorTest, SkipCache) {
       *MakeGarbageCollected<FakeDisplayItemClient>("multicol");
   FakeDisplayItemClient& content =
       *MakeGarbageCollected<FakeDisplayItemClient>("content");
-  GraphicsContext context(GetPaintController());
   gfx::Rect rect1(100, 100, 50, 50);
   gfx::Rect rect2(150, 100, 50, 50);
   gfx::Rect rect3(200, 100, 50, 50);
 
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, multicol, kBackgroundType, gfx::Rect(100, 200, 100, 100));
-    GetPaintController().BeginSkippingCache();
+    paint_controller.BeginSkippingCache();
     DrawRect(context, content, kForegroundType, rect1);
     DrawRect(context, content, kForegroundType, rect2);
-    GetPaintController().EndSkippingCache();
+    paint_controller.EndSkippingCache();
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     // Draw again with nothing invalidated.
     EXPECT_TRUE(ClientCacheIsValid(multicol));
     DrawRect(context, multicol, kBackgroundType, gfx::Rect(100, 200, 100, 100));
 
-    GetPaintController().BeginSkippingCache();
+    paint_controller.BeginSkippingCache();
     DrawRect(context, content, kForegroundType, rect1);
     DrawRect(context, content, kForegroundType, rect2);
-    GetPaintController().EndSkippingCache();
+    paint_controller.EndSkippingCache();
   }
 
   EXPECT_THAT(GetRasterInvalidations(),
               UnorderedElementsAre(RasterInvalidationInfo{
                   content.Id(), "content", UnionRects(rect1, rect2),
                   PaintInvalidationReason::kUncacheable}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     // Now the multicol becomes 3 columns and repaints.
     multicol.Invalidate();
     DrawRect(context, multicol, kBackgroundType, gfx::Rect(100, 100, 100, 100));
 
-    GetPaintController().BeginSkippingCache();
+    paint_controller.BeginSkippingCache();
     DrawRect(context, content, kForegroundType, rect1);
     DrawRect(context, content, kForegroundType, rect2);
     DrawRect(context, content, kForegroundType, rect3);
-    GetPaintController().EndSkippingCache();
+    paint_controller.EndSkippingCache();
   }
 
   EXPECT_THAT(
@@ -792,46 +807,47 @@ TEST_P(DisplayItemRasterInvalidatorTest, SkipCache) {
       UnorderedElementsAre(
           RasterInvalidationInfo{multicol.Id(), "multicol",
                                  gfx::Rect(100, 200, 100, 100),
-                                 PaintInvalidationReason::kFull},
+                                 PaintInvalidationReason::kLayout},
           RasterInvalidationInfo{multicol.Id(), "multicol",
                                  gfx::Rect(100, 100, 100, 100),
-                                 PaintInvalidationReason::kFull},
+                                 PaintInvalidationReason::kLayout},
           RasterInvalidationInfo{content.Id(), "content",
                                  UnionRects(rect1, UnionRects(rect2, rect3)),
                                  PaintInvalidationReason::kUncacheable}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 TEST_P(DisplayItemRasterInvalidatorTest, PartialSkipCache) {
   FakeDisplayItemClient& content =
       *MakeGarbageCollected<FakeDisplayItemClient>("content");
-  GraphicsContext context(GetPaintController());
 
   gfx::Rect rect1(100, 100, 50, 50);
   gfx::Rect rect2(150, 100, 50, 50);
   gfx::Rect rect3(200, 100, 50, 50);
 
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     DrawRect(context, content, kBackgroundType, rect1);
-    GetPaintController().BeginSkippingCache();
+    paint_controller.BeginSkippingCache();
     DrawRect(context, content, kForegroundType, rect2);
-    GetPaintController().EndSkippingCache();
+    paint_controller.EndSkippingCache();
     DrawRect(context, content, kForegroundType, rect3);
   }
 
-  invalidator_.SetTracksRasterInvalidations(true);
+  invalidator_->SetTracksRasterInvalidations(true);
   {
-    RasterInvalidationCycleScope cycle_scope(GetPaintController(),
-                                             invalidator_);
-    InitRootChunk();
+    RasterInvalidationPaintController paint_controller(GetPersistentData(),
+                                                       *invalidator_);
+    GraphicsContext context(paint_controller);
+    InitRootChunk(paint_controller);
     // Draw again with nothing invalidated.
     DrawRect(context, content, kBackgroundType, rect1);
-    GetPaintController().BeginSkippingCache();
+    paint_controller.BeginSkippingCache();
     DrawRect(context, content, kForegroundType, rect2);
-    GetPaintController().EndSkippingCache();
+    paint_controller.EndSkippingCache();
     DrawRect(context, content, kForegroundType, rect3);
   }
 
@@ -840,7 +856,7 @@ TEST_P(DisplayItemRasterInvalidatorTest, PartialSkipCache) {
       UnorderedElementsAre(RasterInvalidationInfo{
           content.Id(), "content", UnionRects(rect1, UnionRects(rect2, rect3)),
           PaintInvalidationReason::kUncacheable}));
-  invalidator_.SetTracksRasterInvalidations(false);
+  invalidator_->SetTracksRasterInvalidations(false);
 }
 
 }  // namespace blink

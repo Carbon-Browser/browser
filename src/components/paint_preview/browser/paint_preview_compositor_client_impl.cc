@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
 
@@ -17,7 +18,7 @@ PaintPreviewCompositorClientImpl::PaintPreviewCompositorClientImpl(
     scoped_refptr<base::SequencedTaskRunner> compositor_task_runner,
     base::WeakPtr<PaintPreviewCompositorServiceImpl> service)
     : compositor_task_runner_(compositor_task_runner),
-      default_task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      default_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       service_(service),
       compositor_(new mojo::Remote<mojom::PaintPreviewCompositor>(),
                   base::OnTaskRunnerDeleter(compositor_task_runner_)) {}
@@ -27,7 +28,7 @@ PaintPreviewCompositorClientImpl::~PaintPreviewCompositorClientImpl() {
   NotifyServiceOfInvalidation();
 }
 
-const absl::optional<base::UnguessableToken>&
+const std::optional<base::UnguessableToken>&
 PaintPreviewCompositorClientImpl::Token() const {
   DCHECK(default_task_runner_->RunsTasksInCurrentSequence());
   return token_;

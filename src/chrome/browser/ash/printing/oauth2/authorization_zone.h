@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,8 @@ class SharedURLLoaderFactory;
 namespace ash {
 namespace printing {
 namespace oauth2 {
+
+class ClientIdsDatabase;
 
 // The class AuthorizationZone is responsible for handling sessions with single
 // Authorization Server. It creates and maintains OAuth2 sessions.
@@ -44,17 +46,14 @@ namespace oauth2 {
 //
 class AuthorizationZone {
  public:
-  // Constructor. If `client_ID` is empty a Registration Request will be used
-  // to register a new client (inside InitAuthorization(...) method).
+  // `client_ids_database` cannot be nullptr and must outlive created object.
   static std::unique_ptr<AuthorizationZone> Create(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const GURL& authorization_server_uri,
-      const std::string& client_id = "");
-  // Not copyable.
+      ClientIdsDatabase* client_ids_database);
+
   AuthorizationZone(const AuthorizationZone&) = delete;
   AuthorizationZone& operator=(const AuthorizationZone&) = delete;
-
-  // Destructor.
   virtual ~AuthorizationZone() = default;
 
   // Starts authorization process. If successful, the `callback` is returned
@@ -88,6 +87,10 @@ class AuthorizationZone {
   virtual void MarkEndpointAccessTokenAsExpired(
       const chromeos::Uri& ipp_endpoint,
       const std::string& endpoint_access_token) = 0;
+  // This method must be called when the Authorization Zone becomes untrusted.
+  // The method cancels all existing sessions and calls all pending callbacks
+  // in the object with status StatusCode::kUntrustedAuthorizationServer.
+  virtual void MarkAuthorizationZoneAsUntrusted() = 0;
 
  protected:
   AuthorizationZone() = default;

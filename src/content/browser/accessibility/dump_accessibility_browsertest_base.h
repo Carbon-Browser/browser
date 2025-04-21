@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/cxx20_erase_list.h"
 #include "base/files/file_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/ax_inspect_factory.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/accessibility_notification_waiter.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "third_party/blink/public/common/features.h"
@@ -23,10 +23,12 @@
 #include "ui/accessibility/platform/inspect/ax_inspect_scenario.h"
 #include "ui/accessibility/platform/inspect/ax_inspect_test_helper.h"
 
-namespace content {
-
-class BrowserAccessibility;
+namespace ui {
 class BrowserAccessibilityManager;
+class BrowserAccessibility;
+}  // namespace ui
+
+namespace content {
 
 // Base class for an accessibility browsertest that takes an HTML file as
 // input, loads it into a tab, dumps some accessibility data in text format,
@@ -49,13 +51,26 @@ class DumpAccessibilityTestBase
   // loads the HTML, loads the accessibility tree, calls Dump(), then
   // compares the output to the expected result and has the test succeed
   // or fail based on the diff.
+  // Run with given AXMode.
+  void RunTest(ui::AXMode mode,
+               const base::FilePath file_path,
+               const char* file_dir,
+               const base::FilePath::StringType& expectations_qualifier =
+                   FILE_PATH_LITERAL(""));
+
+  // Given a path to an HTML file relative to the test directory,
+  // loads the HTML, loads the accessibility tree, calls Dump(), then
+  // compares the output to the expected result and has the test succeed
+  // or fail based on the diff.
+  // Run with default kAXModeComplete.
   void RunTest(const base::FilePath file_path,
                const char* file_dir,
                const base::FilePath::StringType& expectations_qualifier =
                    FILE_PATH_LITERAL(""));
 
   template <const char* type>
-  void RunTypedTest(const base::FilePath::CharType* file_path) {
+  void RunTypedTest(const base::FilePath::CharType* file_path,
+                    ui::AXMode mode = ui::kAXModeComplete) {
     base::FilePath test_path = GetTestFilePath("accessibility", type);
     {
       base::ScopedAllowBlockingForTesting allow_blocking;
@@ -64,32 +79,40 @@ class DumpAccessibilityTestBase
     base::FilePath test_file = test_path.Append(base::FilePath(file_path));
 
     std::string dir(std::string() + "accessibility/" + type);
-    RunTest(test_file, dir.c_str());
+    RunTest(mode, test_file, dir.c_str());
   }
 
-  template <std::vector<ui::AXApiType::Type> TestPasses(),
-            ui::AXApiType::TypeConstant type>
-  static std::vector<ui::AXApiType::Type> TestPassesExcept() {
-    std::vector<ui::AXApiType::Type> passes = TestPasses();
-    base::Erase(passes, type);
+  typedef std::vector<ui::AXApiType::Type> ApiTypeVector;
+
+  static ApiTypeVector TreeTestPasses() {
+    return ui::AXInspectTestHelper::TreeTestPasses();
+  }
+  static ApiTypeVector EventTestPasses() {
+    return ui::AXInspectTestHelper::EventTestPasses();
+  }
+
+  template <ApiTypeVector TestPasses(), ui::AXApiType::TypeConstant type>
+  static ApiTypeVector TestPassesExcept() {
+    ApiTypeVector passes = TestPasses();
+    std::erase(passes, type);
     return passes;
   }
 
   template <ui::AXApiType::TypeConstant type>
-  static std::vector<ui::AXApiType::Type> TreeTestPassesExcept() {
+  static ApiTypeVector TreeTestPassesExcept() {
     return TestPassesExcept<ui::AXInspectTestHelper::TreeTestPasses, type>();
   }
 
   template <ui::AXApiType::TypeConstant type>
-  static std::vector<ui::AXApiType::Type> EventTestPassesExcept() {
+  static ApiTypeVector EventTestPassesExcept() {
     return TestPassesExcept<ui::AXInspectTestHelper::EventTestPasses, type>();
   }
 
-  static std::vector<ui::AXApiType::Type> TreeTestPassesExceptUIA() {
+  static ApiTypeVector TreeTestPassesExceptUIA() {
     return TreeTestPassesExcept<ui::AXApiType::kWinUIA>();
   }
 
-  static std::vector<ui::AXApiType::Type> EventTestPassesExceptUIA() {
+  static ApiTypeVector EventTestPassesExceptUIA() {
     return EventTestPassesExcept<ui::AXApiType::kWinUIA>();
   }
 
@@ -97,6 +120,7 @@ class DumpAccessibilityTestBase
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpOnMainThread() override;
   void SetUp() override;
+  void TearDown() override;
 
   //
   // For subclasses to override:
@@ -106,7 +130,7 @@ class DumpAccessibilityTestBase
   // including the load complete accessibility event. The subclass should
   // dump whatever that specific test wants to dump, returning the result
   // as a sequence of strings.
-  virtual std::vector<std::string> Dump() = 0;
+  virtual std::vector<std::string> Dump(ui::AXMode mode) = 0;
 
   // Add the default filters that are applied to all tests.
   virtual std::vector<ui::AXPropertyFilter> DefaultFilters() const = 0;
@@ -116,8 +140,9 @@ class DumpAccessibilityTestBase
   virtual void OnDiffFailed() {}
 
   // Choose which feature flags to enable or disable.
-  virtual void ChooseFeatures(std::vector<base::Feature>* enabled_features,
-                              std::vector<base::Feature>* disabled_features);
+  virtual void ChooseFeatures(
+      std::vector<base::test::FeatureRef>* enabled_features,
+      std::vector<base::test::FeatureRef>* disabled_features);
 
   //
   // Helpers
@@ -130,7 +155,8 @@ class DumpAccessibilityTestBase
   // and return it as a string.
   std::string DumpUnfilteredAccessibilityTreeAsString();
 
-  void RunTestForPlatform(const base::FilePath file_path,
+  void RunTestForPlatform(ui::AXMode mode,
+                          const base::FilePath file_path,
                           const char* file_dir,
                           const base::FilePath::StringType&
                               expectations_qualifier = FILE_PATH_LITERAL(""));
@@ -138,20 +164,21 @@ class DumpAccessibilityTestBase
   // Retrieve the accessibility node that matches the accessibility name. There
   // is an optional search_root parameter that defaults to the document root if
   // not provided.
-  BrowserAccessibility* FindNode(
+  ui::BrowserAccessibility* FindNode(
       const std::string& name,
-      BrowserAccessibility* search_root = nullptr) const;
+      ui::BrowserAccessibility* search_root = nullptr) const;
 
   // Retrieve the browser accessibility manager object for the current web
   // contents.
-  BrowserAccessibilityManager* GetManager() const;
+  ui::BrowserAccessibilityManager* GetManager() const;
 
   std::unique_ptr<ui::AXTreeFormatter> CreateFormatter() const;
 
   // Returns a list of captured events fired after the invoked action.
-  using InvokeAction = base::OnceCallback<base::Value()>;
-  std::pair<base::Value, std::vector<std::string>> CaptureEvents(
-      InvokeAction invoke_action);
+  using InvokeAction = base::OnceCallback<EvalJsResult()>;
+  std::pair<EvalJsResult, std::vector<std::string>> CaptureEvents(
+      InvokeAction invoke_action,
+      ui::AXMode mode);
 
   // Test scenario loaded from the test file.
   ui::AXInspectScenario scenario_;
@@ -162,30 +189,37 @@ class DumpAccessibilityTestBase
 
   base::test::ScopedFeatureList scoped_feature_list_;
 
-  bool HasHtmlAttribute(BrowserAccessibility& node,
-                        const char* attr,
-                        const std::string& value) const;
+  ui::BrowserAccessibility* FindNodeByStringAttribute(
+      const ax::mojom::StringAttribute attr,
+      const std::string& value) const;
 
-  BrowserAccessibility* FindNodeByHTMLAttribute(const char* attr,
-                                                const std::string& value) const;
+  std::string FormatWebContentsTestNode(const ui::AXTreeFormatter&) const;
+
+  // Returns true if the tests should run against the external accessibility
+  // tree.
+  bool IsTestingExternalTree() const;
 
  protected:
   ui::AXInspectTestHelper test_helper_;
 
   WebContentsImpl* GetWebContents() const;
+  gfx::AcceleratedWidget GetAcceleratedWidget() const;
 
-  // Wait until all accessibility events and dirty objects have been processed.
-  void WaitForEndOfTest() const;
+  // Wait until all accessibility events and dirty objects have been processed
+  // with the given AXMode.
+  void WaitForEndOfTest(ui::AXMode mode) const;
 
   // Perform any requested default actions and wait until a notification is
-  // received that each action is performed.
-  void PerformAndWaitForDefaultActions();
+  // received that each action is performed with the given AXMode.
+  void PerformAndWaitForDefaultActions(ui::AXMode mode);
 
-  // Support the @WAIT-FOR directive (node, tree tests only).
-  void WaitForExpectedText();
+  // Support the @WAIT-FOR directive (node, tree tests only) with the given
+  // AXMode.
+  void WaitForExpectedText(ui::AXMode mode);
 
-  // Wait for default action, expected text and then end of test signal.
-  void WaitForFinalTreeContents();
+  // Wait for default action, expected text and then end of test signal with the
+  // given AXMode.
+  void WaitForFinalTreeContents(ui::AXMode mode);
 
   // Creates a new secure test server that can be used in place of the default
   // HTTP embedded_test_server defined in BrowserTestBase. The new test server
@@ -202,23 +236,28 @@ class DumpAccessibilityTestBase
   }
 
  private:
-  BrowserAccessibility* FindNodeInSubtree(BrowserAccessibility& node,
-                                          const std::string& name) const;
+  std::string FormatWebContentsTree(const ui::AXTreeFormatter&) const;
 
-  BrowserAccessibility* FindNodeByHTMLAttributeInSubtree(
-      BrowserAccessibility& node,
-      const char* attr,
+  ui::BrowserAccessibility* FindNodeInSubtree(ui::BrowserAccessibility& node,
+                                              const std::string& name) const;
+
+  ui::BrowserAccessibility* FindNodeByStringAttributeInSubtree(
+      ui::BrowserAccessibility& node,
+      const ax::mojom::StringAttribute attr,
       const std::string& value) const;
 
-  std::vector<std::string> CollectAllFrameUrls(
+  // The entries in skip_urls will be omitted from the result. This is used,
+  // e.g., in support of the @NO-LOAD-EXPECTED directive, when an element has an
+  // invalid src attribute.
+  std::map<std::string, unsigned> CollectAllFrameUrls(
       const std::vector<std::string>& skip_urls);
 
   // Wait until all initial content is completely loaded, included within
-  // subframes, objects and portals.
-  void WaitForAllFramesLoaded();
+  // subframes and objects with given AXMode.
+  void WaitForAllFramesLoaded(ui::AXMode mode);
 
   void OnEventRecorded(const std::string& event) const {
-    LOG(INFO) << "++ Platform event: " << event;
+    VLOG(1) << "++ Platform event: " << event;
   }
 
   bool has_performed_default_actions_ = false;

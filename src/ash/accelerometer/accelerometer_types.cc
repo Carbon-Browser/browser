@@ -1,8 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ash/accelerometer/accelerometer_types.h"
+
+#include <cmath>
 
 #include "base/numerics/math_constants.h"
 #include "ui/gfx/geometry/vector3d_f.h"

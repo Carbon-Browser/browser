@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/borealis/borealis_launch_options.h"
 
 class Profile;
@@ -18,12 +19,9 @@ class GuestOsStabilityMonitor;
 }
 namespace borealis {
 
-class BorealisDiskManager;
 class BorealisEngagementMetrics;
-class BorealisGameModeController;
 class BorealisLifetimeObserver;
 class BorealisPowerController;
-class SelfActivationPermissionGranter;
 
 // An object to track information about the state of the Borealis VM.
 // BorealisContext objects should only be created by the Borealis Context
@@ -57,15 +55,6 @@ class BorealisContext {
   const base::FilePath& disk_path() const { return disk_path_; }
   void set_disk_path(base::FilePath path) { disk_path_ = std::move(path); }
 
-  const base::FilePath& wayland_path() const { return wayland_path_; }
-  void set_wayland_path(base::FilePath path) {
-    wayland_path_ = std::move(path);
-  }
-
-  BorealisDiskManager& get_disk_manager() { return *disk_manager_.get(); }
-  void SetDiskManagerForTesting(
-      std::unique_ptr<BorealisDiskManager> disk_manager);
-
   // Called to signal that this Borealis VM is being unexpectedly shut down.
   // Not to be called during intentional shutdowns.
   void NotifyUnexpectedVmShutdown();
@@ -75,12 +64,11 @@ class BorealisContext {
 
   explicit BorealisContext(Profile* profile);
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   BorealisLaunchOptions::Options launch_options_;
   std::string vm_name_;
   std::string container_name_;
   base::FilePath disk_path_;
-  base::FilePath wayland_path_;
   // This instance listens for the session to finish and issues an automatic
   // shutdown when it does.
   std::unique_ptr<BorealisLifetimeObserver> lifetime_observer_;
@@ -88,15 +76,9 @@ class BorealisContext {
   std::unique_ptr<guest_os::GuestOsStabilityMonitor>
       guest_os_stability_monitor_;
 
-  std::unique_ptr<BorealisGameModeController> game_mode_controller_;
-
   std::unique_ptr<BorealisEngagementMetrics> engagement_metrics_;
 
-  std::unique_ptr<BorealisDiskManager> disk_manager_;
-
   std::unique_ptr<BorealisPowerController> power_controller_;
-
-  std::unique_ptr<SelfActivationPermissionGranter> self_activation_granter_;
 };
 
 }  // namespace borealis

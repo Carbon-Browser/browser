@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/linux/suid/client/setuid_sandbox_host.h"
 
@@ -20,6 +25,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/path_service.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/launch.h"
@@ -97,8 +103,9 @@ const char* GetDevelSandboxPath() {
 
 }  // namespace
 
-SetuidSandboxHost* SetuidSandboxHost::Create() {
-  return new SetuidSandboxHost(base::Environment::Create());
+std::unique_ptr<SetuidSandboxHost> SetuidSandboxHost::Create() {
+  // Private constructor.
+  return base::WrapUnique(new SetuidSandboxHost(base::Environment::Create()));
 }
 
 SetuidSandboxHost::SetuidSandboxHost(std::unique_ptr<base::Environment> env)
@@ -106,8 +113,7 @@ SetuidSandboxHost::SetuidSandboxHost(std::unique_ptr<base::Environment> env)
   DCHECK(env_);
 }
 
-SetuidSandboxHost::~SetuidSandboxHost() {
-}
+SetuidSandboxHost::~SetuidSandboxHost() = default;
 
 // Check if CHROME_DEVEL_SANDBOX is set but empty. This currently disables
 // the setuid sandbox. TODO(jln): fix this (crbug.com/245376).

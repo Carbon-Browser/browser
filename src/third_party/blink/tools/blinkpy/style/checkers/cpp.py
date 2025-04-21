@@ -43,7 +43,6 @@ import six
 import sre_compile
 import unicodedata
 
-from blinkpy.common.memoized import memoized
 from blinkpy.common.system.filesystem import FileSystem
 
 from functools import total_ordering
@@ -1066,8 +1065,6 @@ class _ClassInfo(object):
         self.virtual_method_line_number = None
         self.has_virtual_destructor = False
         self.brace_depth = 0
-        self.unsigned_bitfields = []
-        self.bool_bitfields = []
 
 
 class _ClassState(object):
@@ -1242,33 +1239,6 @@ def check_for_non_standard_constructs(clean_lines, line_number, class_state,
                 (classinfo.name, classinfo.virtual_method_line_number))
     else:
         classinfo.brace_depth = brace_depth
-
-    well_typed_bitfield = False
-    # Look for bool <name> : 1 declarations.
-    args = search(r'\bbool\s+(\S*)\s*:\s*\d+\s*;', line)
-    if args:
-        classinfo.bool_bitfields.append(
-            '%d: %s' % (line_number, args.group(1)))
-        well_typed_bitfield = True
-
-    # Look for unsigned <name> : n declarations.
-    args = search(r'\bunsigned\s+(?:int\s+)?(\S+)\s*:\s*\d+\s*;', line)
-    if args:
-        classinfo.unsigned_bitfields.append(
-            '%d: %s' % (line_number, args.group(1)))
-        well_typed_bitfield = True
-
-    # Look for other bitfield declarations. We don't care about those in
-    # size-matching structs.
-    if not (well_typed_bitfield or classinfo.name.startswith('SameSizeAs')
-            or classinfo.name.startswith('Expected')):
-        args = match(r'\s*(\S+)\s+(\S+)\s*:\s*\d+\s*;', line)
-        if args:
-            error(
-                line_number, 'runtime/bitfields', 4,
-                'Member %s of class %s defined as a bitfield of type %s. '
-                'Please declare all bitfields as unsigned.' %
-                (args.group(2), classinfo.name, args.group(1)))
 
 
 def is_blank_line(line):
@@ -1651,6 +1621,15 @@ def check_conditional_and_loop_bodies_for_brace_violations(
         current_pos = _find_in_lines(r'\S', lines, current_pos, None)
         if not current_pos:
             return
+
+        likely_attribute = match(r'\[\[(?:un)?likely\]\]\s*',
+                                 lines[current_pos.row][current_pos.column:])
+        if likely_attribute:
+            current_pos.column += likely_attribute.end()
+            end_line_of_conditional = current_pos.row
+            current_pos = _find_in_lines(r'\S', lines, current_pos, None)
+            if not current_pos:
+                return
 
         current_arm_uses_brace = False
         if lines[current_pos.row][current_pos.column] == '{':
@@ -2121,7 +2100,7 @@ def check_identifier_name_in_declaration(filename, line_number, line,
     type_regexp = r'\w([\w]|\s*[*&]\s*|::)+'
     identifier_regexp = r'(?P<identifier>[\w:]+)'
     maybe_bitfield_regexp = r'(:\s*\d+\s*)?'
-    character_after_identifier_regexp = r'(?P<character_after_identifier>[[;()=,])(?!=)'
+    character_after_identifier_regexp = r'(?P<character_after_identifier>[\[;()=,])(?!=)'
     declaration_without_type_regexp = r'\s*' + identifier_regexp + \
         r'\s*' + maybe_bitfield_regexp + character_after_identifier_regexp
     declaration_with_type_regexp = r'\s*' + type_regexp + r'\s' + declaration_without_type_regexp
@@ -2443,8 +2422,8 @@ _RE_PATTERN_STRING = re.compile(r'\bstring\b')
 _re_pattern_algorithm_header = []
 for _template in ('copy', 'max', 'min', 'min_element', 'sort', 'swap',
                   'transform'):
-    # Match max<type>(..., ...), max(..., ...), but not foo->max, foo.max or
-    # type::max().
+    # Match max<type>(..., ...), max(..., ...), but not foo->max, foo.max,
+    # or type::max().
     _re_pattern_algorithm_header.append(
         (re.compile(r'[^>.]\b' + _template + r'(<.*?>)?\([^\)]'), _template,
          '<algorithm>'))

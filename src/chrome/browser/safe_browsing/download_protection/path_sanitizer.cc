@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@ namespace safe_browsing {
 
 PathSanitizer::PathSanitizer() {
   // Get the home directory path.
-  if (!base::PathService::Get(base::DIR_HOME, &home_path_))
+  if (!base::PathService::Get(base::DIR_HOME, &home_path_)) {
     NOTREACHED();
+  }
 }
 
 const base::FilePath& PathSanitizer::GetHomeDirectory() const {

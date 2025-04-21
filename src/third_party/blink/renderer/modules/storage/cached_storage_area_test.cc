@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/modules/storage/testing/fake_area_source.h"
 #include "third_party/blink/renderer/modules/storage/testing/mock_storage_area.h"
 #include "third_party/blink/renderer/platform/testing/scoped_mocked_url.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -55,8 +56,7 @@ class CachedStorageAreaTest : public testing::Test {
                                ->MainFrame()
                                ->DomWindow());
     cached_area_ = base::MakeRefCounted<CachedStorageArea>(
-        area_type, kRootStorageKey, local_dom_window_root,
-        scheduler::GetSingleThreadTaskRunnerForTesting(), nullptr,
+        area_type, kRootStorageKey, local_dom_window_root, nullptr,
         /*is_session_storage_for_prerendering=*/false);
     cached_area_->SetRemoteAreaForTesting(
         mock_storage_area_.GetInterfaceRemote());
@@ -149,6 +149,7 @@ class CachedStorageAreaTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   MockStorageArea mock_storage_area_;
   Persistent<FakeAreaSource> source_area_;
   Persistent<FakeAreaSource> source_area2_;
@@ -221,7 +222,7 @@ TEST_P(CachedStorageAreaTestWithParam, SetItem) {
   EXPECT_THAT(mock_storage_area_.observed_puts(),
               ElementsAre(ObservedPut(kKey, kValue, source_)));
 
-  EXPECT_TRUE(source_area_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
   if (IsSessionStorage()) {
     ASSERT_EQ(1u, source_area2_->events.size());
     EXPECT_EQ(kKey, source_area2_->events[0].key);
@@ -229,8 +230,24 @@ TEST_P(CachedStorageAreaTestWithParam, SetItem) {
     EXPECT_EQ(kValue, source_area2_->events[0].new_value);
     EXPECT_EQ(kPageUrl, source_area2_->events[0].url);
   } else {
-    EXPECT_TRUE(source_area2_->events.IsEmpty());
+    EXPECT_TRUE(source_area2_->events.empty());
   }
+}
+
+// Verify that regardless of how many times `SetItem` is called in one task,
+// only one checkpoint is generated.
+TEST_P(CachedStorageAreaTestWithParam, SetItemCheckpoints) {
+  EXPECT_TRUE(cached_area_->SetItem(kKey, kValue, source_area_));
+  EXPECT_EQ(mock_storage_area_.observed_checkpoints(), 0U);
+  task_environment_.RunUntilIdle();
+  EXPECT_EQ(mock_storage_area_.observed_checkpoints(), 1U);
+
+  EXPECT_TRUE(cached_area_->SetItem(kKey, kValue2, source_area_));
+  EXPECT_TRUE(cached_area_->SetItem(kKey, kValue, source_area_));
+  EXPECT_TRUE(cached_area_->SetItem("key2", kValue, source_area_));
+  EXPECT_EQ(mock_storage_area_.observed_checkpoints(), 1U);
+  task_environment_.RunUntilIdle();
+  EXPECT_EQ(mock_storage_area_.observed_checkpoints(), 2U);
 }
 
 TEST_P(CachedStorageAreaTestWithParam, Clear_AlreadyEmpty) {
@@ -250,8 +267,8 @@ TEST_P(CachedStorageAreaTestWithParam, Clear_AlreadyEmpty) {
   }
 
   // Neither should have events since area was already empty.
-  EXPECT_TRUE(source_area_->events.IsEmpty());
-  EXPECT_TRUE(source_area2_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
+  EXPECT_TRUE(source_area2_->events.empty());
 }
 
 TEST_P(CachedStorageAreaTestWithParam, Clear_WithData) {
@@ -268,7 +285,7 @@ TEST_P(CachedStorageAreaTestWithParam, Clear_WithData) {
     EXPECT_EQ(0, mock_storage_area_.observed_get_alls());
   }
 
-  EXPECT_TRUE(source_area_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
   if (IsSessionStorage()) {
     ASSERT_EQ(1u, source_area2_->events.size());
     EXPECT_TRUE(source_area2_->events[0].key.IsNull());
@@ -276,7 +293,7 @@ TEST_P(CachedStorageAreaTestWithParam, Clear_WithData) {
     EXPECT_TRUE(source_area2_->events[0].new_value.IsNull());
     EXPECT_EQ(kPageUrl, source_area2_->events[0].url);
   } else {
-    EXPECT_TRUE(source_area2_->events.IsEmpty());
+    EXPECT_TRUE(source_area2_->events.empty());
   }
 }
 
@@ -287,11 +304,11 @@ TEST_P(CachedStorageAreaTestWithParam, RemoveItem_NothingToRemove) {
   mock_storage_area_.Flush();
   EXPECT_TRUE(IsCacheLoaded());
   EXPECT_EQ(1, mock_storage_area_.observed_get_alls());
-  EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+  EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
 
   // Neither should have events since area was already empty.
-  EXPECT_TRUE(source_area_->events.IsEmpty());
-  EXPECT_TRUE(source_area2_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
+  EXPECT_TRUE(source_area2_->events.empty());
 }
 
 TEST_P(CachedStorageAreaTestWithParam, RemoveItem) {
@@ -307,7 +324,7 @@ TEST_P(CachedStorageAreaTestWithParam, RemoveItem) {
   EXPECT_THAT(mock_storage_area_.observed_deletes(),
               ElementsAre(ObservedDelete(kKey, source_)));
 
-  EXPECT_TRUE(source_area_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
   if (IsSessionStorage()) {
     ASSERT_EQ(1u, source_area2_->events.size());
     EXPECT_EQ(kKey, source_area2_->events[0].key);
@@ -315,7 +332,7 @@ TEST_P(CachedStorageAreaTestWithParam, RemoveItem) {
     EXPECT_TRUE(source_area2_->events[0].new_value.IsNull());
     EXPECT_EQ(kPageUrl, source_area2_->events[0].url);
   } else {
-    EXPECT_TRUE(source_area2_->events.IsEmpty());
+    EXPECT_TRUE(source_area2_->events.empty());
   }
 }
 
@@ -367,11 +384,11 @@ TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithNoDelta) {
 
   // There should be no observed operations on the backend.
   mock_storage_area_.Flush();
-  EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-  EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+  EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+  EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
 
   // There should also be no generated storage events.
-  EXPECT_TRUE(source_area_->events.IsEmpty());
+  EXPECT_TRUE(source_area_->events.empty());
 }
 
 TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithKeyDiff) {
@@ -409,14 +426,14 @@ TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithKeyDiff) {
     EXPECT_EQ(kCachedValue2, cached_area_->GetItem(kKey2));
     EXPECT_THAT(mock_storage_area_.observed_puts(),
                 ElementsAre(ObservedPut(kKey2, kCachedValue2, "\n")));
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
-    EXPECT_TRUE(source_area_->events.IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
+    EXPECT_TRUE(source_area_->events.empty());
   } else {
     // For Local Storage, we expect no mutations to the backend but instead a
     // storage event to be broadcast for the diff.
     EXPECT_EQ(kPersistedValue2, cached_area_->GetItem(kKey2));
-    EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
     EXPECT_THAT(source_area_->events,
                 ElementsAre(Event(kKey2, kCachedValue2, kPersistedValue2)));
   }
@@ -455,15 +472,15 @@ TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithMissingBackendKey) {
     EXPECT_EQ(kValue2, cached_area_->GetItem(kKey2));
     EXPECT_THAT(mock_storage_area_.observed_puts(),
                 ElementsAre(ObservedPut(kKey2, kValue2, "\n")));
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
-    EXPECT_TRUE(source_area_->events.IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
+    EXPECT_TRUE(source_area_->events.empty());
   } else {
     // For Local Storage, we expect no mutations to the backend but instead a
     // storage event to be broadcast for the diff.
     EXPECT_EQ(1u, cached_area_->GetLength());
     EXPECT_TRUE(cached_area_->GetItem(kKey2).IsNull());
-    EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
     EXPECT_THAT(source_area_->events,
                 ElementsAre(Event(kKey2, kValue2, String())));
   }
@@ -500,15 +517,15 @@ TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithMissingLocalKey) {
     EXPECT_TRUE(cached_area_->GetItem(kKey2).IsNull());
     EXPECT_THAT(mock_storage_area_.observed_deletes(),
                 ElementsAre(ObservedDelete(kKey2, "\n")));
-    EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-    EXPECT_TRUE(source_area_->events.IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+    EXPECT_TRUE(source_area_->events.empty());
   } else {
     // For Local Storage, we expect no mutations to the backend but instead a
     // storage event to be broadcast for the diff.
     EXPECT_EQ(2u, cached_area_->GetLength());
     EXPECT_EQ(kValue2, cached_area_->GetItem(kKey2));
-    EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
     EXPECT_THAT(source_area_->events,
                 ElementsAre(Event(kKey2, String(), kValue2)));
   }
@@ -561,15 +578,15 @@ TEST_P(CachedStorageAreaTestWithParam, ResetConnectionWithComplexDiff) {
                                      ObservedPut(kKey3, kValue3, "\n")));
     EXPECT_THAT(mock_storage_area_.observed_deletes(),
                 ElementsAre(ObservedDelete(kKey4, "\n")));
-    EXPECT_TRUE(source_area_->events.IsEmpty());
+    EXPECT_TRUE(source_area_->events.empty());
   } else {
     // For Local Storage, we expect no mutations to the backend but instead a
     // storage event to be broadcast for the diff.
     EXPECT_EQ(kAltValue2, cached_area_->GetItem(kKey2));
     EXPECT_TRUE(cached_area_->GetItem(kKey3).IsNull());
     EXPECT_EQ(kValue4, cached_area_->GetItem(kKey4));
-    EXPECT_TRUE(mock_storage_area_.observed_puts().IsEmpty());
-    EXPECT_TRUE(mock_storage_area_.observed_deletes().IsEmpty());
+    EXPECT_TRUE(mock_storage_area_.observed_puts().empty());
+    EXPECT_TRUE(mock_storage_area_.observed_deletes().empty());
     EXPECT_THAT(source_area_->events,
                 UnorderedElementsAre(Event(kKey2, kValue2, kAltValue2),
                                      Event(kKey3, kValue3, String()),
@@ -584,11 +601,11 @@ TEST_F(CachedStorageAreaTest, KeyMutationsAreIgnoredUntilCompletion) {
   EXPECT_TRUE(cached_area_->SetItem(kKey, kValue, source_area_));
   mock_storage_area_.Flush();
   EXPECT_TRUE(IsIgnoringKeyMutations(kKey));
-  observer->KeyDeleted(KeyToUint8Vector(kKey), absl::nullopt, kRemoteSource);
+  observer->KeyDeleted(KeyToUint8Vector(kKey), std::nullopt, kRemoteSource);
   EXPECT_TRUE(IsIgnoringKeyMutations(kKey));
   EXPECT_EQ(kValue, cached_area_->GetItem(kKey));
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
-                       absl::nullopt, source_);
+                       std::nullopt, source_);
   EXPECT_FALSE(IsIgnoringKeyMutations(kKey));
 
   // RemoveItem
@@ -605,7 +622,7 @@ TEST_F(CachedStorageAreaTest, KeyMutationsAreIgnoredUntilCompletion) {
   EXPECT_TRUE(IsIgnoringKeyMutations(kKey));
   mock_storage_area_.Flush();
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
-                       absl::nullopt, source_);
+                       std::nullopt, source_);
   observer->KeyDeleted(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
                        source_);
   EXPECT_FALSE(IsIgnoringKeyMutations(kKey));
@@ -625,14 +642,14 @@ TEST_F(CachedStorageAreaTest, ChangeEvents) {
   cached_area_->SetItem(kKey, kValue2, source_area_);
   cached_area_->RemoveItem(kKey, source_area_);
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
-                       absl::nullopt, source_);
+                       std::nullopt, source_);
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue2),
                        ValueToUint8Vector(kValue), source_);
   observer->KeyDeleted(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue2),
                        source_);
 
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
-                       absl::nullopt, kRemoteSource);
+                       std::nullopt, kRemoteSource);
   observer->AllDeleted(/*was_nonempty=*/true, kRemoteSource);
 
   // Source area should have ignored all but the last two events.
@@ -699,7 +716,7 @@ TEST_F(CachedStorageAreaTest, RevertOnChangeFailedWithSubsequentChanges) {
   observer->KeyChangeFailed(KeyToUint8Vector(kKey), source_);
   EXPECT_EQ(kValue2, cached_area_->GetItem(kKey));
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue2),
-                       absl::nullopt, source_);
+                       std::nullopt, source_);
   EXPECT_EQ(kValue2, cached_area_->GetItem(kKey));
 }
 
@@ -729,7 +746,7 @@ TEST_F(CachedStorageAreaTest, RevertOnChangeFailedWithNonLocalChanges) {
   EXPECT_EQ(kValue, cached_area_->GetItem(kKey));
   // Should be ignored.
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue2),
-                       absl::nullopt, kRemoteSource);
+                       std::nullopt, kRemoteSource);
   EXPECT_EQ(kValue, cached_area_->GetItem(kKey));
   // Now that we fail the pending |SetItem()|, the above remote change should be
   // reflected.
@@ -748,7 +765,7 @@ TEST_F(CachedStorageAreaTest, RevertOnChangeFailedAfterNonLocalClear) {
   cached_area_->SetItem(kKey, kValue2, source_area_);
   EXPECT_EQ(kValue2, cached_area_->GetItem(kKey));
   observer->KeyChanged(KeyToUint8Vector(kKey), ValueToUint8Vector(kValue),
-                       absl::nullopt, source_);
+                       std::nullopt, source_);
   // We still have |kValue2| cached since its mutation is still pending.
   EXPECT_EQ(kValue2, cached_area_->GetItem(kKey));
 
@@ -887,16 +904,14 @@ TEST_F(CachedStorageAreaTest, RecoveryWhenNoLocalDOMWindowPresent) {
       CachedStorageAreaTest::kPageUrl, local_dom_window);
   StorageController::DomStorageConnection connection;
   std::ignore = connection.dom_storage_remote.BindNewPipeAndPassReceiver();
-  auto task_runner = scheduler::GetSingleThreadTaskRunnerForTesting();
-  StorageController controller(std::move(connection), task_runner, 100);
-  auto* sessionStorage =
-      MakeGarbageCollected<StorageNamespace>(&controller, "foo");
+  StorageController controller(std::move(connection), 100);
+  auto* sessionStorage = MakeGarbageCollected<StorageNamespace>(
+      *local_dom_window->GetFrame()->GetPage(), &controller, "foo");
 
   // When no local DOM window is present this shouldn't fatal, just not bind
   auto cached_area = base::MakeRefCounted<CachedStorageArea>(
       CachedStorageArea::AreaType::kSessionStorage,
-      CachedStorageAreaTest::kRootStorageKey, nullptr, task_runner,
-      sessionStorage,
+      CachedStorageAreaTest::kRootStorageKey, nullptr, sessionStorage,
       /*is_session_storage_for_prerendering=*/false);
 
   // If we add an active source then re-bind it should work

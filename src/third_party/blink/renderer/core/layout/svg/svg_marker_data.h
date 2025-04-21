@@ -53,7 +53,6 @@ struct MarkerPosition {
         return marker_end;
     }
     NOTREACHED();
-    return nullptr;
   }
 
   SVGMarkerType type;
@@ -85,7 +84,7 @@ class SVGMarkerDataBuilder : private SVGPathConsumer {
   // SVGPathConsumer
   void EmitSegment(const PathSegmentData&) override;
 
-  static void UpdateFromPathElement(void* info, const PathElement*);
+  static void UpdateFromPathElement(void* info, const PathElement&);
 
   enum AngleType {
     kBisecting,

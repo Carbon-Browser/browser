@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include <utility>
 #include <vector>
+
+#include "base/not_fatal_until.h"
 
 namespace viz {
 
@@ -26,7 +28,7 @@ DisplayResourceProviderNull::DeleteAndReturnUnusedResourcesToChildImpl(
 
   for (ResourceId local_id : unused) {
     auto it = resources_.find(local_id);
-    DCHECK(it != resources_.end());
+    CHECK(it != resources_.end(), base::NotFatalUntil::M130);
     ChildResource& resource = it->second;
 
     ResourceId child_id = resource.transferable.id;

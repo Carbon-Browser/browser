@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,14 @@ class SimpleURLLoader;
 }
 
 namespace policy {
+
+enum class EnterpriseUserInfoFetchStatus {
+  kSuccess,
+  kFailedWithNetworkError,
+  kCantParseJsonInResponse,
+  kResponseIsNotDict,
+  kMaxValue = kResponseIsNotDict
+};
 
 // Class that makes a UserInfo request, parses the response, and notifies
 // a provided Delegate when the request is complete.

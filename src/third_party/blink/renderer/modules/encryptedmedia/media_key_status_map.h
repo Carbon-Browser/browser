@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sync_iterator_media_key_status_map.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_piece.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 
@@ -15,6 +16,7 @@ namespace blink {
 
 class ExceptionState;
 class ScriptState;
+class V8UnionMediaKeyStatusOrUndefined;
 class WebData;
 
 // Represents a read-only map (to JavaScript) of key IDs and their current
@@ -22,10 +24,7 @@ class WebData;
 // is a keychange event, iteration order and completeness is not guaranteed
 // if the event loop runs.
 class MediaKeyStatusMap final : public ScriptWrappable,
-                                public PairIterable<Member<V8BufferSource>,
-                                                    V8BufferSource,
-                                                    String,
-                                                    IDLString> {
+                                public PairSyncIterable<MediaKeyStatusMap> {
   DEFINE_WRAPPERTYPEINFO();
 
  private:
@@ -41,19 +40,20 @@ class MediaKeyStatusMap final : public ScriptWrappable,
   MediaKeyStatusMap() = default;
 
   void Clear();
-  void AddEntry(WebData key_id, const String& status);
+  void AddEntry(WebData key_id, const V8MediaKeyStatus&);
   const MapEntry& at(uint32_t) const;
 
   // IDL attributes / methods
   uint32_t size() const { return entries_.size(); }
   bool has(const V8BufferSource* key_id);
-  ScriptValue get(ScriptState*, const V8BufferSource* key_id);
+  V8UnionMediaKeyStatusOrUndefined* get(const V8BufferSource* key_id);
 
   void Trace(Visitor*) const override;
 
  private:
-  // PairIterable<> implementation.
-  IterationSource* StartIteration(ScriptState*, ExceptionState&) override;
+  // PairSyncIterable<> implementation.
+  IterationSource* CreateIterationSource(ScriptState*,
+                                         ExceptionState&) override;
 
   uint32_t IndexOf(const DOMArrayPiece& key_id) const;
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ TEST_F(LinkElementLoadingTest,
   css_resource.Start();
 
   // Remove a link element from a document
-  auto* link = To<HTMLLinkElement>(GetDocument().getElementById("link"));
+  auto* link =
+      To<HTMLLinkElement>(GetDocument().getElementById(AtomicString("link")));
   EXPECT_NE(nullptr, link);
   link->remove();
 

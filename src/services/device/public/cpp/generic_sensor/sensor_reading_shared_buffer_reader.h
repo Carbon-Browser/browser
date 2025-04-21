@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,9 @@
 namespace device {
 
 union SensorReading;
-struct SensorReadingSharedBuffer;
+template <class T>
+struct SensorReadingSharedBufferImpl;
+using SensorReadingSharedBuffer = SensorReadingSharedBufferImpl<void>;
 
 class SensorReadingSharedBufferReader {
  public:
@@ -38,9 +40,6 @@ class SensorReadingSharedBufferReader {
  private:
   explicit SensorReadingSharedBufferReader(
       base::ReadOnlySharedMemoryMapping mapping);
-
-  static bool TryReadFromBuffer(const SensorReadingSharedBuffer* buffer,
-                                SensorReading* result);
 
   base::ReadOnlySharedMemoryMapping mapping_;
 };

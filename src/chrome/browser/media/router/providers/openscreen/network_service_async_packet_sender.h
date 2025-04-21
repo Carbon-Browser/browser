@@ -1,12 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_ROUTER_PROVIDERS_OPENSCREEN_NETWORK_SERVICE_ASYNC_PACKET_SENDER_H_
 #define CHROME_BROWSER_MEDIA_ROUTER_PROVIDERS_OPENSCREEN_NETWORK_SERVICE_ASYNC_PACKET_SENDER_H_
 
-#include "base/callback.h"
-
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/ip_endpoint.mojom.h"
@@ -17,7 +16,7 @@ namespace media_router {
 
 class AsyncPacketSender {
  public:
-  virtual ~AsyncPacketSender() {}
+  virtual ~AsyncPacketSender() = default;
 
   virtual net::Error SendTo(const net::IPEndPoint& dest_addr,
                             base::span<const uint8_t> data,

@@ -11,6 +11,6 @@ UNKNOWN focusable has_input_focus
 ++++++++STATIC_TEXT label='read '
 ++++++++++UNKNOWN label='read '
 ++++++LINK focusable label='read' actions='{DEFAULT}'
-++++++++IMAGE actions='{DEFAULT}'
+++++++++IMAGE
 ++++++++STATIC_TEXT label='read'
 ++++++++++UNKNOWN label='read'

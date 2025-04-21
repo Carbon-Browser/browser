@@ -1,13 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://wicg.github.io/compute-pressure/#dom-pressurerecord
+// https://w3c.github.io/compute-pressure/#dom-pressurestate
+enum PressureState {
+  "nominal",
+  "fair",
+  "serious",
+  "critical"
+};
+
+// https://w3c.github.io/compute-pressure/#the-pressurerecord-interface
 [
-    Exposed=Window,
+    Exposed=(DedicatedWorker,SharedWorker,Window),
+    RuntimeEnabled=ComputePressure,
     SecureContext
-] dictionary PressureRecord {
-   // TODO(crbug.com/1308316): Remove cpuUtilization when switching
-   // to new API.
-   double cpuUtilization;
+] interface PressureRecord {
+  readonly attribute PressureSource source;
+  readonly attribute PressureState state;
+  readonly attribute DOMHighResTimeStamp time;
+  [CallWith=ScriptState] object toJSON();
 };

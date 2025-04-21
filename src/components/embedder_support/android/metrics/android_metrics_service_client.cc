@@ -1,43 +1,47 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/embedder_support/android/metrics/android_metrics_service_client.h"
 
 #include <jni.h>
+
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
+#include "base/barrier_closure.h"
 #include "base/base_paths_android.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
+#include "base/hash/hash.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/persistent_histogram_allocator.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/path_service.h"
 #include "base/process/process_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "cc/base/switches.h"
 #include "components/embedder_support/android/metrics/android_metrics_log_uploader.h"
-#include "components/embedder_support/android/metrics/jni/AndroidMetricsServiceClient_jni.h"
 #include "components/metrics/android_metrics_provider.h"
-#include "components/metrics/call_stack_profile_metrics_provider.h"
+#include "components/metrics/call_stacks/call_stack_profile_metrics_provider.h"
 #include "components/metrics/content/accessibility_metrics_provider.h"
 #include "components/metrics/content/content_stability_metrics_provider.h"
 #include "components/metrics/content/extensions_helper.h"
 #include "components/metrics/content/gpu_metrics_provider.h"
+#include "components/metrics/content/metrics_services_web_contents_observer.h"
 #include "components/metrics/content/subprocess_metrics_provider.h"
 #include "components/metrics/cpu_metrics_provider.h"
 #include "components/metrics/drive_metrics_provider.h"
+#include "components/metrics/dwa/dwa_service.h"
 #include "components/metrics/entropy_state_provider.h"
 #include "components/metrics/file_metrics_provider.h"
-#include "components/metrics/form_factor_metrics_provider.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_state_manager.h"
@@ -45,8 +49,10 @@
 #include "components/metrics/net/net_metrics_log_uploader.h"
 #include "components/metrics/net/network_metrics_provider.h"
 #include "components/metrics/persistent_histograms.h"
+#include "components/metrics/persistent_synthetic_trial_observer.h"
 #include "components/metrics/sampling_metrics_provider.h"
 #include "components/metrics/stability_metrics_helper.h"
+#include "components/metrics/ui/form_factor_metrics_provider.h"
 #include "components/metrics/ui/screen_info_metrics_provider.h"
 #include "components/metrics/version_utils.h"
 #include "components/prefs/pref_service.h"
@@ -54,9 +60,11 @@
 #include "components/ukm/ukm_service.h"
 #include "content/public/browser/histogram_fetcher.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
+#include "content/public/browser/web_contents.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/embedder_support/android/metrics/jni/AndroidMetricsServiceClient_jni.h"
 
 namespace metrics {
 
@@ -107,95 +115,62 @@ metrics::FileMetricsProvider::FilterAction FilterBrowserMetricsFiles(
   return metrics::FileMetricsProvider::FILTER_PROCESS_FILE;
 }
 
-// Constructs the name of a persistent metrics file from a directory and metrics
-// name, and either registers that file as associated with a previous run if
-// metrics reporting is enabled, or deletes it if not.
-void RegisterOrRemovePreviousRunMetricsFile(
-    bool metrics_reporting_enabled,
-    const base::FilePath& dir,
-    base::StringPiece metrics_name,
-    metrics::FileMetricsProvider::SourceAssociation association,
-    metrics::FileMetricsProvider* file_metrics_provider) {
-  base::FilePath metrics_file =
-      base::GlobalHistogramAllocator::ConstructFilePath(dir, metrics_name);
-
-  if (metrics_reporting_enabled) {
-    // Enable reading any existing saved metrics.
-    file_metrics_provider->RegisterSource(metrics::FileMetricsProvider::Params(
-        metrics_file,
-        metrics::FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_FILE,
-        association, metrics_name));
-  } else {
-    // When metrics reporting is not enabled, any existing file should be
-    // deleted in order to preserve user privacy.
-    base::ThreadPool::PostTask(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
-         base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
-        base::GetDeleteFileCallback(metrics_file));
-  }
-}
-
 bool IsSamplesCounterEnabled() {
   return base::GetFieldTrialParamByFeatureAsBool(
-      base::kPersistentHistogramsFeature, "prev_run_metrics_count_only", false);
+      kPersistentHistogramsFeature, "prev_run_metrics_count_only", false);
 }
 
-// TODO(crbug.com/1152072): Unify this implementation with the one in
+// TODO(crbug.com/40158523): Unify this implementation with the one in
 // ChromeMetricsServiceClient.
 std::unique_ptr<metrics::FileMetricsProvider> CreateFileMetricsProvider(
     PrefService* pref_service,
     bool metrics_reporting_enabled) {
+  using metrics::FileMetricsProvider;
+
   // Create an object to monitor files of metrics and include them in reports.
-  std::unique_ptr<metrics::FileMetricsProvider> file_metrics_provider =
-      std::make_unique<metrics::FileMetricsProvider>(pref_service);
+  std::unique_ptr<FileMetricsProvider> file_metrics_provider =
+      std::make_unique<FileMetricsProvider>(pref_service);
 
   base::FilePath user_data_dir;
   base::PathService::Get(base::DIR_ANDROID_APP_DATA, &user_data_dir);
-  // Register the Crashpad metrics files.
-  // Register the data from the previous run if crashpad_handler didn't exit
-  // cleanly.
-  RegisterOrRemovePreviousRunMetricsFile(
-      metrics_reporting_enabled, user_data_dir, kCrashpadHistogramAllocatorName,
-      metrics::FileMetricsProvider::ASSOCIATE_INTERNAL_PROFILE_OR_PREVIOUS_RUN,
-      file_metrics_provider.get());
 
-  base::FilePath browser_metrics_upload_dir =
-      user_data_dir.AppendASCII(kBrowserMetricsName);
-  if (metrics_reporting_enabled) {
-    metrics::FileMetricsProvider::Params browser_metrics_params(
-        browser_metrics_upload_dir,
-        metrics::FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_DIR,
-        IsSamplesCounterEnabled()
-            ? metrics::FileMetricsProvider::
-                  ASSOCIATE_INTERNAL_PROFILE_SAMPLES_COUNTER
-            : metrics::FileMetricsProvider::ASSOCIATE_INTERNAL_PROFILE,
-        kBrowserMetricsName);
+  FileMetricsProvider::Params browser_metrics_params(
+      user_data_dir.AppendASCII(kBrowserMetricsName),
+      FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_DIR,
+      IsSamplesCounterEnabled()
+          ? FileMetricsProvider::ASSOCIATE_INTERNAL_PROFILE_SAMPLES_COUNTER
+          : FileMetricsProvider::ASSOCIATE_INTERNAL_PROFILE,
+      kBrowserMetricsName);
+  browser_metrics_params.max_dir_kib = kMaxHistogramStorageKiB;
+  browser_metrics_params.filter =
+      base::BindRepeating(FilterBrowserMetricsFiles);
+  file_metrics_provider->RegisterSource(browser_metrics_params,
+                                        metrics_reporting_enabled);
 
-    browser_metrics_params.max_dir_kib = kMaxHistogramStorageKiB;
-    browser_metrics_params.filter =
-        base::BindRepeating(FilterBrowserMetricsFiles);
-    file_metrics_provider->RegisterSource(browser_metrics_params);
+  // Register the Crashpad metrics files:
+  // 1. Data from the previous run if crashpad_handler didn't exit cleanly.
+  base::FilePath crashpad_metrics_file =
+      base::GlobalHistogramAllocator::ConstructFilePath(
+          user_data_dir, kCrashpadHistogramAllocatorName);
+  file_metrics_provider->RegisterSource(
+      FileMetricsProvider::Params(
+          crashpad_metrics_file,
+          FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_FILE,
+          FileMetricsProvider::ASSOCIATE_INTERNAL_PROFILE_OR_PREVIOUS_RUN,
+          kCrashpadHistogramAllocatorName),
+      metrics_reporting_enabled);
 
-    base::FilePath crashpad_active_path =
-        base::GlobalHistogramAllocator::ConstructFilePathForActiveFile(
-            user_data_dir, kCrashpadHistogramAllocatorName);
-    // Register data that will be populated for the current run. "Active"
-    // files need an empty "prefs_key" because they update the file itself.
-    file_metrics_provider->RegisterSource(metrics::FileMetricsProvider::Params(
-        crashpad_active_path,
-        metrics::FileMetricsProvider::SOURCE_HISTOGRAMS_ACTIVE_FILE,
-        metrics::FileMetricsProvider::ASSOCIATE_CURRENT_RUN));
-  } else {
-    // When metrics reporting is not enabled, any existing files should be
-    // deleted in order to preserve user privacy.
-    base::ThreadPool::PostTask(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
-         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::GetDeletePathRecursivelyCallback(
-            std::move(browser_metrics_upload_dir)));
-  }
+  // 2. Data from the current run. Note: "Active" files don't set "prefs_key"
+  // because they update the file itself.
+  base::FilePath crashpad_active_path =
+      base::GlobalHistogramAllocator::ConstructFilePathForActiveFile(
+          user_data_dir, kCrashpadHistogramAllocatorName);
+  file_metrics_provider->RegisterSource(
+      FileMetricsProvider::Params(
+          crashpad_active_path,
+          FileMetricsProvider::SOURCE_HISTOGRAMS_ACTIVE_FILE,
+          FileMetricsProvider::ASSOCIATE_CURRENT_RUN),
+      metrics_reporting_enabled);
 
   return file_metrics_provider;
 }
@@ -233,6 +208,7 @@ void AndroidMetricsServiceClient::RegisterPrefs(PrefRegistrySimple* registry) {
   metrics::FileMetricsProvider::RegisterPrefs(registry);
   metrics::StabilityMetricsHelper::RegisterPrefs(registry);
   ukm::UkmService::RegisterPrefs(registry);
+  metrics::dwa::DwaService::RegisterPrefs(registry);
 }
 
 void AndroidMetricsServiceClient::Initialize(PrefService* pref_service) {
@@ -241,33 +217,31 @@ void AndroidMetricsServiceClient::Initialize(PrefService* pref_service) {
 
   pref_service_ = pref_service;
 
-  // TODO(crbug/1245347): If and when the Extended Variations Safe Mode
-  // experiment is enabled on Android WebLayer, pass the channel to the
-  // MetricsStateManager.
-  //
-  // Pass an empty file path since the path is for the Extended Variations Safe
-  // Mode experiment and Android embedders are excluded from this experiment.
   metrics_state_manager_ = MetricsStateManager::Create(
-      pref_service_, this, std::wstring(), base::FilePath());
+      pref_service_, this,
+      // Pass an empty file path since the path is for Extended Variations Safe
+      // Mode, which is N/A to Android embedders.
+      std::wstring(), base::FilePath(), StartupVisibility::kUnknown,
+      {
+          // The low entropy provider is used instead of the default provider
+          // because the default provider needs to know if UMA is enabled and
+          // querying GMS to determine whether UMA is enabled is slow.
+          // The low entropy provider has fewer unique experiment combinations,
+          // which is better for privacy, but can have crosstalk issues between
+          // experiments.
+          .default_entropy_provider_type = metrics::EntropyProviderType::kLow,
+          .force_benchmarking_mode =
+              base::CommandLine::ForCurrentProcess()->HasSwitch(
+                  switches::kEnableGpuBenchmarking),
+      });
 
-  // Creates the FieldTrialList using the low entropy provider. The low entropy
-  // provider is used instead of the default provider because the default
-  // provider needs to know if UMA is enabled and querying GMS to determine
-  // whether UMA is enabled is slow.
-  //
-  // Both entropy providers guarantee permanent consistency, which is the main
-  // requirement. The difference is that the low entropy provider has fewer
-  // unique experiment combinations. This is better for privacy (since
-  // experiment state doesn't identify users), but also means fewer combinations
-  // are tested in the wild.
-  metrics_state_manager_->InstantiateFieldTrialList(
-      cc::switches::kEnableGpuBenchmarking, EntropyProviderType::kLow);
+  metrics_state_manager_->InstantiateFieldTrialList();
 
   init_finished_ = true;
 
   synthetic_trial_registry_ =
-      std::make_unique<variations::SyntheticTrialRegistry>(
-          IsExternalExperimentAllowlistEnabled());
+      std::make_unique<variations::SyntheticTrialRegistry>();
+  synthetic_trial_observation_.Observe(synthetic_trial_registry_.get());
 
   // Create the MetricsService immediately so that other code can make use of
   // it. Chrome always creates the MetricsService as well.
@@ -307,7 +281,6 @@ void AndroidMetricsServiceClient::MaybeStartMetrics() {
     // Register for notifications so we can detect when the user or app are
     // interacting with the embedder. We use these as signals to wake up the
     // MetricsService.
-    RegisterForNotifications();
     OnMetricsStart();
 
     if (IsReportingEnabled()) {
@@ -317,6 +290,7 @@ void AndroidMetricsServiceClient::MaybeStartMetrics() {
     }
 
     CreateUkmService();
+    CreateDwaService();
   } else {
     // Even though reporting is not enabled, CreateFileMetricsProvider() is
     // called. This ensures on disk state is removed.
@@ -325,12 +299,13 @@ void AndroidMetricsServiceClient::MaybeStartMetrics() {
     OnMetricsNotStarted();
     pref_service_->ClearPref(prefs::kMetricsClientID);
     pref_service_->ClearPref(prefs::kMetricsProvisionalClientID);
+    pref_service_->ClearPref(prefs::kMetricsLogRecordId);
   }
 }
 
 void AndroidMetricsServiceClient::RegisterMetricsProvidersAndInitState() {
-  metrics_service_->RegisterMetricsProvider(
-      std::make_unique<metrics::SubprocessMetricsProvider>());
+  CHECK(metrics::SubprocessMetricsProvider::GetInstance());
+
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<NetworkMetricsProvider>(
           content::CreateNetworkConnectionTrackerAsyncGetter()));
@@ -394,17 +369,6 @@ void AndroidMetricsServiceClient::CreateUkmService() {
   UpdateUkmService();
 }
 
-void AndroidMetricsServiceClient::RegisterForNotifications() {
-  registrar_.Add(this, content::NOTIFICATION_LOAD_START,
-                 content::NotificationService::AllSources());
-  registrar_.Add(this, content::NOTIFICATION_LOAD_STOP,
-                 content::NotificationService::AllSources());
-  registrar_.Add(this, content::NOTIFICATION_RENDERER_PROCESS_CLOSED,
-                 content::NotificationService::AllSources());
-  registrar_.Add(this, content::NOTIFICATION_RENDER_WIDGET_HOST_HANG,
-                 content::NotificationService::AllSources());
-}
-
 void AndroidMetricsServiceClient::SetHaveMetricsConsent(bool user_consent,
                                                         bool app_consent) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -446,12 +410,37 @@ void AndroidMetricsServiceClient::UpdateUkmService() {
   bool is_incognito = IsOffTheRecordSessionActive();
 
   if (consent_or_flag && allowed && !is_incognito) {
-    ukm_service_->EnableRecording(/*extensions=*/false);
+    ukm_service_->EnableRecording();
     ukm_service_->EnableReporting();
   } else {
     ukm_service_->DisableRecording();
     ukm_service_->DisableReporting();
   }
+}
+
+void AndroidMetricsServiceClient::UpdateDwaService() {
+  if (!dwa_service_) {
+    return;
+  }
+  // DWA is tied to UKM consent.
+  bool consent_or_flag = IsConsentGiven() || IsMetricsReportingForceEnabled();
+  bool allowed = IsDwaAllowedForAllProfiles();
+  bool is_incognito = IsOffTheRecordSessionActive();
+
+  if (consent_or_flag && allowed && !is_incognito) {
+    metrics::dwa::DwaRecorder::Get()->EnableRecording();
+    dwa_service_->EnableReporting();
+  } else {
+    metrics::dwa::DwaRecorder::Get()->DisableRecording();
+    metrics::dwa::DwaRecorder::Get()->Purge();
+    dwa_service_->DisableReporting();
+  }
+}
+
+void AndroidMetricsServiceClient::CreateDwaService() {
+  dwa_service_ =
+        std::make_unique<metrics::dwa::DwaService>(this, pref_service_);
+  UpdateDwaService();
 }
 
 bool AndroidMetricsServiceClient::IsConsentDetermined() const {
@@ -524,10 +513,29 @@ std::string AndroidMetricsServiceClient::GetVersionString() {
   return metrics::GetVersionString();
 }
 
+void AndroidMetricsServiceClient::MergeSubprocessHistograms() {
+  // TODO(crbug.com/40213327): Move this to a shared place to not have to
+  // duplicate the code across different `MetricsServiceClient`s.
+
+  // Synchronously fetch subprocess histograms that live in shared memory.
+  base::StatisticsRecorder::ImportProvidedHistogramsSync();
+
+  // Asynchronously fetch subprocess histograms that do not live in shared
+  // memory (e.g., they were emitted before the shared memory was set up).
+  content::FetchHistogramsAsynchronously(
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      /*callback=*/base::DoNothing(),
+      /*wait_time=*/base::Milliseconds(kMaxHistogramGatheringWaitDuration));
+}
+
 void AndroidMetricsServiceClient::CollectFinalMetricsForLog(
     base::OnceClosure done_callback) {
+  auto barrier_closure =
+      base::BarrierClosure(/*num_closures=*/2, std::move(done_callback));
+
   // Merge histograms from metrics providers into StatisticsRecorder.
-  base::StatisticsRecorder::ImportProvidedHistograms();
+  base::StatisticsRecorder::ImportProvidedHistograms(
+      /*async=*/true, /*done_callback=*/barrier_closure);
 
   base::TimeDelta timeout =
       base::Milliseconds(kMaxHistogramGatheringWaitDuration);
@@ -536,8 +544,8 @@ void AndroidMetricsServiceClient::CollectFinalMetricsForLog(
   // child processes. |timeout| specifies how long to wait before absolutely
   // calling us back on the task.
   content::FetchHistogramsAsynchronously(
-      base::ThreadTaskRunnerHandle::Get(),
-      CreateChainedClosure(std::move(done_callback),
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      CreateChainedClosure(barrier_closure,
                            on_final_metrics_collected_listener_),
       timeout);
 
@@ -548,7 +556,7 @@ void AndroidMetricsServiceClient::CollectFinalMetricsForLog(
 std::unique_ptr<MetricsLogUploader> AndroidMetricsServiceClient::CreateUploader(
     const GURL& server_url,
     const GURL& insecure_server_url,
-    base::StringPiece mime_type,
+    std::string_view mime_type,
     MetricsLogUploader::MetricServiceType service_type,
     const MetricsLogUploader::UploadCallback& on_upload_complete) {
   if (service_type == metrics::MetricsLogUploader::UKM) {
@@ -587,27 +595,46 @@ bool AndroidMetricsServiceClient::IsUkmAllowedForAllProfiles() {
   return false;
 }
 
+bool AndroidMetricsServiceClient::IsDwaAllowedForAllProfiles() {
+  return false;
+}
+
 bool AndroidMetricsServiceClient::ShouldStartUpFastForTesting() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return fast_startup_for_testing_;
 }
 
-void AndroidMetricsServiceClient::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  switch (type) {
-    case content::NOTIFICATION_LOAD_STOP:
-    case content::NOTIFICATION_LOAD_START:
-    case content::NOTIFICATION_RENDERER_PROCESS_CLOSED:
-    case content::NOTIFICATION_RENDER_WIDGET_HOST_HANG:
-      metrics_service_->OnApplicationNotIdle();
-      break;
-    default:
-      NOTREACHED();
+void AndroidMetricsServiceClient::OnRenderProcessHostCreated(
+    content::RenderProcessHost* host) {
+  if (!host_observation_.IsObservingSource(host)) {
+    host_observation_.AddObservation(host);
   }
+}
+
+void AndroidMetricsServiceClient::RenderProcessExited(
+    content::RenderProcessHost* host,
+    const content::ChildProcessTerminationInfo& info) {
+  host_observation_.RemoveObservation(host);
+
+  if (did_start_metrics_) {
+    metrics_service_->OnApplicationNotIdle();
+  }
+}
+
+void AndroidMetricsServiceClient::OnWebContentsCreated(
+    content::WebContents* web_contents) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  metrics::MetricsServicesWebContentsObserver::CreateForWebContents(
+      web_contents,
+      /*OnDidStartLoadingCb=*/
+      base::BindRepeating(&AndroidMetricsServiceClient::OnDidStartLoading,
+                          weak_ptr_factory_.GetWeakPtr()),
+      /*OnDidStopLoadingCb=*/
+      base::BindRepeating(&AndroidMetricsServiceClient::OnApplicationNotIdle,
+                          weak_ptr_factory_.GetWeakPtr()),
+      /*OnRendererUnresponsiveCb=*/
+      base::BindRepeating(&AndroidMetricsServiceClient::OnApplicationNotIdle,
+                          weak_ptr_factory_.GetWeakPtr()));
 }
 
 void AndroidMetricsServiceClient::SetCollectFinalMetricsForLogClosureForTesting(
@@ -663,7 +690,7 @@ std::string AndroidMetricsServiceClient::GetAppPackageName() {
   base::android::ScopedJavaLocalRef<jstring> j_app_name =
       Java_AndroidMetricsServiceClient_getAppPackageName(env);
   if (j_app_name)
-    return ConvertJavaStringToUTF8(env, j_app_name);
+    return base::android::ConvertJavaStringToUTF8(env, j_app_name);
   return std::string();
 }
 
@@ -674,6 +701,26 @@ bool AndroidMetricsServiceClient::IsOffTheRecordSessionActive() {
 scoped_refptr<network::SharedURLLoaderFactory>
 AndroidMetricsServiceClient::GetURLLoaderFactory() {
   return nullptr;
+}
+
+void AndroidMetricsServiceClient::OnApplicationNotIdle() {
+  auto* metrics_service = GetMetricsServiceIfStarted();
+  if (!metrics_service) {
+    return;
+  }
+
+  metrics_service->OnApplicationNotIdle();
+}
+
+void AndroidMetricsServiceClient::OnDidStartLoading() {
+  OnApplicationNotIdle();
+
+  auto* metrics_service = GetMetricsService();
+  if (!metrics_service) {
+    return;
+  }
+
+  metrics_service->OnPageLoadStarted();
 }
 
 }  // namespace metrics

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <string>
 
-namespace chrome {
+#include "url/gurl.h"
+
+class PrefService;
 
 // Returns true if the given browser command is allowed in app mode.
 bool IsCommandAllowedInAppMode(int command_id, bool is_popup);
@@ -23,6 +25,8 @@ bool IsRunningInForcedAppMode();
 // with the provided id.
 bool IsRunningInForcedAppModeForApp(const std::string& app_id);
 
-}  // namespace chrome
+// Returns true when the given `origin` can access browser permissions available
+// to the web kiosk app.
+bool IsWebKioskOriginAllowed(const PrefService* prefs, const GURL& origin);
 
 #endif  // CHROME_BROWSER_APP_MODE_APP_MODE_UTILS_H_

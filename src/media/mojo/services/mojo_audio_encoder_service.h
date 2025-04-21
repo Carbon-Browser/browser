@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/weak_ptr.h"
 #include "media/base/audio_encoder.h"
@@ -16,7 +17,6 @@
 #include "media/mojo/services/media_mojo_export.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -46,7 +46,7 @@ class MEDIA_MOJO_EXPORT MojoAudioEncoderService final
       base::OnceCallback<void(const media::EncoderStatus&)>;
   void OnDone(MojoDoneCallback callback, EncoderStatus error);
   void OnOutput(EncodedAudioBuffer output,
-                absl::optional<media::AudioEncoder::CodecDescription> desc);
+                std::optional<media::AudioEncoder::CodecDescription> desc);
 
   std::unique_ptr<media::AudioEncoder> encoder_;
   mojo::AssociatedRemote<mojom::AudioEncoderClient> client_;

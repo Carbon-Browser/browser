@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,20 +121,6 @@ __gCrWeb.common.trim = function(str) {
 };
 
 /**
- * Extracts the webpage URL from the given URL by removing the query
- * and the reference (aka fragment) from the URL.
- * @param {string} url Web page URL.
- * @return {string} Web page URL with query and reference removed.
- */
-__gCrWeb.common.removeQueryAndReferenceFromURL = function(url) {
-  var parsed = new URL(url);
-  // For some protocols (eg. data:, javascript:) URL.origin is "null" so
-  // URL.protocol is used instead.
-  return (parsed.origin !== 'null' ? parsed.origin : parsed.protocol) +
-      parsed.pathname;
-};
-
-/**
  * Posts |message| to the webkit message handler specified by |handlerName|.
  * DEPRECATED: This function will be removed soon. Instead, use the
  * implementation at //ios/web/public/js_messaging/resources/utils.ts
@@ -143,11 +129,15 @@ __gCrWeb.common.removeQueryAndReferenceFromURL = function(url) {
  * @param {Object} message The message to post to the handler.
  */
 __gCrWeb.common.sendWebKitMessage = function(handlerName, message) {
-  // A web page can override |window.webkit| with any value. Deleting the
-  // object ensures that original and working implementation of
-  // window.webkit is restored.
-  var oldWebkit = window.webkit;
-  delete window['webkit'];
-  window.webkit.messageHandlers[handlerName].postMessage(message);
-  window.webkit = oldWebkit;
+  try {
+    // A web page can override `window.webkit` with any value. Deleting the
+    // object ensures that original and working implementation of
+    // window.webkit is restored.
+    var oldWebkit = window.webkit;
+    delete window['webkit'];
+    window.webkit.messageHandlers[handlerName].postMessage(message);
+    window.webkit = oldWebkit;
+  } catch (err) {
+    // TODO(crbug.com/40269960): Report this fatal error
+  }
 };

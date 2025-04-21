@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -59,10 +59,6 @@ class SearchProvider : public BaseSearchProvider,
   SearchProvider(const SearchProvider&) = delete;
   SearchProvider& operator=(const SearchProvider&) = delete;
 
-  // Extracts the suggest response metadata which SearchProvider previously
-  // stored for |match|.
-  static std::string GetSuggestMetadata(const AutocompleteMatch& match);
-
   // Answers prefetch handling - register displayed answers. Takes the top
   // match for Autocomplete and registers the contained answer data, if any.
   void RegisterDisplayedAnswers(const AutocompleteResult& result);
@@ -76,9 +72,6 @@ class SearchProvider : public BaseSearchProvider,
       bool allow_exact_keyword_match,
       bool prefer_keyword);
 
-  // AutocompleteProvider:
-  void ResetSession() override;
-
   // The verbatim score for an input which is not a URL.
   static const int kNonURLVerbatimRelevance = 1300;
 
@@ -88,7 +81,6 @@ class SearchProvider : public BaseSearchProvider,
  private:
   friend class AutocompleteProviderTest;
   friend class BaseSearchProviderTest;
-  FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, CanSendRequestWithURL);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest,
                            DontInlineAutocompleteAsynchronously);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, NavigationInline);
@@ -102,6 +94,8 @@ class SearchProvider : public BaseSearchProvider,
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, SuggestQueryUsesToken);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, AnswersCache);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, RemoveExtraAnswers);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, DuplicateCardAnswer);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, CopyAnswerToVerbatim);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, DoesNotProvideOnFocus);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, SendsWarmUpRequestOnFocus);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, DoTrimHttpScheme);
@@ -110,6 +104,16 @@ class SearchProvider : public BaseSearchProvider,
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest,
                            DontTrimHttpsSchemeIfInputHasScheme);
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, DoTrimHttpsScheme);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest, SendRequestWithURL);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest, SendRequestWithoutURL);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest,
+                           SendRequestWithLensInteractionResponse);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest,
+                           LensContextualSearchboxSuggestRequest);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderRequestTest,
+                           LensContextualSearchboxNoSuggestRequest);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderOTRTest, DoesNotSendSuggestRequest);
+  FRIEND_TEST_ALL_PREFIXES(SearchProviderOTRTest, SendSuggestRequestForLens);
 
   // Manages the providers (TemplateURLs) used by SearchProvider. Two providers
   // may be used:
@@ -172,8 +176,6 @@ class SearchProvider : public BaseSearchProvider,
             bool due_to_user_inactivity) override;
 
   // BaseSearchProvider:
-  const TemplateURL* GetTemplateURL(bool is_keyword) const override;
-  const AutocompleteInput GetInput(bool is_keyword) const override;
   bool ShouldAppendExtraParams(
       const SearchSuggestionParser::SuggestResult& result) const override;
   void RecordDeletionResult(bool success) override;
@@ -181,8 +183,17 @@ class SearchProvider : public BaseSearchProvider,
   // TemplateURLServiceObserver:
   void OnTemplateURLServiceChanged() override;
 
+  // Returns the TemplateURL corresponding to the keyword or default
+  // provider based on the value of |is_keyword|.
+  const TemplateURL* GetTemplateURL(bool is_keyword) const;
+
+  // Returns the AutocompleteInput for keyword provider or default provider
+  // based on the value of |is_keyword|.
+  const AutocompleteInput GetInput(bool is_keyword) const;
+
   // Called back from SimpleURLLoader.
   void OnURLLoadComplete(const network::SimpleURLLoader* source,
+                         const int response_code,
                          std::unique_ptr<std::string> response_body);
 
   // Stops the suggest query.
@@ -237,13 +248,6 @@ class SearchProvider : public BaseSearchProvider,
   // Stops |loader| if it's running.  This includes resetting the unique_ptr.
   void CancelLoader(std::unique_ptr<network::SimpleURLLoader>* loader);
 
-  // Returns true when the current query can be sent to at least one suggest
-  // service.  This will be false for example when suggest is disabled.  In
-  // the process, calculates whether the query may contain potentially
-  // private data and stores the result in |is_query_private|; such queries
-  // should not be sent to the default search engine.
-  bool IsQuerySuitableForSuggest(bool* query_is_private) const;
-
   // Returns true if sending the query to a suggest server may leak sensitive
   // information (and hence the suggest request shouldn't be sent).  In
   // particular, if the input type might be a URL, we take extra care so that
@@ -278,6 +282,11 @@ class SearchProvider : public BaseSearchProvider,
   // Remove answer contents from each match in |matches| other than the first
   // that appears.
   static void RemoveExtraAnswers(ACMatches* matches);
+
+  // Add a copy of an answer suggestion presented as a rich card, sans answer
+  // data. This gives an "escape hatch" if, e.g. the user wants the verbatim
+  // query associated with the answer suggestion.
+  static void DuplicateCardAnswer(ACMatches* matches);
 
   // Checks if suggested relevances violate an expected constraint.
   // See UpdateMatches() for the use and explanation of this constraint
@@ -319,10 +328,9 @@ class SearchProvider : public BaseSearchProvider,
       bool is_keyword,
       SearchSuggestionParser::SuggestResults* scored_results);
 
-  // Adds matches for |results| to |map|.
+  // Adds matches for `results` to `map`.
   void AddSuggestResultsToMap(
       const SearchSuggestionParser::SuggestResults& results,
-      const std::string& metadata,
       MatchMap* map);
 
   // Gets the relevance score for the verbatim result.  This value may be
@@ -330,11 +338,6 @@ class SearchProvider : public BaseSearchProvider,
   // |relevance_from_server| is non-null, it will be set to indicate which of
   // those is true.
   int GetVerbatimRelevance(bool* relevance_from_server) const;
-
-  // Whether we should limit suggestions from SearchProvider while in
-  // keyword mode to only keyword suggestions. Used when we suspect that the
-  // user intentionally entered keyword mode and doesn't want the others.
-  bool ShouldCurbDefaultSuggestions() const;
 
   // Calculates the relevance score for the verbatim result from the
   // default search engine.  This version takes into account context:
@@ -359,12 +362,10 @@ class SearchProvider : public BaseSearchProvider,
   // indicates whether the results correspond to the keyword provider or default
   // provider. |use_aggressive_method| says whether this function can use a
   // method that gives high scores (1200+) rather than one that gives lower
-  // scores.  When using the aggressive method, scores may exceed 1300
-  // unless |prevent_search_history_inlining| is set.
+  // scores.  When using the aggressive method, scores may exceed 1300.
   int CalculateRelevanceForHistory(const base::Time& time,
                                    bool is_keyword,
-                                   bool use_aggressive_method,
-                                   bool prevent_search_history_inlining) const;
+                                   bool use_aggressive_method) const;
 
   // Returns an AutocompleteMatch for a navigational suggestion.
   AutocompleteMatch NavigationToMatch(

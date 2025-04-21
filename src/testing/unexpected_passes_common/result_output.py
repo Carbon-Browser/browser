@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Methods related to outputting script results in a human-readable format.
@@ -6,17 +6,21 @@
 Also probably a good example of how to *not* write HTML.
 """
 
-from __future__ import print_function
-
 import collections
 import logging
 import sys
 import tempfile
-import typing
+from typing import Any, Dict, IO, List, Optional, Set, Union
 
+# vpython-provided modules.
 import six
 
+# //testing imports.
 from unexpected_passes_common import data_types
+
+# //third_party/blink/tools imports.
+# Used for posting Buganizer comments.
+from blinkpy.w3c import buganizer
 
 FULL_PASS = 'Fully passed in the following'
 PARTIAL_PASS = 'Partially passed in the following'
@@ -165,7 +169,12 @@ SECTION_UNUSED = ('Unused Expectations (Indicative Of The Configuration No '
 MAX_BUGS_PER_LINE = 5
 MAX_CHARACTERS_PER_CL_LINE = 72
 
-ElementType = typing.Union[typing.Dict[str, typing.Any], typing.List[str], str]
+BUGANIZER_COMMENT = ('The unexpected pass finder removed the last expectation '
+                     'associated with this bug. An associated CL should be '
+                     'landing shortly, after which this bug can be closed once '
+                     'a human confirms there is no more work to be done.')
+
+ElementType = Union[Dict[str, Any], List[str], str]
 # Sample:
 # {
 #   expectation_file: {
@@ -188,13 +197,13 @@ ElementType = typing.Union[typing.Dict[str, typing.Any], typing.List[str], str]
 #     }
 #   }
 # }
-FullOrNeverPassValue = typing.List[str]
-PartialPassValue = typing.Dict[str, typing.List[str]]
-PassValue = typing.Union[FullOrNeverPassValue, PartialPassValue]
-BuilderToPassMap = typing.Dict[str, typing.Dict[str, PassValue]]
-ExpectationToBuilderMap = typing.Dict[str, BuilderToPassMap]
-TestToExpectationMap = typing.Dict[str, ExpectationToBuilderMap]
-ExpectationFileStringDict = typing.Dict[str, TestToExpectationMap]
+FullOrNeverPassValue = List[str]
+PartialPassValue = Dict[str, List[str]]
+PassValue = Union[FullOrNeverPassValue, PartialPassValue]
+BuilderToPassMap = Dict[str, Dict[str, PassValue]]
+ExpectationToBuilderMap = Dict[str, BuilderToPassMap]
+TestToExpectationMap = Dict[str, ExpectationToBuilderMap]
+ExpectationFileStringDict = Dict[str, TestToExpectationMap]
 # Sample:
 # {
 #   test_name: {
@@ -210,9 +219,9 @@ ExpectationFileStringDict = typing.Dict[str, TestToExpectationMap]
 #   },
 #   ...
 # }
-StepToResultsMap = typing.Dict[str, typing.List[str]]
-BuilderToStepMap = typing.Dict[str, StepToResultsMap]
-TestToBuilderStringDict = typing.Dict[str, BuilderToStepMap]
+StepToResultsMap = Dict[str, List[str]]
+BuilderToStepMap = Dict[str, StepToResultsMap]
+TestToBuilderStringDict = Dict[str, BuilderToStepMap]
 # Sample:
 # {
 #   result_output.FULL_PASS: {
@@ -233,15 +242,14 @@ TestToBuilderStringDict = typing.Dict[str, BuilderToStepMap]
 #     },
 #   },
 # }
-FullOrNeverPassStepValue = typing.List[str]
-PartialPassStepValue = typing.Dict[str, typing.List[str]]
-PassStepValue = typing.Union[FullOrNeverPassStepValue, PartialPassStepValue]
-OrderedPassStringDict = typing.OrderedDict[str, typing.Dict[str, PassStepValue]]
+FullOrNeverPassStepValue = List[str]
+PartialPassStepValue = Dict[str, List[str]]
+PassStepValue = Union[FullOrNeverPassStepValue, PartialPassStepValue]
 
-UnmatchedResultsType = typing.Dict[str, data_types.ResultListType]
-UnusedExpectation = typing.Dict[str, typing.List[data_types.Expectation]]
+UnmatchedResultsType = Dict[str, data_types.ResultListType]
+UnusedExpectation = Dict[str, List[data_types.Expectation]]
 
-RemovedUrlsType = typing.Union[typing.List[str], typing.Set[str]]
+RemovedUrlsType = Union[List[str], Set[str]]
 
 
 def OutputResults(stale_dict: data_types.TestExpectationMap,
@@ -250,7 +258,7 @@ def OutputResults(stale_dict: data_types.TestExpectationMap,
                   unmatched_results: UnmatchedResultsType,
                   unused_expectations: UnusedExpectation,
                   output_format: str,
-                  file_handle: typing.Optional[typing.IO] = None) -> None:
+                  file_handle: Optional[IO] = None) -> None:
   """Outputs script results to |file_handle|.
 
   Args:
@@ -321,7 +329,7 @@ def OutputResults(stale_dict: data_types.TestExpectationMap,
       _RecursiveHtmlToFile(active_str_dict, file_handle)
 
     if unused_expectations_str_list:
-      file_handle.write('\n<h1>' + SECTION_UNUSED + "</h1>\n")
+      file_handle.write('\n<h1>' + SECTION_UNUSED + '</h1>\n')
       _RecursiveHtmlToFile(unused_expectations_str_list, file_handle)
     if unmatched_results_str_dict:
       file_handle.write('\n<h1>' + SECTION_UNMATCHED + '</h1>\n')
@@ -336,7 +344,7 @@ def OutputResults(stale_dict: data_types.TestExpectationMap,
 
 
 def RecursivePrintToFile(element: ElementType, depth: int,
-                         file_handle: typing.IO) -> None:
+                         file_handle: IO) -> None:
   """Recursively prints |element| as text to |file_handle|.
 
   Args:
@@ -359,7 +367,7 @@ def RecursivePrintToFile(element: ElementType, depth: int,
     raise RuntimeError('Given unhandled type %s' % type(element))
 
 
-def _RecursiveHtmlToFile(element: ElementType, file_handle: typing.IO) -> None:
+def _RecursiveHtmlToFile(element: ElementType, file_handle: IO) -> None:
   """Recursively outputs |element| as HTMl to |file_handle|.
 
   Iterables will be output as a collapsible section containing any of the
@@ -528,8 +536,7 @@ def _ConvertUnmatchedResultsToStringDict(unmatched_results: UnmatchedResultsType
 
 
 def _ConvertUnusedExpectationsToStringDict(
-    unused_expectations: UnusedExpectation
-) -> typing.Dict[str, typing.List[str]]:
+    unused_expectations: UnusedExpectation) -> Dict[str, List[str]]:
   """Converts |unused_expectations| to a dict of strings for reporting.
 
   Args:
@@ -552,9 +559,7 @@ def _ConvertUnusedExpectationsToStringDict(
   for expectation_file, expectations in unused_expectations.items():
     expectation_str_list = []
     for e in expectations:
-      expectation_str_list.append(
-          '[ %s ] %s [ %s ]' %
-          (' '.join(e.tags), e.test, ' '.join(e.expected_results)))
+      expectation_str_list.append(e.AsExpectationFileString())
     output_dict[expectation_file] = expectation_str_list
   return output_dict
 
@@ -569,8 +574,9 @@ def AddStatsToStr(s: str, stats: data_types.BuildStats) -> str:
 
 
 def OutputAffectedUrls(removed_urls: RemovedUrlsType,
-                       orphaned_urls: typing.Optional[RemovedUrlsType] = None
-                       ) -> None:
+                       orphaned_urls: Optional[RemovedUrlsType] = None,
+                       bug_file_handle: Optional[IO] = None,
+                       auto_close_bugs: bool = True) -> None:
   """Outputs URLs of affected expectations for easier consumption by the user.
 
   Outputs the following:
@@ -586,6 +592,11 @@ def OutputAffectedUrls(removed_urls: RemovedUrlsType,
     removed_urls: A set or list of strings containing bug URLs.
     orphaned_urls: A subset of |removed_urls| whose bugs no longer have any
         corresponding expectations.
+    bug_file_handle: An optional open file-like object to write CL description
+        bug information to. If not specified, will print to the terminal.
+    auto_close_bugs: A boolean specifying whether bugs in |orphaned_urls| should
+        be auto-closed on CL submission or not. If not closed, a comment will
+        be posted instead.
   """
   removed_urls = list(removed_urls)
   removed_urls.sort()
@@ -593,12 +604,15 @@ def OutputAffectedUrls(removed_urls: RemovedUrlsType,
   orphaned_urls = list(orphaned_urls)
   orphaned_urls.sort()
   _OutputAffectedUrls(removed_urls, orphaned_urls)
-  _OutputUrlsForClDescription(removed_urls, orphaned_urls)
+  _OutputUrlsForClDescription(removed_urls,
+                              orphaned_urls,
+                              file_handle=bug_file_handle,
+                              auto_close_bugs=auto_close_bugs)
 
 
-def _OutputAffectedUrls(affected_urls: typing.List[str],
-                        orphaned_urls: typing.List[str],
-                        file_handle: typing.Optional[typing.IO] = None) -> None:
+def _OutputAffectedUrls(affected_urls: List[str],
+                        orphaned_urls: List[str],
+                        file_handle: Optional[IO] = None) -> None:
   """Outputs |urls| for opening in a browser as affected bugs.
 
   Args:
@@ -606,15 +620,14 @@ def _OutputAffectedUrls(affected_urls: typing.List[str],
     orphaned_urls: A list of strings containing URLs to output as closable.
     file_handle: A file handle to write the string to. Defaults to stdout.
   """
-  _OutputUrlsForCommandLine(affected_urls, "Affected bugs", file_handle)
+  _OutputUrlsForCommandLine(affected_urls, 'Affected bugs', file_handle)
   if orphaned_urls:
-    _OutputUrlsForCommandLine(orphaned_urls, "Closable bugs", file_handle)
+    _OutputUrlsForCommandLine(orphaned_urls, 'Closable bugs', file_handle)
 
 
-def _OutputUrlsForCommandLine(urls: typing.List[str],
+def _OutputUrlsForCommandLine(urls: List[str],
                               description: str,
-                              file_handle: typing.Optional[typing.IO] = None
-                              ) -> None:
+                              file_handle: Optional[IO] = None) -> None:
   """Outputs |urls| for opening in a browser.
 
   The output string is meant to be passed to a browser via the command line in
@@ -636,10 +649,10 @@ def _OutputUrlsForCommandLine(urls: typing.List[str],
   file_handle.write('%s: %s\n' % (description, ' '.join(urls)))
 
 
-def _OutputUrlsForClDescription(affected_urls: typing.List[str],
-                                orphaned_urls: typing.List[str],
-                                file_handle: typing.Optional[typing.IO] = None
-                                ) -> None:
+def _OutputUrlsForClDescription(affected_urls: List[str],
+                                orphaned_urls: List[str],
+                                file_handle: Optional[IO] = None,
+                                auto_close_bugs: bool = True) -> None:
   """Outputs |urls| for use in a CL description.
 
   Output adheres to the line length recommendation and max number of bugs per
@@ -649,6 +662,9 @@ def _OutputUrlsForClDescription(affected_urls: typing.List[str],
     affected_urls: A list of strings containing URLs to output.
     orphaned_urls: A list of strings containing URLs to output as closable.
     file_handle: A file handle to write the string to. Defaults to stdout.
+    auto_close_bugs: A boolean specifying whether bugs in |orphaned_urls| should
+        be auto-closed on CL submission or not. If not closed, a comment will
+        be posted instead.
   """
 
   def AddBugTypeToOutputString(urls, prefix):
@@ -692,58 +708,47 @@ def _OutputUrlsForClDescription(affected_urls: typing.List[str],
   if affected_but_not_closable:
     output_str += AddBugTypeToOutputString(affected_but_not_closable, 'Bug:')
   if orphaned_urls:
-    output_str += AddBugTypeToOutputString(orphaned_urls, 'Fixed:')
+    if auto_close_bugs:
+      output_str += AddBugTypeToOutputString(orphaned_urls, 'Fixed:')
+    else:
+      output_str += AddBugTypeToOutputString(orphaned_urls, 'Bug:')
+      _PostCommentsToOrphanedBugs(orphaned_urls)
 
   file_handle.write('Affected bugs for CL description:\n%s' % output_str)
 
 
-def ConvertBuilderMapToPassOrderedStringDict(
-    builder_map: data_types.BuilderStepMap) -> OrderedPassStringDict:
-  """Converts |builder_map| into an ordered dict split by pass type.
+def _PostCommentsToOrphanedBugs(orphaned_urls: List[str]) -> None:
+  """Posts comments to bugs in |orphaned_urls| saying they can likely be closed.
+
+  Does not post again if the comment has been posted before in the past.
 
   Args:
-    builder_map: A data_types.BuildStepMap.
-
-  Returns:
-    A collections.OrderedDict in the following format:
-    {
-      result_output.FULL_PASS: {
-        builder_name: [
-          step_name (total passes / total builds)
-        ],
-      },
-      result_output.NEVER_PASS: {
-        builder_name: [
-          step_name (total passes / total builds)
-        ],
-      },
-      result_output.PARTIAL_PASS: {
-        builder_name: {
-          step_name (total passes / total builds): [
-            failure links,
-          ],
-        },
-      },
-    }
-
-    The ordering and presence of the top level keys is guaranteed.
+    orphaned_urls: A list of strings containing URLs to post comments to.
   """
-  # This is similar to what we do in
-  # result_output._ConvertTestExpectationMapToStringDict, but we want the
-  # top-level grouping to be by pass type rather than by builder, so we can't
-  # re-use the code from there.
-  # Ordered dict used to ensure that order is guaranteed when printing out.
-  str_dict = collections.OrderedDict()
-  str_dict[FULL_PASS] = {}
-  str_dict[NEVER_PASS] = {}
-  str_dict[PARTIAL_PASS] = {}
-  for builder_name, step_name, stats in builder_map.IterBuildStats():
-    step_str = AddStatsToStr(step_name, stats)
-    if stats.did_fully_pass:
-      str_dict[FULL_PASS].setdefault(builder_name, []).append(step_str)
-    elif stats.did_never_pass:
-      str_dict[NEVER_PASS].setdefault(builder_name, []).append(step_str)
-    else:
-      str_dict[PARTIAL_PASS].setdefault(builder_name, {})[step_str] = list(
-          stats.failure_links)
-  return str_dict
+
+  try:
+    buganizer_client = _GetBuganizerClient()
+  except buganizer.BuganizerError as e:
+    logging.error(
+        'Encountered error when authenticating, cannot post comments. %s', e)
+    return
+
+  for url in orphaned_urls:
+    try:
+      comment_list = buganizer_client.GetIssueComments(url)
+      # GetIssueComments currently returns a dict if something goes wrong
+      # instead of raising an exception.
+      if isinstance(comment_list, dict):
+        logging.exception('Failed to get comments from %s: %s', url,
+                          comment_list.get('error', 'error not provided'))
+        continue
+      existing_comments = [c['comment'] for c in comment_list]
+      if BUGANIZER_COMMENT not in existing_comments:
+        buganizer_client.NewComment(url, BUGANIZER_COMMENT)
+    except buganizer.BuganizerError:
+      logging.exception('Could not fetch or add comments for %s', url)
+
+
+def _GetBuganizerClient() -> buganizer.BuganizerClient:
+  """Helper function to get a usable Buganizer client."""
+  return buganizer.BuganizerClient()

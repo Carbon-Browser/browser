@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/permission.h"
 #include "components/services/app_service/public/cpp/run_on_os_login_types.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/webui/resources/cr_components/app_management/app_management.mojom.h"
 
 namespace mojo {
@@ -39,11 +40,16 @@ struct StructTraits<PermissionDataView, apps::PermissionPtr> {
     return r->permission_type;
   }
 
-  static const apps::PermissionValuePtr& value(const apps::PermissionPtr& r) {
+  static const apps::Permission::PermissionValue& value(
+      const apps::PermissionPtr& r) {
     return r->value;
   }
 
   static bool is_managed(const apps::PermissionPtr& r) { return r->is_managed; }
+
+  static std::optional<std::string> details(const apps::PermissionPtr& r) {
+    return r->details;
+  }
 
   static bool Read(PermissionDataView, apps::PermissionPtr* out);
 };
@@ -61,24 +67,33 @@ struct EnumTraits<TriState, apps::TriState> {
 };
 
 template <>
-struct UnionTraits<PermissionValueDataView, apps::PermissionValuePtr> {
-  static PermissionValueDataView::Tag GetTag(const apps::PermissionValuePtr& r);
+struct UnionTraits<PermissionValueDataView, apps::Permission::PermissionValue> {
+  static PermissionValueDataView::Tag GetTag(
+      const apps::Permission::PermissionValue& r);
 
-  static bool IsNull(const apps::PermissionValuePtr& r) {
-    return !r->bool_value.has_value() && !r->tristate_value.has_value();
+  static bool IsNull(const apps::Permission::PermissionValue& r) {
+    return false;
   }
 
-  static void SetToNull(apps::PermissionValuePtr* out) { out->reset(); }
+  static void SetToNull(apps::Permission::PermissionValue* out) {}
 
-  static bool bool_value(const apps::PermissionValuePtr& r) {
-    return r->bool_value.value();
+  static bool bool_value(const apps::Permission::PermissionValue& r) {
+    if (absl::holds_alternative<bool>(r)) {
+      return absl::get<bool>(r);
+    }
+    return false;
   }
 
-  static apps::TriState tristate_value(const apps::PermissionValuePtr& r) {
-    return r->tristate_value.value();
+  static apps::TriState tristate_value(
+      const apps::Permission::PermissionValue& r) {
+    if (absl::holds_alternative<apps::TriState>(r)) {
+      return absl::get<apps::TriState>(r);
+    }
+    return apps::TriState::kBlock;
   }
 
-  static bool Read(PermissionValueDataView data, apps::PermissionValuePtr* out);
+  static bool Read(PermissionValueDataView data,
+                   apps::Permission::PermissionValue* out);
 };
 
 template <>

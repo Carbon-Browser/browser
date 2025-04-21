@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/keyboard/ui/keyboard_ui.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
 
 class ChromeKeyboardWebContents;
@@ -60,7 +61,7 @@ class ChromeKeyboardUI : public keyboard::KeyboardUI,
 
   // The BrowserContext to use for creating the WebContents hosting the
   // keyboard.
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext> browser_context_;
 
   std::unique_ptr<ChromeKeyboardWebContents> keyboard_contents_;
   std::unique_ptr<ui::Shadow> shadow_;

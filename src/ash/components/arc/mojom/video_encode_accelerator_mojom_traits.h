@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,16 +24,6 @@ struct EnumTraits<arc::mojom::VideoFrameStorageType,
   static bool FromMojom(
       arc::mojom::VideoFrameStorageType input,
       media::VideoEncodeAccelerator::Config::StorageType* output);
-};
-
-template <>
-struct EnumTraits<arc::mojom::VideoEncodeAccelerator_Error,
-                  media::VideoEncodeAccelerator::Error> {
-  static arc::mojom::VideoEncodeAccelerator_Error ToMojom(
-      media::VideoEncodeAccelerator::Error input);
-
-  static bool FromMojom(arc::mojom::VideoEncodeAccelerator_Error input,
-                        media::VideoEncodeAccelerator::Error* output);
 };
 
 template <>
@@ -110,12 +100,12 @@ struct StructTraits<arc::mojom::VideoEncodeAcceleratorConfigDataView,
 
   static uint32_t initial_framerate(
       const media::VideoEncodeAccelerator::Config& input) {
-    return input.initial_framerate.value_or(0);
+    return input.framerate;
   }
 
-  static bool has_initial_framerate(
+  static uint32_t has_initial_framerate_deprecated(
       const media::VideoEncodeAccelerator::Config& input) {
-    return input.initial_framerate.has_value();
+    return true;
   }
 
   static uint32_t gop_length(
@@ -140,9 +130,7 @@ struct StructTraits<arc::mojom::VideoEncodeAcceleratorConfigDataView,
 
   static arc::mojom::VideoFrameStorageType storage_type(
       const media::VideoEncodeAccelerator::Config& input) {
-    auto storage_type = input.storage_type.value_or(
-        media::VideoEncodeAccelerator::Config::StorageType::kShmem);
-    switch (storage_type) {
+    switch (input.storage_type) {
       case media::VideoEncodeAccelerator::Config::StorageType::kShmem:
         return arc::mojom::VideoFrameStorageType::SHMEM;
       case media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer:

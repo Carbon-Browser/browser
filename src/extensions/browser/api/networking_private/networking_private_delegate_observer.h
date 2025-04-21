@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 namespace extensions {
 
 // Implemented by event handlers so they are notified when a change event
-// occurs. Triggered by NetworkingPrivateServiceClient,
-// NetworkingPrivateLinux or LacrosNetworkingPrivateObserver.
+// occurs. Triggered by NetworkingPrivateServiceClient or
+// NetworkingPrivateLinux.
 class NetworkingPrivateDelegateObserver {
  public:
   NetworkingPrivateDelegateObserver& operator=(
@@ -43,7 +43,7 @@ class NetworkingPrivateDelegateObserver {
   virtual void OnCertificateListsChanged() = 0;
 
  protected:
-  virtual ~NetworkingPrivateDelegateObserver() {}
+  virtual ~NetworkingPrivateDelegateObserver() = default;
 };
 
 }  // namespace extensions

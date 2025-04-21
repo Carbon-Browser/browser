@@ -1,12 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/pepper/pepper_video_capture_host.h"
 
+#include <algorithm>
 #include <memory>
 
-#include "base/cxx17_backports.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/renderer/pepper/host_globals.h"
 #include "content/renderer/pepper/pepper_media_device_manager.h"
@@ -147,10 +147,10 @@ void PepperVideoCaptureHost::OnFrameReady(
         // TODO(ihf): handle size mismatches gracefully here.
         return;
       }
-      uint8_t* dst = reinterpret_cast<uint8_t*>(buffers_[i].data);
-      static_assert(media::VideoFrame::kYPlane == 0, "y plane should be 0");
-      static_assert(media::VideoFrame::kUPlane == 1, "u plane should be 1");
-      static_assert(media::VideoFrame::kVPlane == 2, "v plane should be 2");
+      uint8_t* dst = reinterpret_cast<uint8_t*>(buffers_[i].data.get());
+      static_assert(media::VideoFrame::Plane::kY == 0, "y plane should be 0");
+      static_assert(media::VideoFrame::Plane::kU == 1, "u plane should be 1");
+      static_assert(media::VideoFrame::Plane::kV == 2, "v plane should be 2");
 
       if (frame->storage_type() ==
           media::VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
@@ -158,17 +158,20 @@ void PepperVideoCaptureHost::OnFrameReady(
         DCHECK_EQ(frame->format(), media::PIXEL_FORMAT_NV12);
         scoped_refptr<media::VideoFrame> mapped_frame =
             media::ConvertToMemoryMappedFrame(frame);
+        if (!mapped_frame) {
+          DLOG(ERROR) << "VideoFrame failed to map";
+          return;
+        }
         scoped_refptr<media::VideoFrame> dst_frame =
             media::VideoFrame::WrapExternalData(
                 media::PIXEL_FORMAT_I420, frame->natural_size(),
                 gfx::Rect(frame->natural_size()), frame->natural_size(), dst,
                 buffers_[i].buffer->size(), frame->timestamp());
-        int uv_size = mapped_frame->coded_size().GetArea() / 2;
-        std::vector<uint8_t> temp_uv_buffer(uv_size);
-        media::EncoderStatus status = media::ConvertAndScaleFrame(
-            *mapped_frame, *dst_frame, temp_uv_buffer);
-        if (!status.is_ok())
+        media::EncoderStatus status =
+            frame_converter_.ConvertAndScale(*mapped_frame, *dst_frame);
+        if (!status.is_ok()) {
           return;
+        }
       } else {
         DCHECK_EQ(frame->format(), media::PIXEL_FORMAT_I420);
         size_t num_planes = media::VideoFrame::NumPlanes(frame->format());
@@ -363,11 +366,11 @@ void PepperVideoCaptureHost::SetRequestedInfo(
     const PP_VideoCaptureDeviceInfo_Dev& device_info,
     uint32_t buffer_count) {
   // Clamp the buffer count to between 1 and |kMaxBuffers|.
-  buffer_count_hint_ = base::clamp(buffer_count, 1U, kMaxBuffers);
+  buffer_count_hint_ = std::clamp(buffer_count, 1U, kMaxBuffers);
   // Clamp the frame rate to between 1 and |kMaxFramesPerSecond - 1|.
   int frames_per_second =
-      base::clamp(device_info.frames_per_second, 1U,
-                  uint32_t{media::limits::kMaxFramesPerSecond - 1});
+      std::clamp(device_info.frames_per_second, 1U,
+                 uint32_t{media::limits::kMaxFramesPerSecond - 1});
 
   video_capture_params_.requested_format = media::VideoCaptureFormat(
       gfx::Size(device_info.width, device_info.height), frames_per_second,

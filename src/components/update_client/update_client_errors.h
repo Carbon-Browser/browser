@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,24 +26,37 @@ enum class Error {
 // the enums below; the order must be kept stable.
 enum class ErrorCategory {
   kNone = 0,
-  kDownload,
-  kUnpack,
-  kInstall,
-  kService,  // Runtime errors which occur in the service itself.
-  kUpdateCheck,
+  kDownload = 1,
+  kUnpack = 2,
+  kInstall = 3,
+  kService = 4,  // Runtime errors which occur in the service itself.
+  kUpdateCheck = 5,
+  // kUnknown = 6, defined in `updater_service.mojom`.
+  kInstaller = 7,
 };
 
-// These errors are returned with the |kNetworkError| error category. This
-// category could include other errors such as the errors defined by
-// the Chrome net stack.
+// These errors are returned with the `kDownload` error category. This category
+// could include other errors such as the errors defined by the Chrome net
+// stack.
 enum class CrxDownloaderError {
   NONE = 0,
   NO_URL = 10,
   NO_HASH = 11,
   BAD_HASH = 12,  // The downloaded file fails the hash verification.
+  DISK_FULL = 13,
+  CANCELLED = 14,
+  NO_DOWNLOAD_DIR = 15,
+
   // The Windows BITS queue contains to many update client jobs. The value is
   // chosen so that it can be reported as a custom COM error on this platform.
   BITS_TOO_MANY_JOBS = 0x0200,
+  // Errors 11XX are reserved for Mac background downloader errors.
+  MAC_BG_CANNOT_CREATE_DOWNLOAD_CACHE = 1101,
+  MAC_BG_MOVE_TO_CACHE_FAIL = 1102,
+  MAC_BG_MISSING_COMPLETION_DATA = 1103,
+  MAC_BG_DUPLICATE_DOWNLOAD = 1104,
+  MAC_BG_SESSION_INVALIDATED = 1105,
+  MAC_BG_SESSION_TOO_MANY_TASKS = 1106,
   GENERIC_ERROR = -1
 };
 
@@ -68,6 +81,10 @@ enum class UnpackerError {
   kDeltaPatchProcessFailure = 15,
   kDeltaMissingExistingFile = 16,
   // kFingerprintWriteFailed = 17,    // Deprecated. Don't use.
+  kPuffinMissingPreviousCrx = 18,
+  kFailedToAddToCache = 19,
+  kFailedToCreateCacheDir = 20,
+  kCrxCacheNotProvided = 21,
 };
 
 // These errors are returned with the |kInstall| error category and
@@ -97,6 +114,10 @@ enum class ServiceError {
   SERVICE_WAIT_FAILED = 1,
   UPDATE_DISABLED = 2,
   CANCELLED = 3,
+
+  // Returned when a `CheckForUpdate` call is made, the server returns a
+  // update response indicating an update is available, and updates are enabled.
+  CHECK_FOR_UPDATE_ONLY = 4,
 };
 
 // These errors are related to serialization, deserialization, and parsing of
@@ -116,6 +137,17 @@ enum class ProtocolError : int {
   UNKNOWN_APPLICATION = -10006,
   RESTRICTED_APPLICATION = -10007,
   INVALID_APPID = -10008,
+  OS_NOT_SUPPORTED = -10009,
+  HW_NOT_SUPPORTED = -10010,
+  NO_HASH = -10011,
+  UNSUPPORTED_PROTOCOL = -10012,
+  INTERNAL = -10013,
+};
+
+struct CategorizedError {
+  ErrorCategory category_ = ErrorCategory::kNone;
+  int code_ = 0;
+  int extra_ = 0;
 };
 
 }  // namespace update_client

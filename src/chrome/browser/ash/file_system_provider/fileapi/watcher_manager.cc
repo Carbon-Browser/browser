@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/fileapi/watcher_manager.h"
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -15,8 +15,7 @@
 
 using content::BrowserThread;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 namespace {
 
@@ -56,7 +55,7 @@ void AddWatcherOnUIThread(const storage::FileSystemURL& url,
   }
 
   parser.file_system()->AddWatcher(url.origin().GetURL(), parser.file_path(),
-                                   recursive, false /* persistent */,
+                                   recursive, /*persistent=*/false,
                                    std::move(callback),
                                    std::move(notification_callback));
 }
@@ -110,5 +109,4 @@ void WatcherManager::RemoveWatcher(const storage::FileSystemURL& url,
                                                std::move(callback))));
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

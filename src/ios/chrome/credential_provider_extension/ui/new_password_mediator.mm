@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,24 @@
 
 #import <AuthenticationServices/AuthenticationServices.h>
 
-#include "base/strings/sys_string_conversions.h"
-#include "components/autofill/core/browser/proto/password_requirements.pb.h"
-#include "components/password_manager/core/browser/generation/password_generator.h"
-#include "ios/chrome/common/app_group/app_group_constants.h"
-#include "ios/chrome/common/app_group/app_group_metrics.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/autofill/core/browser/proto/password_requirements.pb.h"
+#import "components/password_manager/core/browser/generation/password_generator.h"
+#import "ios/chrome/common/app_group/app_group_constants.h"
+#import "ios/chrome/common/app_group/app_group_metrics.h"
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
 #import "ios/chrome/common/credential_provider/archivable_credential_util.h"
 #import "ios/chrome/common/credential_provider/constants.h"
+#import "ios/chrome/common/credential_provider/credential_provider_creation_notifier.h"
 #import "ios/chrome/common/credential_provider/credential_store.h"
 #import "ios/chrome/common/credential_provider/user_defaults_credential_store.h"
 #import "ios/chrome/credential_provider_extension/metrics_util.h"
-#include "ios/chrome/credential_provider_extension/password_spec_fetcher_buildflags.h"
+#import "ios/chrome/credential_provider_extension/password_spec_fetcher_buildflags.h"
 #import "ios/chrome/credential_provider_extension/password_util.h"
+#import "ios/chrome/credential_provider_extension/ui/credential_response_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/new_password_ui_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/ui_util.h"
 #import "ios/components/credential_provider_extension/password_spec_fetcher.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill::GeneratePassword;
 using autofill::PasswordRequirementsSpec;
@@ -78,6 +76,8 @@ using base::SysUTF16ToNSString;
 
 - (void)saveCredentialWithUsername:(NSString*)username
                           password:(NSString*)password
+                              note:(NSString*)note
+                              gaia:(NSString*)gaia
                      shouldReplace:(BOOL)shouldReplace {
   if (!shouldReplace && [self credentialExistsForUsername:username]) {
     [self.uiHandler alertUserCredentialExists];
@@ -85,7 +85,10 @@ using base::SysUTF16ToNSString;
   }
 
   ArchivableCredential* credential =
-      [self createNewCredentialWithUsername:username password:password];
+      [self createNewCredentialWithUsername:username
+                                   password:password
+                                       note:note
+                                       gaia:gaia];
 
   if (!credential) {
     [self.uiHandler alertSavePasswordFailed];
@@ -103,7 +106,12 @@ using base::SysUTF16ToNSString;
                }
                [self.uiHandler credentialSaved:credential];
                [self userSelectedCredential:credential];
+               [CredentialProviderCreationNotifier notifyCredentialCreated];
              }];
+}
+
+- (NSString*)gaia {
+  return [self.credentialResponseHandler gaia];
 }
 
 #pragma mark - Private
@@ -119,31 +127,25 @@ using base::SysUTF16ToNSString;
 
 // Creates a new credential but doesn't add it to any stores.
 - (ArchivableCredential*)createNewCredentialWithUsername:(NSString*)username
-                                                password:(NSString*)password {
+                                                password:(NSString*)password
+                                                    note:(NSString*)note
+                                                    gaia:(NSString*)gaia {
   NSString* identifier = [self currentIdentifier];
   NSURL* url = [NSURL URLWithString:identifier];
   NSString* recordIdentifier = RecordIdentifierForData(url, username);
 
-  NSString* uuid = [[NSUUID UUID] UUIDString];
-  if (!StorePasswordInKeychain(password, uuid)) {
-    return nil;
-  }
-  NSString* validationIdentifierKey =
-      AppGroupUserDefaultsCredentialProviderUserID();
-  NSString* validationIdentifier =
-      [app_group::GetGroupUserDefaults() stringForKey:validationIdentifierKey];
-
   return [[ArchivableCredential alloc] initWithFavicon:nil
-                                    keychainIdentifier:uuid
+                                                  gaia:gaia
+                                              password:password
                                                   rank:1
                                       recordIdentifier:recordIdentifier
                                      serviceIdentifier:identifier
                                            serviceName:url.host ?: identifier
-                                                  user:username
-                                  validationIdentifier:validationIdentifier];
+                                              username:username
+                                                  note:note];
 }
 
-// Saves the given credential to disk and calls |completion| once the operation
+// Saves the given credential to disk and calls `completion` once the operation
 // is finished.
 - (void)saveNewCredential:(ArchivableCredential*)credential
                completion:(void (^)(NSError* error))completion {
@@ -163,13 +165,11 @@ using base::SysUTF16ToNSString;
 
 // Alerts the host app that the user selected a credential.
 - (void)userSelectedCredential:(id<Credential>)credential {
-  NSString* password =
-      PasswordWithKeychainIdentifier(credential.keychainIdentifier);
-  ASPasswordCredential* ASCredential =
-      [ASPasswordCredential credentialWithUser:credential.user
+  NSString* password = credential.password;
+  ASPasswordCredential* passwordCredential =
+      [ASPasswordCredential credentialWithUser:credential.username
                                       password:password];
-  [self.context completeRequestWithSelectedCredential:ASCredential
-                                    completionHandler:nil];
+  [self.credentialResponseHandler userSelectedPassword:passwordCredential];
 }
 
 - (NSString*)currentIdentifier {

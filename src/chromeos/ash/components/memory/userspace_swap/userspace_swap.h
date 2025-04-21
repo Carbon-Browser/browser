@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -185,7 +185,7 @@ COMPONENT_EXPORT(USERSPACE_SWAP)
 bool SwapRenderer(RendererSwapData* data, size_t size_limit_bytes);
 
 // GetPartitionAllocSuperPagesInUse will return |max_superpages| worth of
-// regions that are currently allocated by partition alloc.
+// regions that are currently allocated by PartitionAlloc.
 COMPONENT_EXPORT(USERSPACE_SWAP)
 bool GetPartitionAllocSuperPagesInUse(
     int32_t max_superpages,

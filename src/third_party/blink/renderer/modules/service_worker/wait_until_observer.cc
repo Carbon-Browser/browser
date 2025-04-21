@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/web_test_support.h"
@@ -36,64 +35,49 @@ base::TimeDelta WindowInteractionTimeout() {
 
 }  // anonymous namespace
 
-class WaitUntilObserver::ThenFunction final : public ScriptFunction::Callable {
+// According from step 4 of ExtendableEvent::waitUntil() in spec:
+// https://w3c.github.io/ServiceWorker/#dom-extendableevent-waituntil
+// "Upon fulfillment or rejection of f, queue a microtask to run these
+// substeps: Decrement the pending promises count by one."
+class WaitUntilObserver::ThenFulfilled final
+    : public ThenCallable<IDLUndefined, ThenFulfilled> {
  public:
-  enum ResolveType {
-    kFulfilled,
-    kRejected,
-  };
-
-  ThenFunction(WaitUntilObserver* observer,
-               ResolveType type,
-               PromiseSettledCallback callback)
-      : observer_(observer),
-        resolve_type_(type),
-        callback_(std::move(callback)) {}
+  explicit ThenFulfilled(WaitUntilObserver* observer) : observer_(observer) {}
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(observer_);
-    ScriptFunction::Callable::Trace(visitor);
+    ThenCallable<IDLUndefined, ThenFulfilled>::Trace(visitor);
   }
 
-  ScriptValue Call(ScriptState* script_state, ScriptValue value) override {
+  void React(ScriptState*) {
     DCHECK(observer_);
-    DCHECK(resolve_type_ == kFulfilled || resolve_type_ == kRejected);
-    if (callback_)
-      callback_.Run(value);
-    // According from step 4 of ExtendableEvent::waitUntil() in spec:
-    // https://w3c.github.io/ServiceWorker/#dom-extendableevent-waituntil
-    // "Upon fulfillment or rejection of f, queue a microtask to run these
-    // substeps: Decrement the pending promises count by one."
-
-    scoped_refptr<scheduler::EventLoop> event_loop =
-        ExecutionContext::From(script_state)->GetAgent()->event_loop();
-
-    // At this time point the microtask A running resolve/reject function of
-    // this promise has already been queued, in order to allow microtask A to
-    // call waitUntil, we enqueue another microtask B to delay the promise
-    // settled notification to |observer_|, thus A will run before B so A can
-    // call waitUntil well, but any other microtask C possibly enqueued by A
-    // will run after B so C maybe can't call waitUntil if there has no any
-    // extend lifetime promise at that time.
-    if (resolve_type_ == kRejected) {
-      event_loop->EnqueueMicrotask(
-          WTF::Bind(&WaitUntilObserver::OnPromiseRejected,
-                    WrapPersistent(observer_.Get())));
-      observer_ = nullptr;
-      return ScriptPromise::Reject(script_state, value).AsScriptValue();
-    }
-
-    event_loop->EnqueueMicrotask(
-        WTF::Bind(&WaitUntilObserver::OnPromiseFulfilled,
-                  WrapPersistent(observer_.Get())));
+    observer_->OnPromiseFulfilled();
     observer_ = nullptr;
-    return value;
   }
 
  private:
   Member<WaitUntilObserver> observer_;
-  ResolveType resolve_type_;
-  PromiseSettledCallback callback_;
+};
+
+class WaitUntilObserver::ThenRejected final
+    : public ThenCallable<IDLAny, ThenRejected, IDLPromise<IDLAny>> {
+ public:
+  explicit ThenRejected(WaitUntilObserver* observer) : observer_(observer) {}
+
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(observer_);
+    ThenCallable<IDLAny, ThenRejected, IDLPromise<IDLAny>>::Trace(visitor);
+  }
+
+  ScriptPromise<IDLAny> React(ScriptState* script_state, ScriptValue value) {
+    DCHECK(observer_);
+    observer_->OnPromiseRejected();
+    observer_ = nullptr;
+    return ScriptPromise<IDLAny>::Reject(script_state, value);
+  }
+
+ private:
+  Member<WaitUntilObserver> observer_;
 };
 
 void WaitUntilObserver::WillDispatchEvent() {
@@ -121,11 +105,10 @@ void WaitUntilObserver::DidDispatchEvent(bool event_dispatch_failed) {
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-extendableevent-waituntil
-bool WaitUntilObserver::WaitUntil(ScriptState* script_state,
-                                  ScriptPromise script_promise,
-                                  ExceptionState& exception_state,
-                                  PromiseSettledCallback on_promise_fulfilled,
-                                  PromiseSettledCallback on_promise_rejected) {
+bool WaitUntilObserver::WaitUntil(
+    ScriptState* script_state,
+    const ScriptPromise<IDLUndefined>& script_promise,
+    ExceptionState& exception_state) {
   DCHECK_NE(event_dispatch_state_, EventDispatchState::kInitial);
 
   // 1. `If the isTrusted attribute is false, throw an "InvalidStateError"
@@ -154,14 +137,8 @@ bool WaitUntilObserver::WaitUntil(ScriptState* script_state,
   // 3. `Add f to the extend lifetime promises.`
   // 4. `Increment the pending promises count by one.`
   IncrementPendingPromiseCount();
-  script_promise.Then(MakeGarbageCollected<ScriptFunction>(
-                          script_state, MakeGarbageCollected<ThenFunction>(
-                                            this, ThenFunction::kFulfilled,
-                                            std::move(on_promise_fulfilled))),
-                      MakeGarbageCollected<ScriptFunction>(
-                          script_state, MakeGarbageCollected<ThenFunction>(
-                                            this, ThenFunction::kRejected,
-                                            std::move(on_promise_rejected))));
+  script_promise.Then(script_state, MakeGarbageCollected<ThenFulfilled>(this),
+                      MakeGarbageCollected<ThenRejected>(this));
   return true;
 }
 
@@ -184,7 +161,7 @@ WaitUntilObserver::WaitUntilObserver(ExecutionContext* context,
       type_(type),
       event_id_(event_id),
       consume_window_interaction_timer_(
-          Thread::Current()->GetTaskRunner(),
+          context->GetTaskRunner(TaskType::kUserInteraction),
           this,
           &WaitUntilObserver::ConsumeWindowInteraction) {}
 
@@ -214,7 +191,6 @@ void WaitUntilObserver::MaybeCompleteEvent() {
   switch (event_dispatch_state_) {
     case EventDispatchState::kInitial:
       NOTREACHED();
-      return;
     case EventDispatchState::kDispatching:
       // Still dispatching, do not complete the event.
       return;

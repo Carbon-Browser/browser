@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 class GURL;
 
 namespace bookmarks {
-class BookmarkModel;
 class BookmarkNode;
 }
 
@@ -32,11 +31,11 @@ class OfflinePageBookmarkObserver
 
   // Implement bookmarks::OfflinePageBookmarkObserver
   void BookmarkModelChanged() override;
-  void BookmarkNodeRemoved(bookmarks::BookmarkModel* model,
-                           const bookmarks::BookmarkNode* parent,
+  void BookmarkNodeRemoved(const bookmarks::BookmarkNode* parent,
                            size_t old_index,
                            const bookmarks::BookmarkNode* node,
-                           const std::set<GURL>& removed_urls) override;
+                           const std::set<GURL>& removed_urls,
+                           const base::Location& location) override;
 
  private:
   // Does work for actual deleting removed bookmark pages.

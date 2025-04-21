@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "content/public/common/content_client.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_util.h"
-#include "net/cookies/same_party_context.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 
 namespace content {
@@ -36,7 +35,6 @@ proto::CookieMatchType CookieMatchTypeToProto(
       return proto::CookieMatchType::STARTS_WITH;
   }
   NOTREACHED();
-  return proto::CookieMatchType::EQUALS;
 }
 
 network::mojom::CookieMatchType CookieMatchTypeFromProto(
@@ -156,6 +154,7 @@ void CookieChangeSubscription::Serialize(
   mojo_subscription->match_type = match_type_;
 }
 
+// TODO(crbug.com/378827534) Plumb scope semantics to function
 bool CookieChangeSubscription::ShouldObserveChangeTo(
     const net::CanonicalCookie& cookie,
     net::CookieAccessSemantics access_semantics) const {
@@ -170,25 +169,18 @@ bool CookieChangeSubscription::ShouldObserveChangeTo(
       break;
   }
 
-  // We assume that this is a same-site, same-party context.
+  // We assume that this is a same-site context.
   net::CookieOptions net_options;
   net_options.set_same_site_cookie_context(
       net::CookieOptions::SameSiteCookieContext::MakeInclusive());
-  net_options.set_same_party_context(net::SamePartyContext::MakeInclusive());
-  // It doesn't matter which we choose here, since both SameParty and SameSite
-  // semantics should allow this access. But we make a choice to be explicit.
-  net_options.set_is_in_nontrivial_first_party_set(true);
 
   return cookie
-      .IncludeForRequestURL(
-          url_, net_options,
-          net::CookieAccessParams{
-              access_semantics,
-              network::IsUrlPotentiallyTrustworthy(url_),
-              net::cookie_util::GetSamePartyStatus(
-                  cookie, net_options,
-                  GetContentClient()->browser()->IsFirstPartySetsEnabled()),
-          })
+      .IncludeForRequestURL(url_, net_options,
+                            net::CookieAccessParams{
+                                access_semantics,
+                                net::CookieScopeSemantics::UNKNOWN,
+                                network::IsUrlPotentiallyTrustworthy(url_),
+                            })
       .status.IsInclude();
 }
 

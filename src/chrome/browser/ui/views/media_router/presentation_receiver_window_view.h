@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,9 @@ class PresentationReceiverWindowView final
       public ExclusiveAccessContext,
       public ExclusiveAccessBubbleViewsContext,
       public ui::AcceleratorProvider {
+  METADATA_HEADER(PresentationReceiverWindowView, views::WidgetDelegateView)
+
  public:
-  METADATA_HEADER(PresentationReceiverWindowView);
   PresentationReceiverWindowView(PresentationReceiverWindowFrame* frame,
                                  PresentationReceiverWindowDelegate* delegate);
   PresentationReceiverWindowView(const PresentationReceiverWindowView&) =
@@ -93,27 +94,23 @@ class PresentationReceiverWindowView final
                        ExclusiveAccessBubbleType bubble_type,
                        const int64_t display_id) final;
   void ExitFullscreen() final;
-  void UpdateExclusiveAccessExitBubbleContent(
-      const GURL& url,
-      ExclusiveAccessBubbleType bubble_type,
-      ExclusiveAccessBubbleHideCallback bubble_first_hide_callback,
-      bool force_update) final;
+  void UpdateExclusiveAccessBubble(
+      const ExclusiveAccessBubbleParams& params,
+      ExclusiveAccessBubbleHideCallback first_hide_callback) override;
   bool IsExclusiveAccessBubbleDisplayed() const final;
   void OnExclusiveAccessUserInput() final;
-  content::WebContents* GetActiveWebContents() final;
+  content::WebContents* GetWebContentsForExclusiveAccess() final;
+  bool CanUserEnterFullscreen() const final;
   bool CanUserExitFullscreen() const final;
 
   // ExclusiveAccessBubbleViewsContext overrides.
   ExclusiveAccessManager* GetExclusiveAccessManager() final;
-  views::Widget* GetBubbleAssociatedWidget() final;
   ui::AcceleratorProvider* GetAcceleratorProvider() final;
   gfx::NativeView GetBubbleParentView() const final;
-  gfx::Point GetCursorPointInParent() const final;
   gfx::Rect GetClientAreaBoundsInScreen() const final;
   bool IsImmersiveModeEnabled() const final;
   gfx::Rect GetTopContainerBoundsInScreen() final;
   void DestroyAnyExclusiveAccessBubble() final;
-  bool CanTriggerOnMouse() const final;
 
   // ui::AcceleratorProvider overrides.
   bool GetAcceleratorForCommandId(int command_id,

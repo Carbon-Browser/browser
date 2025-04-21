@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,12 @@ namespace android {
 
 class DistillerUIHandleAndroid : public DistillerUIHandle {
  public:
-  DistillerUIHandleAndroid() {}
+  DistillerUIHandleAndroid() = default;
 
   DistillerUIHandleAndroid(const DistillerUIHandleAndroid&) = delete;
   DistillerUIHandleAndroid& operator=(const DistillerUIHandleAndroid&) = delete;
 
-  ~DistillerUIHandleAndroid() override {}
+  ~DistillerUIHandleAndroid() override = default;
 
   void set_render_frame_host(content::RenderFrameHost* host) {
     render_frame_host_ = host;

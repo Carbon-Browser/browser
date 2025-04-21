@@ -1,31 +1,31 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import './shared_style.css.js';
-import './strings.m.js';
+import '/strings.m.js';
 import './item.js';
 
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {isMac} from 'chrome://resources/js/cr.m.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {ListPropertyUpdateMixin} from 'chrome://resources/js/list_property_update_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {isMac} from 'chrome://resources/js/platform.js';
 import {PluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import {getDeepActiveElement} from 'chrome://resources/js/util.js';
+import type {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {deselectItems, selectAll, selectItem, updateAnchor} from './actions.js';
 import {BookmarksCommandManagerElement} from './command_manager.js';
 import {MenuSource} from './constants.js';
-import {BookmarksItemElement} from './item.js';
+import type {BookmarksItemElement} from './item.js';
 import {getTemplate} from './list.html.js';
 import {StoreClientMixin} from './store_client_mixin.js';
-import {OpenCommandMenuDetail} from './types.js';
+import type {OpenCommandMenuDetail} from './types.js';
 import {canReorderChildren, getDisplayedList} from './util.js';
 
 const BookmarksListElementBase =
@@ -93,7 +93,8 @@ export class BookmarksListElement extends BookmarksListElementBase {
   override ready() {
     super.ready();
     this.addEventListener('click', () => this.deselectItems_());
-    this.addEventListener('contextmenu', e => this.onContextMenu_(e));
+    this.addEventListener('contextmenu',
+                          e => this.onContextMenu_(e as MouseEvent));
     this.addEventListener(
         'open-command-menu',
         e => this.onOpenCommandMenu_(e as CustomEvent<OpenCommandMenuDetail>));
@@ -118,7 +119,7 @@ export class BookmarksListElement extends BookmarksListElementBase {
 
     this.eventTracker_.add(
         document, 'highlight-items',
-        e => this.onHighlightItems_(e as CustomEvent<string[]>));
+        (e: Event) => this.onHighlightItems_(e as CustomEvent<string[]>));
     this.eventTracker_.add(
         document, 'import-began', () => this.onImportBegan_());
     this.eventTracker_.add(
@@ -360,6 +361,10 @@ export class BookmarksListElement extends BookmarksListElementBase {
 
   private getAriaSelected_(id: string): boolean {
     return this.selectedItems_.has(id);
+  }
+
+  setDisplayedIdsForTesting(ids: string[]) {
+    this.displayedIds_ = ids;
   }
 }
 

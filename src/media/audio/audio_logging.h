@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,15 +54,15 @@ class AudioLog {
 // behavior.
 class AudioLogFactory {
  public:
-  enum AudioComponent {
+  enum class AudioComponent {
     // Input controllers have a 1:1 mapping with streams, so there's no need to
     // track both controllers and streams.
-    AUDIO_INPUT_CONTROLLER,
+    kAudioInputController,
     // Output controllers may or may not be backed by an active stream, so we
     // need to track both controllers and streams.
-    AUDIO_OUTPUT_CONTROLLER,
-    AUDIO_OUTPUT_STREAM,
-    AUDIO_COMPONENT_MAX
+    kAudioOuputController,
+    kAudioOutputStream,
+    kAudiocomponentMax,
   };
 
   // Create a new AudioLog object for tracking the behavior for one instance of

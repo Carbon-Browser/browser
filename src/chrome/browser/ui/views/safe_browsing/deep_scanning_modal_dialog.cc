@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ DeepScanningModalDialog::DeepScanningModalDialog(
     : TabModalConfirmDialogDelegate(web_contents),
       accept_callback_(std::move(accept_callback)) {}
 
-DeepScanningModalDialog::~DeepScanningModalDialog() {}
+DeepScanningModalDialog::~DeepScanningModalDialog() = default;
 
 std::u16string DeepScanningModalDialog::GetTitle() {
   return l10n_util::GetStringUTF16(IDS_DEEP_SCANNING_DIALOG_OPEN_NOW_TITLE);

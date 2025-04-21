@@ -1,11 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_ROUTER_DISCOVERY_MDNS_CAST_MEDIA_SINK_SERVICE_TEST_HELPERS_H_
 #define CHROME_BROWSER_MEDIA_ROUTER_DISCOVERY_MDNS_CAST_MEDIA_SINK_SERVICE_TEST_HELPERS_H_
-
-#include "chrome/browser/media/router/discovery/mdns/cast_media_sink_service.h"
 
 #include <string>
 
@@ -15,13 +13,14 @@
 #include "base/test/mock_callback.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/timer/mock_timer.h"
+#include "chrome/browser/media/router/discovery/mdns/cast_media_sink_service.h"
 #include "chrome/browser/media/router/discovery/mdns/cast_media_sink_service_impl.h"
 #include "chrome/browser/media/router/discovery/mdns/media_sink_util.h"
 #include "chrome/browser/media/router/test/mock_dns_sd_registry.h"
 #include "chrome/browser/media/router/test/provider_test_helpers.h"
-#include "components/cast_channel/cast_socket.h"
-#include "components/cast_channel/cast_socket_service.h"
-#include "components/cast_channel/cast_test_util.h"
+#include "components/media_router/common/providers/cast/channel/cast_socket.h"
+#include "components/media_router/common/providers/cast/channel/cast_socket_service.h"
+#include "components/media_router/common/providers/cast/channel/cast_test_util.h"
 #include "components/media_router/common/test/test_helper.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_task_environment.h"
@@ -39,7 +38,7 @@ class MockCastMediaSinkServiceImpl : public CastMediaSinkServiceImpl {
       const OnSinksDiscoveredCallback& callback,
       cast_channel::CastSocketService* cast_socket_service,
       DiscoveryNetworkMonitor* network_monitor,
-      MediaSinkServiceBase* dial_media_sink_service);
+      DialMediaSinkServiceImpl* dial_media_sink_service);
   ~MockCastMediaSinkServiceImpl() override;
 
   void Start() override { DoStart(); }
@@ -74,14 +73,13 @@ class MockCastMediaSinkServiceImpl : public CastMediaSinkServiceImpl {
 class TestCastMediaSinkService : public CastMediaSinkService {
  public:
   TestCastMediaSinkService(cast_channel::CastSocketService* cast_socket_service,
-                           DiscoveryNetworkMonitor* network_monitor)
-      : cast_socket_service_(cast_socket_service),
-        network_monitor_(network_monitor) {}
-  ~TestCastMediaSinkService() override = default;
+                           DiscoveryNetworkMonitor* network_monitor);
+  ~TestCastMediaSinkService() override;
 
   std::unique_ptr<CastMediaSinkServiceImpl, base::OnTaskRunnerDeleter>
   CreateImpl(const OnSinksDiscoveredCallback& sinks_discovered_cb,
-             MediaSinkServiceBase* dial_media_sink_service) override;
+             DialMediaSinkServiceImpl* dial_media_sink_service) override;
+  MOCK_METHOD(void, StartMdnsDiscovery, ());
 
   MockCastMediaSinkServiceImpl* mock_impl() { return mock_impl_; }
 

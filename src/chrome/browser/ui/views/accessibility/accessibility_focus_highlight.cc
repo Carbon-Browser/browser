@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/accessibility/accessibility_focus_highlight.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/common/pref_names.h"
@@ -103,8 +105,9 @@ AccessibilityFocusHighlight::AccessibilityFocusHighlight(
 }
 
 AccessibilityFocusHighlight::~AccessibilityFocusHighlight() {
-  if (compositor_ && compositor_->HasAnimationObserver(this))
+  if (compositor_ && compositor_->HasAnimationObserver(this)) {
     compositor_->RemoveAnimationObserver(this);
+  }
 }
 
 // static
@@ -137,8 +140,9 @@ SkColor AccessibilityFocusHighlight::GetHighlightColor() {
   SkColor theme_color =
       color_provider->GetColor(ui::kColorFocusableBorderFocused);
 
-  if (theme_color == SK_ColorTRANSPARENT || use_default_color_for_testing_)
+  if (theme_color == SK_ColorTRANSPARENT || use_default_color_for_testing_) {
     return color_provider->GetColor(kColorFocusHighlightDefault);
+  }
 
   return theme_color;
 #endif
@@ -193,17 +197,20 @@ void AccessibilityFocusHighlight::CreateOrUpdateLayer(gfx::Rect node_bounds) {
       display::Screen::GetScreen()->GetDisplayMatching(layer_bounds);
   ui::Compositor* compositor = root_layer->GetCompositor();
   if (compositor != compositor_) {
-    if (compositor_ && compositor_->HasAnimationObserver(this))
+    if (compositor_ && compositor_->HasAnimationObserver(this)) {
       compositor_->RemoveAnimationObserver(this);
+    }
     compositor_ = compositor;
-    if (compositor_ && !compositor_->HasAnimationObserver(this))
+    if (compositor_ && !compositor_->HasAnimationObserver(this)) {
       compositor_->AddAnimationObserver(this);
+    }
   }
 }
 
 void AccessibilityFocusHighlight::RemoveLayer() {
-  if (no_fade_for_testing_)
+  if (no_fade_for_testing_) {
     return;
+  }
 
   layer_.reset();
   if (compositor_) {
@@ -220,7 +227,7 @@ void AccessibilityFocusHighlight::AddOrRemoveObservers() {
   if (prefs->GetBoolean(prefs::kAccessibilityFocusHighlightEnabled)) {
     // Listen for focus changes. Automatically deregisters when destroyed,
     // or when the preference toggles off.
-    // TODO(crbug.com/1194802): This will fire even for focused-element changes
+    // TODO(crbug.com/40758630): This will fire even for focused-element changes
     // in windows other than browser_view_, which might not be ideal behavior.
     focus_changed_subscription_ =
         content::BrowserAccessibilityState::GetInstance()
@@ -240,17 +247,19 @@ void AccessibilityFocusHighlight::OnFocusChangedInPage(
     const content::FocusedNodeDetails& details) {
   // Unless this is a test, only draw the focus ring if this BrowserView is
   // the active one.
-  // TODO(crbug.com/1194802): Even if this BrowserView is active, it doesn't
+  // TODO(crbug.com/40758630): Even if this BrowserView is active, it doesn't
   // necessarily own the node we're about to highlight.
-  if (!browser_view_->IsActive() && !skip_activation_check_for_testing_)
+  if (!browser_view_->IsActive() && !skip_activation_check_for_testing_) {
     return;
+  }
 
   // Get the bounds of the focused node from the web page.
   gfx::Rect node_bounds = details.node_bounds_in_screen;
 
   // This happens if e.g. we focus on <body>. Don't show a confusing highlight.
-  if (node_bounds.IsEmpty())
+  if (node_bounds.IsEmpty()) {
     return;
+  }
 
   // Convert it to the local coordinates of this BrowserView's widget.
   node_bounds.Offset(-gfx::ToFlooredVector2d(browser_view_->GetWidget()
@@ -293,7 +302,7 @@ void AccessibilityFocusHighlight::OnPaintLayer(
     // Decrease alpha as distance remaining decreases.
     int alpha = (original_alpha * remaining * remaining) /
                 (kGradientWidth * kGradientWidth);
-    gradient_flags.setAlpha(alpha);
+    gradient_flags.setAlphaf(alpha / 255.0f);
 
     recorder.canvas()->DrawRoundRect(gradient_bounds, gradient_border_radius,
                                      gradient_flags);
@@ -326,8 +335,9 @@ float AccessibilityFocusHighlight::ComputeOpacity(
     base::TimeDelta time_since_focus_move) {
   float opacity = 1.0f;
 
-  if (no_fade_for_testing_)
+  if (no_fade_for_testing_) {
     return opacity;
+  }
 
   if (time_since_layer_create < fade_in_time_) {
     // We're fading in.
@@ -341,18 +351,20 @@ float AccessibilityFocusHighlight::ComputeOpacity(
     opacity = 1.0f - (time_since_began_fading / fade_out_time_);
   }
 
-  return base::clamp(opacity, 0.0f, 1.0f);
+  return std::clamp(opacity, 0.0f, 1.0f);
 }
 
 void AccessibilityFocusHighlight::OnAnimationStep(base::TimeTicks timestamp) {
-  if (!layer_)
+  if (!layer_) {
     return;
+  }
 
   // It's quite possible for the first 1 or 2 animation frames to be
   // for a timestamp that's earlier than the time we received the
   // focus change, so we just treat those as a delta of zero.
-  if (timestamp < layer_created_time_)
+  if (timestamp < layer_created_time_) {
     timestamp = layer_created_time_;
+  }
 
   // The time since the layer was created is used for fading in.
   base::TimeDelta time_since_layer_create = timestamp - layer_created_time_;

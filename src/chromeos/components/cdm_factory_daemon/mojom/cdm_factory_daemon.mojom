@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 // interface can also be used to connect directly to the OEMCrypto
 // implementation for ARC.
 
-// Next MinVersion: 7
+// Next MinVersion: 10
 
 module chromeos.cdm.mojom;
 
@@ -26,25 +26,42 @@ import "chromeos/components/cdm_factory_daemon/mojom/output_protection.mojom";
 interface CdmFactory {
   // Deprecated, do not use.
   [MinVersion=1]
-  CreateCdmDeprecated@1(
-              pending_associated_remote<ContentDecryptionModuleClient> client,
-              pending_associated_remote<CdmStorage> storage,
-              pending_associated_receiver<ContentDecryptionModule> cdm,
-              pending_remote<OutputProtection> output_protection);
+  DEPRECATED_1@1(
+      pending_associated_remote<ContentDecryptionModuleClient> client,
+      pending_associated_remote<CdmStorage> storage,
+      pending_associated_receiver<ContentDecryptionModule> cdm,
+      pending_remote<OutputProtection> output_protection);
+
+  // Deprecated, do not use.
+  [MinVersion=3]
+  CreateCdmDeprecated@2(
+      pending_associated_remote<ContentDecryptionModuleClient> client,
+      pending_associated_remote<CdmStorage> storage,
+      pending_remote<OutputProtection> output_protection,
+      string host,
+      pending_associated_receiver<ContentDecryptionModule> cdm);
+
+  [Stable, Extensible]
+  enum CreateCdmStatus {
+    [Default] kSuccess,
+    kNoMoreInstances,
+    kInsufficientGpuResources,
+  };
 
   // Creates a new ContentDecryptionModule instance for a |host| with the
   // corresponding |client|, remote |storage| implementation and
   // |output_protection|. Use an associated interface to ensure ordering and
   // that all become invalidated at the same time.
-  [MinVersion=3]
-  CreateCdm@2(pending_associated_remote<ContentDecryptionModuleClient> client,
+  [MinVersion=9]
+  CreateCdm@3(pending_associated_remote<ContentDecryptionModuleClient> client,
               pending_associated_remote<CdmStorage> storage,
               pending_remote<OutputProtection> output_protection,
               string host,
-              pending_associated_receiver<ContentDecryptionModule> cdm);
+              pending_associated_receiver<ContentDecryptionModule> cdm) =>
+      (CreateCdmStatus result);
 };
 
-// Next Method ID: 8
+// Next Method ID: 10
 // Used for bootstrapping the connection between ash-chrome browser and the
 // cdm-oemcrypto ChromeOS daemon, then methods can be invoked to obtain
 // interfaces to perform CDM or OEMCrypto operations. For the OEMCrypto
@@ -97,4 +114,24 @@ interface CdmFactoryDaemon {
   [MinVersion=6]
   GetAndroidHwKeyData@7(array<uint8> key_id, array<uint8> hw_identifier) =>
       (DecryptStatus status, array<uint8> key_data);
+
+  // Allocates a secure buffer in TrustZone on ARM platforms. The lifetime of
+  // this buffer is managed by the returned fd. This should be resolved to a
+  // secure handle through V4L2; the resulting secure handle can then be used
+  // for the target of decryption. If the allocation fails, a null handle is
+  // returned.
+  [MinVersion=7]
+  AllocateSecureBuffer@8(uint32 size) => (handle<platform>? fd);
+
+  // Parses the data in the secure buffer referenced by |secure_handle| at
+  // |offset| bytes into it as an H264 slice header. |stream_data| should
+  // contain the required SPS/PPS structure defined in Chrome and the TA.
+  // Returns a bool for success/fail and on success the array will be populated
+  // with the slice header structure.
+  // NOTE: We do not establish the structures in Mojo because we are not using
+  // Mojo in the end-to-end communication.
+  [MinVersion=8]
+  ParseEncryptedSliceHeader@9(uint64 secure_handle, uint32 offset,
+                              array<uint8> stream_data) =>
+      (bool success, array<uint8> slice_header);
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/federated_identity_api_permission_context_delegate.h"
+#include "url/gurl.h"
 
 namespace content {
 class BrowserContext;
+class RenderFrameHost;
 }
 
 namespace permissions {
@@ -39,14 +41,23 @@ class FederatedIdentityApiPermissionContext
 
   // content::FederatedIdentityApiPermissionContextDelegate:
   content::FederatedIdentityApiPermissionContextDelegate::PermissionStatus
-  GetApiPermissionStatus(const url::Origin& rp_origin) override;
-  void RecordDismissAndEmbargo(const url::Origin& rp_origin) override;
-  void RemoveEmbargoAndResetCounts(const url::Origin& rp_origin) override;
+  GetApiPermissionStatus(const url::Origin& relying_party_embedder) override;
+  void RecordDismissAndEmbargo(
+      const url::Origin& relying_party_embedder) override;
+  void RemoveEmbargoAndResetCounts(
+      const url::Origin& relying_party_embedder) override;
+
+  bool HasThirdPartyCookiesAccess(
+      content::RenderFrameHost& host,
+      const GURL& provider_url,
+      const url::Origin& relying_party_embedder) const override;
+
+  bool AreThirdPartyCookiesEnabledInSettings() const override;
 
  private:
   const raw_ptr<HostContentSettingsMap> host_content_settings_map_;
   scoped_refptr<content_settings::CookieSettings> cookie_settings_;
-  const raw_ptr<permissions::PermissionDecisionAutoBlocker>
+  const raw_ptr<permissions::PermissionDecisionAutoBlocker, DanglingUntriaged>
       permission_autoblocker_;
 };
 

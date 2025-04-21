@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 
 #include <limits>
 
+#include "base/apple/mach_logging.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
 #include "build/build_config.h"
 #include "util/misc/clock.h"
 #include "util/misc/implicit_cast.h"

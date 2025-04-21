@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 
 #include "base/base_paths.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/heap_array.h"
 #include "base/debug/alias.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -35,14 +36,7 @@ namespace crypto {
 
 namespace {
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
-
-// Fake certificate authority database used for testing.
-static const base::FilePath::CharType kReadOnlyCertDB[] =
-    FILE_PATH_LITERAL("/etc/fake_root_ca/nssdb");
-
-#else
-
+#if !(BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS))
 base::FilePath GetDefaultConfigDirectory() {
   base::FilePath dir;
   base::PathService::Get(base::DIR_HOME, &dir);
@@ -58,20 +52,14 @@ base::FilePath GetDefaultConfigDirectory() {
   DVLOG(2) << "DefaultConfigDirectory: " << dir.value();
   return dir;
 }
-
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 
-// On non-Chrome OS platforms, return the default config directory. On Chrome OS
-// test images, return a read-only directory with fake root CA certs (which are
-// used by the local Google Accounts server mock we use when testing our login
-// code). On Chrome OS non-test images (where the read-only directory doesn't
-// exist), return an empty path.
+// On non-Chrome OS platforms, return the default config directory. On Chrome
+// OS return a empty path which will result in NSS being initialized without a
+// persistent database.
 base::FilePath GetInitialConfigDirectory() {
 #if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  base::FilePath database_dir = base::FilePath(kReadOnlyCertDB);
-  if (!base::PathExists(database_dir))
-    database_dir.clear();
-  return database_dir;
+  return base::FilePath();
 #else
   return GetDefaultConfigDirectory();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -200,17 +188,17 @@ class NSSInitSingleton {
     // Initializing NSS causes us to do blocking IO.
     // Temporarily allow it until we fix
     //   http://code.google.com/p/chromium/issues/detail?id=59847
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForNSS allow_blocking;
 
     EnsureNSPRInit();
 
-    // We *must* have NSS >= 3.26 at compile time.
-    static_assert((NSS_VMAJOR == 3 && NSS_VMINOR >= 26) || (NSS_VMAJOR > 3),
+    // We *must* have NSS >= 3.35 at compile time.
+    static_assert((NSS_VMAJOR == 3 && NSS_VMINOR >= 35) || (NSS_VMAJOR > 3),
                   "nss version check failed");
     // Also check the run-time NSS version.
     // NSS_VersionCheck is a >= check, not strict equality.
-    if (!NSS_VersionCheck("3.26")) {
-      LOG(FATAL) << "NSS_VersionCheck(\"3.26\") failed. NSS >= 3.26 is "
+    if (!NSS_VersionCheck("3.35")) {
+      LOG(FATAL) << "NSS_VersionCheck(\"3.35\") failed. NSS >= 3.35 is "
                     "required. Please upgrade to the latest NSS, and if you "
                     "still get this error, contact your distribution "
                     "maintainer.";
@@ -218,6 +206,13 @@ class NSSInitSingleton {
 
     SECStatus status = SECFailure;
     base::FilePath database_dir = GetInitialConfigDirectory();
+    // In MSAN, all loaded libraries needs to be instrumented. But the user
+    // config may reference an uninstrumented module, so load NSS without cert
+    // DBs instead. Tests should ideally be run under
+    // testing/run_with_dummy_home.py to eliminate dependencies on user
+    // configuration, but the bots are not currently configured to do so. This
+    // workaround may be removed if/when the bots use run_with_dummy_home.py.
+#if !defined(MEMORY_SANITIZER)
     if (!database_dir.empty()) {
       // Initialize with a persistent database (likely, ~/.pki/nssdb).
       // Use "sql:" which can be shared by multiple processes safely.
@@ -234,6 +229,7 @@ class NSSInitSingleton {
                    << nss_config_dir << "): " << GetNSSErrorMessage();
       }
     }
+#endif  // !defined(MEMORY_SANITIZER)
     if (status != SECSuccess) {
       VLOG(1) << "Initializing NSS without a persistent database.";
       status = NSS_NoDB_Init(nullptr);
@@ -357,9 +353,10 @@ SECMODModule* LoadNSSModule(const char* name,
 std::string GetNSSErrorMessage() {
   std::string result;
   if (PR_GetErrorTextLength()) {
-    std::unique_ptr<char[]> error_text(new char[PR_GetErrorTextLength() + 1]);
-    PRInt32 copied = PR_GetErrorText(error_text.get());
-    result = std::string(error_text.get(), copied);
+    auto error_text =
+        base::HeapArray<char>::Uninit(PR_GetErrorTextLength() + 1);
+    PRInt32 copied = PR_GetErrorText(error_text.data());
+    result = std::string(error_text.data(), copied);
   } else {
     result = base::StringPrintf("NSS error code: %d", PR_GetError());
   }

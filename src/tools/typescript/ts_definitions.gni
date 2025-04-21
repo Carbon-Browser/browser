@@ -1,8 +1,11 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
 import("//third_party/node/node.gni")
+
+assert(is_chromeos_ash)
 
 template("ts_definitions") {
   node(target_name) {
@@ -10,8 +13,10 @@ template("ts_definitions") {
 
     forward_variables_from(invoker,
                            [
+                             "deps",
                              "extra_deps",
                              "js_files",
+                             "visibility",
                            ])
 
     inputs = [ "//tools/typescript/tsconfig_definitions_base.json" ]
@@ -44,6 +49,16 @@ template("ts_definitions") {
              "--js_files",
            ] + js_files
 
+    if (defined(deps)) {
+      args += [ "--deps" ]
+
+      foreach(dep, deps) {
+        name = get_label_info(dep, "name")
+        args += [ rebase_path(get_label_info(dep, "dir"), ".") +
+                  "/tsconfig_$name.json" ]
+      }
+    }
+
     if (defined(extra_deps)) {
       if (!defined(deps)) {
         deps = []
@@ -53,11 +68,9 @@ template("ts_definitions") {
 
     path_mappings = [
       "chrome://resources/*|" +
-          rebase_path("$root_gen_dir/ui/webui/resources/preprocessed/*",
-                      target_gen_dir),
+          rebase_path("$root_gen_dir/ui/webui/resources/tsc/*", target_gen_dir),
       "//resources/*|" +
-          rebase_path("$root_gen_dir/ui/webui/resources/preprocessed/*",
-                      target_gen_dir),
+          rebase_path("$root_gen_dir/ui/webui/resources/tsc/*", target_gen_dir),
       "chrome://resources/polymer/v3_0/*|" +
           rebase_path("//third_party/polymer/v3_0/components-chromium/*",
                       target_gen_dir),
@@ -71,6 +84,24 @@ template("ts_definitions") {
               "//third_party/polymer/v3_0/components-chromium/polymer/polymer-element.d.ts",
               target_gen_dir),
     ]
+
+    if (is_chromeos_ash) {
+      path_mappings += [
+        "chrome://resources/cros_components/*|" + rebase_path(
+                "$root_gen_dir/ui/webui/resources/tsc/cros_components/to_be_rewritten/*",
+                target_gen_dir),
+        "//resources/cros_components/*|" + rebase_path(
+                "$root_gen_dir/ui/webui/resources/tsc/cros_components/to_be_rewritten/*",
+                target_gen_dir),
+        "chrome://resources/ash/common/*|" + rebase_path(
+                "$root_gen_dir/ash/webui/common/resources/preprocessed/*",
+                target_gen_dir),
+        "//resources/ash/common/*|" + rebase_path(
+                "$root_gen_dir/ash/webui/common/resources/preprocessed/*",
+                target_gen_dir),
+      ]
+    }
+
     args += [ "--path_mappings" ] + path_mappings
     if (defined(invoker.path_mappings)) {
       args += invoker.path_mappings

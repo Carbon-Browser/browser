@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "media/audio/audio_features.h"
@@ -35,29 +34,10 @@ namespace {
 // waiting on these threads).
 constexpr base::TimeDelta kReatimeThreadPeriod = base::Milliseconds(10);
 
-absl::optional<base::TimeDelta> GetAudioThreadHangDeadline() {
-  if (!base::FeatureList::IsEnabled(
-          features::kAudioServiceOutOfProcessKillAtHang)) {
-    return absl::nullopt;
-  }
-  const std::string timeout_string = base::GetFieldTrialParamValueByFeature(
-      features::kAudioServiceOutOfProcessKillAtHang, "timeout_seconds");
-  int timeout_int = 0;
-  if (!base::StringToInt(timeout_string, &timeout_int) || timeout_int == 0)
-    return absl::nullopt;
-  return base::Seconds(timeout_int);
-}
-
 HangAction GetAudioThreadHangAction() {
-  const bool dump =
-      base::FeatureList::IsEnabled(features::kDumpOnAudioServiceHang);
-  const bool kill = base::FeatureList::IsEnabled(
-      features::kAudioServiceOutOfProcessKillAtHang);
-  if (dump) {
-    return kill ? HangAction::kDumpAndTerminateCurrentProcess
-                : HangAction::kDump;
-  }
-  return kill ? HangAction::kTerminateCurrentProcess : HangAction::kDoNothing;
+  return base::FeatureList::IsEnabled(features::kDumpOnAudioServiceHang)
+             ? HangAction::kDumpAndTerminateCurrentProcess
+             : HangAction::kTerminateCurrentProcess;
 }
 
 // Thread class for hosting owned AudioManager on the main thread of the
@@ -89,11 +69,11 @@ class MainThread final : public media::AudioThread {
 };
 
 MainThread::MainThread()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       worker_thread_("AudioWorkerThread", kReatimeThreadPeriod),
       hang_monitor_(media::AudioThreadHangMonitor::Create(
           GetAudioThreadHangAction(),
-          GetAudioThreadHangDeadline(),
+          /*use the default*/ std::nullopt,
           base::DefaultTickClock::GetInstance(),
           task_runner_)) {}
 
@@ -126,7 +106,6 @@ base::SingleThreadTaskRunner* MainThread::GetWorkerTaskRunner() {
       (worker_task_runner_ && worker_task_runner_->BelongsToCurrentThread()));
   if (!worker_task_runner_) {
     base::Thread::Options options;
-    options.timer_slack = base::TIMER_SLACK_NONE;
     options.thread_type = base::ThreadType::kRealtimeAudio;
     CHECK(worker_thread_.StartWithOptions(std::move(options)));
     worker_task_runner_ = worker_thread_.task_runner();

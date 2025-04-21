@@ -38,17 +38,20 @@
 
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "services/network/public/mojom/websocket.mojom-blink.h"
 #include "third_party/blink/public/mojom/websockets/websocket_connector.mojom-blink-forward.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/websockets/websocket_channel.h"
 #include "third_party/blink/renderer/modules/websockets/websocket_message_chunk_accumulator.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
+#include "third_party/blink/renderer/platform/bindings/v8_external_memory_accounter.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
@@ -57,6 +60,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
@@ -152,12 +156,12 @@ class MODULES_EXPORT WebSocketChannelImpl final
   struct DataFrame final {
     DataFrame(bool fin,
               network::mojom::blink::WebSocketMessageType type,
-              uint32_t data_length)
+              size_t data_length)
         : fin(fin), type(type), data_length(data_length) {}
 
     bool fin;
     network::mojom::blink::WebSocketMessageType type;
-    uint32_t data_length;
+    size_t data_length;
   };
 
   // Used by BlobLoader and Message, so defined here so that it can be shared.
@@ -167,17 +171,18 @@ class MODULES_EXPORT WebSocketChannelImpl final
     // type, but the deleter cannot be called when it was used.
     MessageDataDeleter() : isolate_(nullptr), size_(0) {}
 
-    MessageDataDeleter(v8::Isolate* isolate, size_t size)
-        : isolate_(isolate), size_(size) {}
+    MessageDataDeleter(v8::Isolate* isolate, size_t size);
 
-    MessageDataDeleter(const MessageDataDeleter&) = default;
-    MessageDataDeleter& operator=(const MessageDataDeleter&) = default;
+    MessageDataDeleter(MessageDataDeleter&&) = default;
+    MessageDataDeleter& operator=(MessageDataDeleter&&) = default;
 
     void operator()(char* p) const;
 
    private:
-    v8::Isolate* isolate_;
+    raw_ptr<v8::Isolate> isolate_;
     size_t size_;
+    NO_UNIQUE_ADDRESS mutable V8ExternalMemoryAccounterBase
+        external_memory_accounter_;
   };
 
   using MessageData = std::unique_ptr<char[], MessageDataDeleter>;
@@ -334,7 +339,7 @@ class MODULES_EXPORT WebSocketChannelImpl final
   void HandleDidClose(bool was_clean, uint16_t code, const String& reason);
 
   // Completion callback. It is called with the results of throttling.
-  void OnCompletion(const absl::optional<WebString>& error);
+  void OnCompletion(const std::optional<WebString>& error);
 
   // Methods for BlobLoader.
   void DidFinishLoadingBlob(MessageData, size_t);
@@ -369,7 +374,7 @@ class MODULES_EXPORT WebSocketChannelImpl final
   uint64_t identifier_;
   Member<BlobLoader> blob_loader_;
   WTF::Deque<Message> messages_;
-  WebSocketMessageChunkAccumulator message_chunks_;
+  Member<WebSocketMessageChunkAccumulator> message_chunks_;
   const Member<ExecutionContext> execution_context_;
 
   bool backpressure_ = false;

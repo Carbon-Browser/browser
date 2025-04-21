@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ function onMoveEntryRequested(options, onSuccess, onError) {
 
   // Move the metadata with changing the 'name' field.
   var newMetadata =
-      JSON.parse(JSON.stringify(test_util.defaultMetadata[options.sourcePath]));
+      structuredClone(test_util.defaultMetadata[options.sourcePath]);
   newMetadata.name = options.targetPath.split('/').pop();
   test_util.defaultMetadata[options.targetPath] = newMetadata;
 

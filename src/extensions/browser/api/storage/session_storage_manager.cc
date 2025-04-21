@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class SessionStorageManagerFactory : public BrowserContextKeyedServiceFactory {
   // BrowserContextKeyedServiceFactory:
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* browser_context) const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* browser_context) const override;
 };
 
@@ -54,13 +54,15 @@ content::BrowserContext* SessionStorageManagerFactory::GetBrowserContextToUse(
     content::BrowserContext* browser_context) const {
   // Share storage between incognito and on-the-record profiles by using the
   // original context of an incognito window.
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(browser_context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      browser_context);
 }
 
-KeyedService* SessionStorageManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SessionStorageManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new SessionStorageManager(api::storage::session::QUOTA_BYTES,
-                                   browser_context);
+  return std::make_unique<SessionStorageManager>(
+      api::storage::session::QUOTA_BYTES, browser_context);
 }
 
 }  // namespace
@@ -73,7 +75,7 @@ SessionStorageManager::SessionValue::SessionValue(base::Value value,
 // Implementation of ValueChange.
 SessionStorageManager::ValueChange::ValueChange(
     std::string key,
-    absl::optional<base::Value> old_value,
+    std::optional<base::Value> old_value,
     base::Value* new_value)
     : key(key), old_value(std::move(old_value)), new_value(new_value) {}
 
@@ -144,12 +146,15 @@ SessionStorageManager::ExtensionStorage::GetAll() const {
 
 bool SessionStorageManager::ExtensionStorage::Set(
     std::map<std::string, base::Value> input_values,
-    std::vector<ValueChange>& changes) {
+    std::vector<ValueChange>& changes,
+    std::string* error) {
   std::map<std::string, std::unique_ptr<SessionValue>> session_values;
   size_t updated_used_total =
       CalculateUsage(std::move(input_values), session_values);
-  if (updated_used_total == quota_bytes_)
+  if (updated_used_total == quota_bytes_) {
+    *error = "Session storage quota bytes exceeded. Values were not stored.";
     return false;
+  }
 
   // Insert values in storage map and update total bytes.
   for (auto& session_value : session_values) {
@@ -160,9 +165,9 @@ bool SessionStorageManager::ExtensionStorage::Set(
 
     // Add the change to the changes list.
     ValueChange change(session_value.first,
-                       existent_value ? absl::optional<base::Value>(
+                       existent_value ? std::optional<base::Value>(
                                             std::move(existent_value->value))
-                                      : absl::nullopt,
+                                      : std::nullopt,
                        &session_value.second->value);
     changes.push_back(std::move(change));
 
@@ -182,7 +187,7 @@ void SessionStorageManager::ExtensionStorage::Remove(
 
     // Add the change to the changes list.
     ValueChange change(
-        key, absl::optional<base::Value>(std::move(value_it->second->value)),
+        key, std::optional<base::Value>(std::move(value_it->second->value)),
         nullptr);
     changes.push_back(std::move(change));
 
@@ -195,8 +200,8 @@ void SessionStorageManager::ExtensionStorage::Clear(
     std::vector<ValueChange>& changes) {
   for (auto& value : values_) {
     ValueChange change(
-        value.first,
-        absl::optional<base::Value>(std::move(value.second->value)), nullptr);
+        value.first, std::optional<base::Value>(std::move(value.second->value)),
+        nullptr);
     changes.push_back(std::move(change));
   }
   Clear();
@@ -281,14 +286,15 @@ std::map<std::string, const base::Value*> SessionStorageManager::GetAll(
 
 bool SessionStorageManager::Set(const ExtensionId& extension_id,
                                 std::map<std::string, base::Value> input_values,
-                                std::vector<ValueChange>& changes) {
+                                std::vector<ValueChange>& changes,
+                                std::string* error) {
   auto& storage = extensions_storage_[extension_id];
 
   // Initialize the extension storage, if it doesn't already exist.
   if (!storage)
     storage = std::make_unique<ExtensionStorage>(quota_bytes_per_extension_);
 
-  return storage->Set(std::move(input_values), changes);
+  return storage->Set(std::move(input_values), changes, error);
 }
 
 void SessionStorageManager::Remove(const ExtensionId& extension_id,

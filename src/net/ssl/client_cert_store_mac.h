@@ -1,11 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_SSL_CLIENT_CERT_STORE_MAC_H_
 #define NET_SSL_CLIENT_CERT_STORE_MAC_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "net/base/net_export.h"
 #include "net/ssl/client_cert_store.h"
 #include "net/ssl/ssl_cert_request_info.h"
@@ -24,14 +26,17 @@ class NET_EXPORT ClientCertStoreMac : public ClientCertStore {
   ~ClientCertStoreMac() override;
 
   // ClientCertStore:
-  void GetClientCerts(const SSLCertRequestInfo& cert_request_info,
+  void GetClientCerts(scoped_refptr<const SSLCertRequestInfo> cert_request_info,
                       ClientCertListCallback callback) override;
 
  private:
-  // TODO(https://crbug.com/1302761): Improve test coverage and remove/reduce
+  // TODO(crbug.com/40825523): Improve test coverage and remove/reduce
   // the friend tests and ForTesting methods.
   friend class ClientCertStoreMacTest;
   friend class ClientCertStoreMacTestDelegate;
+
+  void OnClientCertsResponse(ClientCertListCallback callback,
+                             ClientCertIdentityList identities);
 
   // A hook for testing. Filters |input_identities| using the logic being used
   // to filter the system store when GetClientCerts() is called. Implemented by
@@ -52,6 +57,8 @@ class NET_EXPORT ClientCertStoreMac : public ClientCertStore {
       std::vector<std::unique_ptr<ClientCertIdentityMac>> regular_identities,
       const SSLCertRequestInfo& request,
       ClientCertIdentityList* selected_identities);
+
+  base::WeakPtrFactory<ClientCertStoreMac> weak_factory_{this};
 };
 
 }  // namespace net

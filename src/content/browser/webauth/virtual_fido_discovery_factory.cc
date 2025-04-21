@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "build/build_config.h"
 #include "content/browser/webauth/virtual_authenticator.h"
 #include "content/browser/webauth/virtual_discovery.h"
 #include "device/fido/fido_discovery_base.h"
@@ -52,7 +53,7 @@ VirtualFidoDiscoveryFactory::Create(device::FidoTransportProtocol transport) {
 
 void VirtualFidoDiscoveryFactory::AuthenticatorAdded(
     VirtualAuthenticator* authenticator) {
-  for (auto* discovery : discoveries_) {
+  for (VirtualFidoDiscovery* discovery : discoveries_) {
     if (discovery->transport() == authenticator->transport()) {
       discovery->AddVirtualDevice(authenticator->ConstructDevice());
     }
@@ -61,7 +62,7 @@ void VirtualFidoDiscoveryFactory::AuthenticatorAdded(
 
 void VirtualFidoDiscoveryFactory::AuthenticatorRemoved(
     const std::string& authenticator_id) {
-  for (auto* discovery : discoveries_) {
+  for (VirtualFidoDiscovery* discovery : discoveries_) {
     discovery->RemoveVirtualDevice(authenticator_id);
   }
 }
@@ -69,5 +70,12 @@ void VirtualFidoDiscoveryFactory::AuthenticatorRemoved(
 bool VirtualFidoDiscoveryFactory::IsTestOverride() {
   return true;
 }
+
+#if BUILDFLAG(IS_WIN)
+std::unique_ptr<device::FidoDiscoveryBase>
+VirtualFidoDiscoveryFactory::MaybeCreateWinWebAuthnApiDiscovery() {
+  return nullptr;
+}
+#endif
 
 }  // namespace content

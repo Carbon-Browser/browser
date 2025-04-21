@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 
 class ToggleMicrophoneButton : public OverlayWindowImageButton {
- public:
-  METADATA_HEADER(ToggleMicrophoneButton);
+  METADATA_HEADER(ToggleMicrophoneButton, OverlayWindowImageButton)
 
+ public:
   explicit ToggleMicrophoneButton(PressedCallback callback);
   ToggleMicrophoneButton(const ToggleMicrophoneButton&) = delete;
   ToggleMicrophoneButton& operator=(const ToggleMicrophoneButton&) = delete;

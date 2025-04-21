@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define CC_TILES_RASTER_DARK_MODE_FILTER_H_
 
 #include "cc/cc_export.h"
-#include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 
 namespace cc {
 
-// This class provides an interface/wrapeer over blink::DarkModeFilter. The APIs
+class ColorFilter;
+
+// This class provides an interface/wrapper over blink::DarkModeFilter. The APIs
 // in this interface are thread-safe and can be used concurrently from any
 // thread. The interface would be created and destroyed on main thread. Derived
 // classes should ensure making these APIs thread-safe.
@@ -20,8 +21,8 @@ class CC_EXPORT RasterDarkModeFilter {
   virtual ~RasterDarkModeFilter() = default;
 
   // Ensure pixmap has decoded data before calling this API.
-  virtual sk_sp<SkColorFilter> ApplyToImage(const SkPixmap& pixmap,
-                                            const SkIRect& src) const = 0;
+  virtual sk_sp<ColorFilter> ApplyToImage(const SkPixmap& pixmap,
+                                          const SkIRect& src) const = 0;
 };
 
 }  // namespace cc

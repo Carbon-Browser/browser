@@ -28,7 +28,6 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="2329392777730037872">Không mở được <ph name="URL" /> trên ứng dụng.</translation>
 <translation id="2359808026110333948">Tiếp tục</translation>
 <translation id="2366718077645204424">Không thể kết nối với máy chủ. Điều này có thể do cấu hình của mạng bạn đang sử dụng.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Nhìn thấy trực tuyến lần cuối <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Cấp quyền 'Hỗ trợ tiếp cận' cho <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Đã kết nối với <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Bạn có muốn chia sẻ máy tính này cho một người dùng khác xem và kiểm soát không?</translation>
@@ -36,7 +35,6 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="2599300881200251572">Dịch vụ này kích hoạt các kết nối đến từ ứng dụng khách Chrome Remote Desktop.</translation>
 <translation id="2647232381348739934">Dịch vụ kết nối từ xa trên Chrome</translation>
 <translation id="2676780859508944670">Đang xử lý...</translation>
-<translation id="2692522824157224199">Bản quyền 2022 Google LLC. Bảo lưu mọi quyền.</translation>
 <translation id="2699970397166997657">Kết nối từ xa trên Chrome</translation>
 <translation id="2758123043070977469">Đã xảy ra lỗi khi xác thực, vui lòng đăng nhập lại.</translation>
 <translation id="2803375539583399270">Nhập mã PIN</translation>
@@ -54,7 +52,6 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="3423542133075182604">Xử lý từ xa bằng khóa bảo mật</translation>
 <translation id="3581045510967524389">Không thể kết nối với mạng. Vui lòng kiểm tra xem thiết bị của bạn đã được kết nối với mạng hay chưa.</translation>
 <translation id="3596628256176442606">Dịch vụ này kích hoạt các kết nối đến từ ứng dụng khách kết nối từ xa trên Chrome.</translation>
-<translation id="369442766917958684">Ngoại tuyến.</translation>
 <translation id="3695446226812920698">Tìm hiểu cách thức</translation>
 <translation id="3776024066357219166">Phiên Chrome Remote Desktop của bạn đã kết thúc.</translation>
 <translation id="3858860766373142691">Tên</translation>
@@ -73,7 +70,6 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="4257751272692708833">Trình chuyển tiếp URL của <ph name="PRODUCT_NAME" /></translation>
 <translation id="4277736576214464567">Mã truy cập không hợp lệ. Vui lòng thử lại.</translation>
 <translation id="4281844954008187215">Điều khoản dịch vụ</translation>
-<translation id="4372650392690220936">Bản quyền 2022 The Chromium Authors. Bảo lưu mọi quyền.</translation>
 <translation id="4405930547258349619">Thư viện trung tâm</translation>
 <translation id="443560535555262820">Mở tùy chọn Hỗ trợ tiếp cận</translation>
 <translation id="4450893287417543264">Không hiện lại</translation>
@@ -107,7 +103,6 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="5601503069213153581">Mã PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Máy tính của bạn hiện đang được chia sẻ với <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Đã đăng nhập bằng địa chỉ <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Kết nối lại</translation>
 <translation id="5810269635982033450">Màn hình đóng vai trò như bàn di chuột</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> đã yêu cầu quyền truy cập để xem màn hình và điều khiển bàn phím cũng như chuột của bạn. Hãy nhấn ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' nếu bạn không biết yêu cầu này. Nếu bạn có biết, hãy chọn ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' để cho phép kết nối khi đã sẵn sàng.</translation>
@@ -148,12 +143,13 @@ Nếu đã chọn '<ph name="SERVICE_SCRIPT_NAME" />', hãy bỏ chọn rồi ch
 <translation id="7535110896613603182">Mở phần Cài đặt ứng dụng mặc định</translation>
 <translation id="7628469622942688817">Nhớ mã PIN của tôi trên thiết bị này.</translation>
 <translation id="7649070708921625228">Trợ giúp</translation>
-<translation id="7658239707568436148">Hủy</translation>
+<translation id="7658239707568436148">Huỷ</translation>
 <translation id="7665369617277396874">Thêm tài khoản</translation>
 <translation id="7678209621226490279">Gắn vào bên trái</translation>
 <translation id="7693372326588366043">Làm mới danh sách máy chủ</translation>
 <translation id="7714222945760997814">Báo cáo nội dung này</translation>
 <translation id="7868137160098754906">Hãy nhập mã PIN của bạn cho máy tính từ xa.</translation>
+<translation id="7881455334687220899">Bản quyền 2024 The Chromium Authors. Bảo lưu mọi quyền.</translation>
 <translation id="7895403300744144251">Chính sách quyền riêng tư trên máy tính từ xa không cho phép các kết nối từ tài khoản của bạn.</translation>
 <translation id="7936528439960309876">Gắn vào bên phải</translation>
 <translation id="7970576581263377361">Xác thực bị lỗi. Vui lòng đăng nhập lại vào Chromium.</translation>
@@ -185,6 +181,7 @@ Nếu đã đánh dấu vào hộp '<ph name="SERVICE_SCRIPT_NAME" />', hãy b�
 <translation id="8747048596626351634">Phiên bị lỗi hoặc không bắt đầu được. Nếu đã có ~/.chrome-remote-desktop-session trên máy tính từ xa, hãy đảm bảo rằng phiên này bắt đầu chạy một quy trình ở nền trước trong thời gian dài, chẳng hạn như môi trường máy tính để bàn hoặc trình quản lý cửa sổ.</translation>
 <translation id="8804164990146287819">Chính sách quyền riêng tư</translation>
 <translation id="8906511416443321782">Bạn cần phải cho phép sử dụng micrô để ghi âm và truyền đến ứng dụng Chrome Remote Desktop.</translation>
+<translation id="9042277333359847053">Bản quyền 2024 Google LLC. Bảo lưu mọi quyền.</translation>
 <translation id="9111855907838866522">Bạn đã kết nối với thiết bị từ xa. Để mở menu, vui lòng nhấn vào màn hình bằng 4 ngón tay.</translation>
 <translation id="9126115402994542723">Không yêu cầu lại mã PIN khi kết nối với máy chủ này từ thiết bị này.</translation>
 <translation id="916856682307586697">Chạy XSession mặc định</translation>

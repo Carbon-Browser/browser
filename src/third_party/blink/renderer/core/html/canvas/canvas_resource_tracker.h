@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class CanvasRenderingContextHost;
 class ExecutionContext;
 
 class CORE_EXPORT CanvasResourceTracker final
-    : public V8PerIsolateData::GarbageCollectedData {
+    : public V8PerIsolateData::UserData {
  public:
   using ResourceMap = HeapHashMap<WeakMember<CanvasRenderingContextHost>,
                                   WeakMember<ExecutionContext>>;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include "ash/login/ui/hover_notifier.h"
 #include "ash/login/ui/non_accessible_view.h"
-#include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/utf_string_conversions.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/combobox_model.h"
 
 namespace ash {
@@ -21,7 +22,7 @@ class PublicAccountComboboxModel : public ui::ComboboxModel {
  public:
   PublicAccountComboboxModel(
       const std::vector<PublicAccountMenuView::Item>& items,
-      size_t default_index)
+      std::optional<size_t> default_index)
       : items_(items), default_index_(default_index) {}
 
   PublicAccountComboboxModel(const PublicAccountComboboxModel&) = delete;
@@ -31,11 +32,11 @@ class PublicAccountComboboxModel : public ui::ComboboxModel {
   ~PublicAccountComboboxModel() override = default;
 
   // ui::ComboboxModel:
-  size_t GetItemCount() const override { return items_.size(); }
+  size_t GetItemCount() const override { return items_->size(); }
 
   // ui::ComboboxModel:
   std::u16string GetItemAt(size_t index) const override {
-    return base::UTF8ToUTF16(items_[index].title);
+    return base::UTF8ToUTF16((*items_)[index].title);
   }
 
   // ui::ComboboxModel:
@@ -44,26 +45,27 @@ class PublicAccountComboboxModel : public ui::ComboboxModel {
   // represent them as disabled items because they were presented in a similar
   // fashion before (i.e. the group name was visible but unclickable).
   bool IsItemEnabledAt(size_t index) const override {
-    return !items_[index].is_group;
+    return !(*items_)[index].is_group;
   }
 
   // ui::ComboboxModel:
-  absl::optional<size_t> GetDefaultIndex() const override {
+  std::optional<size_t> GetDefaultIndex() const override {
     return default_index_;
   }
 
  private:
-  const std::vector<PublicAccountMenuView::Item>& items_;
-  const size_t default_index_;
+  const raw_ref<const std::vector<PublicAccountMenuView::Item>> items_;
+  const std::optional<size_t> default_index_;
 };
 
 }  // namespace
 
 PublicAccountMenuView::Item::Item() = default;
 
-PublicAccountMenuView::PublicAccountMenuView(const std::vector<Item>& items,
-                                             size_t selected_index,
-                                             const OnSelect& on_select)
+PublicAccountMenuView::PublicAccountMenuView(
+    const std::vector<Item>& items,
+    std::optional<size_t> selected_index,
+    const OnSelect& on_select)
     : views::Combobox(
           std::make_unique<PublicAccountComboboxModel>(items, selected_index)),
       items_(items),
@@ -79,7 +81,10 @@ PublicAccountMenuView::PublicAccountMenuView(const std::vector<Item>& items,
 PublicAccountMenuView::~PublicAccountMenuView() = default;
 
 void PublicAccountMenuView::OnSelectedIndexChanged() {
-  on_select_.Run(items_[GetSelectedIndex().value()].value);
+  on_select_.Run((*items_)[GetSelectedIndex().value()].value);
 }
+
+BEGIN_METADATA(PublicAccountMenuView)
+END_METADATA
 
 }  // namespace ash

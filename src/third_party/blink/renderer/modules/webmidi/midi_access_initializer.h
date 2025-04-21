@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,23 +21,23 @@ namespace blink {
 
 class ScriptState;
 
-class MODULES_EXPORT MIDIAccessInitializer : public ScriptPromiseResolver,
-                                             public MIDIDispatcher::Client {
-
+class MODULES_EXPORT MIDIAccessInitializer
+    : public GarbageCollected<MIDIAccessInitializer>,
+      public MIDIDispatcher::Client {
  public:
   struct PortDescriptor {
     DISALLOW_NEW();
     String id;
     String manufacturer;
     String name;
-    MIDIPort::TypeCode type;
+    MIDIPortType type;
     String version;
     midi::mojom::PortState state;
 
     PortDescriptor(const String& id,
                    const String& manufacturer,
                    const String& name,
-                   MIDIPort::TypeCode type,
+                   MIDIPortType type,
                    const String& version,
                    midi::mojom::PortState state)
         : id(id),
@@ -48,16 +48,10 @@ class MODULES_EXPORT MIDIAccessInitializer : public ScriptPromiseResolver,
           state(state) {}
   };
 
-  static ScriptPromise Start(ScriptState* script_state,
-                             const MIDIOptions* options) {
-    MIDIAccessInitializer* resolver =
-        MakeGarbageCollected<MIDIAccessInitializer>(script_state, options);
-    resolver->KeepAliveWhilePending();
-    return resolver->Start();
-  }
-
   MIDIAccessInitializer(ScriptState*, const MIDIOptions*);
-  ~MIDIAccessInitializer() override = default;
+  virtual ~MIDIAccessInitializer() = default;
+
+  ScriptPromise<MIDIAccess> Start(LocalDOMWindow*);
 
   // MIDIDispatcher::Client
   void DidAddInputPort(const String& id,
@@ -76,23 +70,19 @@ class MODULES_EXPORT MIDIAccessInitializer : public ScriptPromiseResolver,
                              midi::mojom::PortState) override;
   void DidStartSession(midi::mojom::Result) override;
   void DidReceiveMIDIData(unsigned port_index,
-                          const unsigned char* data,
-                          wtf_size_t length,
+                          base::span<const uint8_t> data,
                           base::TimeTicks time_stamp) override {}
 
   void Trace(Visitor*) const override;
 
  private:
-  ExecutionContext* GetExecutionContext() const;
-  ScriptPromise Start();
-
-  void ContextDestroyed() override;
 
   void StartSession();
 
   void OnPermissionsUpdated(mojom::blink::PermissionStatus);
   void OnPermissionUpdated(mojom::blink::PermissionStatus);
 
+  Member<ScriptPromiseResolver<MIDIAccess>> resolver_;
   Member<MIDIDispatcher> dispatcher_;
   Vector<PortDescriptor> port_descriptors_;
   Member<const MIDIOptions> options_;

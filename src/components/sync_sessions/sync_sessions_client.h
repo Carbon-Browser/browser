@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "components/sync/model/model_type_store.h"
+#include "base/memory/weak_ptr.h"
+#include "components/sync/model/data_type_store.h"
 
 class GURL;
 
@@ -31,7 +32,7 @@ class SyncSessionsClient {
 
   // Getters for services that sessions depends on.
   virtual SessionSyncPrefs* GetSessionSyncPrefs() = 0;
-  virtual syncer::RepeatingModelTypeStoreFactory GetStoreFactory() = 0;
+  virtual syncer::RepeatingDataTypeStoreFactory GetStoreFactory() = 0;
 
   // Clears all on demand favicons (downloaded based on synced history data).
   virtual void ClearAllOnDemandFavicons() = 0;
@@ -53,6 +54,9 @@ class SyncSessionsClient {
   // Returns a LocalSessionEventRouter instance that is customized for the
   // embedder's context.
   virtual LocalSessionEventRouter* GetLocalSessionEventRouter() = 0;
+
+  // Returns a weak pointer to the implementation instance.
+  virtual base::WeakPtr<SyncSessionsClient> AsWeakPtr() = 0;
 };
 
 }  // namespace sync_sessions

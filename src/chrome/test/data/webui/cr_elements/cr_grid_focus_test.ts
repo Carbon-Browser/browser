@@ -1,18 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_grid/cr_grid.js';
 
-import {CrGridElement} from 'chrome://resources/cr_elements/cr_grid/cr_grid.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
-
+import type {CrGridElement} from 'chrome://resources/cr_elements/cr_grid/cr_grid.js';
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
+import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
+import {keyDownOn} from 'chrome://webui-test/keyboard_mock_interactions.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 suite('CrElementsGridFocusTest', () => {
-  function createGrid(size: number): CrGridElement {
+  function createGrid(
+      size: number, disableArrowNav: boolean = false): CrGridElement {
     const grid = document.createElement('cr-grid');
     for (let i = 0; i < size; i++) {
       const div = document.createElement('div');
@@ -21,6 +22,7 @@ suite('CrElementsGridFocusTest', () => {
       grid.appendChild(div);
     }
     grid.columns = 6;
+    grid.disableArrowNavigation = disableArrowNav;
     document.body.appendChild(grid);
     return grid;
   }
@@ -37,7 +39,7 @@ suite('CrElementsGridFocusTest', () => {
   }
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
   });
 
   test('right focuses right item', () => {
@@ -248,5 +250,120 @@ suite('CrElementsGridFocusTest', () => {
 
     // Assert.
     await itemClicked;
+  });
+
+  test('right arrow does not change focus with arrow nav disabled', () => {
+    // Arrange.
+    const grid = createGrid(12, true);
+
+    // Act.
+    keydown(grid.children[0]!, 'ArrowRight');
+
+    // Assert.
+    assertFocus(document.body);
+  });
+
+  test('left arrow does not change focus with arrow nav disabled', () => {
+    // Arrange.
+    const grid = createGrid(12, true);
+
+    // Act.
+    keydown(grid.children[0]!, 'ArrowLeft');
+
+    // Assert.
+    assertFocus(document.body);
+  });
+
+  test('up arrow does not change focus with arrow nav disabled', () => {
+    // Arrange.
+    const grid = createGrid(12, true);
+
+    // Act.
+    keydown(grid.children[0]!, 'ArrowUp');
+
+    // Assert.
+    assertFocus(document.body);
+  });
+
+  test('down arrow does not change focus with arrow nav disabled', () => {
+    // Arrange.
+    const grid = createGrid(12, true);
+
+    // Act.
+    keydown(grid.children[0]!, 'ArrowDown');
+
+    // Assert.
+    assertFocus(document.body);
+  });
+
+  test('ignoreModifiedKeyEvents', function() {
+    const grid = createGrid(3);
+    grid.ignoreModifiedKeyEvents = true;
+
+    const items = grid.$.items.assignedElements();
+    (items[0] as HTMLElement).focus();
+    assertFocus(items[0]!);
+
+    function assertFocusUnchanged(key: 'ArrowRight'|'ArrowLeft') {
+      assertFocus(items[0]!);
+      keyDownOn(items[0]!, 0, 'alt', key);
+      assertFocus(items[0]!);
+      keyDownOn(items[0]!, 0, 'ctrl', key);
+      assertFocus(items[0]!);
+      keyDownOn(items[0]!, 0, 'meta', key);
+      assertFocus(items[0]!);
+      keyDownOn(items[0]!, 0, 'shift', key);
+      assertFocus(items[0]!);
+    }
+
+    // Test non-modifier events still work.
+    keydown(items[0]!, 'ArrowRight');
+    assertFocus(items[1]!);
+    keydown(items[1]!, 'ArrowLeft');
+    assertFocus(items[0]!);
+
+    // Test modifier events don't change focus.
+    assertFocusUnchanged('ArrowRight');
+    assertFocusUnchanged('ArrowLeft');
+
+    // Test RTL case.
+    grid.dir = 'rtl';
+    assertFocusUnchanged('ArrowRight');
+    assertFocusUnchanged('ArrowLeft');
+
+    keydown(items[0]!, 'ArrowRight');
+    assertFocus(items[2]!);
+    keydown(items[2]!, 'ArrowLeft');
+    assertFocus(items[0]!);
+  });
+
+  // Test cases where keyboard events are coming from children of the slotted
+  // elements and ensure that keyboard navigation still works.
+  test('focusSelector focuses right item', function() {
+    document.body.innerHTML = getTrustedHTML`
+      <cr-grid focus-selector="button">
+        <div><button id="0"></button></div>
+        <div><button id="1"></button></div>
+        <div><button id="2"></button></div>
+      </cr-grid>`;
+
+    const grid = document.body.querySelector('cr-grid')!;
+    assertEquals('button', grid.focusSelector);
+    const items = grid.$.items.assignedElements();
+    const focusableChildren = items.map(i => i.querySelector('button'));
+
+    // Focus first element.
+    focusableChildren[0]!.focus();
+    assertFocus(focusableChildren[0]!);
+
+    // Navigate via keyboard.
+    keydown(focusableChildren[0]!, 'ArrowRight');
+    assertFocus(focusableChildren[1]!);
+
+    keydown(focusableChildren[1]!, 'ArrowRight');
+    assertFocus(focusableChildren[2]!);
+
+    keydown(focusableChildren[2]!, 'ArrowRight');
+    assertFocus(focusableChildren[0]!);
   });
 });

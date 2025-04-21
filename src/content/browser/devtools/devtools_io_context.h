@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
@@ -18,7 +18,7 @@ class SequencedTaskRunner;
 
 namespace content {
 
-class DevToolsIOContext : public base::SupportsWeakPtr<DevToolsIOContext> {
+class DevToolsIOContext final {
  public:
   class Stream : public base::RefCountedDeleteOnSequence<Stream> {
    public:
@@ -63,6 +63,10 @@ class DevToolsIOContext : public base::SupportsWeakPtr<DevToolsIOContext> {
   bool Close(const std::string& handle);
   void DiscardAllStreams();
 
+  base::WeakPtr<DevToolsIOContext> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
   static bool IsTextMimeType(const std::string& mime_type);
 
  private:
@@ -70,6 +74,8 @@ class DevToolsIOContext : public base::SupportsWeakPtr<DevToolsIOContext> {
   void RegisterStream(scoped_refptr<Stream> stream, const std::string& handle);
 
   std::map<std::string, scoped_refptr<Stream>> streams_;
+
+  base::WeakPtrFactory<DevToolsIOContext> weak_ptr_factory_{this};
 };
 
 }  // namespace content

@@ -23,23 +23,43 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/modules/speech/speech_recognition.h"
 
 #include <algorithm>
 
+#include "base/feature_list.h"
 #include "build/build_config.h"
+#include "media/base/audio_parameters.h"
+#include "media/base/channel_layout.h"
+#include "media/base/media_switches.h"
+#include "media/mojo/mojom/speech_recognition.mojom-blink.h"
+#include "media/mojo/mojom/speech_recognition_audio_forwarder.mojom-blink.h"
+#include "media/mojo/mojom/speech_recognition_error.mojom-blink.h"
+#include "media/mojo/mojom/speech_recognition_result.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/blink/public/mojom/speech/speech_recognition_error.mojom-blink.h"
-#include "third_party/blink/public/mojom/speech/speech_recognition_result.mojom-blink.h"
+#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
+#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
+#include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_settings.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/page/page.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
+#include "third_party/blink/renderer/modules/mediastream/speech_recognition_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/modules/speech/speech_recognition_controller.h"
 #include "third_party/blink/renderer/modules/speech/speech_recognition_error_event.h"
 #include "third_party/blink/renderer/modules/speech/speech_recognition_event.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 
 namespace blink {
 
@@ -48,35 +68,46 @@ SpeechRecognition* SpeechRecognition::Create(ExecutionContext* context) {
 }
 
 void SpeechRecognition::start(ExceptionState& exception_state) {
-  if (!controller_ || !GetExecutionContext())
+  // https://wicg.github.io/nav-speculation/prerendering.html#web-speech-patch
+  // If this is called in prerendering, it should be deferred.
+  if (DomWindow() && DomWindow()->document()->IsPrerendering()) {
+    DomWindow()->document()->AddPostPrerenderingActivationStep(
+        WTF::BindOnce(&SpeechRecognition::StartInternal,
+                      WrapWeakPersistent(this), /*exception_state=*/nullptr));
     return;
+  }
+  StartInternal(&exception_state);
+}
 
-  if (started_) {
+// TODO(crbug.com/384797834): Add Web Platform Tests for MediaStreamTrack
+// support.
+void SpeechRecognition::start(MediaStreamTrack* media_stream_track,
+                              ExceptionState& exception_state) {
+  DCHECK(media_stream_track && media_stream_track->Component());
+
+  if (media_stream_track->Component()->GetReadyState() !=
+          MediaStreamSource::kReadyStateLive ||
+      media_stream_track->Component()->GetSourceType() !=
+          MediaStreamSource::kTypeAudio) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "recognition has already started.");
+                                      "The MediaStreamTrack is not of kind "
+                                      "'audio' or is not of state 'live'.");
     return;
   }
 
-  final_results_.clear();
-
-  mojo::PendingRemote<mojom::blink::SpeechRecognitionSessionClient>
-      session_client;
-  // See https://bit.ly/2S0zRAS for task types.
-  receiver_.Bind(
-      session_client.InitWithNewPipeAndPassReceiver(),
-      GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI));
-  receiver_.set_disconnect_handler(WTF::Bind(
-      &SpeechRecognition::OnConnectionError, WrapWeakPersistent(this)));
-
-  controller_->Start(
-      session_.BindNewPipeAndPassReceiver(
-          GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI)),
-      std::move(session_client), *grammars_, lang_, continuous_,
-      interim_results_, max_alternatives_);
-  started_ = true;
+  stream_track_ = media_stream_track;
+  start(exception_state);
 }
 
 void SpeechRecognition::stopFunction() {
+  // https://wicg.github.io/nav-speculation/prerendering.html#web-speech-patch
+  // If this is called in prerendering, it should be deferred.
+  if (DomWindow() && DomWindow()->document()->IsPrerendering()) {
+    DomWindow()->document()->AddPostPrerenderingActivationStep(WTF::BindOnce(
+        &SpeechRecognition::stopFunction, WrapWeakPersistent(this)));
+    return;
+  }
+
   if (!controller_)
     return;
 
@@ -87,6 +118,14 @@ void SpeechRecognition::stopFunction() {
 }
 
 void SpeechRecognition::abort() {
+  // https://wicg.github.io/nav-speculation/prerendering.html#web-speech-patch
+  // If this is called in prerendering, it should be deferred.
+  if (DomWindow() && DomWindow()->document()->IsPrerendering()) {
+    DomWindow()->document()->AddPostPrerenderingActivationStep(
+        WTF::BindOnce(&SpeechRecognition::abort, WrapWeakPersistent(this)));
+    return;
+  }
+
   if (!controller_)
     return;
 
@@ -96,9 +135,51 @@ void SpeechRecognition::abort() {
   }
 }
 
+ScriptPromise<IDLBoolean> SpeechRecognition::onDeviceWebSpeechAvailable(
+    ScriptState* script_state,
+    const String& lang,
+    ExceptionState& exception_state) {
+  if (!controller_ || !GetExecutionContext()) {
+    return EmptyPromise();
+  }
+
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(
+      script_state, exception_state.GetContext());
+  auto result = resolver->Promise();
+
+  controller_->OnDeviceWebSpeechAvailable(
+      lang, WTF::BindOnce([](SpeechRecognition*,
+                             ScriptPromiseResolver<IDLBoolean>* resolver,
+                             bool available) { resolver->Resolve(available); },
+                          WrapPersistent(this), WrapPersistent(resolver)));
+
+  return result;
+}
+
+ScriptPromise<IDLBoolean> SpeechRecognition::installOnDeviceSpeechRecognition(
+    ScriptState* script_state,
+    const String& lang,
+    ExceptionState& exception_state) {
+  if (!controller_ || !GetExecutionContext()) {
+    return EmptyPromise();
+  }
+
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(
+      script_state, exception_state.GetContext());
+  auto result = resolver->Promise();
+
+  controller_->InstallOnDeviceSpeechRecognition(
+      lang, WTF::BindOnce([](SpeechRecognition*,
+                             ScriptPromiseResolver<IDLBoolean>* resolver,
+                             bool success) { resolver->Resolve(success); },
+                          WrapPersistent(this), WrapPersistent(resolver)));
+
+  return result;
+}
+
 void SpeechRecognition::ResultRetrieved(
-    WTF::Vector<mojom::blink::SpeechRecognitionResultPtr> results) {
-  auto* it = std::stable_partition(
+    WTF::Vector<media::mojom::blink::WebSpeechRecognitionResultPtr> results) {
+  auto it = std::stable_partition(
       results.begin(), results.end(),
       [](const auto& result) { return !result->is_provisional; });
   wtf_size_t provisional_count = static_cast<wtf_size_t>(results.end() - it);
@@ -106,8 +187,7 @@ void SpeechRecognition::ResultRetrieved(
   // Add the new results to the previous final results.
   HeapVector<Member<SpeechRecognitionResult>> aggregated_results =
       std::move(final_results_);
-  aggregated_results.ReserveCapacity(aggregated_results.size() +
-                                     results.size());
+  aggregated_results.reserve(aggregated_results.size() + results.size());
 
   for (const auto& result : results) {
     HeapVector<Member<SpeechRecognitionAlternative>> alternatives;
@@ -141,8 +221,9 @@ void SpeechRecognition::ResultRetrieved(
 }
 
 void SpeechRecognition::ErrorOccurred(
-    mojom::blink::SpeechRecognitionErrorPtr error) {
-  if (error->code == mojom::blink::SpeechRecognitionErrorCode::kNoMatch) {
+    media::mojom::blink::SpeechRecognitionErrorPtr error) {
+  if (error->code ==
+      media::mojom::blink::SpeechRecognitionErrorCode::kNoMatch) {
     DispatchEvent(*SpeechRecognitionEvent::CreateNoMatch(nullptr));
   } else {
     // TODO(primiano): message?
@@ -204,37 +285,101 @@ void SpeechRecognition::PageVisibilityChanged() {
 }
 
 void SpeechRecognition::OnConnectionError() {
-  ErrorOccurred(mojom::blink::SpeechRecognitionError::New(
-      mojom::blink::SpeechRecognitionErrorCode::kNetwork,
-      mojom::blink::SpeechAudioErrorDetails::kNone));
+  ErrorOccurred(media::mojom::blink::SpeechRecognitionError::New(
+      media::mojom::blink::SpeechRecognitionErrorCode::kNetwork,
+      media::mojom::blink::SpeechAudioErrorDetails::kNone));
   Ended();
 }
 
+void SpeechRecognition::StartInternal(ExceptionState* exception_state) {
+  if (!controller_ || !GetExecutionContext())
+    return;
+
+  if (started_) {
+    // https://wicg.github.io/speech-api/#dom-speechrecognition-start
+    // The spec says that if the start method is called on an already started
+    // object (that is, start has previously been called, and no error or end
+    // event has fired on the object), the user agent must throw an
+    // "InvalidStateError" DOMException and ignore the call. But, if it's called
+    // after prerendering activation, `exception_state` is null since it's
+    // STACK_ALLOCATED and it can't be passed.
+    if (exception_state) {
+      exception_state->ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                         "recognition has already started.");
+    }
+    return;
+  }
+  final_results_.clear();
+
+  if (base::FeatureList::IsEnabled(
+          blink::features::kMediaStreamTrackWebSpeech) &&
+      stream_track_) {
+    SpeechRecognitionMediaStreamAudioSink* sink =
+        MakeGarbageCollected<SpeechRecognitionMediaStreamAudioSink>(
+            GetExecutionContext(),
+            WTF::BindOnce(&SpeechRecognition::StartController,
+                          WrapPersistent(this),
+                          session_.BindNewPipeAndPassReceiver(
+                              GetExecutionContext()->GetTaskRunner(
+                                  TaskType::kMiscPlatformAPI))));
+    WebMediaStreamAudioSink::AddToAudioTrack(
+        sink, WebMediaStreamTrack(stream_track_->Component()));
+    stream_track_->RegisterSink(sink);
+  } else {
+    StartController(session_.BindNewPipeAndPassReceiver(
+        GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI)));
+  }
+
+  started_ = true;
+}
+
+void SpeechRecognition::StartController(
+    mojo::PendingReceiver<media::mojom::blink::SpeechRecognitionSession>
+        session_receiver,
+    std::optional<media::AudioParameters> audio_parameters,
+    mojo::PendingReceiver<media::mojom::blink::SpeechRecognitionAudioForwarder>
+        audio_forwarder_receiver) {
+  mojo::PendingRemote<media::mojom::blink::SpeechRecognitionSessionClient>
+      session_client;
+  // See https://bit.ly/2S0zRAS for task types.
+  receiver_.Bind(
+      session_client.InitWithNewPipeAndPassReceiver(),
+      GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI));
+  receiver_.set_disconnect_handler(WTF::BindOnce(
+      &SpeechRecognition::OnConnectionError, WrapWeakPersistent(this)));
+  controller_->Start(
+      std::move(session_receiver), std::move(session_client), *grammars_, lang_,
+      continuous_, interim_results_, max_alternatives_,
+      /*on_device=*/
+      (mode_ == V8SpeechRecognitionMode::Enum::kOndevicePreferred ||
+       mode_ == V8SpeechRecognitionMode::Enum::kOndeviceOnly),
+      /*allow_cloud_fallback=*/
+      (mode_ != V8SpeechRecognitionMode::Enum::kOndeviceOnly),
+      std::move(audio_forwarder_receiver), std::move(audio_parameters));
+}
+
 SpeechRecognition::SpeechRecognition(LocalDOMWindow* window)
-    : ExecutionContextLifecycleObserver(window),
+    : ActiveScriptWrappable<SpeechRecognition>({}),
+      ExecutionContextLifecycleObserver(window),
       PageVisibilityObserver(window->GetFrame() ? window->GetFrame()->GetPage()
                                                 : nullptr),
       grammars_(SpeechGrammarList::Create()),  // FIXME: The spec is not clear
                                                // on the default value for the
                                                // grammars attribute.
-      continuous_(false),
-      interim_results_(false),
-      max_alternatives_(1),
       controller_(SpeechRecognitionController::From(*window)),
-      started_(false),
-      stopping_(false),
       receiver_(this, window),
       session_(window) {}
 
 SpeechRecognition::~SpeechRecognition() = default;
 
 void SpeechRecognition::Trace(Visitor* visitor) const {
+  visitor->Trace(stream_track_);
   visitor->Trace(grammars_);
   visitor->Trace(controller_);
   visitor->Trace(final_results_);
   visitor->Trace(receiver_);
   visitor->Trace(session_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   PageVisibilityObserver::Trace(visitor);
 }

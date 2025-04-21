@@ -1,22 +1,22 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
+
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/notifications/notification_test_util.h"
@@ -30,6 +30,7 @@
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/web_applications/extensions/web_app_extension_shortcut.h"
 #include "chrome/common/chrome_features.h"
@@ -43,17 +44,20 @@
 #include "components/infobars/core/infobar.h"
 #include "components/url_formatter/url_formatter.h"
 #include "content/public/browser/child_process_security_policy.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/site_isolation_policy.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
+#include "content/public/common/isolated_world_ids.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/no_renderer_crashes_assertion.h"
 #include "content/public/test/prerender_test_util.h"
+#include "content/public/test/render_frame_host_test_support.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
@@ -132,12 +136,12 @@ class TaskManagerBrowserTest : public extensions::ExtensionBrowserTest {
         base::FilePath(kTitle1File));
   }
 
-  absl::optional<size_t> FindResourceIndex(const std::u16string& title) {
+  std::optional<size_t> FindResourceIndex(const std::u16string& title) {
     for (size_t i = 0; i < model_->GetRowCount(); ++i) {
       if (title == model_->GetRowTitle(i))
         return i;
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  protected:
@@ -152,7 +156,8 @@ class TaskManagerBrowserTest : public extensions::ExtensionBrowserTest {
 
     // Add content/test/data so we can use cross_site_iframe_factory.html
     base::FilePath test_data_dir;
-    ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir));
+    ASSERT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir));
     embedded_test_server()->ServeFilesFromDirectory(
         test_data_dir.AppendASCII("content/test/data/"));
     ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
@@ -252,7 +257,7 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NoticeTabContentsChanges) {
 
   // Close the tab and verify that we notice.
   browser()->tab_strip_model()->CloseWebContentsAt(0,
-                                                   TabStripModel::CLOSE_NONE);
+                                                   TabCloseTypes::CLOSE_NONE);
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchTab("title1.html")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
 }
@@ -270,7 +275,7 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, KillTab) {
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(2, MatchAnyTab()));
 
   // Killing the tab via task manager should remove the row.
-  absl::optional<size_t> tab = FindResourceIndex(MatchTab("title1.html"));
+  std::optional<size_t> tab = FindResourceIndex(MatchTab("title1.html"));
   ASSERT_TRUE(tab.has_value());
   ASSERT_TRUE(model()->GetTabId(tab.value()).is_valid());
   {
@@ -308,13 +313,14 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NavigateAwayFromHungRenderer) {
   // SiteInstance. Then immediately hang the renderer so that title3.html can't
   // load in this process.
   content::WebContentsAddedObserver web_contents_added_observer;
-  int dummy_value = 0;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractInt(
-      tab1->GetPrimaryMainFrame(),
-      "window.open('title3.html', '_blank');\n"
-      "window.domAutomationController.send(55);\n"
-      "while(1);",
-      &dummy_value));
+  content::DOMMessageQueue message_queue;
+  content::ExecuteScriptAsync(tab1->GetPrimaryMainFrame(),
+                              "window.open('title3.html', '_blank');\n"
+                              "window.domAutomationController.send(false);\n"
+                              "while(1);");
+  std::string message;
+  EXPECT_TRUE(message_queue.WaitForMessage(&message));
+  EXPECT_EQ("false", message);
 
   // Blocks until a new WebContents appears as a result of window.open().
   WebContents* tab2 = web_contents_added_observer.GetWebContents();
@@ -336,7 +342,8 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NavigateAwayFromHungRenderer) {
   // manager.
   tab2->OpenURL(content::OpenURLParams(url3, content::Referrer(),
                                        WindowOpenDisposition::CURRENT_TAB,
-                                       ui::PAGE_TRANSITION_TYPED, false));
+                                       ui::PAGE_TRANSITION_TYPED, false),
+                /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchTab("iframe test")));
 }
@@ -370,12 +377,12 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NoticeExtensionTabChanges) {
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
 
-  absl::optional<size_t> extension_tab =
+  std::optional<size_t> extension_tab =
       FindResourceIndex(MatchExtension("Foobar"));
   ASSERT_TRUE(extension_tab.has_value());
   ASSERT_TRUE(model()->GetTabId(extension_tab.value()).is_valid());
 
-  absl::optional<size_t> background_page =
+  std::optional<size_t> background_page =
       FindResourceIndex(MatchExtension("My extension 1"));
   ASSERT_TRUE(background_page.has_value());
   ASSERT_FALSE(model()->GetTabId(background_page.value()).is_valid());
@@ -402,12 +409,12 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NoticeExtensionTab) {
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
 
-  absl::optional<size_t> extension_tab =
+  std::optional<size_t> extension_tab =
       FindResourceIndex(MatchExtension("Foobar"));
   ASSERT_TRUE(extension_tab.has_value());
   ASSERT_TRUE(model()->GetTabId(extension_tab.value()).is_valid());
 
-  absl::optional<size_t> background_page =
+  std::optional<size_t> background_page =
       FindResourceIndex(MatchExtension("My extension 1"));
   ASSERT_TRUE(background_page.has_value());
   ASSERT_FALSE(model()->GetTabId(background_page.value()).is_valid());
@@ -440,7 +447,7 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NoticeAppTabChanges) {
 
   // Check that the third entry (main.html) is of type extension and has both
   // a tab contents and an extension.
-  absl::optional<size_t> app_tab =
+  std::optional<size_t> app_tab =
       FindResourceIndex(MatchApp("Packaged App Test"));
   ASSERT_TRUE(app_tab.has_value());
   ASSERT_TRUE(model()->GetTabId(app_tab.value()).is_valid());
@@ -477,7 +484,7 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, NoticeAppTab) {
 
   // Check that the third entry (main.html) is of type extension and has both
   // a tab contents and an extension.
-  absl::optional<size_t> app_tab =
+  std::optional<size_t> app_tab =
       FindResourceIndex(MatchApp("Packaged App Test"));
   ASSERT_TRUE(app_tab.has_value());
   ASSERT_TRUE(model()->GetTabId(app_tab.value()).is_valid());
@@ -633,19 +640,20 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, WebWorkerJSHeapMemory) {
       "    'postMessage(\"okay\");']);\n"
       "blobURL = window.URL.createObjectURL(blob);\n"
       "var worker = new Worker(blobURL);\n"
-      "worker.addEventListener('message', function(e) {\n"
-      "  window.domAutomationController.send(e.data);\n"  // e.data == "okay"
-      "});\n"
-      "worker.postMessage('go');\n",
+      "new Promise(resolve => {\n"
+      "  worker.addEventListener('message', function(e) {\n"
+      "    resolve(e.data);\n"  // e.data == "okay"
+      "  });\n"
+      "  worker.postMessage('go');\n"
+      "});\n",
       static_cast<unsigned long>(minimal_heap_size));
-  std::string ok;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      browser()->tab_strip_model()->GetActiveWebContents(), test_js, &ok));
-  ASSERT_EQ("okay", ok);
+  ASSERT_EQ("okay",
+            content::EvalJs(
+                browser()->tab_strip_model()->GetActiveWebContents(), test_js));
 
   // The worker has allocated objects of at least |minimal_heap_size| bytes.
   // Wait for the heap stats to reflect this.
-  const char kTabWildcard[] = "https://127.0.0.1:*/title1.html";
+  const char kTabWildcard[] = "127.0.0.1:*/title1.html";
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerStatToExceed(
       MatchTab(kTabWildcard), ColumnSpecifier::V8_MEMORY, minimal_heap_size));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerStatToExceed(
@@ -667,12 +675,12 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, JSHeapMemory) {
       "mem = new Array(%lu);\n"
       "for (var i = 0; i < mem.length; i += 16)\n"
       "  mem[i] = i;\n"
-      "window.domAutomationController.send(\"okay\");\n",
+      "\"okay\";\n",
       static_cast<unsigned long>(minimal_heap_size));
   std::string ok;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      browser()->tab_strip_model()->GetActiveWebContents(), test_js, &ok));
-  ASSERT_EQ("okay", ok);
+  ASSERT_EQ("okay",
+            content::EvalJs(
+                browser()->tab_strip_model()->GetActiveWebContents(), test_js));
 
   model()->ToggleColumnVisibility(ColumnSpecifier::V8_MEMORY);
 
@@ -717,7 +725,8 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, MAYBE_SentDataObserved) {
       ->GetActiveWebContents()
       ->GetPrimaryMainFrame()
       ->ExecuteJavaScriptForTests(base::UTF8ToUTF16(test_js),
-                                  base::NullCallback());
+                                  base::NullCallback(),
+                                  content::ISOLATED_WORLD_ID_GLOBAL);
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerStatToExceed(
       MatchTab("network use"), ColumnSpecifier::TOTAL_NETWORK_USE, 16000000));
   // There shouldn't be too much usage on the browser process. Note that it
@@ -757,7 +766,8 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, MAYBE_TotalSentDataObserved) {
       ->GetActiveWebContents()
       ->GetPrimaryMainFrame()
       ->ExecuteJavaScriptForTests(base::UTF8ToUTF16(test_js),
-                                  base::NullCallback());
+                                  base::NullCallback(),
+                                  content::ISOLATED_WORLD_ID_GLOBAL);
 
   // This test uses |setTimeout| to exceed the Nyquist ratio to ensure that at
   // least 1 refresh has happened of no traffic.
@@ -773,7 +783,8 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, MAYBE_TotalSentDataObserved) {
       ->GetActiveWebContents()
       ->GetPrimaryMainFrame()
       ->ExecuteJavaScriptForTests(base::UTF8ToUTF16(test_js),
-                                  base::NullCallback());
+                                  base::NullCallback(),
+                                  content::ISOLATED_WORLD_ID_GLOBAL);
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerStatToExceed(
       MatchTab("network use"), ColumnSpecifier::TOTAL_NETWORK_USE,
       16000000 * 2));
@@ -802,19 +813,18 @@ IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest, MAYBE_IdleWakeups) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestURL()));
 
   std::string test_js =
-    "function myWait() {\n"
-    "  setTimeout(function() { myWait(); }, 1)\n"
-    "}\n"
-    "myWait();\n"
-    "window.domAutomationController.send(\"okay\");\n";
+      "function myWait() {\n"
+      "  setTimeout(function() { myWait(); }, 1)\n"
+      "}\n"
+      "myWait();\n"
+      "\"okay\";\n";
 
-  std::string ok;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      browser()->tab_strip_model()->GetActiveWebContents(), test_js, &ok));
-  ASSERT_EQ("okay", ok);
+  ASSERT_EQ("okay",
+            content::EvalJs(
+                browser()->tab_strip_model()->GetActiveWebContents(), test_js));
 
-// The script above should trigger a lot of idle wakeups - up to 1000 per
-// second. Let's make sure we get at least 100 (in case the test runs slow).
+  // The script above should trigger a lot of idle wakeups - up to 1000 per
+  // second. Let's make sure we get at least 100 (in case the test runs slow).
   const int kMinExpectedWakeCount = 100;
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerStatToExceed(
       MatchTab("title1.html"), ColumnSpecifier::IDLE_WAKEUPS,
@@ -943,13 +953,13 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, SubframeHistoryNavigation) {
       ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   content::RenderFrameHost* grandchild_frame = ChildFrameAt(child_frame, 0);
   grandchild_frame->ExecuteJavaScriptWithUserGestureForTests(
-      u"a=5", base::NullCallback());
+      u"a=5", base::NullCallback(), content::ISOLATED_WORLD_ID_GLOBAL);
 
   GURL d_url = embedded_test_server()->GetURL(
       "d.com", "/cross_site_iframe_factory.html?d(e)");
-  ASSERT_TRUE(content::ExecuteScript(
-      tab->GetPrimaryMainFrame(),
-      "frames[0][0].location.href = '" + d_url.spec() + "';"));
+  ASSERT_TRUE(
+      content::ExecJs(tab->GetPrimaryMainFrame(),
+                      "frames[0][0].location.href = '" + d_url.spec() + "';"));
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(0, MatchSubframe("http://c.com/")));
@@ -1036,7 +1046,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, KillSubframe) {
   };
   browser()->OpenURL(content::OpenURLParams(main_url, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("cross-site iframe test")));
@@ -1057,7 +1068,7 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, KillSubframe) {
   ASSERT_TRUE(b_frame->GetSiteInstance()->RequiresDedicatedProcess());
   {
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> subframe_b =
+    std::optional<size_t> subframe_b =
         FindResourceIndex(MatchSubframe("http://b.com/"));
     ASSERT_TRUE(subframe_b.has_value());
     ASSERT_TRUE(model()->GetTabId(subframe_b.value()).is_valid());
@@ -1079,7 +1090,7 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, KillSubframe) {
 
   // Reload the subframe and verify it has re-appeared in the task manager.
   // This is a regression test for https://crbug.com/642958.
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       browser()
           ->tab_strip_model()
           ->GetActiveWebContents()
@@ -1103,7 +1114,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, NavigateToSubframeProcess) {
       "/cross-site/a.com/iframe_cross_site.html"));
   browser()->OpenURL(content::OpenURLParams(a_dotcom, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("cross-site iframe test")));
@@ -1126,7 +1138,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest, NavigateToSubframeProcess) {
 
   browser()->OpenURL(content::OpenURLParams(b_dotcom, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchTab("iframe test")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
@@ -1149,7 +1162,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
 
   browser()->OpenURL(content::OpenURLParams(b_dotcom, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchTab("iframe test")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
@@ -1161,7 +1175,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
       "/cross-site/a.com/iframe_cross_site.html"));
   browser()->OpenURL(content::OpenURLParams(a_dotcom, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("cross-site iframe test")));
@@ -1205,7 +1220,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
       "/cross-site/a.com/iframe_cross_site.html"));
   browser()->OpenURL(content::OpenURLParams(a_dotcom, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("cross-site iframe test")));
@@ -1226,11 +1242,11 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   const std::string r_script =
       R"( document.getElementById('frame1').src='/title1.html';
           document.title='aac'; )";
-  ASSERT_TRUE(content::ExecuteScript(browser()
-                                         ->tab_strip_model()
-                                         ->GetActiveWebContents()
-                                         ->GetPrimaryMainFrame(),
-                                     r_script));
+  ASSERT_TRUE(content::ExecJs(browser()
+                                  ->tab_strip_model()
+                                  ->GetActiveWebContents()
+                                  ->GetPrimaryMainFrame(),
+                              r_script));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchTab("aac")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
   if (!ShouldExpectSubframes()) {
@@ -1268,9 +1284,11 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   // Navigate the tab to a page on a.com with cross-process subframes.
   GURL a_dotcom_with_iframes(embedded_test_server()->GetURL(
       "/cross-site/a.com/iframe_cross_site.html"));
-  browser()->OpenURL(content::OpenURLParams(
-      a_dotcom_with_iframes, content::Referrer(),
-      WindowOpenDisposition::CURRENT_TAB, ui::PAGE_TRANSITION_TYPED, false));
+  browser()->OpenURL(
+      content::OpenURLParams(a_dotcom_with_iframes, content::Referrer(),
+                             WindowOpenDisposition::CURRENT_TAB,
+                             ui::PAGE_TRANSITION_TYPED, false),
+      /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("cross-site iframe test")));
@@ -1290,9 +1308,11 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   // the subframe processes should disappear.
   GURL a_dotcom_simple(
       embedded_test_server()->GetURL("/cross-site/a.com/title2.html"));
-  browser()->OpenURL(content::OpenURLParams(
-      a_dotcom_simple, content::Referrer(), WindowOpenDisposition::CURRENT_TAB,
-      ui::PAGE_TRANSITION_TYPED, false));
+  browser()->OpenURL(
+      content::OpenURLParams(a_dotcom_simple, content::Referrer(),
+                             WindowOpenDisposition::CURRENT_TAB,
+                             ui::PAGE_TRANSITION_TYPED, false),
+      /*navigation_handle_callback=*/{});
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnySubframe()));
@@ -1305,7 +1325,7 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnySubframe()));
 }
 
-// TODO(https://crbug.com/1113972): disabled as test is flaky.
+// TODO(crbug.com/40710551): disabled as test is flaky.
 IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
                        DISABLED_OrderingOfDependentRows) {
   ShowTaskManager();
@@ -1314,7 +1334,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
       "a.com", "/cross_site_iframe_factory.html?a(b,b,c(d,a,b,c))"));
   browser()->OpenURL(content::OpenURLParams(a_with_frames, content::Referrer(),
                                             WindowOpenDisposition::CURRENT_TAB,
-                                            ui::PAGE_TRANSITION_TYPED, false));
+                                            ui::PAGE_TRANSITION_TYPED, false),
+                     /*navigation_handle_callback=*/{});
 
   if (ShouldExpectSubframes()) {
     ASSERT_NO_FATAL_FAILURE(
@@ -1328,18 +1349,18 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Cross-site iframe factory")));
 
-  absl::optional<size_t> index =
+  std::optional<size_t> index =
       FindResourceIndex(MatchTab("Cross-site iframe factory"));
   ASSERT_TRUE(index.has_value());
   std::vector<size_t> subframe_offsets;
   if (ShouldExpectSubframes()) {
-    absl::optional<size_t> index_b =
+    std::optional<size_t> index_b =
         FindResourceIndex(MatchSubframe("http://b.com/"));
     ASSERT_TRUE(index_b.has_value());
-    absl::optional<size_t> index_c =
+    std::optional<size_t> index_c =
         FindResourceIndex(MatchSubframe("http://c.com/"));
     ASSERT_TRUE(index_c.has_value());
-    absl::optional<size_t> index_d =
+    std::optional<size_t> index_d =
         FindResourceIndex(MatchSubframe("http://d.com/"));
     ASSERT_TRUE(index_d.has_value());
     subframe_offsets = {index_b.value() - index.value(),
@@ -1354,7 +1375,8 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
   browser()->OpenURL(
       content::OpenURLParams(other_tab_url, content::Referrer(),
                              WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                             ui::PAGE_TRANSITION_TYPED, false));
+                             ui::PAGE_TRANSITION_TYPED, false),
+      /*navigation_handle_callback=*/{});
 
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(2, MatchTab("Cross-site iframe factory")));
@@ -1396,13 +1418,13 @@ IN_PROC_BROWSER_TEST_P(TaskManagerOOPIFBrowserTest,
     // The other tab 2 subframes (b.com and c.com) should join existing
     // subframe processes from tab 1.  Check that the b.com and c.com subframe
     // processes now have two rows each.
-    absl::optional<size_t> subframe_b_index =
+    std::optional<size_t> subframe_b_index =
         FindResourceIndex(MatchSubframe("http://b.com/"));
     ASSERT_TRUE(subframe_b_index.has_value());
-    absl::optional<size_t> subframe_c_index =
+    std::optional<size_t> subframe_c_index =
         FindResourceIndex(MatchSubframe("http://c.com/"));
     ASSERT_TRUE(subframe_c_index.has_value());
-    absl::optional<size_t> subframe_d_index =
+    std::optional<size_t> subframe_d_index =
         FindResourceIndex(MatchSubframe("http://d.com/"));
     ASSERT_TRUE(subframe_d_index.has_value());
     EXPECT_EQ(
@@ -1467,15 +1489,9 @@ class PrerenderTaskBrowserTest : public TaskManagerBrowserTest {
     prerender_helper_ = std::make_unique<content::test::PrerenderTestHelper>(
         base::BindRepeating(&PrerenderTaskBrowserTest::GetActiveWebContents,
                             base::Unretained(this)));
-    EXPECT_TRUE(blink::features::IsPrerender2Enabled());
     feature_list_.InitWithFeaturesAndParameters(
-        /*enabled_features=*/
-        {
-            {features::kBackForwardCache,
-             {{"enable_same_site", "true"},
-              {"TimeToLiveInBackForwardCacheInSeconds", "3600"}}},
-            {features::kOmniboxTriggerForPrerender2, {}},
-        },
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            /*ignore_outstanding_network_request=*/false),
         /*disabled_features=*/{});
     EXPECT_TRUE(content::BackForwardCache::IsBackForwardCacheFeatureEnabled());
   }
@@ -1497,7 +1513,7 @@ class PrerenderTaskBrowserTest : public TaskManagerBrowserTest {
     embedded_test_server()->StartAcceptingConnections();
   }
 
-  void NavigateTo(base::StringPiece page_url) const {
+  void NavigateTo(std::string_view page_url) const {
     ASSERT_TRUE(ui_test_utils::NavigateToURL(
         browser(), embedded_test_server()->GetURL(page_url)));
   }
@@ -1524,9 +1540,11 @@ class PrerenderTaskBrowserTest : public TaskManagerBrowserTest {
       const GURL& url,
       WindowOpenDisposition disposition,
       ui::PageTransition transition) {
-    return GetActiveWebContents()->OpenURL(content::OpenURLParams(
-        url, content::Referrer(), disposition, transition,
-        /*is_renderer_initiated=*/false));
+    return GetActiveWebContents()->OpenURL(
+        content::OpenURLParams(url, content::Referrer(), disposition,
+                               transition,
+                               /*is_renderer_initiated=*/false),
+        /*navigation_handle_callback=*/{});
   }
 
   content::test::PrerenderTestHelper* prerender_helper() {
@@ -1546,17 +1564,27 @@ class PrerenderTaskBrowserTest : public TaskManagerBrowserTest {
 
 }  // namespace
 
+// TODO(crbug.com/40232771): Flaky on Windows7.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_ProperlyShowsTasks DISABLED_ProperlyShowsTasks
+#else
+#define MAYBE_ProperlyShowsTasks ProperlyShowsTasks
+#endif
 // Tests that the task manager properly:
 // 1. shows the Prerender entry when the speculation rule is injected;
 // 2. shows the Prerender entry when the manager is closed and reopened.
 // 3. deletes the Prerender entry when the prerendered page is activated.
-IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest, ProperlyShowsTasks) {
+IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest, MAYBE_ProperlyShowsTasks) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
   NavigateTo(kMainPageUrl);
 
   const auto prerender_gurl = embedded_test_server()->GetURL(kPrerenderURL);
+  std::string server_port;
+  if (prerender_gurl.has_port()) {
+    server_port = prerender_gurl.port();
+  }
 
   // Inject the speculation rule and wait for prerender to complete.
   prerender_helper()->AddPrerender(prerender_gurl);
@@ -1594,14 +1622,29 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest, ProperlyShowsTasks) {
       url_formatter::FormatUrl(embedded_test_server()->GetURL(kPrerenderURL));
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab(base::UTF16ToUTF8(tab_title))));
-  ASSERT_NO_FATAL_FAILURE(
-      WaitForTaskManagerRows(1, MatchBFCache("http://127.0.0.1/")));
+  if (content::SiteIsolationPolicy::AreOriginKeyedProcessesEnabledByDefault() &&
+      !server_port.empty()) {
+    // When kOriginKeyedProcessesByDefault is enabled, we need to include the
+    // port number as the SiteInstance's site_url will include it.
+    ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
+        1, MatchBFCache("http://127.0.0.1:" + server_port + "/")));
+  } else {
+    ASSERT_NO_FATAL_FAILURE(
+        WaitForTaskManagerRows(1, MatchBFCache("http://127.0.0.1/")));
+  }
 }
 
+// TODO(crbug.com/40232771): Flaky on Windows7.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_DeletesTaskAfterPrerenderKilled \
+  DISABLED_DeletesTaskAfterPrerenderKilled
+#else
+#define MAYBE_DeletesTaskAfterPrerenderKilled DeletesTaskAfterPrerenderKilled
+#endif
 // Tests that the task manager properly deletes the prerender task once the
 // prerender is cancelled.
 IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
-                       DeletesTaskAfterPrerenderKilled) {
+                       MAYBE_DeletesTaskAfterPrerenderKilled) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
@@ -1622,7 +1665,7 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
   // remove the prerender task entry.
   {
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> prerender_row =
+    std::optional<size_t> prerender_row =
         FindResourceIndex(MatchPrerender(prerender_gurl.spec()));
     ASSERT_TRUE(prerender_row.has_value());
     ASSERT_TRUE(model()->GetTabId(prerender_row.value()).is_valid());
@@ -1634,10 +1677,18 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
   }
 }
 
+// TODO(crbug.com/40232771): Flaky on Windows7.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_DeletesTaskAfterTriggerPageKilled \
+  DISABLED_DeletesTaskAfterTriggerPageKilled
+#else
+#define MAYBE_DeletesTaskAfterTriggerPageKilled \
+  DeletesTaskAfterTriggerPageKilled
+#endif
 // Tests that the task manager properly deletes the task of the trigger tab and
 // prerender when the trigger is terminated.
 IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
-                       DeletesTaskAfterTriggerPageKilled) {
+                       MAYBE_DeletesTaskAfterTriggerPageKilled) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
@@ -1657,21 +1708,34 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
   // Terminate the prerender task, which should signal the task manager to
   // remove the prerender task entry.
   {
+    base::HistogramTester histogram_tester;
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> trigger_row =
+    std::optional<size_t> trigger_row =
         FindResourceIndex(MatchTab("Title Of Awesomeness"));
     ASSERT_TRUE(trigger_row.has_value());
     ASSERT_TRUE(model()->GetTabId(trigger_row.value()).is_valid());
     model()->Kill(trigger_row.value());
     ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnyTab()));
     ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnyPrerender()));
+    histogram_tester.ExpectUniqueSample(
+        "Prerender.Experimental.PrerenderHostFinalStatus.SpeculationRule",
+        /*PrerenderFinalStatus::kPrimaryMainFrameRendererProcessKilled=*/57, 1);
   }
 }
 
+// TODO(crbug.com/40232771): Flaky on Windows7.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_ProperlyShowsPrerenderTaskByAutocompletePredictor \
+  DISABLED_ProperlyShowsPrerenderTaskByAutocompletePredictor
+#else
+#define MAYBE_ProperlyShowsPrerenderTaskByAutocompletePredictor \
+  ProperlyShowsPrerenderTaskByAutocompletePredictor
+#endif
 // Test that the autocomplete action predictor trigger Prerender tasks are
 // properly displayed. Such predictor is used to trigger Omnibox Prerender.
-IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
-                       ProperlyShowsPrerenderTaskByAutocompletePredictor) {
+IN_PROC_BROWSER_TEST_F(
+    PrerenderTaskBrowserTest,
+    MAYBE_ProperlyShowsPrerenderTaskByAutocompletePredictor) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
@@ -1693,8 +1757,9 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
       WaitForTaskManagerRows(1, MatchPrerender(prerender_gurl.spec())));
   // Main task stays after prerendered task is terminated.
   {
+    base::HistogramTester histogram_tester;
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> prerender_row =
+    std::optional<size_t> prerender_row =
         FindResourceIndex(MatchPrerender(prerender_gurl.spec()));
     ASSERT_TRUE(prerender_row.has_value());
     ASSERT_TRUE(model()->GetTabId(prerender_row.value()).is_valid());
@@ -1703,12 +1768,17 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
     ASSERT_NO_FATAL_FAILURE(
         WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
     ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnyPrerender()));
+    histogram_tester.ExpectUniqueSample(
+        "Prerender.Experimental.PrerenderHostFinalStatus.Embedder_"
+        "DirectURLInput",
+        /*PrerenderFinalStatus::kRendererProcessKilled=*/14, 1);
   }
   // Both tasks are deleted after main task is terminated.
   {
     // Use a different URL because re-using the same URL does not trigger new
     // prerendering:
     // https://crsrc.org/c/chrome/browser/predictors/autocomplete_action_predictor.cc;l=208;drc=a08a4e1c3f6862b3b1385b8a040a4fdb524e509d
+    base::HistogramTester histogram_tester;
     const char kNewPrerenderURL[] = "/title3.html";
     const auto new_prerender_gurl =
         embedded_test_server()->GetURL(kNewPrerenderURL);
@@ -1720,20 +1790,32 @@ IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
         WaitForTaskManagerRows(1, MatchPrerender(new_prerender_gurl.spec())));
 
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> trigger_row =
+    std::optional<size_t> trigger_row =
         FindResourceIndex(MatchTab("Title Of Awesomeness"));
     ASSERT_TRUE(trigger_row.has_value());
     ASSERT_TRUE(model()->GetTabId(trigger_row.value()).is_valid());
     model()->Kill(trigger_row.value());
     ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnyTab()));
     ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnyPrerender()));
+    histogram_tester.ExpectUniqueSample(
+        "Prerender.Experimental.PrerenderHostFinalStatus.Embedder_"
+        "DirectURLInput",
+        /*PrerenderFinalStatus::kPrimaryMainFrameRendererProcessKilled=*/57, 1);
   }
 }
 
+// TODO(crbug.com/40232771): Flaky on Windows7.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_OmniboxPrerenderActivationClearsTask \
+  DISABLED_OmniboxPrerenderActivationClearsTask
+#else
+#define MAYBE_OmniboxPrerenderActivationClearsTask \
+  OmniboxPrerenderActivationClearsTask
+#endif
 // Test that the Omnibox-triggered prerender activation clears the prerender
 // entry in the task manager.
 IN_PROC_BROWSER_TEST_F(PrerenderTaskBrowserTest,
-                       OmniboxPrerenderActivationClearsTask) {
+                       MAYBE_OmniboxPrerenderActivationClearsTask) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
@@ -1782,7 +1864,6 @@ class FencedFrameTaskBrowserTest : public TaskManagerBrowserTest {
  public:
   FencedFrameTaskBrowserTest() {
     EXPECT_TRUE(blink::features::IsFencedFramesEnabled());
-    EXPECT_TRUE(blink::features::IsFencedFramesMPArchBased());
   }
   FencedFrameTaskBrowserTest(const FencedFrameTaskBrowserTest&) = delete;
   FencedFrameTaskBrowserTest& operator=(const FencedFrameTaskBrowserTest&) =
@@ -1806,14 +1887,22 @@ class FencedFrameTaskBrowserTest : public TaskManagerBrowserTest {
   }
 
   void NavigateTo(Browser* browser,
-                  base::StringPiece host,
-                  base::StringPiece rel_url) {
+                  std::string_view host,
+                  std::string_view rel_url) {
     ASSERT_TRUE(ui_test_utils::NavigateToURL(
         browser, https_server()->GetURL(host, rel_url)));
   }
 
-  std::string GetFencedFrameTitle(base::StringPiece host) const {
-    return base::StrCat({"https://", host, "/"});
+  std::string GetFencedFrameTitle(const GURL& url) const {
+    GURL::Replacements replacements;
+    replacements.ClearPath();
+    replacements.ClearRef();
+    if (!content::SiteIsolationPolicy::
+            AreOriginKeyedProcessesEnabledByDefault()) {
+      // Only include the port for origin-isolated urls.
+      replacements.ClearPort();
+    }
+    return url.ReplaceComponents(replacements).spec();
   }
 
   net::EmbeddedTestServer* https_server() { return &https_server_; }
@@ -1827,11 +1916,22 @@ class FencedFrameTaskBrowserTest : public TaskManagerBrowserTest {
       std::make_unique<content::test::FencedFrameTestHelper>();
 };
 
+// TODO(crbug.com/40285326): This fails with the field trial testing config.
+class FencedFrameTaskBrowserTestNoTestingConfig
+    : public FencedFrameTaskBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    FencedFrameTaskBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
+};
+
 }  // namespace
 
 // Testing that the task manager properly displays fenced frame tasks with
 // re-opening task manager, and with fenced frame navigations.
-IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, ProperlyShowsTasks) {
+IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTestNoTestingConfig,
+                       ProperlyShowsTasks) {
   ShowTaskManager();
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAboutBlankTab()));
 
@@ -1865,7 +1965,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, ProperlyShowsTasks) {
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(cross_site_gurl))));
 
   // Close the task manager and re-open it, all tasks should be re-created.
   HideTaskManager();
@@ -1875,13 +1975,13 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, ProperlyShowsTasks) {
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(cross_site_gurl))));
 
   // Terminate the fenced frame. The embedder frame remains intact.
   {
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> fenced_frame_row =
-        FindResourceIndex(MatchFencedFrame(GetFencedFrameTitle("b.test")));
+    std::optional<size_t> fenced_frame_row = FindResourceIndex(
+        MatchFencedFrame(GetFencedFrameTitle(cross_site_gurl)));
     ASSERT_TRUE(fenced_frame_row.has_value());
     ASSERT_TRUE(model()->GetTabId(fenced_frame_row.value()).is_valid());
     model()->Kill(fenced_frame_row.value());
@@ -1895,7 +1995,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, ProperlyShowsTasks) {
   {
     helper()->CreateFencedFrame(main_frame, initial_gurl);
     content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes;
-    absl::optional<size_t> embedder_row =
+    std::optional<size_t> embedder_row =
         FindResourceIndex(MatchTab("Title Of Awesomeness"));
     ASSERT_TRUE(embedder_row.has_value());
     ASSERT_TRUE(model()->GetTabId(embedder_row.value()).is_valid());
@@ -1942,7 +2042,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, EmptyFencedFrameNotShown) {
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(fenced_frame_gurl))));
 }
 
 // Tests that the task manager properly shows tasks in Incognito mode.
@@ -1969,7 +2069,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, ShowsIncognitoTask) {
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchIncognitoTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchIncognitoFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchIncognitoFencedFrame(GetFencedFrameTitle(fenced_frame_gurl))));
 }
 
 // Test that clicking on the task manager fenced frame task row brings the focus
@@ -1996,7 +2096,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, TaskActivationChangesFocus) {
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(fenced_frame_gurl))));
 
   // Open a new tab of "about:blank". This appends an active WebContents at
   // index 1.
@@ -2008,8 +2108,8 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest, TaskActivationChangesFocus) {
   // The WebContents of "about:blank" is active.
   ASSERT_EQ(browser()->tab_strip_model()->active_index(), 1);
 
-  const absl::optional<size_t> fenced_frame_task_row =
-      FindResourceIndex(MatchFencedFrame(GetFencedFrameTitle("b.test")));
+  const std::optional<size_t> fenced_frame_task_row = FindResourceIndex(
+      MatchFencedFrame(GetFencedFrameTitle(fenced_frame_gurl)));
   ASSERT_TRUE(fenced_frame_task_row.has_value());
   model()->Activate(fenced_frame_task_row.value());
 
@@ -2041,7 +2141,7 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest,
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(fenced_frame_gurl))));
 
   // Same-doc navigation of the fenced frame.
   const auto same_doc_navi_gurl = https_server()->GetURL(
@@ -2052,5 +2152,84 @@ IN_PROC_BROWSER_TEST_F(FencedFrameTaskBrowserTest,
   ASSERT_NO_FATAL_FAILURE(
       WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
   ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(
-      1, MatchFencedFrame(GetFencedFrameTitle("b.test"))));
+      1, MatchFencedFrame(GetFencedFrameTitle(fenced_frame_gurl))));
+}
+
+// Asserts that the task manager does not attempt to create any task for a RFH
+// in `kPendingCommit` or `kPendingDeletion` state. Creating tasks during these
+// two states will trigger a `NOTREACHED()` in
+// `WebContentsTaskProvider::WebContentsEntry::CreateTaskForFrame`.
+IN_PROC_BROWSER_TEST_F(TaskManagerBrowserTest,
+                       NoCrashOnPendingCommitPendingDeletaionRFH) {
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL("a.test", "/title2.html")));
+  auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
+  auto* main_frame = web_contents->GetPrimaryMainFrame();
+
+  const std::string kCreateAndNavigateIFrame = R"(
+    const iframe = document.createElement("iframe");
+    iframe.src = $1;
+    document.body.appendChild(iframe);
+  )";
+
+  // Create a cross-origin iframe, because we don't show tasks for iframes of
+  // the same origin.
+  const GURL cross_origin_subframe_url =
+      embedded_test_server()->GetURL("b.test", "/title3.html");
+  content::TestNavigationManager nav_obs(web_contents,
+                                         cross_origin_subframe_url);
+  ASSERT_TRUE(ExecJs(
+      main_frame,
+      content::JsReplace(kCreateAndNavigateIFrame, cross_origin_subframe_url)));
+  ASSERT_TRUE(nav_obs.WaitForRequestStart());
+
+  ShowTaskManager();
+  // Main frame. The task manager does not create tasks for speculative RFHs.
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
+  ASSERT_NO_FATAL_FAILURE(
+      WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnySubframe()));
+
+  nav_obs.ResumeNavigation();
+  ASSERT_TRUE(nav_obs.WaitForNavigationFinished());
+
+  // Main frame + subframe after the navigation is resumed.
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
+  ASSERT_NO_FATAL_FAILURE(
+      WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnySubframe()));
+  ASSERT_NO_FATAL_FAILURE(
+      WaitForTaskManagerRows(1, MatchSubframe("http://b.test/")));
+
+  HideTaskManager();
+  // Get hold of the subframe RFH, and stop it from being deleted.
+  content::RenderFrameHostWrapper subframe_rfh(
+      content::ChildFrameAt(main_frame, 0));
+  content::LeaveInPendingDeletionState(subframe_rfh.get());
+
+  const std::string kRemoveIFrame = R"(
+    const iframe = document.querySelector('iframe');
+    document.body.removeChild(iframe);
+  )";
+  ASSERT_TRUE(ExecJs(main_frame, kRemoveIFrame));
+
+  // The `kPendingDeletion` subframe RFH is not destroyed, and reachable from
+  // the `WebContents`, so it's possible for
+  // `WebContentsTaskProvider::WebContentsEntry::CreateAllTasks()` to create a
+  // task for it.
+  ASSERT_FALSE(subframe_rfh.IsDestroyed());
+  bool reached = false;
+  web_contents->ForEachRenderFrameHost([&](content::RenderFrameHost* rfh) {
+    if (rfh == subframe_rfh.get()) {
+      reached = true;
+    }
+  });
+  ASSERT_TRUE(reached);
+
+  // However we shouldn't create any tasks for a RFH to be deleted.
+  ShowTaskManager();
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(1, MatchAnyTab()));
+  ASSERT_NO_FATAL_FAILURE(
+      WaitForTaskManagerRows(1, MatchTab("Title Of Awesomeness")));
+  ASSERT_NO_FATAL_FAILURE(WaitForTaskManagerRows(0, MatchAnySubframe()));
 }

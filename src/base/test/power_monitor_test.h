@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_TEST_POWER_MONITOR_TEST_H_
 #define BASE_TEST_POWER_MONITOR_TEST_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_source.h"
 #include "base/power_monitor/power_observer.h"
@@ -36,24 +37,27 @@ class ScopedPowerMonitorTestSource {
       delete;
 
   // Retrieve current states.
-  PowerThermalObserver::DeviceThermalState GetCurrentThermalState();
-  bool IsOnBatteryPower();
+  PowerThermalObserver::DeviceThermalState GetCurrentThermalState() const;
+  PowerStateObserver::BatteryPowerStatus GetBatteryPowerStatus() const;
 
   // Sends asynchronous notifications to registered observers.
   void Suspend();
   void Resume();
-  void SetOnBatteryPower(bool on_battery_power);
+  void SetBatteryPowerStatus(
+      PowerStateObserver::BatteryPowerStatus battery_power_status);
 
   void GenerateSuspendEvent();
   void GenerateResumeEvent();
-  void GeneratePowerStateEvent(bool on_battery_power);
+  void GeneratePowerStateEvent(
+      PowerStateObserver::BatteryPowerStatus battery_power_status);
   void GenerateThermalThrottlingEvent(
       PowerThermalObserver::DeviceThermalState new_thermal_state);
   void GenerateSpeedLimitEvent(int speed_limit);
 
  private:
   // Owned by PowerMonitor.
-  PowerMonitorTestSource* power_monitor_test_source_ = nullptr;
+  raw_ptr<PowerMonitorTestSource, DanglingUntriaged>
+      power_monitor_test_source_ = nullptr;
 };
 
 class PowerMonitorTestObserver : public PowerSuspendObserver,
@@ -64,7 +68,8 @@ class PowerMonitorTestObserver : public PowerSuspendObserver,
   ~PowerMonitorTestObserver() override;
 
   // PowerStateObserver overrides.
-  void OnPowerStateChange(bool on_battery_power) override;
+  void OnBatteryPowerStatusChange(
+      PowerStateObserver::BatteryPowerStatus battery_power_status) override;
   // PowerSuspendObserver overrides.
   void OnSuspend() override;
   void OnResume() override;
@@ -80,7 +85,9 @@ class PowerMonitorTestObserver : public PowerSuspendObserver,
   int thermal_state_changes() const { return thermal_state_changes_; }
   int speed_limit_changes() const { return speed_limit_changes_; }
 
-  bool last_power_state() const { return last_power_state_; }
+  PowerStateObserver::BatteryPowerStatus last_power_status() const {
+    return last_power_status_;
+  }
   PowerThermalObserver::DeviceThermalState last_thermal_state() const {
     return last_thermal_state_;
   }
@@ -99,7 +106,8 @@ class PowerMonitorTestObserver : public PowerSuspendObserver,
   int speed_limit_changes_ = 0;
 
   // Last power state we were notified of.
-  bool last_power_state_ = false;
+  PowerStateObserver::BatteryPowerStatus last_power_status_ =
+      PowerStateObserver::BatteryPowerStatus::kUnknown;
   // Last power thermal we were notified of.
   PowerThermalObserver::DeviceThermalState last_thermal_state_ =
       PowerThermalObserver::DeviceThermalState::kUnknown;

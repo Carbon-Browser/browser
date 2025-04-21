@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,7 @@ class COMPONENT_EXPORT(URL) ICUCharsetConverter : public CharsetConverter {
 
   ~ICUCharsetConverter() override;
 
-  void ConvertFromUTF16(const char16_t* input,
-                        int input_len,
+  void ConvertFromUTF16(std::u16string_view input,
                         CanonOutput* output) override;
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include <memory>
 #include <string>
 
+#include "base/uuid.h"
 #include "base/values.h"
-#include "components/metrics/structured/structured_metrics_client.h"
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
 
 Event::MetricValue::MetricValue(MetricType type, base::Value value)
     : type(type), value(std::move(value)) {}
@@ -27,40 +26,71 @@ bool Event::MetricValue::operator==(const Event::MetricValue& rhs) const {
 
 Event::MetricValue::~MetricValue() = default;
 
+Event::EventSequenceMetadata::EventSequenceMetadata(int reset_counter)
+    : reset_counter(reset_counter),
+      event_unique_id(base::Uuid::GenerateRandomV4().AsLowercaseString()) {}
+
+Event::EventSequenceMetadata::EventSequenceMetadata(
+    const Event::EventSequenceMetadata& other) = default;
+Event::EventSequenceMetadata& Event::EventSequenceMetadata::operator=(
+    const Event::EventSequenceMetadata& other) = default;
+
+Event::EventSequenceMetadata::~EventSequenceMetadata() = default;
+
 Event::Event() = default;
 Event::Event(const std::string& project_name, const std::string& event_name)
     : project_name_(project_name), event_name_(event_name) {}
+Event::Event(const std::string& project_name,
+             const std::string& event_name,
+             bool is_event_sequence)
+    : project_name_(project_name),
+      event_name_(event_name),
+      is_event_sequence_(is_event_sequence) {}
+
 Event::~Event() = default;
 
 Event::Event(Event&& other)
     : project_name_(std::move(other.project_name_)),
-      event_name_(std::move(other.event_name_)) {
-  metric_values_.insert(std::make_move_iterator(other.metric_values_.begin()),
-                        std::make_move_iterator(other.metric_values_.end()));
-}
+      event_name_(std::move(other.event_name_)),
+      metric_values_(std::move(other.metric_values_)),
+      recorded_time_since_boot_(std::move(other.recorded_time_since_boot_)),
+      event_sequence_metadata_(std::move(other.event_sequence_metadata_)),
+      is_event_sequence_(other.is_event_sequence_) {}
 
 Event& Event::operator=(Event&& other) {
   project_name_ = std::move(other.project_name_);
   event_name_ = std::move(other.event_name_);
-  metric_values_.insert(std::make_move_iterator(other.metric_values_.begin()),
-                        std::make_move_iterator(other.metric_values_.end()));
+  metric_values_ = std::move(other.metric_values_);
+  recorded_time_since_boot_ = std::move(other.recorded_time_since_boot_);
+  event_sequence_metadata_ = std::move(other.event_sequence_metadata_);
+  is_event_sequence_ = other.is_event_sequence_;
   return *this;
 }
 
-void Event::Record() {
-  StructuredMetricsClient::Get()->Record(std::move(*this));
+bool Event::IsEventSequenceType() const {
+  return is_event_sequence_;
 }
 
-const std::string& Event::project_name() const {
-  return project_name_;
+Event Event::Clone() const {
+  auto clone = Event(project_name_, event_name_, is_event_sequence_);
+  for (const auto& metric : metric_values()) {
+    const Event::MetricValue& metric_value = metric.second;
+    clone.AddMetric(metric.first, metric_value.type,
+                    metric_value.value.Clone());
+  }
+  clone.recorded_time_since_boot_ = recorded_time_since_boot_;
+  clone.event_sequence_metadata_ = event_sequence_metadata_;
+  return clone;
 }
 
-const std::string& Event::event_name() const {
-  return event_name_;
+const Event::EventSequenceMetadata& Event::event_sequence_metadata() const {
+  CHECK(event_sequence_metadata_.has_value());
+  return event_sequence_metadata_.value();
 }
 
-const std::map<std::string, Event::MetricValue>& Event::metric_values() const {
-  return metric_values_;
+const base::TimeDelta Event::recorded_time_since_boot() const {
+  CHECK(recorded_time_since_boot_.has_value());
+  return recorded_time_since_boot_.value();
 }
 
 bool Event::AddMetric(const std::string& metric_name,
@@ -88,13 +118,22 @@ bool Event::AddMetric(const std::string& metric_name,
       valid = value.is_bool();
       break;
   }
-  if (!valid)
+  if (!valid) {
     return false;
+  }
 
   auto pair =
       metric_values_.emplace(metric_name, MetricValue(type, std::move(value)));
   return pair.second;
 }
 
-}  // namespace structured
-}  // namespace metrics
+void Event::SetEventSequenceMetadata(
+    const Event::EventSequenceMetadata& event_sequence_metadata) {
+  event_sequence_metadata_ = event_sequence_metadata;
+}
+
+void Event::SetRecordedTimeSinceBoot(base::TimeDelta recorded_time_since_boot) {
+  recorded_time_since_boot_ = recorded_time_since_boot;
+}
+
+}  // namespace metrics::structured

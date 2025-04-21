@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,11 @@ void ClearLog();
 
 // Logs a message using printf format.
 // This function can be called from any thread.
+PRINTF_FORMAT(3, 4)
 void Log(logging::LogSeverity level,
          const base::Location& location,
          const char* format,
-         ...) PRINTF_FORMAT(3, 4);
+         ...);
 
 // Returns the log history.
 // This function can be called from any thread.

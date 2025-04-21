@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ const char kChromeUntrustedTestURL[] = "chrome-untrusted://test/";
 
 namespace errors = manifest_errors;
 
-typedef ChromeManifestTest ChromePermissionManifestTest;
+using ChromePermissionManifestTest = ChromeManifestTest;
 
 TEST_F(ChromePermissionManifestTest, ChromeURLPermissionInvalid) {
   LoadAndExpectWarning(
@@ -40,7 +40,7 @@ TEST_F(ChromePermissionManifestTest, ChromeUntrustedURLPermissionInvalid) {
 
 TEST_F(ChromePermissionManifestTest, ChromeURLPermissionAllowedWithFlag) {
   // Ignore the policy delegate for this test.
-  PermissionsData::SetPolicyDelegate(NULL);
+  PermissionsData::SetPolicyDelegate(nullptr);
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kExtensionsOnChromeURLs);
   std::string error;

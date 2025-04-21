@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/sequence_checker.h"
@@ -74,6 +74,7 @@ class SerialPortManagerImpl : public mojom::SerialPortManager,
   // SerialDeviceEnumerator::Observer methods:
   void OnPortAdded(const mojom::SerialPortInfo& port) override;
   void OnPortRemoved(const mojom::SerialPortInfo& port) override;
+  void OnPortConnectedStateChanged(const mojom::SerialPortInfo& port) override;
 
   void OpenBluetoothSerialPortOnUI(
       const std::string& address,

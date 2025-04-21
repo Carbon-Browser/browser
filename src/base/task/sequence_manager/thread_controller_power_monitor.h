@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,8 @@ class BASE_EXPORT ThreadControllerPowerMonitor : public PowerSuspendObserver {
   // notifications.
   bool IsProcessInPowerSuspendState();
 
-  // Initialize the ThreadControllerPowerMonitor. Must be called once on the
-  // main thread during startup while single-threaded.
-  static void InitializeOnMainThread();
+  // Initializes features for this class. See `base::features::Init()`.
+  static void InitializeFeatures();
 
   static void OverrideUsePowerMonitorForTesting(bool use_power_monitor);
   static void ResetForTesting();

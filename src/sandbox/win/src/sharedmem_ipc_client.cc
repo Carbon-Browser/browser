@@ -1,6 +1,11 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/win/src/sharedmem_ipc_client.h"
 
@@ -28,7 +33,7 @@ DWORD SignalObjectAndWaitWrapper(HANDLE object_to_signal,
       millis == INFINITE ? nullptr : &timeout);
   if (!NT_SUCCESS(status))
     return WAIT_FAILED;
-  return status;
+  return static_cast<DWORD>(status);
 }
 
 DWORD WaitForSingleObjectWrapper(HANDLE handle, DWORD millis) {
@@ -38,7 +43,7 @@ DWORD WaitForSingleObjectWrapper(HANDLE handle, DWORD millis) {
       handle, FALSE, millis == INFINITE ? nullptr : &timeout);
   if (!NT_SUCCESS(status))
     return WAIT_FAILED;
-  return status;
+  return static_cast<DWORD>(status);
 }
 
 }  // namespace
@@ -49,9 +54,10 @@ DWORD WaitForSingleObjectWrapper(HANDLE handle, DWORD millis) {
 void* SharedMemIPCClient::GetBuffer() {
   bool failure = false;
   size_t ix = LockFreeChannel(&failure);
-  if (failure)
+  if (failure) {
     return nullptr;
-  return reinterpret_cast<char*>(control_.get()) +
+  }
+  return reinterpret_cast<char*>(control_) +
          control_->channels[ix].channel_base;
 }
 
@@ -172,7 +178,8 @@ size_t SharedMemIPCClient::LockFreeChannel(bool* severe_failure) {
 // Find out which channel we are from the pointer returned by GetBuffer.
 size_t SharedMemIPCClient::ChannelIndexFromBuffer(const void* buffer) {
   ptrdiff_t d = reinterpret_cast<const char*>(buffer) - first_base_;
-  size_t num = d / kIPCChannelSize;
+  DCHECK_GE(d, 0);
+  size_t num = static_cast<size_t>(d) / kIPCChannelSize;
   DCHECK_LT(num, control_->channels_count);
   return (num);
 }

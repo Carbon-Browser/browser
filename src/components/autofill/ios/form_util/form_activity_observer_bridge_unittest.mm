@@ -1,21 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "components/autofill/ios/form_util/form_activity_observer_bridge.h"
 
-#include "components/autofill/ios/form_util/test_form_activity_observer.h"
+#import "components/autofill/core/common/form_data.h"
+#import "components/autofill/ios/form_util/test_form_activity_observer.h"
 #import "ios/web/public/test/fakes/fake_web_frame.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 @interface FakeFormActivityObserver : NSObject<FormActivityObserver>
 // Arguments passed to
-// |webState:didSubmitDocumentWithFormNamed:withData:userInitiated:inFrame:|.
+// |webState:didSubmitDocumentWithFormData:userInitiated:inFrame:|.
 @property(nonatomic, readonly)
     autofill::TestSubmitDocumentInfo* submitDocumentInfo;
 // Arguments passed to
@@ -49,18 +46,14 @@
 }
 
 - (void)webState:(web::WebState*)webState
-    didSubmitDocumentWithFormNamed:(const std::string&)formName
-                          withData:(const std::string&)formData
-                    hasUserGesture:(BOOL)hasUserGesture
-                   formInMainFrame:(BOOL)formInMainFrame
-                           inFrame:(web::WebFrame*)frame {
+    didSubmitDocumentWithFormData:(const autofill::FormData&)formData
+                   hasUserGesture:(BOOL)hasUserGesture
+                          inFrame:(web::WebFrame*)frame {
   _submitDocumentInfo = std::make_unique<autofill::TestSubmitDocumentInfo>();
   _submitDocumentInfo->web_state = webState;
   _submitDocumentInfo->sender_frame = frame;
-  _submitDocumentInfo->form_name = formName;
   _submitDocumentInfo->form_data = formData;
   _submitDocumentInfo->has_user_gesture = hasUserGesture;
-  _submitDocumentInfo->form_in_main_frame = formInMainFrame;
 }
 
 - (void)webState:(web::WebState*)webState
@@ -99,23 +92,16 @@ class FormActivityObserverBridgeTest : public PlatformTest {
 // Tests |webState:didRegisterFormActivityWithParams:inFrame:| forwarding.
 TEST_F(FormActivityObserverBridgeTest, DocumentSubmitted) {
   ASSERT_FALSE([observer_ submitDocumentInfo]);
-  std::string kTestFormName("form-name");
-  std::string kTestFormData("[]");
+  autofill::FormData kTestFormData;
   bool has_user_gesture = true;
-  bool form_in_main_frame = true;
-  auto sender_frame =
-      web::FakeWebFrame::Create("sender_frame", true, GURL::EmptyGURL());
+  auto sender_frame = web::FakeWebFrame::Create("sender_frame", true);
   observer_bridge_.DocumentSubmitted(&fake_web_state_, sender_frame.get(),
-                                     kTestFormName, kTestFormData,
-                                     has_user_gesture, form_in_main_frame);
+                                     kTestFormData, has_user_gesture);
   ASSERT_TRUE([observer_ submitDocumentInfo]);
   EXPECT_EQ(&fake_web_state_, [observer_ submitDocumentInfo]->web_state);
   EXPECT_EQ(sender_frame.get(), [observer_ submitDocumentInfo]->sender_frame);
-  EXPECT_EQ(kTestFormName, [observer_ submitDocumentInfo]->form_name);
   EXPECT_EQ(kTestFormData, [observer_ submitDocumentInfo]->form_data);
   EXPECT_EQ(has_user_gesture, [observer_ submitDocumentInfo]->has_user_gesture);
-  EXPECT_EQ(form_in_main_frame,
-            [observer_ submitDocumentInfo]->form_in_main_frame);
 }
 
 // Tests |webState:didRegisterFormActivity:...| forwarding.
@@ -123,8 +109,7 @@ TEST_F(FormActivityObserverBridgeTest, FormActivityRegistered) {
   ASSERT_FALSE([observer_ formActivityInfo]);
 
   autofill::FormActivityParams params;
-  auto sender_frame =
-      web::FakeWebFrame::Create("sender_frame", true, GURL::EmptyGURL());
+  auto sender_frame = web::FakeWebFrame::Create("sender_frame", true);
   params.form_name = "form-name";
   params.field_type = "field-type";
   params.type = "type";
@@ -149,18 +134,12 @@ TEST_F(FormActivityObserverBridgeTest, FormRemovalRegistered) {
   ASSERT_FALSE([observer_ formRemovalInfo]);
 
   autofill::FormRemovalParams params;
-  auto sender_frame =
-      web::FakeWebFrame::Create("sender_frame", true, GURL::EmptyGURL());
-  params.form_name = "form-name";
-  params.unique_form_id = autofill::FormRendererId(1);
-  params.input_missing = true;
+  auto sender_frame = web::FakeWebFrame::Create("sender_frame", true);
+  params.removed_forms = {autofill::FormRendererId(1)};
   observer_bridge_.FormRemoved(&fake_web_state_, sender_frame.get(), params);
   ASSERT_TRUE([observer_ formRemovalInfo]);
   EXPECT_EQ(&fake_web_state_, [observer_ formRemovalInfo]->web_state);
   EXPECT_EQ(sender_frame.get(), [observer_ formRemovalInfo]->sender_frame);
-  EXPECT_EQ(params.form_name,
-            [observer_ formRemovalInfo]->form_removal_params.form_name);
-  EXPECT_EQ(params.unique_form_id,
-            [observer_ formRemovalInfo]->form_removal_params.unique_form_id);
-  EXPECT_TRUE([observer_ formRemovalInfo]->form_removal_params.input_missing);
+  EXPECT_EQ(params.removed_forms,
+            [observer_ formRemovalInfo]->form_removal_params.removed_forms);
 }

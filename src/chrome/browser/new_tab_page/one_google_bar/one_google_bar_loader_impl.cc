@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
@@ -20,6 +20,7 @@
 #include "components/google/core/common/google_util.h"
 #include "components/signin/public/identity_manager/tribool.h"
 #include "components/variations/net/variations_http_headers.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
@@ -48,32 +49,34 @@ const char kResponsePreamble[] = ")]}'";
 // instead of these custom functions.
 namespace safe_html {
 
-bool GetImpl(const base::DictionaryValue& dict,
+bool GetImpl(const base::Value::Dict& dict,
              const std::string& name,
              const std::string& wrapped_field_name,
              std::string* out) {
-  const base::DictionaryValue* value = nullptr;
-  if (!dict.GetDictionary(name, &value)) {
+  const base::Value::Dict* value = dict.FindDict(name);
+  if (!value) {
     out->clear();
     return false;
   }
 
-  if (!value->GetString(wrapped_field_name, out)) {
+  const std::string* maybe_field_val = value->FindString(wrapped_field_name);
+  if (!maybe_field_val) {
     out->clear();
     return false;
   }
+  *out = *maybe_field_val;
 
   return true;
 }
 
-bool GetHtml(const base::DictionaryValue& dict,
+bool GetHtml(const base::Value::Dict& dict,
              const std::string& name,
              std::string* out) {
   return GetImpl(dict, name,
                  "private_do_not_access_or_else_safe_html_wrapped_value", out);
 }
 
-bool GetScript(const base::DictionaryValue& dict,
+bool GetScript(const base::Value::Dict& dict,
                const std::string& name,
                std::string* out) {
   return GetImpl(dict, name,
@@ -81,7 +84,7 @@ bool GetScript(const base::DictionaryValue& dict,
                  out);
 }
 
-bool GetStyleSheet(const base::DictionaryValue& dict,
+bool GetStyleSheet(const base::Value::Dict& dict,
                    const std::string& name,
                    std::string* out) {
   return GetImpl(dict, name,
@@ -91,29 +94,29 @@ bool GetStyleSheet(const base::DictionaryValue& dict,
 
 }  // namespace safe_html
 
-absl::optional<OneGoogleBarData> JsonToOGBData(const base::Value& value) {
-  const base::DictionaryValue* dict = nullptr;
-  if (!value.GetAsDictionary(&dict)) {
+std::optional<OneGoogleBarData> JsonToOGBData(const base::Value& value) {
+  if (!value.is_dict()) {
     DVLOG(1) << "Parse error: top-level dictionary not found";
-    return absl::nullopt;
+    return std::nullopt;
   }
+  const base::Value::Dict& dict = value.GetDict();
 
-  const base::DictionaryValue* update = nullptr;
-  if (!dict->GetDictionary("update", &update)) {
+  const base::Value::Dict* update = dict.FindDict("update");
+  if (!update) {
     DVLOG(1) << "Parse error: no update";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  const base::Value* language = nullptr;
+  const std::string* maybe_language = update->FindString("language_code");
   std::string language_code;
-  if (update->Get("language_code", &language)) {
-    language_code = language->GetString();
+  if (maybe_language) {
+    language_code = *maybe_language;
   }
 
-  const base::DictionaryValue* one_google_bar = nullptr;
-  if (!update->GetDictionary("ogb", &one_google_bar)) {
+  const base::Value::Dict* one_google_bar = update->FindDict("ogb");
+  if (!one_google_bar) {
     DVLOG(1) << "Parse error: no ogb";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   OneGoogleBarData result;
@@ -121,13 +124,13 @@ absl::optional<OneGoogleBarData> JsonToOGBData(const base::Value& value) {
 
   if (!safe_html::GetHtml(*one_google_bar, "html", &result.bar_html)) {
     DVLOG(1) << "Parse error: no html";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  const base::DictionaryValue* page_hooks = nullptr;
-  if (!one_google_bar->GetDictionary("page_hooks", &page_hooks)) {
+  const base::Value::Dict* page_hooks = one_google_bar->FindDict("page_hooks");
+  if (!page_hooks) {
     DVLOG(1) << "Parse error: no page_hooks";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   safe_html::GetScript(*page_hooks, "in_head_script", &result.in_head_script);
@@ -206,14 +209,14 @@ void OneGoogleBarLoaderImpl::AuthenticatedURLLoader::SetRequestHeaders(
                    signin::PROFILE_MODE_ADD_ACCOUNT_DISABLED;
   }
 
-  // TODO(crbug.com/1134045): Check whether the child account status should also
-  // be sent in the Mirror request header when loading the local version of
+  // TODO(crbug.com/40151268): Check whether the child account status should
+  // also be sent in the Mirror request header when loading the local version of
   // OneGoogleBar.
   std::string chrome_connected_header_value =
       chrome_connected_header_helper.BuildRequestHeader(
           /*is_header_request=*/true, api_url_,
           // Gaia ID is only needed for (drive|docs).google.com.
-          /*gaia_id=*/std::string(),
+          GaiaId(),
           /*is_child_account=*/signin::Tribool::kUnknown, profile_mode,
           signin::kChromeMirrorHeaderSource,
           /*force_account_consistency=*/false);
@@ -257,6 +260,8 @@ void OneGoogleBarLoaderImpl::AuthenticatedURLLoader::Start() {
   SetRequestHeaders(resource_request.get());
   resource_request->request_initiator =
       url::Origin::Create(GURL(chrome::kChromeUINewTabURL));
+  // Adds cookies even if 3P cookies are blocked. See b/297160590.
+  resource_request->site_for_cookies = net::SiteForCookies::FromUrl(api_url_);
 
   simple_loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
                                                     traffic_annotation);
@@ -349,7 +354,7 @@ void OneGoogleBarLoaderImpl::LoadDone(
     // This represents network errors (i.e. the server did not provide a
     // response).
     DVLOG(1) << "Request failed with error: " << simple_loader->NetError();
-    Respond(Status::TRANSIENT_ERROR, absl::nullopt);
+    Respond(Status::TRANSIENT_ERROR, std::nullopt);
     return;
   }
 
@@ -371,17 +376,17 @@ void OneGoogleBarLoaderImpl::JsonParsed(
     data_decoder::DataDecoder::ValueOrError result) {
   if (!result.has_value()) {
     DVLOG(1) << "Parsing JSON failed: " << result.error();
-    Respond(Status::FATAL_ERROR, absl::nullopt);
+    Respond(Status::FATAL_ERROR, std::nullopt);
     return;
   }
 
-  absl::optional<OneGoogleBarData> data = JsonToOGBData(*result);
+  std::optional<OneGoogleBarData> data = JsonToOGBData(*result);
   Respond(data.has_value() ? Status::OK : Status::FATAL_ERROR, data);
 }
 
 void OneGoogleBarLoaderImpl::Respond(
     Status status,
-    const absl::optional<OneGoogleBarData>& data) {
+    const std::optional<OneGoogleBarData>& data) {
   for (auto& callback : callbacks_) {
     std::move(callback).Run(status, data);
   }

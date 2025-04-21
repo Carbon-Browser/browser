@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,16 @@ namespace autofill {
 enum class AutofillProgressDialogType {
   // Unspecified progress dialog type.
   kUnspecified = 0,
-  // Used when authenticating with FIDO.
-  // This progress dialog type applies to Android only.
-  kAndroidFIDOProgressDialog = 1,
-  // Used when unmasking virtual cards.
-  kVirtualCardUnmaskProgressDialog = 2
+  kVirtualCardUnmaskProgressDialog,
+  // Used when conducting a risk-based check for masked server card.
+  kServerCardUnmaskProgressDialog,
+  // Used when unmasking server IBANs.
+  kServerIbanUnmaskProgressDialog,
+  // Used in the VCN 3DS authentication flow after closure of the pop-up, while
+  // a Payments server call is being made to fetch the resulting virtual card.
+  k3dsFetchVcnProgressDialog,
+  // Used when unmasking a card info retrieval enrolled card.
+  kCardInfoRetrievalEnrolledUnmaskProgressDialog,
 };
 
 }  // namespace autofill

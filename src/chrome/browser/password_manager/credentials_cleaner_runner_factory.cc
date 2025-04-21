@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,21 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/password_manager/core/browser/credentials_cleaner_runner.h"
 #include "content/public/browser/browser_context.h"
 
 CredentialsCleanerRunnerFactory::CredentialsCleanerRunnerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "CredentialsCleanerRunner",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 CredentialsCleanerRunnerFactory::~CredentialsCleanerRunnerFactory() = default;
 
@@ -29,7 +36,8 @@ CredentialsCleanerRunnerFactory::GetForProfile(Profile* profile) {
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
-KeyedService* CredentialsCleanerRunnerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CredentialsCleanerRunnerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new password_manager::CredentialsCleanerRunner();
+  return std::make_unique<password_manager::CredentialsCleanerRunner>();
 }

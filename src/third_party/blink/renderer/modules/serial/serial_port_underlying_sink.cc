@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,20 @@
 #include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
-#include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/streams/writable_stream_default_controller.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_piece.h"
 #include "third_party/blink/renderer/modules/serial/serial_port.h"
+#include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 
 namespace blink {
+
+namespace {
+using ::device::mojom::blink::SerialSendError;
+}
 
 SerialPortUnderlyingSink::SerialPortUnderlyingSink(
     SerialPort* serial_port,
@@ -29,7 +34,7 @@ SerialPortUnderlyingSink::SerialPortUnderlyingSink(
                                     WrapWeakPersistent(this)));
 }
 
-ScriptPromise SerialPortUnderlyingSink::start(
+ScriptPromise<IDLUndefined> SerialPortUnderlyingSink::start(
     ScriptState* script_state,
     WritableStreamDefaultController* controller,
     ExceptionState& exception_state) {
@@ -51,13 +56,14 @@ ScriptPromise SerialPortUnderlyingSink::start(
     Member<SerialPortUnderlyingSink> sink_;
   };
 
-  controller->signal()->AddAlgorithm(
+  DCHECK(!abort_handle_);
+  abort_handle_ = controller->signal()->AddAlgorithm(
       MakeGarbageCollected<AbortAlgorithm>(this));
 
-  return ScriptPromise::CastUndefined(script_state);
+  return ToResolvedUndefinedPromise(script_state);
 }
 
-ScriptPromise SerialPortUnderlyingSink::write(
+ScriptPromise<IDLUndefined> SerialPortUnderlyingSink::write(
     ScriptState* script_state,
     ScriptValue chunk,
     WritableStreamDefaultController* controller,
@@ -70,68 +76,96 @@ ScriptPromise SerialPortUnderlyingSink::write(
   buffer_source_ = V8BufferSource::Create(script_state->GetIsolate(),
                                           chunk.V8Value(), exception_state);
   if (exception_state.HadException())
-    return ScriptPromise();
+    return EmptyPromise();
 
   pending_operation_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = pending_operation_->Promise();
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+          script_state, exception_state.GetContext());
+  auto promise = pending_operation_->Promise();
 
   WriteData();
   return promise;
 }
 
-ScriptPromise SerialPortUnderlyingSink::close(ScriptState* script_state,
-                                              ExceptionState& exception_state) {
+ScriptPromise<IDLUndefined> SerialPortUnderlyingSink::close(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   // The specification guarantees that this will only be called after all
   // pending writes have been completed.
   DCHECK(!pending_operation_);
 
   watcher_.Cancel();
   data_pipe_.reset();
+  abort_handle_.Clear();
 
   pending_operation_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  serial_port_->Drain(WTF::Bind(&SerialPortUnderlyingSink::OnFlushOrDrain,
-                                WrapPersistent(this)));
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+          script_state, exception_state.GetContext());
+  serial_port_->Drain(WTF::BindOnce(&SerialPortUnderlyingSink::OnFlushOrDrain,
+                                    WrapPersistent(this)));
   return pending_operation_->Promise();
 }
 
-ScriptPromise SerialPortUnderlyingSink::abort(ScriptState* script_state,
-                                              ScriptValue reason,
-                                              ExceptionState& exception_state) {
+ScriptPromise<IDLUndefined> SerialPortUnderlyingSink::abort(
+    ScriptState* script_state,
+    ScriptValue reason,
+    ExceptionState& exception_state) {
   // The specification guarantees that this will only be called after all
   // pending writes have been completed.
   DCHECK(!pending_operation_);
 
   watcher_.Cancel();
   data_pipe_.reset();
+  abort_handle_.Clear();
 
   // If the port is closing the flush will be performed when it closes so we
   // don't need to do it here.
   if (serial_port_->IsClosing()) {
     serial_port_->UnderlyingSinkClosed();
-    return ScriptPromise::CastUndefined(script_state);
+    return ToResolvedUndefinedPromise(script_state);
   }
 
   pending_operation_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(
+          script_state, exception_state.GetContext());
   serial_port_->Flush(device::mojom::blink::SerialPortFlushMode::kTransmit,
-                      WTF::Bind(&SerialPortUnderlyingSink::OnFlushOrDrain,
-                                WrapPersistent(this)));
+                      WTF::BindOnce(&SerialPortUnderlyingSink::OnFlushOrDrain,
+                                    WrapPersistent(this)));
   return pending_operation_->Promise();
 }
 
-void SerialPortUnderlyingSink::SignalError(DOMException* exception) {
+void SerialPortUnderlyingSink::SignalError(SerialSendError error) {
   watcher_.Cancel();
   data_pipe_.reset();
+  abort_handle_.Clear();
+
+  ScriptState* script_state = pending_operation_
+                                  ? pending_operation_->GetScriptState()
+                                  : script_state_.Get();
+  ScriptState::Scope script_state_scope(script_state_);
+
+  v8::Isolate* isolate = script_state->GetIsolate();
+  v8::Local<v8::Value> exception;
+  switch (error) {
+    case SerialSendError::NONE:
+      NOTREACHED();
+    case SerialSendError::DISCONNECTED:
+      exception = V8ThrowDOMException::CreateOrDie(
+          isolate, DOMExceptionCode::kNetworkError,
+          "The device has been lost.");
+      break;
+    case SerialSendError::SYSTEM_ERROR:
+      exception = V8ThrowDOMException::CreateOrDie(
+          isolate, DOMExceptionCode::kUnknownError,
+          "An unknown system error has occurred.");
+      break;
+  }
 
   if (pending_operation_) {
     pending_operation_->Reject(exception);
     pending_operation_ = nullptr;
   } else {
-    ScriptState::Scope scope(script_state_);
-    controller_->error(script_state_,
-                       ScriptValue::From(script_state_, exception));
+    controller_->error(script_state_, ScriptValue(isolate, exception));
   }
 
   serial_port_->UnderlyingSinkClosed();
@@ -141,6 +175,7 @@ void SerialPortUnderlyingSink::Trace(Visitor* visitor) const {
   visitor->Trace(serial_port_);
   visitor->Trace(script_state_);
   visitor->Trace(controller_);
+  visitor->Trace(abort_handle_);
   visitor->Trace(buffer_source_);
   visitor->Trace(pending_operation_);
   UnderlyingSinkBase::Trace(visitor);
@@ -148,6 +183,7 @@ void SerialPortUnderlyingSink::Trace(Visitor* visitor) const {
 
 void SerialPortUnderlyingSink::OnAborted() {
   watcher_.Cancel();
+  abort_handle_.Clear();
 
   // Rejecting |pending_operation_| allows the rest of the process of aborting
   // the stream to be handled by abort().
@@ -173,11 +209,13 @@ void SerialPortUnderlyingSink::OnHandleReady(MojoResult result,
 }
 
 void SerialPortUnderlyingSink::OnFlushOrDrain() {
-  DCHECK(pending_operation_);
-
-  pending_operation_->Resolve();
-  pending_operation_ = nullptr;
-  serial_port_->UnderlyingSinkClosed();
+  // If pending_operation_ is nullptr, that means SignalError happened before
+  // flush finished and SerialPort::UnderlyingSinkClosed has been called.
+  if (pending_operation_) {
+    pending_operation_->Resolve();
+    pending_operation_ = nullptr;
+    serial_port_->UnderlyingSinkClosed();
+  }
 }
 
 void SerialPortUnderlyingSink::WriteData() {
@@ -197,19 +235,14 @@ void SerialPortUnderlyingSink::WriteData() {
     return;
   }
 
-  const uint8_t* data = array_piece.Bytes();
-  const size_t length = array_piece.ByteLength();
-
-  DCHECK_LT(offset_, length);
-  data += offset_;
-  uint32_t num_bytes = base::saturated_cast<uint32_t>(length - offset_);
-
+  size_t actually_written_bytes = 0;
   MojoResult result =
-      data_pipe_->WriteData(data, &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+      data_pipe_->WriteData(array_piece.ByteSpan().subspan(offset_),
+                            MOJO_WRITE_DATA_FLAG_NONE, actually_written_bytes);
   switch (result) {
     case MOJO_RESULT_OK:
-      offset_ += num_bytes;
-      if (offset_ == length) {
+      offset_ += actually_written_bytes;
+      if (offset_ == array_piece.ByteLength()) {
         buffer_source_ = nullptr;
         offset_ = 0;
         pending_operation_->Resolve();
@@ -231,6 +264,13 @@ void SerialPortUnderlyingSink::WriteData() {
 void SerialPortUnderlyingSink::PipeClosed() {
   watcher_.Cancel();
   data_pipe_.reset();
+  abort_handle_.Clear();
+}
+
+void SerialPortUnderlyingSink::Dispose() {
+  // Ensure that `watcher_` is disarmed so that `OnHandleReady()` is not called
+  // after this object becomes garbage.
+  PipeClosed();
 }
 
 }  // namespace blink

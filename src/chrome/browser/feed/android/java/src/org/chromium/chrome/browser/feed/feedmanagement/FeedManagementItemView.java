@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import android.widget.TextView;
 
 import org.chromium.chrome.browser.feed.R;
 
-/**
- * View class for the individual line items in the feed management interstitial.
- */
+/** View class for the individual line items in the feed management interstitial. */
 public class FeedManagementItemView extends LinearLayout {
     private TextView mTitle;
     private TextView mDescription;
@@ -21,12 +19,15 @@ public class FeedManagementItemView extends LinearLayout {
     public void setTitle(String title) {
         mTitle.setText(title);
     }
+
     public void setDescription(String description) {
         mDescription.setText(description);
     }
+
     public FeedManagementItemView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
+
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();

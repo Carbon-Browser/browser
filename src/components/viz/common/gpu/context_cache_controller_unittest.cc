@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkPixmap.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
 
 using ::testing::Mock;
 using ::testing::StrictMock;
@@ -24,7 +25,7 @@ namespace {
 
 class MockContextSupport : public TestContextSupport {
  public:
-  MockContextSupport() {}
+  MockContextSupport() = default;
   MOCK_METHOD1(SetAggressivelyFreeResources,
                void(bool aggressively_free_resources));
 };
@@ -161,9 +162,12 @@ TEST(ContextCacheControllerTest, ScopedBusyMulitpleWhileVisible) {
 TEST(ContextCacheControllerTest, CheckSkiaResourcePurgeAPI) {
   StrictMock<MockContextSupport> context_support;
   auto task_runner = base::MakeRefCounted<base::TestMockTimeTaskRunner>();
-  ContextCacheController cache_controller(&context_support, task_runner);
+
+  // Must outlive `cache_controller`.
   auto context_provider = TestContextProvider::Create();
-  context_provider->BindToCurrentThread();
+  context_provider->BindToCurrentSequence();
+
+  ContextCacheController cache_controller(&context_support, task_runner);
   auto* gr_context = context_provider->GrContext();
   cache_controller.SetGrContext(gr_context);
 
@@ -178,8 +182,8 @@ TEST(ContextCacheControllerTest, CheckSkiaResourcePurgeAPI) {
     auto image_info = SkImageInfo::MakeN32Premul(200, 200);
     std::vector<uint8_t> image_data(image_info.computeMinByteSize());
     SkPixmap pixmap(image_info, image_data.data(), image_info.minRowBytes());
-    auto image = SkImage::MakeRasterCopy(pixmap);
-    auto image_gpu = image->makeTextureImage(gr_context);
+    auto image = SkImages::RasterFromPixmapCopy(pixmap);
+    auto image_gpu = SkImages::TextureFromImage(gr_context, std::move(image));
     gr_context->flushAndSubmit();
   }
 

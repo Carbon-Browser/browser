@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define MEDIA_MOJO_CLIENTS_MOJO_DECODER_FACTORY_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/decoder_factory.h"
 
@@ -30,7 +31,7 @@ class MojoDecoderFactory final : public DecoderFactory {
       MediaLog* media_log,
       std::vector<std::unique_ptr<AudioDecoder>>* audio_decoders) final;
 
-  // TODO(crbug.com/1173503): Implement GetSupportedVideoDecoderConfigs.
+  // TODO(crbug.com/40167137): Implement GetSupportedVideoDecoderConfigs.
 
   void CreateVideoDecoders(
       scoped_refptr<base::SequencedTaskRunner> task_runner,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,26 +9,30 @@ import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 
-/**
- * Test utils for clicking and other mouse actions.
- */
+import org.chromium.base.ThreadUtils;
+
+/** Test utils for clicking and other mouse actions. */
 public class ClickUtils {
     /**
-     * Click a button. Unlike {@link ClickUtils#mouseSingleClickView} this directly accesses
-     * the view and does not send motion events though the message queue. As such it doesn't require
-     * the view to have been created by the instrumented activity, but gives less flexibility than
-     * mouseSingleClickView. For example, if the view is hierachical, then clickButton will always
+     * Click a button. Unlike {@link ClickUtils#mouseSingleClickView} this directly accesses the
+     * view and does not send motion events though the message queue. As such it doesn't require the
+     * view to have been created by the instrumented activity, but gives less flexibility than
+     * mouseSingleClickView. For example, if the view is hierarchical, then clickButton will always
      * act on specified view, whereas mouseSingleClickView will send the events to the appropriate
      * child view. It is hence only really appropriate for simple views such as buttons.
      *
      * @param button the button to be clicked.
      */
     public static void clickButton(final View button) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // Post the actual click to the button's message queue, to ensure that it has been
-            // inflated before the click is received.
-            button.post(() -> { button.performClick(); });
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // Post the actual click to the button's message queue, to ensure that it has
+                    // been inflated before the click is received.
+                    button.post(
+                            () -> {
+                                button.performClick();
+                            });
+                });
     }
 
     /**
@@ -69,8 +73,22 @@ public class ClickUtils {
         properties[0] = new MotionEvent.PointerProperties();
         properties[0].id = 0;
         properties[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
-        MotionEvent event = MotionEvent.obtain(
-                downTime, eventTime, action, 1, properties, coords, 0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+        MotionEvent event =
+                MotionEvent.obtain(
+                        downTime,
+                        eventTime,
+                        action,
+                        1,
+                        properties,
+                        coords,
+                        0,
+                        0,
+                        0.0f,
+                        0.0f,
+                        0,
+                        0,
+                        0,
+                        0);
         instrumentation.sendPointerSync(event);
         instrumentation.waitForIdleSync();
     }

@@ -25,12 +25,12 @@
 
 #include "third_party/blink/renderer/modules/gamepad/gamepad.h"
 
+#include <algorithm>
+
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/renderer/core/timing/performance.h"
 #include "third_party/blink/renderer/modules/gamepad/gamepad_comparisons.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
-
-#include <algorithm>
 
 namespace blink {
 
@@ -43,8 +43,10 @@ Gamepad::Gamepad(Client* client,
       timestamp_(0.0),
       has_vibration_actuator_(false),
       vibration_actuator_type_(device::GamepadHapticActuatorType::kDualRumble),
+      has_touch_events_(false),
       is_axis_data_dirty_(true),
       is_button_data_dirty_(true),
+      is_touch_data_dirty_(true),
       time_origin_(time_origin),
       time_floor_(time_floor) {
   DCHECK(!time_origin_.is_null());
@@ -65,8 +67,15 @@ void Gamepad::UpdateFromDeviceState(const device::Gamepad& device_gamepad,
 
   SetConnected(device_gamepad.connected);
   SetTimestamp(device_gamepad, cross_origin_isolated_capability);
-  SetAxes(device_gamepad.axes_length, device_gamepad.axes);
-  SetButtons(device_gamepad.buttons_length, device_gamepad.buttons);
+  SetAxes(base::span(device_gamepad.axes).first(device_gamepad.axes_length));
+  SetButtons(
+      base::span(device_gamepad.buttons).first(device_gamepad.buttons_length));
+
+  if (device_gamepad.supports_touch_events_) {
+    SetTouchEvents(base::span(device_gamepad.touch_events)
+                       .first(device_gamepad.touch_events_length));
+  }
+
   // Always called as gamepads require additional steps to determine haptics
   // capability and thus may provide them when not |newly_connected|. This is
   // also simpler than logic to conditionally call.
@@ -100,15 +109,15 @@ const Gamepad::DoubleVector& Gamepad::axes() {
   return axes_;
 }
 
-void Gamepad::SetAxes(unsigned count, const double* data) {
-  bool skip_update =
-      axes_.size() == count && std::equal(data, data + count, axes_.begin());
-  if (skip_update)
+void Gamepad::SetAxes(base::span<const double> data) {
+  if (std::ranges::equal(data, axes_)) {
     return;
+  }
 
-  axes_.resize(count);
-  if (count)
-    std::copy(data, data + count, axes_.begin());
+  axes_.resize(base::checked_cast<wtf_size_t>(data.size()));
+  if (!data.empty()) {
+    base::span(axes_).copy_from(data);
+  }
   is_axis_data_dirty_ = true;
 }
 
@@ -117,24 +126,69 @@ const GamepadButtonVector& Gamepad::buttons() {
   return buttons_;
 }
 
-void Gamepad::SetButtons(unsigned count, const device::GamepadButton* data) {
+const GamepadTouchVector* Gamepad::touchEvents() {
+  is_touch_data_dirty_ = false;
+  if (!has_touch_events_) {
+    return nullptr;
+  }
+  return &touch_events_;
+}
+
+void Gamepad::SetTouchEvents(base::span<const device::GamepadTouch> data) {
+  has_touch_events_ = true;
+  if (data.empty()) {
+    touch_events_.clear();
+    return;
+  }
+
   bool skip_update =
-      buttons_.size() == count &&
-      std::equal(data, data + count, buttons_.begin(),
-                 [](const device::GamepadButton& device_gamepad_button,
-                    const Member<GamepadButton>& gamepad_button) {
-                   return gamepad_button->IsEqual(device_gamepad_button);
-                 });
+      std::ranges::equal(data, touch_events_,
+                         [](const device::GamepadTouch& device_gamepad_touch,
+                            const Member<GamepadTouch>& gamepad_touch) {
+                           return gamepad_touch->IsEqual(device_gamepad_touch);
+                         });
+  if (skip_update) {
+    return;
+  }
+
+  if (touch_events_.size() != data.size()) {
+    touch_events_.clear();
+    touch_events_.resize(base::checked_cast<wtf_size_t>(data.size()));
+    for (size_t i = 0; i < data.size(); ++i) {
+      touch_events_[i] = MakeGarbageCollected<GamepadTouch>();
+    }
+  }
+
+  if (client_) {
+    client_->SetTouchEvents(*this, touch_events_, data);
+  } else {
+    for (size_t i = 0; i < data.size(); ++i) {
+      touch_events_[i]->UpdateValuesFrom(data[i], data[i].touch_id);
+    }
+  }
+
+  is_touch_data_dirty_ = true;
+}
+
+void Gamepad::SetButtons(base::span<const device::GamepadButton> data) {
+  bool skip_update = std::ranges::equal(
+      data, buttons_,
+      [](const device::GamepadButton& device_gamepad_button,
+         const Member<GamepadButton>& gamepad_button) {
+        return gamepad_button->IsEqual(device_gamepad_button);
+      });
   if (skip_update)
     return;
 
-  if (buttons_.size() != count) {
-    buttons_.resize(count);
-    for (unsigned i = 0; i < count; ++i)
+  if (buttons_.size() != data.size()) {
+    buttons_.resize(base::checked_cast<wtf_size_t>(data.size()));
+    for (size_t i = 0; i < data.size(); ++i) {
       buttons_[i] = MakeGarbageCollected<GamepadButton>();
+    }
   }
-  for (unsigned i = 0; i < count; ++i)
+  for (size_t i = 0; i < data.size(); ++i) {
     buttons_[i]->UpdateValuesFrom(data[i]);
+  }
   is_button_data_dirty_ = true;
 }
 
@@ -171,6 +225,7 @@ void Gamepad::SetTimestamp(const device::Gamepad& device_gamepad,
 void Gamepad::Trace(Visitor* visitor) const {
   visitor->Trace(client_);
   visitor->Trace(buttons_);
+  visitor->Trace(touch_events_);
   ScriptWrappable::Trace(visitor);
 }
 

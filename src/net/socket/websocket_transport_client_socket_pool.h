@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,26 +8,34 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "net/base/net_export.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_pool.h"
 #include "net/socket/connect_job.h"
 #include "net/socket/ssl_client_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
 struct CommonConnectJobParams;
 struct NetworkTrafficAnnotationTag;
+class StreamSocketHandle;
+
+// Identifier for a ClientSocketHandle to scope the lifetime of references.
+// ClientSocketHandleID are derived from ClientSocketHandle*, used in
+// comparison only, and are never dereferenced. We use an std::uintptr_t here to
+// match the size of a pointer, and to prevent dereferencing. Also, our
+// tooling complains about dangling pointers if we pass around a raw ptr.
+using ClientSocketHandleID = std::uintptr_t;
 
 class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
     : public ClientSocketPool {
@@ -35,7 +43,7 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   WebSocketTransportClientSocketPool(
       int max_sockets,
       int max_sockets_per_group,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       const CommonConnectJobParams* common_connect_job_params);
 
   WebSocketTransportClientSocketPool(
@@ -51,14 +59,14 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   // need to explicitly check for this. Instead, ensure that dead sockets are
   // returned to ReleaseSocket() in a timely fashion.
   static void UnlockEndpoint(
-      ClientSocketHandle* handle,
+      StreamSocketHandle* handle,
       WebSocketEndpointLockManager* websocket_endpoint_lock_manager);
 
   // ClientSocketPool implementation.
   int RequestSocket(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       RequestPriority priority,
       const SocketTag& socket_tag,
       RespectLimits respect_limits,
@@ -69,7 +77,7 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   int RequestSockets(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       int num_sockets,
       CompletionOnceCallback callback,
       const NetLogWithSource& net_log) override;
@@ -145,7 +153,7 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
     StalledRequest(
         const GroupId& group_id,
         const scoped_refptr<SocketParams>& params,
-        const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+        const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
         RequestPriority priority,
         ClientSocketHandle* handle,
         CompletionOnceCallback callback,
@@ -156,7 +164,7 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
 
     const GroupId group_id;
     const scoped_refptr<SocketParams> params;
-    const absl::optional<NetworkTrafficAnnotationTag> proxy_annotation_tag;
+    const std::optional<NetworkTrafficAnnotationTag> proxy_annotation_tag;
     const RequestPriority priority;
     const raw_ptr<ClientSocketHandle> handle;
     CompletionOnceCallback callback;
@@ -183,7 +191,8 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   void InvokeUserCallbackLater(ClientSocketHandle* handle,
                                CompletionOnceCallback callback,
                                int rv);
-  void InvokeUserCallback(ClientSocketHandle* handle,
+  void InvokeUserCallback(ClientSocketHandleID handle_id,
+                          base::WeakPtr<ClientSocketHandle> weak_handle,
                           CompletionOnceCallback callback,
                           int rv);
   bool ReachedMaxSocketsLimit() const;
@@ -198,8 +207,8 @@ class NET_EXPORT_PRIVATE WebSocketTransportClientSocketPool
   void ActivateStalledRequest();
   bool DeleteStalledRequest(ClientSocketHandle* handle);
 
-  const ProxyServer proxy_server_;
-  std::set<const ClientSocketHandle*> pending_callbacks_;
+  const ProxyChain proxy_chain_;
+  std::set<ClientSocketHandleID> pending_callbacks_;
   PendingConnectsMap pending_connects_;
   StalledRequestQueue stalled_request_queue_;
   StalledRequestMap stalled_request_map_;

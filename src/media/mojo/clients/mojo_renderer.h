@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/unguessable_token.h"
 #include "media/base/demuxer_stream.h"
@@ -20,11 +22,6 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace base {
-class SingleThreadTaskRunner;
-}
 
 namespace media {
 
@@ -41,11 +38,11 @@ class VideoRendererSink;
 // connected and passed in the constructor. Then Initialize() will be called on
 // the |task_runner| and starting from that point this class is bound to the
 // |task_runner|*. That means all Renderer and RendererClient methods will be
-// called/dispached on the |task_runner|. The only exception is GetMediaTime(),
+// called/dispatched on the |task_runner|. The only exception is GetMediaTime(),
 // which can be called on any thread.
 class MojoRenderer : public Renderer, public mojom::RendererClient {
  public:
-  MojoRenderer(const scoped_refptr<base::SingleThreadTaskRunner>& task_runner,
+  MojoRenderer(const scoped_refptr<base::SequencedTaskRunner>& task_runner,
                std::unique_ptr<VideoOverlayFactory> video_overlay_factory,
                VideoRendererSink* video_renderer_sink,
                mojo::PendingRemote<mojom::Renderer> remote_renderer);
@@ -60,12 +57,13 @@ class MojoRenderer : public Renderer, public mojom::RendererClient {
                   media::RendererClient* client,
                   PipelineStatusCallback init_cb) override;
   void SetCdm(CdmContext* cdm_context, CdmAttachedCB cdm_attached_cb) override;
-  void SetLatencyHint(absl::optional<base::TimeDelta> latency_hint) override;
+  void SetLatencyHint(std::optional<base::TimeDelta> latency_hint) override;
   void Flush(base::OnceClosure flush_cb) override;
   void StartPlayingFrom(base::TimeDelta time) override;
   void SetPlaybackRate(double playback_rate) override;
   void SetVolume(float volume) override;
   base::TimeDelta GetMediaTime() override;
+  RendererType GetRendererType() override;
 
  private:
   // mojom::RendererClient implementation, dispatched on the |task_runner_|.
@@ -112,7 +110,7 @@ class MojoRenderer : public Renderer, public mojom::RendererClient {
 
   // |task_runner| on which all methods are invoked, except for GetMediaTime(),
   // which can be called on any thread.
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // Overlay factory used to create overlays for video frames rendered
   // by the remote renderer.
@@ -120,7 +118,10 @@ class MojoRenderer : public Renderer, public mojom::RendererClient {
 
   // Video frame overlays are rendered onto this sink.
   // Rendering of a new overlay is only needed when video natural size changes.
-  raw_ptr<VideoRendererSink> video_renderer_sink_ = nullptr;
+  // TODO(crbug.com/41490899) Investigate dangling pointer.
+  raw_ptr<VideoRendererSink,
+          FlakyDanglingUntriaged | AcrossTasksDanglingUntriaged>
+      video_renderer_sink_ = nullptr;
 
   // Provider of audio/video DemuxerStreams. Must be valid throughout the
   // lifetime of |this|.
@@ -161,7 +162,7 @@ class MojoRenderer : public Renderer, public mojom::RendererClient {
   mutable base::Lock lock_;
   media::TimeDeltaInterpolator media_time_interpolator_;
 
-  absl::optional<PipelineStatistics> pending_stats_;
+  std::optional<PipelineStatistics> pending_stats_;
 };
 
 }  // namespace media

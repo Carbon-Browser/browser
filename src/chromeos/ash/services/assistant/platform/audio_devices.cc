@@ -1,21 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/platform/audio_devices.h"
 
-#include "ash/components/audio/audio_device.h"
-#include "ash/components/audio/cras_audio_handler.h"
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/scoped_observation.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
+#include "chromeos/ash/components/audio/audio_device.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -28,14 +30,14 @@ constexpr const char kDefaultLocale[] = "en_us";
 // Examples:
 //     "fr"     ->  "fr_fr"
 //     "nl-BE"  ->  "nl_be"
-absl::optional<std::string> ToHotwordModel(std::string pref_locale) {
+std::optional<std::string> ToHotwordModel(std::string pref_locale) {
   std::vector<std::string> code_strings = base::SplitString(
       pref_locale, "-", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
 
   if (code_strings.size() == 0) {
     // Note: I am not sure this happens during real operations, but it
     // definitely happens during the ChromeOS performance tests.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   DCHECK_LT(code_strings.size(), 3u);
@@ -53,9 +55,8 @@ absl::optional<std::string> ToHotwordModel(std::string pref_locale) {
   return code_strings[0] + "_" + base::ToLowerASCII(code_strings[1]);
 }
 
-const chromeos::AudioDevice* GetHighestPriorityDevice(
-    const chromeos::AudioDevice* left,
-    const chromeos::AudioDevice* right) {
+const AudioDevice* GetHighestPriorityDevice(const AudioDevice* left,
+                                            const AudioDevice* right) {
   if (!left)
     return right;
   if (!right)
@@ -63,17 +64,16 @@ const chromeos::AudioDevice* GetHighestPriorityDevice(
   return left->priority < right->priority ? right : left;
 }
 
-absl::optional<uint64_t> IdToOptional(const AudioDevice* device) {
+std::optional<uint64_t> IdToOptional(const AudioDevice* device) {
   if (!device)
-    return absl::nullopt;
+    return std::nullopt;
   return device->id;
 }
 
-absl::optional<uint64_t> GetHotwordDeviceId(
-    const chromeos::AudioDeviceList& devices) {
-  const chromeos::AudioDevice* result = nullptr;
+std::optional<uint64_t> GetHotwordDeviceId(const AudioDeviceList& devices) {
+  const AudioDevice* result = nullptr;
 
-  for (const chromeos::AudioDevice& device : devices) {
+  for (const AudioDevice& device : devices) {
     if (!device.is_input)
       continue;
 
@@ -90,22 +90,21 @@ absl::optional<uint64_t> GetHotwordDeviceId(
   return IdToOptional(result);
 }
 
-absl::optional<uint64_t> GetPreferredDeviceId(
-    const chromeos::AudioDeviceList& devices) {
-  const chromeos::AudioDevice* result = nullptr;
+std::optional<uint64_t> GetPreferredDeviceId(const AudioDeviceList& devices) {
+  const AudioDevice* result = nullptr;
 
-  for (const chromeos::AudioDevice& device : devices) {
+  for (const AudioDevice& device : devices) {
     if (!device.is_input)
       continue;
 
     switch (device.type) {
-      case chromeos::AudioDeviceType::kMic:
-      case chromeos::AudioDeviceType::kUsb:
-      case chromeos::AudioDeviceType::kHeadphone:
-      case chromeos::AudioDeviceType::kInternalMic:
-      case chromeos::AudioDeviceType::kFrontMic:
-      case chromeos::AudioDeviceType::kRearMic:
-      case chromeos::AudioDeviceType::kKeyboardMic:
+      case AudioDeviceType::kMic:
+      case AudioDeviceType::kUsb:
+      case AudioDeviceType::kHeadphone:
+      case AudioDeviceType::kInternalMic:
+      case AudioDeviceType::kFrontMic:
+      case AudioDeviceType::kRearMic:
+      case AudioDeviceType::kKeyboardMic:
         result = GetHighestPriorityDevice(result, &device);
         break;
       default:
@@ -118,9 +117,9 @@ absl::optional<uint64_t> GetPreferredDeviceId(
   return IdToOptional(result);
 }
 
-absl::optional<std::string> ToString(absl::optional<uint64_t> int_value) {
+std::optional<std::string> ToString(std::optional<uint64_t> int_value) {
   if (!int_value)
-    return absl::nullopt;
+    return std::nullopt;
   return base::NumberToString(int_value.value());
 }
 
@@ -144,7 +143,7 @@ class AudioDevices::ScopedCrasAudioHandlerObserver
   //    - Subscribe for changes
   //    - Fetch the current state.
   void StartObserving() {
-    scoped_observer_.Observe(cras_audio_handler_);
+    scoped_observer_.Observe(cras_audio_handler_.get());
     FetchAudioNodes();
   }
 
@@ -156,18 +155,15 @@ class AudioDevices::ScopedCrasAudioHandlerObserver
     if (!base::SysInfo::IsRunningOnChromeOS())
       return;
 
-    chromeos::AudioDeviceList audio_devices;
+    AudioDeviceList audio_devices;
     cras_audio_handler_->GetAudioDevices(&audio_devices);
     parent_->SetAudioDevices(audio_devices);
   }
 
-  AudioDevices* const parent_;
+  const raw_ptr<AudioDevices> parent_;
   // Owned by |AssistantManagerServiceImpl|.
-  CrasAudioHandler* const cras_audio_handler_;
-  base::ScopedObservation<CrasAudioHandler,
-                          CrasAudioHandler::AudioObserver,
-                          &CrasAudioHandler::AddAudioObserver,
-                          &CrasAudioHandler::RemoveAudioObserver>
+  const raw_ptr<CrasAudioHandler> cras_audio_handler_;
+  base::ScopedObservation<CrasAudioHandler, CrasAudioHandler::AudioObserver>
       scoped_observer_{this};
 };
 
@@ -221,7 +217,7 @@ class AudioDevices::HotwordModelUpdater {
         }));
   }
 
-  CrasAudioHandler* const cras_audio_handler_;
+  const raw_ptr<CrasAudioHandler> cras_audio_handler_;
   uint64_t hotword_device_;
   std::string locale_;
 
@@ -261,18 +257,17 @@ void AudioDevices::SetLocale(const std::string& locale) {
 }
 
 void AudioDevices::SetAudioDevicesForTest(
-    const chromeos::AudioDeviceList& audio_devices) {
+    const AudioDeviceList& audio_devices) {
   SetAudioDevices(audio_devices);
 }
 
-void AudioDevices::SetAudioDevices(const chromeos::AudioDeviceList& devices) {
+void AudioDevices::SetAudioDevices(const AudioDeviceList& devices) {
   UpdateHotwordDeviceId(devices);
   UpdateDeviceId(devices);
   UpdateHotwordModel();
 }
 
-void AudioDevices::UpdateHotwordDeviceId(
-    const chromeos::AudioDeviceList& devices) {
+void AudioDevices::UpdateHotwordDeviceId(const AudioDeviceList& devices) {
   hotword_device_id_ = GetHotwordDeviceId(devices);
 
   VLOG(2) << "Changed audio hotword input device to "
@@ -282,7 +277,7 @@ void AudioDevices::UpdateHotwordDeviceId(
     observer.SetHotwordDeviceId(ToString(hotword_device_id_));
 }
 
-void AudioDevices::UpdateDeviceId(const chromeos::AudioDeviceList& devices) {
+void AudioDevices::UpdateDeviceId(const AudioDeviceList& devices) {
   device_id_ = GetPreferredDeviceId(devices);
 
   VLOG(2) << "Changed audio input device to "
@@ -303,5 +298,4 @@ void AudioDevices::UpdateHotwordModel() {
       cras_audio_handler_, hotword_device_id_.value(), locale_);
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

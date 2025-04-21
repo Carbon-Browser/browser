@@ -1,15 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "ash/components/arc/session/arc_session_runner.h"
 
 #include <memory>
 #include <utility>
 
 #include "ash/components/arc/arc_util.h"
-#include "ash/components/arc/session/arc_session_runner.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
@@ -18,6 +17,7 @@
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 
 namespace arc {
 
@@ -111,14 +111,14 @@ class ArcSessionRunnerTest : public testing::Test,
   static std::unique_ptr<ArcSession> CreateSuspendedArcSession() {
     auto arc_session = std::make_unique<FakeArcSession>();
     arc_session->SuspendBoot();
-    return std::move(arc_session);
+    return arc_session;
   }
 
   static std::unique_ptr<ArcSession> CreateBootFailureArcSession(
       ArcStopReason reason) {
     auto arc_session = std::make_unique<FakeArcSession>();
     arc_session->EnableBootFailureEmulation(reason);
-    return std::move(arc_session);
+    return arc_session;
   }
 
  private:
@@ -166,11 +166,9 @@ TEST_F(ArcSessionRunnerTest, Basic) {
   arc_session_runner()->ResumeRunner();
   Observer observer;
   arc_session_runner()->AddObserver(&observer);
-  base::ScopedClosureRunner teardown(base::BindOnce(
-      [](ArcSessionRunner* arc_session_runner, Observer* observer) {
-        arc_session_runner->RemoveObserver(observer);
-      },
-      arc_session_runner(), &observer));
+  absl::Cleanup teardown = [this, &observer] {
+    arc_session_runner()->RemoveObserver(&observer);
+  };
 
   EXPECT_FALSE(arc_session());
 

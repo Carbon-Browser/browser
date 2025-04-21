@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,9 @@
 #include "ash/app_list/model/search/search_result.h"
 #include "ash/app_list/model/search/search_result_observer.h"
 #include "ash/ash_export.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/controls/button/button.h"
 
@@ -37,6 +39,8 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
                                     public views::ContextMenuController,
                                     public ui::SimpleMenuModel::Delegate,
                                     public SearchResultObserver {
+  METADATA_HEADER(ContinueTaskView, views::Button)
+
  public:
   // The type of result for the task.
   // These values are used for metrics and should not be changed.
@@ -47,15 +51,14 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
     kMaxValue = kUnknown,
   };
 
-  METADATA_HEADER(ContinueTaskView);
-
   ContinueTaskView(AppListViewDelegate* view_delegate, bool tablet_mode);
   ContinueTaskView(const ContinueTaskView&) = delete;
   ContinueTaskView& operator=(const ContinueTaskView&) = delete;
   ~ContinueTaskView() override;
 
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size GetMaximumSize() const override;
   void OnThemeChanged() override;
@@ -82,15 +85,17 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
 
  private:
   void UpdateIcon();
+  ui::ColorId GetIconBackgroundColorId() const;
   gfx::Size GetIconSize() const;
   void UpdateResult();
 
   void OnButtonPressed(const ui::Event& event);
 
   // views::ContextMenuController:
-  void ShowContextMenuForViewImpl(views::View* source,
-                                  const gfx::Point& point,
-                                  ui::MenuSourceType source_type) override;
+  void ShowContextMenuForViewImpl(
+      views::View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override;
 
   // Opens the search result related to the view.
   void OpenResult(int event_flags);
@@ -104,23 +109,18 @@ class ASH_EXPORT ContinueTaskView : public views::Button,
   // Closes the context menu for this view if it is running.
   void CloseContextMenu();
 
-  // Updates the background and the border if the ContinueTaskView is in tablet
-  // mode.
-  void UpdateStyleForTabletMode();
-
   // Record metrics at the moment when the ContinueTaskView result is removed.
   void LogMetricsOnResultRemoved();
 
   // The index of this view within a |SearchResultContainerView| that holds it.
-  absl::optional<int> index_in_container_;
+  std::optional<int> index_in_container_;
 
-  AppListViewDelegate* const view_delegate_;
-  views::Label* title_ = nullptr;
-  views::Label* subtitle_ = nullptr;
-  views::ImageView* icon_ = nullptr;
-  SearchResult* result_ = nullptr;  // Owned by SearchModel::SearchResults.
-
-  const bool is_tablet_mode_;
+  const raw_ptr<AppListViewDelegate> view_delegate_;
+  raw_ptr<views::Label> title_ = nullptr;
+  raw_ptr<views::Label> subtitle_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
+  raw_ptr<SearchResult> result_ =
+      nullptr;  // Owned by SearchModel::SearchResults.
 
   std::unique_ptr<ui::SimpleMenuModel> context_menu_model_;
   std::unique_ptr<views::MenuRunner> context_menu_runner_;

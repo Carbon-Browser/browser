@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <cmath>
 
+#include "base/numerics/angle_conversions.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/mojom/sensor.mojom-blink.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/platform_event_controller.h"
@@ -18,7 +19,6 @@
 #include "third_party/blink/renderer/modules/device_orientation/device_motion_event_rotation_rate.h"
 #include "third_party/blink/renderer/modules/device_orientation/device_sensor_entry.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
-#include "ui/gfx/geometry/angle_conversions.h"
 
 namespace {
 
@@ -78,8 +78,8 @@ void DeviceMotionEventPump::SendStartMessage(LocalFrame& frame) {
         sensor_provider_.BindNewPipeAndPassReceiver(
             frame.GetTaskRunner(TaskType::kSensor)));
     sensor_provider_.set_disconnect_handler(
-        WTF::Bind(&DeviceSensorEventPump::HandleSensorProviderError,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(&DeviceSensorEventPump::HandleSensorProviderError,
+                      WrapWeakPersistent(this)));
   }
 
   accelerometer_->Start(sensor_provider_.get());
@@ -162,9 +162,9 @@ DeviceMotionData* DeviceMotionEventPump::GetDataFromSharedMemory() {
       return nullptr;
 
     rotation_rate = DeviceMotionEventRotationRate::Create(
-        gfx::RadToDeg(gyroscope_reading.gyro.x),
-        gfx::RadToDeg(gyroscope_reading.gyro.y),
-        gfx::RadToDeg(gyroscope_reading.gyro.z));
+        base::RadToDeg(gyroscope_reading.gyro.x.value()),
+        base::RadToDeg(gyroscope_reading.gyro.y.value()),
+        base::RadToDeg(gyroscope_reading.gyro.z.value()));
   } else {
     rotation_rate = DeviceMotionEventRotationRate::Create(NAN, NAN, NAN);
   }

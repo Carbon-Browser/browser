@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/animation/list_interpolation_functions.h"
 
 #include <memory>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/core/animation/underlying_value_owner.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
@@ -35,8 +35,7 @@ class UnderlyingItemValue : public UnderlyingValue {
     return *To<InterpolableList>(underlying_list_.MutableInterpolableValue())
                 .GetMutable(index_);
   }
-  void SetInterpolableValue(
-      std::unique_ptr<InterpolableValue> interpolable_value) final {
+  void SetInterpolableValue(InterpolableValue* interpolable_value) final {
     To<InterpolableList>(underlying_list_.MutableInterpolableValue())
         .Set(index_, std::move(interpolable_value));
   }
@@ -138,27 +137,27 @@ PairwiseInterpolationValue ListInterpolationFunctions::MaybeMergeSingles(
   }
 
   if (start_length == 0) {
-    std::unique_ptr<InterpolableValue> start_interpolable_value =
+    InterpolableValue* start_interpolable_value =
         end.interpolable_value->CloneAndZero();
-    return PairwiseInterpolationValue(std::move(start_interpolable_value),
+    return PairwiseInterpolationValue(start_interpolable_value,
                                       std::move(end.interpolable_value),
                                       std::move(end.non_interpolable_value));
   }
 
   if (end_length == 0) {
-    std::unique_ptr<InterpolableValue> end_interpolable_value =
+    InterpolableValue* end_interpolable_value =
         start.interpolable_value->CloneAndZero();
     return PairwiseInterpolationValue(std::move(start.interpolable_value),
-                                      std::move(end_interpolable_value),
+                                      end_interpolable_value,
                                       std::move(start.non_interpolable_value));
   }
 
   const wtf_size_t final_length =
       MatchLengths(start_length, end_length, length_matching_strategy);
-  auto result_start_interpolable_list =
-      std::make_unique<InterpolableList>(final_length);
-  auto result_end_interpolable_list =
-      std::make_unique<InterpolableList>(final_length);
+  auto* result_start_interpolable_list =
+      MakeGarbageCollected<InterpolableList>(final_length);
+  auto* result_end_interpolable_list =
+      MakeGarbageCollected<InterpolableList>(final_length);
   Vector<scoped_refptr<const NonInterpolableValue>>
       result_non_interpolable_values(final_length);
 
@@ -187,7 +186,7 @@ PairwiseInterpolationValue ListInterpolationFunctions::MaybeMergeSingles(
           end_non_interpolable_list
               ? end_non_interpolable_list->Get(i % end_non_interpolable_length)
               : nullptr);
-      PairwiseInterpolationValue result = merge_single_item_conversions.Run(
+      PairwiseInterpolationValue result = merge_single_item_conversions(
           std::move(start_merge), std::move(end_merge));
       if (!result)
         return nullptr;
@@ -237,13 +236,13 @@ static void RepeatToLength(InterpolationValue& value, wtf_size_t length) {
   if (current_length == length)
     return;
   DCHECK_LT(current_length, length);
-  auto new_interpolable_list = std::make_unique<InterpolableList>(length);
+  auto* new_interpolable_list = MakeGarbageCollected<InterpolableList>(length);
   Vector<scoped_refptr<const NonInterpolableValue>> new_non_interpolable_values(
       length);
   for (wtf_size_t i = length; i-- > 0;) {
     new_interpolable_list->Set(
         i, i < current_length
-               ? std::move(interpolable_list.GetMutable(i))
+               ? std::move(interpolable_list.GetMutable(i).Get())
                : interpolable_list.Get(i % current_length)->Clone());
     new_non_interpolable_values[i] =
         non_interpolable_list.Get(i % current_length);
@@ -267,8 +266,8 @@ static void PadToSameLength(InterpolationValue& value,
       To<NonInterpolableList>(*length_value.non_interpolable_value);
   const wtf_size_t target_length = target_interpolable_list.length();
   DCHECK_LT(current_length, target_length);
-  auto new_interpolable_list =
-      std::make_unique<InterpolableList>(target_length);
+  auto* new_interpolable_list =
+      MakeGarbageCollected<InterpolableList>(target_length);
   Vector<scoped_refptr<const NonInterpolableValue>> new_non_interpolable_values(
       target_length);
   wtf_size_t index = 0;
@@ -300,8 +299,8 @@ static bool InterpolableListsAreCompatible(
             ListInterpolationFunctions::LengthMatchingStrategy::
                 kLowestCommonMultiple ||
         (i < a.length() && i < b.length())) {
-      if (!interpolable_values_are_compatible.Run(a.Get(i % a.length()),
-                                                  b.Get(i % b.length()))) {
+      if (!interpolable_values_are_compatible(a.Get(i % a.length()),
+                                              b.Get(i % b.length()))) {
         return false;
       }
     }
@@ -321,8 +320,8 @@ static bool NonInterpolableListsAreCompatible(
             ListInterpolationFunctions::LengthMatchingStrategy::
                 kLowestCommonMultiple ||
         (i < a.length() && i < b.length())) {
-      if (!non_interpolable_values_are_compatible.Run(a.Get(i % a.length()),
-                                                      b.Get(i % b.length()))) {
+      if (!non_interpolable_values_are_compatible(a.Get(i % a.length()),
+                                                  b.Get(i % b.length()))) {
         return false;
       }
     }
@@ -408,9 +407,9 @@ void ListInterpolationFunctions::Composite(
 
     for (wtf_size_t i = 0; i < final_length; i++) {
       UnderlyingItemValue underlying_item(underlying_value_owner, builder, i);
-      composite_item.Run(underlying_item, underlying_fraction,
-                         *interpolable_list.Get(i % value_length),
-                         non_interpolable_list.Get(i % value_length));
+      composite_item(underlying_item, underlying_fraction,
+                     *interpolable_list.Get(i % value_length),
+                     non_interpolable_list.Get(i % value_length));
     }
   } else {
     DCHECK(length_matching_strategy == LengthMatchingStrategy::kPadToLargest ||
@@ -428,9 +427,8 @@ void ListInterpolationFunctions::Composite(
 
     for (wtf_size_t i = 0; i < value_length; i++) {
       UnderlyingItemValue underlying_item(underlying_value_owner, builder, i);
-      composite_item.Run(underlying_item, underlying_fraction,
-                         *interpolable_list.Get(i),
-                         non_interpolable_list.Get(i));
+      composite_item(underlying_item, underlying_fraction,
+                     *interpolable_list.Get(i), non_interpolable_list.Get(i));
     }
     for (wtf_size_t i = value_length; i < final_length; i++) {
       underlying_interpolable_list.GetMutable(i)->Scale(underlying_fraction);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,6 @@
 namespace content {
 class WebContents;
 }
-
-namespace chrome {
 
 // Shows a warning notification in |web_contents| that the app was run with
 // dangerous command line flags or dangerous flags in about:flags.
@@ -25,7 +23,5 @@ void ShowBadFlagsInfoBar(content::WebContents* web_contents,
 
 // Shows a warning dialog if the originally specified user data dir was invalid.
 void MaybeShowInvalidUserDataDirWarningDialog();
-
-}  // namespace chrome
 
 #endif  // CHROME_BROWSER_UI_STARTUP_BAD_FLAGS_PROMPT_H_

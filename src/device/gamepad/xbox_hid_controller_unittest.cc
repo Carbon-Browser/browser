@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/to_vector.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "device/gamepad/hid_writer.h"
 #include "device/gamepad/public/mojom/gamepad.mojom.h"
@@ -23,7 +25,9 @@ namespace {
 constexpr size_t kReportLength = 9;
 
 constexpr uint8_t kStopVibration[] = {0x03,  // report ID
-                                      0x03, 0x00, 0x00,
+                                      0x0f,
+                                      0x00,  // left trigger
+                                      0x00,  // right trigger
                                       0x00,  // strong magnitude
                                       0x00,  // weak magnitude
                                       0xff, 0x00, 0x01};
@@ -31,7 +35,9 @@ static_assert(sizeof(kStopVibration) == kReportLength,
               "kStopVibration has incorrect size");
 
 constexpr uint8_t kStartVibration[] = {0x03,  // report ID
-                                       0x03, 0x00, 0x00,
+                                       0x0f,
+                                       0x7f,  // left trigger
+                                       0xff,  // right trigger
                                        0xff,  // strong magnitude
                                        0x7f,  // weak magnitude
                                        0xff, 0x00, 0x01};
@@ -48,6 +54,8 @@ constexpr double kZeroStartDelayMillis = 0.0;
 // these magnitudes.
 constexpr double kStrongMagnitude = 1.0;  // 100% intensity
 constexpr double kWeakMagnitude = 0.5;    // 50% intensity
+constexpr double kLeftTrigger = 1.0;      // 100% intensity
+constexpr double kRightTrigger = 0.5;     // 50% intensity
 
 constexpr base::TimeDelta kPendingTaskDuration =
     base::Milliseconds(kDurationMillis);
@@ -70,9 +78,8 @@ class FakeHidWriter : public HidWriter {
 class XboxHidControllerTest : public testing::Test {
  public:
   XboxHidControllerTest()
-      : start_vibration_report_(kStartVibration,
-                                kStartVibration + kReportLength),
-        stop_vibration_report_(kStopVibration, kStopVibration + kReportLength),
+      : start_vibration_report_(base::ToVector(kStartVibration)),
+        stop_vibration_report_(base::ToVector(kStopVibration)),
         callback_count_(0),
         callback_result_(
             mojom::GamepadHapticsResult::GamepadHapticsResultError) {
@@ -84,25 +91,30 @@ class XboxHidControllerTest : public testing::Test {
   XboxHidControllerTest(const XboxHidControllerTest&) = delete;
   XboxHidControllerTest& operator=(const XboxHidControllerTest&) = delete;
 
-  void TearDown() override { gamepad_->Shutdown(); }
+  void TearDown() override {
+    fake_hid_writer_ = nullptr;
+    gamepad_->Shutdown();
+  }
 
   void PostPlayEffect(
       double start_delay,
       double strong_magnitude,
       double weak_magnitude,
+      double left_trigger,
+      double right_trigger,
       mojom::GamepadHapticsManager::PlayVibrationEffectOnceCallback callback) {
     gamepad_->PlayEffect(
         mojom::GamepadHapticEffectType::GamepadHapticEffectTypeDualRumble,
-        mojom::GamepadEffectParameters::New(
-            kDurationMillis, start_delay, strong_magnitude, weak_magnitude,
-            /*left_trigger=*/0, /*right_trigger=*/0),
-        std::move(callback), base::ThreadTaskRunnerHandle::Get());
+        mojom::GamepadEffectParameters::New(kDurationMillis, start_delay,
+                                            strong_magnitude, weak_magnitude,
+                                            left_trigger, right_trigger),
+        std::move(callback), base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void PostResetVibration(
       mojom::GamepadHapticsManager::ResetVibrationActuatorCallback callback) {
     gamepad_->ResetVibration(std::move(callback),
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   // Callback for PlayEffect or ResetVibration.
@@ -126,7 +138,8 @@ TEST_F(XboxHidControllerTest, PlayEffect) {
   EXPECT_EQ(0, callback_count_);
 
   PostPlayEffect(
-      kZeroStartDelayMillis, kStrongMagnitude, kWeakMagnitude,
+      kZeroStartDelayMillis, kStrongMagnitude, kWeakMagnitude, kLeftTrigger,
+      kRightTrigger,
       base::BindOnce(&XboxHidControllerTest::Callback, base::Unretained(this)));
 
   // Run the queued task and start vibration.

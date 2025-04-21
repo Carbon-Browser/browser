@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -24,8 +25,7 @@
 using l10n_util::GetStringUTF16;
 using l10n_util::GetStringUTF8;
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 WidgetExample::WidgetExample()
     : ExampleBase(GetStringUTF8(IDS_WIDGET_SELECT_LABEL).c_str()) {}
@@ -81,8 +81,9 @@ void WidgetExample::CreateDialogWidget(View* sender, bool modal) {
       std::make_unique<Label>(GetStringUTF16(IDS_WIDGET_FOOTNOTE_LABEL)));
   dialog->AddChildView(std::make_unique<Label>(
       GetStringUTF16(IDS_WIDGET_DIALOG_CONTENTS_LABEL)));
-  if (modal)
-    dialog->SetModalType(ui::MODAL_TYPE_WINDOW);
+  if (modal) {
+    dialog->SetModalType(ui::mojom::ModalType::kWindow);
+  }
   DialogDelegate::CreateDialogWidget(dialog.release(), nullptr,
                                      sender->GetWidget()->GetNativeView())
       ->Show();
@@ -90,7 +91,8 @@ void WidgetExample::CreateDialogWidget(View* sender, bool modal) {
 
 void WidgetExample::ShowWidget(View* sender, Widget::InitParams::Type type) {
   // Setup shared Widget hierarchy and bounds parameters.
-  Widget::InitParams params(type);
+  Widget::InitParams params(Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET,
+                            type);
   params.parent = sender->GetWidget()->GetNativeView();
   params.bounds =
       gfx::Rect(sender->GetBoundsInScreen().CenterPoint(), gfx::Size(300, 200));
@@ -114,5 +116,4 @@ void WidgetExample::ShowWidget(View* sender, Widget::InitParams::Type type) {
   widget->Show();
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

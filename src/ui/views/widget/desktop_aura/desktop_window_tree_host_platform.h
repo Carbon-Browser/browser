@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "ui/aura/window_tree_host_platform.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/platform_window/extensions/workspace_extension_delegate.h"
 #include "ui/views/views_export.h"
@@ -74,21 +76,24 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   void Close() override;
   void CloseNow() override;
   aura::WindowTreeHost* AsWindowTreeHost() override;
-  void Show(ui::WindowShowState show_state,
+  void Show(ui::mojom::WindowShowState show_state,
             const gfx::Rect& restore_bounds) override;
   bool IsVisible() const override;
   void SetSize(const gfx::Size& size) override;
   void StackAbove(aura::Window* window) override;
   void StackAtTop() override;
+  bool IsStackedAbove(aura::Window* window) override;
   void CenterWindow(const gfx::Size& size) override;
-  void GetWindowPlacement(gfx::Rect* bounds,
-                          ui::WindowShowState* show_state) const override;
+  void GetWindowPlacement(
+      gfx::Rect* bounds,
+      ui::mojom::WindowShowState* show_state) const override;
   gfx::Rect GetWindowBoundsInScreen() const override;
   gfx::Rect GetClientAreaBoundsInScreen() const override;
   gfx::Rect GetRestoredBounds() const override;
   std::string GetWorkspace() const override;
   gfx::Rect GetWorkAreaBoundsInScreen() const override;
   void SetShape(std::unique_ptr<Widget::ShapeRects> native_shape) override;
+  void SetParent(gfx::AcceleratedWidget parent) override;
   void Activate() override;
   void Deactivate() override;
   bool IsActive() const override;
@@ -115,22 +120,24 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
   void FrameTypeChanged() override;
-  void SetFullscreen(bool fullscreen) override;
+  void SetFullscreen(bool fullscreen, int64_t display_id) override;
   bool IsFullscreen() const override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
                       const gfx::ImageSkia& app_icon) override;
-  void InitModalType(ui::ModalType modal_type) override;
+  void InitModalType(ui::mojom::ModalType modal_type) override;
   void FlashFrame(bool flash_frame) override;
   bool IsAnimatingClosed() const override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   void SizeConstraintsChanged() override;
   bool ShouldUpdateWindowTransparency() const override;
   bool ShouldUseDesktopNativeCursorManager() const override;
   bool ShouldCreateVisibilityController() const override;
   void UpdateWindowShapeIfNeeded(const ui::PaintContext& context) override;
   void SetBoundsInDIP(const gfx::Rect& bounds) override;
+  void SetAllowScreenshots(bool allow) override;
+  bool AreScreenshotsAllowed() override;
 
   // WindowTreeHost:
   gfx::Transform GetRootTransform() const override;
@@ -139,24 +146,37 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   gfx::Rect CalculateRootWindowBounds() const override;
   gfx::Rect GetBoundsInDIP() const override;
 
+  // CompositorObserver:
+  void OnCompositorVisibilityChanging(ui::Compositor* compositor,
+                                      bool visible) override;
+  void OnCompositorVisibilityChanged(ui::Compositor* compositor,
+                                     bool visible) override;
+
   // PlatformWindowDelegate:
+  gfx::Insets CalculateInsetsInDIP(
+      ui::PlatformWindowState window_state) const override;
   void OnClosed() override;
   void OnWindowStateChanged(ui::PlatformWindowState old_state,
                             ui::PlatformWindowState new_state) override;
   void OnCloseRequest() override;
   void OnAcceleratedWidgetAvailable(gfx::AcceleratedWidget widget) override;
   void OnWillDestroyAcceleratedWidget() override;
+  bool OnRotateFocus(ui::PlatformWindowDelegate::RotateDirection direction,
+                     bool reset) override;
   void OnActivationChanged(bool active) override;
-  absl::optional<gfx::Size> GetMinimumSizeForWindow() override;
-  absl::optional<gfx::Size> GetMaximumSizeForWindow() override;
+  std::optional<gfx::Size> GetMinimumSizeForWindow() const override;
+  std::optional<gfx::Size> GetMaximumSizeForWindow() const override;
+  bool CanMaximize() const override;
+  bool CanFullscreen() const override;
   SkPath GetWindowMaskForWindowShapeInPixels() override;
-  absl::optional<ui::MenuType> GetMenuType() override;
-  absl::optional<ui::OwnedWindowAnchor> GetOwnedWindowAnchorAndRectInPx()
+  std::optional<ui::OwnedWindowAnchor> GetOwnedWindowAnchorAndRectInDIP()
       override;
   gfx::Rect ConvertRectToPixels(const gfx::Rect& rect_in_dip) const override;
   gfx::Rect ConvertRectToDIP(const gfx::Rect& rect_in_pixels) const override;
   gfx::PointF ConvertScreenPointToLocalDIP(
       const gfx::Point& screen_in_pixels) const override;
+  gfx::Insets ConvertInsetsToPixels(
+      const gfx::Insets& insets_dip) const override;
 
   // ui::WorkspaceExtensionDelegate:
   void OnWorkspaceChanged() override;
@@ -189,13 +209,14 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   Widget* GetWidget();
   const Widget* GetWidget() const;
 
+  void ScheduleRelayout();
+
  private:
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest,
                            UpdateWindowShapeFromWindowMask);
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest,
                            MakesParentChildRelationship);
-
-  void ScheduleRelayout();
+  FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest, OnRotateFocus);
 
   // Set visibility and fire OnNativeWidgetVisibilityChanged() if it changed.
   void SetVisible(bool visible);
@@ -212,7 +233,13 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   // Helper method that returns the display for the |window()|.
   display::Display GetDisplayNearestRootWindow() const;
 
-  const raw_ptr<internal::NativeWidgetDelegate> native_widget_delegate_;
+  // Impl for rotation logic.
+  static bool RotateFocusForWidget(
+      Widget& widget,
+      ui::PlatformWindowDelegate::RotateDirection direction,
+      bool reset);
+
+  const base::WeakPtr<internal::NativeWidgetDelegate> native_widget_delegate_;
   const raw_ptr<DesktopNativeWidgetAura> desktop_native_widget_aura_;
 
   bool is_active_ = false;
@@ -222,7 +249,8 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   // We can optionally have a parent which can order us to close, or own
   // children who we're responsible for closing when we CloseNow().
   raw_ptr<DesktopWindowTreeHostPlatform> window_parent_ = nullptr;
-  std::set<DesktopWindowTreeHostPlatform*> window_children_;
+  std::set<raw_ptr<DesktopWindowTreeHostPlatform, SetExperimental>>
+      window_children_;
 
   // Used for tab dragging in move loop requests.
   WindowMoveClientPlatform window_move_client_;

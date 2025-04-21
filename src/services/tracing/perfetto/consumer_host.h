@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/sequence_checker.h"
 #include "base/threading/sequence_bound.h"
 #include "base/timer/timer.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/tracing/public/mojom/perfetto_service.mojom.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/consumer.h"
@@ -50,6 +51,11 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
         const perfetto::TraceConfig& trace_config,
         perfetto::base::ScopedFile output_file,
         mojom::TracingClientPriority priority);
+    TracingSession(
+        ConsumerHost* host,
+        mojo::PendingReceiver<mojom::TracingSessionHost> tracing_session_host,
+        mojo::PendingRemote<mojom::TracingSessionClient> tracing_session_client,
+        mojom::TracingClientPriority priority);
 
     TracingSession(const TracingSession&) = delete;
     TracingSession& operator=(const TracingSession&) = delete;
@@ -60,8 +66,11 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
     void OnTraceData(std::vector<perfetto::TracePacket> packets, bool has_more);
     void OnTraceStats(bool success, const perfetto::TraceStats&);
     void OnTracingDisabled(const std::string& error);
+    void OnSessionCloned(const OnSessionClonedArgs&);
     void OnConsumerClientDisconnected();
     void Flush(uint32_t timeout, base::OnceCallback<void(bool)> callback);
+    void CloneSession(const base::UnguessableToken& uuid,
+                      CloneSessionCallback callback);
 
     mojom::TracingClientPriority tracing_priority() const {
       return tracing_priority_;
@@ -102,6 +111,7 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
     bool convert_to_legacy_json_ = false;
     base::SequenceBound<StreamWriter> read_buffers_stream_writer_;
     RequestBufferUsageCallback request_buffer_usage_callback_;
+    CloneSessionCallback on_session_cloned_callback_;
     std::unique_ptr<perfetto::trace_processor::TraceProcessorStorage>
         trace_processor_;
     std::string json_agent_label_filter_;
@@ -113,7 +123,7 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
 
     // If set, we didn't issue OnTracingEnabled() on the session yet. If set and
     // empty, no more pids are pending and we should issue OnTracingEnabled().
-    absl::optional<std::set<base::ProcessId>> pending_enable_tracing_ack_pids_;
+    std::optional<std::set<base::ProcessId>> pending_enable_tracing_ack_pids_;
     base::OneShotTimer enable_tracing_ack_timer_;
 
     struct DataSourceHandle : public std::pair<std::string, std::string> {
@@ -147,6 +157,11 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
       mojo::PendingRemote<mojom::TracingSessionClient> tracing_session_client,
       const perfetto::TraceConfig& config,
       base::File output_file) override;
+  void CloneSession(
+      mojo::PendingReceiver<mojom::TracingSessionHost> tracing_session_host,
+      mojo::PendingRemote<mojom::TracingSessionClient> tracing_session_client,
+      const base::UnguessableToken& uuid,
+      CloneSessionCallback callback) override;
 
   // perfetto::Consumer implementation.
   // This gets called by the Perfetto service as control signals,
@@ -158,6 +173,7 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
                    bool has_more) override;
   void OnObservableEvents(const perfetto::ObservableEvents&) override;
   void OnTraceStats(bool success, const perfetto::TraceStats&) override;
+  void OnSessionCloned(const OnSessionClonedArgs&) override;
 
   // Unused in Chrome.
   void OnDetach(bool success) override {}

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ class ClipboardRecentContentIOS : public ClipboardRecentContent {
   // pasteboard entry expiration. This information will be shared with other
   // application in the application group.
   ClipboardRecentContentIOS(const std::string& application_scheme,
-                            NSUserDefaults* group_user_defaults);
+                            NSUserDefaults* group_user_defaults,
+                            bool only_use_clipboard_async);
 
   // Constructor that directly takes an |implementation|. For use in tests.
   explicit ClipboardRecentContentIOS(
@@ -43,10 +44,10 @@ class ClipboardRecentContentIOS : public ClipboardRecentContent {
   ~ClipboardRecentContentIOS() override;
 
   // ClipboardRecentContent implementation.
-  absl::optional<GURL> GetRecentURLFromClipboard() override;
-  absl::optional<std::u16string> GetRecentTextFromClipboard() override;
-  absl::optional<std::set<ClipboardContentType>>
-  GetCachedClipboardContentTypes() override;
+  std::optional<GURL> GetRecentURLFromClipboard() override;
+  std::optional<std::u16string> GetRecentTextFromClipboard() override;
+  std::optional<std::set<ClipboardContentType>> GetCachedClipboardContentTypes()
+      override;
   void GetRecentImageFromClipboard(GetRecentImageCallback callback) override;
   bool HasRecentImageFromClipboard() override;
   void HasRecentContentFromClipboard(std::set<ClipboardContentType> types,
@@ -58,7 +59,7 @@ class ClipboardRecentContentIOS : public ClipboardRecentContent {
   void ClearClipboardContent() override;
 
  private:
-  absl::optional<gfx::Image> GetRecentImageFromClipboardInternal();
+  std::optional<gfx::Image> GetRecentImageFromClipboardInternal();
   void OnGetRecentImageFromClipboard(GetRecentImageCallback callback,
                                      const SkBitmap& sk_bitmap);
 

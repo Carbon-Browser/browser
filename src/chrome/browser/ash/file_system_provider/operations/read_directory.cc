@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,24 +9,23 @@
 #include <string>
 #include <utility>
 
+#include "base/files/safe_base_name.h"
 #include "chrome/browser/ash/file_system_provider/operations/get_metadata.h"
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 // Convert |input| into |output|. If parsing fails, then returns false.
-bool ConvertRequestValueToEntryList(std::unique_ptr<RequestValue> value,
+bool ConvertRequestValueToEntryList(const RequestValue& value,
                                     storage::AsyncFileUtil::EntryList* output) {
   using extensions::api::file_system_provider::EntryMetadata;
   using extensions::api::file_system_provider_internal::
       ReadDirectoryRequestedSuccess::Params;
 
-  const Params* params = value->read_directory_success_params();
+  const Params* params = value.read_directory_success_params();
   if (!params)
     return false;
 
@@ -35,11 +34,13 @@ bool ConvertRequestValueToEntryList(std::unique_ptr<RequestValue> value,
             entry_metadata,
             ProvidedFileSystemInterface::METADATA_FIELD_IS_DIRECTORY |
                 ProvidedFileSystemInterface::METADATA_FIELD_NAME,
-            false /* root_entry */)) {
+            /*root_entry=*/false)) {
       return false;
     }
 
-    output->emplace_back(base::FilePath(*entry_metadata.name),
+    auto name = base::SafeBaseName::Create(*entry_metadata.name);
+    CHECK(name) << *entry_metadata.name;
+    output->emplace_back(*name, std::string(),
                          *entry_metadata.is_directory
                              ? filesystem::mojom::FsFileType::DIRECTORY
                              : filesystem::mojom::FsFileType::REGULAR_FILE);
@@ -51,16 +52,15 @@ bool ConvertRequestValueToEntryList(std::unique_ptr<RequestValue> value,
 }  // namespace
 
 ReadDirectory::ReadDirectory(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     const base::FilePath& directory_path,
     storage::AsyncFileUtil::ReadDirectoryCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       directory_path_(directory_path),
       callback_(std::move(callback)) {}
 
-ReadDirectory::~ReadDirectory() {
-}
+ReadDirectory::~ReadDirectory() = default;
 
 bool ReadDirectory::Execute(int request_id) {
   using extensions::api::file_system_provider::ReadDirectoryRequestedOptions;
@@ -83,32 +83,29 @@ bool ReadDirectory::Execute(int request_id) {
           options));
 }
 
-void ReadDirectory::OnSuccess(int /* request_id */,
-                              std::unique_ptr<RequestValue> result,
+void ReadDirectory::OnSuccess(/*request_id=*/int,
+                              const RequestValue& result,
                               bool has_more) {
   storage::AsyncFileUtil::EntryList entry_list;
   const bool convert_result =
-      ConvertRequestValueToEntryList(std::move(result), &entry_list);
+      ConvertRequestValueToEntryList(result, &entry_list);
 
   if (!convert_result) {
     LOG(ERROR)
         << "Failed to parse a response for the read directory operation.";
     callback_.Run(base::File::FILE_ERROR_IO,
                   storage::AsyncFileUtil::EntryList(),
-                  false /* has_more */);
+                  /*has_more=*/false);
     return;
   }
 
   callback_.Run(base::File::FILE_OK, entry_list, has_more);
 }
 
-void ReadDirectory::OnError(int /* request_id */,
-                            std::unique_ptr<RequestValue> /* result */,
+void ReadDirectory::OnError(/*request_id=*/int,
+                            /*result=*/const RequestValue&,
                             base::File::Error error) {
-  callback_.Run(
-      error, storage::AsyncFileUtil::EntryList(), false /* has_more */);
+  callback_.Run(error, storage::AsyncFileUtil::EntryList(), /*has_more=*/false);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

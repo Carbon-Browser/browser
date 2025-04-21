@@ -1,27 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/desks/templates/saved_desk_grid_view.h"
 
-#include <algorithm>
 #include <memory>
 
 #include "ash/public/cpp/desk_template.h"
-#include "ash/screen_util.h"
 #include "ash/shell.h"
-#include "ash/wm/desks/templates/saved_desk_animations.h"
+#include "ash/wm/desks/templates/saved_desk_constants.h"
 #include "ash/wm/desks/templates/saved_desk_item_view.h"
 #include "ash/wm/desks/templates/saved_desk_name_view.h"
-#include "ash/wm/desks/templates/saved_desk_presenter.h"
 #include "ash/wm/overview/overview_controller.h"
-#include "ash/wm/overview/overview_highlight_controller.h"
 #include "ash/wm/overview/overview_session.h"
 #include "base/i18n/string_compare.h"
-#include "third_party/icu/source/common/unicode/uloc.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "third_party/icu/source/i18n/unicode/coll.h"
-#include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/aura/window.h"
+#include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -29,7 +25,6 @@
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/views/animation/animation_builder.h"
-#include "ui/views/animation/bounds_animator.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/window_util.h"
 
@@ -40,19 +35,17 @@ namespace {
 constexpr int kLandscapeMaxColumns = 3;
 constexpr int kPortraitMaxColumns = 2;
 
-constexpr int kGridPaddingDp = 24;
-
-// This is the maximum number of templates we will show in the grid. This
+// This is the maximum number of saved desks we will show in the grid. This
 // constant is used instead of the Desk model `GetMaxEntryCount()` because that
 // takes into consideration the number of `policy_entries_`, which can cause it
 // to exceed 6 items.
-// Note: Because we are only showing a maximum number of templates, there are
-// cases that not all existing templates will be displayed, such as when a user
-// has more than the maximum count. Since we also don't update the grid whenever
-// there is a change, deleting a template may result in existing templates not
-// being shown as well, if the user originally exceeded the max template count
-// when the grid was first shown.
-constexpr std::size_t kMaxTemplateCount = 6u;
+// Note: Because we are only showing a maximum number of saved desks, there are
+// cases that not all existing saved desks will be displayed, such as when a
+// user has more than the maximum count. Since we also don't update the grid
+// whenever there is a change, deleting a saved desk may result in existing
+// saved desks not being shown as well, if the user originally exceeded the max
+// saved desk item count when the grid was first shown.
+constexpr std::size_t kMaxItemCount = 6u;
 
 constexpr gfx::Transform kEndTransform;
 
@@ -62,7 +55,7 @@ constexpr float kAddOrDeleteItemScale = 0.75f;
 constexpr base::TimeDelta kBoundsChangeAnimationDuration =
     base::Milliseconds(300);
 
-constexpr base::TimeDelta kTemplateViewsScaleAndFadeDuration =
+constexpr base::TimeDelta kItemViewsScaleAndFadeDuration =
     base::Milliseconds(50);
 
 // Gets the scale transform for `view`. It returns a transform with a scale of
@@ -71,8 +64,8 @@ constexpr base::TimeDelta kTemplateViewsScaleAndFadeDuration =
 gfx::Transform GetScaleTransformForView(views::View* view) {
   gfx::Transform scale_transform;
   scale_transform.Scale(kAddOrDeleteItemScale, kAddOrDeleteItemScale);
-  return gfx::TransformAboutPivot(view->GetLocalBounds().CenterPoint(),
-                                  scale_transform);
+  return gfx::TransformAboutPivot(
+      gfx::RectF(view->GetLocalBounds()).CenterPoint(), scale_transform);
 }
 
 }  // namespace
@@ -89,27 +82,8 @@ SavedDeskGridView::SavedDeskGridView()
 
 SavedDeskGridView::~SavedDeskGridView() = default;
 
-void SavedDeskGridView::PopulateGridUI(
-    const std::vector<const DeskTemplate*>& desk_templates,
-    const base::GUID& last_saved_template_uuid) {
-  DCHECK(grid_items_.empty());
-
-  // TODO(richui|sammiequon): See if this can be removed as this function should
-  // only be called once per overview session.
-  if (desk_templates.empty()) {
-    RemoveAllChildViews();
-    grid_items_.clear();
-    return;
-  }
-
-  AddOrUpdateTemplates(desk_templates,
-                       /*initializing_grid_view=*/true,
-                       last_saved_template_uuid);
-}
-
-void SavedDeskGridView::SortTemplateGridItems(
-    const base::GUID& last_saved_template_uuid) {
-  // Sort the `grid_items_` into alphabetical order based on template name.
+void SavedDeskGridView::SortEntries(const base::Uuid& order_first_uuid) {
+  // Sort the `grid_items_` into alphabetical order based on saved desk name.
   // Note that this doesn't update the order of the child views, but just sorts
   // the vector. `Layout` is responsible for placing the views in the correct
   // locations in the grid.
@@ -117,108 +91,98 @@ void SavedDeskGridView::SortTemplateGridItems(
   std::unique_ptr<icu::Collator> collator(
       icu::Collator::createInstance(error_code));  // Use current ICU locale.
   DCHECK(U_SUCCESS(error_code));
-  // If there is a newly saved template, move that template to the front of the
-  // grid, and sort the rest of the templates after it.
-  std::sort(grid_items_.begin(), grid_items_.end(),
-            [&collator, last_saved_template_uuid](const SavedDeskItemView* a,
-                                                  const SavedDeskItemView* b) {
-              if (last_saved_template_uuid.is_valid() &&
-                  a->uuid() == last_saved_template_uuid) {
-                return true;
-              }
-              if (last_saved_template_uuid.is_valid() &&
-                  b->uuid() == last_saved_template_uuid) {
-                return false;
-              }
-              return base::i18n::CompareString16WithCollator(
-                         *collator, a->name_view()->GetAccessibleName(),
-                         b->name_view()->GetAccessibleName()) < 0;
-            });
+
+  // If there is a uuid that is to be placed first, move that saved desk to the
+  // front of the grid, and sort the rest of the entries after it.
+  auto rest = base::ranges::partition(
+      grid_items_,
+      [&order_first_uuid](const base::Uuid& uuid) {
+        return uuid == order_first_uuid;
+      },
+      &SavedDeskItemView::uuid);
+
+  std::sort(
+      rest, grid_items_.end(),
+      [&collator](const SavedDeskItemView* a, const SavedDeskItemView* b) {
+        return base::i18n::CompareString16WithCollator(
+                   *collator, a->name_view()->GetText(),
+                   b->name_view()->GetText()) < 0;
+      });
 
   // A11y traverses views based on the order of the children, so we need to
   // manually reorder the child views to match the order that they are
   // displayed, which is the alphabetically sorted `grid_items_` order. If
-  // there was a newly saved template, the first template in the grid will
-  // be the new template, while the rest will be sorted alphabetically.
+  // there was a newly saved desk item, the first item in the grid will
+  // be the new item, while the rest will be sorted alphabetically.
   for (size_t i = 0; i < grid_items_.size(); i++)
     ReorderChildView(grid_items_[i], i);
   NotifyAccessibilityEvent(ax::mojom::Event::kTreeChanged, true);
 
   if (bounds_animator_.IsAnimating())
     bounds_animator_.Cancel();
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
-void SavedDeskGridView::AddOrUpdateTemplates(
-    const std::vector<const DeskTemplate*>& entries,
-    bool initializing_grid_view,
-    const base::GUID& last_saved_template_uuid) {
+void SavedDeskGridView::AddOrUpdateEntries(
+    const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>& entries,
+    const base::Uuid& order_first_uuid,
+    bool animate) {
   std::vector<SavedDeskItemView*> new_grid_items;
 
   for (const DeskTemplate* entry : entries) {
-    auto iter = std::find_if(grid_items_.begin(), grid_items_.end(),
-                             [entry](SavedDeskItemView* grid_item) {
-                               return entry->uuid() == grid_item->uuid();
-                             });
+    auto iter = base::ranges::find(grid_items_, entry->uuid(),
+                                   &SavedDeskItemView::uuid);
 
     if (iter != grid_items_.end()) {
-      (*iter)->UpdateTemplate(*entry);
-    } else if (grid_items_.size() < kMaxTemplateCount) {
+      (*iter)->UpdateSavedDesk(*entry);
+    } else if (grid_items_.size() < kMaxItemCount) {
       SavedDeskItemView* grid_item =
           AddChildView(std::make_unique<SavedDeskItemView>(entry->Clone()));
       grid_items_.push_back(grid_item);
-      if (!initializing_grid_view)
+      if (animate)
         new_grid_items.push_back(grid_item);
     }
   }
 
-  // Sort the `grid_items_` into alphabetical order based on template name. If a
-  // given uuid is valid, it'll push that template item to the front of the grid
-  // and sort the remaining templates after it.
-  SortTemplateGridItems(last_saved_template_uuid);
+  SortEntries(order_first_uuid);
 
-  if (!initializing_grid_view)
+  // The preferred size of `SavedDeskGridView` is related to the number of
+  // items. Here our quantities may have changed which means the preferred size
+  // has period.
+  PreferredSizeChanged();
+
+  if (animate)
     AnimateGridItems(new_grid_items);
 }
 
-void SavedDeskGridView::DeleteTemplates(const std::vector<std::string>& uuids) {
-  OverviewHighlightController* highlight_controller =
-      Shell::Get()
-          ->overview_controller()
-          ->overview_session()
-          ->highlight_controller();
-  DCHECK(highlight_controller);
-
-  for (const std::string& uuid : uuids) {
-    auto iter =
-        std::find_if(grid_items_.begin(), grid_items_.end(),
-                     [uuid](SavedDeskItemView* grid_item) {
-                       return uuid == grid_item->uuid().AsLowercaseString();
-                     });
+void SavedDeskGridView::DeleteEntries(const std::vector<base::Uuid>& uuids,
+                                      bool delete_animation) {
+  for (const base::Uuid& uuid : uuids) {
+    auto iter = base::ranges::find(grid_items_, uuid, &SavedDeskItemView::uuid);
 
     if (iter == grid_items_.end())
       continue;
 
     SavedDeskItemView* grid_item = *iter;
-    highlight_controller->OnViewDestroyingOrDisabling(grid_item);
-    highlight_controller->OnViewDestroyingOrDisabling(grid_item->name_view());
 
     // Performs an animation of changing the deleted grid item opacity
     // from 1 to 0 and scales down to `kAddOrDeleteItemScale`. `old_layer_tree`
     // will be deleted when the animation is complete.
-    auto old_grid_item_layer_tree = wm::RecreateLayers(grid_item);
-    auto* old_grid_item_layer_tree_root = old_grid_item_layer_tree->root();
-    GetWidget()->GetLayer()->Add(old_grid_item_layer_tree_root);
+    if (delete_animation) {
+      auto old_grid_item_layer_tree = wm::RecreateLayers(grid_item);
+      auto* old_grid_item_layer_tree_root = old_grid_item_layer_tree->root();
+      GetWidget()->GetLayer()->Add(old_grid_item_layer_tree_root);
 
-    views::AnimationBuilder()
-        .OnEnded(base::BindOnce(
-            [](std::unique_ptr<ui::LayerTreeOwner> layer_tree_owner) {},
-            std::move(old_grid_item_layer_tree)))
-        .Once()
-        .SetTransform(old_grid_item_layer_tree_root,
-                      GetScaleTransformForView(grid_item))
-        .SetOpacity(old_grid_item_layer_tree_root, 0.f)
-        .SetDuration(kTemplateViewsScaleAndFadeDuration);
+      views::AnimationBuilder()
+          .OnEnded(base::BindOnce(
+              [](std::unique_ptr<ui::LayerTreeOwner> layer_tree_owner) {},
+              std::move(old_grid_item_layer_tree)))
+          .Once()
+          .SetTransform(old_grid_item_layer_tree_root,
+                        GetScaleTransformForView(grid_item))
+          .SetOpacity(old_grid_item_layer_tree_root, 1.f)
+          .SetDuration(kItemViewsScaleAndFadeDuration);
+    }
 
     RemoveChildViewT(grid_item);
     grid_items_.erase(iter);
@@ -228,18 +192,19 @@ void SavedDeskGridView::DeleteTemplates(const std::vector<std::string>& uuids) {
   NotifyAccessibilityEvent(ax::mojom::Event::kTreeChanged, true);
 }
 
-bool SavedDeskGridView::IsTemplateNameBeingModified() const {
+bool SavedDeskGridView::IsSavedDeskNameBeingModified() const {
   if (!GetWidget()->IsActive())
     return false;
 
-  for (auto* grid_item : grid_items_) {
+  for (ash::SavedDeskItemView* grid_item : grid_items_) {
     if (grid_item->IsNameBeingModified())
       return true;
   }
   return false;
 }
 
-gfx::Size SavedDeskGridView::CalculatePreferredSize() const {
+gfx::Size SavedDeskGridView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   if (grid_items_.empty())
     return gfx::Size();
 
@@ -251,11 +216,11 @@ gfx::Size SavedDeskGridView::CalculatePreferredSize() const {
   const int item_width = SavedDeskItemView::kPreferredSize.width();
   const int item_height = SavedDeskItemView::kPreferredSize.height();
 
-  return gfx::Size(cols * item_width + (cols - 1) * kGridPaddingDp,
-                   rows * item_height + (rows - 1) * kGridPaddingDp);
+  return gfx::Size(cols * item_width + (cols - 1) * kSaveDeskPaddingDp,
+                   rows * item_height + (rows - 1) * kSaveDeskPaddingDp);
 }
 
-void SavedDeskGridView::Layout() {
+void SavedDeskGridView::Layout(PassKey) {
   if (grid_items_.empty())
     return;
 
@@ -280,14 +245,11 @@ bool SavedDeskGridView::IsAnimating() const {
   return bounds_animator_.IsAnimating();
 }
 
-SavedDeskItemView* SavedDeskGridView::GetItemForUUID(const base::GUID& uuid) {
+SavedDeskItemView* SavedDeskGridView::GetItemForUUID(const base::Uuid& uuid) {
   if (!uuid.is_valid())
     return nullptr;
 
-  auto it = std::find_if(grid_items_.begin(), grid_items_.end(),
-                         [&uuid](SavedDeskItemView* item_view) {
-                           return uuid == item_view->uuid();
-                         });
+  auto it = base::ranges::find(grid_items_, uuid, &SavedDeskItemView::uuid);
   return it == grid_items_.end() ? nullptr : *it;
 }
 
@@ -314,12 +276,12 @@ std::vector<gfx::Rect> SavedDeskGridView::CalculateGridItemPositions() const {
     if (i != 0 && i % column_count == 0) {
       // Move the position to the start of the next row.
       x = 0;
-      y += grid_item_size.height() + kGridPaddingDp;
+      y += grid_item_size.height() + kSaveDeskPaddingDp;
     }
 
     positions.emplace_back(gfx::Point(x, y), grid_item_size);
 
-    x += grid_item_size.width() + kGridPaddingDp;
+    x += grid_item_size.width() + kSaveDeskPaddingDp;
   }
 
   DCHECK_EQ(positions.size(), grid_items_.size());
@@ -349,10 +311,10 @@ void SavedDeskGridView::AnimateGridItems(
       views::AnimationBuilder()
           .Once()
           .Offset(kBoundsChangeAnimationDuration -
-                  kTemplateViewsScaleAndFadeDuration)
+                  kItemViewsScaleAndFadeDuration)
           .SetTransform(layer, kEndTransform)
           .SetOpacity(layer, 1.f)
-          .SetDuration(kTemplateViewsScaleAndFadeDuration);
+          .SetDuration(kItemViewsScaleAndFadeDuration);
       continue;
     }
 
@@ -360,7 +322,7 @@ void SavedDeskGridView::AnimateGridItems(
   }
 }
 
-BEGIN_METADATA(SavedDeskGridView, views::View)
+BEGIN_METADATA(SavedDeskGridView)
 END_METADATA
 
 }  // namespace ash

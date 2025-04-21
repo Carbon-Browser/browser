@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,11 +32,6 @@ class WebFeedTabHelper : public content::WebContentsObserver,
         content::WebContents* web_contents,
         base::OnceCallback<void(WebFeedMetadata)> callback) = 0;
   };
-
-  // Returns the follow state for |web_contents|. kUnknown will be returned if
-  // the feature is not enabled or the follow state can't be determined.
-  static TabWebFeedFollowState GetFollowState(
-      content::WebContents* web_contents);
 
   WebFeedTabHelper(const WebFeedTabHelper&) = delete;
   WebFeedTabHelper& operator=(const WebFeedTabHelper&) = delete;

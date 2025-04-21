@@ -1,14 +1,21 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/mp2t/es_parser_adts.h"
 
 #include <stddef.h>
 
+#include <optional>
 #include <vector>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/base/bit_reader.h"
@@ -20,7 +27,6 @@
 #include "media/formats/common/offset_byte_queue.h"
 #include "media/formats/mp2t/mp2t_common.h"
 #include "media/formats/mpeg/adts_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -47,7 +53,7 @@ namespace mp2t {
 
 struct EsParserAdts::AdtsFrame {
   // Pointer to the ES data.
-  const uint8_t* data;
+  raw_ptr<const uint8_t> data;
 
   // Frame size;
   int size;
@@ -93,7 +99,7 @@ bool EsParserAdts::LookForAdtsFrame(AdtsFrame* adts_frame) {
     }
 
     es_queue_->Pop(offset);
-    es_queue_->Peek(&adts_frame->data, &es_size);
+    es_queue_->Peek(&adts_frame->data.AsEphemeralRawAddr(), &es_size);
     adts_frame->queue_offset = es_queue_->head();
     adts_frame->size = frame_size;
     adts_frame->header_size = header_size;
@@ -120,14 +126,10 @@ EsParserAdts::EsParserAdts(NewAudioConfigCB new_audio_config_cb,
                            bool sbr_in_mimetype)
     : new_audio_config_cb_(std::move(new_audio_config_cb)),
       emit_buffer_cb_(std::move(emit_buffer_cb)),
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
       get_decrypt_config_cb_(),
       init_encryption_scheme_(EncryptionScheme::kUnencrypted),
-#endif
-      sbr_in_mimetype_(sbr_in_mimetype) {
-}
+      sbr_in_mimetype_(sbr_in_mimetype) {}
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 EsParserAdts::EsParserAdts(NewAudioConfigCB new_audio_config_cb,
                            EmitBufferCB emit_buffer_cb,
                            GetDecryptConfigCB get_decrypt_config_cb,
@@ -138,12 +140,9 @@ EsParserAdts::EsParserAdts(NewAudioConfigCB new_audio_config_cb,
       get_decrypt_config_cb_(std::move(get_decrypt_config_cb)),
       init_encryption_scheme_(init_encryption_scheme),
       sbr_in_mimetype_(sbr_in_mimetype) {}
-#endif
 
-EsParserAdts::~EsParserAdts() {
-}
+EsParserAdts::~EsParserAdts() = default;
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 void EsParserAdts::CalculateSubsamplesForAdtsFrame(
     const AdtsFrame& adts_frame,
     std::vector<SubsampleEntry>* subsamples) {
@@ -168,7 +167,6 @@ void EsParserAdts::CalculateSubsamplesForAdtsFrame(
     subsamples->push_back(subsample);
   }
 }
-#endif
 
 bool EsParserAdts::ParseFromEsQueue() {
   // Look for every ADTS frame in the ES buffer.
@@ -185,7 +183,7 @@ bool EsParserAdts::ParseFromEsQueue() {
     if (current_timing_desc.pts != kNoTimestamp)
       audio_timestamp_helper_->SetBaseTimestamp(current_timing_desc.pts);
 
-    if (audio_timestamp_helper_->base_timestamp() == kNoTimestamp) {
+    if (!audio_timestamp_helper_->base_timestamp()) {
       DVLOG(1) << "Skipping audio frame with unknown timestamp";
       SkipAdtsFrame(adts_frame);
       continue;
@@ -207,7 +205,6 @@ bool EsParserAdts::ParseFromEsQueue() {
     stream_parser_buffer->SetDecodeTimestamp(
         DecodeTimestamp::FromPresentationTime(current_pts));
     stream_parser_buffer->set_duration(frame_duration);
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
     if (get_decrypt_config_cb_) {
       const DecryptConfig* base_decrypt_config = get_decrypt_config_cb_.Run();
       if (base_decrypt_config) {
@@ -220,7 +217,6 @@ bool EsParserAdts::ParseFromEsQueue() {
                 subsamples, EncryptionPattern()));
       }
     }
-#endif
     emit_buffer_cb_.Run(stream_parser_buffer);
 
     // Update the PTS of the next frame.
@@ -258,13 +254,9 @@ bool EsParserAdts::UpdateAudioConfiguration(const uint8_t* adts_header,
   const int extended_samples_per_second =
       sbr_in_mimetype_ ? std::min(2 * orig_sample_rate, 48000)
                        : orig_sample_rate;
-  EncryptionScheme scheme = EncryptionScheme::kUnencrypted;
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-  scheme = init_encryption_scheme_;
-#endif
   AudioDecoderConfig audio_decoder_config(
       AudioCodec::kAAC, kSampleFormatS16, channel_layout,
-      extended_samples_per_second, extra_data, scheme);
+      extended_samples_per_second, extra_data, init_encryption_scheme_);
 
   if (!audio_decoder_config.IsValidConfig()) {
     DVLOG(1) << "Invalid config: "
@@ -284,8 +276,7 @@ bool EsParserAdts::UpdateAudioConfiguration(const uint8_t* adts_header,
     // sample rate to compute audio timestamps and durations correctly.
 
     // Reset the timestamp helper to use a new time scale.
-    if (audio_timestamp_helper_ &&
-        audio_timestamp_helper_->base_timestamp() != kNoTimestamp) {
+    if (audio_timestamp_helper_ && audio_timestamp_helper_->base_timestamp()) {
       base::TimeDelta base_timestamp = audio_timestamp_helper_->GetTimestamp();
       audio_timestamp_helper_.reset(new AudioTimestampHelper(orig_sample_rate));
       audio_timestamp_helper_->SetBaseTimestamp(base_timestamp);

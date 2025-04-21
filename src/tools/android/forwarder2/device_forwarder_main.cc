@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
@@ -120,7 +120,7 @@ class ClientDelegate : public Daemon::ClientDelegate {
     CHECK_GT(bytes_read, 0);
     DCHECK(static_cast<unsigned int>(bytes_read) < sizeof(buf));
     buf[bytes_read] = 0;
-    base::StringPiece msg(buf, bytes_read);
+    std::string_view msg(buf, bytes_read);
     if (base::StartsWith(msg, "ERROR")) {
       LOG(ERROR) << msg;
       has_failed_ = true;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class InstallerStateTest : public testing::Test {
   InstallerStateTest& operator=(const InstallerStateTest&) = delete;
 
  protected:
-  InstallerStateTest() {}
+  InstallerStateTest() = default;
 
   void SetUp() override { ASSERT_TRUE(test_dir_.CreateUniqueTempDir()); }
 

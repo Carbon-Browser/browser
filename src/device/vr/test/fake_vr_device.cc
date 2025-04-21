@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,12 @@ void FakeVRDevice::RequestSession(
   // The current tests never use the return values, so it's fine to return
   // invalid data here.
   std::move(callback).Run(nullptr);
+}
+
+void FakeVRDevice::ShutdownSession(
+    mojom::XRRuntime::ShutdownSessionCallback callback) {
+  OnExitPresent();
+  std::move(callback).Run();
 }
 
 void FakeVRDevice::OnPresentingControllerMojoConnectionError() {

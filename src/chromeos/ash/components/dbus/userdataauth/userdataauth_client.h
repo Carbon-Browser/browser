@@ -1,16 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_USERDATAAUTH_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_USERDATAAUTH_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
-#include "chromeos/dbus/cryptohome/rpc.pb.h"
+#include "base/scoped_observation_traits.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 
 namespace dbus {
 class Bus;
@@ -36,66 +37,109 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
         const ::user_data_auth::DircryptoMigrationProgress& progress) {}
   };
 
-  using IsMountedCallback =
-      DBusMethodCallback<::user_data_auth::IsMountedReply>;
-  using UnmountCallback = DBusMethodCallback<::user_data_auth::UnmountReply>;
-  using MountCallback = DBusMethodCallback<::user_data_auth::MountReply>;
-  using RemoveCallback = DBusMethodCallback<::user_data_auth::RemoveReply>;
-  using GetKeyDataCallback =
-      DBusMethodCallback<::user_data_auth::GetKeyDataReply>;
-  using CheckKeyCallback = DBusMethodCallback<::user_data_auth::CheckKeyReply>;
-  using AddKeyCallback = DBusMethodCallback<::user_data_auth::AddKeyReply>;
-  using RemoveKeyCallback =
-      DBusMethodCallback<::user_data_auth::RemoveKeyReply>;
-  using MassRemoveKeysCallback =
-      DBusMethodCallback<::user_data_auth::MassRemoveKeysReply>;
-  using MigrateKeyCallback =
-      DBusMethodCallback<::user_data_auth::MigrateKeyReply>;
-  using StartFingerprintAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::StartFingerprintAuthSessionReply>;
-  using EndFingerprintAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::EndFingerprintAuthSessionReply>;
-  using StartMigrateToDircryptoCallback =
-      DBusMethodCallback<::user_data_auth::StartMigrateToDircryptoReply>;
-  using NeedsDircryptoMigrationCallback =
-      DBusMethodCallback<::user_data_auth::NeedsDircryptoMigrationReply>;
-  using GetSupportedKeyPoliciesCallback =
-      DBusMethodCallback<::user_data_auth::GetSupportedKeyPoliciesReply>;
-  using GetAccountDiskUsageCallback =
-      DBusMethodCallback<::user_data_auth::GetAccountDiskUsageReply>;
-  using StartAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::StartAuthSessionReply>;
-  using AuthenticateAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::AuthenticateAuthSessionReply>;
-  using AddCredentialsCallback =
-      DBusMethodCallback<::user_data_auth::AddCredentialsReply>;
-  using UpdateCredentialCallback =
-      DBusMethodCallback<::user_data_auth::UpdateCredentialReply>;
+  class FingerprintAuthObserver : public base::CheckedObserver {
+   public:
+    // Used for the legacy fingerprint auth scan signal.
+    virtual void OnFingerprintScan(
+        const ::user_data_auth::FingerprintScanResult& result) {}
+    // Used for the legacy fingerprint enroll scan signal.
+    virtual void OnEnrollScanDone(
+        const ::user_data_auth::FingerprintScanResult& result,
+        bool is_complete,
+        int percent_complete) {}
+  };
 
-  using PrepareGuestVaultCallback =
-      DBusMethodCallback<::user_data_auth::PrepareGuestVaultReply>;
-  using PrepareEphemeralVaultCallback =
-      DBusMethodCallback<::user_data_auth::PrepareEphemeralVaultReply>;
-  using CreatePersistentUserCallback =
-      DBusMethodCallback<::user_data_auth::CreatePersistentUserReply>;
-  using PreparePersistentVaultCallback =
-      DBusMethodCallback<::user_data_auth::PreparePersistentVaultReply>;
-  using PrepareVaultForMigrationCallback =
-      DBusMethodCallback<::user_data_auth::PrepareVaultForMigrationReply>;
-  using InvalidateAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::InvalidateAuthSessionReply>;
-  using ExtendAuthSessionCallback =
-      DBusMethodCallback<::user_data_auth::ExtendAuthSessionReply>;
-  using AddAuthFactorCallback =
-      DBusMethodCallback<::user_data_auth::AddAuthFactorReply>;
-  using AuthenticateAuthFactorCallback =
-      DBusMethodCallback<::user_data_auth::AuthenticateAuthFactorReply>;
-  using UpdateAuthFactorCallback =
-      DBusMethodCallback<::user_data_auth::UpdateAuthFactorReply>;
-  using RemoveAuthFactorCallback =
-      DBusMethodCallback<::user_data_auth::RemoveAuthFactorReply>;
+  // Processes sub messages embedded in the PrepareAuthFactorProgress signal
+  // received
+  class PrepareAuthFactorProgressObserver : public base::CheckedObserver {
+   public:
+    // Called when a fingerprint auth message is received.
+    virtual void OnFingerprintAuthScan(
+        const ::user_data_auth::AuthScanDone& result) {}
+
+    // Called when a enroll progress is received.
+    virtual void OnFingerprintEnrollProgress(
+        const ::user_data_auth::AuthEnrollmentProgress& result) {}
+  };
+
+  class AuthFactorStatusUpdateObserver : public base::CheckedObserver {
+   public:
+    // Called when AuthFactorStatusUpdate signal is received.
+    virtual void OnAuthFactorStatusUpdate(
+        const ::user_data_auth::AuthFactorStatusUpdate& update) {}
+  };
+
+  using IsMountedCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::IsMountedReply>;
+  using GetVaultPropertiesCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::GetVaultPropertiesReply>;
+  using UnmountCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::UnmountReply>;
+  using RemoveCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::RemoveReply>;
+
+  using GetSupportedKeyPoliciesCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::GetSupportedKeyPoliciesReply>;
+  using GetAccountDiskUsageCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::GetAccountDiskUsageReply>;
+
+  // AuthSession interaction API.
+  using StartAuthSessionCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::StartAuthSessionReply>;
   using GetAuthSessionStatusCallback =
-      DBusMethodCallback<::user_data_auth::GetAuthSessionStatusReply>;
+      chromeos::DBusMethodCallback<::user_data_auth::GetAuthSessionStatusReply>;
+  using InvalidateAuthSessionCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::InvalidateAuthSessionReply>;
+  using ExtendAuthSessionCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::ExtendAuthSessionReply>;
+  // AuthFactors API for AuthSession.
+  using AuthenticateAuthFactorCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::AuthenticateAuthFactorReply>;
+  using AddAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::AddAuthFactorReply>;
+  using UpdateAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::UpdateAuthFactorReply>;
+  using UpdateAuthFactorMetadataCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::UpdateAuthFactorMetadataReply>;
+  using ReplaceAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::ReplaceAuthFactorReply>;
+  using RemoveAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::RemoveAuthFactorReply>;
+  using ListAuthFactorsCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::ListAuthFactorsReply>;
+  using GetAuthFactorExtendedInfoCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::GetAuthFactorExtendedInfoReply>;
+
+  // Asynchronous (biometric) AuthFactors API.
+  using PrepareAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::PrepareAuthFactorReply>;
+  using TerminateAuthFactorCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::TerminateAuthFactorReply>;
+  // Home directory-related API.
+  using PrepareGuestVaultCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::PrepareGuestVaultReply>;
+  using PrepareEphemeralVaultCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::PrepareEphemeralVaultReply>;
+  using CreatePersistentUserCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::CreatePersistentUserReply>;
+  using PreparePersistentVaultCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::PreparePersistentVaultReply>;
+  using PrepareVaultForMigrationCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::PrepareVaultForMigrationReply>;
+
+  using StartMigrateToDircryptoCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::StartMigrateToDircryptoReply>;
+  using NeedsDircryptoMigrationCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::NeedsDircryptoMigrationReply>;
+
+  using GetArcDiskFeaturesCallback =
+      chromeos::DBusMethodCallback<::user_data_auth::GetArcDiskFeaturesReply>;
+
+  using GetRecoverableKeyStoresCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::GetRecoverableKeyStoresReply>;
+
+  using SetUserDataStorageWriteEnabledCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::SetUserDataStorageWriteEnabledReply>;
 
   // Not copyable or movable.
   UserDataAuthClient(const UserDataAuthClient&) = delete;
@@ -106,6 +150,12 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
 
   // Creates and initializes a fake global instance if not already created.
   static void InitializeFake();
+
+  // Override the global instance for testing. Must only be called in unit
+  // tests, which bypass the normal browser startup and shutdown sequence. Use
+  // InitializeFake or OverrideGlobalInstance in FakeUserDataAuth for browser
+  // tests.
+  static void OverrideGlobalInstanceForTesting(UserDataAuthClient*);
 
   // Destroys the global instance.
   static void Shutdown();
@@ -123,62 +173,50 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
   // Removes an observer if added.
   virtual void RemoveObserver(Observer* observer) = 0;
 
+  // Adds a fingerprint auth observer.
+  virtual void AddFingerprintAuthObserver(
+      FingerprintAuthObserver* observer) = 0;
+
+  // Removes a fingerprint auth observer if added.
+  virtual void RemoveFingerprintAuthObserver(
+      FingerprintAuthObserver* observer) = 0;
+
+  // Adds a PrepareAuthFactorProgress observer.
+  virtual void AddPrepareAuthFactorProgressObserver(
+      PrepareAuthFactorProgressObserver* observer) = 0;
+
+  // Removes a PrepareAuthFactorProgress observer if added.
+  virtual void RemovePrepareAuthFactorProgressObserver(
+      PrepareAuthFactorProgressObserver* observer) = 0;
+
+  virtual void AddAuthFactorStatusUpdateObserver(
+      AuthFactorStatusUpdateObserver* observer) = 0;
+
+  virtual void RemoveAuthFactorStatusUpdateObserver(
+      AuthFactorStatusUpdateObserver* observer) = 0;
+
   // Actual DBus Methods:
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Queries if user's vault is mounted.
   virtual void IsMounted(const ::user_data_auth::IsMountedRequest& request,
                          IsMountedCallback callback) = 0;
 
+  // Queries user's vault properties.
+  virtual void GetVaultProperties(
+      const ::user_data_auth::GetVaultPropertiesRequest& request,
+      GetVaultPropertiesCallback callback) = 0;
+
   // Unmounts user's vault.
   virtual void Unmount(const ::user_data_auth::UnmountRequest& request,
                        UnmountCallback callback) = 0;
 
-  // Mounts user's vault.
-  virtual void Mount(const ::user_data_auth::MountRequest& request,
-                     MountCallback callback) = 0;
-
   // Removes user's vault.
   virtual void Remove(const ::user_data_auth::RemoveRequest& request,
                       RemoveCallback callback) = 0;
-
-  // Get key metadata for user's vault.
-  virtual void GetKeyData(const ::user_data_auth::GetKeyDataRequest& request,
-                          GetKeyDataCallback callback) = 0;
-
-  // Try authenticating with key in user's vault.
-  virtual void CheckKey(const ::user_data_auth::CheckKeyRequest& request,
-                        CheckKeyCallback callback) = 0;
-
-  // Add a key to user's vault.
-  virtual void AddKey(const ::user_data_auth::AddKeyRequest& request,
-                      AddKeyCallback callback) = 0;
-
-  // Remove a key from user's vault.
-  virtual void RemoveKey(const ::user_data_auth::RemoveKeyRequest& request,
-                         RemoveKeyCallback callback) = 0;
-
-  // Remove multiple keys from user's vault.
-  virtual void MassRemoveKeys(
-      const ::user_data_auth::MassRemoveKeysRequest& request,
-      MassRemoveKeysCallback callback) = 0;
-
-  // Change the user vault's key's authentication.
-  virtual void MigrateKey(const ::user_data_auth::MigrateKeyRequest& request,
-                          MigrateKeyCallback callback) = 0;
-
-  // Starts a fingerprint auth session.
-  virtual void StartFingerprintAuthSession(
-      const ::user_data_auth::StartFingerprintAuthSessionRequest& request,
-      StartFingerprintAuthSessionCallback callback) = 0;
-
-  // Ends a fingerprint auth session.
-  virtual void EndFingerprintAuthSession(
-      const ::user_data_auth::EndFingerprintAuthSessionRequest& request,
-      EndFingerprintAuthSessionCallback callback) = 0;
 
   // Instructs cryptohome to migrate the vault from eCryptfs to Dircrypto.
   virtual void StartMigrateToDircrypto(
@@ -205,23 +243,6 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
   virtual void StartAuthSession(
       const ::user_data_auth::StartAuthSessionRequest& request,
       StartAuthSessionCallback callback) = 0;
-
-  // Attempts to authenticate with the given auth session.
-  virtual void AuthenticateAuthSession(
-      const ::user_data_auth::AuthenticateAuthSessionRequest& request,
-      AuthenticateAuthSessionCallback callback) = 0;
-
-  // Attempts to add credentials to the vault identified/authorized by auth
-  // session.
-  virtual void AddCredentials(
-      const ::user_data_auth::AddCredentialsRequest& request,
-      AddCredentialsCallback callback) = 0;
-
-  // Attempts to update credentials in the vault identified/authorized by auth
-  // session.
-  virtual void UpdateCredential(
-      const ::user_data_auth::UpdateCredentialRequest& request,
-      UpdateCredentialCallback callback) = 0;
 
   // This request is intended to happen when a user wants
   // to login to ChromeOS as a guest.
@@ -283,16 +304,72 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
       const ::user_data_auth::UpdateAuthFactorRequest& request,
       UpdateAuthFactorCallback callback) = 0;
 
+  // This call will be used in the case of a user wanting
+  // to update an AuthFactor's metadata. (E.g. Changing the user specified
+  // name).
+  virtual void UpdateAuthFactorMetadata(
+      const ::user_data_auth::UpdateAuthFactorMetadataRequest& request,
+      UpdateAuthFactorMetadataCallback callback) = 0;
+
+  // This call will be used in the case of a user wanting to remove an existing
+  // Authfactor and add a new one to replace it. (E.g. Changing to local
+  // password from Gaia password).
+  virtual void ReplaceAuthFactor(
+      const ::user_data_auth::ReplaceAuthFactorRequest& request,
+      ReplaceAuthFactorCallback callback) = 0;
+
   // This is called when a user wants to remove an
   // AuthFactor.
   virtual void RemoveAuthFactor(
       const ::user_data_auth::RemoveAuthFactorRequest& request,
       RemoveAuthFactorCallback callback) = 0;
 
+  // This is called to determine all configured AuthFactors as well as supported
+  // AuthFactors whenever AuthFactors-based API is used.
+  virtual void ListAuthFactors(
+      const ::user_data_auth::ListAuthFactorsRequest& request,
+      ListAuthFactorsCallback callback) = 0;
+
+  // This is called to get AuthFactor for given label along with optional
+  // extended info.
+  virtual void GetAuthFactorExtendedInfo(
+      const ::user_data_auth::GetAuthFactorExtendedInfoRequest& request,
+      GetAuthFactorExtendedInfoCallback callback) = 0;
+
   // This is called when a user wants to get an AuthSession status.
   virtual void GetAuthSessionStatus(
       const ::user_data_auth::GetAuthSessionStatusRequest& request,
       GetAuthSessionStatusCallback callback) = 0;
+
+  // This is called to enable asynchronous auth factors (like Fingerprint).
+  // Note that caller needs to add PrepareAuthFactorProgressObserver before this
+  // call.
+  virtual void PrepareAuthFactor(
+      const ::user_data_auth::PrepareAuthFactorRequest& request,
+      PrepareAuthFactorCallback callback) = 0;
+
+  // Counterpart for `PrepareAuthFactor`, method is called to disable particular
+  // asynchronous auth factor (like Fingerprint).
+  // Note that caller needs to remove PrepareAuthFactorProgressObserver after
+  // this call.
+  virtual void TerminateAuthFactor(
+      const ::user_data_auth::TerminateAuthFactorRequest& request,
+      TerminateAuthFactorCallback callback) = 0;
+
+  // Retrieve the ARC-related disk features supported.
+  virtual void GetArcDiskFeatures(
+      const ::user_data_auth::GetArcDiskFeaturesRequest& request,
+      GetArcDiskFeaturesCallback callback) = 0;
+
+  // Retrieve LSKF-wrapped key material for upload to a remote recovery service.
+  virtual void GetRecoverableKeyStores(
+      const ::user_data_auth::GetRecoverableKeyStoresRequest& request,
+      GetRecoverableKeyStoresCallback callback) = 0;
+
+  // Enable/disable write access permissions to MyFiles directory.
+  virtual void SetUserDataStorageWriteEnabled(
+      const ::user_data_auth::SetUserDataStorageWriteEnabledRequest& request,
+      SetUserDataStorageWriteEnabledCallback callback) = 0;
 
  protected:
   // Initialize/Shutdown should be used instead.
@@ -302,9 +379,24 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) UserDataAuthClient {
 
 }  // namespace ash
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::UserDataAuthClient;
-}
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    ash::UserDataAuthClient,
+    ash::UserDataAuthClient::FingerprintAuthObserver> {
+  static void AddObserver(
+      ash::UserDataAuthClient* source,
+      ash::UserDataAuthClient::FingerprintAuthObserver* observer) {
+    source->AddFingerprintAuthObserver(observer);
+  }
+  static void RemoveObserver(
+      ash::UserDataAuthClient* source,
+      ash::UserDataAuthClient::FingerprintAuthObserver* observer) {
+    source->RemoveFingerprintAuthObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_USERDATAAUTH_CLIENT_H_

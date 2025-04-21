@@ -1,33 +1,31 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/widget/widget_deletion_observer.h"
 
+#include "base/scoped_observation.h"
 #include "ui/views/widget/widget.h"
 
 namespace views {
 
-WidgetDeletionObserver::WidgetDeletionObserver(Widget* widget)
-    : widget_(widget) {
-  if (widget_)
-    widget_->AddObserver(this);
+WidgetDeletionObserver::WidgetDeletionObserver(Widget* widget) {
+  if (widget) {
+    widget_observation_.Observe(widget);
+  }
 }
 
 WidgetDeletionObserver::~WidgetDeletionObserver() {
-  CleanupWidget();
+  widget_observation_.Reset();
   CHECK(!IsInObserverList());
 }
 
-void WidgetDeletionObserver::OnWidgetDestroying(Widget* widget) {
-  CleanupWidget();
+bool WidgetDeletionObserver::IsWidgetAlive() const {
+  return widget_observation_.IsObserving();
 }
 
-void WidgetDeletionObserver::CleanupWidget() {
-  if (widget_) {
-    widget_->RemoveObserver(this);
-    widget_ = nullptr;
-  }
+void WidgetDeletionObserver::OnWidgetDestroying(Widget* widget) {
+  widget_observation_.Reset();
 }
 
 }  // namespace views

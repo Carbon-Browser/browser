@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://tab-strip.top-chrome/tab.js';
 
 import {getFavicon} from 'chrome://resources/js/icon.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {TabElement} from 'chrome://tab-strip.top-chrome/tab.js';
-import {Tab, TabNetworkState} from 'chrome://tab-strip.top-chrome/tab_strip.mojom-webui.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import type {TabElement} from 'chrome://tab-strip.top-chrome/tab.js';
+import type {Tab} from 'chrome://tab-strip.top-chrome/tab_strip.mojom-webui.js';
+import {TabNetworkState} from 'chrome://tab-strip.top-chrome/tab_strip.mojom-webui.js';
 import {CloseTabAction, TabsApiProxyImpl} from 'chrome://tab-strip.top-chrome/tabs_api_proxy.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
@@ -44,7 +45,7 @@ suite('Tab', function() {
   setup(() => {
     loadTimeData.overrideValues(strings);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     // Set CSS variable for animations
     document.body.style.setProperty('--tabstrip-tab-height', '100px');
@@ -57,65 +58,6 @@ suite('Tab', function() {
     tabElement = document.createElement('tabstrip-tab');
     tabElement.tab = createTabData();
     document.body.appendChild(tabElement);
-  });
-
-  test('slideIn animates scale for the last tab', async () => {
-    document.documentElement.dir = 'ltr';
-    tabElement.style.paddingRight = '100px';
-    const tabElementStyle = window.getComputedStyle(tabElement);
-
-    const animationPromise = tabElement.slideIn();
-    // Before animation completes.
-    assertEquals('20px', tabElementStyle.paddingRight);
-    assertEquals('280px', tabElementStyle.maxWidth);
-    assertEquals('matrix(0, 0, 0, 0, 0, 0)', tabElementStyle.transform);
-    await animationPromise;
-    // After animation completes.
-    assertEquals('100px', tabElementStyle.paddingRight);
-    assertEquals('none', tabElementStyle.maxWidth);
-    assertEquals('none', tabElementStyle.transform);
-  });
-
-  test('slideIn animations for not the last tab', async () => {
-    // Add another element to make sure the element being tested is not the
-    // last.
-    document.body.appendChild(document.createElement('div'));
-
-    document.documentElement.dir = 'ltr';
-    tabElement.style.paddingRight = '100px';
-    const tabElementStyle = window.getComputedStyle(tabElement);
-
-    const animationPromise = tabElement.slideIn();
-    // Before animation completes.
-    assertEquals('0px', tabElementStyle.paddingRight);
-    assertEquals('0px', tabElementStyle.maxWidth);
-    assertEquals('matrix(0, 0, 0, 0, 0, 0)', tabElementStyle.transform);
-    await animationPromise;
-    // After animation completes.
-    assertEquals('100px', tabElementStyle.paddingRight);
-    assertEquals('none', tabElementStyle.maxWidth);
-    assertEquals('none', tabElementStyle.transform);
-  });
-
-  test('slideIn animations right to left for RTL languages', async () => {
-    // Add another element to make sure the element being tested is not the
-    // last.
-    document.body.appendChild(document.createElement('div'));
-
-    document.documentElement.dir = 'rtl';
-    tabElement.style.paddingLeft = '100px';
-    const tabElementStyle = window.getComputedStyle(tabElement);
-
-    const animationPromise = tabElement.slideIn();
-    // Before animation completes.
-    assertEquals('0px', tabElementStyle.paddingLeft);
-    assertEquals('0px', tabElementStyle.maxWidth);
-    assertEquals('matrix(0, 0, 0, 0, 0, 0)', tabElementStyle.transform);
-    await animationPromise;
-    // After animation completes.
-    assertEquals('100px', tabElementStyle.paddingLeft);
-    assertEquals('none', tabElementStyle.maxWidth);
-    assertEquals('none', tabElementStyle.transform);
   });
 
   test('slideOut animates out the element', async () => {
@@ -326,7 +268,7 @@ suite('Tab', function() {
       'sets the favicon to the default favicon URL if there is none provided',
       () => {
         const updatedTab = createTabData();
-        delete updatedTab.faviconUrl;
+        updatedTab.faviconUrl = null;
         tabElement.tab = updatedTab;
         const faviconElement =
             tabElement.shadowRoot!.querySelector<HTMLElement>('#favicon')!;

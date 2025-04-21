@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -16,9 +16,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/url_matcher/url_matcher.h"
 #include "extensions/common/api/events.h"
 #include "extensions/common/extension.h"
@@ -26,7 +27,6 @@
 
 namespace base {
 class Time;
-class Value;
 }
 
 namespace content {
@@ -59,7 +59,6 @@ namespace extensions {
 template<typename ConditionT>
 class DeclarativeConditionSet {
  public:
-  using Values = std::vector<std::unique_ptr<base::Value>>;
   using Conditions = std::vector<std::unique_ptr<const ConditionT>>;
   using const_iterator = typename Conditions::const_iterator;
 
@@ -72,7 +71,7 @@ class DeclarativeConditionSet {
   static std::unique_ptr<DeclarativeConditionSet> Create(
       const Extension* extension,
       url_matcher::URLMatcherConditionFactory* url_matcher_condition_factory,
-      const Values& condition_values,
+      const base::Value::List& condition_values,
       std::string* error);
 
   const Conditions& conditions() const {
@@ -122,14 +121,14 @@ class DeclarativeConditionSet {
 //   static std::unique_ptr<ActionT> Create(
 //       const Extension* extension,
 //       // Except this argument gets elements of the Values array.
-//       const base::Value& definition,
+//       const base::Value::Dict& definition,
 //       std::string* error, bool* bad_message);
-//   void Apply(const std::string& extension_id,
+//   void Apply(const ExtensionId& extension_id,
 //              const base::Time& extension_install_time,
 //              // Contains action-type-specific in/out parameters.
 //              typename ActionT::ApplyInfo* apply_info) const;
 //   // Only needed if the RulesRegistry calls DeclarativeActionSet::Revert().
-//   void Revert(const std::string& extension_id,
+//   void Revert(const ExtensionId& extension_id,
 //               const base::Time& extension_install_time,
 //               // Contains action-type-specific in/out parameters.
 //               typename ActionT::ApplyInfo* apply_info) const;
@@ -143,7 +142,6 @@ class DeclarativeConditionSet {
 template<typename ActionT>
 class DeclarativeActionSet {
  public:
-  using Values = std::vector<std::unique_ptr<base::Value>>;
   using Actions = std::vector<scoped_refptr<const ActionT>>;
 
   explicit DeclarativeActionSet(const Actions& actions);
@@ -157,25 +155,25 @@ class DeclarativeActionSet {
   static std::unique_ptr<DeclarativeActionSet> Create(
       content::BrowserContext* browser_context,
       const Extension* extension,
-      const Values& action_values,
+      const base::Value::List& action_values,
       std::string* error,
       bool* bad_message);
 
   // Rules call this method when their conditions are fulfilled.
-  void Apply(const std::string& extension_id,
+  void Apply(const ExtensionId& extension_id,
              const base::Time& extension_install_time,
              typename ActionT::ApplyInfo* apply_info) const;
 
   // Rules call this method when their conditions are fulfilled, but Apply has
   // already been called.
-  void Reapply(const std::string& extension_id,
+  void Reapply(const ExtensionId& extension_id,
                const base::Time& extension_install_time,
                typename ActionT::ApplyInfo* apply_info) const;
 
   // Rules call this method when they have stateful conditions, and those
   // conditions stop being fulfilled.  Rules with event-based conditions (e.g. a
   // network request happened) will never Revert() an action.
-  void Revert(const std::string& extension_id,
+  void Revert(const ExtensionId& extension_id,
               const base::Time& extension_install_time,
               typename ActionT::ApplyInfo* apply_info) const;
 
@@ -243,7 +241,7 @@ class DeclarativeRule {
 
   const GlobalRuleId& id() const { return id_; }
   const Tags& tags() const { return tags_; }
-  const std::string& extension_id() const { return id_.first; }
+  const ExtensionId& extension_id() const { return id_.first; }
   const ConditionSet& conditions() const { return *conditions_; }
   const ActionSet& actions() const { return *actions_; }
   Priority priority() const { return priority_; }
@@ -307,14 +305,13 @@ std::unique_ptr<DeclarativeConditionSet<ConditionT>>
 DeclarativeConditionSet<ConditionT>::Create(
     const Extension* extension,
     url_matcher::URLMatcherConditionFactory* url_matcher_condition_factory,
-    const Values& condition_values,
+    const base::Value::List& condition_values,
     std::string* error) {
   Conditions result;
 
   for (const auto& value : condition_values) {
-    CHECK(value.get());
     std::unique_ptr<ConditionT> condition = ConditionT::Create(
-        extension, url_matcher_condition_factory, *value, error);
+        extension, url_matcher_condition_factory, value, error);
     if (!error->empty())
       return nullptr;
     result.push_back(std::move(condition));
@@ -362,7 +359,7 @@ template <typename ActionT>
 std::unique_ptr<DeclarativeActionSet<ActionT>>
 DeclarativeActionSet<ActionT>::Create(content::BrowserContext* browser_context,
                                       const Extension* extension,
-                                      const Values& action_values,
+                                      const base::Value::List& action_values,
                                       std::string* error,
                                       bool* bad_message) {
   *error = "";
@@ -370,9 +367,13 @@ DeclarativeActionSet<ActionT>::Create(content::BrowserContext* browser_context,
   Actions result;
 
   for (const auto& value : action_values) {
-    CHECK(value.get());
-    scoped_refptr<const ActionT> action =
-        ActionT::Create(browser_context, extension, *value, error, bad_message);
+    if (!value.is_dict()) {
+      *bad_message = true;
+      *error = "Action must be an object.";
+      return nullptr;
+    }
+    scoped_refptr<const ActionT> action = ActionT::Create(
+        browser_context, extension, value.GetDict(), error, bad_message);
     if (!error->empty() || *bad_message)
       return nullptr;
     result.push_back(action);
@@ -381,27 +382,27 @@ DeclarativeActionSet<ActionT>::Create(content::BrowserContext* browser_context,
   return std::make_unique<DeclarativeActionSet>(result);
 }
 
-template<typename ActionT>
+template <typename ActionT>
 void DeclarativeActionSet<ActionT>::Apply(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const base::Time& extension_install_time,
     typename ActionT::ApplyInfo* apply_info) const {
   for (const scoped_refptr<const ActionT>& action : actions_)
     action->Apply(extension_id, extension_install_time, apply_info);
 }
 
-template<typename ActionT>
+template <typename ActionT>
 void DeclarativeActionSet<ActionT>::Reapply(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const base::Time& extension_install_time,
     typename ActionT::ApplyInfo* apply_info) const {
   for (const scoped_refptr<const ActionT>& action : actions_)
     action->Reapply(extension_id, extension_install_time, apply_info);
 }
 
-template<typename ActionT>
+template <typename ActionT>
 void DeclarativeActionSet<ActionT>::Revert(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const base::Time& extension_install_time,
     typename ActionT::ApplyInfo* apply_info) const {
   for (const scoped_refptr<const ActionT>& action : actions_)
@@ -480,7 +481,7 @@ DeclarativeRule<ConditionT, ActionT>::Create(
     return std::move(error_result);
   }
 
-  CHECK(rule.priority.get());
+  CHECK(rule.priority);
   int priority = *(rule.priority);
 
   GlobalRuleId rule_id(extension->id(), *(rule.id));

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,12 @@
 namespace media {
 namespace cast {
 
-EncodedFrame::EncodedFrame()
-    : dependency(UNKNOWN_DEPENDENCY), new_playout_delay_ms(0) {}
-
+EncodedFrame::EncodedFrame() = default;
 EncodedFrame::~EncodedFrame() = default;
 
 void EncodedFrame::CopyMetadataTo(EncodedFrame* dest) const {
   DCHECK(dest);
-  dest->dependency = this->dependency;
+  dest->is_key_frame = this->is_key_frame;
   dest->frame_id = this->frame_id;
   dest->referenced_frame_id = this->referenced_frame_id;
   dest->rtp_timestamp = this->rtp_timestamp;

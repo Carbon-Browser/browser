@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,9 @@ class URLLoaderFactory;
 }
 }  // namespace network
 
+class Browser;
 class CaptivePortalBrowserTest;
+class HttpsUpgradesBrowserTest;
 
 namespace captive_portal {
 
@@ -106,6 +108,7 @@ class CaptivePortalService : public KeyedService {
  private:
   friend class CaptivePortalServiceTest;
   friend class ::CaptivePortalBrowserTest;
+  friend class ::HttpsUpgradesBrowserTest;
 
   enum State {
     // No check is running or pending.

@@ -1,11 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/subresource_filter/content/browser/navigation_console_logger.h"
 
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/memory/ptr_util.h"
-#include "components/subresource_filter/content/browser/content_subresource_filter_web_contents_helper.h"
+#include "base/not_fatal_until.h"
+#include "components/subresource_filter/content/shared/browser/utils.h"
 #include "content/public/browser/frame_type.h"
 #include "content/public/browser/navigation_handle.h"
 
@@ -16,9 +19,9 @@ void NavigationConsoleLogger::LogMessageOnCommit(
     content::NavigationHandle* handle,
     blink::mojom::ConsoleMessageLevel level,
     const std::string& message) {
-  DCHECK(IsInSubresourceFilterRoot(handle));
-  DCHECK_NE(handle->GetNavigatingFrameType(),
-            content::FrameType::kFencedFrameRoot);
+  CHECK(IsInSubresourceFilterRoot(handle), base::NotFatalUntil::M129);
+  CHECK_NE(handle->GetNavigatingFrameType(),
+           content::FrameType::kFencedFrameRoot, base::NotFatalUntil::M129);
 
   if (handle->HasCommitted() && !handle->IsErrorPage()) {
     handle->GetRenderFrameHost()->AddMessageToConsole(level, message);
@@ -31,9 +34,9 @@ void NavigationConsoleLogger::LogMessageOnCommit(
 // static
 NavigationConsoleLogger* NavigationConsoleLogger::CreateIfNeededForNavigation(
     content::NavigationHandle* handle) {
-  DCHECK(IsInSubresourceFilterRoot(handle));
-  DCHECK_NE(handle->GetNavigatingFrameType(),
-            content::FrameType::kFencedFrameRoot);
+  CHECK(IsInSubresourceFilterRoot(handle), base::NotFatalUntil::M129);
+  CHECK_NE(handle->GetNavigatingFrameType(),
+           content::FrameType::kFencedFrameRoot, base::NotFatalUntil::M129);
   return GetOrCreateForNavigationHandle(*handle);
 }
 
@@ -48,7 +51,7 @@ void NavigationConsoleLogger::DidFinishNavigation(
   if (handle != handle_)
     return;
 
-  // The main frame navigation has finished.
+  // The root frame navigation has finished.
   if (handle->HasCommitted() && !handle->IsErrorPage()) {
     for (const auto& message : commit_messages_) {
       handle->GetRenderFrameHost()->AddMessageToConsole(message.first,

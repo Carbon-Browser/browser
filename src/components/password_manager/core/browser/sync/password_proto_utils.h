@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,15 +13,16 @@
 namespace sync_pb {
 class PasswordSpecifics;
 class PasswordSpecificsData;
-class PasswordSpecificsData_PasswordIssues;
+class PasswordIssues;
 class PasswordSpecificsData_Notes;
+class PasswordSpecificsMetadata;
 }  // namespace sync_pb
 
 namespace password_manager {
 
 // Converts a map of `form_password_issues` into the format required by the
 // proto.
-sync_pb::PasswordSpecificsData_PasswordIssues PasswordIssuesMapToProto(
+sync_pb::PasswordIssues PasswordIssuesMapToProto(
     const base::flat_map<InsecureType, InsecurityMetadata>&
         form_password_issues);
 
@@ -52,10 +53,17 @@ sync_pb::PasswordSpecifics SpecificsFromPassword(
 
 // Returns sync_pb::PasswordSpecificsData based on given `password_form`.
 // `base_password_data` is intended for carrying over unknown and unsupported
-// fields when there is a local modification to an existing sync entity.
+// fields when there is a local modification to an existing sync entity. The
+// resulting proto contains all supported fields from `password_form` combined
+// with unsupported from `base_password_data`
 sync_pb::PasswordSpecificsData SpecificsDataFromPassword(
     const PasswordForm& password_form,
     const sync_pb::PasswordSpecificsData& base_password_data);
+
+// Returns sync_pb::PasswordSpecificsMetadata based on the given
+// `password_form`.
+sync_pb::PasswordSpecificsMetadata SpecificsMetadataFromPassword(
+    const PasswordForm& password_form);
 
 // Returns a partial PasswordForm for a given set of `password_data`. In
 // contrast to `PasswordFromProtoWithLocalData`, this method resets local data.

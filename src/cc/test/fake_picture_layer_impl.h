@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,8 +54,10 @@ class FakePictureLayerImpl : public PictureLayerImpl {
   using PictureLayerImpl::AddTiling;
   using PictureLayerImpl::CanHaveTilings;
   using PictureLayerImpl::CleanUpTilingsOnActiveLayer;
+  using PictureLayerImpl::IsDirectlyCompositedImage;
   using PictureLayerImpl::MinimumContentsScale;
   using PictureLayerImpl::SanityCheckTilingState;
+  using PictureLayerImpl::UpdateDirectlyCompositedImageFromRasterSource;
   using PictureLayerImpl::UpdateRasterSource;
 
   using PictureLayerImpl::MaximumTilingContentsScale;
@@ -117,6 +119,10 @@ class FakePictureLayerImpl : public PictureLayerImpl {
 
   bool only_used_low_res_last_append_quads() const {
     return only_used_low_res_last_append_quads_;
+  }
+
+  scoped_refptr<const DiscardableImageMap> discardable_image_map() const {
+    return discardable_image_map_;
   }
 
  protected:

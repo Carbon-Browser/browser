@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,6 +13,8 @@ source_set("privacy_budget") {
     "privacy_budget_settings_provider.h",
     "types.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
     "//base",

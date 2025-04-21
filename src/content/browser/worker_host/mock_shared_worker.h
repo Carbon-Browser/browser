@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "third_party/blink/public/common/messaging/message_port_channel.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_container.mojom.h"
 #include "third_party/blink/public/mojom/worker/shared_worker_factory.mojom.h"
@@ -87,11 +88,10 @@ class MockSharedWorkerFactory : public blink::mojom::SharedWorkerFactory {
   void CreateSharedWorker(
       blink::mojom::SharedWorkerInfoPtr info,
       const blink::SharedWorkerToken& token,
-      const url::Origin& constructor_origin,
+      const blink::StorageKey& constructor_key,
+      const url::Origin& renderer_origin,
       bool is_constructor_secure_context,
       const std::string& user_agent,
-      const std::string& full_user_agent,
-      const std::string& reduced_user_agent,
       const blink::UserAgentMetadata& ua_metadata,
       bool pause_on_start,
       const base::UnguessableToken& devtools_worker_token,
@@ -111,7 +111,8 @@ class MockSharedWorkerFactory : public blink::mojom::SharedWorkerFactory {
       mojo::PendingReceiver<blink::mojom::SharedWorker> receiver,
       mojo::PendingRemote<blink::mojom::BrowserInterfaceBroker>
           browser_interface_broker,
-      ukm::SourceId ukm_source_id) override;
+      ukm::SourceId ukm_source_id,
+      bool require_cross_site_request_for_cookies) override;
 
   struct CreateParams {
     CreateParams();
@@ -123,6 +124,7 @@ class MockSharedWorkerFactory : public blink::mojom::SharedWorkerFactory {
     mojo::PendingRemote<blink::mojom::SharedWorkerHost> host;
     mojo::PendingReceiver<blink::mojom::SharedWorker> receiver;
     ukm::SourceId ukm_source_id;
+    bool require_cross_site_request_for_cookies;
   };
 
   mojo::Receiver<blink::mojom::SharedWorkerFactory> receiver_;

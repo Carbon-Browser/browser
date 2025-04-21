@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,9 @@ class MockOverscrollRefreshHandlerAndroid : public ui::OverscrollRefreshHandler,
   ~MockOverscrollRefreshHandlerAndroid() override;
 
   // ui::OverscrollRefreshHandler:
-  bool PullStart(OverscrollAction type,
-                 float startx,
-                 float starty,
-                 bool navigateForward) override;
+  bool PullStart(
+      OverscrollAction type,
+      std::optional<ui::BackGestureEventSwipeEdge> initiating_edge) override;
   void PullUpdate(float, float) override;
   void PullRelease(bool) override;
   void PullReset() override;

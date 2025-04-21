@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,16 @@
 #include <vector>
 
 #include "base/containers/queue.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "device/vr/android/arcore/ar_compositor_frame_sink.h"
 #include "device/vr/public/cpp/xr_frame_sink_client.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
+#include "device/vr/public/mojom/xr_session.mojom.h"
 #include "device/vr/util/fps_meter.h"
 #include "device/vr/util/sliding_average.h"
 #include "gpu/ipc/common/surface_handle.h"
@@ -47,7 +49,7 @@ class WindowAndroid;
 namespace device {
 
 class ArCore;
-class ArCoreSessionUtils;
+class XrJavaCoordinator;
 class ArCoreFactory;
 class ArImageTransport;
 class WebXrPresentationState;
@@ -72,19 +74,26 @@ using ArCoreGlCreateSessionCallback =
 
 struct ArCoreGlInitializeResult {
   std::unordered_set<device::mojom::XRSessionFeature> enabled_features;
-  absl::optional<device::mojom::XRDepthConfig> depth_configuration;
+  std::optional<device::mojom::XRDepthConfig> depth_configuration;
   viz::FrameSinkId frame_sink_id;
 
   ArCoreGlInitializeResult(
       std::unordered_set<device::mojom::XRSessionFeature> enabled_features,
-      absl::optional<device::mojom::XRDepthConfig> depth_configuration,
+      std::optional<device::mojom::XRDepthConfig> depth_configuration,
       viz::FrameSinkId frame_sink_id);
   ArCoreGlInitializeResult(ArCoreGlInitializeResult&& other);
   ~ArCoreGlInitializeResult();
 };
 
+enum class ArCoreGlInitializeError {
+  kFailure,
+  kRetryableFailure,
+};
+
+using ArCoreGlInitializeStatus =
+    base::expected<ArCoreGlInitializeResult, ArCoreGlInitializeError>;
 using ArCoreGlInitializeCallback =
-    base::OnceCallback<void(absl::optional<ArCoreGlInitializeResult>)>;
+    base::OnceCallback<void(ArCoreGlInitializeStatus)>;
 
 // All of this class's methods must be called on the same valid GL thread with
 // the exception of GetGlThreadTaskRunner() and GetWeakPtr().
@@ -101,7 +110,9 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   ~ArCoreGl() override;
 
   void Initialize(
-      ArCoreSessionUtils* session_utils,
+      const scoped_refptr<base::SingleThreadTaskRunner>&
+          main_thread_task_runner,
+      XrJavaCoordinator* session_utils,
       ArCoreFactory* arcore_factory,
       XrFrameSinkClient* xr_frame_sink_client,
       gfx::AcceleratedWidget drawing_widget,
@@ -136,9 +147,6 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   void GetEnvironmentIntegrationProvider(
       mojo::PendingAssociatedReceiver<mojom::XREnvironmentIntegrationProvider>
           environment_provider) override;
-  void SetInputSourceButtonListener(
-      mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>)
-      override;
 
   // XRPresentationProvider
   void SubmitFrameMissing(int16_t frame_index, const gpu::SyncToken&) override;
@@ -209,12 +217,14 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
                     mojom::XRFrameDataPtr frame_data,
                     mojom::XRFrameDataProvider::GetFrameDataCallback callback);
 
-  bool InitializeGl(gfx::AcceleratedWidget drawing_widget);
-  void InitializeArCompositor(gpu::SurfaceHandle surface_handle,
+  bool InitializeGl();
+  void InitializeArCompositor(const scoped_refptr<base::SingleThreadTaskRunner>&
+                                  main_thread_task_runner,
+                              gpu::SurfaceHandle surface_handle,
                               ui::WindowAndroid* root_window,
                               XrFrameSinkClient* xr_frame_sink_client,
                               device::DomOverlaySetup dom_setup);
-  void OnArImageTransportReady();
+  void OnArImageTransportReady(bool success);
   void OnArCompositorInitialized(bool initialized);
   void OnInitialized();
   bool IsOnGlThread() const;
@@ -239,8 +249,9 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   void DidNotProduceVizFrame(int16_t frame_index);
   void OnBeginFrame(const viz::BeginFrameArgs& args,
                     const viz::FrameTimingDetailsMap&);
-  void OnReclaimedGpuFenceAvailable(WebXrFrame* frame,
-                                    std::unique_ptr<gfx::GpuFence> gpu_fence);
+  void OnReclaimedGpuFenceAvailable(
+      WebXrFrame* frame,
+      std::vector<std::unique_ptr<gfx::GpuFence>> gpu_fences);
   void ClearRenderingFrame(WebXrFrame* frame);
   void RecalculateUvsAndProjection();
 
@@ -248,7 +259,7 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   // the session and only send out necessary data related to reference spaces to
   // blink. Valid after the call to |Initialize()| method.
   std::unordered_set<device::mojom::XRSessionFeature> enabled_features_;
-  absl::optional<device::mojom::XRDepthConfig> depth_configuration_;
+  std::optional<device::mojom::XRDepthConfig> depth_configuration_;
 
   base::OnceClosure session_shutdown_callback_;
 
@@ -268,7 +279,6 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   // Where possible, we should use the ArCompositor to integrate with viz,
   // rather than our own custom compositing logic.
   std::unique_ptr<ArCompositorFrameSink> ar_compositor_;
-  const bool use_ar_compositor_;
 
   // This class uses the same overall presentation state logic
   // as GvrGraphicsDelegate, with some difference due to drawing
@@ -374,10 +384,10 @@ class ArCoreGl : public mojom::XRFrameDataProvider,
   uint32_t stage_parameters_id_;
 
   // Currently estimated floor height.
-  absl::optional<float> floor_height_estimate_;
+  std::optional<float> floor_height_estimate_;
 
   // Touch-related data.
-  // Android will report touch events via MotionEvent - see ArImmersiveOverlay
+  // Android will report touch events via MotionEvent - see XrImmersiveOverlay
   // for details.
   struct ScreenTouchEvent {
     gfx::PointF screen_last_touch;

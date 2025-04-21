@@ -1,8 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "third_party/blink/renderer/modules/webcodecs/audio_decoder_broker.h"
+
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/files/file_util.h"
@@ -23,15 +26,15 @@
 #include "media/mojo/services/interface_factory_impl.h"
 #include "media/mojo/services/mojo_audio_decoder_service.h"
 #include "media/mojo/services/mojo_cdm_service_context.h"
+#include "media/mojo/services/mojo_media_client.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
-
-#include "third_party/blink/renderer/modules/webcodecs/audio_decoder_broker.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -86,6 +89,19 @@ class FakeAudioDecoder : public media::MockAudioDecoder {
   OutputCB output_cb_;
 };
 
+class FakeMojoMediaClient : public media::MojoMediaClient {
+ public:
+  FakeMojoMediaClient() = default;
+  FakeMojoMediaClient(const FakeMojoMediaClient&) = delete;
+  FakeMojoMediaClient& operator=(const FakeMojoMediaClient&) = delete;
+
+  std::unique_ptr<media::AudioDecoder> CreateAudioDecoder(
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
+      std::unique_ptr<media::MediaLog> media_log) override {
+    return std::make_unique<FakeAudioDecoder>();
+  }
+};
+
 // Other end of remote InterfaceFactory requested by AudioDecoderBroker. Used
 // to create our (fake) media::mojom::AudioDecoder.
 class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
@@ -96,7 +112,7 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
   void BindRequest(mojo::ScopedMessagePipeHandle handle) {
     receiver_.Bind(mojo::PendingReceiver<media::mojom::InterfaceFactory>(
         std::move(handle)));
-    receiver_.set_disconnect_handler(WTF::Bind(
+    receiver_.set_disconnect_handler(WTF::BindOnce(
         &FakeInterfaceFactory::OnConnectionError, base::Unretained(this)));
   }
 
@@ -109,7 +125,8 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
       mojo::PendingReceiver<media::mojom::AudioDecoder> receiver) override {
     audio_decoder_receivers_.Add(
         std::make_unique<media::MojoAudioDecoderService>(
-            &cdm_service_context_, std::make_unique<FakeAudioDecoder>()),
+            &mojo_media_client_, &cdm_service_context_,
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         std::move(receiver));
   }
   void CreateAudioEncoder(
@@ -120,6 +137,11 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
       mojo::PendingReceiver<media::mojom::VideoDecoder> receiver,
       mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
           dst_video_decoder) override {}
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  void CreateStableVideoDecoder(
+      mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
+          video_decoder) override {}
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   void CreateDefaultRenderer(
       const std::string& audio_device_id,
       mojo::PendingReceiver<media::mojom::Renderer> receiver) override {}
@@ -143,7 +165,8 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
 #endif  // BUILDFLAG(IS_ANDROID)
   void CreateCdm(const media::CdmConfig& cdm_config,
                  CreateCdmCallback callback) override {
-    std::move(callback).Run(mojo::NullRemote(), nullptr, "CDM not supported");
+    std::move(callback).Run(mojo::NullRemote(), nullptr,
+                            media::CreateCdmStatus::kCdmNotSupported);
   }
 #if BUILDFLAG(IS_WIN)
   void CreateMediaFoundationRenderer(
@@ -157,6 +180,7 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
 #endif  // BUILDFLAG(IS_WIN)
 
  private:
+  FakeMojoMediaClient mojo_media_client_;
   media::MojoCdmServiceContext cdm_service_context_;
   mojo::Receiver<media::mojom::InterfaceFactory> receiver_{this};
   mojo::UniqueReceiverSet<media::mojom::AudioDecoder> audio_decoder_receivers_;
@@ -216,8 +240,8 @@ class AudioDecoderBrokerTest : public testing::Test {
                            media::DecoderStatus::Codes::kOk))));
     decoder_broker_->Initialize(
         config, nullptr /* cdm_context */,
-        WTF::Bind(&AudioDecoderBrokerTest::OnInitWithClosure,
-                  WTF::Unretained(this), run_loop.QuitClosure()),
+        WTF::BindOnce(&AudioDecoderBrokerTest::OnInitWithClosure,
+                      WTF::Unretained(this), run_loop.QuitClosure()),
         WTF::BindRepeating(&AudioDecoderBrokerTest::OnOutput,
                            WTF::Unretained(this)),
         media::WaitingCB());
@@ -231,8 +255,8 @@ class AudioDecoderBrokerTest : public testing::Test {
     base::RunLoop run_loop;
     EXPECT_CALL(*this, OnDecodeDone(HasStatusCode(expected_status)));
     decoder_broker_->Decode(
-        buffer, WTF::Bind(&AudioDecoderBrokerTest::OnDecodeDoneWithClosure,
-                          WTF::Unretained(this), run_loop.QuitClosure()));
+        buffer, WTF::BindOnce(&AudioDecoderBrokerTest::OnDecodeDoneWithClosure,
+                              WTF::Unretained(this), run_loop.QuitClosure()));
     run_loop.Run();
     testing::Mock::VerifyAndClearExpectations(this);
   }
@@ -241,8 +265,8 @@ class AudioDecoderBrokerTest : public testing::Test {
     base::RunLoop run_loop;
     EXPECT_CALL(*this, OnResetDone());
     decoder_broker_->Reset(
-        WTF::Bind(&AudioDecoderBrokerTest::OnResetDoneWithClosure,
-                  WTF::Unretained(this), run_loop.QuitClosure()));
+        WTF::BindOnce(&AudioDecoderBrokerTest::OnResetDoneWithClosure,
+                      WTF::Unretained(this), run_loop.QuitClosure()));
     run_loop.Run();
     testing::Mock::VerifyAndClearExpectations(this);
   }
@@ -255,6 +279,7 @@ class AudioDecoderBrokerTest : public testing::Test {
   bool SupportsDecryption() { return decoder_broker_->SupportsDecryption(); }
 
  protected:
+  test::TaskEnvironment task_environment_;
   media::NullMediaLog null_media_log_;
   std::unique_ptr<AudioDecoderBroker> decoder_broker_;
   std::vector<scoped_refptr<media::AudioBuffer>> output_buffers_;
@@ -281,10 +306,10 @@ TEST_F(AudioDecoderBrokerTest, Decode_Uninitialized) {
 media::AudioDecoderConfig MakeVorbisConfig() {
   std::string extradata_name = "vorbis-extradata";
   base::FilePath extradata_path = media::GetTestDataFilePath(extradata_name);
-  int64_t tmp = 0;
-  CHECK(base::GetFileSize(extradata_path, &tmp))
-      << "Failed to get file size for '" << extradata_name << "'";
-  int file_size = base::checked_cast<int>(tmp);
+  std::optional<int64_t> tmp = base::GetFileSize(extradata_path);
+  CHECK(tmp.has_value()) << "Failed to get file size for '" << extradata_name
+                         << "'";
+  int file_size = base::checked_cast<int>(tmp.value());
   std::vector<uint8_t> extradata(file_size);
   CHECK_EQ(file_size,
            base::ReadFile(extradata_path,
@@ -305,18 +330,24 @@ TEST_F(AudioDecoderBrokerTest, Decode_NoMojoDecoder) {
   InitializeDecoder(MakeVorbisConfig());
   EXPECT_EQ(GetDecoderType(), media::AudioDecoderType::kFFmpeg);
 
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-0"));
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-1"));
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-2"));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-0", base::Milliseconds(0)));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-1", base::Milliseconds(1)));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-2", base::Milliseconds(2)));
   DecodeBuffer(media::DecoderBuffer::CreateEOSBuffer());
   // 2, not 3, because the first frame doesn't generate an output.
   ASSERT_EQ(2U, output_buffers_.size());
 
   ResetDecoder();
 
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-0"));
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-1"));
-  DecodeBuffer(media::ReadTestDataFile("vorbis-packet-2"));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-0", base::Milliseconds(0)));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-1", base::Milliseconds(1)));
+  DecodeBuffer(
+      media::ReadTestDataFile("vorbis-packet-2", base::Milliseconds(2)));
   DecodeBuffer(media::DecoderBuffer::CreateEOSBuffer());
   // 2 more than last time.
   ASSERT_EQ(4U, output_buffers_.size());

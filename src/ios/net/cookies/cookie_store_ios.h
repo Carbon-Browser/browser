@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,24 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/linked_list.h"
+#include "base/functional/callback.h"
+#import "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "ios/net/cookies/cookie_cache.h"
+#include "ios/net/cookies/cookie_notification_observer.h"
 #import "ios/net/cookies/system_cookie_store.h"
 #include "net/cookies/cookie_access_result.h"
 #include "net/cookies/cookie_change_dispatcher.h"
 #include "net/cookies/cookie_monster.h"
 #include "net/cookies/cookie_store.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 @class NSHTTPCookie;
@@ -32,18 +34,7 @@
 
 namespace net {
 
-extern bool const kFirstPartySetsEnabled;
-
 class NetLog;
-
-// Observer for changes on |NSHTTPCookieStorge sharedHTTPCookieStorage|.
-class CookieNotificationObserver {
- public:
-  // Called when any cookie is added, deleted or changed in
-  // |NSHTTPCookieStorge sharedHTTPCookieStorage|.
-  virtual void OnSystemCookiesChanged() = 0;
-};
-
 class CookieStoreIOS;
 
 // The CookieStoreIOS is an implementation of CookieStore relying on
@@ -64,11 +55,6 @@ class CookieStoreIOS : public net::CookieStore,
   // so callers should not expect these values to be populated.
   CookieStoreIOS(std::unique_ptr<SystemCookieStore> system_store,
                  NetLog* net_log);
-
-  // Used by ChromeSigninCookieManager/Cronet.
-  // TODO(crbug.com/759226): Remove once the migration to use SystemCookieStore
-  // is finished.
-  CookieStoreIOS(NSHTTPCookieStorage* ns_cookie_store, NetLog* net_log);
 
   CookieStoreIOS(const CookieStoreIOS&) = delete;
   CookieStoreIOS& operator=(const CookieStoreIOS&) = delete;
@@ -92,8 +78,8 @@ class CookieStoreIOS : public net::CookieStore,
       const GURL& source_url,
       const net::CookieOptions& options,
       SetCookiesCallback callback,
-      absl::optional<net::CookieAccessResult> cookie_access_result =
-          absl::nullopt) override;
+      std::optional<net::CookieAccessResult> cookie_access_result =
+          std::nullopt) override;
   void GetCookieListWithOptionsAsync(
       const GURL& url,
       const net::CookieOptions& options,
@@ -128,8 +114,6 @@ class CookieStoreIOS : public net::CookieStore,
   SetCookiesCallback WrapSetCallback(SetCookiesCallback callback);
   DeleteCallback WrapDeleteCallback(DeleteCallback callback);
   base::OnceClosure WrapClosure(base::OnceClosure callback);
-
-  bool metrics_enabled() { return metrics_enabled_; }
 
   net::CookieMonster* cookie_monster() { return cookie_monster_.get(); }
 
@@ -171,11 +155,11 @@ class CookieStoreIOS : public net::CookieStore,
     AddCallbackForCookie(
         const GURL& url,
         const std::string& name,
-        const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+        const std::optional<net::CookiePartitionKey>& cookie_partition_key,
         CookieChangeCallback callback) override;
     [[nodiscard]] std::unique_ptr<CookieChangeSubscription> AddCallbackForUrl(
         const GURL& url,
-        const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+        const std::optional<net::CookiePartitionKey>& cookie_partition_key,
         CookieChangeCallback callback) override;
     [[nodiscard]] std::unique_ptr<CookieChangeSubscription>
     AddCallbackForAllChanges(CookieChangeCallback callback) override;
@@ -183,7 +167,7 @@ class CookieStoreIOS : public net::CookieStore,
    private:
     // Instances of this class are always members of CookieStoreIOS, so
     // |cookie_store| is guaranteed to outlive this instance.
-    CookieStoreIOS* const cookie_store_;
+    const raw_ptr<CookieStoreIOS> cookie_store_;
   };
 
   // Interface only used by CookieChangeDispatcherIOS.
@@ -215,7 +199,6 @@ class CookieStoreIOS : public net::CookieStore,
 
   std::unique_ptr<net::CookieMonster> cookie_monster_;
   std::unique_ptr<SystemCookieStore> system_store_;
-  bool metrics_enabled_;
   base::CancelableOnceClosure flush_closure_;
 
   // Cookie notification methods.

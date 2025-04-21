@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/cpu_time_budget_pool.h"
 
 #include <cstdint>
+#include <optional>
 
 #include "base/check_op.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/task_queue_throttler.h"
 
 namespace blink {
@@ -35,7 +35,7 @@ QueueBlockType CPUTimeBudgetPool::GetBlockType() const {
 
 void CPUTimeBudgetPool::SetMaxBudgetLevel(
     base::TimeTicks now,
-    absl::optional<base::TimeDelta> max_budget_level) {
+    std::optional<base::TimeDelta> max_budget_level) {
   Advance(now);
   max_budget_level_ = max_budget_level;
   EnforceBudgetLevelRestrictions();
@@ -43,7 +43,7 @@ void CPUTimeBudgetPool::SetMaxBudgetLevel(
 
 void CPUTimeBudgetPool::SetMaxThrottlingDelay(
     base::TimeTicks now,
-    absl::optional<base::TimeDelta> max_throttling_delay) {
+    std::optional<base::TimeDelta> max_throttling_delay) {
   Advance(now);
   max_throttling_delay_ = max_throttling_delay;
   EnforceBudgetLevelRestrictions();

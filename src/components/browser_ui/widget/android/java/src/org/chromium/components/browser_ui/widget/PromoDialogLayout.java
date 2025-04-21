@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.core.view.ViewCompat;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
-
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
+import org.chromium.components.browser_ui.widget.DualControlLayout.ButtonType;
 import org.chromium.components.browser_ui.widget.PromoDialog.DialogParams;
 
 /**
@@ -88,8 +87,11 @@ public final class PromoDialogLayout extends BoundedLinearLayout {
         if (mParams.drawableInstance != null) {
             mIllustrationView.setImageDrawable(mParams.drawableInstance);
         } else if (mParams.vectorDrawableResource != 0) {
-            mIllustrationView.setImageDrawable(VectorDrawableCompat.create(
-                    getResources(), mParams.vectorDrawableResource, getContext().getTheme()));
+            mIllustrationView.setImageDrawable(
+                    TraceEventVectorDrawableCompat.create(
+                            getResources(),
+                            mParams.vectorDrawableResource,
+                            getContext().getTheme()));
         } else if (mParams.drawableResource != 0) {
             mIllustrationView.setImageResource(mParams.drawableResource);
         } else {
@@ -128,17 +130,20 @@ public final class PromoDialogLayout extends BoundedLinearLayout {
 
         // Create the buttons.
         DualControlLayout buttonBar = (DualControlLayout) findViewById(R.id.button_bar);
-        String primaryString = mParams.primaryButtonCharSequence != null
-                ? mParams.primaryButtonCharSequence.toString()
-                : getResources().getString(mParams.primaryButtonStringResource);
+        String primaryString =
+                mParams.primaryButtonCharSequence != null
+                        ? mParams.primaryButtonCharSequence.toString()
+                        : getResources().getString(mParams.primaryButtonStringResource);
         buttonBar.addView(
-                DualControlLayout.createButtonForLayout(getContext(), true, primaryString, null));
+                DualControlLayout.createButtonForLayout(
+                        getContext(), ButtonType.PRIMARY_FILLED, primaryString, null));
 
         if (mParams.secondaryButtonStringResource != 0) {
             String secondaryString =
                     getResources().getString(mParams.secondaryButtonStringResource);
-            buttonBar.addView(DualControlLayout.createButtonForLayout(
-                    getContext(), false, secondaryString, null));
+            buttonBar.addView(
+                    DualControlLayout.createButtonForLayout(
+                            getContext(), ButtonType.SECONDARY_TEXT, secondaryString, null));
         }
     }
 
@@ -149,7 +154,8 @@ public final class PromoDialogLayout extends BoundedLinearLayout {
      * @return Whether the layout needed to be adjusted.
      */
     private boolean fixupHeader() {
-        if (mParams.drawableResource != 0 || mParams.vectorDrawableResource != 0
+        if (mParams.drawableResource != 0
+                || mParams.vectorDrawableResource != 0
                 || mParams.drawableInstance != null) {
             return false;
         }
@@ -170,10 +176,11 @@ public final class PromoDialogLayout extends BoundedLinearLayout {
         ((ViewGroup) mHeaderView.getParent()).removeView(mHeaderView);
         desiredParent.addView(mHeaderView, 0);
 
-        int startEndPadding = applyHeaderPadding
-                ? getResources().getDimensionPixelSize(R.dimen.promo_dialog_padding)
-                : 0;
-        ViewCompat.setPaddingRelative(mHeaderView, startEndPadding, 0, startEndPadding, 0);
+        int startEndPadding =
+                applyHeaderPadding
+                        ? getResources().getDimensionPixelSize(R.dimen.promo_dialog_padding)
+                        : 0;
+        mHeaderView.setPaddingRelative(startEndPadding, 0, startEndPadding, 0);
         return true;
     }
 

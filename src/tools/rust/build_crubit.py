@@ -1,24 +1,31 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 '''Builds the Crubit tool.
 
-!!! DO NOT USE IN PRODUCTION
-Builds the Crubit tool (an experiment for Rust/C++ FFI bindings generation).
+Builds the Crubit tools for generating Rust/C++ bindings.
 
-This script clones the Crubit repository, checks it out to a defined revision,
-and then uses Bazel to build Crubit.
+This script must be run after //tools/rust/build_rust.py as it uses the outputs
+of that script in the compilation of Crubit. It uses:
+- The LLVM and Clang libraries and headers in `RUST_HOST_LLVM_INSTALL_DIR`.
+- The rust toolchain binaries and libraries in `RUST_TOOLCHAIN_OUT_DIR`.
+
+This script:
+- Clones the Abseil repository, checks out a defined revision.
+- Builds Abseil with Cmake.
+- Clones the Crubit repository, checks out a defined revision.
+- Builds Crubit's rs_bindings_from_cc with Cargo.
+- Adds rs_bindings_from_cc and the Crubit support libraries into the
+  toolchain package in `RUST_TOOLCHAIN_OUT_DIR`.
+
+The cc_bindings_from_rs binary is not yet built, as there's no Cargo rules to build it yet.
 '''
 
 import argparse
-import collections
-import hashlib
 import os
-import pipes
+import platform
 import shutil
-import string
-import subprocess
 import sys
 
 from pathlib import Path
@@ -28,153 +35,177 @@ sys.path.append(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'clang',
                  'scripts'))
 
-from update import (CLANG_REVISION, CLANG_SUB_REVISION, LLVM_BUILD_DIR)
-from build import (LLVM_BOOTSTRAP_INSTALL_DIR, MaybeDownloadHostGcc)
+from build import (AddCMakeToPath, AddZlibToPath, CheckoutGitRepo,
+                   DownloadDebianSysroot, RunCommand, THIRD_PARTY_DIR)
+from update import (RmTree)
 
-from update_rust import (CHROMIUM_DIR, RUST_REVISION, RUST_SUB_REVISION,
-                         STAGE0_JSON_SHA256, THIRD_PARTY_DIR,
-                         GetPackageVersion)
+from build_rust import (RUST_HOST_LLVM_INSTALL_DIR)
+from update_rust import (CHROMIUM_DIR, ABSL_REVISION, CRUBIT_REVISION,
+                         RUST_TOOLCHAIN_OUT_DIR)
 
-# Trunk on 2022-07-14.
-#
-# The revision specified below should typically be the same as the
-# `crubit_revision` specified in the //DEPS file.  More details and roll
-# instructions can be found in tools/rust/README.md.
-#
-# TODO(https://crbug.com/1329611): Move `CRUBIT_REVISION` to `update_rust.py`
-# (see WIP CL: https://crrev.com/c/3718281).
-CRUBIT_REVISION = 'd9b0ad4c09b46328dcc7a5ec28ce86cca56e0389'
-CRUBIT_SUB_REVISION = 1
+ABSL_GIT = 'https://github.com/abseil/abseil-cpp'
+CRUBIT_GIT = 'https://github.com/google/crubit'
 
-THIRD_PARTY_DIR = os.path.join(CHROMIUM_DIR, 'third_party')
-CRUBIT_SRC_DIR = os.path.join(THIRD_PARTY_DIR, 'crubit', 'src')
-BAZEL_EXE = os.path.join(CHROMIUM_DIR, 'tools', 'bazel', 'bazel')
+ABSL_SRC_DIR = os.path.join(CHROMIUM_DIR, 'third_party',
+                            'rust-toolchain-intermediate', 'absl')
+ABSL_INSTALL_DIR = os.path.join(ABSL_SRC_DIR, 'install')
+CRUBIT_SRC_DIR = os.path.join(CHROMIUM_DIR, 'third_party',
+                              'rust-toolchain-intermediate', 'crubit')
+
+EXE = '.exe' if sys.platform == 'win32' else ''
 
 
-def RunCommand(command, env=None, cwd=None, fail_hard=True):
-    print('Running', command)
-    if subprocess.run(command, env=env, cwd=cwd,
-                      shell=sys.platform == 'win32').returncode == 0:
-        return True
-    print('Failed.')
-    if fail_hard:
-        raise RuntimeError(f"Failed to run {command}")
-    return False
+def BuildAbsl(env, debug):
+    os.chdir(ABSL_SRC_DIR)
 
-
-def CheckoutCrubit(commit, dir):
-    """Checkout the Crubit repo at a certain git commit in dir. Any local
-  modifications in dir will be lost."""
-
-    print('Checking out crubit repo %s into %s' % (commit, dir))
-
-    # Try updating the current repo if it exists and has no local diff.
-    if os.path.isdir(dir):
-        os.chdir(dir)
-        # git diff-index --quiet returns success when there is no diff.
-        # Also check that the first commit is reachable.
-        if (RunCommand(['git', 'diff-index', '--quiet', 'HEAD'],
-                       fail_hard=False)
-                and RunCommand(['git', 'fetch'], fail_hard=False)
-                and RunCommand(['git', 'checkout', commit], fail_hard=False)):
-            return
-
-        # If we can't use the current repo, delete it.
-        os.chdir(CHROMIUM_DIR)  # Can't remove dir if we're in it.
-        print('Removing %s.' % dir)
-        RmTree(dir)
-
-    clone_cmd = ['git', 'clone', 'https://github.com/google/crubit.git', dir]
-
-    if RunCommand(clone_cmd, fail_hard=False):
-        os.chdir(dir)
-        if RunCommand(['git', 'checkout', commit], fail_hard=False):
-            return
-
-    print('CheckoutCrubit failed.')
-    sys.exit(1)
-
-
-def BuildCrubit(gcc_toolchain_path):
-    # TODO(https://crbug.com/1337346): Use locally built Rust instead of having
-    # Bazel always download the whole Rust toolchain from the internet.
-    # TODO(https://crbug.com/1337348): Use crates from chromium/src/third_party/rust.
-
-    # This environment variable is consumed by crubit/bazel/llvm.bzl and will
-    # configure Crubit's build to include and link against LLVM+Clang headers
-    # and libraries built when building Chromium toolchain.  (Instead of
-    # downloading LLVM+Clang and building it during Crubit build.)
-    env = {"LLVM_INSTALL_PATH": LLVM_BOOTSTRAP_INSTALL_DIR}
-
-    # Use the compiler and linker from `LLVM_BUILD_DIR`.
-    #
-    # Note that we use `bin/clang` from `LLVM_BUILD_DIR`, but depend on headers
-    # and libraries from `LLVM_BOOTSTRAP_INSTALL_DIR`.  The former helps ensure
-    # that we use the same compiler as the final one used elsewhere in Chromium.
-    # The latter is needed, because the headers+libraries are not available
-    # anywhere else.
-    clang_path = os.path.join(LLVM_BUILD_DIR, "bin", "clang")
-    env["CXX"] = f"{clang_path}++"
-    env["LD"] = f"{clang_path}++"
-    # CC is set via `--repo_env` rather than via `env` to ensure that we
-    # override the defaults from `crubit/.bazelrc`.
-    extra_args = [
-        "--repo_env=CC=",  # Unset/ignore the value set via crubit/.bazelrc
-        f"--repo_env=CC={clang_path}",
+    configure_cmd = [
+        'cmake',
+        '-B',
+        'out',
+        '-GNinja',
+        # Because Crubit is built with C++20.
+        '-DCMAKE_CXX_STANDARD=20',
+        f'-DCMAKE_INSTALL_PREFIX={ABSL_INSTALL_DIR}',
+        '-DABSL_PROPAGATE_CXX_STD=ON',
+        '-DABSL_BUILD_TESTING=OFF',
+        '-DABSL_USE_GOOGLETEST_HEAD=OFF',
+        # LLVM is built with static CRT. Make Abseil match it.
+        '-DABSL_MSVC_STATIC_RUNTIME=ON',
     ]
+    if not debug:
+        configure_cmd.append('-DCMAKE_BUILD_TYPE=Release')
 
-    # Include and link against the C++ stdlib from the GCC toolchain.
-    gcc_toolchain_flag = (f'--gcc-toolchain={gcc_toolchain_path}'
-                          if gcc_toolchain_path else '')
-    env["BAZEL_CXXOPTS"] = gcc_toolchain_flag
-    env["BAZEL_LINKOPTS"] = gcc_toolchain_flag
-    # TODO(https://crbug.com/1338217): Link C++ stdlib *statically*.
-    # Things tried so far:
-    # - Attempts that result in a sefgault when compiling Rust rlib ...
-    #     1a. env["BAZEL_LINKOPTS"] = f"{gcc_toolchain_flag}:-static"
-    #     1b. extra_args += ["--features=fully_static_link"]
-    #         # Optionally: extra_args += ["--sandbox_debug"]
-    # - Attempts that don't have any effect (`ldd ... rs_bindings_from_cc_impl`
-    #   still shows `libstdc++.so.6 => ...`):
-    #     2. extra_args += ["--dynamic_mode=off"]
+    RunCommand(configure_cmd, setenv=True, env=env)
+    build_cmd = ['cmake', '--build', 'out', '--target', 'all']
+    RunCommand(build_cmd, setenv=True, env=env)
+    install_cmd = ['cmake', '--install', 'out']
+    RunCommand(install_cmd, setenv=True, env=env)
 
-    # Run bazel build ...
-    args = [BAZEL_EXE, "build", "rs_bindings_from_cc:rs_bindings_from_cc_impl"]
-    RunCommand(args + extra_args, env=env, cwd=CRUBIT_SRC_DIR)
+    os.chdir(CHROMIUM_DIR)
 
 
-def ShutdownBazel():
-    # This needs to use the same arguments as BuildCrubit, because otherwise
-    # we get: WARNING: Running Bazel server needs to be killed, because the
-    # startup options are different.
-    RunCommand([BAZEL_EXE, "shutdown"], cwd=CRUBIT_SRC_DIR)
+def BuildCrubit(env, debug):
+    os.chdir(CRUBIT_SRC_DIR)
+
+    CRUBIT_BINS = ['rs_bindings_from_cc']
+
+    build_cmd = ['cargo', 'build']
+    for bin in CRUBIT_BINS:
+        build_cmd += ['--bin', bin]
+    if not debug:
+        build_cmd.append('--release')
+    RunCommand(build_cmd, setenv=True, env=env)
+
+    print(f'Installing Crubit to {RUST_TOOLCHAIN_OUT_DIR} ...')
+    target_dir = os.path.join(CRUBIT_SRC_DIR, 'target',
+                              'debug' if debug else 'release')
+    for bin in CRUBIT_BINS:
+        bin = bin + EXE
+        shutil.copy(os.path.join(target_dir, bin),
+                    os.path.join(RUST_TOOLCHAIN_OUT_DIR, 'bin', bin))
+
+    support_build_dir = os.path.join(CRUBIT_SRC_DIR, 'support')
+    support_out_dir = os.path.join(RUST_TOOLCHAIN_OUT_DIR, 'lib', 'crubit')
+    if os.path.exists(support_out_dir):
+        RmTree(support_out_dir)
+    shutil.copytree(support_build_dir, support_out_dir)
+
+    os.chdir(CHROMIUM_DIR)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description='Build and package Crubit tools')
-    parser.add_argument('-v',
-                        '--verbose',
-                        action='count',
-                        help='run subcommands with verbosity')
     parser.add_argument(
         '--skip-checkout',
         action='store_true',
-        help='skip Crubit git checkout. Useful for trying local changes')
+        help=('skip checking out source code. Useful for trying local'
+              'changes'))
+    parser.add_argument('--debug',
+                        action='store_true',
+                        help=('build Crubit in debug mode'))
     args, rest = parser.parse_known_args()
-
-    # Fetch GCC package to build against same libstdc++ as Clang. This function
-    # will only download it if necessary.
-    args.gcc_toolchain = None
-    MaybeDownloadHostGcc(args)
+    assert (not rest)
 
     if not args.skip_checkout:
-        CheckoutCrubit(CRUBIT_REVISION, CRUBIT_SRC_DIR)
+        CheckoutGitRepo("absl", ABSL_GIT, ABSL_REVISION, ABSL_SRC_DIR)
+        CheckoutGitRepo("crubit", CRUBIT_GIT, CRUBIT_REVISION, CRUBIT_SRC_DIR)
+    if sys.platform.startswith('linux'):
+        arch = 'arm64' if platform.machine() == 'aarch64' else 'amd64'
+        sysroot = DownloadDebianSysroot(arch, args.skip_checkout)
 
-    try:
-        BuildCrubit(args.gcc_toolchain)
-    finally:
-        ShutdownBazel()
+    llvm_bin_dir = os.path.join(RUST_HOST_LLVM_INSTALL_DIR, 'bin')
+    rust_bin_dir = os.path.join(RUST_TOOLCHAIN_OUT_DIR, 'bin')
+
+    AddCMakeToPath()
+
+    env = os.environ
+
+    path_trailing_sep = os.pathsep if env['PATH'] else ''
+    env['PATH'] = (f'{llvm_bin_dir}{os.pathsep}'
+                   f'{rust_bin_dir}{path_trailing_sep}'
+                   f'{env["PATH"]}')
+
+    if sys.platform == 'win32':
+        # CMake on Windows doesn't like depot_tools's ninja.bat wrapper.
+        ninja_dir = os.path.join(THIRD_PARTY_DIR, 'ninja')
+        env['PATH'] = f'{ninja_dir}{os.pathsep}{env["PATH"]}'
+
+    env['CXXFLAGS'] = ''
+    env['RUSTFLAGS'] = ''
+
+    if sys.platform == 'win32':
+        env['CC'] = 'clang-cl'
+        env['CXX'] = 'clang-cl'
+    else:
+        env['CC'] = 'clang'
+        env['CXX'] = 'clang++'
+
+    # We link with lld via clang, except on windows where we point to lld-link
+    # directly.
+    if sys.platform == 'win32':
+        env['RUSTFLAGS'] += f' -Clinker=lld-link'
+    else:
+        env['RUSTFLAGS'] += f' -Clinker=clang'
+        env['RUSTFLAGS'] += f' -Clink-arg=-fuse-ld=lld'
+
+    if sys.platform == 'win32':
+        # LLVM is built with static CRT. Make Rust match it.
+        env['RUSTFLAGS'] += f' -Ctarget-feature=+crt-static'
+
+    if sys.platform.startswith('linux'):
+        sysroot_flag = (f'--sysroot={sysroot}' if sysroot else '')
+        env['CXXFLAGS'] += f" {sysroot_flag}"
+        env['RUSTFLAGS'] += f" -Clink-arg={sysroot_flag}"
+
+    if sys.platform == 'darwin':
+        import subprocess
+        # The system/xcode compiler would find system SDK correctly, but
+        # the Clang we've built does not. See
+        # https://github.com/llvm/llvm-project/issues/45225
+        sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'],
+                                           text=True).rstrip()
+        env['CXXFLAGS'] += f' -isysroot {sdk_path}'
+        env['RUSTFLAGS'] += f' -Clink-arg=-isysroot -Clink-arg={sdk_path}'
+
+    if sys.platform == 'win32':
+        # LLVM depends on Zlib.
+        zlib_dir = AddZlibToPath(dry_run=args.skip_checkout)
+        env['CXXFLAGS'] += f' /I{zlib_dir}'
+        env['RUSTFLAGS'] += f' -Clink-arg=/LIBPATH:{zlib_dir}'
+        # Prevent deprecation warnings.
+        env['CXXFLAGS'] += ' /D_CRT_SECURE_NO_DEPRECATE'
+
+    BuildAbsl(env, args.debug)
+
+    env['ABSL_INCLUDE_PATH'] = os.path.join(ABSL_INSTALL_DIR, 'include')
+    env['ABSL_LIB_STATIC_PATH'] = os.path.join(ABSL_INSTALL_DIR, 'lib')
+    env['CLANG_INCLUDE_PATH'] = os.path.join(RUST_HOST_LLVM_INSTALL_DIR,
+                                             'include')
+    env['CLANG_LIB_STATIC_PATH'] = os.path.join(RUST_HOST_LLVM_INSTALL_DIR,
+                                                'lib')
+
+    BuildCrubit(env, args.debug)
 
     return 0
 

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,6 +9,7 @@ blink_core_sources_workers = [
   "abstract_worker.h",
   "cross_thread_global_scope_creation_params_copier.cc",
   "cross_thread_global_scope_creation_params_copier.h",
+  "custom_event_message.h",
   "dedicated_worker.cc",
   "dedicated_worker.h",
   "dedicated_worker_global_scope.cc",

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,10 +31,10 @@ class ModelValidatorHandler
   // ModelValidatorHandler:
   void OnModelUpdated(
       optimization_guide::proto::OptimizationTarget optimization_target,
-      const optimization_guide::ModelInfo& model_info) override;
+      base::optional_ref<const ModelInfo> model_info) override;
 
   // Invoked when the model has finished executing.
-  void OnModelExecutionComplete(const absl::optional<float>& output);
+  void OnModelExecutionComplete(const std::optional<float>& output);
 
   base::WeakPtrFactory<ModelValidatorHandler> weak_ptr_factory_{this};
 };
@@ -55,7 +55,7 @@ class ModelValidatorExecutor
   // BaseModelExecutor:
   bool Preprocess(const std::vector<TfLiteTensor*>& input_tensors,
                   const std::vector<float>& input) override;
-  absl::optional<float> Postprocess(
+  std::optional<float> Postprocess(
       const std::vector<const TfLiteTensor*>& output_tensors) override;
 };
 

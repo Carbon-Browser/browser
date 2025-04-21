@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,18 @@
 
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/desks/desks_controller.h"
+#include "ash/wm/desks/desks_test_util.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 
 namespace ash {
 
 namespace {
+
+using ::testing::ElementsAre;
 
 class TestDesksActivationObserver : public DesksController::Observer {
  public:
@@ -29,17 +33,10 @@ class TestDesksActivationObserver : public DesksController::Observer {
   void set_activation_changes(int val) { activation_changes_ = val; }
 
   // DesksController::Observer:
-  void OnDeskAdded(const Desk* desk) override {}
-  void OnDeskRemoved(const Desk* desk) override {}
-  void OnDeskReordered(int old_index, int new_index) override {}
   void OnDeskActivationChanged(const Desk* activated,
                                const Desk* deactivated) override {
     ++activation_changes_;
   }
-  void OnDeskSwitchAnimationLaunching() override {}
-  void OnDeskSwitchAnimationFinished() override {}
-  void OnDeskNameChanged(const Desk* desk,
-                         const std::u16string& new_name) override {}
 
  private:
   int activation_changes_ = 0;
@@ -69,7 +66,7 @@ TEST_F(AutotestDesksApiTest, ActivateDeskAtIndex) {
   auto* controller = DesksController::Get();
   while (controller->CanCreateDesks())
     EXPECT_TRUE(test_api.CreateNewDesk());
-  EXPECT_EQ(desks_util::kMaxNumberOfDesks, controller->desks().size());
+  EXPECT_EQ(desks_util::GetMaxNumberOfDesks(), controller->desks().size());
   constexpr int kIndices[] = {1, 2, 3, 0};
   for (const int index : kIndices) {
     base::RunLoop run_loop;
@@ -83,7 +80,7 @@ TEST_F(AutotestDesksApiTest, RemoveActiveDesk) {
   AutotestDesksApi test_api;
   EXPECT_FALSE(test_api.RemoveActiveDesk(base::DoNothing()));
 
-  const size_t max_number_of_desks = desks_util::kMaxNumberOfDesks;
+  const size_t max_number_of_desks = desks_util::GetMaxNumberOfDesks();
   auto* controller = DesksController::Get();
   while (controller->CanCreateDesks())
     EXPECT_TRUE(test_api.CreateNewDesk());
@@ -107,6 +104,52 @@ TEST_F(AutotestDesksApiTest, RemoveActiveDesk) {
   EXPECT_FALSE(test_api.RemoveActiveDesk(base::DoNothing()));
 }
 
+TEST_F(AutotestDesksApiTest, GetDesksInfo) {
+  AutotestDesksApi test_api;
+
+  // Originally we have 1 desk, which is the active desk and it is not
+  // animating. Desk indexes start at 0.
+  AutotestDesksApi::DesksInfo desks_info = test_api.GetDesksInfo();
+  EXPECT_EQ(0, desks_info.active_desk_index);
+  EXPECT_EQ(1, desks_info.num_desks);
+  EXPECT_FALSE(desks_info.is_animating);
+  EXPECT_THAT(desks_info.desk_containers, ElementsAre("Desk_Container_A"));
+
+  // Add two desks and activate the second one. It is not animating because with
+  // non-zero duration the animation is instant.
+  auto* controller = DesksController::Get();
+  NewDesk();
+  NewDesk();
+  ASSERT_EQ(3u, controller->desks().size());
+  ActivateDesk(controller->desks()[1].get());
+  desks_info = test_api.GetDesksInfo();
+  EXPECT_EQ(1, desks_info.active_desk_index);
+  EXPECT_EQ(3, desks_info.num_desks);
+  EXPECT_FALSE(desks_info.is_animating);
+  EXPECT_THAT(
+      desks_info.desk_containers,
+      ElementsAre("Desk_Container_A", "Desk_Container_B", "Desk_Container_C"));
+
+  ui::ScopedAnimationDurationScaleMode non_zero(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  // Start the desk animation. The active desk index is updated when the
+  // animation is done.
+  DeskSwitchAnimationWaiter waiter;
+  controller->ActivateAdjacentDesk(
+      /*going_left=*/true, DesksSwitchSource::kDeskSwitchShortcut);
+  desks_info = test_api.GetDesksInfo();
+  EXPECT_EQ(1, desks_info.active_desk_index);
+  EXPECT_TRUE(desks_info.is_animating);
+
+  // Wait until the desk animation is finished. The active desk index should be
+  // 0, the first desk.
+  waiter.Wait();
+  desks_info = test_api.GetDesksInfo();
+  EXPECT_EQ(0, desks_info.active_desk_index);
+  EXPECT_FALSE(desks_info.is_animating);
+}
+
 using EnhancedDeskAnimationsAutotestDesksApiTest = AutotestDesksApiTest;
 
 // TODO(b/219068687): Re-enable chained desk animation tests.
@@ -114,7 +157,7 @@ TEST_F(EnhancedDeskAnimationsAutotestDesksApiTest,
        DISABLED_ActivateAdjacentDesksToTargetIndex) {
   // Create all desks possible.
   AutotestDesksApi test_api;
-  const int max_number_of_desks = desks_util::kMaxNumberOfDesks;
+  const int max_number_of_desks = desks_util::GetMaxNumberOfDesks();
   auto* controller = DesksController::Get();
   while (controller->CanCreateDesks())
     EXPECT_TRUE(test_api.CreateNewDesk());
@@ -127,7 +170,7 @@ TEST_F(EnhancedDeskAnimationsAutotestDesksApiTest,
   // Activating already active desk does nothing.
   EXPECT_FALSE(
       test_api.ActivateAdjacentDesksToTargetIndex(0, base::DoNothing()));
-  EXPECT_EQ(desks_util::kMaxNumberOfDesks, controller->desks().size());
+  EXPECT_EQ(desks_util::GetMaxNumberOfDesks(), controller->desks().size());
 
   // Replacing needs to be done while a current animation is underway, otherwise
   // it will have no effect.

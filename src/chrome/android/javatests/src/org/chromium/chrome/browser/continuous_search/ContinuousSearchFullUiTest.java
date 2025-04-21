@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,6 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
 
 import static org.hamcrest.CoreMatchers.allOf;
-
-import static org.chromium.ui.test.util.ViewUtils.waitForView;
 
 import android.view.View;
 
@@ -25,11 +23,13 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.FeatureList;
+import org.chromium.base.FeatureOverrides;
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
@@ -38,21 +38,18 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
-import org.chromium.ui.test.util.UiRestriction;
+import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.test.util.ViewUtils;
 import org.chromium.url.GURL;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Tests the full continuous search UI.
- */
+/** Tests the full continuous search UI. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@Features.EnableFeatures({ChromeFeatureList.CONTINUOUS_SEARCH})
+@EnableFeatures({ChromeFeatureList.CONTINUOUS_SEARCH})
 @Batch(Batch.PER_CLASS)
 public class ContinuousSearchFullUiTest {
     @ClassRule
@@ -66,28 +63,27 @@ public class ContinuousSearchFullUiTest {
     private GURL mUrl;
 
     public ContinuousSearchFullUiTest() {
-        FeatureList.TestValues testValues = new FeatureList.TestValues();
-        testValues.addFeatureFlagOverride(ChromeFeatureList.CONTINUOUS_SEARCH, true);
-        testValues.addFieldTrialParamOverride(ChromeFeatureList.CONTINUOUS_SEARCH,
-                ContinuousSearchListMediator.TRIGGER_MODE_PARAM, "0");
-        testValues.addFieldTrialParamOverride(ChromeFeatureList.CONTINUOUS_SEARCH,
-                ContinuousSearchListMediator.SHOW_RESULT_TITLE_PARAM, "true");
-        FeatureList.setTestValues(testValues);
+        FeatureOverrides.newBuilder()
+                .enable(ChromeFeatureList.CONTINUOUS_SEARCH)
+                .param(ContinuousSearchListMediator.TRIGGER_MODE_PARAM, 0)
+                .param(ContinuousSearchListMediator.SHOW_RESULT_TITLE_PARAM, true)
+                .apply();
     }
 
     @Before
     public void setUp() {
-        mUrl = new GURL(
-                sActivityTestRule.getTestServer().getURL("/chrome/test/data/android/simple.html"));
+        mUrl =
+                new GURL(
+                        sActivityTestRule
+                                .getTestServer()
+                                .getURL("/chrome/test/data/android/simple.html"));
         sActivityTestRule.loadUrl(mUrl.getSpec());
     }
 
-    /**
-     * Assert that all the critical views are shown using mock data to trigger the UI.
-     */
+    /** Assert that all the critical views are shown using mock data to trigger the UI. */
     @Test
     @MediumTest
-    @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE})
+    @Restriction({DeviceFormFactor.PHONE})
     public void testDisplaysFullUi() throws TimeoutException {
         List<PageItem> results = new ArrayList<PageItem>();
         results.add(new PageItem(new GURL("https://www.foo.com/"), "Foo Result"));
@@ -98,35 +94,51 @@ public class ContinuousSearchFullUiTest {
         results.add(new PageItem(new GURL("https://www.chromium.org/"), "Chromium Result"));
         List<PageGroup> groups = new ArrayList<PageGroup>();
         groups.add(new PageGroup("Group 1", false, results));
-        ContinuousNavigationMetadata metadata = new ContinuousNavigationMetadata(
-                new GURL("https://www.google.com/search?q=foo"), "foo",
-                new ContinuousNavigationMetadata.Provider(
-                        PageCategory.ORGANIC_SRP, "Search", R.drawable.ic_logo_googleg_20dp),
-                groups);
+        ContinuousNavigationMetadata metadata =
+                new ContinuousNavigationMetadata(
+                        new GURL("https://www.google.com/search?q=foo"),
+                        "foo",
+                        new ContinuousNavigationMetadata.Provider(
+                                PageCategory.ORGANIC_SRP,
+                                "Search",
+                                R.drawable.ic_logo_googleg_20dp),
+                        groups);
 
         // Show the container and contents.
         Tab tab = sActivityTestRule.getActivity().getActivityTab();
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { ContinuousNavigationUserData.getForTab(tab).updateData(metadata, mUrl); });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ContinuousNavigationUserData.getForTab(tab).updateData(metadata, mUrl);
+                });
 
         // Ensure all the view information is shown. This automatically checks for visible.
-        waitForView(allOf(withParent(withId(R.id.continuous_search_container_stub)),
-                withId(org.chromium.chrome.browser.continuous_search.R.id.container_view)));
-        waitForView(withId(org.chromium.chrome.browser.continuous_search.R.id
-                                   .continuous_search_provider_label));
-        waitForView(withId(org.chromium.chrome.browser.continuous_search.R.id.button_dismiss));
+        ViewUtils.waitForVisibleView(
+                allOf(
+                        withParent(withId(R.id.continuous_search_container_stub)),
+                        withId(org.chromium.chrome.browser.continuous_search.R.id.container_view)));
+        ViewUtils.waitForVisibleView(
+                withId(
+                        org.chromium.chrome.browser.continuous_search.R.id
+                                .continuous_search_provider_label));
+        ViewUtils.waitForVisibleView(
+                withId(org.chromium.chrome.browser.continuous_search.R.id.button_dismiss));
 
         // Check the items in the carousel exist.
-        RecyclerView carousel = (RecyclerView) sActivityTestRule.getActivity().findViewById(
-                org.chromium.chrome.browser.continuous_search.R.id.recycler_view);
+        RecyclerView carousel =
+                (RecyclerView)
+                        sActivityTestRule
+                                .getActivity()
+                                .findViewById(
+                                        org.chromium.chrome.browser.continuous_search.R.id
+                                                .recycler_view);
         Assert.assertNotNull(carousel);
         Assert.assertEquals(results.size(), carousel.getAdapter().getItemCount());
 
         // Wait for animated scroll to the open element.
         LinearLayoutManager layoutManager = (LinearLayoutManager) carousel.getLayoutManager();
         CriteriaHelper.pollUiThread(
-                ()
-                        -> Criteria.checkThat(
+                () ->
+                        Criteria.checkThat(
                                 layoutManager.findFirstCompletelyVisibleItemPosition(),
                                 Matchers.is(2)));
         ContinuousSearchChipView chip =
@@ -139,13 +151,17 @@ public class ContinuousSearchFullUiTest {
         // will have been setup in this test, but it is not readily accessible.
 
         // Close the UI by pretending another URL was opened and assert that the view is closed.
-        View rootContainer = sActivityTestRule.getActivity().findViewById(
-                org.chromium.chrome.browser.continuous_search.R.id.container_root);
+        View rootContainer =
+                sActivityTestRule
+                        .getActivity()
+                        .findViewById(
+                                org.chromium.chrome.browser.continuous_search.R.id.container_root);
         Assert.assertNotNull(rootContainer);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ContinuousNavigationUserData.getForTab(tab).updateCurrentUrl(
-                    new GURL("https://other.com/"));
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ContinuousNavigationUserData.getForTab(tab)
+                            .updateCurrentUrl(new GURL("https://other.com/"));
+                });
         CriteriaHelper.pollUiThread(
                 () -> Criteria.checkThat(rootContainer.getVisibility(), Matchers.is(View.GONE)));
     }

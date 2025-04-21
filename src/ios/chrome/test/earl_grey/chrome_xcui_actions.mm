@@ -1,34 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/test/earl_grey/chrome_xcui_actions.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 // The splitter is 10 points wide.
 const CGFloat kSplitterWidth = 10.0;
-
-CGVector FixCoordinateOffset(CGVector offset) {
-#if TARGET_IPHONE_SIMULATOR
-  // TODO(crbug.com/1342819): For some unknown reason, the XCUICoordinate
-  // space is scaled by the simulator's scale factor when computing offsets
-  // relative to the app or screen.
-  if (@available(iOS 16, *)) {
-    CGFloat scale = UIScreen.mainScreen.scale;
-    return CGVectorMake(offset.dx * scale, offset.dy * scale);
-  }
-#endif
-  return offset;
-}
 
 // Returns a normalized vector for the given edge.
 CGVector GetNormalizedEdgeVector(GREYContentEdge edge) {
@@ -50,9 +33,9 @@ NSString* GetWindowAccessibilityIdentifier(int window_number) {
   return [NSString stringWithFormat:@"%d", window_number];
 }
 
-// Finds the element with the given |identifier| of given |type| in given
-// |window_number|.  If |identitifer| is nil, this will return a element for the
-// window with |window_number| itself.
+// Finds the element with the given `identifier` of given `type` in given
+// `window_number`.  If `identitifer` is nil, this will return a element for the
+// window with `window_number` itself.
 XCUIElement* GetElementMatchingIdentifierInWindow(XCUIApplication* app,
                                                   NSString* identifier,
                                                   int window_number,
@@ -74,18 +57,18 @@ XCUIElement* GetElementMatchingIdentifierInWindow(XCUIApplication* app,
   return [query elementBoundByIndex:0];
 }
 
-// Long press at |start_point| and drag to |end_point|, with fixed press and
-// hold druations and drag velocity.
+// Long press at `start_point` and drag to `end_point`, with fixed press and
+// hold durations and drag velocity.
 void LongPressAndDragBetweenCoordinates(XCUICoordinate* start_point,
                                         XCUICoordinate* end_point) {
-  [start_point pressForDuration:1.5
+  [start_point pressForDuration:2.5
            thenDragToCoordinate:end_point
                    withVelocity:XCUIGestureVelocityDefault
-            thenHoldForDuration:1.0];
+            thenHoldForDuration:2.5];
 }
 
-// Long press on |src_element|'s center then drag to the point in |dst_element|
-// defined by |dst_normalized_offset|. Returns NO if either element is nil, YES
+// Long press on `src_element`'s center then drag to the point in `dst_element`
+// defined by `dst_normalized_offset`. Returns NO if either element is nil, YES
 // otherwise.
 BOOL LongPressAndDragBetweenElements(XCUIElement* src_element,
                                      XCUIElement* dst_element,
@@ -113,9 +96,9 @@ BOOL LongPressCellAndDragToEdge(NSString* accessibility_identifier,
   XCUIElement* drag_element = GetElementMatchingIdentifierInWindow(
       app, accessibility_identifier, window_number, XCUIElementTypeCell);
 
-  // |app| is still an element, so it can just be passed in directly here.
-  return LongPressAndDragBetweenElements(
-      drag_element, app, FixCoordinateOffset(GetNormalizedEdgeVector(edge)));
+  // `app` is still an element, so it can just be passed in directly here.
+  return LongPressAndDragBetweenElements(drag_element, app,
+                                         GetNormalizedEdgeVector(edge));
 }
 
 BOOL LongPressCellAndDragToOffsetOf(NSString* src_accessibility_identifier,

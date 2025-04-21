@@ -1,16 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_CONTENT_SETTINGS_CONTENT_SETTINGS_SERVICE_H_
 #define EXTENSIONS_BROWSER_API_CONTENT_SETTINGS_CONTENT_SETTINGS_SERVICE_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
 #include "extensions/browser/api/content_settings/content_settings_store.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_prefs_observer.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -41,13 +42,13 @@ class ContentSettingsService : public BrowserContextKeyedAPI,
       GetFactoryInstance();
 
   // ExtensionPrefsObserver implementation.
-  void OnExtensionRegistered(const std::string& extension_id,
+  void OnExtensionRegistered(const ExtensionId& extension_id,
                              const base::Time& install_time,
                              bool is_enabled) override;
-  void OnExtensionPrefsLoaded(const std::string& extension_id,
+  void OnExtensionPrefsLoaded(const ExtensionId& extension_id,
                               const ExtensionPrefs* prefs) override;
-  void OnExtensionPrefsDeleted(const std::string& extension_id) override;
-  void OnExtensionStateChanged(const std::string& extension_id,
+  void OnExtensionPrefsDeleted(const ExtensionId& extension_id) override;
+  void OnExtensionStateChanged(const ExtensionId& extension_id,
                                bool state) override;
   void OnExtensionPrefsWillBeDestroyed(ExtensionPrefs* prefs) override;
 

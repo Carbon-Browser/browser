@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,17 @@ namespace syncer {
 
 bool SyncInvalidation::LessThanByVersion(const SyncInvalidation& a,
                                          const SyncInvalidation& b) {
-  if (a.IsUnknownVersion() && !b.IsUnknownVersion())
+  if (a.IsUnknownVersion() && !b.IsUnknownVersion()) {
     return true;
+  }
 
-  if (!a.IsUnknownVersion() && b.IsUnknownVersion())
+  if (!a.IsUnknownVersion() && b.IsUnknownVersion()) {
     return false;
+  }
 
-  if (a.IsUnknownVersion() && b.IsUnknownVersion())
+  if (a.IsUnknownVersion() && b.IsUnknownVersion()) {
     return false;
+  }
 
   return a.GetVersion() < b.GetVersion();
 }

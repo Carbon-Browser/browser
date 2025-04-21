@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
@@ -39,8 +40,10 @@ const char kUrl3[] = "https://www.google.com/3";
 const char kUrl4[] = "https://www.google.com/4";
 const char kUrl5[] = "https://www.google.com/5";
 
-const base::Time kInitialTimeStamp = base::Time::FromDoubleT(1000);
-const base::Time kUpdatedTimeStamp = base::Time::FromDoubleT(2000);
+const base::Time kInitialTimeStamp =
+    base::Time::FromSecondsSinceUnixEpoch(1000);
+const base::Time kUpdatedTimeStamp =
+    base::Time::FromSecondsSinceUnixEpoch(2000);
 
 // An enum describing the different types of update that can happen to a note
 // during a test case. This determines what kind of updated metadata will be
@@ -303,7 +306,7 @@ class UserNoteUtilsTest
       if (note_config.target_url == frame_config.url &&
           note_config.update_type != NoteUpdateType::ADDED) {
         const auto token_it = test_id_to_token_.find(note_config.test_id);
-        DCHECK(token_it != test_id_to_token_.end());
+        CHECK(token_it != test_id_to_token_.end());
 
         const auto note_entry_it =
             note_service_->model_map_.find(token_it->second);
@@ -337,7 +340,7 @@ class UserNoteUtilsTest
         /*min_note_version=*/1);
 
     const auto token_it = test_id_to_token_.find(note_config.test_id);
-    DCHECK(token_it != test_id_to_token_.end());
+    CHECK(token_it != test_id_to_token_.end());
 
     snapshot.AddEntry(GURL(note_config.target_url), token_it->second,
                       std::move(note_metadata));
@@ -347,7 +350,9 @@ class UserNoteUtilsTest
       token_to_test_id_;
   std::unordered_map<int, base::UnguessableToken> test_id_to_token_;
   std::unordered_map<content::RenderFrameHost*, FrameConfig> frame_to_config_;
-  std::unordered_map<FrameConfig, content::RenderFrameHost*, FrameConfigHash>
+  std::unordered_map<FrameConfig,
+                     raw_ptr<content::RenderFrameHost, CtnExperimental>,
+                     FrameConfigHash>
       config_to_frame_;
   std::vector<std::unique_ptr<content::WebContents>> web_contents_list_;
   std::unique_ptr<UserNoteService> note_service_;
@@ -693,28 +698,29 @@ TEST_P(UserNoteUtilsTest, CalculateNoteChanges) {
   }
 
   // Round up the test frames as if they were the user's open tabs.
-  std::vector<content::RenderFrameHost*> frame_hosts;
-  frame_hosts.reserve(frame_to_config_.size());
+  std::vector<content::WeakDocumentPtr> weak_documents;
+  weak_documents.reserve(frame_to_config_.size());
   for (const auto& config_it : frame_to_config_) {
-    frame_hosts.push_back(config_it.first);
+    weak_documents.emplace_back(config_it.first->GetWeakDocumentPtr());
   }
 
   // Calculate the diff between the notes in the frames and the notes in the
   // metadata.
   const std::vector<std::unique_ptr<FrameUserNoteChanges>>& actual_diffs =
-      CalculateNoteChanges(*note_service_, frame_hosts, metadata_snapshot);
+      CalculateNoteChanges(*note_service_, weak_documents, metadata_snapshot);
 
   std::unordered_set<content::RenderFrameHost*> frames_with_diff;
   for (const std::unique_ptr<FrameUserNoteChanges>& diff : actual_diffs) {
+    content::RenderFrameHost* rfh = diff->document_.AsRenderFrameHostIfValid();
     // Find the frame config for this diff's frame.
-    const auto config_it = frame_to_config_.find(diff->rfh_);
-    DCHECK(config_it != frame_to_config_.end());
+    const auto config_it = frame_to_config_.find(rfh);
+    CHECK(config_it != frame_to_config_.end());
     FrameConfig frame_config = config_it->second;
 
     // Make sure there is at most one diff per frame.
-    EXPECT_TRUE(frames_with_diff.find(diff->rfh_) == frames_with_diff.end())
+    EXPECT_TRUE(frames_with_diff.find(rfh) == frames_with_diff.end())
         << "More than one diff generated for frame " << frame_config.test_id;
-    frames_with_diff.emplace(diff->rfh_);
+    frames_with_diff.emplace(rfh);
 
     // Verify that a diff was expected for this frame.
     EXPECT_TRUE(frame_config.expect_diff)

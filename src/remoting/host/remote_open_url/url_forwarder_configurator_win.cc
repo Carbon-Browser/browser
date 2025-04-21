@@ -1,18 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/remote_open_url/url_forwarder_configurator_win.h"
 
 #include <windows.h>
+
 #include <wtsapi32.h>
+
 #include <memory>
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/notreached.h"
@@ -154,7 +156,7 @@ void UrlForwarderConfiguratorWin::SetUpUrlForwarder(
 void UrlForwarderConfiguratorWin::OnSetUpResponse(bool success) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  report_user_intervention_required_timer_.AbandonAndStop();
+  report_user_intervention_required_timer_.Stop();
   set_up_url_forwarder_callback_.Run(success
                                          ? SetUpUrlForwarderResponse::COMPLETE
                                          : SetUpUrlForwarderResponse::FAILED);

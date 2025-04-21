@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,6 +72,25 @@ interface HelpContentProvider {
 struct FeedbackContext {
   // The e-mail of the user that initiated this feedback.
   string? email;
+  // Whether or not the Wifi debug logs is allowed by user.
+  bool wifi_debug_logs_allowed;
+  // Whether or not this ChromeOS device is linked to a phone
+  // (Google Internal only).
+  bool has_linked_cross_device_phone;
+  // Whether or not the signed in email is an internal google account.
+  bool is_internal_account;
+  // Whether or not the feedback app is opened from Assistant.
+  bool from_assistant;
+  // Whether or not the assistant debug info is allowed by user.
+  bool assistant_debug_info_allowed;
+  // Whether or not the feedback app is opened from OS Settings Search.
+  bool from_settings_search;
+  // Whether or not the feedback app is opened from autofill context menu.
+  bool from_autofill;
+  // Autofill metadata provided by source CrOS application by
+  // setting the autofill_metadata query parameter when opening the CrOS
+  // Feedback app.
+  string? autofill_metadata;
   // The URL of the page that this issue was being experienced on.
   url.mojom.Url?  page_url;
   // Extra diagnostics information provided by source CrOS application by
@@ -81,6 +100,11 @@ struct FeedbackContext {
   // file, zipped, and then attached to the report.
   // Example value: "Failed to connect to wifi network.".
   string? extra_diagnostics;
+  // When a report is sent with bluetooth logs, the category_tag will be set
+  // to BluetoothReportWithLogs.
+  string? category_tag;
+  // The performance trace id.
+  int32 trace_id;
 };
 
 // Status of the sending of a feedback report.
@@ -123,6 +147,86 @@ struct Report {
   // Whether or not consent has been granted to Google for to contact user in
   // reference to report. See (go/feedback-user-consent-faq).
   bool contact_user_consent_granted;
+  // Whether or not the report has sendBluetoothLogs
+  // flag set true by internal google account only.
+  bool send_bluetooth_logs;
+  // Whether or not the report has sendWifiDebugLogs
+  // flag set true by internal google account only.
+  bool send_wifi_debug_logs;
+  // Whether or not to send autofill metadata with this report. Set by internal
+  // google account only.
+  bool include_autofill_metadata;
+};
+
+// The first action taken on the confirmation page.
+enum FeedbackAppPostSubmitAction {
+  // User send a new report.
+  kSendNewReport,
+  // User close app by clicking done button.
+  kClickDoneButton,
+  // User open explore app.
+  kOpenExploreApp,
+  // User open diagnostics app.
+  kOpenDiagnosticsApp,
+  // User open chromebook community link.
+  kOpenChromebookCommunity,
+  // User close app by clicking x button on the top right.
+  kCloseFeedbackApp
+
+  // NOTE: If you add any entries to this enum, you must also update the
+  // corresponding UMA FeedbackAppPostSubmitAction at
+  // tools/metrics/histograms/enums.xml.
+};
+
+// User actions before sending the feedback.
+enum FeedbackAppPreSubmitAction {
+  // User clicked the help content on search page.
+  kViewedHelpContent,
+  // User viewed the screenshot on share data page.
+  kViewedScreenshot,
+  // User viewed the selected image to be attached on share data page.
+  kViewedImage,
+  // User viewed the system and app info on share data page.
+  kViewedSystemAndAppInfo,
+  // User viewed the autofill metadata info on share data page.
+  kViewedAutofillMetadata,
+  // User viewed the metrics on share data page.
+  kViewedMetrics
+};
+
+// User exit paths.
+enum FeedbackAppExitPath {
+  // User quit on search page after clicking some help contents.
+  kQuitSearchPageHelpContentClicked,
+  // User quit on search page without clicking some help contents.
+  kQuitSearchPageNoHelpContentClicked,
+  // User close on search page because no help content is shown (Offline or
+  // Search is down).
+  kQuitNoHelpContentDisplayed,
+  // User close on share data page after clicking some help contents.
+  kQuitShareDataPageHelpContentClicked,
+  // User close on share data page without clicking some help contents.
+  kQuitShareDataPageNoHelpContentClicked,
+  // User submit feedback and click the help content.
+  kSuccessHelpContentClicked,
+  // User submit feedback without clicking the help content.
+  kSuccessNoHelpContentClicked
+};
+
+// The outcome of checking help contents.
+enum FeedbackAppHelpContentOutcome {
+  // User click continue after clicking the help content.
+  kContinueHelpContentClicked,
+  // User click continue without clicking any help content.
+  kContinueNoHelpContentClicked,
+  // User click continue despite no help content is displayed.
+  kContinueNoHelpContentDisplayed,
+  // User quit feedback app after clicking the help content.
+  kQuitHelpContentClicked,
+  // User quit feedback app without clicking any help content.
+  kQuitNoHelpContentClicked,
+  // User quit feedback app because no help content is displayed.
+  kQuitNoHelpContentDisplayed,
 };
 
 // Provides services needed by the feedback UI to display data and send reports.
@@ -146,4 +250,18 @@ interface FeedbackServiceProvider {
   // Open system info dialog (which displays the system logs
   // to be sent with the report if the user has opted in).
   OpenSystemInfoDialog();
+  // Open autofill dialog (which displays the autofill logs
+  // to be sent with the report if the user has opted in).
+  OpenAutofillDialog(string autofill_metadata);
+  // Record the metrics of users' first action on confirmation page.
+  RecordPostSubmitAction(FeedbackAppPostSubmitAction action);
+  // Record metrics of users' action before sending the feedback.
+  RecordPreSubmitAction(FeedbackAppPreSubmitAction action);
+  // Record metrics of users' exit paths of feedback app.
+  RecordExitPath(FeedbackAppExitPath exit_path);
+  // Record the outcome of clicking and viewing the help content.
+  RecordHelpContentOutcome(FeedbackAppHelpContentOutcome outcome);
+  // Record metrics of number of results returned in each search, fires when
+  // user clicks help content.
+  RecordHelpContentSearchResultCount(int32 count);
 };

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 const int kNoProblemDelayMs = 1000;
@@ -57,7 +56,8 @@ class ArcPingRoutineTest : public NetworkDiagnosticsTestHelper {
     fake_net_instance_->set_ping_test_result(result);
 
     // Set up routine with fake NetworkInstance service.
-    arc_ping_routine_ = std::make_unique<ArcPingRoutine>();
+    arc_ping_routine_ = std::make_unique<ArcPingRoutine>(
+        mojom::RoutineCallSource::kDiagnosticsUI);
     arc_ping_routine_->set_net_instance_for_testing(fake_net_instance_.get());
   }
 

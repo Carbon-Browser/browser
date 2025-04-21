@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 
 #include <fuchsia/media/cpp/fidl.h>
 
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "media/audio/audio_io.h"
 #include "media/base/audio_parameters.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -67,9 +69,9 @@ class AudioOutputStreamFuchsia : public AudioOutputStream {
 
   // Schedules |timer_| to call PumpSamples() when appropriate for the next
   // packet.
-  void SchedulePumpSamples(base::TimeTicks now);
+  void SchedulePumpSamples();
 
-  AudioManagerFuchsia* manager_;
+  raw_ptr<AudioManagerFuchsia> manager_;
   AudioParameters parameters_;
 
   fuchsia::media::AudioRendererPtr audio_renderer_;
@@ -81,7 +83,7 @@ class AudioOutputStreamFuchsia : public AudioOutputStream {
   base::WritableSharedMemoryMapping payload_buffer_;
   size_t payload_buffer_pos_ = 0;
 
-  AudioSourceCallback* callback_ = nullptr;
+  raw_ptr<AudioSourceCallback> callback_ = nullptr;
 
   double volume_ = 1.0;
 
@@ -96,10 +98,10 @@ class AudioOutputStreamFuchsia : public AudioOutputStream {
 
   // Current min lead time for the stream. This value is not set until the first
   // AudioRenderer::OnMinLeadTimeChanged event.
-  absl::optional<base::TimeDelta> min_lead_time_;
+  std::optional<base::TimeDelta> min_lead_time_;
 
   // Timer that's scheduled to call PumpSamples().
-  base::OneShotTimer timer_;
+  base::DeadlineTimer timer_;
 };
 
 }  // namespace media

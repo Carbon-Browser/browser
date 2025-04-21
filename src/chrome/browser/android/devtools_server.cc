@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,16 @@
 #include <utility>
 
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/android/chrome_jni_headers/DevToolsServer_jni.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/common/chrome_content_client.h"
@@ -39,6 +37,9 @@
 #include "content/public/common/user_agent.h"
 #include "net/base/net_errors.h"
 #include "net/socket/unix_domain_server_socket_posix.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/DevToolsServer_jni.h"
 
 using base::android::JavaParamRef;
 using content::DevToolsAgentHost;
@@ -168,9 +169,8 @@ bool DevToolsServer::IsStarted() const {
 static jlong JNI_DevToolsServer_InitRemoteDebugging(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj,
-    const JavaParamRef<jstring>& socket_name_prefix) {
-  DevToolsServer* server = new DevToolsServer(
-      base::android::ConvertJavaStringToUTF8(env, socket_name_prefix));
+    std::string& socket_name_prefix) {
+  DevToolsServer* server = new DevToolsServer(socket_name_prefix);
   return reinterpret_cast<intptr_t>(server);
 }
 

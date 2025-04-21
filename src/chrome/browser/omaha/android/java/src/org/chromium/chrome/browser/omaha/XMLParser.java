@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-/**
- * Breaks XML down into its constituent elements and attributes.
- */
+/** Breaks XML down into its constituent elements and attributes. */
 public class XMLParser extends DefaultHandler {
     static final class Node {
         public final String tag;
@@ -56,7 +54,9 @@ public class XMLParser extends DefaultHandler {
             throw new RequestFailureException(
                     "Hit IOException", e, RequestFailureException.ERROR_MALFORMED_XML);
         } catch (ParserConfigurationException e) {
-            throw new RequestFailureException("Hit ParserConfigurationException", e,
+            throw new RequestFailureException(
+                    "Hit ParserConfigurationException",
+                    e,
                     RequestFailureException.ERROR_MALFORMED_XML);
         } catch (SAXParseException e) {
             throw new RequestFailureException(

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/test/test_timeouts.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/language/core/browser/language_prefs_test_util.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -36,7 +35,7 @@ class LanguagePrefsTest : public testing::Test {
 
   void SetUp() override {
     prefs_->SetString(language::prefs::kAcceptLanguages, std::string());
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     prefs_->SetString(language::prefs::kPreferredLanguages, std::string());
 #endif
   }
@@ -71,20 +70,14 @@ TEST_F(LanguagePrefsTest, UpdateLanguageList) {
   content_languages_tester.ExpectAcceptLanguagePrefs("en,ja,it");
 
   // Locale-specific codes.
-  // The list is exanded by adding the base languagese.
   languages = {"en-US", "ja", "en-CA", "fr-CA"};
   language_prefs_->SetUserSelectedLanguagesList(languages);
   content_languages_tester.ExpectAcceptLanguagePrefs("en-US,ja,en-CA,fr-CA");
-
-  // List already expanded.
-  languages = {"en-US", "en", "fr", "fr-CA"};
-  language_prefs_->SetUserSelectedLanguagesList(languages);
-  content_languages_tester.ExpectAcceptLanguagePrefs("en-US,en,fr,fr-CA");
 }
 
 TEST_F(LanguagePrefsTest, UpdateForcedLanguageList) {
   // Only test policy-forced languages on non-Chrome OS platforms.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   GTEST_SKIP();
 #else
   language::test::LanguagePrefTester content_languages_tester =
@@ -160,18 +153,47 @@ TEST_F(LanguagePrefsTest, ResetLanguagePrefs) {
   language_prefs_->SetUserSelectedLanguagesList({"en", "es", "fr"});
   content_languages_tester.ExpectSelectedLanguagePrefs("en,es,fr");
   content_languages_tester.ExpectAcceptLanguagePrefs("en,es,fr");
+#if BUILDFLAG(IS_ANDROID)
+  language_prefs_->SetULPLanguages({"a", "b", "c"});
+  EXPECT_THAT(language_prefs_->GetULPLanguages(),
+              testing::ElementsAre("a", "b", "c"));
+#endif
 
   ResetLanguagePrefs(prefs_.get());
+#if BUILDFLAG(IS_ANDROID)
+  EXPECT_THAT(language_prefs_->GetULPLanguages(), testing::IsEmpty());
+#endif
   content_languages_tester.ExpectSelectedLanguagePrefs("");
   // Accept languages pref is reset to the default value, not cleared.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   content_languages_tester.ExpectAcceptLanguagePrefs(
       prefs_->GetDefaultPrefValue(language::prefs::kPreferredLanguages)
           ->GetString());
-#else   // BUILDFLAG(IS_CHROMEOS_ASH)
+#else   // BUILDFLAG(IS_CHROMEOS)
   content_languages_tester.ExpectAcceptLanguagePrefs(
       prefs_->GetDefaultPrefValue(language::prefs::kAcceptLanguages)
           ->GetString());
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
+}
+
+TEST_F(LanguagePrefsTest, ULPLanguagesPref) {
+#if BUILDFLAG(IS_ANDROID)
+  // ULPLanguagesPref is initially empty.
+  EXPECT_THAT(language_prefs_->GetULPLanguages(), testing::IsEmpty());
+
+  // Set ULP Language Preference.
+  language_prefs_->SetULPLanguages({"a", "b", "c"});
+  EXPECT_THAT(language_prefs_->GetULPLanguages(),
+              testing::ElementsAre("a", "b", "c"));
+
+  // Setting ULP languages to a new list clears the old list.
+  language_prefs_->SetULPLanguages({"d", "e", "f"});
+  EXPECT_THAT(language_prefs_->GetULPLanguages(),
+              testing::ElementsAre("d", "e", "f"));
+
+  // Setting ULP languages to a an empty list clears it.
+  language_prefs_->SetULPLanguages({});
+  EXPECT_THAT(language_prefs_->GetULPLanguages(), testing::IsEmpty());
+#endif
 }
 }  // namespace language

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,9 +85,9 @@ class OfflinePageEvaluationBridge : public OfflinePageModel::Observer,
 
   void SavePageLater(JNIEnv* env,
                      const base::android::JavaParamRef<jobject>& obj,
-                     const base::android::JavaParamRef<jstring>& url,
-                     const base::android::JavaParamRef<jstring>& j_namespace,
-                     const base::android::JavaParamRef<jstring>& j_client_id,
+                     std::string& url,
+                     std::string& name_space,
+                     std::string& client_id,
                      jboolean user_requested);
 
  private:

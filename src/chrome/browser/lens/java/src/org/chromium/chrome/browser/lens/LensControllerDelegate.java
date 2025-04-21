@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,16 +13,18 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import org.chromium.base.Callback;
-import org.chromium.chrome.browser.contextmenu.ChipRenderParams;
+import org.chromium.components.embedder_support.contextmenu.ChipRenderParams;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
- * Base class for defining methods where different behavior is required by downstream targets.
- * The correct version of {@link LensControllerDelegateImpl} will be determined at compile time
- * via build rules.
+ * Base class for defining methods where different behavior is required by downstream targets. The
+ * correct implementation of {@link LensControllerDelegate} will be determined at compile time via
+ * {@link ServiceLoaderUtil}.
  */
 public class LensControllerDelegate {
-    /** @see {@link LensController#isSdkAvailable()} */
+    /**
+     * @see {@link LensController#isSdkAvailable()}
+     */
     public boolean isSdkAvailable() {
         return false;
     }
@@ -54,8 +56,13 @@ public class LensControllerDelegate {
             LensQueryParams lensQueryParams, Callback<ChipRenderParams> chipRenderParamsCallback) {}
 
     /** @see {@link LensController#getShareWithGoogleLensIntent()} */
-    public Intent getShareWithGoogleLensIntent(Uri imageUri, boolean isIncognito, String srcUrl,
-            String titleOrAltText, String pageUrl, @Nullable String lensIntentType) {
+    public Intent getShareWithGoogleLensIntent(
+            Uri imageUri,
+            boolean isIncognito,
+            String srcUrl,
+            String titleOrAltText,
+            String pageUrl,
+            @Nullable String lensIntentType) {
         return null;
     }
 
@@ -89,20 +96,10 @@ public class LensControllerDelegate {
 
     /**
      * Retrieve the Text resource id for "Translate image with Google Lens".
+     *
      * @return The resource id for "Translate image with Google Lens" string.
      */
     protected @StringRes int getTranslateWithGoogleLensTextResourceId() {
         return R.string.contextmenu_translate_image_with_google_lens;
-    }
-
-    /** Enables lens debug mode for chrome://internals/lens. */
-    public void enableDebugMode() {}
-
-    /** Disables lens debug mode for chrome://internals/lens. */
-    public void disableDebugMode() {}
-
-    /** Gets debug data to populate chrome://internals/lens. */
-    public String[][] getDebugData() {
-        return new String[0][0];
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <map>
 #include <memory>
+
+#include "base/memory/raw_ptr.h"
 
 namespace gfx {
 class Rect;
@@ -17,6 +19,7 @@ class Layer;
 }  // namespace ui
 
 namespace views {
+class AnimationSequenceBlock;
 class View;
 }  // namespace views
 
@@ -44,10 +47,8 @@ class AppsGridRowChangeAnimator {
   // the layer copy and view is used to calculate new animation parameters.
   void AnimateBetweenRows(AppListItemView* view,
                           const gfx::Rect& current,
-                          const gfx::Rect& target);
-
-  // Called when the bounds animator completes its animations.
-  void OnBoundsAnimatorDone();
+                          const gfx::Rect& target,
+                          views::AnimationSequenceBlock* animation_sequence);
 
   // Removes `view` from `row_change_layers_` if it exists in the map.
   void CancelAnimation(views::View* view);
@@ -61,7 +62,7 @@ class AppsGridRowChangeAnimator {
   }
 
  private:
-  const AppsGridView* apps_grid_view_ = nullptr;
+  raw_ptr<const AppsGridView> apps_grid_view_ = nullptr;
 
   // Whether a new row change animation is currently being set up.
   bool setting_up_animation_ = false;

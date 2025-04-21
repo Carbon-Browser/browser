@@ -1,14 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_task_queue_controller.h"
 
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback.h"
+#include "base/not_fatal_until.h"
 #include "base/trace_event/traced_value.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
@@ -44,7 +51,7 @@ FrameTaskQueueController::GetTaskQueue(
   if (!task_queues_.Contains(queue_traits.Key()))
     CreateTaskQueue(queue_traits);
   auto it = task_queues_.find(queue_traits.Key());
-  DCHECK(it != task_queues_.end());
+  CHECK(it != task_queues_.end(), base::NotFatalUntil::M130);
   return it->value;
 }
 
@@ -54,18 +61,9 @@ FrameTaskQueueController::GetAllTaskQueuesAndVoters() const {
 }
 
 scoped_refptr<MainThreadTaskQueue>
-FrameTaskQueueController::NewResourceLoadingTaskQueue() {
-  scoped_refptr<MainThreadTaskQueue> task_queue =
-      main_thread_scheduler_impl_->NewLoadingTaskQueue(
-          MainThreadTaskQueue::QueueType::kFrameLoading, frame_scheduler_impl_);
-  TaskQueueCreated(task_queue);
-  resource_loading_task_queues_.insert(task_queue);
-  return task_queue;
-}
-
-scoped_refptr<MainThreadTaskQueue>
 FrameTaskQueueController::NewWebSchedulingTaskQueue(
     QueueTraits queue_traits,
+    WebSchedulingQueueType queue_type,
     WebSchedulingPriority priority) {
   // Note: we only track this |task_queue| in |all_task_queues_and_voters_|.
   // It's interacted with through the MainThreadWebSchedulingTaskQueueImpl that
@@ -75,6 +73,7 @@ FrameTaskQueueController::NewWebSchedulingTaskQueue(
           MainThreadTaskQueue::QueueCreationParams(
               MainThreadTaskQueue::QueueType::kWebScheduling)
               .SetQueueTraits(queue_traits)
+              .SetWebSchedulingQueueType(queue_type)
               .SetWebSchedulingPriority(priority)
               .SetFrameScheduler(frame_scheduler_impl_));
   TaskQueueCreated(task_queue);
@@ -119,8 +118,7 @@ void FrameTaskQueueController::TaskQueueCreated(
   all_task_queues_and_voters_.push_back(
       TaskQueueAndEnabledVoterPair(task_queue.get(), voter.get()));
 
-  DCHECK(task_queue_enabled_voters_.find(task_queue) ==
-         task_queue_enabled_voters_.end());
+  DCHECK(!base::Contains(task_queue_enabled_voters_, task_queue));
   task_queue_enabled_voters_.insert(task_queue, std::move(voter));
 }
 
@@ -130,7 +128,7 @@ void FrameTaskQueueController::RemoveTaskQueueAndVoter(
   task_queue_enabled_voters_.erase(queue);
 
   bool found_task_queue = false;
-  for (auto* it = all_task_queues_and_voters_.begin();
+  for (auto it = all_task_queues_and_voters_.begin();
        it != all_task_queues_and_voters_.end(); ++it) {
     if (it->first == queue) {
       found_task_queue = true;
@@ -150,22 +148,10 @@ FrameTaskQueueController::GetQueueEnabledVoter(
   return it->value.get();
 }
 
-bool FrameTaskQueueController::RemoveResourceLoadingTaskQueue(
-    const scoped_refptr<MainThreadTaskQueue>& task_queue) {
-  DCHECK(task_queue);
-
-  if (!resource_loading_task_queues_.Contains(task_queue))
-    return false;
-  resource_loading_task_queues_.erase(task_queue);
-  RemoveTaskQueueAndVoter(task_queue.get());
-  return true;
-}
-
 void FrameTaskQueueController::WriteIntoTrace(
     perfetto::TracedValue context) const {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("task_queues", task_queues_.Values());
-  dict.Add("resource_loading_task_queues", resource_loading_task_queues_);
 }
 
 // static

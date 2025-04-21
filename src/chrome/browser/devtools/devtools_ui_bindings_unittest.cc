@@ -1,14 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/devtools/devtools_ui_bindings.h"
+
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/test/browser_task_environment.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 class DevToolsUIBindingsTest : public testing::Test {
@@ -129,41 +132,40 @@ class DevToolsUIBindingsSyncInfoTest : public testing::Test {
   signin::IdentityTestEnvironment identity_test_env_;
 
   TestingProfile profile_;
-  syncer::TestSyncService* sync_service_;
+  raw_ptr<syncer::TestSyncService> sync_service_;
 };
 
 TEST_F(DevToolsUIBindingsSyncInfoTest, SyncDisabled) {
-  sync_service_->SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+  sync_service_->SetSignedOut();
 
-  base::Value info =
+  base::Value::Dict info =
       DevToolsUIBindings::GetSyncInformationForProfile(&profile_);
 
-  EXPECT_FALSE(info.FindBoolKey("isSyncActive").value());
+  EXPECT_FALSE(info.FindBool("isSyncActive").value());
 }
 
 TEST_F(DevToolsUIBindingsSyncInfoTest, PreferencesNotSynced) {
-  syncer::ModelTypeSet activeDataTypes;
-  activeDataTypes.Put(syncer::ModelType::BOOKMARKS);
-  sync_service_->SetActiveDataTypes(activeDataTypes);
+  sync_service_->GetUserSettings()->SetSelectedTypes(
+      /*sync_everything=*/false,
+      /*types=*/{syncer::UserSelectableType::kBookmarks});
 
-  base::Value info =
+  base::Value::Dict info =
       DevToolsUIBindings::GetSyncInformationForProfile(&profile_);
 
-  EXPECT_TRUE(info.FindBoolKey("isSyncActive").value());
-  EXPECT_FALSE(info.FindBoolKey("arePreferencesSynced").value());
+  EXPECT_THAT(info.FindBool("isSyncActive"), testing::Optional(true));
+  EXPECT_THAT(info.FindBool("arePreferencesSynced"), testing::Optional(false));
 }
 
 TEST_F(DevToolsUIBindingsSyncInfoTest, ImageAlwaysProvided) {
   AccountInfo account_info = identity_test_env_.MakePrimaryAccountAvailable(
       "sync@devtools.dev", signin::ConsentLevel::kSync);
-  sync_service_->SetAccountInfo(account_info);
+  sync_service_->SetSignedIn(signin::ConsentLevel::kSync, account_info);
 
   EXPECT_TRUE(account_info.account_image.IsEmpty());
 
-  base::Value info =
+  base::Value::Dict info =
       DevToolsUIBindings::GetSyncInformationForProfile(&profile_);
 
-  EXPECT_EQ(*info.FindStringKey("accountEmail"), "sync@devtools.dev");
-  EXPECT_NE(info.FindStringKey("accountImage"), nullptr);
+  EXPECT_EQ(*info.FindString("accountEmail"), "sync@devtools.dev");
+  EXPECT_NE(info.FindString("accountImage"), nullptr);
 }

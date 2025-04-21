@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/scoped_feature_list.h"
@@ -21,6 +21,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/isolation_info.h"
+#include "net/storage_access_api/status.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -31,6 +32,7 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_container.mojom.h"
 #include "third_party/blink/public/mojom/worker/dedicated_worker_host_factory.mojom.h"
 #include "third_party/blink/public/mojom/worker/worker_main_script_load_params.mojom.h"
+#include "url/origin.h"
 
 namespace content {
 
@@ -39,21 +41,22 @@ class MockDedicatedWorker
     : public blink::mojom::DedicatedWorkerHostFactoryClient {
  public:
   MockDedicatedWorker(int worker_process_id,
-                      GlobalRenderFrameHostId render_frame_host_id) {
+                      GlobalRenderFrameHostId render_frame_host_id,
+                      const url::Origin& origin) {
     // The COEP reporter is replaced by a placeholder connection. Reports are
     // ignored.
     auto coep_reporter = std::make_unique<CrossOriginEmbedderPolicyReporter>(
         RenderFrameHostImpl::FromID(render_frame_host_id)
             ->GetStoragePartition()
             ->GetWeakPtr(),
-        GURL(), absl::nullopt, absl::nullopt, base::UnguessableToken::Create(),
-        net::NetworkIsolationKey());
+        GURL(), std::nullopt, std::nullopt, base::UnguessableToken::Create(),
+        net::NetworkAnonymizationKey());
 
     mojo::MakeSelfOwnedReceiver(
         std::make_unique<DedicatedWorkerHostFactoryImpl>(
-            worker_process_id, render_frame_host_id,
-            /*creator_worker_token=*/absl::nullopt, render_frame_host_id,
-            blink::StorageKey(), net::IsolationInfo::CreateTransient(),
+            worker_process_id, /*creator=*/render_frame_host_id,
+            render_frame_host_id, blink::StorageKey::CreateFirstParty(origin),
+            net::IsolationInfo::CreateTransient(),
             network::mojom::ClientSecurityState::New(),
             coep_reporter->GetWeakPtr(), coep_reporter->GetWeakPtr()),
         factory_.BindNewPipeAndPassReceiver());
@@ -64,10 +67,11 @@ class MockDedicatedWorker
           /*script_url=*/GURL(), network::mojom::CredentialsMode::kSameOrigin,
           blink::mojom::FetchClientSettingsObject::New(),
           mojo::PendingRemote<blink::mojom::BlobURLToken>(),
-          receiver_.BindNewPipeAndPassRemote());
+          receiver_.BindNewPipeAndPassRemote(),
+          net::StorageAccessApiStatus::kNone);
     } else {
       factory_->CreateWorkerHost(
-          blink::DedicatedWorkerToken(), /*script_url=*/GURL(),
+          blink::DedicatedWorkerToken(), /*script_url=*/GURL(), origin,
           browser_interface_broker_.BindNewPipeAndPassReceiver(),
           remote_host_.BindNewPipeAndPassReceiver(), base::DoNothing());
     }
@@ -82,7 +86,8 @@ class MockDedicatedWorker
   void OnWorkerHostCreated(
       mojo::PendingRemote<blink::mojom::BrowserInterfaceBroker>
           browser_interface_broker,
-      mojo::PendingRemote<blink::mojom::DedicatedWorkerHost>) override {
+      mojo::PendingRemote<blink::mojom::DedicatedWorkerHost>,
+      const url::Origin&) override {
     browser_interface_broker_.Bind(std::move(browser_interface_broker));
   }
 
@@ -161,12 +166,12 @@ class TestDedicatedWorkerServiceObserver
  public:
   struct DedicatedWorkerInfo {
     int worker_process_id;
-    GlobalRenderFrameHostId ancestor_render_frame_host_id;
+    url::Origin origin;
+    DedicatedWorkerCreator creator;
 
     bool operator==(const DedicatedWorkerInfo& other) const {
-      return std::tie(worker_process_id, ancestor_render_frame_host_id) ==
-             std::tie(other.worker_process_id,
-                      other.ancestor_render_frame_host_id);
+      return std::tie(worker_process_id, origin, creator) ==
+             std::tie(other.worker_process_id, other.origin, other.creator);
     }
   };
 
@@ -178,23 +183,22 @@ class TestDedicatedWorkerServiceObserver
       const TestDedicatedWorkerServiceObserver& other) = delete;
 
   // DedicatedWorkerService::Observer:
-  void OnWorkerCreated(
-      const blink::DedicatedWorkerToken& token,
-      int worker_process_id,
-      GlobalRenderFrameHostId ancestor_render_frame_host_id) override {
+  void OnWorkerCreated(const blink::DedicatedWorkerToken& token,
+                       int worker_process_id,
+                       const url::Origin& security_origin,
+                       DedicatedWorkerCreator creator) override {
     bool inserted =
         dedicated_worker_infos_
             .emplace(token, DedicatedWorkerInfo{worker_process_id,
-                                                ancestor_render_frame_host_id})
+                                                security_origin, creator})
             .second;
     DCHECK(inserted);
 
     if (on_worker_event_callback_)
       std::move(on_worker_event_callback_).Run();
   }
-  void OnBeforeWorkerDestroyed(
-      const blink::DedicatedWorkerToken& token,
-      GlobalRenderFrameHostId ancestor_render_frame_host_id) override {
+  void OnBeforeWorkerDestroyed(const blink::DedicatedWorkerToken& token,
+                               DedicatedWorkerCreator creator) override {
     size_t removed = dedicated_worker_infos_.erase(token);
     DCHECK_EQ(removed, 1u);
 
@@ -233,19 +237,20 @@ TEST_P(DedicatedWorkerServiceImplTest, DedicatedWorkerServiceObserver) {
   scoped_dedicated_worker_service_observation_.Observe(
       GetDedicatedWorkerService());
 
-  std::unique_ptr<TestWebContents> web_contents =
-      CreateWebContents(GURL("http://example.com/"));
+  const GURL kUrl("http://example.com/");
+  std::unique_ptr<TestWebContents> web_contents = CreateWebContents(kUrl);
   TestRenderFrameHost* render_frame_host = web_contents->GetPrimaryMainFrame();
 
   // At first, there is no live dedicated worker.
   EXPECT_TRUE(observer.dedicated_worker_infos().empty());
 
   // Create the dedicated worker.
-  const GlobalRenderFrameHostId ancestor_render_frame_host_id =
-      render_frame_host->GetGlobalId();
-  const int render_process_host_id = render_frame_host->GetProcess()->GetID();
+  const DedicatedWorkerCreator creator(render_frame_host->GetGlobalId());
+  const int render_process_host_id =
+      render_frame_host->GetProcess()->GetDeprecatedID();
+  const auto origin = url::Origin::Create(kUrl);
   auto mock_dedicated_worker = std::make_unique<MockDedicatedWorker>(
-      render_process_host_id, ancestor_render_frame_host_id);
+      render_process_host_id, render_frame_host->GetGlobalId(), origin);
   observer.RunUntilWorkerEvent();
 
   // The service sent a OnWorkerStarted() notification.
@@ -254,8 +259,8 @@ TEST_P(DedicatedWorkerServiceImplTest, DedicatedWorkerServiceObserver) {
     const auto& dedicated_worker_info =
         observer.dedicated_worker_infos().begin()->second;
     EXPECT_EQ(dedicated_worker_info.worker_process_id, render_process_host_id);
-    EXPECT_EQ(dedicated_worker_info.ancestor_render_frame_host_id,
-              ancestor_render_frame_host_id);
+    EXPECT_EQ(dedicated_worker_info.creator, creator);
+    EXPECT_EQ(dedicated_worker_info.origin, origin);
   }
 
   // Test EnumerateDedicatedWorkers().
@@ -270,8 +275,8 @@ TEST_P(DedicatedWorkerServiceImplTest, DedicatedWorkerServiceObserver) {
     const auto& dedicated_worker_info =
         enumeration_observer.dedicated_worker_infos().begin()->second;
     EXPECT_EQ(dedicated_worker_info.worker_process_id, render_process_host_id);
-    EXPECT_EQ(dedicated_worker_info.ancestor_render_frame_host_id,
-              ancestor_render_frame_host_id);
+    EXPECT_EQ(dedicated_worker_info.creator, creator);
+    EXPECT_EQ(dedicated_worker_info.origin, origin);
   }
 
   // Delete the dedicated worker.

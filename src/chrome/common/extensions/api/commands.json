@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@
       {
         "name": "getAll",
         "type": "function",
-        "description": "Returns all the registered extension commands for this extension and their shortcut (if active).",
+        "description": "Returns all the registered extension commands for this extension and their shortcut (if active). Before Chrome 110, this command did not return <code>_execute_action</code>.",
         "parameters": [],
         "returns_async": {
           "name": "callback",

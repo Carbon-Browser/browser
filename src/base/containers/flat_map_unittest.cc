@@ -1,14 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/containers/flat_map.h"
 
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
 #include "base/test/move_only_int.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,6 +37,19 @@ bool operator<(const Unsortable& lhs, const Unsortable& rhs) = delete;
 bool operator<=(const Unsortable& lhs, const Unsortable& rhs) = delete;
 bool operator>(const Unsortable& lhs, const Unsortable& rhs) = delete;
 bool operator>=(const Unsortable& lhs, const Unsortable& rhs) = delete;
+
+class ImplicitInt {
+ public:
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  ImplicitInt(int data) : data_(data) {}
+
+ private:
+  friend bool operator<(const ImplicitInt& lhs, const ImplicitInt& rhs) {
+    return lhs.data_ < rhs.data_;
+  }
+
+  int data_;
+};
 
 }  // namespace
 
@@ -215,7 +230,7 @@ TEST(FlatMap, AtFunction) {
   EXPECT_EQ("b", m.at(2));
 
   // Const reference works.
-  const std::string& const_ref = base::as_const(m).at(1);
+  const std::string& const_ref = std::as_const(m).at(1);
   EXPECT_EQ("a", const_ref);
 
   // Reference works, can operate on the string.
@@ -228,8 +243,8 @@ TEST(FlatMap, AtFunction) {
 
   // Heterogeneous look-up works.
   base::flat_map<std::string, int> m2 = {{"a", 1}, {"b", 2}};
-  EXPECT_EQ(1, m2.at(base::StringPiece("a")));
-  EXPECT_EQ(2, base::as_const(m2).at(base::StringPiece("b")));
+  EXPECT_EQ(1, m2.at(std::string_view("a")));
+  EXPECT_EQ(2, std::as_const(m2).at(std::string_view("b")));
 }
 
 // insert_or_assign(K&&, M&&)
@@ -409,6 +424,8 @@ TEST(FlatMap, UsingTransparentCompare) {
   m1.count(x);
   m.find(x);
   m1.find(x);
+  m.contains(x);
+  m1.contains(x);
   m.equal_range(x);
   m1.equal_range(x);
   m.lower_bound(x);
@@ -422,6 +439,41 @@ TEST(FlatMap, UsingTransparentCompare) {
   m.emplace(ExplicitInt(1), 0);
   m.erase(m.begin());
   m.erase(m.cbegin());
+}
+
+TEST(FlatMap, UsingInitializerList) {
+  base::flat_map<ImplicitInt, int> m;
+  const auto& m1 = m;
+
+  // Check if the calls can be resolved. Correctness is checked in flat_tree
+  // tests.
+  m.count({1});
+  m1.count({2});
+  m.find({3});
+  m1.find({4});
+  m.contains({5});
+  m1.contains({6});
+  m.equal_range({7});
+  m1.equal_range({8});
+  m.lower_bound({9});
+  m1.lower_bound({10});
+  m.upper_bound({11});
+  m1.upper_bound({12});
+  m.erase({13});
+}
+
+TEST(FlatMap, DeductionGuides) {
+  {
+    std::vector<std::pair<int, float>> v = {{1, 4.0}, {2, 3.0}};
+    flat_map map{v};
+    static_assert(std::is_same_v<decltype(map), flat_map<int, float>>);
+  }
+
+  {
+    std::vector<std::pair<int, float>> v = {{1, 4.0}, {2, 3.0}};
+    flat_map map(std::move(v));
+    static_assert(std::is_same_v<decltype(map), flat_map<int, float>>);
+  }
 }
 
 }  // namespace base

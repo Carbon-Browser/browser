@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/test/test_types.h"
+
+#include "cc/base/region.h"
 
 namespace cc {
 
@@ -27,6 +29,10 @@ const char* RasterTypeTestSuffix(TestRasterType type) {
 void PrintTo(const RasterTestConfig& config, std::ostream* os) {
   PrintTo(config.renderer_type, os);
   *os << '_' << RasterTypeTestSuffix(config.raster_type);
+}
+
+void PrintTo(const Region& region, std::ostream* os) {
+  *os << region.ToString();
 }
 
 }  // namespace cc

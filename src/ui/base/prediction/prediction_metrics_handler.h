@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define UI_BASE_PREDICTION_PREDICTION_METRICS_HANDLER_H_
 
 #include <deque>
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ref.h"
+#include "base/metrics/histogram_base.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/point_f.h"
 
 namespace ui {
@@ -100,7 +102,7 @@ class COMPONENT_EXPORT(UI_BASE_PREDICTION) PredictionMetricsHandler {
   gfx::PointF last_interpolated_, last_frame_interpolated_;
   // Last predicted point that pop from predicted_event_queue_. Use for
   // computing Jitter metrics.
-  absl::optional<gfx::PointF> last_predicted_ = absl::nullopt;
+  std::optional<gfx::PointF> last_predicted_ = std::nullopt;
   // The first real event position which time is later than the predicted time.
   gfx::PointF next_real_;
 
@@ -108,10 +110,20 @@ class COMPONENT_EXPORT(UI_BASE_PREDICTION) PredictionMetricsHandler {
   gfx::PointF next_real_point_after_frame_;
 
   // Beginning of the full histogram name. It will have the various metrics'
-  // names (.OverPrediction, .UnderPrediction, .WrongDirection,
-  // .PredictionJitter, .VisualJitter) appended to it when counting the metric
-  // in a histogram.
+  // names (.OverPrediction, .UnderPrediction, .PredictionJitter, .VisualJitter)
+  // appended to it when counting the metric in a histogram.
   const std::string histogram_name_;
+
+  // Histograms are never deleted we leak them at shutdown so it is fine to keep
+  // a reference here.
+  const raw_ref<base::HistogramBase> over_prediction_histogram_;
+  const raw_ref<base::HistogramBase> under_prediction_histogram_;
+  const raw_ref<base::HistogramBase> prediction_score_histogram_;
+  const raw_ref<base::HistogramBase> frame_over_prediction_histogram_;
+  const raw_ref<base::HistogramBase> frame_under_prediction_histogram_;
+  const raw_ref<base::HistogramBase> frame_prediction_score_histogram_;
+  const raw_ref<base::HistogramBase> prediction_jitter_histogram_;
+  const raw_ref<base::HistogramBase> visual_jitter_histogram_;
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,6 @@ gfx::Point GetArrowAnchorPointFromAnchorRect(BubbleBorder::Arrow arrow,
 
     default:
       NOTREACHED();
-      return gfx::Point();
   }
 }
 
@@ -94,7 +93,6 @@ gfx::Vector2d GetContentBoundsOffsetToArrowAnchorPoint(
 
     default:
       NOTREACHED();
-      return gfx::Vector2d();
   }
 }
 

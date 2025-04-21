@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@ bool StructTraits<network::mojom::LoadTimingInfoConnectTimingDataView,
                   net::LoadTimingInfo::ConnectTiming>::
     Read(network::mojom::LoadTimingInfoConnectTimingDataView data,
          net::LoadTimingInfo::ConnectTiming* out) {
-  return data.ReadDnsStart(&out->dns_start) && data.ReadDnsEnd(&out->dns_end) &&
+  return data.ReadDomainLookupStart(&out->domain_lookup_start) &&
+         data.ReadDomainLookupEnd(&out->domain_lookup_end) &&
          data.ReadConnectStart(&out->connect_start) &&
          data.ReadConnectEnd(&out->connect_end) &&
          data.ReadSslStart(&out->ssl_start) && data.ReadSslEnd(&out->ssl_end);
@@ -41,6 +42,10 @@ bool StructTraits<network::mojom::LoadTimingInfoDataView, net::LoadTimingInfo>::
          data.ReadPushEnd(&out->push_end) &&
          data.ReadServiceWorkerStartTime(&out->service_worker_start_time) &&
          data.ReadServiceWorkerReadyTime(&out->service_worker_ready_time) &&
+         data.ReadServiceWorkerRouterEvaluationStart(
+             &out->service_worker_router_evaluation_start) &&
+         data.ReadServiceWorkerCacheLookupStart(
+             &out->service_worker_cache_lookup_start) &&
          data.ReadServiceWorkerFetchStart(&out->service_worker_fetch_start) &&
          data.ReadServiceWorkerRespondWithSettled(
              &out->service_worker_respond_with_settled);

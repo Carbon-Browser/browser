@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,12 @@ class CSSPaintInterpolationType : public CSSInterpolationType {
                                   StyleResolverState&) const final;
 
  private:
+  // This method confirms that the two colors are in the same colorspace for
+  // interpolation and converts them if necessary.
+  PairwiseInterpolationValue MaybeMergeSingles(
+      InterpolationValue&& start,
+      InterpolationValue&& end) const final;
+
   InterpolationValue MaybeConvertNeutral(const InterpolationValue& underlying,
                                          ConversionCheckers&) const final;
   InterpolationValue MaybeConvertInitial(const StyleResolverState&,

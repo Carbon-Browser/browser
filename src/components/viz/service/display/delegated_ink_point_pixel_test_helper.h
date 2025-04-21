@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,12 +35,14 @@ class DelegatedInkPointPixelTestHelper {
 
   explicit DelegatedInkPointPixelTestHelper(DirectRenderer* renderer);
   void SetRendererAndCreateInkRenderer(DirectRenderer* renderer);
+  void DropRenderer();
 
   void CreateAndSendMetadata(const gfx::PointF& point,
                              float diameter,
                              SkColor4f color,
                              base::TimeTicks timestamp,
-                             const gfx::RectF& presentation_area);
+                             const gfx::RectF& presentation_area,
+                             const std::uint64_t render_pass_id);
 
   void CreateAndSendMetadataFromLastPoint();
   void CreateAndSendMetadataFromLastPoint(int32_t pointer_id);

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/files/file_util.h"
 #include "base/metrics/field_trial.h"
 #include "base/path_service.h"
+#include "base/process/launch.h"
 #include "base/ranges/ranges.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -37,10 +38,13 @@
 #include "components/variations/service/variations_service.h"
 #include "components/variations/variations_switches.h"
 #include "components/variations/variations_test_utils.h"
-#include "components/version_info/channel.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_POSIX)
+#include <sys/wait.h>
+#endif
 
 namespace variations {
 
@@ -76,13 +80,14 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeEndToEndBrowserTestHelper,
                              expected_user_data_dir.value()));
 
   // If the test makes it this far, then either it's the first run of the
-  // test, or the safe seed was used.
+  // test, or the safe seed was used, or it is the run using the null seed.
   const int crash_streak = g_browser_process->local_state()->GetInteger(
       prefs::kVariationsCrashStreak);
   const bool is_first_run = (crash_streak == 0);
+  const bool is_null_seed = (crash_streak == kCrashStreakNullSeedThreshold);
   const bool safe_seed_was_used =
       FieldTrialListHasAllStudiesFrom(kTestSeedData);
-  EXPECT_NE(is_first_run, safe_seed_was_used)  // ==> XOR
+  EXPECT_NE(is_first_run || is_null_seed, safe_seed_was_used)  // ==> XOR
       << "crash_streak=" << crash_streak;
 }
 
@@ -103,6 +108,34 @@ class VariationsSafeModeEndToEndBrowserTest : public ::testing::Test {
   }
 
  protected:
+  base::CommandLine SetUpSubTest() {
+    // Reuse the browser_tests binary (i.e., that this test code is in), to
+    // manually run the sub-test.
+    base::CommandLine sub_test =
+        base::CommandLine(base::CommandLine::ForCurrentProcess()->GetProgram());
+
+    // Run the manual sub-test in the |user_data_dir()| allocated for this test.
+    sub_test.AppendSwitchASCII(
+        base::kGTestFilterFlag,
+        "VariationsSafeModeEndToEndBrowserTestHelper.MANUAL_SubTest");
+    sub_test.AppendSwitch(::switches::kRunManualTestsFlag);
+    sub_test.AppendSwitch(::switches::kSingleProcessTests);
+    sub_test.AppendSwitchPath(::switches::kUserDataDir, user_data_dir());
+
+    // Assign the test environment to be on the Canary channel. This ensures
+    // compatibility with the crashing study in the seed.
+    sub_test.AppendSwitchASCII(switches::kFakeVariationsChannel, "canary");
+
+    // TODO(crbug.com/379869158): Update the test to also support
+    // seed-file-based variations seeds.
+    sub_test.AppendSwitchASCII(::switches::kForceFieldTrials,
+                               "SeedFileTrial/Control_V5");
+
+    // Explicitly avoid any terminal control characters in the output.
+    sub_test.AppendSwitchASCII("gtest_color", "no");
+    return sub_test;
+  }
+
   const base::FilePath& user_data_dir() const { return user_data_dir_; }
   const base::FilePath& local_state_file() const { return local_state_file_; }
 
@@ -114,49 +147,26 @@ class VariationsSafeModeEndToEndBrowserTest : public ::testing::Test {
     return copy_of_local_state_file;
   }
 
-  bool IsSuccessfulSubTestOutput(const std::string& output) {
-    static const char* const kSubTestSuccessStrings[] = {
-        "Running 1 test from 1 test suite",
-        "OK ] VariationsSafeModeEndToEndBrowserTestHelper.MANUAL_SubTest",
-        "1 test from VariationsSafeModeEndToEndBrowserTestHelper",
-        "1 test from 1 test suite ran",
-    };
-    auto is_in_output = [&](const char* s) {
-      return base::Contains(output, s);
-    };
-    return base::ranges::all_of(kSubTestSuccessStrings, is_in_output);
-  }
-
-  bool IsCrashingSubTestOutput(const std::string& output) {
-    const char* const kSubTestCrashStrings[] = {
-        "Running 1 test from 1 test suite",
-        "VariationsSafeModeEndToEndBrowserTestHelper.MANUAL_SubTest",
-        "crash_for_testing",
-    };
-    auto is_in_output = [&](const char* s) {
-      return base::Contains(output, s);
-    };
-    return base::ranges::all_of(kSubTestCrashStrings, is_in_output);
-  }
-
   void RunAndExpectSuccessfulSubTest(
       const base::CommandLine& sub_test_command) {
     std::string output;
-    base::GetAppOutputAndError(sub_test_command, &output);
-    EXPECT_TRUE(IsSuccessfulSubTestOutput(output))
-        << "Did not find success signals in output:\n"
-        << output;
+    int exit_code;
+    base::GetAppOutputWithExitCode(sub_test_command, &output, &exit_code);
+    EXPECT_EQ(0, exit_code) << "Did not get successful exit code";
   }
 
   void RunAndExpectCrashingSubTest(const base::CommandLine& sub_test_command) {
     std::string output;
-    base::GetAppOutputAndError(sub_test_command, &output);
-    EXPECT_FALSE(IsSuccessfulSubTestOutput(output))
-        << "Expected crash but found success signals in output:\n"
-        << output;
-    EXPECT_TRUE(IsCrashingSubTestOutput(output))
-        << "Did not find crash signals in output:\n"
-        << output;
+    int exit_code;
+    base::GetAppOutputWithExitCode(sub_test_command, &output, &exit_code);
+#if BUILDFLAG(IS_POSIX)
+    ASSERT_TRUE(WIFSIGNALED(exit_code));
+    // Posix only defines 7-bit exit codes.
+    EXPECT_EQ(0x7E57C0D3 & 0x7F, WTERMSIG(exit_code))
+        << "Did not get crash exit code";
+#else
+    EXPECT_EQ(0x7E57C0D3, exit_code) << "Did not get crash exit code";
+#endif
   }
 
   std::unique_ptr<PrefService> LoadLocalState(const base::FilePath& path) {
@@ -171,8 +181,7 @@ class VariationsSafeModeEndToEndBrowserTest : public ::testing::Test {
       PrefService* pref_service) {
     static constexpr wchar_t kDummyWindowsRegistryKey[] = L"";
     auto clean_exit_beacon = std::make_unique<metrics::CleanExitBeacon>(
-        kDummyWindowsRegistryKey, user_data_dir(), pref_service,
-        version_info::Channel::UNKNOWN);
+        kDummyWindowsRegistryKey, user_data_dir(), pref_service);
     clean_exit_beacon->Initialize();
     return clean_exit_beacon;
   }
@@ -185,38 +194,14 @@ class VariationsSafeModeEndToEndBrowserTest : public ::testing::Test {
   base::FilePath local_state_file_;
 };
 
-// TODO(crbug.com/1344852): test is flaky on Mac.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_ExtendedSafeModeEndToEnd DISABLED_ExtendedSafeModeEndToEnd
-#else
-#define MAYBE_ExtendedSafeModeEndToEnd ExtendedSafeModeEndToEnd
-#endif
-TEST_F(VariationsSafeModeEndToEndBrowserTest, MAYBE_ExtendedSafeModeEndToEnd) {
-  // Reuse the browser_tests binary (i.e., that this test code is in), to
-  // manually run the sub-test.
-  base::CommandLine sub_test =
-      base::CommandLine(base::CommandLine::ForCurrentProcess()->GetProgram());
-
-  // Run the manual sub-test in the |user_data_dir()| allocated for this test.
-  sub_test.AppendSwitchASCII(
-      base::kGTestFilterFlag,
-      "VariationsSafeModeEndToEndBrowserTestHelper.MANUAL_SubTest");
-  sub_test.AppendSwitch(::switches::kRunManualTestsFlag);
-  sub_test.AppendSwitch(::switches::kSingleProcessTests);
-  sub_test.AppendSwitchPath(::switches::kUserDataDir, user_data_dir());
-
-  // Assign the test environment to be on the Canary channel. This ensures
-  // compatibility with the crashing study in the seed.
-  sub_test.AppendSwitchASCII(switches::kFakeVariationsChannel, "canary");
-
-  // Explicitly avoid any terminal control characters in the output.
-  sub_test.AppendSwitchASCII("gtest_color", "no");
+TEST_F(VariationsSafeModeEndToEndBrowserTest, ExtendedSafeSeedEndToEnd) {
+  base::CommandLine sub_test = SetUpSubTest();
 
   // Initial sub-test run should be successful.
   RunAndExpectSuccessfulSubTest(sub_test);
 
   // To speed up the test, skip the first k-1 crashing runs.
-  const int initial_crash_count = kCrashStreakThreshold - 1;
+  const int initial_crash_count = kCrashStreakSafeSeedThreshold - 1;
 
   // Inject the safe and crashing seeds into the Local State of |sub_test|.
   {
@@ -226,18 +211,53 @@ TEST_F(VariationsSafeModeEndToEndBrowserTest, MAYBE_ExtendedSafeModeEndToEnd) {
     WriteSeedData(local_state.get(), kCrashingSeedData, kRegularSeedPrefKeys);
   }
 
-  // The next run will be |kCrashStreakThreshold| crashing runs of the sub-test.
+  // The next run will be |kCrashStreakSafeSeedThreshold| crashing runs of the
+  // sub-test.
   {
     RunAndExpectCrashingSubTest(sub_test);
     auto local_state = LoadLocalState(CopyOfLocalStateFile());
     auto clean_exit_beacon = LoadCleanExitBeacon(local_state.get());
     ASSERT_TRUE(clean_exit_beacon != nullptr);
     ASSERT_FALSE(clean_exit_beacon->exited_cleanly());
-    ASSERT_EQ(kCrashStreakThreshold,
+    ASSERT_EQ(kCrashStreakSafeSeedThreshold,
               local_state->GetInteger(prefs::kVariationsCrashStreak));
   }
 
   // Do another run and verify that safe mode kicks in, preventing the crash.
+  RunAndExpectSuccessfulSubTest(sub_test);
+}
+
+TEST_F(VariationsSafeModeEndToEndBrowserTest, ExtendedNullSeedEndToEnd) {
+  base::ScopedAllowBlockingForTesting allow_io;
+  base::CommandLine sub_test = SetUpSubTest();
+
+  // Initial sub-test run should be successful.
+  RunAndExpectSuccessfulSubTest(sub_test);
+
+  // To speed up the test, skip the first k-1 crashing runs.
+  const int initial_crash_count = kCrashStreakNullSeedThreshold - 1;
+
+  // Inject the crashing seeds for both Regular and Safe.
+  {
+    auto local_state = LoadLocalState(local_state_file());
+    local_state->SetInteger(prefs::kVariationsCrashStreak, initial_crash_count);
+    WriteSeedData(local_state.get(), kCrashingSeedData, kSafeSeedPrefKeys);
+    WriteSeedData(local_state.get(), kCrashingSeedData, kRegularSeedPrefKeys);
+  }
+
+  // The next run will be |kCrashStreakNullSeedThreshold| crashing runs of the
+  // sub-test.
+  {
+    RunAndExpectCrashingSubTest(sub_test);
+    auto local_state = LoadLocalState(CopyOfLocalStateFile());
+    auto clean_exit_beacon = LoadCleanExitBeacon(local_state.get());
+    ASSERT_TRUE(clean_exit_beacon != nullptr);
+    ASSERT_FALSE(clean_exit_beacon->exited_cleanly());
+    ASSERT_EQ(kCrashStreakNullSeedThreshold,
+              local_state->GetInteger(prefs::kVariationsCrashStreak));
+  }
+
+  // Should use null seed, preventing the crash.
   RunAndExpectSuccessfulSubTest(sub_test);
 }
 

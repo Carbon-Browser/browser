@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ SourceBufferTrackBaseSupplement& SourceBufferTrackBaseSupplement::From(
     TrackBase& track) {
   SourceBufferTrackBaseSupplement* supplement = FromIfExists(track);
   if (!supplement) {
-    supplement = MakeGarbageCollected<SourceBufferTrackBaseSupplement>();
+    supplement = MakeGarbageCollected<SourceBufferTrackBaseSupplement>(track);
     Supplement<TrackBase>::ProvideTo(track, supplement);
   }
   return *supplement;
@@ -34,12 +34,13 @@ SourceBufferTrackBaseSupplement& SourceBufferTrackBaseSupplement::From(
 SourceBuffer* SourceBufferTrackBaseSupplement::sourceBuffer(TrackBase& track) {
   SourceBufferTrackBaseSupplement* supplement = FromIfExists(track);
   if (supplement)
-    return supplement->source_buffer_;
+    return supplement->source_buffer_.Get();
   return nullptr;
 }
 
-SourceBufferTrackBaseSupplement::SourceBufferTrackBaseSupplement()
-    : Supplement(nullptr) {}
+SourceBufferTrackBaseSupplement::SourceBufferTrackBaseSupplement(
+    TrackBase& track)
+    : Supplement(track) {}
 
 void SourceBufferTrackBaseSupplement::SetSourceBuffer(
     TrackBase& track,

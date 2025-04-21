@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.os.Bundle;
 
 import androidx.fragment.app.DialogFragment;
 
-/**
- * Class to create a dialog in the Password check view.
- */
+/** Class to create a dialog in the Password check view. */
 public class PasswordCheckDialogFragment extends DialogFragment {
     /**
      * This interface combines handling the clicks on the buttons and the general dismissal of the

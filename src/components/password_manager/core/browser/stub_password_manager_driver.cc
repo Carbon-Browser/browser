@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/stub_password_manager_driver.h"
 
+#include "components/autofill/core/common/aliases.h"
 #include "url/gurl.h"
 
 namespace password_manager {
@@ -15,16 +16,27 @@ int StubPasswordManagerDriver::GetId() const {
   return 0;
 }
 
-void StubPasswordManagerDriver::FillPasswordForm(
-    const autofill::PasswordFormFillData& form_data) {
-}
+void StubPasswordManagerDriver::SetPasswordFillData(
+    const autofill::PasswordFormFillData& form_data) {}
 
 void StubPasswordManagerDriver::GeneratedPasswordAccepted(
     const std::u16string& password) {}
 
-void StubPasswordManagerDriver::FillSuggestion(const std::u16string& username,
-                                               const std::u16string& password) {
-}
+void StubPasswordManagerDriver::GeneratedPasswordRejected() {}
+
+void StubPasswordManagerDriver::FocusNextFieldAfterPasswords() {}
+
+void StubPasswordManagerDriver::FillSuggestion(
+    const std::u16string& username,
+    const std::u16string& password,
+    base::OnceCallback<void(bool)> success_callback) {}
+
+void StubPasswordManagerDriver::FillSuggestionById(
+    autofill::FieldRendererId username_element_id,
+    autofill::FieldRendererId password_element_id,
+    const std::u16string& username,
+    const std::u16string& password,
+    autofill::AutofillSuggestionTriggerSource suggestion_source) {}
 
 #if BUILDFLAG(IS_ANDROID)
 void StubPasswordManagerDriver::TriggerFormSubmission() {}
@@ -34,15 +46,27 @@ void StubPasswordManagerDriver::PreviewSuggestion(
     const std::u16string& username,
     const std::u16string& password) {}
 
-void StubPasswordManagerDriver::ClearPreviewedForm() {
-}
+void StubPasswordManagerDriver::PreviewSuggestionById(
+    autofill::FieldRendererId username_element_id,
+    autofill::FieldRendererId password_element_id,
+    const std::u16string& username,
+    const std::u16string& password) {}
+
+void StubPasswordManagerDriver::PreviewGenerationSuggestion(
+    const std::u16string& password) {}
+
+void StubPasswordManagerDriver::ClearPreviewedForm() {}
+
+void StubPasswordManagerDriver::SetSuggestionAvailability(
+    autofill::FieldRendererId generation_element_id,
+    autofill::mojom::AutofillSuggestionAvailability suggestion_availability) {}
 
 PasswordGenerationFrameHelper*
 StubPasswordManagerDriver::GetPasswordGenerationHelper() {
   return nullptr;
 }
 
-PasswordManager* StubPasswordManagerDriver::GetPasswordManager() {
+PasswordManagerInterface* StubPasswordManagerDriver::GetPasswordManager() {
   return nullptr;
 }
 
@@ -59,12 +83,16 @@ bool StubPasswordManagerDriver::CanShowAutofillUi() const {
   return true;
 }
 
-::ui::AXTreeID StubPasswordManagerDriver::GetAxTreeId() const {
-  return {};
+int StubPasswordManagerDriver::GetFrameId() const {
+  return GetId();
 }
 
 const GURL& StubPasswordManagerDriver::GetLastCommittedURL() const {
   return GURL::EmptyGURL();
+}
+
+base::WeakPtr<PasswordManagerDriver> StubPasswordManagerDriver::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace password_manager

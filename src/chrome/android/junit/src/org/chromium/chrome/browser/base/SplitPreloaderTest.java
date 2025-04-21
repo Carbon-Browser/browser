@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.BundleUtils;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
@@ -29,9 +30,7 @@ import org.chromium.base.test.util.CallbackHelper;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link SplitPreloader}.
- */
+/** Unit tests for {@link SplitPreloader}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = Build.VERSION_CODES.O)
 public class SplitPreloaderTest {
@@ -89,7 +88,7 @@ public class SplitPreloaderTest {
         }
     }
 
-    private static class OnCompleteTracker implements SplitPreloader.OnComplete {
+    private static class PreloadHooksTracker implements SplitPreloader.PreloadHooks {
         private SplitContext mBackgroundContext;
         private SplitContext mUiContext;
 
@@ -103,6 +102,11 @@ public class SplitPreloaderTest {
         public void runInUiThread(Context context) {
             assertNull(mUiContext);
             mUiContext = (SplitContext) context;
+        }
+
+        @Override
+        public Context createIsolatedSplitContext(String name) {
+            return BundleUtils.createIsolatedSplitContext(name);
         }
 
         public SplitContext getBackgroundContext() {
@@ -119,13 +123,20 @@ public class SplitPreloaderTest {
 
     @Before
     public void setUp() {
+        BundleUtils.setIsBundleForTesting(true);
         mContext = new MainContext(ContextUtils.getApplicationContext());
+        ContextUtils.initApplicationContextForTests(mContext);
         mPreloader = new SplitPreloader(mContext);
+    }
+
+    private void initSplits(String... names) {
+        mContext.getApplicationInfo().splitNames = names;
+        mContext.getApplicationInfo().splitSourceDirs = names;
     }
 
     @Test
     public void testPreload_splitInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
         mPreloader.preload(SPLIT_A, null);
         mPreloader.wait(SPLIT_A);
@@ -136,9 +147,9 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_withOnComplete_splitInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
-        OnCompleteTracker tracker = new OnCompleteTracker();
+        PreloadHooksTracker tracker = new PreloadHooksTracker();
         mPreloader.preload(SPLIT_A, tracker);
         mPreloader.wait(SPLIT_A);
 
@@ -152,9 +163,9 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_multipleWaitCalls() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
-        OnCompleteTracker tracker = new OnCompleteTracker();
+        PreloadHooksTracker tracker = new PreloadHooksTracker();
         mPreloader.preload(SPLIT_A, tracker);
         mPreloader.wait(SPLIT_A);
         mPreloader.wait(SPLIT_A);
@@ -168,12 +179,12 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_withOnComplete_multipleSplitsInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A, SPLIT_B};
+        initSplits(SPLIT_A, SPLIT_B);
 
-        OnCompleteTracker trackerA = new OnCompleteTracker();
+        PreloadHooksTracker trackerA = new PreloadHooksTracker();
         mPreloader.preload(SPLIT_A, trackerA);
 
-        OnCompleteTracker trackerB = new OnCompleteTracker();
+        PreloadHooksTracker trackerB = new PreloadHooksTracker();
         mPreloader.preload(SPLIT_B, trackerB);
         mPreloader.wait(SPLIT_A);
         mPreloader.wait(SPLIT_B);
@@ -201,19 +212,26 @@ public class SplitPreloaderTest {
         Context[] backgroundContextHolder = new Context[1];
         Context[] uiContextHolder = new Context[1];
         CallbackHelper helper = new CallbackHelper();
-        mPreloader.preload(SPLIT_A, new SplitPreloader.OnComplete() {
-            @Override
-            public void runImmediatelyInBackgroundThread(Context context) {
-                backgroundContextHolder[0] = context;
-                helper.notifyCalled();
-            }
+        mPreloader.preload(
+                SPLIT_A,
+                new SplitPreloader.PreloadHooks() {
+                    @Override
+                    public void runImmediatelyInBackgroundThread(Context context) {
+                        backgroundContextHolder[0] = context;
+                        helper.notifyCalled();
+                    }
 
-            @Override
-            public void runInUiThread(Context context) {
-                uiContextHolder[0] = context;
-            }
-        });
-        helper.waitForFirst();
+                    @Override
+                    public void runInUiThread(Context context) {
+                        uiContextHolder[0] = context;
+                    }
+
+                    @Override
+                    public Context createIsolatedSplitContext(String name) {
+                        return BundleUtils.createIsolatedSplitContext(name);
+                    }
+                });
+        helper.waitForOnly();
         assertEquals(backgroundContextHolder[0], mContext);
 
         mPreloader.wait(SPLIT_A);

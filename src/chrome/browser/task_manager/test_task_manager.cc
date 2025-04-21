@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@ TestTaskManager::TestTaskManager()
   set_timer_for_testing(std::make_unique<base::MockRepeatingTimer>());
 }
 
-TestTaskManager::~TestTaskManager() {
-}
+TestTaskManager::~TestTaskManager() = default;
 
 void TestTaskManager::ActivateTask(TaskId task_id) {
 }
@@ -103,6 +102,10 @@ const base::ProcessId& TestTaskManager::GetProcessId(TaskId task_id) const {
 
 Task::Type TestTaskManager::GetType(TaskId task_id) const {
   return Task::UNKNOWN;
+}
+
+Task::SubType TestTaskManager::GetSubType(TaskId task_id) const {
+  return Task::SubType::kNoSubType;
 }
 
 SessionID TestTaskManager::GetTabId(TaskId task_id) const {

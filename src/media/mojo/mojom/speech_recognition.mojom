@@ -1,11 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module media.mojom;
 
 import "media/mojo/mojom/audio_data.mojom";
+import "media/mojo/mojom/speech_recognition_audio_forwarder.mojom";
+import "media/mojo/mojom/speech_recognition_recognition_context.mojom";
+import "media/mojo/mojom/speech_recognizer.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "mojo/public/mojom/base/unguessable_token.mojom";
+import "ui/gfx/geometry/mojom/geometry.mojom";
+
+// Next MinVersion: 9
 
 // Corresponds to the LangIdEvent.ConfidenceInterval defined in
 // http://google3/speech/soda/public/soda_event.proto.
@@ -17,11 +24,22 @@ enum ConfidenceLevel {
   kHighlyConfident,
 };
 
-// The main interface a renderer client uses to interact with a speech
-// recognition service process. In Live Caption, every renderer can own one or
-// more Remote<SpeechRecognitionContext>, with the receiver bound through the
-// BrowserInterfaceBroker. This is a stable interface that is used across the
-// LaCrOS/Ash boundary.
+// Corresponds to the LangIdEvent.AsrSwitchResult defined in
+// http://google3/speech/soda/public/soda_event.proto.
+[Stable, Extensible]
+enum AsrSwitchResult {
+  [Default] kDefaultNoSwitch,
+  kSwitchSucceeded,
+  kSwitchFailed,
+  kSwitchSkipedNoLp,
+};
+
+// The main interface a client uses to interact with a speech
+// recognition service process. For Live Caption, every renderer can own one
+// or more Remote<SpeechRecognitionContext>, with the receiver bound through the
+// BrowserInterfaceBroker. For the Web Speech API, the browser is the client and
+// can own one or more Remote<SpeechRecognitionContext>. This is a stable
+// interface that is used across the LaCrOS/Ash boundary.
 [Stable]
 interface SpeechRecognitionContext {
   // Bind the recognizers to the speech recognition service. Returns a flag
@@ -30,12 +48,25 @@ interface SpeechRecognitionContext {
   BindRecognizer@0(pending_receiver<SpeechRecognitionRecognizer> receiver,
                    pending_remote<SpeechRecognitionRecognizerClient> client,
                    SpeechRecognitionOptions options)
-                   => (bool is_multichannel_supported);
+      => (bool is_multichannel_supported);
+
+  // Bind the recognizer used by the Web Speech API.
+  [MinVersion=6]
+  BindWebSpeechRecognizer@1(
+      pending_receiver<media.mojom.SpeechRecognitionSession> session_receiver,
+      pending_remote<media.mojom.SpeechRecognitionSessionClient> session_client,
+      pending_receiver<SpeechRecognitionAudioForwarder> audio_forwarder,
+      int32 channel_count,
+      int32 sample_rate,
+      SpeechRecognitionOptions options,
+      bool continuous);
 };
 
 // The interface used to pass raw audio from the renderer to the speech
-// recognition service. The remote lives in the renderer process and the
-// receiver lives in the speech recognition process.
+// recognition service. The remote lives either in the renderer process (for web
+// Live Caption) or the browser process (for CrOS features like system Live
+// Caption and dictation) and the receiver lives in the speech recognition
+// process.
 [Stable]
 interface SpeechRecognitionRecognizer {
   // Initialize the speech recognition instance. The speech recognition client
@@ -52,6 +83,11 @@ interface SpeechRecognitionRecognizer {
   // Notify the speech recognition recognizer that the language changed. Takes
   // in the locale string (e.g. "en-US").
   OnLanguageChanged@2(string language);
+
+  // Notify the speech recognition recognizer that the mask offensive words
+  // setting has changed.
+  [MinVersion=2]
+  OnMaskOffensiveWordsChanged@3(bool mask_offensive_words);
 };
 
 // The interface used to return speech recognition events from the speech
@@ -61,10 +97,11 @@ interface SpeechRecognitionRecognizer {
 [Stable]
 interface SpeechRecognitionRecognizerClient {
   // Triggered by speech recognition process on a speech recognition event.
-  // Returns whether the result was received successfully. Speech recognition
-  // will halt if this returns false.
+  //
+  // Returns false if the client wants to halt speech recognition e.g. in
+  // response to user input or in the case of an error.
   OnSpeechRecognitionRecognitionEvent@0(SpeechRecognitionResult result)
-      => (bool success);
+      => (bool continue_recognition);
 
   // Called when speech recognition stops.
   OnSpeechRecognitionStopped@1();
@@ -107,7 +144,7 @@ struct TimingInformation {
   // chromeos/services/machine_learning/public/mojom/soda.mojom. Therefore, it
   // must be optional. Hypothesis parts maybe non-empty optional containing a
   // zero length vector if no words were spoken during the event's time span.
-  array<HypothesisParts> ? hypothesis_parts;
+  array<HypothesisParts>? hypothesis_parts;
 };
 
 // A speech recognition result created by the speech service and passed to the
@@ -137,30 +174,81 @@ struct LanguageIdentificationEvent {
 
   // The confidence interval.
   ConfidenceLevel confidence_level;
+
+  // If multilang is enabled, describes the actions Automatic Speech Recognition
+  // took as a result of this event.
+  [MinVersion=1]
+  AsrSwitchResult? asr_switch_result;
 };
 
 // The interface used to notify the speech recognition client of events
 // triggered by the browser. The remote lives in the browser process and the
-// receiver lives in the renderer process.
+// receiver lives either in the renderer process (for web Live Caption) or
+// the browser process (for CrOS system Live Caption).
 [Stable]
 interface SpeechRecognitionBrowserObserver {
   // Notify the speech recognition client when speech recognition availability
   // changes.
-  SpeechRecognitionAvailabilityChanged@0(bool is_speech_recognition_available);
+  SpeechRecognitionAvailabilityChanged@0(
+      bool is_speech_recognition_available);
 
   // Notify the speech recognition client when the speech recognition language
   // changes.
   SpeechRecognitionLanguageChanged@1(string language);
+
+  // Notify the speech recognition client when the mask offensive words pref
+  // changes.
+  [MinVersion=2]
+  SpeechRecognitionMaskOffensiveWordsChanged@2(bool mask_offensive_words);
+};
+
+// The user-facing source of recognized speech; typically a tab. The remote
+// lives in the Ash browser process and is used to trigger behavior in lacros
+// (like focusing the tab). The receiver lives in the lacros browser process.
+[Stable]
+interface SpeechRecognitionSurface {
+  // "Activate" the surface - i.e. bring it to the front and focus it.
+  Activate@0();
+
+  // Fetch the bounds of the surface in screen coordinates. A nullopt is
+  // returned if no bounds could be fetched.
+  GetBounds@1() => (gfx.mojom.Rect? bounds);
+};
+
+// The OS-side observer of a lacros-side speech surface. Used to close or
+// re-render a live caption bubble based on user interaction with the
+// lacros-side surface. The remote lives in the lacros browser process, and the
+// receiver lives in the Ash browser process.
+[Stable]
+interface SpeechRecognitionSurfaceClient {
+  // Called when the user navigates away or refreshes the current tab. This
+  // comprises the end of a live caption "session", after which the caption
+  // bubble can be shown even if it was explicitly dismissed by the user.
+  OnSessionEnded@0();
+
+  // Called when the user fullscreens or un-fullscreens the speech surface.
+  OnFullscreenToggled@1();
 };
 
 // This interface between the speech recognition client and the browser.
 // The remote lives in the renderer process and the receiver lives in the
-// browser process.
+// browser process. Not necessary for browser-side features (e.g. CrOS system
+// Live Caption), which can access browser functionality directly.
 [Stable]
 interface SpeechRecognitionClientBrowserInterface {
   // Bind the speech recognition availability observer.
   BindSpeechRecognitionBrowserObserver@0(
-    pending_remote<SpeechRecognitionBrowserObserver> observer);
+      pending_remote<SpeechRecognitionBrowserObserver> observer);
+
+  [MinVersion=1]
+  REMOVED_1@1();
+
+  // Similar to BindSpeechRecognitionBrowserObserver, however binds Browser
+  // observers that listen to events specific to BabelOrca rather than
+  // the traditional LiveCaption preference.
+  [MinVersion=7, EnableIf=is_chromeos_ash]
+  BindBabelOrcaSpeechRecognitionBrowserObserver@2(
+      pending_remote<SpeechRecognitionBrowserObserver> observer);
 };
 
 // Corresponds to ExtendedSodaConfigMsg.RecognitionMode in
@@ -176,8 +264,22 @@ enum SpeechRecognitionMode {
   kCaption,
 };
 
+// Which Chrome/ChromeOS application that is triggering the
+// speech recognition session to start.
+[Stable, Extensible]
+enum RecognizerClientType {
+  [Default] kUnknown,
+  // Dictation on ChromeOS.
+  kDictation,
+  // LiveCaption on Chrome/ChromeOS.
+  kLiveCaption,
+  // Projector on ChromeOS.
+  kProjector,
+  // CastModerator on ChromeOS.
+  kCastModerator,
+};
+
 // Options for speech recognition.
-// TODO(crbug.com/1165437): Add option to include timing metrics in the result.
 [Stable]
 struct SpeechRecognitionOptions {
   // What kind of recognition to use.
@@ -189,9 +291,41 @@ struct SpeechRecognitionOptions {
   bool enable_formatting;
 
   // The BCP-47 localized language code to use (e.g. "en-US").
-  // TODO(crbug.com/1161569): Language needs to be required when multiple
+  // TODO(crbug.com/40162502): Language needs to be required when multiple
   // languages are supported by SODA, so that each SpeechRecognitionRecognizer
-  // can use its own language. Right now Language is only used by Projector
-  // and Dictation via OnDeviceSpeechRecognizer in Chrome OS.
+  // can use its own language.
   string? language;
+
+  // Whether the recognition is happening on-device or remotely on a server.
+  [MinVersion=1]
+  bool is_server_based;
+
+  // Which client is requesting the speech recognition session.
+  [MinVersion=1]
+  RecognizerClientType recognizer_client_type;
+
+  // When true, if the incoming audio buffer is zero for an extended period
+  // (e.g. 10 seconds), audio won't be fed to the captioning model until nonzero
+  // audio is received.
+  // When false, even empty audio is captioned indefinitely.
+  // Set to false if accurate TimingInfo relative to the start of captioning is
+  // needed.
+  [MinVersion=4]
+  bool skip_continuously_empty_audio = false;
+
+  // The optional experiment recognizer routing key for current request.
+  [MinVersion=5]
+  string? experiment_recognizer_routing_key;
+
+  // The channel count of the forwarded audio.
+  [MinVersion=6]
+  int32 channel_count;
+
+  // The sample rate of the forwarded audio.
+  [MinVersion=6]
+  int32 sample_rate;
+
+  // The optional recognition context for speech recognition biasing.
+  [MinVersion=8]
+  SpeechRecognitionRecognitionContext? recognition_context;
 };

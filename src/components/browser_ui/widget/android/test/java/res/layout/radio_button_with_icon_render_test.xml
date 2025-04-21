@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_height="wrap_content"
@@ -35,7 +37,7 @@
             android:id="@+id/icon_bg_override"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/modern_grey_100"
+            android:background="@color/baseline_neutral_90"
             app:iconSrc="@drawable/test_ic_more_vert_black_24dp"
             app:primaryText="@string/test_string"
             app:descriptionText="@string/test_string" />

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ using net::huffman_trie::HuffmanBuilder;
 using net::huffman_trie::HuffmanRepresentationTable;
 using net::huffman_trie::TrieWriter;
 
-namespace url_formatter {
-
-namespace top_domains {
+namespace url_formatter::top_domains {
 
 namespace {
 
@@ -108,7 +106,9 @@ std::string TopDomainStateGenerator::Generate(
   // most space efficient Huffman table for the given inputs. This table is used
   // for the second run.
 
+  // Tables must outlive `trie_entries` and `raw_trie_entries`.
   HuffmanRepresentationTable approximate_table = ApproximateHuffman(entries);
+  HuffmanRepresentationTable optimal_table;
   HuffmanBuilder huffman_builder;
 
   // Create trie entries for the first pass.
@@ -123,10 +123,11 @@ std::string TopDomainStateGenerator::Generate(
 
   TrieWriter writer(approximate_table, &huffman_builder);
   uint32_t root_position;
-  if (!writer.WriteEntries(raw_trie_entries, &root_position))
+  if (!writer.WriteEntries(raw_trie_entries, &root_position)) {
     return std::string();
+  }
 
-  HuffmanRepresentationTable optimal_table = huffman_builder.ToTable();
+  optimal_table = huffman_builder.ToTable();
   TrieWriter new_writer(optimal_table, &huffman_builder);
 
   // Create trie entries using the optimal table for the second pass.
@@ -139,8 +140,9 @@ std::string TopDomainStateGenerator::Generate(
     trie_entries.push_back(std::move(trie_entry));
   }
 
-  if (!new_writer.WriteEntries(raw_trie_entries, &root_position))
+  if (!new_writer.WriteEntries(raw_trie_entries, &root_position)) {
     return std::string();
+  }
 
   uint32_t new_length = new_writer.position();
   std::vector<uint8_t> huffman_tree = huffman_builder.ToVector();
@@ -159,6 +161,4 @@ std::string TopDomainStateGenerator::Generate(
   return output;
 }
 
-}  // namespace top_domains
-
-}  // namespace url_formatter
+}  // namespace url_formatter::top_domains

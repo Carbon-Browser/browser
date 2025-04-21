@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/child/dwrite_font_proxy/dwrite_localized_strings_win.h"
 
-#include "base/strings/string_piece.h"
-
 #include <stddef.h>
 
+#include <string_view>
 
 namespace content {
 
@@ -19,7 +18,7 @@ HRESULT DWriteLocalizedStrings::FindLocaleName(const WCHAR* locale_name,
                                                UINT32* index,
                                                BOOL* exists) {
   static_assert(sizeof(WCHAR) == sizeof(char16_t), "WCHAR should be UTF-16.");
-  const base::StringPiece16 locale_name_str(
+  const std::u16string_view locale_name_str(
       reinterpret_cast<const char16_t*>(locale_name));
   for (size_t n = 0; n < strings_.size(); ++n) {
     if (strings_[n].first == locale_name_str) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/strings/grit/components_branded_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -15,11 +16,11 @@ namespace permissions {
 FakeBluetoothChooserController::FakeBluetoothChooserController(
     std::vector<FakeDevice> devices)
     : ChooserController(
-          l10n_util::GetStringFUTF16(IDS_BLUETOOTH_DEVICE_CHOOSER_PROMPT_ORIGIN,
+          l10n_util::GetStringFUTF16(IDS_BLUETOOTH_DEVICE_CHOOSER_PROMPT,
                                      u"example.com")),
       devices_(std::move(devices)) {}
 
-FakeBluetoothChooserController::~FakeBluetoothChooserController() {}
+FakeBluetoothChooserController::~FakeBluetoothChooserController() = default;
 
 bool FakeBluetoothChooserController::ShouldShowIconBeforeText() const {
   return true;
@@ -69,6 +70,31 @@ bool FakeBluetoothChooserController::IsConnected(size_t index) const {
 
 bool FakeBluetoothChooserController::IsPaired(size_t index) const {
   return devices_.at(index).paired;
+}
+
+bool FakeBluetoothChooserController::ShouldShowAdapterOffView() const {
+  return true;
+}
+
+int FakeBluetoothChooserController::GetAdapterOffMessageId() const {
+  return IDS_BLUETOOTH_DEVICE_CHOOSER_ADAPTER_OFF;
+}
+
+int FakeBluetoothChooserController::GetTurnAdapterOnLinkTextMessageId() const {
+  return IDS_BLUETOOTH_DEVICE_CHOOSER_TURN_ON_BLUETOOTH_LINK_TEXT;
+}
+
+bool FakeBluetoothChooserController::ShouldShowAdapterUnauthorizedView() const {
+  return true;
+}
+
+int FakeBluetoothChooserController::GetBluetoothUnauthorizedMessageId() const {
+  return IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH;
+}
+
+int FakeBluetoothChooserController::GetAuthorizeBluetoothLinkTextMessageId()
+    const {
+  return IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK_TEXT;
 }
 
 void FakeBluetoothChooserController::SetBluetoothStatus(

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,18 @@
 #include "base/auto_reset.h"
 #include "base/check_op.h"
 #include "base/notreached.h"
+#include "base/trace_event/typed_macros.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/gesture_event_details.h"
 
 namespace ui {
 namespace {
 
 // A BitSet32 is used for tracking dropped gesture types.
-static_assert(ET_GESTURE_TYPE_END - ET_GESTURE_TYPE_START < 32,
+static_assert(base::to_underlying(EventType::kGestureTypeEnd) -
+                      base::to_underlying(EventType::kGestureTypeStart) <
+                  32,
               "gesture type count too large");
 
 GestureEventData CreateGesture(EventType type,
@@ -52,7 +57,8 @@ struct DispositionHandlingInfo {
   EventType antecedent_event_type;
 
   explicit DispositionHandlingInfo(int required_touches)
-      : required_touches(required_touches), antecedent_event_type(ET_UNKNOWN) {}
+      : required_touches(required_touches),
+        antecedent_event_type(EventType::kUnknown) {}
 
   DispositionHandlingInfo(int required_touches,
                           EventType antecedent_event_type)
@@ -72,66 +78,71 @@ DispositionHandlingInfo Info(int required_touches,
 // This approach to disposition handling is described at http://goo.gl/5G8PWJ.
 DispositionHandlingInfo GetDispositionHandlingInfo(EventType type) {
   switch (type) {
-    case ET_GESTURE_TAP_DOWN:
+    case EventType::kGestureTapDown:
       return Info(RT_START);
-    case ET_GESTURE_TAP_CANCEL:
+    case EventType::kGestureTapCancel:
       return Info(RT_START);
-    case ET_GESTURE_SHOW_PRESS:
+    case EventType::kGestureShowPress:
       return Info(RT_START);
-    case ET_GESTURE_LONG_PRESS:
+    case EventType::kGestureLongPress:
       return Info(RT_START);
-    case ET_GESTURE_SHORT_PRESS:
+    case EventType::kGestureShortPress:
       return Info(RT_START);
-    case ET_GESTURE_LONG_TAP:
+    case EventType::kGestureLongTap:
       return Info(RT_START | RT_CURRENT);
-    case ET_GESTURE_TAP:
-      return Info(RT_START | RT_CURRENT, ET_GESTURE_TAP_UNCONFIRMED);
-    case ET_GESTURE_TAP_UNCONFIRMED:
+    case EventType::kGestureTap:
+      return Info(RT_START | RT_CURRENT, EventType::kGestureTapUnconfirmed);
+    case EventType::kGestureTapUnconfirmed:
       return Info(RT_START | RT_CURRENT);
-    case ET_GESTURE_DOUBLE_TAP:
-      return Info(RT_START | RT_CURRENT, ET_GESTURE_TAP_UNCONFIRMED);
-    case ET_GESTURE_SCROLL_BEGIN:
+    case EventType::kGestureDoubleTap:
+      return Info(RT_START | RT_CURRENT, EventType::kGestureTapUnconfirmed);
+    case EventType::kGestureScrollBegin:
       return Info(RT_START);
-    case ET_GESTURE_SCROLL_UPDATE:
-      return Info(RT_CURRENT, ET_GESTURE_SCROLL_BEGIN);
-    case ET_GESTURE_SCROLL_END:
-      return Info(RT_NONE, ET_GESTURE_SCROLL_BEGIN);
-    case ET_SCROLL_FLING_START:
+    case EventType::kGestureScrollUpdate:
+      return Info(RT_CURRENT, EventType::kGestureScrollBegin);
+    case EventType::kGestureScrollEnd:
+      return Info(RT_NONE, EventType::kGestureScrollBegin);
+    case EventType::kScrollFlingStart:
       // We rely on |EndScrollGestureIfNecessary| to end the scroll if the fling
       // start is prevented.
-      return Info(RT_NONE, ET_GESTURE_SCROLL_UPDATE);
-    case ET_SCROLL_FLING_CANCEL:
-      return Info(RT_NONE, ET_SCROLL_FLING_START);
-    case ET_GESTURE_PINCH_BEGIN:
-      return Info(RT_START, ET_GESTURE_SCROLL_BEGIN);
-    case ET_GESTURE_PINCH_UPDATE:
-      return Info(RT_CURRENT, ET_GESTURE_PINCH_BEGIN);
-    case ET_GESTURE_PINCH_END:
-      return Info(RT_NONE, ET_GESTURE_PINCH_BEGIN);
-    case ET_GESTURE_BEGIN:
+      return Info(RT_NONE, EventType::kGestureScrollUpdate);
+    case EventType::kScrollFlingCancel:
+      return Info(RT_NONE, EventType::kScrollFlingStart);
+    case EventType::kGesturePinchBegin:
+      return Info(RT_START, EventType::kGestureScrollBegin);
+    case EventType::kGesturePinchUpdate:
+      return Info(RT_CURRENT, EventType::kGesturePinchBegin);
+    case EventType::kGesturePinchEnd:
+      return Info(RT_NONE, EventType::kGesturePinchBegin);
+    case EventType::kGestureBegin:
       return Info(RT_START);
-    case ET_GESTURE_END:
-      return Info(RT_NONE, ET_GESTURE_BEGIN);
-    case ET_GESTURE_SWIPE:
-      return Info(RT_START, ET_GESTURE_SCROLL_BEGIN);
-    case ET_GESTURE_TWO_FINGER_TAP:
+    case EventType::kGestureEnd:
+      return Info(RT_NONE, EventType::kGestureBegin);
+    case EventType::kGestureSwipe:
+      return Info(RT_START, EventType::kGestureScrollBegin);
+    case EventType::kGestureTwoFingerTap:
       return Info(RT_START);
     default:
       break;
   }
   NOTREACHED();
-  return Info(RT_NONE);
 }
 
 int GetGestureTypeIndex(EventType type) {
-  DCHECK_GE(type, ET_GESTURE_TYPE_START);
-  DCHECK_LE(type, ET_GESTURE_TYPE_END);
-  return type - ET_GESTURE_TYPE_START;
+  DCHECK_GE(type, EventType::kGestureTypeStart);
+  DCHECK_LE(type, EventType::kGestureTypeEnd);
+  return base::to_underlying(type) -
+         base::to_underlying(EventType::kGestureTypeStart);
 }
 
 bool IsTouchStartEvent(GestureEventDataPacket::GestureSource gesture_source) {
   return gesture_source == GestureEventDataPacket::TOUCH_SEQUENCE_START ||
          gesture_source == GestureEventDataPacket::TOUCH_START;
+}
+
+bool DoAddInputTimestampsToGesture(const GestureEventData& gesture_data) {
+  return gesture_data.type() == EventType::kGestureScrollUpdate ||
+         gesture_data.type() == EventType::kGestureScrollBegin;
 }
 
 }  // namespace
@@ -163,8 +174,13 @@ TouchDispositionGestureFilter::OnGesturePacket(
   if (packet.gesture_source() == GestureEventDataPacket::TOUCH_SEQUENCE_START)
     sequences_.push(GestureSequence());
 
-  if (IsEmpty())
+  if (IsEmpty()) {
+    if (packet.gesture_source() ==
+        GestureEventDataPacket::TOUCH_SEQUENCE_CANCEL) {
+      return EMPTY_GESTURE_SEQUENCE;
+    }
     return INVALID_PACKET_ORDER;
+  }
 
   if (packet.gesture_source() == GestureEventDataPacket::TOUCH_TIMEOUT &&
       Tail().empty()) {
@@ -196,10 +212,13 @@ TouchDispositionGestureFilter::OnGesturePacket(
 void TouchDispositionGestureFilter::OnTouchEventAck(
     uint32_t unique_touch_event_id,
     bool event_consumed,
-    bool is_source_touch_event_set_blocking) {
+    bool is_source_touch_event_set_blocking,
+    const std::optional<EventLatencyMetadata>& event_latency_metadata) {
   // Spurious asynchronous acks should not trigger a crash.
-  if (IsEmpty() || (Head().empty() && sequences_.size() == 1))
+  if (IsEmpty() || (Head().empty() && sequences_.size() == 1)) {
+    TRACE_EVENT_INSTANT("input", "OnTouchEventAck spurious async ack");
     return;
+  }
 
   if (Head().empty())
     PopGestureSequence();
@@ -211,16 +230,17 @@ void TouchDispositionGestureFilter::OnTouchEventAck(
       Tail().back().gesture_source() != GestureEventDataPacket::TOUCH_TIMEOUT) {
     Tail().back().Ack(event_consumed, is_source_touch_event_set_blocking);
     if (sequences_.size() == 1 && Tail().size() == 1)
-      SendAckedEvents();
+      SendAckedEvents(event_latency_metadata);
   } else {
     DCHECK(!Head().empty());
     DCHECK_EQ(Head().front().unique_touch_event_id(), unique_touch_event_id);
     Head().front().Ack(event_consumed, is_source_touch_event_set_blocking);
-    SendAckedEvents();
+    SendAckedEvents(event_latency_metadata);
   }
 }
 
-void TouchDispositionGestureFilter::SendAckedEvents() {
+void TouchDispositionGestureFilter::SendAckedEvents(
+    const std::optional<EventLatencyMetadata>& event_latency_metadata) {
   // Dispatch all packets corresponding to ack'ed touches, as well as
   // any pending timeout-based packets.
   bool touch_packet_for_current_ack_handled = false;
@@ -240,8 +260,10 @@ void TouchDispositionGestureFilter::SendAckedEvents() {
 
     if (source != GestureEventDataPacket::TOUCH_TIMEOUT) {
       // We've sent all packets which aren't pending their ack.
-      if (ack_state == GestureEventDataPacket::AckState::PENDING)
+      if (ack_state == GestureEventDataPacket::AckState::PENDING) {
+        TRACE_EVENT_INSTANT("input", "SendAckedEvents RestPending");
         break;
+      }
       state_.OnTouchEventAck(
           ack_state == GestureEventDataPacket::AckState::CONSUMED,
           IsTouchStartEvent(source));
@@ -251,8 +273,20 @@ void TouchDispositionGestureFilter::SendAckedEvents() {
     // Aura, we could trigger a touch-cancel). As popping the sequence destroys
     // the packet, we copy the packet before popping it.
     touch_packet_for_current_ack_handled = true;
-    const GestureEventDataPacket packet = sequence.front();
+    GestureEventDataPacket packet = sequence.front();
     sequence.pop();
+
+    if (source == GestureEventDataPacket::TOUCH_MOVE &&
+        event_latency_metadata.has_value()) {
+      EventLatencyMetadata gesture_event_latency_metadata;
+      gesture_event_latency_metadata
+          .scrolls_blocking_touch_dispatched_to_renderer =
+          event_latency_metadata->dispatched_to_renderer;
+      packet.AddEventLatencyMetadataToGestures(
+          std::move(gesture_event_latency_metadata),
+          base::BindRepeating(DoAddInputTimestampsToGesture));
+    }
+
     FilterAndSendPacket(packet);
   }
   DCHECK(touch_packet_for_current_ack_handled);
@@ -268,6 +302,13 @@ void TouchDispositionGestureFilter::ResetGestureHandlingState() {
 
 void TouchDispositionGestureFilter::FilterAndSendPacket(
     const GestureEventDataPacket& packet) {
+  TRACE_EVENT("input", "TouchDispositionGestureFilter::FilterAndSendPacket",
+              [&](perfetto::EventContext ctx) {
+                auto* event =
+                    ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+                auto* filter = event->set_touch_disposition_gesture_filter();
+                filter->set_gesture_count(packet.gesture_count());
+              });
   if (packet.gesture_source() == GestureEventDataPacket::TOUCH_SEQUENCE_START) {
     CancelTapIfNecessary(packet);
     EndScrollIfNecessary(packet);
@@ -278,13 +319,22 @@ void TouchDispositionGestureFilter::FilterAndSendPacket(
   int gesture_end_index = -1;
   for (size_t i = 0; i < packet.gesture_count(); ++i) {
     const GestureEventData& gesture = packet.gesture(i);
-    DCHECK_GE(gesture.details.type(), ET_GESTURE_TYPE_START);
-    DCHECK_LE(gesture.details.type(), ET_GESTURE_TYPE_END);
+    DCHECK_GE(gesture.details.type(), EventType::kGestureTypeStart);
+    DCHECK_LE(gesture.details.type(), EventType::kGestureTypeEnd);
     if (state_.Filter(gesture.details.type())) {
       CancelTapIfNecessary(packet);
+
+      // Send the gesture begin and end events when the touch start event is
+      // consumed. For every touch press and release, the gesture begin and end
+      // events are always generated.
+      if (base::FeatureList::IsEnabled(features::kEnableGestureBeginEndTypes) &&
+          (gesture.details.type() == EventType::kGestureBegin ||
+           gesture.details.type() == EventType::kGestureEnd)) {
+        SendGesture(gesture, packet);
+      }
       continue;
     }
-    if (gesture.type() == ET_GESTURE_TAP_CANCEL) {
+    if (gesture.type() == EventType::kGestureTapCancel) {
       CancelTapIfNecessary(packet);
       continue;
     }
@@ -299,9 +349,10 @@ void TouchDispositionGestureFilter::FilterAndSendPacket(
     }
     // Occasionally scroll or tap cancel events are synthesized when a touch
     // sequence has been canceled or terminated, we want to make sure that
-    // ET_GESTURE_END always happens after them.
-    if (gesture.type() == ET_GESTURE_END) {
-      // Make sure there is at most one ET_GESTURE_END event in each packet.
+    // EventType::kGestureEnd always happens after them.
+    if (gesture.type() == EventType::kGestureEnd) {
+      // Make sure there is at most one EventType::kGestureEnd event in each
+      // packet.
       DCHECK_EQ(-1, gesture_end_index);
       gesture_end_index = static_cast<int>(i);
       continue;
@@ -317,7 +368,8 @@ void TouchDispositionGestureFilter::FilterAndSendPacket(
              GestureEventDataPacket::TOUCH_SEQUENCE_END) {
     EndScrollIfNecessary(packet);
   }
-  // Always send the ET_GESTURE_END event as the last one for every touch event.
+  // Always send the EventType::kGestureEnd event as the last one for every
+  // touch event.
   if (gesture_end_index >= 0)
     SendGesture(packet.gesture(gesture_end_index), packet);
 }
@@ -325,48 +377,49 @@ void TouchDispositionGestureFilter::FilterAndSendPacket(
 void TouchDispositionGestureFilter::SendGesture(
     const GestureEventData& event,
     const GestureEventDataPacket& packet_being_sent) {
+  TRACE_EVENT("input", "TouchDispositionGestureFilter::SendGesture");
   DCHECK(event.unique_touch_event_id ==
          packet_being_sent.unique_touch_event_id());
 
   // TODO(jdduke): Factor out gesture stream reparation code into a standalone
   // utility class.
   switch (event.type()) {
-    case ET_GESTURE_LONG_TAP:
+    case EventType::kGestureLongTap:
       if (!needs_tap_ending_event_)
         return;
       CancelTapIfNecessary(packet_being_sent);
       CancelFlingIfNecessary(packet_being_sent);
       break;
-    case ET_GESTURE_TAP_DOWN:
+    case EventType::kGestureTapDown:
       DCHECK(!needs_tap_ending_event_);
       ending_event_motion_event_id_ = event.motion_event_id;
       ending_event_primary_tool_type_ = event.primary_tool_type;
       needs_show_press_event_ = true;
       needs_tap_ending_event_ = true;
       break;
-    case ET_GESTURE_SHOW_PRESS:
+    case EventType::kGestureShowPress:
       if (!needs_show_press_event_)
         return;
       needs_show_press_event_ = false;
       break;
-    case ET_GESTURE_DOUBLE_TAP:
+    case EventType::kGestureDoubleTap:
       CancelTapIfNecessary(packet_being_sent);
       needs_show_press_event_ = false;
       break;
-    case ET_GESTURE_TAP:
+    case EventType::kGestureTap:
       DCHECK(needs_tap_ending_event_);
       if (needs_show_press_event_) {
-        SendGesture(GestureEventData(ET_GESTURE_SHOW_PRESS, event),
+        SendGesture(GestureEventData(EventType::kGestureShowPress, event),
                     packet_being_sent);
         DCHECK(!needs_show_press_event_);
       }
       needs_tap_ending_event_ = false;
       break;
-    case ET_GESTURE_TAP_CANCEL:
+    case EventType::kGestureTapCancel:
       needs_show_press_event_ = false;
       needs_tap_ending_event_ = false;
       break;
-    case ET_GESTURE_SCROLL_BEGIN:
+    case EventType::kGestureScrollBegin:
       CancelTapIfNecessary(packet_being_sent);
       CancelFlingIfNecessary(packet_being_sent);
       EndScrollIfNecessary(packet_being_sent);
@@ -374,17 +427,17 @@ void TouchDispositionGestureFilter::SendGesture(
       ending_event_primary_tool_type_ = event.primary_tool_type;
       needs_scroll_ending_event_ = true;
       break;
-    case ET_GESTURE_SCROLL_END:
+    case EventType::kGestureScrollEnd:
       needs_scroll_ending_event_ = false;
       break;
-    case ET_SCROLL_FLING_START:
+    case EventType::kScrollFlingStart:
       CancelFlingIfNecessary(packet_being_sent);
       ending_event_motion_event_id_ = event.motion_event_id;
       ending_event_primary_tool_type_ = event.primary_tool_type;
       needs_fling_ending_event_ = true;
       needs_scroll_ending_event_ = false;
       break;
-    case ET_SCROLL_FLING_CANCEL:
+    case EventType::kScrollFlingCancel:
       needs_fling_ending_event_ = false;
       break;
     default:
@@ -398,11 +451,10 @@ void TouchDispositionGestureFilter::CancelTapIfNecessary(
   if (!needs_tap_ending_event_)
     return;
 
-  SendGesture(CreateGesture(ET_GESTURE_TAP_CANCEL,
-                            ending_event_motion_event_id_,
-                            ending_event_primary_tool_type_,
-                            packet_being_sent),
-              packet_being_sent);
+  SendGesture(
+      CreateGesture(EventType::kGestureTapCancel, ending_event_motion_event_id_,
+                    ending_event_primary_tool_type_, packet_being_sent),
+      packet_being_sent);
   DCHECK(!needs_tap_ending_event_);
 }
 
@@ -411,10 +463,9 @@ void TouchDispositionGestureFilter::CancelFlingIfNecessary(
   if (!needs_fling_ending_event_)
     return;
 
-  SendGesture(CreateGesture(ET_SCROLL_FLING_CANCEL,
+  SendGesture(CreateGesture(EventType::kScrollFlingCancel,
                             ending_event_motion_event_id_,
-                            ending_event_primary_tool_type_,
-                            packet_being_sent),
+                            ending_event_primary_tool_type_, packet_being_sent),
               packet_being_sent);
   DCHECK(!needs_fling_ending_event_);
 }
@@ -424,11 +475,10 @@ void TouchDispositionGestureFilter::EndScrollIfNecessary(
   if (!needs_scroll_ending_event_)
     return;
 
-  SendGesture(CreateGesture(ET_GESTURE_SCROLL_END,
-                            ending_event_motion_event_id_,
-                            ending_event_primary_tool_type_,
-                            packet_being_sent),
-              packet_being_sent);
+  SendGesture(
+      CreateGesture(EventType::kGestureScrollEnd, ending_event_motion_event_id_,
+                    ending_event_primary_tool_type_, packet_being_sent),
+      packet_being_sent);
   DCHECK(!needs_scroll_ending_event_);
 }
 
@@ -474,7 +524,7 @@ bool TouchDispositionGestureFilter::GestureHandlingState::Filter(
       disposition_handling_info.antecedent_event_type;
   if ((required_touches & RT_START && start_touch_consumed_) ||
       (required_touches & RT_CURRENT && current_touch_consumed_) ||
-      (antecedent_event_type != ET_UNKNOWN &&
+      (antecedent_event_type != EventType::kUnknown &&
        last_gesture_of_type_dropped_.has_bit(
            GetGestureTypeIndex(antecedent_event_type)))) {
     last_gesture_of_type_dropped_.mark_bit(GetGestureTypeIndex(gesture_type));

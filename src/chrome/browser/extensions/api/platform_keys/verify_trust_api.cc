@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,18 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ref_counted.h"
-#include "chrome/browser/extensions/api/platform_keys/platform_keys_api.h"
+#include "chrome/browser/extensions/api/platform_keys_core/platform_keys_utils.h"
 #include "chrome/common/extensions/api/platform_keys_internal.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_verifier.h"
@@ -46,7 +48,7 @@ class VerifyTrustAPI::IOPart {
   // with the result (see the declaration of VerifyCallback).
   // Will not call back after this object is destructed or the verifier for this
   // extension is deleted (see OnExtensionUnloaded).
-  void Verify(std::unique_ptr<Params> params,
+  void Verify(std::optional<Params> params,
               const std::string& extension_id,
               VerifyCallback callback);
 
@@ -57,7 +59,7 @@ class VerifyTrustAPI::IOPart {
 
  private:
   struct RequestState {
-    RequestState() {}
+    RequestState() = default;
 
     RequestState(const RequestState&) = delete;
     RequestState& operator=(const RequestState&) = delete;
@@ -101,7 +103,7 @@ VerifyTrustAPI::~VerifyTrustAPI() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 }
 
-void VerifyTrustAPI::Verify(std::unique_ptr<Params> params,
+void VerifyTrustAPI::Verify(std::optional<Params> params,
                             const std::string& extension_id,
                             VerifyCallback ui_callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -154,7 +156,7 @@ VerifyTrustAPI::IOPart::~IOPart() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 }
 
-void VerifyTrustAPI::IOPart::Verify(std::unique_ptr<Params> params,
+void VerifyTrustAPI::IOPart::Verify(std::optional<Params> params,
                                     const std::string& extension_id,
                                     VerifyCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
@@ -166,14 +168,14 @@ void VerifyTrustAPI::IOPart::Verify(std::unique_ptr<Params> params,
     return;
   }
 
-  std::vector<base::StringPiece> der_cert_chain;
+  std::vector<std::string_view> der_cert_chain;
   for (const std::vector<uint8_t>& cert_der :
        details.server_certificate_chain) {
     if (cert_der.empty()) {
       std::move(callback).Run(platform_keys::kErrorInvalidX509Cert, 0, 0);
       return;
     }
-    der_cert_chain.push_back(base::StringPiece(
+    der_cert_chain.push_back(std::string_view(
         reinterpret_cast<const char*>(cert_der.data()), cert_der.size()));
   }
   scoped_refptr<net::X509Certificate> cert_chain(

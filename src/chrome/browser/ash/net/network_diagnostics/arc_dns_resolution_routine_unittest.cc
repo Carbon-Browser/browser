@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 const int kNoProblemDelayMs = 100;
@@ -27,7 +26,7 @@ const int kVeryHighLatencyDelayMs = 550;
 
 class ArcDnsResolutionRoutineTest : public ::testing::Test {
  public:
-  ArcDnsResolutionRoutineTest() {}
+  ArcDnsResolutionRoutineTest() = default;
 
   ArcDnsResolutionRoutineTest(const ArcDnsResolutionRoutineTest&) = delete;
   ArcDnsResolutionRoutineTest& operator=(const ArcDnsResolutionRoutineTest&) =
@@ -60,7 +59,8 @@ class ArcDnsResolutionRoutineTest : public ::testing::Test {
     fake_net_instance_->set_dns_resolution_test_result(result);
 
     // Set up routine with fake NetworkInstance service.
-    arc_dns_resolution_routine_ = std::make_unique<ArcDnsResolutionRoutine>();
+    arc_dns_resolution_routine_ = std::make_unique<ArcDnsResolutionRoutine>(
+        mojom::RoutineCallSource::kDiagnosticsUI);
     arc_dns_resolution_routine_->set_net_instance_for_testing(
         fake_net_instance_.get());
   }

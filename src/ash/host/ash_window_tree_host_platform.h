@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "ash/host/ash_window_tree_host.h"
 #include "ash/host/transformer_helper.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_tree_host_platform.h"
 #include "ui/ozone/public/input_controller.h"
 
@@ -36,6 +37,10 @@ class ASH_EXPORT AshWindowTreeHostPlatform
       delete;
 
   ~AshWindowTreeHostPlatform() override;
+
+  void set_ignore_platform_damage_rect_for_test(bool ignore) {
+    ignore_platform_damage_rect_for_test_ = ignore;
+  }
 
  protected:
   friend ExtendedMouseWarpControllerTest;
@@ -69,11 +74,13 @@ class ASH_EXPORT AshWindowTreeHostPlatform
       const gfx::Size& host_size_in_pixels) const override;
   void OnCursorVisibilityChangedNative(bool show) override;
   void SetBoundsInPixels(const gfx::Rect& bounds) override;
+  void OnDamageRect(const gfx::Rect& damage_rect) override;
   void DispatchEvent(ui::Event* event) override;
   std::unique_ptr<aura::ScopedEnableUnadjustedMouseEvents>
   RequestUnadjustedMovement() override;
 
-  AshWindowTreeHostDelegate* delegate_ = nullptr;  // Not owned.
+  raw_ptr<AshWindowTreeHostDelegate, DanglingUntriaged> delegate_ =
+      nullptr;  // Not owned.
 
  private:
   // All constructors call into this.
@@ -84,9 +91,11 @@ class ASH_EXPORT AshWindowTreeHostPlatform
 
   TransformerHelper transformer_helper_;
 
-  ui::InputController* input_controller_ = nullptr;
+  raw_ptr<ui::InputController, DanglingUntriaged> input_controller_ = nullptr;
 
   gfx::Rect last_cursor_confine_bounds_in_pixels_;
+
+  bool ignore_platform_damage_rect_for_test_ = false;
 };
 
 }  // namespace ash

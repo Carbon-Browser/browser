@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
 
 namespace image_annotation {
 
-// static
-const base::Feature ImageAnnotationService::kExperiment{
-    "ImageAnnotationServiceExperimental", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kImageAnnotationServiceExperimental,
+             "ImageAnnotationServiceExperimental",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 constexpr base::FeatureParam<std::string>
     ImageAnnotationService::kPixelsServerUrl;
 constexpr base::FeatureParam<std::string>
@@ -29,6 +30,7 @@ ImageAnnotationService::ImageAnnotationService(
     mojo::PendingReceiver<mojom::ImageAnnotationService> receiver,
     std::string api_key,
     scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory,
+    std::unique_ptr<manta::AnchovyProvider> anchovy_provider,
     std::unique_ptr<Annotator::Client> annotator_client)
     : receiver_(this, std::move(receiver)),
       annotator_(GURL(kPixelsServerUrl.Get()),
@@ -38,6 +40,7 @@ ImageAnnotationService::ImageAnnotationService(
                  kBatchSize.Get(),
                  kMinOcrConfidence.Get(),
                  shared_url_loader_factory,
+                 std::move(anchovy_provider),
                  std::move(annotator_client)) {}
 
 ImageAnnotationService::~ImageAnnotationService() = default;

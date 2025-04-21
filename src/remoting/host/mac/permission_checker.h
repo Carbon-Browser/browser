@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/mac/permission_process_utils.h"
 
-namespace remoting {
-namespace mac {
+namespace remoting::mac {
 
 class PermissionChecker : public PermissionWizard::Delegate {
  public:
@@ -32,7 +31,6 @@ class PermissionChecker : public PermissionWizard::Delegate {
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
 };
 
-}  // namespace mac
-}  // namespace remoting
+}  // namespace remoting::mac
 
 #endif  // REMOTING_HOST_MAC_PERMISSION_CHECKER_H_

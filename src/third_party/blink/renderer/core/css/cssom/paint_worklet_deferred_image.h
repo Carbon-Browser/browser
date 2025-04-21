@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class CORE_EXPORT PaintWorkletDeferredImage : public GeneratedImage {
             const gfx::RectF& dest_rect,
             const gfx::RectF& src_rect,
             const ImageDrawOptions&) override;
-  void DrawTile(GraphicsContext&,
+  void DrawTile(cc::PaintCanvas*,
                 const gfx::RectF&,
                 const ImageDrawOptions&) override;
   sk_sp<cc::PaintShader> CreateShader(const gfx::RectF& tile_rect,
@@ -49,7 +49,7 @@ class CORE_EXPORT PaintWorkletDeferredImage : public GeneratedImage {
                             const gfx::SizeF& size)
       : GeneratedImage(size) {
     image_ = PaintImageBuilder::WithDefault()
-                 .set_paint_worklet_input(std::move(input))
+                 .set_deferred_paint_record(std::move(input))
                  .set_id(PaintImage::GetNextId())
                  .TakePaintImage();
   }

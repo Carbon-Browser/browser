@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define UI_COMPOSITOR_TEST_TEST_CONTEXT_FACTORIES_H_
 
 #include <memory>
+
+#include "ui/compositor/test/in_process_context_factory.h"
 
 namespace gl {
 class DisableNullDrawGLBindings;
@@ -18,9 +20,6 @@ class FrameSinkManagerImpl;
 }  // namespace viz
 
 namespace ui {
-
-class InProcessContextFactory;
-class ContextFactory;
 
 // Set up the compositor ContextFactory for a test environment. Unit tests that
 // do not have a full content environment need to call this before initializing
@@ -37,7 +36,7 @@ class TestContextFactories {
   TestContextFactories(const TestContextFactories&) = delete;
   TestContextFactories& operator=(const TestContextFactories&) = delete;
 
-  ContextFactory* GetContextFactory() const;
+  ui::InProcessContextFactory* GetContextFactory() const;
 
  private:
   std::unique_ptr<gl::DisableNullDrawGLBindings> disable_null_draw_;

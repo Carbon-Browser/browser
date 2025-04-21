@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,9 @@ namespace ui {
 enum {
   PATH_START = 3000,
 
+#if !BUILDFLAG(IS_IOS)
   DIR_LOCALES,  // Directory where locale resources are stored.
+#endif
 
   // Valid only in development environment; TODO(darin): move this
   UI_DIR_TEST_DATA,  // Directory where unit test data resides.

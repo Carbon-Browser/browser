@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/public/platform_screen.h"
+
+#include <optional>
 
 #include "base/notreached.h"
 #include "base/time/time.h"
@@ -14,7 +16,7 @@ PlatformScreen::PlatformScreen() = default;
 PlatformScreen::~PlatformScreen() = default;
 
 gfx::AcceleratedWidget PlatformScreen::GetLocalProcessWidgetAtPoint(
-    const gfx::Point& point,
+    const gfx::Point& point_in_dip,
     const std::set<gfx::AcceleratedWidget>& ignore) const {
   NOTIMPLEMENTED_LOG_ONCE();
   return gfx::kNullAcceleratedWidget;
@@ -54,7 +56,11 @@ base::Value::List PlatformScreen::GetGpuExtraInfo(
   return base::Value::List();
 }
 
-void PlatformScreen::SetDeviceScaleFactor(float scale) {}
+std::optional<float>
+PlatformScreen::GetPreferredScaleFactorForAcceleratedWidget(
+    gfx::AcceleratedWidget widget) const {
+  return std::nullopt;
+}
 
 void PlatformScreen::StorePlatformNameIntoListOfValues(
     base::Value::List& values,

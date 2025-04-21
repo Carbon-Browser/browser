@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/test/chromedriver/log_replay/replay_http_client.h"
@@ -18,14 +18,11 @@ std::string UrlPath(const std::string& url) {
 
 }  // namespace
 
-ReplayHttpClient::ReplayHttpClient(
-    const DevToolsEndpoint& endpoint,
-    network::mojom::URLLoaderFactory* factory,
-    std::unique_ptr<std::set<WebViewInfo::Type>> window_types,
-    const base::FilePath& log_path)
-    : DevToolsHttpClient(endpoint, factory, std::move(window_types)),
-      log_reader_(log_path) {}
-ReplayHttpClient::~ReplayHttpClient() {}
+ReplayHttpClient::ReplayHttpClient(const DevToolsEndpoint& endpoint,
+                                   network::mojom::URLLoaderFactory* factory,
+                                   const base::FilePath& log_path)
+    : DevToolsHttpClient(endpoint, factory), log_reader_(log_path) {}
+ReplayHttpClient::~ReplayHttpClient() = default;
 
 bool ReplayHttpClient::FetchUrlAndLog(const std::string& url,
                                       std::string* response) {

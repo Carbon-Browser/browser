@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_VR_UI_SCENE_CONSTANTS_H_
 #define CHROME_BROWSER_VR_UI_SCENE_CONSTANTS_H_
 
-#include "ui/gfx/geometry/angle_conversions.h"
+#include "base/numerics/angle_conversions.h"
 
 namespace vr {
 
@@ -49,7 +49,7 @@ static constexpr float kUrlBarHeightDMM = 0.088f;
 static constexpr float kUrlBarRelativeOffset = -0.45f;
 // This is the absolute offset of the URL bar's neutral position in DMM.
 static constexpr float kUrlBarVerticalOffsetDMM = -0.516f;
-static constexpr float kUrlBarRotationRad = gfx::DegToRad(-10.0f);
+static constexpr float kUrlBarRotationRad = base::DegToRad(-10.0f);
 static constexpr float kUrlBarFontHeightDMM = 0.027f;
 static constexpr float kUrlBarButtonSizeDMM = 0.064f;
 static constexpr float kUrlBarButtonIconSizeDMM = 0.038f;

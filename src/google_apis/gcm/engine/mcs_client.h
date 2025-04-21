@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/containers/circular_deque.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "google_apis/gcm/base/gcm_export.h"
 #include "google_apis/gcm/base/mcs_message.h"
 #include "google_apis/gcm/engine/connection_factory.h"
@@ -257,11 +258,11 @@ class GCM_EXPORT MCSClient {
   uint64_t security_token_;
 
   // Factory for creating new connections and connection handlers.
-  raw_ptr<ConnectionFactory> connection_factory_;
+  raw_ptr<ConnectionFactory, DanglingUntriaged> connection_factory_;
 
   // Connection handler to handle all over-the-wire protocol communication
   // with the mobile connection server.
-  raw_ptr<ConnectionHandler> connection_handler_;
+  raw_ptr<ConnectionHandler, DanglingUntriaged> connection_handler_;
 
   // -----  Reliablie Message Queue section -----
   // Note: all queues/maps are ordered from oldest (front/begin) message to
@@ -272,7 +273,8 @@ class GCM_EXPORT MCSClient {
   base::circular_deque<MCSPacketInternal> to_resend_;
 
   // Map of collapse keys to their pending messages.
-  std::map<CollapseKey, ReliablePacketInfo*> collapse_key_map_;
+  std::map<CollapseKey, raw_ptr<ReliablePacketInfo, CtnExperimental>>
+      collapse_key_map_;
 
   // Last device_to_server stream id acknowledged by the server.
   StreamId last_device_to_server_stream_id_received_;
@@ -302,7 +304,7 @@ class GCM_EXPORT MCSClient {
   PersistentIdList restored_unackeds_server_ids_;
 
   // The GCM persistent store. Not owned.
-  raw_ptr<GCMStore> gcm_store_;
+  raw_ptr<GCMStore, DanglingUntriaged> gcm_store_;
 
   const scoped_refptr<base::SequencedTaskRunner> io_task_runner_;
 

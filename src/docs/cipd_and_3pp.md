@@ -62,7 +62,8 @@ For more on third-party dependencies, see [adding_to_third_party.md].
 
 The 3pp subdirectory will store all the 3pp related files, including a 3pp spec
 (`3pp.pb`), as well as scripts, patches and/or tools to build the software
-from source. It should be placed directly under the package directory.
+from source. It should be placed directly under the directory path that matches
+the desired name of the cipd package.
 
 Staying with the example from above, the `sample_cipd_dep` directory may be
 like the following.
@@ -194,7 +195,7 @@ may be like the following.
 
 ```
 #!/bin/bash
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -220,13 +221,13 @@ When specifying the `source` in 3pp.pb, it is possible to use a custom catch-all
 script to probe for the latest version and obtain the latest sources. A simple
 example can be like the following:
 
+> Note that this python script should be **python3-compatible**.
+
 ```
-#!/usr/bin/env python
-# Copyright 2021 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2023 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
-from __future__ import print_function
 
 import argparse
 import json

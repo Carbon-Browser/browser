@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,9 @@ class InsertionOrderedSet {
 
   size_t size() const { return vector_.size(); }
 
-  const std::vector<T>& vector() { return vector_; }
+  const std::vector<T>& vector() const { return vector_; }
 
-  const base::flat_set<T>& set() { return set_; }
+  const base::flat_set<T>& set() const { return set_; }
 
  private:
   base::flat_set<T> set_;

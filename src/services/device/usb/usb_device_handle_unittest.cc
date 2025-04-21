@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/device/usb/usb_device_handle.h"
 
@@ -8,7 +13,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -164,7 +169,7 @@ TEST_F(UsbDeviceHandleTest, InterruptTransfer) {
       base::MakeRefCounted<base::RefCountedBytes>(in_buffer->size());
   TestCompletionCallback out_completion;
   for (size_t i = 0; i < out_buffer->size(); ++i) {
-    out_buffer->data()[i] = i;
+    out_buffer->as_vector()[i] = i;
   }
 
   handle->GenericTransfer(UsbTransferDirection::OUTBOUND, 0x01, out_buffer,
@@ -230,7 +235,7 @@ TEST_F(UsbDeviceHandleTest, BulkTransfer) {
       base::MakeRefCounted<base::RefCountedBytes>(in_buffer->size());
   TestCompletionCallback out_completion;
   for (size_t i = 0; i < out_buffer->size(); ++i) {
-    out_buffer->data()[i] = i;
+    out_buffer->as_vector()[i] = i;
   }
 
   handle->GenericTransfer(UsbTransferDirection::OUTBOUND, 0x02, out_buffer,

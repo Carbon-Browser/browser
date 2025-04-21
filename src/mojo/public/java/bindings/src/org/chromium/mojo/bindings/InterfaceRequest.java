@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.bindings;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.mojo.system.MessagePipeHandle;
 
 /**
@@ -15,11 +16,10 @@ import org.chromium.mojo.system.MessagePipeHandle;
  *
  * @param <P> the type of the remote interface proxy.
  */
+@NullMarked
 public class InterfaceRequest<P extends Interface> implements HandleOwner<MessagePipeHandle> {
 
-    /**
-     * The handle which will be sent and will be connected to the implementation.
-     */
+    /** The handle which will be sent and will be connected to the implementation. */
     private final MessagePipeHandle mHandle;
 
     /**

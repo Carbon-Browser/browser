@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <list>
 #include <memory>
-#include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/aggregation_service/aggregation_service_key_fetcher.h"
@@ -102,14 +103,14 @@ class CONTENT_EXPORT AggregationServiceNetworkFetcherImpl
   void OnError(const GURL& url,
                NetworkFetchCallback callback,
                FetchStatus status,
-               const std::string& error_msg);
+               std::string_view error_msg);
 
   void RecordFetchStatus(FetchStatus status) const;
 
   // Download requests that are in progress.
   UrlLoaderList loaders_in_progress_;
 
-  const base::Clock& clock_;
+  const raw_ref<const base::Clock> clock_;
 
   // Might be `nullptr` for testing, otherwise must outlive `this`.
   raw_ptr<StoragePartition> storage_partition_;

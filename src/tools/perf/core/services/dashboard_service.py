@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -69,7 +69,7 @@ def Timeseries2(**kwargs):
 def Timeseries(test_path, days=30):
   """Get timeseries for the given test path.
 
-  TODO(crbug.com/907121): Remove when no longer needed.
+  TODO(crbug.com/40603244): Remove when no longer needed.
 
   Args:
     test_path: test path to get timeseries for.
@@ -94,7 +94,7 @@ def Timeseries(test_path, days=30):
 def ListTestPaths(test_suite, sheriff):
   """Lists test paths for the given test_suite.
 
-  TODO(crbug.com/907121): Remove when no longer needed.
+  TODO(crbug.com/40603244): Remove when no longer needed.
 
   Args:
     test_suite: String with test suite to get paths for.

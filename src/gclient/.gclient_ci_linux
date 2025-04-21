@@ -16,6 +16,15 @@ solutions = [
     "managed": False,
     "name": "src",
     "deps_file": ".DEPS.git",
-    "custom_deps": {},
+    "custom_deps": {
+       "reclient-configs": 'https://github.com/EngFlow/reclient-configs@9748bcf10a7e245cb6d0c2129629ed40fe2b1047',
+                   },
+    "custom_hooks": [
+                     {'name': 'reclient_config',
+                      'pattern': '.',
+                      'action': ['python3', 'reclient-configs/configure_reclient.py', '--src_dir=src'],
+                     },
+                    ],
+    "custom_vars": {},
   },
 ]

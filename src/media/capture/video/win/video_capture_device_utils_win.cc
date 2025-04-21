@@ -1,14 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/capture/video/win/video_capture_device_utils_win.h"
 
 #include <cmath>
 #include <iostream>
 
+#include "base/check_op.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 
 namespace media {
 
@@ -82,15 +87,12 @@ double PlatformExposureTimeToCaptureStep(long log_step,
 int GetCameraRotation(VideoFacingMode facing) {
   int rotation = 0;
 
-  // Before Win10, we can't distinguish if the selected camera is an internal or
-  // external one. So we assume it's internal and do the frame rotation if the
-  // auto rotation is enabled to cover most user cases.
   if (!IsInternalCamera(facing)) {
     return rotation;
   }
 
   // When display is only on external monitors, the auto-rotation state still
-  // may be ENALBED on the target device. In that case, we shouldn't query the
+  // may be ENABLED on the target device. In that case, we shouldn't query the
   // display orientation and the built-in camera will be treated as an external
   // one.
   DISPLAY_DEVICE internal_display_device;
@@ -98,13 +100,9 @@ int GetCameraRotation(VideoFacingMode facing) {
     return rotation;
   }
 
-  if (facing == VideoFacingMode::MEDIA_VIDEO_FACING_NONE) {
-    // We set camera facing using Win10 only DeviceInformation API. So pre-Win10
-    // cameras always have a facing of VideoFacingMode::MEDIA_VIDEO_FACING_NONE.
-    // Win10 cameras with VideoFacingMode::MEDIA_VIDEO_FACING_NONE should early
-    // exit as part of the IsInternalCamera(facing) check above.
-    DCHECK(base::win::GetVersion() < base::win::Version::WIN10);
-  }
+  // Windows cameras with VideoFacingMode::MEDIA_VIDEO_FACING_NONE should early
+  // exit as part of the IsInternalCamera(facing) check above.
+  DCHECK_NE(facing, VideoFacingMode::MEDIA_VIDEO_FACING_NONE);
 
   DEVMODE mode;
   ::ZeroMemory(&mode, sizeof(mode));
@@ -182,16 +180,8 @@ bool IsAutoRotationEnabled() {
 }
 
 bool IsInternalCamera(VideoFacingMode facing) {
-  if (base::win::GetVersion() < base::win::Version::WIN10) {
-    return true;
-  }
-
-  if (facing == MEDIA_VIDEO_FACING_USER ||
-      facing == MEDIA_VIDEO_FACING_ENVIRONMENT) {
-    return true;
-  }
-
-  return false;
+  return facing == MEDIA_VIDEO_FACING_USER ||
+         facing == MEDIA_VIDEO_FACING_ENVIRONMENT;
 }
 
 bool HasActiveInternalDisplayDevice(DISPLAY_DEVICE* internal_display_device) {

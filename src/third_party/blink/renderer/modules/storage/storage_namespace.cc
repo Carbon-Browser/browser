@@ -48,11 +48,13 @@ const char StorageNamespace::kSupplementName[] = "SessionStorageNamespace";
 
 StorageNamespace::StorageNamespace(StorageController* controller)
     : Supplement(nullptr), controller_(controller) {}
-StorageNamespace::StorageNamespace(StorageController* controller,
+StorageNamespace::StorageNamespace(Page& page,
+                                   StorageController* controller,
                                    const String& namespace_id)
     : Supplement(nullptr),
       controller_(controller),
-      namespace_id_(namespace_id) {}
+      namespace_id_(namespace_id),
+      task_runner_(page.GetAgentGroupScheduler().DefaultTaskRunner()) {}
 
 // static
 void StorageNamespace::ProvideSessionStorageNamespaceTo(
@@ -62,15 +64,16 @@ void StorageNamespace::ProvideSessionStorageNamespaceTo(
     return;
   auto* ss_namespace =
       StorageController::GetInstance()->CreateSessionStorageNamespace(
-          String(namespace_id.data(), namespace_id.length()));
+          page, String(namespace_id));
   if (!ss_namespace)
     return;
   ProvideTo(page, ss_namespace);
 }
 
 scoped_refptr<CachedStorageArea> StorageNamespace::GetCachedArea(
-    const LocalDOMWindow* local_dom_window,
-    mojo::PendingRemote<mojom::blink::StorageArea> storage_area) {
+    LocalDOMWindow* local_dom_window,
+    mojo::PendingRemote<mojom::blink::StorageArea> storage_area,
+    StorageContext context) {
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
   enum class CacheMetrics {
@@ -82,7 +85,15 @@ scoped_refptr<CachedStorageArea> StorageNamespace::GetCachedArea(
 
   CacheMetrics metric = CacheMetrics::kMiss;
   scoped_refptr<CachedStorageArea> result;
-  auto cache_it = cached_areas_.find(&local_dom_window->GetStorageKey());
+  BlinkStorageKey storage_key = local_dom_window->GetStorageKey();
+  // The Storage Access API needs to use the first-party version of the storage
+  // key. For more see:
+  // third_party/blink/renderer/modules/storage_access/README.md
+  if (context == StorageContext::kStorageAccessAPI) {
+    storage_key =
+        BlinkStorageKey::CreateFirstParty(storage_key.GetSecurityOrigin());
+  }
+  auto cache_it = cached_areas_.find(&storage_key);
   if (cache_it != cached_areas_.end()) {
     metric = cache_it->value->HasOneRef() ? CacheMetrics::kHit
                                           : CacheMetrics::kUnused;
@@ -102,24 +113,21 @@ scoped_refptr<CachedStorageArea> StorageNamespace::GetCachedArea(
   result = base::MakeRefCounted<CachedStorageArea>(
       IsSessionStorage() ? CachedStorageArea::AreaType::kSessionStorage
                          : CachedStorageArea::AreaType::kLocalStorage,
-      local_dom_window->GetStorageKey(), local_dom_window,
-      controller_->TaskRunner(), this,
+      storage_key, local_dom_window, this,
       /*is_session_storage_for_prerendering=*/false, std::move(storage_area));
-  cached_areas_.insert(std::make_unique<const BlinkStorageKey>(
-                           local_dom_window->GetStorageKey()),
+  cached_areas_.insert(std::make_unique<const BlinkStorageKey>(storage_key),
                        result);
   return result;
 }
 
 scoped_refptr<CachedStorageArea> StorageNamespace::CreateCachedAreaForPrerender(
-    const LocalDOMWindow* local_dom_window,
+    LocalDOMWindow* local_dom_window,
     mojo::PendingRemote<mojom::blink::StorageArea> storage_area) {
   DCHECK((IsSessionStorage()));
   return base::MakeRefCounted<CachedStorageArea>(
       IsSessionStorage() ? CachedStorageArea::AreaType::kSessionStorage
                          : CachedStorageArea::AreaType::kLocalStorage,
-      local_dom_window->GetStorageKey(), local_dom_window,
-      controller_->TaskRunner(), this,
+      local_dom_window->GetStorageKey(), local_dom_window, this,
       /*is_session_storage_for_prerendering=*/true, std::move(storage_area));
 }
 
@@ -218,16 +226,15 @@ void StorageNamespace::DidDispatchStorageEvent(
 }
 
 void StorageNamespace::BindStorageArea(
-    const LocalDOMWindow& local_dom_window,
+    const BlinkStorageKey& storage_key,
+    const LocalFrameToken& local_frame_token,
     mojo::PendingReceiver<mojom::blink::StorageArea> receiver) {
   if (IsSessionStorage()) {
     controller_->dom_storage()->BindSessionStorageArea(
-        local_dom_window.GetStorageKey(), local_dom_window.GetLocalFrameToken(),
-        namespace_id_, std::move(receiver));
+        storage_key, local_frame_token, namespace_id_, std::move(receiver));
   } else {
-    controller_->dom_storage()->OpenLocalStorage(
-        local_dom_window.GetStorageKey(), local_dom_window.GetLocalFrameToken(),
-        std::move(receiver));
+    controller_->dom_storage()->OpenLocalStorage(storage_key, local_frame_token,
+                                                 std::move(receiver));
   }
 }
 
@@ -242,8 +249,7 @@ void StorageNamespace::EnsureConnected() {
   if (namespace_.is_bound())
     return;
   controller_->dom_storage()->BindSessionStorageNamespace(
-      namespace_id_,
-      namespace_.BindNewPipeAndPassReceiver(controller_->TaskRunner()));
+      namespace_id_, namespace_.BindNewPipeAndPassReceiver(task_runner_));
 }
 
 }  // namespace blink

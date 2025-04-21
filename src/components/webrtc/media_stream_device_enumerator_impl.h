@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,15 +24,14 @@ class MediaStreamDeviceEnumeratorImpl : public MediaStreamDeviceEnumerator {
   // MediaStreamDeviceEnumerator:
   const blink::MediaStreamDevices& GetAudioCaptureDevices() const override;
   const blink::MediaStreamDevices& GetVideoCaptureDevices() const override;
-  void GetDefaultDevicesForBrowserContext(
+  const std::optional<blink::MediaStreamDevice>
+  GetPreferredAudioDeviceForBrowserContext(
       content::BrowserContext* context,
-      bool audio,
-      bool video,
-      blink::mojom::StreamDevices& devices) override;
-  const blink::MediaStreamDevice* GetRequestedAudioDevice(
-      const std::string& requested_audio_device_id) override;
-  const blink::MediaStreamDevice* GetRequestedVideoDevice(
-      const std::string& requested_video_device_id) override;
+      const std::vector<std::string>& eligible_device_ids) const override;
+  const std::optional<blink::MediaStreamDevice>
+  GetPreferredVideoDeviceForBrowserContext(
+      content::BrowserContext* context,
+      const std::vector<std::string>& eligible_device_ids) const override;
 };
 
 }  // namespace webrtc

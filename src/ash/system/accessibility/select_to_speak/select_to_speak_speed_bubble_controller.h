@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/system/accessibility/select_to_speak/select_to_speak_speed_view.h"
 #include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/view_click_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/wm/public/activation_change_observer.h"
 
 namespace ash {
@@ -39,8 +40,12 @@ class ASH_EXPORT SelectToSpeakSpeedBubbleController
  private:
   friend class SelectToSpeakSpeedBubbleControllerTest;
 
+  void MaybeRecordDurationHistogram();
+
   // TrayBubbleView::Delegate:
+  std::u16string GetAccessibleNameForBubble() override;
   void BubbleViewDestroyed() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // ::wm::ActivationChangeObserver:
   void OnWindowActivated(ActivationReason reason,
@@ -50,13 +55,15 @@ class ASH_EXPORT SelectToSpeakSpeedBubbleController
   // SelectToSpeakSpeedView::Delegate:
   void OnSpeechRateSelected(double speech_rate) override;
 
+  base::Time last_show_time_;
+
   // Owned by views hierarchy.
-  TrayBubbleView* bubble_view_ = nullptr;
-  views::Widget* bubble_widget_ = nullptr;
-  SelectToSpeakSpeedView* speed_view_ = nullptr;
+  raw_ptr<TrayBubbleView> bubble_view_ = nullptr;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
+  raw_ptr<SelectToSpeakSpeedView, DanglingUntriaged> speed_view_ = nullptr;
 
   // Owned by parent whose lifetime exceeds this class.
-  SelectToSpeakSpeedView::Delegate* delegate_ = nullptr;
+  raw_ptr<SelectToSpeakSpeedView::Delegate> delegate_ = nullptr;
 };
 
 }  // namespace ash

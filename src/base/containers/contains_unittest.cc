@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/containers/contains.h"
 
+#include <functional>
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "base/containers/flat_set.h"
-#include "base/functional/identity.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -36,11 +36,11 @@ TEST(ContainsTest, GenericContainsWithProjection) {
 }
 
 TEST(ContainsTest, GenericSetContainsWithProjection) {
-  constexpr StringPiece kFoo = "foo";
+  constexpr std::string_view kFoo = "foo";
   std::set<std::string> set = {"foo", "bar", "baz"};
 
   // Opt into a linear search by explicitly providing a projection:
-  EXPECT_TRUE(Contains(set, kFoo, identity{}));
+  EXPECT_TRUE(Contains(set, kFoo, std::identity{}));
 }
 
 TEST(ContainsTest, ContainsWithFindAndNpos) {

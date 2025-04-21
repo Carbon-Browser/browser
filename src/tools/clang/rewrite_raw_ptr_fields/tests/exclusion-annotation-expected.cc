@@ -1,30 +1,62 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
+#include "base/memory/raw_span.h"
 
 #define RAW_PTR_EXCLUSION __attribute__((annotate("raw_ptr_exclusion")))
 
-class SomeClass;
+class SomeClass {
+ public:
+  int member;
+};
 
 class MyClass {
+ public:
   // Expected rewrite: raw_ptr<SomeClass> raw_ptr_field;
   raw_ptr<SomeClass> raw_ptr_field;
+
+  // Expected rewrite: raw_ref<SomeClass> raw_ref_field;
+  const raw_ref<SomeClass> raw_ref_field;
+
+  // Expected rewrite: base::raw_span<SomeClass> span_field;
+  base::raw_span<SomeClass> span_field;
+
   RAW_PTR_EXCLUSION SomeClass* excluded_raw_ptr_field;
+  RAW_PTR_EXCLUSION SomeClass& excluded_raw_ref_field;
+  RAW_PTR_EXCLUSION base::span<SomeClass> excluded_span_field;
 };
 
 struct MyStruct {
   // Expected rewrite: raw_ptr<SomeClass> raw_ptr_field;
   raw_ptr<SomeClass> raw_ptr_field;
+  // Expected rewrite: raw_ref<SomeClass> raw_ref_field;
+  const raw_ref<SomeClass> raw_ref_field;
+  // Expected rewrite: base::raw_span<SomeClass> span_field;
+  base::raw_span<SomeClass> span_field;
   RAW_PTR_EXCLUSION SomeClass* excluded_raw_ptr_field;
+  RAW_PTR_EXCLUSION SomeClass& excluded_raw_ref_field;
+  RAW_PTR_EXCLUSION base::span<SomeClass> excluded_span_field;
 };
 
 template <typename T>
 class MyTemplate {
+ public:
   // Expected rewrite: raw_ptr<T> raw_ptr_field;
   raw_ptr<T> raw_ptr_field;
+
+  // Expected rewrite: raw_ref<T> raw_ref_field;
+  const raw_ref<T> raw_ref_field;
+
+  // Expected rewrite: base::raw_span<T> span_field;
+  base::raw_span<T> span_field;
+
   RAW_PTR_EXCLUSION T* excluded_raw_ptr_field;
+  RAW_PTR_EXCLUSION T& excluded_raw_ref_field;
+  RAW_PTR_EXCLUSION base::span<T> excluded_span_field;
 };
 
 // The field below won't compile without the |typename| keyword (because
@@ -39,4 +71,10 @@ struct DependentNameTest {
   raw_ptr<typename MaybeProvidesType<T>::Type> raw_ptr_field;
   RAW_PTR_EXCLUSION
   typename MaybeProvidesType<T>::Type* excluded_raw_ptr_field;
+
+  // Expected rewrite:
+  // base::raw_span<typename MaybeProvidesType<T>::Type> span_field;
+  base::raw_span<typename MaybeProvidesType<T>::Type> span_field;
+  RAW_PTR_EXCLUSION
+  base::span<typename MaybeProvidesType<T>::Type> excluded_span_field;
 };

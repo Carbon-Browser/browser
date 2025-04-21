@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -138,8 +138,8 @@ class COMPONENT_EXPORT(LEARNING_IMPL) RandomTreeTrainer
       // indices that we're using out of our training data.
       std::vector<size_t> training_idx;
 
-      // Number of occurances of each target value in |training_data| along this
-      // branch of the split.
+      // Number of occurrences of each target value in |training_data| along
+      // this branch of the split.
       // This is a flat_map since we're likely to have a very small (e.g.,
       // "true / "false") number of targets.
       TargetHistogram target_histogram;

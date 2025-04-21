@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 #include <pk11priv.h>
 #include <pk11pub.h>
 
+#include <optional>
 #include <utility>
 
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -19,10 +21,9 @@
 #include "content/public/browser/browser_thread.h"
 #include "crypto/nss_key_util.h"
 #include "net/cert/nss_cert_database.h"
-#include "net/cert/pem.h"
 #include "net/cert/scoped_nss_types.h"
 #include "net/cert/x509_util_nss.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/boringssl/src/pki/pem.h"
 
 namespace {
 
@@ -41,6 +42,28 @@ void GetCertDBOnIOThread(
   }
 }
 
+net::ScopedCERTCertificate TranslatePEMToCert(const std::string& cert_pem) {
+  bssl::PEMTokenizer tokenizer(cert_pem, {arc::kCertificatePEMHeader});
+  if (!tokenizer.GetNext()) {
+    NET_LOG(ERROR) << "Failed to get certificate data";
+    return nullptr;
+  }
+
+  std::vector<uint8_t> cert_der(tokenizer.data().begin(),
+                                tokenizer.data().end());
+  return net::x509_util::CreateCERTCertificateFromBytes(cert_der);
+}
+
+// Check the status of delete operation for cert and key, then runs |callback|.
+void DeleteCertAndKeyCallback(arc::CertManagerImpl::DeleteCertCallback callback,
+                              bool status) {
+  if (!status) {
+    NET_LOG(ERROR) << "Failed to delete certificate";
+  }
+  // Run the callback regardless of the certificate and key deletion status.
+  std::move(callback).Run();
+}
+
 }  // namespace
 
 namespace arc {
@@ -56,7 +79,7 @@ std::string CertManagerImpl::ImportPrivateKey(const std::string& key_pem,
     return std::string();
   }
 
-  net::PEMTokenizer tokenizer(key_pem, {kPrivateKeyPEMHeader});
+  bssl::PEMTokenizer tokenizer(key_pem, {kPrivateKeyPEMHeader});
   if (!tokenizer.GetNext()) {
     NET_LOG(ERROR) << "Failed to get private key data";
     return std::string();
@@ -92,24 +115,19 @@ std::string CertManagerImpl::ImportUserCert(const std::string& cert_pem,
     return std::string();
   }
 
-  net::PEMTokenizer tokenizer(cert_pem, {kCertificatePEMHeader});
-  if (!tokenizer.GetNext()) {
-    NET_LOG(ERROR) << "Failed to get certificate data";
+  net::ScopedCERTCertificate cert = TranslatePEMToCert(cert_pem);
+  if (!cert) {
+    NET_LOG(ERROR) << "Failed to translate PEM to certificate object";
     return std::string();
   }
 
-  int status = database->ImportUserCert(tokenizer.data());
+  int status = database->ImportUserCert(cert.get());
   if (status != net::OK) {
     NET_LOG(ERROR) << "Failed to import user certificate with status code "
                    << status;
     return std::string();
   }
 
-  std::vector<uint8_t> cert_der(tokenizer.data().begin(),
-                                tokenizer.data().end());
-  net::ScopedCERTCertificate cert(
-      net::x509_util::CreateCERTCertificateFromBytes(cert_der.data(),
-                                                     cert_der.size()));
   crypto::ScopedSECItem sec_item(
       PK11_GetLowLevelKeyIDForCert(nullptr, cert.get(), nullptr));
   if (!sec_item) {
@@ -118,6 +136,24 @@ std::string CertManagerImpl::ImportUserCert(const std::string& cert_pem,
   }
 
   return base::HexEncode(sec_item->data, sec_item->len);
+}
+
+void CertManagerImpl::DeleteCertAndKeyAsync(const std::string& cert_pem,
+                                            net::NSSCertDatabase* database,
+                                            DeleteCertCallback callback) {
+  if (!database) {
+    NET_LOG(ERROR) << "Certificate database is not initialized";
+    return;
+  }
+
+  net::ScopedCERTCertificate cert = TranslatePEMToCert(cert_pem);
+  if (!cert) {
+    NET_LOG(ERROR) << "Failed to translate PEM to certificate object";
+    return;
+  }
+  database->DeleteCertAndKeyAsync(
+      std::move(cert),
+      base::BindOnce(&DeleteCertAndKeyCallback, std::move(callback)));
 }
 
 int CertManagerImpl::GetSlotID(net::NSSCertDatabase* database) {
@@ -135,6 +171,27 @@ int CertManagerImpl::GetSlotID(net::NSSCertDatabase* database) {
   return PK11_GetSlotID(private_slot.get());
 }
 
+void CertManagerImpl::DeleteAndImportPrivateKeyAndCertWithDB(
+    const std::string& key_pem,
+    const std::string& cert_pem,
+    ImportPrivateKeyAndCertCallback callback,
+    net::NSSCertDatabase* database) {
+  // Attempt to delete the key and certificate first. This is important for an
+  // edge case below.
+  // 1. The user removes a set of passpoint credentials. This causes shill to
+  // delete the key and certificate from chaps.
+  // 2. The user re-adds passpoint credentials with the same key and
+  // certificate.
+  // If there is no Chrome restart between (1) and (2), NSS caches are not
+  // updated with the result of (1), making (2) fail.
+  // Deleting the key from NSS ensures that (2) succeeds even in this case.
+  DeleteCertAndKeyAsync(
+      cert_pem, database,
+      base::BindOnce(&CertManagerImpl::ImportPrivateKeyAndCertWithDB,
+                     weak_factory_.GetWeakPtr(), key_pem, cert_pem,
+                     std::move(callback), database));
+}
+
 void CertManagerImpl::ImportPrivateKeyAndCertWithDB(
     const std::string& key_pem,
     const std::string& cert_pem,
@@ -143,15 +200,18 @@ void CertManagerImpl::ImportPrivateKeyAndCertWithDB(
   std::string key_id = ImportPrivateKey(key_pem, database);
   if (key_id.empty()) {
     NET_LOG(ERROR) << "Failed to import private key";
-    std::move(callback).Run(/*cert_id=*/absl::nullopt,
-                            /*slot_id=*/absl::nullopt);
+    std::move(callback).Run(/*cert_id=*/std::nullopt,
+                            /*slot_id=*/std::nullopt);
     return;
   }
+  // Both DeleteCertAndKey parse the passed certificate into a CERTCertificate.
+  // This is unfortunate but reusing the same CERTCertificate resulted in
+  // PK11_GetLowLevelKeyIDForCert failing after the DeleteCertAndKey call.
   std::string cert_id = ImportUserCert(cert_pem, database);
   if (cert_id.empty()) {
     NET_LOG(ERROR) << "Failed to import client certificate";
-    std::move(callback).Run(/*cert_id=*/absl::nullopt,
-                            /*slot_id=*/absl::nullopt);
+    std::move(callback).Run(/*cert_id=*/std::nullopt,
+                            /*slot_id=*/std::nullopt);
     return;
   }
   int slot_id = GetSlotID(database);
@@ -172,11 +232,10 @@ void CertManagerImpl::ImportPrivateKeyAndCert(
           &GetCertDBOnIOThread,
           NssServiceFactory::GetForContext(profile_)
               ->CreateNSSCertDatabaseGetterForIOThread(),
-          base::BindPostTask(
-              base::SequencedTaskRunnerHandle::Get(),
-              base::BindOnce(&CertManagerImpl::ImportPrivateKeyAndCertWithDB,
-                             weak_factory_.GetWeakPtr(), key_pem, cert_pem,
-                             std::move(callback)))));
+          base::BindPostTaskToCurrentDefault(base::BindOnce(
+              &CertManagerImpl::DeleteAndImportPrivateKeyAndCertWithDB,
+              weak_factory_.GetWeakPtr(), key_pem, cert_pem,
+              std::move(callback)))));
 }
 
 }  // namespace arc

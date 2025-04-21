@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <commctrl.h>
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,7 +17,6 @@
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace remoting {
 
@@ -62,7 +62,7 @@ class SimpleTaskDialog final {
 
   // Shows the dialog and returns the ID of the button that the user clicked.
   // Returns nullopt if the dialog fails to show or times out.
-  absl::optional<int> Show();
+  std::optional<int> Show();
 
   SimpleTaskDialog(const SimpleTaskDialog&) = delete;
   SimpleTaskDialog& operator=(const SimpleTaskDialog&) = delete;

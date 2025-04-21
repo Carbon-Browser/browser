@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ExtensionsTestRunner} from 'extensions_test_runner';
+
 (async function() {
   TestRunner.addResult(`Tests ignoreCache flag of WebInspector.inspectedPage.reload()\n`);
-  await TestRunner.loadTestModule('extensions_test_runner');
   await TestRunner.navigatePromise('resources/random-script.html');
   await ExtensionsTestRunner.runExtensionTests([
     function extension_testIgnoreCache(nextTest) {

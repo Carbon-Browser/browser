@@ -1,19 +1,25 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/audio/snooper_node.h"
 
 #include <algorithm>
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
@@ -22,7 +28,6 @@
 #include "services/audio/test/fake_consumer.h"
 #include "services/audio/test/fake_loopback_group_member.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace audio {
 namespace {
@@ -46,7 +51,7 @@ constexpr base::TimeDelta kInputAdvanceTime = base::Milliseconds(2);
 
 // Command-line switch to request dumping the recorded output to a WAV file for
 // analyzing the recorded output from one of the tests.
-constexpr base::StringPiece kDumpAsWavSwitch = "dump-as-wav";
+constexpr std::string_view kDumpAsWavSwitch = "dump-as-wav";
 
 // Test parameters.
 struct InputAndOutputParams {
@@ -220,7 +225,7 @@ class SnooperNodeTest : public testing::TestWithParam<InputAndOutputParams> {
     // |bus|. Don't do this check if there is already a test failure, and this
     // would just keep spamming the test output.
     if (!HasFailure()) {
-      const absl::optional<base::TimeTicks> suggestion =
+      const std::optional<base::TimeTicks> suggestion =
           node_->SuggestLatestRenderTime(bus->frames());
       if (suggestion) {
         EXPECT_LE(output_time, *suggestion)
@@ -294,9 +299,9 @@ class SnooperNodeTest : public testing::TestWithParam<InputAndOutputParams> {
   double max_relative_error_ = 0.0;
 
   // The pipeline from source to consumer.
-  absl::optional<FakeLoopbackGroupMember> group_member_;
-  absl::optional<SnooperNode> node_;
-  absl::optional<FakeConsumer> consumer_;
+  std::optional<FakeLoopbackGroupMember> group_member_;
+  std::optional<SnooperNode> node_;
+  std::optional<FakeConsumer> consumer_;
 };
 
 // The skew test here is generating 10 seconds of audio per iteration, with
@@ -571,7 +576,7 @@ TEST_P(SnooperNodeTest, SuggestsRenderTimes) {
   // further details.) The suggestion should also not be too far in the past.
   const base::TimeTicks first_input_time = task_runner()->NowTicks();
   group_member()->RenderMoreAudio(first_input_time);
-  const absl::optional<base::TimeTicks> first_suggestion =
+  const std::optional<base::TimeTicks> first_suggestion =
       node()->SuggestLatestRenderTime(output_params().frames_per_buffer());
   ASSERT_TRUE(first_suggestion);
   base::TimeTicks time_at_end_of_input =
@@ -599,7 +604,7 @@ TEST_P(SnooperNodeTest, SuggestsRenderTimes) {
         base::Seconds(i * input_params().frames_per_buffer() /
                       static_cast<double>(input_params().sample_rate()));
     group_member()->RenderMoreAudio(next_input_time);
-    const absl::optional<base::TimeTicks> next_suggestion =
+    const std::optional<base::TimeTicks> next_suggestion =
         node()->SuggestLatestRenderTime(output_params().frames_per_buffer());
     ASSERT_TRUE(next_suggestion);
     time_at_end_of_input = next_input_time + input_params().GetBufferDuration();
@@ -732,58 +737,59 @@ TEST_P(SnooperNodeTest, HandlesSeekedRenderTimes) {
   }
 }
 
-InputAndOutputParams MakeParams(media::ChannelLayout input_channel_layout,
-                                int input_sample_rate,
-                                int input_frames_per_buffer,
-                                media::ChannelLayout output_channel_layout,
-                                int output_sample_rate,
-                                int output_frames_per_buffer) {
+InputAndOutputParams MakeParams(
+    media::ChannelLayoutConfig input_channel_layout_config,
+    int input_sample_rate,
+    int input_frames_per_buffer,
+    media::ChannelLayoutConfig output_channel_layout_config,
+    int output_sample_rate,
+    int output_frames_per_buffer) {
   return InputAndOutputParams{
       media::AudioParameters(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                             input_channel_layout, input_sample_rate,
+                             input_channel_layout_config, input_sample_rate,
                              input_frames_per_buffer),
       media::AudioParameters(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                             output_channel_layout, output_sample_rate,
+                             output_channel_layout_config, output_sample_rate,
                              output_frames_per_buffer)};
 }
 
 INSTANTIATE_TEST_SUITE_P(
     All,
     SnooperNodeTest,
-    testing::Values(MakeParams(media::CHANNEL_LAYOUT_STEREO,
+    testing::Values(MakeParams(media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480,
-                               media::CHANNEL_LAYOUT_STEREO,
+                               media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480),
-                    MakeParams(media::CHANNEL_LAYOUT_STEREO,
+                    MakeParams(media::ChannelLayoutConfig::Stereo(),
                                48000,
                                64,
-                               media::CHANNEL_LAYOUT_STEREO,
+                               media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480),
-                    MakeParams(media::CHANNEL_LAYOUT_STEREO,
+                    MakeParams(media::ChannelLayoutConfig::Stereo(),
                                44100,
                                64,
-                               media::CHANNEL_LAYOUT_STEREO,
+                               media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480),
-                    MakeParams(media::CHANNEL_LAYOUT_STEREO,
+                    MakeParams(media::ChannelLayoutConfig::Stereo(),
                                48000,
                                512,
-                               media::CHANNEL_LAYOUT_STEREO,
+                               media::ChannelLayoutConfig::Stereo(),
                                44100,
                                441),
-                    MakeParams(media::CHANNEL_LAYOUT_MONO,
+                    MakeParams(media::ChannelLayoutConfig::Mono(),
                                8000,
                                64,
-                               media::CHANNEL_LAYOUT_STEREO,
+                               media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480),
-                    MakeParams(media::CHANNEL_LAYOUT_STEREO,
+                    MakeParams(media::ChannelLayoutConfig::Stereo(),
                                48000,
                                480,
-                               media::CHANNEL_LAYOUT_MONO,
+                               media::ChannelLayoutConfig::Mono(),
                                8000,
                                80)));
 

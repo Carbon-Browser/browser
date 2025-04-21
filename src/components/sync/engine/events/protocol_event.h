@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,8 @@ class ProtocolEvent {
   virtual std::unique_ptr<ProtocolEvent> Clone() const = 0;
 
   // Assembles the data exposed through the ProtocolEvent's interface into a
-  // single DictionaryValue.
-  std::unique_ptr<base::DictionaryValue> ToValue(bool include_specifics) const;
+  // single base::Value::Dict.
+  base::Value::Dict ToValue(bool include_specifics) const;
 
   // Returns the time when the request was sent or received.
   base::Time GetTimestampForTesting() const;
@@ -53,10 +53,9 @@ class ProtocolEvent {
   // implementer is allowed to return lots of data separated by newlines.
   virtual std::string GetDetails() const = 0;
 
-  // Returns a DictionaryValue representing the protobuf message associated with
-  // this event.
-  virtual std::unique_ptr<base::DictionaryValue> GetProtoMessage(
-      bool include_specifics) const = 0;
+  // Returns a base::Value::Dict representing the protobuf message associated
+  // with this event.
+  virtual base::Value::Dict GetProtoMessage(bool include_specifics) const = 0;
 };
 
 }  // namespace syncer

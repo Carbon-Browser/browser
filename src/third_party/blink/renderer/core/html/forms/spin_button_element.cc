@@ -26,6 +26,7 @@
 
 #include "third_party/blink/renderer/core/html/forms/spin_button_element.h"
 
+#include "base/notreached.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/event_interface_names.h"
 #include "third_party/blink/renderer/core/events/mouse_event.h"
@@ -49,6 +50,7 @@ SpinButtonElement::SpinButtonElement(Document& document,
       capturing_(false),
       up_down_state_(kDown),
       press_starting_state_(kDown),
+      should_recalc_up_down_state_(false),
       repeating_timer_(document.GetTaskRunner(TaskType::kInternalDefault),
                        this,
                        &SpinButtonElement::RepeatingTimerFired) {
@@ -82,8 +84,6 @@ void SpinButtonElement::DefaultEventHandler(Event& event) {
     return;
   }
 
-  gfx::Point local = gfx::ToRoundedPoint(
-      box->AbsoluteToLocalPoint(mouse_event->AbsoluteLocation()));
   if (mouse_event->type() == event_type_names::kMousedown &&
       mouse_event->button() ==
           static_cast<int16_t>(WebPointerProperties::Button::kLeft)) {
@@ -96,6 +96,10 @@ void SpinButtonElement::DefaultEventHandler(Event& event) {
           // started the timer after doStepAction(), we would have no
           // chance to cancel the timer.
           StartRepeatingTimer();
+          if (should_recalc_up_down_state_) {
+            should_recalc_up_down_state_ = false;
+            CalculateUpDownStateByMouseLocation(event);
+          }
           DoStepAction(up_down_state_ == kUp ? 1 : -1);
       }
       // Check |GetLayoutObject| again to make sure element is not removed by
@@ -115,11 +119,7 @@ void SpinButtonElement::DefaultEventHandler(Event& event) {
                  static_cast<int16_t>(WebPointerProperties::Button::kLeft)) {
     ReleaseCapture();
   } else if (event.type() == event_type_names::kMousemove) {
-      UpDownState old_up_down_state = up_down_state_;
-      up_down_state_ = (local.y() < box->Size().Height() / 2) ? kUp : kDown;
-      if (up_down_state_ != old_up_down_state) {
-        GetLayoutObject()->SetShouldDoFullPaintInvalidation();
-      }
+    CalculateUpDownStateByMouseLocation(event);
   }
 
   if (!event.DefaultHandled())
@@ -133,6 +133,9 @@ void SpinButtonElement::WillOpenPopup() {
 void SpinButtonElement::ForwardEvent(Event& event) {
   if (!GetLayoutBox())
     return;
+
+  if (event.type() == event_type_names::kFocus)
+    should_recalc_up_down_state_ = true;
 
   if (!event.HasInterface(event_interface_names::kWheelEvent))
     return;
@@ -220,6 +223,36 @@ void SpinButtonElement::RepeatingTimerFired(TimerBase*) {
 bool SpinButtonElement::ShouldRespondToMouseEvents() const {
   return !spin_button_owner_ ||
          spin_button_owner_->ShouldSpinButtonRespondToMouseEvents();
+}
+
+void SpinButtonElement::CalculateUpDownStateByMouseLocation(Event& event) {
+  auto* mouse_event = DynamicTo<MouseEvent>(event);
+  LayoutBox* box = GetLayoutBox();
+  if (!mouse_event || !box)
+    return;
+
+  gfx::Point local = gfx::ToRoundedPoint(
+      box->AbsoluteToLocalPoint(mouse_event->AbsoluteLocation()));
+  UpDownState old_up_down_state = up_down_state_;
+  WritingDirectionMode writing_direction =
+      GetComputedStyle() ? GetComputedStyle()->GetWritingDirection()
+                         : WritingDirectionMode(WritingMode::kHorizontalTb,
+                                                TextDirection::kLtr);
+  switch (writing_direction.LineOver()) {
+    case PhysicalDirection::kUp:
+      up_down_state_ = (local.y() < box->Size().height / 2) ? kUp : kDown;
+      break;
+    case PhysicalDirection::kDown:
+      NOTREACHED();
+    case PhysicalDirection::kLeft:
+      up_down_state_ = (local.x() < box->Size().width / 2) ? kUp : kDown;
+      break;
+    case PhysicalDirection::kRight:
+      up_down_state_ = (local.x() < box->Size().width / 2) ? kDown : kUp;
+      break;
+  }
+  if (up_down_state_ != old_up_down_state)
+    GetLayoutObject()->SetShouldDoFullPaintInvalidation();
 }
 
 void SpinButtonElement::Trace(Visitor* visitor) const {

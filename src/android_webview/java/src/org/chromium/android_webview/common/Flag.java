@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,22 +18,24 @@ public class Flag {
     private final boolean mIsBaseFeature;
 
     /**
-     * Creates a Flag which represents a {@code base::Feature}.
+     * Creates a Flag which represents a {@code base::Feature}. Flags created with this method
+     * overload will not have a user-visible flag description.
      */
+    public static Flag baseFeature(@NonNull String name) {
+        return new Flag(name, /* description= */ "", /* enabledStateValue= */ null, true);
+    }
+
+    /** Creates a Flag which represents a {@code base::Feature}. */
     public static Flag baseFeature(@NonNull String name, @NonNull String description) {
-        return new Flag(name, description, /*enabledStateValue=*/null, true);
+        return new Flag(name, description, /* enabledStateValue= */ null, true);
     }
 
-    /**
-     * Creates a Flag which represents a commandline switch.
-     */
+    /** Creates a Flag which represents a commandline switch. */
     public static Flag commandLine(@NonNull String name, @NonNull String description) {
-        return new Flag(name, description, /*enabledStateValue=*/null, false);
+        return new Flag(name, description, /* enabledStateValue= */ null, false);
     }
 
-    /**
-     * Creates a Flag which represents a commandline switch with a value applied when enabled.
-     */
+    /** Creates a Flag which represents a commandline switch with a value applied when enabled. */
     public static Flag commandLine(
             @NonNull String name, @NonNull String description, @NonNull String enabledStateValue) {
         return new Flag(name, description, enabledStateValue, false);
@@ -43,8 +45,11 @@ public class Flag {
      * Calls should use {@link #baseFeature(String, String)} or {@link
      * #commandLine(String, String)} instead.
      */
-    private Flag(@NonNull String name, @NonNull String description,
-            @Nullable String enabledStateValue, boolean isBaseFeature) {
+    private Flag(
+            @NonNull String name,
+            @NonNull String description,
+            @Nullable String enabledStateValue,
+            boolean isBaseFeature) {
         mName = name;
         mDescription = description;
         mEnabledStateValue = enabledStateValue;

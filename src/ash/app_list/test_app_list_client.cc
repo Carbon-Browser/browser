@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,31 @@
 #include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/public/cpp/app_list/app_list_controller.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "ui/menus/simple_menu_model.h"
 
 namespace ash {
+
+namespace {
+class FakeScopedIphSession : public ScopedIphSession {
+ public:
+  ~FakeScopedIphSession() override = default;
+  void NotifyEvent(const std::string& event) override {}
+};
+}  // namespace
 
 TestAppListClient::TestAppListClient() = default;
 
 TestAppListClient::~TestAppListClient() = default;
+
+std::vector<AppListSearchControlCategory>
+TestAppListClient::GetToggleableCategories() const {
+  return toggleable_categories_for_test_;
+}
 
 void TestAppListClient::StartZeroStateSearch(base::OnceClosure on_done,
                                              base::TimeDelta timeout) {
@@ -31,7 +46,7 @@ void TestAppListClient::StartZeroStateSearch(base::OnceClosure on_done,
     // Simulate production behavior, which collects the results asynchronously.
     // Bounce through OnZeroStateSearchDone() to count calls, so that tests can
     // assert that the callback happened.
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TestAppListClient::OnZeroStateSearchDone,
                        weak_factory_.GetWeakPtr(), std::move(on_done)),
@@ -41,6 +56,8 @@ void TestAppListClient::StartZeroStateSearch(base::OnceClosure on_done,
 
 void TestAppListClient::StartSearch(const std::u16string& trimmed_query) {
   search_queries_.push_back(trimmed_query);
+  if (search_callback_)
+    search_callback_.Run(trimmed_query);
 }
 
 void TestAppListClient::OpenSearchResult(int profile_id,
@@ -59,18 +76,18 @@ void TestAppListClient::InvokeSearchResultAction(
   invoked_result_actions_.emplace_back(result_id, action);
 }
 
-void TestAppListClient::GetSearchResultContextMenuModel(
-    const std::string& result_id,
-    GetContextMenuModelCallback callback) {
-  std::move(callback).Run(nullptr);
-}
-
 void TestAppListClient::ActivateItem(int profile_id,
                                      const std::string& id,
                                      int event_flags,
-                                     ash::AppListLaunchedFrom launched_from) {
+                                     ash::AppListLaunchedFrom launched_from,
+                                     bool is_above_the_fold) {
   activate_item_count_++;
   activate_item_last_id_ = id;
+  if (is_above_the_fold) {
+    activate_item_above_the_fold_++;
+  } else {
+    activate_item_below_the_fold_++;
+  }
 }
 
 void TestAppListClient::GetContextMenuModel(
@@ -85,6 +102,17 @@ void TestAppListClient::GetContextMenuModel(
 
 AppListNotifier* TestAppListClient::GetNotifier() {
   return nullptr;
+}
+
+void TestAppListClient::RecalculateWouldTriggerLauncherSearchIph() {}
+
+std::unique_ptr<ScopedIphSession>
+TestAppListClient::CreateLauncherSearchIphSession() {
+  return std::make_unique<FakeScopedIphSession>();
+}
+
+void TestAppListClient::LoadIcon(int profile_id, const std::string& app_id) {
+  loaded_icon_app_ids_.push_back(app_id);
 }
 
 std::vector<TestAppListClient::SearchResultActionId>
@@ -105,16 +133,31 @@ ash::AppListSortOrder TestAppListClient::GetPermanentSortingOrder() const {
   return ash::AppListSortOrder::kCustom;
 }
 
-void TestAppListClient::CommitTemporarySortOrder() {
-  // Committing the temporary sort order should not introduce item reorder so
-  // reset the sort order without reorder animation.
-  AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
-      /*new_order=*/absl::nullopt, /*animate=*/false, base::NullCallback());
-}
-
 void TestAppListClient::OnZeroStateSearchDone(base::OnceClosure on_done) {
   zero_state_search_done_count_++;
   std::move(on_done).Run();
+}
+
+std::optional<bool> TestAppListClient::IsNewUser(
+    const AccountId& account_id) const {
+  return is_new_user_;
+}
+
+void TestAppListClient::RecordAppsDefaultVisibility(
+    const std::vector<std::string>& apps_above_the_fold,
+    const std::vector<std::string>& apps_below_the_fold,
+    bool is_apps_collections_page) {
+  items_above_the_fold_count_ = apps_above_the_fold.size();
+  items_below_the_fold_count_ = apps_below_the_fold.size();
+}
+
+bool TestAppListClient::HasReordered() {
+  return false;
+}
+
+void TestAppListClient::GetAssistantNewEntryPointEligibility(
+    GetAssistantNewEntryPointEligibilityCallback callback) {
+  std::move(callback).Run(ash::assistant::features::IsNewEntryPointEnabled());
 }
 
 }  // namespace ash

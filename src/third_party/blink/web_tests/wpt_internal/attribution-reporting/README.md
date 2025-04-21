@@ -61,12 +61,12 @@ await resetEventLevelReports();
 
 ### registerAttributionSrc
 
-This works to register a source or a trigger. You just need to pass in the name
-of the header and the body of the header.
+This works to register a source or a trigger. You just need to pass the body of
+the headers that you want to register.
 
 ```javascript
 const sourceEvent = {...};
-registerAttributionSrc('Attribution-Reporting-Register-Source', sourceEvent);
+registerAttributionSrc({ source: sourceEvent });
 ```
 
 The
@@ -95,6 +95,11 @@ returned by the server or the test times out. Please note that receiving reports
 from the server is a destructive operation on the server-side. This would
 essentially clear the server of all the reports.
 
+### waitForSourceToBeRegistered
+
+Waits for a previously initiated source registration `registerAttributionSrc` to
+complete. Please note that a source can be "waited on" once.
+
 ```javascript
 // then syntax
 pollEventLevelReports(100).then(callback...);
@@ -112,7 +117,7 @@ a basic test that utilizes helpers for Event-Level reports.
 
 Attribution Reporting APIs add noise to the report content and delay to report
 delivery. In order for the tests to run without this noise and delay, chrome
-must run with command-line switch `--conversions-debug-mode`. For this reason,
+must run with command-line switch `--attribution-reporting-debug-mode`. For this reason,
 all Attribution Reporting tests are virtual tests. You can run the tests by
 
 ```shell
@@ -120,10 +125,10 @@ all Attribution Reporting tests are virtual tests. You can run the tests by
 autoninja -C out/Default blink_tests
 
 # Run all Attribution Reporting tests
-third_party/blink/tools/run_web_tests.py -t Default virtual/conversions-debug-mode/wpt_internal/attribution-reporting
+third_party/blink/tools/run_web_tests.py -t Default virtual/attribution-reporting-debug-mode/wpt_internal/attribution-reporting
 
 # Run a single test
-third_party/blink/tools/run_web_tests.py -t Default virtual/conversions-debug-mode/wpt_internal/attribution-reporting/<test-name>.sub.https.html
+third_party/blink/tools/run_web_tests.py -t Default virtual/attribution-reporting-debug-mode/wpt_internal/attribution-reporting/<test-name>.sub.https.html
 ```
 
 ## Server Code

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,8 @@ class MockCanvas : public SkCanvas {
     DrawRectCall(const SkRect& rect, const SkPaint& paint)
         : rect(rect), paint(paint) {}
 
-    bool operator<(const DrawRectCall& other) const {
-      return std::tie(rect.fLeft, rect.fTop, rect.fRight, rect.fBottom) <
+    auto operator<=>(const DrawRectCall& other) const {
+      return std::tie(rect.fLeft, rect.fTop, rect.fRight, rect.fBottom) <=>
              std::tie(other.rect.fLeft, other.rect.fTop, other.rect.fRight,
                       other.rect.fBottom);
     }
@@ -47,10 +47,10 @@ class MockCanvas : public SkCanvas {
     DrawRRectCall(const SkRRect& rrect, const SkPaint& paint)
         : rrect(rrect), paint(paint) {}
 
-    bool operator<(const DrawRRectCall& other) const {
+    auto operator<=>(const DrawRRectCall& other) const {
       SkRect rect = rrect.rect();
       SkRect other_rect = other.rrect.rect();
-      return std::tie(rect.fLeft, rect.fTop, rect.fRight, rect.fBottom) <
+      return std::tie(rect.fLeft, rect.fTop, rect.fRight, rect.fBottom) <=>
              std::tie(other_rect.fLeft, other_rect.fTop, other_rect.fRight,
                       other_rect.fBottom);
     }
@@ -160,9 +160,7 @@ class BorderTest : public ViewsTestBase {
     view_ = std::make_unique<views::View>();
     view_->SetSize(gfx::Size(100, 50));
     recorder_ = std::make_unique<cc::PaintRecorder>();
-    canvas_ = std::make_unique<gfx::Canvas>(
-        recorder_->beginRecording(SkRect::MakeWH(kCanvasWidth, kCanvasHeight)),
-        1.0f);
+    canvas_ = std::make_unique<gfx::Canvas>(recorder_->beginRecording(), 1.0f);
   }
 
   void TearDown() override {
@@ -174,10 +172,10 @@ class BorderTest : public ViewsTestBase {
   }
 
   std::unique_ptr<MockCanvas> DrawIntoMockCanvas() {
-    sk_sp<cc::PaintRecord> record = recorder_->finishRecordingAsPicture();
+    cc::PaintRecord record = recorder_->finishRecordingAsPicture();
     std::unique_ptr<MockCanvas> mock(
         new MockCanvas(kCanvasWidth, kCanvasHeight));
-    record->Playback(mock.get());
+    record.Playback(mock.get());
     return mock;
   }
 

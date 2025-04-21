@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_MESSAGE_CENTER_VIEWS_NOTIFICATION_VIEW_H_
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/message_center/message_center_export.h"
 #include "ui/message_center/views/notification_view_base.h"
 
@@ -20,17 +21,14 @@ namespace message_center {
 // than ChromeOS. This view is used to displays all current types of
 // notification (web, basic, image, and list) except custom notification.
 class MESSAGE_CENTER_EXPORT NotificationView : public NotificationViewBase {
+  METADATA_HEADER(NotificationView, NotificationViewBase)
+
  public:
   // TODO(crbug/1241983): Add metadata and builder support to this view.
   explicit NotificationView(const message_center::Notification& notification);
   NotificationView(const NotificationView&) = delete;
   NotificationView& operator=(const NotificationView&) = delete;
   ~NotificationView() override;
-
-  // NotificationViewBase:
-  // TODO(crbug/1262372): Move this to private once CaptureModeNotificationView
-  // does not depend on this class.
-  void Layout() override;
 
   SkColor GetActionButtonColorForTesting(views::LabelButton* action_button);
 
@@ -45,6 +43,8 @@ class MESSAGE_CENTER_EXPORT NotificationView : public NotificationViewBase {
   void CreateOrUpdateSmallIconView(const Notification& notification) override;
   void CreateOrUpdateInlineSettingsViews(
       const Notification& notification) override;
+  void CreateOrUpdateSnoozeSettingsViews(
+      const Notification& notification) override;
   std::unique_ptr<views::LabelButton> GenerateNotificationLabelButton(
       views::Button::PressedCallback callback,
       const std::u16string& label) override;
@@ -54,10 +54,12 @@ class MESSAGE_CENTER_EXPORT NotificationView : public NotificationViewBase {
   void OnThemeChanged() override;
   void UpdateCornerRadius(int top_radius, int bottom_radius) override;
   void ToggleInlineSettings(const ui::Event& event) override;
+  void ToggleSnoozeSettings(const ui::Event& event) override;
   bool IsExpandable() const override;
-  void AddLayerBeneathView(ui::Layer* layer) override;
-  void RemoveLayerBeneathView(ui::Layer* layer) override;
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
+  void RemoveLayerFromRegions(ui::Layer* layer) override;
   void PreferredSizeChanged() override;
+  void Layout(PassKey) override;
 
   void UpdateHeaderViewBackgroundColor();
   SkColor GetNotificationHeaderViewBackgroundColor() const;
@@ -76,7 +78,7 @@ class MESSAGE_CENTER_EXPORT NotificationView : public NotificationViewBase {
   void HeaderRowPressed();
 
   // Notification title, which is dynamically created inside view hierarchy.
-  raw_ptr<views::Label> title_view_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> title_view_ = nullptr;
 
   // Views for inline settings.
   raw_ptr<views::RadioButton> block_all_button_ = nullptr;

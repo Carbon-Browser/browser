@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,16 +33,16 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FontSettingsIncognito) {
   prefs->SetString(prefs::kWebKitSansSerifFontFamily, "Arial");
   prefs->SetInteger(prefs::kWebKitDefaultFontSize, 16);
 
-  EXPECT_TRUE(
-      RunExtensionTest("font_settings/incognito",
-                       {.page_url = "launch.html", .open_in_incognito = true},
-                       {.allow_in_incognito = true}));
+  EXPECT_TRUE(RunExtensionTest(
+      "font_settings/incognito",
+      {.extension_url = "launch.html", .open_in_incognito = true},
+      {.allow_in_incognito = true}));
 }
 
 // Test the list of generic font families.
 IN_PROC_BROWSER_TEST_F(ExtensionApiTest, FontSettingsGenericFamilies) {
   PrefService* prefs = browser()->profile()->GetPrefs();
-  // TODO(crbug.com/122303): Test generic font families added to CSS Fonts
+  // TODO(crbug.com/40187445): Test generic font families added to CSS Fonts
   // Module Level 4.
   prefs->SetString(prefs::kWebKitStandardFontFamily, "default_standard");
   prefs->SetString(prefs::kWebKitSansSerifFontFamily, "default_sansserif");

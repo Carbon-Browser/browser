@@ -1,13 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_CREDENTIAL_PROVIDER_GAIACP_AUTH_UTILS_H_
 #define CHROME_CREDENTIAL_PROVIDER_GAIACP_AUTH_UTILS_H_
 
+#include <credentialprovider.h>
+#include <wtypes.h>
+
 #include <string>
 
-#include "chrome/credential_provider/gaiacp/stdafx.h"
+#include "base/win/windows_types.h"
 
 namespace credential_provider {
 

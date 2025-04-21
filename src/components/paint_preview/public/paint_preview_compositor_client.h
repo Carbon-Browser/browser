@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PAINT_PREVIEW_PUBLIC_PAINT_PREVIEW_COMPOSITOR_CLIENT_H_
 #define COMPONENTS_PAINT_PREVIEW_PUBLIC_PAINT_PREVIEW_COMPOSITOR_CLIENT_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
 #include "base/unguessable_token.h"
 #include "components/services/paint_preview_compositor/public/mojom/paint_preview_compositor.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace gfx {
@@ -27,7 +28,7 @@ class PaintPreviewCompositorClient {
 
   // Returns the token associated with the client. Will be null if the client
   // isn't started.
-  virtual const absl::optional<base::UnguessableToken>& Token() const = 0;
+  virtual const std::optional<base::UnguessableToken>& Token() const = 0;
 
   // Adds `closure` as a disconnect handler.
   virtual void SetDisconnectHandler(base::OnceClosure closure) = 0;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ public class JustNowProvider {
     }
 
     private boolean isRecentOrInProgressDownload(OfflineItem item) {
-        return item.state == OfflineItemState.IN_PROGRESS || item.state == OfflineItemState.PAUSED
+        return item.state == OfflineItemState.IN_PROGRESS
+                || item.state == OfflineItemState.PAUSED
                 || (item.state == OfflineItemState.INTERRUPTED && item.isResumable)
                 || new Date(item.completionTimeMs).after(mThresholdDate);
     }

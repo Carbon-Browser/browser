@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,7 @@ struct CRDTP_EXPORT Status {
 
   Error error = Error::OK;
   size_t pos = npos();
-  [[nodiscard]] Status(Error error, size_t pos) : error(error), pos(pos) {}
+  Status(Error error, size_t pos) : error(error), pos(pos) {}
   Status() = default;
 
   bool IsMessageError() const {
@@ -115,20 +115,23 @@ class StatusOr {
   explicit StatusOr(const Status& status) : status_(status) {}
 
   bool ok() const { return status_.ok(); }
-  T& operator*() & {
+  const Status& status() const { return status_; }
+  T& operator*() & { return value(); }
+  const T& operator*() const& { return value(); }
+  T&& operator*() && { return value(); }
+
+  T& value() & {
     assert(ok());
     return value_;
   }
-  const T& operator*() const& { return value(); }
-  T&& operator*() && { return value(); }
-  const Status& status() const { return status_; }
-
-  T& value() & { return *this; }
   T&& value() && {
     assert(ok());
     return std::move(value_);
   }
-  const T& value() const& { return *this; }
+  const T& value() const& {
+    assert(ok());
+    return value_;
+  }
 
  private:
   Status status_;

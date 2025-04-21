@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,11 @@ DMAuth DMAuth::FromOAuthToken(const std::string& oauth_token) {
 // static
 DMAuth DMAuth::FromEnrollmentToken(const std::string& enrollment_token) {
   return DMAuth(enrollment_token, DMAuthTokenType::kEnrollment);
+}
+
+// static
+DMAuth DMAuth::FromOidcResponse(const std::string& oidc_id_token) {
+  return DMAuth(oidc_id_token, DMAuthTokenType::kOidc);
 }
 
 // static

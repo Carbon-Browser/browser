@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "ash/shell.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "ash/webui/personalization_app/mojom/personalization_app.mojom.h"
-#include "ui/gfx/color_analysis.h"
 
 namespace ash {
 
@@ -37,7 +36,6 @@ SkColor ConvertBacklightColorToSkColor(
       return SkColorSetRGB(/*r=*/132, /*g=*/32, /*b=*/180);
     case personalization_app::mojom::BacklightColor::kRainbow:
       NOTREACHED();
-      return kDefaultColor;
   }
 }
 
@@ -70,7 +68,6 @@ SkColor ConvertBacklightColorToIconBackgroundColor(
           personalization_app::mojom::BacklightColor::kWallpaper);
     case personalization_app::mojom::BacklightColor::kRainbow:
       NOTREACHED();
-      return kDefaultColor;
   }
 }
 

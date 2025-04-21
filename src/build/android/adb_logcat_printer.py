@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -112,7 +112,7 @@ def GetDeviceLogs(log_filenames, logger):
     logger.debug('%s: %s', device, str(device_files))
     device_file_lines = []
     for cur_file in device_files:
-      with open(cur_file) as f:
+      with open(cur_file, encoding='latin1') as f:
         device_file_lines += [(cur_file, f.read().splitlines())]
     combined_lines = CombineLogFiles(device_file_lines, logger)
     # Prepend each line with a short unique ID so it's easy to see

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,17 +44,20 @@ public class PlayerSwipeRefreshHandler implements OverscrollHandler {
                 new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         // Use the same colors as {@link org.chromium.chrome.browser.SwipeRefreshHandler}.
         mSwipeRefreshLayout.setProgressBackgroundColorSchemeColor(
-                ChromeColors.getSurfaceColor(context, org.chromium.ui.R.dimen.default_elevation_2));
+                ChromeColors.getSurfaceColor(context, R.dimen.default_elevation_2));
         mSwipeRefreshLayout.setColorSchemeColors(
                 SemanticColorUtils.getDefaultControlColorActive(context));
         mSwipeRefreshLayout.setEnabled(true);
 
-        mSwipeRefreshLayout.setOnRefreshListener(() -> {
-            mSwipeRefreshLayout.postDelayed(() -> {
-                mSwipeRefreshLayout.setRefreshing(false);
-            }, STOP_REFRESH_ANIMATION_DELAY_MS);
-            mRefreshCallback.run();
-        });
+        mSwipeRefreshLayout.setOnRefreshListener(
+                () -> {
+                    mSwipeRefreshLayout.postDelayed(
+                            () -> {
+                                mSwipeRefreshLayout.setRefreshing(false);
+                            },
+                            STOP_REFRESH_ANIMATION_DELAY_MS);
+                    mRefreshCallback.run();
+                });
         TraceEvent.end("PlayerSwipeRefreshHandler");
     }
 
@@ -67,8 +70,7 @@ public class PlayerSwipeRefreshHandler implements OverscrollHandler {
 
     @Override
     public boolean start() {
-        // TODO(1335416): Update this to |true| if experiment is successful
-        return mSwipeRefreshLayout.start(false);
+        return mSwipeRefreshLayout.start();
     }
 
     @Override

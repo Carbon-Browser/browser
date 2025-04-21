@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,22 +10,30 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/new_window_delegate.h"
 #include "ash/public/cpp/test/test_new_window_delegate.h"
-#include "ash/scoped_animation_disabler.h"
 #include "ash/screen_util.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test_shell_delegate.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_test_util.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
+#include "ash/wm/window_util.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/pickle.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/custom_data_helper.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
@@ -33,6 +41,8 @@
 #include "ui/compositor/test/test_utils.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/vector2d.h"
+#include "ui/wm/core/scoped_animation_disabler.h"
+#include "ui/wm/core/window_util.h"
 
 using ::base::test::RunOnceCallback;
 using ::testing::_;
@@ -72,20 +82,12 @@ class MockNewWindowDelegate : public TestNewWindowDelegate {
 
 class TabDragDropDelegateTest : public AshTestBase {
  public:
-  TabDragDropDelegateTest() {
-    ash::features::SetWebUITabStripEnabled(true);
-    scoped_feature_list_.InitAndEnableFeature(
-        ash::features::kWebUITabStripTabDragIntegration);
-  }
+  TabDragDropDelegateTest() = default;
 
   // AshTestBase:
   void SetUp() override {
-    auto mock_new_window_delegate =
+    mock_new_window_delegate_ =
         std::make_unique<NiceMock<MockNewWindowDelegate>>();
-    mock_new_window_delegate_ptr_ = mock_new_window_delegate.get();
-    test_new_window_delegate_provider_ =
-        std::make_unique<TestNewWindowDelegateProvider>(
-            std::move(mock_new_window_delegate));
 
     auto mock_shell_delegate = std::make_unique<NiceMock<MockShellDelegate>>();
     mock_shell_delegate_ = mock_shell_delegate.get();
@@ -104,7 +106,9 @@ class TabDragDropDelegateTest : public AshTestBase {
 
     // Clear our pointer before the object is destroyed.
     mock_shell_delegate_ = nullptr;
-    test_new_window_delegate_provider_.reset();
+
+    mock_new_window_delegate_.reset();
+
     AshTestBase::TearDown();
   }
 
@@ -116,13 +120,8 @@ class TabDragDropDelegateTest : public AshTestBase {
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-  NiceMock<MockShellDelegate>* mock_shell_delegate_ = nullptr;
-
-  std::unique_ptr<TestNewWindowDelegateProvider>
-      test_new_window_delegate_provider_;
-  NiceMock<MockNewWindowDelegate>* mock_new_window_delegate_ptr_ = nullptr;
-
+  std::unique_ptr<NiceMock<MockNewWindowDelegate>> mock_new_window_delegate_;
+  raw_ptr<NiceMock<MockShellDelegate>> mock_shell_delegate_ = nullptr;
   std::unique_ptr<aura::Window> dummy_window_;
 };
 
@@ -219,10 +218,10 @@ TEST_F(TabDragDropDelegateTest, DropOnEdgeEntersSplitView) {
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
-  EXPECT_EQ(new_window.get(), split_view_controller->GetSnappedWindow(
-                                  SplitViewController::SnapPosition::RIGHT));
-  EXPECT_EQ(source_window.get(), split_view_controller->GetSnappedWindow(
-                                     SplitViewController::SnapPosition::LEFT));
+  EXPECT_EQ(new_window.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kSecondary));
+  EXPECT_EQ(source_window.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kPrimary));
 }
 
 // When a tab is dragged to the left/right edge of the tab strip. It should not
@@ -269,13 +268,13 @@ TEST_F(TabDragDropDelegateTest, DropTabInSplitViewMode) {
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
   split_view_controller->SnapWindow(source_window.get(),
-                                    SplitViewController::SnapPosition::LEFT);
+                                    SnapPosition::kPrimary);
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
   // Snap another window to the right to make sure right split screen is not in
   // overview mode.
   std::unique_ptr<aura::Window> right_window = CreateToplevelTestWindow();
   split_view_controller->SnapWindow(right_window.get(),
-                                    SplitViewController::SnapPosition::RIGHT);
+                                    SnapPosition::kSecondary);
 
   const gfx::Point drag_start_location = source_window->bounds().CenterPoint();
   auto area =
@@ -298,10 +297,10 @@ TEST_F(TabDragDropDelegateTest, DropTabInSplitViewMode) {
                                          ui::OSExchangeData());
 
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
-  EXPECT_EQ(new_window1.get(), split_view_controller->GetSnappedWindow(
-                                   SplitViewController::SnapPosition::RIGHT));
-  EXPECT_EQ(source_window.get(), split_view_controller->GetSnappedWindow(
-                                     SplitViewController::SnapPosition::LEFT));
+  EXPECT_EQ(new_window1.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kSecondary));
+  EXPECT_EQ(source_window.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kPrimary));
   new_window1.reset();  // Close |new_window1|.
 
   // Emulate a drag to the left side of the screen.
@@ -321,17 +320,13 @@ TEST_F(TabDragDropDelegateTest, DropTabInSplitViewMode) {
                                          ui::OSExchangeData());
 
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
-  EXPECT_EQ(nullptr, split_view_controller->GetSnappedWindow(
-                         SplitViewController::SnapPosition::RIGHT));
-  EXPECT_EQ(new_window2.get(), split_view_controller->GetSnappedWindow(
-                                   SplitViewController::SnapPosition::LEFT));
+  EXPECT_EQ(nullptr,
+            split_view_controller->GetSnappedWindow(SnapPosition::kSecondary));
+  EXPECT_EQ(new_window2.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kPrimary));
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
-  auto windows_list = Shell::Get()
-                          ->overview_controller()
-                          ->GetWindowsListInOverviewGridsForTest();
-  EXPECT_NE(
-      std::end(windows_list),
-      std::find(windows_list.begin(), windows_list.end(), source_window.get()));
+  EXPECT_TRUE(
+      base::Contains(GetWindowsListInOverviewGrids(), source_window.get()));
 }
 
 TEST_F(TabDragDropDelegateTest, DropTabToOverviewMode) {
@@ -340,7 +335,7 @@ TEST_F(TabDragDropDelegateTest, DropTabToOverviewMode) {
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
   split_view_controller->SnapWindow(source_window.get(),
-                                    SplitViewController::SnapPosition::LEFT);
+                                    SnapPosition::kPrimary);
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
@@ -364,14 +359,10 @@ TEST_F(TabDragDropDelegateTest, DropTabToOverviewMode) {
   delegate1.release()->DropAndDeleteSelf(drag_end_location_right,
                                          ui::OSExchangeData());
 
-  EXPECT_EQ(nullptr, split_view_controller->GetSnappedWindow(
-                         SplitViewController::SnapPosition::RIGHT));
-  auto windows_list = Shell::Get()
-                          ->overview_controller()
-                          ->GetWindowsListInOverviewGridsForTest();
-  EXPECT_NE(
-      std::end(windows_list),
-      std::find(windows_list.begin(), windows_list.end(), new_window.get()));
+  EXPECT_EQ(nullptr,
+            split_view_controller->GetSnappedWindow(SnapPosition::kSecondary));
+  EXPECT_TRUE(
+      base::Contains(GetWindowsListInOverviewGrids(), new_window.get()));
 }
 
 TEST_F(TabDragDropDelegateTest, WillNotDropTabToOverviewModeInSnappingZone) {
@@ -380,7 +371,7 @@ TEST_F(TabDragDropDelegateTest, WillNotDropTabToOverviewModeInSnappingZone) {
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
   split_view_controller->SnapWindow(source_window.get(),
-                                    SplitViewController::SnapPosition::LEFT);
+                                    SnapPosition::kPrimary);
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
@@ -404,8 +395,8 @@ TEST_F(TabDragDropDelegateTest, WillNotDropTabToOverviewModeInSnappingZone) {
   delegate1.release()->DropAndDeleteSelf(drag_end_location_right,
                                          ui::OSExchangeData());
 
-  EXPECT_EQ(new_window.get(), split_view_controller->GetSnappedWindow(
-                                  SplitViewController::SnapPosition::RIGHT));
+  EXPECT_EQ(new_window.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kSecondary));
   ASSERT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
 }
 
@@ -415,7 +406,7 @@ TEST_F(TabDragDropDelegateTest, WillNotDropTabToOverviewMode) {
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
   split_view_controller->SnapWindow(source_window.get(),
-                                    SplitViewController::SnapPosition::LEFT);
+                                    SnapPosition::kPrimary);
   EXPECT_TRUE(split_view_controller->InTabletSplitViewMode());
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
@@ -439,14 +430,10 @@ TEST_F(TabDragDropDelegateTest, WillNotDropTabToOverviewMode) {
   delegate1.release()->DropAndDeleteSelf(drag_end_location_right,
                                          ui::OSExchangeData());
 
-  EXPECT_EQ(new_window.get(), split_view_controller->GetSnappedWindow(
-                                  SplitViewController::SnapPosition::LEFT));
-  auto windows_list = Shell::Get()
-                          ->overview_controller()
-                          ->GetWindowsListInOverviewGridsForTest();
-  EXPECT_EQ(
-      std::end(windows_list),
-      std::find(windows_list.begin(), windows_list.end(), new_window.get()));
+  EXPECT_EQ(new_window.get(),
+            split_view_controller->GetSnappedWindow(SnapPosition::kPrimary));
+  EXPECT_FALSE(
+      base::Contains(GetWindowsListInOverviewGrids(), new_window.get()));
 }
 
 TEST_F(TabDragDropDelegateTest, SourceWindowBoundsUpdatedWhileDragging) {
@@ -483,10 +470,10 @@ TEST_F(TabDragDropDelegateTest, SourceWindowBoundsUpdatedWhileDragging) {
     // actually be snapped.
     SplitViewController* const split_view_controller =
         SplitViewController::Get(source_window.get());
-    EXPECT_EQ(
-        source_window->bounds(),
-        split_view_controller->GetSnappedWindowBoundsInParent(
-            SplitViewController::SnapPosition::RIGHT, source_window.get()));
+    EXPECT_EQ(source_window->bounds(),
+              split_view_controller->GetSnappedWindowBoundsInParent(
+                  SnapPosition::kSecondary, source_window.get(),
+                  chromeos::kDefaultSnapRatio));
     EXPECT_FALSE(split_view_controller->InSplitViewMode());
   }
 
@@ -501,8 +488,7 @@ TEST_F(TabDragDropDelegateTest, SnappedSourceWindowNotMoved) {
 
   SplitViewController* const split_view_controller =
       SplitViewController::Get(source_window.get());
-  SplitViewController::SnapPosition const snap_position =
-      SplitViewController::SnapPosition::LEFT;
+  SnapPosition const snap_position = SnapPosition::kPrimary;
   split_view_controller->SnapWindow(source_window.get(), snap_position);
   const gfx::Rect original_bounds = source_window->bounds();
 
@@ -576,6 +562,64 @@ TEST_F(TabDragDropDelegateTest, DropWithoutNewWindow) {
   auto delegate = std::make_unique<TabDragDropDelegate>(
       Shell::GetPrimaryRootWindow(), source_window.get(), drag_location);
   delegate->OnNewBrowserWindowCreated(drag_location, /*new_window=*/nullptr);
+}
+
+// Tests that if tab dragging is started on a floated window and then canceled,
+// the float window returns to its original bounds.
+TEST_F(TabDragDropDelegateTest, CancelTabDragWithFloatedWindow) {
+  // Create a floated window.
+  std::unique_ptr<aura::Window> source_window = CreateToplevelTestWindow();
+  source_window->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::BROWSER);
+  wm::ActivateWindow(source_window.get());
+  PressAndReleaseKey(ui::VKEY_F, ui::EF_ALT_DOWN | ui::EF_COMMAND_DOWN);
+  ASSERT_TRUE(WindowState::Get(source_window.get())->IsFloated());
+  const gfx::Rect original_bounds = source_window->GetBoundsInScreen();
+
+  // Simulate tab dragging from the floated source window.
+  auto delegate = std::make_unique<TabDragDropDelegate>(
+      Shell::GetPrimaryRootWindow(), source_window.get(),
+      source_window->bounds().CenterPoint());
+  delegate.reset();
+  EXPECT_EQ(original_bounds, source_window->GetBoundsInScreen());
+}
+
+TEST_F(TabDragDropDelegateTest, CaptureShouldBeReleasedAfterDrop) {
+  std::unique_ptr<aura::Window> source_window =
+      CreateToplevelTestWindow(gfx::Rect(0, 0, 10, 10));
+
+  constexpr gfx::Point kDragStartLocation(5, 5);
+
+  // Emulate a drag session ending in a drop to a new window.
+  auto* delegate = new TabDragDropDelegate(
+      Shell::GetPrimaryRootWindow(), source_window.get(), kDragStartLocation);
+
+  delegate->TakeCapture(Shell::GetPrimaryRootWindow(), source_window.get(),
+                        base::BindLambdaForTesting([]() {}),
+                        ui::TransferTouchesBehavior::kCancel);
+
+  delegate->DragUpdate(kDragStartLocation);
+  delegate->DragUpdate(kDragStartLocation + gfx::Vector2d(10, 0));
+
+  // Input capture should still be active.
+  EXPECT_TRUE(ash::window_util::GetCaptureWindow());
+
+  NewWindowDelegate::NewWindowForDetachingTabCallback new_window_callback;
+  EXPECT_CALL(*mock_new_window_delegate(),
+              NewWindowForDetachingTab(source_window.get(), _, _))
+      .Times(1)
+      .WillOnce(
+          [&](aura::Window* source_window, const ui::OSExchangeData& drop_data,
+              NewWindowDelegate::NewWindowForDetachingTabCallback callback) {
+            new_window_callback = std::move(callback);
+          });
+
+  delegate->DropAndDeleteSelf(kDragStartLocation + gfx::Vector2d(10, 0),
+                              ui::OSExchangeData());
+
+  // Input capture should have been released.
+  EXPECT_FALSE(ash::window_util::GetCaptureWindow());
+
+  std::move(new_window_callback).Run(source_window.get());
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,21 @@
 #include <cmath>
 #include <limits>
 
+#include "base/android/build_info.h"
 #include "base/android/jni_android.h"
-#include "base/numerics/math_constants.h"
+#include "base/android/scoped_java_ref.h"
+#include "base/numerics/angle_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/events/android/motion_event_android.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/events/android/motion_event_android_java.h"
+#include "ui/events/android/motion_event_android_native.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/test/motion_event_test_utils.h"
 #include "ui/events/test/scoped_event_test_tick_clock.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "ui/events/motionevent_jni_headers/MotionEvent_jni.h"
 
 namespace ui {
 
@@ -40,10 +48,10 @@ constexpr int kAndroidButtonPrimary = 1;
 
 // This function convert tilt_x and tilt_y back to tilt_rad.
 float ConvertToTiltRad(float tilt_x, float tilt_y) {
-  float tilt_x_r = sinf(tilt_x * base::kPiFloat / 180.f);
-  float tilt_x_z = cosf(tilt_x * base::kPiFloat / 180.f);
-  float tilt_y_r = sinf(tilt_y * base::kPiFloat / 180.f);
-  float tilt_y_z = cosf(tilt_y * base::kPiFloat / 180.f);
+  float tilt_x_r = sinf(base::DegToRad(tilt_x));
+  float tilt_x_z = cosf(base::DegToRad(tilt_x));
+  float tilt_y_r = sinf(base::DegToRad(tilt_y));
+  float tilt_y_z = cosf(base::DegToRad(tilt_y));
   float r_x = tilt_x_r * tilt_y_z;
   float r_y = tilt_y_r * tilt_x_z;
   float r = sqrtf(r_x * r_x + r_y * r_y);
@@ -58,11 +66,17 @@ constexpr float float_error = 0.0001f;
 // we're primarily testing caching behavior, and the code necessary to
 // construct a Java-backed MotionEvent itself adds unnecessary complexity.
 TEST(MotionEventAndroidTest, Constructor) {
-  constexpr int kEventTimeMS = 5;
-  base::TimeTicks event_time =
-      base::TimeTicks() + base::Milliseconds(kEventTimeMS);
+  constexpr int kLatestEventTimeNS = 5'123'456;
+  constexpr int kOldestEventTimeNS = 4'123'456;
+  base::TimeTicks latest_event_time =
+      base::TimeTicks() + base::Nanoseconds(kLatestEventTimeNS);
+  base::TimeTicks oldest_event_time =
+      base::TimeTicks() + base::Nanoseconds(kOldestEventTimeNS);
+  const base::TimeTicks down_time_ms =
+      base::TimeTicks::FromUptimeMillis(oldest_event_time.ToUptimeMillis());
+
   ui::test::ScopedEventTestTickClock clock;
-  clock.SetNowTicks(event_time);
+  clock.SetNowTicks(latest_event_time);
 
   MotionEventAndroid::Pointer p0(
       1, 13.7f, -7.13f, 5.3f, 1.2f, 0.1f, 0.2f, kAndroidToolTypeFinger);
@@ -72,14 +86,17 @@ TEST(MotionEventAndroidTest, Constructor) {
   int pointer_count = 2;
   int history_size = 0;
   int action_index = -1;
-  MotionEventAndroid event(
+  MotionEventAndroidJava event(
       base::android::AttachCurrentThread(), nullptr, kPixToDip, 0.f, 0.f, 0.f,
-      kEventTimeMS, kAndroidActionDown, pointer_count, history_size,
-      action_index, kAndroidActionButton, 0, kAndroidButtonPrimary,
-      kAndroidAltKeyDown, raw_offset, -raw_offset, false, &p0, &p1);
+      oldest_event_time, latest_event_time, down_time_ms, kAndroidActionDown,
+      pointer_count, history_size, action_index, kAndroidActionButton, 0,
+      kAndroidButtonPrimary, kAndroidAltKeyDown, 0, raw_offset, -raw_offset,
+      false, &p0, &p1);
 
   EXPECT_EQ(MotionEvent::Action::DOWN, event.GetAction());
-  EXPECT_EQ(event_time, event.GetEventTime());
+  EXPECT_EQ(oldest_event_time, event.GetEventTime());
+  EXPECT_EQ(latest_event_time, event.GetLatestEventTime());
+  EXPECT_EQ(event.GetDownTime(), down_time_ms);
   EXPECT_EQ(p0.pos_x_pixels * kPixToDip, event.GetX(0));
   EXPECT_EQ(p0.pos_y_pixels * kPixToDip, event.GetY(0));
   EXPECT_EQ(p1.pos_x_pixels * kPixToDip, event.GetX(1));
@@ -117,29 +134,29 @@ TEST(MotionEventAndroidTest, Clone) {
   const int pointer_count = 1;
   MotionEventAndroid::Pointer p0(
       1, 13.7f, -7.13f, 5.3f, 1.2f, 0.1f, 0.2f, kAndroidToolTypeFinger);
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           nullptr);
+  MotionEventAndroidJava event(base::android::AttachCurrentThread(), nullptr,
+                               kPixToDip, 0, 0, 0, base::TimeTicks(),
+                               kAndroidActionDown, pointer_count, 0, 0, 0, 0, 0,
+                               0, 0, 0, 0, false, &p0, nullptr);
 
   std::unique_ptr<MotionEvent> clone = event.Clone();
   EXPECT_EQ(ui::test::ToString(event), ui::test::ToString(*clone));
 }
 
 TEST(MotionEventAndroidTest, Cancel) {
-  constexpr const int kEventTimeMS = 5;
+  constexpr const int kEventTimeNS = 5'123'456;
   base::TimeTicks event_time =
-      base::TimeTicks() + base::Milliseconds(kEventTimeMS);
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS);
   ui::test::ScopedEventTestTickClock clock;
   clock.SetNowTicks(event_time);
 
   const int pointer_count = 1;
   MotionEventAndroid::Pointer p0(
       1, 13.7f, -7.13f, 5.3f, 1.2f, 0.1f, 0.2f, kAndroidToolTypeFinger);
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, kEventTimeMS, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           nullptr);
+  MotionEventAndroidJava event(
+      base::android::AttachCurrentThread(), nullptr, kPixToDip, 0, 0, 0,
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS), kAndroidActionDown,
+      pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0, nullptr);
 
   std::unique_ptr<MotionEvent> cancel_event = event.Cancel();
   EXPECT_EQ(MotionEvent::Action::CANCEL, cancel_event->GetAction());
@@ -160,10 +177,10 @@ TEST(MotionEventAndroidTest, InvalidOrientationsSanitized) {
   float orientation1 = std::numeric_limits<float>::quiet_NaN();
   MotionEventAndroid::Pointer p0(0, 0, 0, 0, 0, orientation0, 0, 0);
   MotionEventAndroid::Pointer p1(1, 0, 0, 0, 0, orientation1, 0, 0);
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           &p1);
+  MotionEventAndroidJava event(base::android::AttachCurrentThread(), nullptr,
+                               kPixToDip, 0, 0, 0, base::TimeTicks(),
+                               kAndroidActionDown, pointer_count, 0, 0, 0, 0, 0,
+                               0, 0, 0, 0, false, &p0, &p1);
 
   EXPECT_EQ(0.f, event.GetOrientation(0));
   EXPECT_EQ(0.f, event.GetOrientation(1));
@@ -176,10 +193,11 @@ TEST(MotionEventAndroidTest, NonEmptyHistoryForNonMoveEventsSanitized) {
   int pointer_count = 1;
   size_t history_size = 5;
   MotionEventAndroid::Pointer p0(0, 0, 0, 0, 0, 0, 0, 0);
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, history_size, 0, 0, 0, 0, 0, 0, 0,
-                           false, &p0, nullptr);
+  MotionEventAndroidJava event(base::android::AttachCurrentThread(), nullptr,
+                               kPixToDip, 0, 0, 0, base::TimeTicks(),
+                               base::TimeTicks(), base::TimeTicks(),
+                               kAndroidActionDown, pointer_count, history_size,
+                               0, 0, 0, 0, 0, 0, 0, 0, false, &p0, nullptr);
 
   EXPECT_EQ(0U, event.GetHistorySize());
 }
@@ -195,13 +213,52 @@ TEST(MotionEventAndroidTest, ActionIndexForPointerDown) {
   int pointer_count = 2;
   int history_size = 0;
   int action_index = 1;
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionPointerDown,
-                           pointer_count, history_size, action_index, 0, 0, 0,
-                           0, 0, 0, false, &p0, &p1);
+  MotionEventAndroidJava event(
+      base::android::AttachCurrentThread(), nullptr, kPixToDip, 0, 0, 0,
+      base::TimeTicks(), kAndroidActionPointerDown, pointer_count, history_size,
+      action_index, 0, 0, 0, 0, 0, 0, 0, false, &p0, &p1);
 
   EXPECT_EQ(MotionEvent::Action::POINTER_DOWN, event.GetAction());
   EXPECT_EQ(action_index, event.GetActionIndex());
+}
+
+TEST(MotionEventAndroidTest, NativeBackedConstructor) {
+  if (base::android::BuildInfo::GetInstance()->sdk_int() <
+      base::android::SDK_VERSION_S) {
+    GTEST_SKIP()
+        << "AMotionEvent_fromJava used in test is only available on S+";
+  }
+
+  const float x = 100;
+  const float y = 200;
+  // Java_MotionEvent_obtain expects timestamps(down time, event time) obtained
+  // from |SystemClock#uptimeMillis()|.
+  const jlong down_time_ms = base::TimeTicks::Now().ToUptimeMillis();
+  const jlong event_time_ms = down_time_ms;
+  JNIEnv* env = base::android::AttachCurrentThread();
+  base::android::ScopedJavaLocalRef<jobject> java_motion_event =
+      JNI_MotionEvent::Java_MotionEvent_obtain(env, down_time_ms, event_time_ms,
+                                               kAndroidActionDown, x, y,
+                                               kAndroidAltKeyDown);
+  const AInputEvent* native_event = nullptr;
+  if (__builtin_available(android 31, *)) {
+    native_event = AMotionEvent_fromJava(env, java_motion_event.obj());
+  }
+  CHECK(native_event != nullptr);
+
+  std::unique_ptr<MotionEventAndroid> event = MotionEventAndroidNative::Create(
+      base::android::ScopedInputEvent(native_event), kPixToDip,
+      /* y_offset_pix= */ 0);
+
+  EXPECT_EQ(event->GetX(0), x * kPixToDip);
+  EXPECT_EQ(event->GetY(0), y * kPixToDip);
+  EXPECT_EQ(event->GetAction(), MotionEvent::Action::DOWN);
+  EXPECT_EQ(event->GetFlags(), ui::EF_ALT_DOWN);
+
+  EXPECT_EQ(event->GetEventTime(),
+            base::TimeTicks::FromUptimeMillis(event_time_ms));
+  EXPECT_EQ(event->GetDownTime(),
+            base::TimeTicks::FromUptimeMillis(down_time_ms));
 }
 
 }  // namespace ui

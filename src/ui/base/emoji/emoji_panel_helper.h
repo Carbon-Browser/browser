@@ -1,35 +1,60 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_BASE_EMOJI_EMOJI_PANEL_HELPER_H_
 #define UI_BASE_EMOJI_EMOJI_PANEL_HELPER_H_
 
-#include "base/callback.h"
+#include <string>
+
 #include "base/component_export.h"
-#include "build/chromeos_buildflags.h"
+#include "base/functional/callback_forward.h"
+#include "build/build_config.h"
 
 namespace ui {
 
 // Returns whether showing the Emoji Panel is supported on this version of
 // the operating system.
-COMPONENT_EXPORT(UI_BASE) bool IsEmojiPanelSupported();
+COMPONENT_EXPORT(UI_BASE_EMOJI) bool IsEmojiPanelSupported();
 
 // Invokes the commands to show the Emoji Panel.
-COMPONENT_EXPORT(UI_BASE) void ShowEmojiPanel();
+COMPONENT_EXPORT(UI_BASE_EMOJI) void ShowEmojiPanel();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // Invokes the commands to show the Emoji Panel in tablet mode (ChromeOS only).
-COMPONENT_EXPORT(UI_BASE) void ShowTabletModeEmojiPanel();
+COMPONENT_EXPORT(UI_BASE_EMOJI) void ShowTabletModeEmojiPanel();
+
+enum class COMPONENT_EXPORT(UI_BASE_EMOJI) EmojiPickerCategory {
+  kEmojis,
+  kSymbols,
+  kEmoticons,
+  kGifs,
+};
+
+enum class COMPONENT_EXPORT(UI_BASE_EMOJI) EmojiPickerFocusBehavior {
+  kOnlyShowWhenFocused,
+  kAlwaysShow,
+};
+
+using EmojiKeyboardCallback =
+    base::RepeatingCallback<void(EmojiPickerCategory,
+                                 EmojiPickerFocusBehavior,
+                                 const std::string& initial_query)>;
+
+// Show the emoji picker pre scrolled to a specific category
+COMPONENT_EXPORT(UI_BASE_EMOJI)
+void ShowEmojiPanelInSpecificMode(EmojiPickerCategory category,
+                                  EmojiPickerFocusBehavior focus_behavior,
+                                  const std::string& initial_query);
 
 // Sets a callback to show the emoji panel (ChromeOS only).
-COMPONENT_EXPORT(UI_BASE)
-void SetShowEmojiKeyboardCallback(base::RepeatingClosure callback);
+COMPONENT_EXPORT(UI_BASE_EMOJI)
+void SetShowEmojiKeyboardCallback(EmojiKeyboardCallback callback);
 
 // Sets a callback to show the emoji panel in tablet mode (ChromeOS only).
-COMPONENT_EXPORT(UI_BASE)
+COMPONENT_EXPORT(UI_BASE_EMOJI)
 void SetTabletModeShowEmojiKeyboardCallback(base::RepeatingClosure callback);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace ui
 

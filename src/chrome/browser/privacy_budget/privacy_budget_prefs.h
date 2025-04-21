@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,6 @@ namespace prefs {
 //
 // Value is an int stored as IntegerPref.
 extern const char kPrivacyBudgetGeneration[];
-
-// Pref used for persisting for which blocks of surfaces we already reported the
-// hash for estimating the Reid score. Used to avoid recomputing and reporting
-// the hashes multiple times.
-extern const char kPrivacyBudgetReportedReidBlocks[];
 
 // Pref used for persisting |IdentifiabilityStudyState::seen_surface_sequence_|.
 //
@@ -42,6 +37,13 @@ extern const char kPrivacyBudgetSelectedOffsets[];
 //
 // Value is an integer >= 0.
 extern const char kPrivacyBudgetSelectedBlock[];
+
+// Pref used for persisting the random salt which is used to decide whether the
+// meta experiment should be active. The meta experiment is active if the salt
+// is smaller than the meta experiment selection probability.
+//
+// Value is a double in the interval [0,1)
+extern const char kPrivacyBudgetMetaExperimentActivationSalt[];
 
 void RegisterPrivacyBudgetPrefs(PrefRegistrySimple* registry);
 

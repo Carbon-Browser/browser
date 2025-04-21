@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,14 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/support_tool/data_collector.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 
 // Collects network routing tables data for both IPv4 and IPv6 and writes it
 // into "network_routes.txt" file.
@@ -36,21 +36,21 @@ class NetworkRoutesDataCollector : public DataCollector {
   void CollectDataAndDetectPII(
       DataCollectorDoneCallback on_data_collected_callback,
       scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-      scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container)
+      scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container)
       override;
 
   void ExportCollectedDataWithPII(
-      std::set<feedback::PIIType> pii_types_to_keep,
+      std::set<redaction::PIIType> pii_types_to_keep,
       base::FilePath target_directory,
       scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-      scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container,
+      scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container,
       DataCollectorDoneCallback on_exported_callback) override;
 
  private:
   // Is called when a GetRoutes() call to DebugDaemonClient succeeds. Checks the
   // contents of `routes` and appends its contents to `network_routes_`.
   void OnGetRoutes(base::RepeatingClosure barrier_closure,
-                   absl::optional<std::vector<std::string>> routes);
+                   std::optional<std::vector<std::string>> routes);
 
   // Is called when all GetRoutes() calls are done. Runs PII detection on
   // `task_runner_for_redaction_tool` for `network_routes_` and calls
@@ -58,7 +58,7 @@ class NetworkRoutesDataCollector : public DataCollector {
   void OnAllGetRoutesDone(
       DataCollectorDoneCallback on_data_collected_callback,
       scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-      scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container);
+      scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container);
 
   // Merges `detected_pii` into `pii_map_` and runs
   // `on_data_collected_callback`.

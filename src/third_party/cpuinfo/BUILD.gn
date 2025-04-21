@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,6 +25,7 @@ config("cpuinfo_config") {
   defines = [
     "_GNU_SOURCE=1",  # Required for CPU_SETSIZE to be available.
     "CPUINFO_INTERNAL=",
+    "CPUINFO_LOG_LEVEL=0",  # CPUINFO_LOG_NONE=0
     "CPUINFO_PRIVATE=",
   ]
 }
@@ -38,6 +39,7 @@ source_set("cpuinfo") {
     "src/src/api.c",
     "src/src/cache.c",
     "src/src/init.c",
+    "src/src/log.c",
   ]
 
   deps = [
@@ -198,6 +200,13 @@ source_set("cpu_and_os_specific") {
 
   if (is_win && (current_cpu == "x86" || current_cpu == "x64")) {
     sources = [ "src/src/x86/windows/init.c" ]
+  }
+
+  if (is_win && current_cpu == "arm64") {
+    sources = [
+      "src/src/arm/windows/init-by-logical-sys-info.c",
+      "src/src/arm/windows/init.c",
+    ]
   }
 
   if ((is_mac || is_ios) && (current_cpu == "x86" || current_cpu == "x64")) {

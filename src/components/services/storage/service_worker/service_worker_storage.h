@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/field_trial_params.h"
 #include "components/services/storage/public/mojom/local_storage_control.mojom.h"
 #include "components/services/storage/public/mojom/service_worker_storage_control.mojom.h"
 #include "components/services/storage/public/mojom/storage_policy_update.mojom.h"
@@ -47,6 +49,12 @@ FORWARD_DECLARE_TEST(ServiceWorkerStorageDiskTest,
 FORWARD_DECLARE_TEST(ServiceWorkerStorageTest, DisabledStorage);
 }  // namespace service_worker_storage_unittest
 
+// The maximum scope URL count for cache per the storage key.
+inline constexpr size_t kMaxServiceWorkerScopeUrlCountPerStorageKey = 100;
+
+void OverrideMaxServiceWorkerScopeUrlCountForTesting(
+    std::optional<size_t> max_count);
+
 // This class provides an interface to store and retrieve ServiceWorker
 // registration data. The lifetime is equal to ServiceWorkerRegistry that is
 // an owner of this class. When a storage operation fails, this is marked as
@@ -59,6 +67,11 @@ class ServiceWorkerStorage {
   using ResourceList = std::vector<mojom::ServiceWorkerResourceRecordPtr>;
   using GetRegisteredStorageKeysCallback =
       base::OnceCallback<void(const std::vector<blink::StorageKey>& keys)>;
+  using FindRegistrationForClientUrlDataCallback =
+      base::OnceCallback<void(mojom::ServiceWorkerRegistrationDataPtr data,
+                              std::unique_ptr<ResourceList> resources,
+                              const std::optional<std::vector<GURL>>& scopes,
+                              ServiceWorkerDatabase::Status status)>;
   using FindRegistrationDataCallback =
       base::OnceCallback<void(mojom::ServiceWorkerRegistrationDataPtr data,
                               std::unique_ptr<ResourceList> resources,
@@ -116,9 +129,10 @@ class ServiceWorkerStorage {
   // ResourceList if registration is found, or returns
   // ServiceWorkerDatabase::Status::kErrorNotFound if no matching registration
   // is found.
-  void FindRegistrationForClientUrl(const GURL& client_url,
-                                    const blink::StorageKey& key,
-                                    FindRegistrationDataCallback callback);
+  void FindRegistrationForClientUrl(
+      const GURL& client_url,
+      const blink::StorageKey& key,
+      FindRegistrationForClientUrlDataCallback callback);
   void FindRegistrationForScope(const GURL& scope,
                                 const blink::StorageKey& key,
                                 FindRegistrationDataCallback callback);
@@ -167,6 +181,20 @@ class ServiceWorkerStorage {
                                      const blink::StorageKey& key,
                                      const std::string& value,
                                      DatabaseStatusCallback callback);
+  // Updates the stored fetch handler type to match the value of
+  // the active service worker version's.
+  void UpdateFetchHandlerType(int64_t registration_id,
+                              const blink::StorageKey& key,
+                              blink::mojom::ServiceWorkerFetchHandlerType type,
+                              DatabaseStatusCallback callback);
+
+  // Updates sha256 scripts in resource lists of the active service worker
+  // version's.
+  void UpdateResourceSha256Checksums(
+      int64_t registration_id,
+      const blink::StorageKey& key,
+      const base::flat_map<int64_t, std::string>& updated_sha256_checksums,
+      DatabaseStatusCallback callback);
 
   // Deletes the registration specified by |registration_id|. This should be
   // called only from ServiceWorkerRegistry.
@@ -339,6 +367,11 @@ class ServiceWorkerStorage {
       StorageKeyState storage_key_state,
       const ServiceWorkerDatabase::DeletedVersion& deleted_version_data,
       ServiceWorkerDatabase::Status status)>;
+  using FindForClientUrlInDBCallback =
+      base::OnceCallback<void(mojom::ServiceWorkerRegistrationDataPtr data,
+                              std::unique_ptr<ResourceList> resources,
+                              const std::optional<std::vector<GURL>>& scopes,
+                              ServiceWorkerDatabase::Status status)>;
   using FindInDBCallback =
       base::OnceCallback<void(mojom::ServiceWorkerRegistrationDataPtr data,
                               std::unique_ptr<ResourceList> resources,
@@ -436,7 +469,7 @@ class ServiceWorkerStorage {
       scoped_refptr<base::SequencedTaskRunner> original_task_runner,
       const GURL& client_url,
       const blink::StorageKey& key,
-      FindInDBCallback callback);
+      FindForClientUrlInDBCallback callback);
   static void FindForScopeInDB(
       ServiceWorkerDatabase* database,
       scoped_refptr<base::SequencedTaskRunner> original_task_runner,
@@ -487,9 +520,9 @@ class ServiceWorkerStorage {
       scoped_refptr<base::SequencedTaskRunner> original_task_runner,
       const std::string& key_prefix,
       GetUserDataForAllRegistrationsInDBCallback callback);
-  static void DeleteAllDataForStorageKeysFromDB(
+  static void DeleteAllDataForOriginsFromDB(
       ServiceWorkerDatabase* database,
-      const std::set<blink::StorageKey>& keys);
+      const std::set<url::Origin>& origins);
   static void PerformStorageCleanupInDB(ServiceWorkerDatabase* database);
   static void GetPurgeableResourceIdsFromDB(
       ServiceWorkerDatabase* database,
@@ -511,7 +544,7 @@ class ServiceWorkerStorage {
   // StorageKeys having registations.
   std::set<blink::StorageKey> registered_keys_;
   // The set of StorageKeys whose storage should be cleaned on shutdown.
-  std::set<blink::StorageKey> keys_to_purge_on_shutdown_;
+  std::set<url::Origin> origins_to_purge_on_shutdown_;
 
   // Pending database tasks waiting for initialization.
   std::vector<base::OnceClosure> pending_tasks_;

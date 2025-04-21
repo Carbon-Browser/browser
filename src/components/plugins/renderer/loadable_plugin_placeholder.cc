@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/string_escape.h"
 #include "base/metrics/user_metrics_action.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
@@ -40,12 +38,8 @@ void LoadablePluginPlaceholder::MaybeLoadBlockedPlugin(
 
 LoadablePluginPlaceholder::LoadablePluginPlaceholder(
     RenderFrame* render_frame,
-    const blink::WebPluginParams& params,
-    const std::string& html_data)
-    : PluginPlaceholderBase(render_frame, params, html_data),
-      is_blocked_for_prerendering_(false),
-      allow_loading_(false),
-      finished_loading_(false) {}
+    const blink::WebPluginParams& params)
+    : PluginPlaceholderBase(render_frame, params) {}
 
 LoadablePluginPlaceholder::~LoadablePluginPlaceholder() {
 }
@@ -88,12 +82,6 @@ void LoadablePluginPlaceholder::ReplacePlugin(blink::WebPlugin* new_plugin) {
   plugin()->Destroy();
 }
 
-void LoadablePluginPlaceholder::SetMessage(const std::u16string& message) {
-  message_ = message;
-  if (finished_loading_)
-    UpdateMessage();
-}
-
 void LoadablePluginPlaceholder::UpdateMessage() {
   if (!plugin())
     return;
@@ -107,12 +95,14 @@ bool LoadablePluginPlaceholder::IsErrorPlaceholder() {
   return !allow_loading_;
 }
 
-void LoadablePluginPlaceholder::OnSetIsPrerendering(bool is_prerendering) {
-  // Prerendering can only be enabled prior to a RenderView's first navigation,
-  // so no BlockedPlugin should see the notification that enables prerendering.
-  DCHECK(!is_prerendering);
-  if (is_blocked_for_prerendering_) {
-    is_blocked_for_prerendering_ = false;
+void LoadablePluginPlaceholder::OnSetIsNoStatePrefetching(
+    bool is_no_state_prefetching) {
+  // NoStatePrefetching can only be enabled prior to a RenderView's first
+  // navigation, so no BlockedPlugin should see the notification that enables
+  // NoStatePrefetching.
+  DCHECK(!is_no_state_prefetching);
+  if (is_blocked_for_no_state_prefetching_) {
+    is_blocked_for_no_state_prefetching_ = false;
     if (!LoadingBlocked())
       LoadPlugin();
   }
@@ -127,7 +117,6 @@ void LoadablePluginPlaceholder::LoadPlugin() {
     return;
   if (!allow_loading_) {
     NOTREACHED();
-    return;
   }
 
   ReplacePlugin(CreatePlugin());
@@ -166,13 +155,9 @@ void LoadablePluginPlaceholder::SetIdentifier(const std::string& identifier) {
   identifier_ = identifier;
 }
 
-const std::string& LoadablePluginPlaceholder::GetIdentifier() const {
-  return identifier_;
-}
-
 bool LoadablePluginPlaceholder::LoadingBlocked() const {
   DCHECK(allow_loading_);
-  return is_blocked_for_prerendering_;
+  return is_blocked_for_no_state_prefetching_;
 }
 
 }  // namespace plugins

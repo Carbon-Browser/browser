@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/dom_storage/session_storage_area_impl.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/services/storage/dom_storage/session_storage_data_map.h"
@@ -72,26 +72,26 @@ void SessionStorageAreaImpl::AddObserver(
 void SessionStorageAreaImpl::Put(
     const std::vector<uint8_t>& key,
     const std::vector<uint8_t>& value,
-    const absl::optional<std::vector<uint8_t>>& client_old_value,
+    const std::optional<std::vector<uint8_t>>& client_old_value,
     const std::string& source,
     PutCallback callback) {
   DCHECK(IsBound());
   DCHECK_NE(0, shared_data_map_->map_data()->ReferenceCount());
   if (shared_data_map_->map_data()->ReferenceCount() > 1)
-    CreateNewMap(NewMapType::FORKED, absl::nullopt);
+    CreateNewMap(NewMapType::FORKED, std::nullopt);
   shared_data_map_->storage_area()->Put(key, value, client_old_value, source,
                                         std::move(callback));
 }
 
 void SessionStorageAreaImpl::Delete(
     const std::vector<uint8_t>& key,
-    const absl::optional<std::vector<uint8_t>>& client_old_value,
+    const std::optional<std::vector<uint8_t>>& client_old_value,
     const std::string& source,
     DeleteCallback callback) {
   DCHECK(IsBound());
   DCHECK_NE(0, shared_data_map_->map_data()->ReferenceCount());
   if (shared_data_map_->map_data()->ReferenceCount() > 1)
-    CreateNewMap(NewMapType::FORKED, absl::nullopt);
+    CreateNewMap(NewMapType::FORKED, std::nullopt);
   shared_data_map_->storage_area()->Delete(key, client_old_value, source,
                                            std::move(callback));
 }
@@ -135,6 +135,10 @@ void SessionStorageAreaImpl::GetAll(
                      std::move(callback)));
 }
 
+void SessionStorageAreaImpl::Checkpoint() {
+  shared_data_map_->storage_area()->Checkpoint();
+}
+
 void SessionStorageAreaImpl::FlushForTesting() {
   receivers_.FlushForTesting();
 }
@@ -166,7 +170,7 @@ void SessionStorageAreaImpl::OnDeleteAllResult(
 
 void SessionStorageAreaImpl::CreateNewMap(
     NewMapType map_type,
-    const absl::optional<std::string>& delete_all_source) {
+    const std::optional<std::string>& delete_all_source) {
   bool bound = IsBound();
   if (bound)
     shared_data_map_->RemoveBindingReference();

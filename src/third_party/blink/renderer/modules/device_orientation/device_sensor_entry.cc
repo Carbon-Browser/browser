@@ -1,11 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/device_orientation/device_sensor_entry.h"
 
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer_reader.h"
+#include "services/device/public/mojom/sensor_provider.mojom-blink.h"
+#include "third_party/blink/public/mojom/sensor/web_sensor_provider.mojom-blink.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/device_orientation/device_sensor_event_pump.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
@@ -24,7 +27,7 @@ DeviceSensorEntry::DeviceSensorEntry(DeviceSensorEventPump* event_pump,
 DeviceSensorEntry::~DeviceSensorEntry() = default;
 
 void DeviceSensorEntry::Start(
-    device::mojom::blink::SensorProvider* sensor_provider) {
+    mojom::blink::WebSensorProvider* sensor_provider) {
   // If sensor remote is not bound, reset to |kNotInitialized| state (in case
   // we're in some other state), unless we're currently being initialized (which
   // is indicated by either |kInitializing| or |kShouldSuspend| state).
@@ -35,9 +38,9 @@ void DeviceSensorEntry::Start(
 
   if (state_ == State::kNotInitialized) {
     state_ = State::kInitializing;
-    sensor_provider->GetSensor(type_,
-                               WTF::Bind(&DeviceSensorEntry::OnSensorCreated,
-                                         WrapWeakPersistent(this)));
+    sensor_provider->GetSensor(
+        type_, WTF::BindOnce(&DeviceSensorEntry::OnSensorCreated,
+                             WrapWeakPersistent(this)));
   } else if (state_ == State::kSuspended) {
     sensor_remote_->Resume();
     state_ = State::kActive;
@@ -108,7 +111,7 @@ void DeviceSensorEntry::SensorReadingChanged() {
   // frequency, the |shared_buffer| is read frequently, and
   // Sensor::ConfigureReadingChangeNotifications() is set to false,
   // so this method is not called and doesn't need to be implemented.
-  NOTREACHED();
+  LOG(ERROR) << "SensorReadingChanged";
 }
 
 void DeviceSensorEntry::OnSensorCreated(
@@ -147,12 +150,13 @@ void DeviceSensorEntry::OnSensorCreated(
       static_cast<double>(DeviceSensorEventPump::kDefaultPumpFrequencyHz),
       params->maximum_frequency);
 
-  sensor_remote_.set_disconnect_handler(WTF::Bind(
+  sensor_remote_.set_disconnect_handler(WTF::BindOnce(
       &DeviceSensorEntry::HandleSensorError, WrapWeakPersistent(this)));
   sensor_remote_->ConfigureReadingChangeNotifications(/*enabled=*/false);
   sensor_remote_->AddConfiguration(
-      std::move(config), WTF::Bind(&DeviceSensorEntry::OnSensorAddConfiguration,
-                                   WrapWeakPersistent(this)));
+      std::move(config),
+      WTF::BindOnce(&DeviceSensorEntry::OnSensorAddConfiguration,
+                    WrapWeakPersistent(this)));
 }
 
 void DeviceSensorEntry::OnSensorAddConfiguration(bool success) {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/i18n/file_util_icu.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/visibility_timer_tab_helper.h"
 #include "chrome/browser/webshare/prepare_directory_task.h"
@@ -40,8 +39,8 @@ constexpr base::FilePath::CharType kWebShareDirname[] =
     FILE_PATH_LITERAL("WebShare");
 
 base::FilePath GenerateUniqueSubDirectory(const base::FilePath& directory) {
-  std::string unique_subdirectory =
-      base::StringPrintf("share-%s", base::GenerateGUID().c_str());
+  std::string unique_subdirectory = base::StringPrintf(
+      "share-%s", base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
   return directory.Append(unique_subdirectory);
 }
 

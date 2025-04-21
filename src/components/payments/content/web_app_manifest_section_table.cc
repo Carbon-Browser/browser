@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,9 +64,9 @@ bool DeserializeFingerPrints(
 
 }  // namespace
 
-WebAppManifestSectionTable::WebAppManifestSectionTable() {}
+WebAppManifestSectionTable::WebAppManifestSectionTable() = default;
 
-WebAppManifestSectionTable::~WebAppManifestSectionTable() {}
+WebAppManifestSectionTable::~WebAppManifestSectionTable() = default;
 
 WebAppManifestSectionTable* WebAppManifestSectionTable::FromWebDatabase(
     WebDatabase* db) {
@@ -79,20 +79,15 @@ WebDatabaseTable::TypeKey WebAppManifestSectionTable::GetTypeKey() const {
 }
 
 bool WebAppManifestSectionTable::CreateTablesIfNecessary() {
-  if (!db_->Execute("CREATE TABLE IF NOT EXISTS web_app_manifest_section ( "
-                    "expire_date INTEGER NOT NULL DEFAULT 0, "
-                    "id VARCHAR, "
-                    "min_version INTEGER NOT NULL DEFAULT 0, "
-                    "fingerprints BLOB) ")) {
+  if (!db()->Execute("CREATE TABLE IF NOT EXISTS web_app_manifest_section ( "
+                     "expire_date INTEGER NOT NULL DEFAULT 0, "
+                     "id VARCHAR, "
+                     "min_version INTEGER NOT NULL DEFAULT 0, "
+                     "fingerprints BLOB) ")) {
     NOTREACHED();
-    return false;
   }
 
   return true;
-}
-
-bool WebAppManifestSectionTable::IsSyncable() {
-  return false;
 }
 
 bool WebAppManifestSectionTable::MigrateToVersion(
@@ -102,10 +97,10 @@ bool WebAppManifestSectionTable::MigrateToVersion(
 }
 
 void WebAppManifestSectionTable::RemoveExpiredData() {
-  const time_t now_date_in_seconds = base::Time::NowFromSystemTime().ToTimeT();
-  sql::Statement s(db_->GetUniqueStatement(
+  const base::Time now = base::Time::NowFromSystemTime();
+  sql::Statement s(db()->GetUniqueStatement(
       "DELETE FROM web_app_manifest_section WHERE expire_date < ? "));
-  s.BindInt64(0, now_date_in_seconds);
+  s.BindTime(0, now);
   s.Run();
 }
 
@@ -113,11 +108,11 @@ bool WebAppManifestSectionTable::AddWebAppManifest(
     const std::vector<WebAppManifestSection>& manifest) {
   DCHECK_LT(0U, manifest.size());
 
-  sql::Transaction transaction(db_);
+  sql::Transaction transaction(db());
   if (!transaction.Begin())
     return false;
 
-  sql::Statement s1(db_->GetUniqueStatement(
+  sql::Statement s1(db()->GetUniqueStatement(
       "DELETE FROM web_app_manifest_section WHERE id=? "));
   for (const auto& section : manifest) {
     s1.BindString(0, section.id);
@@ -127,15 +122,15 @@ bool WebAppManifestSectionTable::AddWebAppManifest(
   }
 
   sql::Statement s2(
-      db_->GetUniqueStatement("INSERT INTO web_app_manifest_section "
-                              "(expire_date, id, min_version, fingerprints) "
-                              "VALUES (?, ?, ?, ?)"));
-  const time_t expire_date_in_seconds =
-      base::Time::NowFromSystemTime().ToTimeT() +
-      WEB_APP_MANIFEST_VALID_TIME_IN_SECONDS;
+      db()->GetUniqueStatement("INSERT INTO web_app_manifest_section "
+                               "(expire_date, id, min_version, fingerprints) "
+                               "VALUES (?, ?, ?, ?)"));
+  const base::Time expire_date =
+      base::Time::FromTimeT(base::Time::NowFromSystemTime().ToTimeT() +
+                            WEB_APP_MANIFEST_VALID_TIME_IN_SECONDS);
   for (const auto& section : manifest) {
     int index = 0;
-    s2.BindInt64(index++, expire_date_in_seconds);
+    s2.BindTime(index++, expire_date);
     s2.BindString(index++, section.id);
     s2.BindInt64(index++, section.min_version);
     std::unique_ptr<std::vector<uint8_t>> serialized_fingerprints =
@@ -155,9 +150,9 @@ bool WebAppManifestSectionTable::AddWebAppManifest(
 std::vector<WebAppManifestSection>
 WebAppManifestSectionTable::GetWebAppManifest(const std::string& web_app) {
   sql::Statement s(
-      db_->GetUniqueStatement("SELECT id, min_version, fingerprints "
-                              "FROM web_app_manifest_section "
-                              "WHERE id=?"));
+      db()->GetUniqueStatement("SELECT id, min_version, fingerprints "
+                               "FROM web_app_manifest_section "
+                               "WHERE id=?"));
   s.BindString(0, web_app);
 
   std::vector<WebAppManifestSection> manifest;

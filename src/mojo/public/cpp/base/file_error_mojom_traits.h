@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,6 @@ struct EnumTraits<mojo_base::mojom::FileError, base::File::Error> {
         return mojo_base::mojom::FileError::FAILED;
     }
     NOTREACHED();
-    return mojo_base::mojom::FileError::FAILED;
   }
 
   static bool FromMojom(mojo_base::mojom::FileError in,
@@ -112,7 +111,6 @@ struct EnumTraits<mojo_base::mojom::FileError, base::File::Error> {
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

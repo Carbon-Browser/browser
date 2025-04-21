@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ class SaveUpdateAddressProfilePromptView {
  public:
   virtual bool Show(SaveUpdateAddressProfilePromptController* controller,
                     const AutofillProfile& autofill_profile,
-                    bool is_update) = 0;
+                    bool is_update,
+                    bool is_migration_to_account) = 0;
 
   virtual ~SaveUpdateAddressProfilePromptView() = default;
 };

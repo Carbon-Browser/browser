@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,6 @@ class COMPONENT_EXPORT(UI_BASE_PREDICTION) InputFilter {
 
   // Returns the name of the filter
   virtual const char* GetName() const = 0;
-
-  // Returns a copy of the filter.
-  virtual InputFilter* Clone() = 0;
-
-  // Reset the filter to its initial state
-  virtual void Reset() = 0;
 };
 
 }  // namespace ui

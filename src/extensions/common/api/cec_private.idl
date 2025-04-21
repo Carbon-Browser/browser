@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ namespace cecPrivate {
     //
     // |callback| will be run as soon as all displays have been requested to
     // change their power state.
-    [supportsPromises] static void sendStandBy(
+    static void sendStandBy(
         optional ChangePowerStateCallback callback);
 
     // Attempt to announce this device as the active input source towards all
@@ -55,11 +55,11 @@ namespace cecPrivate {
     //
     // |callback| will be run as soon as all displays have been requested to
     // change their power state.
-    [supportsPromises] static void sendWakeUp(
+    static void sendWakeUp(
         optional ChangePowerStateCallback callback);
 
     // Queries all HDMI CEC capable displays for their current power state.
-    [supportsPromises] static void queryDisplayCecPowerState(
+    static void queryDisplayCecPowerState(
         DisplayCecPowerStateCallback callback);
   };
 };

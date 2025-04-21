@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/notreached.h"
@@ -37,7 +37,6 @@ std::string ToString(ContentFormat format) {
     default:
       NOTREACHED();
   }
-  return "";
 }
 
 }  // namespace
@@ -46,7 +45,7 @@ HttpExchange::HttpExchange(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : url_loader_factory_(url_loader_factory) {}
 
-HttpExchange::~HttpExchange() {}
+HttpExchange::~HttpExchange() = default;
 
 void HttpExchange::Clear() {
   content_.clear();
@@ -222,7 +221,7 @@ void HttpExchange::OnURLLoaderCompleted(
     std::move(callback).Run(StatusCode::kInvalidResponse);
     return;
   }
-  content_ = std::move(parsed->GetDict());
+  content_ = std::move(parsed).value().TakeDict();
 
   // Exits if success.
   if (http_status == success_http_status) {
@@ -336,6 +335,10 @@ bool HttpExchange::ParamStringGet(const std::string& name,
   }
   if (!node->is_string()) {
     error_msg_ = base::StrCat({"Field ", name, " must be a string"});
+    return false;
+  }
+  if (required && node->GetString().empty()) {
+    error_msg_ = base::StrCat({"Field ", name, " cannot be empty"});
     return false;
   }
   if (value) {

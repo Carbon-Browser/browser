@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef BASE_WIN_SCOPED_HANDLE_VERIFIER_H_
 #define BASE_WIN_SCOPED_HANDLE_VERIFIER_H_
@@ -13,7 +18,6 @@
 #include "base/hash/hash.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock_impl.h"
-#include "base/threading/thread_local.h"
 #include "base/win/windows_types.h"
 
 namespace base {
@@ -23,7 +27,7 @@ namespace internal {
 
 struct HandleHash {
   size_t operator()(const HANDLE& handle) const {
-    return base::FastHash(as_bytes(make_span(&handle, 1)));
+    return base::FastHash(byte_span_from_ref(handle));
   }
 };
 
@@ -57,11 +61,9 @@ struct ScopedHandleVerifierInfo {
 // from emitting an unrecognized attribute warning.
 #pragma warning(push)
 #pragma warning(disable : 5030)
-class [[clang::lto_visibility_public]] ScopedHandleVerifier {
+class [[clang::lto_visibility_public, nodiscard]] ScopedHandleVerifier {
 #pragma warning(pop)
  public:
-  explicit ScopedHandleVerifier(bool enabled);
-
   ScopedHandleVerifier(const ScopedHandleVerifier&) = delete;
   ScopedHandleVerifier& operator=(const ScopedHandleVerifier&) = delete;
 
@@ -72,31 +74,40 @@ class [[clang::lto_visibility_public]] ScopedHandleVerifier {
   // forward the call execution to another module, instead of letting the
   // compiler call the version that is linked in the current module.
   virtual bool CloseHandle(HANDLE handle);
-  virtual void StartTracking(HANDLE handle, const void* owner, const void* pc1,
+  virtual void StartTracking(HANDLE handle,
+                             const void* owner,
+                             const void* pc1,
                              const void* pc2);
-  virtual void StopTracking(HANDLE handle, const void* owner, const void* pc1,
+  virtual void StopTracking(HANDLE handle,
+                            const void* owner,
+                            const void* pc1,
                             const void* pc2);
   virtual void Disable();
   virtual void OnHandleBeingClosed(HANDLE handle, HandleOperation operation);
   virtual HMODULE GetModule() const;
 
  private:
+  explicit ScopedHandleVerifier(bool enabled);
   ~ScopedHandleVerifier();  // Not implemented.
 
-  void StartTrackingImpl(HANDLE handle, const void* owner, const void* pc1,
+  void StartTrackingImpl(HANDLE handle,
+                         const void* owner,
+                         const void* pc1,
                          const void* pc2);
-  void StopTrackingImpl(HANDLE handle, const void* owner, const void* pc1,
+  void StopTrackingImpl(HANDLE handle,
+                        const void* owner,
+                        const void* pc1,
                         const void* pc2);
   void OnHandleBeingClosedImpl(HANDLE handle, HandleOperation operation);
 
   static base::internal::LockImpl* GetLock();
   static void InstallVerifier();
   static void ThreadSafeAssignOrCreateScopedHandleVerifier(
-      ScopedHandleVerifier * existing_verifier, bool enabled);
+      ScopedHandleVerifier* existing_verifier,
+      bool enabled);
 
   base::debug::StackTrace creation_stack_;
   bool enabled_;
-  base::ThreadLocalBoolean closing_;
   raw_ptr<base::internal::LockImpl> lock_;
   std::unordered_map<HANDLE, ScopedHandleVerifierInfo, HandleHash> map_;
 };

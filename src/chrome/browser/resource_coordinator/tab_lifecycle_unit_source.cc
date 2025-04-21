@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/resource_coordinator/discard_metrics_lifecycle_unit_observer.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit_source_observer.h"
@@ -23,12 +23,14 @@
 #include "chrome/browser/ui/recently_audible_helper.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/pref_names.h"
-#include "components/performance_manager/performance_manager_impl.h"
+#include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/page_node.h"
+#include "components/performance_manager/public/performance_manager.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 
 namespace resource_coordinator {
@@ -67,13 +69,11 @@ WEB_CONTENTS_USER_DATA_KEY_IMPL(TabLifecycleUnitSource::TabLifecycleUnitHolder);
 // A very simple graph observer that forwards events over to the
 // TabLifecycleUnitSource on the UI thread. This is created on the UI thread
 // and ownership passed to the performance manager.
-class TabLifecycleStateObserver
-    : public performance_manager::PageNode::ObserverDefaultImpl,
-      public performance_manager::GraphOwned {
+class TabLifecycleStateObserver : public performance_manager::PageNodeObserver,
+                                  public performance_manager::GraphOwned {
  public:
   using Graph = performance_manager::Graph;
   using PageNode = performance_manager::PageNode;
-  using WebContentsProxy = performance_manager::WebContentsProxy;
 
   TabLifecycleStateObserver() = default;
 
@@ -85,22 +85,23 @@ class TabLifecycleStateObserver
 
  private:
   static void OnLifecycleStateChangedImpl(
-      const WebContentsProxy& contents_proxy,
+      base::WeakPtr<content::WebContents> contents,
       performance_manager::mojom::LifecycleState state) {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     // If the web contents is still alive then dispatch to the actual
     // implementation in TabLifecycleUnitSource.
-    if (auto* contents = contents_proxy.Get())
-      TabLifecycleUnitSource::OnLifecycleStateChanged(contents, state);
+    if (contents) {
+      TabLifecycleUnitSource::OnLifecycleStateChanged(contents.get(), state);
+    }
   }
 
-  // performance_manager::PageNode::ObserverDefaultImpl::
+  // PageNodeObserver:
   void OnPageLifecycleStateChanged(const PageNode* page_node) override {
     // Forward the notification over to the UI thread.
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&TabLifecycleStateObserver::OnLifecycleStateChangedImpl,
-                       page_node->GetContentsProxy(),
+                       page_node->GetWebContents(),
                        page_node->GetLifecycleState()));
   }
 
@@ -131,8 +132,8 @@ TabLifecycleUnitSource::~TabLifecycleUnitSource() {
 void TabLifecycleUnitSource::Start() {
   // TODO(sebmarchand): Remove the "IsAvailable" check, or merge the TM into the
   // PM. The TM and PM must always exist together.
-  if (performance_manager::PerformanceManagerImpl::IsAvailable()) {
-    performance_manager::PerformanceManagerImpl::PassToGraph(
+  if (performance_manager::PerformanceManager::IsAvailable()) {
+    performance_manager::PerformanceManager::PassToGraph(
         FROM_HERE, std::make_unique<TabLifecycleStateObserver>());
   }
 }

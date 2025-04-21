@@ -33,7 +33,7 @@
     [CEReactions] attribute (boolean or unrestricted double or DOMString)? hidden;
 
     [RuntimeCallStatsCounter=HTMLElementClick] void click();
-    [CEReactions, RuntimeEnabled=InertAttribute, Reflect] attribute boolean inert;
+    [CEReactions, Reflect] attribute boolean inert;
     [CEReactions, Reflect] attribute DOMString accessKey;
     [CEReactions] attribute boolean draggable;
     [CEReactions] attribute boolean spellcheck;
@@ -43,7 +43,7 @@
 
     // EditContext
     // https://w3c.github.io/edit-context/
-    [RuntimeEnabled=EditContext] attribute EditContext? editContext;
+    [RaisesException=Setter] attribute EditContext? editContext;
 
     // HTMLElement includes ElementContentEditable
     // https://html.spec.whatwg.org/C/#contenteditable
@@ -55,7 +55,7 @@
     // Explainers:
     // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/master/VirtualKeyboardPolicy/explainer.md
     // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/master/VirtualKeyboardAPI/explainer.md
-    [RuntimeEnabled=VirtualKeyboard, CEReactions, Reflect, ReflectOnly=("auto","manual")] attribute DOMString virtualKeyboardPolicy;
+    [CEReactions, Reflect, ReflectOnly=("auto","manual")] attribute DOMString virtualKeyboardPolicy;
 
     // CSSOM View Module
     // https://drafts.csswg.org/cssom-view/#extensions-to-the-htmlelement-interface
@@ -65,9 +65,21 @@
     [ImplementedAs=offsetWidthForBinding] readonly attribute long offsetWidth;
     [ImplementedAs=offsetHeightForBinding] readonly attribute long offsetHeight;
 
+    // The Popover API
+    [MeasureAs=ElementTogglePopover,RaisesException] boolean togglePopover(optional (TogglePopoverOptions or boolean) options);
+    [MeasureAs=ElementShowPopover,RaisesException] void showPopover(optional ShowPopoverOptions options);
+    [MeasureAs=ElementHidePopover,RaisesException] void hidePopover();
+
+    // See crbug.com/1418144. We need to change ReflectOnly based on a runtime flag, which isn't possible.
+    // See also crbug.com/1416284. When HTMLPopoverHint is removed as a flag, we should be able to go back to using [Reflect].
+    // [CEReactions,Reflect,ReflectOnly=("auto","hint","manual"),ReflectEmpty="auto",ReflectInvalid="manual"] attribute DOMString? popover;
+    [CEReactions] attribute DOMString? popover;
+
     // Non-standard APIs
-    [CEReactions, RaisesException=Setter, MeasureAs=HTMLElementInnerText, ImplementedAs=innerTextForBinding] attribute ([TreatNullAs=EmptyString] DOMString or TrustedScript) innerText;
-    [CEReactions, RaisesException=Setter, MeasureAs=HTMLElementOuterText] attribute [TreatNullAs=EmptyString] DOMString outerText;
+    [CEReactions, RaisesException=Setter, MeasureAs=HTMLElementInnerText, ImplementedAs=innerTextForBinding] attribute ([LegacyNullToEmptyString] DOMString or TrustedScript) innerText;
+    [CEReactions, RaisesException=Setter, MeasureAs=HTMLElementOuterText] attribute [LegacyNullToEmptyString] DOMString outerText;
+
+    [CEReactions] attribute DOMString writingSuggestions;
 };
 
 HTMLElement includes GlobalEventHandlers;

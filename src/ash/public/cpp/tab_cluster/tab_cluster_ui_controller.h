@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,8 @@ class ASH_PUBLIC_EXPORT TabClusterUIController {
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
+
+  const TabItems& tab_items() const { return tab_items_; }
 
  private:
   Clusterer clusterer_;

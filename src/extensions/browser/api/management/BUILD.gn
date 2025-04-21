@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,15 +16,24 @@ source_set("management") {
     "management_api_delegate.h",
   ]
 
-  deps = [
-    "//build:chromeos_buildflags",
-    "//extensions/browser/api",
-    "//extensions/common",
-    "//extensions/common/api",
-  ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
+    "//base",
+    "//components/keyed_service/core",
     "//extensions/browser:browser_sources",
+    "//extensions/common",
+    "//extensions/common:common_constants",
+    "//extensions/common/api",
     "//services/data_decoder/public/cpp",
+    "//url",
+  ]
+
+  deps = [
+    "//build:chromeos_buildflags",
+    "//components/supervised_user/core/common:buildflags",
+    "//components/supervised_user/core/common:features",
+    "//content/public/browser",
+    "//extensions/common:mojom",
   ]
 }

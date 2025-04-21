@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <fuchsia/media/cpp/fidl.h>
+#include <lib/zx/eventpair.h>
 
 #include "base/memory/scoped_refptr.h"
 #include "media/base/media_export.h"
@@ -17,7 +18,8 @@
 #include "media/base/video_decoder_config.h"
 #include "media/fuchsia/common/sysmem_buffer_stream.h"
 #include "media/fuchsia/common/sysmem_client.h"
-#include "ui/gfx/native_pixmap_handle.h"
+#include "media/mojo/mojom/fuchsia_media.mojom.h"
+#include "mojo/public/cpp/bindings/shared_remote.h"
 
 namespace gfx {
 class ClientNativePixmapFactory;
@@ -30,7 +32,7 @@ class RasterContextProvider;
 namespace media {
 
 namespace mojom {
-class FuchsiaMediaResourceProvider;
+class FuchsiaMediaCodecProvider;
 }  // namespace mojom
 
 class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
@@ -39,7 +41,9 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
  public:
   FuchsiaVideoDecoder(
       scoped_refptr<viz::RasterContextProvider> raster_context_provider,
-      media::mojom::FuchsiaMediaResourceProvider* media_resource_provider);
+      const mojo::SharedRemote<media::mojom::FuchsiaMediaCodecProvider>&
+          media_codec_provider,
+      bool allow_overlays);
   ~FuchsiaVideoDecoder() override;
 
   FuchsiaVideoDecoder(const FuchsiaVideoDecoder&) = delete;
@@ -63,6 +67,9 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   bool CanReadWithoutStalling() const override;
   int GetMaxDecodeRequests() const override;
 
+  void SetClientNativePixmapFactoryForTests(
+      std::unique_ptr<gfx::ClientNativePixmapFactory> factory);
+
  private:
   class OutputMailbox;
 
@@ -72,7 +79,7 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
 
   // SysmemBufferStream::Sink implementation.
   void OnSysmemBufferStreamBufferCollectionToken(
-      fuchsia::sysmem::BufferCollectionTokenPtr token) override;
+      fuchsia::sysmem2::BufferCollectionTokenPtr token) override;
   void OnSysmemBufferStreamOutputPacket(
       StreamProcessorHelper::IoPacket packet) override;
   void OnSysmemBufferStreamEndOfStream() override;
@@ -104,7 +111,7 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   // Callback for SysmemBufferCollection::CreateSharedToken(), used to send the
   // sysmem buffer collection token to the GPU process.
   void SetBufferCollectionTokenForGpu(
-      fuchsia::sysmem::BufferCollectionTokenPtr token);
+      fuchsia::sysmem2::BufferCollectionTokenPtr token);
 
   // Called by OutputMailbox to signal that the output buffer can be reused.
   void ReleaseOutputPacket(StreamProcessorHelper::IoPacket packet);
@@ -113,15 +120,13 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   void ReleaseOutputBuffers();
 
   const scoped_refptr<viz::RasterContextProvider> raster_context_provider_;
-  media::mojom::FuchsiaMediaResourceProvider* media_resource_provider_;
+  const mojo::SharedRemote<media::mojom::FuchsiaMediaCodecProvider>
+      media_codec_provider_;
 
   const bool use_overlays_for_video_;
 
   OutputCB output_cb_;
   WaitingCB waiting_cb_;
-
-  // Aspect ratio specified in container.
-  VideoAspectRatio container_aspect_ratio_;
 
   std::unique_ptr<SysmemBufferStream> sysmem_buffer_stream_;
 
@@ -144,13 +149,15 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   // Output buffers for |decoder_|.
   fuchsia::media::VideoUncompressedFormat output_format_;
   std::unique_ptr<SysmemCollectionClient> output_buffer_collection_;
-  gfx::SysmemBufferCollectionId output_buffer_collection_id_;
+  zx::eventpair output_buffer_collection_handle_;
   std::vector<OutputMailbox*> output_mailboxes_;
+
+  // Set to true when the output buffers are protected.
+  bool protected_output_ = false;
 
   size_t num_used_output_buffers_ = 0;
 
-  base::WeakPtr<FuchsiaVideoDecoder> weak_this_;
-  base::WeakPtrFactory<FuchsiaVideoDecoder> weak_factory_{this};
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // WeakPtrFactory used to schedule CallNextDecodeCallbacks(). These pointers
   // are discarded in DropInputQueue() in order to avoid calling

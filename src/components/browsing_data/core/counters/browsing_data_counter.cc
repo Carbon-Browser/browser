@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/browsing_data/core/pref_names.h"
@@ -24,7 +24,7 @@ static const int kDelayUntilReadyToShowResultMs = 1000;
 BrowsingDataCounter::BrowsingDataCounter()
     : initialized_(false), use_delay_(true), state_(State::IDLE) {}
 
-BrowsingDataCounter::~BrowsingDataCounter() {}
+BrowsingDataCounter::~BrowsingDataCounter() = default;
 
 void BrowsingDataCounter::Init(PrefService* pref_service,
                                ClearBrowsingDataTab clear_browsing_data_tab,
@@ -39,6 +39,22 @@ void BrowsingDataCounter::Init(PrefService* pref_service,
                base::BindRepeating(&BrowsingDataCounter::Restart,
                                    base::Unretained(this)));
 
+  initialized_ = true;
+  OnInitialized();
+}
+
+void BrowsingDataCounter::InitWithoutPeriodPref(
+    PrefService* pref_service,
+    ClearBrowsingDataTab clear_browsing_data_tab,
+    base::Time begin_time,
+    ResultCallback callback) {
+  DCHECK(!initialized_);
+  callback_ = std::move(callback);
+  clear_browsing_data_tab_ = clear_browsing_data_tab;
+  pref_.Init(GetPrefName(), pref_service,
+             base::BindRepeating(&BrowsingDataCounter::Restart,
+                                 base::Unretained(this)));
+  begin_time_ = begin_time;
   initialized_ = true;
   OnInitialized();
 }
@@ -95,6 +111,12 @@ void BrowsingDataCounter::Restart() {
   Count();
 }
 
+void BrowsingDataCounter::SetBeginTime(base::Time begin_time) {
+  DCHECK(period_.GetPrefName().empty());
+  begin_time_ = begin_time;
+  Restart();
+}
+
 void BrowsingDataCounter::ReportResult(ResultInt value) {
   ReportResult(std::make_unique<FinishedResult>(this, value));
 }
@@ -114,8 +136,10 @@ void BrowsingDataCounter::ReportResult(std::unique_ptr<Result> result) {
       staged_result_ = std::move(result);
       return;
     case State::IDLE:
+      DUMP_WILL_BE_NOTREACHED() << "State::IDLE";
+      return;
     case State::REPORT_STAGED_RESULT:
-      NOTREACHED();
+      NOTREACHED() << "State::REPORT_STAGED_RESULT";
   }
 }
 
@@ -173,7 +197,7 @@ BrowsingDataCounter::Result::Result(const BrowsingDataCounter* source)
   DCHECK(source);
 }
 
-BrowsingDataCounter::Result::~Result() {}
+BrowsingDataCounter::Result::~Result() = default;
 
 bool BrowsingDataCounter::Result::Finished() const {
   return false;
@@ -186,7 +210,7 @@ BrowsingDataCounter::FinishedResult::FinishedResult(
     ResultInt value)
     : Result(source), value_(value) {}
 
-BrowsingDataCounter::FinishedResult::~FinishedResult() {}
+BrowsingDataCounter::FinishedResult::~FinishedResult() = default;
 
 bool BrowsingDataCounter::FinishedResult::Finished() const {
   return true;
@@ -204,6 +228,6 @@ BrowsingDataCounter::SyncResult::SyncResult(const BrowsingDataCounter* source,
                                             bool sync_enabled)
     : FinishedResult(source, value), sync_enabled_(sync_enabled) {}
 
-BrowsingDataCounter::SyncResult::~SyncResult() {}
+BrowsingDataCounter::SyncResult::~SyncResult() = default;
 
 }  // namespace browsing_data

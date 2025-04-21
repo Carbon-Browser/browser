@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import "mojo/public/mojom/base/string16.mojom";
 import "ui/gfx/image/mojom/image.mojom";
 import "url/mojom/url.mojom";
 
-[Stable, Extensible]
+[Extensible]
 enum SearchStatus {
   // Indicates an error with the search. No results will be sent with this
   // status, and there may or may not be further results sent.
@@ -27,7 +27,7 @@ enum SearchStatus {
 };
 
 // Enum represents the result type.
-[Stable, Extensible]
+[Extensible]
 enum SearchResultType {
   [Default] kUnknown = 0,
   // This represents the results come from Omnibox's AutocompleteController
@@ -36,9 +36,8 @@ enum SearchResultType {
 };
 
 // Struct represents search result.
-// Next min ID: 20
-// Next min version: 5
-[Stable]
+// Next min ID: 22
+// Next min version: 6
 struct SearchResult {
   // Type of the result. Used to distinguish between different types of result.
   SearchResultType type@0;
@@ -62,6 +61,9 @@ struct SearchResult {
   // Whether the result is an answer result or not. Used for kOmniboxResult
   // type results.
   OptionalBool is_answer@4;
+  // The Omnibox search result type as required for metrics logging. Used for
+  // kOmniboxResult type results. This defaults to kUnset.
+  [MinVersion=5] MetricsType metrics_type@20;
   // The Omnibox subtype of the result, used for kOmniboxResult type results.
   // This defaults to kUnset.
   OmniboxType omnibox_type@5;
@@ -72,10 +74,16 @@ struct SearchResult {
   // The page transition type of this result. Used for opening a result.
   [MinVersion=2] PageTransition page_transition@15;
 
-  // The image url of the result, if any. Used to download the result image.
+  // The image url of the result, if any. Used to download the result image. The
+  // presence of this field defines a result as a "rich entity". We consider
+  // weather answer results with icons as a special kind of rich entity.
   url.mojom.Url? image_url@7;
-  // Favicon of the result.
+  // Favicon of the result, if available. The presence or absence of this field
+  // is what defines a result as a "favicon-type result".
   gfx.mojom.ImageSkia? favicon@8;
+  // Handle through which to receive asynchronously-fetched data about this
+  // search result.
+  [MinVersion=5] pending_receiver<SearchResultConsumer>? receiver@21;
 
   // The accessibility label to use for the second image line, if one exists.
   [MinVersion=3] mojo_base.mojom.String16? description_a11y_label@19;
@@ -97,7 +105,7 @@ struct SearchResult {
   // Text type of the additional description, if any.
   TextType additional_description_type@13;
 
-  [Stable, Extensible]
+  [Extensible]
   enum OptionalBool {
     kUnset,
     kFalse,
@@ -105,21 +113,38 @@ struct SearchResult {
   };
 
   // Enum representing the Omnibox result subtype.
-  [Stable, Extensible]
+  [Extensible]
   enum OmniboxType {
     [Default] kUnset = 0,
-    kRichImage = 1,
-    kFavicon = 2,
-    kBookmark = 3,
+    kRichImageDeprecated = 1,
+    kFaviconDeprecated = 2,
+    kCalculatorDeprecated = 7,
+    kBookmark = 3,  // A special kind of domain type.
     kDomain = 4,
     kSearch = 5,
     kHistory = 6,
-    kCalculator = 7,
     [MinVersion=1] kOpenTab = 8,
   };
 
+  // Enum representing the search result type as required for metrics logging.
+  [Extensible]
+  enum MetricsType {
+    [Default] kUnset = 0,
+    kWhatYouTyped = 1,
+    kRecentlyVisitedWebsite = 2,
+    kHistoryTitle = 3,
+    kSearchWhatYouTyped = 4,
+    kSearchHistory = 5,
+    kSearchSuggest = 6,
+    kSearchSuggestPersonalized = 7,
+    kBookmark = 8,
+    kSearchSuggestEntity = 9,
+    kNavSuggest = 10,
+    kCalculator = 11,
+  };
+
   // Enum representing the Omnibox answer subtype.
-  [Stable, Extensible]
+  [Extensible]
   enum AnswerType {
     [Default] kUnset = 0,
     kDefaultAnswer = 1,
@@ -134,7 +159,7 @@ struct SearchResult {
   };
 
   // Enum representing special text types.
-  [Stable, Extensible]
+  [Extensible]
   enum TextType {
     [Default] kUnset = 0,
     kPositive = 1,
@@ -143,7 +168,7 @@ struct SearchResult {
   };
 
   // Enum representing the page transition types.
-  [Stable, Extensible]
+  [Extensible]
   enum PageTransition {
     [Default] kUnset = 0,
     kTyped = 1,
@@ -153,7 +178,7 @@ struct SearchResult {
 
 // Interface to send results from lacros to ash. Implemented in ash.
 // Next min method ID: 1
-[Stable, Uuid="ce797aae-286e-4b63-b7b3-090bf5040818"]
+[Uuid="ce797aae-286e-4b63-b7b3-090bf5040818"]
 interface SearchResultsPublisher {
   // Sends search result from lacros to ash. For each query, this will be called
   // multiple times, each time it will overwrite the existing results. When all
@@ -164,7 +189,7 @@ interface SearchResultsPublisher {
 
 // Interface to send search queries from ash to lacros. Implemented in lacros.
 // Next min method ID: 2
-[Stable, Uuid="c2d77467-b04d-4b10-8f54-de52c3cbe30d"]
+[Uuid="c2d77467-b04d-4b10-8f54-de52c3cbe30d"]
 interface SearchController {
   // Sends search queries from ash to lacros. If a search query is called while
   // there is an in-flight search query, the in-flight search query will be
@@ -179,10 +204,35 @@ interface SearchController {
 
 // Interface to register the search controller. Implemented in ash.
 // Next min method ID: 1
-[Stable, Uuid="1dc4306b-50af-4b43-a1f0-552e7010971e"]
+[Uuid="1dc4306b-50af-4b43-a1f0-552e7010971e"]
 interface SearchControllerRegistry {
   // Lacros can register the search controller to ash so that ash can
   // start making calls.
   RegisterSearchController@0(
       pending_remote<SearchController> search_controller);
+};
+
+// Interface to construct `SearchController` instances. Implemented in lacros.
+//
+// This interface is currently under construction until we can determine a
+// suitable API for all `SearchController` users.
+//
+// Next min method ID: 1
+[Uuid="cc869735-ba36-434e-9535-b82fea3c256c"]
+interface SearchControllerFactory {
+  // Creates a new `SearchController` for Picker.
+  CreateSearchControllerPicker@0(
+      pending_receiver<SearchController> controller,
+      bool bookmarks,
+      bool history,
+      bool open_tabs);
+};
+
+// Interface implemented by result objects to receive asynchronously-updated
+// data for one search result.
+// Next min method ID: 1
+[Uuid="d3294d1e-dadb-4bc2-a1ce-5b731f11cce1"]
+interface SearchResultConsumer {
+  // Called once with a favicon if it was successfully asynchronously fetched.
+  OnFaviconReceived@0(gfx.mojom.ImageSkia favicon);
 };

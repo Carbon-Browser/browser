@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "components/dom_distiller/core/distilled_content_store.h"
 #include "components/dom_distiller/core/proto/distilled_article.pb.h"
 #include "components/dom_distiller/core/task_tracker.h"
@@ -23,7 +23,7 @@ namespace {
 
 ArticleEntry CreateSkeletonEntryForUrl(const GURL& url) {
   ArticleEntry skeleton;
-  skeleton.entry_id = base::GenerateGUID();
+  skeleton.entry_id = base::Uuid::GenerateRandomV4().AsLowercaseString();
   skeleton.pages.push_back(url);
 
   DCHECK(IsEntryValid(skeleton));
@@ -114,14 +114,13 @@ TaskTracker* DomDistillerService::CreateTaskTracker(const ArticleEntry& entry) {
 }
 
 void DomDistillerService::CancelTask(TaskTracker* task) {
-  auto it = std::find_if(tasks_.begin(), tasks_.end(),
-                         [task](const std::unique_ptr<TaskTracker>& t) {
-                           return task == t.get();
-                         });
+  auto it =
+      base::ranges::find(tasks_, task, &std::unique_ptr<TaskTracker>::get);
   if (it != tasks_.end()) {
     it->release();
     tasks_.erase(it);
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, task);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                  task);
   }
 }
 

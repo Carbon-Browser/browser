@@ -1,29 +1,27 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_SERVICES_SHARING_NEARBY_PLATFORM_INPUT_STREAM_IMPL_H_
 #define CHROME_SERVICES_SHARING_NEARBY_PLATFORM_INPUT_STREAM_IMPL_H_
 
-#include "third_party/nearby/src/internal/platform/input_stream.h"
-
 #include <stdint.h>
-#include <memory>
 
-#include "ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
+#include <memory>
+#include <optional>
+
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/waitable_event.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/nearby/src/internal/platform/input_stream.h"
 
 namespace base {
 class SequencedTaskRunner;
 }  // namespace base
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // An implementation of a Nearby Connections InputStream that reads from the
 // Mojo DataPipe, |receive_stream|, passed into the constructor by the specified
@@ -67,13 +65,11 @@ class InputStreamImpl : public InputStream {
   mojo::SimpleWatcher receive_stream_watcher_;
 
   std::unique_ptr<ByteArray> pending_read_buffer_;
-  uint32_t pending_read_buffer_pos_ = 0;
+  size_t pending_read_buffer_pos_ = 0;
   ExceptionOr<ByteArray> exception_or_received_byte_array_;
-  absl::optional<base::WaitableEvent> read_waitable_event_;
+  base::WaitableEvent read_waitable_event_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_INPUT_STREAM_IMPL_H_

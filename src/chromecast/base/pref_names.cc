@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@ const char kMetricsIsNewClientID[] = "user_experience_metrics.is_new_client_id";
 
 // Whether or not to report metrics and crashes.
 const char kOptInStats[] = "opt-in.stats";
+
+// Whether or not TOS has been accepted by user.
+const char kTosAccepted[] = "tos-accepted";
 
 // Total number of kernel crashes since the last report.
 const char kStabilityKernelCrashCount[] =

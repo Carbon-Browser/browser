@@ -1,20 +1,35 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef PDF_PDF_H_
 #define PDF_PDF_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/containers/span.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "build/chromeos_buildflags.h"
+#include "pdf/document_metadata.h"
+#include "services/screen_ai/buildflags/buildflags.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "pdf/flatten_pdf_result.h"
+#endif
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+#include <memory>
+
+#include "base/functional/callback_forward.h"
+#include "services/screen_ai/public/mojom/screen_ai_service.mojom.h"
+#include "third_party/skia/include/core/SkBitmap.h"
+#endif  // BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
 namespace gfx {
 class Rect;
@@ -24,11 +39,18 @@ class SizeF;
 
 namespace chrome_pdf {
 
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+class PdfProgressiveSearchifier;
+#endif  // BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+
+void SetUseSkiaRendererPolicy(bool use_skia);
+
 #if BUILDFLAG(IS_CHROMEOS)
 // Create a flattened PDF document from an existing PDF document.
 // `input_buffer` is the buffer that contains the entire PDF document to be
 // flattened.
-std::vector<uint8_t> CreateFlattenedPdf(base::span<const uint8_t> input_buffer);
+std::optional<FlattenPdfResult> CreateFlattenedPdf(
+    base::span<const uint8_t> input_buffer);
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)
@@ -49,7 +71,7 @@ enum PrintingMode {
 
 // `pdf_buffer` is the buffer that contains the entire PDF document to be
 //     rendered.
-// `page_number` is the 0-based index of the page to be rendered.
+// `page_index` is the 0-based index of the page to be rendered.
 // `dc` is the device context to render into.
 // `dpi_x` and `dpi_y` is the resolution.
 // `bounds_origin_x`, `bounds_origin_y`, `bounds_width` and `bounds_height`
@@ -74,7 +96,7 @@ enum PrintingMode {
 // `use_color` specifies color or grayscale.
 // Returns false if the document or the page number are not valid.
 bool RenderPDFPageToDC(base::span<const uint8_t> pdf_buffer,
-                       int page_number,
+                       int page_index,
                        HDC dc,
                        int dpi_x,
                        int dpi_y,
@@ -98,26 +120,35 @@ bool GetPDFDocInfo(base::span<const uint8_t> pdf_buffer,
                    int* page_count,
                    float* max_page_width);
 
-// Whether the PDF is Tagged (see 10.7 "Tagged PDF" in PDF Reference 1.7).
+// Gets the PDF document metadata (see section 14.3.3 "Document Information
+// Dictionary" of the ISO 32000-1:2008 spec).
+std::optional<DocumentMetadata> GetPDFDocMetadata(
+    base::span<const uint8_t> pdf_buffer);
+
+// Whether the PDF is Tagged (see ISO 32000-1:2008 14.8 "Tagged PDF").
 // Returns true if it's a tagged (accessible) PDF, false if it's a valid
 // PDF but untagged, and nullopt if the PDF can't be parsed.
-absl::optional<bool> IsPDFDocTagged(base::span<const uint8_t> pdf_buffer);
+std::optional<bool> IsPDFDocTagged(base::span<const uint8_t> pdf_buffer);
 
 // Given a tagged PDF (see IsPDFDocTagged, above), return the portion of
 // the structure tree for a given page as a hierarchical tree of base::Values.
 base::Value GetPDFStructTreeForPage(base::span<const uint8_t> pdf_buffer,
                                     int page_index);
 
+// Whether the PDF has a Document Outline (see ISO 32000-1:2008 12.3.3 "Document
+// Outline"). Returns true if the PDF has an outline, false if it's a valid PDF
+// without an outline, and nullopt if the PDF can't be parsed.
+std::optional<bool> PDFDocHasOutline(base::span<const uint8_t> pdf_buffer);
+
 // Gets the dimensions of a specific page in a document.
 // `pdf_buffer` is the buffer that contains the entire PDF document to be
 //     rendered.
-// `page_number` is the page number that the function will get the dimensions
-//     of.
+// `page_index` is the page number that the function will get the dimensions of.
 // Returns the size of the page in points, or nullopt if the document or the
 // page number are not valid.
-absl::optional<gfx::SizeF> GetPDFPageSizeByIndex(
+std::optional<gfx::SizeF> GetPDFPageSizeByIndex(
     base::span<const uint8_t> pdf_buffer,
-    int page_number);
+    int page_index);
 
 enum class RenderDeviceType {
   kDisplay,
@@ -141,14 +172,14 @@ struct RenderOptions {
 // Renders PDF page into 4-byte per pixel BGRA color bitmap.
 // `pdf_buffer` is the buffer that contains the entire PDF document to be
 //     rendered.
-// `page_number` is the 0-based index of the page to be rendered.
+// `page_index` is the 0-based index of the page to be rendered.
 // `bitmap_buffer` is the output buffer for bitmap.
 // `bitmap_size` is the size of the output bitmap.
 // `dpi` is the 2D resolution.
 // `options` is the options to render with.
 // Returns false if the document or the page number are not valid.
 bool RenderPDFPageToBitmap(base::span<const uint8_t> pdf_buffer,
-                           int page_number,
+                           int page_index,
                            void* bitmap_buffer,
                            const gfx::Size& bitmap_size,
                            const gfx::Size& dpi,
@@ -194,6 +225,27 @@ std::vector<uint8_t> ConvertPdfDocumentToNupPdf(
     size_t pages_per_sheet,
     const gfx::Size& page_size,
     const gfx::Rect& printable_area);
+
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+// Converts an inaccessible PDF to a searchable PDF.
+// `pdf_buffer` is the buffer of the inaccessible PDF.
+// `perform_ocr_callback` is the callback that takes an image and outputs
+//     the OCR result. It may be called multiple times.
+//
+// The conversion is done by performing OCR on each image in the PDF and adding
+// a layer of invisible text to the PDF to make text on images accessible. Each
+// execution should take place in an isolated process, and each process should
+// be terminated upon completion of the conversion. An empty vector is returned
+// on failure.
+std::vector<uint8_t> Searchify(
+    base::span<const uint8_t> pdf_buffer,
+    base::RepeatingCallback<screen_ai::mojom::VisualAnnotationPtr(
+        const SkBitmap& bitmap)> perform_ocr_callback);
+
+// Creates a PDF searchifier for future operations, such as adding and deleting
+// pages, and saving PDFs. Crashes if failed to create.
+std::unique_ptr<PdfProgressiveSearchifier> CreateProgressiveSearchifier();
+#endif  // BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
 }  // namespace chrome_pdf
 

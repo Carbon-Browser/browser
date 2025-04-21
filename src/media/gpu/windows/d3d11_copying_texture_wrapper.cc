@@ -1,14 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/windows/d3d11_copying_texture_wrapper.h"
 
-#include <memory>
-
-#include "gpu/command_buffer/service/mailbox_manager.h"
-#include "media/gpu/windows/d3d11_com_defs.h"
-#include "ui/gl/hdr_metadata_helper_win.h"
+#include "media/gpu/windows/d3d11_picture_buffer.h"
 
 namespace media {
 
@@ -17,28 +13,24 @@ CopyingTexture2DWrapper::CopyingTexture2DWrapper(
     const gfx::Size& size,
     std::unique_ptr<Texture2DWrapper> output_wrapper,
     scoped_refptr<VideoProcessorProxy> processor,
-    ComD3D11Texture2D output_texture,
-    absl::optional<gfx::ColorSpace> output_color_space)
+    ComD3D11Texture2D output_texture)
     : size_(size),
       video_processor_(std::move(processor)),
       output_texture_wrapper_(std::move(output_wrapper)),
-      output_texture_(std::move(output_texture)),
-      output_color_space_(std::move(output_color_space)) {}
+      output_texture_(std::move(output_texture)) {}
 
 CopyingTexture2DWrapper::~CopyingTexture2DWrapper() = default;
 
-// Copy path doesn't need to acquire keyed mutex until calling
-// VideoProcessorBlt.
-D3D11Status CopyingTexture2DWrapper::AcquireKeyedMutexIfNeeded() {
+// Copy path doesn't need to sync until calling VideoProcessorBlt.
+D3D11Status CopyingTexture2DWrapper::BeginSharedImageAccess() {
   return D3D11Status::Codes::kOk;
 }
 
 D3D11Status CopyingTexture2DWrapper::ProcessTexture(
     const gfx::ColorSpace& input_color_space,
-    MailboxHolderArray* mailbox_dest,
-    gfx::ColorSpace* output_color_space) {
+    scoped_refptr<gpu::ClientSharedImage>& shared_image_dest) {
   // Acquire keyed mutex for VideoProcessorBlt ops.
-  D3D11Status status = output_texture_wrapper_->AcquireKeyedMutexIfNeeded();
+  D3D11Status status = output_texture_wrapper_->BeginSharedImageAccess();
   if (!status.is_ok()) {
     return status;
   }
@@ -66,30 +58,14 @@ D3D11Status CopyingTexture2DWrapper::ProcessTexture(
   streams.Enable = TRUE;
   streams.pInputSurface = input_view.Get();
 
-  // If we were given an output color space, then that's what we'll use.
-  // Otherwise, we'll use whatever the input space is.
-  gfx::ColorSpace copy_color_space =
-      output_color_space_ ? *output_color_space_ : input_color_space;
-
   // If the input color space has changed, or if this is the first call, then
   // notify the video processor about it.
   if (!previous_input_color_space_ ||
       *previous_input_color_space_ != input_color_space) {
     previous_input_color_space_ = input_color_space;
 
-    // The VideoProcessor doesn't support tone mapping of HLG content, so treat
-    // treat it as gamma 2.2 since HLG is designed to look okay that way.
-    auto adjusted_color_space = input_color_space;
-    if (input_color_space.GetTransferID() == gfx::ColorSpace::TransferID::HLG &&
-        !copy_color_space.IsHDR()) {
-      adjusted_color_space = gfx::ColorSpace(
-          input_color_space.GetPrimaryID(),
-          gfx::ColorSpace::TransferID::GAMMA22, input_color_space.GetMatrixID(),
-          input_color_space.GetRangeID());
-    }
-
-    video_processor_->SetStreamColorSpace(adjusted_color_space);
-    video_processor_->SetOutputColorSpace(copy_color_space);
+    video_processor_->SetStreamColorSpace(input_color_space);
+    video_processor_->SetOutputColorSpace(input_color_space);
   }
 
   hr = video_processor_->VideoProcessorBlt(output_view.Get(),
@@ -99,15 +75,18 @@ D3D11Status CopyingTexture2DWrapper::ProcessTexture(
   if (!SUCCEEDED(hr))
     return {D3D11Status::Codes::kVideoProcessorBltFailed, hr};
 
-  return output_texture_wrapper_->ProcessTexture(copy_color_space, mailbox_dest,
-                                                 output_color_space);
+  return output_texture_wrapper_->ProcessTexture(input_color_space,
+                                                 shared_image_dest);
 }
 
 D3D11Status CopyingTexture2DWrapper::Init(
     scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner,
     GetCommandBufferHelperCB get_helper_cb,
     ComD3D11Texture2D texture,
-    size_t array_slice) {
+    size_t array_slice,
+    scoped_refptr<media::D3D11PictureBuffer> picture_buffer,
+    PictureBufferGPUResourceInitDoneCB
+        picture_buffer_gpu_resource_init_done_cb) {
   auto result = video_processor_->Init(size_.width(), size_.height());
   if (!result.is_ok())
     return std::move(result).AddHere();
@@ -119,19 +98,8 @@ D3D11Status CopyingTexture2DWrapper::Init(
 
   return output_texture_wrapper_->Init(
       std::move(gpu_task_runner), std::move(get_helper_cb), output_texture_,
-      /*array_slice=*/0);
-}
-
-void CopyingTexture2DWrapper::SetStreamHDRMetadata(
-    const gfx::HDRMetadata& stream_metadata) {
-  auto dxgi_stream_metadata =
-      gl::HDRMetadataHelperWin::HDRMetadataToDXGI(stream_metadata);
-  video_processor_->SetStreamHDRMetadata(dxgi_stream_metadata);
-}
-
-void CopyingTexture2DWrapper::SetDisplayHDRMetadata(
-    const DXGI_HDR_METADATA_HDR10& dxgi_display_metadata) {
-  video_processor_->SetDisplayHDRMetadata(dxgi_display_metadata);
+      /*array_size=*/0, std::move(picture_buffer),
+      std::move(picture_buffer_gpu_resource_init_done_cb));
 }
 
 }  // namespace media

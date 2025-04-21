@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <set>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/proto/internal.pb.h"
@@ -25,8 +25,7 @@
 #include "remoting/protocol/session.h"
 #include "remoting/protocol/session_config.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class AudioDecodeScheduler;
 class AudioReader;
@@ -57,6 +56,7 @@ class IceConnectionToHost : public ConnectionToHost,
                scoped_refptr<TransportContext> transport_context,
                HostEventCallback* event_callback) override;
   void Disconnect(ErrorCode error) override;
+  void ApplyNetworkSettings(const NetworkSettings& settings) override;
   const SessionConfig& config() override;
   ClipboardStub* clipboard_forwarder() override;
   HostStub* host_stub() override;
@@ -69,7 +69,7 @@ class IceConnectionToHost : public ConnectionToHost,
 
   // IceTransport::EventHandler interface.
   void OnIceTransportRouteChange(const std::string& channel_name,
-                              const TransportRoute& route) override;
+                                 const TransportRoute& route) override;
   void OnIceTransportError(ErrorCode error) override;
 
   // ChannelDispatcherBase::EventHandler interface.
@@ -108,13 +108,12 @@ class IceConnectionToHost : public ConnectionToHost,
 
   // Internal state of the connection.
   State state_ = INITIALIZING;
-  ErrorCode error_ = OK;
+  ErrorCode error_ = ErrorCode::OK;
 
  private:
   SEQUENCE_CHECKER(sequence_checker_);
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_ICE_CONNECTION_TO_HOST_H_

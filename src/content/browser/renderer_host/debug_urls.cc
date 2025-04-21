@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/compiler_specific.h"
+#include "base/debug/alias.h"
 #include "base/debug/asan_invalid_access.h"
 #include "base/debug/profiler.h"
+#include "base/functional/bind.h"
+#include "base/immediate_crash.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/sanitizer_buildflags.h"
 #include "base/strings/utf_string_conversions.h"
@@ -103,11 +106,19 @@ bool HandleAsanDebugURL(const GURL& url) {
   return true;
 }
 
-void HangCurrentThread() {
+NOINLINE void HangCurrentThread() {
   ScopedAllowWaitForDebugURL allow_wait;
   base::WaitableEvent(base::WaitableEvent::ResetPolicy::AUTOMATIC,
                       base::WaitableEvent::InitialState::NOT_SIGNALED)
       .Wait();
+}
+
+NOINLINE void CrashBrowserProcessIntentionally() {
+  // Don't fold so that crash reports will clearly show this method. This helps
+  // with crash triage.
+  NO_CODE_FOLDING();
+  // Induce an intentional crash in the browser process.
+  base::ImmediateCrash();
 }
 
 }  // namespace
@@ -119,7 +130,7 @@ bool HandleDebugURL(const GURL& url,
   // URL, unless kEnableGpuBenchmarking is enabled by Telemetry.
   bool is_telemetry_navigation =
       base::CommandLine::ForCurrentProcess()->HasSwitch(
-          cc::switches::kEnableGpuBenchmarking) &&
+          switches::kEnableGpuBenchmarking) &&
       (PageTransitionCoreTypeIs(transition, ui::PAGE_TRANSITION_TYPED));
 
   if (!is_explicit_navigation && !is_telemetry_navigation)
@@ -129,8 +140,7 @@ bool HandleDebugURL(const GURL& url,
     return HandleAsanDebugURL(url);
 
   if (url == blink::kChromeUIBrowserCrashURL) {
-    // Induce an intentional crash in the browser process.
-    CHECK(false);
+    CrashBrowserProcessIntentionally();
     return true;
   }
 
@@ -162,44 +172,36 @@ bool HandleDebugURL(const GURL& url,
   }
 
   if (url == blink::kChromeUIGpuCleanURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->DestroyAllChannels();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->DestroyAllChannels();
+    }
     return true;
   }
 
   if (url == blink::kChromeUIGpuCrashURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->Crash();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->Crash();
+    }
     return true;
   }
 
 #if BUILDFLAG(IS_ANDROID)
   if (url == blink::kChromeUIGpuJavaCrashURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->ThrowJavaException();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->ThrowJavaException();
+    }
     return true;
   }
 #endif
 
   if (url == blink::kChromeUIGpuHangURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->Hang();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->Hang();
+    }
     return true;
   }
 

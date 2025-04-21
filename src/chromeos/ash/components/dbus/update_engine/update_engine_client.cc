@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,22 @@
 
 #include <stdint.h>
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
+#include "chromeos/version/version_loader.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
@@ -30,16 +31,6 @@
 namespace ash {
 
 namespace {
-
-const char kReleaseChannelCanary[] = "canary-channel";
-const char kReleaseChannelDev[] = "dev-channel";
-const char kReleaseChannelBeta[] = "beta-channel";
-const char kReleaseChannelStable[] = "stable-channel";
-
-// List of release channels ordered by stability.
-const char* kReleaseChannelsList[] = {kReleaseChannelCanary, kReleaseChannelDev,
-                                      kReleaseChannelBeta,
-                                      kReleaseChannelStable};
 
 // Delay between successive state transitions during AU.
 const int kStateTransitionDefaultDelayMs = 3000;
@@ -56,11 +47,6 @@ const int64_t kDownloadSizeDelta = 1 << 19;
 const char kStubVersion[] = "1234.0.0.0";
 
 UpdateEngineClient* g_instance = nullptr;
-
-bool IsValidChannel(const std::string& channel) {
-  return channel == kReleaseChannelDev || channel == kReleaseChannelBeta ||
-         channel == kReleaseChannelStable;
-}
 
 // The UpdateEngineClient implementation used in production.
 class UpdateEngineClientImpl : public UpdateEngineClient {
@@ -146,11 +132,6 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
 
   void SetChannel(const std::string& target_channel,
                   bool is_powerwash_allowed) override {
-    if (!IsValidChannel(target_channel)) {
-      LOG(ERROR) << "Invalid channel name: " << target_channel;
-      return;
-    }
-
     dbus::MethodCall method_call(update_engine::kUpdateEngineInterface,
                                  update_engine::kSetChannel);
     dbus::MessageWriter writer(&method_call);
@@ -264,6 +245,31 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
                        std::move(callback)));
   }
 
+  void ApplyDeferredUpdate(bool shutdown_after_update,
+                           base::OnceClosure failure_callback) override {
+    update_engine::ApplyUpdateConfig config;
+    config.set_done_action(shutdown_after_update
+                               ? update_engine::UpdateDoneAction::SHUTDOWN
+                               : update_engine::UpdateDoneAction::REBOOT);
+    dbus::MethodCall method_call(update_engine::kUpdateEngineInterface,
+                                 update_engine::kApplyDeferredUpdateAdvanced);
+    dbus::MessageWriter writer(&method_call);
+    if (!writer.AppendProtoAsArrayOfBytes(config)) {
+      LOG(ERROR) << "Failed to encode ApplyUpdateConfig protobuf.";
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(failure_callback));
+      return;
+    }
+
+    VLOG(1) << "Requesting UpdateEngine to apply deferred update.";
+
+    update_engine_proxy_->CallMethod(
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::BindOnce(&UpdateEngineClientImpl::OnApplyDeferredUpdate,
+                       weak_ptr_factory_.GetWeakPtr(),
+                       std::move(failure_callback)));
+  }
+
   void Init(dbus::Bus* bus) override {
     update_engine_proxy_ = bus->GetObjectProxy(
         update_engine::kUpdateEngineServiceName,
@@ -302,8 +308,8 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
   }
 
   void GetUpdateEngineStatus() {
-    // TODO(crbug.com/977320): Rename the method call back to GetStatus() after
-    // the interface changed.
+    // TODO(crbug.com/40633112): Rename the method call back to GetStatus()
+    // after the interface changed.
     dbus::MethodCall method_call(update_engine::kUpdateEngineInterface,
                                  update_engine::kGetStatusAdvanced);
     update_engine_proxy_->CallMethodWithErrorCallback(
@@ -329,7 +335,7 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(update_params)) {
       LOG(ERROR) << "Failed to encode UpdateParams protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), UPDATE_RESULT_FAILED));
       return;
     }
@@ -458,12 +464,21 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
     }
 
     VLOG(1) << "Eol date received: " << status.eol_date();
+    VLOG(1) << "Extended date received: " << status.extended_date();
+    VLOG(1) << "Extended opt in received: "
+            << status.extended_opt_in_required();
 
     EolInfo eol_info;
     if (status.eol_date() > 0) {
       eol_info.eol_date =
           base::Time::UnixEpoch() + base::Days(status.eol_date());
     }
+    if (status.extended_date() > 0) {
+      eol_info.extended_date =
+          base::Time::UnixEpoch() + base::Days(status.extended_date());
+    }
+    eol_info.extended_opt_in_required = status.extended_opt_in_required();
+
     std::move(callback).Run(eol_info);
   }
 
@@ -495,7 +510,7 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
     if (!response) {
       LOG(ERROR) << update_engine::kIsFeatureEnabled
                  << " call failed for feature " << feature;
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
 
@@ -503,7 +518,7 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
     bool enabled;
     if (!reader.PopBool(&enabled)) {
       LOG(ERROR) << "Bad response: " << response->ToString();
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
 
@@ -532,6 +547,18 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
     std::move(callback).Run(success);
   }
 
+  // Called when a response for `ApplyDeferredUpdate()` is received.
+  void OnApplyDeferredUpdate(base::OnceClosure failure_callback,
+                             dbus::Response* response) {
+    if (!response) {
+      LOG(ERROR) << update_engine::kApplyDeferredUpdate << " call failed.";
+      std::move(failure_callback).Run();
+      return;
+    }
+
+    VLOG(1) << "Update is applied.";
+  }
+
   // Called when a status update signal is received.
   void StatusUpdateReceived(dbus::Signal* signal) {
     VLOG(1) << "Status update signal received: " << signal->ToString();
@@ -554,7 +581,7 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
     LOG_IF(WARNING, !success) << "Failed to connect to status updated signal.";
   }
 
-  dbus::ObjectProxy* update_engine_proxy_;
+  raw_ptr<dbus::ObjectProxy> update_engine_proxy_;
   base::ObserverList<Observer>::Unchecked observers_;
   update_engine::StatusResult last_status_;
 
@@ -575,8 +602,7 @@ class UpdateEngineClientImpl : public UpdateEngineClient {
 class UpdateEngineClientDesktopFake : public UpdateEngineClient {
  public:
   UpdateEngineClientDesktopFake()
-      : current_channel_(kReleaseChannelBeta),
-        target_channel_(kReleaseChannelBeta) {}
+      : current_channel_("beta-channel"), target_channel_("beta-channel") {}
 
   UpdateEngineClientDesktopFake(const UpdateEngineClientDesktopFake&) = delete;
   UpdateEngineClientDesktopFake& operator=(
@@ -611,7 +637,7 @@ class UpdateEngineClientDesktopFake : public UpdateEngineClient {
     last_status_.set_new_version("0.0.0.0");
     last_status_.set_new_size(0);
     last_status_.set_is_enterprise_rollback(false);
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&UpdateEngineClientDesktopFake::StateTransition,
                        weak_factory_.GetWeakPtr(), apply_update),
@@ -676,7 +702,13 @@ class UpdateEngineClientDesktopFake : public UpdateEngineClient {
   void IsFeatureEnabled(const std::string& feature,
                         IsFeatureEnabledCallback callback) override {
     VLOG(1) << "Requesting to get " << feature;
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
+  }
+
+  void ApplyDeferredUpdate(bool shutdown_after_update,
+                           base::OnceClosure failure_callback) override {
+    VLOG(1) << "Applying deferred update and "
+            << (shutdown_after_update ? "shutdown." : "reboot.");
   }
 
  private:
@@ -691,6 +723,8 @@ class UpdateEngineClientDesktopFake : public UpdateEngineClient {
       case update_engine::Operation::ATTEMPTING_ROLLBACK:
       case update_engine::Operation::NEED_PERMISSION_TO_UPDATE:
       case update_engine::Operation::DISABLED:
+      case update_engine::Operation::UPDATED_BUT_DEFERRED:
+      case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
         return;
       case update_engine::Operation::CHECKING_FOR_UPDATE:
         next_operation = update_engine::Operation::UPDATE_AVAILABLE;
@@ -723,7 +757,7 @@ class UpdateEngineClientDesktopFake : public UpdateEngineClient {
     for (auto& observer : observers_)
       observer.UpdateStatusChanged(last_status_);
     if (last_status_.current_operation() != update_engine::Operation::IDLE) {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&UpdateEngineClientDesktopFake::StateTransition,
                          weak_factory_.GetWeakPtr(), apply_update),
@@ -731,7 +765,7 @@ class UpdateEngineClientDesktopFake : public UpdateEngineClient {
     }
   }
 
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged observers_;
 
   std::string current_channel_;
   std::string target_channel_;
@@ -775,19 +809,6 @@ FakeUpdateEngineClient* UpdateEngineClient::InitializeFakeForTest() {
 void UpdateEngineClient::Shutdown() {
   CHECK(g_instance);
   delete g_instance;
-}
-
-// static
-bool UpdateEngineClient::IsTargetChannelMoreStable(
-    const std::string& current_channel,
-    const std::string& target_channel) {
-  const char** cix = std::find(
-      kReleaseChannelsList,
-      kReleaseChannelsList + std::size(kReleaseChannelsList), current_channel);
-  const char** tix = std::find(
-      kReleaseChannelsList,
-      kReleaseChannelsList + std::size(kReleaseChannelsList), target_channel);
-  return tix > cix;
 }
 
 UpdateEngineClient::UpdateEngineClient() {

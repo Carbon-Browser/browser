@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <wrl/implements.h>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace webshare {
 
@@ -47,8 +47,6 @@ class __declspec(uuid("53CA4C00-6F19-40C1-A740-F66510E2DB40"))
 
   using PostDataRequestedCallback =
       base::RepeatingCallback<void(const DataRequestedContent&)>;
-
-  static bool IsSupportedEnvironment();
 
   FakeDataTransferManager();
   FakeDataTransferManager(const FakeDataTransferManager&) = delete;

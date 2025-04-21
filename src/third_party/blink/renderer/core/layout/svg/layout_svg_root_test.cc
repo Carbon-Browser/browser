@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_shape.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_layout_support.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
+#include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/testing/find_cc_layer.h"
 #include "third_party/blink/renderer/platform/testing/paint_test_configurations.h"
@@ -41,7 +42,7 @@ TEST_P(LayoutSVGRootTest, VisualRectMappingWithoutViewportClipWithBorder) {
   EXPECT_EQ(PhysicalRect(90, 90, 100, 100), rect);
 
   auto root_visual_rect =
-      static_cast<const LayoutObject&>(root).LocalVisualRect();
+      LocalVisualRect(static_cast<const LayoutObject&>(root));
   // SVG root's local overflow does not include overflow from descendants.
   EXPECT_EQ(PhysicalRect(0, 0, 220, 120), root_visual_rect);
 
@@ -61,7 +62,8 @@ TEST_P(LayoutSVGRootTest, VisualOverflowExpandsLayer) {
       CcLayersByDOMElementId(GetDocument().View()->RootCcLayer(), "root")[0];
   EXPECT_EQ(gfx::Size(100, 100), layer->bounds());
 
-  GetDocument().getElementById("rect")->setAttribute("height", "200");
+  GetElementById("rect")->setAttribute(svg_names::kHeightAttr,
+                                       AtomicString("200"));
   UpdateAllLifecyclePhasesForTest();
 
   EXPECT_EQ(gfx::Size(100, 200), layer->bounds());
@@ -83,7 +85,7 @@ TEST_P(LayoutSVGRootTest, VisualRectMappingWithViewportClipAndBorder) {
   EXPECT_EQ(PhysicalRect(90, 90, 100, 20), rect);
 
   auto root_visual_rect =
-      static_cast<const LayoutObject&>(root).LocalVisualRect();
+      LocalVisualRect(static_cast<const LayoutObject&>(root));
   // SVG root with overflow:hidden doesn't include overflow from children, just
   // border box rect.
   EXPECT_EQ(PhysicalRect(0, 0, 220, 120), root_visual_rect);
@@ -101,7 +103,7 @@ TEST_P(LayoutSVGRootTest, RectBasedHitTestPartialOverlap) {
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
+  const auto& svg = *GetElementById("svg");
   const auto& body = *GetDocument().body();
 
   // This is the center of the rect-based hit test below.
@@ -135,13 +137,13 @@ TEST_P(LayoutSVGRootTest, PaintLayerType) {
   ASSERT_TRUE(root.Layer());
   EXPECT_FALSE(root.Layer()->IsSelfPaintingLayer());
 
-  GetDocument().getElementById("rect")->setAttribute("style",
-                                                     "will-change: transform");
+  GetElementById("rect")->setAttribute(svg_names::kStyleAttr,
+                                       AtomicString("will-change: transform"));
   UpdateAllLifecyclePhasesForTest();
   ASSERT_TRUE(root.Layer());
   EXPECT_FALSE(root.Layer()->IsSelfPaintingLayer());
 
-  GetDocument().getElementById("rect")->removeAttribute("style");
+  GetElementById("rect")->removeAttribute(svg_names::kStyleAttr);
   UpdateAllLifecyclePhasesForTest();
   ASSERT_TRUE(root.Layer());
   EXPECT_FALSE(root.Layer()->IsSelfPaintingLayer());

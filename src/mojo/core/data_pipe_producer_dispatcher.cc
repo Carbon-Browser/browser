@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "mojo/core/data_pipe_producer_dispatcher.h"
 
@@ -9,7 +14,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/checked_math.h"
@@ -163,7 +168,8 @@ MojoResult DataPipeProducerDispatcher::WriteData(
 
 MojoResult DataPipeProducerDispatcher::BeginWriteData(
     void** buffer,
-    uint32_t* buffer_num_bytes) {
+    uint32_t* buffer_num_bytes,
+    MojoBeginWriteDataFlags flags) {
   base::AutoLock lock(lock_);
   if (!shared_ring_buffer_.IsValid() || in_transit_)
     return MOJO_RESULT_INVALID_ARGUMENT;
@@ -350,14 +356,20 @@ DataPipeProducerDispatcher::Deserialize(const void* data,
     return nullptr;
   }
 
+  std::optional<base::UnguessableToken> buffer_guid =
+      base::UnguessableToken::Deserialize(state->buffer_guid_high,
+                                          state->buffer_guid_low);
+  if (!buffer_guid.has_value()) {
+    AssertNotExtractingHandlesFromMessage();
+    return nullptr;
+  }
+
   auto region_handle = CreateSharedMemoryRegionHandleFromPlatformHandles(
       std::move(handles[0]), PlatformHandle());
   auto region = base::subtle::PlatformSharedMemoryRegion::Take(
       std::move(region_handle),
       base::subtle::PlatformSharedMemoryRegion::Mode::kUnsafe,
-      state->options.capacity_num_bytes,
-      base::UnguessableToken::Deserialize(state->buffer_guid_high,
-                                          state->buffer_guid_low));
+      state->options.capacity_num_bytes, buffer_guid.value());
   auto ring_buffer =
       base::UnsafeSharedMemoryRegion::Deserialize(std::move(region));
   if (!ring_buffer.IsValid()) {

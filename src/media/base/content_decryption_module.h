@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "media/base/cdm_key_information.h"
 #include "media/base/eme_constants.h"
@@ -56,17 +57,18 @@ enum class CdmMessageType {
   MESSAGE_TYPE_MAX = INDIVIDUALIZATION_REQUEST
 };
 
+// This enum is reported to UKM. Existing values should NEVER be changed.
 enum class HdcpVersion {
-  kHdcpVersionNone,
-  kHdcpVersion1_0,
-  kHdcpVersion1_1,
-  kHdcpVersion1_2,
-  kHdcpVersion1_3,
-  kHdcpVersion1_4,
-  kHdcpVersion2_0,
-  kHdcpVersion2_1,
-  kHdcpVersion2_2,
-  kHdcpVersion2_3,
+  kHdcpVersionNone = 0,
+  kHdcpVersion1_0 = 1,
+  kHdcpVersion1_1 = 2,
+  kHdcpVersion1_2 = 3,
+  kHdcpVersion1_3 = 4,
+  kHdcpVersion1_4 = 5,
+  kHdcpVersion2_0 = 6,
+  kHdcpVersion2_1 = 7,
+  kHdcpVersion2_2 = 8,
+  kHdcpVersion2_3 = 9,
   kMaxValue = kHdcpVersion2_3
 };
 
@@ -192,6 +194,11 @@ struct MEDIA_EXPORT ContentDecryptionModuleTraits {
   static void Destruct(const ContentDecryptionModule* cdm);
 };
 
+// Try to convert `hdcp_version_string` to `HdcpVersion`. Returns std::nullopt
+// on failure.
+MEDIA_EXPORT std::optional<media::HdcpVersion> MaybeHdcpVersionFromString(
+    const std::string& hdcp_version_string);
+
 // CDM session event callbacks.
 
 // Called when the CDM needs to queue a message event to the session object.
@@ -205,7 +212,7 @@ using SessionMessageCB =
 // CDM may close a session at any point, such as in response to a CloseSession()
 // call, when the session is no longer needed, or when system resources are
 // lost, as specified by `reason`.
-// See http://w3c.github.io/encrypted-media/#session-close
+// See http://w3c.github.io/encrypted-media/#session-closed
 using SessionClosedCB =
     base::RepeatingCallback<void(const std::string& session_id,
                                  CdmSessionClosedReason reason)>;

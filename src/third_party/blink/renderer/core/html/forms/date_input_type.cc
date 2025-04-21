@@ -39,6 +39,7 @@
 #include "third_party/blink/renderer/core/input_type_names.h"
 #include "third_party/blink/renderer/platform/text/date_components.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
+#include "ui/strings/grit/ax_strings.h"
 
 namespace blink {
 
@@ -47,14 +48,10 @@ static const int kDateDefaultStepBase = 0;
 static const int kDateStepScaleFactor = 86400000;
 
 DateInputType::DateInputType(HTMLInputElement& element)
-    : BaseTemporalInputType(element) {}
+    : BaseTemporalInputType(Type::kDate, element) {}
 
 void DateInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeDate);
-}
-
-const AtomicString& DateInputType::FormControlType() const {
-  return input_type_names::kDate;
 }
 
 StepRange DateInputType::CreateStepRange(

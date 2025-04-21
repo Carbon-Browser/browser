@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HIGHLIGHT_HIGHLIGHT_H_
 
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_highlight_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_sync_iterator_highlight.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/abstract_range.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
@@ -16,12 +18,10 @@
 
 namespace blink {
 
-using HighlightSetIterable =
-    SetlikeIterable<Member<AbstractRange>, AbstractRange>;
+using HighlightSetIterable = ValueSyncIterable<Highlight>;
 class HighlightRegistry;
 
-class CORE_EXPORT Highlight : public ScriptWrappable,
-                              public HighlightSetIterable {
+class CORE_EXPORT Highlight : public EventTarget, public HighlightSetIterable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -41,19 +41,21 @@ class CORE_EXPORT Highlight : public ScriptWrappable,
   const int32_t& priority() const { return priority_; }
   void setPriority(const int32_t&);
 
-  AtomicString type() const { return type_; }
-  void setType(const AtomicString& type) { type_ = type; }
+  V8HighlightType type() const { return type_; }
+  void setType(const V8HighlightType& type) { type_ = type; }
 
   bool Contains(AbstractRange*) const;
 
+  // EventTarget
+  const AtomicString& InterfaceName() const override;
+  ExecutionContext* GetExecutionContext() const override;
+
+  // HighlightSetIterable
   class IterationSource final : public HighlightSetIterable::IterationSource {
    public:
     explicit IterationSource(const Highlight& highlight);
 
-    bool Next(ScriptState*,
-              Member<AbstractRange>&,
-              Member<AbstractRange>&,
-              ExceptionState&) override;
+    bool FetchNextItem(ScriptState*, AbstractRange*&, ExceptionState&) override;
 
     void Trace(blink::Visitor*) const override;
 
@@ -61,10 +63,6 @@ class CORE_EXPORT Highlight : public ScriptWrappable,
     wtf_size_t index_;
     HeapVector<Member<AbstractRange>> highlight_ranges_snapshot_;
   };
-
-  HighlightSetIterable::IterationSource* StartIteration(
-      ScriptState*,
-      ExceptionState&) override;
 
   const HeapLinkedHashSet<Member<AbstractRange>>& GetRanges() const {
     return highlight_ranges_;
@@ -74,9 +72,13 @@ class CORE_EXPORT Highlight : public ScriptWrappable,
   void DeregisterFrom(HighlightRegistry* highlight_registry);
 
  private:
+  HighlightSetIterable::IterationSource* CreateIterationSource(
+      ScriptState*,
+      ExceptionState&) override;
+
   HeapLinkedHashSet<Member<AbstractRange>> highlight_ranges_;
   int32_t priority_ = 0;
-  AtomicString type_ = "highlight";
+  V8HighlightType type_ = V8HighlightType{V8HighlightType::Enum::kHighlight};
   // Since a Highlight can be registered many times under different names in
   // many HighlightRegistries, we need to keep track of the number of times
   // it's present in each registry. If the Highlight is not registered anywhere,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "build/build_config.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/events/wheel_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -15,32 +16,10 @@
 #include "third_party/blink/renderer/core/layout/hit_test_request.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/pointer_lock_controller.h"
-#include "third_party/blink/renderer/core/page/scrolling/root_scroller_controller.h"
-#include "third_party/blink/renderer/core/page/scrolling/scroll_state.h"
-#include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
-#include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
 namespace blink {
-
-namespace {
-
-gfx::Vector2dF ResolveMouseWheelPercentToWheelDelta(
-    const WebMouseWheelEvent& event) {
-  DCHECK(event.delta_units == ui::ScrollGranularity::kScrollByPercentage);
-  // TODO (dlibby): OS scroll settings need to be factored into this.
-  // Note that this value is negative because we're converting from wheel
-  // ticks to wheel delta pixel. Wheel ticks are negative for scrolling down,
-  // but the delta must be positive.
-  constexpr float percent_mouse_wheel_ticks_multiplier = -100.f;
-  return gfx::Vector2dF(
-      event.wheel_ticks_x * percent_mouse_wheel_ticks_multiplier,
-      event.wheel_ticks_y * percent_mouse_wheel_ticks_multiplier);
-}
-
-}  // namespace
 
 MouseWheelEventManager::MouseWheelEventManager(LocalFrame& frame,
                                                ScrollManager& scroll_manager)
@@ -78,8 +57,6 @@ WebInputEventResult MouseWheelEventManager::HandleWheelEvent(
 
   if ((event.phase & kWheelEventPhaseNoEventMask) ||
       (event.momentum_phase & kWheelEventPhaseNoEventMask)) {
-    // Filter wheel events with zero deltas and reset the wheel_target_ node.
-    DCHECK(!event.delta_x && !event.delta_y);
     return WebInputEventResult::kNotHandled;
   }
 
@@ -112,12 +89,7 @@ WebInputEventResult MouseWheelEventManager::HandleWheelEvent(
 
   if (wheel_target_) {
     WheelEvent* dom_event =
-        (event.delta_units == ui::ScrollGranularity::kScrollByPercentage)
-            ? WheelEvent::Create(event,
-                                 ResolveMouseWheelPercentToWheelDelta(event),
-                                 wheel_target_->GetDocument().domWindow())
-            : WheelEvent::Create(event,
-                                 wheel_target_->GetDocument().domWindow());
+        WheelEvent::Create(event, *wheel_target_->GetDocument().domWindow());
 
     // The event handler might remove |wheel_target_| from DOM so we should get
     // this value now (see https://crbug.com/857013).

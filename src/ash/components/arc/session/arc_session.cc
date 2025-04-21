@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ void ArcSession::RemoveObserver(Observer* observer) {
 std::unique_ptr<ArcSession> ArcSession::Create(
     ArcBridgeService* arc_bridge_service,
     version_info::Channel channel,
-    chromeos::SchedulerConfigurationManagerBase*
-        scheduler_configuration_manager,
+    ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager,
     AdbSideloadingAvailabilityDelegate* adb_sideloading_availability_delegate) {
   return std::make_unique<ArcSessionImpl>(
       ArcSessionImpl::CreateDelegate(arc_bridge_service, channel),

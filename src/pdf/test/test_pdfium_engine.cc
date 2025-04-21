@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/values.h"
 #include "pdf/document_attachment_info.h"
 #include "pdf/document_metadata.h"
-#include "pdf/pdf_engine.h"
 #include "pdf/pdfium/pdfium_engine.h"
 #include "pdf/pdfium/pdfium_form_filler.h"
 
@@ -29,7 +28,7 @@ const uint8_t TestPDFiumEngine::kLoadedData[];
 // static
 const uint8_t TestPDFiumEngine::kSaveData[];
 
-TestPDFiumEngine::TestPDFiumEngine(PDFEngine::Client* client)
+TestPDFiumEngine::TestPDFiumEngine(PDFiumEngineClient* client)
     : PDFiumEngine(client, PDFiumFormFiller::ScriptOption::kNoJavaScript) {}
 
 TestPDFiumEngine::~TestPDFiumEngine() = default;

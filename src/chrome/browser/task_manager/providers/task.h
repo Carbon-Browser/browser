@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/memory/weak_ptr.h"
 #include "base/process/kill.h"
 #include "base/process/process_handle.h"
 #include "base/time/time.h"
@@ -58,6 +59,15 @@ class Task {
 
     /* Lacros task. */
     LACROS, /* A task from lacros-chrome */
+  };
+
+  // Additional Type Information about a Task.
+  enum class SubType {
+    kNoSubType = 0,
+
+    /* Renderer Processes may also be marked as a specific renderer subtype. */
+    kSpareRenderer,
+    kUnknownRenderer,
   };
 
   // Create a task with the given |title| and the given favicon |icon|. This
@@ -111,6 +121,9 @@ class Task {
   // Returns the task type.
   virtual Type GetType() const = 0;
 
+  // Returns the task subtype.
+  virtual SubType GetSubType() const;
+
   // This is the unique ID of the BrowserChildProcessHost/RenderProcessHost. It
   // is not the PID nor the handle of the process.
   // For a task that represents the browser process, the return value is 0. For
@@ -135,7 +148,7 @@ class Task {
   // embedded in a page), this returns the Task representing the parent
   // activity.
   bool HasParentTask() const;
-  virtual const Task* GetParentTask() const;
+  virtual base::WeakPtr<Task> GetParentTask() const;
 
   // Getting the Sqlite used memory (in bytes). Not all tasks reports Sqlite
   // memory, in this case a default invalid value of -1 will be returned.
@@ -174,6 +187,8 @@ class Task {
   const gfx::ImageSkia& icon() const { return icon_; }
   const base::ProcessHandle& process_handle() const { return process_handle_; }
   const base::ProcessId& process_id() const { return process_id_; }
+
+  base::WeakPtr<Task> AsWeakPtr();
 
  protected:
   // If |*result_image| is not already set, fetch the image with id
@@ -224,6 +239,8 @@ class Task {
 
   // The PID of the process on which this task is running.
   base::ProcessId process_id_;
+
+  base::WeakPtrFactory<Task> weak_ptr_factory_{this};
 };
 
 }  // namespace task_manager

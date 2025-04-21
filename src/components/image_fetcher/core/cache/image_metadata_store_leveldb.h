@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,7 +109,7 @@ class ImageMetadataStoreLevelDB : public ImageMetadataStore {
   std::unique_ptr<leveldb_proto::ProtoDatabase<CachedImageMetadataProto>>
       database_;
   // Clock is owned by the service that creates this object.
-  raw_ptr<base::Clock> clock_;
+  raw_ptr<base::Clock, DanglingUntriaged> clock_;
   base::WeakPtrFactory<ImageMetadataStoreLevelDB> weak_ptr_factory_{this};
 };
 

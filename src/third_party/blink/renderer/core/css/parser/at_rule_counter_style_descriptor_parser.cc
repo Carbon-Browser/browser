@@ -1,49 +1,52 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "third_party/blink/renderer/core/css/parser/at_rule_descriptor_parser.h"
 
 #include "third_party/blink/renderer/core/css/css_string_value.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/css_value_pair.h"
+#include "third_party/blink/renderer/core/css/media_values.h"
+#include "third_party/blink/renderer/core/css/parser/at_rule_descriptor_parser.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
-#include "third_party/blink/renderer/core/css/parser/css_parser_token_range.h"
 #include "third_party/blink/renderer/core/css/properties/css_parsing_utils.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 
 namespace blink {
 
 namespace {
 
-CSSValue* ConsumeCounterStyleSymbol(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleSymbol(CSSParserTokenStream& stream,
                                     const CSSParserContext& context) {
   // <symbol> = <string> | <image> | <custom-ident>
-  if (CSSValue* string = css_parsing_utils::ConsumeString(range))
+  if (CSSValue* string = css_parsing_utils::ConsumeString(stream)) {
     return string;
+  }
   if (RuntimeEnabledFeatures::CSSAtRuleCounterStyleImageSymbolsEnabled()) {
-    if (CSSValue* image = css_parsing_utils::ConsumeImage(range, context))
+    if (CSSValue* image = css_parsing_utils::ConsumeImage(stream, context)) {
       return image;
+    }
   }
   if (CSSCustomIdentValue* custom_ident =
-          css_parsing_utils::ConsumeCustomIdent(range, context)) {
+          css_parsing_utils::ConsumeCustomIdent(stream, context)) {
     return custom_ident;
   }
   return nullptr;
 }
 
-CSSValue* ConsumeCounterStyleSystem(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleSystem(CSSParserTokenStream& stream,
                                     const CSSParserContext& context) {
   // Syntax: cyclic | numeric | alphabetic | symbolic | additive |
   // [ fixed <integer>? ] | [ extends <counter-style-name> ]
   if (CSSValue* ident = css_parsing_utils::ConsumeIdent<
           CSSValueID::kCyclic, CSSValueID::kSymbolic, CSSValueID::kAlphabetic,
-          CSSValueID::kNumeric, CSSValueID::kAdditive>(range))
+          CSSValueID::kNumeric, CSSValueID::kAdditive>(stream)) {
     return ident;
+  }
 
   if (CSSValue* ident =
-          css_parsing_utils::ConsumeIdent<CSSValueID::kFixed>(range)) {
+          css_parsing_utils::ConsumeIdent<CSSValueID::kFixed>(stream)) {
     CSSValue* first_symbol_value =
-        css_parsing_utils::ConsumeInteger(range, context);
+        css_parsing_utils::ConsumeInteger(stream, context);
     if (!first_symbol_value) {
       first_symbol_value = CSSNumericLiteralValue::Create(
           1, CSSPrimitiveValue::UnitType::kInteger);
@@ -53,11 +56,12 @@ CSSValue* ConsumeCounterStyleSystem(CSSParserTokenRange& range,
   }
 
   if (CSSValue* ident =
-          css_parsing_utils::ConsumeIdent<CSSValueID::kExtends>(range)) {
+          css_parsing_utils::ConsumeIdent<CSSValueID::kExtends>(stream)) {
     CSSValue* extended =
-        css_parsing_utils::ConsumeCounterStyleName(range, context);
-    if (!extended)
+        css_parsing_utils::ConsumeCounterStyleName(stream, context);
+    if (!extended) {
       return nullptr;
+    }
     return MakeGarbageCollected<CSSValuePair>(
         ident, extended, CSSValuePair::kKeepIdenticalValues);
   }
@@ -76,112 +80,130 @@ CSSValue* ConsumeCounterStyleSystem(CSSParserTokenRange& range,
             CSSValueID::kInternalKoreanHanjaFormal,
             CSSValueID::kInternalLowerArmenian,
             CSSValueID::kInternalUpperArmenian,
-            CSSValueID::kInternalEthiopicNumeric>(range))
+            CSSValueID::kInternalEthiopicNumeric>(stream)) {
       return ident;
+    }
   }
 
   return nullptr;
 }
 
-CSSValue* ConsumeCounterStyleNegative(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleNegative(CSSParserTokenStream& stream,
                                       const CSSParserContext& context) {
   // Syntax: <symbol> <symbol>?
-  CSSValue* prepend = ConsumeCounterStyleSymbol(range, context);
-  if (!prepend)
+  CSSValue* prepend = ConsumeCounterStyleSymbol(stream, context);
+  if (!prepend) {
     return nullptr;
-  if (range.AtEnd())
+  }
+  if (stream.AtEnd()) {
     return prepend;
+  }
 
-  CSSValue* append = ConsumeCounterStyleSymbol(range, context);
-  if (!append || !range.AtEnd())
+  CSSValue* append = ConsumeCounterStyleSymbol(stream, context);
+  if (!append || !stream.AtEnd()) {
     return nullptr;
+  }
 
   return MakeGarbageCollected<CSSValuePair>(prepend, append,
                                             CSSValuePair::kKeepIdenticalValues);
 }
 
-CSSValue* ConsumeCounterStyleRangeBound(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleRangeBound(CSSParserTokenStream& stream,
                                         const CSSParserContext& context) {
   if (CSSValue* infinite =
-          css_parsing_utils::ConsumeIdent<CSSValueID::kInfinite>(range))
+          css_parsing_utils::ConsumeIdent<CSSValueID::kInfinite>(stream)) {
     return infinite;
-  if (CSSValue* integer = css_parsing_utils::ConsumeInteger(range, context))
+  }
+  if (CSSValue* integer = css_parsing_utils::ConsumeInteger(stream, context)) {
     return integer;
+  }
   return nullptr;
 }
 
-CSSValue* ConsumeCounterStyleRange(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleRange(CSSParserTokenStream& stream,
                                    const CSSParserContext& context) {
   // Syntax: [ [ <integer> | infinite ]{2} ]# | auto
   if (CSSValue* auto_value =
-          css_parsing_utils::ConsumeIdent<CSSValueID::kAuto>(range))
+          css_parsing_utils::ConsumeIdent<CSSValueID::kAuto>(stream)) {
     return auto_value;
+  }
 
   CSSValueList* list = CSSValueList::CreateCommaSeparated();
   do {
-    CSSValue* lower_bound = ConsumeCounterStyleRangeBound(range, context);
-    if (!lower_bound)
+    CSSValue* lower_bound = ConsumeCounterStyleRangeBound(stream, context);
+    if (!lower_bound) {
       return nullptr;
-    CSSValue* upper_bound = ConsumeCounterStyleRangeBound(range, context);
-    if (!upper_bound)
+    }
+    CSSValue* upper_bound = ConsumeCounterStyleRangeBound(stream, context);
+    if (!upper_bound) {
       return nullptr;
+    }
 
-    // If the lower bound of any range is higher than the upper bound, the
+    // If the lower bound of any stream is higher than the upper bound, the
     // entire descriptor is invalid and must be ignored.
+    MediaValues* media_values = MediaValues::CreateDynamicIfFrameExists(
+        context.GetDocument() ? context.GetDocument()->GetFrame() : nullptr);
     if (lower_bound->IsPrimitiveValue() && upper_bound->IsPrimitiveValue() &&
-        To<CSSPrimitiveValue>(lower_bound)->GetIntValue() >
-            To<CSSPrimitiveValue>(upper_bound)->GetIntValue())
+        To<CSSPrimitiveValue>(lower_bound)->ComputeInteger(*media_values) >
+            To<CSSPrimitiveValue>(upper_bound)->ComputeInteger(*media_values)) {
       return nullptr;
+    }
 
     list->Append(*MakeGarbageCollected<CSSValuePair>(
         lower_bound, upper_bound, CSSValuePair::kKeepIdenticalValues));
-  } while (css_parsing_utils::ConsumeCommaIncludingWhitespace(range));
-  if (!range.AtEnd() || !list->length())
+  } while (css_parsing_utils::ConsumeCommaIncludingWhitespace(stream));
+  if (!stream.AtEnd() || !list->length()) {
     return nullptr;
+  }
   return list;
 }
 
-CSSValue* ConsumeCounterStylePad(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStylePad(CSSParserTokenStream& stream,
                                  const CSSParserContext& context) {
   // Syntax: <integer [0,∞]> && <symbol>
   CSSValue* integer = nullptr;
   CSSValue* symbol = nullptr;
   while (!integer || !symbol) {
     if (!integer) {
-      integer = css_parsing_utils::ConsumeInteger(range, context, 0);
-      if (integer)
+      integer = css_parsing_utils::ConsumeInteger(stream, context, 0);
+      if (integer) {
         continue;
+      }
     }
     if (!symbol) {
-      symbol = ConsumeCounterStyleSymbol(range, context);
-      if (symbol)
+      symbol = ConsumeCounterStyleSymbol(stream, context);
+      if (symbol) {
         continue;
+      }
     }
     return nullptr;
   }
-  if (!range.AtEnd())
+  if (!stream.AtEnd()) {
     return nullptr;
+  }
 
   return MakeGarbageCollected<CSSValuePair>(integer, symbol,
                                             CSSValuePair::kKeepIdenticalValues);
 }
 
-CSSValue* ConsumeCounterStyleSymbols(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleSymbols(CSSParserTokenStream& stream,
                                      const CSSParserContext& context) {
   // Syntax: <symbol>+
   CSSValueList* list = CSSValueList::CreateSpaceSeparated();
-  while (!range.AtEnd()) {
-    CSSValue* symbol = ConsumeCounterStyleSymbol(range, context);
-    if (!symbol)
+  while (!stream.AtEnd()) {
+    CSSValue* symbol = ConsumeCounterStyleSymbol(stream, context);
+    if (!symbol) {
       return nullptr;
+    }
     list->Append(*symbol);
   }
-  if (!list->length())
+  if (!list->length()) {
     return nullptr;
+  }
   return list;
 }
 
-CSSValue* ConsumeCounterStyleAdditiveSymbols(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleAdditiveSymbols(CSSParserTokenStream& stream,
                                              const CSSParserContext& context) {
   // Syntax: [ <integer [0,∞]> && <symbol> ]#
   CSSValueList* list = CSSValueList::CreateCommaSeparated();
@@ -191,14 +213,16 @@ CSSValue* ConsumeCounterStyleAdditiveSymbols(CSSParserTokenRange& range,
     CSSValue* symbol = nullptr;
     while (!integer || !symbol) {
       if (!integer) {
-        integer = css_parsing_utils::ConsumeInteger(range, context, 0);
-        if (integer)
+        integer = css_parsing_utils::ConsumeInteger(stream, context, 0);
+        if (integer) {
           continue;
+        }
       }
       if (!symbol) {
-        symbol = ConsumeCounterStyleSymbol(range, context);
-        if (symbol)
+        symbol = ConsumeCounterStyleSymbol(stream, context);
+        if (symbol) {
           continue;
+        }
       }
       return nullptr;
     }
@@ -206,30 +230,37 @@ CSSValue* ConsumeCounterStyleAdditiveSymbols(CSSParserTokenRange& range,
     if (last_integer) {
       // The additive tuples must be specified in order of strictly descending
       // weight; otherwise, the declaration is invalid and must be ignored.
-      if (integer->GetIntValue() >= last_integer->GetIntValue())
+      MediaValues* media_values = MediaValues::CreateDynamicIfFrameExists(
+          context.GetDocument() ? context.GetDocument()->GetFrame() : nullptr);
+      if (integer->ComputeInteger(*media_values) >=
+          last_integer->ComputeInteger(*media_values)) {
         return nullptr;
+      }
     }
     last_integer = integer;
 
     list->Append(*MakeGarbageCollected<CSSValuePair>(
         integer, symbol, CSSValuePair::kKeepIdenticalValues));
-  } while (css_parsing_utils::ConsumeCommaIncludingWhitespace(range));
-  if (!range.AtEnd() || !list->length())
+  } while (css_parsing_utils::ConsumeCommaIncludingWhitespace(stream));
+  if (!stream.AtEnd() || !list->length()) {
     return nullptr;
+  }
   return list;
 }
 
-CSSValue* ConsumeCounterStyleSpeakAs(CSSParserTokenRange& range,
+CSSValue* ConsumeCounterStyleSpeakAs(CSSParserTokenStream& stream,
                                      const CSSParserContext& context) {
   // Syntax: auto | bullets | numbers | words | <counter-style-name>
   // We don't support spell-out now.
   if (CSSValue* ident = css_parsing_utils::ConsumeIdent<
           CSSValueID::kAuto, CSSValueID::kBullets, CSSValueID::kNumbers,
-          CSSValueID::kWords>(range))
+          CSSValueID::kWords>(stream)) {
     return ident;
+  }
   if (CSSValue* name =
-          css_parsing_utils::ConsumeCounterStyleName(range, context))
+          css_parsing_utils::ConsumeCounterStyleName(stream, context)) {
     return name;
+  }
   return nullptr;
 }
 
@@ -237,53 +268,55 @@ CSSValue* ConsumeCounterStyleSpeakAs(CSSParserTokenRange& range,
 
 CSSValue* AtRuleDescriptorParser::ParseAtCounterStyleDescriptor(
     AtRuleDescriptorID id,
-    CSSParserTokenRange& range,
+    CSSParserTokenStream& stream,
     const CSSParserContext& context) {
   CSSValue* parsed_value = nullptr;
   switch (id) {
     case AtRuleDescriptorID::System:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleSystem(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleSystem(stream, context);
       break;
     case AtRuleDescriptorID::Negative:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleNegative(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleNegative(stream, context);
       break;
     case AtRuleDescriptorID::Prefix:
     case AtRuleDescriptorID::Suffix:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleSymbol(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleSymbol(stream, context);
       break;
     case AtRuleDescriptorID::Range:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleRange(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleRange(stream, context);
       break;
     case AtRuleDescriptorID::Pad:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStylePad(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStylePad(stream, context);
       break;
     case AtRuleDescriptorID::Fallback:
-      range.ConsumeWhitespace();
-      parsed_value = css_parsing_utils::ConsumeCounterStyleName(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value =
+          css_parsing_utils::ConsumeCounterStyleName(stream, context);
       break;
     case AtRuleDescriptorID::Symbols:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleSymbols(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleSymbols(stream, context);
       break;
     case AtRuleDescriptorID::AdditiveSymbols:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleAdditiveSymbols(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleAdditiveSymbols(stream, context);
       break;
     case AtRuleDescriptorID::SpeakAs:
-      range.ConsumeWhitespace();
-      parsed_value = ConsumeCounterStyleSpeakAs(range, context);
+      stream.ConsumeWhitespace();
+      parsed_value = ConsumeCounterStyleSpeakAs(stream, context);
       break;
     default:
       break;
   }
 
-  if (!parsed_value || !range.AtEnd())
+  if (!parsed_value || !stream.AtEnd()) {
     return nullptr;
+  }
 
   return parsed_value;
 }

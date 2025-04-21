@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ option optimize_for = LITE_RUNTIME;
 
 package sync_pb;
 
-import "components/sync/protocol/model_type_state.proto";
+import "components/sync/protocol/data_type_state.proto";
 import "components/sync/protocol/entity_metadata.proto";
 
 // Corresponds to a single bookmark id/metadata pair.
@@ -27,7 +27,7 @@ message BookmarkMetadata {
 // persisting and loading sync metadata from disk.
 message BookmarkModelMetadata {
   // Bookmark global metadata.
-  optional ModelTypeState model_type_state = 1;
+  optional DataTypeState data_type_state = 1;
 
   // A set of all bookmarks metadata.
   repeated BookmarkMetadata bookmarks_metadata = 2;
@@ -39,10 +39,10 @@ message BookmarkModelMetadata {
   reserved 5;
 
   // Indicates whether the reupload of bookmarks has been triggered such that
-  // they include fields like |type|, |unique_position| and |parent_guid|, which
+  // they include fields like `type`, `unique_position` and `parent_guid`, which
   // means that their sequence number has been increased (independently of
   // whether the commit has succeeded or even started).
-  // TODO(crbug.com/1232951): remove this code when most of bookmarks are
+  // TODO(crbug.com/40780588): remove this code when most of bookmarks are
   // reuploaded.
   optional bool bookmarks_hierarchy_fields_reuploaded = 6;
 
@@ -71,4 +71,9 @@ message BookmarkModelMetadata {
   // time the last update was ignored. To distinguish between these two, the
   // field above can be used.
   optional int64 max_version_among_ignored_updates_due_to_missing_parent = 8;
+
+  // Indicates whether the count of remote updates during the latest initial
+  // merge exceeded the bookmark limit. This field is mutually exclusive to all
+  // the other fields and is managed completely by the processor.
+  optional bool last_initial_merge_remote_updates_exceeded_limit = 9;
 }

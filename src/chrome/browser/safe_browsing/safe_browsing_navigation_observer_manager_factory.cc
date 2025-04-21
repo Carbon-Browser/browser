@@ -1,15 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/storage_partition.h"
 
 namespace safe_browsing {
 
@@ -25,26 +24,30 @@ SafeBrowsingNavigationObserverManagerFactory::GetForBrowserContext(
 // static
 SafeBrowsingNavigationObserverManagerFactory*
 SafeBrowsingNavigationObserverManagerFactory::GetInstance() {
-  return base::Singleton<SafeBrowsingNavigationObserverManagerFactory>::get();
+  static base::NoDestructor<SafeBrowsingNavigationObserverManagerFactory>
+      instance;
+  return instance.get();
 }
 
 SafeBrowsingNavigationObserverManagerFactory::
     SafeBrowsingNavigationObserverManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SafeBrowsingNavigationObserverManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
-KeyedService*
-SafeBrowsingNavigationObserverManagerFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> SafeBrowsingNavigationObserverManagerFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new SafeBrowsingNavigationObserverManager(profile->GetPrefs());
-}
-
-content::BrowserContext*
-SafeBrowsingNavigationObserverManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<SafeBrowsingNavigationObserverManager>(
+      profile->GetPrefs(),
+      profile->GetDefaultStoragePartition()->GetServiceWorkerContext());
 }
 
 }  // namespace safe_browsing

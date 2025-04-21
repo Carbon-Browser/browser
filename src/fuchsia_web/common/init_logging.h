@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef FUCHSIA_WEB_COMMON_INIT_LOGGING_H_
 #define FUCHSIA_WEB_COMMON_INIT_LOGGING_H_
 
-#include "base/strings/string_piece_forward.h"
+#include <string_view>
 
 namespace base {
 class CommandLine;
@@ -24,6 +24,6 @@ bool InitLoggingFromCommandLineDefaultingToStderrForTest(
 // Emits an INFO log indicating that |component_name| is starting along with the
 // version. Call during the startup of a Fuchsia Component (e.g., in main())
 // after InitLoggingFromCommandLine() succeeds.
-void LogComponentStartWithVersion(base::StringPiece component_name);
+void LogComponentStartWithVersion(std::string_view component_name);
 
 #endif  // FUCHSIA_WEB_COMMON_INIT_LOGGING_H_

@@ -28,7 +28,6 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="2329392777730037872">Otvaranje URL-a <ph name="URL" /> na klijentu nije uspjelo.</translation>
 <translation id="2359808026110333948">Nastavi</translation>
 <translation id="2366718077645204424">Nije moguće pristupiti hostu. To je vjerojatno zbog konfiguracije mreže koju upotrebljavate.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Posljednji put viđen online <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Dodijeli usluzi <ph name="PRODUCT_NAME" /> dopuštenje za "Pristupačnost"</translation>
 <translation id="2509394361235492552">Povezano s računalom <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Želite li dijeliti ovo računalo tako da ga neki drugi korisnik može vidjeti i upravljati njime?</translation>
@@ -36,9 +35,8 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="2599300881200251572">Ta usluga omogućuje dolazne veze s klijenata Udaljene radne površine Chrome.</translation>
 <translation id="2647232381348739934">Usluga Chromoting</translation>
 <translation id="2676780859508944670">Obrada…</translation>
-<translation id="2692522824157224199">Autorska prava 2022. Google LLC. Sva prava pridržana.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
-<translation id="2758123043070977469">Bilo je problema s provjerom autentičnosti, prijavite se ponovo.</translation>
+<translation id="2758123043070977469">Bilo je problema s autentifikacijom, prijavite se ponovo.</translation>
 <translation id="2803375539583399270">Unesite PIN</translation>
 <translation id="2919669478609886916">Ovaj uređaj trenutačno dijelite s drugim korisnikom. Želite li nastaviti dijeljenje?</translation>
 <translation id="2939145106548231838">Autentifikacija na hostu</translation>
@@ -54,7 +52,6 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="3423542133075182604">Postupak daljinskog postavljanja sigurnosnog ključa</translation>
 <translation id="3581045510967524389">Nije bilo moguće povezati se s mrežom. Provjerite je li uređaj na mreži.</translation>
 <translation id="3596628256176442606">Ta usluga omogućuje dolazne veze s klijenata usluge Chromoting.</translation>
-<translation id="369442766917958684">Offline.</translation>
 <translation id="3695446226812920698">Saznajte kako</translation>
 <translation id="3776024066357219166">Završila je vaša sesija u aplikaciji Udaljena radna površina Chrome.</translation>
 <translation id="3858860766373142691">Naziv</translation>
@@ -73,7 +70,6 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL Forwarder</translation>
 <translation id="4277736576214464567">Pristupni je kôd nevažeći. Pokušajte ponovo.</translation>
 <translation id="4281844954008187215">Uvjeti upotrebe usluge</translation>
-<translation id="4372650392690220936">Autorska prava 2022. Autori Chromiuma. Sva prava pridržana.</translation>
 <translation id="4405930547258349619">Središnja biblioteka</translation>
 <translation id="443560535555262820">Otvori postavke pristupačnosti</translation>
 <translation id="4450893287417543264">Ne prikazuj ponovo</translation>
@@ -107,7 +103,6 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Vaša se radna površina trenutačno dijeli s korisnikom <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Prijavljeni ste kao <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Ponovno povezivanje</translation>
 <translation id="5810269635982033450">Zaslon se ponaša kao dodirna podloga</translation>
 <translation id="5823554426827907568">Korisnik <ph name="CLIENT_USERNAME" /> zatražio je pristup za pregled vašeg zaslona i upravljanje vašom tipkovnicom i mišem. Pritisnite <ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" /> ako ne očekujete taj zahtjev. U suprotnom odaberite <ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" /> da biste dopustili povezivanje kad budete spremni.</translation>
@@ -154,6 +149,7 @@ Ako je okvir "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, uklonite kvači
 <translation id="7693372326588366043">Osvježi popis hostova</translation>
 <translation id="7714222945760997814">Prijavite ovo</translation>
 <translation id="7868137160098754906">Unesite PIN za udaljeno računalo.</translation>
+<translation id="7881455334687220899">Autorska prava 2024. Autori Chromiuma. Sva prava pridržana.</translation>
 <translation id="7895403300744144251">Sigurnosna pravila na udaljenom računalu ne dopuštaju povezivanje s vašeg računa.</translation>
 <translation id="7936528439960309876">Usidri udesno</translation>
 <translation id="7970576581263377361">Autentifikacija nije uspjela. Prijavite se ponovo na Chromium.</translation>
@@ -185,6 +181,7 @@ Ako je okvir stavke "<ph name="SERVICE_SCRIPT_NAME" />" već potvrđen, poništi
 <translation id="8747048596626351634">Sesija se srušila ili se nije pokrenula. Ako ~/.chrome-remote-desktop-session postoji na udaljenom računalu, neka pokrene dugotrajan postupak u prednjem planu kao što je okruženje radnje površine ili upravitelj prozora.</translation>
 <translation id="8804164990146287819">Pravila o privatnosti</translation>
 <translation id="8906511416443321782">Pristup mikrofonu potreban je za snimanje audiozapisa i emitiranje njegovog streama na klijentu udaljene radne površine Chrome.</translation>
+<translation id="9042277333359847053">Autorska prava 2024. Google LLC. Sva prava pridržana.</translation>
 <translation id="9111855907838866522">Povezani ste s udaljenim uređajem. Da biste otvorili izbornik, prstima dodirnite zaslon.</translation>
 <translation id="9126115402994542723">Nemoj ponovo tražiti PIN prilikom povezivanja s tim hostom s ovog uređaja.</translation>
 <translation id="916856682307586697">Pokrenite zadanu Xsesiju</translation>

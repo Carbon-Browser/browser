@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,15 @@
 #include <vector>
 
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/payment_request_sheet_controller.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/theme_resources.h"
-#include "components/autofill/core/browser/autofill_data_util.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/data_quality/autofill_data_util.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/geo/phone_number_i18n.h"
 #include "components/payments/content/icon/icon_size.h"
@@ -47,13 +46,12 @@
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
-#include "ui/views/controls/button/image_button.h"
-#include "ui/views/controls/button/image_button_factory.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/painter.h"
+#include "ui/views/style/typography.h"
 #include "ui/views/view.h"
 
 namespace payments {
@@ -61,9 +59,9 @@ namespace payments {
 namespace {
 
 class ThemeTrackingLabel : public views::Label {
- public:
-  METADATA_HEADER(ThemeTrackingLabel);
+  METADATA_HEADER(ThemeTrackingLabel, views::Label)
 
+ public:
   explicit ThemeTrackingLabel(const std::u16string& text) : Label(text) {}
   ~ThemeTrackingLabel() override = default;
 
@@ -74,21 +72,22 @@ class ThemeTrackingLabel : public views::Label {
   // views::Label:
   void OnThemeChanged() override {
     Label::OnThemeChanged();
-    if (enabled_color_id_.has_value())
+    if (enabled_color_id_.has_value()) {
       SetEnabledColor(GetColorProvider()->GetColor(*enabled_color_id_));
+    }
   }
 
  private:
-  absl::optional<ui::ColorId> enabled_color_id_;
+  std::optional<ui::ColorId> enabled_color_id_;
 };
 
-BEGIN_METADATA(ThemeTrackingLabel, views::Label)
+BEGIN_METADATA(ThemeTrackingLabel)
 END_METADATA
 
 class ChromeLogoImageView : public views::ImageView {
- public:
-  METADATA_HEADER(ChromeLogoImageView);
+  METADATA_HEADER(ChromeLogoImageView, views::ImageView)
 
+ public:
   ChromeLogoImageView() {
     SetCanProcessEventsWithinSubtree(false);
     SetTooltipText(l10n_util::GetStringUTF16(IDS_PRODUCT_NAME));
@@ -98,39 +97,14 @@ class ChromeLogoImageView : public views::ImageView {
   // views::ImageView:
   void OnThemeChanged() override {
     ImageView::OnThemeChanged();
-    SetImage(ui::ResourceBundle::GetSharedInstance()
-                 .GetImageNamed(GetNativeTheme()->ShouldUseDarkColors()
-                                    ? IDR_PRODUCT_LOGO_NAME_22_WHITE
-                                    : IDR_PRODUCT_LOGO_NAME_22)
-                 .AsImageSkia());
+    SetImage(ui::ImageModel::FromResourceId(
+        GetNativeTheme()->ShouldUseDarkColors() ? IDR_PRODUCT_LOGO_NAME_22_WHITE
+                                                : IDR_PRODUCT_LOGO_NAME_22));
   }
 };
 
-BEGIN_METADATA(ChromeLogoImageView, views::ImageView)
+BEGIN_METADATA(ChromeLogoImageView)
 END_METADATA
-
-class PaymentRequestBackArrowButton : public views::ImageButton {
- public:
-  explicit PaymentRequestBackArrowButton(
-      views::Button::PressedCallback back_arrow_callback)
-      : views::ImageButton(back_arrow_callback) {
-    ConfigureVectorImageButton(this);
-    constexpr int kBackArrowSize = 16;
-    SetSize(gfx::Size(kBackArrowSize, kBackArrowSize));
-    SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
-    SetID(static_cast<int>(DialogViewID::BACK_BUTTON));
-    SetAccessibleName(l10n_util::GetStringUTF16(IDS_PAYMENTS_BACK));
-  }
-
-  void OnThemeChanged() override {
-    views::View::OnThemeChanged();
-    const auto* const cp = GetColorProvider();
-    views::SetImageFromVectorIconWithColor(
-        this, vector_icons::kBackArrowIcon,
-        cp->GetColor(kColorPaymentsRequestBackArrowButtonIcon),
-        cp->GetColor(kColorPaymentsRequestBackArrowButtonIconDisabled));
-  }
-};
 
 // |s1|, |s2|, and |s3| are lines identifying the profile. |s1| is the
 // "headline" which may be emphasized depending on |type|. If |enabled| is
@@ -151,16 +125,18 @@ std::unique_ptr<views::View> GetBaseProfileLabel(
   container->SetLayoutManager(std::move(layout));
 
   if (!s1.empty()) {
-    const int text_style = type == AddressStyleType::DETAILED
-                               ? static_cast<int>(STYLE_EMPHASIZED)
-                               : static_cast<int>(views::style::STYLE_PRIMARY);
+    const int text_style =
+        type == AddressStyleType::DETAILED
+            ? static_cast<int>(views::style::STYLE_EMPHASIZED)
+            : static_cast<int>(views::style::STYLE_PRIMARY);
     auto label = std::make_unique<ThemeTrackingLabel>(s1);
     label->SetTextContext(views::style::CONTEXT_LABEL);
     label->SetTextStyle(text_style);
     label->SetID(static_cast<int>(DialogViewID::PROFILE_LABEL_LINE_1));
     label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    if (!enabled)
+    if (!enabled) {
       label->set_enabled_color_id(ui::kColorLabelForegroundDisabled);
+    }
     container->AddChildView(std::move(label));
   }
 
@@ -168,8 +144,9 @@ std::unique_ptr<views::View> GetBaseProfileLabel(
     auto label = std::make_unique<ThemeTrackingLabel>(s2);
     label->SetID(static_cast<int>(DialogViewID::PROFILE_LABEL_LINE_2));
     label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    if (!enabled)
+    if (!enabled) {
       label->set_enabled_color_id(ui::kColorLabelForegroundDisabled);
+    }
     container->AddChildView(std::move(label));
   }
 
@@ -177,8 +154,9 @@ std::unique_ptr<views::View> GetBaseProfileLabel(
     auto label = std::make_unique<ThemeTrackingLabel>(s3);
     label->SetID(static_cast<int>(DialogViewID::PROFILE_LABEL_LINE_3));
     label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    if (!enabled)
+    if (!enabled) {
       label->set_enabled_color_id(ui::kColorLabelForegroundDisabled);
+    }
     container->AddChildView(std::move(label));
   }
 
@@ -230,7 +208,7 @@ class PaymentRequestRowBorderPainter : public views::Painter {
   PaymentRequestRowBorderPainter& operator=(
       const PaymentRequestRowBorderPainter&) = delete;
 
-  ~PaymentRequestRowBorderPainter() override {}
+  ~PaymentRequestRowBorderPainter() override = default;
 
   // views::Painter:
   gfx::Size GetMinimumSize() const override {
@@ -252,34 +230,6 @@ class PaymentRequestRowBorderPainter : public views::Painter {
 
 }  // namespace
 
-void PopulateSheetHeaderView(bool show_back_arrow,
-                             std::unique_ptr<views::View> header_content_view,
-                             views::Button::PressedCallback back_arrow_callback,
-                             views::View* container,
-                             std::unique_ptr<views::Background> background) {
-  container->SetBackground(std::move(background));
-  views::BoxLayout* layout =
-      container->SetLayoutManager(std::make_unique<views::BoxLayout>());
-  layout->set_cross_axis_alignment(
-      views::BoxLayout::CrossAxisAlignment::kCenter);
-  // Need some spacing if the optional back arrow presents.
-  constexpr int kPaddingBetweenArrowAndTitle = 8;
-  layout->set_between_child_spacing(kPaddingBetweenArrowAndTitle);
-
-  constexpr int kVerticalInset = 14;
-  constexpr int kHeaderHorizontalInset = 16;
-  container->SetBorder(views::CreateEmptyBorder(
-      gfx::Insets::TLBR(kVerticalInset, kHeaderHorizontalInset, kVerticalInset,
-                        kHeaderHorizontalInset)));
-
-  if (show_back_arrow)
-    container->AddChildView(
-        std::make_unique<PaymentRequestBackArrowButton>(back_arrow_callback));
-
-  layout->SetFlexForView(
-      container->AddChildView(std::move(header_content_view)), 1);
-}
-
 std::unique_ptr<views::ImageView> CreateAppIconView(
     int icon_resource_id,
     const SkBitmap* icon_bitmap,
@@ -292,21 +242,20 @@ std::unique_ptr<views::ImageView> CreateAppIconView(
     gfx::ImageSkia img = gfx::ImageSkia::CreateFrom1xBitmap(
                              (icon_bitmap ? *icon_bitmap : SkBitmap()))
                              .DeepCopy();
-    icon_view->SetImage(img);
+    icon_view->SetImage(ui::ImageModel::FromImageSkia(img));
     float width = base::checked_cast<float>(img.width());
     float height = base::checked_cast<float>(img.height());
     float ratio = 1;
-    if (width && height)
+    if (width && height) {
       ratio = width / height;
+    }
     // We should set image size in density indepent pixels here, since
     // views::ImageView objects are rastered at the device scale factor.
     icon_view->SetImageSize(gfx::Size(
         ratio * IconSizeCalculator::kPaymentAppDeviceIndependentIdealIconHeight,
         IconSizeCalculator::kPaymentAppDeviceIndependentIdealIconHeight));
   } else {
-    icon_view->SetImage(ui::ResourceBundle::GetSharedInstance()
-                            .GetImageNamed(icon_resource_id)
-                            .AsImageSkia());
+    icon_view->SetImage(ui::ImageModel::FromResourceId(icon_resource_id));
     // Images from |icon_resource_id| are 32x20 credit cards.
     icon_view->SetImageSize(gfx::Size(32, 20));
   }
@@ -399,7 +348,7 @@ std::unique_ptr<views::Border> CreatePaymentRequestRowBorder(
 
 std::unique_ptr<views::Label> CreateBoldLabel(const std::u16string& text) {
   return std::make_unique<views::Label>(text, views::style::CONTEXT_LABEL,
-                                        STYLE_EMPHASIZED);
+                                        views::style::STYLE_EMPHASIZED);
 }
 
 std::unique_ptr<views::Label> CreateMediumLabel(const std::u16string& text) {

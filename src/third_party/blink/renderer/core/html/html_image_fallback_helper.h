@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,18 @@
 namespace blink {
 
 class Element;
-class ComputedStyle;
+class HTMLElement;
+class ComputedStyleBuilder;
 
 class HTMLImageFallbackHelper {
   STATIC_ONLY(HTMLImageFallbackHelper);
 
  public:
   static void CreateAltTextShadowTree(Element&);
-  static void CustomStyleForAltText(Element&, ComputedStyle& new_style);
+  // Adjusts the style of the shadow host, and also produces a StyleHostData
+  // object (stored on the builder) which is used by AdjustChildStyle
+  // (in the .cc file) to implement custom inheritance from the host.
+  static void AdjustHostStyle(HTMLElement&, ComputedStyleBuilder&);
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <stdint.h>
 
 #include "base/atomicops.h"
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
 #include "gpu/command_buffer/service/error_state.h"
@@ -174,68 +174,8 @@ void SummedIntegerQuery::Process(bool did_finish) {
   MarkAsCompleted(summed_result);
 }
 
-class CommandLatencyQuery : public QueryManager::Query {
- public:
-  CommandLatencyQuery(QueryManager* manager,
-                      GLenum target,
-                      scoped_refptr<gpu::Buffer> buffer,
-                      QuerySync* sync);
-
-  void Begin() override;
-  void End(base::subtle::Atomic32 submit_count) override;
-  void QueryCounter(base::subtle::Atomic32 submit_count) override;
-  void Pause() override;
-  void Resume() override;
-  void Process(bool did_finish) override;
-  void Destroy(bool have_context) override;
-
- protected:
-  ~CommandLatencyQuery() override;
-};
-
-CommandLatencyQuery::CommandLatencyQuery(QueryManager* manager,
-                                         GLenum target,
-                                         scoped_refptr<gpu::Buffer> buffer,
-                                         QuerySync* sync)
-    : Query(manager, target, std::move(buffer), sync) {}
-
-void CommandLatencyQuery::Begin() {
-  MarkAsActive();
-}
-
-void CommandLatencyQuery::Pause() {
-  MarkAsPaused();
-}
-
-void CommandLatencyQuery::Resume() {
-  MarkAsActive();
-}
-
-void CommandLatencyQuery::End(base::subtle::Atomic32 submit_count) {
-  base::TimeDelta now = base::TimeTicks::Now() - base::TimeTicks();
-  MarkAsPending(submit_count);
-  MarkAsCompleted(now.InMicroseconds());
-}
-
-void CommandLatencyQuery::QueryCounter(base::subtle::Atomic32 submit_count) {
-  NOTREACHED();
-}
-
-void CommandLatencyQuery::Process(bool did_finish) {
-  NOTREACHED();
-}
-
-void CommandLatencyQuery::Destroy(bool /* have_context */) {
-  if (!IsDeleted()) {
-    MarkAsDeleted();
-  }
-}
-
-CommandLatencyQuery::~CommandLatencyQuery() = default;
-
-class AsyncReadPixelsCompletedQuery
-    : public GLES2QueryManager::GLES2Query,
-      public base::SupportsWeakPtr<AsyncReadPixelsCompletedQuery> {
+class AsyncReadPixelsCompletedQuery final
+    : public GLES2QueryManager::GLES2Query {
  public:
   AsyncReadPixelsCompletedQuery(GLES2QueryManager* manager,
                                 GLenum target,
@@ -253,6 +193,7 @@ class AsyncReadPixelsCompletedQuery
  protected:
   void Complete();
   ~AsyncReadPixelsCompletedQuery() override;
+  base::WeakPtrFactory<AsyncReadPixelsCompletedQuery> weak_ptr_factory_{this};
 };
 
 AsyncReadPixelsCompletedQuery::AsyncReadPixelsCompletedQuery(
@@ -277,7 +218,8 @@ void AsyncReadPixelsCompletedQuery::Resume() {
 void AsyncReadPixelsCompletedQuery::End(base::subtle::Atomic32 submit_count) {
   MarkAsPending(submit_count);
   gles2_query_manager()->decoder()->WaitForReadPixels(
-      base::BindOnce(&AsyncReadPixelsCompletedQuery::Complete, AsWeakPtr()));
+      base::BindOnce(&AsyncReadPixelsCompletedQuery::Complete,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void AsyncReadPixelsCompletedQuery::QueryCounter(
@@ -535,18 +477,10 @@ GLES2QueryManager::GLES2Query::~GLES2Query() = default;
 GLES2QueryManager::GLES2QueryManager(GLES2Decoder* decoder,
                                      FeatureInfo* feature_info)
     : decoder_(decoder),
-      use_arb_occlusion_query2_for_occlusion_query_boolean_(
-          feature_info->feature_flags()
-              .use_arb_occlusion_query2_for_occlusion_query_boolean),
-      use_arb_occlusion_query_for_occlusion_query_boolean_(
-          feature_info->feature_flags()
-              .use_arb_occlusion_query_for_occlusion_query_boolean),
       update_disjoints_continually_(false),
       disjoint_notify_shm_id_(-1),
       disjoint_notify_shm_offset_(0),
       disjoints_notified_(0) {
-  DCHECK(!(use_arb_occlusion_query_for_occlusion_query_boolean_ &&
-           use_arb_occlusion_query2_for_occlusion_query_boolean_));
   DCHECK(decoder);
   gl::GLContext* context = decoder_->GetGLContext();
   if (context) {
@@ -565,9 +499,6 @@ QueryManager::Query* GLES2QueryManager::CreateQuery(
     QuerySync* sync) {
   scoped_refptr<Query> query;
   switch (target) {
-    case GL_LATENCY_QUERY_CHROMIUM:
-      query = new CommandLatencyQuery(this, target, std::move(buffer), sync);
-      break;
     case GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM:
       query = new AsyncReadPixelsCompletedQuery(this, target, std::move(buffer),
                                                 sync);
@@ -630,28 +561,6 @@ std::unique_ptr<gl::GPUTimer> GLES2QueryManager::CreateGPUTimer(
 
 bool GLES2QueryManager::GPUTimingAvailable() {
   return gpu_timing_client_->IsAvailable();
-}
-
-GLenum GLES2QueryManager::AdjustTargetForEmulation(GLenum target) {
-  switch (target) {
-    case GL_ANY_SAMPLES_PASSED_CONSERVATIVE_EXT:
-    case GL_ANY_SAMPLES_PASSED_EXT:
-      if (use_arb_occlusion_query2_for_occlusion_query_boolean_) {
-        // ARB_occlusion_query2 does not have a
-        // GL_ANY_SAMPLES_PASSED_CONSERVATIVE_EXT
-        // target.
-        target = GL_ANY_SAMPLES_PASSED_EXT;
-      } else if (use_arb_occlusion_query_for_occlusion_query_boolean_) {
-        // ARB_occlusion_query does not have a
-        // GL_ANY_SAMPLES_PASSED_EXT
-        // target.
-        target = GL_SAMPLES_PASSED_ARB;
-      }
-      break;
-    default:
-      break;
-  }
-  return target;
 }
 
 void GLES2QueryManager::UpdateDisjointValue() {

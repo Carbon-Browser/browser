@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,28 +6,28 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include "base/environment.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "components/mirroring/service/mirroring_features.h"
+#include "media/base/audio_codecs.h"
 #include "media/base/audio_parameters.h"
+#include "media/base/video_codecs.h"
 
 using media::ResolutionChangePolicy;
-using media::cast::Codec;
+using media::cast::AudioCodecParams;
 using media::cast::FrameSenderConfig;
-using media::cast::RtpPayloadType;
+using media::cast::VideoCodecParams;
 
 namespace mirroring {
 
 namespace {
 
-// Default end-to-end latency. Currently adaptive latency control is disabled
-// because of audio playout regressions (b/32876644).
-// TODO(openscreen/44): Re-enable in port to Open Screen.
-constexpr base::TimeDelta kDefaultPlayoutDelay = base::Milliseconds(400);
-
 constexpr int kAudioTimebase = 48000;
-constexpr int kVidoTimebase = 90000;
+constexpr int kVideoTimebase = 90000;
 constexpr int kAudioChannels = 2;
 constexpr int kAudioFramerate = 100;  // 100 FPS for 10ms packets.
 constexpr int kMinVideoBitrate = 300000;
@@ -80,48 +80,46 @@ MirrorSettings::MirrorSettings()
       max_width_(kMaxWidth),
       max_height_(kMaxHeight) {}
 
-MirrorSettings::~MirrorSettings() {}
+MirrorSettings::~MirrorSettings() = default;
 
 // static
 FrameSenderConfig MirrorSettings::GetDefaultAudioConfig(
-    RtpPayloadType payload_type,
-    Codec codec) {
+    media::AudioCodec codec) {
   FrameSenderConfig config;
   config.sender_ssrc = 1;
   config.receiver_ssrc = 2;
   const base::TimeDelta playout_delay = GetPlayoutDelay();
   config.min_playout_delay = playout_delay;
   config.max_playout_delay = playout_delay;
-  config.animated_playout_delay = playout_delay;
-  config.rtp_payload_type = payload_type;
-  config.rtp_timebase = kAudioTimebase;
+  config.rtp_timebase = (codec == media::AudioCodec::kUnknown)
+                            ? media::cast::kRemotingRtpTimebase
+                            : kAudioTimebase;
   config.channels = kAudioChannels;
   config.min_bitrate = config.max_bitrate = config.start_bitrate =
       kAudioBitrate;
   config.max_frame_rate = kAudioFramerate;  // 10 ms audio frames
-  config.codec = codec;
+  config.audio_codec_params = AudioCodecParams{.codec = codec};
   return config;
 }
 
 // static
 FrameSenderConfig MirrorSettings::GetDefaultVideoConfig(
-    RtpPayloadType payload_type,
-    Codec codec) {
+    media::VideoCodec codec) {
   FrameSenderConfig config;
   config.sender_ssrc = 11;
   config.receiver_ssrc = 12;
   const base::TimeDelta playout_delay = GetPlayoutDelay();
   config.min_playout_delay = playout_delay;
   config.max_playout_delay = playout_delay;
-  config.animated_playout_delay = playout_delay;
-  config.rtp_payload_type = payload_type;
-  config.rtp_timebase = kVidoTimebase;
+  config.rtp_timebase = (codec == media::VideoCodec::kUnknown)
+                            ? media::cast::kRemotingRtpTimebase
+                            : kVideoTimebase;
   config.channels = 1;
   config.min_bitrate = kMinVideoBitrate;
   config.max_bitrate = kMaxVideoBitrate;
   config.start_bitrate = kMinVideoBitrate;
   config.max_frame_rate = kMaxFrameRate;
-  config.codec = codec;
+  config.video_codec_params = VideoCodecParams(codec);
   return config;
 }
 
@@ -147,14 +145,17 @@ media::VideoCaptureParams MirrorSettings::GetVideoCaptureParams() {
   } else {
     params.resolution_change_policy = ResolutionChangePolicy::ANY_WITHIN_LIMIT;
   }
+  params.is_high_dpi_enabled =
+      base::FeatureList::IsEnabled(features::kCastEnableStreamingWithHiDPI);
+
   DCHECK(params.IsValid());
   return params;
 }
 
 media::AudioParameters MirrorSettings::GetAudioCaptureParams() {
   media::AudioParameters params(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                                media::CHANNEL_LAYOUT_STEREO, kAudioTimebase,
-                                kAudioTimebase / 100);
+                                media::ChannelLayoutConfig::Stereo(),
+                                kAudioTimebase, kAudioTimebase / 100);
   DCHECK(params.IsValid());
   return params;
 }

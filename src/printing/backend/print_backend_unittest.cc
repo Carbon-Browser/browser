@@ -1,262 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "printing/backend/print_backend.h"
 
 #include "base/memory/scoped_refptr.h"
-#include "base/test/values_test_util.h"
-#include "base/values.h"
 #include "printing/mojom/print.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace printing {
-
-namespace {
-
 #if BUILDFLAG(IS_WIN)
-// The correct format of XPS "PageOutputQuality" and "PageOutputColor"
-// capabilities.
-constexpr char kCorrectCapabilities[] = R"({
-  "type": "element",
-  "tag": "psf:PrintCapabilities",
-  "children": [
-    {
-      "type": "element",
-      "tag": "psf:Feature",
-      "attributes": {
-        "name": "psk:PageOutputQuality"
-      },
-      "children": [
-        {
-          "type": "element",
-          "tag": "psf:Feature",
-          "attributes": {
-            "name": "psk:PageOutputQuality"
-          }
-        },
-        {
-          "type": "element",
-          "tag": "psf:Property",
-          "attributes": {
-            "name": "psf:SelectionType"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Value",
-              "attributes": {
-                "xsi:type": "xsd:QName"
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "text": "psk:PickOne"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Property",
-          "attributes": {
-            "name": "psf:DisplayName"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Value",
-              "attributes": {
-                "xsi:type": "xsd:string"
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "text": "Quality"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Option",
-          "attributes": {
-            "name": "ns0000:Draft",
-            "constrain": "psk:None"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Property",
-              "attributes": {
-                "name": "psf:DisplayName"
-              },
-              "children": [
-                {
-                  "type": "element",
-                  "tag": "psf:Value",
-                  "attributes": {
-                    "xsi:type": "xsd:string"
-                  },
-                  "children": [
-                    {
-                      "type": "text",
-                      "text": "Draft"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Option",
-          "attributes": {
-            "name": "ns0000:Advanced",
-            "constrain": "psk:None"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Property",
-              "attributes": {
-                "name": "psf:DisplayName"
-              },
-              "children": [
-                {
-                  "type": "element",
-                  "tag": "psf:Value",
-                  "attributes": {
-                    "xsi:type": "xsd:string"
-                  },
-                  "children": [
-                    {
-                      "type": "text",
-                      "text": "Advanced"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Option",
-          "attributes": {
-            "name": "psk:Normal"
-          }
-        }
-      ]
-    },
-    {
-      "type": "element",
-      "tag": "psf:Feature",
-      "attributes": {
-        "name": "psk:PageOutputColor"
-      }
-    }
-  ]
-}
-)";
-
-// The incorrect format of XPS `PageOutputQuality` capability.
-// The property inside option ns0000:Draft does not have any value.
-constexpr char kIncorrectCapabilities[] = R"({
-  "type": "element",
-  "tag": "psf:PrintCapabilities",
-  "children": [
-    {
-      "type": "element",
-      "tag": "psf:Feature",
-      "attributes": {
-        "name": "psk:PageOutputQuality"
-      },
-      "children": [
-        {
-          "type": "element",
-          "tag": "psf:Feature",
-          "attributes": {
-            "name": "psk:PageOutputQuality"
-          }
-        },
-        {
-          "type": "element",
-          "tag": "psf:Property",
-          "attributes": {
-            "name": "psf:SelectionType"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Value",
-              "attributes": {
-                "xsi:type": "xsd:QName"
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "text": "psk:PickOne"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Property",
-          "attributes": {
-            "name": "psf:DisplayName"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Value",
-              "attributes": {
-                "xsi:type": "xsd:string"
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "text": "Quality"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "element",
-          "tag": "psf:Option",
-          "attributes": {
-            "name": "ns0000:Draft",
-            "constrain": "psk:None"
-          },
-          "children": [
-            {
-              "type": "element",
-              "tag": "psf:Property",
-              "attributes": {
-                "name": "psf:DisplayName"
-              }
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-)";
-
-const PageOutputQualityAttributes kPageOutputQualities = {
-    PageOutputQualityAttribute("Draft", "ns0000:Draft"),
-    PageOutputQualityAttribute("Advanced", "ns0000:Advanced"),
-    PageOutputQualityAttribute("", "psk:Normal")};
+#include "base/types/expected.h"
 #endif  // BUILDFLAG(IS_WIN)
 
-}  // namespace
+namespace printing {
 
 // PrintBackendTest makes use of a real print backend instance, and thus will
 // interact with printer drivers installed on a system.  This can be useful on
@@ -303,6 +59,45 @@ TEST_F(PrintBackendTest, MANUAL_EnumeratePrintersNoneInstalled) {
   EXPECT_TRUE(printer_list.empty());
 }
 
+TEST_F(PrintBackendTest, PaperSupportsCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200},
+                                              {100, 200}, 500);
+
+  EXPECT_TRUE(paper.SupportsCustomSize());
+}
+
+TEST_F(PrintBackendTest, PaperDoesNotSupportCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200});
+
+  EXPECT_FALSE(paper.SupportsCustomSize());
+}
+
+TEST_F(PrintBackendTest, PaperSizeWithinBoundsDistinctSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200});
+
+  // For paper that does not support custom sizes, the size has to match
+  // exactly.
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({90, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 210}));
+}
+
+TEST_F(PrintBackendTest, PaperSizeWithinBoundsCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200},
+                                              {100, 200}, 500);
+
+  // For paper that supports custom sizes, the size has to match exactly or fall
+  // within the custom size range.
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 200}));
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 300}));
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 500}));
+
+  EXPECT_FALSE(paper.IsSizeWithinBounds({101, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({99, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 199}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 501}));
+}
+
 #if BUILDFLAG(IS_WIN)
 
 // This test is for the XPS API that read the XML capabilities of a
@@ -312,32 +107,16 @@ TEST_F(PrintBackendTest, MANUAL_GetXmlPrinterCapabilitiesForXpsDriver) {
   EXPECT_EQ(GetPrintBackend()->EnumeratePrinters(printer_list),
             mojom::ResultCode::kSuccess);
   for (const auto& printer : printer_list) {
-    std::string capabilities;
-    EXPECT_EQ(GetPrintBackend()->GetXmlPrinterCapabilitiesForXpsDriver(
-                  printer.printer_name, capabilities),
-              mojom::ResultCode::kSuccess);
+    auto caps = GetPrintBackend()->GetXmlPrinterCapabilitiesForXpsDriver(
+        printer.printer_name);
+    DLOG(WARNING) << "Capabilities for printer " << printer.printer_name;
+    // Do not fail with assert on lack of value, so that entire list of
+    // printers can be checked.
+    EXPECT_TRUE(caps.has_value());
+    if (caps.has_value()) {
+      DLOG(WARNING) << caps.value();
+    }
   }
-}
-
-TEST_F(PrintBackendTest,
-       ParseCorrectPageOutputQualityForXpsPrinterCapabilities) {
-  PrinterSemanticCapsAndDefaults printer_info;
-
-  // Expect that parsing XPS Printer Capabilities is successful.
-  // After parsing, `printer_info` will have 2 capabilities: "PageOutputQuality"
-  // and "PageOutputColor".
-  EXPECT_EQ(GetPrintBackend()->ParseValueForXpsPrinterCapabilities(
-                base::test::ParseJson(kCorrectCapabilities), &printer_info),
-            mojom::ResultCode::kSuccess);
-  ASSERT_EQ(printer_info.page_output_quality->qualities, kPageOutputQualities);
-}
-
-TEST_F(PrintBackendTest,
-       ParseIncorrectPageOutputQualityForXpsPrinterCapabilities) {
-  PrinterSemanticCapsAndDefaults printer_info;
-  EXPECT_EQ(GetPrintBackend()->ParseValueForXpsPrinterCapabilities(
-                base::test::ParseJson(kIncorrectCapabilities), &printer_info),
-            mojom::ResultCode::kFailed);
 }
 
 #endif  // BUILDFLAG(IS_WIN)

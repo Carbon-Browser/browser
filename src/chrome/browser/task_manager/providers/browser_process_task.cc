@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "chrome/browser/task_manager/task_manager_observer.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
-#include "third_party/sqlite/sqlite3.h"
+#include "sql/sql_memory_dump_provider.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace task_manager {
@@ -20,8 +20,7 @@ BrowserProcessTask::BrowserProcessTask()
            base::GetCurrentProcessHandle()),
       used_sqlite_memory_(-1) {}
 
-BrowserProcessTask::~BrowserProcessTask() {
-}
+BrowserProcessTask::~BrowserProcessTask() = default;
 
 bool BrowserProcessTask::IsKillable() {
   // Never kill the browser process.
@@ -36,8 +35,9 @@ void BrowserProcessTask::Refresh(const base::TimeDelta& update_interval,
                                  int64_t refresh_flags) {
   Task::Refresh(update_interval, refresh_flags);
 
-  if ((refresh_flags & REFRESH_TYPE_SQLITE_MEMORY) != 0)
-    used_sqlite_memory_ = static_cast<int64_t>(sqlite3_memory_used());
+  if (refresh_flags & REFRESH_TYPE_SQLITE_MEMORY) {
+    used_sqlite_memory_ = sql::SqlMemoryDumpProvider::GetMemoryUse();
+  }
 }
 
 Task::Type BrowserProcessTask::GetType() const {

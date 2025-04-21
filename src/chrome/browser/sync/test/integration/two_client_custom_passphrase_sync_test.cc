@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "chrome/browser/sync/test/integration/updated_progress_marker_checker.h"
-#include "components/sync/nigori/nigori_test_utils.h"
+#include "components/sync/test/nigori_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_launcher.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -50,16 +50,16 @@ class TwoClientCustomPassphraseSyncTest : public SyncTest {
   }
 
   void AddTestBookmarksToClient(int index) {
-    ASSERT_TRUE(AddURL(index, 0, "What are you syncing about?",
+    ASSERT_TRUE(AddURL(index, 0, u"What are you syncing about?",
                        GURL("https://google.com/synced-bookmark-1")));
-    ASSERT_TRUE(AddURL(index, 1, "Test bookmark",
+    ASSERT_TRUE(AddURL(index, 1, u"Test bookmark",
                        GURL("https://google.com/synced-bookmark-2")));
   }
 };
 
 IN_PROC_BROWSER_TEST_F(TwoClientCustomPassphraseSyncTest,
                        DecryptionFailsWhenIncorrectPassphraseProvided) {
-  ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
+  ASSERT_TRUE(SetupSync());
   ASSERT_TRUE(AllModelsMatch());
 
   GetSyncService(kEncryptingClientId)
@@ -75,7 +75,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientCustomPassphraseSyncTest,
 }
 
 IN_PROC_BROWSER_TEST_F(TwoClientCustomPassphraseSyncTest, ClientsCanSyncData) {
-  ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
+  ASSERT_TRUE(SetupSync());
   ASSERT_TRUE(AllModelsMatch());
 
   GetSyncService(kEncryptingClientId)

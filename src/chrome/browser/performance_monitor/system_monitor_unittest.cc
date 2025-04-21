@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ const int kFakeFreePhysMemoryMb = 42;
 
 class MockMetricsMonitorObserver : public SystemObserver {
  public:
-  ~MockMetricsMonitorObserver() override {}
+  ~MockMetricsMonitorObserver() override = default;
   MOCK_METHOD1(OnFreePhysicalMemoryMbSample, void(int free_phys_memory_mb));
   MOCK_METHOD1(OnSystemMetricsStruct,
                void(const base::SystemMetrics& system_metrics));
@@ -39,7 +39,7 @@ class TestMetricEvaluatorsHelper : public MetricEvaluatorsHelper {
 
   ~TestMetricEvaluatorsHelper() override = default;
 
-  absl::optional<int> GetFreePhysicalMemoryMb() override {
+  std::optional<int> GetFreePhysicalMemoryMb() override {
     return kFakeFreePhysMemoryMb;
   }
 };

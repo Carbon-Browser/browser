@@ -1,9 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_VIZ_PUBLIC_CPP_COMPOSITING_FILTER_OPERATION_MOJOM_TRAITS_H_
 #define SERVICES_VIZ_PUBLIC_CPP_COMPOSITING_FILTER_OPERATION_MOJOM_TRAITS_H_
+
+#include <optional>
 
 #include "base/containers/span.h"
 #include "cc/paint/filter_operation.h"
@@ -12,7 +14,6 @@
 #include "services/viz/public/mojom/compositing/filter_operation.mojom-shared.h"
 #include "skia/public/mojom/skcolor4f_mojom_traits.h"
 #include "skia/public/mojom/tile_mode_mojom_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 
@@ -23,25 +24,19 @@ struct StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation> {
   static viz::mojom::FilterType type(const cc::FilterOperation& op);
 
   static float amount(const cc::FilterOperation& operation) {
-    if (operation.type() == cc::FilterOperation::COLOR_MATRIX ||
+    if (operation.type() == cc::FilterOperation::ALPHA_THRESHOLD ||
+        operation.type() == cc::FilterOperation::COLOR_MATRIX ||
         operation.type() == cc::FilterOperation::REFERENCE) {
       return 0.f;
     }
     return operation.amount();
   }
 
-  static float outer_threshold(const cc::FilterOperation& operation) {
-    if (operation.type() != cc::FilterOperation::ALPHA_THRESHOLD &&
-        operation.type() != cc::FilterOperation::STRETCH) {
-      return 0.f;
-    }
-    return operation.outer_threshold();
-  }
-
-  static gfx::Point drop_shadow_offset(const cc::FilterOperation& operation) {
-    if (operation.type() != cc::FilterOperation::DROP_SHADOW)
+  static gfx::Point offset(const cc::FilterOperation& operation) {
+    if (operation.type() != cc::FilterOperation::DROP_SHADOW &&
+        operation.type() != cc::FilterOperation::OFFSET)
       return gfx::Point();
-    return operation.drop_shadow_offset();
+    return operation.offset();
   }
 
   static SkColor4f drop_shadow_color(const cc::FilterOperation& operation) {
@@ -59,11 +54,11 @@ struct StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation> {
     return operation.image_filter();
   }
 
-  static absl::optional<base::span<const float>> matrix(
+  static std::optional<base::span<const float>> matrix(
       const cc::FilterOperation& operation) {
     if (operation.type() != cc::FilterOperation::COLOR_MATRIX)
-      return absl::nullopt;
-    return base::make_span(operation.matrix());
+      return std::nullopt;
+    return base::span(operation.matrix());
   }
 
   static base::span<const gfx::Rect> shape(

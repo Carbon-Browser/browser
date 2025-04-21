@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,11 +22,11 @@ Vector<std::pair<String, int32_t>> RecordTest::getStringLongRecord() {
 }
 
 void RecordTest::setNullableStringLongRecord(
-    const absl::optional<Vector<std::pair<String, int32_t>>>& arg) {
+    const std::optional<Vector<std::pair<String, int32_t>>>& arg) {
   nullable_string_long_record_ = arg;
 }
 
-absl::optional<Vector<std::pair<String, int32_t>>>
+std::optional<Vector<std::pair<String, int32_t>>>
 RecordTest::getNullableStringLongRecord() {
   return nullable_string_long_record_;
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,8 @@ class BluetoothDelegateImpl : public content::BluetoothDelegate {
         content::RenderFrameHost* frame,
         const std::u16string& device_identifier,
         content::BluetoothDelegate::PairPromptCallback callback,
-        content::BluetoothDelegate::PairingKind pairng_kind) = 0;
+        content::BluetoothDelegate::PairingKind pairing_kind,
+        const std::optional<std::u16string>& pin) = 0;
   };
 
   explicit BluetoothDelegateImpl(std::unique_ptr<Client> client);
@@ -97,7 +98,8 @@ class BluetoothDelegateImpl : public content::BluetoothDelegate {
   void ShowDevicePairPrompt(content::RenderFrameHost* frame,
                             const std::u16string& device_identifier,
                             PairPromptCallback callback,
-                            PairingKind pairing_kind) override;
+                            PairingKind pairing_kind,
+                            const std::optional<std::u16string>& pin) override;
 
   blink::WebBluetoothDeviceId GetWebBluetoothDeviceId(
       content::RenderFrameHost* frame,
@@ -118,6 +120,7 @@ class BluetoothDelegateImpl : public content::BluetoothDelegate {
   void RevokeDevicePermissionWebInitiated(
       content::RenderFrameHost* frame,
       const blink::WebBluetoothDeviceId& device_id) override;
+  bool MayUseBluetooth(content::RenderFrameHost* frame) override;
   bool IsAllowedToAccessService(content::RenderFrameHost* frame,
                                 const blink::WebBluetoothDeviceId& device_id,
                                 const device::BluetoothUUID& service) override;
@@ -160,7 +163,8 @@ class BluetoothDelegateImpl : public content::BluetoothDelegate {
    private:
     raw_ptr<BluetoothDelegateImpl> owning_delegate_;
     base::ObserverList<FramePermissionObserver> observer_list_;
-    std::list<FramePermissionObserver*> observers_pending_removal_;
+    std::list<raw_ptr<FramePermissionObserver, CtnExperimental>>
+        observers_pending_removal_;
     bool is_traversing_observers_ = false;
     base::ScopedObservation<ObjectPermissionContextBase,
                             ObjectPermissionContextBase::PermissionObserver>

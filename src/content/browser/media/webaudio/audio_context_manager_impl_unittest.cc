@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,11 @@ class AudioContextManagerImplTest : public RenderViewHostTestHarness {
     audio_context_manager_ = &AudioContextManagerImpl::CreateForTesting(
         *main_rfh(), service_remote.BindNewPipeAndPassReceiver());
     audio_context_manager_->set_clock_for_testing(&clock_);
+  }
+
+  void TearDown() override {
+    audio_context_manager_ = nullptr;
+    RenderViewHostTestHarness::TearDown();
   }
 
   AudioContextManagerImpl* audio_context_manager() {

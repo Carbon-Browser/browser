@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /** The different types of search engine promo dialogs. */
-@IntDef({SearchEnginePromoType.DONT_SHOW, SearchEnginePromoType.SHOW_SOGOU,
-        SearchEnginePromoType.SHOW_EXISTING, SearchEnginePromoType.SHOW_NEW})
+@IntDef({
+    SearchEnginePromoType.DONT_SHOW,
+    SearchEnginePromoType.SHOW_SOGOU,
+    SearchEnginePromoType.SHOW_EXISTING,
+    SearchEnginePromoType.SHOW_NEW,
+})
 @Retention(RetentionPolicy.SOURCE)
 public @interface SearchEnginePromoType {
     int DONT_SHOW = -1;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/page_load_metrics/browser/page_load_metrics_test_waiter.h"
 #include "components/ukm/test_ukm_recorder.h"
-#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/signed_exchange_browser_test_helper.h"
@@ -21,8 +20,7 @@ class SignedExchangePageLoadMetricsBrowserTest
  public:
   SignedExchangePageLoadMetricsBrowserTest()
       : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
-    feature_list_.InitWithFeatures(
-        {ukm::kUkmFeature, features::kSignedHTTPExchange}, {});
+    feature_list_.InitAndEnableFeature(ukm::kUkmFeature);
   }
 
   SignedExchangePageLoadMetricsBrowserTest(
@@ -30,7 +28,7 @@ class SignedExchangePageLoadMetricsBrowserTest
   SignedExchangePageLoadMetricsBrowserTest& operator=(
       const SignedExchangePageLoadMetricsBrowserTest&) = delete;
 
-  ~SignedExchangePageLoadMetricsBrowserTest() override {}
+  ~SignedExchangePageLoadMetricsBrowserTest() override = default;
 
  protected:
   void PreRunTestOnMainThread() override {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,14 @@
 #include <limits>
 #include <string>
 
-#include "ui/gfx/geometry/geometry_export.h"
+#include "base/component_export.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
 namespace gfx {
 
 // Represents the geometry of a region with rounded corners, expressed as four
 // corner radii in the order: top-left, top-right, bottom-right, bottom-left.
-class GEOMETRY_EXPORT RoundedCornersF {
+class COMPONENT_EXPORT(GEOMETRY) RoundedCornersF {
  public:
   // Creates an empty RoundedCornersF with all corners having zero radius.
   constexpr RoundedCornersF() : RoundedCornersF(0.0f) {}

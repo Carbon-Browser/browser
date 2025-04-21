@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ VideoCaptureErrorOrDevice::VideoCaptureErrorOrDevice(
 std::unique_ptr<VideoCaptureDevice> VideoCaptureErrorOrDevice::ReleaseDevice() {
   DCHECK_EQ(error_code_, VideoCaptureError::kNone);
 
-  error_code_ = VideoCaptureError::
-      kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested;
+  error_code_ = VideoCaptureError::kVideoCaptureDeviceAlreadyReleased;
   return std::move(device_);
 }
 
@@ -50,7 +49,7 @@ VideoCaptureDeviceFactory::GetDxgiDeviceManager() {
   return nullptr;
 }
 
-void VideoCaptureDeviceFactory::OnGpuInfoUpdate(const CHROME_LUID& luid){};
+void VideoCaptureDeviceFactory::OnGpuInfoUpdate(const CHROME_LUID& luid) {}
 #endif
 
 }  // namespace media

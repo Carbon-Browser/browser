@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include "ash/hud_display/fps_graph_page_view.h"
 #include "ash/hud_display/hud_constants.h"
 #include "ash/hud_display/memory_graph_page_view.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/layout/fill_layout.h"
 
@@ -34,7 +34,7 @@ void GetDataSnapshotOnThreadPool(DataSource* data_source,
 ////////////////////////////////////////////////////////////////////////////////
 // GraphsContainerView, public:
 
-BEGIN_METADATA(GraphsContainerView, views::View)
+BEGIN_METADATA(GraphsContainerView)
 END_METADATA
 
 GraphsContainerView::GraphsContainerView()
@@ -89,7 +89,7 @@ void GraphsContainerView::UpdateData(
           : 1;
   data_update_count_ += intervals;
 
-  for (auto* child : children()) {
+  for (views::View* child : children()) {
     // Insert missing points.
     for (unsigned j = 0; j < intervals; ++j)
       static_cast<GraphPageViewBase*>(child)->UpdateData(*snapshot);
@@ -103,7 +103,7 @@ void GraphsContainerView::UpdateData(
   if (next_start_time <= now) {
     RequestDataUpdate();
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&GraphsContainerView::RequestDataUpdate,
                        weak_factory_.GetWeakPtr()),
@@ -117,8 +117,9 @@ void GraphsContainerView::SetMode(HUDDisplayMode mode) {
     DCHECK(selected);
     return;
   }
-  for (auto* child : children())
+  for (views::View* child : children()) {
     child->SetVisible(false);
+  }
 
   selected->SetVisible(true);
 }

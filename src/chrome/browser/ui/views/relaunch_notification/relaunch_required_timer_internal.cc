@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,14 +55,15 @@ base::TimeDelta ComputeNextRefreshDelta(base::TimeDelta deadline_offset) {
   static constexpr base::TimeDelta kMinSeconds = base::Seconds(1);
 
   base::TimeDelta delta;
-  if (rounded_offset > kMinDays)
+  if (rounded_offset > kMinDays) {
     delta = base::Days(rounded_offset.InDays() - 1);
-  else if (rounded_offset > kMinHours)
+  } else if (rounded_offset > kMinHours) {
     delta = base::Hours(rounded_offset.InHours() - 1);
-  else if (rounded_offset > kMinMinutes)
+  } else if (rounded_offset > kMinMinutes) {
     delta = base::Minutes(rounded_offset.InMinutes() - 1);
-  else if (rounded_offset > kMinSeconds)
+  } else if (rounded_offset > kMinSeconds) {
     delta = base::Seconds(rounded_offset.InSeconds() - 1);
+  }
 
   return deadline_offset - delta;
 }

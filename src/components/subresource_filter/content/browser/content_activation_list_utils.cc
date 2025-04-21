@@ -1,8 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/subresource_filter/content/browser/content_activation_list_utils.h"
+
+#include "base/check.h"
+#include "base/not_fatal_until.h"
 #include "components/subresource_filter/core/browser/subresource_filter_features.h"
 
 namespace subresource_filter {
@@ -58,9 +61,9 @@ ActivationList GetListForThreatTypeAndMetadata(
     safe_browsing::SBThreatType threat_type,
     const safe_browsing::ThreatMetadata& threat_type_metadata,
     bool* warning) {
-  DCHECK(warning);
+  CHECK(warning, base::NotFatalUntil::M129);
   bool is_phishing_interstitial =
-      (threat_type == safe_browsing::SB_THREAT_TYPE_URL_PHISHING);
+      (threat_type == safe_browsing::SBThreatType::SB_THREAT_TYPE_URL_PHISHING);
   bool is_soc_engineering_ads_interstitial =
       threat_type_metadata.threat_pattern_type ==
       safe_browsing::ThreatPatternType::SOCIAL_ENGINEERING_ADS;
@@ -69,7 +72,8 @@ ActivationList GetListForThreatTypeAndMetadata(
       return ActivationList::SOCIAL_ENG_ADS_INTERSTITIAL;
     }
     return ActivationList::PHISHING_INTERSTITIAL;
-  } else if (threat_type == safe_browsing::SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
+  } else if (threat_type ==
+             safe_browsing::SBThreatType::SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
     return GetSubresourceFilterMatch(threat_type_metadata, warning);
   }
   return ActivationList::NONE;

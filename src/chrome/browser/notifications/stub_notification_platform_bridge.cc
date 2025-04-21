@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,15 @@ void StubNotificationPlatformBridge::Close(Profile* profile,
 
 void StubNotificationPlatformBridge::GetDisplayed(
     Profile* profile,
+    GetDisplayedNotificationsCallback callback) const {
+  std::set<std::string> displayed_notifications;
+  std::move(callback).Run(std::move(displayed_notifications),
+                          false /* supports_synchronization */);
+}
+
+void StubNotificationPlatformBridge::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
     GetDisplayedNotificationsCallback callback) const {
   std::set<std::string> displayed_notifications;
   std::move(callback).Run(std::move(displayed_notifications),

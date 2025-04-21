@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 
 #include <array>
 
-#include "base/callback.h"
+#include "ash/ime/ime_controller_impl.h"
+#include "ash/public/mojom/input_device_settings.mojom.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/data_source_observer.h"
 #include "components/exo/key_state.h"
+#include "components/exo/ui_lock_controller.h"
 #include "ui/aura/client/drag_drop_delegate.h"
 #include "ui/aura/client/focus_change_observer.h"
 #include "ui/base/clipboard/clipboard_observer.h"
@@ -23,11 +25,6 @@
 #include "ui/events/event_handler.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/platform/platform_event_observer.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/ime/ime_controller_impl.h"
-#include "components/exo/ui_lock_controller.h"
-#endif
 
 namespace ui {
 class KeyEvent;
@@ -48,9 +45,7 @@ class Seat : public aura::client::FocusChangeObserver,
              public ui::PlatformEventObserver,
              public ui::EventHandler,
              public ui::ClipboardObserver,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-             public ash::ImeControllerImpl::Observer,
-#endif
+             public ash::ImeController::Observer,
              public DataSourceObserver {
  public:
   explicit Seat(std::unique_ptr<DataExchangeDelegate> delegate);
@@ -81,6 +76,9 @@ class Seat : public aura::client::FocusChangeObserver,
     return 0 <= priority && priority <= kMaxObserverPriority;
   }
 
+  // Nontify observers when a new surface is created.
+  void NotifySurfaceCreated(Surface* surface);
+
   // Notify observers about pointer capture state changes.
   void NotifyPointerCaptureEnabled(Pointer* pointer,
                                    aura::Window* capture_window);
@@ -92,20 +90,19 @@ class Seat : public aura::client::FocusChangeObserver,
   virtual Surface* GetFocusedSurface();
 
   // Returns currently pressed keys.
-  const base::flat_map<ui::DomCode, KeyState>& pressed_keys() const {
+  const base::flat_map<PhysicalCode, base::flat_set<KeyState>>& pressed_keys()
+      const {
     return pressed_keys_;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   const XkbTracker* xkb_tracker() const { return xkb_tracker_.get(); }
-#endif
 
   DataExchangeDelegate* data_exchange_delegate() {
     return data_exchange_delegate_.get();
   }
 
   // Returns physical code for the currently processing event.
-  ui::DomCode physical_code_for_currently_processing_event() const {
+  const PhysicalCode& physical_code_for_currently_processing_event() const {
     return physical_code_for_currently_processing_event_;
   }
 
@@ -119,6 +116,12 @@ class Seat : public aura::client::FocusChangeObserver,
 
   // Abort any drag operations that haven't been started yet.
   void AbortPendingDragOperation();
+
+  // Returns true if the drag and drop has been started (which happens
+  // asynchronously) and hasn't been fully finished yet. This can return true
+  // even if ash's DND session is finished because wayland's dnd finished event
+  // is sent asynchronosly.
+  bool IsDragDropOperationInProgress() const;
 
   // Overridden from aura::client::FocusChangeObserver:
   void OnWindowFocused(aura::Window* gained_focus,
@@ -137,16 +140,14 @@ class Seat : public aura::client::FocusChangeObserver,
   // Overridden from DataSourceObserver:
   void OnDataSourceDestroying(DataSource* source) override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Overridden from ash::ImeControllerImpl::Observer:
+  // Overridden from ash::ImeController::Observer:
   void OnCapsLockChanged(bool enabled) override;
   void OnKeyboardLayoutNameChanged(const std::string& layout_name) override;
 
   UILockController* GetUILockControllerForTesting();
-#endif
 
   void set_physical_code_for_currently_processing_event_for_testing(
-      ui::DomCode physical_code_for_currently_processing_event) {
+      PhysicalCode physical_code_for_currently_processing_event) {
     physical_code_for_currently_processing_event_ =
         physical_code_for_currently_processing_event;
   }
@@ -159,18 +160,6 @@ class Seat : public aura::client::FocusChangeObserver,
 
  private:
   class RefCountedScopedClipboardWriter;
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Called when the focused window is a Lacros window and a source
-  // DataTransferEndpoint is read in the available MIME types. This
-  // is currently used to synchronize clipboard source metadata from
-  // Lacros to Ash.
-  void OnDataTransferEndpointRead(
-      scoped_refptr<RefCountedScopedClipboardWriter> writer,
-      base::OnceClosure callback,
-      const std::string& mime_type,
-      std::u16string data);
-#endif
 
   // Called when data is read from FD passed from a client.
   // |data| is read data. |source| is source of the data, or nullptr if
@@ -191,11 +180,9 @@ class Seat : public aura::client::FocusChangeObserver,
                    base::OnceClosure callback,
                    const std::string& mime_type,
                    const std::vector<uint8_t>& data);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   void OnImageDecoded(base::OnceClosure callback,
                       scoped_refptr<RefCountedScopedClipboardWriter> writer,
                       const SkBitmap& bitmap);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   void OnFilenamesRead(ui::EndpointType source,
                        scoped_refptr<RefCountedScopedClipboardWriter> writer,
                        base::OnceClosure callback,
@@ -213,20 +200,22 @@ class Seat : public aura::client::FocusChangeObserver,
   // Max value of SeatObserver's priority. Both side are inclusive.
   static constexpr int kMaxObserverPriority = 1;
 
-  // Map from priority to a list of SeatOberver pointers.
+  // Map from priority to a list of SeatObserver pointers.
   std::array<base::ObserverList<SeatObserver>::Unchecked,
              kMaxObserverPriority + 1>
       priority_observer_list_;
 
   // The platform code is the key in this map as it represents the physical
-  // key that was pressed. The value is a potentially rewritten code that the
-  // physical key press generated.
-  base::flat_map<ui::DomCode, KeyState> pressed_keys_;
-  ui::DomCode physical_code_for_currently_processing_event_ = ui::DomCode::NONE;
+  // key that was pressed. The value is a set of potentially rewritten key codes
+  // that the physical key press generated.
+  base::flat_map<PhysicalCode, base::flat_set<KeyState>> pressed_keys_;
+  PhysicalCode physical_code_for_currently_processing_event_ =
+      ui::DomCode::NONE;
 
   // Data source being used as a clipboard content.
   std::unique_ptr<ScopedDataSource> selection_source_;
 
+  // TODO(oshima): Move this to DataDevice.
   base::WeakPtr<DragDropOperation> drag_drop_operation_;
 
   // True while Seat is updating clipboard data to selection source.
@@ -234,10 +223,8 @@ class Seat : public aura::client::FocusChangeObserver,
 
   bool was_shutdown_ = false;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<UILockController> ui_lock_controller_;
   std::unique_ptr<XkbTracker> xkb_tracker_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   std::unique_ptr<DataExchangeDelegate> data_exchange_delegate_;
   base::WeakPtrFactory<Seat> weak_ptr_factory_{this};

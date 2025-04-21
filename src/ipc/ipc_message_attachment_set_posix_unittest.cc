@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ int GetFdAt(MessageAttachmentSet* set, int id) {
 
 // The MessageAttachmentSet will try and close some of the descriptor numbers
 // which we given it. This is the base descriptor value. It's great enough such
-// that no real descriptor will accidently be closed.
+// that no real descriptor will accidentally be closed.
 static const int kFDBase = 50000;
 
 TEST(MessageAttachmentSet, BasicAdd) {

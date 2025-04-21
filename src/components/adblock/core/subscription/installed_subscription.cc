@@ -19,14 +19,18 @@
 
 namespace adblock {
 
-InstalledSubscription::Selectors::Selectors() = default;
-InstalledSubscription::Selectors::~Selectors() = default;
-InstalledSubscription::Selectors::Selectors(const Selectors&) = default;
-InstalledSubscription::Selectors::Selectors(Selectors&&) = default;
-InstalledSubscription::Selectors& InstalledSubscription::Selectors::operator=(
-    const Selectors&) = default;
-InstalledSubscription::Selectors& InstalledSubscription::Selectors::operator=(
-    Selectors&&) = default;
+InstalledSubscription::ContentFiltersData::ContentFiltersData() = default;
+InstalledSubscription::ContentFiltersData::~ContentFiltersData() = default;
+InstalledSubscription::ContentFiltersData::ContentFiltersData(
+    const ContentFiltersData&) = default;
+InstalledSubscription::ContentFiltersData::ContentFiltersData(
+    ContentFiltersData&&) = default;
+InstalledSubscription::ContentFiltersData&
+InstalledSubscription::ContentFiltersData::operator=(
+    const ContentFiltersData&) = default;
+InstalledSubscription::ContentFiltersData&
+InstalledSubscription::ContentFiltersData::operator=(ContentFiltersData&&) =
+    default;
 
 InstalledSubscription::Snippet::Snippet() = default;
 InstalledSubscription::Snippet::Snippet(const Snippet&) = default;

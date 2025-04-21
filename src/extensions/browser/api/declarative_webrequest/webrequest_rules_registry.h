@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/url_matcher/url_matcher.h"
 #include "extensions/browser/api/declarative/declarative_rule.h"
@@ -90,12 +89,12 @@ class WebRequestRulesRegistry : public RulesRegistry {
 
   // Implementation of RulesRegistry:
   std::string AddRulesImpl(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       const std::vector<const api::events::Rule*>& rules) override;
   std::string RemoveRulesImpl(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       const std::vector<std::string>& rule_identifiers) override;
-  std::string RemoveAllRulesImpl(const std::string& extension_id) override;
+  std::string RemoveAllRulesImpl(const ExtensionId& extension_id) override;
 
   // Returns true if this object retains no allocated data. Only for debugging.
   bool IsEmpty() const;
@@ -105,10 +104,10 @@ class WebRequestRulesRegistry : public RulesRegistry {
 
   // Virtual for testing:
   virtual base::Time GetExtensionInstallationTime(
-      const std::string& extension_id) const;
+      const ExtensionId& extension_id) const;
   virtual void ClearCacheOnNavigation();
 
-  const std::set<const WebRequestRule*>&
+  const std::set<raw_ptr<const WebRequestRule, SetExperimental>>&
   rules_with_untriggered_conditions_for_test() const {
     return rules_with_untriggered_conditions_;
   }
@@ -168,13 +167,12 @@ class WebRequestRulesRegistry : public RulesRegistry {
   // These rules contain condition sets with conditions without URL attributes.
   // Such conditions are not triggered by URL matcher, so we need to test them
   // separately.
-  std::set<const WebRequestRule*> rules_with_untriggered_conditions_;
+  std::set<raw_ptr<const WebRequestRule, SetExperimental>>
+      rules_with_untriggered_conditions_;
 
   std::map<ExtensionId, RulesMap> webrequest_rules_;
 
   url_matcher::URLMatcher url_matcher_;
-
-  raw_ptr<content::BrowserContext> browser_context_;
 };
 
 }  // namespace extensions

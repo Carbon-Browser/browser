@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/platform_apps/platform_app_navigation_redirector.h"
 
 #include "apps/launcher.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_contents_delegate.h"
 #include "chrome/browser/profiles/profile.h"
@@ -86,7 +86,7 @@ PlatformAppNavigationRedirector::MaybeCreateThrottleFor(
       handle->GetWebContents()->GetBrowserContext();
   DCHECK(browser_context);
 
-  if (handle->GetParentFrameOrOuterDocument()) {
+  if (!handle->IsInOutermostMainFrame()) {
     DVLOG(1) << "Skip redirection: navigation is from an iframe or inner page";
     return nullptr;
   }

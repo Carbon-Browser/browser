@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define NET_SOCKET_TRANSPORT_CONNECT_JOB_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -18,14 +19,13 @@
 #include "base/timer/timer.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/dns/host_resolver.h"
-#include "net/dns/host_resolver_results.h"
+#include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/resolve_error_info.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/socket/connect_job.h"
 #include "net/socket/connection_attempts.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "url/scheme_host_port.h"
 
@@ -44,14 +44,15 @@ class NET_EXPORT_PRIVATE TransportSocketParams
   // transport parameters.
   using Endpoint = absl::variant<url::SchemeHostPort, HostPortPair>;
 
-  // |host_resolution_callback| will be invoked after the the hostname is
-  // resolved. |network_isolation_key| is passed to the HostResolver to prevent
-  // cross-NIK leaks. If |host_resolution_callback| does not return OK, then the
-  // connection will be aborted with that value. |supported_alpns| specifies
-  // ALPN protocols for selecting HTTPS/SVCB records. If empty, addresses from
-  // HTTPS/SVCB records will be ignored and only A/AAAA will be used.
+  // `host_resolution_callback` will be invoked after the the hostname is
+  // resolved. `network_anonymization_key` is passed to the HostResolver to
+  // prevent cross-NAK leaks. If `host_resolution_callback` does not return OK,
+  // then the connection will be aborted with that value. `supported_alpns`
+  // specifies ALPN protocols for selecting HTTPS/SVCB records. If empty,
+  // addresses from HTTPS/SVCB records will be ignored and only A/AAAA will be
+  // used.
   TransportSocketParams(Endpoint destination,
-                        NetworkIsolationKey network_isolation_key,
+                        NetworkAnonymizationKey network_anonymization_key,
                         SecureDnsPolicy secure_dns_policy,
                         OnHostResolutionCallback host_resolution_callback,
                         base::flat_set<std::string> supported_alpns);
@@ -60,8 +61,8 @@ class NET_EXPORT_PRIVATE TransportSocketParams
   TransportSocketParams& operator=(const TransportSocketParams&) = delete;
 
   const Endpoint& destination() const { return destination_; }
-  const NetworkIsolationKey& network_isolation_key() const {
-    return network_isolation_key_;
+  const NetworkAnonymizationKey& network_anonymization_key() const {
+    return network_anonymization_key_;
   }
   SecureDnsPolicy secure_dns_policy() const { return secure_dns_policy_; }
   const OnHostResolutionCallback& host_resolution_callback() const {
@@ -76,7 +77,7 @@ class NET_EXPORT_PRIVATE TransportSocketParams
   ~TransportSocketParams();
 
   const Endpoint destination_;
-  const NetworkIsolationKey network_isolation_key_;
+  const NetworkAnonymizationKey network_anonymization_key_;
   const SecureDnsPolicy secure_dns_policy_;
   const OnHostResolutionCallback host_resolution_callback_;
   const base::flat_set<std::string> supported_alpns_;
@@ -134,8 +135,8 @@ class NET_EXPORT_PRIVATE TransportConnectJob : public ConnectJob {
                       const scoped_refptr<TransportSocketParams>& params,
                       Delegate* delegate,
                       const NetLogWithSource* net_log,
-                      absl::optional<EndpointResultOverride>
-                          endpoint_result_override = absl::nullopt);
+                      std::optional<EndpointResultOverride>
+                          endpoint_result_override = std::nullopt);
 
   TransportConnectJob(const TransportConnectJob&) = delete;
   TransportConnectJob& operator=(const TransportConnectJob&) = delete;
@@ -147,7 +148,7 @@ class NET_EXPORT_PRIVATE TransportConnectJob : public ConnectJob {
   bool HasEstablishedConnection() const override;
   ConnectionAttempts GetConnectionAttempts() const override;
   ResolveErrorInfo GetResolveErrorInfo() const override;
-  absl::optional<HostResolverEndpointResult> GetHostResolverEndpointResult()
+  std::optional<HostResolverEndpointResult> GetHostResolverEndpointResult()
       const override;
 
   static base::TimeDelta ConnectionTimeout();

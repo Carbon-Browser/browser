@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "GPU Linux Builder",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -19,12 +19,13 @@
                 ],
                 "build_config": "Release",
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "linux"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
                   "use_clang_coverage",
-                  "enable_reclient"
+                  "chromium_with_telemetry_dependencies"
                 ],
                 "config": "chromium"
               }
@@ -34,7 +35,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Release (NVIDIA)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -46,7 +47,8 @@
                 ],
                 "build_config": "Release",
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "linux"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -57,7 +59,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "GPU Linux Builder",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           }
@@ -67,7 +69,7 @@
         {
           "bucket": "ci",
           "builder": "Linux Release (NVIDIA)",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
@@ -75,7 +77,8 @@
           "builder": "linux-rel",
           "group": "tryserver.chromium.linux"
         }
-      ]
+      ],
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/Linux Release (NVIDIA)/targets"
     }
   },
   "$recipe_engine/resultdb/test_presentation": {
@@ -86,6 +89,9 @@
     ]
   },
   "builder_group": "chromium.gpu",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

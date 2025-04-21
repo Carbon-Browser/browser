@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function register() {
   var script = './sw.js';
   var scope = './';
-  navigator.serviceWorker.register(script, {scope: scope})
+  return navigator.serviceWorker.register(script, {scope: scope})
     .then(function() { return navigator.serviceWorker.ready; })
     .then(function(registration) {
         var channel = new MessageChannel();
@@ -37,6 +37,5 @@ function register() {
     })
     .then(function() { return fetch('./sw_controlled_check'); })
     .then(function(res) { return res.text(); })
-    .then(function(txt) { window.domAutomationController.send(txt); })
-    .catch(function(e) { window.domAutomationController.send('Fail: ' + e); });
+    .catch(function(e) { return 'Fail: ' + e; });
 }

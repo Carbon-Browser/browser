@@ -1,6 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/memory/madv_free_discardable_memory_allocator_posix.h"
 
 #include <fcntl.h>
 #include <stdint.h>
@@ -8,7 +10,6 @@
 #include <memory>
 
 #include "base/files/scoped_file.h"
-#include "base/memory/madv_free_discardable_memory_allocator_posix.h"
 #include "base/memory/madv_free_discardable_memory_posix.h"
 #include "base/memory/page_size.h"
 #include "base/tracing_buildflags.h"
@@ -37,7 +38,7 @@ class MadvFreeDiscardableMemoryAllocatorPosixTest : public ::testing::Test {
   MadvFreeDiscardableMemoryAllocatorPosixTest() {
 #if BUILDFLAG(ENABLE_BASE_TRACING)
     base::trace_event::MemoryDumpArgs dump_args = {
-        base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+        base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
     pmd_ = std::make_unique<base::trace_event::ProcessMemoryDump>(dump_args);
 #endif  // BUILDFLAG(ENABLE_BASE_TRACING)
   }

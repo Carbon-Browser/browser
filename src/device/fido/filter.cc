@@ -1,26 +1,29 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/fido/filter.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "components/device_event_log/device_event_log.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 namespace fido_filter {
 
 namespace {
 
-const base::Feature kFilter{"WebAuthenticationFilter",
-                            base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kFilter,
+             "WebAuthenticationFilter",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string> kFilterJSON{
     &kFilter,
@@ -29,13 +32,13 @@ const base::FeatureParam<std::string> kFilterJSON{
 };
 
 struct FilterStep {
-  absl::optional<std::string> operation;
+  std::optional<std::string> operation;
   std::vector<std::string> rp_id;
-  absl::optional<std::string> device;
-  absl::optional<std::string> id_type;
+  std::optional<std::string> device;
+  std::optional<std::string> id_type;
   std::vector<std::string> id;
-  absl::optional<size_t> id_min_size;
-  absl::optional<size_t> id_max_size;
+  std::optional<size_t> id_min_size;
+  std::optional<size_t> id_max_size;
   Action action;
 };
 
@@ -51,9 +54,8 @@ bool IsListOf(const base::Value* v, bool (*predicate)(const base::Value&)) {
   if (!v->is_list()) {
     return false;
   }
-  auto contents = v->GetListDeprecated();
-  return !contents.empty() &&
-         std::all_of(contents.begin(), contents.end(), predicate);
+  const auto& contents = v->GetList();
+  return !contents.empty() && base::ranges::all_of(contents, predicate);
 }
 
 std::vector<std::string> GetStringOrListOfStrings(const base::Value* v) {
@@ -62,29 +64,29 @@ std::vector<std::string> GetStringOrListOfStrings(const base::Value* v) {
   }
 
   std::vector<std::string> ret;
-  for (const auto& elem : v->GetListDeprecated()) {
+  for (const auto& elem : v->GetList()) {
     ret.push_back(elem.GetString());
   }
   return ret;
 }
 
-absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
-  absl::optional<base::Value> v =
+std::optional<std::vector<FilterStep>> ParseJSON(std::string_view json) {
+  std::optional<base::Value> v =
       base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!v || !v->is_dict()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  const base::Value* filters = v->FindKey("filters");
-  if (!filters || !filters->is_list()) {
-    return absl::nullopt;
+  const base::Value::List* filters = v->GetDict().FindList("filters");
+  if (!filters) {
+    return std::nullopt;
   }
 
   std::vector<FilterStep> ret;
-  const auto filter_list = filters->GetListDeprecated();
-  for (const auto& filter : filter_list) {
-    if (!filter.is_dict()) {
-      return absl::nullopt;
+  for (const auto& filter : *filters) {
+    const base::Value::Dict* filter_dict = filter.GetIfDict();
+    if (!filter_dict) {
+      return std::nullopt;
     }
 
     // These are the keys that are extracted from the JSON:
@@ -97,8 +99,9 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
     const base::Value* id_max_size = nullptr;
     const base::Value* action = nullptr;
 
-    // DictItems is used so that unknown keys in the dictionary can be rejected.
-    for (auto pair : filter.DictItems()) {
+    // Walk through all items in the dictionary so that dictionaries with
+    // unknown keys can be rejected.
+    for (auto pair : *filter_dict) {
       if (pair.first == "operation") {
         operation = &pair.second;
       } else if (pair.first == "rp_id") {
@@ -117,7 +120,7 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
         action = &pair.second;
       } else {
         // Unknown keys are an error.
-        return absl::nullopt;
+        return std::nullopt;
       }
     }
 
@@ -130,19 +133,19 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
         (id && !IsString(*id) && !IsListOf(id, IsString)) ||
         (id_min_size && !id_min_size->is_int()) ||
         (id_max_size && !id_max_size->is_int())) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     if ((id_min_size || id_max_size || id) && !id_type) {
       // If matches on the contents or size of an ID are given then the type
       // must also be matched.
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     if (!rp_id && !device) {
       // Filter is too broad. For safety this is disallowed, although one can
       // still explicitly use a wildcard.
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     FilterStep step;
@@ -154,7 +157,7 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
     } else if (action_str == "no-attestation") {
       step.action = Action::NO_ATTESTATION;
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     if (operation) {
@@ -175,14 +178,14 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
     if (id_min_size) {
       const int min_size_int = id_min_size->GetInt();
       if (min_size_int < 0) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       step.id_min_size = min_size_int;
     }
     if (id_max_size) {
       const int max_size_int = id_max_size->GetInt();
       if (max_size_int < 0) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       step.id_max_size = max_size_int;
     }
@@ -214,8 +217,8 @@ const char* IDTypeToString(IDType id_type) {
 size_t g_testing_depth = 0;
 
 struct CurrentFilter {
-  absl::optional<std::vector<FilterStep>> steps;
-  absl::optional<std::string> json;
+  std::optional<std::vector<FilterStep>> steps;
+  std::optional<std::string> json;
 };
 
 CurrentFilter* GetCurrentFilter() {
@@ -223,7 +226,7 @@ CurrentFilter* GetCurrentFilter() {
   return current_filter.get();
 }
 
-bool MaybeParseFilter(base::StringPiece json) {
+bool MaybeParseFilter(std::string_view json) {
   CurrentFilter* const current_filter = GetCurrentFilter();
   if (current_filter->json && json == *current_filter->json) {
     return true;
@@ -260,15 +263,15 @@ void MaybeInitialize() {
 
 Action Evaluate(
     Operation op,
-    base::StringPiece rp_id,
-    absl::optional<base::StringPiece> device,
-    absl::optional<std::pair<IDType, base::span<const uint8_t>>> id) {
+    std::string_view rp_id,
+    std::optional<std::string_view> device,
+    std::optional<std::pair<IDType, base::span<const uint8_t>>> id) {
   CurrentFilter* const current_filter = GetCurrentFilter();
   if (!current_filter->steps) {
     return Action::ALLOW;
   }
 
-  absl::optional<std::string> id_hex;
+  std::optional<std::string> id_hex;
   if (id) {
     id_hex = base::HexEncode(id->second);
   }
@@ -277,10 +280,10 @@ Action Evaluate(
     if ((!filter.operation ||
          base::MatchPattern(OperationToString(op), *filter.operation)) &&
         (filter.rp_id.empty() ||
-         std::any_of(filter.rp_id.begin(), filter.rp_id.end(),
-                     [rp_id](const std::string& pattern) -> bool {
-                       return base::MatchPattern(rp_id, pattern);
-                     })) &&
+         base::ranges::any_of(filter.rp_id,
+                              [rp_id](const std::string& pattern) {
+                                return base::MatchPattern(rp_id, pattern);
+                              })) &&
         (!filter.device ||
          base::MatchPattern(device.value_or(""), *filter.device)) &&
         (!filter.id_type || (id && base::MatchPattern(IDTypeToString(id->first),
@@ -290,10 +293,10 @@ Action Evaluate(
         (!filter.id_max_size ||
          (id && *filter.id_max_size >= id->second.size())) &&
         (filter.id.empty() ||
-         (id_hex && std::any_of(filter.id.begin(), filter.id.end(),
-                                [&id_hex](const std::string& pattern) -> bool {
-                                  return base::MatchPattern(*id_hex, pattern);
-                                })))) {
+         (id_hex && base::ranges::any_of(
+                        filter.id, [&id_hex](const std::string& pattern) {
+                          return base::MatchPattern(*id_hex, pattern);
+                        })))) {
       return filter.action;
     }
   }
@@ -301,7 +304,7 @@ Action Evaluate(
   return Action::ALLOW;
 }
 
-ScopedFilterForTesting::ScopedFilterForTesting(base::StringPiece json)
+ScopedFilterForTesting::ScopedFilterForTesting(std::string_view json)
     : previous_json_(GetCurrentFilter()->json) {
   g_testing_depth++;
   CHECK(g_testing_depth != 0);
@@ -309,7 +312,7 @@ ScopedFilterForTesting::ScopedFilterForTesting(base::StringPiece json)
 }
 
 ScopedFilterForTesting::ScopedFilterForTesting(
-    base::StringPiece json,
+    std::string_view json,
     ScopedFilterForTesting::PermitInvalidJSON)
     : previous_json_(GetCurrentFilter()->json) {
   g_testing_depth++;
@@ -328,7 +331,7 @@ ScopedFilterForTesting::~ScopedFilterForTesting() {
   }
 }
 
-bool ParseForTesting(base::StringPiece json) {
+bool ParseForTesting(std::string_view json) {
   CHECK(base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS)) << json;
   return MaybeParseFilter(json);
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,15 @@
 
 #include <stddef.h>
 
+#include <optional>
+
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/i18n/time_formatting.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/process/launch.h"
@@ -24,20 +28,21 @@
 #include "base/test/scoped_logging_settings.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/multiprocess_func_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
 
 namespace base {
 namespace {
+
+using ::testing::_;
+using ::testing::DoAll;
+using ::testing::Invoke;
+using ::testing::InvokeWithoutArgs;
+using ::testing::Return;
+using ::testing::ReturnPointee;
 
 TestResult GenerateTestResult(const std::string& test_name,
                               TestResult::Status status,
@@ -103,14 +108,21 @@ class MockTestLauncherDelegate : public TestLauncherDelegate {
   MOCK_METHOD0(GetBatchSize, size_t());
 };
 
+class MockResultWatcher : public ResultWatcher {
+ public:
+  MockResultWatcher(FilePath result_file, size_t num_tests)
+      : ResultWatcher(result_file, num_tests) {}
+
+  MOCK_METHOD(bool, WaitWithTimeout, (TimeDelta), (override));
+};
+
 // Using MockTestLauncher to test TestLauncher.
 // Test TestLauncher filters, and command line switches setup.
 class TestLauncherTest : public testing::Test {
  protected:
   TestLauncherTest()
       : command_line(new CommandLine(CommandLine::NO_PROGRAM)),
-        test_launcher(&delegate, 10),
-        task_environment(base::test::TaskEnvironment::MainThreadType::IO) {}
+        test_launcher(&delegate, 10) {}
 
   // Adds tests to be returned by the delegate.
   void AddMockedTests(std::string test_case_name,
@@ -127,7 +139,6 @@ class TestLauncherTest : public testing::Test {
 
   // Setup expected delegate calls, and which tests the delegate will return.
   void SetUpExpectCalls(size_t batch_size = 10) {
-    using ::testing::_;
     EXPECT_CALL(delegate, GetTests(_))
         .WillOnce(::testing::DoAll(testing::SetArgPointee<0>(tests_),
                                    testing::Return(true)));
@@ -150,11 +161,36 @@ class TestLauncherTest : public testing::Test {
   std::unique_ptr<CommandLine> command_line;
   MockTestLauncher test_launcher;
   MockTestLauncherDelegate delegate;
-  base::test::TaskEnvironment task_environment;
+  base::test::TaskEnvironment task_environment{
+      base::test::TaskEnvironment::MainThreadType::IO};
   ScopedTempDir dir;
+
+  FilePath CreateFilterFile() {
+    FilePath result_file = dir.GetPath().AppendASCII("test.filter");
+    WriteFile(result_file, "-Test.firstTest");
+    return result_file;
+  }
 
  private:
   std::vector<TestIdentifier> tests_;
+};
+
+class ResultWatcherTest : public testing::Test {
+ protected:
+  ResultWatcherTest() = default;
+
+  FilePath CreateResultFile() {
+    FilePath result_file = dir.GetPath().AppendASCII("test_results.xml");
+    WriteFile(result_file,
+              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+              "<testsuites>\n"
+              "  <testsuite>\n");
+    return result_file;
+  }
+
+  base::test::TaskEnvironment task_environment{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  ScopedTempDir dir;
 };
 
 // Action to mock delegate invoking OnTestFinish on test launcher.
@@ -195,7 +231,6 @@ TEST_F(TestLauncherTest, OrphanePreTest) {
 // When There are no tests, delegate should not be called.
 TEST_F(TestLauncherTest, EmptyTestSetPasses) {
   SetUpExpectCalls();
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _)).Times(0);
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 }
@@ -207,7 +242,6 @@ TEST_F(TestLauncherTest, FilterDisabledTestByDefault) {
                  {"firstTest", "secondTest", "DISABLED_firstTestDisabled"});
   SetUpExpectCalls();
   std::vector<std::string> tests_names = {"Test.firstTest", "Test.secondTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -226,7 +260,6 @@ TEST_F(TestLauncherTest, ReorderPreTests) {
   SetUpExpectCalls();
   std::vector<std::string> tests_names = {
       "Test.PRE_PRE_firstTest", "Test.PRE_firstTest", "Test.firstTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -243,7 +276,6 @@ TEST_F(TestLauncherTest, UsingCommandLineFilter) {
   SetUpExpectCalls();
   command_line->AppendSwitchASCII("gtest_filter", "Test*.first*");
   std::vector<std::string> tests_names = {"Test.firstTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -261,7 +293,6 @@ TEST_F(TestLauncherTest, FilterIncludePreTest) {
   command_line->AppendSwitchASCII("gtest_filter", "Test.firstTest");
   std::vector<std::string> tests_names = {"Test.PRE_firstTest",
                                           "Test.firstTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -284,7 +315,6 @@ TEST_F(TestLauncherTest, FilterIncludeExclude) {
       "Test.firstTest",
       "Test.thirdTest",
   };
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -300,7 +330,6 @@ TEST_F(TestLauncherTest, RepeatTest) {
   SetUpExpectCalls();
   // Unless --gtest-break-on-failure is specified,
   command_line->AppendSwitchASCII("gtest_repeat", "2");
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .Times(2)
       .WillRepeatedly(::testing::DoAll(OnTestResult(
@@ -315,7 +344,6 @@ TEST_F(TestLauncherTest, RunningMultipleIterationsUntilFailure) {
   // Unless --gtest-break-on-failure is specified,
   command_line->AppendSwitchASCII("gtest_repeat", "4");
   command_line->AppendSwitch("gtest_break_on_failure");
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
                                               TestResult::TEST_SUCCESS)))
@@ -331,7 +359,6 @@ TEST_F(TestLauncherTest, SuccessOnRetryTests) {
   AddMockedTests("Test", {"firstTest"});
   SetUpExpectCalls();
   command_line->AppendSwitchASCII("test-launcher-retry-limit", "2");
-  using ::testing::_;
   std::vector<std::string> tests_names = {"Test.firstTest"};
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
@@ -351,7 +378,6 @@ TEST_F(TestLauncherTest, FailOnRetryTests) {
   AddMockedTests("Test", {"firstTest"});
   SetUpExpectCalls();
   command_line->AppendSwitchASCII("test-launcher-retry-limit", "2");
-  using ::testing::_;
   std::vector<std::string> tests_names = {"Test.firstTest"};
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
@@ -373,7 +399,6 @@ TEST_F(TestLauncherTest, RetryPreTests) {
       GenerateTestResult("Test.PRE_PRE_firstTest", TestResult::TEST_SUCCESS),
       GenerateTestResult("Test.PRE_firstTest", TestResult::TEST_FAILURE),
       GenerateTestResult("Test.firstTest", TestResult::TEST_SUCCESS)};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .WillOnce(::testing::DoAll(
           OnTestResult(&test_launcher, "Test.PRE_PRE_firstTest",
@@ -416,7 +441,6 @@ TEST_F(TestLauncherTest, PreTestFailure) {
   std::vector<TestResult> results = {
       GenerateTestResult("Test.PRE_FirstTest", TestResult::TEST_FAILURE),
       GenerateTestResult("Test.FirstTest", TestResult::TEST_SUCCESS)};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .WillOnce(
           ::testing::DoAll(OnTestResult(&test_launcher, "Test.PRE_FirstTest",
@@ -447,7 +471,56 @@ TEST_F(TestLauncherTest, RunDisabledTests) {
   std::vector<std::string> tests_names = {"DISABLED_TestDisabled.firstTest",
                                           "Test.firstTest",
                                           "Test.DISABLED_firstTestDisabled"};
-  using ::testing::_;
+  EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
+                                 _,
+                                 testing::ElementsAreArray(tests_names.cbegin(),
+                                                           tests_names.cend()),
+                                 _, _))
+      .WillOnce(::testing::DoAll(
+          OnTestResult(&test_launcher, "Test.firstTest",
+                       TestResult::TEST_SUCCESS),
+          OnTestResult(&test_launcher, "DISABLED_TestDisabled.firstTest",
+                       TestResult::TEST_SUCCESS),
+          OnTestResult(&test_launcher, "Test.DISABLED_firstTestDisabled",
+                       TestResult::TEST_SUCCESS)));
+  EXPECT_TRUE(test_launcher.Run(command_line.get()));
+}
+
+// Test TestLauncher does not run negative tests filtered under
+// testing/buildbot/filters.
+TEST_F(TestLauncherTest, DoesRunFilteredTests) {
+  AddMockedTests("Test", {"firstTest", "secondTest"});
+  SetUpExpectCalls();
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  // filter file content is "-Test.firstTest"
+  FilePath path = CreateFilterFile();
+  command_line->AppendSwitchPath("test-launcher-filter-file", path);
+  std::vector<std::string> tests_names = {"Test.secondTest"};
+  EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
+                                 _,
+                                 testing::ElementsAreArray(tests_names.cbegin(),
+                                                           tests_names.cend()),
+                                 _, _))
+      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.secondTest",
+                                              TestResult::TEST_SUCCESS)));
+  EXPECT_TRUE(test_launcher.Run(command_line.get()));
+}
+
+// Test TestLauncher run disabled tests and negative tests filtered under
+// testing/buildbot/filters, when gtest_also_run_disabled_tests is set.
+TEST_F(TestLauncherTest, RunDisabledTestsWithFilteredTests) {
+  AddMockedTests("DISABLED_TestDisabled", {"firstTest"});
+  AddMockedTests("Test", {"firstTest", "DISABLED_firstTestDisabled"});
+  SetUpExpectCalls();
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  // filter file content is "-Test.firstTest", but Test.firstTest will still
+  // run due to gtest_also_run_disabled_tests is set.
+  FilePath path = CreateFilterFile();
+  command_line->AppendSwitchPath("test-launcher-filter-file", path);
+  command_line->AppendSwitch("gtest_also_run_disabled_tests");
+  std::vector<std::string> tests_names = {"DISABLED_TestDisabled.firstTest",
+                                          "Test.firstTest",
+                                          "Test.DISABLED_firstTestDisabled"};
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -469,7 +542,6 @@ TEST_F(TestLauncherTest, DisablePreTests) {
                           "PRE_firstTest", "secondTest"});
   SetUpExpectCalls();
   std::vector<std::string> tests_names = {"Test.secondTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -479,11 +551,67 @@ TEST_F(TestLauncherTest, DisablePreTests) {
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 }
 
+// Test TestLauncher enforce to run tests in the exact positive filter.
+TEST_F(TestLauncherTest, EnforceRunTestsInExactPositiveFilter) {
+  AddMockedTests("Test", {"firstTest", "secondTest", "thirdTest"});
+  SetUpExpectCalls();
+
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath path = dir.GetPath().AppendASCII("test.filter");
+  WriteFile(path, "Test.firstTest\nTest.thirdTest");
+  command_line->AppendSwitchPath("test-launcher-filter-file", path);
+  command_line->AppendSwitch("enforce-exact-positive-filter");
+  command_line->AppendSwitchASCII("test-launcher-total-shards", "2");
+  command_line->AppendSwitchASCII("test-launcher-shard-index", "0");
+
+  // Test.firstTest is in the exact positive filter, so expected to run.
+  // Test.thirdTest is launched in another shard.
+  std::vector<std::string> tests_names = {"Test.firstTest"};
+  EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
+                                 _,
+                                 testing::ElementsAreArray(tests_names.cbegin(),
+                                                           tests_names.cend()),
+                                 _, _))
+      .WillOnce(::testing::DoAll(OnTestResult(&test_launcher, "Test.firstTest",
+                                              TestResult::TEST_SUCCESS)));
+  EXPECT_TRUE(test_launcher.Run(command_line.get()));
+}
+
+// Test TestLauncher should fail if enforce-exact-positive-filter and
+// gtest_filter both presented.
+TEST_F(TestLauncherTest,
+       EnforceRunTestsInExactPositiveFailWithGtestFilterFlag) {
+  command_line->AppendSwitch("enforce-exact-positive-filter");
+  command_line->AppendSwitchASCII("gtest_filter", "Test.firstTest;-Test.*");
+  EXPECT_FALSE(test_launcher.Run(command_line.get()));
+}
+
+// Test TestLauncher should fail if enforce-exact-positive-filter is set
+// with negative test filters.
+TEST_F(TestLauncherTest, EnforceRunTestsInExactPositiveFailWithNegativeFilter) {
+  command_line->AppendSwitch("enforce-exact-positive-filter");
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath path = CreateFilterFile();
+  command_line->AppendSwitchPath("test-launcher-filter-file", path);
+  EXPECT_FALSE(test_launcher.Run(command_line.get()));
+}
+
+// Test TestLauncher should fail if enforce-exact-positive-filter is set
+// with wildcard positive filters.
+TEST_F(TestLauncherTest,
+       EnforceRunTestsInExactPositiveFailWithWildcardPositiveFilter) {
+  command_line->AppendSwitch("enforce-exact-positive-filter");
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath path = dir.GetPath().AppendASCII("test.filter");
+  WriteFile(path, "Test.*");
+  command_line->AppendSwitchPath("test-launcher-filter-file", path);
+  EXPECT_FALSE(test_launcher.Run(command_line.get()));
+}
+
 // Tests fail if they produce too much output.
 TEST_F(TestLauncherTest, ExcessiveOutput) {
   AddMockedTests("Test", {"firstTest"});
   SetUpExpectCalls();
-  using ::testing::_;
   command_line->AppendSwitchASCII("test-launcher-retry-limit", "0");
   command_line->AppendSwitchASCII("test-launcher-print-test-stdio", "never");
   TestResult test_result =
@@ -500,7 +628,6 @@ TEST_F(TestLauncherTest, OutputLimitSwitch) {
   SetUpExpectCalls();
   command_line->AppendSwitchASCII("test-launcher-print-test-stdio", "never");
   command_line->AppendSwitchASCII("test-launcher-output-bytes-limit", "800000");
-  using ::testing::_;
   TestResult test_result =
       GenerateTestResult("Test.firstTest", TestResult::TEST_SUCCESS,
                          Milliseconds(30), std::string(500000, 'a'));
@@ -521,7 +648,6 @@ TEST_F(TestLauncherTest, RedirectStdio) {
   AddMockedTests("Test", {"firstTest"});
   SetUpExpectCalls();
   command_line->AppendSwitchASCII("test-launcher-print-test-stdio", "always");
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .WillOnce(OnTestResult(&test_launcher, "Test.firstTest",
                              TestResult::TEST_SUCCESS));
@@ -536,7 +662,6 @@ TEST_F(TestLauncherTest, StableSharding) {
   command_line->AppendSwitchASCII("test-launcher-shard-index", "0");
   command_line->AppendSwitch("test-launcher-stable-sharding");
   std::vector<std::string> tests_names = {"Test.firstTest", "Test.secondTest"};
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(
                                  _,
                                  testing::ElementsAreArray(tests_names.cbegin(),
@@ -579,8 +704,8 @@ bool ValidateTestResultObject(const Value::Dict& iteration_data,
   result &=
       ValidateKeyValue(*dict, "output_snippet", test_result.output_snippet);
 
-  std::string base64_output_snippet;
-  Base64Encode(test_result.output_snippet, &base64_output_snippet);
+  std::string base64_output_snippet =
+      base::Base64Encode(test_result.output_snippet);
   result &=
       ValidateKeyValue(*dict, "output_snippet_base64", base64_output_snippet);
 
@@ -607,7 +732,7 @@ bool ValidateTestResultObject(const Value::Dict& iteration_data,
 
 // Validate |root| dictionary value contains a list with |values|
 // at |key| value.
-bool ValidateStringList(const absl::optional<Value::Dict>& root,
+bool ValidateStringList(const std::optional<Value::Dict>& root,
                         const std::string& key,
                         std::vector<const char*> values) {
   const Value::List* list = root->FindList(key);
@@ -656,7 +781,6 @@ TEST_F(TestLauncherTest, JsonSummary) {
       GenerateTestResult("Test.secondTest", TestResult::TEST_SUCCESS,
                          Milliseconds(50), "output_second");
 
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .Times(2)
       .WillRepeatedly(
@@ -665,7 +789,7 @@ TEST_F(TestLauncherTest, JsonSummary) {
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 
   // Validate the resulting JSON file is the expected output.
-  absl::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
+  std::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
   ASSERT_TRUE(root);
   EXPECT_TRUE(
       ValidateStringList(root, "all_tests",
@@ -711,13 +835,12 @@ TEST_F(TestLauncherTest, JsonSummaryWithDisabledTests) {
       GenerateTestResult("Test.DISABLED_Test", TestResult::TEST_SUCCESS,
                          Milliseconds(50), "output_second");
 
-  using ::testing::_;
   EXPECT_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
       .WillOnce(OnTestResult(&test_launcher, test_result));
   EXPECT_TRUE(test_launcher.Run(command_line.get()));
 
   // Validate the resulting JSON file is the expected output.
-  absl::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
+  std::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
   ASSERT_TRUE(root);
   Value::Dict* dict = root->FindDict("test_locations");
   ASSERT_TRUE(dict);
@@ -746,7 +869,6 @@ MATCHER(DirectoryIsParentOf, "") {
 // Test that the launcher creates a dedicated temp dir for a child proc and
 // cleans it up.
 TEST_F(TestLauncherTest, TestChildTempDir) {
-  using ::testing::_;
   AddMockedTests("Test", {"firstTest"});
   SetUpExpectCalls();
   ON_CALL(test_launcher, LaunchChildGTestProcess(_, _, _, _))
@@ -797,7 +919,8 @@ class UnitTestLauncherDelegateTester : public testing::Test {
 
 // Validate delegate produces correct command line.
 TEST_F(UnitTestLauncherDelegateTester, GetCommandLine) {
-  UnitTestLauncherDelegate launcher_delegate(&defaultPlatform, 10u, true);
+  UnitTestLauncherDelegate launcher_delegate(&defaultPlatform, 10u, true,
+                                             DoNothing());
   TestLauncherDelegate* delegate_ptr = &launcher_delegate;
 
   std::vector<std::string> test_names(5, "Tests");
@@ -805,9 +928,17 @@ TEST_F(UnitTestLauncherDelegateTester, GetCommandLine) {
   base::FilePath result_file;
   CreateNewTempDirectory(FilePath::StringType(), &temp_dir);
 
+  // Make sure that `--gtest_filter` from the original command line is dropped
+  // from a command line passed to the child process, since `--gtest_filter` is
+  // also specified in the flagfile.
+  CommandLine::ForCurrentProcess()->AppendSwitchASCII("gtest_filter", "*");
+  // But other random flags should be preserved.
+  CommandLine::ForCurrentProcess()->AppendSwitch("mochi-are-delicious");
   CommandLine cmd_line =
       delegate_ptr->GetCommandLine(test_names, temp_dir, &result_file);
   EXPECT_TRUE(cmd_line.HasSwitch("single-process-tests"));
+  EXPECT_FALSE(cmd_line.HasSwitch("gtest_filter"));
+  EXPECT_TRUE(cmd_line.HasSwitch("mochi-are-delicious"));
   EXPECT_EQ(cmd_line.GetSwitchValuePath("test-launcher-output"), result_file);
 
   const int size = 2048;
@@ -824,9 +955,228 @@ TEST_F(UnitTestLauncherDelegateTester, GetCommandLine) {
   }
 }
 
+// Verify that a result watcher can stop polling early when all tests complete.
+TEST_F(ResultWatcherTest, PollCompletesQuickly) {
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat({"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\" />\n",
+              "    <testcase name=\"B\" status=\"run\" time=\"0.500\" "
+              "classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\">\n",
+              "    </testcase>\n",
+              "    <x-teststart name=\"C\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now() + Milliseconds(500)).c_str(),
+              "\" />\n",
+              "    <testcase name=\"C\" status=\"run\" time=\"0.500\" "
+              "classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now() + Milliseconds(500)).c_str(),
+              "\">\n", "    </testcase>\n", "  </testsuite>\n",
+              "</testsuites>\n"})));
+
+  MockResultWatcher result_watcher(result_file, 2);
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .WillOnce(DoAll(InvokeWithoutArgs([&] {
+                        task_environment.AdvanceClock(Milliseconds(1500));
+                      }),
+                      Return(true)));
+
+  Time start = Time::Now();
+  ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
+  ASSERT_EQ(Time::Now() - start, Milliseconds(1500));
+}
+
+// Verify that a result watcher repeatedly checks the file for a batch of slow
+// tests. Each test completes in 40s, which is just under the timeout of 45s.
+TEST_F(ResultWatcherTest, PollCompletesSlowly) {
+  SCOPED_TRACE(::testing::Message() << "Start ticks: " << TimeTicks::Now());
+
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  const Time start = Time::Now();
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat({"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(start).c_str(), "\" />\n"})));
+
+  MockResultWatcher result_watcher(result_file, 10);
+  size_t checks = 0;
+  bool done = false;
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .Times(10)
+      .WillRepeatedly(DoAll(
+          Invoke([&](TimeDelta timeout) {
+            task_environment.AdvanceClock(timeout);
+            // Append a result with "time" (duration) as 40.000s and
+            // "timestamp" (test start) as `Now()` - 45s.
+            AppendToFile(
+                result_file,
+                StrCat({"    <testcase name=\"B\" status=\"run\" "
+                        "time=\"40.000\" classname=\"A\" timestamp=\"",
+                        TimeFormatAsIso8601(Time::Now() - Seconds(45)).c_str(),
+                        "\">\n", "    </testcase>\n"}));
+            checks++;
+            if (checks == 10) {
+              AppendToFile(result_file,
+                           "  </testsuite>\n"
+                           "</testsuites>\n");
+              done = true;
+            } else {
+              // Append a preliminary result for the next test that
+              // started when the last test completed (i.e., `Now()` - 45s
+              // + 40s).
+              AppendToFile(
+                  result_file,
+                  StrCat({"    <x-teststart name=\"B\" classname=\"A\" "
+                          "timestamp=\"",
+                          TimeFormatAsIso8601(Time::Now() - Seconds(5)).c_str(),
+                          "\" />\n"}));
+            }
+          }),
+          ReturnPointee(&done)));
+
+  ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
+  // The first check occurs 45s after the batch starts, so the sequence of
+  // events looks like:
+  //   00:00 - Test 1 starts
+  //   00:40 - Test 1 completes, test 2 starts
+  //   00:45 - Check 1 occurs
+  //   01:20 - Test 2 completes, test 3 starts
+  //   01:25 - Check 2 occurs
+  //   02:00 - Test 3 completes, test 4 starts
+  //   02:05 - Check 3 occurs
+  //   ...
+  ASSERT_EQ(Time::Now() - start, Seconds(45 + 40 * 9));
+}
+
+// Verify that the result watcher identifies when a test times out.
+TEST_F(ResultWatcherTest, PollTimeout) {
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat({"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\" />\n"})));
+
+  MockResultWatcher result_watcher(result_file, 10);
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .Times(2)
+      .WillRepeatedly(
+          DoAll(Invoke(&task_environment, &test::TaskEnvironment::AdvanceClock),
+                Return(false)));
+
+  Time start = Time::Now();
+  ASSERT_FALSE(result_watcher.PollUntilDone(Seconds(45)));
+  // Include a small grace period.
+  ASSERT_EQ(Time::Now() - start, Seconds(45) + TestTimeouts::tiny_timeout());
+}
+
+// Verify that the result watcher retries incomplete reads.
+TEST_F(ResultWatcherTest, RetryIncompleteResultRead) {
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  // Opening "<summary>" tag is not closed.
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat({"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\" />\n",
+              "    <testcase name=\"B\" status=\"run\" time=\"40.000\" "
+              "classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\">\n",
+              "      <summary>"})));
+
+  MockResultWatcher result_watcher(result_file, 2);
+  size_t attempts = 0;
+  bool done = false;
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .Times(5)
+      .WillRepeatedly(DoAll(Invoke([&](TimeDelta timeout) {
+                              task_environment.AdvanceClock(timeout);
+                              // Don't bother writing the rest of the file when
+                              // this test completes.
+                              done = ++attempts >= 5;
+                            }),
+                            ReturnPointee(&done)));
+
+  Time start = Time::Now();
+  ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
+  ASSERT_EQ(Time::Now() - start,
+            Seconds(45) + 4 * TestTimeouts::tiny_timeout());
+}
+
+// Verify that the result watcher continues polling with the base timeout when
+// the clock jumps backward.
+TEST_F(ResultWatcherTest, PollWithClockJumpBackward) {
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  // Cannot move the mock time source backward, so write future timestamps into
+  // the result file instead.
+  Time time_before_change = Time::Now() + Hours(1);
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat(
+          {"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+           TimeFormatAsIso8601(time_before_change).c_str(), "\" />\n",
+           "    <testcase name=\"B\" status=\"run\" time=\"0.500\" "
+           "classname=\"A\" timestamp=\"",
+           TimeFormatAsIso8601(time_before_change).c_str(), "\">\n",
+           "    </testcase>\n",
+           "    <x-teststart name=\"C\" classname=\"A\" timestamp=\"",
+           TimeFormatAsIso8601(time_before_change + Milliseconds(500)).c_str(),
+           "\" />\n"})));
+
+  MockResultWatcher result_watcher(result_file, 2);
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .WillOnce(
+          DoAll(Invoke(&task_environment, &test::TaskEnvironment::AdvanceClock),
+                Return(false)))
+      .WillOnce(
+          DoAll(Invoke(&task_environment, &test::TaskEnvironment::AdvanceClock),
+                Return(true)));
+
+  Time start = Time::Now();
+  ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
+  ASSERT_EQ(Time::Now() - start, Seconds(90));
+}
+
+// Verify that the result watcher continues polling with the base timeout when
+// the clock jumps forward.
+TEST_F(ResultWatcherTest, PollWithClockJumpForward) {
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath result_file = CreateResultFile();
+  ASSERT_TRUE(AppendToFile(
+      result_file,
+      StrCat({"    <x-teststart name=\"B\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\" />\n",
+              "    <testcase name=\"B\" status=\"run\" time=\"0.500\" "
+              "classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now()).c_str(), "\">\n",
+              "    </testcase>\n",
+              "    <x-teststart name=\"C\" classname=\"A\" timestamp=\"",
+              TimeFormatAsIso8601(Time::Now() + Milliseconds(500)).c_str(),
+              "\" />\n"})));
+  task_environment.AdvanceClock(Hours(1));
+
+  MockResultWatcher result_watcher(result_file, 2);
+  EXPECT_CALL(result_watcher, WaitWithTimeout(_))
+      .WillOnce(
+          DoAll(Invoke(&task_environment, &test::TaskEnvironment::AdvanceClock),
+                Return(false)))
+      .WillOnce(
+          DoAll(Invoke(&task_environment, &test::TaskEnvironment::AdvanceClock),
+                Return(true)));
+
+  Time start = Time::Now();
+  ASSERT_TRUE(result_watcher.PollUntilDone(Seconds(45)));
+  ASSERT_EQ(Time::Now() - start, Seconds(90));
+}
+
 // Validate delegate sets batch size correctly.
 TEST_F(UnitTestLauncherDelegateTester, BatchSize) {
-  UnitTestLauncherDelegate launcher_delegate(&defaultPlatform, 15u, true);
+  UnitTestLauncherDelegate launcher_delegate(&defaultPlatform, 15u, true,
+                                             DoNothing());
   TestLauncherDelegate* delegate_ptr = &launcher_delegate;
   EXPECT_EQ(delegate_ptr->GetBatchSize(), 15u);
 }
@@ -845,7 +1195,7 @@ TEST(MockUnitTests, DISABLED_FailTest) {
 }
 // Basic test to crash
 TEST(MockUnitTests, DISABLED_CrashTest) {
-  IMMEDIATE_CRASH();
+  ImmediateCrash();
 }
 // Basic test will not be reached, due to the preceding crash in the same batch.
 TEST(MockUnitTests, DISABLED_NoRunTest) {
@@ -863,19 +1213,12 @@ TEST_F(UnitTestLauncherDelegateTester, RunMockTests) {
   command_line.AppendSwitchPath("test-launcher-summary-output", path);
   command_line.AppendSwitch("gtest_also_run_disabled_tests");
   command_line.AppendSwitchASCII("test-launcher-retry-limit", "0");
-#if BUILDFLAG(IS_WIN)
-  // In Windows versions prior to Windows 8, nested job objects are
-  // not allowed and cause this test to fail.
-  if (win::GetVersion() < win::Version::WIN8) {
-    command_line.AppendSwitch(kDontUseJobObjectFlag);
-  }
-#endif  // BUILDFLAG(IS_WIN)
 
   std::string output;
   GetAppOutputAndError(command_line, &output);
 
   // Validate the resulting JSON file is the expected output.
-  absl::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
+  std::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
   ASSERT_TRUE(root);
 
   const Value::Dict* dict = root->FindDict("test_locations");
@@ -947,15 +1290,77 @@ TEST(ProcessGTestOutputTest, RunMockTests) {
   EXPECT_GT(*test_results[2].timestamp, Time());
 }
 
-// TODO(crbug.com/1094369): Enable leaked-child checks on other platforms.
+// TODO(crbug.com/40287376): Enable the test once GetAppOutputAndError
+// can collect stdout and stderr on Fuchsia.
+#if !BUILDFLAG(IS_FUCHSIA)
+TEST(ProcessGTestOutputTest, FoundTestCaseNotEnforced) {
+  ScopedTempDir dir;
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  FilePath path = dir.GetPath().AppendASCII("test.filter");
+  WriteFile(path, "Test.firstTest\nTest.secondTest");
+  CommandLine command_line(CommandLine::ForCurrentProcess()->GetProgram());
+  command_line.AppendSwitchPath("test-launcher-filter-file", path);
+  command_line.AppendSwitch("enforce-exact-positive-filter");
+  std::string output;
+  // Test cases in the filter do not exist, hence test launcher should
+  // fail and print their names.
+  EXPECT_FALSE(GetAppOutputAndError(command_line, &output));
+  // Banner should appear in the output.
+  const char kBanner[] = "Found exact positive filter not enforced:";
+  EXPECT_TRUE(Contains(output, kBanner));
+  std::vector<std::string> lines = base::SplitString(
+      output, "\n", base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
+  std::unordered_set<std::string> tests_not_enforced;
+  bool banner_has_printed = false;
+  for (size_t i = 0; i < lines.size(); i++) {
+    if (Contains(lines[i], kBanner)) {
+      // The following two lines should have the test cases not enforced
+      // and the third line for the check failure message.
+      EXPECT_LT(i + 3, lines.size());
+      // Banner should only appear once.
+      EXPECT_FALSE(banner_has_printed);
+      banner_has_printed = true;
+      continue;
+    }
+    if (banner_has_printed && tests_not_enforced.size() < 2) {
+      // Note, gtest prints the error with datetime and file line info
+      // ahead to the test names, e.g. below:
+      // [1030/220237.425678:ERROR:test_launcher.cc(2123)] Test.secondTest
+      // [1030/220237.425682:ERROR:test_launcher.cc(2123)] Test.firstTest
+      std::vector<std::string> line_vec = base::SplitString(
+          lines[i], "]", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+      ASSERT_EQ(line_vec.size(), 2u);
+      tests_not_enforced.insert(line_vec[1]);
+      continue;
+    }
+    if (banner_has_printed && tests_not_enforced.size() == 2) {
+// For official builds, they discard logs from CHECK failures, hence
+// the test case cannot catch the "Check failed" line.
+#if !defined(OFFICIAL_BUILD) || DCHECK_IS_ON()
+      EXPECT_TRUE(Contains(lines[i],
+                           "Check failed: "
+                           "!found_exact_positive_filter_not_enforced."));
+#endif  // !defined(OFFICIAL_BUILD) || DCHECK_IS_ON()
+      break;
+    }
+  }
+  // The test case printed is not ordered, hence need UnorderedElementsAre
+  // to compare.
+  EXPECT_THAT(tests_not_enforced, testing::UnorderedElementsAre(
+                                      "Test.firstTest", "Test.secondTest"));
+}
+#endif  // !BUILDFLAG(IS_FUCHSIA)
+
+// TODO(crbug.com/40135391): Enable leaked-child checks on other platforms.
 #if BUILDFLAG(IS_FUCHSIA)
 
 // Test that leaves a child process running. The test is DISABLED_, so it can
 // be launched explicitly by RunMockLeakProcessTest
 
 MULTIPROCESS_TEST_MAIN(LeakChildProcess) {
-  while (true)
+  while (true) {
     PlatformThread::Sleep(base::Seconds(1));
+  }
 }
 
 TEST(LeakedChildProcessTest, DISABLED_LeakChildProcess) {
@@ -978,20 +1383,13 @@ TEST_F(UnitTestLauncherDelegateTester, LeakedChildProcess) {
   command_line.AppendSwitchPath("test-launcher-summary-output", path);
   command_line.AppendSwitch("gtest_also_run_disabled_tests");
   command_line.AppendSwitchASCII("test-launcher-retry-limit", "0");
-#if BUILDFLAG(IS_WIN)
-  // In Windows versions prior to Windows 8, nested job objects are
-  // not allowed and cause this test to fail.
-  if (win::GetVersion() < win::Version::WIN8) {
-    command_line.AppendSwitch(kDontUseJobObjectFlag);
-  }
-#endif  // BUILDFLAG(IS_WIN)
 
   std::string output;
   int exit_code = 0;
   GetAppOutputWithExitCode(command_line, &output, &exit_code);
 
   // Validate that we actually ran a test.
-  absl::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
+  std::optional<Value::Dict> root = test_launcher_utils::ReadSummary(path);
   ASSERT_TRUE(root);
 
   Value::Dict* dict = root->FindDict("test_locations");
@@ -1050,10 +1448,10 @@ TEST(TestLauncherTools, GetTestOutputSnippetTest) {
             "[  SKIPPED ] TestCase.ThirdTest (0 ms)\n");
 }
 
-void CheckTruncatationPreservesMessage(std::string message) {
+MATCHER(CheckTruncationPreservesMessage, "") {
   // Ensure the inserted message matches the expected pattern.
   constexpr char kExpected[] = R"(FATAL.*message\n)";
-  ASSERT_THAT(message, ::testing::ContainsRegex(kExpected));
+  EXPECT_THAT(arg, ::testing::ContainsRegex(kExpected));
 
   const std::string snippet =
       base::StrCat({"[ RUN      ] SampleTestSuite.SampleTestName\n"
@@ -1063,7 +1461,7 @@ void CheckTruncatationPreservesMessage(std::string message) {
                     "Padding log message added for testing purposes\n"
                     "Padding log message added for testing purposes\n"
                     "Padding log message added for testing purposes\n",
-                    message,
+                    arg,
                     "Padding log message added for testing purposes\n"
                     "Padding log message added for testing purposes\n"
                     "Padding log message added for testing purposes\n"
@@ -1072,24 +1470,16 @@ void CheckTruncatationPreservesMessage(std::string message) {
                     "Padding log message added for testing purposes\n"});
 
   // Strip the stack trace off the end of message.
-  size_t line_end_pos = message.find("\n");
-  std::string first_line = message.substr(0, line_end_pos + 1);
+  size_t line_end_pos = arg.find("\n");
+  std::string first_line = arg.substr(0, line_end_pos + 1);
 
   const std::string result = TruncateSnippetFocused(snippet, 300);
   EXPECT_TRUE(result.find(first_line) > 0);
   EXPECT_EQ(result.length(), 300UL);
+  return true;
 }
 
 void MatchesFatalMessagesTest() {
-  // Use a static because only captureless lambdas can be converted to a
-  // function pointer for SetLogMessageHandler().
-  static base::NoDestructor<std::string> log_string;
-  logging::SetLogMessageHandler([](int severity, const char* file, int line,
-                                   size_t start,
-                                   const std::string& str) -> bool {
-    *log_string = str;
-    return true;
-  });
   // Different Chrome test suites have different settings for their logs.
   // E.g. unit tests may not show the process ID (as they are single process),
   // whereas browser tests usually do (as they are multi-process). This
@@ -1101,27 +1491,27 @@ void MatchesFatalMessagesTest() {
     // Process ID, Thread ID, Timestamp and Tickcount.
     logging::SetLogItems(true, true, true, true);
     logging::SetLogPrefix(nullptr);
-    LOG(FATAL) << "message";
-    CheckTruncatationPreservesMessage(*log_string);
+    EXPECT_DEATH_IF_SUPPORTED(LOG(FATAL) << "message",
+                              CheckTruncationPreservesMessage());
   }
   {
     logging::SetLogItems(false, false, false, false);
     logging::SetLogPrefix(nullptr);
-    LOG(FATAL) << "message";
-    CheckTruncatationPreservesMessage(*log_string);
+    EXPECT_DEATH_IF_SUPPORTED(LOG(FATAL) << "message",
+                              CheckTruncationPreservesMessage());
   }
   {
     // Process ID, Thread ID, Timestamp and Tickcount.
     logging::SetLogItems(true, true, true, true);
-    logging::SetLogPrefix("my_log_prefix");
-    LOG(FATAL) << "message";
-    CheckTruncatationPreservesMessage(*log_string);
+    logging::SetLogPrefix("mylogprefix");
+    EXPECT_DEATH_IF_SUPPORTED(LOG(FATAL) << "message",
+                              CheckTruncationPreservesMessage());
   }
   {
     logging::SetLogItems(false, false, false, false);
-    logging::SetLogPrefix("my_log_prefix");
-    LOG(FATAL) << "message";
-    CheckTruncatationPreservesMessage(*log_string);
+    logging::SetLogPrefix("mylogprefix");
+    EXPECT_DEATH_IF_SUPPORTED(LOG(FATAL) << "message",
+                              CheckTruncationPreservesMessage());
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,10 @@
 #define ASH_ASSISTANT_UI_MAIN_STAGE_ASSISTANT_ONBOARDING_SUGGESTION_VIEW_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
-
-namespace chromeos {
-namespace assistant {
-struct AssistantSuggestion;
-}  // namespace assistant
-}  // namespace chromeos
 
 namespace views {
 class ImageView;
@@ -24,16 +19,20 @@ class Label;
 
 namespace ash {
 
+namespace assistant {
+struct AssistantSuggestion;
+}
+
 class AssistantViewDelegate;
 
 class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOnboardingSuggestionView
     : public views::Button {
- public:
-  METADATA_HEADER(AssistantOnboardingSuggestionView);
+  METADATA_HEADER(AssistantOnboardingSuggestionView, views::Button)
 
+ public:
   AssistantOnboardingSuggestionView(
       AssistantViewDelegate* delegate,
-      const chromeos::assistant::AssistantSuggestion& suggestion,
+      const assistant::AssistantSuggestion& suggestion,
       int index);
 
   AssistantOnboardingSuggestionView(const AssistantOnboardingSuggestionView&) =
@@ -43,10 +42,11 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOnboardingSuggestionView
   ~AssistantOnboardingSuggestionView() override;
 
   // views::View:
-  int GetHeightForWidth(int width) const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
+  void RemoveLayerFromRegions(ui::Layer* layer) override;
   void ChildPreferredSizeChanged(views::View* child) override;
-  void AddLayerBeneathView(ui::Layer* layer) override;
-  void RemoveLayerBeneathView(ui::Layer* layer) override;
   void OnThemeChanged() override;
 
   // Returns the icon for the suggestion.
@@ -56,20 +56,21 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOnboardingSuggestionView
   const std::u16string& GetText() const;
 
  private:
-  void InitLayout(const chromeos::assistant::AssistantSuggestion& suggestion);
+  void InitLayout(const assistant::AssistantSuggestion& suggestion);
   void UpdateIcon(const gfx::ImageSkia& icon);
 
   void OnButtonPressed();
 
-  AssistantViewDelegate* const delegate_;  // Owned by AssistantController.
+  const raw_ptr<AssistantViewDelegate>
+      delegate_;  // Owned by AssistantController.
   const base::UnguessableToken suggestion_id_;
   const int index_;
   GURL url_;
 
   // Owned by view hierarchy.
-  views::ImageView* icon_ = nullptr;
-  views::Label* label_ = nullptr;
-  views::InkDropContainerView* ink_drop_container_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
+  raw_ptr<views::InkDropContainerView> ink_drop_container_ = nullptr;
 
   base::WeakPtrFactory<AssistantOnboardingSuggestionView> weak_factory_{this};
 };

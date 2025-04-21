@@ -28,9 +28,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import sys
 
-import hasher
 import json5_generator
 import template_expander
 import name_utilities
@@ -60,7 +58,6 @@ class MakeNamesWriter(json5_generator.Writer):
     }
     filters = {
         'cpp_name': name_utilities.cpp_name,
-        'hash': hasher.hash,
         'symbol': _symbol,
     }
 

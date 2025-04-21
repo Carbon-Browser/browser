@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import org.chromium.components.bookmarks.BookmarkId;
 
 import java.util.UUID;
 
-/**
- * Object to hold a client identifier for an offline page.
- */
+/** Object to hold a client identifier for an offline page. */
 public class ClientId {
     private String mNamespace;
     private String mId;

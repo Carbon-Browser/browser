@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_parameters.h"
 
 namespace audio {
 
@@ -70,7 +71,7 @@ struct ProcessingAudioFifo::CaptureData {
   std::unique_ptr<media::AudioBus> audio_bus;
   base::TimeTicks capture_time;
   double volume;
-  bool key_pressed;
+  media::AudioGlitchInfo audio_glitch_info;
 };
 
 ProcessingAudioFifo::ProcessingAudioFifo(
@@ -124,23 +125,26 @@ ProcessingAudioFifo::CaptureData* ProcessingAudioFifo::GetDataAtIndex(int idx) {
 }
 
 void ProcessingAudioFifo::Start() {
-  StartInternal(&new_data_captured_);
+  StartInternal(&new_data_captured_,
+                base::Thread::Options(base::ThreadType::kRealtimeAudio));
 }
 
 void ProcessingAudioFifo::StartForTesting(
     base::WaitableEvent* fake_new_data_captured) {
-  StartInternal(fake_new_data_captured);
+  // Only use kDefault thread type instead of kRealtimeAudio because Linux has
+  // flakiness issue when setting realtime priority.
+  StartInternal(fake_new_data_captured,
+                base::Thread::Options(base::ThreadType::kDefault));
 }
 
-void ProcessingAudioFifo::StartInternal(
-    base::WaitableEvent* new_data_captured) {
+void ProcessingAudioFifo::StartInternal(base::WaitableEvent* new_data_captured,
+                                        base::Thread::Options options) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(owning_sequence_checker_);
 
   // Start should only be called once.
   DCHECK(!audio_processing_thread_.IsRunning());
 
-  audio_processing_thread_.StartWithOptions(
-      base::Thread::Options(base::ThreadType::kRealtimeAudio));
+  audio_processing_thread_.StartWithOptions(std::move(options));
 
   audio_processing_thread_.task_runner()->PostTask(
       FROM_HERE, base::BindOnce(&ProcessingAudioFifo::ProcessAudioLoop,
@@ -148,11 +152,13 @@ void ProcessingAudioFifo::StartInternal(
                                 base::Unretained(new_data_captured)));
 }
 
-void ProcessingAudioFifo::PushData(const media::AudioBus* audio_bus,
-                                   base::TimeTicks capture_time,
-                                   double volume,
-                                   bool key_pressed) {
+void ProcessingAudioFifo::PushData(
+    const media::AudioBus* audio_bus,
+    base::TimeTicks capture_time,
+    double volume,
+    const media::AudioGlitchInfo& audio_glitch_info) {
   DCHECK_EQ(audio_bus->frames(), input_params_.frames_per_buffer());
+  glitch_info_accumulator_.Add(audio_glitch_info);
 
   CaptureData* data = nullptr;
   int fifo_space = fifo_size_;
@@ -175,13 +181,15 @@ void ProcessingAudioFifo::PushData(const media::AudioBus* audio_bus,
   if (!data) {
     TRACE_EVENT_INSTANT0("audio", "ProcessingAudioFifo::Overrun",
                          TRACE_EVENT_SCOPE_THREAD);
+    glitch_info_accumulator_.Add(media::AudioGlitchInfo{
+        .duration = input_params_.GetBufferDuration(), .count = 1});
     return;  // Overrun.
   }
 
   // Write to the FIFO (lock-free).
   data->capture_time = capture_time;
   data->volume = volume;
-  data->key_pressed = key_pressed;
+  data->audio_glitch_info = glitch_info_accumulator_.GetAndReset();
   audio_bus->CopyTo(data->audio_bus.get());
 
   {
@@ -217,7 +225,7 @@ void ProcessingAudioFifo::ProcessAudioLoop(
 
       // Read from the FIFO, and process the data (lock-free).
       processing_callback_.Run(*data->audio_bus, data->capture_time,
-                               data->volume, data->key_pressed);
+                               data->volume, data->audio_glitch_info);
 
       {
         base::AutoLock locker(fifo_index_lock_);

@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/controls/contextual_tooltip.h"
 
 #include "ash/constants/ash_features.h"
-#include "ash/controls/contextual_tooltip.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
@@ -28,14 +27,12 @@ class ContextualTooltipTest : public AshTestBase,
  public:
   ContextualTooltipTest() {
     if (GetParam()) {
-      scoped_feature_list_.InitWithFeatures(
-          {ash::features::kContextualNudges,
-           ash::features::kHideShelfControlsInTabletMode},
-          {});
+      scoped_feature_list_.InitAndEnableFeature(
+          features::kHideShelfControlsInTabletMode);
 
     } else {
       scoped_feature_list_.InitAndDisableFeature(
-          ash::features::kContextualNudges);
+          features::kHideShelfControlsInTabletMode);
     }
   }
   ~ContextualTooltipTest() override = default;

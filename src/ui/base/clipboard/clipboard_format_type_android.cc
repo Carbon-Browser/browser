@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace ui {
 // ClipboardFormatType implementation.
 ClipboardFormatType::ClipboardFormatType() = default;
 
-ClipboardFormatType::ClipboardFormatType(const std::string& native_format)
+ClipboardFormatType::ClipboardFormatType(std::string_view native_format)
     : data_(native_format) {}
 
 ClipboardFormatType::~ClipboardFormatType() = default;
@@ -26,7 +26,7 @@ std::string ClipboardFormatType::Serialize() const {
 
 // static
 ClipboardFormatType ClipboardFormatType::Deserialize(
-    const std::string& serialization) {
+    std::string_view serialization) {
   return ClipboardFormatType(serialization);
 }
 
@@ -49,31 +49,20 @@ std::string ClipboardFormatType::WebCustomFormatName(int index) {
 }
 
 // static
-std::string ClipboardFormatType::WebCustomFormatMapName() {
-  return "application/web;type=\"custom/formatmap\"";
-}
-
-// static
 ClipboardFormatType ClipboardFormatType::CustomPlatformType(
-    const std::string& format_string) {
-  DCHECK(base::IsStringASCII(format_string));
+    std::string_view format_string) {
+  CHECK(base::IsStringASCII(format_string));
   return ClipboardFormatType::Deserialize(format_string);
 }
 
 // static
 const ClipboardFormatType& ClipboardFormatType::WebCustomFormatMap() {
   static base::NoDestructor<ClipboardFormatType> type(
-      ClipboardFormatType::WebCustomFormatMapName());
+      "application/web;type=\"custom/formatmap\"");
   return *type;
 }
 
 // Various predefined ClipboardFormatTypes.
-
-// static
-ClipboardFormatType ClipboardFormatType::GetType(
-    const std::string& format_string) {
-  return ClipboardFormatType::Deserialize(format_string);
-}
 
 // static
 const ClipboardFormatType& ClipboardFormatType::FilenamesType() {
@@ -131,8 +120,15 @@ const ClipboardFormatType& ClipboardFormatType::BitmapType() {
 }
 
 // static
-const ClipboardFormatType& ClipboardFormatType::WebCustomDataType() {
-  static base::NoDestructor<ClipboardFormatType> type(kMimeTypeWebCustomData);
+const ClipboardFormatType& ClipboardFormatType::DataTransferCustomType() {
+  static base::NoDestructor<ClipboardFormatType> type(
+      kMimeTypeDataTransferCustomData);
+  return *type;
+}
+
+// static
+const ClipboardFormatType& ClipboardFormatType::InternalSourceUrlType() {
+  static base::NoDestructor<ClipboardFormatType> type(kMimeTypeSourceUrl);
   return *type;
 }
 

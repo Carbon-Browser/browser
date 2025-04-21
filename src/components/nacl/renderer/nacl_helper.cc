@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace nacl {
 NaClHelper::NaClHelper(content::RenderFrame* render_frame)
     : RenderFrameObserver(render_frame) {}
 
-NaClHelper::~NaClHelper() {}
+NaClHelper::~NaClHelper() = default;
 
 void NaClHelper::DidCreatePepperPlugin(content::RendererPpapiHost* host) {
   // The Native Client plugin is a host for external plugins.

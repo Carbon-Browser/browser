@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROME_BROWSER_BITMAP_FETCHER_BITMAP_FETCHER_SERVICE_H_
@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/bitmap_fetcher/bitmap_fetcher_delegate.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -37,7 +37,7 @@ class BitmapFetcherService : public KeyedService, public BitmapFetcherDelegate {
 
   class Observer {
    public:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
 
     // Called whenever the image changes. Called with an empty image if the
     // fetch failed or the request ended for any reason.

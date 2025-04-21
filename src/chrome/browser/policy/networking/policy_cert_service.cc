@@ -1,12 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/policy/networking/policy_cert_service.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/extensions/extension_util.h"
@@ -30,13 +30,12 @@
 namespace policy {
 
 PolicyCertService::~PolicyCertService() {
-  if (policy_certificate_provider_)
-    policy_certificate_provider_->RemovePolicyProvidedCertsObserver(this);
+  StopListeningToPolicyCertificateProvider();
 }
 
 PolicyCertService::PolicyCertService(
     Profile* profile,
-    chromeos::PolicyCertificateProvider* policy_certificate_provider,
+    ash::PolicyCertificateProvider* policy_certificate_provider,
     bool may_use_profile_wide_trust_anchors)
     : profile_(profile),
       policy_certificate_provider_(policy_certificate_provider),
@@ -78,6 +77,10 @@ void PolicyCertService::OnPolicyProvidedCertsChanged() {
   auto* profile_network_context =
       ProfileNetworkContextServiceFactory::GetForContext(profile_);
   profile_network_context->UpdateAdditionalCertificates();
+}
+
+void PolicyCertService::OnPolicyCertificateProviderDestroying() {
+  StopListeningToPolicyCertificateProvider();
 }
 
 void PolicyCertService::GetPolicyCertificatesForStoragePartition(
@@ -192,6 +195,14 @@ void PolicyCertService::SetPolicyTrustAnchorsForTesting(
 
   profile_wide_all_server_and_authority_certs_ = trust_anchors;
   profile_wide_trust_anchors_ = trust_anchors;
+}
+
+void PolicyCertService::StopListeningToPolicyCertificateProvider() {
+  if (!policy_certificate_provider_) {
+    return;
+  }
+  policy_certificate_provider_->RemovePolicyProvidedCertsObserver(this);
+  policy_certificate_provider_ = nullptr;
 }
 
 }  // namespace policy

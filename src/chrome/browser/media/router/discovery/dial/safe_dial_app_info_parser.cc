@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/media/router/data_decoder_util.h"
 #include "services/data_decoder/public/cpp/safe_xml_parser.h"
@@ -27,14 +27,16 @@ DialAppState ParseDialAppState(const std::string& app_state) {
 
 void ProcessAdditionalDataElement(const base::Value& additional_data_element,
                                   ParsedDialAppInfo* out_app_info) {
-  const base::Value* child_elements =
+  const base::Value::List* child_elements =
       data_decoder::GetXmlElementChildren(additional_data_element);
-  if (!child_elements || !child_elements->is_list())
+  if (!child_elements) {
     return;
-  for (const auto& child_element : child_elements->GetListDeprecated()) {
+  }
+  for (const auto& child_element : *child_elements) {
     std::string tag_name;
-    if (!data_decoder::GetXmlElementTagName(child_element, &tag_name))
+    if (!data_decoder::GetXmlElementTagName(child_element, &tag_name)) {
       continue;
+    }
     std::string extra_data;
     if (data_decoder::GetXmlElementText(child_element, &extra_data)) {
       out_app_info->extra_data[tag_name] = extra_data;
@@ -48,12 +50,14 @@ SafeDialAppInfoParser::ParsingResult ProcessChildElement(
     const base::Value& child_element,
     ParsedDialAppInfo* out_app_info) {
   std::string tag_name;
-  if (!data_decoder::GetXmlElementTagName(child_element, &tag_name))
+  if (!data_decoder::GetXmlElementTagName(child_element, &tag_name)) {
     return SafeDialAppInfoParser::ParsingResult::kInvalidXML;
+  }
 
   if (tag_name == "name") {
-    if (!data_decoder::GetXmlElementText(child_element, &out_app_info->name))
+    if (!data_decoder::GetXmlElementText(child_element, &out_app_info->name)) {
       return SafeDialAppInfoParser::ParsingResult::kFailToReadName;
+    }
   } else if (tag_name == "options") {
     out_app_info->allow_stop = data_decoder::GetXmlElementAttribute(
                                    child_element, "allowStop") != "false";
@@ -62,8 +66,9 @@ SafeDialAppInfoParser::ParsingResult ProcessChildElement(
         data_decoder::GetXmlElementAttribute(child_element, "href");
   } else if (tag_name == "state") {
     std::string state;
-    if (!data_decoder::GetXmlElementText(child_element, &state))
+    if (!data_decoder::GetXmlElementText(child_element, &state)) {
       return SafeDialAppInfoParser::ParsingResult::kFailToReadState;
+    }
     out_app_info->state = ParseDialAppState(state);
   } else if (tag_name == "additionalData") {
     ProcessAdditionalDataElement(child_element, out_app_info);
@@ -77,11 +82,13 @@ SafeDialAppInfoParser::ParsingResult ProcessChildElement(
 // |app_info|: app info object to be validated.
 SafeDialAppInfoParser::ParsingResult ValidateParsedAppInfo(
     const ParsedDialAppInfo& app_info) {
-  if (app_info.name.empty())
+  if (app_info.name.empty()) {
     return SafeDialAppInfoParser::ParsingResult::kMissingName;
+  }
 
-  if (app_info.state == DialAppState::kUnknown)
+  if (app_info.state == DialAppState::kUnknown) {
     return SafeDialAppInfoParser::ParsingResult::kInvalidState;
+  }
 
   return SafeDialAppInfoParser::ParsingResult::kSuccess;
 }
@@ -125,15 +132,15 @@ void SafeDialAppInfoParser::OnXmlParsingDone(
       data_decoder::GetXmlElementAttribute(*service_element, "dialVer");
 
   // Fetch all the children of <service> element.
-  const base::Value* child_elements =
+  const base::Value::List* child_elements =
       data_decoder::GetXmlElementChildren(*service_element);
-  if (!child_elements || !child_elements->is_list()) {
+  if (!child_elements) {
     std::move(callback).Run(nullptr, ParsingResult::kInvalidXML);
     return;
   }
 
   ParsingResult parsing_result = ParsingResult::kSuccess;
-  for (const auto& child_element : child_elements->GetListDeprecated()) {
+  for (const auto& child_element : *child_elements) {
     parsing_result = ProcessChildElement(child_element, app_info.get());
     if (parsing_result != ParsingResult::kSuccess) {
       std::move(callback).Run(nullptr, parsing_result);

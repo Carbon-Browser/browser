@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,33 @@
 #define CONTENT_PUBLIC_RENDERER_RENDER_ACCESSIBILITY_H_
 
 #include "content/common/content_export.h"
+#include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/ax_tree_source.h"
 
+namespace ui {
+
+class AXTreeID;
+
+}  // namespace ui
+
 namespace content {
+
+class PluginAXTreeActionTargetAdapter;
 
 // This interface exposes the accessibility tree for one RenderFrame.
 class CONTENT_EXPORT RenderAccessibility {
  public:
-  virtual int GenerateAXID() = 0;
-
-  // These APIs allow a page with a single EMBED element to graft an
-  // accessibility tree for the plugin content, implemented as a
-  // PluginAXTreeSource, into the page's accessibility tree.
-  virtual void SetPluginTreeSource(PluginAXTreeSource* source) = 0;
-  virtual void OnPluginRootNodeUpdated() = 0;
-  virtual void ShowPluginContextMenu() = 0;
+  virtual bool HasActiveDocument() const = 0;
+  virtual ui::AXMode GetAXMode() const = 0;
+  virtual void SetPluginAXTreeActionTargetAdapter(
+      PluginAXTreeActionTargetAdapter* adapter) = 0;
+#if BUILDFLAG(IS_CHROMEOS)
+  // TODO(crbug/289010799): Remove `FireLayoutComplete()` when the
+  // Accessibility.PdfOcr.ActiveWhenInaccessiblePdfOpened histogram expires.
+  virtual void FireLayoutComplete() = 0;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  protected:
   ~RenderAccessibility() {}

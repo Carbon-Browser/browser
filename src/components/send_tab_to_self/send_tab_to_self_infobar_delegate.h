@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class SendTabToSelfEntry;
 
 // Delegate containing logic about what to display and how to behave
 // in the SendTabToSelf infobar. Used on Android.
-// TODO(crbug.com/964112): Rename this class to be Android specific.
+// TODO(crbug.com/40627861): Rename this class to be Android specific.
 class SendTabToSelfInfoBarDelegate : public infobars::InfoBarDelegate {
  public:
   static std::unique_ptr<SendTabToSelfInfoBarDelegate> Create(

@@ -1,10 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // This just tests the interface. It does not test for specific results, only
 // that callbacks are correctly invoked, expected parameters are correct,
 // and failures are detected.
+
+// NOTE: These tests rely on implementation details about specific prefs in
+// order to succeed. Changes to any prefs listed below or their behavior may
+// result in these tests failing.
 
 var kTestPrefName = 'autofill.profile_enabled';
 var kTestPrefValue = true;
@@ -13,15 +17,13 @@ var kTestPrefValue = true;
 // settings_private_apitest.cc.
 var kTestEnforcedPrefName = 'homepage_is_newtabpage';
 
-// Content settings are set in setting_private_apitest.cc such that this
+// Command line switch is set in settings_private_apitest.cc such that this
 // preference is disabled.
-var kTestDisabledPrefName = 'generated.cookie_session_only';
-// Device policies are applied in setting_private_apitest.cc such that this
-// preference is partially managed.
-var kPartiallyManagedPrefName = 'generated.cookie_primary_setting';
-var kUserSelectableValues = [0, 1, 2];
+var kTestDisabledPrefName = 'generated.https_first_mode_enabled';
 
 var kTestPageId = 'pageId';
+
+var kTestSupervisedPrefName = 'signin.allowed_on_next_startup';
 
 function callbackResult(result) {
   if (chrome.runtime.lastError)
@@ -55,7 +57,7 @@ var availableTests = [
     chrome.settingsPrivate.getPref(
         kTestPrefName,
         function(value) {
-          chrome.test.assertTrue(value !== null);
+          chrome.test.assertNe(null, value);
           callbackResult(true);
           chrome.test.succeed();
         });
@@ -108,22 +110,11 @@ var availableTests = [
       chrome.test.succeed();
     });
   },
-  function getPartiallyManagedPref() {
-    chrome.settingsPrivate.getPref(kPartiallyManagedPrefName, function(value) {
-      chrome.test.assertEq('object', typeof value);
-      callbackResult(true);
-      chrome.test.assertEq(
-          chrome.settingsPrivate.Enforcement.ENFORCED, value.enforcement);
-      value.userSelectableValues.sort();
-      chrome.test.assertEq(kUserSelectableValues, value.userSelectableValues);
-      chrome.test.succeed();
-    });
-  },
   function getPref_CrOSSetting() {
     chrome.settingsPrivate.getPref(
         'cros.accounts.allowBWSI',
         function(value) {
-          chrome.test.assertTrue(value !== null);
+          chrome.test.assertNe(null, value);
           callbackResult(true);
           chrome.test.succeed();
         });
@@ -165,6 +156,19 @@ var availableTests = [
         false,
         kTestPageId,
         function() {});
+  },
+  function getManagedByParentPref() {
+    chrome.settingsPrivate.getPref(kTestSupervisedPrefName, function(value) {
+      chrome.test.assertEq('object', typeof value);
+      callbackResult(true);
+      chrome.test.assertEq(
+          chrome.settingsPrivate.ControlledBy.CONTROLLED_BY_CHILD_RESTRICTION,
+          value.controlledBy);
+      chrome.test.assertEq(
+          chrome.settingsPrivate.Enforcement.ENFORCEMENT_ENFORCED,
+          value.enforcement);
+      chrome.test.succeed();
+    });
   },
 ];
 

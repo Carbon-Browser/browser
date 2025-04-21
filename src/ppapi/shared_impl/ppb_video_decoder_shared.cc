@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/shared_impl/ppb_video_decoder_shared.h"
 
 #include "base/check.h"
+#include "base/not_fatal_until.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/shared_impl/ppb_graphics_3d_shared.h"
@@ -89,7 +90,7 @@ void PPB_VideoDecoder_Shared::RunBitstreamBufferCallback(
     int32_t result) {
   CallbackById::iterator it =
       bitstream_buffer_callbacks_.find(bitstream_buffer_id);
-  DCHECK(it != bitstream_buffer_callbacks_.end());
+  CHECK(it != bitstream_buffer_callbacks_.end(), base::NotFatalUntil::M130);
   scoped_refptr<TrackedCallback> cc = it->second;
   bitstream_buffer_callbacks_.erase(it);
   cc->Run(PP_OK);

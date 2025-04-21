@@ -1,18 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_SEND_RESULT_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_SEND_RESULT_H_
 
+#include "content/common/content_export.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
+
 namespace content {
 
-// Struct that contains data about sent reports. Some info is displayed in the
-// Conversion Internals WebUI.
-// TODO(apaseltiner): Consider replacing this struct with a single int that
-// contains either HTTP response code, network error, or custom values for
-// `Status::kDropped` and `Status::kFailedToAssemble`.
-struct SendResult {
+struct CONTENT_EXPORT SendResult {
   enum class Status {
     kSent,
     // The report failed without receiving response headers.
@@ -22,34 +20,39 @@ struct SendResult {
     // The report was dropped without ever being sent, e.g. due to embedder
     // disabling the API.
     kDropped,
-    // The report was dropped without ever being sent because assembly failed,
-    // e.g. the aggregation service was unavailable.
-    kFailedToAssemble,
+    // The report was dropped without ever being sent because of unrecoverable
+    // assembly failure, e.g. the aggregation service was unavailable.
+    kAssemblyFailure,
+    // The report was dropped because of transient assembly failure, e.g. the
+    // public key was not fetched.
+    kTransientAssemblyFailure,
   };
 
-  explicit SendResult(Status status,
-                      int network_error = 0,
-                      int http_response_code = 0)
-      : status(status),
-        network_error(network_error),
-        http_response_code(http_response_code) {}
+  struct Sent {
+    enum class Result {
+      kSent,
+      kTransientFailure,
+      kFailure,
+    };
 
-  SendResult(const SendResult&) = default;
-  SendResult& operator=(const SendResult&) = default;
+    Result result;
+    int status;
+    Sent(Result result, int status) : result(result), status(status) {}
 
-  SendResult(SendResult&&) = default;
-  SendResult& operator=(SendResult&&) = default;
+    friend bool operator==(const Sent&, const Sent&) = default;
+  };
 
-  ~SendResult() = default;
+  struct Dropped {};
 
-  Status status;
+  struct AssemblyFailure {
+    bool transient;
+    explicit AssemblyFailure(bool transient) : transient(transient) {}
+  };
 
-  // Information on the network request that was sent.
-  int network_error;
-  int http_response_code;
+  Status status() const;
 
-  // When adding new members, the corresponding `operator==()` definition in
-  // `attribution_test_utils.h` should also be updated.
+  using Result = absl::variant<Sent, Dropped, AssemblyFailure>;
+  Result result;
 };
 
 }  // namespace content

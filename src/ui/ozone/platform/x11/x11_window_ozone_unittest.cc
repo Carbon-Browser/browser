@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ ACTION_P(StoreWidget, widget_ptr) {
 }
 
 ACTION_P(CloneEvent, event_ptr) {
-  *event_ptr = Event::Clone(*arg0);
+  *event_ptr = arg0->Clone();
 }
 
 // TestScreen implementation. We need to set a screen instance, because
@@ -128,7 +128,7 @@ TEST_F(X11WindowOzoneTest, SendPlatformEventToRightTarget) {
   auto window = CreatePlatformWindow(&delegate, bounds, &widget, nullptr);
 
   ScopedXI2Event xi_event;
-  xi_event.InitGenericButtonEvent(kPointerDeviceId, ET_MOUSE_PRESSED,
+  xi_event.InitGenericButtonEvent(kPointerDeviceId, EventType::kMousePressed,
                                   gfx::Point(218, 290), EF_NONE);
 
   // First check events can be received by a target window.
@@ -136,7 +136,7 @@ TEST_F(X11WindowOzoneTest, SendPlatformEventToRightTarget) {
   EXPECT_CALL(delegate, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
   DispatchXEvent(xi_event, widget);
-  EXPECT_EQ(ET_MOUSE_PRESSED, event->type());
+  EXPECT_EQ(EventType::kMousePressed, event->type());
   testing::Mock::VerifyAndClearExpectations(&delegate);
 
   MockPlatformWindowDelegate delegate_2;
@@ -152,7 +152,7 @@ TEST_F(X11WindowOzoneTest, SendPlatformEventToRightTarget) {
   EXPECT_CALL(delegate_2, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
   DispatchXEvent(xi_event, widget_2);
-  EXPECT_EQ(ET_MOUSE_PRESSED, event->type());
+  EXPECT_EQ(EventType::kMousePressed, event->type());
 
   EXPECT_CALL(delegate, OnClosed()).Times(1);
   EXPECT_CALL(delegate_2, OnClosed()).Times(1);
@@ -175,7 +175,7 @@ TEST_F(X11WindowOzoneTest, SendPlatformEventToCapturedWindow) {
       CreatePlatformWindow(&delegate_2, bounds_2, &widget_2, nullptr);
 
   ScopedXI2Event xi_event;
-  xi_event.InitGenericButtonEvent(kPointerDeviceId, ET_MOUSE_PRESSED,
+  xi_event.InitGenericButtonEvent(kPointerDeviceId, EventType::kMousePressed,
                                   gfx::Point(218, 290), EF_NONE);
 
   // Set capture to the second window, but send an event to another window
@@ -188,7 +188,7 @@ TEST_F(X11WindowOzoneTest, SendPlatformEventToCapturedWindow) {
 
   DispatchXEvent(xi_event, widget);
   EXPECT_TRUE(event.get());
-  EXPECT_EQ(ET_MOUSE_PRESSED, event->type());
+  EXPECT_EQ(EventType::kMousePressed, event->type());
   EXPECT_EQ(gfx::Point(-277, 215), event->AsLocatedEvent()->location());
 }
 
@@ -248,7 +248,7 @@ TEST_F(X11WindowOzoneTest, MouseEnterAndDelete) {
   EXPECT_CALL(delegate_1, OnMouseEnter()).Times(1);
   window_2->SetCapture();
   ScopedXI2Event xi_event;
-  xi_event.InitGenericButtonEvent(kPointerDeviceId, ET_MOUSE_PRESSED,
+  xi_event.InitGenericButtonEvent(kPointerDeviceId, EventType::kMousePressed,
                                   gfx::Point(0, 0), EF_NONE);
   DispatchXEvent(xi_event, widget_1);
   EXPECT_EQ(window_1.get(),
@@ -282,7 +282,7 @@ class FakeX11ExtensionDelegateForSize : public X11ExtensionDelegate {
 };
 
 // Verifies X11Window sets fullscreen bounds in pixels when going to fullscreen.
-TEST_F(X11WindowOzoneTest, ToggleFullscreen) {
+TEST_F(X11WindowOzoneTest, SetFullscreen) {
   constexpr gfx::Rect screen_bounds_in_px(640, 480, 1280, 720);
   test_screen_.SetScaleAndBoundsForPrimaryDisplay(2, screen_bounds_in_px);
 
@@ -292,9 +292,11 @@ TEST_F(X11WindowOzoneTest, ToggleFullscreen) {
   FakeX11ExtensionDelegateForSize x11_extension_delegate(screen_bounds_in_px);
   auto window =
       CreatePlatformWindow(&delegate, bounds, &widget, &x11_extension_delegate);
+  EXPECT_CALL(
+      delegate,
+      OnBoundsChanged(testing::Eq(PlatformWindowDelegate::BoundsChange{true})));
 
-  EXPECT_CALL(delegate, OnBoundsChanged(testing::Eq(screen_bounds_in_px)));
-  window->ToggleFullscreen();
+  window->SetFullscreen(true, display::kInvalidDisplayId);
 }
 
 }  // namespace ui

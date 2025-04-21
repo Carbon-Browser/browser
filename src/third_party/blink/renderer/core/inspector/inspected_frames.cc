@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,16 @@ LocalFrame* InspectedFrames::FrameWithSecurityOrigin(
     if (frame->DomWindow()->GetSecurityOrigin()->ToRawString() ==
         origin_raw_string)
       return frame;
+  }
+  return nullptr;
+}
+
+LocalFrame* InspectedFrames::FrameWithStorageKey(const String& key_raw_string) {
+  for (LocalFrame* frame : *this) {
+    if (static_cast<StorageKey>(frame->DomWindow()->GetStorageKey())
+            .Serialize() == key_raw_string.Utf8()) {
+      return frame;
+    }
   }
   return nullptr;
 }

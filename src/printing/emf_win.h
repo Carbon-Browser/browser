@@ -1,13 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef PRINTING_EMF_WIN_H_
 #define PRINTING_EMF_WIN_H_
 
+#include <windows.h>
+
 #include <stddef.h>
 #include <stdint.h>
-#include <windows.h>
 
 #include <memory>
 #include <vector>
@@ -102,6 +103,22 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) Emf : public Metafile {
   HDC hdc_;
 };
 
+// Emf subclass that knows how to play back PostScript data embedded as EMF
+// comment records.
+class COMPONENT_EXPORT(PRINTING_METAFILE) PostScriptMetaFile : public Emf {
+ public:
+  PostScriptMetaFile();
+
+  PostScriptMetaFile(const PostScriptMetaFile&) = delete;
+  PostScriptMetaFile& operator=(const PostScriptMetaFile&) = delete;
+
+  ~PostScriptMetaFile() override;
+
+  // `Emf` overrides:
+  mojom::MetafileDataType GetDataType() const override;
+  bool SafePlayback(HDC hdc) const override;
+};
+
 struct Emf::EnumerationContext {
   EnumerationContext();
 
@@ -132,7 +149,7 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) Emf::Record {
  private:
   friend class Emf;
   friend class Enumerator;
-  const ENHMETARECORD* record_;
+  raw_ptr<const ENHMETARECORD> record_;
 };
 
 // Retrieves individual records out of a Emf buffer. The main use is to skip

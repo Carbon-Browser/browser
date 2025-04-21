@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <iosfwd>
 #include <string>
 
+#include "base/component_export.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 
@@ -15,7 +16,7 @@ namespace gfx {
 
 // A 3d version of gfx::RectF, with the positive z-axis pointed towards
 // the camera.
-class GEOMETRY_EXPORT BoxF {
+class COMPONENT_EXPORT(GEOMETRY) BoxF {
  public:
   constexpr BoxF() : BoxF(0, 0, 0) {}
   constexpr BoxF(float width, float height, float depth)
@@ -114,7 +115,7 @@ class GEOMETRY_EXPORT BoxF {
   float depth_;
 };
 
-GEOMETRY_EXPORT BoxF UnionBoxes(const BoxF& a, const BoxF& b);
+COMPONENT_EXPORT(GEOMETRY) BoxF UnionBoxes(const BoxF& a, const BoxF& b);
 
 inline BoxF ScaleBox(const BoxF& b,
                      float x_scale,

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -79,7 +79,7 @@ RendererTask::RendererTask(const std::u16string& title,
       render_process_host_(render_process_host),
       renderer_resources_sampler_(
           CreateRendererResourcesSampler(render_process_host_)),
-      render_process_id_(render_process_host_->GetID()),
+      render_process_id_(render_process_host_->GetDeprecatedID()),
       v8_memory_allocated_(0),
       v8_memory_used_(0),
       webcache_stats_(blink::WebCacheResourceTypeStats()),
@@ -175,6 +175,10 @@ void RendererTask::OnFaviconUpdated(favicon::FaviconDriver* favicon_driver,
                                     const gfx::Image& image) {
   if (notification_icon_type == NON_TOUCH_16_DIP)
     UpdateFavicon();
+}
+
+base::WeakPtr<RendererTask> RendererTask::AsWeakPtr() {
+  return weak_ptr_factor_.GetWeakPtr();
 }
 
 // static

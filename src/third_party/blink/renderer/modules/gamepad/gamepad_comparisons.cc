@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,32 @@ namespace {
 // incorrectly mapped as triggers do not generate activations in the idle
 // position.
 const double kButtonActivationThreshold = 0.9;
+
+template <typename T>
+auto AsSpan(const T& collection) {
+  return collection.AsSpan();
+}
+
+base::span<const GamepadTouchVector::ValueType> AsSpan(
+    const GamepadTouchVector& collection) {
+  return base::span(collection);
+}
+
+template <typename Collection,
+          typename Pred = std::equal_to<typename Collection::ValueType>>
+bool Compare(const Collection* old_array,
+             const Collection* new_array,
+             Pred pred = Pred{}) {
+  if (old_array && new_array) {
+    // Both arrays are non-null.
+    return !std::ranges::equal(AsSpan(*old_array), AsSpan(*new_array), pred);
+  } else if (old_array != new_array) {
+    // Exactly one array is non-null.
+    return true;
+  }
+  // Both arrays are null, or the arrays are identical.
+  return false;
+}
 
 }  // namespace
 
@@ -125,13 +151,14 @@ bool GamepadStateCompareResult::CompareGamepads(
         CompareAxes(old_gamepad, new_gamepad, i, compare_all_axes);
     bool any_button_updated =
         CompareButtons(old_gamepad, new_gamepad, i, compare_all_buttons);
+    bool any_touch_updated = CompareTouches(old_gamepad, new_gamepad);
 
     if (newly_connected)
       gamepad_connected_.set(i);
     if (newly_disconnected)
       gamepad_disconnected_.set(i);
     if (newly_connected || newly_disconnected || any_axis_updated ||
-        any_button_updated) {
+        any_button_updated || any_touch_updated) {
       any_change = true;
     }
   }
@@ -221,6 +248,29 @@ bool GamepadStateCompareResult::CompareButtons(Gamepad* old_gamepad,
     }
   }
   return any_button_changed;
+}
+
+bool GamepadStateCompareResult::CompareTouches(Gamepad* old_gamepad,
+                                               Gamepad* new_gamepad) {
+  if (!new_gamepad) {
+    return false;
+  }
+
+  const auto* new_touches = new_gamepad->touchEvents();
+  const auto* old_touches = old_gamepad ? old_gamepad->touchEvents() : nullptr;
+
+  return Compare(old_touches, new_touches,
+                 [](const Member<GamepadTouch>& new_touch,
+                    const Member<GamepadTouch>& old_touch) {
+                   return new_touch->touchId() == old_touch->touchId() &&
+                          new_touch->surfaceId() == old_touch->surfaceId() &&
+                          new_touch->HasSurfaceDimensions() ==
+                              old_touch->HasSurfaceDimensions() &&
+                          !Compare(new_touch->surfaceDimensions().Get(),
+                                   old_touch->surfaceDimensions().Get()) &&
+                          !Compare(new_touch->position().Get(),
+                                   old_touch->position().Get());
+                 });
 }
 
 GamepadStateCompareResult GamepadComparisons::Compare(

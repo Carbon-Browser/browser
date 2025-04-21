@@ -1,10 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/media_controls/media_controls_display_cutout_delegate.h"
+#include "third_party/blink/renderer/core/page/page_animator.h"
 
 #include "third_party/blink/public/mojom/page/display_cutout.mojom-blink.h"
+#include "third_party/blink/renderer/core/dom/scripted_animation_controller.h"
 #include "third_party/blink/renderer/core/events/touch_event.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/viewport_data.h"
@@ -17,7 +19,6 @@
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_impl.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
@@ -65,7 +66,9 @@ class MediaControlsDisplayCutoutDelegateTest
     }
 
     test::RunPendingTasks();
-    GetDocument().ServiceScriptedAnimations(base::TimeTicks());
+    PageAnimator::ServiceScriptedAnimations(
+        base::TimeTicks(),
+        {{GetDocument().GetScriptedAnimationController(), false}});
 
     EXPECT_TRUE(GetVideoElement().IsFullscreen());
   }
@@ -73,7 +76,9 @@ class MediaControlsDisplayCutoutDelegateTest
   void SimulateExitFullscreen() {
     Fullscreen::FullyExitFullscreen(GetDocument());
 
-    GetDocument().ServiceScriptedAnimations(base::TimeTicks());
+    PageAnimator::ServiceScriptedAnimations(
+        base::TimeTicks(),
+        {{GetDocument().GetScriptedAnimationController(), false}});
 
     EXPECT_FALSE(GetVideoElement().IsFullscreen());
   }
@@ -170,7 +175,8 @@ class MediaControlsDisplayCutoutDelegateTest
   }
 
   HTMLVideoElement& GetVideoElement() {
-    return *To<HTMLVideoElement>(GetDocument().getElementById("video"));
+    return *To<HTMLVideoElement>(
+        GetDocument().getElementById(AtomicString("video")));
   }
 
   Persistent<DisplayCutoutMockChromeClient> chrome_client_;

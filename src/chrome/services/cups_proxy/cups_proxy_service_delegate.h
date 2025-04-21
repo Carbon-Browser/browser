@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 #define CHROME_SERVICES_CUPS_PROXY_CUPS_PROXY_SERVICE_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/printing/printer_configuration.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cups_proxy {
 
@@ -35,11 +36,10 @@ class CupsProxyServiceDelegate {
 
   virtual std::vector<chromeos::Printer> GetPrinters(
       chromeos::PrinterClass printer_class) = 0;
-  virtual absl::optional<chromeos::Printer> GetPrinter(
+  virtual std::optional<chromeos::Printer> GetPrinter(
       const std::string& id) = 0;
   virtual std::vector<std::string> GetRecentlyUsedPrinters() = 0;
   virtual bool IsPrinterInstalled(const chromeos::Printer& printer) = 0;
-  virtual void PrinterInstalled(const chromeos::Printer& printer) = 0;
   virtual scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() = 0;
 
   // |cb| will be run on this delegate's sequenced context.

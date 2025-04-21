@@ -1,4 +1,4 @@
-# Copyright (c) 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -15,7 +15,7 @@ driver.get('http://www.google.com/xhtml')
 wait = WebDriverWait(driver, 10)
 wait.until(EC.visibility_of_element_located((By.NAME, 'q')))
 
-search_box = driver.find_element_by_name('q')
+search_box = driver.find_element(By.NAME, 'q')
 search_box.send_keys('searchTerm')
 search_box.submit()
 

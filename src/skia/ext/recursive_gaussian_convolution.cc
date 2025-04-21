@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +54,6 @@ inline float ForwardFilter(float in_n_1,
   }
 
   NOTREACHED();
-  return 0.0f;
 }
 
 template<RecursiveFilter::Order order>
@@ -68,7 +72,6 @@ inline float BackwardFilter(const std::vector<float>& out,
           b[1] * out[n + 1] + b[2] * out[n + 2] + b[3] * out[n + 3];
   }
   NOTREACHED();
-  return 0.0f;
 }
 
 template<RecursiveFilter::Order order, bool absolute_values>
@@ -188,7 +191,6 @@ unsigned char SingleChannelRecursiveFilter(
   }
 
   NOTREACHED();
-  return 0;
 }
 
 }

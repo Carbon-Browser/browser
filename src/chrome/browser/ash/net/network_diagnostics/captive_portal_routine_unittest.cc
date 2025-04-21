@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 namespace ash {
 namespace network_diagnostics {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 class CaptivePortalRoutineTest : public NetworkDiagnosticsTestHelper {
  public:
   CaptivePortalRoutineTest() {
-    captive_portal_routine_ = std::make_unique<CaptivePortalRoutine>();
+    captive_portal_routine_ = std::make_unique<CaptivePortalRoutine>(
+        mojom::RoutineCallSource::kDiagnosticsUI);
   }
 
   CaptivePortalRoutineTest(const CaptivePortalRoutineTest&) = delete;
@@ -64,7 +64,7 @@ TEST_F(CaptivePortalRoutineTest, TestNoCaptivePortal) {
 // Test whether no active networks is reported correctly.
 TEST_F(CaptivePortalRoutineTest, TestNoActiveNetworks) {
   base::RunLoop run_loop;
-  SetUpWiFi(shill::kStateOffline);
+  SetUpWiFi(shill::kStateIdle);
   std::vector<mojom::CaptivePortalProblem> expected_problems = {
       mojom::CaptivePortalProblem::kNoActiveNetworks};
   captive_portal_routine()->RunRoutine(

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,9 @@ class MODULES_EXPORT HTMLMediaElementAudioOutputDevice final
   static HTMLMediaElementAudioOutputDevice& From(HTMLMediaElement&);
 
   static String sinkId(HTMLMediaElement&);
-  static ScriptPromise setSinkId(ScriptState*,
-                                 HTMLMediaElement&,
-                                 const String& sink_id);
+  static ScriptPromise<IDLUndefined> setSinkId(ScriptState*,
+                                               HTMLMediaElement&,
+                                               const String& sink_id);
   void setSinkId(const String&);
 
   // AudioOutputDeviceController implementation.

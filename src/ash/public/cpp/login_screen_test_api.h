@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/login_types.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -33,7 +33,6 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static bool IsRestartButtonShown();
   static bool IsShutdownButtonShown();
   static bool IsAppsButtonShown();
-  static bool IsAuthErrorBubbleShown();
   static bool IsGuestButtonShown();
   static bool IsAddUserButtonShown();
   static bool IsCancelButtonShown();
@@ -48,16 +47,19 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static bool IsPasswordFieldShown(const AccountId& account_id);
   static bool IsDisplayPasswordButtonShown(const AccountId& account_id);
   static bool IsManagedIconShown(const AccountId& account_id);
+  static bool ShowRemoveAccountDialog(const AccountId& account_id);
   static bool IsManagedMessageInDialogShown(const AccountId& account_id);
   static bool IsForcedOnlineSignin(const AccountId& account_id);
   static void SubmitPassword(const AccountId& account_id,
                              const std::string& password,
                              bool check_if_submittable);
+  static void SubmitPin(const AccountId& account_id, const std::string& pin);
   static std::u16string GetChallengeResponseLabel(const AccountId& account_id);
   static bool IsChallengeResponseButtonClickable(const AccountId& account_id);
   static void ClickChallengeResponseButton(const AccountId& account_id);
   static int64_t GetUiUpdateCount();
   static bool LaunchApp(const std::string& app_id);
+  static bool LaunchApp(const AccountId& account_id);
   static bool ClickAppsButton();
   static bool ClickAddUserButton();
   static bool ClickCancelButton();
@@ -97,12 +99,27 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static std::u16string GetShutDownButtonLabel();
   static gfx::Rect GetShutDownButtonTargetBounds();
   static gfx::Rect GetShutDownButtonMirroredBounds();
+  static std::string GetAppsButtonClassName();
 
   static void SetPinRequestWidgetShownCallback(
       base::RepeatingClosure on_pin_request_widget_shown);
   static std::u16string GetPinRequestWidgetTitle();
   static void SubmitPinRequestWidget(const std::string& pin);
   static void CancelPinRequestWidget();
+
+  // Local authentication dialog methods.
+  static bool IsLocalAuthenticationDialogVisible();
+  static void CancelLocalAuthenticationDialog();
+  static void SubmitPasswordLocalAuthenticationDialog(
+      const std::string& password);
+  static void SubmitPinLocalAuthenticationDialog(const std::string& pin);
+
+  // AuthErrorBubble methods.
+  static bool IsAuthErrorBubbleShown();
+  static void ShowAuthError(int unlock_attempt);
+  static void HideAuthError();
+  static void PressAuthErrorRecoveryButton();
+  static void PressAuthErrorLearnMoreButton();
 };
 
 }  // namespace ash

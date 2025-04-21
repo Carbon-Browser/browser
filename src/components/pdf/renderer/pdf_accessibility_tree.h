@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,29 +7,38 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "content/public/renderer/plugin_ax_tree_source.h"
+#include "content/public/renderer/plugin_ax_tree_action_target_adapter.h"
 #include "content/public/renderer/render_frame_observer.h"
+#include "pdf/accessibility_structs.h"
 #include "pdf/pdf_accessibility_data_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/screen_ai/buildflags/buildflags.h"
+#include "third_party/blink/public/web/web_ax_object.h"
 #include "ui/accessibility/ax_node.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 #include "ui/accessibility/ax_tree.h"
+#include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_source.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+#include "components/pdf/renderer/pdf_ocr_helper.h"
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+
+namespace blink {
+class WebPluginContainer;
+}  // namespace blink
+
 namespace chrome_pdf {
+
 class PdfAccessibilityActionHandler;
-struct AccessibilityActionData;
-struct AccessibilityCharInfo;
-struct AccessibilityDocInfo;
-struct AccessibilityPageInfo;
-struct AccessibilityPageObjects;
-struct AccessibilityTextRunInfo;
-struct AccessibilityViewportInfo;
-struct PageCharacterIndex;
+class PdfAccessibilityImageFetcher;
+
 }  // namespace chrome_pdf
 
 namespace content {
@@ -39,17 +48,27 @@ class RenderFrame;
 
 namespace gfx {
 class Transform;
-}
+}  // namespace gfx
+
+namespace ui {
+struct AXTreeUpdate;
+}  // namespace ui
 
 namespace pdf {
 
-class PdfAccessibilityTree : public content::PluginAXTreeSource,
+class PdfAccessibilityTree : public ui::AXTreeSource<const ui::AXNode*,
+                                                     ui::AXTreeData*,
+                                                     ui::AXNodeData>,
+                             public content::PluginAXTreeActionTargetAdapter,
                              public content::RenderFrameObserver,
                              public chrome_pdf::PdfAccessibilityDataHandler {
  public:
   PdfAccessibilityTree(
       content::RenderFrame* render_frame,
-      chrome_pdf::PdfAccessibilityActionHandler* action_handler);
+      chrome_pdf::PdfAccessibilityActionHandler* action_handler,
+      chrome_pdf::PdfAccessibilityImageFetcher* image_fetcher,
+      blink::WebPluginContainer* plugin_container,
+      bool print_preview);
   ~PdfAccessibilityTree() override;
 
   static bool IsDataFromPluginValid(
@@ -77,9 +96,12 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
       std::vector<chrome_pdf::AccessibilityTextRunInfo> text_runs,
       std::vector<chrome_pdf::AccessibilityCharInfo> chars,
       chrome_pdf::AccessibilityPageObjects page_objects) override;
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  void OnHasSearchifyText() override;
+#endif
 
   void HandleAction(const chrome_pdf::AccessibilityActionData& action_data);
-  absl::optional<AnnotationInfo> GetPdfAnnotationInfoFromAXNode(
+  std::optional<AnnotationInfo> GetPdfAnnotationInfoFromAXNode(
       int32_t ax_node_id) const;
 
   // Given the AXNode and the character offset within the AXNode, finds the
@@ -91,28 +113,55 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
       uint32_t char_offset_in_node,
       chrome_pdf::PageCharacterIndex& page_char_index) const;
 
-  // content::PluginAXTreeSource:
+  // ui::AXTreeSource:
   bool GetTreeData(ui::AXTreeData* tree_data) const override;
   ui::AXNode* GetRoot() const override;
   ui::AXNode* GetFromId(int32_t id) const override;
   int32_t GetId(const ui::AXNode* node) const override;
-  void GetChildren(const ui::AXNode* node,
-                   std::vector<const ui::AXNode*>* out_children) const override;
+  void CacheChildrenIfNeeded(const ui::AXNode*) override {}
+  size_t GetChildCount(const ui::AXNode*) const override;
+  const ui::AXNode* ChildAt(const ui::AXNode* node, size_t) const override;
+  void ClearChildCache(const ui::AXNode*) override {}
   ui::AXNode* GetParent(const ui::AXNode* node) const override;
   bool IsIgnored(const ui::AXNode* node) const override;
-  bool IsValid(const ui::AXNode* node) const override;
   bool IsEqual(const ui::AXNode* node1, const ui::AXNode* node2) const override;
   const ui::AXNode* GetNull() const override;
-  void SerializeNode(const ui::AXNode* node, ui::AXNodeData* out_data)
-      const override;
+  void SerializeNode(const ui::AXNode* node,
+                     ui::AXNodeData* out_data) const override;
+
+  // content::PluginAXTreeActionTargetAdapter:
   std::unique_ptr<ui::AXActionTarget> CreateActionTarget(
-      const ui::AXNode& target_node) override;
+      ui::AXNodeID id) override;
 
   // content::RenderFrameObserver:
-  void AccessibilityModeChanged(const ui::AXMode& /*mode*/) override;
+  void AccessibilityModeChanged(const ui::AXMode& mode) override;
   void OnDestruct() override;
+  void WasHidden() override;
+  void WasShown() override;
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  void CreateOcrHelper();
+  PdfOcrHelper* ocr_helper_for_testing() { return ocr_helper_.get(); }
+
+  // After receiving a batch of tree updates containing the results of the OCR
+  // Service, this method adds each piece of OCRed text in the correct page,
+  // replacing each image node for which we have OCRed text.
+  virtual void OnOcrDataReceived(std::vector<PdfOcrRequest> ocr_requests,
+                                 std::vector<ui::AXTreeUpdate> tree_updates);
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
   bool ShowContextMenu();
+
+  ui::AXTree& tree_for_testing() { return tree_; }
+
+  // Sets the ID of a child tree which this node will be hosting. In this way,
+  // multiple trees could be stitched together. Clears any existing descendants
+  // of the hosting node in order to maintain the consistency of the tree
+  // structure, and because they would be hidden by the child tree anyway.
+  bool SetChildTree(const ui::AXNodeID& target_node_id,
+                    const ui::AXTreeID& child_tree_id);
+
+  void ForcePluginAXObjectForTesting(const blink::WebAXObject& obj);
 
  private:
   // Update the AXTreeData when the selected range changed.
@@ -140,11 +189,16 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
   // Called after the data for all pages in the PDF have been received.
   // Finishes assembling a complete accessibility tree and grafts it
   // onto the host tree.
-  void Finish();
+  void UnserializeNodes();
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  // Called after the OCR data for all images in the PDF have been received.
+  // Set the status node with the OCR completion message.
+  void SetOcrCompleteStatus();
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
   void AddPageContent(
-      ui::AXNodeData* page_node,
-      const gfx::RectF& page_bounds,
+      const chrome_pdf::AccessibilityPageInfo& page_info,
       uint32_t page_index,
       const std::vector<chrome_pdf::AccessibilityTextRunInfo>& text_runs,
       const std::vector<chrome_pdf::AccessibilityCharInfo>& chars,
@@ -154,22 +208,47 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
   // replacement node data can be introduced.
   void ClearAccessibilityNodes();
 
-  content::RenderAccessibility* GetRenderAccessibility();
-
-  // WARNING: May cause `this` to be deleted.
-  content::RenderAccessibility* GetRenderAccessibilityIfEnabled();
+  std::optional<blink::WebAXObject> GetPluginContainerAXObject();
 
   std::unique_ptr<gfx::Transform> MakeTransformFromViewInfo() const;
 
+  // Set the status node's message.
+  void SetStatusMessage(int message_id);
+
+  void ResetStatusNodeAttributes();
+
   // Handles an accessibility change only if there is a valid
-  // `RenderAccessibility` for the frame.
-  void MaybeHandleAccessibilityChange();
+  // `RenderAccessibility` for the frame. `LoadAccessibility()` will be
+  // triggered in `PdfViewWebPlugin` when `always_load_or_reload_accessibility`
+  // is true, even if the accessibility state is `AccessibilityState::kLoaded`.
+  void MaybeHandleAccessibilityChange(bool always_load_or_reload_accessibility);
+
+  // Marks the plugin container dirty to ensure serialization of the PDF
+  // contents.
+  void MarkPluginContainerDirty();
+
+  // Let our dependent objects know about our lifetime; `set_this`, if true,
+  // sets `this` in our dependents; nullptr otherwise.
+  // Returns true on successful update.
+  bool UpdateDependentObjects(bool set_this);
+
+  // Returns a weak pointer for an instance of this class.
+  base::WeakPtr<PdfAccessibilityTree> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
   ui::AXTreeData tree_data_;
   ui::AXTree tree_;
 
+  // ‌PdfAccessibilityTree belongs to the PDF plugin which is created by the
+  // renderer. `render_frame_` is reset when renderer sends OnDestruct() to its
+  // observers.
+  raw_ptr<content::RenderFrame> render_frame_;
+
   // Unowned. Must outlive `this`.
-  chrome_pdf::PdfAccessibilityActionHandler* const action_handler_;
+  const raw_ptr<chrome_pdf::PdfAccessibilityActionHandler> action_handler_;
+  const raw_ptr<chrome_pdf::PdfAccessibilityImageFetcher> image_fetcher_;
+  const raw_ptr<blink::WebPluginContainer> plugin_container_;
 
   // `zoom_` signifies the zoom level set in for the browser content.
   // `scale_` signifies the scale level set by user. Scale is applied
@@ -180,9 +259,11 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
   // From PDF plugin we receive all the data in logical pixels. Which is
   // without the zoom and scale factor applied. We apply the `zoom_` and
   // `scale_` to generate the final bounding boxes of elements in accessibility
-  // tree.
+  // tree. `orientation_` represents page rotations as multiples of 90 degrees,
+  // based on `chrome_pdf::PageOrientation`.
   double zoom_ = 1.0;
   double scale_ = 1.0;
+  int32_t orientation_ = 0;
   gfx::Vector2dF scroll_;
   gfx::Vector2dF offset_;
   uint32_t selection_start_page_index_ = 0;
@@ -190,7 +271,13 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
   uint32_t selection_end_page_index_ = 0;
   uint32_t selection_end_char_index_ = 0;
   uint32_t page_count_ = 0;
-  ui::AXNodeData* doc_node_;
+  std::unique_ptr<ui::AXNodeData> doc_node_;
+  // The banner node will have an appropriate ARIA landmark for easy navigation
+  // for screen reader users. It will contain the status node below.
+  std::unique_ptr<ui::AXNodeData> banner_node_;
+  // The status node contains a notification message for the user.
+  std::unique_ptr<ui::AXNodeData> status_node_;
+  std::unique_ptr<ui::AXNodeData> status_node_text_;
   std::vector<std::unique_ptr<ui::AXNodeData>> nodes_;
 
   // Map from the id of each static text AXNode and inline text box
@@ -208,7 +295,31 @@ class PdfAccessibilityTree : public content::PluginAXTreeSource,
   // outdated calls of SetAccessibilityPageInfo().
   uint32_t next_page_index_ = 0;
 
-  bool did_get_a_text_run_ = false;
+  // Indicates that the PDF had accessible text (at least on some pages) without
+  // applying searchify.
+  bool had_accessible_text_ = false;
+  bool did_have_an_image_ = false;
+  bool sent_metrics_once_ = false;
+  // Initialize `currently_in_foreground_` to be true as an associated render
+  // frame would be most likely in foreground when being created. If it goes to
+  // background, this value will be flipped to false in `WasHidden()`.
+  bool currently_in_foreground_ = true;
+
+  // Forces a WebAXObject for the plugin container to be returned, even if the
+  // plugin container is nullptr. Enables lower level tests to function.
+  blink::WebAXObject force_plugin_ax_object_for_testing_;
+
+  const bool print_preview_;
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  std::unique_ptr<PdfOcrHelper> ocr_helper_;
+
+  // Flag indicating if any text was converted from images by OCR.
+  bool was_text_converted_from_image_ = false;
+
+  // Flag indicating that searchify (OCR) ran on some pages.
+  bool did_searchify_run_ = false;
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
   base::WeakPtrFactory<PdfAccessibilityTree> weak_ptr_factory_{this};
 };

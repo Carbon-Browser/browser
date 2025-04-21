@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "chromecast/device/bluetooth/le/le_scan_result.h"
 #include "chromecast/device/bluetooth/le/scan_filter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -82,7 +82,7 @@ class LeScanManager {
       base::OnceCallback<void(std::vector<LeScanResult>)>;
   virtual void GetScanResults(
       GetScanResultsCallback cb,
-      absl::optional<ScanFilter> scan_filter = absl::nullopt) = 0;
+      std::optional<ScanFilter> scan_filter = std::nullopt) = 0;
 
   virtual void ClearScanResults() = 0;
 

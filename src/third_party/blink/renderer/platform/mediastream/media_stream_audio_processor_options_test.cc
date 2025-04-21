@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,12 +27,11 @@ TEST(AudioProcessingPropertiesToAudioProcessingSettingsTest,
           /*multi_channel_capture_processing=*/true);
   EXPECT_FALSE(settings.echo_cancellation);
   EXPECT_FALSE(settings.noise_suppression);
-  EXPECT_FALSE(settings.transient_noise_suppression);
   EXPECT_FALSE(settings.automatic_gain_control);
-  EXPECT_FALSE(settings.experimental_automatic_gain_control);
-  EXPECT_FALSE(settings.high_pass_filter);
-  EXPECT_FALSE(settings.stereo_mirroring);
-  EXPECT_FALSE(settings.force_apm_creation);
+
+  EXPECT_EQ(
+      properties.voice_isolation,
+      AudioProcessingProperties::VoiceIsolationType::kVoiceIsolationDefault);
 }
 
 TEST(AudioProcessingPropertiesToAudioProcessingSettingsTest,
@@ -40,24 +39,14 @@ TEST(AudioProcessingPropertiesToAudioProcessingSettingsTest,
   const AudioProcessingProperties properties{
       .echo_cancellation_type = AudioProcessingProperties::
           EchoCancellationType::kEchoCancellationAec3,
-      .goog_audio_mirroring = true,
-      .goog_auto_gain_control = true,
-      .goog_experimental_echo_cancellation = true,
-      .goog_noise_suppression = true,
-      .goog_experimental_noise_suppression = true,
-      .goog_highpass_filter = true,
-      .goog_experimental_auto_gain_control = true};
+      .auto_gain_control = true,
+      .noise_suppression = true};
   const media::AudioProcessingSettings settings =
       properties.ToAudioProcessingSettings(
           /*multi_channel_capture_processing=*/true);
   EXPECT_TRUE(settings.echo_cancellation);
   EXPECT_TRUE(settings.noise_suppression);
-  EXPECT_TRUE(settings.transient_noise_suppression);
   EXPECT_TRUE(settings.automatic_gain_control);
-  EXPECT_TRUE(settings.experimental_automatic_gain_control);
-  EXPECT_TRUE(settings.high_pass_filter);
-  EXPECT_TRUE(settings.stereo_mirroring);
-  EXPECT_TRUE(settings.force_apm_creation);
 }
 
 TEST(AudioProcessingPropertiesToAudioProcessingSettingsTest,
@@ -107,6 +96,29 @@ TEST(AudioProcessingPropertiesToAudioProcessingSettingsTest,
       kPropertiesWithSystemAgc.ToAudioProcessingSettings(
           /*multi_channel_capture_processing=*/true);
   EXPECT_FALSE(settings_with_system_agc.automatic_gain_control);
+}
+
+TEST(AudioProcessingPropertiesTest,
+     GainControlEnabledReturnsTrueIfBrowserAgcEnabled) {
+  constexpr AudioProcessingProperties kPropertiesWithBrowserAgc{
+      .auto_gain_control = true};
+  EXPECT_TRUE(kPropertiesWithBrowserAgc.GainControlEnabled());
+}
+
+TEST(AudioProcessingPropertiesTest,
+     GainControlEnabledReturnsTrueIfSystemAgcEnabled) {
+  constexpr AudioProcessingProperties kPropertiesWithBrowserAgc{
+      .system_gain_control_activated = true,
+      .auto_gain_control = true,
+  };
+  EXPECT_TRUE(kPropertiesWithBrowserAgc.GainControlEnabled());
+}
+
+TEST(AudioProcessingPropertiesTest,
+     GainControlEnabledReturnsFalseIfAgcDisabled) {
+  constexpr AudioProcessingProperties kPropertiesWithBrowserAgc{
+      .auto_gain_control = false};
+  EXPECT_FALSE(kPropertiesWithBrowserAgc.GainControlEnabled());
 }
 
 }  // namespace blink

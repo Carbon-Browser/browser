@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/memory/ptr_util.h"
+#include "base/functional/bind.h"
+#include "base/types/pass_key.h"
 #include "net/base/file_stream.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -25,6 +25,12 @@ const int kCreateFlagsForWrite =
 const int kCreateFlagsForWriteAlways = base::File::FLAG_CREATE_ALWAYS |
                                        base::File::FLAG_WRITE |
                                        base::File::FLAG_ASYNC;
+#if BUILDFLAG(IS_ANDROID)
+// Android always opens Content-URI files for write with truncate for security.
+const int kOpenFlagsForWriteContentUri = base::File::FLAG_CREATE_ALWAYS |
+                                         base::File::FLAG_WRITE |
+                                         base::File::FLAG_ASYNC;
+#endif
 
 }  // namespace
 
@@ -33,8 +39,9 @@ std::unique_ptr<FileStreamWriter> FileStreamWriter::CreateForLocalFile(
     const base::FilePath& file_path,
     int64_t initial_offset,
     OpenOrCreate open_or_create) {
-  return base::WrapUnique(new LocalFileStreamWriter(
-      task_runner, file_path, initial_offset, open_or_create));
+  return std::make_unique<LocalFileStreamWriter>(
+      task_runner, file_path, initial_offset, open_or_create,
+      base::PassKey<FileStreamWriter>());
 }
 
 LocalFileStreamWriter::~LocalFileStreamWriter() {
@@ -76,7 +83,8 @@ int LocalFileStreamWriter::Cancel(net::CompletionOnceCallback callback) {
   return net::ERR_IO_PENDING;
 }
 
-int LocalFileStreamWriter::Flush(net::CompletionOnceCallback callback) {
+int LocalFileStreamWriter::Flush(FlushMode /*flush_mode*/,
+                                 net::CompletionOnceCallback callback) {
   DCHECK(!has_pending_operation_);
   DCHECK(cancel_callback_.is_null());
 
@@ -91,10 +99,12 @@ int LocalFileStreamWriter::Flush(net::CompletionOnceCallback callback) {
   return result;
 }
 
-LocalFileStreamWriter::LocalFileStreamWriter(base::TaskRunner* task_runner,
-                                             const base::FilePath& file_path,
-                                             int64_t initial_offset,
-                                             OpenOrCreate open_or_create)
+LocalFileStreamWriter::LocalFileStreamWriter(
+    base::TaskRunner* task_runner,
+    const base::FilePath& file_path,
+    int64_t initial_offset,
+    OpenOrCreate open_or_create,
+    base::PassKey<FileStreamWriter> /*pass_key*/)
     : file_path_(file_path),
       open_or_create_(open_or_create),
       initial_offset_(initial_offset),
@@ -111,6 +121,11 @@ int LocalFileStreamWriter::InitiateOpen(base::OnceClosure main_operation) {
   switch (open_or_create_) {
     case OPEN_EXISTING_FILE:
       open_flags = kOpenFlagsForWrite;
+#if BUILDFLAG(IS_ANDROID)
+      if (file_path_.IsContentUri()) {
+        open_flags = kOpenFlagsForWriteContentUri;
+      }
+#endif
       break;
     case CREATE_NEW_FILE:
       open_flags = kCreateFlagsForWrite;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/background_fetch/background_fetch_delegate_base.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/download_metadata.h"
@@ -73,7 +73,7 @@ void DownloadClient::OnServiceInitialized(
     if (download.paused) {
       // We need to resurface the notification in a paused state.
       content::BrowserThread::PostBestEffortTask(
-          FROM_HERE, base::SequencedTaskRunnerHandle::Get(),
+          FROM_HERE, base::SequencedTaskRunner::GetCurrentDefault(),
           base::BindOnce(&BackgroundFetchDelegateBase::RestartPausedDownload,
                          GetDelegate()->GetWeakPtr(), download.guid));
     }
@@ -95,8 +95,8 @@ void DownloadClient::OnDownloadStarted(
     const std::string& guid,
     const std::vector<GURL>& url_chain,
     const scoped_refptr<const net::HttpResponseHeaders>& headers) {
-  // TODO(crbug.com/884672): Validate the chain/headers and cancel the download
-  // if invalid.
+  // TODO(crbug.com/40593934): Validate the chain/headers and cancel the
+  // download if invalid.
   auto response =
       std::make_unique<content::BackgroundFetchResponse>(url_chain, headers);
   GetDelegate()->OnDownloadStarted(guid, std::move(response));
@@ -121,10 +121,11 @@ void DownloadClient::OnDownloadFailed(const std::string& guid,
 
 void DownloadClient::OnDownloadSucceeded(const std::string& guid,
                                          const download::CompletionInfo& info) {
-  if (browser_context_->IsOffTheRecord())
+  if (browser_context_->IsOffTheRecord()) {
     DCHECK(info.blob_handle);
-  else
+  } else {
     DCHECK(!info.path.empty());
+  }
 
   auto response = std::make_unique<content::BackgroundFetchResponse>(
       info.url_chain, info.response_headers);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gcm/base/gcm_export.h"

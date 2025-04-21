@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/uuid.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/policy/core/common/cloud/dm_auth.h"
 #include "components/policy/core/common/cloud/dmserver_job_configurations.h"
@@ -26,7 +26,7 @@ namespace em = enterprise_management;
 
 namespace policy {
 
-AndroidManagementClient::AndroidManagementClient(
+AndroidManagementClientImpl::AndroidManagementClientImpl(
     DeviceManagementService* device_management_service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const CoreAccountId& account_id,
@@ -34,11 +34,13 @@ AndroidManagementClient::AndroidManagementClient(
     : device_management_service_(device_management_service),
       url_loader_factory_(url_loader_factory),
       account_id_(account_id),
-      identity_manager_(identity_manager) {}
+      identity_manager_(identity_manager) {
+  device_management_service_->ScheduleInitialization(0);
+}
 
-AndroidManagementClient::~AndroidManagementClient() {}
+AndroidManagementClientImpl::~AndroidManagementClientImpl() = default;
 
-void AndroidManagementClient::StartCheckAndroidManagement(
+void AndroidManagementClientImpl::StartCheckAndroidManagement(
     StatusCallback callback) {
   DCHECK(device_management_service_);
   DCHECK(callback_.is_null());
@@ -47,7 +49,7 @@ void AndroidManagementClient::StartCheckAndroidManagement(
   RequestAccessToken();
 }
 
-void AndroidManagementClient::OnAccessTokenFetchComplete(
+void AndroidManagementClientImpl::OnAccessTokenFetchComplete(
     GoogleServiceAuthError error,
     signin::AccessTokenInfo token_info) {
   access_token_fetcher_.reset();
@@ -62,7 +64,7 @@ void AndroidManagementClient::OnAccessTokenFetchComplete(
   CheckAndroidManagement(token_info.token);
 }
 
-void AndroidManagementClient::RequestAccessToken() {
+void AndroidManagementClientImpl::RequestAccessToken() {
   DCHECK(!access_token_fetcher_);
   // The user must be signed in already.
   DCHECK(identity_manager_->HasAccountWithRefreshToken(account_id_));
@@ -73,20 +75,20 @@ void AndroidManagementClient::RequestAccessToken() {
 
   access_token_fetcher_ = identity_manager_->CreateAccessTokenFetcherForAccount(
       account_id_, "android_management_client", scopes,
-      base::BindOnce(&AndroidManagementClient::OnAccessTokenFetchComplete,
+      base::BindOnce(&AndroidManagementClientImpl::OnAccessTokenFetchComplete,
                      base::Unretained(this)),
       signin::AccessTokenFetcher::Mode::kImmediate);
 }
 
-void AndroidManagementClient::CheckAndroidManagement(
+void AndroidManagementClientImpl::CheckAndroidManagement(
     const std::string& access_token) {
   std::unique_ptr<DMServerJobConfiguration> config = std::make_unique<
       DMServerJobConfiguration>(
       device_management_service_,
       DeviceManagementService::JobConfiguration::TYPE_ANDROID_MANAGEMENT_CHECK,
-      /*client_id=*/base::GenerateGUID(),
+      /*client_id=*/base::Uuid::GenerateRandomV4().AsLowercaseString(),
       /*critical=*/false, DMAuth::NoAuth(), access_token, url_loader_factory_,
-      base::BindOnce(&AndroidManagementClient::OnAndroidManagementChecked,
+      base::BindOnce(&AndroidManagementClientImpl::OnAndroidManagementChecked,
                      weak_ptr_factory_.GetWeakPtr()));
 
   config->request()->mutable_check_android_management_request();
@@ -94,32 +96,29 @@ void AndroidManagementClient::CheckAndroidManagement(
   request_job_ = device_management_service_->CreateJob(std::move(config));
 }
 
-void AndroidManagementClient::OnAndroidManagementChecked(
-    DeviceManagementService::Job* job,
-    DeviceManagementStatus status,
-    int net_error,
-    const em::DeviceManagementResponse& response) {
+void AndroidManagementClientImpl::OnAndroidManagementChecked(
+    DMServerJobResult result) {
   DCHECK(!callback_.is_null());
-  if (status == DM_STATUS_SUCCESS &&
-      !response.has_check_android_management_response()) {
+  if (result.dm_status == DM_STATUS_SUCCESS &&
+      !result.response.has_check_android_management_response()) {
     LOG(WARNING) << "Invalid check android management response.";
-    status = DM_STATUS_RESPONSE_DECODING_ERROR;
+    result.dm_status = DM_STATUS_RESPONSE_DECODING_ERROR;
   }
 
-  Result result;
-  switch (status) {
+  Result management_result;
+  switch (result.dm_status) {
     case DM_STATUS_SUCCESS:
-      result = Result::UNMANAGED;
+      management_result = Result::UNMANAGED;
       break;
     case DM_STATUS_SERVICE_DEVICE_ID_CONFLICT:
-      result = Result::MANAGED;
+      management_result = Result::MANAGED;
       break;
     default:
-      result = Result::ERROR;
+      management_result = Result::ERROR;
   }
 
   request_job_.reset();
-  std::move(callback_).Run(result);
+  std::move(callback_).Run(management_result);
 }
 
 std::ostream& operator<<(std::ostream& os,
@@ -133,7 +132,6 @@ std::ostream& operator<<(std::ostream& os,
       return os << "ERROR";
   }
   NOTREACHED();
-  return os;
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -370,7 +370,7 @@
   case msg_class::ID: {                                                    \
     IPC_TASK_ANNOTATOR_CONTEXT(msg_class)                                  \
     if (!msg_class::DispatchWithParamDelayReply(&ipc_message__, obj,       \
-                                                param__, \ & member_func)) \
+                                                param__, &member_func))    \
       ipc_message__.set_dispatch_error();                                  \
   } break;
 
@@ -395,11 +395,6 @@
         code;                                                                  \
       }                                                                        \
       break;
-
-#define IPC_MESSAGE_UNHANDLED_ERROR() \
-  IPC_MESSAGE_UNHANDLED(NOTREACHED() << \
-                              "Invalid message with type = " << \
-                              ipc_message__.type())
 
 #define IPC_END_MESSAGE_MAP() \
   } \
@@ -525,6 +520,8 @@
   IPC_SYNC_MESSAGE_ROUTED(msg, (a, b, c), (d, e, f))
 #define IPC_SYNC_MESSAGE_ROUTED3_4(msg, a, b, c, d, e, f, g) \
   IPC_SYNC_MESSAGE_ROUTED(msg, (a, b, c), (d, e, f, g))
+#define IPC_SYNC_MESSAGE_ROUTED3_5(msg, a, b, c, d, e, f, g, h) \
+  IPC_SYNC_MESSAGE_ROUTED(msg, (a, b, c), (d, e, f, g, h))
 #define IPC_SYNC_MESSAGE_ROUTED4_0(msg, a, b, c, d) \
   IPC_SYNC_MESSAGE_ROUTED(msg, (a, b, c, d), ())
 #define IPC_SYNC_MESSAGE_ROUTED4_1(msg, a, b, c, d, e) \

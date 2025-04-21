@@ -58,9 +58,6 @@ def __lldb_init_module(debugger, dict):
         'type summary add -F lldb_blink.BlinkLayoutUnit_SummaryProvider blink::LayoutUnit'
     )
     debugger.HandleCommand(
-        'type summary add -F lldb_blink.BlinkLayoutSize_SummaryProvider blink::LayoutSize'
-    )
-    debugger.HandleCommand(
         'type summary add -F lldb_blink.BlinkLayoutPoint_SummaryProvider blink::LayoutPoint'
     )
     debugger.HandleCommand(
@@ -101,12 +98,6 @@ def BlinkLayoutUnit_SummaryProvider(valobj, dict):
     return "{ %s }" % provider.to_string()
 
 
-def BlinkLayoutSize_SummaryProvider(valobj, dict):
-    provider = BlinkLayoutSizeProvider(valobj, dict)
-    return "{ width = %s, height = %s }" % (provider.get_width(),
-                                            provider.get_height())
-
-
 def BlinkLayoutPoint_SummaryProvider(valobj, dict):
     provider = BlinkLayoutPointProvider(valobj, dict)
     return "{ x = %s, y = %s }" % (provider.get_x(), provider.get_y())
@@ -127,7 +118,7 @@ def guess_string_length(valobj, error):
     if not valobj.GetValue():
         return 0
 
-    for i in xrange(0, 2048):
+    for i in range(0, 2048):
         if valobj.GetPointeeData(i, 1).GetUnsignedInt16(error, 0) == 0:
             return i
 
@@ -140,10 +131,10 @@ def ustring_to_string(valobj, error, length=None):
     else:
         length = int(length)
 
-    out_string = u""
-    for i in xrange(0, length):
+    out_string = ""
+    for i in range(0, length):
         char_value = valobj.GetPointeeData(i, 1).GetUnsignedInt16(error, 0)
-        out_string = out_string + unichr(char_value)
+        out_string = out_string + chr(char_value)
 
     return out_string.encode('utf-8')
 
@@ -154,10 +145,10 @@ def lstring_to_string(valobj, error, length=None):
     else:
         length = int(length)
 
-    out_string = u""
-    for i in xrange(0, length):
+    out_string = ""
+    for i in range(0, length):
         char_value = valobj.GetPointeeData(i, 1).GetUnsignedInt8(error, 0)
-        out_string = out_string + unichr(char_value)
+        out_string = out_string + chr(char_value)
 
     return out_string.encode('utf-8')
 
@@ -218,7 +209,7 @@ class WTFStringProvider:
     def to_string(self):
         impl = self.stringimpl()
         if not impl:
-            return u""
+            return ""
         return impl.to_string()
 
 
@@ -231,21 +222,6 @@ class BlinkLayoutUnitProvider:
     def to_string(self):
         return "%.14gpx" % (self.valobj.GetChildMemberWithName('value_').
                             GetValueAsSigned(0) / 64.0)
-
-
-class BlinkLayoutSizeProvider:
-    "Print a blink::LayoutSize"
-
-    def __init__(self, valobj, dict):
-        self.valobj = valobj
-
-    def get_width(self):
-        return BlinkLayoutUnitProvider(
-            self.valobj.GetChildMemberWithName('width_'), dict).to_string()
-
-    def get_height(self):
-        return BlinkLayoutUnitProvider(
-            self.valobj.GetChildMemberWithName('height_'), dict).to_string()
 
 
 class BlinkLayoutPointProvider:
@@ -295,7 +271,7 @@ class BlinkLengthProvider:
         if ltype == 6:
             return 'Length(MaxContent)'
         if ltype == 7:
-            return 'Length(FillAvailable)'
+            return 'Length(Stretch)'
         if ltype == 8:
             return 'Length(FitContent)'
         if ltype == 9:

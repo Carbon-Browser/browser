@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,6 +24,8 @@ component("touch_selection") {
     "touch_selection_draggable.h",
     "touch_selection_menu_runner.cc",
     "touch_selection_menu_runner.h",
+    "touch_selection_metrics.cc",
+    "touch_selection_metrics.h",
     "ui_touch_selection_export.h",
   ]
 
@@ -40,18 +42,32 @@ component("touch_selection") {
 
   if (use_aura) {
     deps += [
+      "//cc/paint",
       "//skia:skia",
       "//ui/aura",
-      "//ui/aura_extra",
+      "//ui/base",
+      "//ui/color",
+      "//ui/color:mixers",
       "//ui/compositor:compositor",
       "//ui/gfx:gfx",
+      "//ui/native_theme",
+      "//ui/native_theme:native_theme_browser",
       "//ui/resources",
+      "//ui/touch_selection/vector_icons",
     ]
 
     sources += [
       "touch_handle_drawable_aura.cc",
       "touch_handle_drawable_aura.h",
+      "touch_selection_magnifier_aura.cc",
+      "touch_selection_magnifier_aura.h",
     ]
+  }
+
+  if (use_blink) {
+    sources += [ "touch_editing_controller.h" ]
+
+    deps += [ "//ui/menus" ]
   }
 }
 
@@ -76,12 +92,14 @@ test("ui_touch_selection_unittests") {
     "longpress_drag_selector_unittest.cc",
     "touch_handle_unittest.cc",
     "touch_selection_controller_unittest.cc",
+    "touch_selection_metrics_unittest.cc",
   ]
 
   deps = [
     ":test_support",
     ":touch_selection",
     "//base/test:run_all_unittests",
+    "//base/test:test_support",
     "//testing/gmock:gmock",
     "//testing/gtest:gtest",
     "//ui/base:base",
@@ -90,7 +108,13 @@ test("ui_touch_selection_unittests") {
     "//ui/gfx:test_support",
   ]
 
-  data_deps = [ "//third_party/mesa_headers" ]
+  data_deps = [ "//third_party/angle:includes" ]
+
+  if (use_aura) {
+    deps += [ "//ui/compositor:compositor" ]
+
+    sources += [ "touch_selection_magnifier_aura_unittest.cc" ]
+  }
 }
 
 if (is_android) {

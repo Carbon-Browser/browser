@@ -14,11 +14,11 @@ import wallet.core.jni.CoinType;
 public class TokenDatabase extends SQLiteOpenHelper {
 
     private ArrayList<TokenObj> mTokenArray = new ArrayList<TokenObj>() {{
-        add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20", "18"));
+        add(new TokenObj(true, "https://carbon.website/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20", "18"));
         // add(new TokenObj(CoinType.BITCOIN, R.drawable.crypto_logo_bitcoin, "Bitcoin", "0.00", "0", "BTC", ""));
-        add(new TokenObj(CoinType.SMARTCHAIN, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_binance.png", "Binance Smart Chain", "0.00", "0", "BSC", "BEP20"));
-        add(new TokenObj(CoinType.ETHEREUM, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_ethereum.png", "Ethereum", "0.00", "0", "ETH", "ERC20"));
-        add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_usdtbep20.png", "Tether USD", "0.00", "0", "USDT", "0x55d398326f99059fF775485246999027B3197955", "BEP20", "18"));
+        add(new TokenObj(CoinType.SMARTCHAIN, "https://carbon.website/carbon/android-resources/wallet/crypto_logo_binance.png", "Binance Smart Chain", "0.00", "0", "BSC", "BEP20"));
+        add(new TokenObj(CoinType.ETHEREUM, "https://carbon.website/carbon/android-resources/wallet/crypto_logo_ethereum.png", "Ethereum", "0.00", "0", "ETH", "ERC20"));
+        add(new TokenObj(true, "https://carbon.website/carbon/android-resources/wallet/crypto_logo_usdtbep20.png", "Tether USD", "0.00", "0", "USDT", "0x55d398326f99059fF775485246999027B3197955", "BEP20", "18"));
     }};
 
     // All Static variables

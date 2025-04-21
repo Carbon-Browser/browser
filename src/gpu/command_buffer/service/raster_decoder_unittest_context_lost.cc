@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,10 @@ class RasterDecoderOOMTest : public RasterDecoderManualInitTest {
  protected:
   void Init(bool has_robustness) {
     InitState init;
+    init.gl_version = "OpenGL ES 3.0";
     init.lose_context_when_out_of_memory = true;
     if (has_robustness) {
-      init.extensions.push_back("GL_ARB_robustness");
+      init.extensions.push_back("GL_EXT_robustness");
     }
     InitDecoder(init);
   }

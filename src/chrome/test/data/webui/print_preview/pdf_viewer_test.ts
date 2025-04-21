@@ -1,43 +1,34 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /* Suite of tests verifying the PDF viewer as served by Print Preview's data
  * source works as expected. */
 
-import 'chrome://print/pdf/elements/viewer-page-indicator.js';
-import 'chrome://print/pdf/pdf_viewer_wrapper.js';
+import 'chrome://print/pdf/pdf_print_wrapper.js';
 
+import type {PdfViewerPrintElement} from 'chrome://print/pdf/pdf_print_wrapper.js';
 import {pdfCreateOutOfProcessPlugin} from 'chrome://print/pdf/pdf_scripting_api.js';
-import {PDFViewerPPElement} from 'chrome://print/pdf/pdf_viewer_pp.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise, microtasksFinished} from 'chrome://webui-test/test_util.js';
 
-const pdf_viewer_test = {
-  suiteName: 'PdfViewerTest',
-  TestNames: {
-    Basic: 'basic',
-    PageIndicator: 'page indicator',
-  },
-};
-
-Object.assign(window, {pdf_viewer_test});
-
-suite(pdf_viewer_test.suiteName, function() {
+suite('PdfViewerTest', function() {
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
   });
 
-  test(pdf_viewer_test.TestNames.Basic, async () => {
+  test('Basic', async () => {
     const plugin = pdfCreateOutOfProcessPlugin(
-        'chrome-untrusted://print/test.pdf', 'chrome://print/pdf');
+        'chrome-untrusted://print/test.pdf',
+        'chrome://print/pdf/index_print.html');
 
     const loaded = eventToPromise('load', plugin);
     document.body.appendChild(plugin);
     await loaded;
     assertTrue(!!plugin.contentDocument);
-    const viewer: PDFViewerPPElement|null =
-        plugin.contentDocument.querySelector('pdf-viewer-pp');
+    const viewer: PdfViewerPrintElement|null =
+        plugin.contentDocument.querySelector('pdf-viewer-print');
     assertTrue(!!viewer);
     assertTrue(plugin.contentDocument.documentElement.hasAttribute(
         'is-print-preview'));
@@ -71,16 +62,18 @@ suite(pdf_viewer_test.suiteName, function() {
     assertTrue(!!viewer.shadowRoot!.querySelector('viewer-error-dialog'));
   });
 
-  test(pdf_viewer_test.TestNames.PageIndicator, function() {
+  test('PageIndicator', async () => {
     const indicator = document.createElement('viewer-page-indicator');
     document.body.appendChild(indicator);
 
     // Assumes label is index + 1 if no labels are provided
     indicator.index = 2;
-    assertEquals('3', indicator.label);
+    await microtasksFinished();
+    assertEquals('3', indicator.$.text.textContent);
 
     // If labels are provided, uses the index to get the label.
     indicator.pageLabels = [1, 3, 5];
-    assertEquals('5', indicator.label);
+    await microtasksFinished();
+    assertEquals('5', indicator.$.text.textContent);
   });
 });

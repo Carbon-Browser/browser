@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_ASSISTANT_TEST_TEST_ASSISTANT_SETUP_H_
 
 #include "ash/public/cpp/assistant/assistant_setup.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace ash {
 

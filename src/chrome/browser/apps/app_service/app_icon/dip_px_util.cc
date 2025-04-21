@@ -1,16 +1,16 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/app_icon/dip_px_util.h"
 
 #include "base/check_op.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/size.h"
 
-// TODO(crbug.com/826982): plumb through enough information to use one of
+// TODO(crbug.com/40569217): plumb through enough information to use one of
 // Screen::GetDisplayNearest{Window/View/Point}. That way in multi-monitor
 // setups where one screen is hidpi and the other one isn't, we don't always do
 // the wrong thing.
@@ -37,7 +37,7 @@ int ConvertBetweenDipAndPx(int value,
   if (invert) {
     scale = 1 / scale;
   }
-  return gfx::ScaleToFlooredSize(gfx::Size(value, value), scale).width();
+  return apps_util::ConvertDipToPxForScale(value, scale);
 }
 
 }  // namespace
@@ -50,6 +50,10 @@ int ConvertDipToPx(int dip, bool quantize_to_supported_scale_factor) {
 
 int ConvertPxToDip(int px, bool quantize_to_supported_scale_factor) {
   return ConvertBetweenDipAndPx(px, quantize_to_supported_scale_factor, true);
+}
+
+int ConvertDipToPxForScale(int dip, float scale) {
+  return gfx::ScaleToFlooredSize(gfx::Size(dip, dip), scale).width();
 }
 
 ui::ResourceScaleFactor GetPrimaryDisplayUIScaleFactor() {

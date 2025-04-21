@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "ipc/ipc_message_macros.h"
 
 IPC_ENUM_TRAITS_MAX_VALUE(ContentSettingsType,
-                          static_cast<int32_t>(ContentSettingsType::NUM_TYPES) -
-                              1)
+                          static_cast<int32_t>(ContentSettingsType::kMaxValue))
 
 #endif  // COMPONENTS_CONTENT_SETTINGS_CORE_COMMON_CONTENT_SETTINGS_PARAM_TRAITS_H_

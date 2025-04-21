@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,11 @@ bool UserEventReporterHelperTesting::ShouldReportUser(
 
 bool UserEventReporterHelperTesting::IsKioskUser() const {
   return is_kiosk_user_;
+}
+
+// static
+std::string UserEventReporterHelperTesting::GetDeviceDmToken() const {
+  return "testing-dm-token";
 }
 
 }  // namespace reporting

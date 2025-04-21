@@ -1,16 +1,17 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/browser/webrtc/webrtc_content_browsertest_base.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test_utils.h"
@@ -36,8 +37,15 @@ namespace content {
 // granted.
 class MAYBE_WebRtcBrowserTest : public WebRtcContentBrowserTestBase {
  public:
-  MAYBE_WebRtcBrowserTest() {}
-  ~MAYBE_WebRtcBrowserTest() override {}
+  MAYBE_WebRtcBrowserTest() {
+#if BUILDFLAG(IS_ANDROID)
+    // This test fails on Nexus 5 devices.
+    // TODO(henrika): see http://crbug.com/362437 and http://crbug.com/359389
+    // for details.
+    scoped_feature_list_.InitAndDisableFeature(features::kWebRtcHWDecoding);
+#endif
+  }
+  ~MAYBE_WebRtcBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     WebRtcContentBrowserTestBase::SetUpCommandLine(command_line);
@@ -47,16 +55,18 @@ class MAYBE_WebRtcBrowserTest : public WebRtcContentBrowserTestBase {
 
  protected:
   // Convenience function since most peerconnection-call.html tests just load
-  // the page, kick off some javascript and wait for the title to change to OK.
+  // the page, and execute some javascript.
   void MakeTypicalPeerConnectionCall(const std::string& javascript) {
     MakeTypicalCall(javascript, "/media/peerconnection-call.html");
   }
 
   void SetConfigurationTest(const std::string& javascript) {
-    // This doesn't actually "make a call", it just loads the page, executes
-    // the javascript and waits for "OK".
+    // This doesn't actually "make a call", it just loads the page, and executes
+    // the javascript, expecting no errors to be thrown.
     MakeTypicalCall(javascript, "/media/peerconnection-setConfiguration.html");
   }
+
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest, CanSetupAudioAndVideoCall) {
@@ -86,8 +96,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
 
 // These tests will make a complete PeerConnection-based call and verify that
 // video is playing for the call.
+//
+// TODO(crbug.com/40930185): Re-enable this test.
 IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
-                       CanSetupDefaultVideoCall) {
+                       DISABLED_CanSetupDefaultVideoCall) {
   MakeTypicalPeerConnectionCall(
       "callAndExpectResolution({video: true}, 640, 480);");
 }
@@ -100,8 +112,9 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
   MakeTypicalPeerConnectionCall(javascript);
 }
 
+// TODO(crbug.com/40930185): Re-enable this test.
 IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
-                       CanSetupVideoCallWith16To9AspectRatio) {
+                       DISABLED_CanSetupVideoCallWith16To9AspectRatio) {
 #if BUILDFLAG(IS_ANDROID)
   // Android requires 16x16 alignment for hardware encoding.
   constexpr int kExpectedAlignment = 16;
@@ -116,7 +129,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
 }
 
 #if BUILDFLAG(IS_MAC)
-// TODO(https://crbug.com/1235254): This test is flakey on macOS.
+// TODO(crbug.com/40781953): This test is flakey on macOS.
 #define MAYBE_CanSetupVideoCallWith4To3AspectRatio \
   DISABLED_CanSetupVideoCallWith4To3AspectRatio
 #else
@@ -162,13 +175,6 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
 // received on pc2 to test that cloning of remote video and audio tracks works
 // as intended and is sent back to pc1.
 IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest, CanForwardRemoteStream) {
-#if defined (OS_ANDROID)
-  // This test fails on Nexus 5 devices.
-  // TODO(henrika): see http://crbug.com/362437 and http://crbug.com/359389
-  // for details.
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kDisableWebRtcHWDecoding);
-#endif
   MakeTypicalPeerConnectionCall(
       "callAndForwardRemoteStream({video: true, audio: true});");
 }
@@ -259,7 +265,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
       "testGetSettingsReportsValuesForRemoteTracks();");
 }
 
-// TODO(crbug.com/988432): This test is a temporary replacement for:
+// TODO(crbug.com/40637961): This test is a temporary replacement for:
 // external/wpt/webrtc/RTCRtpReceiver-getSynchronizationSources.https.html
 IN_PROC_BROWSER_TEST_F(
     MAYBE_WebRtcBrowserTest,
@@ -268,11 +274,12 @@ IN_PROC_BROWSER_TEST_F(
       "testEstablishVideoOnlyCallAndVerifyGetSynchronizationSourcesWorks();");
 }
 
+// Flaky on Android: https://crbug.com/1366910.
 #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(USE_PROPRIETARY_CODECS)
 // This test is to make sure HW H264 work normally on supported devices, since
 // there is no SW H264 fallback available on Android.
 IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcBrowserTest,
-                       CanSetupH264VideoCallOnSupportedDevice) {
+                       DISABLED_CanSetupH264VideoCallOnSupportedDevice) {
   MakeTypicalPeerConnectionCall("CanSetupH264VideoCallOnSupportedDevice();");
 }
 #endif

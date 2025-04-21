@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,6 @@ DOMArrayPiece::DOMArrayPiece(
   }
 
   NOTREACHED();
-  InitNull();
 }
 
 bool DOMArrayPiece::IsNull() const {
@@ -48,7 +47,7 @@ bool DOMArrayPiece::IsDetached() const {
 
 void* DOMArrayPiece::Data() const {
   DCHECK(!IsNull());
-  return data_;
+  return data_.data();
 }
 
 unsigned char* DOMArrayPiece::Bytes() const {
@@ -57,12 +56,17 @@ unsigned char* DOMArrayPiece::Bytes() const {
 
 size_t DOMArrayPiece::ByteLength() const {
   DCHECK(!IsNull());
-  return byte_length_;
+  return data_.size_bytes();
+}
+
+base::span<uint8_t> DOMArrayPiece::ByteSpan() const {
+  DCHECK(!IsNull());
+  return data_;
 }
 
 void DOMArrayPiece::InitWithArrayBuffer(DOMArrayBuffer* buffer) {
   if (buffer) {
-    InitWithData(buffer->Data(), buffer->ByteLength());
+    InitWithData(buffer->ByteSpan());
     is_detached_ = buffer->IsDetached();
   } else {
     InitNull();
@@ -71,23 +75,21 @@ void DOMArrayPiece::InitWithArrayBuffer(DOMArrayBuffer* buffer) {
 
 void DOMArrayPiece::InitWithArrayBufferView(DOMArrayBufferView* buffer) {
   if (buffer) {
-    InitWithData(buffer->BaseAddress(), buffer->byteLength());
+    InitWithData(buffer->ByteSpan());
     is_detached_ = buffer->buffer() ? buffer->buffer()->IsDetached() : true;
   } else {
     InitNull();
   }
 }
 
-void DOMArrayPiece::InitWithData(void* data, size_t byte_length) {
-  byte_length_ = byte_length;
+void DOMArrayPiece::InitWithData(base::span<uint8_t> data) {
   data_ = data;
   is_null_ = false;
   is_detached_ = false;
 }
 
 void DOMArrayPiece::InitNull() {
-  byte_length_ = 0;
-  data_ = nullptr;
+  data_ = base::span<uint8_t>();
   is_null_ = true;
   is_detached_ = false;
 }

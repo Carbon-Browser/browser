@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
 
@@ -13,6 +18,7 @@
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/feature_list.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/quick_unlock/pin_backend.h"
@@ -20,6 +26,7 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/browser_resources.h"
+#include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
@@ -29,6 +36,42 @@
 namespace ash {
 namespace quick_unlock {
 namespace {
+
+// Maps FingerprintLocation to FingerprintDescriptionStrings.
+constexpr auto kFingerprintLocationToStringsMap = base::MakeFixedFlatMap<
+    quick_unlock::FingerprintLocation,
+    quick_unlock::FingerprintDescriptionStrings>(
+    {{quick_unlock::FingerprintLocation::TABLET_POWER_BUTTON,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_POWER_BUTTON_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_POWER_BUTTON_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::KEYBOARD_BOTTOM_LEFT,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_BOTTOM_LEFT_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_BOTTOM_LEFT_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::KEYBOARD_BOTTOM_RIGHT,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_BOTTOM_RIGHT_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_BOTTOM_RIGHT_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::KEYBOARD_TOP_RIGHT,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_TOP_RIGHT_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_KEYBOARD_TOP_RIGHT_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::RIGHT_SIDE,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_RIGHT_SIDE_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_RIGHT_SIDE_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::LEFT_SIDE,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_LEFT_SIDE_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_LEFT_SIDE_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::LEFT_OF_POWER_BUTTON_TOP_RIGHT,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_LEFT_OF_POWER_BUTTON_TOP_RIGHT_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_LEFT_OF_POWER_BUTTON_TOP_RIGHT_DESCRIPTION_CHILD}},
+
+     {quick_unlock::FingerprintLocation::UNKNOWN,
+      {IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_GENERAL_DESCRIPTION,
+       IDS_OOBE_FINGERPINT_SETUP_SCREEN_SENSOR_GENERAL_DESCRIPTION_CHILD}}});
 
 TestApi* g_instance = nullptr;
 
@@ -43,18 +86,18 @@ constexpr int kDefaultMinimumPinLength = 6;
 bool HasPolicyValue(const PrefService* pref_service,
                     Purpose purpose,
                     const char* value) {
-  const base::Value* factors = nullptr;
+  const base::Value::List* factors = nullptr;
   switch (purpose) {
     case Purpose::kUnlock:
-      factors = pref_service->GetList(prefs::kQuickUnlockModeAllowlist);
+      factors = &pref_service->GetList(prefs::kQuickUnlockModeAllowlist);
       break;
     case Purpose::kWebAuthn:
-      factors = pref_service->GetList(prefs::kWebAuthnFactors);
+      factors = &pref_service->GetList(prefs::kWebAuthnFactors);
       break;
     default:
       return false;
   }
-  return base::Contains(factors->GetListDeprecated(), base::Value(value));
+  return base::Contains(*factors, base::Value(value));
 }
 
 // Check if fingerprint is disabled for a specific purpose (so not including
@@ -156,7 +199,6 @@ base::TimeDelta PasswordConfirmationFrequencyToTimeDelta(
       return base::Days(7);
   }
   NOTREACHED();
-  return base::TimeDelta();
 }
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
@@ -179,9 +221,7 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(prefs::kPinUnlockMaximumLength, 0);
   registry->RegisterBooleanPref(prefs::kPinUnlockWeakPinsAllowed, true);
 
-  // Register as true by default only when the feature is enabled.
-  registry->RegisterBooleanPref(::prefs::kPinUnlockAutosubmitEnabled,
-                                features::IsPinAutosubmitFeatureEnabled());
+  registry->RegisterBooleanPref(::prefs::kPinUnlockAutosubmitEnabled, true);
 }
 
 bool IsPinDisabledByPolicy(PrefService* pref_service, Purpose purpose) {
@@ -223,8 +263,9 @@ FingerprintLocation GetFingerprintLocation() {
     return FingerprintLocation::RIGHT_SIDE;
   if (location_info == "left-side")
     return FingerprintLocation::LEFT_SIDE;
+  if (location_info == "left-of-power-button-top-right")
+    return FingerprintLocation::LEFT_OF_POWER_BUTTON_TOP_RIGHT;
   NOTREACHED() << "Not handled value: " << location_info;
-  return default_location;
 }
 
 bool IsFingerprintSupported() {
@@ -259,33 +300,31 @@ bool IsFingerprintEnabled(Profile* profile, Purpose purpose) {
 }
 
 void AddFingerprintResources(content::WebUIDataSource* html_source) {
-  int resource_id_dark;
-  int resource_id_light;
+  int resource_id;
   switch (GetFingerprintLocation()) {
     case FingerprintLocation::TABLET_POWER_BUTTON:
-      resource_id_dark = IDR_FINGERPRINT_TABLET_ANIMATION_DARK;
-      resource_id_light = IDR_FINGERPRINT_TABLET_ANIMATION_LIGHT;
+      resource_id = IDR_FINGERPRINT_TABLET_ANIMATION;
       break;
     case FingerprintLocation::KEYBOARD_BOTTOM_RIGHT:
-      resource_id_dark = IDR_FINGERPRINT_LAPTOP_BOTTOM_RIGHT_ANIMATION_DARK;
-      resource_id_light = IDR_FINGERPRINT_LAPTOP_BOTTOM_RIGHT_ANIMATION_LIGHT;
+      resource_id = IDR_FINGERPRINT_LAPTOP_BOTTOM_RIGHT_ANIMATION;
       break;
     case FingerprintLocation::KEYBOARD_BOTTOM_LEFT:
-      resource_id_dark = IDR_FINGERPRINT_LAPTOP_BOTTOM_LEFT_ANIMATION_DARK;
-      resource_id_light = IDR_FINGERPRINT_LAPTOP_BOTTOM_LEFT_ANIMATION_LIGHT;
+      resource_id = IDR_FINGERPRINT_LAPTOP_BOTTOM_LEFT_ANIMATION;
+      break;
+    case FingerprintLocation::LEFT_OF_POWER_BUTTON_TOP_RIGHT:
+      resource_id =
+          IDR_FINGERPRINT_LAPTOP_LEFT_OF_POWER_BUTTON_TOP_RIGHT_ANIMATION;
       break;
     case FingerprintLocation::KEYBOARD_TOP_RIGHT:
     case FingerprintLocation::RIGHT_SIDE:
     case FingerprintLocation::LEFT_SIDE:
     case FingerprintLocation::UNKNOWN:
-      resource_id_dark = IDR_FINGERPRINT_DEFAULT_ANIMATION_DARK;
-      resource_id_light = IDR_FINGERPRINT_DEFAULT_ANIMATION_LIGHT;
+      resource_id = IDR_FINGERPRINT_DEFAULT_ANIMATION;
       break;
   }
-  html_source->AddResourcePath("fingerprint_scanner_animation_dark.json",
-                               resource_id_dark);
-  html_source->AddResourcePath("fingerprint_scanner_animation_light.json",
-                               resource_id_light);
+
+  html_source->AddResourcePath("fingerprint_scanner_animation.json",
+                               resource_id);
 
   // To use lottie, the worker-src CSP needs to be updated for the web ui
   // that is using it. Since as of now there are only a couple of webuis
@@ -294,6 +333,13 @@ void AddFingerprintResources(content::WebUIDataSource* html_source) {
   // longer required.
   html_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::WorkerSrc, "worker-src blob: 'self';");
+}
+
+FingerprintDescriptionStrings GetFingerprintDescriptionStrings(
+    FingerprintLocation location) {
+  auto location_string_it = kFingerprintLocationToStringsMap.find(location);
+  CHECK(location_string_it != kFingerprintLocationToStringsMap.end());
+  return location_string_it->second;
 }
 
 }  // namespace quick_unlock

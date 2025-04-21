@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/dns/public/dns_over_https_server_config.h"
 
 #include <string>
+#include <string_view>
 
 #include "base/json/json_reader.h"
 #include "net/base/ip_address.h"
@@ -124,7 +125,8 @@ TEST(DnsOverHttpsServerConfigTest, FromValueSimple) {
     }
   )");
 
-  auto parsed = DnsOverHttpsServerConfig::FromValue(std::move(input.GetDict()));
+  auto parsed =
+      DnsOverHttpsServerConfig::FromValue(std::move(input).TakeDict());
 
   auto expected = DnsOverHttpsServerConfig::FromString(
       "https://dnsserver.example.net/dns-query{?dns}");
@@ -143,7 +145,8 @@ TEST(DnsOverHttpsServerConfigTest, FromValueWithEndpoints) {
     }
   )");
 
-  auto parsed = DnsOverHttpsServerConfig::FromValue(std::move(input.GetDict()));
+  auto parsed =
+      DnsOverHttpsServerConfig::FromValue(std::move(input).TakeDict());
 
   auto expected = DnsOverHttpsServerConfig::FromString(
       "https://dnsserver.example.net/dns-query{?dns}", endpoints);
@@ -158,7 +161,8 @@ TEST(DnsOverHttpsServerConfigTest, FromValueWithUnknownKey) {
     }
   )");
 
-  auto parsed = DnsOverHttpsServerConfig::FromValue(std::move(input.GetDict()));
+  auto parsed =
+      DnsOverHttpsServerConfig::FromValue(std::move(input).TakeDict());
 
   auto expected = DnsOverHttpsServerConfig::FromString(
       "https://dnsserver.example.net/dns-query{?dns}");
@@ -170,7 +174,7 @@ TEST(DnsOverHttpsServerConfigTest, FromValueInvalid) {
   EXPECT_FALSE(DnsOverHttpsServerConfig::FromValue(base::Value::Dict()));
 
   // Wrong scheme
-  base::StringPiece input = R"(
+  std::string_view input = R"(
     {
       "template": "http://dnsserver.example.net/dns-query{?dns}"
     }

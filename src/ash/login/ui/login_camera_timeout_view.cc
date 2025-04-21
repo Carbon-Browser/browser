@@ -1,14 +1,19 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/login/ui/login_camera_timeout_view.h"
 
+#include <utility>
+
 #include "ash/login/ui/arrow_button_view.h"
 #include "ash/login/ui/views_utils.h"
+#include "ash/style/ash_color_id.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/devicetype_utils.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace ash {
@@ -38,8 +43,7 @@ views::Label* CreateLabel(const std::u16string& text, const int font_delta) {
       {views::Label::GetDefaultFontList().DeriveWithSizeDelta(font_delta)});
   label->SetAutoColorReadabilityEnabled(false);
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  label->SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kTextColorPrimary));
+  label->SetEnabledColorId(kColorAshTextColorPrimary);
   label->SetSubpixelRenderingEnabled(false);
   return label;
 }
@@ -56,7 +60,7 @@ views::View* LoginCameraTimeoutView::TestApi::arrow_button() const {
 }
 
 LoginCameraTimeoutView::LoginCameraTimeoutView(
-    const views::Button::PressedCallback& callback)
+    views::Button::PressedCallback callback)
     : NonAccessibleView(kLoginCameraTimeoutViewClassName) {
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical, gfx::Insets(),
@@ -85,9 +89,9 @@ LoginCameraTimeoutView::LoginCameraTimeoutView(
       kFontDeltaSubtitle));
 
   // Create arrow button.
-  auto arrow_button =
-      std::make_unique<ArrowButtonView>(callback, kArrowButtonSizeDp);
-  arrow_button->SetAccessibleName(base::JoinString(
+  auto arrow_button = std::make_unique<ArrowButtonView>(std::move(callback),
+                                                        kArrowButtonSizeDp);
+  arrow_button->GetViewAccessibility().SetName(base::JoinString(
       {l10n_util::GetStringFUTF16(IDS_ASH_LOGIN_CAMERA_TIME_OUT_TITLE,
                                   ui::GetChromeOSDeviceName()),
        l10n_util::GetStringUTF16(IDS_ASH_LOGIN_CAMERA_TIME_OUT_SUBTITLE)},
@@ -110,5 +114,8 @@ LoginCameraTimeoutView::~LoginCameraTimeoutView() = default;
 void LoginCameraTimeoutView::RequestFocus() {
   return arrow_button_->RequestFocus();
 }
+
+BEGIN_METADATA(LoginCameraTimeoutView)
+END_METADATA
 
 }  // namespace ash

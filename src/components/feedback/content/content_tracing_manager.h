@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 
@@ -24,7 +25,7 @@
 // version of the performance data.  That data can then be requested via
 // GetTraceData().  When the data is no longer needed, it should be discarded
 // via DiscardTraceData().
-class ContentTracingManager : public TracingManager {
+class ContentTracingManager final : public TracingManager {
  public:
   ~ContentTracingManager() override;
 
@@ -45,11 +46,14 @@ class ContentTracingManager : public TracingManager {
   // Discard the data for trace |id|.
   void DiscardTraceData(int id) override;
 
+  base::WeakPtr<TracingManager> AsWeakPtr() override;
+
  private:
   ContentTracingManager();
 
   void StartTracing();
   void OnTraceDataCollected(std::unique_ptr<std::string> data);
+  void OnTraceDataCompressed(scoped_refptr<base::RefCountedString> data);
 
   // ID of the trace that is being collected.
   int current_trace_id_ = 0;

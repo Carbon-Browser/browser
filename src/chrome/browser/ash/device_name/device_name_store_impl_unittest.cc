@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/device_name/device_name_store_impl.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/device_name/fake_device_name_applier.h"
@@ -14,12 +15,12 @@
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/handlers/fake_device_name_policy_handler.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
@@ -59,10 +60,7 @@ class DeviceNameStoreImplTest : public ::testing::Test {
     ASSERT_TRUE(mock_profile_manager_.SetUp());
     scoped_cros_settings_test_helper_.ReplaceDeviceSettingsProviderWithStub();
 
-    auto fake_user_manager = std::make_unique<FakeChromeUserManager>();
-    fake_user_manager_ = fake_user_manager.get();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(fake_user_manager));
+    fake_user_manager_.Reset(std::make_unique<FakeChromeUserManager>());
   }
 
   void TearDown() override {
@@ -81,10 +79,11 @@ class DeviceNameStoreImplTest : public ::testing::Test {
 
     TestingProfile* mock_profile = mock_profile_manager_.CreateTestingProfile(
         test_account_id.GetUserEmail(),
-        {{OwnerSettingsServiceAshFactory::GetInstance(),
-          base::BindRepeating(
-              &DeviceNameStoreImplTest::CreateOwnerSettingsServiceAsh,
-              base::Unretained(this))}});
+        {TestingProfile::TestingFactory{
+            OwnerSettingsServiceAshFactory::GetInstance(),
+            base::BindRepeating(
+                &DeviceNameStoreImplTest::CreateOwnerSettingsServiceAsh,
+                base::Unretained(this))}});
     owner_settings_service_ash_ =
         OwnerSettingsServiceAshFactory::GetInstance()->GetForBrowserContext(
             mock_profile);
@@ -104,7 +103,7 @@ class DeviceNameStoreImplTest : public ::testing::Test {
 
   void InitializeDeviceNameStore(
       bool is_hostname_setting_flag_enabled,
-      const absl::optional<std::string>& name_in_prefs = absl::nullopt) {
+      const std::optional<std::string>& name_in_prefs = std::nullopt) {
     if (is_hostname_setting_flag_enabled)
       feature_list_.InitAndEnableFeature(features::kEnableHostnameSetting);
     else
@@ -164,15 +163,16 @@ class DeviceNameStoreImplTest : public ::testing::Test {
   // Test backing store for prefs.
   TestingPrefServiceSimple local_state_;
 
-  FakeChromeUserManager* fake_user_manager_;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  ScopedCrosSettingsTestHelper scoped_cros_settings_test_helper_;
+  user_manager::TypedScopedUserManager<FakeChromeUserManager>
+      fake_user_manager_;
+
   TestingProfileManager mock_profile_manager_{
       TestingBrowserProcess::GetGlobal()};
-  OwnerSettingsServiceAsh* owner_settings_service_ash_;
-  ScopedCrosSettingsTestHelper scoped_cros_settings_test_helper_;
+  raw_ptr<OwnerSettingsServiceAsh> owner_settings_service_ash_;
   base::test::ScopedFeatureList feature_list_;
 
-  FakeDeviceNameApplier* fake_device_name_applier_;
+  raw_ptr<FakeDeviceNameApplier, DanglingUntriaged> fake_device_name_applier_;
   FakeObserver fake_observer_;
   std::unique_ptr<policy::FakeDeviceNamePolicyHandler>
       fake_device_name_policy_handler_;
@@ -414,7 +414,7 @@ TEST_F(DeviceNameStoreImplTest,
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameNotConfigurable,
-      absl::nullopt);
+      std::nullopt);
 
   // Verify that device name is set to the default name because of
   // non-configurable device name policy.
@@ -453,7 +453,7 @@ TEST_F(DeviceNameStoreImplTest, ManagedDeviceFirstTimeUserNameNotConfigurable) {
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameNotConfigurable,
-      absl::nullopt);
+      std::nullopt);
   VerifyDeviceNameMetadata(
       "ChromeOS",
       DeviceNameStore::DeviceNameState::kCannotBeModifiedBecauseOfPolicy);
@@ -476,7 +476,7 @@ TEST_F(DeviceNameStoreImplTest, ManagedDeviceNotFirstTimeUserNameConfigurable) {
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameConfigurableByManagedUser,
-      absl::nullopt);
+      std::nullopt);
 
   // Verify that device name is the previously set name upon initialization.
   InitializeDeviceNameStore(/*is_hostname_setting_flag_enabled=*/true,
@@ -512,7 +512,7 @@ TEST_F(DeviceNameStoreImplTest, ManagedDeviceFirstTimeUserNameConfigurable) {
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameConfigurableByManagedUser,
-      absl::nullopt);
+      std::nullopt);
   VerifyDeviceNameMetadata("ChromeOS",
                            DeviceNameStore::DeviceNameState::kCanBeModified);
   EXPECT_EQ(1u, GetNumObserverCalls());
@@ -580,7 +580,7 @@ TEST_F(DeviceNameStoreImplTest, ManagedDeviceOwnerPolicyChanges) {
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameConfigurableByManagedUser,
-      absl::nullopt);
+      std::nullopt);
   VerifyDeviceNameMetadata("Template",
                            DeviceNameStore::DeviceNameState::kCanBeModified);
   EXPECT_EQ(2u, GetNumObserverCalls());
@@ -590,7 +590,7 @@ TEST_F(DeviceNameStoreImplTest, ManagedDeviceOwnerPolicyChanges) {
   fake_device_name_policy_handler()->SetPolicyState(
       policy::DeviceNamePolicyHandler::DeviceNamePolicy::
           kPolicyHostnameNotConfigurable,
-      absl::nullopt);
+      std::nullopt);
   VerifyDeviceNameMetadata(
       "ChromeOS",
       DeviceNameStore::DeviceNameState::kCannotBeModifiedBecauseOfPolicy);

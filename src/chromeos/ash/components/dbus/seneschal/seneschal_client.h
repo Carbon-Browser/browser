@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,16 @@
 #include "base/component_export.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_service.pb.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "dbus/object_proxy.h"
 
 namespace ash {
 
 // SeneschalClient is used to communicate with Seneschal, which manages
 // 9p file servers.
-class COMPONENT_EXPORT(SENESCHAL) SeneschalClient : public DBusClient {
+class COMPONENT_EXPORT(SENESCHAL) SeneschalClient
+    : public chromeos::DBusClient {
  public:
   class Observer : public base::CheckedObserver {
    public:
@@ -38,7 +39,7 @@ class COMPONENT_EXPORT(SENESCHAL) SeneschalClient : public DBusClient {
   ~SeneschalClient() override;
 
   // Factory function, creates a new instance and returns ownership.
-  // For normal usage, access the singleton via DBusThreadManager::Get().
+  // For normal usage, access the singleton via Get().
   static std::unique_ptr<SeneschalClient> Create();
 
   // Registers |callback| to run when the Concierge service becomes available.
@@ -53,13 +54,14 @@ class COMPONENT_EXPORT(SENESCHAL) SeneschalClient : public DBusClient {
   // |callback| is called after the method call finishes.
   virtual void SharePath(
       const vm_tools::seneschal::SharePathRequest& request,
-      DBusMethodCallback<vm_tools::seneschal::SharePathResponse> callback) = 0;
+      chromeos::DBusMethodCallback<vm_tools::seneschal::SharePathResponse>
+          callback) = 0;
 
   // Unshares a path in the Chrome OS host with the container.
   // |callback| is called after the method call finishes.
   virtual void UnsharePath(
       const vm_tools::seneschal::UnsharePathRequest& request,
-      DBusMethodCallback<vm_tools::seneschal::UnsharePathResponse>
+      chromeos::DBusMethodCallback<vm_tools::seneschal::UnsharePathResponse>
           callback) = 0;
 
   // Creates and initializes the global instance. |bus| must not be null.

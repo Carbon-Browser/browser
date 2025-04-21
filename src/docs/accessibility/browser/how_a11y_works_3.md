@@ -25,14 +25,14 @@ directory.
 
 First, gfx::NativeViewAccessible is a typedef used throughout Chromium to
 represent an instance of the platform-specific accessible object on the current
-platform. It's defined alongside gfx::NativeView, gfx::NativeFont,
-gfx::NativeEvent, and other similar types that have equivalents on each
-platform. Note that these are not wrappers or abstractions; they're just
-typedefs enabling you to write a function that returns an instance of the
-appropriate type on each platform. For accessibility, gfx::NativeViewAccessible
-is defined to be IAccessible* on Windows, id on Mac (where 'id' is the type for
-a generic Objective-C object, which has to implement the informal
-NSAccessibility protocol), and AtkObject* on Linux.
+platform. It's defined alongside gfx::NativeView, gfx::NativeEvent, and other
+similar types that have equivalents on each platform. Note that these are not
+wrappers or abstractions; they're just typedefs enabling you to write a function
+that returns an instance of the appropriate type on each platform. For
+accessibility, gfx::NativeViewAccessible is defined to be IAccessible* on
+Windows, id on Mac (where 'id' is the type for a generic Objective-C object,
+which has to implement the informal NSAccessibility protocol), and AtkObject* on
+Linux.
 
 The main class in ui/accessibility/platform is AXPlatformNode. When you call
 AXPlatformNode::Create, you'll get back an object that implements the
@@ -104,7 +104,7 @@ semantics around which events are fired when, and where. As a few examples:
 * On macOS, there are separate events for expanding and collapsing a row
   in a table or tree, vs expanding or collapsing a pop-up menu
 * On Android there's a separate event for the checked state changing, while
-  on other platforms there's just a generic state changed event
+  on other platforms, there's just a generic state changed event
 * On Windows there are SHOW and HIDE events that need to be fired when
   a node or subtree is created or destroyed
 

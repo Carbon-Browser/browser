@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ enum class ProcessHintsComponentResult {
   kFailedInvalidParameters = 1,
   kFailedReadingFile = 2,
   kFailedInvalidConfiguration = 3,
-  kFailedFinishProcessing = 4,
+  kDeprecatedFailedFinishProcessing = 4,
   kSkippedProcessingHints = 5,
   kProcessedNoHints = 6,
   kFailedPreviouslyAttemptedVersionInvalid = 7,

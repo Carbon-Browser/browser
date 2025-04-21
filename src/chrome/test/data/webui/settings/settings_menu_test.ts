@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,94 +6,143 @@
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {pageVisibility, Router, routes, SettingsMenuElement} from 'chrome://settings/settings.js';
-import {assertEquals, assertFalse} from 'chrome://webui-test/chai_assert.js';
+import type {SettingsMenuElement, SettingsRoutes} from 'chrome://settings/settings.js';
+import {resetRouterForTesting, loadTimeData, MetricsBrowserProxyImpl, pageVisibility, Router} from 'chrome://settings/settings.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {isVisible, microtasksFinished} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+
+import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
 
 // clang-format on
 
 suite('SettingsMenu', function() {
   let settingsMenu: SettingsMenuElement;
+  let routes: SettingsRoutes;
+  let metricsBrowserProxy: TestMetricsBrowserProxy;
+
+  function createSettingsMenu() {
+    routes = Router.getInstance().getRoutes();
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    settingsMenu = document.createElement('settings-menu');
+    document.body.appendChild(settingsMenu);
+    flush();
+  }
 
   setup(function() {
-    document.body.innerHTML = '';
-    settingsMenu = document.createElement('settings-menu');
-    settingsMenu.pageVisibility = pageVisibility;
-    document.body.appendChild(settingsMenu);
-  });
-
-  teardown(function() {
-    settingsMenu.remove();
+    metricsBrowserProxy = new TestMetricsBrowserProxy();
+    MetricsBrowserProxyImpl.setInstance(metricsBrowserProxy);
+    createSettingsMenu();
   });
 
   // Test that navigating via the paper menu always clears the current
   // search URL parameter.
-  test('clearsUrlSearchParam', function() {
-    // As of iron-selector 2.x, need to force iron-selector to update before
-    // clicking items on it, or wait for 'iron-items-changed'
-    const ironSelector =
-        settingsMenu.shadowRoot!.querySelector('iron-selector')!;
-    ironSelector.forceSynchronousItemUpdate();
-
+  test('clearsUrlSearchParam', async () => {
     const urlParams = new URLSearchParams('search=foo');
-    Router.getInstance().navigateTo(routes.BASIC, urlParams);
+    Router.getInstance().navigateTo(
+        Router.getInstance().getRoutes().BASIC, urlParams);
     assertEquals(
         urlParams.toString(),
         Router.getInstance().getQueryParameters().toString());
     settingsMenu.$.people.click();
+    await settingsMenu.$.menu.updateComplete;
     assertEquals('', Router.getInstance().getQueryParameters().toString());
-  });
-});
-
-suite('SettingsMenuReset', function() {
-  let settingsMenu: SettingsMenuElement;
-
-  setup(function() {
-    document.body.innerHTML = '';
-    Router.getInstance().navigateTo(routes.RESET, undefined);
-    settingsMenu = document.createElement('settings-menu');
-    document.body.appendChild(settingsMenu);
-    flush();
-  });
-
-  teardown(function() {
-    settingsMenu.remove();
   });
 
   test('openResetSection', function() {
+    Router.getInstance().navigateTo(routes.RESET);
     const selector = settingsMenu.$.menu;
-    const path = new window.URL(selector.selected.toString()).pathname;
-    assertEquals('/reset', path);
+    assertTrue(!!selector.selected);
+    assertEquals('/reset', selector.selected.toString());
   });
 
   test('navigateToAnotherSection', function() {
+    Router.getInstance().navigateTo(routes.RESET);
     const selector = settingsMenu.$.menu;
-    let path = new window.URL(selector.selected.toString()).pathname;
-    assertEquals('/reset', path);
+    assertTrue(!!selector.selected);
+    assertEquals('/reset', selector.selected.toString());
 
-    Router.getInstance().navigateTo(routes.PEOPLE, undefined);
+    Router.getInstance().navigateTo(routes.PEOPLE);
     flush();
 
-    path = new window.URL(selector.selected.toString()).pathname;
-    assertEquals('/people', path);
+    assertTrue(!!selector.selected);
+    assertEquals('/people', selector.selected.toString());
   });
 
   test('navigateToBasic', function() {
+    Router.getInstance().navigateTo(routes.RESET);
     const selector = settingsMenu.$.menu;
-    const path = new window.URL(selector.selected.toString()).pathname;
-    assertEquals('/reset', path);
+    assertTrue(!!selector.selected);
+    assertEquals('/reset', selector.selected.toString());
 
-    Router.getInstance().navigateTo(routes.BASIC, undefined);
+    Router.getInstance().navigateTo(routes.BASIC);
     flush();
 
     // BASIC has no sub page selected.
     assertFalse(!!selector.selected);
   });
 
+  test('noExperimental', async function() {
+    loadTimeData.overrideValues({showAdvancedFeaturesMainControl: false});
+    resetRouterForTesting();
+    createSettingsMenu();
+    await flushTasks();
+
+    const entry = settingsMenu.shadowRoot!.querySelector('a[href=\'/ai\']');
+    assertTrue(!!entry);
+    assertFalse(isVisible(entry));
+  });
+
+  test('navigateToExperimental', async function() {
+    loadTimeData.overrideValues({showAdvancedFeaturesMainControl: true});
+    resetRouterForTesting();
+    createSettingsMenu();
+    Router.getInstance().navigateTo(routes.AI);
+    await flushTasks();
+
+    const entry = settingsMenu.shadowRoot!.querySelector('a[href=\'/ai\']');
+    assertTrue(!!entry);
+    assertTrue(isVisible(entry));
+
+    const selector = settingsMenu.$.menu;
+    assertTrue(!!selector.selected);
+    assertEquals('/ai', selector.selected.toString());
+  });
+
+  // <if expr="enable_glic">
+  test('noGlic', async function() {
+    loadTimeData.overrideValues({showGlicSettings: false});
+    resetRouterForTesting();
+    createSettingsMenu();
+    await flushTasks();
+
+    const entry = settingsMenu.shadowRoot!.querySelector('a[href=\'/glic\']');
+    assertTrue(!!entry);
+    assertFalse(isVisible(entry));
+  });
+
+  test('navigateToGlic', async function() {
+    loadTimeData.overrideValues({showGlicSettings: true});
+    resetRouterForTesting();
+    createSettingsMenu();
+    Router.getInstance().navigateTo(routes.GLIC);
+    await flushTasks();
+
+    const entry = settingsMenu.shadowRoot!.querySelector('a[href=\'/glic\']');
+    assertTrue(!!entry);
+    assertTrue(isVisible(entry));
+
+    const selector = settingsMenu.$.menu;
+    assertTrue(!!selector.selected);
+    assertEquals('/glic', selector.selected.toString());
+  });
+  // </if>
+
   test('pageVisibility', function() {
     function assertPagesHidden(expectedHidden: boolean) {
       const ids = [
         'accessibility', 'appearance',
-        // <if expr="not chromeos_ash and not chromeos_lacros">
+        // <if expr="not is_chromeos">
         'defaultBrowser',
         // </if>
         'downloads', 'languages', 'onStartup', 'people', 'reset',
@@ -132,5 +181,29 @@ suite('SettingsMenuReset', function() {
 
     // Now, the menu items should be hidden.
     assertPagesHidden(true);
+  });
+
+  test('aiPageMenuClick', async function() {
+    loadTimeData.overrideValues({
+      showAdvancedFeaturesMainControl: true,
+      enableAiSettingsPageRefresh: true,
+    });
+    resetRouterForTesting();
+    createSettingsMenu();
+    await flushTasks();
+
+    const entry =
+        settingsMenu.shadowRoot!.querySelector<HTMLElement>('a[href=\'/ai\']');
+    assertTrue(!!entry);
+    assertTrue(isVisible(entry));
+
+    // Ensure UMA is logged.
+    entry.click();
+    assertEquals(
+        'SettingsMenu_AiPageEntryPointClicked',
+        await metricsBrowserProxy.whenCalled('recordAction'));
+
+    await microtasksFinished();
+    assertEquals(routes.AI, Router.getInstance().getCurrentRoute());
   });
 });

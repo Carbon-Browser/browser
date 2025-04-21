@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,16 @@ import android.view.MenuItem;
 
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceFragmentCompat;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.browser.password_manager.PasswordCheckReferrer;
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
 
-/**
- * This class is responsible for rendering the check passwords view in the settings menu.
- */
-public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
+/** This class is responsible for rendering the check passwords view in the settings menu. */
+public class PasswordCheckFragmentView extends PreferenceFragmentCompat
+        implements EmbeddableSettingsPage {
     // Key for the argument with which the PasswordsCheck fragment will be launched. The value for
     // this argument should be part of the PasswordCheckReferrer enum, which contains
     // all points of entry to the password check UI.
@@ -27,9 +29,11 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
 
     private PasswordCheckComponentUi mComponentDelegate;
     private @PasswordCheckReferrer int mPasswordCheckReferrer;
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
 
     /**
      * Set the delegate that handles view events which affect the state of the component.
+     *
      * @param componentDelegate The {@link PasswordCheckComponentUi} delegate.
      */
     void setComponentDelegate(PasswordCheckComponentUi componentDelegate) {
@@ -38,10 +42,15 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-        getActivity().setTitle(R.string.passwords_check_title);
+        mPageTitle.set(getString(R.string.passwords_check_title));
         setPreferenceScreen(getPreferenceManager().createPreferenceScreen(getStyledContext()));
         mPasswordCheckReferrer = getReferrerFromInstanceStateOrLaunchBundle(savedInstanceState);
         setHasOptionsMenu(true);
+    }
+
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
     }
 
     @Override
@@ -49,8 +58,9 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
         menu.clear();
         MenuItem help =
                 menu.add(Menu.NONE, R.id.menu_id_targeted_help, Menu.NONE, R.string.menu_help);
-        help.setIcon(VectorDrawableCompat.create(
-                getResources(), R.drawable.ic_help_and_feedback, getActivity().getTheme()));
+        help.setIcon(
+                TraceEventVectorDrawableCompat.create(
+                        getResources(), R.drawable.ic_help_and_feedback, getActivity().getTheme()));
     }
 
     @Override
@@ -72,8 +82,8 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
         }
         Bundle extras = getArguments();
         assert extras.containsKey(PASSWORD_CHECK_REFERRER)
-            : "PasswordCheckFragmentView must be launched with a password-check-referrer fragment "
-                + "argument, but none was provided.";
+                : "PasswordCheckFragmentView must be launched with a password-check-referrer"
+                        + " fragment argument, but none was provided.";
         return extras.getInt(PASSWORD_CHECK_REFERRER);
     }
 
@@ -91,6 +101,7 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
             mComponentDelegate.destroy();
         }
     }
+
     @Override
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);

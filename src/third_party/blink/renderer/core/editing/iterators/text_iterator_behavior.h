@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,6 +72,10 @@ class CORE_EXPORT TextIteratorBehavior final {
     return values_.bits.emits_punctuation_for_replaced_elements;
   }
 
+  bool IgnoresCSSTextTransforms() const {
+    return values_.bits.ignores_css_text_transforms;
+  }
+
   static TextIteratorBehavior EmitsObjectReplacementCharacterBehavior();
   static TextIteratorBehavior IgnoresStyleVisibilityBehavior();
   static TextIteratorBehavior DefaultRangeLengthBehavior();
@@ -101,6 +105,7 @@ class CORE_EXPORT TextIteratorBehavior final {
       bool suppresses_newline_emission : 1;
       bool ignores_display_lock : 1;
       bool emits_punctuation_for_replaced_elements : 1;
+      bool ignores_css_text_transforms : 1;
     } bits;
   } values_;
 };
@@ -136,6 +141,7 @@ class CORE_EXPORT TextIteratorBehavior::Builder final {
   Builder& SetSuppressesExtraNewlineEmission(bool);
   Builder& SetIgnoresDisplayLock(bool);
   Builder& SetEmitsPunctuationForReplacedElements(bool);
+  Builder& SetIgnoresCSSTextTransforms(bool);
 
  private:
   TextIteratorBehavior behavior_;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,19 +37,21 @@ bool DeleteDmTokenFromSharedPreferences() {
 BrowserDMTokenStorageAndroid::BrowserDMTokenStorageAndroid()
     : task_runner_(base::ThreadPool::CreateTaskRunner({base::MayBlock()})) {}
 
-BrowserDMTokenStorageAndroid::~BrowserDMTokenStorageAndroid() {}
+BrowserDMTokenStorageAndroid::~BrowserDMTokenStorageAndroid() = default;
 
 std::string BrowserDMTokenStorageAndroid::InitClientId() {
   return android::GetClientId();
 }
 
 std::string BrowserDMTokenStorageAndroid::InitEnrollmentToken() {
-  // When a DMToken is available, it's possible that this method was called
-  // very early in the initialization process, even before `g_browser_process`
-  // be initialized.
-  if (!g_browser_process || !g_browser_process->browser_policy_connector() ||
-      !g_browser_process->browser_policy_connector()->HasPolicyService()) {
-    DCHECK(!android::ReadDmTokenFromSharedPreferences().empty());
+  // When a DMToken is available or main profile is managed, it's possible that
+  // this method was called very early in the initialization process, even
+  // before `g_browser_process` be initialized.
+  // However, if DM token is available we don't need enrollment token. And main
+  // profile only requires the device identity to calculate the profile id.
+  // Neither of them actually need enrollment token so it's safe to return an
+  // empty string for now.
+  if (!CanInitEnrollmentToken()) {
     return std::string();
   }
 
@@ -68,6 +70,11 @@ std::string BrowserDMTokenStorageAndroid::InitDMToken() {
 
 bool BrowserDMTokenStorageAndroid::InitEnrollmentErrorOption() {
   return false;
+}
+
+bool BrowserDMTokenStorageAndroid::CanInitEnrollmentToken() const {
+  return g_browser_process && g_browser_process->browser_policy_connector() &&
+         g_browser_process->browser_policy_connector()->HasPolicyService();
 }
 
 BrowserDMTokenStorage::StoreTask BrowserDMTokenStorageAndroid::SaveDMTokenTask(

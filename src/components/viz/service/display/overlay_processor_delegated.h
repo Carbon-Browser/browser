@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,28 +8,27 @@
 #include <memory>
 #include <vector>
 
-#include "base/containers/flat_map.h"
-#include "build/build_config.h"
 #include "components/viz/common/display/overlay_strategy.h"
 #include "components/viz/common/quads/aggregated_render_pass.h"
 #include "components/viz/service/display/output_surface.h"
 #include "components/viz/service/display/overlay_candidate.h"
-#include "components/viz/service/display/overlay_candidate_temporal_tracker.h"
+#include "components/viz/service/display/overlay_processor_delegated_support.h"
 #include "components/viz/service/display/overlay_processor_ozone.h"
 #include "components/viz/service/viz_service_export.h"
-#include "gpu/ipc/common/surface_handle.h"
 
-#include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/public/overlay_candidates_ozone.h"
 
 namespace viz {
 
 // OverlayProcessor subclass that attempts to promote to overlay all the draw
-// quads of the root render pass. This is currently only used by LaCros.
+// quads of the root render pass. This was only used by LaCros.
 // TODO(petermcneeley): This class and its Apple equivalent(s) will eventually
 // be refactored in merged together into a unified delegation processor.
 // Delegation will just become an extended feature of ozone and we avoid/push
 // down platform specific defines and files where possible.
+//
+// TODO(crbug.com/375523817): consider either merging that with
+// OverlayProcessorOzone or completely remove it.
 class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
     : public OverlayProcessorOzone {
  public:
@@ -56,32 +55,18 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
       gfx::Rect* damage_rect,
       std::vector<gfx::Rect>* content_bounds) final;
 
-  // This function takes a pointer to the absl::optional instance so the
+  // This function takes a pointer to the std::optional instance so the
   // instance can be reset. When the overlay strategy covers the entire output
   // surface, we no longer need the output surface as a separate overlay. This
   // is also used by SurfaceControl to adjust rotation.
   // TODO(weiliangc): Internalize the |output_surface_plane| inside the overlay
   // processor.
   void AdjustOutputSurfaceOverlay(
-      absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
+      std::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
+
+  gfx::RectF GetUnassignedDamage() const override;
 
  private:
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused. For some cases in
-  // |OverlayCandidate::CandidateStatus| feed into this enum but neither is a
-  // perfect subset of the other.
-  enum class DelegationStatus {
-    kFullDelegation = 0,
-    kCompositedOther = 1,
-    kCompositedNotAxisAligned = 2,
-    kCompositedCheckOverlayFail = 3,
-    kCompositedNotOverlay = 4,
-    kCompositedTooManyQuads = 5,
-    kCompositedBackdropFilter = 6,
-    kCompositedCopyRequest = 7,
-    kMaxValue = kCompositedCopyRequest
-  };
-
   gfx::RectF GetPrimaryPlaneDisplayRect(
       const OverlayProcessorInterface::OutputSurfaceOverlayPlane*
           primary_plane);
@@ -94,16 +79,30 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
   // |primary_plane|'s blending setting.
   bool AttemptWithStrategies(
       const SkM44& output_color_matrix,
+      const OverlayProcessorInterface::FilterOperationsMap& render_pass_filters,
       const OverlayProcessorInterface::FilterOperationsMap&
           render_pass_backdrop_filters,
-      DisplayResourceProvider* resource_provider,
+      const DisplayResourceProvider* resource_provider,
       AggregatedRenderPassList* render_pass_list,
       SurfaceDamageRectList* surface_damage_rect_list,
       OverlayProcessorInterface::OutputSurfaceOverlayPlane* primary_plane,
       OverlayCandidateList* candidates,
       std::vector<gfx::Rect>* content_bounds);
 
+  // Should delegation be blocked because we have recently had copy output
+  // requests on any render passes. The root render pass must not be delegated
+  // if there is a copy request in order to draw correctly. For non-root passes,
+  // this is done to prevent execessive power usage that can occur if copy
+  // output requests happen approximately every other frame, causing a lot of
+  // delegation overhead.
+  bool BlockForCopyRequests(const AggregatedRenderPassList* render_pass_list);
+
   DelegationStatus delegated_status_ = DelegationStatus::kCompositedOther;
+  bool needs_background_image_ = false;
+  gfx::RectF unassigned_damage_;
+  // Used to count the number of frames we should wait until allowing delegation
+  // again.
+  int copy_request_counter_ = 0;
 };
 }  // namespace viz
 

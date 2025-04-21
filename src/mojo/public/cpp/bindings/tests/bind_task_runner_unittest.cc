@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
@@ -20,7 +20,7 @@
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/interfaces/bindings/tests/test_associated_interfaces.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_associated_interfaces.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {
@@ -42,7 +42,6 @@ class TestTaskRunner : public base::SequencedTaskRunner {
                                   base::OnceClosure task,
                                   base::TimeDelta delay) override {
     NOTREACHED();
-    return false;
   }
 
   bool PostDelayedTask(const base::Location& from_here,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,9 @@ class VIZ_COMMON_EXPORT ParentLocalSurfaceIdAllocator {
 
   // Marks the last known LocalSurfaceId as invalid until the next call to
   // GenerateId. This is used to defer commits until some LocalSurfaceId is
-  // provided from an external source.
-  void Invalidate();
+  // provided from an external source. If `also_invalidate_allocation_group` is
+  // set to true, the allocation group is also invalidated.
+  void Invalidate(bool also_invalidate_allocation_group = false);
 
   void GenerateId();
 

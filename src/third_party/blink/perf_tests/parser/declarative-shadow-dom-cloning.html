@@ -7,15 +7,10 @@
 function createDeepShadowTemplateContent(levels, slotted) {
   const nestedContent = levels > 0 ? createDeepShadowTemplateContent(levels-1) : '<span>End</span>';
   if (slotted) {
-    return `<div><template shadowroot=open><slot></slot></template>${nestedContent}</div>`;
+    return `<div><template shadowrootmode=open><slot></slot></template>${nestedContent}</div>`;
   } else {
-    return `<div><template shadowroot=open>${nestedContent}</template></div>`;
+    return `<div><template shadowrootmode=open>${nestedContent}</template></div>`;
   }
-}
-
-function setInnerHTML(el,content) {
-  const fragment = (new DOMParser()).parseFromString(`<pre>${content}</pre>`, 'text/html', {includeShadowRoots: true});
-  (el instanceof HTMLTemplateElement ? el.content : el).replaceChildren(...fragment.body.firstChild.childNodes);
 }
 
 const hostChildren = 100;
@@ -37,7 +32,7 @@ function buildTemplate(slotted) {
   const template = document.createElement('template');
   document.body.appendChild(template);
   const html = createDeepShadowTemplateContent(hostChildren, slotted);
-  setInnerHTML(template,html);
+  template.content.setHTMLUnsafe(html);
   testClone(template);
   return template;
 }

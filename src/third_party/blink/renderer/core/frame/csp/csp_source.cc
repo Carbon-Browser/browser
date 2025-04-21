@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ SchemeMatchingResult SchemeMatches(
     const String& self_protocol) {
   DCHECK_EQ(protocol, protocol.DeprecatedLower());
   const String& scheme =
-      (source.scheme.IsEmpty() ? self_protocol : source.scheme);
+      (source.scheme.empty() ? self_protocol : source.scheme);
 
   if (scheme == protocol)
     return SchemeMatchingResult::kMatchingExact;
@@ -46,24 +46,42 @@ SchemeMatchingResult SchemeMatches(
 }
 
 bool HostMatches(const network::mojom::blink::CSPSource& source,
-                 const String& host) {
+                 const StringView& host) {
   if (source.is_host_wildcard) {
-    if (source.host.IsEmpty()) {
+    if (source.host.empty()) {
       // host-part = "*"
       return true;
     }
-    if (host.EndsWithIgnoringCase(String("." + source.host))) {
+    if (host.ToString().EndsWith(String("." + source.host))) {
       // host-part = "*." 1*host-char *( "." 1*host-char )
       return true;
     }
     return false;
   }
-  return EqualIgnoringASCIICase(source.host, host);
+  return source.host == host;
+}
+
+bool HostMatches(const network::mojom::blink::CSPSource& source,
+                 const KURL& url) {
+  // Chromium currently has an issue handling non-special URLs. The url.Host()
+  // function returns an empty string for them. See
+  // crbug.com/40063064 for details.
+  //
+  // In the future, once non-special URLs are fully supported, we might consider
+  // checking the host information for them too.
+  //
+  // For now, we check `url.IsStandard()` to maintain consistent behavior
+  // regardless of the url::StandardCompliantNonSpecialSchemeURLParsing feature
+  // state.
+  if (!url.IsStandard()) {
+    return HostMatches(source, "");
+  }
+  return HostMatches(source, url.Host());
 }
 
 bool PathMatches(const network::mojom::blink::CSPSource& source,
-                 const String& url_path) {
-  if (source.path.IsEmpty() || (source.path == "/" && url_path.IsEmpty()))
+                 const StringView& url_path) {
+  if (source.path.empty() || (source.path == "/" && url_path.empty()))
     return true;
 
   String path =
@@ -89,9 +107,9 @@ PortMatchingResult PortMatches(const network::mojom::blink::CSPSource& source,
   }
 
   bool is_scheme_http;  // needed for detecting an upgrade when the port is 0
-  is_scheme_http = source.scheme.IsEmpty()
-                       ? EqualIgnoringASCIICase("http", self_protocol)
-                       : EqualIgnoringASCIICase("http", source.scheme);
+  is_scheme_http = source.scheme.empty()
+                       ? "http" == self_protocol
+                       : "http" == source.scheme;
 
   if ((source.port == 80 ||
        ((source.port == url::PORT_UNSPECIFIED || source.port == 443) &&
@@ -161,7 +179,7 @@ bool CSPSourceMatches(const network::mojom::blink::CSPSource& source,
     return false;
   }
 
-  return HostMatches(source, url.Host()) &&
+  return HostMatches(source, url) &&
          ports_match != PortMatchingResult::kNotMatching && paths_match;
 }
 
@@ -181,7 +199,7 @@ bool CSPSourceMatchesAsSelf(const network::mojom::blink::CSPSource& source,
     return true;
   }
 
-  bool hosts_match = HostMatches(source, url.Host());
+  bool hosts_match = HostMatches(source, url);
   PortMatchingResult ports_match = PortMatches(
       source, source.scheme, url.HasPort() ? url.Port() : url::PORT_UNSPECIFIED,
       url.Protocol());
@@ -206,7 +224,7 @@ bool CSPSourceMatchesAsSelf(const network::mojom::blink::CSPSource& source,
 }
 
 bool CSPSourceIsSchemeOnly(const network::mojom::blink::CSPSource& source) {
-  return source.host.IsEmpty() && (!source.is_host_wildcard);
+  return source.host.empty() && (!source.is_host_wildcard);
 }
 
 }  // namespace blink

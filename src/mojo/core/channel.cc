@@ -1,48 +1,58 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "mojo/core/channel.h"
 
 #include <stddef.h>
 #include <string.h>
 
-#include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
+#include "base/check_op.h"
+#include "base/functional/overloaded.h"
 #include "base/logging.h"
-#include "base/memory/nonscannable_memory.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_math.h"
+#include "base/process/current_process.h"
 #include "base/process/process_handle.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "mojo/core/configuration.h"
-#include "mojo/core/core.h"
 #include "mojo/core/embedder/features.h"
+#include "mojo/core/ipcz_driver/envelope.h"
 
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mach_logging.h"
+#if BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
+#include "base/apple/mach_logging.h"
 #elif BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
 #endif
 
-namespace mojo {
-namespace core {
+#if BUILDFLAG(IS_ANDROID)
+#include "mojo/core/channel_binder.h"
+#endif
+
+namespace mojo::core {
 
 namespace {
 
 std::atomic_bool g_use_trivial_messages{false};
 
-// To ensure amortized O(1) appends, need to be >1. Most STL implementations
-// use 2, but it may be too much for us, and we do see OOM crashes in the
-// reallocation.
-//
-// TODO(1301294): Consider asking the memory allocator for a
-// suitable size.
-constexpr float kGrowthFactor = 1.5;
+// TODO(crbug.com/40824727): Consider asking the memory allocator for a suitable
+// size.
+constexpr int kGrowthFactor = 2;
 
 static_assert(
     IsAlignedForChannelMessage(sizeof(Channel::Message::LegacyHeader)),
@@ -65,17 +75,20 @@ static_assert(offsetof(Channel::Message::LegacyHeader, message_type) ==
 const size_t kReadBufferSize = 4096;
 const size_t kMaxUnusedReadBufferCapacity = 4096;
 
-// TODO(rockot): Increase this if/when Channel implementations support more.
-// Linux: The platform imposes a limit of 253 handles per sendmsg().
+#if BUILDFLAG(IS_FUCHSIA)
 // Fuchsia: The zx_channel_write() API supports up to 64 handles.
 const size_t kMaxAttachedHandles = 64;
+#else
+// Linux: The platform imposes a limit of 253 handles per sendmsg().
+const size_t kMaxAttachedHandles = 253;
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
 static_assert(alignof(std::max_align_t) >= kChannelMessageAlignment, "");
 Channel::AlignedBuffer MakeAlignedBuffer(size_t size) {
   // Generic allocators (such as malloc) return a pointer that is suitably
   // aligned for storing any type of object with a fundamental alignment
   // requirement. Buffers have no additional alignment requirement beyond that.
-  void* ptr = base::AllocNonScannable(size);
+  void* ptr = operator new(size);
   // Even though the allocator is configured in such a way that it crashes
   // rather than return nullptr, ASAN and friends don't know about that. This
   // CHECK() prevents Clusterfuzz from complaining. crbug.com/1180576.
@@ -84,6 +97,54 @@ Channel::AlignedBuffer MakeAlignedBuffer(size_t size) {
 }
 
 struct TrivialMessage;
+
+// The type of message always used by a Channel which backs an ipcz transport.
+// Most of the inherited Message interface is unused since it's only called by
+// the original Mojo Core implementation.
+struct IpczMessage : public Channel::Message {
+  IpczMessage(base::span<const uint8_t> data,
+              std::vector<PlatformHandle> handles) {
+    size_ = sizeof(IpczHeader) + data.size();
+    data_.reset(static_cast<char*>(operator new(size_)));
+
+    IpczHeader& header = *reinterpret_cast<IpczHeader*>(data_.get());
+    header.size = sizeof(IpczHeader);
+
+    DCHECK_LE(handles.size(), std::numeric_limits<uint16_t>::max());
+    DCHECK_LE(size_, std::numeric_limits<uint32_t>::max());
+    header.num_handles = static_cast<uint16_t>(handles.size());
+    header.num_bytes = static_cast<uint32_t>(size_);
+    header.v2.creation_timeticks_us =
+        (base::TimeTicks::Now() - base::TimeTicks()).InMicroseconds();
+    memcpy(&header + 1, data.data(), data.size());
+
+    handles_.reserve(handles.size());
+    for (PlatformHandle& handle : handles) {
+      handles_.emplace_back(std::move(handle));
+    }
+  }
+  ~IpczMessage() override = default;
+
+  // Channel::Message:
+  void SetHandles(std::vector<PlatformHandle>) override { NOTREACHED(); }
+  void SetHandles(std::vector<PlatformHandleInTransit>) override {
+    NOTREACHED();
+  }
+  std::vector<PlatformHandleInTransit> TakeHandles() override {
+    return std::move(handles_);
+  }
+  size_t NumHandlesForTransit() const override { return handles_.size(); }
+
+  const void* data() const override { return data_.get(); }
+  void* mutable_data() const override { NOTREACHED(); }
+  size_t capacity() const override { return size_; }
+
+  bool ExtendPayload(size_t) override { NOTREACHED(); }
+
+ private:
+  Channel::AlignedBuffer data_;
+  std::vector<PlatformHandleInTransit> handles_;
+};
 
 // A complex message can be large or contain file handles.
 struct ComplexMessage : public Channel::Message {
@@ -127,10 +188,11 @@ struct ComplexMessage : public Channel::Message {
 
 #if BUILDFLAG(IS_WIN)
   // On Windows, handles are serialised into the extra header section.
-  raw_ptr<HandleEntry> handles_ = nullptr;
-#elif BUILDFLAG(IS_MAC)
+  raw_ptr<HandleEntry, AllowPtrArithmetic> handles_ = nullptr;
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   // On OSX, handles are serialised into the extra header section.
-  raw_ptr<MachPortsExtraHeader> mach_ports_header_ = nullptr;
+  raw_ptr<MachPortsExtraHeader, AllowPtrArithmetic> mach_ports_header_ =
+      nullptr;
 #endif
 };
 
@@ -222,6 +284,13 @@ Channel::MessagePtr Channel::Message::CreateMessage(size_t capacity,
 }
 
 // static
+Channel::MessagePtr Channel::Message::CreateIpczMessage(
+    base::span<const uint8_t> data,
+    std::vector<PlatformHandle> handles) {
+  return std::make_unique<IpczMessage>(data, std::move(handles));
+}
+
+// static
 void Channel::set_use_trivial_messages(bool use_trivial_messages) {
   g_use_trivial_messages = use_trivial_messages;
 }
@@ -233,7 +302,7 @@ Channel::MessagePtr Channel::Message::CreateRawForFuzzing(
   message->size_ = data.size();
   if (data.size()) {
     message->data_ = MakeAlignedBuffer(data.size());
-    std::copy(data.begin(), data.end(), message->data_.get());
+    base::ranges::copy(data, message->data_.get());
   }
   return base::WrapUnique<Channel::Message>(message.release());
 }
@@ -290,7 +359,7 @@ Channel::MessagePtr Channel::Message::Deserialize(
   uint32_t max_handles = extra_header_size / sizeof(HandleEntry);
 #elif BUILDFLAG(IS_FUCHSIA)
   uint32_t max_handles = extra_header_size / sizeof(HandleInfoEntry);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   if (extra_header_size > 0 &&
       extra_header_size < sizeof(MachPortsExtraHeader)) {
     DLOG(ERROR) << "Decoding invalid message: " << extra_header_size << " < "
@@ -459,7 +528,7 @@ ComplexMessage::ComplexMessage(size_t capacity,
 #elif BUILDFLAG(IS_FUCHSIA)
   // On Fuchsia we serialize handle types into the extra header space.
   extra_header_size = max_handles_ * sizeof(HandleInfoEntry);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   // On OSX, some of the platform handles may be mach ports, which are
   // serialised into the message buffer. Since there could be a mix of fds and
   // mach ports, we store the mach ports as an <index, port> pair (of uint32_t),
@@ -509,7 +578,7 @@ ComplexMessage::ComplexMessage(size_t capacity,
     // Initialize all handles to invalid values.
     for (size_t i = 0; i < max_handles_; ++i)
       handles_[i].handle = base::win::HandleToUint32(INVALID_HANDLE_VALUE);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
     mach_ports_header_ =
         reinterpret_cast<MachPortsExtraHeader*>(mutable_extra_header());
     mach_ports_header_->num_ports = 0;
@@ -545,7 +614,7 @@ bool ComplexMessage::ExtendPayload(size_t new_payload_size) {
 // payload buffer has been relocated.
 #if BUILDFLAG(IS_WIN)
       handles_ = reinterpret_cast<HandleEntry*>(mutable_extra_header());
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
       mach_ports_header_ =
           reinterpret_cast<MachPortsExtraHeader*>(mutable_extra_header());
 #endif
@@ -598,7 +667,7 @@ void ComplexMessage::SetHandles(
   }
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   if (mach_ports_header_) {
     for (size_t i = 0; i < max_handles_; ++i) {
       mach_ports_header_->entries[i] = {0};
@@ -803,20 +872,49 @@ class Channel::ReadBuffer {
   size_t num_occupied_bytes_ = 0;
 };
 
+bool Channel::Delegate::IsIpczTransport() const {
+  return false;
+}
+
+void Channel::Delegate::OnChannelDestroyed() {}
+
 Channel::Channel(Delegate* delegate,
                  HandlePolicy handle_policy,
                  DispatchBufferPolicy buffer_policy)
-    : delegate_(delegate),
+    : is_for_ipcz_(delegate ? delegate->IsIpczTransport() : false),
+      delegate_(delegate),
       handle_policy_(handle_policy),
       read_buffer_(buffer_policy == DispatchBufferPolicy::kManaged
                        ? new ReadBuffer
                        : nullptr) {}
 
-Channel::~Channel() = default;
+Channel::~Channel() {
+  if (is_for_ipcz()) {
+    DCHECK(delegate_);
+    delegate_->OnChannelDestroyed();
+  }
+}
+
+// static
+scoped_refptr<Channel> Channel::CreateForIpczDriver(
+    Delegate* delegate,
+    PlatformChannelEndpoint endpoint,
+    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner) {
+#if BUILDFLAG(IS_NACL)
+  return nullptr;
+#else
+  return Create(delegate, ConnectionParams{std::move(endpoint)},
+                HandlePolicy::kAcceptHandles, std::move(io_task_runner));
+#endif
+}
 
 void Channel::ShutDown() {
   ShutDownImpl();
-  delegate_ = nullptr;
+  if (!is_for_ipcz()) {
+    // When Channel is used for an ipcz transport, we leave `delegate_` intact
+    // so the Channel can notify once it's finally being destroyed.
+    delegate_ = nullptr;
+  }
 }
 
 char* Channel::GetReadBuffer(size_t* buffer_capacity) {
@@ -833,7 +931,10 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
   DCHECK(read_buffer_);
   *next_read_size_hint = kReadBufferSize;
   read_buffer_->Claim(bytes_read);
-  while (read_buffer_->num_occupied_bytes() >= sizeof(Message::LegacyHeader)) {
+
+  const size_t header_size = is_for_ipcz_ ? sizeof(Message::IpczHeader)
+                                          : sizeof(Message::LegacyHeader);
+  while (read_buffer_->num_occupied_bytes() >= header_size) {
     // Ensure the occupied data is properly aligned. If it isn't, a SIGBUS could
     // happen on architectures that don't allow misaligned words access (i.e.
     // anything other than x86). Only re-align when necessary to avoid copies.
@@ -843,10 +944,13 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
     }
 
     DispatchResult result =
-        TryDispatchMessage(base::make_span(read_buffer_->occupied_bytes(),
-                                           read_buffer_->num_occupied_bytes()),
+        TryDispatchMessage(base::span(read_buffer_->occupied_bytes(),
+                                      read_buffer_->num_occupied_bytes()),
                            next_read_size_hint);
     if (result == DispatchResult::kOK) {
+      if (ShouldRecordSubsampledHistograms()) {
+        LogHistogramForIPCMetrics(MessageType::kReceive);
+      }
       read_buffer_->Discard(*next_read_size_hint);
       *next_read_size_hint = 0;
     } else if (result == DispatchResult::kNotEnoughData) {
@@ -863,8 +967,67 @@ bool Channel::OnReadComplete(size_t bytes_read, size_t* next_read_size_hint) {
 Channel::DispatchResult Channel::TryDispatchMessage(
     base::span<const char> buffer,
     size_t* size_hint) {
+  return TryDispatchMessage(buffer, std::nullopt, nullptr, size_hint);
+}
+
+Channel::DispatchResult Channel::TryDispatchMessage(
+    base::span<const char> buffer,
+    std::optional<std::vector<PlatformHandle>> received_handles,
+    scoped_refptr<ipcz_driver::Envelope> envelope,
+    size_t* size_hint) {
   TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("toplevel.ipc"),
               "Mojo dispatch message");
+  if (is_for_ipcz_) {
+    // This has already been validated.
+    DCHECK_GE(buffer.size(), Message::kMinIpczHeaderSize);
+
+    const auto& header =
+        *reinterpret_cast<const Message::IpczHeader*>(buffer.data());
+    const size_t header_size = header.size;
+    const size_t num_bytes = header.num_bytes;
+    const size_t num_handles = header.num_handles;
+    if (header_size < Message::kMinIpczHeaderSize || num_bytes < header_size) {
+      return DispatchResult::kError;
+    }
+
+    if (buffer.size() < num_bytes) {
+      *size_hint = num_bytes - buffer.size();
+      return DispatchResult::kNotEnoughData;
+    }
+
+    std::vector<PlatformHandle> handles;
+    if (num_handles > 0) {
+      if (handle_policy_ == HandlePolicy::kRejectHandles) {
+        return DispatchResult::kError;
+      }
+
+      if (received_handles) {
+        handles = std::move(*received_handles);
+      } else if (!GetReadPlatformHandlesForIpcz(num_handles, handles)) {
+        return DispatchResult::kError;
+      }
+
+      if (handles.size() < num_handles) {
+        return DispatchResult::kMissingHandles;
+      }
+    }
+
+    if (ShouldRecordSubsampledHistograms() && Message::IsAtLeastV2(header)) {
+      base::TimeTicks creation_time =
+          base::TimeTicks() +
+          base::Microseconds(header.v2.creation_timeticks_us);
+      UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
+          "Mojo.Channel.WriteToReadLatencyUs",
+          base::TimeTicks::Now() - creation_time, base::Microseconds(1),
+          base::Seconds(1), 100);
+    }
+
+    auto data = buffer.first(num_bytes).subspan(header_size);
+    delegate_->OnChannelMessage(data.data(), data.size(), std::move(handles),
+                                std::move(envelope));
+    *size_hint = num_bytes;
+    return DispatchResult::kOK;
+  }
 
   // We have at least enough data available for a LegacyHeader.
   const Message::LegacyHeader* legacy_header =
@@ -917,16 +1080,19 @@ Channel::DispatchResult Channel::TryDispatchMessage(
   std::vector<PlatformHandle> handles;
   bool deferred = false;
   if (num_handles > 0) {
-    if (handle_policy_ == HandlePolicy::kRejectHandles)
-      return DispatchResult::kError;
-
-    if (!GetReadPlatformHandles(payload, payload_size, num_handles,
-                                extra_header, extra_header_size, &handles,
-                                &deferred)) {
+    if (handle_policy_ == HandlePolicy::kRejectHandles) {
       return DispatchResult::kError;
     }
 
-    if (handles.empty()) {
+    if (received_handles) {
+      handles = std::move(*received_handles);
+    } else if (!GetReadPlatformHandles(payload, payload_size, num_handles,
+                                       extra_header, extra_header_size,
+                                       &handles, &deferred)) {
+      return DispatchResult::kError;
+    }
+
+    if (handles.size() < num_handles) {
       // Not enough handles available for this message.
       return DispatchResult::kMissingHandles;
     }
@@ -941,7 +1107,8 @@ Channel::DispatchResult Channel::TryDispatchMessage(
       return DispatchResult::kError;
     }
   } else if (!deferred && delegate_) {
-    delegate_->OnChannelMessage(payload, payload_size, std::move(handles));
+    delegate_->OnChannelMessage(payload, payload_size, std::move(handles),
+                                std::move(envelope));
   }
 
   *size_hint = legacy_header->num_bytes;
@@ -960,6 +1127,20 @@ bool Channel::OnControlMessage(Message::MessageType message_type,
   return false;
 }
 
+// static
+void Channel::LogHistogramForIPCMetrics(MessageType type) {
+  if (type == MessageType::kSent) {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Mojo.Channel.WriteSendMessageProcessType",
+        base::CurrentProcess::GetInstance().GetShortType({}));
+  }
+  if (type == MessageType::kReceive) {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Mojo.Channel.WriteReceiveMessageProcessType",
+        base::CurrentProcess::GetInstance().GetShortType({}));
+  }
+}
+
 // Currently only Non-nacl CrOs, Linux, and Android support upgrades.
 #if BUILDFLAG(IS_NACL) || (!(BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || \
                              BUILDFLAG(IS_ANDROID)))
@@ -970,9 +1151,19 @@ MOJO_SYSTEM_IMPL_EXPORT bool Channel::SupportsChannelUpgrade() {
 
 MOJO_SYSTEM_IMPL_EXPORT void Channel::OfferChannelUpgrade() {
   NOTREACHED();
-  return;
 }
 #endif
 
-}  // namespace core
-}  // namespace mojo
+void Channel::RecordSentMessageMetrics(size_t payload_size) {
+  if (ShouldRecordSubsampledHistograms()) {
+    UMA_HISTOGRAM_COUNTS_100000("Mojo.Channel.WriteMessageSize", payload_size);
+    LogHistogramForIPCMetrics(MessageType::kSent);
+  }
+}
+
+bool Channel::ShouldRecordSubsampledHistograms() {
+  base::AutoLock hold(lock_);
+  return sub_sampler_.ShouldSample(0.001);
+}
+
+}  // namespace mojo::core

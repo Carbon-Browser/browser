@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/in_session_auth_token_provider.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "testing/gmock/include/gmock/gmock.h"
 

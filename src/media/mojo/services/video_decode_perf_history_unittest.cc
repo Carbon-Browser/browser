@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -267,7 +267,7 @@ class VideoDecodePerfHistoryTest : public testing::Test {
     const auto& entries =
         test_recorder_->GetEntriesByName(UkmEntry::kEntryName);
     ASSERT_GE(entries.size(), 1U);
-    auto* entry = entries.back();
+    auto* entry = entries.back().get();
 
     // Verify stream properties. Make a key to ensure we check bucketed values.
     VideoDecodeStatsDB::VideoDescKey key =
@@ -890,7 +890,7 @@ TEST_P(VideoDecodePerfHistoryParamTest,
                      base::Unretained(this)));
 
   // Verify perf history returns is_smooth = true for entry that would be
-  // smooth per new smooth theshold.
+  // smooth per new smooth threshold.
   EXPECT_CALL(*this, MockGetPerfInfoCB(kIsSmooth, kIsNotPowerEfficient));
   perf_history_->GetPerfInfo(
       MakeFeaturesPtr(kKnownProfile, kKownSize, kSmoothFrameRateNew,

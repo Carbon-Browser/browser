@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/message_formatter.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
@@ -132,7 +132,6 @@ void UpdateRequiredNotification::Show(NotificationType type,
   std::u16string button = GetButtonText(type);
   if (title.empty() || body.empty() || button.empty()) {
     NOTREACHED();
-    return;
   }
 
   DisplayNotification(title, body, button,
@@ -149,22 +148,19 @@ void UpdateRequiredNotification::DisplayNotification(
   message_center::RichNotificationData data;
   data.buttons.push_back(message_center::ButtonInfo(button_text));
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE,
-          kUpdateRequiredNotificationId, title, message,
-          std::u16string() /*display_source*/, GURL(),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT,
-              kUpdateRequiredNotificationId,
-              NotificationCatalogName::kUpdateRequired),
-          data,
-          base::MakeRefCounted<message_center::ThunkNotificationDelegate>(
-              weak_factory_.GetWeakPtr()),
-          vector_icons::kBusinessIcon, color_type);
-  notification->set_priority(priority);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, kUpdateRequiredNotificationId,
+      title, message, std::u16string() /*display_source*/, GURL(),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 kUpdateRequiredNotificationId,
+                                 NotificationCatalogName::kUpdateRequired),
+      data,
+      base::MakeRefCounted<message_center::ThunkNotificationDelegate>(
+          weak_factory_.GetWeakPtr()),
+      vector_icons::kBusinessIcon, color_type);
+  notification.set_priority(priority);
 
-  SystemNotificationHelper::GetInstance()->Display(*notification);
+  SystemNotificationHelper::GetInstance()->Display(notification);
 }
 
 void UpdateRequiredNotification::Hide() {
@@ -177,8 +173,8 @@ void UpdateRequiredNotification::Close(bool by_user) {
 }
 
 void UpdateRequiredNotification::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   // |button_index| may be empty if the notification body was clicked.
   if (!button_index)
     return;

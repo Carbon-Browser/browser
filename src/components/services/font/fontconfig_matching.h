@@ -1,12 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_FONT_FONTCONFIG_MATCHING_H_
 #define COMPONENTS_SERVICES_FONT_FONTCONFIG_MATCHING_H_
 
+#include <optional>
+
 #include "base/files/file_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace font_service {
 // Searches FontConfig for a system font uniquely identified by full font name
@@ -19,11 +20,11 @@ class FontConfigLocalMatching {
     unsigned ttc_index;
   };
 
-  static absl::optional<FontConfigMatchResult>
+  static std::optional<FontConfigMatchResult>
   FindFontByPostscriptNameOrFullFontName(const std::string& font_name);
 
  private:
-  static absl::optional<FontConfigMatchResult> FindFontBySpecifiedName(
+  static std::optional<FontConfigMatchResult> FindFontBySpecifiedName(
       const char* fontconfig_parameter_name,
       const std::string& font_name);
 };

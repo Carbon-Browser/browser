@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/webui/theme_source.h"
-#include "chrome/browser/ui/webui/webui_util.h"
+#include "chrome/browser/ui/webui/webui_util_desktop.h"
 #include "chrome/grit/theme_resources.h"
 #include "content/public/browser/web_ui.h"
 
@@ -43,7 +43,7 @@ void ThemeHandler::OnJavascriptAllowed() {
   // Or native theme change.
   if (web_ui()) {
     theme_observation_.Observe(
-        webui::GetNativeTheme(web_ui()->GetWebContents()));
+        webui::GetNativeThemeDeprecated(web_ui()->GetWebContents()));
   }
 }
 
@@ -61,7 +61,7 @@ void ThemeHandler::OnNativeThemeUpdated(ui::NativeTheme* observed_theme) {
   // switch between light/dark mode. b) A different theme is enabled. e.g.
   // switch between GTK and classic theme on Linux. Reset observer in case b).
   ui::NativeTheme* current_theme =
-      webui::GetNativeTheme(web_ui()->GetWebContents());
+      webui::GetNativeThemeDeprecated(web_ui()->GetWebContents());
   if (observed_theme != current_theme) {
     theme_observation_.Reset();
     theme_observation_.Observe(current_theme);
@@ -79,8 +79,8 @@ void ThemeHandler::SendThemeChanged() {
   bool has_custom_bg = ThemeService::GetThemeProviderForProfile(GetProfile())
                            .HasCustomImage(IDR_THEME_NTP_BACKGROUND);
   // TODO(dbeam): why does this need to be a dictionary?
-  base::DictionaryValue dictionary;
-  dictionary.SetBoolKey("hasCustomBackground", has_custom_bg);
+  base::Value::Dict dictionary;
+  dictionary.Set("hasCustomBackground", has_custom_bg);
   FireWebUIListener("theme-changed", dictionary);
 }
 

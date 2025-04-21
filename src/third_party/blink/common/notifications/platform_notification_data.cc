@@ -1,14 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/notifications/platform_notification_data.h"
+
+#include "mojo/public/cpp/bindings/clone_traits.h"
 #include "third_party/blink/public/mojom/notifications/notification.mojom.h"
 
 namespace blink {
 
 PlatformNotificationData::PlatformNotificationData()
-    : direction(mojom::NotificationDirection::LEFT_TO_RIGHT) {}
+    : direction(mojom::NotificationDirection::LEFT_TO_RIGHT),
+      scenario(mojom::NotificationScenario::DEFAULT) {}
 
 PlatformNotificationData::PlatformNotificationData(
     const PlatformNotificationData& other) {
@@ -34,9 +37,9 @@ PlatformNotificationData& PlatformNotificationData::operator=(
   silent = other.silent;
   require_interaction = other.require_interaction;
   data = other.data;
-  for (auto& action : other.actions)
-    actions.push_back(action.Clone());
+  actions = mojo::Clone(other.actions);
   show_trigger_timestamp = other.show_trigger_timestamp;
+  scenario = other.scenario;
 
   return *this;
 }

@@ -1,18 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_component;
 
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.ACTIVE_TAB_INDEX;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.HEIGHT;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.NO_ACTIVE_TAB;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.PAGE_CHANGE_LISTENER;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.TABS;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.TOP_SHADOW_VISIBLE;
 import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.VISIBLE;
 
-import android.view.ViewStub;
+import android.content.Context;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
@@ -21,8 +15,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import org.chromium.base.TraceEvent;
+import org.chromium.chrome.browser.keyboard_accessory.AccessorySheetVisualStateProvider;
+import org.chromium.chrome.browser.keyboard_accessory.R;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
-import org.chromium.ui.DeferredViewStubInflationProvider;
+import org.chromium.ui.AsyncViewProvider;
+import org.chromium.ui.AsyncViewStub;
 import org.chromium.ui.ViewProvider;
 import org.chromium.ui.modelutil.LazyConstructionPropertyMcp;
 import org.chromium.ui.modelutil.ListModel;
@@ -30,48 +28,68 @@ import org.chromium.ui.modelutil.ListModelChangeProcessor;
 import org.chromium.ui.modelutil.PropertyModel;
 
 /**
- * Creates and owns all elements which are part of the accessory sheet component.
- * It's part of the controller but will mainly forward events (like showing the sheet) and handle
- * communication with the ManualFillingCoordinator (e.g. add a tab to trigger the sheet).
- * to the {@link AccessorySheetMediator}.
+ * Creates and owns all elements which are part of the accessory sheet component. It's part of the
+ * controller but will mainly forward events (like showing the sheet) and handle communication with
+ * the ManualFillingCoordinator (e.g. add a tab to trigger the sheet). to the {@link
+ * AccessorySheetMediator}.
  */
-public class AccessorySheetCoordinator {
+public class AccessorySheetCoordinator implements AccessorySheetVisualStateProvider {
     private final AccessorySheetMediator mMediator;
+
+    /**
+     * Describes the events that are emitted when an accessory sheet is closed / changed. A class
+     * implementing this interface takes the responsibility control the sheet, i.e.
+     * ManualFillingCoordinator.
+     */
+    public interface SheetVisibilityDelegate {
+        /**
+         * Is triggered when a tab in the accessory was selected and the sheet needs to change.
+         * @param sheetIndex The index of the selected sheet in the sheet openers / tab bar.
+         */
+        void onChangeAccessorySheet(int sheetIndex);
+
+        /** Called when the sheet needs to be hidden. */
+        void onCloseAccessorySheet();
+    }
 
     /**
      * Creates the sheet component by instantiating Model, View and Controller before wiring these
      * parts up.
-     * @param sheetStub A {@link ViewStub} for the accessory sheet layout.
+     *
+     * @param sheetStub A {@link AsyncViewStub} for the accessory sheet layout.
      */
-    public AccessorySheetCoordinator(ViewStub sheetStub) {
-        this(new DeferredViewStubInflationProvider<>(sheetStub));
+    public AccessorySheetCoordinator(
+            AsyncViewStub sheetStub, SheetVisibilityDelegate sheetVisibilityDelegate) {
+        this(
+                sheetStub.getContext(),
+                AsyncViewProvider.of(sheetStub, R.id.keyboard_accessory_sheet_container),
+                sheetVisibilityDelegate);
     }
 
     /**
-     * Constructor that allows to mock the {@link DeferredViewStubInflationProvider}.
+     * Constructor that allows to mock the {@link AsyncViewProvider}.
+     *
+     * @param context The {@link Context} for accessing color resources.
      * @param viewProvider A provider for the accessory.
      */
     @VisibleForTesting
-    AccessorySheetCoordinator(ViewProvider<AccessorySheetView> viewProvider) {
-        PropertyModel model = new PropertyModel
-                                      .Builder(TABS, ACTIVE_TAB_INDEX, VISIBLE, HEIGHT,
-                                              TOP_SHADOW_VISIBLE, PAGE_CHANGE_LISTENER)
-                                      .with(TABS, new ListModel<>())
-                                      .with(ACTIVE_TAB_INDEX, NO_ACTIVE_TAB)
-                                      .with(VISIBLE, false)
-                                      .with(TOP_SHADOW_VISIBLE, false)
-                                      .build();
+    AccessorySheetCoordinator(
+            Context context,
+            ViewProvider<AccessorySheetView> viewProvider,
+            SheetVisibilityDelegate sheetVisibilityDelegate) {
+        PropertyModel model = AccessorySheetProperties.defaultPropertyModel().build();
 
         LazyConstructionPropertyMcp.create(
                 model, VISIBLE, viewProvider, AccessorySheetViewBinder::bind);
 
         AccessorySheetMetricsRecorder.registerAccessorySheetModelMetricsObserver(model);
-        mMediator = new AccessorySheetMediator(model);
+        mMediator = new AccessorySheetMediator(context, model, sheetVisibilityDelegate);
     }
 
     /**
-     * Creates the {@link PagerAdapter} for the newly inflated {@link ViewPager}.
-     * The created adapter observes the given model for item changes and updates the view pager.
+     * Creates the {@link PagerAdapter} for the newly inflated {@link ViewPager}. The created
+     * adapter observes the given model for item changes and updates the view pager.
+     *
      * @param tabList The list of tabs to be displayed.
      * @param viewPager The newly inflated {@link ViewPager}.
      * @return A fully initialized {@link PagerAdapter}.
@@ -116,16 +134,14 @@ public class AccessorySheetCoordinator {
         return mMediator.getHeight();
     }
 
-    /**
-     * Shows the Accessory Sheet.
-     */
+    /** Shows the Accessory Sheet. */
     public void show() {
+        TraceEvent.begin("AccessorySheetCoordinator#show");
         mMediator.show();
+        TraceEvent.end("AccessorySheetCoordinator#show");
     }
 
-    /**
-     * Hides the Accessory Sheet.
-     */
+    /** Hides the Accessory Sheet. */
     public void hide() {
         mMediator.hide();
     }
@@ -150,7 +166,16 @@ public class AccessorySheetCoordinator {
         mMediator.setOnPageChangeListener(onPageChangeListener);
     }
 
-    @VisibleForTesting
+    @Override
+    public void addObserver(Observer observer) {
+        mMediator.addObserver(observer);
+    }
+
+    @Override
+    public void removeObserver(Observer observer) {
+        mMediator.removeObserver(observer);
+    }
+
     AccessorySheetMediator getMediatorForTesting() {
         return mMediator;
     }

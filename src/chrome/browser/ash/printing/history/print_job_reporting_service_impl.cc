@@ -1,30 +1,32 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "chrome/browser/ash/printing/history/print_job_reporting_service.h"
 
 #include <memory>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/printing/history/print_job_info.pb.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chrome/browser/ash/printing/history/print_job_reporting_service.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/reporting/client/report_queue.h"
+#include "components/reporting/client/report_queue_configuration.h"
 #include "components/reporting/client/report_queue_factory.h"
+#include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
+#include "components/reporting/proto/synced/status.pb.h"
 #include "components/reporting/util/status.h"
-#include "components/reporting/util/status.pb.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -183,16 +185,21 @@ class PrintJobReportingServiceImpl : public PrintJobReportingService {
   const std::unique_ptr<::reporting::ReportQueue, base::OnTaskRunnerDeleter>
       report_queue_;
 
-  CrosSettings* const cros_settings_;
+  const raw_ptr<CrosSettings> cros_settings_;
 
   base::WeakPtrFactory<PrintJobReportingServiceImpl> weak_factory_{this};
 };
 
 // static
 std::unique_ptr<PrintJobReportingService> PrintJobReportingService::Create() {
+  ::reporting::SourceInfo source_info;
+  source_info.set_source(::reporting::SourceInfo::ASH);
   auto report_queue =
       ::reporting::ReportQueueFactory::CreateSpeculativeReportQueue(
-          ::reporting::EventType::kUser, ::reporting::Destination::PRINT_JOBS);
+          ::reporting::ReportQueueConfiguration::Create(
+              {.event_type = ::reporting::EventType::kUser,
+               .destination = ::reporting::Destination::PRINT_JOBS})
+              .SetSourceInfo(std::move(source_info)));
   return std::make_unique<PrintJobReportingServiceImpl>(
       std::move(report_queue));
 }

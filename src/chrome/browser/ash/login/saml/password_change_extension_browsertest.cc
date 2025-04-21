@@ -1,8 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <memory>
+#include <string>
+
 #include "ash/constants/ash_switches.h"
+#include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/saml/in_session_password_change_manager.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
@@ -13,9 +19,11 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "net/base/url_util.h"
+#include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
 
@@ -191,7 +199,7 @@ class PasswordChangeExtensionTest : public extensions::ExtensionBrowserTest {
   EmbeddedTestServerSetupMixin embedded_test_server_mixin_{
       &mixin_host_, &embedded_test_server_};
 
-  const extensions::Extension* extension;
+  raw_ptr<const extensions::Extension, DanglingUntriaged> extension;
 
   std::unique_ptr<InSessionPasswordChangeManager> password_change_manager_;
 };

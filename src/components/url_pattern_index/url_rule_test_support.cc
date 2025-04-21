@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/url_pattern_index/url_rule_test_support.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <string_view>
+
 #include "base/check.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -58,7 +59,7 @@ void AddRequestDomains(const std::vector<std::string>& request_domains,
                                  base::Unretained(rule)));
 }
 
-url::Origin GetOrigin(base::StringPiece origin_string) {
+url::Origin GetOrigin(std::string_view origin_string) {
   return !origin_string.empty() ? url::Origin::Create(GURL(origin_string))
                                 : url::Origin();
 }

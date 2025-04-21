@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,6 +41,8 @@ if (enable_vulkan) {
 
     public_configs = [ ":vulkan_config" ]
 
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     defines = [ "IS_VULKAN_IMPL" ]
 
     deps = [
@@ -48,8 +50,7 @@ if (enable_vulkan) {
       "//ui/gfx",
     ]
 
-    public_deps =
-        [ "//third_party/vulkan-deps/vulkan-headers/src:vulkan_headers" ]
+    public_deps = [ "//third_party/vulkan-headers/src:vulkan_headers" ]
 
     if (is_fuchsia) {
       sources += [ "fuchsia/vulkan_fuchsia_ext.h" ]
@@ -66,10 +67,13 @@ if (enable_vulkan) {
 
     defines = [ "IS_VULKAN_IMPL" ]
 
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     deps = [
       ":vulkan_function_pointers",
       "//base",
       "//third_party/vulkan_memory_allocator",
+      "//ui/gfx:gfx",
     ]
   }
 
@@ -96,6 +100,8 @@ if (enable_vulkan) {
       "vulkan_implementation.h",
       "vulkan_instance.cc",
       "vulkan_instance.h",
+      "vulkan_memory.cc",
+      "vulkan_memory.h",
       "vulkan_surface.cc",
       "vulkan_surface.h",
       "vulkan_swap_chain.cc",
@@ -110,12 +116,15 @@ if (enable_vulkan) {
       defines += [ "OZONE_PLATFORM_IS_X11" ]
     }
 
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     deps = [
       ":buildflags",
       "//base",
       "//build:chromeos_buildflags",
       "//components/crash/core/common:crash_key",
       "//gpu/ipc/common:vulkan_ycbcr_info",
+      "//ui/base:ozone_buildflags",
       "//ui/gfx",
       "//ui/gl",
     ]
@@ -149,6 +158,19 @@ if (enable_vulkan) {
         "vulkan_image_win.cc",
         "vulkan_util_win32.cc",
       ]
+    }
+
+    if (use_ozone) {
+      sources += [
+        "drm_modifiers_filter_vulkan.cc",
+        "drm_modifiers_filter_vulkan.h",
+      ]
+
+      deps += [ "//ui/ozone:drm_modifiers_filter" ]
+    }
+
+    if (is_chromeos_ash) {
+      deps += [ "//ui/gfx/linux:drm" ]
     }
 
     if (is_fuchsia) {
@@ -196,10 +218,7 @@ if (enable_vulkan) {
 
     if (is_android) {
       sources += [ "tests/native_window_android.cc" ]
-      deps += [
-        "//ui/android:ui_java",
-        "//ui/gl",
-      ]
+      deps += [ "//ui/gl" ]
     }
   }
 
@@ -215,7 +234,7 @@ if (enable_vulkan) {
         "tests/vulkan_test.cc",
         "tests/vulkan_tests_main.cc",
 
-        # TODO(crbug.com/1234132): fix compile problem with the latest vulkan
+        # TODO(crbug.com/40781300): fix compile problem with the latest vulkan
         # headers.
         # "vulkan_cxx_unittest.cc",
         "vulkan_fence_helper_unittest.cc",
@@ -243,6 +262,8 @@ if (enable_vulkan) {
       }
 
       if (use_ozone) {
+        sources += [ "drm_modifiers_filter_vulkan_unittest.cc" ]
+
         deps += [ "//ui/ozone" ]
       }
     }

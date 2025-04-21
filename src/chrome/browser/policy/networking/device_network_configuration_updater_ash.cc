@@ -1,28 +1,28 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/policy/networking/device_network_configuration_updater_ash.h"
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
-#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_device_handler.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/components/onc/onc_parsed_certificates.h"
 #include "chromeos/components/onc/onc_utils.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/policy/policy_constants.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/cert/x509_certificate.h"
@@ -46,8 +46,8 @@ DeviceNetworkConfigurationUpdaterAsh::~DeviceNetworkConfigurationUpdaterAsh() =
 std::unique_ptr<DeviceNetworkConfigurationUpdaterAsh>
 DeviceNetworkConfigurationUpdaterAsh::CreateForDevicePolicy(
     PolicyService* policy_service,
-    chromeos::ManagedNetworkConfigurationHandler* network_config_handler,
-    chromeos::NetworkDeviceHandler* network_device_handler,
+    ash::ManagedNetworkConfigurationHandler* network_config_handler,
+    ash::NetworkDeviceHandler* network_device_handler,
     ash::CrosSettings* cros_settings,
     const DeviceNetworkConfigurationUpdaterAsh::DeviceAssetIDFetcher&
         device_asset_id_fetcher) {
@@ -61,8 +61,8 @@ DeviceNetworkConfigurationUpdaterAsh::CreateForDevicePolicy(
 
 DeviceNetworkConfigurationUpdaterAsh::DeviceNetworkConfigurationUpdaterAsh(
     PolicyService* policy_service,
-    chromeos::ManagedNetworkConfigurationHandler* network_config_handler,
-    chromeos::NetworkDeviceHandler* network_device_handler,
+    ash::ManagedNetworkConfigurationHandler* network_config_handler,
+    ash::NetworkDeviceHandler* network_device_handler,
     ash::CrosSettings* cros_settings,
     const DeviceNetworkConfigurationUpdaterAsh::DeviceAssetIDFetcher&
         device_asset_id_fetcher)
@@ -110,8 +110,8 @@ void DeviceNetworkConfigurationUpdaterAsh::ImportClientCertificates() {
 }
 
 void DeviceNetworkConfigurationUpdaterAsh::ApplyNetworkPolicy(
-    base::ListValue* network_configs_onc,
-    base::DictionaryValue* global_network_config) {
+    const base::Value::List& network_configs_onc,
+    const base::Value::Dict& global_network_config) {
   // Ensure this is runnng on the UI thead because we're accessing global data
   // to populate the substitutions.
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -121,17 +121,17 @@ void DeviceNetworkConfigurationUpdaterAsh::ApplyNetworkPolicy(
   // string. This is to be consistent with user policy identity string
   // expansions.
   base::flat_map<std::string, std::string> substitutions;
-  substitutions[::onc::substitutes::kDeviceSerialNumber] =
-      chromeos::system::StatisticsProvider::GetInstance()
-          ->GetEnterpriseMachineID();
+  substitutions[::onc::substitutes::kDeviceSerialNumber] = std::string(
+      ash::system::StatisticsProvider::GetInstance()->GetMachineID().value_or(
+          ""));
   substitutions[::onc::substitutes::kDeviceAssetId] =
       device_asset_id_fetcher_.Run();
 
   network_config_handler_->SetProfileWideVariableExpansions(
-      /*username_hash=*/std::string(), std::move(substitutions));
-  network_config_handler_->SetPolicy(
-      onc_source_, /*username_hash=*/std::string(), *network_configs_onc,
-      *global_network_config);
+      /*userhash=*/std::string(), std::move(substitutions));
+  network_config_handler_->SetPolicy(onc_source_, /*userhash=*/std::string(),
+                                     network_configs_onc,
+                                     global_network_config);
 }
 
 void DeviceNetworkConfigurationUpdaterAsh::OnDataRoamingSettingChanged() {

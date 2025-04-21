@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "chrome/browser/media_galleries/fileapi/mtp_device_async_delegate.h"
 #include "content/public/browser/browser_thread.h"
 #include "storage/browser/file_system/external_mount_points.h"
@@ -65,7 +66,8 @@ void MTPDeviceMapService::RevokeMTPFileSystem(
     const AsyncDelegateKey key =
         GetAsyncDelegateKey(device_location, read_only);
     MTPDeviceUsageMap::iterator delegate_it = mtp_device_usage_map_.find(key);
-    DCHECK(delegate_it != mtp_device_usage_map_.end());
+    CHECK(delegate_it != mtp_device_usage_map_.end(),
+          base::NotFatalUntil::M130);
 
     mtp_device_usage_map_[key]--;
     if (mtp_device_usage_map_[key] == 0) {
@@ -97,7 +99,7 @@ void MTPDeviceMapService::RemoveAsyncDelegate(
 
   const AsyncDelegateKey key = GetAsyncDelegateKey(device_location, read_only);
   AsyncDelegateMap::iterator it = async_delegate_map_.find(key);
-  DCHECK(it != async_delegate_map_.end());
+  CHECK(it != async_delegate_map_.end(), base::NotFatalUntil::M130);
   it->second->CancelPendingTasksAndDeleteDelegate();
   async_delegate_map_.erase(it);
 }
@@ -127,7 +129,7 @@ MTPDeviceAsyncDelegate* MTPDeviceMapService::GetMTPDeviceAsyncDelegate(
   base::FilePath device_path;
   if (!storage::ExternalMountPoints::GetSystemInstance()->GetRegisteredPath(
           filesystem_id, &device_path)) {
-    return NULL;
+    return nullptr;
   }
 
   const base::FilePath::StringType& device_location = device_path.value();
@@ -135,7 +137,7 @@ MTPDeviceAsyncDelegate* MTPDeviceMapService::GetMTPDeviceAsyncDelegate(
   MTPDeviceFileSystemMap::const_iterator mtp_device_map_it =
       mtp_device_map_.find(filesystem_id);
   if (mtp_device_map_it == mtp_device_map_.end())
-    return NULL;
+    return nullptr;
 
   DCHECK_EQ(device_path.value(), mtp_device_map_it->second.first);
   const bool read_only = mtp_device_map_it->second.second;
@@ -148,8 +150,7 @@ MTPDeviceAsyncDelegate* MTPDeviceMapService::GetMTPDeviceAsyncDelegate(
              : NULL;
 }
 
-MTPDeviceMapService::MTPDeviceMapService() {
-}
+MTPDeviceMapService::MTPDeviceMapService() = default;
 
 MTPDeviceMapService::~MTPDeviceMapService() {
   DCHECK(mtp_device_usage_map_.empty());

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,13 +31,10 @@ class RecentTabsPagePrefs {
   void SetSyncPromoCollapsed(JNIEnv* env,
                              jboolean is_collapsed);
 
-  jboolean GetForeignSessionCollapsed(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& session_tag);
-  void SetForeignSessionCollapsed(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& session_tag,
-      jboolean is_collapsed);
+  jboolean GetForeignSessionCollapsed(JNIEnv* env, std::string& session_tag);
+  void SetForeignSessionCollapsed(JNIEnv* env,
+                                  std::string& session_tag,
+                                  jboolean is_collapsed);
 
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 

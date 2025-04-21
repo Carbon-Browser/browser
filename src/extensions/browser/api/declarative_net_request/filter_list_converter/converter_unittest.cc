@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative_net_request/filter_list_converter/converter.h"
+
+#include <optional>
 
 #include "base/check_op.h"
 #include "base/files/file_path.h"
@@ -12,11 +14,8 @@
 #include "base/json/json_reader.h"
 #include "base/strings/string_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace extensions {
-namespace declarative_net_request {
-namespace filter_list_converter {
+namespace extensions::declarative_net_request::filter_list_converter {
 namespace {
 
 void TestConversion(std::vector<std::string> filter_list_rules,
@@ -27,17 +26,16 @@ void TestConversion(std::vector<std::string> filter_list_rules,
 
   base::FilePath input_path = temp_dir.GetPath().AppendASCII("filterlist.txt");
   std::string filterlist = base::JoinString(filter_list_rules, "\n");
-  CHECK_EQ(filterlist.size(),
-           static_cast<size_t>(base::WriteFile(input_path, filterlist.c_str(),
-                                               filterlist.size())));
+  CHECK(base::WriteFile(input_path, filterlist));
 
-  absl::optional<base::Value> expected_json =
+  std::optional<base::Value> expected_json =
       base::JSONReader::Read(json_result);
   CHECK(expected_json.has_value());
 
   base::FilePath output_path = temp_dir.GetPath();
-  if (write_type == WriteType::kJSONRuleset)
+  if (write_type == WriteType::kJSONRuleset) {
     output_path = output_path.AppendASCII("rules.json");
+  }
 
   ConvertRuleset({input_path}, output_path, write_type, true /* noisy */);
 
@@ -167,6 +165,4 @@ INSTANTIATE_TEST_SUITE_P(All,
                                            WriteType::kJSONRuleset));
 
 }  // namespace
-}  // namespace filter_list_converter
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request::filter_list_converter

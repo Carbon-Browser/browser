@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ template<class T>
 class RefCountedVector
     : public base::RefCountedThreadSafe<RefCountedVector<T> > {
  public:
-  RefCountedVector() {}
+  RefCountedVector() = default;
   explicit RefCountedVector(const std::vector<T>& initializer)
       : data(initializer) {}
 
@@ -26,7 +26,7 @@ class RefCountedVector
 
  private:
   friend class base::RefCountedThreadSafe<RefCountedVector<T>>;
-  ~RefCountedVector() {}
+  ~RefCountedVector() = default;
 };
 
 #endif  // CHROME_COMMON_REF_COUNTED_UTIL_H__

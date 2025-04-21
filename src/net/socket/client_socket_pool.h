@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define NET_SOCKET_CLIENT_SOCKET_POOL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -15,7 +17,7 @@
 #include "net/base/completion_once_callback.h"
 #include "net/base/load_states.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/privacy_mode.h"
 #include "net/base/request_priority.h"
 #include "net/dns/host_resolver.h"
@@ -24,7 +26,7 @@
 #include "net/log/net_log_capture_mode.h"
 #include "net/socket/connect_job.h"
 #include "net/socket/socket_tag.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "net/ssl/ssl_config.h"
 #include "url/scheme_host_port.h"
 
 namespace net {
@@ -35,7 +37,7 @@ class HttpAuthController;
 class HttpResponseInfo;
 class NetLogWithSource;
 struct NetworkTrafficAnnotationTag;
-class ProxyServer;
+class ProxyChain;
 struct SSLConfig;
 class StreamSocket;
 
@@ -96,11 +98,20 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
   // considered indistinguishable.
   class NET_EXPORT GroupId {
    public:
+    // Returns the prefix for `privacy_mode` for logging.
+    static std::string_view GetPrivacyModeGroupIdPrefix(
+        PrivacyMode privacy_mode);
+
+    // Returns the prefix for `secure_dns_policy` for logging.
+    static std::string_view GetSecureDnsPolicyGroupIdPrefix(
+        SecureDnsPolicy secure_dns_policy);
+
     GroupId();
     GroupId(url::SchemeHostPort destination,
             PrivacyMode privacy_mode,
-            NetworkIsolationKey network_isolation_key,
-            SecureDnsPolicy secure_dns_policy);
+            NetworkAnonymizationKey network_anonymization_key,
+            SecureDnsPolicy secure_dns_policy,
+            bool disable_cert_network_fetches);
     GroupId(const GroupId& group_id);
 
     ~GroupId();
@@ -112,27 +123,35 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
 
     PrivacyMode privacy_mode() const { return privacy_mode_; }
 
-    const NetworkIsolationKey& network_isolation_key() const {
-      return network_isolation_key_;
+    const NetworkAnonymizationKey& network_anonymization_key() const {
+      return network_anonymization_key_;
     }
 
     SecureDnsPolicy secure_dns_policy() const { return secure_dns_policy_; }
+
+    bool disable_cert_network_fetches() const {
+      return disable_cert_network_fetches_;
+    }
 
     // Returns the group ID as a string, for logging.
     std::string ToString() const;
 
     bool operator==(const GroupId& other) const {
-      return std::tie(destination_, privacy_mode_, network_isolation_key_,
-                      secure_dns_policy_) ==
+      return std::tie(destination_, privacy_mode_, network_anonymization_key_,
+                      secure_dns_policy_, disable_cert_network_fetches_) ==
              std::tie(other.destination_, other.privacy_mode_,
-                      other.network_isolation_key_, other.secure_dns_policy_);
+                      other.network_anonymization_key_,
+                      other.secure_dns_policy_,
+                      other.disable_cert_network_fetches_);
     }
 
     bool operator<(const GroupId& other) const {
-      return std::tie(destination_, privacy_mode_, network_isolation_key_,
-                      secure_dns_policy_) <
+      return std::tie(destination_, privacy_mode_, network_anonymization_key_,
+                      secure_dns_policy_, disable_cert_network_fetches_) <
              std::tie(other.destination_, other.privacy_mode_,
-                      other.network_isolation_key_, other.secure_dns_policy_);
+                      other.network_anonymization_key_,
+                      other.secure_dns_policy_,
+                      other.disable_cert_network_fetches_);
     }
 
    private:
@@ -143,10 +162,15 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
     PrivacyMode privacy_mode_;
 
     // Used to separate requests made in different contexts.
-    NetworkIsolationKey network_isolation_key_;
+    NetworkAnonymizationKey network_anonymization_key_;
 
     // Controls the Secure DNS behavior to use when creating this socket.
     SecureDnsPolicy secure_dns_policy_;
+
+    // Whether cert validation-related network fetches are allowed. Should only
+    // be true for a very limited number of network-configuration related
+    // scripts (e.g., PAC fetches).
+    bool disable_cert_network_fetches_;
   };
 
   // Parameters that, in combination with GroupId, proxy, websocket information,
@@ -154,38 +178,33 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
   //
   // DO NOT ADD ANY FIELDS TO THIS CLASS.
   //
-  // TODO(https://crbug.com/921369) In order to resolve longstanding issues
+  // TODO(crbug.com/40609237) In order to resolve longstanding issues
   // related to pooling distinguishable sockets together, remove this class
   // entirely.
   class NET_EXPORT_PRIVATE SocketParams
       : public base::RefCounted<SocketParams> {
    public:
-    // For non-SSL requests / non-HTTPS proxies, the corresponding SSLConfig
-    // argument may be nullptr.
-    SocketParams(std::unique_ptr<SSLConfig> ssl_config_for_origin,
-                 std::unique_ptr<SSLConfig> ssl_config_for_proxy);
+    // For non-SSL requests, `allowed_bad_certs` argument will be ignored (and
+    // is likely empty, anyways).
+    explicit SocketParams(
+        const std::vector<SSLConfig::CertAndStatus>& allowed_bad_certs);
 
     SocketParams(const SocketParams&) = delete;
     SocketParams& operator=(const SocketParams&) = delete;
 
-    // Creates a  SocketParams object with none of the fields populated. This
+    // Creates a SocketParams object with none of the fields populated. This
     // works for the HTTP case only.
     static scoped_refptr<SocketParams> CreateForHttpForTesting();
 
-    const SSLConfig* ssl_config_for_origin() const {
-      return ssl_config_for_origin_.get();
-    }
-
-    const SSLConfig* ssl_config_for_proxy() const {
-      return ssl_config_for_proxy_.get();
+    const std::vector<SSLConfig::CertAndStatus>& allowed_bad_certs() const {
+      return allowed_bad_certs_;
     }
 
    private:
     friend class base::RefCounted<SocketParams>;
     ~SocketParams();
 
-    std::unique_ptr<SSLConfig> ssl_config_for_origin_;
-    std::unique_ptr<SSLConfig> ssl_config_for_proxy_;
+    std::vector<SSLConfig::CertAndStatus> allowed_bad_certs_;
   };
 
   ClientSocketPool(const ClientSocketPool&) = delete;
@@ -234,7 +253,7 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
   virtual int RequestSocket(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       RequestPriority priority,
       const SocketTag& socket_tag,
       RespectLimits respect_limits,
@@ -258,7 +277,7 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
   virtual int RequestSockets(
       const GroupId& group_id,
       scoped_refptr<SocketParams> params,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       int num_sockets,
       CompletionOnceCallback callback,
       const NetLogWithSource& net_log) = 0;
@@ -348,13 +367,13 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
                                                 const GroupId& group_id);
 
   // Utility method to log a GroupId with a NetLog event.
-  static base::Value NetLogGroupIdParams(const GroupId& group_id);
+  static base::Value::Dict NetLogGroupIdParams(const GroupId& group_id);
 
   std::unique_ptr<ConnectJob> CreateConnectJob(
       GroupId group_id,
       scoped_refptr<SocketParams> socket_params,
-      const ProxyServer& proxy_server,
-      const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
+      const ProxyChain& proxy_chain,
+      const std::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       RequestPriority request_priority,
       SocketTag socket_tag,
       ConnectJob::Delegate* delegate);

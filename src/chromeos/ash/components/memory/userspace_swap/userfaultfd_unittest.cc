@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/components/memory/userspace_swap/userfaultfd.h"
 
@@ -12,10 +17,11 @@
 
 #include <atomic>
 
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/page_size.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/rand_util.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -75,8 +81,8 @@ class ScopedMemory {
   }
 
   void* Release() {
-    void* ptr = nullptr;
-    std::swap(ptr_, ptr);
+    void* ptr = ptr_;
+    ptr_ = nullptr;
     return ptr;
   }
 
@@ -93,7 +99,9 @@ class ScopedMemory {
   void* get() { return ptr_; }
 
  private:
-  void* ptr_ = nullptr;
+  // RAW_PTR_EXCLUSION: Never allocated by PartitionAlloc (always mmap'ed), so
+  // there is no benefit to using a raw_ptr, only cost.
+  RAW_PTR_EXCLUSION void* ptr_ = nullptr;
   size_t len_ = 0;
 };
 
@@ -104,9 +112,13 @@ const size_t kPageSize = base::GetPageSize();
 class UserfaultFDTest : public testing::Test {
  public:
   void SetUp() override {
-    // We skip these tests if the kernel does not support userfaultfd.
+    // We skip these tests if the kernel does not support userfaultfd
+    // or when we have insufficient permissions.
     if (!UserfaultFD::KernelSupportsUserfaultFD()) {
       GTEST_SKIP() << "Skipping test: no userfaultfd(2) support.";
+    }
+    if (!CreateUffd() && errno == EPERM) {
+      GTEST_SKIP() << "Skipping test: userfaultfd(2) not permitted.";
     }
   }
 

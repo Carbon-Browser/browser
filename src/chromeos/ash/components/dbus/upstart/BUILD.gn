@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,8 +11,6 @@ component("upstart") {
 
   deps = [
     "//base",
-    "//chromeos/ash/components/dbus/authpolicy",
-    "//chromeos/ash/components/dbus/authpolicy:authpolicy_proto",
     "//chromeos/ash/components/dbus/kerberos",
     "//chromeos/ash/components/dbus/media_analytics",
     "//chromeos/dbus/common",

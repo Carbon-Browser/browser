@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <array>
+
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace remoting {
 
 typedef void (*TestFunction)(size_t i, RunningSamples& samples);
 
-static const int64_t kTestValues[] = { 10, 20, 30, 10, 25, 16, 15 };
+const auto kTestValues = std::to_array<int64_t>({10, 20, 30, 10, 25, 16, 15});
 
 // Test framework that verifies average() and max() at beginning, iterates
 // through all elements and meanwhile calls your own test function
@@ -39,8 +41,9 @@ TEST(RunningSamplesTest, AverageOneElementWindow) {
 TEST(RunningSamplesTest, AverageTwoElementWindow) {
   TestFramework(2, [](size_t i, RunningSamples& samples) {
     double expected = kTestValues[i];
-    if (i > 0)
-      expected = (expected + kTestValues[i-1]) / 2;
+    if (i > 0) {
+      expected = (expected + kTestValues[i - 1]) / 2;
+    }
 
     EXPECT_EQ(expected, samples.Average());
   });
@@ -51,8 +54,9 @@ TEST(RunningSamplesTest, AverageLongWindow) {
   TestFramework(std::size(kTestValues) + 1,
                 [](size_t i, RunningSamples& samples) {
                   double expected = 0.0;
-                  for (size_t j = 0; j <= i; ++j)
+                  for (size_t j = 0; j <= i; ++j) {
                     expected += kTestValues[j];
+                  }
                   expected /= i + 1;
 
                   EXPECT_EQ(expected, samples.Average());
@@ -70,8 +74,9 @@ TEST(RunningSamplesTest, MaxOneElementWindow) {
 TEST(RunningSamplesTest, MaxTwoElementWindow) {
   TestFramework(2, [](size_t i, RunningSamples& samples) {
     double expected = kTestValues[i];
-    if (i > 0)
-      expected = expected > kTestValues[i-1] ? expected : kTestValues[i-1];
+    if (i > 0) {
+      expected = expected > kTestValues[i - 1] ? expected : kTestValues[i - 1];
+    }
 
     EXPECT_EQ(expected, samples.Max());
   });
@@ -82,8 +87,9 @@ TEST(RunningSamplesTest, MaxLongWindow) {
   TestFramework(
       std::size(kTestValues) + 1, [](size_t i, RunningSamples& samples) {
         int64_t expected = -1;
-        for (size_t j = 0; j <= i; ++j)
+        for (size_t j = 0; j <= i; ++j) {
           expected = expected > kTestValues[j] ? expected : kTestValues[j];
+        }
 
         EXPECT_EQ(expected, samples.Max());
       });

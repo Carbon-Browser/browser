@@ -1,14 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.hardware_acceleration;
 
-import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.support.test.InstrumentationRegistry;
+import android.os.Build;
 
 import androidx.test.filters.SmallTest;
 
@@ -16,26 +15,30 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.PackageUtils;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.DisableIf;
 import org.chromium.chrome.browser.app.ChromeActivity;
 
-/**
- * Hardware acceleration-related manifest tests.
- */
+/** Hardware acceleration-related manifest tests. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
+@DisableIf.Build(
+        sdk_is_greater_than = Build.VERSION_CODES.P,
+        sdk_is_less_than = Build.VERSION_CODES.TIRAMISU,
+        supported_abis_includes = "x86_64",
+        message = "vr tests do not apply to emulator")
 public class ManifestHWATest {
     @Test
     @SmallTest
     public void testAccelerationDisabled() throws Exception {
-        Context context = InstrumentationRegistry.getTargetContext();
-        PackageInfo info = context.getPackageManager().getPackageInfo(
-                context.getApplicationInfo().packageName,
-                PackageManager.GET_ACTIVITIES);
+        PackageInfo info = PackageUtils.getApplicationPackageInfo(PackageManager.GET_ACTIVITIES);
         for (ActivityInfo activityInfo : info.activities) {
-            String activityName = activityInfo.targetActivity != null ? activityInfo.targetActivity
-                                                                      : activityInfo.name;
+            String activityName =
+                    activityInfo.targetActivity != null
+                            ? activityInfo.targetActivity
+                            : activityInfo.name;
             try {
                 Class<?> activityClass = Class.forName(activityName);
                 if (ChromeActivity.class.isAssignableFrom(activityClass)) {

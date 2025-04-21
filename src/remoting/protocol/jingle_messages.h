@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 #include "third_party/webrtc/api/candidate.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class ContentDescription;
 
@@ -39,7 +38,6 @@ struct JingleMessage {
     FAILED_APPLICATION,
     INCOMPATIBLE_PARAMETERS,
   };
-
 
   JingleMessage();
   JingleMessage(const SignalingAddress& to,
@@ -88,7 +86,17 @@ struct JingleMessage {
   // Value from the <google:remoting:error-code> tag if it is present in the
   // message. Useful mainly for session-terminate messages. If it's UNKNOWN,
   // or reason is UNKNOWN_REASON, this field will be ignored in the xml output.
-  ErrorCode error_code = UNKNOWN_ERROR;
+  ErrorCode error_code = ErrorCode::UNKNOWN_ERROR;
+
+  // Value from the <google:remoting:error-details> tag if it is present in the
+  // message. Useful mainly for session-terminate messages. If it's empty, or
+  // reason is UNKNOWN_REASON, this field will be ignored in the xml output.
+  std::string error_details;
+
+  // Value from the <google:remoting:error-location> tag if it is present in the
+  // message. Useful mainly for session-terminate messages. If it's empty, or
+  // reason is UNKNOWN_REASON, this field will be ignored in the xml output.
+  std::string error_location;
 };
 
 struct JingleMessageReply {
@@ -153,7 +161,6 @@ struct IceTransportInfo {
   std::list<NamedCandidate> candidates;
 };
 
-}  // protocol
-}  // remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_JINGLE_MESSAGES_H_

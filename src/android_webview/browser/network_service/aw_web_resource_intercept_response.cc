@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "android_webview/browser_jni_headers/AwWebResourceInterceptResponse_jni.h"
 #include "base/android/jni_android.h"
 #include "components/embedder_support/android/util/web_resource_response.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/AwWebResourceInterceptResponse_jni.h"
 
 using base::android::ScopedJavaLocalRef;
 

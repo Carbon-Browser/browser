@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <commdlg.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
@@ -47,15 +47,13 @@ class FakePdfPrinterHandler : public PdfPrinterHandler {
       : PdfPrinterHandler(profile, contents, sticky_settings),
         save_failed_(false) {}
 
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override {
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override {
     // Since we always cancel the dialog as soon as it is initialized, this
     // should never be called.
     NOTREACHED();
   }
 
-  void FileSelectionCanceled(void* params) override {
+  void FileSelectionCanceled() override {
     save_failed_ = true;
     run_loop_.Quit();
   }
@@ -83,8 +81,7 @@ class FakePdfPrinterHandler : public PdfPrinterHandler {
     select_file_dialog_->SelectFile(
         ui::SelectFileDialog::SELECT_SAVEAS_FILE, std::u16string(),
         default_filename, &file_type_info, 0, base::FilePath::StringType(),
-        platform_util::GetTopLevel(preview_web_contents_->GetNativeView()),
-        nullptr);
+        platform_util::GetTopLevel(preview_web_contents_->GetNativeView()));
   }
 
   bool save_failed_;
@@ -95,12 +92,12 @@ class FakePdfPrinterHandler : public PdfPrinterHandler {
 
 class PdfPrinterHandlerWinTest : public BrowserWithTestWindowTest {
  public:
-  PdfPrinterHandlerWinTest() {}
+  PdfPrinterHandlerWinTest() = default;
 
   PdfPrinterHandlerWinTest(const PdfPrinterHandlerWinTest&) = delete;
   PdfPrinterHandlerWinTest& operator=(const PdfPrinterHandlerWinTest&) = delete;
 
-  ~PdfPrinterHandlerWinTest() override {}
+  ~PdfPrinterHandlerWinTest() override = default;
 
   void SetUp() override {
     BrowserWithTestWindowTest::SetUp();

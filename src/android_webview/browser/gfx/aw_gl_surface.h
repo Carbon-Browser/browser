@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@ namespace android_webview {
 // This surface is used to represent the underlying surface provided by the App
 // inside a hardware draw. Note that offscreen contexts will not be using this
 // GLSurface.
+//
+// Lifetime: WebView
 class AwGLSurface : public gl::GLSurfaceEGL {
  public:
   AwGLSurface(gl::GLDisplayEGL* display, bool is_angle);
@@ -28,7 +30,8 @@ class AwGLSurface : public gl::GLSurfaceEGL {
   void Destroy() override;
   bool IsOffscreen() override;
   unsigned int GetBackingFramebufferObject() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   bool OnMakeCurrent(gl::GLContext* context) override;
   gfx::Size GetSize() override;
   void* GetHandle() override;
@@ -49,6 +52,13 @@ class AwGLSurface : public gl::GLSurfaceEGL {
   // Returns true if this GLSurface created fbo to implement stencil clipping.
   // This doesn't take into account if fbo was created by Android.
   virtual bool IsDrawingToFBO();
+  virtual void DestroyExternalStencilFramebuffer() {}
+
+  bool is_angle() { return is_angle_; }
+
+  scoped_refptr<gl::GLSurface> wrapped_surface() const {
+    return wrapped_surface_;
+  }
 
  protected:
   ~AwGLSurface() override;

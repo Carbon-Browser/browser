@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/image_fetcher/core/fake_image_decoder.h"
 #include "components/signin/internal/identity_manager/account_fetcher_service.h"
 #include "components/signin/internal/identity_manager/account_tracker_service.h"
@@ -36,6 +36,7 @@
 #include "components/signin/public/base/account_consistency_method.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/base/list_accounts_test_utils.h"
+#include "components/signin/public/base/signin_prefs.h"
 #include "components/signin/public/base/signin_switches.h"
 #include "components/signin/public/base/test_signin_client.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
@@ -48,6 +49,7 @@
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/gaia_auth_fetcher.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "net/cookies/cookie_change_dispatcher.h"
 #include "net/cookies/cookie_constants.h"
@@ -60,12 +62,8 @@
 #include "components/signin/internal/identity_manager/child_account_info_fetcher_android.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/account_manager/account_manager_factory.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ash/components/account_manager/account_manager_factory.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_facade_impl.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
@@ -75,25 +73,6 @@
 
 namespace signin {
 namespace {
-
-const char kTestConsumerId[] = "dummy_consumer";
-const char kTestConsumerId2[] = "dummy_consumer 2";
-const char kTestGaiaId[] = "dummyId";
-const char kTestGaiaId2[] = "dummyId2";
-const char kTestGaiaId3[] = "dummyId3";
-const char kTestEmail[] = "me@gmail.com";
-const char kTestEmail2[] = "me2@gmail.com";
-const char kTestEmail3[] = "me3@gmail.com";
-
-const char kTestHostedDomain[] = "example.com";
-const char kTestFullName[] = "full_name";
-const char kTestGivenName[] = "given_name";
-const char kTestLocale[] = "locale";
-const char kTestPictureUrl[] = "http://picture.example.com/picture.jpg";
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-const char kTestEmailWithPeriod[] = "m.e@gmail.com";
-#endif
 
 // Subclass of FakeOAuth2AccessTokenManager with bespoke behavior.
 class CustomFakeOAuth2AccessTokenManager : public FakeOAuth2AccessTokenManager {
@@ -127,8 +106,9 @@ class CustomFakeOAuth2AccessTokenManager : public FakeOAuth2AccessTokenManager {
 
       // It should trigger OnAccessTokenRemovedFromCache from
       // IdentityManager::DiagnosticsObserver.
-      for (auto& observer : GetDiagnosticsObserversForTesting())
+      for (auto& observer : GetDiagnosticsObserversForTesting()) {
         observer.OnAccessTokenRemoved(account_id, scopes);
+      }
 
       std::move(on_access_token_invalidated_callback_).Run();
     }
@@ -231,8 +211,9 @@ class TestIdentityManagerDiagnosticsObserver
     token_requestor_consumer_id_ = consumer_id;
     token_requestor_scopes_ = scopes;
 
-    if (on_access_token_requested_callback_)
+    if (on_access_token_requested_callback_) {
       std::move(on_access_token_requested_callback_).Run();
+    }
   }
 
   void OnAccessTokenRemovedFromCache(const CoreAccountId& account_id,
@@ -244,15 +225,16 @@ class TestIdentityManagerDiagnosticsObserver
   void OnAccessTokenRequestCompleted(const CoreAccountId& account_id,
                                      const std::string& consumer_id,
                                      const ScopeSet& scopes,
-                                     GoogleServiceAuthError error,
+                                     const GoogleServiceAuthError& error,
                                      base::Time expiration_time) override {
     access_token_request_completed_account_id_ = account_id;
     access_token_request_completed_consumer_id_ = consumer_id;
     access_token_request_completed_scopes_ = scopes;
     access_token_request_completed_error_ = error;
 
-    if (on_access_token_request_completed_callback_)
+    if (on_access_token_request_completed_callback_) {
       std::move(on_access_token_request_completed_callback_).Run();
+    }
   }
 
   raw_ptr<IdentityManager> identity_manager_;
@@ -276,10 +258,31 @@ class IdentityManagerTest : public testing::Test {
   IdentityManagerTest(const IdentityManagerTest&) = delete;
   IdentityManagerTest& operator=(const IdentityManagerTest&) = delete;
 
+  const std::string kTestConsumerId = "dummy_consumer";
+  const std::string kTestConsumerId2 = "dummy_consumer 2";
+  const GaiaId kTestGaiaId = GaiaId("dummyId");
+  const GaiaId kTestGaiaId2 = GaiaId("dummyId2");
+  const GaiaId kTestGaiaId3 = GaiaId("dummyId3");
+  const std::string kTestEmail = "me@gmail.com";
+  const std::string kTestEmail2 = "me2@gmail.com";
+  const std::string kTestEmail3 = "me3@gmail.com";
+
+  const std::string kTestHostedDomain = "example.com";
+  const std::string kTestFullName = "full_name";
+  const std::string kTestGivenName = "given_name";
+  const std::string kTestLocale = "locale";
+  const std::string kTestPictureUrl = "http://picture.example.com/picture.jpg";
+
+#if BUILDFLAG(IS_CHROMEOS)
+  const std::string kTestEmailWithPeriod = "m.e@gmail.com";
+#endif
+
  protected:
   IdentityManagerTest()
       : signin_client_(&pref_service_, &test_url_loader_factory_) {
     IdentityManager::RegisterProfilePrefs(pref_service_.registry());
+    SigninPrefs::RegisterProfilePrefs(pref_service_.registry());
+
     IdentityManager::RegisterLocalStatePrefs(pref_service_.registry());
 
     RecreateIdentityManager(
@@ -340,8 +343,9 @@ class IdentityManagerTest : public testing::Test {
     // trigger a DCHECK because there are still living observers.
     identity_manager_observer_.reset();
     identity_manager_diagnostics_observer_.reset();
-    if (identity_manager_)
+    if (identity_manager_) {
       identity_manager_->Shutdown();
+    }
     identity_manager_.reset();
 
     if (temp_profile_dir_.IsValid()) {
@@ -352,11 +356,15 @@ class IdentityManagerTest : public testing::Test {
 
     ASSERT_TRUE(temp_profile_dir_.CreateUniqueTempDir());
 
+#if BUILDFLAG(IS_ANDROID)
+    // Required to create AccountTrackerService on Android.
+    SetUpMockAccountManagerFacade();
+#endif
     auto account_tracker_service = std::make_unique<AccountTrackerService>();
     account_tracker_service->Initialize(&pref_service_,
                                         temp_profile_dir_.GetPath());
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     account_manager::AccountManager::RegisterPrefs(pref_service_.registry());
     auto* ash_account_manager = GetAccountManagerFactory()->GetAccountManager(
         temp_profile_dir_.GetPath().value());
@@ -377,7 +385,7 @@ class IdentityManagerTest : public testing::Test {
             std::move(remote),
             /*remote_version=*/std::numeric_limits<uint32_t>::max(),
             /*account_manager_for_tests=*/
-            ash_account_manager);
+            ash_account_manager->GetWeakPtr());
 
     auto token_service = std::make_unique<CustomFakeProfileOAuth2TokenService>(
         &pref_service_,
@@ -412,15 +420,14 @@ class IdentityManagerTest : public testing::Test {
     base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
     cmd_line->AppendSwitch(switches::kClearTokenService);
 
-    primary_account_manager->Initialize(&pref_service_);
-
     if (primary_account_manager_setup ==
         PrimaryAccountManagerSetup::kWithAuthenticatedAccout) {
       CoreAccountId account_id =
           account_tracker_service->SeedAccountInfo(kTestGaiaId, kTestEmail);
       primary_account_manager->SetPrimaryAccountInfo(
           account_tracker_service->GetAccountInfo(account_id),
-          ConsentLevel::kSync);
+          ConsentLevel::kSync,
+          signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
     }
 
     IdentityManager::InitParameters init_params;
@@ -436,8 +443,8 @@ class IdentityManagerTest : public testing::Test {
 
     init_params.primary_account_mutator =
         std::make_unique<PrimaryAccountMutatorImpl>(
-            account_tracker_service.get(), token_service.get(),
-            primary_account_manager.get(), &pref_service_, account_consistency);
+            account_tracker_service.get(), primary_account_manager.get(),
+            &pref_service_, &signin_client_);
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
     init_params.device_accounts_synchronizer =
@@ -448,12 +455,10 @@ class IdentityManagerTest : public testing::Test {
         token_service.get(), account_tracker_service.get(),
         primary_account_manager.get(), &pref_service_);
 #endif
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     init_params.account_manager_facade = account_manager_facade_.get();
 #endif
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
     init_params.signin_client = &signin_client_;
-#endif
     init_params.account_fetcher_service = std::move(account_fetcher_service);
     init_params.account_tracker_service = std::move(account_tracker_service);
     init_params.gaia_cookie_manager_service =
@@ -474,19 +479,8 @@ class IdentityManagerTest : public testing::Test {
     // behavior from all platforms, even from ones where tokens are loaded
     // asynchronously (e.g., ChromeOS). Wait for loading to finish to meet these
     // expectations.
-    // TODO(https://crbug.com/1195170): Move waiting to tests that need it.
+    // TODO(crbug.com/40175926): Move waiting to tests that need it.
     signin::WaitForRefreshTokensLoaded(identity_manager());
-  }
-
-  void SimulateAdditionOfAccountToCookieSuccess(GaiaAuthConsumer* consumer,
-                                                const std::string& data) {
-    consumer->OnMergeSessionSuccess(data);
-  }
-
-  void SimulateAdditionOfAccountToCookieSuccessFailure(
-      GaiaAuthConsumer* consumer,
-      const GoogleServiceAuthError& error) {
-    consumer->OnMergeSessionFailure(error);
   }
 
   void SimulateCookieDeletedByUser(
@@ -511,7 +505,7 @@ class IdentityManagerTest : public testing::Test {
     return &test_url_loader_factory_;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::AccountManagerFactory* GetAccountManagerFactory() {
     return &account_manager_factory_;
   }
@@ -520,7 +514,7 @@ class IdentityManagerTest : public testing::Test {
  private:
   base::ScopedTempDir temp_profile_dir_;
   base::test::TaskEnvironment task_environment_;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::AccountManagerFactory account_manager_factory_;
   std::unique_ptr<account_manager::AccountManagerFacadeImpl>
       account_manager_facade_;
@@ -552,7 +546,7 @@ TEST_F(IdentityManagerTest, Construct) {
   EXPECT_NE(identity_manager()->GetAccountsMutator(), nullptr);
   EXPECT_EQ(identity_manager()->GetDeviceAccountsSynchronizer(), nullptr);
 #endif
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   EXPECT_NE(identity_manager()->GetAccountManagerFacade(), nullptr);
 #endif
 }
@@ -573,7 +567,7 @@ TEST_F(IdentityManagerTest, PrimaryAccountInfoAtStartup) {
 
 // Signin/signout tests aren't relevant and cannot build on ChromeOS, which
 // doesn't support signin/signout.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Test that the user signing in results in firing of the IdentityManager
 // observer callback and the IdentityManager's state being updated.
 TEST_F(IdentityManagerTest, PrimaryAccountInfoAfterSignin) {
@@ -602,7 +596,7 @@ TEST_F(IdentityManagerTest, PrimaryAccountInfoAfterSignin) {
 
   CoreAccountId primary_account_id =
       identity_manager()->GetPrimaryAccountId(signin::ConsentLevel::kSync);
-  EXPECT_EQ(primary_account_id, CoreAccountId(kTestGaiaId));
+  EXPECT_EQ(primary_account_id, CoreAccountId::FromGaiaId(kTestGaiaId));
   EXPECT_EQ(primary_account_id, primary_account_info.account_id);
 
   EXPECT_EQ(primary_account_id, identity_manager()->GetPrimaryAccountId(
@@ -672,17 +666,18 @@ TEST_F(IdentityManagerTest,
       identity_manager()->GetPrimaryAccountInfo(signin::ConsentLevel::kSync);
   EXPECT_EQ(kTestGaiaId, primary_account_info.gaia);
   EXPECT_EQ(kTestEmail, primary_account_info.email);
-  EXPECT_EQ(CoreAccountId(kTestGaiaId), primary_account_info.account_id);
+  EXPECT_EQ(CoreAccountId::FromGaiaId(kTestGaiaId),
+            primary_account_info.account_id);
   EXPECT_EQ(primary_account_info,
             identity_manager()->GetPrimaryAccountInfo(ConsentLevel::kSignin));
 
   CoreAccountId primary_account_id =
       identity_manager()->GetPrimaryAccountId(signin::ConsentLevel::kSync);
-  EXPECT_EQ(primary_account_id, CoreAccountId(kTestGaiaId));
+  EXPECT_EQ(primary_account_id, CoreAccountId::FromGaiaId(kTestGaiaId));
   EXPECT_EQ(primary_account_id,
             identity_manager()->GetPrimaryAccountId(ConsentLevel::kSignin));
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 TEST_F(IdentityManagerTest, HasPrimaryAccount) {
   EXPECT_TRUE(
@@ -697,7 +692,7 @@ TEST_F(IdentityManagerTest, HasPrimaryAccount) {
       identity_manager()->HasPrimaryAccount(signin::ConsentLevel::kSync));
   EXPECT_TRUE(identity_manager()->HasPrimaryAccount(ConsentLevel::kSignin));
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // Signing out should cause IdentityManager to recognize that there is no
   // longer a primary account.
   ClearPrimaryAccount(identity_manager());
@@ -1276,7 +1271,8 @@ TEST_F(IdentityManagerTest, RemoveAccessTokenFromCache) {
   identity_manager()->GetAccountTrackerService()->SeedAccountInfo(kTestGaiaId,
                                                                   kTestEmail);
   identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
-      primary_account_id(), ConsentLevel::kSync);
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   SetRefreshTokenForAccount(identity_manager(), primary_account_id(),
                             "refresh_token");
 
@@ -1319,7 +1315,8 @@ TEST_F(IdentityManagerTest,
   identity_manager()->GetAccountTrackerService()->SeedAccountInfo(kTestGaiaId,
                                                                   kTestEmail);
   identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
-      primary_account_id(), ConsentLevel::kSync);
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   SetRefreshTokenForAccount(identity_manager(), primary_account_id(),
                             "refresh_token");
 
@@ -1412,7 +1409,8 @@ TEST_F(IdentityManagerTest, ObserveAccessTokenFetch) {
   identity_manager()->GetAccountTrackerService()->SeedAccountInfo(kTestGaiaId,
                                                                   kTestEmail);
   identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
-      primary_account_id(), ConsentLevel::kSync);
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   SetRefreshTokenForAccount(identity_manager(), primary_account_id(),
                             "refresh_token");
 
@@ -1470,7 +1468,8 @@ TEST_F(IdentityManagerTest,
   identity_manager()->GetAccountTrackerService()->SeedAccountInfo(kTestGaiaId,
                                                                   kTestEmail);
   identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
-      primary_account_id(), ConsentLevel::kSync);
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   SetRefreshTokenForAccount(identity_manager(), primary_account_id(),
                             "refresh_token");
   token_service()->set_auto_post_fetch_response_on_message_loop(true);
@@ -1527,7 +1526,7 @@ TEST_F(IdentityManagerTest,
   run_loop.Run();
 
   EXPECT_TRUE(token_fetcher);
-  EXPECT_EQ(GoogleServiceAuthError(GoogleServiceAuthError::REQUEST_CANCELED),
+  EXPECT_EQ(GoogleServiceAuthError(GoogleServiceAuthError::USER_NOT_SIGNED_UP),
             identity_manager_diagnostics_observer()
                 ->on_access_token_request_completed_error());
 }
@@ -1538,7 +1537,7 @@ TEST_F(IdentityManagerTest, GetAccountsCookieMutator) {
   EXPECT_TRUE(mutator);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // On ChromeOS, AccountTrackerService first receives the normalized email
 // address from GAIA and then later has it updated with the user's
 // originally-specified version of their email address (at the time of that
@@ -1581,7 +1580,7 @@ TEST_F(IdentityManagerTest,
 
 TEST_F(IdentityManagerTest,
        CallbackSentOnPrimaryAccountRefreshTokenUpdateWithInvalidToken) {
-  SetInvalidRefreshTokenForPrimaryAccount(identity_manager());
+  signin::SetInvalidRefreshTokenForPrimaryAccount(identity_manager());
 
   CoreAccountInfo account_info =
       identity_manager_observer()->AccountFromRefreshTokenUpdatedCallback();
@@ -1641,15 +1640,19 @@ TEST_F(IdentityManagerTest, CallbackSentOnSecondaryAccountRefreshTokenRemoval) {
       identity_manager_observer()->AccountIdFromRefreshTokenRemovedCallback());
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 TEST_F(
     IdentityManagerTest,
     CallbackSentOnSecondaryAccountRefreshTokenUpdateWithValidTokenWhenNoPrimaryAccount) {
   ClearPrimaryAccount(identity_manager());
 
   // Add an unconsented primary account, incl. proper cookies.
-  AccountInfo expected_account_info = MakeAccountAvailableWithCookies(
-      identity_manager(), test_url_loader_factory(), kTestEmail2, kTestGaiaId2);
+  AccountInfo expected_account_info = MakeAccountAvailable(
+      identity_manager(),
+      AccountAvailabilityOptionsBuilder(test_url_loader_factory())
+          .WithCookie(true)
+          .WithGaiaId(kTestGaiaId2)
+          .Build(kTestEmail2));
   EXPECT_EQ(kTestEmail2, expected_account_info.email);
 
   CoreAccountInfo account_info =
@@ -1665,8 +1668,12 @@ TEST_F(
   ClearPrimaryAccount(identity_manager());
 
   // Add an unconsented primary account, incl. proper cookies.
-  AccountInfo expected_account_info = MakeAccountAvailableWithCookies(
-      identity_manager(), test_url_loader_factory(), kTestEmail2, kTestGaiaId2);
+  AccountInfo expected_account_info = MakeAccountAvailable(
+      identity_manager(),
+      AccountAvailabilityOptionsBuilder(test_url_loader_factory())
+          .WithCookie(true)
+          .WithGaiaId(kTestGaiaId2)
+          .Build(kTestEmail2));
   EXPECT_EQ(kTestEmail2, expected_account_info.email);
 
   SetInvalidRefreshTokenForAccount(identity_manager(),
@@ -1684,8 +1691,12 @@ TEST_F(IdentityManagerTest,
   ClearPrimaryAccount(identity_manager());
 
   // Add an unconsented primary account, incl. proper cookies.
-  AccountInfo expected_account_info = MakeAccountAvailableWithCookies(
-      identity_manager(), test_url_loader_factory(), kTestEmail2, kTestGaiaId2);
+  AccountInfo expected_account_info = MakeAccountAvailable(
+      identity_manager(),
+      AccountAvailabilityOptionsBuilder(test_url_loader_factory())
+          .WithCookie(true)
+          .WithGaiaId(kTestGaiaId2)
+          .Build(kTestEmail2));
   EXPECT_EQ(kTestEmail2, expected_account_info.email);
 
   RemoveRefreshTokenForAccount(identity_manager(),
@@ -1704,7 +1715,8 @@ TEST_F(IdentityManagerTest, CallbackSentOnRefreshTokenRemovalOfUnknownAccount) {
   // IdentityManager passes on the callback in this case.
   token_service()->set_all_credentials_loaded_for_testing(false);
 
-  CoreAccountId dummy_account_id("dummy_account");
+  CoreAccountId dummy_account_id =
+      CoreAccountId::FromGaiaId(GaiaId("dummy_account"));
 
   base::RunLoop run_loop;
   token_service()->RevokeCredentials(dummy_account_id);
@@ -1743,8 +1755,10 @@ TEST_F(IdentityManagerTest,
   const AccountsInCookieJarInfo& accounts_in_cookie_jar_info =
       identity_manager_observer()
           ->AccountsInfoFromAccountsInCookieUpdatedCallback();
-  EXPECT_TRUE(accounts_in_cookie_jar_info.accounts_are_fresh);
-  EXPECT_TRUE(accounts_in_cookie_jar_info.signed_in_accounts.empty());
+  EXPECT_TRUE(accounts_in_cookie_jar_info.AreAccountsFresh());
+  EXPECT_TRUE(
+      accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()
+          .empty());
 }
 
 TEST_F(IdentityManagerTest,
@@ -1761,16 +1775,18 @@ TEST_F(IdentityManagerTest,
   const AccountsInCookieJarInfo& accounts_in_cookie_jar_info =
       identity_manager_observer()
           ->AccountsInfoFromAccountsInCookieUpdatedCallback();
-  EXPECT_TRUE(accounts_in_cookie_jar_info.accounts_are_fresh);
-  ASSERT_EQ(1u, accounts_in_cookie_jar_info.signed_in_accounts.size());
-  ASSERT_TRUE(accounts_in_cookie_jar_info.signed_out_accounts.empty());
+  EXPECT_TRUE(accounts_in_cookie_jar_info.AreAccountsFresh());
+  ASSERT_EQ(1u,
+            accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()
+                .size());
+  ASSERT_TRUE(accounts_in_cookie_jar_info.GetSignedOutAccounts().empty());
 
   gaia::ListedAccount listed_account =
-      accounts_in_cookie_jar_info.signed_in_accounts[0];
+      accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()[0];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail),
       listed_account.id);
-  EXPECT_EQ(kTestGaiaId, listed_account.gaia_id);
+  EXPECT_EQ(kTestGaiaId, listed_account.gaia_id.ToString());
   EXPECT_EQ(kTestEmail, listed_account.email);
 }
 
@@ -1788,26 +1804,28 @@ TEST_F(IdentityManagerTest,
   const AccountsInCookieJarInfo& accounts_in_cookie_jar_info =
       identity_manager_observer()
           ->AccountsInfoFromAccountsInCookieUpdatedCallback();
-  EXPECT_TRUE(accounts_in_cookie_jar_info.accounts_are_fresh);
-  ASSERT_EQ(2u, accounts_in_cookie_jar_info.signed_in_accounts.size());
-  ASSERT_TRUE(accounts_in_cookie_jar_info.signed_out_accounts.empty());
+  EXPECT_TRUE(accounts_in_cookie_jar_info.AreAccountsFresh());
+  ASSERT_EQ(2u,
+            accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()
+                .size());
+  ASSERT_TRUE(accounts_in_cookie_jar_info.GetSignedOutAccounts().empty());
 
   // Verify not only that both accounts are present but that they are listed in
   // the expected order as well.
   gaia::ListedAccount listed_account1 =
-      accounts_in_cookie_jar_info.signed_in_accounts[0];
+      accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()[0];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail),
       listed_account1.id);
-  EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id);
+  EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id.ToString());
   EXPECT_EQ(kTestEmail, listed_account1.email);
 
   gaia::ListedAccount account_info2 =
-      accounts_in_cookie_jar_info.signed_in_accounts[1];
+      accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()[1];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId2, kTestEmail2),
       account_info2.id);
-  EXPECT_EQ(kTestGaiaId2, account_info2.gaia_id);
+  EXPECT_EQ(kTestGaiaId2, account_info2.gaia_id.ToString());
   EXPECT_EQ(kTestEmail2, account_info2.email);
 }
 
@@ -1838,11 +1856,13 @@ TEST_F(IdentityManagerTest, CallbackSentOnUpdateToSignOutAccountsInCookie) {
     const AccountsInCookieJarInfo& accounts_in_cookie_jar_info =
         identity_manager_observer()
             ->AccountsInfoFromAccountsInCookieUpdatedCallback();
-    EXPECT_TRUE(accounts_in_cookie_jar_info.accounts_are_fresh);
-    ASSERT_EQ(2 - accounts_signed_out,
-              accounts_in_cookie_jar_info.signed_in_accounts.size());
+    EXPECT_TRUE(accounts_in_cookie_jar_info.AreAccountsFresh());
+    ASSERT_EQ(
+        2 - accounts_signed_out,
+        accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()
+            .size());
     ASSERT_EQ(accounts_signed_out,
-              accounts_in_cookie_jar_info.signed_out_accounts.size());
+              accounts_in_cookie_jar_info.GetSignedOutAccounts().size());
 
     // Verify not only that both accounts are present but that they are listed
     // in the expected order as well.
@@ -1852,24 +1872,28 @@ TEST_F(IdentityManagerTest, CallbackSentOnUpdateToSignOutAccountsInCookie) {
     int i = 0, j = 0;
     gaia::ListedAccount listed_account1 =
         signed_out_status.account_1
-            ? accounts_in_cookie_jar_info.signed_out_accounts[i++]
-            : accounts_in_cookie_jar_info.signed_in_accounts[j++];
-    if (!signed_out_status.account_1)
+            ? accounts_in_cookie_jar_info.GetSignedOutAccounts()[i++]
+            : accounts_in_cookie_jar_info
+                  .GetPotentiallyInvalidSignedInAccounts()[j++];
+    if (!signed_out_status.account_1) {
       EXPECT_EQ(
           identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail),
           listed_account1.id);
-    EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id);
+    }
+    EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id.ToString());
     EXPECT_EQ(kTestEmail, listed_account1.email);
 
     gaia::ListedAccount listed_account2 =
         signed_out_status.account_2
-            ? accounts_in_cookie_jar_info.signed_out_accounts[i++]
-            : accounts_in_cookie_jar_info.signed_in_accounts[j++];
-    if (!signed_out_status.account_2)
+            ? accounts_in_cookie_jar_info.GetSignedOutAccounts()[i++]
+            : accounts_in_cookie_jar_info
+                  .GetPotentiallyInvalidSignedInAccounts()[j++];
+    if (!signed_out_status.account_2) {
       EXPECT_EQ(identity_manager()->PickAccountIdForAccount(kTestGaiaId2,
                                                             kTestEmail2),
                 listed_account2.id);
-    EXPECT_EQ(kTestGaiaId2, listed_account2.gaia_id);
+    }
+    EXPECT_EQ(kTestGaiaId2, listed_account2.gaia_id.ToString());
     EXPECT_EQ(kTestEmail2, listed_account2.email);
   }
 }
@@ -1889,9 +1913,11 @@ TEST_F(IdentityManagerTest,
   const AccountsInCookieJarInfo& accounts_in_cookie_jar_info =
       identity_manager_observer()
           ->AccountsInfoFromAccountsInCookieUpdatedCallback();
-  EXPECT_FALSE(accounts_in_cookie_jar_info.accounts_are_fresh);
-  EXPECT_TRUE(accounts_in_cookie_jar_info.signed_in_accounts.empty());
-  EXPECT_TRUE(accounts_in_cookie_jar_info.signed_out_accounts.empty());
+  EXPECT_FALSE(accounts_in_cookie_jar_info.AreAccountsFresh());
+  EXPECT_TRUE(
+      accounts_in_cookie_jar_info.GetPotentiallyInvalidSignedInAccounts()
+          .empty());
+  EXPECT_TRUE(accounts_in_cookie_jar_info.GetSignedOutAccounts().empty());
 }
 
 TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithNoAccounts) {
@@ -1906,9 +1932,10 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithNoAccounts) {
   // notification that the accounts in the cookie jar have been updated.
   const AccountsInCookieJarInfo& accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
-  EXPECT_FALSE(accounts_in_cookie_jar.accounts_are_fresh);
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_in_accounts.empty());
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_FALSE(accounts_in_cookie_jar.AreAccountsFresh());
+  EXPECT_TRUE(
+      accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts().empty());
+  EXPECT_TRUE(accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 
   run_loop.Run();
 
@@ -1917,9 +1944,11 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithNoAccounts) {
   const AccountsInCookieJarInfo updated_accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
 
-  EXPECT_TRUE(updated_accounts_in_cookie_jar.accounts_are_fresh);
-  EXPECT_TRUE(updated_accounts_in_cookie_jar.signed_in_accounts.empty());
-  EXPECT_TRUE(updated_accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_TRUE(updated_accounts_in_cookie_jar.AreAccountsFresh());
+  EXPECT_TRUE(
+      updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()
+          .empty());
+  EXPECT_TRUE(updated_accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 }
 
 TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithOneAccount) {
@@ -1935,9 +1964,10 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithOneAccount) {
   // notification that the accounts in the cookie jar have been updated.
   const AccountsInCookieJarInfo& accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
-  EXPECT_FALSE(accounts_in_cookie_jar.accounts_are_fresh);
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_in_accounts.empty());
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_FALSE(accounts_in_cookie_jar.AreAccountsFresh());
+  EXPECT_TRUE(
+      accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts().empty());
+  EXPECT_TRUE(accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 
   run_loop.Run();
 
@@ -1946,16 +1976,18 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithOneAccount) {
   const AccountsInCookieJarInfo& updated_accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
 
-  EXPECT_TRUE(updated_accounts_in_cookie_jar.accounts_are_fresh);
-  ASSERT_EQ(1u, updated_accounts_in_cookie_jar.signed_in_accounts.size());
-  ASSERT_TRUE(updated_accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_TRUE(updated_accounts_in_cookie_jar.AreAccountsFresh());
+  ASSERT_EQ(
+      1u, updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()
+              .size());
+  ASSERT_TRUE(updated_accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 
   gaia::ListedAccount listed_account =
-      updated_accounts_in_cookie_jar.signed_in_accounts[0];
+      updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()[0];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail),
       listed_account.id);
-  EXPECT_EQ(kTestGaiaId, listed_account.gaia_id);
+  EXPECT_EQ(kTestGaiaId, listed_account.gaia_id.ToString());
   EXPECT_EQ(kTestEmail, listed_account.email);
 }
 
@@ -1972,9 +2004,10 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithTwoAccounts) {
   // notification that the accounts in the cookie jar have been updated.
   const AccountsInCookieJarInfo& accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
-  EXPECT_FALSE(accounts_in_cookie_jar.accounts_are_fresh);
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_in_accounts.empty());
-  EXPECT_TRUE(accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_FALSE(accounts_in_cookie_jar.AreAccountsFresh());
+  EXPECT_TRUE(
+      accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts().empty());
+  EXPECT_TRUE(accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 
   run_loop.Run();
 
@@ -1983,84 +2016,37 @@ TEST_F(IdentityManagerTest, GetAccountsInCookieJarWithTwoAccounts) {
   const AccountsInCookieJarInfo& updated_accounts_in_cookie_jar =
       identity_manager()->GetAccountsInCookieJar();
 
-  EXPECT_TRUE(updated_accounts_in_cookie_jar.accounts_are_fresh);
-  ASSERT_EQ(2u, updated_accounts_in_cookie_jar.signed_in_accounts.size());
-  ASSERT_TRUE(updated_accounts_in_cookie_jar.signed_out_accounts.empty());
+  EXPECT_TRUE(updated_accounts_in_cookie_jar.AreAccountsFresh());
+  ASSERT_EQ(
+      2u, updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()
+              .size());
+  ASSERT_TRUE(updated_accounts_in_cookie_jar.GetSignedOutAccounts().empty());
 
   // Verify not only that both accounts are present but that they are listed in
   // the expected order as well.
   gaia::ListedAccount listed_account1 =
-      updated_accounts_in_cookie_jar.signed_in_accounts[0];
+      updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()[0];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail),
       listed_account1.id);
-  EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id);
+  EXPECT_EQ(kTestGaiaId, listed_account1.gaia_id.ToString());
   EXPECT_EQ(kTestEmail, listed_account1.email);
 
   gaia::ListedAccount listed_account2 =
-      updated_accounts_in_cookie_jar.signed_in_accounts[1];
+      updated_accounts_in_cookie_jar.GetPotentiallyInvalidSignedInAccounts()[1];
   EXPECT_EQ(
       identity_manager()->PickAccountIdForAccount(kTestGaiaId2, kTestEmail2),
       listed_account2.id);
-  EXPECT_EQ(kTestGaiaId2, listed_account2.gaia_id);
+  EXPECT_EQ(kTestGaiaId2, listed_account2.gaia_id.ToString());
   EXPECT_EQ(kTestEmail2, listed_account2.email);
-}
-
-TEST_F(IdentityManagerTest, CallbackSentOnSuccessfulAdditionOfAccountToCookie) {
-  const CoreAccountId kTestAccountId("account_id");
-
-  CoreAccountId account_from_add_account_to_cookie_completed_callback;
-  GoogleServiceAuthError error_from_add_account_to_cookie_completed_callback;
-  auto completion_callback =
-      base::BindLambdaForTesting([&](const CoreAccountId& account_id,
-                                     const GoogleServiceAuthError& error) {
-        account_from_add_account_to_cookie_completed_callback = account_id;
-        error_from_add_account_to_cookie_completed_callback = error;
-      });
-
-  identity_manager()->GetGaiaCookieManagerService()->AddAccountToCookie(
-      kTestAccountId, gaia::GaiaSource::kChrome,
-      std::move(completion_callback));
-  SimulateAdditionOfAccountToCookieSuccess(
-      identity_manager()->GetGaiaCookieManagerService(), "token");
-  EXPECT_EQ(account_from_add_account_to_cookie_completed_callback,
-            kTestAccountId);
-  EXPECT_EQ(error_from_add_account_to_cookie_completed_callback,
-            GoogleServiceAuthError::AuthErrorNone());
-}
-
-TEST_F(IdentityManagerTest, CallbackSentOnFailureAdditionOfAccountToCookie) {
-  const CoreAccountId kTestAccountId("account_id");
-
-  CoreAccountId account_from_add_account_to_cookie_completed_callback;
-  GoogleServiceAuthError error_from_add_account_to_cookie_completed_callback;
-  auto completion_callback =
-      base::BindLambdaForTesting([&](const CoreAccountId& account_id,
-                                     const GoogleServiceAuthError& error) {
-        account_from_add_account_to_cookie_completed_callback = account_id;
-        error_from_add_account_to_cookie_completed_callback = error;
-      });
-
-  identity_manager()->GetGaiaCookieManagerService()->AddAccountToCookie(
-      kTestAccountId, gaia::GaiaSource::kChrome,
-      std::move(completion_callback));
-
-  GoogleServiceAuthError error(GoogleServiceAuthError::SERVICE_ERROR);
-  SimulateAdditionOfAccountToCookieSuccessFailure(
-      identity_manager()->GetGaiaCookieManagerService(), error);
-
-  EXPECT_EQ(account_from_add_account_to_cookie_completed_callback,
-            kTestAccountId);
-  EXPECT_EQ(error_from_add_account_to_cookie_completed_callback, error);
 }
 
 TEST_F(IdentityManagerTest,
        CallbackSentOnSetAccountsInCookieCompleted_Success) {
-  const CoreAccountId kTestAccountId("account_id");
-  const CoreAccountId kTestAccountId2("account_id2");
-  const std::vector<std::pair<CoreAccountId, std::string>> accounts = {
-      {kTestAccountId, kTestAccountId.ToString()},
-      {kTestAccountId2, kTestAccountId2.ToString()}};
+  const CoreAccountId kTestAccountId = CoreAccountId::FromGaiaId(kTestGaiaId);
+  const CoreAccountId kTestAccountId2 = CoreAccountId::FromGaiaId(kTestGaiaId2);
+  const std::vector<std::pair<CoreAccountId, GaiaId>> accounts = {
+      {kTestAccountId, kTestGaiaId}, {kTestAccountId2, kTestGaiaId2}};
 
   SetAccountsInCookieResult
       error_from_set_accounts_in_cookie_completed_callback;
@@ -2085,11 +2071,10 @@ TEST_F(IdentityManagerTest,
 
 TEST_F(IdentityManagerTest,
        CallbackSentOnSetAccountsInCookieCompleted_Failure) {
-  const CoreAccountId kTestAccountId("account_id");
-  const CoreAccountId kTestAccountId2("account_id2");
-  const std::vector<std::pair<CoreAccountId, std::string>> accounts = {
-      {kTestAccountId, kTestAccountId.ToString()},
-      {kTestAccountId2, kTestAccountId2.ToString()}};
+  const CoreAccountId kTestAccountId = CoreAccountId::FromGaiaId(kTestGaiaId);
+  const CoreAccountId kTestAccountId2 = CoreAccountId::FromGaiaId(kTestGaiaId2);
+  const std::vector<std::pair<CoreAccountId, GaiaId>> accounts = {
+      {kTestAccountId, kTestGaiaId}, {kTestAccountId2, kTestGaiaId2}};
 
   SetAccountsInCookieResult
       error_from_set_accounts_in_cookie_completed_callback;
@@ -2120,7 +2105,7 @@ TEST_F(IdentityManagerTest, CallbackSentOnAccountsCookieDeletedByUserAction) {
   auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       "SAPISID", std::string(), ".google.com", "/", base::Time(), base::Time(),
       base::Time(), base::Time(), /*secure=*/true, false,
-      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT, false);
+      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT);
   SimulateCookieDeletedByUser(identity_manager()->GetGaiaCookieManagerService(),
                               *cookie);
   run_loop.Run();
@@ -2152,7 +2137,7 @@ TEST_F(IdentityManagerTest, OnNetworkInitialized) {
   auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       "SAPISID", std::string(), ".google.com", "/", base::Time(), base::Time(),
       base::Time(), base::Time(), /*secure=*/true, false,
-      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT, false);
+      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT);
   test_cookie_manager_ptr->DispatchCookieChange(net::CookieChangeInfo(
       *cookie, net::CookieAccessResult(), net::CookieChangeCause::EXPLICIT));
   run_loop.Run();
@@ -2163,7 +2148,8 @@ TEST_F(IdentityManagerTest,
   identity_manager()->GetAccountTrackerService()->SeedAccountInfo(kTestGaiaId,
                                                                   kTestEmail);
   identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
-      primary_account_id(), ConsentLevel::kSync);
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   SetRefreshTokenForAccount(identity_manager(), primary_account_id(),
                             "refresh_token");
 
@@ -2327,7 +2313,7 @@ TEST_F(IdentityManagerTest, FindExtendedPrimaryAccountInfo) {
   EXPECT_EQ(core_info.email, extended_info.email);
   EXPECT_EQ(core_info.gaia, extended_info.gaia);
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // It's not possible to sign out on Ash.
   ClearPrimaryAccount(identity_manager());
   SetRefreshTokenForAccount(identity_manager(), core_info.account_id, "token");
@@ -2357,56 +2343,6 @@ TEST_F(IdentityManagerTest, AreRefreshTokensLoaded) {
   run_loop.Run();
   EXPECT_TRUE(identity_manager()->AreRefreshTokensLoaded());
 }
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-TEST_F(IdentityManagerTest, SetPrimaryAccount) {
-  signin_client()->SetInitialPrimaryAccountForTests(
-      account_manager::Account{
-          account_manager::AccountKey{kTestGaiaId,
-                                      account_manager::AccountType::kGaia},
-          kTestEmail},
-      /*is_child=*/false);
-  // Do not sign into a primary account as part of the test setup.
-  RecreateIdentityManager(AccountConsistencyMethod::kDisabled,
-                          PrimaryAccountManagerSetup::kNoAuthenticatedAccount);
-
-  // We should have a non-syncing Primary Account set up automatically.
-  ASSERT_TRUE(identity_manager()->HasPrimaryAccount(ConsentLevel::kSignin));
-  ASSERT_FALSE(identity_manager()->HasPrimaryAccount(ConsentLevel::kSync));
-  EXPECT_EQ(
-      kTestGaiaId,
-      identity_manager()->GetPrimaryAccountInfo(ConsentLevel::kSignin).gaia);
-}
-
-// TODO(https://crbug.com/1223364): Remove this when all the users are migrated.
-TEST_F(IdentityManagerTest, SetPrimaryAccountClearsExistingPrimaryAccount) {
-  signin_client()->SetInitialPrimaryAccountForTests(
-      account_manager::Account{
-          account_manager::AccountKey{kTestGaiaId2,
-                                      account_manager::AccountType::kGaia},
-          kTestEmail2},
-      /*is_child=*/false);
-
-  // RecreateIdentityManager will create PrimaryAccountManager with the primary
-  // account set to kTestGaiaId. After that, IdentityManager ctor should clear
-  // this existing primary account and set the new one to the initial value
-  // provided by the SigninClient.
-  RecreateIdentityManager(AccountConsistencyMethod::kDisabled,
-                          PrimaryAccountManagerSetup::kWithAuthenticatedAccout);
-  ASSERT_TRUE(identity_manager()->HasPrimaryAccount(ConsentLevel::kSignin));
-  ASSERT_FALSE(identity_manager()->HasPrimaryAccount(ConsentLevel::kSync));
-  EXPECT_EQ(
-      kTestGaiaId2,
-      identity_manager()->GetPrimaryAccountInfo(ConsentLevel::kSignin).gaia);
-}
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-TEST_F(IdentityManagerTest, AccountIdMigration_DoneOnInitialization) {
-  EXPECT_EQ(IdentityManager::AccountIdMigrationState::MIGRATION_DONE,
-            identity_manager()->GetAccountIdMigrationState());
-}
-#endif
 
 // Checks that IdentityManager::Observer gets OnAccountUpdated when account info
 // is updated.
@@ -2451,20 +2387,9 @@ TEST_F(IdentityManagerTest, TestOnAccountRemovedWithInfoCallback) {
 }
 
 TEST_F(IdentityManagerTest, TestPickAccountIdForAccount) {
-  const CoreAccountId account_id =
-      identity_manager()->PickAccountIdForAccount(kTestGaiaId, kTestEmail);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  const bool account_id_migration_done =
-      identity_manager()->GetAccountIdMigrationState() ==
-      IdentityManager::AccountIdMigrationState::MIGRATION_DONE;
-  if (account_id_migration_done) {
-    EXPECT_EQ(kTestGaiaId, account_id.ToString());
-  } else {
-    EXPECT_TRUE(gaia::AreEmailsSame(kTestEmail, account_id.ToString()));
-  }
-#else
-  EXPECT_TRUE(gaia::AreEmailsSame(kTestGaiaId, account_id.ToString()));
-#endif
+  EXPECT_EQ(kTestGaiaId, identity_manager()
+                             ->PickAccountIdForAccount(kTestGaiaId, kTestEmail)
+                             .ToString());
 }
 
 #if BUILDFLAG(IS_ANDROID)

@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module remoting.mojom;
 
 import "mojo/public/mojom/base/values.mojom";
+import "remoting/host/mojom/chromoting_host_services.mojom";
 import "services/network/public/mojom/ip_endpoint.mojom";
 
 // Provides a set of methods to allow the Daemon process to initialize and
@@ -12,19 +13,12 @@ import "services/network/public/mojom/ip_endpoint.mojom";
 // The remote for this interface is owned in the high-privilege daemon process
 // and the receiver is bound in the low-privilege network process.
 interface RemotingHostControl {
-  // Instructs the network process to crash itself. This is called when a higher
-  // privilege process detects abnormal behavior in the host process. After
-  // crashing, the daemon process will automatically restart the network
-  // process.
-  [EnableIf=is_win]
-  CrashHostProcess(string function_name, string file_name, int32 line_number);
-
   // Provides host configuration details to the network process such as the
   // owner email and robot account to use for authentication to service APIs.
   // This method may be called multiple times as changes are detected in the
   // host configuration file.
   [EnableIf=is_win]
-  ApplyHostConfig(mojo_base.mojom.DeprecatedDictionaryValue config);
+  ApplyHostConfig(mojo_base.mojom.DictionaryValue config);
 
   // Provides the network process with a set of platform handles which are used
   // for pairing functionality. The network process does not have access to the
@@ -34,6 +28,15 @@ interface RemotingHostControl {
   [EnableIf=is_win]
   InitializePairingRegistry(handle<platform> privileged_handle,
                             handle<platform> unprivileged_handle);
+
+  // Requests the network process to bind a pending receiver of
+  // ChromotingHostServices coming from a user-launched process. On Windows, the
+  // daemon process is responsible for brokering all mojo IPCs, but it doesn't
+  // affect where the receivers and remotes are bound. Please see comments on
+  // the ChromotingHostServices interface.
+  [EnableIf=is_win]
+  BindChromotingHostServices(pending_receiver<ChromotingHostServices> receiver,
+                             int32 peer_pid);
 };
 
 // Provides a set of methods to allow the Daemon process to notify the network

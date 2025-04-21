@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define CC_BENCHMARKS_RASTERIZE_AND_RECORD_BENCHMARK_IMPL_H_
 
 #include <stddef.h>
+
+#include <array>
 
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -38,8 +40,8 @@ class RasterizeAndRecordBenchmarkImpl : public MicroBenchmarkImpl {
     int pixels_rasterized;
     int pixels_rasterized_with_non_solid_color;
     int pixels_rasterized_as_opaque;
-    int visible_pixels_by_lcd_text_disallowed_reason
-        [kLCDTextDisallowedReasonCount];
+    std::array<int, kLCDTextDisallowedReasonCount>
+        visible_pixels_by_lcd_text_disallowed_reason;
     base::TimeDelta total_best_time;
     int total_layers;
     int total_picture_layers;

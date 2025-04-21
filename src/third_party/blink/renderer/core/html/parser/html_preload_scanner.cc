@@ -28,8 +28,10 @@
 #include "third_party/blink/renderer/core/html/parser/html_preload_scanner.h"
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
@@ -42,7 +44,6 @@
 #include "third_party/blink/renderer/core/css/parser/sizes_attribute_parser.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
-#include "third_party/blink/renderer/core/frame/attribution_src_loader.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/viewport_data.h"
@@ -61,21 +62,23 @@
 #include "third_party/blink/renderer/core/html/parser/html_tokenizer.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
+#include "third_party/blink/renderer/core/lcp_critical_path_predictor/lcp_critical_path_predictor.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/loader/fetch_priority_attribute.h"
 #include "third_party/blink/renderer/core/loader/preload_helper.h"
-#include "third_party/blink/renderer/core/loader/subresource_integrity_helper.h"
 #include "third_party/blink/renderer/core/loader/web_bundle/script_web_bundle_rule.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/script/script_loader.h"
 #include "third_party/blink/renderer/core/script_type_names.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/loader/fetch/client_hints_preferences.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/loader/fetch/integrity_metadata.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource.h"
 #include "third_party/blink/renderer/platform/loader/subresource_integrity.h"
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 
@@ -87,20 +90,22 @@ bool Match(const AtomicString& name, const QualifiedName& q_name) {
   return q_name.LocalName() == name;
 }
 
-String InitiatorFor(const StringImpl* tag_impl) {
+String InitiatorFor(const StringImpl* tag_impl, bool link_is_modulepreload) {
   DCHECK(tag_impl);
   if (Match(tag_impl, html_names::kImgTag))
     return html_names::kImgTag.LocalName();
   if (Match(tag_impl, html_names::kInputTag))
     return html_names::kInputTag.LocalName();
-  if (Match(tag_impl, html_names::kLinkTag))
+  if (Match(tag_impl, html_names::kLinkTag)) {
+    if (link_is_modulepreload)
+      return fetch_initiator_type_names::kOther;
     return html_names::kLinkTag.LocalName();
+  }
   if (Match(tag_impl, html_names::kScriptTag))
     return html_names::kScriptTag.LocalName();
   if (Match(tag_impl, html_names::kVideoTag))
     return html_names::kVideoTag.LocalName();
   NOTREACHED();
-  return g_empty_string;
 }
 
 bool MediaAttributeMatches(const MediaValuesCached& media_values,
@@ -109,8 +114,9 @@ bool MediaAttributeMatches(const MediaValuesCached& media_values,
   // trials for media queries are not needed.
   MediaQuerySet* media_queries =
       MediaQuerySet::Create(attribute_value, nullptr);
-  MediaQueryEvaluator media_query_evaluator(&media_values);
-  return media_query_evaluator.Eval(*media_queries);
+  MediaQueryEvaluator* media_query_evaluator =
+      MakeGarbageCollected<MediaQueryEvaluator>(&media_values);
+  return media_query_evaluator->Eval(*media_queries);
 }
 
 void ScanScriptWebBundle(
@@ -164,24 +170,32 @@ class TokenPreloadScanner::StartTagScanner {
   STACK_ALLOCATED();
 
  public:
-  StartTagScanner(const StringImpl* tag_impl,
-                  MediaValuesCached* media_values,
-                  SubresourceIntegrity::IntegrityFeatures features,
-                  TokenPreloadScanner::ScannerType scanner_type,
-                  bool priority_hints_origin_trial_enabled,
-                  const HashSet<String>* disabled_image_types)
+  StartTagScanner(
+      const StringImpl* tag_impl,
+      MediaValuesCached* media_values,
+      TokenPreloadScanner::ScannerType scanner_type,
+      const HashSet<String>* disabled_image_types,
+      features::LcppPreloadLazyLoadImageType preload_lazy_load_image_type)
       : tag_impl_(tag_impl),
         media_values_(media_values),
-        integrity_features_(features),
         scanner_type_(scanner_type),
-        priority_hints_origin_trial_enabled_(
-            priority_hints_origin_trial_enabled),
-        disabled_image_types_(disabled_image_types) {
+        disabled_image_types_(disabled_image_types),
+        preload_lazy_load_image_type_(preload_lazy_load_image_type) {
+    switch (preload_lazy_load_image_type_) {
+      case features::LcppPreloadLazyLoadImageType::kCustomLazyLoading:
+      case features::LcppPreloadLazyLoadImageType::kAll:
+        use_data_src_attr_match_for_image_ = true;
+        break;
+      case features::LcppPreloadLazyLoadImageType::kNone:
+      case features::LcppPreloadLazyLoadImageType::kNativeLazyLoading:
+        use_data_src_attr_match_for_image_ = false;
+        break;
+    }
     if (Match(tag_impl_, html_names::kImgTag) ||
         Match(tag_impl_, html_names::kSourceTag) ||
         Match(tag_impl_, html_names::kLinkTag)) {
       source_size_ =
-          SizesAttributeParser(media_values_, String(), nullptr).length();
+          SizesAttributeParser(media_values_, String(), nullptr).Size();
       return;
     }
     if (!Match(tag_impl_, html_names::kInputTag) &&
@@ -200,7 +214,7 @@ class TokenPreloadScanner::StartTagScanner {
       return;
     for (const HTMLToken::Attribute& html_token_attribute : attributes) {
       AtomicString attribute_name(html_token_attribute.GetName());
-      String attribute_value = html_token_attribute.Value8BitIfNecessary();
+      String attribute_value = html_token_attribute.Value();
       ProcessAttribute(attribute_name, attribute_value);
     }
     PostProcessAfterAttributes();
@@ -214,35 +228,36 @@ class TokenPreloadScanner::StartTagScanner {
 
   void HandlePictureSourceURL(PictureData& picture_data) {
     if (Match(tag_impl_, html_names::kSourceTag) && matched_ &&
-        picture_data.source_url.IsEmpty()) {
+        picture_data.source_url.empty()) {
       picture_data.source_url = srcset_image_candidate_.ToString();
       picture_data.source_size_set = source_size_set_;
       picture_data.source_size = source_size_;
       picture_data.picked = true;
     } else if (Match(tag_impl_, html_names::kImgTag) &&
-               !picture_data.source_url.IsEmpty()) {
+               !picture_data.source_url.empty()) {
       SetUrlToLoad(picture_data.source_url, kAllowURLReplacement);
     }
   }
 
   std::unique_ptr<PreloadRequest> CreatePreloadRequest(
       const KURL& predicted_base_url,
-      const SegmentedString& source,
       const PictureData& picture_data,
       const CachedDocumentParameters& document_parameters,
       const PreloadRequest::ExclusionInfo* exclusion_info,
-      bool treat_links_as_in_body) {
+      bool treat_links_as_in_body,
+      bool is_potentially_lcp_element) {
     PreloadRequest::RequestType request_type =
         PreloadRequest::kRequestTypePreload;
-    absl::optional<ResourceType> type;
+    std::optional<ResourceType> type;
     if (ShouldPreconnect()) {
       request_type = PreloadRequest::kRequestTypePreconnect;
     } else {
       if (IsLinkRelPreload()) {
         request_type = PreloadRequest::kRequestTypeLinkRelPreload;
         type = ResourceTypeForLinkPreload();
-        if (type == absl::nullopt)
+        if (type == std::nullopt) {
           return nullptr;
+        }
       } else if (IsLinkRelModulePreload()) {
         request_type = PreloadRequest::kRequestTypeLinkRelPreload;
         type = ResourceType::kScript;
@@ -252,9 +267,6 @@ class TokenPreloadScanner::StartTagScanner {
       }
     }
 
-    TextPosition position =
-        TextPosition(source.CurrentLine(), source.CurrentColumn());
-    FetchParameters::ResourceWidth resource_width;
     float source_size = source_size_;
     bool source_size_set = source_size_set_;
     if (picture_data.picked) {
@@ -267,12 +279,14 @@ class TokenPreloadScanner::StartTagScanner {
             : ResourceFetcher::kImageNotImageSet;
 
     if (source_size_set) {
-      resource_width.width = source_size;
-      resource_width.is_set = true;
+      // resource_width_ may have originally been set by an explicit width
+      // attribute on an img tag but it gets overridden by sizes if present.
+      resource_width_ = source_size;
     }
 
-    if (type == absl::nullopt)
+    if (type == std::nullopt) {
       type = GetResourceType();
+    }
 
     // The element's 'referrerpolicy' attribute (if present) takes precedence
     // over the document's referrer policy.
@@ -281,9 +295,9 @@ class TokenPreloadScanner::StartTagScanner {
             ? referrer_policy_
             : document_parameters.referrer_policy;
     auto request = PreloadRequest::CreateIfNeeded(
-        InitiatorFor(tag_impl_), position, url_to_load_, predicted_base_url,
-        type.value(), referrer_policy, is_image_set, exclusion_info,
-        resource_width, request_type);
+        InitiatorFor(tag_impl_, link_is_modulepreload_), url_to_load_,
+        predicted_base_url, type.value(), referrer_policy, is_image_set,
+        exclusion_info, resource_width_, resource_height_, request_type);
     if (!request)
       return nullptr;
 
@@ -313,17 +327,21 @@ class TokenPreloadScanner::StartTagScanner {
               : (is_async_ ? RenderBlockingBehavior::kPotentiallyBlocking
                            : RenderBlockingBehavior::kNonBlocking);
     } else if (is_script || type == ResourceType::kCSSStyleSheet) {
-      // CSS here is render blocking, as non blocking doesn't get preloaded.
-      // JS here is a blocking one, as others would've been caught by the
-      // previous condition.
+      // CSS here is render blocking unless it's disabled, as non blocking
+      // doesn't get preloaded. JS here is a blocking one, as others would've
+      // been caught by the previous condition.
       render_blocking_behavior =
-          treat_links_as_in_body ? RenderBlockingBehavior::kInBodyParserBlocking
-                                 : RenderBlockingBehavior::kBlocking;
+          type == ResourceType::kCSSStyleSheet && disabled_attr_set_
+              ? RenderBlockingBehavior::kNonBlocking
+          : treat_links_as_in_body
+              ? RenderBlockingBehavior::kInBodyParserBlocking
+              : RenderBlockingBehavior::kBlocking;
     }
     request->SetRenderBlockingBehavior(render_blocking_behavior);
 
     if (type == ResourceType::kImage && is_img &&
-        IsLazyLoadImageDeferable(document_parameters)) {
+        IsLazyLoadImageDeferable(document_parameters,
+                                 is_potentially_lcp_element)) {
       return nullptr;
     }
     // Do not set integrity metadata for <link> elements for destinations not
@@ -341,10 +359,19 @@ class TokenPreloadScanner::StartTagScanner {
     if (scanner_type_ == ScannerType::kInsertion)
       request->SetFromInsertionScanner(true);
 
-    if (attributionsrc_attr_set_ &&
-        document_parameters.can_register_attribution) {
+    if (attributionsrc_attr_set_) {
       DCHECK(is_script || is_img);
       request->SetAttributionReportingEligibleImgOrScript(true);
+    }
+
+    if (shared_storage_writable_opted_in_) {
+      DCHECK(is_img);
+      request->SetSharedStorageWritableOptedIn(true);
+    }
+
+    if (browsing_topics_attr_set_) {
+      DCHECK(is_img);
+      request->SetBrowsingTopicsEligible(true);
     }
 
     return request;
@@ -368,8 +395,8 @@ class TokenPreloadScanner::StartTagScanner {
     } else if (!integrity_attr_set_ &&
                Match(attribute_name, html_names::kIntegrityAttr)) {
       integrity_attr_set_ = true;
-      SubresourceIntegrity::ParseIntegrityAttribute(
-          attribute_value, integrity_features_, integrity_metadata_);
+      SubresourceIntegrity::ParseIntegrityAttribute(attribute_value,
+                                                    integrity_metadata_);
     } else if (Match(attribute_name, html_names::kTypeAttr)) {
       type_attribute_value_ = attribute_value;
     } else if (Match(attribute_name, html_names::kLanguageAttr)) {
@@ -382,11 +409,9 @@ class TokenPreloadScanner::StartTagScanner {
       SetReferrerPolicy(attribute_value,
                         kDoNotSupportReferrerPolicyLegacyKeywords);
     } else if (!fetch_priority_hint_set_ &&
-               Match(attribute_name, html_names::kFetchpriorityAttr) &&
-               priority_hints_origin_trial_enabled_) {
+               Match(attribute_name, html_names::kFetchpriorityAttr)) {
       SetFetchPriorityHint(attribute_value);
-    } else if (RuntimeEnabledFeatures::BlockingAttributeEnabled() &&
-               Match(attribute_name, html_names::kBlockingAttr)) {
+    } else if (Match(attribute_name, html_names::kBlockingAttr)) {
       blocking_attribute_value_ = attribute_value;
     } else if (Match(attribute_name, html_names::kAttributionsrcAttr)) {
       attributionsrc_attr_set_ = true;
@@ -410,27 +435,33 @@ class TokenPreloadScanner::StartTagScanner {
                !attribute_value.IsNull()) {
       SetReferrerPolicy(attribute_value, kSupportReferrerPolicyLegacyKeywords);
     } else if (!fetch_priority_hint_set_ &&
-               Match(attribute_name, html_names::kFetchpriorityAttr) &&
-               priority_hints_origin_trial_enabled_) {
+               Match(attribute_name, html_names::kFetchpriorityAttr)) {
       SetFetchPriorityHint(attribute_value);
+    } else if (Match(attribute_name, html_names::kWidthAttr)) {
+      HTMLDimension dimension;
+      if (ParseDimensionValue(attribute_value, dimension) &&
+          dimension.IsAbsolute()) {
+        resource_width_ = dimension.Value();
+      }
+    } else if (Match(attribute_name, html_names::kHeightAttr)) {
+      HTMLDimension dimension;
+      if (ParseDimensionValue(attribute_value, dimension) &&
+          dimension.IsAbsolute()) {
+        resource_height_ = dimension.Value();
+      }
     } else if (loading_attr_value_ == LoadingAttributeValue::kAuto &&
-               Match(attribute_name, html_names::kLoadingAttr) &&
-               RuntimeEnabledFeatures::LazyImageLoadingEnabled()) {
+               Match(attribute_name, html_names::kLoadingAttr)) {
       loading_attr_value_ = GetLoadingAttributeValue(attribute_value);
-    } else if (width_attr_dimension_type_ ==
-                   HTMLImageElement::LazyLoadDimensionType::kNotAbsolute &&
-               Match(attribute_name, html_names::kWidthAttr) &&
-               RuntimeEnabledFeatures::LazyImageLoadingEnabled()) {
-      width_attr_dimension_type_ =
-          HTMLImageElement::GetAttributeLazyLoadDimensionType(attribute_value);
-    } else if (height_attr_dimension_type_ ==
-                   HTMLImageElement::LazyLoadDimensionType::kNotAbsolute &&
-               Match(attribute_name, html_names::kHeightAttr) &&
-               RuntimeEnabledFeatures::LazyImageLoadingEnabled()) {
-      height_attr_dimension_type_ =
-          HTMLImageElement::GetAttributeLazyLoadDimensionType(attribute_value);
     } else if (Match(attribute_name, html_names::kAttributionsrcAttr)) {
       attributionsrc_attr_set_ = true;
+    } else if (Match(attribute_name, html_names::kSharedstoragewritableAttr)) {
+      shared_storage_writable_opted_in_ = true;
+    } else if (Match(attribute_name, html_names::kBrowsingtopicsAttr)) {
+      browsing_topics_attr_set_ = true;
+    } else if (use_data_src_attr_match_for_image_ &&
+               Match(attribute_name, html_names::kDataSrcAttr) &&
+               img_src_url_.IsNull()) {
+      img_src_url_ = attribute_value;
     }
   }
 
@@ -487,8 +518,8 @@ class TokenPreloadScanner::StartTagScanner {
     } else if (!integrity_attr_set_ &&
                Match(attribute_name, html_names::kIntegrityAttr)) {
       integrity_attr_set_ = true;
-      SubresourceIntegrity::ParseIntegrityAttribute(
-          attribute_value, integrity_features_, integrity_metadata_);
+      SubresourceIntegrity::ParseIntegrityAttribute(attribute_value,
+                                                    integrity_metadata_);
     } else if (Match(attribute_name, html_names::kImagesrcsetAttr) &&
                srcset_attribute_value_.IsNull()) {
       srcset_attribute_value_ = attribute_value;
@@ -496,12 +527,12 @@ class TokenPreloadScanner::StartTagScanner {
                !source_size_set_) {
       ParseSourceSize(attribute_value);
     } else if (!fetch_priority_hint_set_ &&
-               Match(attribute_name, html_names::kFetchpriorityAttr) &&
-               priority_hints_origin_trial_enabled_) {
+               Match(attribute_name, html_names::kFetchpriorityAttr)) {
       SetFetchPriorityHint(attribute_value);
-    } else if (RuntimeEnabledFeatures::BlockingAttributeEnabled() &&
-               Match(attribute_name, html_names::kBlockingAttr)) {
+    } else if (Match(attribute_name, html_names::kBlockingAttr)) {
       blocking_attribute_value_ = attribute_value;
+    } else if (Match(attribute_name, html_names::kDisabledAttr)) {
+      disabled_attr_set_ = true;
     }
   }
 
@@ -570,10 +601,31 @@ class TokenPreloadScanner::StartTagScanner {
   }
 
   bool IsLazyLoadImageDeferable(
-      const CachedDocumentParameters& document_parameters) {
+      const CachedDocumentParameters& document_parameters,
+      bool is_potentially_lcp_element) {
     if (document_parameters.lazy_load_image_setting ==
         LocalFrame::LazyLoadImageSetting::kDisabled) {
       return false;
+    }
+
+    // LCPP experiment in crbug.com/1498777. If the image is potentially a LCP
+    // element, the scanner doesn't mark it as a deferable image regardless of
+    // whether it has loading="lazy" attribute or not, in order to make the LCP
+    // image load completion faster. An exception to this is "lazy load auto
+    // sizes" which must defer because sizes=auto requires layout information.
+    //
+    // If the dry run mode is enabled, prevents the actual preload request from
+    // being created.
+    const bool dry_run_mode = features::kLCPPLazyLoadImagePreloadDryRun.Get();
+    if (is_potentially_lcp_element && !source_size_is_auto_ && !dry_run_mode) {
+      switch (document_parameters.preload_lazy_load_image_type) {
+        case features::LcppPreloadLazyLoadImageType::kNativeLazyLoading:
+        case features::LcppPreloadLazyLoadImageType::kCustomLazyLoading:
+        case features::LcppPreloadLazyLoadImageType::kAll:
+          return false;
+        case features::LcppPreloadLazyLoadImageType::kNone:
+          break;
+      }
     }
 
     return loading_attr_value_ == LoadingAttributeValue::kLazy;
@@ -582,10 +634,10 @@ class TokenPreloadScanner::StartTagScanner {
   void SetUrlToLoad(const String& value, URLReplacement replacement) {
     // We only respect the first src/href, per HTML5:
     // http://www.whatwg.org/specs/web-apps/current-work/multipage/tokenization.html#attribute-name-state
-    if (replacement == kDisallowURLReplacement && !url_to_load_.IsEmpty())
+    if (replacement == kDisallowURLReplacement && !url_to_load_.empty())
       return;
     String url = StripLeadingAndTrailingHTMLSpaces(value);
-    if (url.IsEmpty())
+    if (url.empty())
       return;
     url_to_load_ = url;
   }
@@ -599,7 +651,7 @@ class TokenPreloadScanner::StartTagScanner {
     return charset_;
   }
 
-  absl::optional<ResourceType> ResourceTypeForLinkPreload() const {
+  std::optional<ResourceType> ResourceTypeForLinkPreload() const {
     DCHECK(link_is_preload_);
     return PreloadHelper::GetResourceTypeFromAsAttribute(as_attribute_value_);
   }
@@ -616,27 +668,26 @@ class TokenPreloadScanner::StartTagScanner {
     if (link_is_preconnect_)
       return ResourceType::kRaw;
     NOTREACHED();
-    return ResourceType::kRaw;
   }
 
   bool ShouldPreconnect() const {
     return Match(tag_impl_, html_names::kLinkTag) && link_is_preconnect_ &&
-           !url_to_load_.IsEmpty();
+           !url_to_load_.empty();
   }
 
   bool IsLinkRelPreload() const {
     return Match(tag_impl_, html_names::kLinkTag) && link_is_preload_ &&
-           !url_to_load_.IsEmpty();
+           !url_to_load_.empty();
   }
 
   bool IsLinkRelModulePreload() const {
     return Match(tag_impl_, html_names::kLinkTag) && link_is_modulepreload_ &&
-           !url_to_load_.IsEmpty();
+           !url_to_load_.empty();
   }
 
-  bool ShouldPreloadLink(absl::optional<ResourceType>& type) const {
+  bool ShouldPreloadLink(std::optional<ResourceType>& type) const {
     if (link_is_style_sheet_) {
-      return type_attribute_value_.IsEmpty() ||
+      return type_attribute_value_.empty() ||
              MIMETypeRegistry::IsSupportedStyleSheetMIMEType(
                  ContentType(type_attribute_value_).GetType());
     } else if (link_is_preload_) {
@@ -644,7 +695,7 @@ class TokenPreloadScanner::StartTagScanner {
         return HTMLImageElement::SupportedImageType(type_attribute_value_,
                                                     disabled_image_types_);
       }
-      if (type_attribute_value_.IsEmpty())
+      if (type_attribute_value_.empty())
         return true;
       String type_from_attribute = ContentType(type_attribute_value_).GetType();
       if ((type == ResourceType::kFont &&
@@ -661,8 +712,8 @@ class TokenPreloadScanner::StartTagScanner {
     return false;
   }
 
-  bool ShouldPreload(absl::optional<ResourceType>& type) const {
-    if (url_to_load_.IsEmpty())
+  bool ShouldPreload(std::optional<ResourceType>& type) const {
+    if (url_to_load_.empty())
       return false;
     if (!matched_)
       return false;
@@ -703,8 +754,9 @@ class TokenPreloadScanner::StartTagScanner {
   }
 
   void ParseSourceSize(const String& attribute_value) {
-    source_size_ =
-        SizesAttributeParser(media_values_, attribute_value, nullptr).length();
+    SizesAttributeParser sizes_parser(media_values_, attribute_value, nullptr);
+    source_size_ = sizes_parser.Size();
+    source_size_is_auto_ = sizes_parser.IsAuto();
     source_size_set_ = true;
   }
 
@@ -721,7 +773,6 @@ class TokenPreloadScanner::StartTagScanner {
   }
 
   void SetFetchPriorityHint(const String& fetch_priority_hint) {
-    DCHECK(priority_hints_origin_trial_enabled_);
     fetch_priority_hint_set_ = true;
     fetch_priority_hint_ = GetFetchPriorityAttributeValue(fetch_priority_hint);
   }
@@ -752,6 +803,7 @@ class TokenPreloadScanner::StartTagScanner {
   AtomicString resources_attribute_value_;
   bool nomodule_attribute_value_ = false;
   float source_size_ = 0;
+  bool source_size_is_auto_ = false;
   bool source_size_set_ = false;
   FetchParameters::DeferOption defer_ = FetchParameters::kNoDefer;
   CrossOriginAttributeValue cross_origin_ = kCrossOriginAttributeNotSet;
@@ -765,26 +817,28 @@ class TokenPreloadScanner::StartTagScanner {
       network::mojom::ReferrerPolicy::kDefault;
   bool integrity_attr_set_ = false;
   bool is_async_ = false;
+  bool disabled_attr_set_ = false;
   IntegrityMetadataSet integrity_metadata_;
-  SubresourceIntegrity::IntegrityFeatures integrity_features_;
   LoadingAttributeValue loading_attr_value_ = LoadingAttributeValue::kAuto;
-  HTMLImageElement::LazyLoadDimensionType width_attr_dimension_type_ =
-      HTMLImageElement::LazyLoadDimensionType::kNotAbsolute;
-  HTMLImageElement::LazyLoadDimensionType height_attr_dimension_type_ =
-      HTMLImageElement::LazyLoadDimensionType::kNotAbsolute;
   TokenPreloadScanner::ScannerType scanner_type_;
   // For explanation, see TokenPreloadScanner's declaration.
-  bool priority_hints_origin_trial_enabled_;
   const HashSet<String>* disabled_image_types_;
   bool attributionsrc_attr_set_ = false;
+  bool shared_storage_writable_opted_in_ = false;
+  bool browsing_topics_attr_set_ = false;
+  std::optional<float> resource_width_;
+  std::optional<float> resource_height_;
+  features::LcppPreloadLazyLoadImageType preload_lazy_load_image_type_;
+  bool use_data_src_attr_match_for_image_ = false;
 };
 
 TokenPreloadScanner::TokenPreloadScanner(
     const KURL& document_url,
     std::unique_ptr<CachedDocumentParameters> document_parameters,
-    const MediaValuesCached::MediaValuesCachedData& media_values_cached_data,
+    std::unique_ptr<MediaValuesCached::MediaValuesCachedData>
+        media_values_cached_data,
     const ScannerType scanner_type,
-    bool priority_hints_origin_trial_enabled)
+    Vector<ElementLocator> locators)
     : document_url_(document_url),
       in_style_(false),
       in_picture_(false),
@@ -794,34 +848,22 @@ TokenPreloadScanner::TokenPreloadScanner(
       seen_img_(false),
       template_count_(0),
       document_parameters_(std::move(document_parameters)),
-      media_values_(
-          MakeGarbageCollected<MediaValuesCached>(media_values_cached_data)),
+      media_values_cached_data_(std::move(media_values_cached_data)),
       scanner_type_(scanner_type),
-      priority_hints_origin_trial_enabled_(
-          priority_hints_origin_trial_enabled) {
-  DCHECK(document_parameters_.get());
-  DCHECK(media_values_.Get());
+      lcp_element_matcher_(std::move(locators)) {
+  CHECK(document_parameters_.get());
+  CHECK(media_values_cached_data_.get());
   DCHECK(document_url.IsValid());
   css_scanner_.SetReferrerPolicy(document_parameters_->referrer_policy);
 }
 
 TokenPreloadScanner::~TokenPreloadScanner() = default;
 
-void TokenPreloadScanner::Scan(const HTMLToken& token,
-                               const SegmentedString& source,
-                               PreloadRequestStream& requests,
-                               MetaCHValues& meta_ch_values,
-                               absl::optional<ViewportDescription>* viewport,
-                               bool* is_csp_meta_tag) {
-  ScanCommon(token, source, requests, meta_ch_values, viewport,
-             is_csp_meta_tag);
-}
-
 static void HandleMetaViewport(
     const String& attribute_value,
     const CachedDocumentParameters* document_parameters,
     MediaValuesCached* media_values,
-    absl::optional<ViewportDescription>* viewport) {
+    std::optional<ViewportDescription>* viewport) {
   if (!document_parameters->viewport_meta_enabled)
     return;
   ViewportDescription description(ViewportDescription::kViewportMeta);
@@ -843,7 +885,7 @@ static void HandleMetaReferrer(const String& attribute_value,
                                CSSPreloadScanner* css_scanner) {
   network::mojom::ReferrerPolicy meta_referrer_policy =
       network::mojom::ReferrerPolicy::kDefault;
-  if (!attribute_value.IsEmpty() && !attribute_value.IsNull() &&
+  if (!attribute_value.empty() && !attribute_value.IsNull() &&
       SecurityPolicy::ReferrerPolicyFromString(
           attribute_value, kSupportReferrerPolicyLegacyKeywords,
           &meta_referrer_policy)) {
@@ -855,7 +897,7 @@ static void HandleMetaReferrer(const String& attribute_value,
 void TokenPreloadScanner::HandleMetaNameAttribute(
     const HTMLToken& token,
     MetaCHValues& meta_ch_values,
-    absl::optional<ViewportDescription>* viewport) {
+    std::optional<ViewportDescription>* viewport) {
   const HTMLToken::Attribute* name_attribute =
       token.GetAttributeItem(html_names::kNameAttr);
   if (!name_attribute)
@@ -870,7 +912,7 @@ void TokenPreloadScanner::HandleMetaNameAttribute(
   String content_attribute_value(content_attribute->Value());
   if (EqualIgnoringASCIICase(name_attribute_value, "viewport")) {
     HandleMetaViewport(content_attribute_value, document_parameters_.get(),
-                       media_values_.Get(), viewport);
+                       EnsureMediaValues(), viewport);
     return;
   }
 
@@ -878,23 +920,14 @@ void TokenPreloadScanner::HandleMetaNameAttribute(
     HandleMetaReferrer(content_attribute_value, document_parameters_.get(),
                        &css_scanner_);
   }
-
-  if (EqualIgnoringASCIICase(name_attribute_value, http_names::kAcceptCH) &&
-      RuntimeEnabledFeatures::ClientHintsMetaNameAcceptCHEnabled()) {
-    meta_ch_values.push_back(MetaCHValue{
-        .value = content_attribute->GetValue(),
-        .type = network::MetaCHType::NameAcceptCH,
-        .is_doc_preloader = scanner_type_ == ScannerType::kMainDocument});
-  }
 }
 
-void TokenPreloadScanner::ScanCommon(
-    const HTMLToken& token,
-    const SegmentedString& source,
-    PreloadRequestStream& requests,
-    MetaCHValues& meta_ch_values,
-    absl::optional<ViewportDescription>* viewport,
-    bool* is_csp_meta_tag) {
+void TokenPreloadScanner::Scan(const HTMLToken& token,
+                               const SegmentedString& source,
+                               PreloadRequestStream& requests,
+                               MetaCHValues& meta_ch_values,
+                               std::optional<ViewportDescription>* viewport,
+                               int* csp_meta_tag_count) {
   if (!document_parameters_->do_html_preload_scanning)
     return;
 
@@ -915,9 +948,13 @@ void TokenPreloadScanner::ScanCommon(
     }
     case HTMLToken::kEndTag: {
       const StringImpl* tag_impl = TagImplFor(token.Data());
+      lcp_element_matcher_.ObserveEndTag(tag_impl);
       if (Match(tag_impl, html_names::kTemplateTag)) {
         if (template_count_)
           --template_count_;
+        return;
+      }
+      if (template_count_) {
         return;
       }
       if (Match(tag_impl, html_names::kStyleTag)) {
@@ -939,9 +976,28 @@ void TokenPreloadScanner::ScanCommon(
     }
     case HTMLToken::kStartTag: {
       const StringImpl* tag_impl = TagImplFor(token.Data());
+      const bool potentially_lcp_element =
+          lcp_element_matcher_.ObserveStartTagAndReportMatch(tag_impl, token);
+      if (potentially_lcp_element) {
+        seen_potential_lcp_element_ = true;
+      }
+
       if (Match(tag_impl, html_names::kTemplateTag)) {
-        ++template_count_;
-        return;
+        bool is_declarative_shadow_root = false;
+        const HTMLToken::Attribute* shadowrootmode_attribute =
+            token.GetAttributeItem(html_names::kShadowrootmodeAttr);
+        if (shadowrootmode_attribute) {
+          String shadowrootmode_value(shadowrootmode_attribute->Value());
+          is_declarative_shadow_root =
+              EqualIgnoringASCIICase(shadowrootmode_value, "open") ||
+              EqualIgnoringASCIICase(shadowrootmode_value, "closed");
+        }
+        // If this is a declarative shadow root <template shadowrootmode>
+        // element *and* we're not already inside a non-DSD <template> element,
+        // then we leave the template count at zero. Otherwise, increment it.
+        if (!(is_declarative_shadow_root && !template_count_)) {
+          ++template_count_;
+        }
       }
       if (template_count_)
         return;
@@ -978,11 +1034,9 @@ void TokenPreloadScanner::ScanCommon(
           String equiv_attribute_value(equiv_attribute->Value());
           if (EqualIgnoringASCIICase(equiv_attribute_value,
                                      "content-security-policy")) {
-            *is_csp_meta_tag = true;
+            ++(*csp_meta_tag_count);
           } else if (EqualIgnoringASCIICase(equiv_attribute_value,
-                                            http_names::kAcceptCH) &&
-                     RuntimeEnabledFeatures::
-                         ClientHintsMetaHTTPEquivAcceptCHEnabled()) {
+                                            http_names::kAcceptCH)) {
             const HTMLToken::Attribute* content_attribute =
                 token.GetAttributeItem(html_names::kContentAttr);
             if (content_attribute) {
@@ -993,9 +1047,7 @@ void TokenPreloadScanner::ScanCommon(
                                   scanner_type_ == ScannerType::kMainDocument});
             }
           } else if (EqualIgnoringASCIICase(equiv_attribute_value,
-                                            http_names::kDelegateCH) &&
-                     RuntimeEnabledFeatures::
-                         ClientHintsMetaEquivDelegateCHEnabled()) {
+                                            http_names::kDelegateCH)) {
             const HTMLToken::Attribute* content_attribute =
                 token.GetAttributeItem(html_names::kContentAttr);
             if (content_attribute) {
@@ -1016,6 +1068,19 @@ void TokenPreloadScanner::ScanCommon(
         seen_body_ = true;
       } else if (Match(tag_impl, html_names::kImgTag)) {
         seen_img_ = true;
+        if (base::FeatureList::IsEnabled(
+                features::kSimplifyLoadingTransparentPlaceholderImage)) {
+          // Skip trying to create a preload request if we know the image is a
+          // data URI, as we do not preload data URIs anyway.
+          const HTMLToken::Attribute* source_attribute =
+              token.GetAttributeItem(html_names::kSrcAttr);
+          if (source_attribute) {
+            String source_attribute_value(source_attribute->Value());
+            if (source_attribute_value.StartsWithIgnoringASCIICase("data:")) {
+              return;
+            }
+          }
+        }
       } else if (Match(tag_impl, html_names::kPictureTag)) {
         in_picture_ = true;
         picture_data_ = PictureData();
@@ -1028,21 +1093,27 @@ void TokenPreloadScanner::ScanCommon(
         picture_data_.picked = false;
       }
 
+      MediaValuesCached* media_values = EnsureMediaValues();
       StartTagScanner scanner(
-          tag_impl, media_values_, document_parameters_->integrity_features,
-          scanner_type_, priority_hints_origin_trial_enabled_,
-          &document_parameters_->disabled_image_types);
+          tag_impl, media_values, scanner_type_,
+          &document_parameters_->disabled_image_types,
+          document_parameters_->preload_lazy_load_image_type);
       scanner.ProcessAttributes(token.Attributes());
 
-      if (in_picture_ && media_values_->Width())
+      if (in_picture_ && media_values->Width()) {
         scanner.HandlePictureSourceURL(picture_data_);
-      if (in_style_)
+      }
+      if (in_style_) {
         css_scanner_.SetMediaMatches(scanner.GetMatched());
+      }
       std::unique_ptr<PreloadRequest> request = scanner.CreatePreloadRequest(
-          predicted_base_element_url_, source, picture_data_,
-          *document_parameters_, exclusion_info_.get(),
-          seen_img_ || seen_body_);
+          predicted_base_element_url_, picture_data_, *document_parameters_,
+          exclusion_info_.get(), seen_img_ || seen_body_,
+          potentially_lcp_element);
       if (request) {
+        request->SetInitiatorPosition(
+            TextPosition(source.CurrentLine(), source.CurrentColumn()));
+        request->SetIsPotentiallyLCPElement(potentially_lcp_element);
         requests.push_back(std::move(request));
       }
       return;
@@ -1057,8 +1128,8 @@ void TokenPreloadScanner::UpdatePredictedBaseURL(const HTMLToken& token) {
   DCHECK(predicted_base_element_url_.IsEmpty());
   if (const HTMLToken::Attribute* href_attribute =
           token.GetAttributeItem(html_names::kHrefAttr)) {
-    KURL url(document_url_, StripLeadingAndTrailingHTMLSpaces(
-                                href_attribute->Value8BitIfNecessary()));
+    KURL url(document_url_,
+             StripLeadingAndTrailingHTMLSpaces(href_attribute->Value()));
     bool is_valid_base_url =
         url.IsValid() && !url.ProtocolIsData() && !url.ProtocolIsJavaScript();
     predicted_base_element_url_ = is_valid_base_url ? url : KURL();
@@ -1070,61 +1141,117 @@ std::unique_ptr<HTMLPreloadScanner> HTMLPreloadScanner::Create(
     Document& document,
     HTMLParserOptions options,
     TokenPreloadScanner::ScannerType scanner_type) {
+  Vector<ElementLocator> locators;
+  if (LocalFrame* frame = document.GetFrame()) {
+    if (LCPCriticalPathPredictor* lcpp = frame->GetLCPP()) {
+      locators = lcpp->lcp_element_locators();
+    }
+  }
+
+  bool skip_preload_scan = IsSkipPreloadScanEnabled(&document);
+  if (skip_preload_scan) {
+    UseCounter::Count(document, WebFeature::kSkippedPreloadScanning);
+  }
+
   return std::make_unique<HTMLPreloadScanner>(
-      std::make_unique<HTMLTokenizer>(options),
-      options.priority_hints_origin_trial_enabled, document.Url(),
+      std::make_unique<HTMLTokenizer>(options), document.Url(),
       std::make_unique<CachedDocumentParameters>(&document),
-      MediaValuesCached::MediaValuesCachedData(document), scanner_type,
-      nullptr);
+      std::make_unique<MediaValuesCached::MediaValuesCachedData>(document),
+      scanner_type, /* script_token_scanner=*/nullptr, TakePreloadFn(),
+      std::move(locators), skip_preload_scan);
 }
 
 // static
-WTF::SequenceBound<HTMLPreloadScanner> HTMLPreloadScanner::CreateBackground(
+bool HTMLPreloadScanner::IsSkipPreloadScanEnabled(const Document* document) {
+  if (const auto* context = document->GetExecutionContext()) {
+    if (RuntimeEnabledFeatures::SkipPreloadScanningEnabled(context)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// static
+HTMLPreloadScanner::BackgroundPtr HTMLPreloadScanner::CreateBackground(
     HTMLDocumentParser* parser,
     HTMLParserOptions options,
-    scoped_refptr<base::SequencedTaskRunner> task_runner) {
+    scoped_refptr<base::SequencedTaskRunner> task_runner,
+    TakePreloadFn take_preload) {
   auto* document = parser->GetDocument();
-  return WTF::SequenceBound<HTMLPreloadScanner>(
-      std::move(task_runner), std::make_unique<HTMLTokenizer>(options),
-      options.priority_hints_origin_trial_enabled, document->Url(),
-      std::make_unique<CachedDocumentParameters>(document),
-      MediaValuesCached::MediaValuesCachedData(*document),
-      TokenPreloadScanner::ScannerType::kMainDocument,
-      base::FeatureList::IsEnabled(features::kPrecompileInlineScripts)
-          ? BackgroundHTMLScanner::ScriptTokenScanner::Create(parser)
-          : nullptr);
+
+  Vector<ElementLocator> locators;
+  if (LocalFrame* frame = document->GetFrame()) {
+    if (LCPCriticalPathPredictor* lcpp = frame->GetLCPP()) {
+      locators = lcpp->lcp_element_locators();
+    }
+  }
+
+  bool skip_preload_scan = IsSkipPreloadScanEnabled(document);
+  if (skip_preload_scan) {
+    UseCounter::Count(document, WebFeature::kSkippedPreloadScanning);
+  }
+
+  return BackgroundPtr(
+      new HTMLPreloadScanner(
+          std::make_unique<HTMLTokenizer>(options), document->Url(),
+          std::make_unique<CachedDocumentParameters>(document),
+          std::make_unique<MediaValuesCached::MediaValuesCachedData>(*document),
+          TokenPreloadScanner::ScannerType::kMainDocument,
+          BackgroundHTMLScanner::ScriptTokenScanner::Create(parser),
+          std::move(take_preload), std::move(locators), skip_preload_scan),
+      Deleter{task_runner});
 }
 
 HTMLPreloadScanner::HTMLPreloadScanner(
     std::unique_ptr<HTMLTokenizer> tokenizer,
-    bool priority_hints_origin_trial_enabled,
     const KURL& document_url,
     std::unique_ptr<CachedDocumentParameters> document_parameters,
-    const MediaValuesCached::MediaValuesCachedData& media_values_cached_data,
+    std::unique_ptr<MediaValuesCached::MediaValuesCachedData>
+        media_values_cached_data,
     const TokenPreloadScanner::ScannerType scanner_type,
     std::unique_ptr<BackgroundHTMLScanner::ScriptTokenScanner>
-        script_token_scanner)
+        script_token_scanner,
+    TakePreloadFn take_preload,
+    Vector<ElementLocator> locators,
+    bool skip_preload_scanning)
     : scanner_(document_url,
                std::move(document_parameters),
-               media_values_cached_data,
+               std::move(media_values_cached_data),
                scanner_type,
-               priority_hints_origin_trial_enabled),
+               std::move(locators)),
       tokenizer_(std::move(tokenizer)),
-      script_token_scanner_(std::move(script_token_scanner)) {}
+      script_token_scanner_(std::move(script_token_scanner)),
+      take_preload_(std::move(take_preload)),
+      skip_preload_scanning_(skip_preload_scanning) {
+  TRACE_EVENT_WITH_FLOW0("blink", "HTMLPreloadScanner::HTMLPreloadScanner",
+                         TRACE_ID_LOCAL(this), TRACE_EVENT_FLAG_FLOW_OUT);
+}
 
-HTMLPreloadScanner::~HTMLPreloadScanner() = default;
+HTMLPreloadScanner::~HTMLPreloadScanner() {
+  TRACE_EVENT_WITH_FLOW0("blink", "HTMLPreloadScanner::~HTMLPreloadScanner",
+                         TRACE_ID_LOCAL(this), TRACE_EVENT_FLAG_FLOW_IN);
+}
 
 void HTMLPreloadScanner::AppendToEnd(const SegmentedString& source) {
+  TRACE_EVENT_WITH_FLOW0("blink", "HTMLPreloadScanner::AppendToEnd",
+                         TRACE_ID_LOCAL(this),
+                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
   source_.Append(source);
 }
 
 std::unique_ptr<PendingPreloadData> HTMLPreloadScanner::Scan(
-    const KURL& starting_base_element_url,
-    const TakePreloadFn& take_preload) {
+    const KURL& starting_base_element_url) {
   auto pending_data = std::make_unique<PendingPreloadData>();
 
-  TRACE_EVENT1("blink", "HTMLPreloadScanner::scan", "source_length",
-               source_.length());
+  if (skip_preload_scanning_) {
+    // Skip PreloadScan origin trial is enabled.
+    return pending_data;
+  }
+
+  TRACE_EVENT_WITH_FLOW1("blink", "HTMLPreloadScanner::scan",
+                         TRACE_ID_LOCAL(this),
+                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT,
+                         "source_length", source_.length());
 
   // When we start scanning, our best prediction of the baseElementURL is the
   // real one!
@@ -1137,42 +1264,53 @@ std::unique_ptr<PendingPreloadData> HTMLPreloadScanner::Scan(
   if (script_token_scanner_)
     script_token_scanner_->set_first_script_in_scan(true);
 
-  while (tokenizer_->NextToken(source_, token_)) {
-    if (token_.GetType() == HTMLToken::kStartTag)
-      tokenizer_->UpdateStateFor(
-          AttemptStaticStringCreation(token_.GetName(), kLikely8Bit));
-    bool seen_csp_meta_tag = false;
-    scanner_.Scan(token_, source_, pending_data->requests,
+  while (HTMLToken* token = tokenizer_->NextToken(source_)) {
+    if (token->GetType() == HTMLToken::kStartTag)
+      tokenizer_->UpdateStateFor(*token);
+    int csp_meta_tag_count = 0;
+    scanner_.Scan(*token, source_, pending_data->requests,
                   pending_data->meta_ch_values, &pending_data->viewport,
-                  &seen_csp_meta_tag);
+                  &csp_meta_tag_count);
     if (script_token_scanner_)
-      script_token_scanner_->ScanToken(token_);
-    pending_data->has_csp_meta_tag |= seen_csp_meta_tag;
-    token_.Clear();
-    // Don't preload anything if a CSP meta tag is found. We should rarely find
-    // them here because the HTMLPreloadScanner is only used for the synchronous
-    // parsing path.
-    if (seen_csp_meta_tag) {
-      // Reset the tokenizer, to avoid re-scanning tokens that we are about to
-      // start parsing.
-      source_.Clear();
-      tokenizer_->Reset();
-      return pending_data;
+      script_token_scanner_->ScanToken(*token);
+    pending_data->csp_meta_tag_count += csp_meta_tag_count;
+    token->Clear();
+
+    if (!RuntimeEnabledFeatures::AllowPreloadingWithCSPMetaTagEnabled()) {
+      // Don't preload anything if a CSP meta tag is found. We should rarely
+      // find them here because the HTMLPreloadScanner is only used for the
+      // synchronous parsing path.
+      CHECK(csp_meta_tag_count >= 0);
+      if (csp_meta_tag_count) {
+        // Reset the tokenizer, to avoid re-scanning tokens that we are about to
+        // start parsing.
+        source_.Clear();
+        tokenizer_->Reset();
+        return pending_data;
+      }
     }
+
     // Incrementally add preloads when scanning in the background.
-    if (take_preload && !pending_data->requests.IsEmpty()) {
-      take_preload.Run(std::move(pending_data));
+    if (take_preload_ && !pending_data->requests.empty()) {
+      take_preload_.Run(std::move(pending_data));
       pending_data = std::make_unique<PendingPreloadData>();
     }
   }
+
+  pending_data->has_located_potential_lcp_element =
+      scanner_.HasLocatedPotentialLcpElement();
+
   return pending_data;
 }
 
-void HTMLPreloadScanner::ScanInBackground(const String& source,
-                                          const KURL& document_base_element_url,
-                                          const TakePreloadFn& take_preload) {
+void HTMLPreloadScanner::ScanInBackground(
+    const String& source,
+    const KURL& document_base_element_url) {
+  TRACE_EVENT_WITH_FLOW0("blink", "HTMLPreloadScanner::ScanInBackground",
+                         TRACE_ID_LOCAL(this),
+                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
   source_.Append(source);
-  take_preload.Run(Scan(document_base_element_url, take_preload));
+  take_preload_.Run(Scan(document_base_element_url));
 }
 
 CachedDocumentParameters::CachedDocumentParameters(Document* document) {
@@ -1189,23 +1327,31 @@ CachedDocumentParameters::CachedDocumentParameters(Document* document) {
   viewport_meta_enabled = document->GetSettings() &&
                           document->GetSettings()->GetViewportMetaEnabled();
   referrer_policy = document->GetReferrerPolicy();
-  integrity_features =
-      SubresourceIntegrityHelper::GetFeatures(document->GetExecutionContext());
   if (document->Loader() && document->Loader()->GetFrame()) {
     lazy_load_image_setting =
         document->Loader()->GetFrame()->GetLazyLoadImageSetting();
   } else {
     lazy_load_image_setting = LocalFrame::LazyLoadImageSetting::kDisabled;
   }
+  const features::LcppPreloadLazyLoadImageType
+      kPreloadLazyLoadImageType =
+          features::kLCPCriticalPathPredictorPreloadLazyLoadImageType.Get();
+  preload_lazy_load_image_type =
+      preload_lazy_load_image_type_for_testing.has_value()
+          ? preload_lazy_load_image_type_for_testing.value()
+          : kPreloadLazyLoadImageType;
   probe::GetDisabledImageTypes(document->GetExecutionContext(),
                                &disabled_image_types);
+}
 
-  can_register_attribution = CanRegisterAttributionInContext(
-      document->Loader()->GetFrame(),
-      /*element=*/nullptr,
-      /*request_id=*/absl::nullopt,
-      AttributionSrcLoader::RegisterContext::kAttributionSrc,
-      /*log_issues=*/false);
+// static
+std::optional<features::LcppPreloadLazyLoadImageType>
+    CachedDocumentParameters::preload_lazy_load_image_type_for_testing =
+        std::nullopt;
+// static
+void CachedDocumentParameters::SetLcppPreloadLazyLoadImageTypeForTesting(
+    std::optional<features::LcppPreloadLazyLoadImageType> type) {
+  preload_lazy_load_image_type_for_testing = type;
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,8 @@ namespace send_tab_to_self {
 class SendTabToSelfToolbarIconView
     : public views::ImageView,
       public SendTabToSelfToolbarIconControllerDelegate {
+  METADATA_HEADER(SendTabToSelfToolbarIconView, views::ImageView)
+
  public:
   explicit SendTabToSelfToolbarIconView(BrowserView* browser_view);
   SendTabToSelfToolbarIconView(const SendTabToSelfToolbarIconView&) = delete;
@@ -34,10 +36,6 @@ class SendTabToSelfToolbarIconView
   bool IsActive() override;
 
   void DismissEntry(std::string& guid);
-
-  void LogNotificationOpened();
-
-  void LogNotificationDismissed();
 
  private:
   const raw_ptr<const Browser> browser_;

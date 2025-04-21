@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_ON_LOAD_SCRIPT_INJECTOR_BROWSER_ON_LOAD_SCRIPT_INJECTOR_HOST_H_
 
 #include <map>
+#include <string_view>
 #include <vector>
 
 #include "base/memory/read_only_shared_memory_region.h"
@@ -55,10 +56,10 @@ class ON_LOAD_SCRIPT_INJECTOR_EXPORT OnLoadScriptInjectorHost {
   // All entries of |origins_to_inject| must be valid/not opaque.
   void AddScript(ScriptId id,
                  std::vector<url::Origin> origins_to_inject,
-                 base::StringPiece script);
+                 std::string_view script);
 
   // Same as AddScript(), except that scripts are injected for all pages.
-  void AddScriptForAllOrigins(ScriptId id, base::StringPiece script);
+  void AddScriptForAllOrigins(ScriptId id, std::string_view script);
 
   // Removes the script |id|.
   void RemoveScript(ScriptId id);

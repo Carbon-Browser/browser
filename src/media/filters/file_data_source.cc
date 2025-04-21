@@ -1,14 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/filters/file_data_source.h"
 
 #include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 
 namespace media {
 
@@ -69,5 +74,15 @@ bool FileDataSource::IsStreaming() {
 void FileDataSource::SetBitrate(int bitrate) {}
 
 FileDataSource::~FileDataSource() = default;
+
+bool FileDataSource::PassedTimingAllowOriginCheck() {
+  // There are no HTTP responses, so this can safely return true.
+  return true;
+}
+
+bool FileDataSource::WouldTaintOrigin() {
+  // There are no HTTP responses, so this can safely return false.
+  return false;
+}
 
 }  // namespace media

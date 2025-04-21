@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/base/typed_buffer.h"
 
@@ -59,12 +64,12 @@ TEST(TypedBufferTest, Pass) {
   EXPECT_TRUE(right.get());
   EXPECT_EQ(right.length(), sizeof(int));
 
-  Data* raw_ptr = right.get();
+  Data* ptr = right.get();
   left = std::move(right);
 
   // Verify that passing ownership transfers both the buffer pointer and its
   // length.
-  EXPECT_EQ(left.get(), raw_ptr);
+  EXPECT_EQ(left.get(), ptr);
   EXPECT_EQ(left.length(), sizeof(int));
 
   // Verify that the original object was cleared.

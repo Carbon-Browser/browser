@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,40 +50,21 @@ class DownloadsHandler : public SettingsPageUIHandler,
   void HandleSelectDownloadLocation(const base::Value::List& args);
 
   // SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+  void FileSelectionCanceled() override;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Callback for the "getDownloadLocationText" message.  Converts actual
   // paths in chromeos to values suitable to display to users.
-  // E.g. /home/chronos/u-<hash>/Downloads => "Downloads".
+  // E.g. /home/chronos/u-<hash>/MyFiles/Downloads => "My Files > Downloads".
   void HandleGetDownloadLocationText(const base::Value::List& args);
 #endif
-
-  bool IsDownloadsConnectionPolicyEnabled() const;
-  void SendDownloadsConnectionPolicyToJavascript();
-
-  // Callback for the "setDownloadsConnectionAccountLink" message. If there is
-  // no account linked and arg is true, this prompts the user to sign in; if
-  // there is an existing linked account and arg is false, this removes the
-  // linked account info and stored authentication tokens; otherwise, this
-  // merely sends the latest stored account info.
-  void HandleSetDownloadsConnectionAccountLink(const base::Value::List& args);
-  // Callback for file system connector code, since prompting the user to sign
-  // in is async.
-  void OnDownloadsConnectionAccountLinkSet(bool success);
-  // Sends the latest stored account info to the settings page.
-  void SendDownloadsConnectionInfoToJavascript();
 
   raw_ptr<Profile> profile_;
 
   PrefChangeRegistrar pref_registrar_;
 
   scoped_refptr<ui::SelectFileDialog> select_folder_dialog_;
-
-  base::WeakPtrFactory<DownloadsHandler> weak_factory_{this};
 };
 
 }  // namespace settings

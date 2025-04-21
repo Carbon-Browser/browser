@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/core/animation/property_handle.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
+#include "third_party/blink/renderer/core/css/media_values.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/css/parser/css_variable_parser.h"
 #include "third_party/blink/renderer/core/css/resolver/css_to_style_map.h"
@@ -49,7 +50,7 @@ static String CSSPropertyToKeyframeAttribute(const CSSProperty& property) {
 static String PresentationAttributeToKeyframeAttribute(
     const CSSProperty& presentation_attribute) {
   StringBuilder builder;
-  builder.Append(kSVGPrefix, kSVGPrefixLength);
+  builder.Append(base::byte_span_from_cstring(kSVGPrefix));
   builder.Append(presentation_attribute.GetPropertyName());
   return builder.ToString();
 }
@@ -90,8 +91,8 @@ CSSPropertyID AnimationInputHelpers::KeyframeAttributeToPresentationAttribute(
     return CSSPropertyID::kInvalid;
 
   String unprefixed_property = RemoveSVGPrefix(property);
-  if (SVGElement::IsAnimatableCSSProperty(QualifiedName(
-          g_null_atom, AtomicString(unprefixed_property), g_null_atom))) {
+  if (SVGElement::IsAnimatableCSSProperty(
+          QualifiedName(AtomicString(unprefixed_property)))) {
     return CssPropertyID(element->GetExecutionContext(), unprefixed_property);
   }
   return CSSPropertyID::kInvalid;
@@ -101,10 +102,10 @@ using AttributeNameMap = HashMap<QualifiedName, const QualifiedName*>;
 
 const AttributeNameMap& GetSupportedAttributes() {
   DEFINE_STATIC_LOCAL(AttributeNameMap, supported_attributes, ());
-  if (supported_attributes.IsEmpty()) {
+  if (supported_attributes.empty()) {
     // Fill the set for the first use.
     // Animatable attributes from http://www.w3.org/TR/SVG/attindex.html
-    const QualifiedName* attributes[] = {
+    const auto attributes = std::to_array<const QualifiedName*>({
         &html_names::kClassAttr,
         &svg_names::kAmplitudeAttr,
         &svg_names::kAzimuthAttr,
@@ -200,10 +201,10 @@ const AttributeNameMap& GetSupportedAttributes() {
         &svg_names::kYAttr,
         &svg_names::kYChannelSelectorAttr,
         &svg_names::kZAttr,
-    };
-    for (size_t i = 0; i < std::size(attributes); i++) {
-      DCHECK(!SVGElement::IsAnimatableCSSProperty(*attributes[i]));
-      supported_attributes.Set(*attributes[i], attributes[i]);
+    });
+    for (const QualifiedName* attribute : attributes) {
+      DCHECK(!SVGElement::IsAnimatableCSSProperty(*attribute));
+      supported_attributes.Set(*attribute, attribute);
     }
   }
   return supported_attributes;
@@ -211,7 +212,7 @@ const AttributeNameMap& GetSupportedAttributes() {
 
 QualifiedName SvgAttributeName(const String& property) {
   DCHECK(!IsSVGPrefixed(property));
-  return QualifiedName(g_null_atom, AtomicString(property), g_null_atom);
+  return QualifiedName(AtomicString(property));
 }
 
 const QualifiedName* AnimationInputHelpers::KeyframeAttributeToSVGAttribute(
@@ -240,7 +241,7 @@ scoped_refptr<TimingFunction> AnimationInputHelpers::ParseTimingFunction(
     const String& string,
     Document* document,
     ExceptionState& exception_state) {
-  if (string.IsEmpty()) {
+  if (string.empty()) {
     exception_state.ThrowTypeError("Easing may not be the empty string");
     return nullptr;
   }
@@ -265,7 +266,13 @@ scoped_refptr<TimingFunction> AnimationInputHelpers::ParseTimingFunction(
     exception_state.ThrowTypeError("Easing may not be set to a list of values");
     return nullptr;
   }
-  return CSSToStyleMap::MapAnimationTimingFunction(value_list->Item(0));
+  // TODO(sesse): Are there situations where we're being called, but where
+  // we should use a length resolver related to a specific element's computed
+  // style?
+  MediaValues* media_values = MediaValues::CreateDynamicIfFrameExists(
+      document ? document->GetFrame() : nullptr);
+  return CSSToStyleMap::MapAnimationTimingFunction(*media_values,
+                                                   value_list->Item(0));
 }
 
 String AnimationInputHelpers::PropertyHandleToKeyframeAttribute(

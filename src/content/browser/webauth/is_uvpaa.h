@@ -1,13 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_WEBAUTH_IS_UVPAA_H_
 #define CONTENT_BROWSER_WEBAUTH_IS_UVPAA_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
 
 #if BUILDFLAG(IS_MAC)

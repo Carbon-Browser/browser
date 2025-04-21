@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_TAILORED_SECURITY_UNCONSENTED_MODAL_H_
 #define CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_TAILORED_SECURITY_UNCONSENTED_MODAL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/window/dialog_delegate.h"
 
 namespace content {
@@ -19,12 +20,12 @@ namespace safe_browsing {
 
 // A tab modal dialog that is shown when the user's tailored security bit
 // changes and the user isn't consented to sync.
-// TODO(crbug.com/1336052): Remove this modal after launching
+// TODO(crbug.com/40847463): Remove this modal after launching
 // `TailoredSecurityDesktopModal`.
 class TailoredSecurityUnconsentedModal : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(TailoredSecurityUnconsentedModal);
+  METADATA_HEADER(TailoredSecurityUnconsentedModal, views::DialogDelegateView)
 
+ public:
   // Show this dialog for the given |web_contents|.
   static void ShowForWebContents(content::WebContents* web_contents);
 
@@ -36,7 +37,7 @@ class TailoredSecurityUnconsentedModal : public views::DialogDelegateView {
   ~TailoredSecurityUnconsentedModal() override;
 
   // views::DialogDelegate implementation:
-  bool IsDialogButtonEnabled(ui::DialogButton button) const override;
+  bool IsDialogButtonEnabled(ui::mojom::DialogButton button) const override;
   bool ShouldShowCloseButton() const override;
 
  private:

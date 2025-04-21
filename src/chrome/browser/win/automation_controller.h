@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 // Needed for <uiautomation.h>
 #include <objbase.h>
 
-#include <uiautomation.h>
-
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
+
+#include <uiautomation.h>
 
 // This is a helper class to facilitate the usage of the UI Automation API in
 // the Chrome codebase. It takes care of initializing the Automation context and

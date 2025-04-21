@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,7 @@ struct AccessibilityPageInfo {
   gfx::Rect bounds;
   uint32_t text_run_count = 0;
   uint32_t char_count = 0;
+  bool is_searchified = false;
 };
 
 // See PDF Reference 1.7, page 402, table 5.3.
@@ -87,6 +88,11 @@ struct AccessibilityTextRunInfo {
                            const gfx::RectF& bounds,
                            AccessibilityTextDirection direction,
                            const AccessibilityTextStyleInfo& style);
+  AccessibilityTextRunInfo(uint32_t len,
+                           const gfx::RectF& bounds,
+                           AccessibilityTextDirection direction,
+                           const AccessibilityTextStyleInfo& style,
+                           bool is_searchified);
   AccessibilityTextRunInfo(const AccessibilityTextRunInfo& other);
   ~AccessibilityTextRunInfo();
 
@@ -94,6 +100,7 @@ struct AccessibilityTextRunInfo {
   gfx::RectF bounds;
   AccessibilityTextDirection direction = AccessibilityTextDirection::kNone;
   AccessibilityTextStyleInfo style;
+  bool is_searchified = false;
 };
 
 struct AccessibilityCharInfo {
@@ -132,7 +139,7 @@ struct AccessibilityImageInfo {
   AccessibilityImageInfo(const std::string& alt_text,
                          uint32_t text_run_index,
                          const gfx::RectF& bounds,
-                         const SkBitmap& image_data);
+                         int32_t page_object_index);
   AccessibilityImageInfo(const AccessibilityImageInfo& other);
   ~AccessibilityImageInfo();
 
@@ -147,9 +154,8 @@ struct AccessibilityImageInfo {
   // Bounding box of the image.
   gfx::RectF bounds;
 
-  // Only populated if `alt_text` is empty or unavailable, and if the user has
-  // requested that the OCR service tag the PDF so that it is made accessible.
-  SkBitmap image_data;
+  // Index of the image object in its page.
+  int32_t page_object_index;
 };
 
 struct AccessibilityHighlightInfo {
@@ -360,10 +366,15 @@ struct AccessibilityFocusInfo {
 };
 
 struct AccessibilityViewportInfo {
+  AccessibilityViewportInfo();
+  AccessibilityViewportInfo(const AccessibilityViewportInfo& other);
+  ~AccessibilityViewportInfo();
+
   double zoom = 0.0;
   double scale = 0.0;
   gfx::Point scroll;
   gfx::Point offset;
+  uint32_t orientation = 0;
   uint32_t selection_start_page_index = 0;
   uint32_t selection_start_char_index = 0;
   uint32_t selection_end_page_index = 0;

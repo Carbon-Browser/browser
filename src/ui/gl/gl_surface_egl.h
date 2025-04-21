@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "base/command_line.h"
 #include "base/containers/queue.h"
 #include "base/time/time.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/vsync_provider.h"
 #include "ui/gl/egl_timestamps.h"
@@ -28,6 +29,10 @@
 #include "ui/gl/gl_export.h"
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_surface_overlay.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "ui/gl/android/scoped_a_native_window.h"
+#endif
 
 namespace gl {
 
@@ -62,9 +67,15 @@ class GL_EXPORT GLSurfaceEGL : public GLSurface {
 class GL_EXPORT NativeViewGLSurfaceEGL : public GLSurfaceEGL,
                                          public EGLTimestampClient {
  public:
+#if BUILDFLAG(IS_ANDROID)
+  NativeViewGLSurfaceEGL(GLDisplayEGL* display,
+                         ScopedANativeWindow scoped_window,
+                         std::unique_ptr<gfx::VSyncProvider> vsync_provider);
+#else
   NativeViewGLSurfaceEGL(GLDisplayEGL* display,
                          EGLNativeWindowType window,
                          std::unique_ptr<gfx::VSyncProvider> vsync_provider);
+#endif
 
   NativeViewGLSurfaceEGL(const NativeViewGLSurfaceEGL&) = delete;
   NativeViewGLSurfaceEGL& operator=(const NativeViewGLSurfaceEGL&) = delete;
@@ -80,7 +91,8 @@ class GL_EXPORT NativeViewGLSurfaceEGL : public GLSurfaceEGL,
               bool has_alpha) override;
   bool Recreate() override;
   bool IsOffscreen() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   gfx::Size GetSize() override;
   EGLSurface GetHandle() override;
   bool SupportsPostSubBuffer() override;
@@ -88,16 +100,11 @@ class GL_EXPORT NativeViewGLSurfaceEGL : public GLSurfaceEGL,
                                 int y,
                                 int width,
                                 int height,
-                                PresentationCallback callback) override;
-  bool SupportsCommitOverlayPlanes() override;
-  gfx::SwapResult CommitOverlayPlanes(PresentationCallback callback) override;
+                                PresentationCallback callback,
+                                gfx::FrameData data) override;
   bool OnMakeCurrent(GLContext* context) override;
   gfx::VSyncProvider* GetVSyncProvider() override;
   void SetVSyncEnabled(bool enabled) override;
-  bool ScheduleOverlayPlane(
-      GLImage* image,
-      std::unique_ptr<gfx::GpuFence> gpu_fence,
-      const gfx::OverlayPlaneData& overlay_plane_data) override;
   gfx::SurfaceOrigin GetOrigin() const override;
   EGLTimestampClient* GetEGLTimestampClient() override;
 
@@ -116,6 +123,9 @@ class GL_EXPORT NativeViewGLSurfaceEGL : public GLSurfaceEGL,
  protected:
   ~NativeViewGLSurfaceEGL() override;
 
+#if BUILDFLAG(IS_ANDROID)
+  ScopedANativeWindow scoped_window_;
+#endif
   EGLNativeWindowType window_ = 0;
   gfx::Size size_ = gfx::Size(1, 1);
   bool enable_fixed_size_angle_ = true;
@@ -125,7 +135,8 @@ class GL_EXPORT NativeViewGLSurfaceEGL : public GLSurfaceEGL,
   }
 
   gfx::SwapResult SwapBuffersWithDamage(const std::vector<int>& rects,
-                                        PresentationCallback callback);
+                                        PresentationCallback callback,
+                                        gfx::FrameData data);
 
  private:
   struct SwapInfo {
@@ -177,7 +188,8 @@ class GL_EXPORT PbufferGLSurfaceEGL : public GLSurfaceEGL {
   bool Initialize(GLSurfaceFormat format) override;
   void Destroy() override;
   bool IsOffscreen() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   gfx::Size GetSize() override;
   bool Resize(const gfx::Size& size,
               float scale_factor,
@@ -209,7 +221,8 @@ class GL_EXPORT SurfacelessEGL : public GLSurfaceEGL {
   void Destroy() override;
   bool IsOffscreen() override;
   bool IsSurfaceless() const override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   gfx::Size GetSize() override;
   bool Resize(const gfx::Size& size,
               float scale_factor,

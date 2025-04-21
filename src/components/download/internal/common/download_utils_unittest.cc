@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,6 @@ TEST(DownloadUtilsTest, HandleServerResponse200) {
 }
 
 TEST(DownloadUtilsTest, HandleServerResponse200_RangeRequest) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kDownloadRange);
-
   // Arbitrary range request must expect HTTP 206 as a successful response.
   scoped_refptr<net::HttpResponseHeaders> headers(
       new net::HttpResponseHeaders("HTTP/1.1 200 OK"));
@@ -39,9 +36,6 @@ TEST(DownloadUtilsTest, HandleServerResponse200_RangeRequest) {
 }
 
 TEST(DownloadUtilsTest, HandleServerResponse206_RangeRequest) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kDownloadRange);
-
   scoped_refptr<net::HttpResponseHeaders> headers(
       new net::HttpResponseHeaders("HTTP/1.1 206 Partial Content"));
   headers->AddHeader("Content-Range", "bytes 105-125/500");
@@ -56,17 +50,13 @@ TEST(DownloadUtilsTest, HandleServerResponse206_RangeRequest) {
 void VerifyRangeHeader(DownloadUrlParameters* params,
                        const std::string& expected_range_header) {
   auto resource_request = CreateResourceRequest(params);
-  std::string header_value;
-  ASSERT_TRUE(resource_request->headers.GetHeader(
-      net::HttpRequestHeaders::kRange, &header_value));
+  EXPECT_EQ(expected_range_header, resource_request->headers.GetHeader(
+                                       net::HttpRequestHeaders::kRange));
   ASSERT_FALSE(
       resource_request->headers.HasHeader(net::HttpRequestHeaders::kIfRange));
-  EXPECT_EQ(expected_range_header, header_value);
 }
 
 TEST(DownloadUtilsTest, CreateResourceRequest) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kDownloadRange);
   auto params = std::make_unique<DownloadUrlParameters>(
       GURL(), TRAFFIC_ANNOTATION_FOR_TESTS);
   params->set_use_if_range(false);
@@ -86,6 +76,19 @@ TEST(DownloadUtilsTest, CreateResourceRequest) {
   VerifyRangeHeader(params.get(), "bytes=-200");
   params->set_offset(5);
   VerifyRangeHeader(params.get(), "bytes=-195");
+}
+
+TEST(DownloadUtilsTest, IsContentDispositionAttachmentInHead) {
+  network::mojom::URLResponseHead response_head;
+  EXPECT_FALSE(IsContentDispositionAttachmentInHead(response_head));
+
+  net::HttpResponseHeaders::Builder builder(net::HttpVersion(1, 1), "200 OK");
+  response_head.headers = builder.Build();
+  EXPECT_FALSE(IsContentDispositionAttachmentInHead(response_head));
+
+  builder.AddHeader("Content-Disposition", "attachment");
+  response_head.headers = builder.Build();
+  EXPECT_TRUE(IsContentDispositionAttachmentInHead(response_head));
 }
 
 }  // namespace

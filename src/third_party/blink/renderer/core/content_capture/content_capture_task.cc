@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -101,13 +101,15 @@ bool ContentCaptureTask::CaptureContent(Vector<cc::NodeInfo>& data) {
 bool ContentCaptureTask::CaptureContent() {
   DCHECK(task_session_);
   Vector<cc::NodeInfo> buffer;
-  if (histogram_reporter_)
+  if (histogram_reporter_) {
     histogram_reporter_->OnCaptureContentStarted();
+  }
   bool result = CaptureContent(buffer);
-  if (!buffer.IsEmpty())
+  if (!buffer.empty())
     task_session_->SetCapturedContent(buffer);
-  if (histogram_reporter_)
+  if (histogram_reporter_) {
     histogram_reporter_->OnCaptureContentEnded(buffer.size());
+  }
   return result;
 }
 
@@ -118,8 +120,9 @@ void ContentCaptureTask::SendContent(
   auto* client = GetWebContentCaptureClient(*document);
   DCHECK(client);
 
-  if (histogram_reporter_)
+  if (histogram_reporter_) {
     histogram_reporter_->OnSendContentStarted();
+  }
   WebVector<WebContentHolder> content_batch;
   content_batch.reserve(kBatchSize);
   // Only send changed content after the new content was sent.
@@ -142,8 +145,9 @@ void ContentCaptureTask::SendContent(
       doc_session.SetFirstDataHasSent();
     }
   }
-  if (histogram_reporter_)
+  if (histogram_reporter_) {
     histogram_reporter_->OnSendContentEnded(content_batch.size());
+  }
 }
 
 WebContentCaptureClient* ContentCaptureTask::GetWebContentCaptureClient(
@@ -229,8 +233,9 @@ bool ContentCaptureTask::RunInternal() {
 void ContentCaptureTask::Run(TimerBase*) {
   TRACE_EVENT0("content_capture", "RunTask");
   task_delay_->IncreaseDelayExponent();
-  if (histogram_reporter_)
+  if (histogram_reporter_) {
     histogram_reporter_->OnTaskRun();
+  }
   bool completed = RunInternal();
   if (!completed) {
     ScheduleInternal(ScheduleReason::kRetryTask);
@@ -279,8 +284,6 @@ void ContentCaptureTask::ScheduleInternal(ScheduleReason reason) {
 void ContentCaptureTask::Schedule(ScheduleReason reason) {
   DCHECK(local_frame_root_);
   has_content_change_ = true;
-  if (histogram_reporter_)
-    histogram_reporter_->OnContentChanged();
   ScheduleInternal(reason);
 }
 

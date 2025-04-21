@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/service/display/output_surface_client.h"
 #include "components/viz/service/display/output_surface_frame.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
-#include "third_party/khronos/GLES2/gl2.h"
+#include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "ui/gfx/buffer_format_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gfx/swap_result.h"
@@ -38,22 +38,20 @@ void PixelTestOutputSurface::Reshape(const ReshapeParams& params) {
 }
 
 void PixelTestOutputSurface::SwapBuffers(viz::OutputSurfaceFrame frame) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PixelTestOutputSurface::SwapBuffersCallback,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
 
 void PixelTestOutputSurface::SwapBuffersCallback() {
   base::TimeTicks now = base::TimeTicks::Now();
-  gfx::SwapTimings timings = {now, now};
-  client_->DidReceiveSwapBuffersAck(timings,
+  gpu::SwapBuffersCompleteParams params;
+  params.swap_response.timings = {now, now};
+  params.swap_response.result = gfx::SwapResult::SWAP_ACK;
+  client_->DidReceiveSwapBuffersAck(params,
                                     /*release_fence=*/gfx::GpuFenceHandle());
   client_->DidReceivePresentationFeedback(
       gfx::PresentationFeedback(base::TimeTicks::Now(), base::TimeDelta(), 0));
-}
-
-bool PixelTestOutputSurface::IsDisplayedAsOverlayPlane() const {
-  return false;
 }
 
 void PixelTestOutputSurface::SetUpdateVSyncParametersCallback(
@@ -61,6 +59,13 @@ void PixelTestOutputSurface::SetUpdateVSyncParametersCallback(
 
 gfx::OverlayTransform PixelTestOutputSurface::GetDisplayTransform() {
   return gfx::OVERLAY_TRANSFORM_NONE;
+}
+
+void PixelTestOutputSurface::ReadbackForTesting(
+    base::OnceCallback<void(std::unique_ptr<viz::CopyOutputResult>)> callback) {
+  SkBitmap bitmap = software_device()->ReadbackForTesting();
+  std::move(callback).Run(std::make_unique<viz::CopyOutputSkBitmapResult>(
+      gfx::Rect(gfx::SkISizeToSize(bitmap.dimensions())), std::move(bitmap)));
 }
 
 }  // namespace cc

@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_content_settings_container.h"
 
+#include "chrome/browser/ui/browser.h"
 #include "ui/base/hit_test.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
@@ -21,6 +22,7 @@ constexpr base::TimeDelta kContentSettingsFadeInDuration =
 }  // namespace
 
 WebAppContentSettingsContainer::WebAppContentSettingsContainer(
+    Browser* browser,
     IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
     ContentSettingImageView::Delegate* content_setting_image_delegate) {
   views::BoxLayout& layout =
@@ -36,7 +38,7 @@ WebAppContentSettingsContainer::WebAppContentSettingsContainer(
   for (auto& model : models) {
     auto image_view = std::make_unique<ContentSettingImageView>(
         std::move(model), icon_label_bubble_delegate,
-        content_setting_image_delegate,
+        content_setting_image_delegate, browser,
         views::CustomFrameView::GetWindowTitleFontList());
     // Padding around content setting icons.
     constexpr auto kContentSettingIconInteriorPadding = gfx::Insets(4);
@@ -52,13 +54,15 @@ WebAppContentSettingsContainer::WebAppContentSettingsContainer(
 WebAppContentSettingsContainer::~WebAppContentSettingsContainer() = default;
 
 void WebAppContentSettingsContainer::UpdateContentSettingViewsVisibility() {
-  for (auto* v : content_setting_views_)
+  for (ContentSettingImageView* v : content_setting_views_) {
     v->Update();
+  }
 }
 
 void WebAppContentSettingsContainer::SetIconColor(SkColor icon_color) {
-  for (auto* v : content_setting_views_)
+  for (ContentSettingImageView* v : content_setting_views_) {
     v->SetIconColor(icon_color);
+  }
 }
 
 void WebAppContentSettingsContainer::SetUpForFadeIn() {
@@ -69,8 +73,9 @@ void WebAppContentSettingsContainer::SetUpForFadeIn() {
 }
 
 void WebAppContentSettingsContainer::FadeIn() {
-  if (GetVisible())
+  if (GetVisible()) {
     return;
+  }
 
   // The layer may have been destroyed since SetUpForFadeIn() was called.
   SetPaintToLayer();
@@ -83,9 +88,10 @@ void WebAppContentSettingsContainer::FadeIn() {
 
 void WebAppContentSettingsContainer::EnsureVisible() {
   SetVisible(true);
-  if (layer())
+  if (layer()) {
     layer()->SetOpacity(1);
+  }
 }
 
-BEGIN_METADATA(WebAppContentSettingsContainer, views::View)
+BEGIN_METADATA(WebAppContentSettingsContainer)
 END_METADATA

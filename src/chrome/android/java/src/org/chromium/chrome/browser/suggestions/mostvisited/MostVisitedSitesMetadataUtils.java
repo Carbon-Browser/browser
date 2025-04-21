@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@ import androidx.core.util.AtomicFile;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.StreamUtil;
-import org.chromium.base.StrictModeContext;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.chrome.browser.suggestions.tile.Tile;
@@ -29,9 +29,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * This class provides methods to write/read most visited sites related info to devices.
- */
+/** This class provides methods to write/read most visited sites related info to devices. */
 public class MostVisitedSitesMetadataUtils {
     private static final String TAG = "TopSites";
 
@@ -111,19 +109,18 @@ public class MostVisitedSitesMetadataUtils {
 
     /**
      * Restore the suggestion lists from the disk and deserialize them on UI thread.
-     * @return Suggestion lists
-     * IOException: If there is any problem when restoring file or deserialize data, remove the
-     * stale files and throw an exception, then the UI thread will know there is no cache file and
-     * show something else.
+     *
+     * @return Suggestion lists IOException: If there is any problem when restoring file or
+     *     deserialize data, remove the stale files and throw an exception, then the UI thread will
+     *     know there is no cache file and show something else.
      */
     public static List<Tile> restoreFileToSuggestionListsOnUiThread() throws IOException {
-        try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
-            return restoreFileToSuggestionLists();
-        }
+        return restoreFileToSuggestionLists();
     }
 
     /**
      * Asynchronously serialize the suggestion lists and save it into the disk.
+     *
      * @param suggestionTiles The site suggestion tiles.
      * @param callback Callback function after saving file.
      */
@@ -201,7 +198,7 @@ public class MostVisitedSitesMetadataUtils {
             if (url.isEmpty()) throw new IOException("GURL deserialization failed.");
 
             // Read the allowlistIconPath, which is always an empty string.
-            String allowlistIconPath = stream.readUTF();
+            stream.readUTF();
             int titleSource = stream.readInt();
             int source = stream.readInt();
             int sectionType = stream.readInt();
@@ -230,7 +227,8 @@ public class MostVisitedSitesMetadataUtils {
                 stream = file.startWrite();
                 stream.write(listData, 0, listData.length);
                 file.finishWrite(stream);
-                Log.i(TAG,
+                Log.i(
+                        TAG,
                         "Finished saving top sites list to file:" + metadataFile.getAbsolutePath());
             } catch (IOException e) {
                 if (stream != null) file.failWrite(stream);
@@ -263,15 +261,14 @@ public class MostVisitedSitesMetadataUtils {
 
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     public static File getOrCreateTopSitesDirectory() {
-        try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
-            synchronized (DIR_CREATION_LOCK) {
-                if (sStateDirectory == null) {
-                    sStateDirectory = ContextUtils.getApplicationContext().getDir(
-                            sStateDirName, Context.MODE_PRIVATE);
-                }
+        synchronized (DIR_CREATION_LOCK) {
+            if (sStateDirectory == null) {
+                sStateDirectory =
+                        ContextUtils.getApplicationContext()
+                                .getDir(sStateDirName, Context.MODE_PRIVATE);
             }
-            return sStateDirectory;
         }
+        return sStateDirectory;
     }
 
     private void updatePendingToCurrent() {
@@ -283,22 +280,22 @@ public class MostVisitedSitesMetadataUtils {
         }
     }
 
-    @VisibleForTesting
     public Runnable getCurrentTaskForTesting() {
         return mCurrentTask;
     }
 
-    @VisibleForTesting
     public void setCurrentTaskForTesting(Runnable currentTask) {
+        var oldValue = mCurrentTask;
         mCurrentTask = currentTask;
+        ResettersForTesting.register(() -> mCurrentTask = oldValue);
     }
 
-    @VisibleForTesting
     public void setPendingTaskForTesting(Runnable pendingTask) {
+        var oldValue = mPendingTask;
         mPendingTask = pendingTask;
+        ResettersForTesting.register(() -> mPendingTask = oldValue);
     }
 
-    @VisibleForTesting
     public int getPendingTaskTilesNumForTesting() {
         return mPendingTaskTilesNumForTesting;
     }

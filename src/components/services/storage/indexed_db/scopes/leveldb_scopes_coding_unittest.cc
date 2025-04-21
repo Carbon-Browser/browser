@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_coding.h"
 
+#include <iomanip>
 #include <ostream>
 
 #include "testing/gtest/include/gtest/gtest.h"
@@ -19,7 +20,7 @@ std::ostream& operator<<(std::ostream& os, const leveldb::Slice& slice) {
 }
 }  // namespace leveldb
 
-namespace content {
+namespace content::indexed_db {
 namespace {
 
 TEST(LevelDBScopesCodingTest, GlobalMetadataKey) {
@@ -180,4 +181,4 @@ TEST(LevelDBScopesCodingTest, InvalidPrefix) {
 }
 
 }  // namespace
-}  // namespace content
+}  // namespace content::indexed_db

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,22 @@
  * it into a Macro.
  */
 
-import {InputController} from '../input_controller.js';
+import {InputController} from '/common/action_fulfillment/input_controller.js';
+import {DeletePrevSentMacro} from '/common/action_fulfillment/macros/delete_prev_sent_macro.js';
+import {InputTextViewMacro, NewLineMacro} from '/common/action_fulfillment/macros/input_text_view_macro.js';
+import {Macro} from '/common/action_fulfillment/macros/macro.js';
+import {MacroName} from '/common/action_fulfillment/macros/macro_names.js';
+import {NavNextSentMacro, NavPrevSentMacro} from '/common/action_fulfillment/macros/nav_sent_macro.js';
+import {RepeatMacro} from '/common/action_fulfillment/macros/repeat_macro.js';
+import * as RepeatableKeyPress from '/common/action_fulfillment/macros/repeatable_key_press_macro.js';
+import {SmartDeletePhraseMacro} from '/common/action_fulfillment/macros/smart_delete_phrase_macro.js';
+import {SmartInsertBeforeMacro} from '/common/action_fulfillment/macros/smart_insert_before_macro.js';
+import {SmartReplacePhraseMacro} from '/common/action_fulfillment/macros/smart_replace_phrase_macro.js';
+import {SmartSelectBetweenMacro} from '/common/action_fulfillment/macros/smart_select_between_macro.js';
+import {ToggleDictationMacro} from '/common/action_fulfillment/macros/toggle_dictation_macro.js';
+
 import {LocaleInfo} from '../locale_info.js';
-import {DeletePrevSentMacro} from '../macros/delete_prev_sent_macro.js';
-import {HiddenMacroManager} from '../macros/hidden_macro_manager.js';
-import {InputTextViewMacro, NewLineMacro} from '../macros/input_text_view_macro.js';
 import {ListCommandsMacro} from '../macros/list_commands_macro.js';
-import {Macro} from '../macros/macro.js';
-import {MacroName} from '../macros/macro_names.js';
-import {NavNextSentMacro, NavPrevSentMacro} from '../macros/nav_sent_macro.js';
-import * as RepeatableKeyPress from '../macros/repeatable_key_press_macro.js';
-import {SmartDeletePhraseMacro} from '../macros/smart_delete_phrase_macro.js';
-import {SmartInsertBeforeMacro} from '../macros/smart_insert_before_macro.js';
-import {SmartReplacePhraseMacro} from '../macros/smart_replace_phrase_macro.js';
-import {SmartSelectBetweenMacro} from '../macros/smart_select_between_macro.js';
-import {StopListeningMacro} from '../macros/stop_listening_macro.js';
 
 import {ParseStrategy} from './parse_strategy.js';
 
@@ -81,7 +82,13 @@ class SimpleMacroFactory {
     const message = chrome.i18n.getMessage(
         SimpleMacroFactory.getData_()[macroName].messageId, args);
     const pattern = `^${message}$`;
-    this.commandRegex_ = new RegExp(pattern, 'i');
+    if (LocaleInfo.considerSpaces()) {
+      this.commandRegex_ = new RegExp(pattern, 'i');
+    } else {
+      // A regex to be used if the Dictation language doesn't use spaces e.g.
+      // Japanese.
+      this.commandRegex_ = new RegExp(pattern.replace(/\s+/g, ''), 'i');
+    }
   }
 
   /**
@@ -98,14 +105,33 @@ class SimpleMacroFactory {
 
     const initialArgs = [];
     switch (this.macroName_) {
-      case MacroName.NEW_LINE:
+      case MacroName.COPY_SELECTED_TEXT:
+      case MacroName.CUT_SELECTED_TEXT:
+      case MacroName.DELETE_ALL_TEXT:
+      case MacroName.DELETE_PREV_CHAR:
       case MacroName.DELETE_PREV_SENT:
+      case MacroName.DELETE_PREV_WORD:
+      case MacroName.NAV_END_TEXT:
+      case MacroName.NAV_NEXT_CHAR:
+      case MacroName.NAV_NEXT_LINE:
       case MacroName.NAV_NEXT_SENT:
+      case MacroName.NAV_NEXT_WORD:
+      case MacroName.NAV_START_TEXT:
+      case MacroName.NAV_PREV_CHAR:
+      case MacroName.NAV_PREV_LINE:
       case MacroName.NAV_PREV_SENT:
+      case MacroName.NAV_PREV_WORD:
+      case MacroName.NEW_LINE:
+      case MacroName.SELECT_ALL_TEXT:
+      case MacroName.SELECT_NEXT_CHAR:
+      case MacroName.SELECT_NEXT_WORD:
+      case MacroName.SELECT_PREV_CHAR:
+      case MacroName.SELECT_PREV_WORD:
       case MacroName.SMART_DELETE_PHRASE:
-      case MacroName.SMART_REPLACE_PHRASE:
       case MacroName.SMART_INSERT_BEFORE:
+      case MacroName.SMART_REPLACE_PHRASE:
       case MacroName.SMART_SELECT_BTWN_INCL:
+      case MacroName.UNSELECT_TEXT:
         initialArgs.push(this.inputController_);
         break;
     }
@@ -188,9 +214,9 @@ class SimpleMacroFactory {
       },
       [MacroName.NEW_LINE]:
           {messageId: 'dictation_command_new_line', build: NewLineMacro},
-      [MacroName.STOP_LISTENING]: {
+      [MacroName.TOGGLE_DICTATION]: {
         messageId: 'dictation_command_stop_listening',
-        build: StopListeningMacro,
+        build: ToggleDictationMacro,
       },
       [MacroName.DELETE_PREV_WORD]: {
         messageId: 'dictation_command_delete_prev_word',
@@ -248,22 +274,60 @@ export class SimpleParseStrategy extends ParseStrategy {
      */
     this.macroFactoryMap_ = new Map();
 
+    /** @private {!Set<!MacroName>} */
+    this.supportedMacros_ = new Set();
+
     this.initialize_();
   }
 
   /** @private */
   initialize_() {
-    for (const key in MacroName) {
-      const name = MacroName[key];
-      if (HiddenMacroManager.isHiddenMacro(name) ||
-          name === MacroName.INPUT_TEXT_VIEW ||
-          name === MacroName.UNSPECIFIED) {
-        continue;
-      }
+    // Adds all macros that are supported by regular expressions. If a macro
+    // has a string associated with it in dictation_strings.grd, then it belongs
+    // in this set. Don't add macros that require arguments in their utterances
+    // e.g. "select <phrase_or_word>" - these macros are better handled by
+    // Pumpkin.
+    this.supportedMacros_.add(MacroName.DELETE_PREV_CHAR)
+        .add(MacroName.NAV_PREV_CHAR)
+        .add(MacroName.NAV_NEXT_CHAR)
+        .add(MacroName.NAV_PREV_LINE)
+        .add(MacroName.NAV_NEXT_LINE)
+        .add(MacroName.COPY_SELECTED_TEXT)
+        .add(MacroName.PASTE_TEXT)
+        .add(MacroName.CUT_SELECTED_TEXT)
+        .add(MacroName.UNDO_TEXT_EDIT)
+        .add(MacroName.REDO_ACTION)
+        .add(MacroName.SELECT_ALL_TEXT)
+        .add(MacroName.UNSELECT_TEXT)
+        .add(MacroName.LIST_COMMANDS)
+        .add(MacroName.NEW_LINE)
+        .add(MacroName.TOGGLE_DICTATION)
+        .add(MacroName.DELETE_PREV_WORD)
+        .add(MacroName.DELETE_PREV_SENT)
+        .add(MacroName.NAV_NEXT_WORD)
+        .add(MacroName.NAV_PREV_WORD)
+        .add(MacroName.SMART_DELETE_PHRASE)
+        .add(MacroName.SMART_REPLACE_PHRASE)
+        .add(MacroName.SMART_INSERT_BEFORE)
+        .add(MacroName.SMART_SELECT_BTWN_INCL)
+        .add(MacroName.NAV_NEXT_SENT)
+        .add(MacroName.NAV_PREV_SENT);
 
+    this.supportedMacros_.forEach((name) => {
       this.macroFactoryMap_.set(
           name, new SimpleMacroFactory(name, this.getInputController()));
+    });
+  }
+
+  /** @override */
+  refresh() {
+    this.enabled = LocaleInfo.areCommandsSupported();
+    if (!this.enabled) {
+      return;
     }
+
+    this.macroFactoryMap_ = new Map();
+    this.initialize_();
   }
 
   /** @override */
@@ -285,9 +349,8 @@ export class SimpleParseStrategy extends ParseStrategy {
       // "Delete the previous word" should be parsed as a DELETE_PREV_WORD
       // instead of SMART_DELETE_PHRASE with phrase "the previous word".
       // Prioritize other deletion macros over SMART_DELETE_PHRASE.
-      return macros[0].getMacroName() === MacroName.SMART_DELETE_PHRASE ?
-          macros[1] :
-          macros[0];
+      return macros[0].getName() === MacroName.SMART_DELETE_PHRASE ? macros[1] :
+                                                                     macros[0];
     } else if (macros.length > 2) {
       console.warn(`Unexpected ambiguous macros found for text: ${text}.`);
       return macros[0];

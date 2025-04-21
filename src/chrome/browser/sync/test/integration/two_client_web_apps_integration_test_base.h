@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "chrome/browser/sync/test/integration/web_apps_sync_test_base.h"
 #include "chrome/browser/ui/views/web_apps/web_app_integration_test_driver.h"
-#include "content/public/test/browser_test.h"
 
 namespace base {
 class CommandLine;
@@ -21,15 +20,19 @@ class TwoClientWebAppsIntegrationTestBase
  public:
   TwoClientWebAppsIntegrationTestBase();
 
-  // WebAppIntegrationBrowserTestBase::TestDelegate:
+  // WebAppIntegrationTestDriver::TestDelegate:
   Browser* CreateBrowser(Profile* profile) override;
+  void CloseBrowserSynchronously(Browser* browser) override;
   void AddBlankTabAndShow(Browser* browser) override;
   const net::EmbeddedTestServer* EmbeddedTestServer() const override;
-  std::vector<Profile*> GetAllProfiles() override;
+  Profile* GetDefaultProfile() override;
   bool IsSyncTest() override;
   void SyncTurnOff() override;
   void SyncTurnOn() override;
+  void SyncSignOut(Profile*) override;
+  void SyncSignIn(Profile*) override;
   void AwaitWebAppQuiescence() override;
+  Profile* GetProfileClient(ProfileClient client) override;
 
  protected:
   void SetUp() override;

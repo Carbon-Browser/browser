@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,7 @@ class MockMDnsDatagramServerSocket : public DatagramServerSocket {
   MOCK_METHOD1(SetReceiveBufferSize, int(int32_t size));
   MOCK_METHOD1(SetSendBufferSize, int(int32_t size));
   MOCK_METHOD0(SetDoNotFragment, int());
+  MOCK_METHOD0(SetRecvTos, int());
   MOCK_METHOD1(SetMsgConfirm, void(bool confirm));
 
   MOCK_METHOD0(Close, void());
@@ -55,9 +56,6 @@ class MockMDnsDatagramServerSocket : public DatagramServerSocket {
   MOCK_CONST_METHOD1(GetPeerAddress, int(IPEndPoint* address));
   int GetLocalAddress(IPEndPoint* address) const override;
   MOCK_METHOD0(UseNonBlockingIO, void());
-  MOCK_METHOD0(UseWriteBatching, void());
-  MOCK_METHOD0(UseMultiCore, void());
-  MOCK_METHOD0(UseSendmmsg, void());
   MOCK_CONST_METHOD0(NetLog, const NetLogWithSource&());
 
   MOCK_METHOD0(AllowAddressReuse, void());
@@ -72,8 +70,10 @@ class MockMDnsDatagramServerSocket : public DatagramServerSocket {
   MOCK_METHOD1(SetMulticastLoopbackMode, int(bool loopback));
 
   MOCK_METHOD1(SetDiffServCodePoint, int(DiffServCodePoint dscp));
+  MOCK_METHOD2(SetTos, int(DiffServCodePoint dscp, EcnCodePoint ecn));
 
   MOCK_METHOD0(DetachFromThread, void());
+  MOCK_CONST_METHOD0(GetLastTos, DscpAndEcn());
 
   void SetResponsePacket(const std::string& response_packet);
 

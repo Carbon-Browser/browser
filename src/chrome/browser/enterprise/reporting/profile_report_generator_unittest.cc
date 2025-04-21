@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,19 @@
 
 #include <string>
 
-#include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/policy/chrome_browser_policy_connector.h"
+#include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile_attributes_init_params.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
-#include "chrome/common/chrome_features.h"
-#include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -27,15 +27,22 @@
 #include "components/policy/core/common/mock_policy_service.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
+#include "components/sync/base/features.h"
 #include "content/public/test/browser_task_environment.h"
-#include "extensions/browser/pref_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/enterprise/reporting/reporting_delegate_factory_android.h"
 #else
 #include "chrome/browser/enterprise/reporting/reporting_delegate_factory_desktop.h"
+#include "chrome/common/extensions/extension_constants.h"
+#include "extensions/browser/pref_names.h"
 #endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/browser/extension_registry.h"
+#include "extensions/common/extension_builder.h"
+#endif
 
 using ::testing::NiceMock;
 
@@ -48,6 +55,12 @@ constexpr char kProfile[] = "Default";
 constexpr char16_t kProfile16[] = u"Profile";
 constexpr char kIdleProfile[] = "IdleProfile";
 constexpr char16_t kIdleProfile16[] = u"IdleProfile";
+
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+constexpr char kAffiliationId1[] = "affiliation-id-1";
+constexpr char kAffiliationId2[] = "affiliation-id-2";
+#endif
+
 
 #if !BUILDFLAG(IS_ANDROID)
 const int kMaxNumberOfExtensionRequest = 1000;
@@ -96,7 +109,7 @@ class ProfileReportGeneratorTest : public ::testing::Test {
         kProfile, {}, kProfile16, 0,
         IdentityTestEnvironmentProfileAdaptor::
             GetIdentityTestEnvironmentFactories(),
-        /*is_supervised_profile=*/false, absl::nullopt,
+        /*is_supervised_profile=*/false, std::nullopt,
         std::move(policy_service_));
   }
 
@@ -112,7 +125,7 @@ class ProfileReportGeneratorTest : public ::testing::Test {
   void InitPolicyMap() {
     policy_map_.Set("kPolicyName1", policy::POLICY_LEVEL_MANDATORY,
                     policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-                    base::Value(base::Value::List()), nullptr);
+                    base::Value(true), nullptr);
     policy_map_.Set("kPolicyName2", policy::POLICY_LEVEL_RECOMMENDED,
                     policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_MERGED,
                     base::Value(true), nullptr);
@@ -137,43 +150,38 @@ class ProfileReportGeneratorTest : public ::testing::Test {
     return report;
   }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   void SetExtensionToPendingList(const std::vector<std::string>& ids) {
-    std::unique_ptr<base::Value> id_values =
-        std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
+    base::Value::Dict id_values;
     for (const auto& id : ids) {
-      base::Value request_data(base::Value::Type::DICTIONARY);
-      request_data.SetKey(
-          extension_misc::kExtensionRequestTimestamp,
-          ::base::TimeToValue(base::Time::FromJavaTime(kFakeTime)));
-      if (base::FeatureList::IsEnabled(
-              features::kExtensionWorkflowJustification)) {
-        request_data.SetKey(extension_misc::kExtensionWorkflowJustification,
-                            base::Value(kJustification));
-      }
-      id_values->SetKey(id, std::move(request_data));
+      id_values.Set(
+          id,
+          base::Value::Dict()
+              .Set(extension_misc::kExtensionRequestTimestamp,
+                   ::base::TimeToValue(
+                       base::Time::FromMillisecondsSinceUnixEpoch(kFakeTime)))
+              .Set(extension_misc::kExtensionWorkflowJustification,
+                   base::Value(kJustification)));
     }
     profile()->GetTestingPrefService()->SetUserPref(
         prefs::kCloudExtensionRequestIds, std::move(id_values));
   }
 
   void SetExtensionSettings(const std::string& settings_string) {
-    absl::optional<base::Value> settings =
+    std::optional<base::Value> settings =
         base::JSONReader::Read(settings_string);
     ASSERT_TRUE(settings.has_value());
     profile()->GetTestingPrefService()->SetManagedPref(
         extensions::pref_names::kExtensionManagement,
         base::Value::ToUniquePtrValue(std::move(*settings)));
   }
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   TestingProfile* profile() { return profile_; }
   TestingProfileManager* profile_manager() { return &profile_manager_; }
 
   PlatformReportingDelegateFactory reporting_delegate_factory_;
   ProfileReportGenerator generator_;
-
-  base::test::ScopedFeatureList feature_list_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
@@ -203,10 +211,30 @@ TEST_F(ProfileReportGeneratorTest, UnsignedInProfile) {
 }
 
 TEST_F(ProfileReportGeneratorTest, SignedInProfile) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(
+      syncer::kReplaceSyncPromosWithSignInPromos);
+
   IdentityTestEnvironmentProfileAdaptor identity_test_env_adaptor(profile());
   auto expected_info =
       identity_test_env_adaptor.identity_test_env()->SetPrimaryAccount(
           "test@mail.com", signin::ConsentLevel::kSync);
+  auto report = GenerateReport();
+  EXPECT_TRUE(report->has_chrome_signed_in_user());
+  EXPECT_EQ(expected_info.email, report->chrome_signed_in_user().email());
+  EXPECT_EQ(expected_info.gaia,
+            report->chrome_signed_in_user().obfuscated_gaia_id());
+}
+
+TEST_F(ProfileReportGeneratorTest,
+       SignedInProfileReplaceSyncPromosWithSigninPromos) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(syncer::kReplaceSyncPromosWithSignInPromos);
+
+  IdentityTestEnvironmentProfileAdaptor identity_test_env_adaptor(profile());
+  auto expected_info =
+      identity_test_env_adaptor.identity_test_env()->SetPrimaryAccount(
+          "test@mail.com", signin::ConsentLevel::kSignin);
   auto report = GenerateReport();
   EXPECT_TRUE(report->has_chrome_signed_in_user());
   EXPECT_EQ(expected_info.email, report->chrome_signed_in_user().email());
@@ -239,7 +267,6 @@ TEST_F(ProfileReportGeneratorTest, ProfileIdObfuscate) {
   EXPECT_NE(report->id(), report3->id());
 }
 
-#if !BUILDFLAG(IS_ANDROID)
 TEST_F(ProfileReportGeneratorTest, PoliciesDisabled) {
   // Users' profile info is collected by default.
   std::unique_ptr<em::ChromeUserProfileInfo> report = GenerateReport();
@@ -257,6 +284,57 @@ TEST_F(ProfileReportGeneratorTest, PoliciesDisabled) {
   EXPECT_EQ(2, report->chrome_policies_size());
 }
 
+TEST_F(ProfileReportGeneratorTest, PoliciesHidden) {
+  std::unique_ptr<em::ChromeUserProfileInfo> report = GenerateReport();
+
+  for (const auto& policy : report->chrome_policies()) {
+    EXPECT_EQ("true", policy.value());
+  }
+
+  generator_.set_is_machine_scope(false);
+  report = GenerateReport();
+
+  for (const auto& policy : report->chrome_policies()) {
+    if (policy.scope() == em::Policy_PolicyScope_SCOPE_MACHINE) {
+      EXPECT_EQ("\"********\"", policy.value());
+    } else {
+      EXPECT_EQ("true", policy.value());
+    }
+  }
+}
+
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(ProfileReportGeneratorTest, IsAffiliated) {
+  profile()->GetProfilePolicyConnector()->SetUserAffiliationIdsForTesting(
+      {kAffiliationId1});
+  g_browser_process->browser_policy_connector()
+      ->SetDeviceAffiliatedIdsForTesting({kAffiliationId1});
+
+  std::unique_ptr<em::ChromeUserProfileInfo> report = GenerateReport();
+
+  ASSERT_TRUE(report->has_affiliation());
+
+  EXPECT_TRUE(report->affiliation().is_affiliated());
+  EXPECT_FALSE(report->affiliation().has_unaffiliation_reason());
+}
+
+TEST_F(ProfileReportGeneratorTest, NotAffiliated) {
+  profile()->GetProfilePolicyConnector()->SetUserAffiliationIdsForTesting(
+      {kAffiliationId1});
+  g_browser_process->browser_policy_connector()
+      ->SetDeviceAffiliatedIdsForTesting({kAffiliationId2});
+
+  std::unique_ptr<em::ChromeUserProfileInfo> report = GenerateReport();
+
+  ASSERT_TRUE(report->has_affiliation());
+
+  EXPECT_FALSE(report->affiliation().is_affiliated());
+  EXPECT_EQ(em::AffiliationState_UnaffiliationReason_USER_UNMANAGED,
+            report->affiliation().unaffiliation_reason());
+}
+#endif // !BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(ProfileReportGeneratorTest, PendingRequest) {
   profile()->GetTestingPrefService()->SetManagedPref(
       prefs::kCloudExtensionRequestEnabled,
@@ -268,23 +346,19 @@ TEST_F(ProfileReportGeneratorTest, PendingRequest) {
   ASSERT_EQ(1, report->extension_requests_size());
   EXPECT_EQ(kExtensionId, report->extension_requests(0).id());
   EXPECT_EQ(kFakeTime, report->extension_requests(0).request_timestamp());
-  EXPECT_EQ(std::string(), report->extension_requests(0).justification());
+  EXPECT_EQ(kJustification, report->extension_requests(0).justification());
 }
 
-TEST_F(ProfileReportGeneratorTest, PendingRequest_Justification) {
-  feature_list_.InitAndEnableFeature(features::kExtensionWorkflowJustification);
-
+TEST_F(ProfileReportGeneratorTest, PendingRequestNotSupportProfileReporting) {
   profile()->GetTestingPrefService()->SetManagedPref(
       prefs::kCloudExtensionRequestEnabled,
       std::make_unique<base::Value>(true));
   std::vector<std::string> ids = {kExtensionId};
   SetExtensionToPendingList(ids);
 
+  generator_.set_is_machine_scope(false);
   auto report = GenerateReport();
-  ASSERT_EQ(1, report->extension_requests_size());
-  EXPECT_EQ(kExtensionId, report->extension_requests(0).id());
-  EXPECT_EQ(kFakeTime, report->extension_requests(0).request_timestamp());
-  EXPECT_EQ(kJustification, report->extension_requests(0).justification());
+  ASSERT_EQ(0, report->extension_requests_size());
 }
 
 TEST_F(ProfileReportGeneratorTest, NoPendingRequestWhenItsDisabled) {
@@ -347,6 +421,26 @@ TEST_F(ProfileReportGeneratorTest, TooManyRequests) {
               report2->extension_requests(id).id());
 }
 
-#endif  // !BUILDFLAG(IS_ANDROID)
+TEST_F(ProfileReportGeneratorTest, DisableExtensionInfo) {
+  extensions::ExtensionBuilder builder(
+      "name", extensions::ExtensionBuilder::Type::EXTENSION);
+
+  auto extension = builder.SetID("abcdefghijklmnoabcdefghijklmnoab").Build();
+  extensions::ExtensionRegistry::Get(profile())->AddEnabled(extension);
+
+  EXPECT_EQ(1, GenerateReport()->extensions_size());
+
+  bool is_extension_enabled = false;
+  generator_.SetExtensionsEnabledCallback(base::BindRepeating(
+      [](bool* is_extension_enabled) { return *is_extension_enabled; },
+      &is_extension_enabled));
+
+  EXPECT_EQ(0, GenerateReport()->extensions_size());
+
+  is_extension_enabled = true;
+  EXPECT_EQ(1, GenerateReport()->extensions_size());
+}
+
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 }  // namespace enterprise_reporting

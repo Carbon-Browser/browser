@@ -58,6 +58,8 @@ class MultipleFieldsTemporalInputTypeView final
 
   wtf_size_t FocusedFieldIndex() const override;
 
+  bool IsMultipleFieldsTemporal() const override { return true; }
+
  private:
   // DateTimeEditElement::EditControlOwner functions
   void DidBlurFromControl(mojom::blink::FocusType) final;
@@ -94,11 +96,12 @@ class MultipleFieldsTemporalInputTypeView final
 
   // InputTypeView functions
   void Blur() final;
-  ControlPart AutoAppearance() const override;
+  AppearanceValue AutoAppearance() const override;
   void OpenPopupView() override;
   void ClosePopupView() override;
   bool HasOpenedPopup() const override;
-  void CustomStyleForLayoutObject(ComputedStyle& style) override;
+  bool IsPickerVisible() const override;
+  void AdjustStyle(ComputedStyleBuilder&) override;
   void CreateShadowSubtree() final;
   void DestroyShadowSubtree() final;
   void DisabledAttributeChanged() final;
@@ -124,6 +127,8 @@ class MultipleFieldsTemporalInputTypeView final
   AXObject* PopupRootAXObject() final;
 
   DateTimeEditElement* GetDateTimeEditElement() const;
+  // Similar to GetDateTimeEditElement(), but does not force creation.
+  DateTimeEditElement* GetDateTimeEditElementIfCreated() const;
   SpinButtonElement* GetSpinButtonElement() const;
   ClearButtonElement* GetClearButtonElement() const;
   PickerIndicatorElement* GetPickerIndicatorElement() const;

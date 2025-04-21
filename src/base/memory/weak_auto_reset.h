@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,9 @@ class WeakAutoReset {
 
  private:
   void Reset() {
-    if (ptr_)
+    if (ptr_) {
       ptr_.get()->*field_ = std::move(old_value_);
+    }
   }
 
   base::WeakPtr<T> ptr_;

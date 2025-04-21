@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,25 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/perf_time_logger.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_mojo.h"
 #include "ipc/ipc_perftest_messages.h"
 #include "ipc/ipc_perftest_util.h"
 #include "ipc/ipc_sync_channel.h"
-#include "ipc/ipc_test.mojom.h"
+#include "ipc/ipc_test.test-mojom.h"
 #include "ipc/ipc_test_base.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/core/test/mojo_test_base.h"
@@ -98,7 +98,9 @@ class PerformanceChannelListener : public Listener {
         DCHECK_EQ(response, payload_);
       }
       perf_logger_.reset();
-      base::RunLoop::QuitCurrentWhenIdleDeprecated();
+      if (!quit_closure_.is_null()) {
+        std::move(quit_closure_).Run();
+      }
     } else {
       SendPong();
     }
@@ -112,7 +114,9 @@ class PerformanceChannelListener : public Listener {
     count_down_--;
     if (count_down_ == 0) {
       perf_logger_.reset();  // Stop the perf timer now.
-      base::RunLoop::QuitCurrentWhenIdleDeprecated();
+      if (!quit_closure_.is_null()) {
+        std::move(quit_closure_).Run();
+      }
       return;
     }
 
@@ -120,6 +124,10 @@ class PerformanceChannelListener : public Listener {
   }
 
   void SendPong() { sender_->Send(new TestMsg_Ping(payload_)); }
+
+  void set_quit_closure(base::OnceClosure quit_closure) {
+    quit_closure_ = std::move(quit_closure);
+  }
 
  private:
   std::string label_;
@@ -131,6 +139,7 @@ class PerformanceChannelListener : public Listener {
   int count_down_;
   std::string payload_;
   std::unique_ptr<base::PerfTimeLogger> perf_logger_;
+  base::OnceClosure quit_closure_;
 };
 
 class PingPongTestParams {
@@ -200,7 +209,8 @@ class MojoChannelPerfTest : public IPCChannelMojoTestBase {
     PerformanceChannelListener listener("ChannelProxy");
     auto channel_proxy = IPC::ChannelProxy::Create(
         TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-        GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get());
+        GetIOThreadTaskRunner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     listener.Init(channel_proxy.get());
 
     LockThreadAffinity thread_locker(kSharedCore);
@@ -213,7 +223,9 @@ class MojoChannelPerfTest : public IPCChannelMojoTestBase {
       channel_proxy->Send(new TestMsg_Hello);
 
       // Run message loop.
-      base::RunLoop().Run();
+      base::RunLoop loop;
+      listener.set_quit_closure(loop.QuitWhenIdleClosure());
+      loop.Run();
     }
 
     // Send quit message.
@@ -233,7 +245,8 @@ class MojoChannelPerfTest : public IPCChannelMojoTestBase {
         base::WaitableEvent::InitialState::NOT_SIGNALED);
     auto channel_proxy = IPC::SyncChannel::Create(
         TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-        GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get(), false,
+        GetIOThreadTaskRunner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), false,
         &shutdown_event);
     listener.Init(channel_proxy.get());
 
@@ -247,7 +260,9 @@ class MojoChannelPerfTest : public IPCChannelMojoTestBase {
       channel_proxy->Send(new TestMsg_Hello);
 
       // Run message loop.
-      base::RunLoop().Run();
+      base::RunLoop loop;
+      listener.set_quit_closure(loop.QuitWhenIdleClosure());
+      loop.Run();
     }
 
     // Send quit message.
@@ -303,13 +318,15 @@ class MojoInterfacePerfTest : public mojo::core::test::MojoTestBase {
     LockThreadAffinity thread_locker(kSharedCore);
     std::vector<PingPongTestParams> params = GetDefaultTestParams();
     for (size_t i = 0; i < params.size(); i++) {
-      ping_receiver_->Ping("hello",
-                           base::BindOnce(&MojoInterfacePerfTest::OnPong,
-                                          base::Unretained(this)));
+      base::RunLoop loop;
+      ping_receiver_->Ping(
+          "hello",
+          base::BindOnce(&MojoInterfacePerfTest::OnPong, base::Unretained(this),
+                         loop.QuitWhenIdleClosure()));
       message_count_ = count_down_ = params[i].message_count();
       payload_ = std::string(params[i].message_size(), 'a');
 
-      base::RunLoop().Run();
+      loop.Run();
     }
 
     ping_receiver_->Quit();
@@ -317,7 +334,7 @@ class MojoInterfacePerfTest : public mojo::core::test::MojoTestBase {
     std::ignore = ping_receiver_.Unbind().PassPipe().release();
   }
 
-  void OnPong(const std::string& value) {
+  void OnPong(base::OnceClosure quit_closure, const std::string& value) {
     if (value == "hello") {
       DCHECK(!perf_logger_.get());
       std::string test_name =
@@ -331,7 +348,9 @@ class MojoInterfacePerfTest : public mojo::core::test::MojoTestBase {
       count_down_--;
       if (count_down_ == 0) {
         perf_logger_.reset();
-        base::RunLoop::QuitCurrentWhenIdleDeprecated();
+        if (!quit_closure.is_null()) {
+          std::move(quit_closure).Run();
+        }
         return;
       }
     }
@@ -343,11 +362,14 @@ class MojoInterfacePerfTest : public mojo::core::test::MojoTestBase {
         DCHECK_EQ(response, payload_);
       }
       perf_logger_.reset();
-      base::RunLoop::QuitCurrentWhenIdleDeprecated();
+      if (!quit_closure.is_null()) {
+        std::move(quit_closure).Run();
+      }
     } else {
-      ping_receiver_->Ping(payload_,
-                           base::BindOnce(&MojoInterfacePerfTest::OnPong,
-                                          base::Unretained(this)));
+      ping_receiver_->Ping(
+          payload_,
+          base::BindOnce(&MojoInterfacePerfTest::OnPong, base::Unretained(this),
+                         std::move(quit_closure)));
     }
   }
 
@@ -413,8 +435,9 @@ class InterfacePassingTestDriverImpl : public mojom::InterfacePassingTestDriver,
   }
 
   void Quit() override {
-    if (quit_closure_)
+    if (!quit_closure_.is_null()) {
       std::move(quit_closure_).Run();
+    }
   }
 
   // mojom::PingReceiver implementation:
@@ -518,7 +541,9 @@ class MojoInterfacePassingPerfTest : public mojo::core::test::MojoTestBase {
 
     if (count_down_ == 0) {
       perf_logger_.reset();
-      std::move(quit_closure_).Run();
+      if (!quit_closure_.is_null()) {
+        std::move(quit_closure_).Run();
+      }
       return;
     }
 
@@ -743,23 +768,26 @@ class CallbackPerfTest : public testing::Test {
     std::vector<PingPongTestParams> params = GetDefaultTestParams();
     for (size_t i = 0; i < params.size(); i++) {
       std::string hello("hello");
+      base::RunLoop loop;
       client_thread_.task_runner()->PostTask(
-          FROM_HERE, base::BindOnce(&CallbackPerfTest::Ping,
-                                    base::Unretained(this), hello));
+          FROM_HERE,
+          base::BindOnce(&CallbackPerfTest::Ping, base::Unretained(this), hello,
+                         loop.QuitWhenIdleClosure()));
       message_count_ = count_down_ = params[i].message_count();
       payload_ = std::string(params[i].message_size(), 'a');
 
-      base::RunLoop().Run();
+      loop.Run();
     }
   }
 
-  void Ping(const std::string& value) {
+  void Ping(const std::string& value, base::OnceClosure quit_closure) {
     task_environment_.GetMainThreadTaskRunner()->PostTask(
-        FROM_HERE, base::BindOnce(&CallbackPerfTest::OnPong,
-                                  base::Unretained(this), value));
+        FROM_HERE,
+        base::BindOnce(&CallbackPerfTest::OnPong, base::Unretained(this), value,
+                       std::move(quit_closure)));
   }
 
-  void OnPong(const std::string& value) {
+  void OnPong(const std::string& value, base::OnceClosure quit_closure) {
     if (value == "hello") {
       DCHECK(!perf_logger_.get());
       std::string test_name =
@@ -773,14 +801,17 @@ class CallbackPerfTest : public testing::Test {
       count_down_--;
       if (count_down_ == 0) {
         perf_logger_.reset();
-        base::RunLoop::QuitCurrentWhenIdleDeprecated();
+        if (!quit_closure.is_null()) {
+          std::move(quit_closure).Run();
+        }
         return;
       }
     }
 
     client_thread_.task_runner()->PostTask(
-        FROM_HERE, base::BindOnce(&CallbackPerfTest::Ping,
-                                  base::Unretained(this), payload_));
+        FROM_HERE,
+        base::BindOnce(&CallbackPerfTest::Ping, base::Unretained(this),
+                       payload_, std::move(quit_closure)));
   }
 
   void RunSingleThreadNoPostTaskPingPongServer() {
@@ -821,23 +852,28 @@ class CallbackPerfTest : public testing::Test {
     std::vector<PingPongTestParams> params = GetDefaultTestParams();
     for (size_t i = 0; i < params.size(); i++) {
       std::string hello("hello");
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::RunLoop loop;
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&CallbackPerfTest::SingleThreadPingPostTask,
-                                    base::Unretained(this), hello));
+                                    base::Unretained(this), hello,
+                                    loop.QuitWhenIdleClosure()));
       message_count_ = count_down_ = params[i].message_count();
       payload_ = std::string(params[i].message_size(), 'a');
 
-      base::RunLoop().Run();
+      loop.Run();
     }
   }
 
-  void SingleThreadPingPostTask(const std::string& value) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(&CallbackPerfTest::SingleThreadPongPostTask,
-                                  base::Unretained(this), value));
+  void SingleThreadPingPostTask(const std::string& value,
+                                base::OnceClosure quit_closure) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&CallbackPerfTest::SingleThreadPongPostTask,
+                       base::Unretained(this), value, std::move(quit_closure)));
   }
 
-  void SingleThreadPongPostTask(const std::string& value) {
+  void SingleThreadPongPostTask(const std::string& value,
+                                base::OnceClosure quit_closure) {
     if (value == "hello") {
       DCHECK(!perf_logger_.get());
       std::string test_name =
@@ -851,14 +887,17 @@ class CallbackPerfTest : public testing::Test {
       count_down_--;
       if (count_down_ == 0) {
         perf_logger_.reset();
-        base::RunLoop::QuitCurrentWhenIdleDeprecated();
+        if (!quit_closure.is_null()) {
+          std::move(quit_closure).Run();
+        }
         return;
       }
     }
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CallbackPerfTest::SingleThreadPingPostTask,
-                                  base::Unretained(this), payload_));
+                                  base::Unretained(this), payload_,
+                                  std::move(quit_closure)));
   }
 
  private:

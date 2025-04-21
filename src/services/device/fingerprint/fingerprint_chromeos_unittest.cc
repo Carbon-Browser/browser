@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/fingerprint/fingerprint_chromeos.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -29,6 +29,10 @@ class FakeFingerprintObserver : public mojom::FingerprintObserver {
 
   // mojom::FingerprintObserver
   void OnRestarted() override { restarts_++; }
+  void OnStatusChanged(device::mojom::BiometricsManagerStatus status) override {
+    DCHECK_EQ(status, device::mojom::BiometricsManagerStatus::INITIALIZED);
+    status_changes_++;
+  }
 
   void OnEnrollScanDone(device::mojom::ScanResult scan_result,
                         bool is_complete,
@@ -61,6 +65,7 @@ class FakeFingerprintObserver : public mojom::FingerprintObserver {
   int enroll_scan_dones_ = 0;  // Count of enroll scan done signal received.
   int auth_scan_dones_ = 0;    // Count of auth scan done signal received.
   int restarts_ = 0;           // Count of restart signal received.
+  int status_changes_ = 0;     // Count of StatusChanged signal received.
   int session_failures_ = 0;   // Count of session failed signal received.
 
   device::mojom::FingerprintMessage
@@ -89,6 +94,11 @@ class FingerprintChromeOSTest : public testing::Test {
   FingerprintChromeOS* fingerprint() { return fingerprint_.get(); }
 
   void GenerateRestartSignal() { fingerprint_->BiodServiceRestarted(); }
+
+  void GenerateSessionStateSignal() {
+    fingerprint_->BiodServiceStatusChanged(
+        biod::BiometricsManagerStatus::INITIALIZED);
+  }
 
   void GenerateEnrollScanDoneSignal() {
     std::string fake_fingerprint_data;
@@ -127,8 +137,9 @@ class FingerprintChromeOSTest : public testing::Test {
     }
   }
 
-  void OnGetRecords(const base::flat_map<std::string, std::string>&
-                        fingerprints_list_mapping) {
+  void OnGetRecords(
+      const base::flat_map<std::string, std::string>& fingerprints_list_mapping,
+      bool success) {
     ++get_records_results_;
   }
 
@@ -152,6 +163,7 @@ TEST_F(FingerprintChromeOSTest, FingerprintObserverTest) {
   fingerprint()->AddFingerprintObserver(std::move(pending_observer));
 
   GenerateRestartSignal();
+  GenerateSessionStateSignal();
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(observer.restarts(), 1);
 
@@ -278,14 +290,6 @@ TEST_F(FingerprintChromeOSTest, FingerprintScanResultConvertTest) {
             device::mojom::FingerprintMessage::Tag::kScanResult);
   EXPECT_EQ(observer.last_message().get_scan_result(),
             device::mojom::ScanResult::NO_MATCH);
-
-  msg.set_scan_result(biod::SCAN_RESULT_MAX);
-  GenerateAuthScanDoneSignal(msg);
-  base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(observer.last_message().which(),
-            device::mojom::FingerprintMessage::Tag::kScanResult);
-  EXPECT_EQ(observer.last_message().get_scan_result(),
-            device::mojom::ScanResult::kMaxValue);
 }
 
 // Make sure that compilation fails if a new value is added and this assert is

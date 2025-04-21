@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,12 @@
 #define COMPONENTS_SYNC_INVALIDATIONS_SYNC_INVALIDATIONS_SERVICE_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "components/sync/invalidations/interested_data_types_manager.h"
+#include "base/memory/raw_ptr.h"
+#include "base/sequence_checker.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/invalidations/sync_invalidations_service.h"
 
 namespace gcm {
@@ -21,6 +24,7 @@ class InstanceIDDriver;
 
 namespace syncer {
 class FCMHandler;
+class InterestedDataTypesHandler;
 class InvalidationsListener;
 
 // The non-test implementation of SyncInvalidationsService.
@@ -32,16 +36,19 @@ class SyncInvalidationsServiceImpl : public SyncInvalidationsService {
   ~SyncInvalidationsServiceImpl() override;
 
   // SyncInvalidationsService implementation.
-  void SetActive(bool active) override;
   void AddListener(InvalidationsListener* listener) override;
+  bool HasListener(InvalidationsListener* listener) override;
   void RemoveListener(InvalidationsListener* listener) override;
+  void StartListening() override;
+  void StopListening() override;
+  void StopListeningPermanently() override;
   void AddTokenObserver(FCMRegistrationTokenObserver* observer) override;
   void RemoveTokenObserver(FCMRegistrationTokenObserver* observer) override;
-  absl::optional<std::string> GetFCMRegistrationToken() const override;
+  std::optional<std::string> GetFCMRegistrationToken() const override;
   void SetInterestedDataTypesHandler(
       InterestedDataTypesHandler* handler) override;
-  absl::optional<ModelTypeSet> GetInterestedDataTypes() const override;
-  void SetInterestedDataTypes(const ModelTypeSet& data_types) override;
+  std::optional<DataTypeSet> GetInterestedDataTypes() const override;
+  void SetInterestedDataTypes(const DataTypeSet& data_types) override;
   void SetCommittedAdditionalInterestedDataTypesCallback(
       InterestedDataTypesAppliedCallback callback) override;
 
@@ -52,8 +59,11 @@ class SyncInvalidationsServiceImpl : public SyncInvalidationsService {
   FCMHandler* GetFCMHandlerForTesting();
 
  private:
+  SEQUENCE_CHECKER(sequence_checker_);
+
   std::unique_ptr<FCMHandler> fcm_handler_;
-  InterestedDataTypesManager data_types_manager_;
+  raw_ptr<InterestedDataTypesHandler> interested_data_types_handler_ = nullptr;
+  std::optional<DataTypeSet> interested_data_types_;
 };
 
 }  // namespace syncer

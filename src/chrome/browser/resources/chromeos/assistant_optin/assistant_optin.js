@@ -1,18 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import './assistant_optin_flow.js';
 
-import './assistant_optin_flow.m.js';
-import {BrowserProxyImpl} from './browser_proxy.m.js';
+import {$} from 'chrome://resources/ash/common/util.js';
+
+import {BrowserProxyImpl} from './browser_proxy.js';
 
 class InSessionAssistantScreen {
     /**
      * Starts the assistant opt-in flow.
      */
     static show() {
-      var url = new URL(document.URL);
+      const url = new URL(document.URL);
       $('assistant-optin-flow-card').onBeforeShow();
       $('assistant-optin-flow-card')
           .onShow(

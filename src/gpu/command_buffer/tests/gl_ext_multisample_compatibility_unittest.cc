@@ -1,6 +1,11 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -9,6 +14,7 @@
 
 #include <memory>
 
+#include "base/containers/contains.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "gpu/command_buffer/tests/gl_test_utils.h"
@@ -150,7 +156,7 @@ TEST_F(EXTMultisampleCompatibilityTest, DrawAndResolve) {
     return;
   }
 
-  // TODO(crbug.com/1144270) Fails on Mac Mini 8.1
+  // TODO(crbug.com/40728740) Fails on Mac Mini 8.1
   if (GPUTestBotConfig::CurrentConfigMatches("Mac Intel 0x3e9b"))
     return;
 
@@ -205,9 +211,10 @@ TEST_F(EXTMultisampleCompatibilityTest, DrawAlphaOneAndResolve) {
   // TODO: Figure out why this fails on NVIDIA Shield. crbug.com/700060.
   std::string renderer(gl_.context()->GetGLRenderer());
   std::string version(gl_.context()->GetGLVersion());
-  if (renderer.find("NVIDIA Tegra") != std::string::npos &&
-      version.find("OpenGL ES 3.2 NVIDIA 361.00") != std::string::npos)
+  if (base::Contains(renderer, "NVIDIA Tegra") &&
+      base::Contains(version, "OpenGL ES 3.2 NVIDIA 361.00")) {
     return;
+  }
 #endif
 
   // SAMPLE_ALPHA_TO_ONE is specified to transform alpha values of

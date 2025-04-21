@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/safe_search_api/safe_search/safe_search_url_checker_client.h"
 #include "components/safe_search_api/url_checker.h"
@@ -22,7 +22,7 @@ namespace {
 void OnCheckURLDone(SafeSearchService::CheckSafeSearchCallback callback,
                     const GURL& /* url */,
                     safe_search_api::Classification classification,
-                    bool /* uncertain */) {
+                    safe_search_api::ClassificationDetails details) {
   std::move(callback).Run(classification ==
                           safe_search_api::Classification::SAFE);
 }
@@ -98,9 +98,10 @@ SafeSearchFactory::SafeSearchFactory()
 
 SafeSearchFactory::~SafeSearchFactory() = default;
 
-KeyedService* SafeSearchFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SafeSearchFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SafeSearchService(context);
+  return std::make_unique<SafeSearchService>(context);
 }
 
 content::BrowserContext* SafeSearchFactory::GetBrowserContextToUse(

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ import java.util.ArrayList;
  * of AwContents
  */
 public class TestAwContents extends AwContents {
-    /**
-     * The observer of render process gone events.
-     */
+    /** The observer of render process gone events. */
     public interface RenderProcessGoneObserver {
         /**
          * Invoked when AwContents notified AwContentsClient about render
@@ -29,21 +27,31 @@ public class TestAwContents extends AwContents {
          */
         void onRenderProcessGoneNotifiedToAwContentsClient();
 
-        /**
-         * Invoked when AwContents has been destroyed.
-         */
+        /** Invoked when AwContents has been destroyed. */
         void onAwContentsDestroyed();
     }
 
     private ArrayList<RenderProcessGoneObserver> mRenderProcessGoneObservers;
     private RenderProcessGoneHelper mRenderProcessGoneHelper;
 
-    public TestAwContents(AwBrowserContext browserContext, ViewGroup containerView, Context context,
+    public TestAwContents(
+            AwBrowserContext browserContext,
+            ViewGroup containerView,
+            Context context,
             InternalAccessDelegate internalAccessAdapter,
-            NativeDrawFunctorFactory nativeDrawFunctorFactory, AwContentsClient contentsClient,
-            AwSettings settings, DependencyFactory dependencyFactory) {
-        super(browserContext, containerView, context, internalAccessAdapter,
-                nativeDrawFunctorFactory, contentsClient, settings, dependencyFactory);
+            NativeDrawFunctorFactory nativeDrawFunctorFactory,
+            AwContentsClient contentsClient,
+            AwSettings settings,
+            DependencyFactory dependencyFactory) {
+        super(
+                browserContext,
+                containerView,
+                context,
+                internalAccessAdapter,
+                nativeDrawFunctorFactory,
+                contentsClient,
+                settings,
+                dependencyFactory);
 
         mRenderProcessGoneHelper = new RenderProcessGoneHelper();
         mRenderProcessGoneObservers = new ArrayList<RenderProcessGoneObserver>();
@@ -69,5 +77,9 @@ public class TestAwContents extends AwContents {
         for (RenderProcessGoneObserver observer : mRenderProcessGoneObservers) {
             observer.onAwContentsDestroyed();
         }
+    }
+
+    public void setShouldBlockSpecialFileUrls(boolean shouldBlock) {
+        getSettings().setBlockSpecialFileUrls(shouldBlock);
     }
 }

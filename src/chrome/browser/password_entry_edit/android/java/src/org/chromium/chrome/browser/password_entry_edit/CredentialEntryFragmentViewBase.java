@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,32 +11,29 @@ import android.view.MenuItem;
 
 import androidx.preference.PreferenceFragmentCompat;
 
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
+
 /**
  * Base structure to be shared by fragments displaying: saved credentials to be edited, saved
  * federated credentials and sites blocklisted for saving by the user.
  */
-public abstract class CredentialEntryFragmentViewBase extends PreferenceFragmentCompat {
+public abstract class CredentialEntryFragmentViewBase extends PreferenceFragmentCompat
+        implements EmbeddableSettingsPage {
     ComponentStateDelegate mComponentStateDelegate;
     UiActionHandler mUiActionHandler;
 
     /**
      * To be implemented by classes which need to know about the fragment's state
-     * TODO(crbug.com/1178519): The coordinator should be made a LifecycleObserver instead.
+     * TODO(crbug.com/40749164): The coordinator should be made a LifecycleObserver instead.
      */
     interface ComponentStateDelegate {
-        /**
-         * Called when the fragment is started.
-         */
+        /** Called when the fragment is started. */
         void onStartFragment();
 
-        /**
-         * Called when the fragment is resumed.
-         */
+        /** Called when the fragment is resumed. */
         void onResumeFragment();
 
-        /**
-         * Signals that the component is no longer needed.
-         */
+        /** Signals that the component is no longer needed. */
         void onDestroy();
     }
 

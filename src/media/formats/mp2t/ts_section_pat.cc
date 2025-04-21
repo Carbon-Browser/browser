@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,7 @@ bool TsSectionPat::ParsePsiSection(BitReader* bit_reader) {
 
   // Both the program table and the CRC have a size multiple of 4.
   // Note for pmt_pid_count: minus 4 to account for the CRC.
+  RCHECK(section_length > 0);
   RCHECK((section_length % 4) == 0);
   int pmt_pid_count = (section_length - 4) / 4;
 

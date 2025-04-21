@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,21 @@
 
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
 #include "components/reporting/util/test_support_callbacks.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using ::testing::Eq;
-using testing::IsEmpty;
-using testing::Not;
-using ::testing::Pointwise;
-using ::testing::StrEq;
-using UsbEventInfoPtr = chromeos::cros_healthd::mojom::UsbEventInfoPtr;
-using UsbEventInfo = chromeos::cros_healthd::mojom::UsbEventInfo;
-
 namespace reporting {
 namespace {
+
+using ::ash::cros_healthd::mojom::UsbEventInfo;
+using ::ash::cros_healthd::mojom::UsbEventInfoPtr;
+using ::testing::Eq;
+using ::testing::IsEmpty;
+using ::testing::StrEq;
 
 static constexpr int32_t kTestVid = 0xffee;
 static constexpr int32_t kTestPid = 0x0;
@@ -47,14 +46,9 @@ class UsbEventsObserverTest : public ::testing::Test {
 
   void TearDown() override { ::ash::cros_healthd::FakeCrosHealthd::Shutdown(); }
 
-  UsbEventInfoPtr test_usb_event_info = UsbEventInfo::New(kTestVendor,
-                                                          kTestName,
-                                                          kTestVid,
-                                                          kTestPid,
-                                                          kTestCategories);
-
  private:
   base::test::TaskEnvironment task_environment_;
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 };
 
 TEST_F(UsbEventsObserverTest, UsbOnRemove) {
@@ -68,7 +62,10 @@ TEST_F(UsbEventsObserverTest, UsbOnRemove) {
 
   usb_observer.SetOnEventObservedCallback(std::move(cb));
   usb_observer.SetReportingEnabled(true);
-  usb_observer.OnRemove(std::move(test_usb_event_info));
+  usb_observer.OnEvent(
+      ::ash::cros_healthd::mojom::EventInfo::NewUsbEventInfo(UsbEventInfo::New(
+          kTestVendor, kTestName, kTestVid, kTestPid, kTestCategories,
+          ::ash::cros_healthd::mojom::UsbEventInfo::State::kRemove)));
 
   UsbTelemetry usb_telemetry =
       metric_data.telemetry_data().peripherals_telemetry().usb_telemetry(
@@ -107,7 +104,10 @@ TEST_F(UsbEventsObserverTest, UsbOnAdd) {
 
   usb_observer.SetOnEventObservedCallback(std::move(cb));
   usb_observer.SetReportingEnabled(true);
-  usb_observer.OnAdd(std::move(test_usb_event_info));
+  usb_observer.OnEvent(
+      ::ash::cros_healthd::mojom::EventInfo::NewUsbEventInfo(UsbEventInfo::New(
+          kTestVendor, kTestName, kTestVid, kTestPid, kTestCategories,
+          ::ash::cros_healthd::mojom::UsbEventInfo::State::kAdd)));
 
   UsbTelemetry usb_telemetry =
       metric_data.telemetry_data().peripherals_telemetry().usb_telemetry().at(
@@ -141,10 +141,14 @@ TEST_F(UsbEventsObserverTest, UsbOnAddUsingFakeCrosHealthd) {
   constexpr int kExpectedUsbTelemetrySize = 1;
   constexpr int kIndexOfUsbTelemetry = 0;
 
-  usb_observer.SetOnEventObservedCallback(result_metric_data.cb());
+  usb_observer.SetOnEventObservedCallback(result_metric_data.repeating_cb());
   usb_observer.SetReportingEnabled(true);
 
-  ::ash::cros_healthd::FakeCrosHealthd::Get()->EmitUsbAddEventForTesting();
+  ::ash::cros_healthd::mojom::UsbEventInfo info;
+  info.state = ::ash::cros_healthd::mojom::UsbEventInfo::State::kAdd;
+  ::ash::cros_healthd::FakeCrosHealthd::Get()->EmitEventForCategory(
+      ::ash::cros_healthd::mojom::EventCategoryEnum::kUsb,
+      ::ash::cros_healthd::mojom::EventInfo::NewUsbEventInfo(info.Clone()));
 
   const auto metric_data = result_metric_data.result();
 
@@ -163,5 +167,6 @@ TEST_F(UsbEventsObserverTest, UsbOnAddUsingFakeCrosHealthd) {
   EXPECT_THAT(usb_telemetry.categories(), IsEmpty());
   EXPECT_EQ(metric_data.event_data().type(), MetricEventType::USB_ADDED);
 }
+
 }  // namespace
 }  // namespace reporting

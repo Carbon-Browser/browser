@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chromecast/base/jni_headers/DumpstateWriter_jni.h"
 
 namespace chromecast {

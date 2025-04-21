@@ -1,16 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
 #include "base/android/jni_string.h"
-#include "components/dom_distiller/core/jni_headers/DomDistillerUrlUtils_jni.h"
 #include "components/dom_distiller/core/url_constants.h"
 #include "components/dom_distiller/core/url_utils.h"
 #include "net/base/url_util.h"
 #include "url/android/gurl_android.h"
 #include "url/gurl.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/dom_distiller/core/android/jni_headers/DomDistillerUrlUtils_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;

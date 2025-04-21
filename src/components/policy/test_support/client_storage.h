@@ -1,16 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_POLICY_TEST_SUPPORT_CLIENT_STORAGE_H_
 #define COMPONENTS_POLICY_TEST_SUPPORT_CLIENT_STORAGE_H_
 
+#include <stdint.h>
+
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -28,7 +29,7 @@ class ClientStorage {
     std::string device_id;
     std::string device_token;
     std::string machine_name;
-    absl::optional<std::string> username;
+    std::optional<std::string> username;
     std::vector<std::string> state_keys;
     std::set<std::string> allowed_policy_types;
   };

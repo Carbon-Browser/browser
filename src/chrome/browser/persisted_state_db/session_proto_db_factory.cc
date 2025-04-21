@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,38 @@ SessionProtoDBFactory<persisted_state_db::PersistedStateContentProto>*
 SessionProtoDBFactory<
     persisted_state_db::PersistedStateContentProto>::GetInstance() {
   return GetPersistedStateSessionProtoDBFactory();
+}
+
+SessionProtoDBFactory<
+    commerce_subscription_db::CommerceSubscriptionContentProto>*
+GetCommerceSubscriptionSessionProtoDBFactory() {
+  static base::NoDestructor<SessionProtoDBFactory<
+      commerce_subscription_db::CommerceSubscriptionContentProto>>
+      instance;
+  return instance.get();
+}
+
+template <>
+SessionProtoDBFactory<
+    commerce_subscription_db::CommerceSubscriptionContentProto>*
+SessionProtoDBFactory<
+    commerce_subscription_db::CommerceSubscriptionContentProto>::GetInstance() {
+  return GetCommerceSubscriptionSessionProtoDBFactory();
+}
+
+SessionProtoDBFactory<parcel_tracking_db::ParcelTrackingContent>*
+GetParcelTrackingSessionProtoDBFactory() {
+  static base::NoDestructor<
+      SessionProtoDBFactory<parcel_tracking_db::ParcelTrackingContent>>
+      instance;
+  return instance.get();
+}
+
+template <>
+SessionProtoDBFactory<parcel_tracking_db::ParcelTrackingContent>*
+SessionProtoDBFactory<
+    parcel_tracking_db::ParcelTrackingContent>::GetInstance() {
+  return GetParcelTrackingSessionProtoDBFactory();
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -52,24 +84,21 @@ SessionProtoDBFactory<coupon_db::CouponContentProto>::GetInstance() {
   return GetCouponSessionProtoDBFactory();
 }
 
-#else
-SessionProtoDBFactory<
-    commerce_subscription_db::CommerceSubscriptionContentProto>*
-GetCommerceSubscriptionSessionProtoDBFactory() {
-  static base::NoDestructor<SessionProtoDBFactory<
-      commerce_subscription_db::CommerceSubscriptionContentProto>>
+SessionProtoDBFactory<discounts_db::DiscountsContentProto>*
+GetDiscountsSessionProtoDBFactory() {
+  static base::NoDestructor<
+      SessionProtoDBFactory<discounts_db::DiscountsContentProto>>
       instance;
   return instance.get();
 }
 
 template <>
-SessionProtoDBFactory<
-    commerce_subscription_db::CommerceSubscriptionContentProto>*
-SessionProtoDBFactory<
-    commerce_subscription_db::CommerceSubscriptionContentProto>::GetInstance() {
-  return GetCommerceSubscriptionSessionProtoDBFactory();
+SessionProtoDBFactory<discounts_db::DiscountsContentProto>*
+SessionProtoDBFactory<discounts_db::DiscountsContentProto>::GetInstance() {
+  return GetDiscountsSessionProtoDBFactory();
 }
 
+#else
 SessionProtoDBFactory<merchant_signal_db::MerchantSignalContentProto>*
 GetMerchantSignalSessionProtoDBFactory() {
   static base::NoDestructor<

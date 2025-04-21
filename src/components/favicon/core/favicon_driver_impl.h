@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,12 +40,12 @@ class FaviconDriverImpl : public FaviconDriver,
   bool HasPendingTasksForTest();
 
  protected:
-  // |favicon_service| may be null, which means favicons are not saved.
+  // `favicon_service` may be null, which means favicons are not saved.
   explicit FaviconDriverImpl(CoreFaviconService* favicon_service);
   ~FaviconDriverImpl() override;
 
-  // Informs CoreFaviconService that the favicon for |url| is out of date. If
-  // |force_reload| is true, then discard information about favicon download
+  // Informs CoreFaviconService that the favicon for `url` is out of date. If
+  // `force_reload` is true, then discard information about favicon download
   // failures.
   void SetFaviconOutOfDateForPage(const GURL& url, bool force_reload);
 

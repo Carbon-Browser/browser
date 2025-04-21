@@ -1,16 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/navigation/serializable_user_data_manager_impl.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/web/public/session/crw_session_user_data.h"
 #import "ios/web/public/web_state.h"
-#import "ios/web/session/crw_session_user_data.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace {
@@ -23,7 +19,7 @@ const void* const kSerializableUserDataManagerKey =
 // associated WebState.
 class SerializableUserDataManagerWrapper : public base::SupportsUserData::Data {
  public:
-  // Returns the SerializableUserDataManagerWrapper associated with |web_state|,
+  // Returns the SerializableUserDataManagerWrapper associated with `web_state`,
   // creating one if necessary.
   static SerializableUserDataManagerWrapper* FromWebState(WebState* web_state) {
     DCHECK(web_state);

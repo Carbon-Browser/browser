@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/third_party/dynamic_annotations/dynamic_annotations.h"
 #include "base/threading/thread_local.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "remoting/base/auto_thread_task_runner.h"
+#include "third_party/abseil-cpp/absl/base/dynamic_annotations.h"
 
 #if BUILDFLAG(IS_POSIX)
 #include "base/files/file_descriptor_watcher_posix.h"
@@ -45,7 +45,7 @@ std::unique_ptr<base::win::ScopedCOMInitializer> CreateComInitializer(
 }
 #endif
 
-}
+}  // namespace
 
 // Used to pass data to ThreadMain.  This structure is allocated on the stack
 // from within StartWithType.
@@ -72,14 +72,16 @@ scoped_refptr<AutoThreadTaskRunner> AutoThread::CreateWithType(
     base::MessagePumpType type) {
   AutoThread* thread = new AutoThread(name, joiner.get());
   scoped_refptr<AutoThreadTaskRunner> task_runner = thread->StartWithType(type);
-  if (!task_runner.get())
+  if (!task_runner.get()) {
     delete thread;
+  }
   return task_runner;
 }
 
 // static
 scoped_refptr<AutoThreadTaskRunner> AutoThread::Create(
-    const char* name, scoped_refptr<AutoThreadTaskRunner> joiner) {
+    const char* name,
+    scoped_refptr<AutoThreadTaskRunner> joiner) {
   return CreateWithType(name, joiner, base::MessagePumpType::DEFAULT);
 }
 
@@ -94,8 +96,9 @@ scoped_refptr<AutoThreadTaskRunner> AutoThread::CreateWithLoopAndComInitTypes(
   thread->SetComInitType(com_init_type);
   scoped_refptr<AutoThreadTaskRunner> task_runner =
       thread->StartWithType(pump_type);
-  if (!task_runner.get())
+  if (!task_runner.get()) {
     delete thread;
+  }
   return task_runner;
 }
 #endif
@@ -200,7 +203,7 @@ void AutoThread::ThreadMain() {
 
   // Complete the initialization of our AutoThread object.
   base::PlatformThread::SetName(name_);
-  ANNOTATE_THREAD_NAME(name_.c_str());  // Tell the name to race detector.
+  ABSL_ANNOTATE_THREAD_NAME(name_.c_str());  // Tell the name to race detector.
 
   // Return an AutoThreadTaskRunner that will cleanly quit this thread when
   // no more references to it remain.
@@ -232,4 +235,4 @@ void AutoThread::ThreadMain() {
   DCHECK(was_quit_properly_);
 }
 
-}  // namespace base
+}  // namespace remoting

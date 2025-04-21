@@ -1,27 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/find_in_page/find_in_page_java_script_feature.h"
 
-#include "base/no_destructor.h"
+#import "base/no_destructor.h"
 #import "ios/web/find_in_page/find_in_page_constants.h"
-#include "ios/web/public/js_messaging/java_script_feature_util.h"
-#include "ios/web/public/js_messaging/web_frame.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/js_messaging/java_script_feature_util.h"
+#import "ios/web/public/js_messaging/web_frame.h"
 
 namespace {
-const char kScriptName[] = "find_in_page";
+const char kScriptName[] = "find_in_page_native_api";
 const char kEventListenersScriptName[] = "find_in_page_event_listeners";
 
 // Timeout for the find within JavaScript in milliseconds.
 const double kFindInPageFindTimeout = 100.0;
 
 // The timeout for JavaScript function calls in milliseconds. Important that
-// this is longer than |kFindInPageFindTimeout| to allow for incomplete find to
+// this is longer than `kFindInPageFindTimeout` to allow for incomplete find to
 // restart again. If this timeout hits, then something went wrong with the find
 // and find in page should not continue.
 const double kJavaScriptFunctionCallTimeout = 200.0;
@@ -43,7 +39,7 @@ FindInPageJavaScriptFeature* FindInPageJavaScriptFeature::GetInstance() {
 
 FindInPageJavaScriptFeature::FindInPageJavaScriptFeature()
     : JavaScriptFeature(
-          ContentWorld::kAnyContentWorld,
+          ContentWorld::kIsolatedWorld,
           {FeatureScript::CreateWithFilename(
                kScriptName,
                FeatureScript::InjectionTime::kDocumentStart,
@@ -62,10 +58,10 @@ FindInPageJavaScriptFeature::~FindInPageJavaScriptFeature() = default;
 bool FindInPageJavaScriptFeature::Search(
     WebFrame* frame,
     const std::string& query,
-    base::OnceCallback<void(absl::optional<int>)> callback) {
-  std::vector<base::Value> params;
-  params.push_back(base::Value(query));
-  params.push_back(base::Value(kFindInPageFindTimeout));
+    base::OnceCallback<void(std::optional<int>)> callback) {
+  base::Value::List params;
+  params.Append(query);
+  params.Append(kFindInPageFindTimeout);
   return CallJavaScriptFunction(
       frame, kFindInPageSearch, params,
       base::BindOnce(&FindInPageJavaScriptFeature::ProcessSearchResult,
@@ -75,9 +71,9 @@ bool FindInPageJavaScriptFeature::Search(
 
 void FindInPageJavaScriptFeature::Pump(
     WebFrame* frame,
-    base::OnceCallback<void(absl::optional<int>)> callback) {
-  std::vector<base::Value> params;
-  params.push_back(base::Value(kFindInPageFindTimeout));
+    base::OnceCallback<void(std::optional<int>)> callback) {
+  base::Value::List params;
+  params.Append(kFindInPageFindTimeout);
   CallJavaScriptFunction(
       frame, kFindInPagePump, params,
       base::BindOnce(&FindInPageJavaScriptFeature::ProcessSearchResult,
@@ -89,22 +85,21 @@ void FindInPageJavaScriptFeature::SelectMatch(
     WebFrame* frame,
     int index,
     base::OnceCallback<void(const base::Value*)> callback) {
-  std::vector<base::Value> params;
-  params.push_back(base::Value(index));
+  base::Value::List params;
+  params.Append(index);
   CallJavaScriptFunction(frame, kFindInPageSelectAndScrollToMatch, params,
                          std::move(callback),
                          base::Milliseconds(kJavaScriptFunctionCallTimeout));
 }
 
 void FindInPageJavaScriptFeature::Stop(WebFrame* frame) {
-  std::vector<base::Value> params;
-  CallJavaScriptFunction(frame, kFindInPageStop, params);
+  CallJavaScriptFunction(frame, kFindInPageStop, base::Value::List());
 }
 
 void FindInPageJavaScriptFeature::ProcessSearchResult(
-    base::OnceCallback<void(const absl::optional<int>)> callback,
+    base::OnceCallback<void(const std::optional<int>)> callback,
     const base::Value* result) {
-  absl::optional<int> match_count;
+  std::optional<int> match_count;
   if (result && result->is_double()) {
     // Valid match number returned. If not, match count will be 0 in order to
     // zero-out count from previous find.

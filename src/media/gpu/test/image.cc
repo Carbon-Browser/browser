@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ namespace {
 // Resolve the specified test file path to an absolute path. The path can be
 // either an absolute path, a path relative to the current directory, or a path
 // relative to the test data path.
-absl::optional<base::FilePath> ResolveFilePath(
-    const base::FilePath& file_path) {
+std::optional<base::FilePath> ResolveFilePath(const base::FilePath& file_path) {
   base::FilePath resolved_path = file_path;
 
   // Try to resolve the path into an absolute path. If the path doesn't exist,
@@ -35,8 +34,8 @@ absl::optional<base::FilePath> ResolveFilePath(
   }
 
   return PathExists(resolved_path)
-             ? absl::optional<base::FilePath>(resolved_path)
-             : absl::nullopt;
+             ? std::optional<base::FilePath>(resolved_path)
+             : std::nullopt;
 }
 
 // Converts the |pixel_format| string into a VideoPixelFormat.
@@ -47,6 +46,8 @@ VideoPixelFormat ConvertStringtoPixelFormat(const std::string& pixel_format) {
     return PIXEL_FORMAT_I420;
   } else if (pixel_format == "NV12") {
     return PIXEL_FORMAT_NV12;
+  } else if (pixel_format == "P010" || pixel_format == "MT2T") {
+    return PIXEL_FORMAT_P010LE;
   } else if (pixel_format == "YV12") {
     return PIXEL_FORMAT_YV12;
   } else if (pixel_format == "RGBA") {
@@ -75,7 +76,7 @@ bool Image::Load() {
   DCHECK(!file_path_.empty());
   DCHECK(!IsLoaded());
 
-  absl::optional<base::FilePath> resolved_path = ResolveFilePath(file_path_);
+  std::optional<base::FilePath> resolved_path = ResolveFilePath(file_path_);
   if (!resolved_path) {
     LOG(ERROR) << "Image file not found: " << file_path_;
     return false;
@@ -95,7 +96,7 @@ bool Image::Load() {
 
   // Verify that the image's checksum matches the checksum in the metadata.
   base::MD5Digest digest;
-  base::MD5Sum(mapped_file_.data(), mapped_file_.length(), &digest);
+  base::MD5Sum(mapped_file_.bytes(), &digest);
   if (base::MD5DigestToBase16(digest) != checksum_) {
     LOG(ERROR) << "Image checksum not matching metadata";
     return false;
@@ -114,7 +115,7 @@ bool Image::LoadMetadata() {
   }
 
   base::FilePath json_path = file_path_.AddExtension(kMetadataSuffix);
-  absl::optional<base::FilePath> resolved_path = ResolveFilePath(json_path);
+  std::optional<base::FilePath> resolved_path = ResolveFilePath(json_path);
   if (!resolved_path) {
     LOG(ERROR) << "Image metadata file not found: " << json_path;
     return false;
@@ -139,44 +140,41 @@ bool Image::LoadMetadata() {
              << metadata_result.error().message;
     return false;
   }
-  base::Value& metadata = *metadata_result;
+  const base::Value::Dict& metadata = metadata_result->GetDict();
 
   // Get the pixel format from the json data.
-  const base::Value* pixel_format =
-      metadata.FindKeyOfType("pixel_format", base::Value::Type::STRING);
+  const std::string* pixel_format = metadata.FindString("pixel_format");
   if (!pixel_format) {
     VLOGF(1) << "Key \"pixel_format\" is not found in " << json_path;
     return false;
   }
-  pixel_format_ = ConvertStringtoPixelFormat(pixel_format->GetString());
+  pixel_format_ = ConvertStringtoPixelFormat(*pixel_format);
   if (pixel_format_ == PIXEL_FORMAT_UNKNOWN) {
-    VLOGF(1) << pixel_format->GetString() << " is not supported";
+    VLOGF(1) << *pixel_format << " is not supported";
     return false;
   }
 
   // Get the image dimensions from the json data.
-  const base::Value* width =
-      metadata.FindKeyOfType("width", base::Value::Type::INTEGER);
-  if (!width) {
+  std::optional<int> width = metadata.FindInt("width");
+  if (!width.has_value()) {
     VLOGF(1) << "Key \"width\" is not found in " << json_path;
     return false;
   }
-  const base::Value* height =
-      metadata.FindKeyOfType("height", base::Value::Type::INTEGER);
+  std::optional<int> height = metadata.FindInt("height");
   if (!height) {
     VLOGF(1) << "Key \"height\" is not found in " << json_path;
     return false;
   }
-  size_ = gfx::Size(width->GetInt(), height->GetInt());
+  size_ = gfx::Size(*width, *height);
 
   // Try to get the visible rectangle of the image from the json data.
   // These values are not in json data if all the image data is in the visible
   // area.
   visible_rect_ = gfx::Rect(size_);
-  const base::Value* visible_rect_info =
-      metadata.FindKeyOfType("visible_rect", base::Value::Type::LIST);
+  const base::Value::List* visible_rect_info =
+      metadata.FindList("visible_rect");
   if (visible_rect_info) {
-    base::Value::ConstListView values = visible_rect_info->GetListDeprecated();
+    const base::Value::List& values = *visible_rect_info;
     if (values.size() != 4) {
       VLOGF(1) << "unexpected json format for visible rectangle";
       return false;
@@ -190,13 +188,12 @@ bool Image::LoadMetadata() {
   }
 
   // Get the image rotation info from the json data.
-  const base::Value* rotation =
-      metadata.FindKeyOfType("rotation", base::Value::Type::INTEGER);
-  if (!rotation) {
+  std::optional<int> rotation = metadata.FindInt("rotation");
+  if (!rotation.has_value()) {
     // Default rotation value is VIDEO_ROTATION_0
     rotation_ = VIDEO_ROTATION_0;
   } else {
-    switch (rotation->GetInt()) {
+    switch (*rotation) {
       case 0:
         rotation_ = VIDEO_ROTATION_0;
         break;
@@ -210,19 +207,18 @@ bool Image::LoadMetadata() {
         rotation_ = VIDEO_ROTATION_270;
         break;
       default:
-        VLOGF(1) << "Invalid rotation value: " << rotation->GetInt();
+        VLOGF(1) << "Invalid rotation value: " << *rotation;
         return false;
     };
   }
 
   // Get the image checksum from the json data.
-  const base::Value* checksum =
-      metadata.FindKeyOfType("checksum", base::Value::Type::STRING);
+  const std::string* checksum = metadata.FindString("checksum");
   if (!checksum) {
     VLOGF(1) << "Key \"checksum\" is not found in " << json_path;
     return false;
   }
-  checksum_ = checksum->GetString();
+  checksum_ = *checksum;
 
   return true;
 }

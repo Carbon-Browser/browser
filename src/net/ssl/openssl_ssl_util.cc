@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,6 @@ namespace {
 class OpenSSLNetErrorLibSingleton {
  public:
   OpenSSLNetErrorLibSingleton() {
-    crypto::EnsureOpenSSLInit();
-
     // Allocate a new error library value for inserting net errors into
     // OpenSSL. This does not register any ERR_STRING_DATA for the errors, so
     // stringifying error codes through OpenSSL will return NULL.
@@ -126,9 +124,9 @@ int MapOpenSSLErrorSSL(uint32_t error_code) {
   }
 }
 
-base::Value NetLogOpenSSLErrorParams(int net_error,
-                                     int ssl_error,
-                                     const OpenSSLErrorInfo& error_info) {
+base::Value::Dict NetLogOpenSSLErrorParams(int net_error,
+                                           int ssl_error,
+                                           const OpenSSLErrorInfo& error_info) {
   base::Value::Dict dict;
   dict.Set("net_error", net_error);
   dict.Set("ssl_error", ssl_error);
@@ -140,7 +138,7 @@ base::Value NetLogOpenSSLErrorParams(int net_error,
     dict.Set("file", error_info.file);
   if (error_info.line != 0)
     dict.Set("line", error_info.line);
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace
@@ -151,7 +149,6 @@ void OpenSSLPutNetError(const base::Location& location, int err) {
   if (err < 0 || err > 0xfff) {
     // OpenSSL reserves 12 bits for the reason code.
     NOTREACHED();
-    err = ERR_INVALID_ARGUMENT;
   }
   ERR_put_error(OpenSSLNetErrorLib(), 0 /* unused */, err, location.file_name(),
                 location.line_number());
@@ -229,7 +226,6 @@ int GetNetSSLVersion(SSL* ssl) {
       return SSL_CONNECTION_VERSION_TLS1_3;
     default:
       NOTREACHED();
-      return SSL_CONNECTION_VERSION_UNKNOWN;
   }
 }
 

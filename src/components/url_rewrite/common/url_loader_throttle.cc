@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/url_rewrite/common/url_loader_throttle.h"
 
 #include <string>
+#include <string_view>
 
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -70,7 +71,7 @@ void ApplyReplaceUrl(network::ResourceRequest* request,
 void ApplyRemoveHeader(
     network::ResourceRequest* request,
     const mojom::UrlRequestRewriteRemoveHeaderPtr& remove_header) {
-  absl::optional<std::string> query_pattern = remove_header->query_pattern;
+  std::optional<std::string> query_pattern = remove_header->query_pattern;
   if (query_pattern &&
       request->url.query().find(query_pattern.value()) == std::string::npos) {
     // Per the FIDL API, the header should be removed if there is no query
@@ -95,9 +96,8 @@ void ApplyAppendToQuery(
   request->url = request->url.ReplaceComponents(replacements);
 }
 
-bool HostMatches(const base::StringPiece& url_host,
-                 const base::StringPiece& rule_host) {
-  const base::StringPiece kWildcard("*.");
+bool HostMatches(std::string_view url_host, std::string_view rule_host) {
+  const std::string_view kWildcard("*.");
   if (base::StartsWith(rule_host, kWildcard, base::CompareCase::SENSITIVE)) {
     if (base::EndsWith(url_host, rule_host.substr(1),
                        base::CompareCase::SENSITIVE)) {
@@ -112,15 +112,12 @@ bool HostMatches(const base::StringPiece& url_host,
   return base::CompareCaseInsensitiveASCII(url_host, rule_host) == 0;
 }
 
-// Returns true if the host and scheme filters defined in |rule| match
-// |request|.
-bool RuleFiltersMatchRequest(network::ResourceRequest* request,
-                             const mojom::UrlRequestRulePtr& rule) {
-  const GURL& url = request->url;
-
+// Returns true if the host and scheme filters defined in |rule| match |url|.
+bool RuleFiltersMatchUrl(const GURL& url,
+                         const mojom::UrlRequestRulePtr& rule) {
   if (rule->hosts_filter) {
     bool found = false;
-    for (const base::StringPiece host : rule->hosts_filter.value()) {
+    for (const std::string_view host : rule->hosts_filter.value()) {
       if ((found = HostMatches(url.host(), host)))
         break;
     }
@@ -153,7 +150,7 @@ bool IsRequestAllowed(network::ResourceRequest* request,
     if (rule->actions[0]->which() != mojom::UrlRequestAction::Tag::kPolicy)
       continue;
 
-    if (!RuleFiltersMatchRequest(request, rule))
+    if (!RuleFiltersMatchUrl(request->url, rule))
       continue;
 
     switch (rule->actions[0]->get_policy()) {
@@ -196,14 +193,13 @@ void URLLoaderThrottle::WillStartRequest(network::ResourceRequest* request,
   *defer = false;
 }
 
-bool URLLoaderThrottle::makes_unsafe_redirect() {
-  // WillStartRequest() does not make cross-scheme redirects.
-  return false;
-}
-
 void URLLoaderThrottle::ApplyRule(network::ResourceRequest* request,
                                   const mojom::UrlRequestRulePtr& rule) {
-  if (!RuleFiltersMatchRequest(request, rule))
+  // Prevent applying rules on redirect navigations.
+  if (request->navigation_redirect_chain.size() > 1u)
+    return;
+
+  if (!RuleFiltersMatchUrl(request->url, rule))
     return;
 
   for (const auto& rewrite : rule->actions)

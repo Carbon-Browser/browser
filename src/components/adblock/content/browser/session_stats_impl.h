@@ -18,6 +18,7 @@
 #ifndef COMPONENTS_ADBLOCK_CONTENT_BROWSER_SESSION_STATS_IMPL_H_
 #define COMPONENTS_ADBLOCK_CONTENT_BROWSER_SESSION_STATS_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/adblock/content/browser/resource_classification_runner.h"
 #include "components/adblock/core/session_stats.h"
@@ -32,34 +33,35 @@ class SessionStatsImpl final : public SessionStats,
 
   ~SessionStatsImpl() final;
 
-  std::map<GURL, long> GetSessionAllowedAdsCount() const final;
+  std::map<GURL, long> GetSessionAllowedResourcesCount() const final;
 
-  std::map<GURL, long> GetSessionBlockedAdsCount() const final;
-
-  void StartCollectingStats() final;
+  std::map<GURL, long> GetSessionBlockedResourcesCount() const final;
 
   // ResourceClassificationRunner::Observer:
-  void OnAdMatched(const GURL& url,
-                   mojom::FilterMatchResult match_result,
-                   const std::vector<GURL>& parent_frame_urls,
-                   ContentType content_type,
-                   content::RenderFrameHost* render_frame_host,
-                   const GURL& subscription) final;
+  void OnRequestMatched(const GURL& url,
+                        FilterMatchResult match_result,
+                        const std::vector<GURL>& parent_frame_urls,
+                        ContentType content_type,
+                        content::RenderFrameHost* render_frame_host,
+                        const GURL& subscription,
+                        const std::string& configuration_name) final;
   void OnPageAllowed(const GURL& url,
                      content::RenderFrameHost* render_frame_host,
-                     const GURL& subscription) final;
+                     const GURL& subscription,
+                     const std::string& configuration_name) final;
   void OnPopupMatched(const GURL& url,
-                      mojom::FilterMatchResult match_result,
+                      FilterMatchResult match_result,
                       const GURL& opener_url,
                       content::RenderFrameHost* render_frame_host,
-                      const GURL& subscription) final;
+                      const GURL& subscription,
+                      const std::string& configuration_name) final;
 
  private:
-  void OnMatchedInternal(mojom::FilterMatchResult match_result,
+  void OnMatchedInternal(FilterMatchResult match_result,
                          const GURL& subscription);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  ResourceClassificationRunner* classification_runner_;
+  raw_ptr<ResourceClassificationRunner> classification_runner_;
   std::map<GURL, long> allowed_map_;
   std::map<GURL, long> blocked_map_;
 };

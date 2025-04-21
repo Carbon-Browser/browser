@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
@@ -22,8 +22,9 @@ class View;
 // title and subtitle, and a secondary right-hand icon (usually a submenu
 // arrow). Icons and subtitle are optional.
 class WebAuthnHoverButton : public HoverButton {
+  METADATA_HEADER(WebAuthnHoverButton, HoverButton)
+
  public:
-  METADATA_HEADER(WebAuthnHoverButton);
   // Creates a hoverable button with the given elements, like so:
   //
   // +-------------------------------------------------------------------+
@@ -43,7 +44,7 @@ class WebAuthnHoverButton : public HoverButton {
                       const std::u16string& title,
                       const std::u16string& subtitle,
                       std::unique_ptr<views::View> secondary_icon,
-                      bool force_two_line = false);
+                      bool enabled);
   WebAuthnHoverButton(const WebAuthnHoverButton&) = delete;
   WebAuthnHoverButton& operator=(const WebAuthnHoverButton&) = delete;
   ~WebAuthnHoverButton() override = default;

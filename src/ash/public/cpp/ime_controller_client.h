@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/base/ime/ash/ime_keyset.h"
 
 namespace ash {
@@ -40,17 +40,9 @@ class ASH_PUBLIC_EXPORT ImeControllerClient {
   // accelerator (e.g. pressing Alt + Search), or from the debug UI (i.e.
   // toggling the caps lock button), propagate the change to the client without
   // sending a change notification back.
-  // TODO(crbug/759435): Ideally this interaction should only be to disable the
-  // caps lock.
+  // TODO(crbug.com/40537240): Ideally this interaction should only be to
+  // disable the caps lock.
   virtual void SetCapsLockEnabled(bool enabled) = 0;
-
-  // Notifies the mirroring state change to the client where IME lives (e.g.
-  // Chrome), so that the IME can behave according to the state.
-  virtual void UpdateMirroringState(bool enabled) = 0;
-
-  // Notifies the casting state change to the client where IME lives (e.g.
-  // Chrome), so that the IME can behave according to the state.
-  virtual void UpdateCastingState(bool enabled) = 0;
 
   // Overrides the keyboard keyset (emoji, handwriting or voice). If keyset is
   // 'kNone', we switch to the default keyset. Because this is asynchronous,

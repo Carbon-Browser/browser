@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@ import android.os.RemoteException;
 import android.util.SparseArray;
 
 import org.chromium.base.CommandLine;
-import org.chromium.base.JNIUtils;
 import org.chromium.base.Log;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.library_loader.LibraryProcessType;
@@ -25,9 +24,7 @@ import java.util.List;
 
 import javax.annotation.concurrent.GuardedBy;
 
-/**
- * Child service started by ChildProcessLauncherTest.
- */
+/** Child service started by ChildProcessLauncherTest. */
 public class TestChildProcessService extends Service {
     private static final String TAG = "TestProcessService";
 
@@ -35,6 +32,7 @@ public class TestChildProcessService extends Service {
 
     private static class TestChildProcessServiceDelegate implements ChildProcessServiceDelegate {
         private final Object mConnectionSetupLock = new Object();
+
         @GuardedBy("mConnectionSetupLock")
         private boolean mConnectionSetup;
 
@@ -55,7 +53,8 @@ public class TestChildProcessService extends Service {
         }
 
         @Override
-        public void onConnectionSetup(Bundle connectionBundle, List<IBinder> clientInterfaces) {
+        public void onConnectionSetup(
+                Bundle connectionBundle, List<IBinder> clientInterfaces, IBinder binderBox) {
             if (clientInterfaces != null && !clientInterfaces.isEmpty()) {
                 mIChildProcessTest = IChildProcessTest.Stub.asInterface(clientInterfaces.get(0));
             }
@@ -81,11 +80,8 @@ public class TestChildProcessService extends Service {
         @Override
         public void loadNativeLibrary(Context hostContext) {
             // Store the command line before loading the library to avoid an assert in CommandLine.
-            mCommandLine = CommandLine.getJavaSwitchesOrNull();
+            mCommandLine = CommandLine.getJavaSwitchesForTesting();
 
-            // Non-main processes are launched for testing. Mark them as such so that the JNI
-            // in the seconary dex won't be registered. See https://crbug.com/810720.
-            JNIUtils.enableSelectiveJniRegistration();
             LibraryLoader.getInstance().loadNow();
             LibraryLoader.getInstance().ensureInitialized();
 
@@ -150,8 +146,9 @@ public class TestChildProcessService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        mService = new ChildProcessService(
-                new TestChildProcessServiceDelegate(), this, getApplicationContext());
+        mService =
+                new ChildProcessService(
+                        new TestChildProcessServiceDelegate(), this, getApplicationContext());
         mService.onCreate();
     }
 

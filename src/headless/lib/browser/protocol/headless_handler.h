@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,19 +29,20 @@ class HeadlessHandler : public DomainHandler,
 
   ~HeadlessHandler() override;
 
+ private:
   // DomainHandler implementation
   void Wire(UberDispatcher* dispatcher) override;
   Response Disable() override;  // Also Headless::Backend implementation
 
   // Headless::Backend implementation
   Response Enable() override;
-  void BeginFrame(Maybe<double> in_frame_time_ticks,
-                  Maybe<double> in_interval,
-                  Maybe<bool> no_display_updates,
-                  Maybe<HeadlessExperimental::ScreenshotParams> screenshot,
-                  std::unique_ptr<BeginFrameCallback> callback) override;
+  void BeginFrame(
+      std::optional<double> in_frame_time_ticks,
+      std::optional<double> in_interval,
+      std::optional<bool> no_display_updates,
+      std::unique_ptr<HeadlessExperimental::ScreenshotParams> screenshot,
+      std::unique_ptr<BeginFrameCallback> callback) override;
 
- private:
   raw_ptr<HeadlessBrowserImpl> browser_;
   raw_ptr<content::WebContents> web_contents_;
   std::unique_ptr<HeadlessExperimental::Frontend> frontend_;

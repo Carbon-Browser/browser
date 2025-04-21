@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,15 +50,12 @@ class FakeConsentAuditor : public ConsentAuditor {
       const CoreAccountId& account_id,
       const sync_pb::UserConsentTypes::AccountPasswordsConsent& consent)
       override;
-  void RecordAutofillAssistantConsent(
-      const CoreAccountId& account_id,
-      const sync_pb::UserConsentTypes::AutofillAssistantConsent& consent)
-      override;
+  MOCK_METHOD2(
+      RecordRecorderSpeakerLabelConsent,
+      void(const CoreAccountId&,
+           const sync_pb::UserConsentTypes::RecorderSpeakerLabelConsent&));
 
-  void RecordLocalConsent(const std::string& feature,
-                          const std::string& description_text,
-                          const std::string& confirmation_text) override;
-  base::WeakPtr<syncer::ModelTypeControllerDelegate> GetControllerDelegate()
+  base::WeakPtr<syncer::DataTypeControllerDelegate> GetControllerDelegate()
       override;
 
   // Methods for fake.
@@ -92,9 +89,8 @@ class FakeConsentAuditor : public ConsentAuditor {
  private:
   CoreAccountId account_id_;
 
-  // Holds specific consent information for assistant activity control consent,
-  // account password consent and autofill assistant consent. Does not (yet)
-  // contain recorded sync consent.
+  // Holds specific consent information for assistant activity control consent
+  // and account password consent. Does not (yet) contain recorded sync consent.
   std::vector<sync_pb::UserConsentSpecifics> recorded_consents_;
 
   std::vector<std::vector<int>> recorded_id_vectors_;

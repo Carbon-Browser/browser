@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,22 @@
 
 #include <shobjidl.h>
 #include <windows.h>
+
 #include <winuser.h>
 #include <wrl/client.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/aura/aura_export.h"
 #include "ui/aura/window.h"
@@ -76,7 +78,7 @@ class AURA_EXPORT NativeWindowOcclusionTrackerWin
   // Tracks the occlusion state of HWNDs registered via Enable().
   struct RootOcclusionState {
     Window::OcclusionState occlusion_state = Window::OcclusionState::UNKNOWN;
-    absl::optional<bool> on_current_workspace;
+    std::optional<bool> on_current_workspace;
     // If `occlusion_state` is VISIBLE, this gives the occluded region. It may
     // be empty (which indicates the the window is entirely visible). This is
     // relative to the origin of the HWND. In other words, it's in window
@@ -174,6 +176,9 @@ class AURA_EXPORT NativeWindowOcclusionTrackerWin
     // range from |event_min| to |event_max|, inclusive.
     void RegisterGlobalEventHook(UINT event_min, UINT event_max);
 
+    // Returns the delay to use for scheduling the next occlusion calculation.
+    const base::TimeDelta GetUpdateOcclusionDelay();
+
     // Registers the EVENT_OBJECT_LOCATIONCHANGE event hook for the process with
     // passed id. The process has one or more visible, opaque windows.
     void RegisterEventHookForProcess(DWORD pid);
@@ -215,7 +220,7 @@ class AURA_EXPORT NativeWindowOcclusionTrackerWin
     // Returns true if |hwnd| is definitely on the current virtual desktop,
     // false if it's definitely not on the current virtual desktop, and nullopt
     // if we we can't tell for sure.
-    absl::optional<bool> IsWindowOnCurrentVirtualDesktop(HWND hwnd);
+    std::optional<bool> IsWindowOnCurrentVirtualDesktop(HWND hwnd);
 
     static WindowOcclusionCalculator* instance_;
 
@@ -327,7 +332,7 @@ class AURA_EXPORT NativeWindowOcclusionTrackerWin
   // Map of HWND to root app windows. Maintained on the UI thread, and used
   // to send occlusion state notifications to Windows from
   // |root_window_hwnds_occlusion_state_|.
-  base::flat_map<HWND, Window*> hwnd_root_window_map_;
+  base::flat_map<HWND, raw_ptr<Window, CtnExperimental>> hwnd_root_window_map_;
 
   // This is set by UpdateOcclusionState. It is currently only used by tests.
   int num_visible_root_windows_ = 0;

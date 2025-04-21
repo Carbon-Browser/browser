@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ void RecordTimeIntervalBetweenCommitAndRead(const ui::ClipboardData* data) {
   if (!data)
     return;
 
-  absl::optional<base::Time> commit_time = data->commit_time();
+  std::optional<base::Time> commit_time = data->commit_time();
   if (!commit_time.has_value())
     return;
 

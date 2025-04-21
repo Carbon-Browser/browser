@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,14 +28,14 @@ class MediaNotificationBackground : public views::Background {
   // Return true if corner radius is successfully updated.
   virtual bool UpdateCornerRadius(int top_radius, int bottom_radius) = 0;
 
-  // Retirm true if artwork max with percentage is successfully updated.
+  // Return true if artwork max with percentage is successfully updated.
   virtual bool UpdateArtworkMaxWidthPct(double max_width_pct) = 0;
 
   virtual void UpdateFavicon(const gfx::ImageSkia& icon) = 0;
-  virtual void UpdateDeviceSelectorAvailability(bool availability) = 0;
+  virtual void UpdateDeviceSelectorVisibility(bool visible) = 0;
 
-  virtual SkColor GetBackgroundColor(const views::View& ownser) const = 0;
-  virtual SkColor GetForegroundColor(const views::View& ownser) const = 0;
+  virtual SkColor GetBackgroundColor(const views::View& owner) const = 0;
+  virtual SkColor GetForegroundColor(const views::View& owner) const = 0;
 };
 
 }  // namespace media_message_center

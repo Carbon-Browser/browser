@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,13 +35,13 @@ void OnScreenlockNotificationReceived(CFNotificationCenterRef center,
 void ScreenlockMonitorDeviceSource::StartListeningForScreenlock() {
   CFNotificationCenterAddObserver(
       CFNotificationCenterGetDistributedCenter(), this,
-      &OnScreenlockNotificationReceived, kScreenLockedEvent, nullptr,
+      &OnScreenlockNotificationReceived, kScreenLockedEvent, /*object=*/nullptr,
       CFNotificationSuspensionBehaviorDeliverImmediately);
 
   CFNotificationCenterAddObserver(
       CFNotificationCenterGetDistributedCenter(), this,
-      &OnScreenlockNotificationReceived, kScreenUnlockedEvent, nullptr,
-      CFNotificationSuspensionBehaviorDeliverImmediately);
+      &OnScreenlockNotificationReceived, kScreenUnlockedEvent,
+      /*object=*/nullptr, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
 
 void ScreenlockMonitorDeviceSource::StopListeningForScreenlock() {

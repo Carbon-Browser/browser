@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,9 +37,8 @@
 //   LogSettings log_settings_;
 // };
 
-#if (DCHECK_IS_ON() || defined(GPU_ENABLE_CLIENT_LOGGING)) &&           \
-    !defined(__native_client__) && !defined(GLES2_CONFORMANCE_TESTS) && \
-    !defined(GLES2_INLINE_OPTIMIZATION)
+#if (DCHECK_IS_ON() || defined(GPU_ENABLE_CLIENT_LOGGING)) && \
+    !defined(__native_client__) && !defined(GLES2_INLINE_OPTIMIZATION)
 #define GPU_CLIENT_DEBUG
 #endif
 

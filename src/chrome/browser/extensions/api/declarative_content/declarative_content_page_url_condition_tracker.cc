@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/declarative_content/declarative_content_page_url_condition_tracker.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/url_matcher/url_matcher_factory.h"
@@ -203,7 +204,7 @@ bool DeclarativeContentPageUrlConditionTracker::EvaluatePredicate(
   const DeclarativeContentPageUrlPredicate* typed_predicate =
       static_cast<const DeclarativeContentPageUrlPredicate*>(predicate);
   auto loc = per_web_contents_tracker_.find(tab);
-  DCHECK(loc != per_web_contents_tracker_.end());
+  CHECK(loc != per_web_contents_tracker_.end(), base::NotFatalUntil::M130);
   const std::set<base::MatcherStringPattern::ID>& web_contents_id_matches =
       loc->second->matches();
   return base::Contains(web_contents_id_matches,

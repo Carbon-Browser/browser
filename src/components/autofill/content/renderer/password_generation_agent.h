@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/content/common/mojom/autofill_agent.mojom.h"
 #include "components/autofill/content/common/mojom/autofill_driver.mojom.h"
 #include "components/autofill/content/renderer/renderer_save_password_progress_logger.h"
@@ -57,19 +58,21 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
 
   // mojom::PasswordGenerationAgent:
   void GeneratedPasswordAccepted(const std::u16string& password) override;
+  void GeneratedPasswordRejected() override;
   void FoundFormEligibleForGeneration(
       const PasswordFormGenerationData& form) override;
   // Sets |generation_element_| to the focused password field and responds back
   // if the generation was triggered successfully.
   void TriggeredGeneratePassword(
       TriggeredGeneratePasswordCallback callback) override;
+  void FocusNextFieldAfterPasswords() override;
 
   // Returns true if the field being changed is one where a generated password
   // is being offered. Updates the state of the popup if necessary.
   bool TextDidChangeInTextField(const blink::WebInputElement& element);
 
   // Returns true if the newly focused node caused the generation UI to show.
-  bool FocusedNodeHasChanged(const blink::WebNode& node);
+  bool ShowPasswordGenerationSuggestions(const blink::WebInputElement& element);
 
   // Event forwarded by AutofillAgent from WebAutofillClient, informing that
   // the text field editing has ended, which means that the field is not
@@ -77,6 +80,11 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   // to a non-focusable element doesn't result in |FocusedNodeHasChanged|
   // being called.
   void DidEndTextFieldEditing(const blink::WebInputElement& element);
+
+  // Event forwarded by AutofillAgent from WebAutofillClient, informing that the
+  // text field was cleared. For password fields this means that they are no
+  // longer generated and should be masked.
+  void TextFieldCleared(const blink::WebInputElement& element);
 
   // Called right before PasswordAutofillAgent filled |password_element|.
   void OnFieldAutofilled(const blink::WebInputElement& password_element);
@@ -94,6 +102,12 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
 #endif
 
   bool IsPrerendering() const;
+
+  // Previews the generation suggestion for the current generation element.
+  void PreviewGenerationSuggestion(const std::u16string& password);
+
+  // Clears the previewed field if it was previously previewed.
+  void ClearPreviewedForm();
 
  private:
   class DeferringPasswordGenerationDriver;
@@ -117,10 +131,11 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   // all required information is collected.
   bool SetUpTriggeredGeneration();
 
-  // This is called whenever automatic generation could be offered.
-  // If manual generation was already requested, automatic generation will
-  // not be offered.
-  void MaybeOfferAutomaticGeneration();
+  // This is called whenever automatic generation could be offered, and returns
+  // true if generation was offered.
+  // If manual generation was already requested, automatic generation is not
+  // offered.
+  bool MaybeOfferAutomaticGeneration();
 
   // Signals the browser that it should offer automatic password generation
   // as a result of the user focusing a password field eligible for generation.
@@ -152,16 +167,11 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   // Creates a FormData to presave a generated password. It copies behavior
   // of CreateFromDataFromWebForm/FromUnownedInputElements. If a form
   // creating is failed, returns an empty unique_ptr.
-  std::unique_ptr<FormData> CreateFormDataToPresave();
+  std::optional<FormData> CreateFormDataToPresave();
 
   // Contains the current element where generation is offered at the moment. It
   // can be either automatic or manual password generation.
   std::unique_ptr<GenerationItemInfo> current_generation_item_;
-
-  // Password element that had focus last. Since Javascript could change focused
-  // element after the user triggered a generation request, it is better to save
-  // the last focused password element.
-  blink::WebInputElement last_focused_password_element_;
 
   // Contains correspondence between generation enabled element and data for
   // generation.
@@ -174,7 +184,7 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
 
   // Unowned pointer. Used to notify PassowrdAutofillAgent when values
   // in password fields are updated.
-  PasswordAutofillAgent* password_agent_;
+  const raw_ptr<PasswordAutofillAgent> password_agent_;
 
   mojo::AssociatedRemote<mojom::PasswordGenerationDriver>
       password_generation_client_;

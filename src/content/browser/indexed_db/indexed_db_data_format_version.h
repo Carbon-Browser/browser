@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/check_op.h"
 #include "content/common/content_export.h"
 
-namespace content {
+namespace content::indexed_db {
 
 // Contains version data for the wire format used for encoding IndexedDB values.
 // A version tuple (a, b) is at least as new as (a', b')
@@ -66,6 +66,6 @@ class IndexedDBDataFormatVersion {
   CONTENT_EXPORT static IndexedDBDataFormatVersion current_;
 };
 
-}  // namespace content
+}  // namespace content::indexed_db
 
 #endif  // CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_DATA_FORMAT_VERSION_H_

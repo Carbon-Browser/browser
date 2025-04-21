@@ -1,8 +1,6 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
-import("//build/config/chromeos/ui_mode.gni")
 
 component("prefs") {
   sources = [
@@ -23,6 +21,7 @@ component("prefs") {
     "pref_filter.h",
     "pref_member.cc",
     "pref_member.h",
+    "pref_name_set.h",
     "pref_notifier.h",
     "pref_notifier_impl.cc",
     "pref_notifier_impl.h",
@@ -46,20 +45,24 @@ component("prefs") {
     "scoped_user_pref_update.h",
     "segregated_pref_store.cc",
     "segregated_pref_store.h",
+    "transparent_unordered_string_map.h",
     "value_map_pref_store.cc",
     "value_map_pref_store.h",
+    "wrap_with_prefix_pref_store.cc",
+    "wrap_with_prefix_pref_store.h",
     "writeable_pref_store.cc",
     "writeable_pref_store.h",
   ]
 
   defines = [ "COMPONENTS_PREFS_IMPLEMENTATION" ]
 
-  deps = [ "//build:chromeos_buildflags" ]
-
+  deps = []
   public_deps = [ "//base" ]
 
   if (is_android) {
     sources += [
+      "android/pref_change_registrar_android.cc",
+      "android/pref_change_registrar_android.h",
       "android/pref_service_android.cc",
       "android/pref_service_android.h",
     ]
@@ -108,6 +111,7 @@ source_set("unit_tests") {
     "pref_value_store_unittest.cc",
     "scoped_user_pref_update_unittest.cc",
     "segregated_pref_store_unittest.cc",
+    "wrap_with_prefix_pref_store_unittest.cc",
   ]
 
   deps = [

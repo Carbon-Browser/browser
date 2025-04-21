@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,12 +117,12 @@ apiBridge.registerCustomHook(function(bindingsAPI) {
 
     // When window creation fails, windowParams is undefined. Return undefined
     // to the caller.
-    if (!windowParams || !windowParams.frameId) {
+    if (!windowParams || !windowParams.frameToken) {
       maybeCallback(undefined);
       return;
     }
 
-    let view = appWindowNatives.GetFrame(windowParams.frameId,
+    let view = appWindowNatives.GetFrame(windowParams.frameToken,
                                          true /* notifyBrowser */);
 
     if (windowParams.existingWindow) {
@@ -159,12 +159,12 @@ apiBridge.registerCustomHook(function(bindingsAPI) {
     view.chrome.app.window.initializeAppWindow(windowParams);
 
     var willCallback = renderFrameObserverNatives.OnDocumentElementCreated(
-        windowParams.frameId, function(success) {
+        windowParams.frameToken, function(success) {
           let windowResult = success ? view.chrome.app.window.current()
                                      : undefined;
           maybeCallback(windowResult);
         });
-    appWindowNatives.ResumeParser(windowParams.frameId);
+    appWindowNatives.ResumeParser(windowParams.frameToken);
     if (!willCallback)
       maybeCallback(undefined);
   });

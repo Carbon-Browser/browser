@@ -1,10 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_DRAWING_BUFFER_TEST_HELPERS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_DRAWING_BUFFER_TEST_HELPERS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "cc/test/stub_decode_cache.h"
 #include "components/viz/test/test_context_provider.h"
@@ -14,9 +20,10 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
-#include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/extensions_3d_util.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types.h"
+#include "third_party/blink/renderer/platform/graphics/test/test_webgraphics_shared_image_interface_provider.h"
 #include "ui/gl/gpu_preference.h"
 
 namespace blink {
@@ -37,10 +44,14 @@ class WebGraphicsContext3DProviderForTests
  public:
   WebGraphicsContext3DProviderForTests(
       std::unique_ptr<gpu::gles2::GLES2Interface> gl)
-      : gl_(std::move(gl)) {}
+      : gl_(std::move(gl)),
+        test_shared_image_interface_(
+            base::MakeRefCounted<gpu::TestSharedImageInterface>()) {}
   WebGraphicsContext3DProviderForTests(
       std::unique_ptr<gpu::webgpu::WebGPUInterface> webgpu)
-      : webgpu_(std::move(webgpu)) {}
+      : webgpu_(std::move(webgpu)),
+        test_shared_image_interface_(
+            base::MakeRefCounted<gpu::TestSharedImageInterface>()) {}
 
   gpu::InterfaceBase* InterfaceBase() override { return gl_.get(); }
   gpu::gles2::GLES2Interface* ContextGL() override { return gl_.get(); }
@@ -50,7 +61,9 @@ class WebGraphicsContext3DProviderForTests
   gpu::webgpu::WebGPUInterface* WebGPUInterface() override {
     return webgpu_.get();
   }
-  bool BindToCurrentThread() override { return false; }
+  gpu::ContextSupport* ContextSupport() override { return nullptr; }
+
+  bool BindToCurrentSequence() override { return false; }
   const gpu::Capabilities& GetCapabilities() const override {
     return capabilities_;
   }
@@ -67,8 +80,8 @@ class WebGraphicsContext3DProviderForTests
   cc::ImageDecodeCache* ImageDecodeCache(SkColorType color_type) override {
     return &image_decode_cache_;
   }
-  viz::TestSharedImageInterface* SharedImageInterface() override {
-    return &test_shared_image_interface_;
+  gpu::TestSharedImageInterface* SharedImageInterface() override {
+    return test_shared_image_interface_.get();
   }
   void CopyVideoFrame(media::PaintCanvasVideoRenderer* video_render,
                       media::VideoFrame* video_frame,
@@ -76,6 +89,12 @@ class WebGraphicsContext3DProviderForTests
   viz::RasterContextProvider* RasterContextProvider() const override {
     return nullptr;
   }
+  unsigned int GetGrGLTextureFormat(
+      viz::SharedImageFormat format) const override {
+    return 0;
+  }
+
+  gpu::GpuFeatureInfo& GetMutableGpuFeatureInfo() { return gpu_feature_info_; }
 
  private:
   cc::StubDecodeCache image_decode_cache_;
@@ -84,7 +103,7 @@ class WebGraphicsContext3DProviderForTests
   gpu::Capabilities capabilities_;
   gpu::GpuFeatureInfo gpu_feature_info_;
   WebglPreferences webgl_preferences_;
-  viz::TestSharedImageInterface test_shared_image_interface_;
+  scoped_refptr<gpu::TestSharedImageInterface> test_shared_image_interface_;
 };
 
 class GLES2InterfaceForTests : public gpu::gles2::GLES2InterfaceStub,
@@ -201,13 +220,6 @@ class GLES2InterfaceForTests : public gpu::gles2::GLES2InterfaceStub,
     }
   }
 
-  void ProduceTextureDirectCHROMIUM(GLuint texture, GLbyte* mailbox) override {
-    ++current_mailbox_byte_;
-    memset(mailbox, current_mailbox_byte_, GL_MAILBOX_SIZE_CHROMIUM);
-    ASSERT_TRUE(texture_sizes_.Contains(texture));
-    most_recently_produced_size_ = texture_sizes_.at(texture);
-  }
-
   void TexImage2D(GLenum target,
                   GLint level,
                   GLint internalformat,
@@ -304,7 +316,17 @@ class GLES2InterfaceForTests : public gpu::gles2::GLES2InterfaceStub,
     // Not unit tested yet. Tested with end-to-end tests.
     return false;
   }
-  void DrawingBufferClientForceLostContextWithAutoRecovery() override {
+  void DrawingBufferClientForceLostContextWithAutoRecovery(
+      const char* reason) override {
+    // Not unit tested yet. Tested with end-to-end tests.
+  }
+  void DrawingBufferClientInterruptPixelLocalStorage() override {
+    // Not unit tested yet. Tested with end-to-end tests.
+  }
+  void DrawingBufferClientRestorePixelLocalStorage() override {
+    // Not unit tested yet. Tested with end-to-end tests.
+  }
+  void DrawingBufferClientInitializeLayer(cc::Layer* layer) override {
     // Not unit tested yet. Tested with end-to-end tests.
   }
 
@@ -386,7 +408,6 @@ class GLES2InterfaceForTests : public gpu::gles2::GLES2InterfaceStub,
   State saved_state_;
 
   gpu::SyncToken most_recently_waited_sync_token_;
-  GLbyte current_mailbox_byte_ = 0;
   gfx::Size most_recently_produced_size_;
   GLuint current_image_id_ = 1;
   HashMap<GLuint, gfx::Size> texture_sizes_;
@@ -399,6 +420,8 @@ class DrawingBufferForTests : public DrawingBuffer {
  public:
   static scoped_refptr<DrawingBufferForTests> Create(
       std::unique_ptr<WebGraphicsContext3DProvider> context_provider,
+      std::unique_ptr<TestWebGraphicsSharedImageInterfaceProvider>
+          shared_image_interface_provider_for_shared_bitmap,
       const Platform::GraphicsInfo& graphics_info,
       DrawingBuffer::Client* client,
       const gfx::Size& size,
@@ -415,6 +438,9 @@ class DrawingBufferForTests : public DrawingBuffer {
       drawing_buffer->BeginDestruction();
       return nullptr;
     }
+    drawing_buffer->SetSharedImageInterfaceProviderForBitmapTest(
+        std::move(shared_image_interface_provider_for_shared_bitmap));
+
     return drawing_buffer;
   }
 
@@ -428,9 +454,11 @@ class DrawingBufferForTests : public DrawingBuffer {
             std::move(context_provider),
             graphics_info,
             false /* usingSwapChain */,
+            false /* desynchronized */,
             std::move(extensions_util),
             client,
             false /* discardFramebufferSupported */,
+            false /* textureStorageEnabled */,
             true /* wantAlphaChannel */,
             true /* premultipliedAlpha */,
             preserve,
@@ -438,9 +466,7 @@ class DrawingBufferForTests : public DrawingBuffer {
             false /* wantDepth */,
             false /* wantStencil */,
             DrawingBuffer::kAllowChromiumImage /* ChromiumImageUsage */,
-            cc::PaintFlags::FilterQuality::kLow,
             PredefinedColorSpace::kSRGB,
-            CanvasPixelFormat::kUint8,
             gl::GpuPreference::kHighPerformance),
         live_(nullptr) {}
 
@@ -453,12 +479,12 @@ class DrawingBufferForTests : public DrawingBuffer {
     return static_cast<GLES2InterfaceForTests*>(ContextGL());
   }
 
-  viz::TestSharedImageInterface* SharedImageInterfaceForTests() {
-    return static_cast<viz::TestSharedImageInterface*>(
+  gpu::TestSharedImageInterface* SharedImageInterfaceForTests() {
+    return static_cast<gpu::TestSharedImageInterface*>(
         ContextProvider()->SharedImageInterface());
   }
 
-  bool* live_;
+  raw_ptr<bool> live_;
 
   int RecycledBitmapCount() { return recycled_bitmaps_.size(); }
 };

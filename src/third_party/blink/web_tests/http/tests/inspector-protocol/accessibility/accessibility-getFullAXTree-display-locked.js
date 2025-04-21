@@ -1,4 +1,4 @@
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   var {page, session, dp} = await testRunner.startHTML(`
     <div style='height: 10000px;'>spacer</div>
     <div id='activatable' style='content-visibility: auto'>
@@ -11,7 +11,7 @@
       <div id='nested' style='content-visibility: auto'>nested</div>
       text
     </div>
-    <div id='nonViewportActivatable' style='content-visibility: hidden-matchable'>nonViewportActivatable text</div>
+    <div id='nonViewportActivatable' hidden=until-found>nonViewportActivatable text</div>
     <div id='nonActivatable' style='content-visibility: hidden'>nonActivatable text</div>
     <div id='normal'>normal text</div>
   `, 'Tests accessibility values of display locked nodes');

@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/memory/enterprise_memory_limit_evaluator.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/performance_manager/public/decorators/process_metrics_decorator.h"
 #include "components/performance_manager/public/graph/process_node.h"
 #include "components/performance_manager/public/performance_manager.h"
@@ -27,7 +28,7 @@ void EnterpriseMemoryLimitEvaluator::Start() {
           base::BindRepeating(
               &EnterpriseMemoryLimitEvaluator::OnTotalResidentSetKbSample,
               weak_ptr_factory_.GetWeakPtr()),
-          base::SequencedTaskRunnerHandle::Get());
+          base::SequencedTaskRunner::GetCurrentDefault());
   observer_ = observer.get();
   performance_manager::PerformanceManager::PassToGraph(FROM_HERE,
                                                        std::move(observer));
@@ -41,7 +42,7 @@ EnterpriseMemoryLimitEvaluator::StartForTesting() {
           base::BindRepeating(
               &EnterpriseMemoryLimitEvaluator::OnTotalResidentSetKbSample,
               weak_ptr_factory_.GetWeakPtr()),
-          base::SequencedTaskRunnerHandle::Get());
+          base::SequencedTaskRunner::GetCurrentDefault());
   observer_ = observer.get();
   return observer;
 }
@@ -116,8 +117,10 @@ void EnterpriseMemoryLimitEvaluator::GraphObserver::
     OnProcessMemoryMetricsAvailable(
         const performance_manager::SystemNode* system_node) {
   uint64_t total_rss_kb = 0U;
-  for (const auto* node : system_node->GetGraph()->GetAllProcessNodes())
-    total_rss_kb += node->GetResidentSetKb();
+  for (const performance_manager::ProcessNode* process_node :
+       system_node->GetGraph()->GetAllProcessNodes()) {
+    total_rss_kb += process_node->GetResidentSetKb();
+  }
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(std::move(on_sample_callback_), total_rss_kb));
 }

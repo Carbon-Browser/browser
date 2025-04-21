@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,16 +15,16 @@ namespace {
 bool IsPathRestrictionSatisfied(const GURL& scope, const GURL& script_url) {
   std::string error_message;
   return service_worker_loader_helpers::IsPathRestrictionSatisfied(
-      scope, script_url, nullptr, &error_message);
+      scope, script_url, std::nullopt, &error_message);
 }
 
 bool IsPathRestrictionSatisfiedWithServiceWorkerAllowedHeader(
     const GURL& scope,
     const GURL& script_url,
-    const std::string& service_worker_allowed) {
+    std::string_view service_worker_allowed) {
   std::string error_message;
   return service_worker_loader_helpers::IsPathRestrictionSatisfied(
-      scope, script_url, &service_worker_allowed, &error_message);
+      scope, script_url, service_worker_allowed, &error_message);
 }
 
 }  // namespace

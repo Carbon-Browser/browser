@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 #define CHROME_BROWSER_SPEECH_SPEECH_RECOGNIZER_DELEGATE_H_
 
 #include <stdint.h>
+
+#include <optional>
 #include <string>
 
 #include "base/time/time.h"
 #include "media/mojo/mojom/speech_recognition.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Requires cleanup. See crbug.com/800374.
 enum SpeechRecognizerStatus {
@@ -39,7 +40,7 @@ class SpeechRecognizerDelegate {
   virtual void OnSpeechResult(
       const std::u16string& text,
       bool is_final,
-      const absl::optional<media::SpeechRecognitionResult>& full_result) = 0;
+      const std::optional<media::SpeechRecognitionResult>& full_result) = 0;
 
   // Invoked regularly to indicate the average sound volume.
   virtual void OnSpeechSoundLevelChanged(int16_t level) = 0;
@@ -51,8 +52,13 @@ class SpeechRecognizerDelegate {
   // Invoked when the speech recognition has stopped.
   virtual void OnSpeechRecognitionStopped() = 0;
 
+  // Invoked when a language identification event
+  // during speech recognition has been received.
+  virtual void OnLanguageIdentificationEvent(
+      media::mojom::LanguageIdentificationEventPtr event) = 0;
+
  protected:
-  virtual ~SpeechRecognizerDelegate() {}
+  virtual ~SpeechRecognizerDelegate() = default;
 };
 
 #endif  // CHROME_BROWSER_SPEECH_SPEECH_RECOGNIZER_DELEGATE_H_

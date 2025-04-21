@@ -99,7 +99,7 @@ for your fuzzer. This will allow more code-reuse between fuzzers, and also
 allow corpus-merging between related fuzzers.
 
 ```
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -205,7 +205,7 @@ mojolpm_fuzzer_test("code_cache_host_mojolpm_fuzzer") {
 Now, the minimal source code to load our testcases:
 
 ```c++
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -241,7 +241,7 @@ is_asan = true
 is_component_build = true
 is_debug = false
 optimize_for_fuzzing = true
-use_goma = true
+use_remoteexec = true
 use_libfuzzer = true
 ```
 
@@ -260,11 +260,11 @@ Mojo Core, and loading ICU datafiles.
 A key difference between our needs here and those of a normal unittest is that
 we very likely do not want to be running in a special single-threaded mode. We
 want to be able to trigger issues related to threading, sequencing and ordering,
-and making sure that the UI, IO and threadpool threads behave as close to a 
+and making sure that the UI, IO and threadpool threads behave as close to a
 normal browser process as possible is desirable.
 
-It's likely better to be conservative here - while it might appear that an 
-interface to be tested has no interaction with the UI thread, and so we could 
+It's likely better to be conservative here - while it might appear that an
+interface to be tested has no interaction with the UI thread, and so we could
 save some resources by only having a real IO thread, it's often very difficult
 to establish this with certainty.
 
@@ -437,6 +437,7 @@ the rough structure of the presentation service fuzzer")
 Make a corpus directory and fire up your shiny new fuzzer!
 
 ```
+ ~/chromium/src% set ASAN_OPTIONS=detect_odr_violation=0,handle_abort=1,handle_sigtrap=1,handle_sigill=1
  ~/chromium/src% out/Default/code_cache_host_mojolpm_fuzzer /dev/shm/corpus
 INFO: Seed: 3273881842
 INFO: Loaded 1 modules   (1121912 inline 8-bit counters): 1121912 [0x559151a1aea8, 0x559151b2cd20),
@@ -552,7 +553,7 @@ is_asan = true
 is_component_build = true
 is_debug = false
 optimize_for_fuzzing = true
-use_goma = true
+use_remoteexec = true
 use_libfuzzer = true
 ```
 
@@ -584,7 +585,7 @@ enable_mojom_fuzzer = true
 is_component_build = false
 is_debug = false
 use_clang_coverage = true
-use_goma = true
+use_remoteexec = true
 use_libfuzzer = true
 ```
 
@@ -720,6 +721,20 @@ implementation should never, under any circumstances be running on this thread,
 so any crash on this thread is the result of a bug in the fuzzer itself, or
 one of the other causes mentioned below.
 
+In AddressSanitizer builds this case can be automatically identified by
+additional instrumentation, which is implemented as part of
+`content::mojolpm::FuzzerEnvironment` but will need to be duplicated for fuzzers
+in other areas of the codebase. This instrumentation prints additional output as
+part of the ASan report, and should make the fuzzer exit cleanly for these false
+positives so that further instrumentation should ignore these crashes.
+
+```
+MojoLPM: FALSE POSITIVE
+This crash occurred on the fuzzer thread, so it is a false positive and
+does not represent a security issue. In MojoLPM, the fuzzer thread
+represents the unprivileged renderer process.
+```
+
 The second is DCHECK or other failures during Mojo serialization. Various traits
 assert that they are serializing reasonable values - since we need to reuse this
 serialization code in the fuzzer to produce input to the implementation, we can
@@ -751,10 +766,51 @@ Thread T5 (fuzzer_thread) created by T0 here:
 ==2940792==ABORTING
 ```
 
+## Debugging tips
+
+`LOG()` statements don't print while running the fuzzer, but printing to
+`std::cout` should work. NOTE(caraitto): This is likely due to the lack of
+`--enable-logging=stderr`, but `LOG()` only worked in certain contexts when
+adding that to the command line during `FuzzerEnvironment` setup. `CHECK()`
+should work though.
+
+[`google::protobuf::TextFormat::PrintToString()`] can be used to dump the
+contents of the current testcase proto. This can be useful to help inspect the
+contents of individual crash testcase files, as you can invoke the fuzzer with a
+crash testcase instead of a corpus directory, and then `PrintToString()` can
+print out a string representation of the crash testcase file. This can be easier
+than trying to use command-line protobuf printing tools as these may require
+listing all .proto schema files used, including the many transitive includes.
+
+The [`mojolpm::Context`] global singleton stores objects like Mojo remotes and
+return values of Mojo methods. It can help connect custom action implementations
+with the generated code. Objects are keyed by the type of object and a numeric
+ID that starts at 1 -- for instance, this is how the
+`code_cache_host_remote_action` above knows to use the specific remote created
+by the `new_code_cache_host` -- they both use the `id` of 1.
+
+By changing the [`MOJOLPM_DBG`] `#define` to 1, a number of `mojolpm::Context`
+debug logging sites will be enabled. It's also possible to add logging to the
+generated code by altering the [generated code templates].
+
+Code coverage, as mentioned above, can also be a good tool to determine how far
+into the code the fuzzer is exploring. It's possible to run coverage on the seed
+corpus to see how much code gets covered initially, or run the fuzzer normally
+(non-coverage run) for a few minutes / hours, starting with the seed corpus,
+then run coverage using the resultant corpus directory to see how much
+additional coverage the fuzzer was able to gain through exploration. (Coverage
+runs don't produce new testcases). You may want to periodically monitor code
+coverage to ensure that product code changes don't result in loss of fuzzer
+coverage. However, if you just want to see if a particular line gets covered, it
+might be faster to add a print or `CHECK()` at that line and run the fuzzer.
+
 [markbrand@google.com]:mailto:markbrand@google.com?subject=[MojoLPM%20Help]:%20&cc=fuzzing@chromium.org
 [libfuzzer]: https://source.chromium.org/chromium/chromium/src/+/main:testing/libfuzzer/getting_started.md
 [Protocol Buffers]: https://developers.google.com/protocol-buffers/docs/cpptutorial
 [libprotobuf-mutator]: https://source.chromium.org/chromium/chromium/src/+/main:testing/libfuzzer/libprotobuf-mutator.md
 [testing in Chromium]: https://source.chromium.org/chromium/chromium/src/+/main:docs/testing/testing_in_chromium.md
 [interfaces]: https://source.chromium.org/search?q=interface%5Cs%2B%5Cw%2B%5Cs%2B%7B%20f:%5C.mojom$%20-f:test
-
+[`google::protobuf::TextFormat::PrintToString()`]: https://source.chromium.org/chromium/chromium/src/+/main:third_party/protobuf/src/google/protobuf/text_format.h;l=92;drc=b8644e8bc11097152e648510ca97dad0a20c1aae
+[`mojolpm::Context`]: https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/tools/fuzzers/mojolpm.cc;l=85;drc=6f3f85b321146cfc0f9eb81a74c7c2257821461e
+[`MOJOLPM_DBG`]: https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/tools/fuzzers/mojolpm.h;l=25;drc=6f3f85b321146cfc0f9eb81a74c7c2257821461e
+[generated code templates]: https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/tools/bindings/generators/mojolpm_templates/;drc=af0878e4870444f6347f915a5f24f438085913f6

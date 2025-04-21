@@ -1,15 +1,20 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/test/chromedriver/chrome/heap_snapshot_taker.h"
 
 #include <stddef.h>
 
+#include <array>
 #include <utility>
 
 #include "base/json/json_reader.h"
-#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 
@@ -18,11 +23,11 @@ HeapSnapshotTaker::HeapSnapshotTaker(DevToolsClient* client)
   client_->AddListener(this);
 }
 
-HeapSnapshotTaker::~HeapSnapshotTaker() {}
+HeapSnapshotTaker::~HeapSnapshotTaker() = default;
 
 Status HeapSnapshotTaker::TakeSnapshot(std::unique_ptr<base::Value>* snapshot) {
   Status status1 = TakeSnapshotInternal();
-  base::DictionaryValue params;
+  base::Value::Dict params;
   Status status2 = client_->SendCommand("Debugger.disable", params);
 
   Status status3(kOk);
@@ -40,12 +45,12 @@ Status HeapSnapshotTaker::TakeSnapshot(std::unique_ptr<base::Value>* snapshot) {
 }
 
 Status HeapSnapshotTaker::TakeSnapshotInternal() {
-  base::DictionaryValue params;
-  const char* const kMethods[] = {
+  base::Value::Dict params;
+  const auto kMethods = std::to_array<const char*>({
       "Debugger.enable",
       "HeapProfiler.collectGarbage",
-      "HeapProfiler.takeHeapSnapshot"
-  };
+      "HeapProfiler.takeHeapSnapshot",
+  });
   for (size_t i = 0; i < std::size(kMethods); ++i) {
     Status status = client_->SendCommand(kMethods[i], params);
     if (status.IsError())
@@ -55,16 +60,20 @@ Status HeapSnapshotTaker::TakeSnapshotInternal() {
   return Status(kOk);
 }
 
+bool HeapSnapshotTaker::ListensToConnections() const {
+  return false;
+}
+
 Status HeapSnapshotTaker::OnEvent(DevToolsClient* client,
                                   const std::string& method,
-                                  const base::DictionaryValue& params) {
+                                  const base::Value::Dict& params) {
   if (method == "HeapProfiler.addHeapSnapshotChunk") {
-    std::string chunk;
-    if (!params.GetString("chunk", &chunk)) {
+    const std::string* chunk = params.FindString("chunk");
+    if (!chunk) {
       return Status(kUnknownError,
                     "HeapProfiler.addHeapSnapshotChunk has no 'chunk'");
     }
-    snapshot_.append(chunk);
+    snapshot_.append(*chunk);
   }
   return Status(kOk);
 }

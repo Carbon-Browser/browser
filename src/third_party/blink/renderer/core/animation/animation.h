@@ -34,38 +34,36 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_property.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_animation_play_state.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_replace_state.h"
 #include "third_party/blink/renderer/core/animation/animation_effect.h"
 #include "third_party/blink/renderer/core/animation/animation_effect_owner.h"
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
+#include "third_party/blink/renderer/core/animation/timeline_offset.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/core/css/css_property_names.h"
-#include "third_party/blink/renderer/core/css/cssom/css_numeric_value.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_client.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_delegate.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 
 namespace blink {
 
-class CompositorAnimation;
-class Element;
-class ExceptionState;
-class PaintArtifactCompositor;
-class TreeScope;
 class AnimationTimeline;
+class Element;
+class PaintArtifactCompositor;
+class StyleChangeReasonForTracing;
+class TreeScope;
+class TimelineRange;
 
-class CORE_EXPORT Animation : public EventTargetWithInlineData,
+class CORE_EXPORT Animation : public EventTarget,
                               public ActiveScriptWrappable<Animation>,
                               public ExecutionContextLifecycleObserver,
                               public CompositorAnimationDelegate,
@@ -75,18 +73,6 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   USING_PRE_FINALIZER(Animation, Dispose);
 
  public:
-  enum AnimationPlayState {
-    kUnset,
-    kIdle,
-    kPending,  // TODO(crbug.com/958433) remove non-spec compliant state.
-    kRunning,
-    kPaused,
-    kFinished
-  };
-
-  // https://w3.org/TR/web-animations-1/#animation-replace-state
-  enum ReplaceState { kActive, kRemoved, kPersisted };
-
   // Priority for sorting getAnimation by Animation class, arranged from lowest
   // priority to highest priority as per spec:
   // https://w3.org/TR/web-animations-1/#dom-document-getanimations
@@ -144,27 +130,28 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   //                             next frame
   //  AnimationTimeDelta() > 0 - if this animation requires an update
   //                             after 'n' units of time
-  absl::optional<AnimationTimeDelta> TimeToEffectChange();
+  std::optional<AnimationTimeDelta> TimeToEffectChange();
 
   void cancel();
 
   V8CSSNumberish* currentTime() const;
-  absl::optional<AnimationTimeDelta> CurrentTimeInternal() const;
+  std::optional<AnimationTimeDelta> CurrentTimeInternal() const;
   void setCurrentTime(const V8CSSNumberish* current_time,
                       ExceptionState& exception_state);
   void SetCurrentTimeInternal(AnimationTimeDelta);
 
-  absl::optional<AnimationTimeDelta> UnlimitedCurrentTime() const;
+  std::optional<AnimationTimeDelta> UnlimitedCurrentTime() const;
+
+  // https://drafts.csswg.org/web-animations-2/#the-overall-progress-of-an-animation
+  std::optional<double> overallProgress() const;
 
   // https://w3.org/TR/web-animations-1/#play-states
-  String PlayStateString() const;
-  static const char* PlayStateString(AnimationPlayState);
-  AnimationPlayState CalculateAnimationPlayState() const;
+  V8AnimationPlayState::Enum CalculateAnimationPlayState() const;
 
   // As a web exposed API, playState must update style and layout if the play
   // state may be affected by it (see CSSAnimation::playState), whereas
   // PlayStateString can be used to query the current play state.
-  virtual String playState() const;
+  virtual V8AnimationPlayState playState() const;
 
   bool PendingInternal() const;
 
@@ -180,16 +167,19 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   void updatePlaybackRate(double playback_rate,
                           ExceptionState& = ASSERT_NO_EXCEPTION);
 
-  ScriptPromise finished(ScriptState*);
-  ScriptPromise ready(ScriptState*);
+  ScriptPromise<Animation> finished(ScriptState*);
+  ScriptPromise<Animation> ready(ScriptState*);
 
   bool Paused() const {
-    return CalculateAnimationPlayState() == kPaused && !is_paused_for_testing_;
+    return CalculateAnimationPlayState() ==
+               V8AnimationPlayState::Enum::kPaused &&
+           !is_paused_for_testing_;
   }
 
   bool Playing() const override {
-    return CalculateAnimationPlayState() == kRunning && !Limited() &&
-           !is_paused_for_testing_;
+    return CalculateAnimationPlayState() ==
+               V8AnimationPlayState::Enum::kRunning &&
+           !Limited() && !is_paused_for_testing_;
   }
 
   bool Limited() const { return Limited(CurrentTimeInternal()); }
@@ -206,13 +196,69 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
 
   double playbackRate() const;
   void setPlaybackRate(double, ExceptionState& = ASSERT_NO_EXCEPTION);
-  AnimationTimeline* timeline() { return timeline_; }
-  AnimationTimeline* timeline() const { return timeline_; }
+
+  AnimationTimeline* TimelineInternal() { return timeline_.Get(); }
+  AnimationTimeline* TimelineInternal() const { return timeline_.Get(); }
+
+  // Note that this function returns the *exposed* timeline, which may be
+  // different from the the timeline the Animation is actually attached to.
+  //
+  // See AnimationTimeline::ExposedTimeline.
+  AnimationTimeline* timeline();
+
+  // Converts time to a progress measured as relative completion of the
+  // animation (effect end time). This value is used to preserve progress when
+  // changing timelines to prevent a discontinuity of the timeline changes while
+  // in a paused state. Note that this progress measure is not the same as the
+  // percentages used in the web-platform API for scroll-linked animations,
+  // which are relative to the timeline duration and not the effect end time.
+  std::optional<double> TimeAsAnimationProgress(AnimationTimeDelta time) const;
+
   virtual void setTimeline(AnimationTimeline* timeline);
+
+  // Animation options for ScrollTimelines.
+  // Setting a range boundary via rangeStart or rangeEnd overrides the
+  // corresponding CSS properties and resets a "sticky" start time.
+  using RangeBoundary = V8UnionStringOrTimelineRangeOffset;
+  const RangeBoundary* rangeStart();
+  const RangeBoundary* rangeEnd();
+  virtual void setRangeStart(const RangeBoundary* range_start,
+                             ExceptionState& exception_state);
+  virtual void setRangeEnd(const RangeBoundary* range_end,
+                           ExceptionState& exception_state);
+
+  const std::optional<TimelineOffset>& GetRangeStartInternal() const {
+    return range_start_;
+  }
+  const std::optional<TimelineOffset>& GetRangeEndInternal() const {
+    return range_end_;
+  }
+  void SetRangeStartInternal(const std::optional<TimelineOffset>& range_start);
+  void SetRangeEndInternal(const std::optional<TimelineOffset>& range_end);
+
+  // This method is only called during style update of a CSS animation.
+  // Preventing an endpoint from stomping a value set via the rangeStart or
+  // rangeEnd API is performed by the caller in CSSAnimations.
+  virtual void SetRange(const std::optional<TimelineOffset>& range_start,
+                        const std::optional<TimelineOffset>& range_end);
+
+  void UpdateBoundaryAlignment(Timing::NormalizedTiming& timing) const;
+
+  // Called during validation of a scroll timeline to determine if a second
+  // style and layout pass is required. During this validation step, we have an
+  // up to date snapshot of the timeline and can initialize the start time if
+  // required. If the start time or intrinsic iteration duration changes, we
+  // need a second style+layout pass even if the timeline snapshot is valid.
+  bool OnValidateSnapshot(bool snapshot_changed);
+
+  void OnRangeUpdate();
+
+  bool ResolveTimelineOffsets(const TimelineRange&);
+
   Document* GetDocument() const;
 
   V8CSSNumberish* startTime() const;
-  absl::optional<AnimationTimeDelta> StartTimeInternal() const {
+  std::optional<AnimationTimeDelta> StartTimeInternal() const {
     return start_time_;
   }
   virtual void setStartTime(const V8CSSNumberish* start_time,
@@ -227,6 +273,7 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
 
   // Pausing via this method is not reflected in the value returned by
   // paused() and must never overlap with pausing via pause().
+  // Deprecated: Do not use in new tests.
   void PauseForTesting(AnimationTimeDelta pause_time);
   void DisableCompositedAnimationForTesting();
 
@@ -248,7 +295,18 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   void RestartAnimationOnCompositor();
   void CancelIncompatibleAnimationsOnCompositor();
   bool HasActiveAnimationsOnCompositor();
-  void SetCompositorPending(bool effect_changed = false);
+
+  enum class CompositorPendingReason {
+    kPendingUpdate,        // Update due to an API call that may affect
+                           // play state or start time.
+    kPendingEffectChange,  // Update that changes the animation effect
+                           // including keyframes or active interval.
+    kPendingCancel,        // Animation has been canceled, but could restart
+                           // conditions permitting.
+    kPendingRestart        // Animation is to be restarted.
+  };
+  void SetCompositorPending(CompositorPendingReason reason);
+
   void NotifyReady(AnimationTimeDelta ready_time);
   void CommitPendingPlay(AnimationTimeDelta ready_time);
   void CommitPendingPause(AnimationTimeDelta ready_time);
@@ -279,23 +337,31 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   bool EffectSuppressed() const override { return effect_suppressed_; }
   void SetEffectSuppressed(bool);
 
-  void InvalidateKeyframeEffect(const TreeScope&);
+  void InvalidateKeyframeEffect(const TreeScope&,
+                                const StyleChangeReasonForTracing&);
   void InvalidateEffectTargetStyle();
+  void InvalidateNormalizedTiming();
 
   void Trace(Visitor*) const override;
 
   bool CompositorPending() const { return compositor_pending_; }
+  bool CompositorPendingCancel() const {
+    return compositor_state_ &&
+           compositor_state_->pending_action == CompositorAction::kCancel;
+  }
 
   // Methods for handling removal and persistence of animations.
   bool IsReplaceable();
   void RemoveReplacedAnimation();
   void persist();
-  String replaceState();
+  V8ReplaceState replaceState();
   void commitStyles(ExceptionState& = ASSERT_NO_EXCEPTION);
   bool ReplaceStateRemoved() const override {
-    return replace_state_ == kRemoved;
+    return replace_state_ == V8ReplaceState::Enum::kRemoved;
   }
-  bool ReplaceStateActive() const { return replace_state_ == kActive; }
+  bool ReplaceStateActive() const {
+    return replace_state_ == V8ReplaceState::Enum::kActive;
+  }
 
   // Overridden for CSS animations to force pending animation properties to be
   // applied. This step is required before any web animation API calls that
@@ -314,7 +380,27 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
     return compositor_property_animations_have_no_effect_;
   }
   bool AnimationHasNoEffect() const { return animation_has_no_effect_; }
-  bool AtScrollTimelineBoundary();
+
+  bool WaitingOnDeferredStartTime() {
+    return !start_time_ && (pending_play_ || pending_pause_);
+  }
+
+  // Scroll linked animations do not initialize the start time
+  // during play or pause as the start time is deferred until timeline
+  // validation.
+  void SetDeferredStartTimeForTesting(
+      AnimationTimeDelta start_time = AnimationTimeDelta()) {
+    start_time_ = start_time;
+  }
+
+  enum NativePaintWorkletProperties {
+    kNoPaintWorklet = 0,
+    kBackgroundColorPaintWorklet = 1,
+    kClipPathPaintWorklet = 2
+  };
+
+  using NativePaintWorkletReasons = uint32_t;
+  NativePaintWorkletReasons GetNativePaintWorkletReasons();
 
  protected:
   DispatchEventResult DispatchEventInternal(Event&) override;
@@ -331,7 +417,7 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   void ForceServiceOnNextFrame();
 
   AnimationTimeDelta EffectEnd() const;
-  bool Limited(absl::optional<AnimationTimeDelta> current_time) const;
+  bool Limited(std::optional<AnimationTimeDelta> current_time) const;
 
   // Playback rate that will take effect once any pending tasks are resolved.
   // If there are no pending tasks, then the effective playback rate equals the
@@ -339,15 +425,15 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   double EffectivePlaybackRate() const;
   void ApplyPendingPlaybackRate();
 
-  absl::optional<AnimationTimeDelta> CalculateStartTime(
+  std::optional<AnimationTimeDelta> CalculateStartTime(
       AnimationTimeDelta current_time) const;
-  absl::optional<AnimationTimeDelta> CalculateCurrentTime() const;
+  std::optional<AnimationTimeDelta> CalculateCurrentTime() const;
 
   V8CSSNumberish* ConvertTimeToCSSNumberish(
-      absl::optional<AnimationTimeDelta>) const;
+      std::optional<AnimationTimeDelta>) const;
   // Failure to convert results in a thrown exception and returning false.
   bool ConvertCSSNumberishToTime(const V8CSSNumberish* numberish,
-                                 absl::optional<AnimationTimeDelta>& time,
+                                 std::optional<AnimationTimeDelta>& time,
                                  String variable_name,
                                  ExceptionState& exception_state);
 
@@ -356,7 +442,7 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
 
   CompositorAnimations::FailureReasons
   CheckCanStartAnimationOnCompositorInternal() const;
-  void CreateCompositorAnimation();
+  void CreateCompositorAnimation(std::optional<int> replaced_cc_animation_id);
   void DestroyCompositorAnimation();
   void AttachCompositorTimeline();
   void DetachCompositorTimeline();
@@ -370,8 +456,7 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   void NotifyAnimationAborted(base::TimeDelta monotonic_time,
                               int group) override {}
 
-  using AnimationPromise = ScriptPromiseProperty<Member<Animation>,
-                                                 Member<DOMException>>;
+  using AnimationPromise = ScriptPromiseProperty<Animation, DOMException>;
   void ResolvePromiseMaybeAsync(AnimationPromise*);
   void RejectAndResetPromise(AnimationPromise*);
   void RejectAndResetPromiseMaybeAsync(AnimationPromise*);
@@ -394,7 +479,7 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   void PlayInternal(AutoRewind auto_rewind, ExceptionState& exception_state);
 
   void ResetPendingTasks();
-  absl::optional<AnimationTimeDelta> TimelineTime() const;
+  std::optional<AnimationTimeDelta> TimelineTime() const;
 
   void ScheduleAsyncFinish();
   void AsyncFinishMicrotask();
@@ -412,21 +497,50 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   // non-native paint worklets.
   void UpdateCompositedPaintStatus();
 
+  // Updates the start time for a running animation that is linked to a scroll
+  // timeline. As the animation is linked to a timeline range, we don't
+  // necessarily know the start time when calling play or pause. Instead, we
+  // calculate the start time and iteration duration once the timeline has been
+  // validated or the animation is ready (if no validation required). The start
+  // time must also be updated if changing the animation range on a running or
+  // finished animation. If a start time was explicitly set, it is treated as
+  // sticky and not updated.
+  void UpdateAutoAlignedStartTime();
+
+  // Conversion between V8 representation of an animation range boundary and the
+  // internal representation.
+  std::optional<TimelineOffset> GetEffectiveTimelineOffset(
+      const RangeBoundary* boundary,
+      double default_percent,
+      ExceptionState& exception_state);
+  static RangeBoundary* ToRangeBoundary(std::optional<TimelineOffset> offset);
+
   String id_;
 
   // Extended play state reported to dev tools. This play state has an
   // additional pending state that is not part of the spec by expected by dev
   // tools.
-  AnimationPlayState reported_play_state_;
+  V8AnimationPlayState::Enum reported_play_state_ =
+      V8AnimationPlayState::Enum::kIdle;
   double playback_rate_;
   // The pending playback rate is not currently in effect. It typically takes
   // effect when running a scheduled task in response to the animation being
   // ready.
-  absl::optional<double> pending_playback_rate_;
-  absl::optional<AnimationTimeDelta> start_time_;
-  absl::optional<AnimationTimeDelta> hold_time_;
-  absl::optional<AnimationTimeDelta> previous_current_time_;
+  std::optional<double> pending_playback_rate_;
+  std::optional<AnimationTimeDelta> start_time_;
+  std::optional<AnimationTimeDelta> hold_time_;
+  std::optional<AnimationTimeDelta> previous_current_time_;
+  // Timeline duration is non-null when using a scroll timeline. The value is
+  // tracked in order to update a hold time if the timeline duration changes.
+  std::optional<AnimationTimeDelta> timeline_duration_;
   bool reset_current_time_on_resume_ = false;
+
+  // Indicates if the animation should auto-align it's start time to the
+  // animation range if attached to a ScrollTimeline.  Explicit calls to
+  // set the current or start time override auto-alignment, effectively making
+  // the start time "sticky", until play or pause are called to un-stick the
+  // start time.
+  bool auto_align_start_time_ = true;
 
   unsigned sequence_number_;
 
@@ -439,7 +553,13 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
   Member<Document> document_;
   Member<AnimationTimeline> timeline_;
 
-  ReplaceState replace_state_;
+  std::optional<TimelineOffset> range_start_;
+  std::optional<TimelineOffset> range_end_;
+
+  Member<CSSValue> style_dependent_range_start_;
+  Member<CSSValue> style_dependent_range_end_;
+
+  V8ReplaceState::Enum replace_state_ = V8ReplaceState::Enum::kActive;
 
   // Testing flags.
   bool is_paused_for_testing_;
@@ -472,9 +592,16 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
 
   Member<Event> pending_remove_event_;
 
+  // Cache whether animation can potentially have native paint worklets.
+  // In the event of the keyframes changing, we need a new evaluation, of
+  // the composited status for native paint worklet eligible properties.
+  // A change in the playState can also necessitate a composited style update.
+  std::optional<NativePaintWorkletReasons> native_paint_worklet_reasons_;
+  std::optional<NativePaintWorkletReasons> prior_native_paint_worklet_reasons_;
+
   // TODO(crbug.com/960944): Consider reintroducing kPause and cleanup use of
   // mutually exclusive pending_play_ and pending_pause_ flags.
-  enum class CompositorAction { kNone, kStart };
+  enum class CompositorAction { kNone, kStart, kCancel };
 
   class CompositorState {
     USING_FAST_MALLOC(CompositorState);
@@ -484,31 +611,24 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
     // AnimationTimeDelta for start_time_ and hold_time_.
     explicit CompositorState(Animation& animation)
         : start_time(animation.start_time_
-                         ? absl::make_optional(
+                         ? std::make_optional(
                                animation.start_time_.value().InSecondsF())
-                         : absl::nullopt),
+                         : std::nullopt),
           hold_time(animation.hold_time_
-                        ? absl::make_optional(
+                        ? std::make_optional(
                               animation.hold_time_.value().InSecondsF())
-                        : absl::nullopt),
+                        : std::nullopt),
           playback_rate(animation.EffectivePlaybackRate()),
-          effect_changed(false),
           pending_action(animation.start_time_ ? CompositorAction::kNone
                                                : CompositorAction::kStart) {}
     CompositorState(const CompositorState&) = delete;
     CompositorState& operator=(const CompositorState&) = delete;
 
-    absl::optional<double> start_time;
-    absl::optional<double> hold_time;
+    std::optional<double> start_time;
+    std::optional<double> hold_time;
     double playback_rate;
-    bool effect_changed;
+    bool effect_changed = false;
     CompositorAction pending_action;
-  };
-
-  enum CompositorPendingChange {
-    kSetCompositorPending,
-    kSetCompositorPendingWithEffectChanged,
-    kDoNotSetCompositorPending,
   };
 
   // CompositorAnimation objects need to eagerly sever their connection to their
@@ -519,9 +639,13 @@ class CORE_EXPORT Animation : public EventTargetWithInlineData,
     USING_PRE_FINALIZER(CompositorAnimationHolder, Dispose);
 
    public:
-    static CompositorAnimationHolder* Create(Animation*);
+    static CompositorAnimationHolder* Create(
+        Animation*,
+        std::optional<int> replaced_cc_animation_id);
 
-    explicit CompositorAnimationHolder(Animation*);
+    explicit CompositorAnimationHolder(
+        Animation*,
+        std::optional<int> replaced_cc_animation_id);
 
     void Detach();
 

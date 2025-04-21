@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,6 @@ const MultiAnimation::Part& MultiAnimation::GetPart(base::TimeDelta* time,
     *time -= parts_[i].length;
   }
   NOTREACHED();
-  return parts_[0];
 }
 
 }  // namespace gfx

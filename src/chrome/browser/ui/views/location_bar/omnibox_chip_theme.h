@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 // Icon, text, and background colors that should be used for different types
 // of Chip.
 enum class OmniboxChipTheme {
-  kNormalVisibility,
   kLowVisibility,
   // Shows the chip with no background, and an icon color matching other icons
   // in the omnibox. Suitable for collapsing the chip down to a less prominent

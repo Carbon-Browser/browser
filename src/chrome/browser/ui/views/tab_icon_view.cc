@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,8 +76,7 @@ TabIconView::TabIconView() {
   SetFocusBehavior(FocusBehavior::NEVER);
 }
 
-TabIconView::~TabIconView() {
-}
+TabIconView::~TabIconView() = default;
 
 void TabIconView::SetModel(TabIconViewModel* model) {
   model_ = model;
@@ -85,15 +84,17 @@ void TabIconView::SetModel(TabIconViewModel* model) {
 }
 
 void TabIconView::Update() {
-  if (!model_ || !model_->ShouldTabIconViewAnimate())
+  if (!model_ || !model_->ShouldTabIconViewAnimate()) {
     throbber_start_time_ = base::TimeTicks();
+  }
 
   SchedulePaint();
 }
 
 void TabIconView::PaintThrobber(gfx::Canvas* canvas) {
-  if (throbber_start_time_ == base::TimeTicks())
+  if (throbber_start_time_ == base::TimeTicks()) {
     throbber_start_time_ = base::TimeTicks::Now();
+  }
 
   gfx::PaintThrobberSpinning(canvas, GetLocalBounds(),
                              GetColorProvider()->GetColor(ui::kColorThrobber),
@@ -128,7 +129,8 @@ void TabIconView::PaintFavicon(gfx::Canvas* canvas,
                        dest_h, true);
 }
 
-gfx::Size TabIconView::CalculatePreferredSize() const {
+gfx::Size TabIconView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   return gfx::Size(gfx::kFaviconSize, gfx::kFaviconSize);
 }
 
@@ -150,5 +152,5 @@ void TabIconView::PaintButtonContents(gfx::Canvas* canvas) {
   PaintFavicon(canvas, DefaultFavicon::GetInstance().icon());
 }
 
-BEGIN_METADATA(TabIconView, views::MenuButton)
+BEGIN_METADATA(TabIconView)
 END_METADATA

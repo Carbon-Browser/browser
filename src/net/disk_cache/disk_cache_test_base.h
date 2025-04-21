@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,6 +83,7 @@ class DiskCacheTestWithCache : public DiskCacheTest {
 
   void CreateBackend(uint32_t flags);
 
+  void ResetCaches();
   void InitCache();
   void SimulateCrash();
   void SetTestMode();
@@ -98,7 +99,7 @@ class DiskCacheTestWithCache : public DiskCacheTest {
 
   void SetMask(uint32_t mask) { mask_ = mask; }
 
-  void SetMaxSize(int64_t size, bool should_succeed = true);
+  void SetMaxSize(int64_t size);
 
   // Returns value last given to SetMaxSize (or 0).
   int MaxSize() const { return size_; }
@@ -191,6 +192,8 @@ class DiskCacheTestWithCache : public DiskCacheTest {
   void AddDelay();
 
   void OnExternalCacheHit(const std::string& key);
+
+  std::unique_ptr<disk_cache::Backend> TakeCache();
 
   void TearDown() override;
 

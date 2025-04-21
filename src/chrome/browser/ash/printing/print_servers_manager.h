@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROME_BROWSER_ASH_PRINTING_PRINT_SERVERS_MANAGER_H_
@@ -8,9 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "chrome/browser/ash/printing/enterprise/print_servers_policy_provider.h"
 #include "chrome/browser/ash/printing/print_server.h"
-#include "chrome/browser/ash/printing/print_servers_policy_provider.h"
 #include "chrome/browser/ash/printing/printer_detector.h"
 #include "chrome/browser/ash/printing/printer_installation_manager.h"
 #include "chromeos/printing/printer_configuration.h"

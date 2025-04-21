@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,19 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/strings/strcat.h"
+#include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_callback_support.h"
+#include "chrome/browser/webapps/webapps_client_desktop.h"
+#include "components/webapps/browser/banners/app_banner_manager.h"
 #include "components/webapps/browser/installable/installable_data.h"
+#include "components/webapps/browser/webapps_client.h"
 #include "content/public/browser/web_contents.h"
+#include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/blink/public/common/manifest/manifest_util.h"
 
 namespace webapps {
 
@@ -32,6 +41,7 @@ static std::unique_ptr<AppBannerManagerDesktop> CreateTestAppBannerManager(
 void TestAppBannerManagerDesktop::SetUp() {
   AppBannerManagerDesktop::override_app_banner_manager_desktop_for_testing_ =
       CreateTestAppBannerManager;
+  WebappsClientDesktop::CreateSingleton();
 }
 
 TestAppBannerManagerDesktop* TestAppBannerManagerDesktop::FromWebContents(
@@ -59,7 +69,7 @@ bool TestAppBannerManagerDesktop::WaitForInstallableCheck() {
     installable_quit_closure_ = run_loop.QuitClosure();
     run_loop.Run();
   }
-  return *installable_;
+  return *installable_ && IsPromotableWebApp();
 }
 
 void TestAppBannerManagerDesktop::PrepareDone(base::OnceClosure on_done) {
@@ -78,25 +88,46 @@ void TestAppBannerManagerDesktop::AwaitAppInstall() {
 
 void TestAppBannerManagerDesktop::OnDidGetManifest(
     const InstallableData& result) {
+  debug_log_.Append("OnDidGetManifest");
   AppBannerManagerDesktop::OnDidGetManifest(result);
 
-  // AppBannerManagerDesktop does not call |OnDidPerformInstallableCheck| to
-  // complete the installability check in this case, instead it early exits
-  // with failure.
-  if (!result.NoBlockingErrors())
+  // The manifest URL changing in the middle of a pipeline doesn't always mean
+  // the page data will be reset. To ensure that installable_ isn't accidentally
+  // set twice, reset it here.
+  if (base::Contains(result.errors,
+                     InstallableStatusCode::MANIFEST_URL_CHANGED)) {
+    installable_.reset();
+  } else if (blink::IsEmptyManifest(*result.manifest)) {
+    // AppBannerManagerDesktop does not call
+    // |OnDidPerformInstallableWebAppCheck| to complete the installability check
+    // in this case, instead it early exits with failure.
     SetInstallable(false);
+  }
 }
 void TestAppBannerManagerDesktop::OnDidPerformInstallableWebAppCheck(
     const InstallableData& result) {
+  // If the renderer is existing, ensure installable isn't accidentally set
+  // twice.
+  if (base::Contains(result.errors, InstallableStatusCode::RENDERER_EXITING)) {
+    installable_.reset();
+  }
+  debug_log_.Append("OnDidPerformInstallableWebAppCheck");
   AppBannerManagerDesktop::OnDidPerformInstallableWebAppCheck(result);
-  SetInstallable(result.NoBlockingErrors());
+  SetInstallable(result.errors.empty());
 }
 
 void TestAppBannerManagerDesktop::ResetCurrentPageData() {
+  debug_log_.Append("ResetCurrentPageData");
   AppBannerManagerDesktop::ResetCurrentPageData();
   installable_.reset();
   if (tear_down_quit_closure_)
     std::move(tear_down_quit_closure_).Run();
+}
+
+void TestAppBannerManagerDesktop::RecheckInstallabilityForLoadedPage() {
+  debug_log_.Append("RecheckInstallabilityForLoadedPage");
+  installable_.reset();
+  AppBannerManagerDesktop::RecheckInstallabilityForLoadedPage();
 }
 
 TestAppBannerManagerDesktop*
@@ -104,23 +135,30 @@ TestAppBannerManagerDesktop::AsTestAppBannerManagerDesktopForTesting() {
   return this;
 }
 
-void TestAppBannerManagerDesktop::OnInstall(blink::mojom::DisplayMode display) {
-  AppBannerManager::OnInstall(display);
+void TestAppBannerManagerDesktop::OnInstall(
+    blink::mojom::DisplayMode display,
+    bool set_current_web_app_not_installable) {
+  AppBannerManager::OnInstall(display, set_current_web_app_not_installable);
   if (on_install_)
     std::move(on_install_).Run();
 }
 
 void TestAppBannerManagerDesktop::DidFinishCreatingWebApp(
-    const web_app::AppId& app_id,
+    const webapps::ManifestId& manifest_id,
+    base::WeakPtr<AppBannerManagerDesktop> is_navigation_current,
+    const webapps::AppId& app_id,
     webapps::InstallResultCode code) {
-  AppBannerManagerDesktop::DidFinishCreatingWebApp(app_id, code);
+  AppBannerManagerDesktop::DidFinishCreatingWebApp(
+      manifest_id, is_navigation_current, app_id, code);
   OnFinished();
 }
 
 void TestAppBannerManagerDesktop::DidFinishLoad(
     content::RenderFrameHost* render_frame_host,
     const GURL& validated_url) {
-  if (ShouldIgnore(render_frame_host, validated_url)) {
+  debug_log_.Append(base::StrCat({"DidFinishLoad ", validated_url.spec()}));
+  UrlType url_type = GetUrlType(render_frame_host, validated_url);
+  if (url_type == AppBannerManager::UrlType::kInvalidPrimaryFrameUrl) {
     SetInstallable(false);
     return;
   }
@@ -129,17 +167,23 @@ void TestAppBannerManagerDesktop::DidFinishLoad(
 }
 
 void TestAppBannerManagerDesktop::UpdateState(AppBannerManager::State state) {
+  debug_log_.Append(
+      base::StringPrintf("State updated to %d", static_cast<int>(state)));
   AppBannerManager::UpdateState(state);
 
-  if (state == AppBannerManager::State::PENDING_ENGAGEMENT ||
-      state == AppBannerManager::State::PENDING_PROMPT ||
+  if (state == AppBannerManager::State::PENDING_PROMPT_CANCELED ||
+      state == AppBannerManager::State::PENDING_PROMPT_NOT_CANCELED ||
       state == AppBannerManager::State::COMPLETE) {
     OnFinished();
   }
 }
 
 void TestAppBannerManagerDesktop::SetInstallable(bool installable) {
-  DCHECK(!installable_.has_value() || installable_ == installable);
+  debug_log_.Append(base::StringPrintf("SetInstallable(%d)", installable));
+  DCHECK(!installable_.has_value() || installable_ == installable)
+      << "Cannot set installable to " << installable << ", already set to "
+      << installable_.value() << ". Debug log:\n"
+      << debug_log_.DebugString();
   installable_ = installable;
   if (installable_quit_closure_)
     std::move(installable_quit_closure_).Run();
@@ -147,8 +191,8 @@ void TestAppBannerManagerDesktop::SetInstallable(bool installable) {
 
 void TestAppBannerManagerDesktop::OnFinished() {
   if (on_done_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(on_done_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(on_done_));
   }
 }
 

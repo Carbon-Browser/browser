@@ -1,43 +1,39 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/keyed_service/ios/refcounted_browser_state_keyed_service_factory.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "components/keyed_service/core/refcounted_keyed_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
 #include "ios/web/public/browser_state.h"
 
+namespace {
+
+// Wraps `factory` as a KeyedServiceFactory::TestingFactory.
+base::OnceCallback<scoped_refptr<RefcountedKeyedService>(void*)> WrapFactory(
+    RefcountedBrowserStateKeyedServiceFactory::TestingFactory factory) {
+  if (!factory) {
+    return {};
+  }
+
+  return base::BindOnce(
+      [](RefcountedBrowserStateKeyedServiceFactory::TestingFactory factory,
+         void* context) -> scoped_refptr<RefcountedKeyedService> {
+        return std::move(factory).Run(static_cast<web::BrowserState*>(context));
+      },
+      std::move(factory));
+}
+
+}  // namespace
+
 void RefcountedBrowserStateKeyedServiceFactory::SetTestingFactory(
     web::BrowserState* context,
     TestingFactory testing_factory) {
-  RefcountedKeyedServiceFactory::TestingFactory wrapped_factory;
-  if (testing_factory) {
-    wrapped_factory = base::BindRepeating(
-        [](const TestingFactory& testing_factory, void* context) {
-          return testing_factory.Run(static_cast<web::BrowserState*>(context));
-        },
-        std::move(testing_factory));
-  }
-  RefcountedKeyedServiceFactory::SetTestingFactory(context,
-                                                   std::move(wrapped_factory));
-}
-
-scoped_refptr<RefcountedKeyedService>
-RefcountedBrowserStateKeyedServiceFactory::SetTestingFactoryAndUse(
-    web::BrowserState* context,
-    TestingFactory testing_factory) {
-  DCHECK(testing_factory);
-  return RefcountedKeyedServiceFactory::SetTestingFactoryAndUse(
-      context,
-      base::BindRepeating(
-          [](const TestingFactory& testing_factory, void* context) {
-            return testing_factory.Run(
-                static_cast<web::BrowserState*>(context));
-          },
-          std::move(testing_factory)));
+  RefcountedKeyedServiceFactory::SetTestingFactory(
+      context, WrapFactory(std::move(testing_factory)));
 }
 
 RefcountedBrowserStateKeyedServiceFactory::
@@ -91,11 +87,6 @@ scoped_refptr<RefcountedKeyedService>
 RefcountedBrowserStateKeyedServiceFactory::BuildServiceInstanceFor(
     void* context) const {
   return BuildServiceInstanceFor(static_cast<web::BrowserState*>(context));
-}
-
-bool RefcountedBrowserStateKeyedServiceFactory::IsOffTheRecord(
-    void* context) const {
-  return static_cast<web::BrowserState*>(context)->IsOffTheRecord();
 }
 
 void* RefcountedBrowserStateKeyedServiceFactory::GetContextToUse(

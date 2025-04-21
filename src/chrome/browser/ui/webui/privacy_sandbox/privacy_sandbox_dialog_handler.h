@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,18 @@
 #define CHROME_BROWSER_UI_WEBUI_PRIVACY_SANDBOX_PRIVACY_SANDBOX_DIALOG_HANDLER_H_
 
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
-#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
 class PrivacySandboxDialogHandler : public content::WebUIMessageHandler {
  public:
-  PrivacySandboxDialogHandler(base::OnceClosure close_callback,
-                              base::OnceCallback<void(int)> resize_callback,
-                              base::OnceClosure show_dialog_callback,
-                              base::OnceClosure open_settings_callback,
-                              PrivacySandboxService::PromptType prompt_type);
+  PrivacySandboxDialogHandler(
+      base::OnceClosure close_callback,
+      base::OnceCallback<void(int)> resize_callback,
+      base::OnceClosure show_dialog_callback,
+      base::OnceClosure open_settings_callback,
+      base::OnceClosure open_measurement_settings_callback,
+      PrivacySandboxService::PromptType prompt_type);
   ~PrivacySandboxDialogHandler() override;
 
   // content::WebUIMessageHandler:
@@ -24,37 +25,23 @@ class PrivacySandboxDialogHandler : public content::WebUIMessageHandler {
   void OnJavascriptAllowed() override;
   void OnJavascriptDisallowed() override;
 
- protected:
+ private:
   friend class PrivacySandboxDialogHandlerTest;
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxConsentDialogHandlerTest,
-                           HandleResizeDialog);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxConsentDialogHandlerTest,
-                           HandleShowDialog);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxConsentDialogHandlerTest,
-                           HandleClickLearnMore);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxConsentDialogHandlerTest,
-                           HandleConsentAccepted);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxConsentDialogHandlerTest,
-                           HandleConsentDeclined);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxNoticeDialogHandlerTest,
-                           HandleResizeDialog);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxNoticeDialogHandlerTest,
-                           HandleShowDialog);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxNoticeDialogHandlerTest,
-                           HandleOpenSettings);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxNoticeDialogHandlerTest,
-                           HandleNoticeAcknowledge);
 
   void HandlePromptActionOccurred(const base::Value::List& args);
   void HandleResizeDialog(const base::Value::List& args);
   void HandleShowDialog(const base::Value::List& args);
-  void NotifyServiceAboutPromptAction(
-      PrivacySandboxService::PromptAction action);
+  void HandleRecordPrivacyPolicyLoadTime(const base::Value::List& args);
+  // Determines if the Privacy Policy page should be shown.
+  void HandleShouldShowPrivacySandboxPrivacyPolicy(
+      const base::Value::List& args);
+  void CloseDialog();
 
   base::OnceClosure close_callback_;
   base::OnceCallback<void(int)> resize_callback_;
   base::OnceClosure show_dialog_callback_;
   base::OnceClosure open_settings_callback_;
+  base::OnceClosure open_measurement_settings_callback_;
   PrivacySandboxService::PromptType prompt_type_;
 
   raw_ptr<PrivacySandboxService> privacy_sandbox_service_;

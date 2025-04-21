@@ -1,8 +1,5 @@
-sky@chromium.org
+edcourtney@chromium.org
 oshima@chromium.org
-
-# Not working on chromium anymore, but kept just in case we need his review.
-sadrul@chromium.org
 
 per-file *x11.cc=thomasanderson@chromium.org
 per-file *x11.h=thomasanderson@chromium.org

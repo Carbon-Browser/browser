@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,30 +8,27 @@
 #import <Foundation/Foundation.h>
 
 #import "base/test/ios/wait_util.h"
-#include "ios/chrome/common/app_group/app_group_constants.h"
+#import "ios/chrome/common/app_group/app_group_constants.h"
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
 #import "ios/chrome/common/credential_provider/archivable_credential_store.h"
 #import "ios/chrome/common/credential_provider/constants.h"
 #import "ios/chrome/common/credential_provider/user_defaults_credential_store.h"
 #import "ios/chrome/credential_provider_extension/password_util.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/credential_provider_extension/ui/mock_credential_response_handler.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 // Fake implementation of NewPasswordUIHandler so tests can tell if any UI
 // methods were called
 @interface FakeNewPasswordUIHandler : NSObject <NewPasswordUIHandler>
 
-// Whether the |-alertUserCredentialExists| method was called.
+// Whether the `-alertUserCredentialExists` method was called.
 @property(nonatomic, assign) BOOL alertedCredentialExists;
-// Whether the |-alertSavePasswordFailed| method was called.
+// Whether the `-alertSavePasswordFailed` method was called.
 @property(nonatomic, assign) BOOL alertedSaveFailed;
 // Password passed to the consumer.
-@property(nonatomic, assign) NSString* password;
+@property(nonatomic, copy) NSString* password;
 
 @end
 
@@ -51,32 +48,6 @@
 
 @end
 
-// Fake implementation of ASCredentialProviderExtensionContext so tests can
-// tell when a credential has been saved.
-@interface FakeExtensionContext : ASCredentialProviderExtensionContext
-
-@property(nonatomic, strong) ASPasswordCredential* credential;
-
-@property(nonatomic, strong) void (^receivedCredentialBlock)();
-
-@end
-
-@implementation FakeExtensionContext
-
-- (void)completeRequestWithSelectedCredential:(ASPasswordCredential*)credential
-                            completionHandler:
-                                (void (^)(BOOL expired))completionHandler {
-  self.credential = credential;
-  if (completionHandler) {
-    completionHandler(NO);
-  }
-  if (self.receivedCredentialBlock) {
-    self.receivedCredentialBlock();
-  }
-}
-
-@end
-
 namespace {
 
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -92,13 +63,14 @@ NSUserDefaults* TestUserDefaults() {
 
 ArchivableCredential* TestCredential(NSString* recordIdentifier) {
   return [[ArchivableCredential alloc] initWithFavicon:@"favicon"
-                                    keychainIdentifier:@"keychainIdentifier"
+                                                  gaia:nil
+                                              password:@"qwerty123"
                                                   rank:5
                                       recordIdentifier:recordIdentifier
                                      serviceIdentifier:@"serviceIdentifier"
                                            serviceName:@"serviceName"
-                                                  user:@"user"
-                                  validationIdentifier:@"validationIdentifier"];
+                                              username:@"user"
+                                                  note:@"note"];
 }
 
 class NewPasswordMediatorTest : public PlatformTest {
@@ -117,7 +89,8 @@ class NewPasswordMediatorTest : public PlatformTest {
   id<MutableCredentialStore> store_;
   FakeNewPasswordUIHandler* uiHandler_ =
       [[FakeNewPasswordUIHandler alloc] init];
-  FakeExtensionContext* context_ = [[FakeExtensionContext alloc] init];
+  MockCredentialResponseHandler* responseHandler_ =
+      [[MockCredentialResponseHandler alloc] init];
 };
 
 void NewPasswordMediatorTest::SetUp() {
@@ -131,7 +104,7 @@ void NewPasswordMediatorTest::SetUp() {
 
   mediator_.existingCredentials = store_;
   mediator_.uiHandler = uiHandler_;
-  mediator_.context = context_;
+  mediator_.credentialResponseHandler = responseHandler_;
 }
 
 void NewPasswordMediatorTest::TearDown() {
@@ -140,7 +113,7 @@ void NewPasswordMediatorTest::TearDown() {
   [TestUserDefaults() removeObjectForKey:key];
 }
 
-// Tests that |-saveNewCredential:completion:| adds a new credential to the
+// Tests that `-saveNewCredential:completion:` adds a new credential to the
 // store and that gets saved to disk.
 TEST_F(NewPasswordMediatorTest, SaveNewCredential) {
   // Manually store a credential.
@@ -160,14 +133,17 @@ TEST_F(NewPasswordMediatorTest, SaveNewCredential) {
   // gets saved to disk.
   NSString* testUsername = @"user";
   NSString* testPassword = @"password";
+  NSString* testNote = @"note";
 
-  context_.receivedCredentialBlock = ^() {
+  responseHandler_.receivedCredentialBlock = ^() {
     blockWaitCompleted = YES;
   };
 
   blockWaitCompleted = NO;
   [mediator_ saveCredentialWithUsername:testUsername
                                password:testPassword
+                                   note:testNote
+                                   gaia:nil
                           shouldReplace:NO];
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForFileOperationTimeout, ^BOOL {
     return blockWaitCompleted;
@@ -176,8 +152,8 @@ TEST_F(NewPasswordMediatorTest, SaveNewCredential) {
   EXPECT_FALSE(uiHandler_.alertedCredentialExists);
   EXPECT_FALSE(uiHandler_.alertedSaveFailed);
 
-  EXPECT_NSEQ(testUsername, context_.credential.user);
-  EXPECT_NSEQ(testPassword, context_.credential.password);
+  EXPECT_NSEQ(testUsername, responseHandler_.passwordCredential.user);
+  EXPECT_NSEQ(testPassword, responseHandler_.passwordCredential.password);
 
   // Reload the store from memory and check that the credential was added.
   NSString* key = AppGroupUserDefaultsCredentialProviderNewCredentials();
@@ -188,10 +164,10 @@ TEST_F(NewPasswordMediatorTest, SaveNewCredential) {
   EXPECT_TRUE(freshCredentialStore);
   EXPECT_TRUE(freshCredentialStore.credentials);
   EXPECT_EQ(2u, freshCredentialStore.credentials.count);
-  EXPECT_NSEQ(testUsername, freshCredentialStore.credentials[1].user);
+  EXPECT_NSEQ(testUsername, freshCredentialStore.credentials[1].username);
 }
 
-// Tests that |-saveNewCredential:completion:| updates an existing credential
+// Tests that `-saveNewCredential:completion:` updates an existing credential
 // and that gets saved to disk.
 TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
   // Create a credential that will be stored.
@@ -214,7 +190,7 @@ TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
 
   // Store the originally created credential and that should update the existing
   // one.
-  context_.receivedCredentialBlock = ^() {
+  responseHandler_.receivedCredentialBlock = ^() {
     blockWaitCompleted = YES;
   };
 
@@ -223,8 +199,11 @@ TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
   blockWaitCompleted = NO;
   NSString* testUsername = @"user";
   NSString* testPassword = @"password";
+  NSString* testNote = @"note";
   [mediator_ saveCredentialWithUsername:testUsername
                                password:testPassword
+                                   note:testNote
+                                   gaia:nil
                           shouldReplace:NO];
 
   EXPECT_TRUE(uiHandler_.alertedCredentialExists);
@@ -236,6 +215,8 @@ TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
   blockWaitCompleted = NO;
   [mediator_ saveCredentialWithUsername:testUsername
                                password:testPassword
+                                   note:testNote
+                                   gaia:nil
                           shouldReplace:YES];
   EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForFileOperationTimeout, ^BOOL {
     return blockWaitCompleted;
@@ -244,8 +225,8 @@ TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
   EXPECT_FALSE(uiHandler_.alertedCredentialExists);
   EXPECT_FALSE(uiHandler_.alertedSaveFailed);
 
-  EXPECT_NSEQ(testUsername, context_.credential.user);
-  EXPECT_NSEQ(testPassword, context_.credential.password);
+  EXPECT_NSEQ(testUsername, responseHandler_.passwordCredential.user);
+  EXPECT_NSEQ(testPassword, responseHandler_.passwordCredential.password);
 
   // Reload the store from memory and check that the credential was updated.
   NSString* key = AppGroupUserDefaultsCredentialProviderNewCredentials();
@@ -256,6 +237,8 @@ TEST_F(NewPasswordMediatorTest, SaveUpdateCredential) {
   EXPECT_TRUE(freshCredentialStore);
   EXPECT_TRUE(freshCredentialStore.credentials);
   EXPECT_EQ(1u, freshCredentialStore.credentials.count);
-  EXPECT_NSEQ(testUsername, freshCredentialStore.credentials.firstObject.user);
+  EXPECT_NSEQ(testUsername,
+              freshCredentialStore.credentials.firstObject.username);
 }
-}
+
+}  // namespace

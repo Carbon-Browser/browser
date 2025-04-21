@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,83 +43,14 @@ class JourneyLogger {
     COMPLETION_STATUS_USER_ABORTED = 1,
     COMPLETION_STATUS_OTHER_ABORTED = 2,
     COMPLETION_STATUS_COULD_NOT_SHOW = 3,
+    COMPLETION_STATUS_USER_OPTED_OUT = 4,
     COMPLETION_STATUS_MAX,
   };
 
   // Used to record the different events that happened during the Payment
   // Request.
   // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.payments
-  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: Event
-  enum Event {
-    // Initiated means the PaymentRequest object was constructed.
-    EVENT_INITIATED = 0,
-    // PaymentRequest was triggered via .show() and a native UI was shown.
-    EVENT_SHOWN = 1 << 0,
-    // A payment app was invoked, regardless of whether the UI was skipped or
-    // the pay button was actually clicked.
-    EVENT_PAY_CLICKED = 1 << 1,
-    EVENT_RECEIVED_INSTRUMENT_DETAILS = 1 << 2,
-    // PaymentRequest was triggered via .show() and no UI was shown because we
-    // skipped directly to the payment app.
-    EVENT_SKIPPED_SHOW = 1 << 3,
-    // .complete() was called by the merchant, completing the flow.
-    EVENT_COMPLETED = 1 << 4,
-    // The user aborted the flow by either dismissing it explicitly, or
-    // navigating away (if possible).
-    EVENT_USER_ABORTED = 1 << 5,
-    // Other reasons for aborting include the merchant calling .abort(), the
-    // merchant triggering a navigation, the tab closing, the browser closing,
-    // etc. See implementation for details.
-    EVENT_OTHER_ABORTED = 1 << 6,
-    EVENT_HAD_INITIAL_FORM_OF_PAYMENT = 1 << 7,
-    EVENT_HAD_NECESSARY_COMPLETE_SUGGESTIONS = 1 << 8,
-    // canMakePayment was called with a result of "true" or "false",
-    // respectively. An absence of both events means canMakePayment was not
-    // called, or the user was in incognito mode.
-    EVENT_CAN_MAKE_PAYMENT_TRUE = 1 << 9,
-    EVENT_CAN_MAKE_PAYMENT_FALSE = 1 << 10,
-    // Correspond to the merchant specifying requestShipping, requestPayerName,
-    // requestPayerEmail, requestPayerPhone.
-    EVENT_REQUEST_SHIPPING = 1 << 11,
-    EVENT_REQUEST_PAYER_NAME = 1 << 12,
-    EVENT_REQUEST_PAYER_EMAIL = 1 << 13,
-    EVENT_REQUEST_PAYER_PHONE = 1 << 14,
-    // The merchant requested at least one basic-card method.
-    EVENT_REQUEST_METHOD_BASIC_CARD = 1 << 15,
-    // The merchant requested a Google payment method.
-    EVENT_REQUEST_METHOD_GOOGLE = 1 << 16,
-    // The merchant requested a non-Google, non-basic-card payment method.
-    EVENT_REQUEST_METHOD_OTHER = 1 << 17,
-    // The user initiated the transaction using a saved credit card, a Google
-    // payment app (e.g., Android Pay), or another payment instrument,
-    // respectively.
-    EVENT_SELECTED_CREDIT_CARD = 1 << 18,
-    EVENT_SELECTED_GOOGLE = 1 << 19,
-    EVENT_SELECTED_OTHER = 1 << 20,
-    // hasEnrolledInstrument was called with a result of "true" or "false",
-    // respectively. An absence of both events means hasEnrolledInstrument was
-    // not called, or the user was in incognito mode.
-    EVENT_HAS_ENROLLED_INSTRUMENT_TRUE = 1 << 21,
-    EVENT_HAS_ENROLLED_INSTRUMENT_FALSE = 1 << 22,
-    // True when a NotShownReason is set.
-    EVENT_COULD_NOT_SHOW = 1 << 23,
-    EVENT_NEEDS_COMPLETION_CONTACT_INFO = 1 << 24,
-    EVENT_NEEDS_COMPLETION_PAYMENT = 1 << 25,
-    EVENT_NEEDS_COMPLETION_SHIPPING = 1 << 26,
-    // Payment apps available (after JIT crawling) at the time show() is called.
-    EVENT_AVAILABLE_METHOD_BASIC_CARD = 1 << 27,
-    EVENT_AVAILABLE_METHOD_GOOGLE = 1 << 28,
-    EVENT_AVAILABLE_METHOD_OTHER = 1 << 29,
-
-    // Bits for secure-payment-confirmation method.
-    EVENT_REQUEST_METHOD_SECURE_PAYMENT_CONFIRMATION = 1 << 30,
-    EVENT_SELECTED_SECURE_PAYMENT_CONFIRMATION = 1 << 31,
-
-    EVENT_ENUM_MAX = EVENT_SELECTED_SECURE_PAYMENT_CONFIRMATION,
-  };
-
-  // A new version of Event. Some basic-card/autofill related bits are
-  // removed to free up more bits for new future payment methods.
+  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: Event2
   enum class Event2 {
     // Initiated means the PaymentRequest object was constructed.
     kInitiated = 0,
@@ -144,12 +75,21 @@ class JourneyLogger {
     kOtherAborted = 1 << 6,
     // Whether or not any requested method is available.
     kHadInitialFormOfPayment = 1 << 7,
+    // An opt-out experience was offered to the user as part of the flow.
+    kOptOutOffered = 1 << 8,
+    // The user elected to opt-out of the flow (and future flows).
+    kUserOptedOut = 1 << 9,
+
+    // .show() was allowed without a user activaiton.
+    kActivationlessShow = 1 << 10,
 
     // Correspond to the merchant specifying requestShipping,
     // requestPayerName,
     // requestPayerEmail, requestPayerPhone.
     kRequestShipping = 1 << 11,
 
+    // The merchent requested a Google Pay Authentication method.
+    kRequestMethodGooglePayAuthentication = 1 << 13,
     // The merchant requested a Play Billing payment method.
     kRequestMethodPlayBilling = 1 << 14,
     // The merchant requested at least one basic-card method.
@@ -170,6 +110,7 @@ class JourneyLogger {
     kCouldNotShow = 1 << 23,
 
     // Bits for secure-payment-confirmation method.
+    kNoMatchingCredentials = 1 << 29,
     kRequestMethodSecurePaymentConfirmation = 1 << 30,
     kSelectedSecurePaymentConfirmation = 1 << 31,
 
@@ -191,18 +132,8 @@ class JourneyLogger {
     ABORT_REASON_OTHER = 8,
     ABORT_REASON_USER_NAVIGATION = 9,
     ABORT_REASON_MERCHANT_NAVIGATION = 10,
+    ABORT_REASON_USER_OPTED_OUT = 11,
     ABORT_REASON_MAX,
-  };
-
-  // The reason why the Payment Request was not shown to the user.
-  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.payments
-  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: NotShownReason
-  enum NotShownReason {
-    NOT_SHOWN_REASON_NO_MATCHING_PAYMENT_METHOD = 0,
-    NOT_SHOWN_REASON_NO_SUPPORTED_PAYMENT_METHOD = 1,
-    NOT_SHOWN_REASON_CONCURRENT_REQUESTS = 2,
-    NOT_SHOWN_REASON_OTHER = 3,
-    NOT_SHOWN_REASON_MAX = 4,
   };
 
   // The categories of the payment methods.
@@ -214,7 +145,8 @@ class JourneyLogger {
     kPlayBilling = 2,
     kSecurePaymentConfirmation = 3,
     kOther = 4,
-    kMaxValue = kOther,
+    kGooglePayAuthentication = 5,
+    kMaxValue = kGooglePayAuthentication,
   };
 
   // Records different checkout steps for payment requests. The difference
@@ -241,7 +173,7 @@ class JourneyLogger {
     kMaxValue = kCompleted,
   };
 
-  JourneyLogger(bool is_incognito, ukm::SourceId payment_request_source_id);
+  explicit JourneyLogger(ukm::SourceId payment_request_source_id);
 
   JourneyLogger(const JourneyLogger&) = delete;
   JourneyLogger& operator=(const JourneyLogger&) = delete;
@@ -253,13 +185,12 @@ class JourneyLogger {
                                    int number,
                                    bool has_complete_suggestion);
 
-  // Records the fact that the merchant called CanMakePayment and records its
-  // return value.
-  void SetCanMakePaymentValue(bool value);
+  // Records that an Opt Out experience is being offered to the user in the
+  // current UI flow.
+  void SetOptOutOffered();
 
-  // Records the fact that the merchant called HasEnrolledInstrument and records
-  // its return value.
-  void SetHasEnrolledInstrumentValue(bool value);
+  // Records that a show() was allowed without a user activation.
+  void SetActivationlessShow();
 
   // Records that a payment app has been shown without payment UIs being shown
   // before that.
@@ -268,17 +199,11 @@ class JourneyLogger {
   // Records that a payment UI has been shown.
   void SetShown();
 
-  // Records that the instrument details have been received.
-  void SetReceivedInstrumentDetails();
-
   // Records that a payment app was invoked.
   void SetPayClicked();
 
   // Records the category of the selected app.
   void SetSelectedMethod(PaymentMethodCategory category);
-
-  // Records the method that is supported by the available payment apps.
-  void SetAvailableMethod(PaymentMethodCategory category);
 
   // Records the user information requested by the merchant.
   void SetRequestedInformation(bool requested_shipping,
@@ -290,7 +215,7 @@ class JourneyLogger {
   // least one payment method in the category (basic-card, google payment
   // method, secure payment confirmation method or other url-based payment
   // method, respectively) is requested.
-  // TODO(crbug.com/754811): Add support for non-basic-card, non-URL methods.
+  // TODO(crbug.com/40534824): Add support for non-basic-card, non-URL methods.
   void SetRequestedPaymentMethods(
       const std::vector<PaymentMethodCategory>& methods);
 
@@ -298,13 +223,15 @@ class JourneyLogger {
   // logging of all the journey metrics.
   void SetCompleted();
 
-  // Records that the Payment Request was aborted along with the reason. Also
-  // starts the logging of all the journey metrics.
+  // Records that the Payment Request was aborted. This counts as a completion,
+  // starting the logging of all the journey metrics.
   void SetAborted(AbortReason reason);
 
-  // Records that the Payment Request was not shown to the user, along with the
-  // reason.
-  void SetNotShown(NotShownReason reason);
+  // Records that the Payment Request was not shown to the user.
+  void SetNotShown();
+
+  // Records that the SPC No Matching Credentials UX was shown to the user.
+  void SetNoMatchingCredentialsShown();
 
   // Increments the bucket count for the given checkout step.
   void RecordCheckoutStep(CheckoutFunnelStep step);
@@ -315,9 +242,6 @@ class JourneyLogger {
   base::WeakPtr<JourneyLogger> GetWeakPtr();
 
  private:
-  // Records that an event occurred.
-  void SetEventOccurred(Event event);
-
   // Records that an event occurred.
   void SetEvent2Occurred(Event2 event);
 
@@ -363,23 +287,13 @@ class JourneyLogger {
   // Validates the recorded event sequence during the Payment Request.
   void ValidateEventBits() const;
 
-  // Asserts that the given bits in events_ and events2_ are equal.
-  void AssertOccurredTogether(Event event, Event2 event2) const;
-
   // Returns whether this Payment Request was triggered (shown or skipped show).
   bool WasPaymentRequestTriggered();
 
-  // Sets needs completion bit in events_ bit field for the given section.
-  void SetSectionNeedsCompletion(Section section);
-
   SectionStats sections_[NUMBER_OF_SECTIONS];
   bool has_recorded_ = false;
-  bool is_incognito_;
 
   // Accumulates the many events that have happened during the Payment Request.
-  int events_;
-
-  // The 2.0 version of event_.
   int events2_;
 
   ukm::SourceId payment_request_source_id_;

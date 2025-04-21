@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "components/performance_manager/public/execution_context/execution_context_registry.h"
+#include "components/performance_manager/public/graph/graph.h"
 
 namespace performance_manager {
 namespace execution_context_priority {
@@ -37,11 +38,25 @@ FrameAudibleVoter::FrameAudibleVoter() = default;
 
 FrameAudibleVoter::~FrameAudibleVoter() = default;
 
-void FrameAudibleVoter::SetVotingChannel(VotingChannel voting_channel) {
+void FrameAudibleVoter::InitializeOnGraph(Graph* graph,
+                                          VotingChannel voting_channel) {
   voting_channel_ = std::move(voting_channel);
+
+  graph->AddFrameNodeObserver(this);
 }
 
-void FrameAudibleVoter::OnFrameNodeAdded(const FrameNode* frame_node) {
+void FrameAudibleVoter::TearDownOnGraph(Graph* graph) {
+  graph->RemoveFrameNodeObserver(this);
+
+  voting_channel_.Reset();
+}
+
+void FrameAudibleVoter::OnBeforeFrameNodeAdded(
+    const FrameNode* frame_node,
+    const FrameNode* pending_parent_frame_node,
+    const PageNode* pending_page_node,
+    const ProcessNode* pending_process_node,
+    const FrameNode* pending_parent_or_outer_document_or_embedder) {
   const Vote vote = GetVote(frame_node->IsAudible());
   voting_channel_.SubmitVote(GetExecutionContext(frame_node), vote);
 }

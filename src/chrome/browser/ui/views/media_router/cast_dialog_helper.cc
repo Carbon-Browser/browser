@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ std::unique_ptr<views::View> CreateThrobber() {
   // The throbber is smaller than other icons, so the difference must be added
   // to the border to make their overall sizes match.
   const int extra_borders =
-      kPrimaryIconSize - throbber->CalculatePreferredSize().height();
+      kPrimaryIconSize - throbber->CalculatePreferredSize({}).height();
   throbber_container->SetBorder(views::CreateEmptyBorder(
       gfx::Insets(extra_borders / 2) + kPrimaryIconBorder));
   throbber_container->AddChildView(throbber);

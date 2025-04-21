@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
@@ -69,7 +69,7 @@ void BatteryMetrics::RecordBatteryDropUMA(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (battery_status.charging) {
     // If the battery charges, drop the stored battery level.
-    last_recorded_battery_level_ = absl::nullopt;
+    last_recorded_battery_level_ = std::nullopt;
     return;
   }
 

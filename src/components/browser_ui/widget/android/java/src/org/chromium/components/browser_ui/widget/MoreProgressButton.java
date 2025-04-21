@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@ import android.widget.FrameLayout;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
+
+import org.chromium.ui.widget.ButtonCompat;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -28,35 +29,25 @@ import java.lang.annotation.RetentionPolicy;
  * Call {@link #setState(int)} to transition between the loading spinner, button, or hidden states.
  */
 public class MoreProgressButton extends FrameLayout implements View.OnClickListener {
-    /**
-     * State for the button, reflects the visibility for the button and spinner
-     */
+    /** State for the button, reflects the visibility for the button and spinner */
     @IntDef({State.INVALID, State.HIDDEN, State.BUTTON, State.LOADING})
     @Retention(RetentionPolicy.SOURCE)
     public @interface State {
-        /**
-         * Internal state used before the button finished inflating.
-         */
+        /** Internal state used before the button finished inflating. */
         int INVALID = -1;
 
-        /**
-         * Both the button and spinner are GONE.
-         */
+        /** Both the button and spinner are GONE. */
         int HIDDEN = 0;
 
-        /**
-         * The button is visible and the loading spinner is hidden.
-         */
+        /** The button is visible and the loading spinner is hidden. */
         int BUTTON = 1;
 
-        /**
-         * The spinner is visible and the button is hidden.
-         */
+        /** The spinner is visible and the button is hidden. */
         int LOADING = 2;
     }
 
     protected View mProgressSpinner;
-    protected View mButton;
+    protected ButtonCompat mButton;
     protected Runnable mOnClickRunnable;
 
     protected @State int mState = State.INVALID;
@@ -108,7 +99,10 @@ public class MoreProgressButton extends FrameLayout implements View.OnClickListe
         this.mProgressSpinner.setVisibility(State.LOADING == state ? View.VISIBLE : View.GONE);
     }
 
-    @VisibleForTesting
+    public void setButtonText(String text) {
+        mButton.setText(text);
+    }
+
     public @State int getStateForTest() {
         return mState;
     }

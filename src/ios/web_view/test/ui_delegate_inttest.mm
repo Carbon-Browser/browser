@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,11 @@
 #import "base/test/ios/wait_util.h"
 #import "ios/web_view/test/web_view_inttest_base.h"
 #import "ios/web_view/test/web_view_test_util.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest_mac.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForUIElementTimeout;
 
@@ -53,10 +49,13 @@ TEST_F(UIDelegateTest, CreateWebView) {
                  forNavigationAction:expected_navigation_action]);
 
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
+
   NSError* error = nil;
-  EXPECT_NE(nil, test::EvaluateJavaScript(
-                     web_view_, @"open('http://example.com/')", &error));
-  EXPECT_EQ(nil, error);
+  EXPECT_NE(nil,
+            test::EvaluateJavaScript(
+                web_view_, @"typeof open('http://example.com/') === 'object'",
+                &error));
+  EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];
 }
@@ -77,7 +76,7 @@ TEST_F(UIDelegateTest, RunJavaScriptAlertPanel) {
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
   NSError* error = nil;
   test::EvaluateJavaScript(web_view_, @"alert('message')", &error);
-  EXPECT_EQ(nil, error);
+  EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];
 }
@@ -98,9 +97,9 @@ TEST_F(UIDelegateTest, RunJavaScriptConfirmPanel) {
 
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
   NSError* error = nil;
-  EXPECT_NSEQ(@(YES), test::EvaluateJavaScript(web_view_, @"confirm('message')",
-                                               &error));
-  EXPECT_EQ(nil, error);
+  EXPECT_TRUE([test::EvaluateJavaScript(web_view_, @"confirm('message')",
+                                        &error) boolValue]);
+  EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];
 }
@@ -124,7 +123,7 @@ TEST_F(UIDelegateTest, RunJavaScriptTextInputPanel) {
   NSError* error = nil;
   EXPECT_NSEQ(@"input", test::EvaluateJavaScript(
                             web_view_, @"prompt('prompt', 'default')", &error));
-  EXPECT_EQ(nil, error);
+  EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];
 }
@@ -153,7 +152,7 @@ TEST_F(UIDelegateTest, DidLoadFavicons) {
   OCMExpect([mock_delegate_ webView:web_view_ didLoadFavicons:favicons_arg]);
 
   ASSERT_TRUE(test::LoadUrl(web_view_, page_url));
-  [(id)mock_delegate_ verifyWithDelay:kWaitForUIElementTimeout];
+  [(id)mock_delegate_ verifyWithDelay:kWaitForUIElementTimeout.InSecondsF()];
 
   ASSERT_EQ(1u, favicons.count);
   EXPECT_EQ(CWVFaviconTypeFavicon, favicons[0].type);

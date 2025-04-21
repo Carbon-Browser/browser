@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,9 @@
 #include "ui/base/class_property.h"
 #include "ui/platform_window/extensions/desk_extension.h"
 #include "ui/platform_window/platform_window.h"
-#include "ui/views/widget/desktop_aura/desktop_window_tree_host_lacros.h"
 #include "ui/views/widget/widget.h"
 
 namespace {
-
-ui::DeskExtension* GetDeskExtension(aura::Window* window) {
-  return views::DesktopWindowTreeHostLacros::From(window->GetHost())
-      ->GetDeskExtension();
-}
 
 //////////////////////////////////////////////////////////////////////
 // DesksHelperLacros implementation:
@@ -47,26 +41,21 @@ class DesksHelperLacros : public chromeos::DesksHelper {
       return false;
     return GetActiveDeskIndex() == desk_index;
   }
-  int GetActiveDeskIndex() const override {
-    return GetDeskExtension(window_)->GetActiveDeskIndex();
+
+  bool BelongsToDesk(aura::Window* window, size_t index) override {
+    return false;
   }
-  std::u16string GetDeskName(int index) const override {
-    return GetDeskExtension(window_)->GetDeskName(index);
-  }
-  int GetNumberOfDesks() const override {
-    return GetDeskExtension(window_)->GetNumberOfDesks();
-  }
-  void SendToDeskAtIndex(aura::Window* window, int desk_index) override {
-    GetDeskExtension(window)->SendToDeskAtIndex(desk_index);
-  }
+
+  int GetActiveDeskIndex() const override { return -1; }
+  std::u16string GetDeskName(int index) const override { return {}; }
+  int GetNumberOfDesks() const override { return -1; }
+  void SendToDeskAtIndex(aura::Window* window, int desk_index) override {}
 
  private:
   raw_ptr<aura::Window> window_;
 };
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(DesksHelperLacros,
-                                   kDesksHelperLacrosKey,
-                                   nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(DesksHelperLacros, kDesksHelperLacrosKey)
 
 }  // namespace
 
@@ -79,12 +68,10 @@ namespace chromeos {
 // static
 DesksHelper* DesksHelper::Get(aura::Window* window) {
   DCHECK(window);
-  DesksHelperLacros* desks_helper = window->GetProperty(kDesksHelperLacrosKey);
-  if (!desks_helper) {
-    desks_helper = new DesksHelperLacros(window);
-    window->SetProperty(kDesksHelperLacrosKey, desks_helper);
-  }
-  return desks_helper;
+  if (auto* desks_helper = window->GetProperty(kDesksHelperLacrosKey))
+    return desks_helper;
+  return window->SetProperty(kDesksHelperLacrosKey,
+                             std::make_unique<DesksHelperLacros>(window));
 }
 
 DesksHelper::DesksHelper() = default;

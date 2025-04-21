@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_GRAPHICS_CAST_SCREEN_H_
 #define CHROMECAST_GRAPHICS_CAST_SCREEN_H_
 
+#include <optional>
+
 #include "chromecast/public/graphics_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display.h"
 #include "ui/display/screen_base.h"
 
@@ -54,7 +55,7 @@ class CastScreen : public display::ScreenBase {
   bool RestorePrimaryDisplaySettings();
 
  private:
-  absl::optional<display::Display> stashed_display_settings_;
+  std::optional<display::Display> stashed_display_settings_;
 };
 
 }  // namespace chromecast

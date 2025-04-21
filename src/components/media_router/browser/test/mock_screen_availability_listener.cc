@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@ MockScreenAvailabilityListener::MockScreenAvailabilityListener(
     const GURL& availability_url)
     : availability_url_(availability_url) {}
 
-MockScreenAvailabilityListener::~MockScreenAvailabilityListener() {}
+MockScreenAvailabilityListener::~MockScreenAvailabilityListener() = default;
 
 GURL MockScreenAvailabilityListener::GetAvailabilityUrl() {
   return availability_url_;

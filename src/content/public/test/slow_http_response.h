@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,6 @@ class SlowHttpResponse : public net::test_server::HttpResponse {
 
   SlowHttpResponse(const SlowHttpResponse&) = delete;
   SlowHttpResponse& operator=(const SlowHttpResponse&) = delete;
-
-  virtual bool IsHandledUrl();
 
   // Subclasses can override this method to add custom HTTP response headers.
   // These headers are only applied to the slow response itself, not the

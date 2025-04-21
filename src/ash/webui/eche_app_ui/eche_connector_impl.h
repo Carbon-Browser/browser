@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define ASH_WEBUI_ECHE_APP_UI_ECHE_CONNECTOR_IMPL_H_
 
 #include "ash/webui/eche_app_ui/eche_connector.h"
+#include "base/memory/raw_ptr.h"
 
-#include "ash/services/secure_channel/public/cpp/client/connection_manager.h"
 #include "ash/webui/eche_app_ui/eche_connection_scheduler.h"
 #include "ash/webui/eche_app_ui/eche_feature_status_provider.h"
 #include "ash/webui/eche_app_ui/feature_status_provider.h"
 #include "base/containers/queue.h"
+#include "chromeos/ash/services/secure_channel/public/cpp/client/connection_manager.h"
 
 namespace ash {
 namespace eche_app {
@@ -48,9 +49,9 @@ class EcheConnectorImpl : public EcheConnector,
   void FlushQueue();
   void FlushQueueWhenDisabled();
 
-  FeatureStatusProvider* eche_feature_status_provider_;
-  secure_channel::ConnectionManager* connection_manager_;
-  EcheConnectionScheduler* connection_scheduler_;
+  raw_ptr<FeatureStatusProvider> eche_feature_status_provider_;
+  raw_ptr<secure_channel::ConnectionManager> connection_manager_;
+  raw_ptr<EcheConnectionScheduler> connection_scheduler_;
   base::queue<proto::ExoMessage> message_queue_;
 };
 

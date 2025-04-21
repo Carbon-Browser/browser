@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace payments {
 
 class PaymentRequestDataUrlTest : public PaymentRequestBrowserTestBase {
  protected:
-  PaymentRequestDataUrlTest() {}
+  PaymentRequestDataUrlTest() = default;
 };
 
 IN_PROC_BROWSER_TEST_F(PaymentRequestDataUrlTest, SecurityError) {
@@ -26,14 +26,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestDataUrlTest, SecurityError) {
       "Test</button><div id='result'></div></body></html>");
 
   // PaymentRequest should not be defined in non-secure context.
-  bool result = true;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      GetActiveWebContents(),
-      "window.domAutomationController.send('PaymentRequest' in window);",
-      &result));
-  ASSERT_FALSE(result);
+  ASSERT_EQ(false, content::EvalJs(GetActiveWebContents(),
+                                   "'PaymentRequest' in window;"));
 
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       GetActiveWebContents(),
       "(function() { document.getElementById('buy').click(); })();"));
   ExpectBodyContains({"PaymentRequest is not defined"});

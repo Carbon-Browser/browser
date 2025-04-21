@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,20 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 
 import androidx.core.app.NotificationCompat;
 
-import org.chromium.base.Function;
 import org.chromium.base.Log;
 import org.chromium.chromecast.base.Controller;
 import org.chromium.chromecast.base.Observable;
-import org.chromium.chromecast.base.Observers;
-import org.chromium.content.browser.MediaSessionImpl;
+import org.chromium.chromecast.base.Observer;
+import org.chromium.content_public.browser.MediaSession;
 import org.chromium.content_public.browser.WebContents;
+
+import java.util.function.Function;
 
 /**
  * Service for "displaying" a WebContents in CastShell.
@@ -39,9 +41,8 @@ public class CastWebContentsService extends Service {
     private final Controller<Intent> mIntentState = new Controller<>();
     private final Observable<WebContents> mWebContentsState =
             mIntentState.map(CastWebContentsIntentUtils::getWebContents);
-    // Allows tests to inject a mock MediaSessionImpl to test audio focus logic.
-    private Function<WebContents, MediaSessionImpl> mMediaSessionGetter =
-            MediaSessionImpl::fromWebContents;
+    // Allows tests to inject a mock MediaSession to test audio focus logic.
+    private Function<WebContents, MediaSession> mMediaSessionGetter = MediaSession::fromWebContents;
 
     {
         // React to web contents by presenting them in a headless view.
@@ -56,8 +57,12 @@ public class CastWebContentsService extends Service {
             startForeground(CAST_NOTIFICATION_ID, notification);
             return () -> stopForeground(true /*removeNotification*/);
         });
-        mWebContentsState.map(this::getMediaSessionImpl)
-                .subscribe(Observers.onEnter(MediaSessionImpl::requestSystemAudioFocus));
+        mWebContentsState
+                .map(this::getMediaSession)
+                .subscribe(Observer.onOpen(MediaSession::requestSystemAudioFocus));
+        // Inform CastContentWindowAndroid we're detaching.
+        Observable<String> instanceIdState = mIntentState.map(Intent::getData).map(Uri::getPath);
+        instanceIdState.subscribe(Observer.onClose(CastWebContentsComponent::onComponentClosed));
 
         if (DEBUG) {
             mWebContentsState.subscribe(x -> {
@@ -71,7 +76,7 @@ public class CastWebContentsService extends Service {
     public void onCreate() {
         super.onCreate();
         if (DEBUG) Log.d(TAG, "onCreate");
-        CastBrowserHelper.initializeBrowser(getApplicationContext());
+        CastBrowserHelper.initializeBrowserAsync(getApplicationContext(), null);
         createNotificationChannel();
     }
 
@@ -90,7 +95,7 @@ public class CastWebContentsService extends Service {
         return false;
     }
 
-    private MediaSessionImpl getMediaSessionImpl(WebContents webContents) {
+    private MediaSession getMediaSession(WebContents webContents) {
         return mMediaSessionGetter.apply(webContents);
     }
 
@@ -98,7 +103,7 @@ public class CastWebContentsService extends Service {
         return mWebContentsState;
     }
 
-    void setMediaSessionImplGetterForTesting(Function<WebContents, MediaSessionImpl> getter) {
+    void setMediaSessionGetterForTesting(Function<WebContents, MediaSession> getter) {
         mMediaSessionGetter = getter;
     }
 

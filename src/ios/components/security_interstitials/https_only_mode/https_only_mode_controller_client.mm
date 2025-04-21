@@ -1,19 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/https_only_mode/https_only_mode_controller_client.h"
 
-#include "components/security_interstitials/core/metrics_helper.h"
-#include "ios/components/security_interstitials/ios_blocking_page_metrics_helper.h"
+#import "components/security_interstitials/core/metrics_helper.h"
+#import "ios/components/security_interstitials/ios_blocking_page_metrics_helper.h"
 #import "ios/web/public/web_state.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-// Creates a metrics helper for |url|.
+// Creates a metrics helper for `url`.
 std::unique_ptr<security_interstitials::IOSBlockingPageMetricsHelper>
 CreateMetricsHelper(web::WebState* web_state, const GURL& url) {
   security_interstitials::MetricsHelper::ReportDetails reporting_info;
@@ -39,7 +35,7 @@ void HttpsOnlyModeControllerClient::GoBack() {
 }
 
 void HttpsOnlyModeControllerClient::Proceed() {
-  // TODO(crbug.com/1302509): Remember the URL so that we don't block
+  // TODO(crbug.com/40825375): Remember the URL so that we don't block
   // again for a certain time.
   Reload();
 }

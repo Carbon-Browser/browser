@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/printing/synced_printers_manager.h"
@@ -47,8 +47,9 @@ bool ListsContainTheSamePrinters(const PrinterList& list_a,
 
     auto it = std::find_if(
         begin, end,
-        [&a](const std::pair<std::string, const chromeos::Printer*>& entry)
-            -> bool { return PrintersAreMostlyEqual(a, *(entry.second)); });
+        [&a](const std::pair<std::string, const chromeos::Printer*>& entry) {
+          return PrintersAreMostlyEqual(a, *(entry.second));
+        });
 
     if (it == end) {
       // Element in a does not match an element in b. Lists do not contain the
@@ -119,11 +120,11 @@ std::unique_ptr<sync_pb::PrinterSpecifics> CreateTestPrinterSpecifics(
 
 void WaitForPrinterStoreToLoad(content::BrowserContext* context) {
   GetPrinterStore(context);
-  // Run tasks to allow a ModelTypeStore to be associated with the
+  // Run tasks to allow a DataTypeStore to be associated with the
   // SyncedPrinterManager.
   //
   // TODO(sync): Remove this forced initialization once there is a mechanism
-  // to queue writes/reads before the ModelTypeStore is associated with the
+  // to queue writes/reads before the DataTypeStore is associated with the
   // SyncedPrinterManager. https://crbug.com/709094.
   content::RunAllTasksUntilIdle();
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,14 +76,14 @@ const char kForceConfigureUserSettings[] = "force-configure-user-settings";
 // confirmation from user.
 const char kForceUninstall[] = "force-uninstall";
 
-// See description for kPatch.
-const char kInputFile[] = "input-file";
-
-// Specify the path to the compressed Chrome archive for install. If not
-// specified, chrome.packed.7z or chrome.7z in the same directory as setup.exe
-// is used (the packed file is preferred; see kUncompressedArchive to force use
-// of an uncompressed archive).
+// Specify the path to the Chrome archive for install. If not specified,
+// chrome.packed.7z or chrome.7z in the same directory as setup.exe
+// is used.
 const char kInstallArchive[] = "install-archive";
+
+// Use the given uncompressed chrome.7z archive as the source of files to
+// install.
+const char kUncompressedArchive[] = "uncompressed-archive";
 
 // Specify the file path of Chrome initial preference file.
 const char kInstallerData[] = "installerdata";
@@ -114,14 +114,6 @@ const char kNonce[] = "nonce";
 
 // Notify the installer that the OS has been upgraded.
 const char kOnOsUpgrade[] = "on-os-upgrade";
-
-// Applies a binary patch to a file. The input, patch, and the output file are
-// specified as command line arguments following the --patch switch.
-// Ex: --patch=courgette --input_file='input' --patch_file='patch'
-//        --output_file='output'
-const char kOutputFile[] = "output-file";
-const char kPatch[] = "patch";
-const char kPatchFile[] = "patch-file";
 
 // Provide the previous version that patch is for.
 const char kPreviousVersion[] = "previous-version";
@@ -180,10 +172,6 @@ const char kSystemLevel[] = "system-level";
 // Signals to setup.exe that it should trigger the active setup command.
 const char kTriggerActiveSetup[] = "trigger-active-setup";
 
-// Use the given uncompressed chrome.7z archive as the source of files to
-// install.
-const char kUncompressedArchive[] = "uncompressed-archive";
-
 // If present, setup will uninstall chrome.
 const char kUninstall[] = "uninstall";
 
@@ -223,6 +211,8 @@ const wchar_t kChromeOldExe[] = L"old_chrome.exe";
 const wchar_t kChromeProxyExe[] = L"chrome_proxy.exe";
 const wchar_t kChromeProxyNewExe[] = L"new_chrome_proxy.exe";
 const wchar_t kChromeProxyOldExe[] = L"old_chrome_proxy.exe";
+const wchar_t kCmdAlternateRenameChromeExe[] = L"rename-chrome-exe";
+const wchar_t kCmdRenameChromeExe[] = L"cmd";
 const wchar_t kCmdOnOsUpgrade[] = L"on-os-upgrade";
 const wchar_t kCmdRotateDeviceTrustKey[] = L"rotate-dtkey";
 const wchar_t kCmdStoreDMToken[] = L"store-dmtoken";
@@ -232,7 +222,6 @@ const wchar_t kInstallBinaryDir[] = L"Application";
 const wchar_t kInstallerDir[] = L"Installer";
 const wchar_t kInstallTempDir[] = L"Temp";
 const wchar_t kLnkExt[] = L".lnk";
-const wchar_t kNaClExe[] = L"nacl64.exe";
 const wchar_t kNotificationHelperExe[] = L"notification_helper.exe";
 const wchar_t kWerDll[] = L"chrome_wer.dll";
 

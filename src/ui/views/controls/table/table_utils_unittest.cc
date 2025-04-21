@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,9 @@ namespace {
 std::string IntVectorToString(const std::vector<int>& values) {
   std::string result;
   for (size_t i = 0; i < values.size(); ++i) {
-    if (i != 0)
+    if (i != 0) {
       result += ",";
+    }
     result += base::NumberToString(values[i]);
   }
   return result;

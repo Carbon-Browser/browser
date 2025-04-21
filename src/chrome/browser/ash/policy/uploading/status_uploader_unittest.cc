@@ -1,29 +1,32 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/uploading/status_uploader.h"
 
 #include <memory>
+#include <tuple>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_move_support.h"
+#include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/status_collector/device_status_collector.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
+#include "components/policy/core/common/device_local_account_type.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/test/browser_task_environment.h"
@@ -42,13 +45,14 @@ namespace {
 
 constexpr base::TimeDelta kDefaultStatusUploadDelay = base::Hours(1);
 constexpr base::TimeDelta kMinImmediateUploadInterval = base::Seconds(10);
+constexpr base::TimeDelta kMinimumScreenshotIdlenessCutoff = base::Minutes(5);
 
 // Using a DeviceStatusCollector to have a concrete StatusCollector, but the
 // exact type doesn't really matter, as it is being mocked.
 class MockDeviceStatusCollector : public DeviceStatusCollector {
  public:
   explicit MockDeviceStatusCollector(PrefService* local_state)
-      : DeviceStatusCollector(local_state, nullptr, nullptr) {}
+      : DeviceStatusCollector(local_state, nullptr, nullptr, nullptr) {}
   MOCK_METHOD1(GetStatusAsync, void(StatusCollectorCallback));
 
   MOCK_METHOD0(OnSubmittedSuccessfully, void());
@@ -58,8 +62,9 @@ class MockDeviceStatusCollector : public DeviceStatusCollector {
   std::unique_ptr<DeviceLocalAccount> GetAutoLaunchedKioskSessionInfo()
       override {
     return std::make_unique<DeviceLocalAccount>(
-        DeviceLocalAccount::TYPE_KIOSK_APP, "account_id", "app_id",
-        "update_url");
+        DeviceLocalAccountType::kKioskApp,
+        policy::DeviceLocalAccount::EphemeralMode::kUnset, "account_id",
+        "app_id", "update_url");
   }
 };
 
@@ -73,8 +78,6 @@ class StatusUploaderTest : public testing::Test {
 
   void SetUp() override {
     // Required for `DeviceStatusCollector`.
-    chromeos::DBusThreadManager::Initialize();
-
     chromeos::PowerManagerClient::InitializeFake();
     chromeos::TpmManagerClient::InitializeFake();
     client_.SetDMToken("dm_token");
@@ -89,7 +92,6 @@ class StatusUploaderTest : public testing::Test {
     content::RunAllTasksUntilIdle();
     chromeos::TpmManagerClient::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   // Given a pending task to upload status, runs the task and returns the
@@ -115,8 +117,8 @@ class StatusUploaderTest : public testing::Test {
 
     // Running the status collected callback should trigger
     // CloudPolicyClient::UploadDeviceStatus.
-    CloudPolicyClient::StatusCallback callback;
-    EXPECT_CALL(client_, UploadDeviceStatus_).WillOnce(MoveArg<3>(&callback));
+    CloudPolicyClient::ResultCallback callback;
+    EXPECT_CALL(client_, UploadDeviceStatus).WillOnce(MoveArg<3>(&callback));
 
     // Send some "valid" (read: non-nullptr) device/session data to the
     // callback in order to simulate valid status data.
@@ -133,7 +135,9 @@ class StatusUploaderTest : public testing::Test {
         .Times(upload_success ? 1 : 0);
 
     // Now invoke the response.
-    std::move(callback).Run(upload_success);
+    std::move(callback).Run(
+        upload_success ? CloudPolicyClient::Result(DM_STATUS_SUCCESS)
+                       : CloudPolicyClient::Result(DM_STATUS_REQUEST_FAILED));
 
     // Now that the previous request was satisfied, a task to do the next
     // upload should be queued.
@@ -161,12 +165,19 @@ class StatusUploaderTest : public testing::Test {
                                             kDefaultStatusUploadDelay);
   }
 
-  content::BrowserTaskEnvironment task_environment_;
+  void MockUserInput() {
+    ui::MouseEvent e(ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), 0, 0);
+    const ui::PlatformEvent& native_event = &e;
+    ui::UserActivityDetector::Get()->DidProcessEvent(native_event);
+  }
+
+  content::BrowserTaskEnvironment task_environment_{
+      content::BrowserTaskEnvironment::TimeSource::MOCK_TIME};
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
   std::unique_ptr<MockDeviceStatusCollector> collector_;
-  MockDeviceStatusCollector* collector_ptr_;
-  ui::UserActivityDetector detector_;
+  raw_ptr<MockDeviceStatusCollector, DanglingUntriaged> collector_ptr_;
   MockCloudPolicyClient client_;
   TestingPrefServiceSimple prefs_;
   // This property is required to instantiate the session manager, a singleton
@@ -259,14 +270,26 @@ TEST_F(StatusUploaderTest, ResetTimerAfterUnregisteredClient) {
 
   StatusCollectorCallback status_callback = CollectStatusCallback();
 
+  // Running the status collected callback should trigger
+  // CloudPolicyClient::UploadDeviceStatus.
+  CloudPolicyClient::ResultCallback callback;
+  EXPECT_CALL(client_, UploadDeviceStatus).WillOnce(MoveArg<3>(&callback));
+
+  // Send some "valid" (read: non-nullptr) device/session data to the
+  // callback in order to simulate valid status data.
+  StatusCollectorParams status_params;
+  std::move(status_callback).Run(std::move(status_params));
+
   // Make sure no status upload is queued up yet (since an upload is in
   // progress).
   EXPECT_FALSE(task_runner_->HasPendingTask());
 
-  // StatusUploader should not try to upload using an unregistered client
-  EXPECT_CALL(client_, UploadDeviceStatus_).Times(0);
-  StatusCollectorParams status_params;
-  std::move(status_callback).Run(std::move(status_params));
+  // No successful submit will happen if not registered.
+  EXPECT_CALL(*collector_ptr_, OnSubmittedSuccessfully()).Times(0);
+
+  // Now invoke the response.
+  std::move(callback).Run(
+      CloudPolicyClient::Result(CloudPolicyClient::NotRegistered()));
 
   // A task to try again should be queued.
   ASSERT_EQ(1U, task_runner_->NumPendingTasks());
@@ -286,23 +309,30 @@ TEST_F(StatusUploaderTest, ChangeFrequency) {
                                    true /* upload_success */);
 }
 
-TEST_F(StatusUploaderTest, NoUploadAfterUserInput) {
+TEST_F(StatusUploaderTest, ScreenshotUploadAllowOnlyAfterCutoffTime) {
   auto uploader = CreateStatusUploader();
   // Should allow data upload before there is user input.
-  EXPECT_TRUE(uploader->IsSessionDataUploadAllowed());
+  EXPECT_TRUE(uploader->IsScreenshotAllowed());
 
-  // Now mock user input, and no session data should be allowed.
-  ui::MouseEvent e(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-                   ui::EventTimeForNow(), 0, 0);
-  const ui::PlatformEvent& native_event = &e;
-  ui::UserActivityDetector::Get()->DidProcessEvent(native_event);
-  EXPECT_FALSE(uploader->IsSessionDataUploadAllowed());
+  MockUserInput();
+  EXPECT_FALSE(uploader->IsScreenshotAllowed());
+
+  MockUserInput();
+  task_environment_.AdvanceClock(kMinimumScreenshotIdlenessCutoff -
+                                 base::Seconds(1));
+  EXPECT_FALSE(uploader->IsScreenshotAllowed());
+
+  // Screenshot is allowed again after a period of inactivity
+  MockUserInput();
+  task_environment_.AdvanceClock(kMinimumScreenshotIdlenessCutoff +
+                                 base::Seconds(1));
+  EXPECT_TRUE(uploader->IsScreenshotAllowed());
 }
 
 TEST_F(StatusUploaderTest, NoUploadAfterVideoCapture) {
   auto uploader = CreateStatusUploader();
   // Should allow data upload before there is video capture.
-  EXPECT_TRUE(uploader->IsSessionDataUploadAllowed());
+  EXPECT_TRUE(uploader->IsScreenshotAllowed());
 
   // Now mock video capture, and no session data should be allowed.
   MediaCaptureDevicesDispatcher::GetInstance()->OnMediaRequestStateChanged(
@@ -310,7 +340,7 @@ TEST_F(StatusUploaderTest, NoUploadAfterVideoCapture) {
       blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       content::MEDIA_REQUEST_STATE_OPENING);
   base::RunLoop().RunUntilIdle();
-  EXPECT_FALSE(uploader->IsSessionDataUploadAllowed());
+  EXPECT_FALSE(uploader->IsScreenshotAllowed());
 }
 
 TEST_F(StatusUploaderTest, ScheduleImmediateStatusUpload) {

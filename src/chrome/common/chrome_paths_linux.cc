@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,7 +89,9 @@ bool GetDefaultUserDataDirectory(base::FilePath* result) {
         GetXDGDirectory(env.get(), kXdgConfigHomeEnvVar, kDotConfigDir);
   }
 
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+  std::string data_dir_basename = "google-chrome-for-testing";
+#elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
   std::string data_dir_basename = "google-chrome";
 #else
   std::string data_dir_basename = "chromium";

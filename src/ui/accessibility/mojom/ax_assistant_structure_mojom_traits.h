@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define UI_ACCESSIBILITY_MOJOM_AX_ASSISTANT_STRUCTURE_MOJOM_TRAITS_H_
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_assistant_structure.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom-shared.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
@@ -40,6 +40,10 @@ struct StructTraits<ax::mojom::AssistantNodeDataView,
       const std::unique_ptr<ui::AssistantNode>& node) {
     return node->children_indices;
   }
+  static const gfx::Rect& unclipped_rect(
+      const std::unique_ptr<ui::AssistantNode>& node) {
+    return node->unclipped_rect;
+  }
   static const gfx::Rect& rect(const std::unique_ptr<ui::AssistantNode>& node) {
     return node->rect;
   }
@@ -68,7 +72,7 @@ struct StructTraits<ax::mojom::AssistantNodeDataView,
   static bool line_through(const std::unique_ptr<ui::AssistantNode>& node) {
     return node->line_through;
   }
-  static const absl::optional<gfx::Range>& selection(
+  static const std::optional<gfx::Range>& selection(
       const std::unique_ptr<ui::AssistantNode>& node) {
     return node->selection;
   }
@@ -76,7 +80,7 @@ struct StructTraits<ax::mojom::AssistantNodeDataView,
       const std::unique_ptr<ui::AssistantNode>& node) {
     return node->class_name;
   }
-  static const absl::optional<std::string>& role(
+  static const std::optional<std::string>& role(
       const std::unique_ptr<ui::AssistantNode>& node) {
     return node->role;
   }

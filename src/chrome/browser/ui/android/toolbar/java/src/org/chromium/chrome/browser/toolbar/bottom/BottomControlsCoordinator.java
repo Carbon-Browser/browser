@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,26 +9,41 @@ import android.app.Activity;
 import android.view.View;
 import android.view.ViewGroup;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.ColorInt;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
+import org.chromium.base.supplier.OneshotSupplier;
+import org.chromium.base.supplier.Supplier;
+import org.chromium.base.supplier.TransitiveObservableSupplier;
+import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
+import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.layouts.LayoutManager;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
+import org.chromium.chrome.browser.tab.TabObscuringHandler;
 import org.chromium.chrome.browser.toolbar.R;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsViewBinder.ViewHolder;
+import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 import org.chromium.ui.resources.ResourceManager;
+import org.chromium.ui.resources.dynamics.ViewResourceAdapter;
 import org.chromium.ui.widget.Toast;
+
+import java.util.HashSet;
+import java.util.Set;
+
+
+
+
 import org.chromium.ui.widget.ChromeImageButton;
 import android.view.View.OnClickListener;
-import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.chrome.browser.toolbar.TabCountProvider;
+// import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton;
@@ -55,16 +70,15 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
 import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
-
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 import android.widget.FrameLayout;
 import android.widget.Space;
-
 import android.content.Intent;
 import org.chromium.base.IntentUtils;
-
 import android.content.ComponentName;
+import org.chromium.base.supplier.Supplier;
+import androidx.core.widget.ImageViewCompat;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -75,29 +89,40 @@ import android.content.ComponentName;
  */
 public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController,
       BottomToolbarThemeCommunicator, FullscreenManager.Observer, MediatorCommunicator {
-    /**
-     * Interface for the BottomControls component to hide and show itself.
-     */
+    /** Interface for the BottomControls component to hide and show itself. */
     public interface BottomControlsVisibilityController {
         void setBottomControlsVisible(boolean isVisible);
+
+        void setBottomControlsColor(@ColorInt int color);
     }
 
     /** The mediator that handles events from outside the bottom controls. */
     private final BottomControlsMediator mMediator;
 
     /** The Delegate for the split toolbar's bottom toolbar component UI operation. */
-    private @Nullable BottomControlsContentDelegate mContentDelegate;
+    private final OneshotSupplier<BottomControlsContentDelegate> mContentDelegateSupplier;
+
+    private final ObservableSupplierImpl<BottomControlsContentDelegate> mContentDelegateWrapper =
+            new ObservableSupplierImpl<>();
+    private final TransitiveObservableSupplier<BottomControlsContentDelegate, Boolean>
+            mHandleBackPressChangedSupplier =
+                    new TransitiveObservableSupplier<>(
+                            mContentDelegateWrapper, cd -> cd.getHandleBackPressChangedSupplier());
+
+    private final ScrollingBottomViewResourceFrameLayout mRootFrameLayout;
+    private final ScrollingBottomViewSceneLayer mSceneLayer;
+
 
     // private View mBottomToolbarWrapper;
-    private View mBottomToolbarCurve;
-    private View mBottomToolbarWrapperLeft;
-    private View mBottomToolbarWrapperRight;
+    // private View mBottomToolbarCurve;
+    // private View mBottomToolbarWrapperLeft;
+    // private View mBottomToolbarWrapperRight;
     private View mBottomToolbarWrapperBottom;
     private View mContainer;
     private ChromeImageButton mSearchAccelerator;
     // private ChromeImageButton mSpeedDialButton;
     private ChromeImageButton mHomeButton;
-    private ChromeImageButton mSettingsButton;
+    // private ChromeImageButton mSettingsButton;
     private ChromeImageButton mRewardsButton;
     private ToggleTabStackButton mTabSwitcherButton;
 
@@ -107,7 +132,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     private LayoutStateProvider mLayoutStateProvider;
     private final LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
 
-    private TabModelSelector mTabModelSelector;
+    // private TabModelSelector mTabModelSelector;
 
     SharedPreferences mPrefs;
 
@@ -141,234 +166,293 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         mCarbonActionButton.setVisibility(View.VISIBLE);
     }
 
+
     /**
      * Build the coordinator that manages the bottom controls.
+     *
      * @param activity Activity instance to use.
      * @param windowAndroid A {@link WindowAndroid} for watching keyboard visibility events.
-     * @param controlsSizer A {@link BrowserControlsSizer} to update the bottom controls
-     *                          height for the renderer.
-     * @param fullscreenManager A {@link FullscreenManager} to listen for fullscreen changes.
-     * @param stub The bottom controls {@link ViewStub} to inflate.
-     * @param contentDelegate Delegate for bottom controls UI operations.
-     * @param overlayPanelVisibilitySupplier Notifies overlay panel visibility event.
+     * @param layoutManager A {@link LayoutManager} to attach overlays to.
      * @param resourceManager A {@link ResourceManager} for loading textures into the compositor.
-     * @param layoutManager A {@link LayoutManagerImpl} to attach overlays to.
+     * @param controlsStacker A {@link BottomControlsStacker} to update the bottom controls.
+     * @param fullscreenManager A {@link FullscreenManager} to listen for fullscreen changes.
+     * @param edgeToEdgeControllerSupplier A supplier to control drawing to the edge of the screen.
+     * @param root The parent {@link ViewGroup} for the bottom controls.
+     * @param contentDelegateSupplier Supplier of delegate for bottom controls UI operations.
+     * @param tabObscuringHandler Delegate object handling obscuring views.
+     * @param overlayPanelVisibilitySupplier Notifies overlay panel visibility event.
+     * @param constraintsSupplier Used to access current constraints of the browser controls.
+     * @param readAloudRestoringSupplier Supplier that returns true if Read Aloud is currently
+     *     restoring its player, e.g. after theme change.
      */
     @SuppressLint("CutPasteId") // Not actually cut and paste since it's View vs ViewGroup.
-    public BottomControlsCoordinator(Activity activity, WindowAndroid windowAndroid,
-            LayoutManager layoutManager, ResourceManager resourceManager,
-            BrowserControlsSizer controlsSizer, FullscreenManager fullscreenManager,
+    public BottomControlsCoordinator(
+            Activity activity,
+            WindowAndroid windowAndroid,
+            LayoutManager layoutManager,
+            ResourceManager resourceManager,
+            BottomControlsStacker controlsStacker,
+            BrowserStateBrowserControlsVisibilityDelegate browserControlsVisibilityDelegate,
+            FullscreenManager fullscreenManager,
+            ObservableSupplier<EdgeToEdgeController> edgeToEdgeControllerSupplier,
             ScrollingBottomViewResourceFrameLayout root,
-            BottomControlsContentDelegate contentDelegate,
+            OneshotSupplier<BottomControlsContentDelegate> contentDelegateSupplier,
+            TabObscuringHandler tabObscuringHandler,
             ObservableSupplier<Boolean> overlayPanelVisibilitySupplier,
-            BottomToolbarCoordinator BottomToolbarCoordinator, OnClickListener tabSwitcherClickHandler,
-            TabModelSelector tabModelSelector, TabCountProvider tabCountProvider) {
+            ObservableSupplier<Integer> constraintsSupplier,
+            Supplier<Boolean> readAloudRestoringSupplier,
+            BottomToolbarCoordinator bottomToolbarCoordinator,
+            Runnable tabSwitcherClickHandler,
+            // TabModelSelector tabModelSelector,
+            ObservableSupplier<Integer> tabCountSupplier,
+            Supplier<Boolean> incognitoSupplier) {
+        mRootFrameLayout = root;
+        root.setConstraintsSupplier(constraintsSupplier);
         PropertyModel model = new PropertyModel(BottomControlsProperties.ALL_KEYS);
 
-        ScrollingBottomViewSceneLayer sceneLayer =
-                new ScrollingBottomViewSceneLayer(root, root.getTopShadowHeight());
+        mSceneLayer = new ScrollingBottomViewSceneLayer(root, root.getTopShadowHeight());
         PropertyModelChangeProcessor.create(
-                model, new ViewHolder(root, sceneLayer), BottomControlsViewBinder::bind);
-        layoutManager.createCompositorMCP(
-                model, sceneLayer, BottomControlsViewBinder::bindCompositorMCP);
-        int bottomControlsHeightId = R.dimen.bottom_controls_height_new;
-
-        // View container = root.findViewById(R.id.bottom_container_slot);
-        // ViewGroup.LayoutParams params = container.getLayoutParams();
-        // params.height = root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
-        // mBottomToolbarWrapper = root.findViewById(R.id.bottom_toolbar_wrapper);
-        mBottomToolbarWrapperLeft = root.findViewById(R.id.bottom_toolbar_wrapper_left);
-        mBottomToolbarWrapperRight = root.findViewById(R.id.bottom_toolbar_wrapper_right);
-        mBottomToolbarWrapperBottom = root.findViewById(R.id.middle_spacer_bottom);
-        mBottomToolbarCurve = root.findViewById(R.id.middle_space_curve);
+                model, new ViewHolder(root, mSceneLayer), BottomControlsViewBinder::bind);
+        if (ChromeFeatureList.sBcivBottomControls.isEnabled()) {
+            Set<PropertyKey> exclusions = new HashSet();
+            exclusions.add(BottomControlsProperties.ANDROID_VIEW_VISIBLE);
+            layoutManager.createCompositorMCPWithExclusions(
+                    model, mSceneLayer, BottomControlsViewBinder::bindCompositorMCP, exclusions);
+        } else {
+            layoutManager.createCompositorMCP(
+                    model, mSceneLayer, BottomControlsViewBinder::bindCompositorMCP);
+        }
+        // int bottomControlsHeightId = R.dimen.bottom_controls_height_new;
+        int bottomControlsHeightId = R.dimen.bottom_controls_height;
+        // mBottomToolbarWrapperLeft = root.findViewById(R.id.bottom_toolbar_wrapper_left);
+        // mBottomToolbarWrapperRight = root.findViewById(R.id.bottom_toolbar_wrapper_right);
+        // mBottomToolbarWrapperBottom = root.findViewById(R.id.middle_spacer_bottom);
+        // mBottomToolbarCurve = root.findViewById(R.id.middle_space_curve);
         mContainer = root.findViewById(R.id.bottom_container_slot);
-        fullscreenManager.addObserver(this);
+
+        ViewGroup.LayoutParams params = mContainer.getLayoutParams();
+
+        int bottomControlsHeightRes =
+                root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
+        params.height = bottomControlsHeightRes;
+
         mMediator =
-                new BottomControlsMediator(windowAndroid, model, controlsSizer, fullscreenManager,
-                        root.getResources().getDimensionPixelOffset(bottomControlsHeightId),
-                        overlayPanelVisibilitySupplier, this, root.getResources().getDimensionPixelOffset(R.dimen.bottom_controls_height_hidden_controls),
-                        this);
+                new BottomControlsMediator(
+                        windowAndroid,
+                        model,
+                        controlsStacker,
+                        browserControlsVisibilityDelegate,
+                        fullscreenManager,
+                        tabObscuringHandler,
+                        bottomControlsHeightRes,
+                        root.getTopShadowHeight(),
+                        overlayPanelVisibilitySupplier,
+                        edgeToEdgeControllerSupplier,
+                        readAloudRestoringSupplier);
+        resourceManager
+                .getDynamicResourceLoader()
+                .registerResource(root.getId(), root.getResourceAdapter());
 
-        resourceManager.getDynamicResourceLoader().registerResource(
-                root.getId(), root.getResourceAdapter());
-
-        mContentDelegate = contentDelegate;
+        mContentDelegateSupplier = contentDelegateSupplier;
         Toast.setGlobalExtraYOffset(
                 root.getResources().getDimensionPixelSize(bottomControlsHeightId));
 
         // Set the visibility of BottomControls to false by default. Components within
         // BottomControls should update the visibility explicitly if needed.
-        setBottomToolbarVisible(true);
+        setBottomControlsVisible(true);
 
-        sceneLayer.setIsVisible(mMediator.isCompositedViewVisible());
-        layoutManager.addSceneOverlay(sceneLayer);
+        mSceneLayer.setIsVisible(mMediator.isCompositedViewVisible());
+        layoutManager.addSceneOverlay(mSceneLayer);
 
-        if (mContentDelegate != null) {
-            mContentDelegate.initializeWithNative(activity, mMediator::setBottomControlsVisible);
-        }
+        mContentDelegateSupplier.onAvailable(
+                (contentDelegate) -> {
+                    contentDelegate.initializeWithNative(
+                            activity,
+                            new BottomControlsVisibilityController() {
+                                @Override
+                                public void setBottomControlsVisible(boolean isVisible) {
+                                    mMediator.setBottomControlsVisible(isVisible);
+                                }
+
+                                @Override
+                                public void setBottomControlsColor(int color) {
+                                    mMediator.setBottomControlsColor(color);
+                                }
+                            },
+                            root::onModelTokenChange);
+                    mContentDelegateWrapper.set(contentDelegate);
+                });
+
+
+
+
+
+
 
         mTabSwitcherButton = root.findViewById(R.id.tab_switcher_button_bottom);
         if (mTabSwitcherButton != null) {
-            mTabSwitcherButton.setOnClickListener(tabSwitcherClickHandler);
-            mTabSwitcherButton.setTabCountProvider(tabCountProvider);
+            mTabSwitcherButton.setOnClickListener(view -> {
+              tabSwitcherClickHandler.run();
+            });
+            mTabSwitcherButton.setSuppliers(tabCountSupplier, null, incognitoSupplier);
         }
 
-        mCarbonActionButton = root.findViewById(R.id.carbon_action_button);
-        mCarbonActionButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-              PopupWindow mPopup = new PopupWindow(v.getContext());
-              mPopup.setFocusable(true);
-              mPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        // mCarbonActionButton = root.findViewById(R.id.carbon_action_button);
+        // mCarbonActionButton.setOnClickListener(new View.OnClickListener() {
+        //     @Override
+        //     public void onClick(View v) {
+        //       PopupWindow mPopup = new PopupWindow(v.getContext());
+        //       mPopup.setFocusable(true);
+        //       mPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        //
+        //       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        //           // The window layout type affects the z-index of the popup window on M+.
+        //           mPopup.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
+        //       }
+        //
+        //       mPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        //
+        //       Rect bgPadding = new Rect();
+        //       mPopup.getBackground().getPadding(bgPadding);
+        //
+        //       int menuWidth = root.getMeasuredWidth();
+        //       int popupWidth = menuWidth + bgPadding.left + bgPadding.right;
+        //       mPopup.setWidth(popupWidth);
+        //
+        //       /*Display display = mActivity.getWindowManager().getDefaultDisplay();
+        //       Point size = new Point();
+        //       display.getSize(size);
+        //       contentView.measure(size.x, size.y);*/
+        //
+        //       // mPopup.setAnimationStyle(R.style.RewardsPopupAnimation);
+        //
+        //       int[] location = new int[2];
+        //       v.getLocationInWindow(location);
+        //
+        //       ArcMenu menu = (ArcMenu) LayoutInflater.from(v.getContext()).inflate(R.layout.carbon_action_button, null);
+        //       // ArcMenu menu = root.findViewById(R.id.carbon_action_button);
+        //       menu.setToolTipSide(ArcMenu.TOOLTIP_LEFT);
+        //
+        //       menu.findViewById(R.id.fabArcMenu).setOnClickListener(new View.OnClickListener() {
+        //           @Override
+        //           public void onClick(View v) {
+        //             menu.menuOnclickMethod();
+        //             new Handler().postDelayed(new Runnable() {
+        //                 @Override
+        //                 public void run() {
+        //                    mPopup.dismiss();
+        //                 }
+        //             }, 500);
+        //           }
+        //       });
+        //
+        //       FloatingActionButton mWalletItem = new FloatingActionButton(root.getContext());
+        //       mWalletItem.setSize(FloatingActionButton.SIZE_MINI);
+        //       mWalletItem.setIcon(R.drawable.ic_action_wallet);
+        //       menu.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        //     	menu.addItem(mWalletItem, "", new View.OnClickListener() {
+        //       		@Override
+        //       		public void onClick(View view) {
+        //             Intent intent = new Intent();
+        //             intent.setComponent(new ComponentName("com.browser.tssomas", "org.chromium.chrome.browser.wallet.WalletActivity"));
+        //
+        //             try {
+        //                 activity.startActivityForResult(intent, 12345);
+        //             } catch (Exception ignore) { }
+        //             new Handler().postDelayed(new Runnable() {
+        //                 @Override
+        //                 public void run() {
+        //                    mPopup.dismiss();
+        //                 }
+        //             }, 500);
+        //           }
+        //     	});
+        //
+        //       FloatingActionButton mStakingItem = new FloatingActionButton(root.getContext());
+        //       mStakingItem.setSize(FloatingActionButton.SIZE_MINI);
+        //       mStakingItem.setIcon(R.drawable.ic_action_staking);
+        //     	menu.addItem(mStakingItem, "", new View.OnClickListener() {
+        //       		@Override
+        //       		public void onClick(View v) {
+        //       		   bottomToolbarCoordinator.loadUrl("https://stake.carbon.website", v);
+        //              menu.menuOnclickMethod();
+        //              new Handler().postDelayed(new Runnable() {
+        //                  @Override
+        //                  public void run() {
+        //                     mPopup.dismiss();
+        //                  }
+        //              }, 500);
+        //       		}
+        //     	});
+        //
+        //       FloatingActionButton mSwapsItem = new FloatingActionButton(root.getContext());
+        //       mSwapsItem.setSize(FloatingActionButton.SIZE_MINI);
+        //       mSwapsItem.setIcon(R.drawable.ic_action_swaps);
+        //     	menu.addItem(mSwapsItem, "", new View.OnClickListener() {
+        //       		@Override
+        //       		public void onClick(View v) {
+        //              bottomToolbarCoordinator.loadUrl("https://www.ldx.fi/", v);
+        //              menu.menuOnclickMethod();
+        //              new Handler().postDelayed(new Runnable() {
+        //                  @Override
+        //                  public void run() {
+        //                     mPopup.dismiss();
+        //                  }
+        //              }, 500);
+        //       		}
+        //     	});
+        //
+        //       FloatingActionButton mRewardsItem = new FloatingActionButton(root.getContext());
+        //       mRewardsItem.setSize(FloatingActionButton.SIZE_MINI);
+        //       mRewardsItem.setIcon(R.drawable.ic_action_rewards);
+        //     	menu.addItem(mRewardsItem, "", new View.OnClickListener() {
+        //       		@Override
+        //       		public void onClick(View v) {
+        //       		   bottomToolbarCoordinator.openRewardsPopup(v);
+        //              mPopup.dismiss();
+        //       		}
+        //     	});
+        //
+        //       mPopup.setContentView(menu);
+        //       try {
+        //           mPopup.showAtLocation(root.findViewById(R.id.carbon_action_button),
+        //                   Gravity.NO_GRAVITY, location[0], (location[1]));
+        //       } catch (Exception ignore) {}
+        //       new Handler().postDelayed(new Runnable() {
+        //           @Override
+        //           public void run() {
+        //              menu.menuOnclickMethod();
+        //
+        //              ((View)menu.getParent()).setOnClickListener(new View.OnClickListener() {
+        //                  @Override
+        //                  public void onClick(View v) {
+        //                    menu.menuOnclickMethod();
+        //                    new Handler().postDelayed(new Runnable() {
+        //                        @Override
+        //                        public void run() {
+        //                           mPopup.dismiss();
+        //                        }
+        //                    }, 500);
+        //                  }
+        //              });
+        //           }
+        //       }, 100);
+        //     }
+        // });
 
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                  // The window layout type affects the z-index of the popup window on M+.
-                  mPopup.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
-              }
-
-              mPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-
-              Rect bgPadding = new Rect();
-              mPopup.getBackground().getPadding(bgPadding);
-
-              int menuWidth = root.getMeasuredWidth();
-              int popupWidth = menuWidth + bgPadding.left + bgPadding.right;
-              mPopup.setWidth(popupWidth);
-
-              /*Display display = mActivity.getWindowManager().getDefaultDisplay();
-              Point size = new Point();
-              display.getSize(size);
-              contentView.measure(size.x, size.y);*/
-
-              // mPopup.setAnimationStyle(R.style.RewardsPopupAnimation);
-
-              int[] location = new int[2];
-              v.getLocationInWindow(location);
-
-              ArcMenu menu = (ArcMenu) LayoutInflater.from(v.getContext()).inflate(R.layout.carbon_action_button, null);
-              // ArcMenu menu = root.findViewById(R.id.carbon_action_button);
-              menu.setToolTipSide(ArcMenu.TOOLTIP_LEFT);
-
-              menu.findViewById(R.id.fabArcMenu).setOnClickListener(new View.OnClickListener() {
-                  @Override
-                  public void onClick(View v) {
-                    menu.menuOnclickMethod();
-                    new Handler().postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                           mPopup.dismiss();
-                        }
-                    }, 500);
-                  }
-              });
-
-              FloatingActionButton mWalletItem = new FloatingActionButton(root.getContext());
-              mWalletItem.setSize(FloatingActionButton.SIZE_MINI);
-              mWalletItem.setIcon(R.drawable.ic_action_wallet);
-              menu.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-            	menu.addItem(mWalletItem, "", new View.OnClickListener() {
-              		@Override
-              		public void onClick(View view) {
-                    Intent intent = new Intent();
-                    intent.setComponent(new ComponentName("com.browser.tssomas", "org.chromium.chrome.browser.wallet.WalletActivity"));
-
-                    try {
-                        activity.startActivityForResult(intent, 12345);
-                    } catch (Exception ignore) { }
-                    new Handler().postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                           mPopup.dismiss();
-                        }
-                    }, 500);
-                  }
-            	});
-
-              FloatingActionButton mStakingItem = new FloatingActionButton(root.getContext());
-              mStakingItem.setSize(FloatingActionButton.SIZE_MINI);
-              mStakingItem.setIcon(R.drawable.ic_action_staking);
-            	menu.addItem(mStakingItem, "", new View.OnClickListener() {
-              		@Override
-              		public void onClick(View v) {
-              		   BottomToolbarCoordinator.loadUrl("https://stake.carbon.website", v);
-                     menu.menuOnclickMethod();
-                     new Handler().postDelayed(new Runnable() {
-                         @Override
-                         public void run() {
-                            mPopup.dismiss();
-                         }
-                     }, 500);
-              		}
-            	});
-
-              FloatingActionButton mSwapsItem = new FloatingActionButton(root.getContext());
-              mSwapsItem.setSize(FloatingActionButton.SIZE_MINI);
-              mSwapsItem.setIcon(R.drawable.ic_action_swaps);
-            	menu.addItem(mSwapsItem, "", new View.OnClickListener() {
-              		@Override
-              		public void onClick(View v) {
-                     BottomToolbarCoordinator.loadUrl("https://www.ldx.fi/", v);
-                     menu.menuOnclickMethod();
-                     new Handler().postDelayed(new Runnable() {
-                         @Override
-                         public void run() {
-                            mPopup.dismiss();
-                         }
-                     }, 500);
-              		}
-            	});
-
-              FloatingActionButton mRewardsItem = new FloatingActionButton(root.getContext());
-              mRewardsItem.setSize(FloatingActionButton.SIZE_MINI);
-              mRewardsItem.setIcon(R.drawable.ic_action_rewards);
-            	menu.addItem(mRewardsItem, "", new View.OnClickListener() {
-              		@Override
-              		public void onClick(View v) {
-              		   BottomToolbarCoordinator.openRewardsPopup(v);
-                     mPopup.dismiss();
-              		}
-            	});
-
-              mPopup.setContentView(menu);
-              try {
-                  mPopup.showAtLocation(root.findViewById(R.id.carbon_action_button),
-                          Gravity.NO_GRAVITY, location[0], (location[1]));
-              } catch (Exception ignore) {}
-              new Handler().postDelayed(new Runnable() {
-                  @Override
-                  public void run() {
-                     menu.menuOnclickMethod();
-
-                     ((View)menu.getParent()).setOnClickListener(new View.OnClickListener() {
-                         @Override
-                         public void onClick(View v) {
-                           menu.menuOnclickMethod();
-                           new Handler().postDelayed(new Runnable() {
-                               @Override
-                               public void run() {
-                                  mPopup.dismiss();
-                               }
-                           }, 500);
-                         }
-                     });
-                  }
-              }, 100);
-            }
-        });
-
-        mSettingsButton = root.findViewById(R.id.settings_button_bottom);
-        mSettingsButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                BottomToolbarCoordinator.openSettings(v);
-            }
-        });
+        // mSettingsButton = root.findViewById(R.id.settings_button_bottom);
+        // mSettingsButton.setOnClickListener(new View.OnClickListener() {
+        //     @Override
+        //     public void onClick(View v) {
+        //         bottomToolbarCoordinator.openSettings(v);
+        //     }
+        // });
 
         mHomeButton = root.findViewById(R.id.bottom_home_button);
         mHomeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                BottomToolbarCoordinator.loadHomepage(v);
+                bottomToolbarCoordinator.loadHomepage(v);
             }
         });
 
@@ -377,7 +461,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             @Override
             public void onClick(View v) {
                 // do callback
-                BottomToolbarCoordinator.focusUrlBar();
+                bottomToolbarCoordinator.focusUrlBar();
             }
         });
 
@@ -397,7 +481,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
         mLayoutStateObserver = new LayoutStateProvider.LayoutStateObserver() {
             @Override
-            public void onStartedShowing(@LayoutType int layoutType, boolean showToolbar) {
+            public void onStartedShowing(@LayoutType int layoutType) {
                 if (layoutType == LayoutType.TAB_SWITCHER) {;
                     // SHOWING OVERVIEW
                     setBottomToolbarVisible(false);
@@ -409,7 +493,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
             @Override
             public void onStartedHiding(
-                    @LayoutType int layoutType, boolean showToolbar, boolean delayAnimation) { }
+                    @LayoutType int layoutType) { }
         };
 
         if (mPrefs == null) {
@@ -417,16 +501,16 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         }
         boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (isCarbonButtonDisabled) {
-            FrameLayout mCarbonButtonContainer = root.findViewById(R.id.carbon_action_button_container);
-            mSettingsButton.setVisibility(View.GONE);
-            mCarbonButtonContainer.setVisibility(View.GONE);
-            mCarbonActionButton.setVisibility(View.GONE);
-
-            Space mMiddleSpacerLeft = root.findViewById(R.id.legacy_spacer_left);
-            mMiddleSpacerLeft.setVisibility(View.VISIBLE);
-
-            Space mMiddleSpacerRight = root.findViewById(R.id.legacy_spacer_right);
-            mMiddleSpacerRight.setVisibility(View.VISIBLE);
+            // FrameLayout mCarbonButtonContainer = root.findViewById(R.id.carbon_action_button_container);
+            // mSettingsButton.setVisibility(View.GONE);
+            // mCarbonButtonContainer.setVisibility(View.GONE);
+            // mCarbonActionButton.setVisibility(View.GONE);
+            //
+            // Space mMiddleSpacerLeft = root.findViewById(R.id.legacy_spacer_left);
+            // mMiddleSpacerLeft.setVisibility(View.VISIBLE);
+            //
+            // // Space mMiddleSpacerRight = root.findViewById(R.id.legacy_spacer_right);
+            // // mMiddleSpacerRight.setVisibility(View.VISIBLE);
 
             ChromeImageButton mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
             mRewardsButton.setVisibility(View.VISIBLE);
@@ -434,10 +518,20 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                 @Override
                 public void onClick(View v) {
                     // do callback
-                    BottomToolbarCoordinator.openRewardsPopup(v);
+                    bottomToolbarCoordinator.openRewardsPopup(v);
                 }
             });
         }
+    }
+
+    @Override
+    public void onTintChanged(ColorStateList tint, @BrandedColorScheme int brandedColorScheme) {
+        // if (mBottomControlsCoordinator != null) {
+        //     ((BottomToolbarThemeCommunicator) mBottomControlsCoordinator).onTintChanged(tint, brandedColorScheme);
+        // }
+        //
+        // mTempColorStateList = tint;
+        // mTempBrandedColorScheme = brandedColorScheme;
     }
 
     /**
@@ -445,20 +539,17 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
      */
     public void setLayoutStateProvider(LayoutStateProvider layoutStateProvider) {
         mMediator.setLayoutStateProvider(layoutStateProvider);
-
-        mLayoutStateProvider = layoutStateProvider;
-        mLayoutStateProvider.addObserver(mLayoutStateObserver);
     }
 
     /**
      * @param isVisible Whether the bottom control is visible.
      */
     public void setBottomControlsVisible(boolean isVisible) {
-        // mMediator.setBottomControlsVisible(isVisible);
+        mMediator.setBottomControlsVisible(isVisible);
     }
 
     public void setBottomToolbarVisible(boolean isVisible) {
-        mMediator.setBottomToolbarVisible(isVisible);
+      // mMediator.setBottomToolbarVisible(isVisible);
     }
 
     private boolean isColorDark(int color){
@@ -472,33 +563,23 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
     @Override
     public void onThemeChanged(int color) {
-        if (mBottomToolbarWrapperLeft == null) return;
+        // if (mBottomToolbarWrapperLeft == null) return;
         // mBottomToolbarWrapper.setBackgroundColor(color);
-        // ApiCompatibilityUtils.setImageTintList(mBottomToolbarCurve, color);
-        mBottomToolbarCurve.setBackground(mTabSwitcherButton.isIncognito() ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_incognito) : isColorDark(color) ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_dark) :
-          mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_light));
-        mBottomToolbarWrapperLeft.setBackgroundColor(color);
-        mBottomToolbarWrapperRight.setBackgroundColor(color);
-        mBottomToolbarWrapperBottom.setBackgroundColor(color);
+        // ImageViewCompat.setImageTintList(mBottomToolbarCurve, color);
+        // mBottomToolbarCurve.setBackground(mTabSwitcherButton.isIncognito() ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_incognito) : isColorDark(color) ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_dark) :
+          // mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_light));
+        // mBottomToolbarWrapperLeft.setBackgroundColor(color);
+        // mBottomToolbarWrapperRight.setBackgroundColor(color);
+        // mBottomToolbarWrapperBottom.setBackgroundColor(color);
 
         ColorStateList tint = isColorDark(color) ? AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_light_tint_list)
                         : AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_dark_tint_list);
 
-        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
-        ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mSettingsButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mTabSwitcherButton, tint);
-        mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
-    }
-
-    @Override
-    public void onTintChanged(ColorStateList tint, @BrandedColorScheme int brandedColorScheme) {
-
-        // ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
-        // // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
-        // ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
-        //
-        // mTabSwitcherButton.setBrandedColorScheme(brandedColorScheme);
+        ImageViewCompat.setImageTintList(mSearchAccelerator, tint);
+        ImageViewCompat.setImageTintList(mHomeButton, tint);
+        // ImageViewCompat.setImageTintList(mSettingsButton, tint);
+        // ImageViewCompat.setImageTintList(mTabSwitcherButton, tint);
+        // mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
     }
 
     @Override
@@ -522,40 +603,44 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
     /**
      * Handles system back press action if needed.
+     *
      * @return Whether or not the back press event is consumed here.
      */
     public boolean onBackPressed() {
-        return mContentDelegate != null && mContentDelegate.onBackPressed();
+        return mContentDelegateSupplier.hasValue()
+                ? mContentDelegateSupplier.get().onBackPressed()
+                : false;
     }
 
     @Override
-    public void handleBackPress() {
-        if (mContentDelegate != null) mContentDelegate.handleBackPress();
+    public @BackPressResult int handleBackPress() {
+        return mContentDelegateSupplier.hasValue()
+                ? mContentDelegateSupplier.get().handleBackPress()
+                : BackPressResult.FAILURE;
     }
 
     @Override
     public ObservableSupplier<Boolean> getHandleBackPressChangedSupplier() {
-        if (mContentDelegate == null) return new ObservableSupplierImpl<>();
-        return mContentDelegate.getHandleBackPressChangedSupplier();
+        return mHandleBackPressChangedSupplier;
     }
 
-    /**
-     * Clean up any state when the bottom controls component is destroyed.
-     */
+    /** Clean up any state when the bottom controls component is destroyed. */
     public void destroy() {
-        if (mContentDelegate != null) mContentDelegate.destroy();
-
-        // if (mBottomToolbarWrapper != null) mBottomToolbarWrapper = null;
-        if (mBottomToolbarWrapperLeft != null) mBottomToolbarWrapperLeft = null;
-        if (mBottomToolbarWrapperRight != null) mBottomToolbarWrapperRight = null;
-        if (mBottomToolbarWrapperBottom != null) mBottomToolbarWrapperBottom = null;
-        if (mBottomToolbarCurve != null) mBottomToolbarCurve = null;
-        if (mContainer != null) mContainer = null;
-        if (mLayoutStateProvider != null) {
-            mLayoutStateProvider.removeObserver(mLayoutStateObserver);
-            mLayoutStateProvider = null;
-        }
-
+        if (mContentDelegateSupplier.hasValue()) mContentDelegateSupplier.get().destroy();
         mMediator.destroy();
+    }
+
+    public void simulateEdgeToEdgeChangeForTesting(
+            int bottomInset, boolean isDrawingToEdge, boolean isPageOptedIntoEdgeToEdge) {
+        mMediator.simulateEdgeToEdgeChangeForTesting( // IN-TEST
+                bottomInset, isDrawingToEdge, isPageOptedIntoEdgeToEdge); // IN-TEST
+    }
+
+    public ScrollingBottomViewSceneLayer getSceneLayerForTesting() {
+        return mSceneLayer;
+    }
+
+    public ViewResourceAdapter getResourceAdapterForTesting() {
+        return mRootFrameLayout.getResourceAdapter();
     }
 }

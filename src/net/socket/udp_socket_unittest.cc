@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,7 +17,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -43,12 +42,16 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
+#if !BUILDFLAG(IS_WIN)
+#include <netinet/in.h>
+#include <sys/socket.h>
+#else
+#include <winsock2.h>
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
-#include "base/android/radio_utils.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "net/android/network_change_notifier_factory_android.h"
-#include "net/android/radio_activity_tracker.h"
 #include "net/base/network_change_notifier.h"
 #endif
 
@@ -87,6 +90,12 @@ class UDPSocketTest : public PlatformTest, public WithTaskEnvironment {
 
   // Blocks until data is read from the socket.
   std::string RecvFromSocket(UDPServerSocket* socket) {
+    return RecvFromSocket(socket, DSCP_DEFAULT, ECN_DEFAULT);
+  }
+
+  std::string RecvFromSocket(UDPServerSocket* socket,
+                             DiffServCodePoint dscp,
+                             EcnCodePoint ecn) {
     TestCompletionCallback callback;
 
     int rv = socket->RecvFrom(buffer_.get(), kMaxRead, &recv_from_address_,
@@ -94,6 +103,14 @@ class UDPSocketTest : public PlatformTest, public WithTaskEnvironment {
     rv = callback.GetResult(rv);
     if (rv < 0)
       return std::string();
+#if BUILDFLAG(IS_WIN)
+    // The DSCP value is not populated on Windows, in order to avoid incurring
+    // an extra system call.
+    EXPECT_EQ(socket->GetLastTos().dscp, DSCP_DEFAULT);
+#else
+    EXPECT_EQ(socket->GetLastTos().dscp, dscp);
+#endif
+    EXPECT_EQ(socket->GetLastTos().ecn, ecn);
     return std::string(buffer_->data(), rv);
   }
 
@@ -117,12 +134,26 @@ class UDPSocketTest : public PlatformTest, public WithTaskEnvironment {
   }
 
   std::string ReadSocket(UDPClientSocket* socket) {
+    return ReadSocket(socket, DSCP_DEFAULT, ECN_DEFAULT);
+  }
+
+  std::string ReadSocket(UDPClientSocket* socket,
+                         DiffServCodePoint dscp,
+                         EcnCodePoint ecn) {
     TestCompletionCallback callback;
 
     int rv = socket->Read(buffer_.get(), kMaxRead, callback.callback());
     rv = callback.GetResult(rv);
     if (rv < 0)
       return std::string();
+#if BUILDFLAG(IS_WIN)
+    // The DSCP value is not populated on Windows, in order to avoid incurring
+    // an extra system call.
+    EXPECT_EQ(socket->GetLastTos().dscp, DSCP_DEFAULT);
+#else
+    EXPECT_EQ(socket->GetLastTos().dscp, dscp);
+#endif
+    EXPECT_EQ(socket->GetLastTos().ecn, ecn);
     return std::string(buffer_->data(), rv);
   }
 
@@ -155,7 +186,7 @@ class UDPSocketTest : public PlatformTest, public WithTaskEnvironment {
   // Run unit test for a connection test.
   // |use_nonblocking_io| is used to switch between overlapped and non-blocking
   // IO on Windows. It has no effect in other ports.
-  void ConnectTest(bool use_nonblocking_io);
+  void ConnectTest(bool use_nonblocking_io, bool use_async);
 
  protected:
   static const int kMaxRead = 1024;
@@ -172,7 +203,7 @@ void ReadCompleteCallback(int* result_out,
   std::move(callback).Run();
 }
 
-void UDPSocketTest::ConnectTest(bool use_nonblocking_io) {
+void UDPSocketTest::ConnectTest(bool use_nonblocking_io, bool use_async) {
   std::string simple_message("hello world!");
   RecordingNetLogObserver net_log_observer;
   // Setup the server to listen.
@@ -192,8 +223,19 @@ void UDPSocketTest::ConnectTest(bool use_nonblocking_io) {
   if (use_nonblocking_io)
     client->UseNonBlockingIO();
 
-  EXPECT_THAT(client->Connect(server_address), IsOk());
-
+  if (!use_async) {
+    EXPECT_THAT(client->Connect(server_address), IsOk());
+  } else {
+    TestCompletionCallback callback;
+    int rv = client->ConnectAsync(server_address, callback.callback());
+    if (rv != OK) {
+      ASSERT_EQ(rv, ERR_IO_PENDING);
+      rv = callback.WaitForResult();
+      EXPECT_EQ(rv, OK);
+    } else {
+      EXPECT_EQ(rv, OK);
+    }
+  }
   // Client sends to the server.
   EXPECT_EQ(simple_message.length(),
             static_cast<size_t>(WriteSocket(client.get(), simple_message)));
@@ -219,7 +261,7 @@ void UDPSocketTest::ConnectTest(bool use_nonblocking_io) {
   EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
 
   // Client sends to the server.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&UDPSocketTest::WriteSocketIgnoreResult,
                      base::Unretained(this), client.get(), simple_message));
@@ -280,12 +322,15 @@ void UDPSocketTest::ConnectTest(bool use_nonblocking_io) {
 
 TEST_F(UDPSocketTest, Connect) {
   // The variable |use_nonblocking_io| has no effect in non-Windows ports.
-  ConnectTest(false);
+  // Run ConnectTest once with sync connect and once with async connect
+  ConnectTest(false, false);
+  ConnectTest(false, true);
 }
 
 #if BUILDFLAG(IS_WIN)
 TEST_F(UDPSocketTest, ConnectNonBlocking) {
-  ConnectTest(true);
+  ConnectTest(true, false);
+  ConnectTest(true, true);
 }
 #endif
 
@@ -309,8 +354,7 @@ TEST_F(UDPSocketTest, PartialRecv) {
   // Read just 2 bytes. Read() is expected to return the first 2 bytes from the
   // packet and discard the rest.
   const int kPartialReadSize = 2;
-  scoped_refptr<IOBuffer> buffer =
-      base::MakeRefCounted<IOBuffer>(kPartialReadSize);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kPartialReadSize);
   int rv =
       server_socket.RecvFrom(buffer.get(), kPartialReadSize,
                              &recv_from_address_, recv_callback.callback());
@@ -437,6 +481,57 @@ TEST_F(UDPSocketTest, ConnectFail) {
 
   // Make sure that UDPSocket actually closed the socket.
   EXPECT_FALSE(socket.is_connected());
+}
+
+// Similar to ConnectFail but UDPSocket adopts an opened socket instead of
+// opening one directly.
+TEST_F(UDPSocketTest, AdoptedSocket) {
+  auto socketfd =
+      CreatePlatformSocket(ConvertAddressFamily(ADDRESS_FAMILY_IPV4),
+                           SOCK_DGRAM, AF_UNIX ? 0 : IPPROTO_UDP);
+  UDPSocket socket(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+
+  EXPECT_THAT(socket.AdoptOpenedSocket(ADDRESS_FAMILY_IPV4, socketfd), IsOk());
+
+  // Connect to an IPv6 address should fail since the socket was created for
+  // IPv4.
+  EXPECT_THAT(socket.Connect(net::IPEndPoint(IPAddress::IPv6Localhost(), 53)),
+              Not(IsOk()));
+
+  // Make sure that UDPSocket actually closed the socket.
+  EXPECT_FALSE(socket.is_connected());
+}
+
+// Tests that UDPSocket updates the global counter correctly.
+TEST_F(UDPSocketTest, LimitAdoptSocket) {
+  ASSERT_EQ(0, GetGlobalUDPSocketCountForTesting());
+  {
+    // Creating a platform socket does not increase count.
+    auto socketfd =
+        CreatePlatformSocket(ConvertAddressFamily(ADDRESS_FAMILY_IPV4),
+                             SOCK_DGRAM, AF_UNIX ? 0 : IPPROTO_UDP);
+    ASSERT_EQ(0, GetGlobalUDPSocketCountForTesting());
+
+    // Simply allocating a UDPSocket does not increase count.
+    UDPSocket socket(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+    EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
+
+    // Calling AdoptOpenedSocket() allocates the socket and increases the global
+    // counter.
+    EXPECT_THAT(socket.AdoptOpenedSocket(ADDRESS_FAMILY_IPV4, socketfd),
+                IsOk());
+    EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
+
+    // Connect to an IPv6 address should fail since the socket was created for
+    // IPv4.
+    EXPECT_THAT(socket.Connect(net::IPEndPoint(IPAddress::IPv6Localhost(), 53)),
+                Not(IsOk()));
+
+    // That Connect() failed doesn't change the global counter.
+    EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
+  }
+  // Finally, destroying UDPSocket decrements the global counter.
+  EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
 }
 
 // In this test, we verify that connect() on a socket will have the effect
@@ -589,14 +684,8 @@ TEST_F(UDPSocketTest, ClientSetDoNotFragment) {
 
     rv = client.SetDoNotFragment();
 #if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_FUCHSIA)
-    // TODO(crbug.com/945590): IP_MTU_DISCOVER is not implemented on Fuchsia.
+    // TODO(crbug.com/42050633): IP_MTU_DISCOVER is not implemented on Fuchsia.
     EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
-#elif BUILDFLAG(IS_MAC)
-    if (base::mac::IsAtLeastOS11()) {
-      EXPECT_THAT(rv, IsOk());
-    } else {
-      EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
-    }
 #else
     EXPECT_THAT(rv, IsOk());
 #endif
@@ -617,14 +706,8 @@ TEST_F(UDPSocketTest, ServerSetDoNotFragment) {
 
     rv = server.SetDoNotFragment();
 #if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_FUCHSIA)
-    // TODO(crbug.com/945590): IP_MTU_DISCOVER is not implemented on Fuchsia.
+    // TODO(crbug.com/42050633): IP_MTU_DISCOVER is not implemented on Fuchsia.
     EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
-#elif BUILDFLAG(IS_MAC)
-    if (base::mac::IsAtLeastOS11()) {
-      EXPECT_THAT(rv, IsOk());
-    } else {
-      EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
-    }
 #else
     EXPECT_THAT(rv, IsOk());
 #endif
@@ -679,8 +762,8 @@ TEST_F(UDPSocketTest, JoinMulticastGroup) {
   socket.Close();
 }
 
-// TODO(https://crbug.com/947115): failing on device on iOS 12.2.
-// TODO(https://crbug.com/1227554): flaky on Mac 11.
+// TODO(crbug.com/40620614): failing on device on iOS 12.2.
+// TODO(crbug.com/40189274): flaky on Mac 11.
 #if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_MAC)
 #define MAYBE_SharedMulticastAddress DISABLED_SharedMulticastAddress
 #else
@@ -800,12 +883,347 @@ TEST_F(UDPSocketTest, SetDSCP) {
   client.Close();
 }
 
+// Send DSCP + ECN marked packets from server to client and verify the TOS
+// bytes that arrive.
+TEST_F(UDPSocketTest, VerifyDscpAndEcnExchangeV4) {
+  IPEndPoint server_address(IPAddress::IPv4Localhost(), 0);
+  UDPServerSocket server(nullptr, NetLogSource());
+  server.AllowAddressReuse();
+  ASSERT_THAT(server.Listen(server_address), IsOk());
+  // Get bound port.
+  ASSERT_THAT(server.GetLocalAddress(&server_address), IsOk());
+  UDPClientSocket client(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+  client.Connect(server_address);
+  EXPECT_EQ(client.SetRecvTos(), 0);
+  EXPECT_EQ(server.SetRecvTos(), 0);
+
+#if BUILDFLAG(IS_WIN)
+  // Do not exercise the DSCP code because it requires a mock Qwave API.
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT1), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_ECT1), 0);
+#endif
+  std::string client_message = "hello";
+  EXPECT_EQ(WriteSocket(&client, client_message),
+            static_cast<int>(client_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, ECN_ECT1),
+            client_message.data());
+
+  // Server messages
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_ECT1), 0);
+  std::string first_message = "foobar";
+  EXPECT_EQ(SendToSocket(&server, first_message),
+            static_cast<int>(first_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, ECN_ECT1), first_message.data());
+
+  std::string second_message = "foo";
+  EXPECT_EQ(server.SetTos(DSCP_CS2, ECN_ECT0), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, ECN_ECT0), second_message.data());
+
+#if BUILDFLAG(IS_WIN)
+  // The Windows sendmsg API does not allow setting ECN_CE as the outgoing mark.
+  EcnCodePoint final_ecn = ECN_ECT1;
+#else
+  EcnCodePoint final_ecn = ECN_CE;
+#endif
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, final_ecn), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  server.Close();
+  client.Close();
+}
+
+// Send DSCP + ECN marked packets from server to client and verify the TOS
+// bytes that arrive.
+TEST_F(UDPSocketTest, VerifyDscpAndEcnExchangeV6) {
+  IPEndPoint server_address(IPAddress::IPv6Localhost(), 0);
+  UDPServerSocket server(nullptr, NetLogSource());
+  server.AllowAddressReuse();
+  ASSERT_THAT(server.Listen(server_address), IsOk());
+  // Get bound port.
+  ASSERT_THAT(server.GetLocalAddress(&server_address), IsOk());
+  UDPClientSocket client(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+  EXPECT_THAT(client.Connect(server_address), IsOk());
+  EXPECT_EQ(client.SetRecvTos(), 0);
+  EXPECT_EQ(server.SetRecvTos(), 0);
+
+#if BUILDFLAG(IS_WIN)
+  // Do not exercise the DSCP code because it requires a mock Qwave API.
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT1), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_ECT1), 0);
+#endif
+  std::string client_message = "hello";
+  EXPECT_EQ(WriteSocket(&client, client_message),
+            static_cast<int>(client_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, ECN_ECT1),
+            client_message.data());
+
+  // Server messages
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_ECT1), 0);
+  std::string first_message = "foobar";
+  EXPECT_EQ(SendToSocket(&server, first_message),
+            static_cast<int>(first_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, ECN_ECT1), first_message.data());
+
+  std::string second_message = "foo";
+  EXPECT_EQ(server.SetTos(DSCP_CS2, ECN_ECT0), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, ECN_ECT0), second_message.data());
+
+#if BUILDFLAG(IS_WIN)
+  // The Windows sendmsg API does not allow setting ECN_CE as the outgoing mark.
+  EcnCodePoint final_ecn = ECN_ECT1;
+#else
+  EcnCodePoint final_ecn = ECN_CE;
+#endif
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, final_ecn), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  server.Close();
+  client.Close();
+}
+
+// Send DSCP + ECN marked packets from client to a dual-stack server and verify
+// the TOS bytes that arrive.
+TEST_F(UDPSocketTest, VerifyDscpAndEcnExchangeDualStack) {
+  IPEndPoint server_v6_address(IPAddress::IPv6AllZeros(), 0);
+  UDPServerSocket server(nullptr, NetLogSource());
+  server.AllowAddressReuse();
+  ASSERT_THAT(server.Listen(server_v6_address), IsOk());
+  // Get bound port.
+  ASSERT_THAT(server.GetLocalAddress(&server_v6_address), IsOk());
+  // The server is bound to IPV6_ANY, so it will receive IPv4 packets addressed
+  // to localhost.
+  IPEndPoint server_v4_address(IPAddress::IPv4Localhost(),
+                               server_v6_address.port());
+  UDPClientSocket client(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+  EXPECT_THAT(client.Connect(server_v4_address), IsOk());
+  EXPECT_EQ(server.SetRecvTos(), 0);
+
+#if BUILDFLAG(IS_WIN)
+  // Windows requires a Mock QWave API to allow the client to set the DSCP. For
+  // efficiency reasons, Chromium windows UDP sockets do not provide access to
+  // incoming DSCP anyway. To avoid all the mocking, don't set the DSCP at all
+  // for Windows. RecvFromSocket() doesn't check the DSCP for Windows.
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT1), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_ECT1), 0);
+#endif  //! BUILDFLAG(IS_WIN)
+  std::string first_message = "foobar";
+  EXPECT_EQ(WriteSocket(&client, first_message),
+            static_cast<int>(first_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, ECN_ECT1), first_message.data());
+
+  std::string second_message = "foo";
+#if BUILDFLAG(IS_WIN)
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT0), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_CS2, ECN_ECT0), 0);
+#endif
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_CS2, ECN_ECT0), second_message.data());
+
+#if BUILDFLAG(IS_WIN)
+  // The Windows sendmsg API does not allow setting ECN_CE as the outgoing mark.
+  EcnCodePoint final_ecn = ECN_ECT1;
+#else
+  EcnCodePoint final_ecn = ECN_CE;
+#endif
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, final_ecn), 0);
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_CS2, final_ecn),
+            second_message.data());
+
+#if !BUILDFLAG(IS_WIN)
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_NO_CHANGE), 0);
+#endif
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, final_ecn),
+            second_message.data());
+
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, final_ecn),
+            second_message.data());
+
+  server.Close();
+  client.Close();
+}
+
+// Send DSCP + ECN marked packets from client to a dual-stack server and verify
+// the TOS bytes that arrive.
+TEST_F(UDPSocketTest, VerifyDscpAndEcnExchangeDualStackV4Mapped) {
+  // Bind to a v4-mapped localhost address
+  IPEndPoint server_v6_address(*IPAddress::FromIPLiteral("::ffff:7f00:0001"),
+                               0);
+  UDPServerSocket server(nullptr, NetLogSource());
+  server.AllowAddressReuse();
+  ASSERT_THAT(server.Listen(server_v6_address), IsOk());
+  // Get bound port.
+  ASSERT_THAT(server.GetLocalAddress(&server_v6_address), IsOk());
+  IPEndPoint server_v4_address(IPAddress::IPv4Localhost(),
+                               server_v6_address.port());
+  UDPClientSocket client(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+  EXPECT_THAT(client.Connect(server_v4_address), IsOk());
+  EXPECT_EQ(server.SetRecvTos(), 0);
+
+#if BUILDFLAG(IS_WIN)
+  // Windows requires a Mock QWave API to allow the client to set the DSCP. For
+  // efficiency reasons, Chromium windows UDP sockets do not provide access to
+  // incoming DSCP anyway. To avoid all the mocking, don't set the DSCP at all
+  // for Windows. RecvFromSocket() doesn't check the DSCP for Windows.
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT1), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_ECT1), 0);
+#endif
+  std::string first_message = "foobar";
+  EXPECT_EQ(WriteSocket(&client, first_message),
+            static_cast<int>(first_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, ECN_ECT1), first_message.data());
+
+  std::string second_message = "foo";
+#if BUILDFLAG(IS_WIN)
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT0), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_CS2, ECN_ECT0), 0);
+#endif
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_CS2, ECN_ECT0), second_message.data());
+
+#if BUILDFLAG(IS_WIN)
+  // The Windows sendmsg API does not allow setting ECN_CE as the outgoing mark.
+  EcnCodePoint final_ecn = ECN_ECT1;
+#else
+  EcnCodePoint final_ecn = ECN_CE;
+#endif
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, final_ecn), 0);
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_CS2, final_ecn),
+            second_message.data());
+
+#if !BUILDFLAG(IS_WIN)
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_NO_CHANGE), 0);
+#endif
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, final_ecn),
+            second_message.data());
+
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(WriteSocket(&client, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, final_ecn),
+            second_message.data());
+
+  server.Close();
+  client.Close();
+}
+
+// For windows, test with Nonblocking sockets. For other platforms, this test
+// is identical to VerifyDscpAndEcnExchange, above.
+TEST_F(UDPSocketTest, VerifyDscpAndEcnExchangeNonBlocking) {
+  IPEndPoint server_address(IPAddress::IPv4Localhost(), 0);
+  UDPServerSocket server(nullptr, NetLogSource());
+  server.UseNonBlockingIO();
+  server.AllowAddressReuse();
+  ASSERT_THAT(server.Listen(server_address), IsOk());
+  // Get bound port.
+  ASSERT_THAT(server.GetLocalAddress(&server_address), IsOk());
+  UDPClientSocket client(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+  client.UseNonBlockingIO();
+  client.Connect(server_address);
+  EXPECT_EQ(client.SetRecvTos(), 0);
+  EXPECT_EQ(server.SetRecvTos(), 0);
+
+#if BUILDFLAG(IS_WIN)
+  // Do not exercise the DSCP code because it requires a mock Qwave API.
+  EXPECT_EQ(client.SetTos(DSCP_NO_CHANGE, ECN_ECT1), 0);
+#else
+  EXPECT_EQ(client.SetTos(DSCP_AF41, ECN_ECT1), 0);
+#endif
+  std::string client_message = "hello";
+  EXPECT_EQ(WriteSocket(&client, client_message),
+            static_cast<int>(client_message.length()));
+  EXPECT_EQ(RecvFromSocket(&server, DSCP_AF41, ECN_ECT1),
+            client_message.data());
+
+  // Server messages
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_ECT1), 0);
+  std::string first_message = "foobar";
+  EXPECT_EQ(SendToSocket(&server, first_message),
+            static_cast<int>(first_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, ECN_ECT1), first_message.data());
+
+  std::string second_message = "foo";
+  EXPECT_EQ(server.SetTos(DSCP_CS2, ECN_ECT0), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, ECN_ECT0), second_message.data());
+
+  // The Windows sendmsg API does not allow setting ECN_CE as the outgoing mark.
+  EcnCodePoint final_ecn = ECN_ECT1;
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, final_ecn), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_CS2, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_AF41, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  EXPECT_EQ(server.SetTos(DSCP_NO_CHANGE, ECN_NO_CHANGE), 0);
+  EXPECT_EQ(SendToSocket(&server, second_message),
+            static_cast<int>(second_message.length()));
+  EXPECT_EQ(ReadSocket(&client, DSCP_AF41, final_ecn), second_message.data());
+
+  server.Close();
+  client.Close();
+}
+
 TEST_F(UDPSocketTest, ConnectUsingNetwork) {
   // The specific value of this address doesn't really matter, and no
   // server needs to be running here. The test only needs to call
   // ConnectUsingNetwork() and won't send any datagrams.
   const IPEndPoint fake_server_address(IPAddress::IPv4Localhost(), 8080);
-  const NetworkChangeNotifier::NetworkHandle wrong_network_handle = 65536;
+  const handles::NetworkHandle wrong_network_handle = 65536;
 #if BUILDFLAG(IS_ANDROID)
   NetworkChangeNotifierFactoryAndroid ncn_factory;
   NetworkChangeNotifier::DisableForTest ncn_disable_for_test;
@@ -830,9 +1248,9 @@ TEST_F(UDPSocketTest, ConnectUsingNetwork) {
     // NetworkChangeNotifier returns a valid default network.
     UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr,
                            NetLogSource());
-    const NetworkChangeNotifier::NetworkHandle network_handle =
+    const handles::NetworkHandle network_handle =
         NetworkChangeNotifier::GetDefaultNetwork();
-    if (network_handle != NetworkChangeNotifier::kInvalidNetworkHandle) {
+    if (network_handle != handles::kInvalidNetworkHandle) {
       EXPECT_EQ(
           OK, socket.ConnectUsingNetwork(network_handle, fake_server_address));
       EXPECT_EQ(network_handle, socket.GetBoundNetwork());
@@ -843,6 +1261,62 @@ TEST_F(UDPSocketTest, ConnectUsingNetwork) {
   EXPECT_EQ(
       ERR_NOT_IMPLEMENTED,
       socket.ConnectUsingNetwork(wrong_network_handle, fake_server_address));
+#endif  // BUILDFLAG(IS_ANDROID)
+}
+
+TEST_F(UDPSocketTest, ConnectUsingNetworkAsync) {
+  // The specific value of this address doesn't really matter, and no
+  // server needs to be running here. The test only needs to call
+  // ConnectUsingNetwork() and won't send any datagrams.
+  const IPEndPoint fake_server_address(IPAddress::IPv4Localhost(), 8080);
+  const handles::NetworkHandle wrong_network_handle = 65536;
+#if BUILDFLAG(IS_ANDROID)
+  NetworkChangeNotifierFactoryAndroid ncn_factory;
+  NetworkChangeNotifier::DisableForTest ncn_disable_for_test;
+  std::unique_ptr<NetworkChangeNotifier> ncn(ncn_factory.CreateInstance());
+  if (!NetworkChangeNotifier::AreNetworkHandlesSupported())
+    GTEST_SKIP() << "Network handles are required to test BindToNetwork.";
+
+  {
+    // Connecting using a not existing network should fail but not report
+    // ERR_NOT_IMPLEMENTED when network handles are supported.
+    UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr,
+                           NetLogSource());
+    TestCompletionCallback callback;
+    int rv = socket.ConnectUsingNetworkAsync(
+        wrong_network_handle, fake_server_address, callback.callback());
+
+    if (rv == ERR_IO_PENDING) {
+      rv = callback.WaitForResult();
+    }
+    EXPECT_NE(ERR_NOT_IMPLEMENTED, rv);
+    EXPECT_NE(OK, rv);
+  }
+
+  {
+    // Connecting using an existing network should succeed when
+    // NetworkChangeNotifier returns a valid default network.
+    UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr,
+                           NetLogSource());
+    TestCompletionCallback callback;
+    const handles::NetworkHandle network_handle =
+        NetworkChangeNotifier::GetDefaultNetwork();
+    if (network_handle != handles::kInvalidNetworkHandle) {
+      int rv = socket.ConnectUsingNetworkAsync(
+          network_handle, fake_server_address, callback.callback());
+      if (rv == ERR_IO_PENDING) {
+        rv = callback.WaitForResult();
+      }
+      EXPECT_EQ(OK, rv);
+      EXPECT_EQ(network_handle, socket.GetBoundNetwork());
+    }
+  }
+#else
+  UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr, NetLogSource());
+  TestCompletionCallback callback;
+  EXPECT_EQ(ERR_NOT_IMPLEMENTED, socket.ConnectUsingNetworkAsync(
+                                     wrong_network_handle, fake_server_address,
+                                     callback.callback()));
 #endif  // BUILDFLAG(IS_ANDROID)
 }
 
@@ -1215,7 +1689,6 @@ TEST_F(DscpManagerTest, SocketReAddedOnRecreateHandle) {
   EXPECT_CALL(api_, RemoveSocketFromFlow(_, _, kFakeFlowId2, _));
   EXPECT_CALL(api_, CloseHandle(kFakeHandle2));
 }
-
 #endif
 
 TEST_F(UDPSocketTest, ReadWithSocketOptimization) {
@@ -1299,6 +1772,8 @@ TEST_F(UDPSocketTest, ReadWithSocketOptimizationTruncation) {
   TestCompletionCallback callback;
   int rv = client.Read(buffer_.get(), kMaxRead, callback.callback());
   EXPECT_EQ(ERR_MSG_TOO_BIG, callback.GetResult(rv));
+  EXPECT_EQ(client.GetLastTos().dscp, DSCP_DEFAULT);
+  EXPECT_EQ(client.GetLastTos().ecn, ECN_DEFAULT);
 
   // 2. The second message is |right_length_message|. Its size is
   // one byte smaller than the size of the buffer. In that case, the client
@@ -1307,6 +1782,8 @@ TEST_F(UDPSocketTest, ReadWithSocketOptimizationTruncation) {
   rv = callback.GetResult(rv);
   EXPECT_EQ(static_cast<int>(right_length_message.length()), rv);
   EXPECT_EQ(right_length_message, std::string(buffer_->data(), rv));
+  EXPECT_EQ(client.GetLastTos().dscp, DSCP_DEFAULT);
+  EXPECT_EQ(client.GetLastTos().ecn, ECN_DEFAULT);
 
   // 3. The third message is |exact_length_message|. Its size is equal to
   // the read buffer size. In that case, the client expects to get
@@ -1320,6 +1797,8 @@ TEST_F(UDPSocketTest, ReadWithSocketOptimizationTruncation) {
   // |ERR_MSG_TOO_BIG|.
   rv = client.Read(buffer_.get(), kMaxRead, callback.callback());
   rv = callback.GetResult(rv);
+  EXPECT_EQ(client.GetLastTos().dscp, DSCP_DEFAULT);
+  EXPECT_EQ(client.GetLastTos().ecn, ECN_DEFAULT);
 #if BUILDFLAG(IS_POSIX)
   EXPECT_EQ(ERR_MSG_TOO_BIG, rv);
 #else
@@ -1406,25 +1885,6 @@ TEST_F(UDPSocketTest, Tag) {
   EXPECT_GT(GetTaggedBytes(tag_val1), old_traffic);
 }
 
-TEST_F(UDPSocketTest, RecordRadioWakeUpTrigger) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kRecordRadioWakeupTrigger);
-
-  base::HistogramTester histograms;
-
-  // Simulates the radio state is dormant.
-  android::RadioActivityTracker::GetInstance().OverrideRadioActivityForTesting(
-      base::android::RadioDataActivity::kDormant);
-  android::RadioActivityTracker::GetInstance().OverrideRadioTypeForTesting(
-      base::android::RadioConnectionType::kCell);
-
-  ConnectTest(/*use_nonblocking_io=*/false);
-
-  // Check the write is recorded as a possible radio wake-up trigger.
-  histograms.ExpectTotalCount(
-      android::kUmaNamePossibleWakeupTriggerUDPWriteAnnotationId, 1);
-}
-
 TEST_F(UDPSocketTest, BindToNetwork) {
   // The specific value of this address doesn't really matter, and no
   // server needs to be running here. The test only needs to call
@@ -1437,24 +1897,24 @@ TEST_F(UDPSocketTest, BindToNetwork) {
     GTEST_SKIP() << "Network handles are required to test BindToNetwork.";
 
   // Binding the socket to a not existing network should fail at connect time.
-  const NetworkChangeNotifier::NetworkHandle wrong_network_handle = 65536;
-  UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr, NetLogSource(),
-                         wrong_network_handle);
+  const handles::NetworkHandle wrong_network_handle = 65536;
+  UDPClientSocket wrong_socket(DatagramSocket::RANDOM_BIND, nullptr,
+                               NetLogSource(), wrong_network_handle);
   // Different Android versions might report different errors. Hence, just check
   // what shouldn't happen.
-  int rv = socket.Connect(fake_server_address);
+  int rv = wrong_socket.Connect(fake_server_address);
   EXPECT_NE(OK, rv);
   EXPECT_NE(ERR_NOT_IMPLEMENTED, rv);
-  EXPECT_NE(wrong_network_handle, socket.GetBoundNetwork());
+  EXPECT_NE(wrong_network_handle, wrong_socket.GetBoundNetwork());
 
   // Binding the socket to an existing network should succeed.
-  const NetworkChangeNotifier::NetworkHandle network_handle =
+  const handles::NetworkHandle network_handle =
       NetworkChangeNotifier::GetDefaultNetwork();
-  if (network_handle != NetworkChangeNotifier::kInvalidNetworkHandle) {
-    UDPClientSocket socket(DatagramSocket::RANDOM_BIND, nullptr, NetLogSource(),
-                           network_handle);
-    EXPECT_EQ(OK, socket.Connect(fake_server_address));
-    EXPECT_EQ(network_handle, socket.GetBoundNetwork());
+  if (network_handle != handles::kInvalidNetworkHandle) {
+    UDPClientSocket correct_socket(DatagramSocket::RANDOM_BIND, nullptr,
+                                   NetLogSource(), network_handle);
+    EXPECT_EQ(OK, correct_socket.Connect(fake_server_address));
+    EXPECT_EQ(network_handle, correct_socket.GetBoundNetwork());
   }
 }
 
@@ -1521,16 +1981,18 @@ TEST_F(UDPSocketTest, LimitClientSocket) {
   socket2.reset();
   EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
 
-  // Now that the count is below limit, try to connect socket3 again. This time
+  // Now that the count is below limit, try to connect another socket. This time
   // it will work.
-  EXPECT_THAT(socket3->Connect(server_address), IsOk());
+  auto socket4 = std::make_unique<UDPClientSocket>(DatagramSocket::DEFAULT_BIND,
+                                                   nullptr, NetLogSource());
+  EXPECT_THAT(socket4->Connect(server_address), IsOk());
   EXPECT_EQ(2, GetGlobalUDPSocketCountForTesting());
 
   // Verify that closing the two remaining sockets brings the open count back to
   // 0.
   socket1.reset();
   EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
-  socket3.reset();
+  socket4.reset();
   EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
 }
 

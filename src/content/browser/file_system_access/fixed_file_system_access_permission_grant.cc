@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@ namespace content {
 
 FixedFileSystemAccessPermissionGrant::FixedFileSystemAccessPermissionGrant(
     PermissionStatus status,
-    base::FilePath path)
-    : status_(status), path_(std::move(path)) {}
+    PathInfo path_info)
+    : status_(status), path_info_(std::move(path_info)) {}
 
 FixedFileSystemAccessPermissionGrant::~FixedFileSystemAccessPermissionGrant() =
     default;
@@ -20,7 +20,11 @@ FixedFileSystemAccessPermissionGrant::GetStatus() {
 }
 
 base::FilePath FixedFileSystemAccessPermissionGrant::GetPath() {
-  return path_;
+  return path_info_.path;
+}
+
+std::string FixedFileSystemAccessPermissionGrant::GetDisplayName() {
+  return path_info_.display_name;
 }
 
 void FixedFileSystemAccessPermissionGrant::RequestPermission(

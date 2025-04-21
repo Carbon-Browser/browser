@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@ using extensions::Extension;
 using extensions::WebviewInfo;
 namespace errors = extensions::manifest_errors;
 
-class WebviewAccessibleResourcesManifestTest : public ChromeManifestTest {
-};
+using WebviewAccessibleResourcesManifestTest = ChromeManifestTest;
 
 TEST_F(WebviewAccessibleResourcesManifestTest, WebviewAccessibleResources) {
   // Manifest version 2 with webview accessible resources specified.

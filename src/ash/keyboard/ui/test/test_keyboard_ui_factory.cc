@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 
@@ -43,11 +43,11 @@ aura::Window* TestKeyboardUIFactory::TestKeyboardUI::LoadKeyboardWindow(
   // Set a default size for the keyboard.
   display::Screen* screen = display::Screen::GetScreen();
   window_->SetBounds(
-      KeyboardBoundsFromRootBounds(screen->GetPrimaryDisplay().bounds()));
+      test::KeyboardBoundsFromRootBounds(screen->GetPrimaryDisplay().bounds()));
 
   // Simulate an asynchronous load.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 
   return window_.get();
 }

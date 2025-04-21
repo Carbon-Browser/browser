@@ -1,16 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/audio/loopback_stream.h"
 
-#include <algorithm>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/sync_socket.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_bus.h"
@@ -72,14 +73,14 @@ LoopbackStream::LoopbackStream(
           [](const std::string& message) { VLOG(1) << message; }),
       shared_memory_count, params, &foreign_socket);
   if (writer) {
-    base::ReadOnlySharedMemoryRegion shared_memory_region =
+    base::UnsafeSharedMemoryRegion shared_memory_region =
         writer->TakeSharedMemoryRegion();
     mojo::PlatformHandle socket_handle;
     if (shared_memory_region.IsValid()) {
       socket_handle = mojo::PlatformHandle(foreign_socket.Take());
       if (socket_handle.is_valid()) {
         std::move(created_callback)
-            .Run({absl::in_place, std::move(shared_memory_region),
+            .Run({std::in_place, std::move(shared_memory_region),
                   std::move(socket_handle)});
         network_.reset(new FlowNetwork(std::move(flow_task_runner), params,
                                        std::move(writer)));
@@ -223,7 +224,7 @@ void LoopbackStream::OnError() {
 
   // Post a task to run the BindingLostCallback, since this method can be called
   // from the constructor.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](base::WeakPtr<LoopbackStream> weak_self,
@@ -260,8 +261,8 @@ void LoopbackStream::FlowNetwork::RemoveInput(SnooperNode* node) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(control_sequence_);
 
   base::AutoLock scoped_lock(lock_);
-  const auto it = std::find(inputs_.begin(), inputs_.end(), node);
-  DCHECK(it != inputs_.end());
+  const auto it = base::ranges::find(inputs_, node);
+  CHECK(it != inputs_.end(), base::NotFatalUntil::M130);
   inputs_.erase(it);
 }
 
@@ -317,7 +318,7 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
     // underruns in the inputs. http://crbug.com/934770
     delayed_capture_time = next_generate_time_ - capture_delay_;
     for (SnooperNode* node : inputs_) {
-      const absl::optional<base::TimeTicks> suggestion =
+      const std::optional<base::TimeTicks> suggestion =
           node->SuggestLatestRenderTime(mix_bus_->frames());
       if (suggestion.value_or(delayed_capture_time) < delayed_capture_time) {
         const base::TimeDelta increase = delayed_capture_time - (*suggestion);
@@ -364,7 +365,7 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
   }
 
   // Insert the result into the AudioDataPipe.
-  writer_->Write(mix_bus_.get(), output_volume, false, delayed_capture_time);
+  writer_->Write(mix_bus_.get(), output_volume, delayed_capture_time, {});
 
   // Determine when to generate more audio again. This is done by advancing the
   // frame count by one interval's worth, then computing the TimeTicks
@@ -402,7 +403,8 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
   // started below will just run immediately and there will be no harmful
   // effects in the next GenerateMoreAudio() call. http://crbug.com/847487
   timer_->Start(FROM_HERE, next_generate_time_, this,
-                &FlowNetwork::GenerateMoreAudio, base::ExactDeadline(true));
+                &FlowNetwork::GenerateMoreAudio,
+                base::subtle::DelayPolicy::kPrecise);
 }
 
 }  // namespace audio

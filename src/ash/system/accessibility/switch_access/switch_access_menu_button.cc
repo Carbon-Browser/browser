@@ -1,15 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/accessibility/switch_access/switch_access_menu_button.h"
 
-#include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
+#include "base/functional/bind.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/mojom/ax_node_data.mojom-shared.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -39,28 +40,22 @@ SwitchAccessMenuButton::SwitchAccessMenuButton(std::string action_name,
                                                int label_text_id)
     : views::Button(
           base::BindRepeating(&SwitchAccessMenuButton::OnButtonPressed,
-                              base::Unretained(this))),
-      action_name_(action_name) {
-  SkColor icon_color = AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kIconColorPrimary);
-  SkColor label_color = AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kTextColorPrimary);
-
+                              base::Unretained(this))) {
   std::u16string label_text = l10n_util::GetStringUTF16(label_text_id);
   views::Builder<SwitchAccessMenuButton>(this)
       .SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY)
-      .AddChildren(
-          views::Builder<views::ImageView>()
-              .CopyAddressTo(&image_view_)
-              .SetImage(gfx::CreateVectorIcon(icon, kIconSizeDip, icon_color)),
-          views::Builder<views::Label>()
-              .CopyAddressTo(&label_)
-              .SetText(label_text)
-              .SetTextContext(views::style::CONTEXT_BUTTON)
-              .SetAutoColorReadabilityEnabled(false)
-              .SetEnabledColor(label_color)
-              .SetMultiLine(true)
-              .SetMaximumWidth(kLabelMaxWidthDip))
+      .AddChildren(views::Builder<views::ImageView>()
+                       .CopyAddressTo(&image_view_)
+                       .SetImage(ui::ImageModel::FromVectorIcon(
+                           icon, kColorAshIconColorPrimary, kIconSizeDip)),
+                   views::Builder<views::Label>()
+                       .CopyAddressTo(&label_)
+                       .SetText(label_text)
+                       .SetTextContext(views::style::CONTEXT_BUTTON)
+                       .SetAutoColorReadabilityEnabled(false)
+                       .SetEnabledColorId(kColorAshTextColorPrimary)
+                       .SetMultiLine(true)
+                       .SetMaximumWidth(kLabelMaxWidthDip))
       .BuildChildren();
 
   std::unique_ptr<views::BoxLayout> layout = std::make_unique<views::BoxLayout>(
@@ -71,7 +66,8 @@ SwitchAccessMenuButton::SwitchAccessMenuButton(std::string action_name,
       kLabelTopPaddingDefaultDip);
 
   // The layout padding changes with the size of the text label.
-  gfx::Size label_size = label_->CalculatePreferredSize();
+  gfx::Size label_size =
+      label_->CalculatePreferredSize(views::SizeBounds(label_->width(), {}));
   int left_padding_dip = (kWidthDip - label_size.width()) / 2;
   int right_padding_dip = kWidthDip - left_padding_dip - label_size.width();
   int bottom_padding_dip = kButtonBottomPaddingDefaultDip;
@@ -84,14 +80,9 @@ SwitchAccessMenuButton::SwitchAccessMenuButton(std::string action_name,
                         bottom_padding_dip, right_padding_dip));
   SetLayoutManager(std::move(layout));
 
-  GetViewAccessibility().OverrideName(label_text);
-  GetViewAccessibility().OverrideIsLeaf(true);
-}
-
-void SwitchAccessMenuButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  views::Button::GetAccessibleNodeData(node_data);
-  node_data->AddStringAttribute(ax::mojom::StringAttribute::kValue,
-                                action_name_);
+  GetViewAccessibility().SetName(label_text, ax::mojom::NameFrom::kAttribute);
+  GetViewAccessibility().SetIsLeaf(true);
+  GetViewAccessibility().SetValue(action_name);
 }
 
 void SwitchAccessMenuButton::OnButtonPressed() {
@@ -99,7 +90,7 @@ void SwitchAccessMenuButton::OnButtonPressed() {
                            /*send_native_event=*/false);
 }
 
-BEGIN_METADATA(SwitchAccessMenuButton, views::Button)
+BEGIN_METADATA(SwitchAccessMenuButton)
 END_METADATA
 
 }  // namespace ash

@@ -41,7 +41,6 @@
 
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "net/cert/nss_cert_database.h"
 #include "net/cert/scoped_nss_types.h"
 
@@ -62,7 +61,8 @@ bool ImportServerCert(
     net::NSSCertDatabase::TrustBits trustBits,
     net::NSSCertDatabase::ImportCertFailureList* not_imported);
 
-int ImportUserCert(CERTCertificate* cert);
+int ImportUserCert(CERTCertificate* cert,
+                   crypto::ScopedPK11Slot preferred_slot);
 
 bool SetCertTrust(CERTCertificate* cert,
                   net::CertType type,

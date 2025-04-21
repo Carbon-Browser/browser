@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class MockMachineLevelUserCloudPolicyStore
  public:
   MockMachineLevelUserCloudPolicyStore()
       : MachineLevelUserCloudPolicyStore(
-            DMToken::CreateEmptyTokenForTesting(),
+            DMToken::CreateEmptyToken(),
             std::string(),
             base::FilePath(),
             base::FilePath(),
@@ -53,7 +53,8 @@ class MachineLevelUserCloudPolicyManagerTest : public ::testing::Test {
   }
 
   SchemaRegistry schema_registry_;
-  raw_ptr<MockMachineLevelUserCloudPolicyStore> store_ = nullptr;
+  raw_ptr<MockMachineLevelUserCloudPolicyStore, DanglingUntriaged> store_ =
+      nullptr;
   std::unique_ptr<MachineLevelUserCloudPolicyManager> manager_;
 };
 

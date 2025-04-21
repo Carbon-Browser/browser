@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdint.h>
 
@@ -12,16 +17,20 @@
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
+#include "media/base/audio_timestamp_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_heap.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_audio_deliverer.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_track_platform.h"
 
 namespace blink {
 
@@ -100,7 +109,7 @@ class FakeMediaStreamAudioSource final : public MediaStreamAudioSource,
       if (!audio_bus_ || audio_bus_->frames() != buffer_size) {
         MediaStreamAudioSource::SetFormat(media::AudioParameters(
             media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-            media::CHANNEL_LAYOUT_MONO, kSampleRate, buffer_size));
+            media::ChannelLayoutConfig::Mono(), kSampleRate, buffer_size));
         audio_bus_ = media::AudioBus::Create(1, buffer_size);
       }
 
@@ -111,7 +120,7 @@ class FakeMediaStreamAudioSource final : public MediaStreamAudioSource,
         data[i] = ++sample_count_;
       CHECK_LT(sample_count_, kMaxValueSafelyConvertableToFloat);
       MediaStreamAudioSource::DeliverDataToTracks(*audio_bus_,
-                                                  base::TimeTicks::Now());
+                                                  base::TimeTicks::Now(), {});
 
       // Sleep before producing the next chunk of audio.
       base::PlatformThread::Sleep(base::Microseconds(
@@ -301,8 +310,8 @@ TEST_F(MediaStreamAudioTest, BasicUsage) {
 
   // Check that the audio parameters propagated to the track and sink.
   const media::AudioParameters expected_params(
-      media::AudioParameters::AUDIO_PCM_LOW_LATENCY, media::CHANNEL_LAYOUT_MONO,
-      kSampleRate, kBufferSize);
+      media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
+      media::ChannelLayoutConfig::Mono(), kSampleRate, kBufferSize);
   EXPECT_TRUE(expected_params.Equals(track()->GetOutputFormat()));
   EXPECT_TRUE(expected_params.Equals(sink.params()));
 
@@ -365,8 +374,8 @@ TEST_F(MediaStreamAudioTest, FormatChangesPropagate) {
   while (!sink.params().IsValid())
     base::PlatformThread::Sleep(TestTimeouts::tiny_timeout());
   const media::AudioParameters expected_params(
-      media::AudioParameters::AUDIO_PCM_LOW_LATENCY, media::CHANNEL_LAYOUT_MONO,
-      kSampleRate, kBufferSize);
+      media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
+      media::ChannelLayoutConfig::Mono(), kSampleRate, kBufferSize);
   EXPECT_TRUE(expected_params.Equals(track()->GetOutputFormat()));
   EXPECT_TRUE(expected_params.Equals(sink.params()));
 
@@ -448,6 +457,92 @@ TEST_F(MediaStreamAudioTest, EnableAndDisableTracks) {
 
   MediaStreamAudioTrack::From(another_component)->RemoveSink(&another_sink);
   track()->RemoveSink(&sink);
+}
+
+TEST(MediaStreamAudioTestStandalone, GetAudioFrameStats) {
+  MediaStreamAudioTrack track(true /* is_local_track */);
+  MediaStreamAudioDeliverer<MediaStreamAudioTrack> deliverer;
+  media::AudioParameters params(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
+                                media::ChannelLayoutConfig::Mono(), kSampleRate,
+                                kBufferSize);
+  std::unique_ptr<media::AudioBus> audio_bus = media::AudioBus::Create(params);
+
+  deliverer.AddConsumer(&track);
+  deliverer.OnSetFormat(params);
+
+  {
+    MediaStreamTrackPlatform::AudioFrameStats stats;
+    track.TransferAudioFrameStatsTo(stats);
+    EXPECT_EQ(stats.DeliveredFrames(), 0u);
+    EXPECT_EQ(stats.DeliveredFramesDuration(), base::TimeDelta());
+    EXPECT_EQ(stats.TotalFrames(), 0u);
+    EXPECT_EQ(stats.TotalFramesDuration(), base::TimeDelta());
+    EXPECT_EQ(stats.Latency(), base::TimeDelta());
+    EXPECT_EQ(stats.AverageLatency(), base::TimeDelta());
+    EXPECT_EQ(stats.MinimumLatency(), base::TimeDelta());
+    EXPECT_EQ(stats.MaximumLatency(), base::TimeDelta());
+  }
+
+  // Deliver two callbacks with different latencies and glitch info.
+  media::AudioGlitchInfo glitch_info_1 =
+      media::AudioGlitchInfo{.duration = base::Milliseconds(3), .count = 1};
+  base::TimeDelta latency_1 = base::Milliseconds(40);
+  deliverer.OnData(*audio_bus, base::TimeTicks::Now() - latency_1,
+                   glitch_info_1);
+
+  media::AudioGlitchInfo glitch_info_2 =
+      media::AudioGlitchInfo{.duration = base::Milliseconds(5), .count = 1};
+  base::TimeDelta latency_2 = base::Milliseconds(60);
+  deliverer.OnData(*audio_bus, base::TimeTicks::Now() - latency_2,
+                   glitch_info_2);
+
+  {
+    MediaStreamTrackPlatform::AudioFrameStats stats;
+    track.TransferAudioFrameStatsTo(stats);
+    EXPECT_EQ(stats.DeliveredFrames(), static_cast<size_t>(kBufferSize * 2));
+    EXPECT_EQ(stats.DeliveredFramesDuration(), params.GetBufferDuration() * 2);
+    EXPECT_EQ(
+        stats.TotalFrames() - stats.DeliveredFrames(),
+        static_cast<size_t>(media::AudioTimestampHelper::TimeToFrames(
+            glitch_info_1.duration + glitch_info_2.duration, kSampleRate)));
+    EXPECT_EQ(stats.TotalFramesDuration() - stats.DeliveredFramesDuration(),
+              glitch_info_1.duration + glitch_info_2.duration);
+    // Due to time differences, the latencies might not be exactly what we
+    // expect.
+    const base::TimeDelta margin_of_error = base::Milliseconds(5);
+    EXPECT_NEAR(stats.Latency().InMillisecondsF(), latency_2.InMillisecondsF(),
+                margin_of_error.InMillisecondsF());
+    EXPECT_NEAR(stats.AverageLatency().InMillisecondsF(),
+                ((latency_1 + latency_2) / 2).InMillisecondsF(),
+                margin_of_error.InMillisecondsF());
+    EXPECT_NEAR(stats.MinimumLatency().InMillisecondsF(),
+                latency_1.InMillisecondsF(), margin_of_error.InMillisecondsF());
+    EXPECT_NEAR(stats.MaximumLatency().InMillisecondsF(),
+                latency_2.InMillisecondsF(), margin_of_error.InMillisecondsF());
+  }
+
+  {
+    // When we get the stats again, the interval latency stats should be reset
+    // but the other stats should remain the same.
+    MediaStreamTrackPlatform::AudioFrameStats stats;
+    track.TransferAudioFrameStatsTo(stats);
+    EXPECT_EQ(stats.DeliveredFrames(), static_cast<size_t>(kBufferSize * 2));
+    EXPECT_EQ(stats.DeliveredFramesDuration(), params.GetBufferDuration() * 2);
+    EXPECT_EQ(
+        stats.TotalFrames() - stats.DeliveredFrames(),
+        static_cast<size_t>(media::AudioTimestampHelper::TimeToFrames(
+            glitch_info_1.duration + glitch_info_2.duration, kSampleRate)));
+    EXPECT_EQ(stats.TotalFramesDuration() - stats.DeliveredFramesDuration(),
+              glitch_info_1.duration + glitch_info_2.duration);
+    // Due to time differences, the latencies might not be exactly what we
+    // expect.
+    const base::TimeDelta margin_of_error = base::Milliseconds(5);
+    EXPECT_NEAR(stats.Latency().InMillisecondsF(), latency_2.InMillisecondsF(),
+                margin_of_error.InMillisecondsF());
+    EXPECT_EQ(stats.AverageLatency(), stats.Latency());
+    EXPECT_EQ(stats.MinimumLatency(), stats.Latency());
+    EXPECT_EQ(stats.MaximumLatency(), stats.Latency());
+  }
 }
 
 }  // namespace blink

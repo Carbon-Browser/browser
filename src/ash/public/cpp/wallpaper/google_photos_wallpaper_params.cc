@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ GooglePhotosWallpaperParams::GooglePhotosWallpaperParams(
     bool daily_refresh_enabled,
     WallpaperLayout layout,
     bool preview_mode,
-    absl::optional<std::string> dedup_key)
+    std::optional<std::string> dedup_key)
     : account_id(account_id),
       id(id),
       daily_refresh_enabled(daily_refresh_enabled),

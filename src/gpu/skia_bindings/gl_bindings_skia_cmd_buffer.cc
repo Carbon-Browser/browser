@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
-#include "third_party/skia/include/gpu/gl/GrGLInterface.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLInterface.h"
 
 using gpu::gles2::GLES2Interface;
 using gpu::ContextSupport;
@@ -196,6 +196,10 @@ sk_sp<GrGLInterface> CreateGLES2InterfaceBindings(
       gles_bind(&GLES2Interface::GetQueryivEXT, impl, context_support);
   functions->fGetQueryObjectuiv =
       gles_bind(&GLES2Interface::GetQueryObjectuivEXT, impl, context_support);
+  functions->fGetQueryObjecti64v =
+      gles_bind(&GLES2Interface::GetQueryObjecti64vEXT, impl, context_support);
+  functions->fGetQueryObjectui64v =
+      gles_bind(&GLES2Interface::GetQueryObjectui64vEXT, impl, context_support);
   functions->fGetShaderInfoLog =
       gles_bind(&GLES2Interface::GetShaderInfoLog, impl, context_support);
   functions->fGetShaderiv =
@@ -366,6 +370,8 @@ sk_sp<GrGLInterface> CreateGLES2InterfaceBindings(
       &GLES2Interface::GetRenderbufferParameteriv, impl, context_support);
   functions->fGenQueries =
       gles_bind(&GLES2Interface::GenQueriesEXT, impl, context_support);
+  functions->fQueryCounter =
+      gles_bind(&GLES2Interface::QueryCounterEXT, impl, context_support);
   functions->fRenderbufferStorage =
       gles_bind(&GLES2Interface::RenderbufferStorage, impl, context_support);
   functions->fRenderbufferStorageMultisample =
@@ -384,8 +390,6 @@ sk_sp<GrGLInterface> CreateGLES2InterfaceBindings(
       &GLES2Interface::BlitFramebufferCHROMIUM, impl, context_support);
   functions->fGenerateMipmap =
       gles_bind(&GLES2Interface::GenerateMipmap, impl, context_support);
-  functions->fCoverageModulation = gles_bind(
-      &GLES2Interface::CoverageModulationCHROMIUM, impl, context_support);
   functions->fWindowRectangles =
       gles_bind(&GLES2Interface::WindowRectanglesEXT, impl, context_support);
   // Skia should not use program binaries over the command buffer. Allowing

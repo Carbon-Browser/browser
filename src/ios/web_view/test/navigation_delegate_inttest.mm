@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,11 @@
 
 #import "ios/web_view/test/web_view_inttest_base.h"
 #import "ios/web_view/test/web_view_test_util.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest_mac.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -42,10 +38,19 @@ class NavigationDelegateTest : public ios_web_view::WebViewInttestBase {
     return net::NSURLWithGURL(test_server_->GetURL("/close-socket"));
   }
 
-  id ArgWithURL(NSURL* url) {
-    return [OCMArg checkWithBlock:^(id object) {
-      return [[object URL] isEqual:url];
+  id NavigationActionArg(NSURL* url, CWVNavigationType navigation_type) {
+    return [OCMArg checkWithBlock:^(CWVNavigationAction* navigation_action) {
+      return [navigation_action.request.URL isEqual:url] &&
+             navigation_action.navigationType == navigation_type;
     }];
+  }
+
+  id NavigationResponseArg(NSURL* url, bool for_main_frame) {
+    return
+        [OCMArg checkWithBlock:^(CWVNavigationResponse* navigation_response) {
+          return [navigation_response.response.URL isEqual:url] &&
+                 navigation_response.forMainFrame == for_main_frame;
+        }];
   }
 
   id<CWVNavigationDelegate> mock_delegate_;
@@ -55,15 +60,30 @@ class NavigationDelegateTest : public ios_web_view::WebViewInttestBase {
 TEST_F(NavigationDelegateTest, RequestSucceeds) {
   // A request made with -loadRequest: has type CWVNavigationTypeTyped.
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldStartLoadWithRequest:ArgWithURL(GetEchoURL())
-                            navigationType:CWVNavigationTypeTyped])
-      .andReturn(YES);
+                decidePolicyForNavigationAction:NavigationActionArg(
+                                                    GetEchoURL(),
+                                                    CWVNavigationTypeTyped)
+                                decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationActionPolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationActionPolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidStartProvisionalNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidStartNavigation:web_view_]);
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldContinueLoadWithResponse:ArgWithURL(GetEchoURL())
-                                  forMainFrame:YES])
-      .andReturn(YES);
+                decidePolicyForNavigationResponse:NavigationResponseArg(
+                                                      GetEchoURL(), YES)
+                                  decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationResponsePolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationResponsePolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidCommitNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidFinishNavigation:web_view_]);
 
@@ -74,9 +94,17 @@ TEST_F(NavigationDelegateTest, RequestSucceeds) {
 // Tests that expected delegate methods are called for a failed request.
 TEST_F(NavigationDelegateTest, RequestFails) {
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldStartLoadWithRequest:ArgWithURL(GetCloseSocketURL())
-                            navigationType:CWVNavigationTypeTyped])
-      .andReturn(YES);
+                decidePolicyForNavigationAction:NavigationActionArg(
+                                                    GetCloseSocketURL(),
+                                                    CWVNavigationTypeTyped)
+                                decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationActionPolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationActionPolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidStartProvisionalNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidStartNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidCommitNavigation:web_view_]);
@@ -96,9 +124,17 @@ TEST_F(NavigationDelegateTest, RequestFails) {
 // when -shouldStartLoadWithRequest:navigationType: returns NO.
 TEST_F(NavigationDelegateTest, CancelRequest) {
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldStartLoadWithRequest:ArgWithURL(GetEchoURL())
-                            navigationType:CWVNavigationTypeTyped])
-      .andReturn(NO);
+                decidePolicyForNavigationAction:NavigationActionArg(
+                                                    GetEchoURL(),
+                                                    CWVNavigationTypeTyped)
+                                decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationActionPolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationActionPolicyCancel);
+        }
+      });
 
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
   [(id)mock_delegate_ verify];
@@ -108,15 +144,30 @@ TEST_F(NavigationDelegateTest, CancelRequest) {
 // when -shouldContinueLoadWithResponse:forMainFrame: returns NO.
 TEST_F(NavigationDelegateTest, CancelResponse) {
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldStartLoadWithRequest:ArgWithURL(GetEchoURL())
-                            navigationType:CWVNavigationTypeTyped])
-      .andReturn(YES);
+                decidePolicyForNavigationAction:NavigationActionArg(
+                                                    GetEchoURL(),
+                                                    CWVNavigationTypeTyped)
+                                decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationActionPolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationActionPolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidStartProvisionalNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidStartNavigation:web_view_]);
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldContinueLoadWithResponse:ArgWithURL(GetEchoURL())
-                                  forMainFrame:YES])
-      .andReturn(NO);
+                decidePolicyForNavigationResponse:NavigationResponseArg(
+                                                      GetEchoURL(), YES)
+                                  decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationResponsePolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationResponsePolicyCancel);
+        }
+      });
 
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
   [(id)mock_delegate_ verify];
@@ -126,15 +177,30 @@ TEST_F(NavigationDelegateTest, CancelResponse) {
 TEST_F(NavigationDelegateTest, SameDocumentNavigations) {
   // A request made with -loadRequest: has type CWVNavigationTypeTyped.
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldStartLoadWithRequest:ArgWithURL(GetEchoURL())
-                            navigationType:CWVNavigationTypeTyped])
-      .andReturn(YES);
+                decidePolicyForNavigationAction:NavigationActionArg(
+                                                    GetEchoURL(),
+                                                    CWVNavigationTypeTyped)
+                                decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationActionPolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationActionPolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidStartProvisionalNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidStartNavigation:web_view_]);
   OCMExpect([mock_delegate_ webView:web_view_
-                shouldContinueLoadWithResponse:ArgWithURL(GetEchoURL())
-                                  forMainFrame:YES])
-      .andReturn(YES);
+                decidePolicyForNavigationResponse:NavigationResponseArg(
+                                                      GetEchoURL(), YES)
+                                  decisionHandler:[OCMArg any]])
+      .andDo(^(NSInvocation* invocation) {
+        __weak void (^decisionHandler)(CWVNavigationResponsePolicy);
+        [invocation getArgument:&decisionHandler atIndex:4];
+        if (decisionHandler) {
+          decisionHandler(CWVNavigationResponsePolicyAllow);
+        }
+      });
   OCMExpect([mock_delegate_ webViewDidCommitNavigation:web_view_]);
   OCMExpect([mock_delegate_ webViewDidFinishNavigation:web_view_]);
 
@@ -143,10 +209,10 @@ TEST_F(NavigationDelegateTest, SameDocumentNavigations) {
   [(id)mock_delegate_ verify];
 
   // Same document navigations should not trigger the delegate methods.
-  NSError* error;
+  NSError* error = nil;
   ASSERT_NSEQ(nil, test::EvaluateJavaScript(
                        web_view_, @"history.pushState({}, \"\");", &error));
-  ASSERT_NSEQ(nil, error);
+  EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];
 }

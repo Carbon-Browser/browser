@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ export enum HistoryPageViewHistogram {
   SYNCED_TABS = 3,
   SIGNIN_PROMO = 4,
   JOURNEYS = 5,
-  END = 6,  // Should always be last.
+  PRODUCT_SPECIFICATIONS_LISTS = 6,
+  END = 7,  // Should always be last.
 }
 
 export const SYNCED_TABS_HISTOGRAM_NAME = 'HistoryPage.OtherDevicesMenu';

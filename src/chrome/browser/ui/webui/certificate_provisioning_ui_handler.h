@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,15 @@ class CertificateProvisioningUiHandler
   // index 1 is a boolean specifying whether the process is a user-specific
   // (false) or a device-wide (true) certificate provisioning process.
   void HandleTriggerCertificateProvisioningProcessUpdate(
+      const base::Value::List& args);
+
+  // Triggers a reset to a particular certificate provisioning process.
+  // |args| is expected to contain two arguments:
+  // The argument at index 0 is a string specifying the certificate profile id
+  // of the process that an update should be triggered for. The argument at
+  // index 1 is a boolean specifying whether the process is a user-specific
+  // (false) or a device-wide (true) certificate provisioning process.
+  void HandleTriggerCertificateProvisioningProcessReset(
       const base::Value::List& args);
 
   // Send the list of certificate provisioning processes to the UI.

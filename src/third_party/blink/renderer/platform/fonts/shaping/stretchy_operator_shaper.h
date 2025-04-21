@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <unicode/uchar.h>
 
-#include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/platform/fonts/glyph.h"
 #include "third_party/blink/renderer/platform/fonts/opentype/open_type_math_support.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
@@ -41,9 +40,9 @@ class PLATFORM_EXPORT StretchyOperatorShaper final {
   // origin as the rectangle assigned to the optional OUT Metrics parameter.
   // May be called multiple times; font and direction may vary between calls.
   // https://w3c.github.io/mathml-core/#dfn-shape-a-stretchy-glyph
-  scoped_refptr<ShapeResult> Shape(const Font*,
-                                   float target_size,
-                                   Metrics* metrics = nullptr) const;
+  const ShapeResult* Shape(const Font*,
+                           float target_size,
+                           Metrics* metrics = nullptr) const;
 
   ~StretchyOperatorShaper() = default;
 

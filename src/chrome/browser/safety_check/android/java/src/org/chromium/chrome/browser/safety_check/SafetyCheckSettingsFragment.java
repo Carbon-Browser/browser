@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,13 +14,15 @@ import android.widget.TextView;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
 import org.chromium.ui.widget.ButtonCompat;
 
-/**
- * Settings fragment containing Safety check. This class represents a View in the MVC paradigm.
- */
-public class SafetyCheckSettingsFragment extends PreferenceFragmentCompat {
+/** Settings fragment containing Safety check. This class represents a View in the MVC paradigm. */
+public class SafetyCheckSettingsFragment extends PreferenceFragmentCompat
+        implements EmbeddableSettingsPage {
     private static final String SAFETY_CHECK_IMMEDIATE_RUN =
             "SafetyCheckSettingsFragment.safetyCheckImmediateRun";
 
@@ -31,18 +33,26 @@ public class SafetyCheckSettingsFragment extends PreferenceFragmentCompat {
 
     private boolean mRunSafetyCheckImmediately;
 
-    /**
-     * Initializes all the objects related to the preferences page.
-     */
+    private SafetyCheckComponentUi mComponentDelegate;
+
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
+
+    /** Initializes all the objects related to the preferences page. */
     @Override
     public void onCreatePreferences(Bundle bundle, String s) {
         // Add all preferences and set the title.
         SettingsUtils.addPreferencesFromResource(this, R.xml.safety_check_preferences);
-        getActivity().setTitle(getString(R.string.prefs_safety_check));
+        mPageTitle.set(getString(R.string.prefs_safety_check));
 
-        mRunSafetyCheckImmediately = getArguments() != null
-                && getArguments().containsKey(SAFETY_CHECK_IMMEDIATE_RUN)
-                && getArguments().getBoolean(SAFETY_CHECK_IMMEDIATE_RUN);
+        mRunSafetyCheckImmediately =
+                getArguments() != null
+                        && getArguments().containsKey(SAFETY_CHECK_IMMEDIATE_RUN)
+                        && getArguments().getBoolean(SAFETY_CHECK_IMMEDIATE_RUN);
+    }
+
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
     }
 
     @Override
@@ -56,7 +66,25 @@ public class SafetyCheckSettingsFragment extends PreferenceFragmentCompat {
         mCheckButton = (ButtonCompat) bottomView.findViewById(R.id.safety_check_button);
         mTimestampTextView = (TextView) bottomView.findViewById(R.id.safety_check_timestamp);
         view.addView(bottomView);
+        setPasswordChecks();
         return view;
+    }
+
+    private void setPasswordChecks() {
+        findPreference(SafetyCheckViewBinder.PASSWORDS_KEY_ACCOUNT)
+                .setVisible(mComponentDelegate.isAccountPasswordStorageUsed());
+        findPreference(SafetyCheckViewBinder.PASSWORDS_KEY_LOCAL)
+                .setVisible(mComponentDelegate.isLocalPasswordStorageUsed());
+    }
+
+    /**
+     * Sets the delegate, which exposes the UI related logic of the safety check component to the
+     * fragment view.
+     *
+     * @param componentDelegate The {@link SafetyCheckComponentUi} delegate.
+     */
+    public void setComponentDelegate(SafetyCheckComponentUi componentDelegate) {
+        mComponentDelegate = componentDelegate;
     }
 
     /**

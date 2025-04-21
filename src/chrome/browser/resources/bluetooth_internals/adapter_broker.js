@@ -1,12 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
-
-import {AdapterInfo, AdapterObserverInterface, AdapterObserverReceiver, AdapterRemote, ConnectResult, DiscoverySessionRemote} from './adapter.mojom-webui.js';
+import {AdapterObserverReceiver, AdapterRemote, ConnectResult, DiscoverySessionRemote} from './adapter.mojom-webui.js';
 import {BluetoothInternalsHandler, BluetoothInternalsHandlerRemote} from './bluetooth_internals.mojom-webui.js';
-import {Device, DeviceInfo, DeviceRemote} from './device.mojom-webui.js';
+import {Device, DeviceRemote} from './device.mojom-webui.js';
 
 const SCAN_CLIENT_NAME = 'Bluetooth Internals Page';
 
@@ -104,7 +102,7 @@ export class AdapterBroker extends EventTarget {
   connectToDevice(address) {
     return this.adapter_.connectToDevice(address).then(function(response) {
       if (response.result !== ConnectResult.SUCCESS) {
-        // TODO(crbug.com/663394): Replace with more descriptive error
+        // TODO(crbug.com/40492643): Replace with more descriptive error
         // messages.
         const errorString = Object.keys(ConnectResult).find(function(key) {
           return ConnectResult[key] === response.result;

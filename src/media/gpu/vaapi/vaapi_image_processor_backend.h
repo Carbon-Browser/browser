@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/containers/small_map.h"
+#include "base/containers/id_map.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/gpu/chromeos/image_processor_backend.h"
 #include "media/gpu/media_gpu_export.h"
 #include "ui/gfx/gpu_memory_buffer.h"
@@ -15,7 +16,7 @@
 namespace media {
 
 class VaapiWrapper;
-class VASurface;
+class ScopedVASurface;
 
 // ImageProcessor that is hardware accelerated with VA-API. This ImageProcessor
 // supports only dma-buf and GpuMemoryBuffer VideoFrames for both input and
@@ -35,39 +36,39 @@ class VaapiImageProcessorBackend : public ImageProcessorBackend {
       const PortConfig& input_config,
       const PortConfig& output_config,
       OutputMode output_mode,
-      VideoRotation relative_rotation,
-      ErrorCB error_cb,
-      scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
+      ErrorCB error_cb);
 
   // ImageProcessor implementation.
-  void Process(scoped_refptr<VideoFrame> input_frame,
-               scoped_refptr<VideoFrame> output_frame,
-               FrameReadyCB cb) override;
+  void ProcessFrame(scoped_refptr<FrameResource> input_frame,
+                    scoped_refptr<FrameResource> output_frame,
+                    FrameResourceReadyCB cb) override;
   void Reset() override;
 
+  std::string type() const override;
+
  private:
-  VaapiImageProcessorBackend(
-      const PortConfig& input_config,
-      const PortConfig& output_config,
-      OutputMode output_mode,
-      VideoRotation relative_rotation,
-      ErrorCB error_cb,
-      scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
+  VaapiImageProcessorBackend(const PortConfig& input_config,
+                             const PortConfig& output_config,
+                             OutputMode output_mode,
+                             ErrorCB error_cb);
   ~VaapiImageProcessorBackend() override;
 
-  const VASurface* GetSurfaceForVideoFrame(scoped_refptr<VideoFrame> frame,
-                                           bool use_protected);
+  // Gets or creates a ScopedVASurface from |frame|; ScopedVASurfaces are stored
+  // and owned in |allocated_va_surfaces_|.
+  const ScopedVASurface* GetOrCreateSurfaceForFrame(const FrameResource& frame,
+                                                    bool use_protected);
 
-  scoped_refptr<VaapiWrapper> vaapi_wrapper_;
-  bool needs_context_ = false;
+  scoped_refptr<VaapiWrapper> vaapi_wrapper_
+      GUARDED_BY_CONTEXT(backend_sequence_checker_);
+  bool needs_context_ GUARDED_BY_CONTEXT(backend_sequence_checker_) = false;
 
-  // VASurfaces are created via importing dma-bufs into libva using
+  // ScopedVASurfaces are created via importing dma-bufs into libva using
   // |vaapi_wrapper_|->CreateVASurfaceForPixmap(). The following map keeps those
-  // VASurfaces for reuse according to the expectations of libva
+  // ScopedVASurfaces for reuse according to the expectations of libva
   // vaDestroySurfaces(): "Surfaces can only be destroyed after all contexts
   // using these surfaces have been destroyed."
-  base::small_map<std::map<gfx::GpuMemoryBufferId, scoped_refptr<VASurface>>>
-      allocated_va_surfaces_;
+  base::flat_map<base::UnguessableToken, std::unique_ptr<ScopedVASurface>>
+      allocated_va_surfaces_ GUARDED_BY_CONTEXT(backend_sequence_checker_);
 };
 
 }  // namespace media

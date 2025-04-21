@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,8 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, UrlKeyedAnonymizedDataCollection) {
       unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, true);
   EXPECT_TRUE(prefs->GetBoolean(
       unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_FALSE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
 
   // Disable by policy.
   PolicyMap policies;
@@ -30,6 +32,84 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, UrlKeyedAnonymizedDataCollection) {
   UpdateProviderPolicy(policies);
 
   EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, true);
+
+  EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  // Enable by policy.
+  policies.Set(key::kUrlKeyedAnonymizedDataCollectionEnabled,
+               POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+               base::Value(true), nullptr);
+  UpdateProviderPolicy(policies);
+
+  EXPECT_TRUE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, false);
+
+  EXPECT_TRUE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+}
+
+IN_PROC_BROWSER_TEST_F(PolicyTest, UrlKeyedMetricsAllowed) {
+  PrefService* prefs = chrome_test_utils::GetProfile(this)->GetPrefs();
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, true);
+  EXPECT_TRUE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_FALSE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  // Disable by policy.
+  PolicyMap policies;
+  policies.Set(key::kUrlKeyedMetricsAllowed, POLICY_LEVEL_MANDATORY,
+               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(false),
+               nullptr);
+  UpdateProviderPolicy(policies);
+
+  EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, true);
+
+  EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_TRUE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  // Enable by policy.
+  policies.Set(key::kUrlKeyedMetricsAllowed, POLICY_LEVEL_MANDATORY,
+               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(true),
+               nullptr);
+  UpdateProviderPolicy(PolicyMap());
+
+  EXPECT_TRUE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_FALSE(prefs->IsManagedPreference(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, false);
+
+  EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+  EXPECT_FALSE(prefs->IsManagedPreference(
       unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
 }
 

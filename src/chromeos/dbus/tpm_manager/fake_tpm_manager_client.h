@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,8 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_TPM_MANAGER) FakeTpmManagerClient
   void ClearStoredOwnerPassword(
       const ::tpm_manager::ClearStoredOwnerPasswordRequest& request,
       ClearStoredOwnerPasswordCallback callback) override;
+  void ClearTpm(const ::tpm_manager::ClearTpmRequest& request,
+                ClearTpmCallback callback) override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
 
@@ -59,6 +61,7 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_TPM_MANAGER) FakeTpmManagerClient
   mutable_dictionary_attack_info_reply() override;
   int take_ownership_count() const override;
   int clear_stored_owner_password_count() const override;
+  int clear_tpm_count() const override;
   void EmitOwnershipTakenSignal() override;
 
  private:
@@ -69,6 +72,7 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_TPM_MANAGER) FakeTpmManagerClient
   ::tpm_manager::GetDictionaryAttackInfoReply dictionary_attack_info_reply_;
   int take_ownership_count_ = 0;
   int clear_stored_owner_password_count_ = 0;
+  int clear_tpm_count_ = 0;
 
   // The observer list of ownership taken signal.
   base::ObserverList<Observer> observer_list_;

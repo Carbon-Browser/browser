@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,6 @@ class VIEWS_EXPORT UniqueWidgetPtr {
     ~Impl() override;
 
     Widget* Get() const;
-    void Reset();
 
     // WidgetObserver overrides.
     void OnWidgetDestroying(Widget* widget) override;
@@ -66,6 +65,7 @@ class VIEWS_EXPORT UniqueWidgetPtr {
       void operator()(Widget* widget);
     };
 
+    bool received_widget_destruction_signal_ = false;
     base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
     std::unique_ptr<Widget, WidgetAutoCloser> widget_closer_;
   };

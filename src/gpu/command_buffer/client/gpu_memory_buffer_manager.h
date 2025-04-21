@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <memory>
 
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/threading/platform_thread.h"
 #include "gpu/gpu_export.h"
 #include "gpu/ipc/common/surface_handle.h"
@@ -19,7 +21,14 @@ class WaitableEvent;
 
 namespace gpu {
 
-struct SyncToken;
+// Used to observe the destruction of GpuMemoryBufferManager.
+class GPU_EXPORT GpuMemoryBufferManagerObserver : public base::CheckedObserver {
+ public:
+  virtual void OnGpuMemoryBufferManagerDestroyed() = 0;
+
+ protected:
+  ~GpuMemoryBufferManagerObserver() override = default;
+};
 
 class GPU_EXPORT GpuMemoryBufferManager {
  public:
@@ -37,42 +46,24 @@ class GPU_EXPORT GpuMemoryBufferManager {
       gpu::SurfaceHandle surface_handle,
       base::WaitableEvent* shutdown_event) = 0;
 
-  // Associates destruction sync point with |buffer|. It can be called on any
-  // thread.
-  virtual void SetDestructionSyncToken(gfx::GpuMemoryBuffer* buffer,
-                                       const gpu::SyncToken& sync_token) = 0;
-
   // Copies pixel data of GMB to the provided shared memory region.
   virtual void CopyGpuMemoryBufferAsync(
       gfx::GpuMemoryBufferHandle buffer_handle,
       base::UnsafeSharedMemoryRegion memory_region,
       base::OnceCallback<void(bool)> callback) = 0;
-  virtual bool CopyGpuMemoryBufferSync(
-      gfx::GpuMemoryBufferHandle buffer_handle,
-      base::UnsafeSharedMemoryRegion memory_region) = 0;
+
+  // Checks if the GpuMemoryBufferManager is connected to the GPU Service
+  // Currently on GPU process crash the connection isn't restored.
+  virtual bool IsConnected() = 0;
+
+  // Implementations of GpuMemoryBufferManager can override below methods if
+  // they want to add/remove observers to notify its destruction.
+  virtual void AddObserver(GpuMemoryBufferManagerObserver* observer);
+  virtual void RemoveObserver(GpuMemoryBufferManagerObserver* observer);
 
  protected:
-  class GPU_EXPORT AllocatedBufferInfo {
-   public:
-    AllocatedBufferInfo(const gfx::GpuMemoryBufferHandle& handle,
-                        const gfx::Size& size,
-                        gfx::BufferFormat format);
-    ~AllocatedBufferInfo();
-
-    gfx::GpuMemoryBufferType type() const { return type_; }
-
-    // Add a memory dump for this buffer to |pmd|. Returns false if adding the
-    // dump failed.
-    bool OnMemoryDump(base::trace_event::ProcessMemoryDump* pmd,
-                      int client_id,
-                      uint64_t client_tracing_process_id) const;
-
-   private:
-    gfx::GpuMemoryBufferId buffer_id_;
-    gfx::GpuMemoryBufferType type_;
-    size_t size_in_bytes_;
-    base::UnguessableToken shared_memory_guid_;
-  };
+  void NotifyObservers();
+  base::ObserverList<GpuMemoryBufferManagerObserver> observers_;
 };
 
 }  // namespace gpu

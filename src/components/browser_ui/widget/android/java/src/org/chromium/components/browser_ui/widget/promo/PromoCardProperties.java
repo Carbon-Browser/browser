@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,15 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.ReadableBooleanPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.ReadableObjectPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.WritableBooleanPropertyKey;
+import org.chromium.ui.modelutil.PropertyModel.WritableIntPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.WritableObjectPropertyKey;
 
-/**
- * Properties for PromoCardView.
- */
+/** Properties for PromoCardView. */
 public class PromoCardProperties {
     // Visible related properties
     public static final WritableBooleanPropertyKey HAS_SECONDARY_BUTTON =
+            new WritableBooleanPropertyKey();
+    public static final WritableBooleanPropertyKey HAS_CLOSE_BUTTON =
             new WritableBooleanPropertyKey();
 
     // View related properties
@@ -38,6 +39,12 @@ public class PromoCardProperties {
     public static final WritableObjectPropertyKey<String> SECONDARY_BUTTON_TEXT =
             new WritableObjectPropertyKey<>();
 
+    /**
+     * This property will set the width of both primary button and secondary button. It can be a
+     * specific number, or LayoutParams.WRAP_CONTENT
+     */
+    public static final WritableIntPropertyKey BUTTONS_WIDTH = new WritableIntPropertyKey();
+
     public static final WritableObjectPropertyKey<ColorStateList> ICON_TINT =
             new WritableObjectPropertyKey<>();
 
@@ -46,6 +53,9 @@ public class PromoCardProperties {
             new WritableObjectPropertyKey<>();
 
     public static final WritableObjectPropertyKey<Callback<View>> SECONDARY_BUTTON_CALLBACK =
+            new WritableObjectPropertyKey<>();
+
+    public static final WritableObjectPropertyKey<Callback<View>> CLOSE_BUTTON_CALLBACK =
             new WritableObjectPropertyKey<>();
 
     // Impression related properties
@@ -66,11 +76,22 @@ public class PromoCardProperties {
     public static final ReadableObjectPropertyKey<Runnable> IMPRESSION_SEEN_CALLBACK =
             new ReadableObjectPropertyKey<>();
 
-    /**
-     * All the property keys needed to create the model for {@link PromoCardView}.
-     */
-    public static final PropertyKey[] ALL_KEYS = new PropertyKey[] {HAS_SECONDARY_BUTTON, IMAGE,
-            ICON_TINT, TITLE, DESCRIPTION, PRIMARY_BUTTON_TEXT, SECONDARY_BUTTON_TEXT,
-            PRIMARY_BUTTON_CALLBACK, SECONDARY_BUTTON_CALLBACK, IS_IMPRESSION_ON_PRIMARY_BUTTON,
-            IMPRESSION_SEEN_CALLBACK};
+    /** All the property keys needed to create the model for {@link PromoCardView}. */
+    public static final PropertyKey[] ALL_KEYS =
+            new PropertyKey[] {
+                HAS_SECONDARY_BUTTON,
+                HAS_CLOSE_BUTTON,
+                IMAGE,
+                ICON_TINT,
+                TITLE,
+                DESCRIPTION,
+                PRIMARY_BUTTON_TEXT,
+                SECONDARY_BUTTON_TEXT,
+                BUTTONS_WIDTH,
+                PRIMARY_BUTTON_CALLBACK,
+                SECONDARY_BUTTON_CALLBACK,
+                CLOSE_BUTTON_CALLBACK,
+                IS_IMPRESSION_ON_PRIMARY_BUTTON,
+                IMPRESSION_SEEN_CALLBACK
+            };
 }

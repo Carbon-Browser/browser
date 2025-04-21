@@ -1,17 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_PROFILE_OAUTH2_TOKEN_SERVICE_OBSERVER_H_
 #define COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_PROFILE_OAUTH2_TOKEN_SERVICE_OBSERVER_H_
 
+#include "base/observer_list_types.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 
 // Classes that want to listen for refresh token availability should
 // implement this interface and register with the ProfileOAuth2TokenService::
 // AddObserver() call.
-class ProfileOAuth2TokenServiceObserver {
+class ProfileOAuth2TokenServiceObserver : public base::CheckedObserver {
  public:
   // Called whenever a new login-scoped refresh token is available for
   // account |account_id|. Once available, access tokens can be retrieved for
@@ -28,16 +30,26 @@ class ProfileOAuth2TokenServiceObserver {
   // Called after all refresh tokens are loaded during ProfileOAuth2TokenService
   // startup.
   virtual void OnRefreshTokensLoaded() {}
-  // Sent after a batch of refresh token changes is done.
+  // Sent after a batch of refresh token changes. This only includes events
+  // about tokens available or revoked. It's guaranteed that every call to
+  // `OnRefreshTokenAvailable()` and `OnRefreshTokenRevoked()` is part of a
+  // batch, but there is no guarantee for other calls.
   virtual void OnEndBatchChanges() {}
   // Called when the authentication error state for |account_id| has changed.
   // Note: It is always called after |OnRefreshTokenAvailable| when refresh
   // token is updated. It is not called when the refresh token is revoked.
-  virtual void OnAuthErrorChanged(const CoreAccountId& account_id,
-                                  const GoogleServiceAuthError& auth_error) {}
+  // The source will be
+  // `signin_metrics::SourceForRefreshTokenOperation::kUnknown` if the token did
+  // not change and became invalid on the server.
+  virtual void OnAuthErrorChanged(
+      const CoreAccountId& account_id,
+      const GoogleServiceAuthError& auth_error,
+      signin_metrics::SourceForRefreshTokenOperation source) {}
 
- protected:
-  virtual ~ProfileOAuth2TokenServiceObserver() {}
+#if BUILDFLAG(IS_IOS)
+  // Called after the list of accounts on the device changes.
+  virtual void OnAccountsOnDeviceChanged() {}
+#endif
 };
 
 #endif  // COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_PROFILE_OAUTH2_TOKEN_SERVICE_OBSERVER_H_

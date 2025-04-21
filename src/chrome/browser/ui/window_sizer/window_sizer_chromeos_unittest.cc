@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "ui/aura/env.h"
 #include "ui/aura/test/test_windows.h"
 #include "ui/aura/window_event_dispatcher.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/display/display.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen.h"
@@ -44,6 +45,9 @@ class WindowSizerChromeOSTest : public ChromeAshTestBase {
 
   // Similar to WindowSizerTestUtil::GetWindowBounds() but takes an existing
   // |display_id| instead of creating a TestScreen and new displays.
+  // TODO(mek): Refactor this to use a builder pattern similar to what
+  // WindowSizerTestUtil does.
+  enum Source { DEFAULT, LAST_ACTIVE, PERSISTED, BOTH };
   void GetWindowBounds(const Browser* browser,
                        const gfx::Rect& passed_in,
                        int64_t display_id,
@@ -54,13 +58,13 @@ class WindowSizerChromeOSTest : public ChromeAshTestBase {
     auto state_provider = std::make_unique<TestStateProvider>();
     if (source == PERSISTED) {
       state_provider->SetPersistentState(bounds, work_area,
-                                         ui::SHOW_STATE_DEFAULT);
+                                         ui::mojom::WindowShowState::kDefault);
     } else {
       DCHECK_EQ(source, DEFAULT);
     }
     display::Screen::GetScreen()->SetDisplayForNewWindows(display_id);
 
-    ui::WindowShowState ignored;
+    ui::mojom::WindowShowState ignored;
     WindowSizer::GetBrowserWindowBoundsAndShowState(
         std::move(state_provider), passed_in, browser, out_bounds, &ignored);
   }
@@ -77,19 +81,21 @@ class WindowSizerChromeOSTest : public ChromeAshTestBase {
   static void GetBrowserWindowBoundsAndShowState(
       const gfx::Rect& bounds,
       const gfx::Rect& work_area,
-      ui::WindowShowState show_state_persisted,
-      ui::WindowShowState show_state_last,
+      ui::mojom::WindowShowState show_state_persisted,
+      ui::mojom::WindowShowState show_state_last,
       Source source,
       const Browser* browser,
       const gfx::Rect& passed_in,
       gfx::Rect* out_bounds,
-      ui::WindowShowState* out_show_state) {
+      ui::mojom::WindowShowState* out_show_state) {
     DCHECK(out_show_state);
     auto provider = std::make_unique<TestStateProvider>();
-    if (source == PERSISTED || source == BOTH)
+    if (source == PERSISTED || source == BOTH) {
       provider->SetPersistentState(bounds, work_area, show_state_persisted);
-    if (source == LAST_ACTIVE || source == BOTH)
+    }
+    if (source == LAST_ACTIVE || source == BOTH) {
       provider->SetLastActiveState(bounds, show_state_last);
+    }
 
     WindowSizer::GetBrowserWindowBoundsAndShowState(
         std::move(provider), passed_in, browser, out_bounds, out_show_state);
@@ -97,14 +103,15 @@ class WindowSizerChromeOSTest : public ChromeAshTestBase {
 
   // Returns browser window show state for simulated persisted and last-active
   // window bounds, work area, show state, etc.
-  static ui::WindowShowState GetBrowserWindowShowState(
-      ui::WindowShowState show_state_persisted,
-      ui::WindowShowState show_state_last,
+  static ui::mojom::WindowShowState GetBrowserWindowShowState(
+      ui::mojom::WindowShowState show_state_persisted,
+      ui::mojom::WindowShowState show_state_last,
       Source source,
       const Browser* browser,
       const gfx::Rect& bounds,
       const gfx::Rect& work_area) {
-    ui::WindowShowState out_show_state = ui::SHOW_STATE_DEFAULT;
+    ui::mojom::WindowShowState out_show_state =
+        ui::mojom::WindowShowState::kDefault;
     gfx::Rect ignored;
     GetBrowserWindowBoundsAndShowState(bounds, work_area, show_state_persisted,
                                        show_state_last, source, browser,
@@ -126,8 +133,9 @@ const int kWindowTilePixels = WindowSizer::kWindowTilePixels;
 std::unique_ptr<Browser> CreateTestBrowser(aura::Window* window,
                                            const gfx::Rect& bounds,
                                            Browser::CreateParams* params) {
-  if (!bounds.IsEmpty())
+  if (!bounds.IsEmpty()) {
     window->SetBounds(bounds);
+  }
   std::unique_ptr<Browser> browser =
       chrome::CreateBrowserWithAuraTestWindowForParams(base::WrapUnique(window),
                                                        params);
@@ -149,10 +157,8 @@ std::unique_ptr<Browser> CreateTestBrowser(aura::Window* window,
 TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
   {
     // 4:3 monitor case, 1024x768, no taskbar.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(p1024x768, p1024x768, gfx::Rect(),
-                                         gfx::Rect(), gfx::Rect(), DEFAULT,
-                                         NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil().WithMonitorBounds(p1024x768).GetWindowBounds();
     EXPECT_EQ(
         gfx::Rect(kDesktopBorderSize, kDesktopBorderSize,
                   1024 - kDesktopBorderSize * 2, 768 - kDesktopBorderSize),
@@ -161,10 +167,10 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1024x768, taskbar on bottom.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_bottom_work_area, gfx::Rect(), gfx::Rect(),
-        gfx::Rect(), DEFAULT, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds = WindowSizerTestUtil()
+                                  .WithMonitorBounds(p1024x768)
+                                  .WithMonitorWorkArea(taskbar_bottom_work_area)
+                                  .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kDesktopBorderSize, kDesktopBorderSize,
                         1024 - kDesktopBorderSize * 2,
                         taskbar_bottom_work_area.height() - kDesktopBorderSize),
@@ -173,10 +179,10 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1024x768, taskbar on right.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_right_work_area, gfx::Rect(), gfx::Rect(),
-        gfx::Rect(), DEFAULT, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds = WindowSizerTestUtil()
+                                  .WithMonitorBounds(p1024x768)
+                                  .WithMonitorWorkArea(taskbar_right_work_area)
+                                  .GetWindowBounds();
     EXPECT_EQ(
         gfx::Rect(kDesktopBorderSize, kDesktopBorderSize,
                   taskbar_right_work_area.width() - kDesktopBorderSize * 2,
@@ -186,10 +192,10 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1024x768, taskbar on left.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_left_work_area, gfx::Rect(), gfx::Rect(),
-        gfx::Rect(), DEFAULT, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds = WindowSizerTestUtil()
+                                  .WithMonitorBounds(p1024x768)
+                                  .WithMonitorWorkArea(taskbar_left_work_area)
+                                  .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(taskbar_left_work_area.x() + kDesktopBorderSize,
                         kDesktopBorderSize,
                         taskbar_left_work_area.width() - kDesktopBorderSize * 2,
@@ -199,10 +205,10 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1024x768, taskbar on top.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_top_work_area, gfx::Rect(), gfx::Rect(), gfx::Rect(),
-        DEFAULT, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds = WindowSizerTestUtil()
+                                  .WithMonitorBounds(p1024x768)
+                                  .WithMonitorWorkArea(taskbar_top_work_area)
+                                  .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kDesktopBorderSize,
                         taskbar_top_work_area.y() + kDesktopBorderSize,
                         1024 - kDesktopBorderSize * 2,
@@ -212,10 +218,8 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1280x1024.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(p1280x1024, p1280x1024, gfx::Rect(),
-                                         gfx::Rect(), gfx::Rect(), DEFAULT,
-                                         NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil().WithMonitorBounds(p1280x1024).GetWindowBounds();
     EXPECT_EQ(gfx::Rect((1280 - kMaximumWindowWidth) / 2, kDesktopBorderSize,
                         kMaximumWindowWidth, 1024 - kDesktopBorderSize),
               window_bounds);
@@ -223,10 +227,8 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 4:3 monitor case, 1600x1200.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(p1600x1200, p1600x1200, gfx::Rect(),
-                                         gfx::Rect(), gfx::Rect(), DEFAULT,
-                                         NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil().WithMonitorBounds(p1600x1200).GetWindowBounds();
     EXPECT_EQ(gfx::Rect((1600 - kMaximumWindowWidth) / 2, kDesktopBorderSize,
                         kMaximumWindowWidth, 1200 - kDesktopBorderSize),
               window_bounds);
@@ -234,10 +236,8 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 16:10 monitor case, 1680x1050.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(p1680x1050, p1680x1050, gfx::Rect(),
-                                         gfx::Rect(), gfx::Rect(), DEFAULT,
-                                         NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil().WithMonitorBounds(p1680x1050).GetWindowBounds();
     EXPECT_EQ(gfx::Rect((1680 - kMaximumWindowWidth) / 2, kDesktopBorderSize,
                         kMaximumWindowWidth, 1050 - kDesktopBorderSize),
               window_bounds);
@@ -245,10 +245,8 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 
   {
     // 16:10 monitor case, 1920x1200.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(p1920x1200, p1920x1200, gfx::Rect(),
-                                         gfx::Rect(), gfx::Rect(), DEFAULT,
-                                         NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil().WithMonitorBounds(p1920x1200).GetWindowBounds();
     EXPECT_EQ(gfx::Rect((1920 - kMaximumWindowWidth) / 2, kDesktopBorderSize,
                         kMaximumWindowWidth, 1200 - kDesktopBorderSize),
               window_bounds);
@@ -260,11 +258,12 @@ TEST(WindowSizerChromeOSNoAshTest, DefaultSizeCase) {
 TEST(WindowSizerChromeOS2NoAshTest, LastWindowBoundsCase) {
   {
     // Normal, in the middle of the screen somewhere.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(),
-        gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(
+                gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400))
+            .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kWindowTilePixels + kDesktopBorderSize,
                         kWindowTilePixels + kDesktopBorderSize, 500, 400)
                   .ToString(),
@@ -273,11 +272,13 @@ TEST(WindowSizerChromeOS2NoAshTest, LastWindowBoundsCase) {
 
   {
     // Taskbar on top.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_top_work_area, gfx::Rect(),
-        gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithMonitorWorkArea(taskbar_top_work_area)
+            .WithLastActiveBounds(
+                gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400))
+            .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kWindowTilePixels + kDesktopBorderSize,
                         std::max(kWindowTilePixels + kDesktopBorderSize,
                                  34 /* toolbar height */),
@@ -287,28 +288,16 @@ TEST(WindowSizerChromeOS2NoAshTest, LastWindowBoundsCase) {
   }
 
   {
-    // Too small to satisify the minimum visibility condition.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(),
-        gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 29, 29), gfx::Rect(),
-        LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
+    // Too small to satisfy the minimum visibility condition.
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(
+                gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 29, 29))
+            .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kWindowTilePixels + kDesktopBorderSize,
                         kWindowTilePixels + kDesktopBorderSize, 30 /* not 29 */,
                         30 /* not 29 */)
-                  .ToString(),
-              window_bounds.ToString());
-  }
-
-  {
-    // Normal.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(),
-        gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(gfx::Rect(kWindowTilePixels + kDesktopBorderSize,
-                        kWindowTilePixels + kDesktopBorderSize, 500, 400)
                   .ToString(),
               window_bounds.ToString());
   }
@@ -318,11 +307,13 @@ TEST(WindowSizerChromeOSNoAshTest,
      LastWindowOffscreenWithNonAggressiveRepositioning) {
   {
     // Taskbar on left.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, taskbar_left_work_area, gfx::Rect(),
-        gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithMonitorWorkArea(taskbar_left_work_area)
+            .WithLastActiveBounds(
+                gfx::Rect(kDesktopBorderSize, kDesktopBorderSize, 500, 400))
+            .GetWindowBounds();
     EXPECT_EQ(gfx::Rect(kWindowTilePixels + kDesktopBorderSize,
                         kWindowTilePixels + kDesktopBorderSize, 500, 400)
                   .ToString(),
@@ -332,59 +323,65 @@ TEST(WindowSizerChromeOSNoAshTest,
   {
     // Offset would put the new window offscreen at the bottom but the minimum
     // visibility condition is barely satisfied without relocation.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(), gfx::Rect(10, 728, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(gfx::Rect(10 + kWindowTilePixels, 738, 500, 400).ToString(),
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(gfx::Rect(10, 638, 500, 400))
+            .GetWindowBounds();
+    // The y position is the display height (768) minus the minimum visible
+    // height (0.3f * 400).
+    EXPECT_EQ(gfx::Rect(10 + kWindowTilePixels, 648, 500, 400).ToString(),
               window_bounds.ToString());
   }
 
   {
     // Offset would put the new window offscreen at the bottom and the minimum
-    // visibility condition is satisified by relocation.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(), gfx::Rect(10, 729, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(gfx::Rect(10 + kWindowTilePixels, 738 /* not 739 */, 500, 400)
-                  .ToString(),
+    // visibility condition is satisfied by relocation.
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(gfx::Rect(20, 639, 500, 400))
+            .GetWindowBounds();
+    EXPECT_EQ(gfx::Rect(20 + kWindowTilePixels, 648, 500, 400).ToString(),
               window_bounds.ToString());
   }
 
   {
     // Offset would put the new window offscreen at the right but the minimum
     // visibility condition is barely satisfied without relocation.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(), gfx::Rect(984, 10, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(gfx::Rect(994, 10 + kWindowTilePixels, 500, 400).ToString(),
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(gfx::Rect(864, 10, 500, 400))
+            .GetWindowBounds();
+    // The x position is the display width (1024) minus the minimum visible
+    // width (0.3f * 500).
+    EXPECT_EQ(gfx::Rect(874, 10 + kWindowTilePixels, 500, 400).ToString(),
               window_bounds.ToString());
   }
 
   {
     // Offset would put the new window offscreen at the right and the minimum
-    // visibility condition is satisified by relocation.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(), gfx::Rect(985, 10, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(gfx::Rect(994 /* not 995 */, 10 + kWindowTilePixels, 500, 400)
-                  .ToString(),
+    // visibility condition is satisfied by relocation.
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(gfx::Rect(865, 20, 500, 400))
+            .GetWindowBounds();
+    EXPECT_EQ(gfx::Rect(874, 20 + kWindowTilePixels, 500, 400).ToString(),
               window_bounds.ToString());
   }
 
   {
     // Offset would put the new window offscreen at the bottom right and the
-    // minimum visibility condition is satisified by relocation.
-    gfx::Rect window_bounds;
-    WindowSizerTestUtil::GetWindowBounds(
-        p1024x768, p1024x768, gfx::Rect(), gfx::Rect(985, 729, 500, 400),
-        gfx::Rect(), LAST_ACTIVE, NULL, gfx::Rect(), &window_bounds);
-    EXPECT_EQ(
-        gfx::Rect(994 /* not 995 */, 738 /* not 739 */, 500, 400).ToString(),
-        window_bounds.ToString());
+    // minimum visibility condition is satisfied by relocation.
+    gfx::Rect window_bounds =
+        WindowSizerTestUtil()
+            .WithMonitorBounds(p1024x768)
+            .WithLastActiveBounds(gfx::Rect(865, 639, 500, 400))
+            .GetWindowBounds();
+    EXPECT_EQ(gfx::Rect(874, 648, 500, 400).ToString(),
+              window_bounds.ToString());
   }
 }
 
@@ -418,8 +415,9 @@ TEST_F(WindowSizerChromeOSTest, PlaceNewWindows) {
 
   // Make sure that popups do not get changed.
   {
-    Browser::CreateParams params_popup(Browser::TYPE_POPUP, &profile_, true);
-    auto new_popup = CreateWindowlessBrowser(params_popup);
+    Browser::CreateParams params_new_popup(Browser::TYPE_POPUP, &profile_,
+                                           true);
+    auto new_popup = CreateWindowlessBrowser(params_new_popup);
     gfx::Rect window_bounds;
     GetWindowBounds(new_popup.get(), gfx::Rect(), display_id,
                     gfx::Rect(50, 100, 300, 150), bottom_s1600x1200, PERSISTED,
@@ -470,30 +468,32 @@ TEST_F(WindowSizerChromeOSTest, PlaceNewBrowserWindowOnEmptyDesktop) {
   // If there is no previous state the window should get maximized if the
   // screen is less than or equal to our limit (1366 pixels width).
   gfx::Rect window_bounds;
-  ui::WindowShowState out_show_state1 = ui::SHOW_STATE_DEFAULT;
+  ui::mojom::WindowShowState out_show_state1 =
+      ui::mojom::WindowShowState::kDefault;
   GetBrowserWindowBoundsAndShowState(
-      gfx::Rect(),             // The (persisted) bounds.
-      p1366x768,               // The overall work area.
-      ui::SHOW_STATE_NORMAL,   // The persisted show state.
-      ui::SHOW_STATE_DEFAULT,  // The last show state.
-      DEFAULT,                 // No persisted values.
-      browser.get(),           // Use this browser.
-      gfx::Rect(),             // Don't request valid bounds.
+      gfx::Rect(),                           // The (persisted) bounds.
+      p1366x768,                             // The overall work area.
+      ui::mojom::WindowShowState::kNormal,   // The persisted show state.
+      ui::mojom::WindowShowState::kDefault,  // The last show state.
+      DEFAULT,                               // No persisted values.
+      browser.get(),                         // Use this browser.
+      gfx::Rect(),                           // Don't request valid bounds.
       &window_bounds, &out_show_state1);
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED, out_show_state1);
+  EXPECT_EQ(ui::mojom::WindowShowState::kMaximized, out_show_state1);
 
   // If there is a stored coordinate however, that should be taken instead.
-  ui::WindowShowState out_show_state2 = ui::SHOW_STATE_DEFAULT;
+  ui::mojom::WindowShowState out_show_state2 =
+      ui::mojom::WindowShowState::kDefault;
   GetBrowserWindowBoundsAndShowState(
-      gfx::Rect(50, 100, 300, 150),  // The (persisted) bounds.
-      p1366x768,                     // The overall work area.
-      ui::SHOW_STATE_NORMAL,         // The persisted show state.
-      ui::SHOW_STATE_DEFAULT,        // The last show state.
-      PERSISTED,                     // Set the persisted values.
-      browser.get(),                 // Use this browser.
-      gfx::Rect(),                   // Don't request valid bounds.
+      gfx::Rect(50, 100, 300, 150),          // The (persisted) bounds.
+      p1366x768,                             // The overall work area.
+      ui::mojom::WindowShowState::kNormal,   // The persisted show state.
+      ui::mojom::WindowShowState::kDefault,  // The last show state.
+      PERSISTED,                             // Set the persisted values.
+      browser.get(),                         // Use this browser.
+      gfx::Rect(),                           // Don't request valid bounds.
       &window_bounds, &out_show_state2);
-  EXPECT_EQ(ui::SHOW_STATE_NORMAL, out_show_state2);
+  EXPECT_EQ(ui::mojom::WindowShowState::kNormal, out_show_state2);
   EXPECT_EQ("50,100 300x150", window_bounds.ToString());
 }
 
@@ -504,17 +504,18 @@ TEST_F(WindowSizerChromeOSTest, PlaceNewBrowserWindowOnLargeDesktop) {
   // A larger monitor should not trigger auto-maximize.
   UpdateDisplay("1600x1200");
   gfx::Rect window_bounds;
-  ui::WindowShowState out_show_state = ui::SHOW_STATE_DEFAULT;
+  ui::mojom::WindowShowState out_show_state =
+      ui::mojom::WindowShowState::kDefault;
   GetBrowserWindowBoundsAndShowState(
-      gfx::Rect(),             // The (persisted) bounds.
-      p1600x1200,              // The overall work area.
-      ui::SHOW_STATE_NORMAL,   // The persisted show state.
-      ui::SHOW_STATE_DEFAULT,  // The last show state.
-      DEFAULT,                 // No persisted values.
-      browser.get(),           // Use this browser.
-      gfx::Rect(),             // Don't request valid bounds.
+      gfx::Rect(),                           // The (persisted) bounds.
+      p1600x1200,                            // The overall work area.
+      ui::mojom::WindowShowState::kNormal,   // The persisted show state.
+      ui::mojom::WindowShowState::kDefault,  // The last show state.
+      DEFAULT,                               // No persisted values.
+      browser.get(),                         // Use this browser.
+      gfx::Rect(),                           // Don't request valid bounds.
       &window_bounds, &out_show_state);
-  EXPECT_EQ(ui::SHOW_STATE_DEFAULT, out_show_state);
+  EXPECT_EQ(ui::mojom::WindowShowState::kDefault, out_show_state);
 }
 
 // Test the placement of newly created windows on multiple dislays.
@@ -614,41 +615,47 @@ TEST_F(WindowSizerChromeOSTest, TestShowState) {
 
   // Tabbed windows should retrieve the saved window state - since there is a
   // top window.
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED,
-            GetBrowserWindowShowState(ui::SHOW_STATE_MAXIMIZED,
-                                      ui::SHOW_STATE_NORMAL, PERSISTED,
-                                      browser.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kMaximized,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kNormal, PERSISTED,
+                                browser.get(), p1600x1200, p1600x1200));
   // A window that is smaller than the whole work area is set to default state.
-  EXPECT_EQ(ui::SHOW_STATE_DEFAULT,
-            GetBrowserWindowShowState(ui::SHOW_STATE_DEFAULT,
-                                      ui::SHOW_STATE_NORMAL, PERSISTED,
-                                      browser.get(), p1280x1024, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kDefault,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kDefault,
+                                ui::mojom::WindowShowState::kNormal, PERSISTED,
+                                browser.get(), p1280x1024, p1600x1200));
   // A window that is sized to occupy the whole work area is maximized.
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED,
-            GetBrowserWindowShowState(ui::SHOW_STATE_DEFAULT,
-                                      ui::SHOW_STATE_NORMAL, PERSISTED,
-                                      browser.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kMaximized,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kDefault,
+                                ui::mojom::WindowShowState::kNormal, PERSISTED,
+                                browser.get(), p1600x1200, p1600x1200));
   // Non tabbed windows should always follow the window saved visibility state.
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED,
-            GetBrowserWindowShowState(
-                ui::SHOW_STATE_MAXIMIZED, ui::SHOW_STATE_NORMAL, BOTH,
-                browser_popup.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kMaximized,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kNormal, BOTH,
+                                browser_popup.get(), p1600x1200, p1600x1200));
   // The non tabbed window will take the status of the last active of its kind.
-  EXPECT_EQ(ui::SHOW_STATE_NORMAL,
-            GetBrowserWindowShowState(
-                ui::SHOW_STATE_DEFAULT, ui::SHOW_STATE_NORMAL, BOTH,
-                browser_popup.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kNormal,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kDefault,
+                                ui::mojom::WindowShowState::kNormal, BOTH,
+                                browser_popup.get(), p1600x1200, p1600x1200));
 
   // A tabbed window should now take the top level window state.
-  EXPECT_EQ(
-      ui::SHOW_STATE_NORMAL,
-      GetBrowserWindowShowState(ui::SHOW_STATE_MAXIMIZED, ui::SHOW_STATE_NORMAL,
-                                BOTH, browser.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(ui::mojom::WindowShowState::kNormal,
+            GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                      ui::mojom::WindowShowState::kNormal, BOTH,
+                                      browser.get(), p1600x1200, p1600x1200));
   // Non tabbed windows should always follow the window saved visibility state.
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED,
-            GetBrowserWindowShowState(
-                ui::SHOW_STATE_MAXIMIZED, ui::SHOW_STATE_MINIMIZED, BOTH,
-                browser_popup.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kMaximized,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kMinimized, BOTH,
+                                browser_popup.get(), p1600x1200, p1600x1200));
 }
 
 TEST_F(WindowSizerChromeOSTest, TestShowStateOnTinyScreen) {
@@ -659,10 +666,11 @@ TEST_F(WindowSizerChromeOSTest, TestShowStateOnTinyScreen) {
   // window visible.
   UpdateDisplay("640x480");
   const gfx::Rect tiny_screen(0, 0, 640, 480);
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED,
-            GetBrowserWindowShowState(ui::SHOW_STATE_MAXIMIZED,
-                                      ui::SHOW_STATE_DEFAULT, BOTH,
-                                      browser.get(), tiny_screen, tiny_screen));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kMaximized,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kDefault, BOTH,
+                                browser.get(), tiny_screen, tiny_screen));
 }
 
 // Test that the default show state override behavior is properly handled.
@@ -680,43 +688,47 @@ TEST_F(WindowSizerChromeOSTest, TestShowStateDefaults) {
 
   // Check that a browser creation state always get used if not given as
   // SHOW_STATE_DEFAULT.
-  ui::WindowShowState window_show_state = GetBrowserWindowShowState(
-      ui::SHOW_STATE_MAXIMIZED, ui::SHOW_STATE_MAXIMIZED, DEFAULT,
-      browser.get(), p1600x1200, p1600x1200);
-  EXPECT_EQ(window_show_state, ui::SHOW_STATE_DEFAULT);
+  ui::mojom::WindowShowState window_show_state =
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kMaximized, DEFAULT,
+                                browser.get(), p1600x1200, p1600x1200);
+  EXPECT_EQ(window_show_state, ui::mojom::WindowShowState::kDefault);
 
-  browser->set_initial_show_state(ui::SHOW_STATE_MINIMIZED);
-  EXPECT_EQ(GetBrowserWindowShowState(ui::SHOW_STATE_MAXIMIZED,
-                                      ui::SHOW_STATE_MAXIMIZED, BOTH,
-                                      browser.get(), p1600x1200, p1600x1200),
-            ui::SHOW_STATE_MINIMIZED);
-  browser->set_initial_show_state(ui::SHOW_STATE_NORMAL);
-  EXPECT_EQ(GetBrowserWindowShowState(ui::SHOW_STATE_MAXIMIZED,
-                                      ui::SHOW_STATE_MAXIMIZED, BOTH,
-                                      browser.get(), p1600x1200, p1600x1200),
-            ui::SHOW_STATE_NORMAL);
-  browser->set_initial_show_state(ui::SHOW_STATE_MAXIMIZED);
+  browser->set_initial_show_state(ui::mojom::WindowShowState::kMinimized);
   EXPECT_EQ(
-      GetBrowserWindowShowState(ui::SHOW_STATE_NORMAL, ui::SHOW_STATE_NORMAL,
-                                BOTH, browser.get(), p1600x1200, p1600x1200),
-      ui::SHOW_STATE_MAXIMIZED);
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kMaximized, BOTH,
+                                browser.get(), p1600x1200, p1600x1200),
+      ui::mojom::WindowShowState::kMinimized);
+  browser->set_initial_show_state(ui::mojom::WindowShowState::kNormal);
+  EXPECT_EQ(
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kMaximized,
+                                ui::mojom::WindowShowState::kMaximized, BOTH,
+                                browser.get(), p1600x1200, p1600x1200),
+      ui::mojom::WindowShowState::kNormal);
+  browser->set_initial_show_state(ui::mojom::WindowShowState::kMaximized);
+  EXPECT_EQ(GetBrowserWindowShowState(ui::mojom::WindowShowState::kNormal,
+                                      ui::mojom::WindowShowState::kNormal, BOTH,
+                                      browser.get(), p1600x1200, p1600x1200),
+            ui::mojom::WindowShowState::kMaximized);
 
   // Check that setting the maximized command line option is forcing the
   // maximized state.
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kStartMaximized);
 
-  browser->set_initial_show_state(ui::SHOW_STATE_NORMAL);
-  EXPECT_EQ(
-      GetBrowserWindowShowState(ui::SHOW_STATE_NORMAL, ui::SHOW_STATE_NORMAL,
-                                BOTH, browser.get(), p1600x1200, p1600x1200),
-      ui::SHOW_STATE_MAXIMIZED);
+  browser->set_initial_show_state(ui::mojom::WindowShowState::kNormal);
+  EXPECT_EQ(GetBrowserWindowShowState(ui::mojom::WindowShowState::kNormal,
+                                      ui::mojom::WindowShowState::kNormal, BOTH,
+                                      browser.get(), p1600x1200, p1600x1200),
+            ui::mojom::WindowShowState::kMaximized);
 
   // The popup should favor the initial show state over the command line.
-  EXPECT_EQ(GetBrowserWindowShowState(
-                ui::SHOW_STATE_NORMAL, ui::SHOW_STATE_NORMAL, BOTH,
-                browser_popup.get(), p1600x1200, p1600x1200),
-            ui::SHOW_STATE_NORMAL);
+  EXPECT_EQ(
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kNormal,
+                                ui::mojom::WindowShowState::kNormal, BOTH,
+                                browser_popup.get(), p1600x1200, p1600x1200),
+      ui::mojom::WindowShowState::kNormal);
 }
 
 TEST_F(WindowSizerChromeOSTest, DefaultStateBecomesMaximized) {
@@ -731,22 +743,22 @@ TEST_F(WindowSizerChromeOSTest, DefaultStateBecomesMaximized) {
 
   // Make a window bigger than the display work area.
   specified_bounds.Inset(-20);
-  ui::WindowShowState show_state = ui::SHOW_STATE_DEFAULT;
+  ui::mojom::WindowShowState show_state = ui::mojom::WindowShowState::kDefault;
   gfx::Rect bounds;
   WindowSizer::GetBrowserWindowBoundsAndShowState(
       specified_bounds, browser.get(), &bounds, &show_state);
   // The window should start maximized with its restore bounds shrunken.
-  EXPECT_EQ(ui::SHOW_STATE_MAXIMIZED, show_state);
+  EXPECT_EQ(ui::mojom::WindowShowState::kMaximized, show_state);
   EXPECT_NE(display_bounds.ToString(), bounds.ToString());
   EXPECT_TRUE(display_bounds.Contains(bounds));
 
   // Make a window smaller than the display work area.
   specified_bounds.Inset(100);
-  show_state = ui::SHOW_STATE_DEFAULT;
+  show_state = ui::mojom::WindowShowState::kDefault;
   WindowSizer::GetBrowserWindowBoundsAndShowState(
       specified_bounds, browser.get(), &bounds, &show_state);
   // The window should start in default state.
-  EXPECT_EQ(ui::SHOW_STATE_DEFAULT, show_state);
+  EXPECT_EQ(ui::mojom::WindowShowState::kDefault, show_state);
   EXPECT_EQ(specified_bounds.ToString(), bounds.ToString());
 }
 
@@ -755,16 +767,18 @@ TEST_F(WindowSizerChromeOSTest, DefaultStateBecomesMaximized) {
 // in that this uses real ash shell implementations + StateProvider
 // rather than mocks.
 TEST_F(WindowSizerChromeOSTest, DefaultBoundsInTargetDisplay) {
-  UpdateDisplay("500x500,600x600");
+  UpdateDisplay("500x400,600x500");
 
-  // By default windows are placed on the primary display.
-  aura::Window* first_root = ash::Shell::GetAllRootWindows()[0];
-  EXPECT_EQ(first_root, ash::Shell::GetRootWindowForNewWindows());
-  gfx::Rect bounds;
-  ui::WindowShowState show_state;
-  WindowSizer::GetBrowserWindowBoundsAndShowState(gfx::Rect(), nullptr, &bounds,
-                                                  &show_state);
-  EXPECT_TRUE(first_root->GetBoundsInScreen().Contains(bounds));
+  {
+    // By default windows are placed on the primary display.
+    aura::Window* first_root = ash::Shell::GetAllRootWindows()[0];
+    EXPECT_EQ(first_root, ash::Shell::GetRootWindowForNewWindows());
+    gfx::Rect bounds;
+    ui::mojom::WindowShowState show_state;
+    WindowSizer::GetBrowserWindowBoundsAndShowState(gfx::Rect(), nullptr,
+                                                    &bounds, &show_state);
+    EXPECT_TRUE(first_root->GetBoundsInScreen().Contains(bounds));
+  }
 
   {
     // When the second display is active new windows are placed there.
@@ -775,7 +789,7 @@ TEST_F(WindowSizerChromeOSTest, DefaultBoundsInTargetDisplay) {
             .id();
     display::Screen::GetScreen()->SetDisplayForNewWindows(second_display_id);
     gfx::Rect bounds;
-    ui::WindowShowState show_state;
+    ui::mojom::WindowShowState show_state;
     WindowSizer::GetBrowserWindowBoundsAndShowState(gfx::Rect(), nullptr,
                                                     &bounds, &show_state);
     EXPECT_TRUE(second_root->GetBoundsInScreen().Contains(bounds));
@@ -790,13 +804,15 @@ TEST_F(WindowSizerChromeOSTest, TrustedPopupBehavior) {
   auto trusted_popup = CreateWindowlessBrowser(trusted_popup_create_params);
   // Trusted popup windows should follow the saved show state and ignore the
   // last show state.
-  EXPECT_EQ(ui::SHOW_STATE_DEFAULT,
-            GetBrowserWindowShowState(
-                ui::SHOW_STATE_DEFAULT, ui::SHOW_STATE_NORMAL, BOTH,
-                trusted_popup.get(), p1280x1024, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kDefault,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kDefault,
+                                ui::mojom::WindowShowState::kNormal, BOTH,
+                                trusted_popup.get(), p1280x1024, p1600x1200));
   // A popup that is sized to occupy the whole work area has default state.
-  EXPECT_EQ(ui::SHOW_STATE_DEFAULT,
-            GetBrowserWindowShowState(
-                ui::SHOW_STATE_DEFAULT, ui::SHOW_STATE_NORMAL, BOTH,
-                trusted_popup.get(), p1600x1200, p1600x1200));
+  EXPECT_EQ(
+      ui::mojom::WindowShowState::kDefault,
+      GetBrowserWindowShowState(ui::mojom::WindowShowState::kDefault,
+                                ui::mojom::WindowShowState::kNormal, BOTH,
+                                trusted_popup.get(), p1600x1200, p1600x1200));
 }

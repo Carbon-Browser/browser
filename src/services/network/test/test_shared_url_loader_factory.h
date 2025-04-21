@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/mojom/network_context.mojom-forward.h"
 
 namespace net {
 class URLRequestContext;
@@ -46,7 +47,7 @@ class TestSharedURLLoaderFactory : public SharedURLLoaderFactory {
   // PendingSharedURLLoaderFactory implementation
   std::unique_ptr<PendingSharedURLLoaderFactory> Clone() override;
 
-  NetworkContext* network_context() { return network_context_.get(); }
+  mojom::NetworkContext* network_context();
 
   int num_created_loaders() const { return num_created_loaders_; }
 

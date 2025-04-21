@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,8 @@ class PasswordProtectionCommitDeferringCondition
   // kDefer which will defer the navigation from committing until `resume` is
   // invoked (via `ResumeNavigation()`).
   Result WillCommitNavigation(base::OnceClosure resume) override;
+
+  const char* TraceEventName() const override;
 
   // Called by the PasswordProtectionService when it decides this navigation no
   // longer needs to be deferred (e.g. because a ping resulted in not showing a

@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/history/history_deletion_info.h"
 
 #include "base/android/jni_array.h"
-#include "chrome/android/chrome_jni_headers/HistoryDeletionInfo_jni.h"
 #include "components/history/core/browser/history_types.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/HistoryDeletionInfo_jni.h"
 
 using base::android::ScopedJavaLocalRef;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,10 @@ class MEDIA_EXPORT ChannelMixer {
   // (1 / sqrt(2)) gain to each.
   static constexpr float kHalfPower = 0.707106781186547524401f;
 
-  ChannelMixer(ChannelLayout input_layout, ChannelLayout output_layout);
+  ChannelMixer(ChannelLayout input_layout,
+               int input_channels,
+               ChannelLayout output_layout,
+               int output_channels);
   ChannelMixer(const AudioParameters& input, const AudioParameters& output);
 
   ChannelMixer(const ChannelMixer&) = delete;

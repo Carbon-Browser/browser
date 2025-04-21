@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <utility>
 
-#include "mojo/public/interfaces/bindings/tests/test_structs.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_structs.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {
@@ -58,7 +58,7 @@ TEST_F(EqualsTest, Array) {
   NamedRegionPtr n2(n1.Clone());
   EXPECT_TRUE(n1.Equals(n2));
 
-  n2->rects = absl::nullopt;
+  n2->rects = std::nullopt;
   EXPECT_FALSE(n1.Equals(n2));
   n2->rects.emplace();
   EXPECT_FALSE(n1.Equals(n2));

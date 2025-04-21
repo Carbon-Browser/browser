@@ -47,8 +47,44 @@ std::string ContentTypeToString(ContentType content_type) {
       return "MEDIA";
     case ContentType::Font:
       return "FONT";
+    case ContentType::WebBundle:
+      return "WEBBUNDLE";
     case ContentType::Default:
       return "DEFAULT";
+  }
+}
+
+// TODO(atokodi): Use StringPiece
+ContentType ContentTypeFromString(const std::string& content_type) {
+  if (content_type == "other" || content_type == "xbl" ||
+      content_type == "dtd") {
+    return ContentType::Other;
+  } else if (content_type == "script") {
+    return ContentType::Script;
+  } else if (content_type == "image" || content_type == "background") {
+    return ContentType::Image;
+  } else if (content_type == "stylesheet") {
+    return ContentType::Stylesheet;
+  } else if (content_type == "object") {
+    return ContentType::Object;
+  } else if (content_type == "subdocument") {
+    return ContentType::Subdocument;
+  } else if (content_type == "websocket") {
+    return ContentType::Websocket;
+  } else if (content_type == "webrtc") {
+    return ContentType::Webrtc;
+  } else if (content_type == "ping") {
+    return ContentType::Ping;
+  } else if (content_type == "xmlhttprequest") {
+    return ContentType::Xmlhttprequest;
+  } else if (content_type == "media") {
+    return ContentType::Media;
+  } else if (content_type == "font") {
+    return ContentType::Font;
+  } else if (content_type == "webbundle") {
+    return ContentType::WebBundle;
+  } else {
+    return ContentType::Unknown;
   }
 }
 

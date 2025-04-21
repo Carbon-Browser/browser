@@ -1,22 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #import <ChromeWebView/ChromeWebView.h>
-#import <EarlGrey/EarlGrey.h>
 #import <XCTest/XCTest.h>
+#import "ios/testing/earl_grey/earl_grey_test.h"
 
 #include "base/strings/sys_string_conversions.h"
 #import "ios/web_view/shell/shell_view_controller.h"
 #import "ios/web_view/shell/test/earl_grey/web_view_shell_matchers.h"
 #import "ios/web_view/test/web_view_test_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -50,7 +46,7 @@ void WaitForWebViewContainingText(NSString* text) {
 // shown, since this isn't a case a user would encounter (i.e. they would
 // dismiss the alert first).
 + (NSArray*)testInvocations {
-  // TODO(crbug.com/654085): Simply skipping all tests isn't the best way to
+  // TODO(crbug.com/41279721): Simply skipping all tests isn't the best way to
   // handle this, it would be better to have something that is more obvious
   // on the bots that this is wrong, without making it look like test flake.
   NSError* error = nil;
@@ -79,7 +75,7 @@ void WaitForWebViewContainingText(NSString* text) {
   std::string URLSpec = _testServer->GetURL("/destination.html").spec();
 
   [[EarlGrey selectElementWithMatcher:ios_web_view::AddressField()]
-      performAction:grey_typeText(base::SysUTF8ToNSString(URLSpec))];
+      performAction:grey_replaceText(base::SysUTF8ToNSString(URLSpec))];
 
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"Go")]
       performAction:grey_tap()];

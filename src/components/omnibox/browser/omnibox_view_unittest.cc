@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <stddef.h>
 
+#include <array>
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -18,34 +20,44 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
 #include "components/omnibox/browser/autocomplete_match.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/test_omnibox_client.h"
-#include "components/omnibox/browser/test_omnibox_edit_controller.h"
 #include "components/omnibox/browser/test_omnibox_edit_model.h"
 #include "components/omnibox/browser/test_omnibox_view.h"
 #include "components/omnibox/common/omnibox_features.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/paint_vector_icon.h"
+
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 #include "components/omnibox/browser/vector_icons.h"  // nogncheck
 #include "components/vector_icons/vector_icons.h"     // nogncheck
 #endif
 
 using base::ASCIIToUTF16;
+using testing::_;
+using testing::DoAll;
+using testing::Return;
+using testing::SaveArg;
 
 namespace {
 
 class OmniboxViewTest : public testing::Test {
  public:
-  OmniboxViewTest() {
-    controller_ = std::make_unique<TestOmniboxEditController>();
-    view_ = std::make_unique<TestOmniboxView>(controller_.get());
-    view_->SetModel(std::make_unique<TestOmniboxEditModel>(
-        view_.get(), controller_.get(), nullptr));
+  OmniboxViewTest()
+      : bookmark_model_(bookmarks::TestBookmarkClient::CreateModel()) {
+    auto omnibox_client = std::make_unique<TestOmniboxClient>();
+    omnibox_client_ = omnibox_client.get();
+    EXPECT_CALL(*client(), GetBookmarkModel())
+        .WillRepeatedly(Return(bookmark_model_.get()));
 
-    bookmark_model_ = bookmarks::TestBookmarkClient::CreateModel();
-    client()->SetBookmarkModel(bookmark_model_.get());
+    view_ = std::make_unique<TestOmniboxView>(std::move(omnibox_client));
+    view_->controller()->SetEditModelForTesting(
+        std::make_unique<TestOmniboxEditModel>(view_->controller(), view_.get(),
+                                               /*pref_service=*/nullptr));
   }
 
   TestOmniboxView* view() { return view_.get(); }
@@ -54,21 +66,19 @@ class OmniboxViewTest : public testing::Test {
     return static_cast<TestOmniboxEditModel*>(view_->model());
   }
 
-  TestOmniboxClient* client() {
-    return static_cast<TestOmniboxClient*>(model()->client());
-  }
+  TestOmniboxClient* client() { return omnibox_client_; }
 
   bookmarks::BookmarkModel* bookmark_model() { return bookmark_model_.get(); }
 
  private:
   base::test::TaskEnvironment task_environment_;
-  std::unique_ptr<TestOmniboxEditController> controller_;
+  raw_ptr<TestOmniboxClient, DanglingUntriaged> omnibox_client_;
   std::unique_ptr<TestOmniboxView> view_;
   std::unique_ptr<bookmarks::BookmarkModel> bookmark_model_;
 };
 
 TEST_F(OmniboxViewTest, TestStripSchemasUnsafeForPaste) {
-  const char* urls[] = {
+  constexpr const auto urls = std::to_array<const char*>({
       " \x01 ",                                       // Safe query.
       "http://www.google.com?q=javascript:alert(0)",  // Safe URL.
       "JavaScript",                                   // Safe query.
@@ -80,11 +90,11 @@ TEST_F(OmniboxViewTest, TestStripSchemasUnsafeForPaste) {
       "jaVascript:\njavaScript:\x01 alert(3) \x01",   // Single strip unsafe.
       ("\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16\x17"
        "\x18\x19 JavaScript:alert(4)"),  // Leading control chars unsafe.
-      "\x01\x02javascript:\x03\x04JavaScript:alert(5)"  // Embedded control
-                                                        // characters unsafe.
-  };
+      "\x01\x02javascript:\x03\x04JavaScript:alert(5)",  // Embedded control
+                                                         // characters unsafe.
+  });
 
-  const char* expecteds[] = {
+  constexpr const auto expecteds = std::to_array<const char*>({
       " \x01 ",                                       // Safe query.
       "http://www.google.com?q=javascript:alert(0)",  // Safe URL.
       "JavaScript",                                   // Safe query.
@@ -95,8 +105,8 @@ TEST_F(OmniboxViewTest, TestStripSchemasUnsafeForPaste) {
       "alert(2)",                                     // Single strip unsafe.
       "alert(3) \x01",                                // Single strip unsafe.
       "alert(4)",  // Leading control chars unsafe.
-      "alert(5)"   // Embedded control characters unsafe.
-  };
+      "alert(5)",  // Embedded control characters unsafe.
+  });
 
   for (size_t i = 0; i < std::size(urls); i++) {
     EXPECT_EQ(ASCIIToUTF16(expecteds[i]),
@@ -166,18 +176,20 @@ TEST_F(OmniboxViewTest, SanitizeTextForPaste) {
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 // Tests GetIcon returns the default search icon when the match is a search
 // query.
-TEST_F(OmniboxViewTest, GetIcon_Default) {
-  ui::ImageModel expected_icon = ui::ImageModel::FromVectorIcon(
-      vector_icons::kSearchIcon, gfx::kPlaceholderColor, gfx::kFaviconSize);
+TEST_F(OmniboxViewTest, DISABLED_GetIcon_Default) {
+  ui::ImageModel expected_icon =
+      ui::ImageModel::FromVectorIcon(vector_icons::kSearchChromeRefreshIcon,
+                                     gfx::kPlaceholderColor, gfx::kFaviconSize);
 
   ui::ImageModel icon = view()->GetIcon(
-      gfx::kFaviconSize, gfx::kPlaceholderColor, base::DoNothing());
+      gfx::kFaviconSize, gfx::kPlaceholderColor, gfx::kPlaceholderColor,
+      gfx::kPlaceholderColor, gfx::kPlaceholderColor, base::DoNothing(), false);
 
   EXPECT_EQ(expected_icon, icon);
 }
 
 // Tests GetIcon returns the bookmark icon when the match is bookmarked.
-TEST_F(OmniboxViewTest, GetIcon_BookmarkIcon) {
+TEST_F(OmniboxViewTest, DISABLED_GetIcon_BookmarkIcon) {
   const GURL kUrl("https://bookmarks.com");
 
   AutocompleteMatch match;
@@ -187,11 +199,13 @@ TEST_F(OmniboxViewTest, GetIcon_BookmarkIcon) {
   bookmark_model()->AddURL(bookmark_model()->bookmark_bar_node(), 0,
                            u"a bookmark", kUrl);
 
-  ui::ImageModel expected_icon = ui::ImageModel::FromVectorIcon(
-      omnibox::kBookmarkIcon, gfx::kPlaceholderColor, gfx::kFaviconSize);
+  ui::ImageModel expected_icon =
+      ui::ImageModel::FromVectorIcon(omnibox::kBookmarkChromeRefreshIcon,
+                                     gfx::kPlaceholderColor, gfx::kFaviconSize);
 
   ui::ImageModel icon = view()->GetIcon(
-      gfx::kFaviconSize, gfx::kPlaceholderColor, base::DoNothing());
+      gfx::kFaviconSize, gfx::kPlaceholderColor, gfx::kPlaceholderColor,
+      gfx::kPlaceholderColor, gfx::kPlaceholderColor, base::DoNothing(), false);
 
   EXPECT_EQ(expected_icon, icon);
 }
@@ -200,16 +214,22 @@ TEST_F(OmniboxViewTest, GetIcon_BookmarkIcon) {
 TEST_F(OmniboxViewTest, GetIcon_Favicon) {
   const GURL kUrl("https://woahDude.com");
 
+  GURL page_url;
+  EXPECT_CALL(*client(), GetFaviconForPageUrl(_, _))
+      .WillOnce(DoAll(SaveArg<0>(&page_url), Return(gfx::Image())));
+
   AutocompleteMatch match;
   match.type = AutocompleteMatchType::URL_WHAT_YOU_TYPED;
   match.destination_url = kUrl;
   model()->SetCurrentMatchForTest(match);
 
-  view()->GetIcon(gfx::kFaviconSize, gfx::kPlaceholderColor, base::DoNothing());
+  view()->GetIcon(gfx::kFaviconSize, gfx::kPlaceholderColor,
+                  gfx::kPlaceholderColor, gfx::kPlaceholderColor,
+                  gfx::kPlaceholderColor, base::DoNothing(), false);
 
-  EXPECT_EQ(client()->GetPageUrlForLastFaviconRequest(), kUrl);
+  EXPECT_EQ(page_url, kUrl);
 }
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 // Tests GetStateChanges correctly determines if text was deleted.
 TEST_F(OmniboxViewTest, GetStateChanges_DeletedText) {

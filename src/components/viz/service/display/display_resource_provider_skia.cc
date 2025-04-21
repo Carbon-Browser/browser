@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,11 @@
 #include <vector>
 
 #include "base/containers/contains.h"
+#include "base/containers/flat_set.h"
+#include "base/not_fatal_until.h"
 #include "build/build_config.h"
-#include "gpu/ipc/scheduler_sequence.h"
+#include "components/viz/service/display/resource_fence.h"
+#include "gpu/command_buffer/service/scheduler_sequence.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 
 namespace viz {
@@ -125,6 +128,7 @@ DisplayResourceProviderSkia::LockSetForExternalUse::LockSetForExternalUse(
     ExternalUseClient* client)
     : resource_provider_(resource_provider) {
   DCHECK(!resource_provider_->external_use_client_);
+  DCHECK(client);
   resource_provider_->external_use_client_ = client;
 }
 
@@ -136,11 +140,9 @@ ExternalUseClient::ImageContext*
 DisplayResourceProviderSkia::LockSetForExternalUse::LockResource(
     ResourceId id,
     bool maybe_concurrent_reads,
-    bool is_video_plane,
-    sk_sp<SkColorSpace> override_color_space,
     bool raw_draw_is_possible) {
   auto it = resource_provider_->resources_.find(id);
-  DCHECK(it != resource_provider_->resources_.end());
+  CHECK(it != resource_provider_->resources_.end(), base::NotFatalUntil::M130);
 
   ChildResource& resource = it->second;
   DCHECK(resource.is_gpu_resource_type());
@@ -150,27 +152,21 @@ DisplayResourceProviderSkia::LockSetForExternalUse::LockResource(
     resources_.emplace_back(id, &resource);
 
     if (!resource.image_context) {
-      sk_sp<SkColorSpace> image_color_space;
-      if (!is_video_plane) {
-        // HDR video color conversion is handled externally in SkiaRenderer
-        // using a special color filter and |color_space| is set to destination
-        // color space so that Skia doesn't perform implicit color conversion.
+      // SkColorSpace covers only RGB portion of the gfx::ColorSpace, YUV
+      // portion is handled via SkYuvColorSpace at places where we create YUV
+      // images.
+      sk_sp<SkColorSpace> image_color_space =
+          resource.transferable.color_space.GetAsFullRangeRGB()
+              .ToSkColorSpace();
 
-        // TODO(https://crbug.com/1271212): Skia doesn't support limited range
-        // color spaces, so we treat it as fullrange, resulting color difference
-        // is very subtle.
-        image_color_space =
-            override_color_space
-                ? override_color_space
-                : resource.transferable.color_space.GetAsFullRangeRGB()
-                      .ToSkColorSpace();
-      }
       resource.image_context =
           resource_provider_->external_use_client_->CreateImageContext(
-              resource.transferable.mailbox_holder, resource.transferable.size,
-              resource.transferable.format, maybe_concurrent_reads,
-              resource.transferable.ycbcr_info, std::move(image_color_space),
-              raw_draw_is_possible);
+              gpu::MailboxHolder(resource.transferable.mailbox(),
+                                 resource.transferable.sync_token(),
+                                 resource.transferable.texture_target()),
+              resource.transferable.size, resource.transferable.format,
+              maybe_concurrent_reads, resource.transferable.ycbcr_info,
+              std::move(image_color_space), raw_draw_is_possible);
     }
     resource.locked_for_external_use = true;
 
@@ -186,8 +182,10 @@ DisplayResourceProviderSkia::LockSetForExternalUse::LockResource(
         break;
     }
 
-    if (resource.resource_fence)
-      resource.resource_fence->Set();
+    if (resource.resource_fence) {
+      resource.resource_fence->set();
+      resource.resource_fence->TrackDeferredResource(id);
+    }
   }
 
   DCHECK(base::Contains(resources_, std::make_pair(id, &resource)));

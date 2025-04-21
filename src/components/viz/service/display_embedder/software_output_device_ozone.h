@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,8 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDeviceOzone
               float scale_factor) override;
   SkCanvas* BeginPaint(const gfx::Rect& damage_rect) override;
   void EndPaint() override;
-  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback) override;
+  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                     gfx::FrameData data) override;
   int MaxFramesPending() const override;
   bool SupportsOverridePlatformSize() const override;
 

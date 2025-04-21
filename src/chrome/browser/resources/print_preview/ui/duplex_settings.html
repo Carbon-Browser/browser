@@ -28,7 +28,7 @@
     </cr-checkbox>
   </div>
 </print-preview-settings-section>
-<iron-collapse opened="[[getOpenCollapse_(
+<cr-collapse opened="[[getOpenCollapse_(
     settings.duplex.*, settings.duplexShortEdge.available)]]">
   <print-preview-settings-section>
     <div slot="title"></div>
@@ -38,7 +38,7 @@
             settings.duplexShortEdge.value, dark)]];"
           disabled$="[[getDisabled_(
             settings.duplexShortEdge.setByPolicy, disabled)]]"
-          value="{{selectedValue::change}}">
+          value="[[selectedValue]]" on-change="onSelectChange">
         <option value="[[duplexValueEnum_.LONG_EDGE]]">
           $i18n{optionLongEdge}
         </option>
@@ -48,4 +48,4 @@
       </select>
     </div>
   </print-preview-settings-section>
-</iron-collapse>
+</cr-collapse>

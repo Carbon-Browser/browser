@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ bool StructTraits<gfx::mojom::LinearGradientDataView, gfx::LinearGradient>::
     return false;
 
   for (int i = 0; i < data.step_count(); ++i) {
-    out->AddStep(steps_data[i].percent, steps_data[i].alpha);
+    out->AddStep(steps_data[i].fraction, steps_data[i].alpha);
   }
   out->set_angle(data.angle());
 

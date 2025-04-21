@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,6 +95,10 @@ size_t TaskManagerTester::GetRowCount() {
 
 std::u16string TaskManagerTester::GetRowTitle(size_t row) {
   return model_->GetText(row, IDS_TASK_MANAGER_TASK_COLUMN);
+}
+
+std::optional<size_t> TaskManagerTester::GetRowForActiveTask() {
+  return model_->GetRowForActiveTask();
 }
 
 void TaskManagerTester::ToggleColumnVisibility(ColumnSpecifier column) {

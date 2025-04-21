@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ TEST(OptimizationGuideNavigtaionDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry,
       ukm::builders::OptimizationGuide::kRegisteredOptimizationTypesName));
@@ -79,7 +79,7 @@ TEST(OptimizationGuideNavigtaionDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry,
       ukm::builders::OptimizationGuide::kRegisteredOptimizationTargetsName));
@@ -106,7 +106,7 @@ TEST(OptimizationGuideNavigationDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry, ukm::builders::OptimizationGuide::
                  kNavigationHintsFetchAttemptStatusName));
@@ -134,7 +134,7 @@ TEST(OptimizationGuideNavigationDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry, ukm::builders::OptimizationGuide::
                  kNavigationHintsFetchRequestLatencyName));
@@ -178,7 +178,7 @@ TEST(OptimizationGuideNavigationDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry, ukm::builders::OptimizationGuide::
                  kNavigationHintsFetchRequestLatencyName));
@@ -205,7 +205,7 @@ TEST(OptimizationGuideNavigationDataTest,
   auto entries = ukm_recorder.GetEntriesByName(
       ukm::builders::OptimizationGuide::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   EXPECT_TRUE(ukm_recorder.EntryHasMetric(
       entry, ukm::builders::OptimizationGuide::
                  kNavigationHintsFetchRequestLatencyName));

@@ -1,22 +1,33 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 '''Support for "policy_templates.json" format used by the policy template
 generator as a source for generating ADM,ADMX,etc files.'''
 
-from __future__ import print_function
-
+import importlib.abc
+import importlib.util
 import json
+import os.path
 import sys
-
-import six
 
 from grit.gather import skeleton_gatherer
 from grit import util
 from grit import tclib
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
+
+
+class StringLoader(importlib.abc.SourceLoader):
+  def __init__(self, data, dir):
+    self.data = data
+    self.dir = dir
+
+  def get_data(self, path):
+    return self.data
+
+  def get_filename(self, fullname):
+    return os.path.join(self.dir, fullname + ".py")
 
 
 class PolicyJson(skeleton_gatherer.SkeletonGatherer):
@@ -84,8 +95,8 @@ class PolicyJson(skeleton_gatherer.SkeletonGatherer):
     try:
       node = minidom.parseString(xml).childNodes[0]
     except ExpatError:
-      reason = '''Input isn't valid XML (has < & > been escaped?): ''' + string
-      six.reraise(Exception, reason, sys.exc_info()[2])
+      raise Exception('''Input isn't valid XML (has < & > been escaped?): ''' +
+                      string)
 
     for child in node.childNodes:
       if child.nodeType == minidom.Node.TEXT_NODE:
@@ -290,10 +301,19 @@ class PolicyJson(skeleton_gatherer.SkeletonGatherer):
     self.have_parsed_ = True
 
     self.text_ = self._LoadInputFile()
-    if util.IsExtraVerbose():
-      print(self.text_)
-
-    self.data = eval(self.text_)
+    if isinstance(self.rc_file, str):
+      name = 'policy_templates'
+      spec = importlib.util.spec_from_loader(
+          name,
+          loader=StringLoader(self.text_,
+                              os.path.dirname(self.GetAbsoluteInputPath())))
+      policy_templates = importlib.util.module_from_spec(spec)
+      exec(self.text_, policy_templates.__dict__)
+      self.data = policy_templates.GetPolicyTemplates()
+    else:
+      if util.IsExtraVerbose():
+        print(self.text_)
+      self.data = json.loads(self.text_)
 
     self._AddNontranslateableChunk('{\n')
     self._AddNontranslateableChunk("  \"policy_definitions\": [\n")
@@ -316,17 +336,17 @@ class PolicyJson(skeleton_gatherer.SkeletonGatherer):
 
     if '_chromium' in defines:
       self._config = {
-        'build': 'chromium',
-        'app_name': 'Chromium',
-        'frame_name': 'Chromium Frame',
-        'os_name': 'Chromium OS',
+          'build': 'chromium',
+          'app_name': 'Chromium',
+          'frame_name': 'Chromium Frame',
+          'os_name': 'ChromiumOS',
       }
     elif '_google_chrome' in defines:
       self._config = {
-        'build': 'chrome',
-        'app_name': 'Google Chrome',
-        'frame_name': 'Google Chrome Frame',
-        'os_name': 'Google Chrome OS',
+          'build': 'chrome',
+          'app_name': 'Google Chrome',
+          'frame_name': 'Google Chrome Frame',
+          'os_name': 'Google ChromeOS',
       }
     else:
       raise Exception('Unknown build')

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,7 +62,6 @@ source_set("crdtp_test") {
     "crdtp/error_support_test.cc",
     "crdtp/find_by_first_test.cc",
     "crdtp/json_test.cc",
-    "crdtp/maybe_test.cc",
     "crdtp/protocol_core_test.cc",
     "crdtp/serializable_test.cc",
     "crdtp/span_test.cc",

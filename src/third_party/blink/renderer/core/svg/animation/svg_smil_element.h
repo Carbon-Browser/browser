@@ -51,28 +51,15 @@ class CORE_EXPORT SMILInstanceTimeList {
   SMILTime NextAfter(SMILTime) const;
 
   wtf_size_t size() const { return instance_times_.size(); }
-  bool IsEmpty() const { return instance_times_.IsEmpty(); }
+  bool IsEmpty() const { return instance_times_.empty(); }
 
   using const_iterator = typename Vector<SMILTimeWithOrigin>::const_iterator;
   const_iterator begin() const { return instance_times_.begin(); }
   const_iterator end() const { return instance_times_.end(); }
 
  private:
-  static unsigned OriginToMask(SMILTimeOrigin origin) {
-    return 1u << static_cast<unsigned>(origin);
-  }
-  void AddOrigin(SMILTimeOrigin origin) {
-    time_origin_mask_ |= OriginToMask(origin);
-  }
-  void ClearOrigin(SMILTimeOrigin origin) {
-    time_origin_mask_ &= ~OriginToMask(origin);
-  }
-  bool HasOrigin(SMILTimeOrigin origin) const {
-    return (time_origin_mask_ & OriginToMask(origin)) != 0;
-  }
-
   Vector<SMILTimeWithOrigin> instance_times_;
-  unsigned time_origin_mask_ = 0;
+  SMILTimeOriginSet time_origins_;
 };
 
 // This class implements SMIL interval timing model as needed for SVG animation.
@@ -82,14 +69,13 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
   ~SVGSMILElement() override;
 
   void ParseAttribute(const AttributeModificationParams&) override;
-  void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
   void RemovedFrom(ContainerNode&) override;
 
   SMILTimeContainer* TimeContainer() const { return time_container_.Get(); }
 
   bool HasValidTarget() const;
-  SVGElement* targetElement() const { return target_element_; }
+  SVGElement* targetElement() const { return target_element_.Get(); }
 
   void BeginByLinkActivation();
 
@@ -167,6 +153,12 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
 
  private:
   bool IsPresentationAttribute(const QualifiedName&) const override;
+  void CollectStyleForPresentationAttribute(
+      const QualifiedName&,
+      const AtomicString&,
+      MutableCSSPropertyValueSet*) override;
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
 
   void AddedEventListener(const AtomicString& event_type,
                           RegisteredEventListener&) final;
@@ -178,7 +170,7 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
   void StartedActiveInterval();
   void EndedActiveInterval();
 
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override {
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override {
     return false;
   }
 
@@ -186,7 +178,7 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
 
   SMILTime BeginTimeForPrioritization(SMILTime presentation_time) const;
 
-  SMILInterval ResolveInterval(SMILTime begin_after, SMILTime end_after) const;
+  SMILInterval ResolveInterval(SMILTime begin_after, SMILTime end_after);
   // Check if the current interval is still current, and apply restart
   // semantics. Returns true if a new interval should be resolved.
   bool HandleIntervalRestart(SMILTime presentation_time);
@@ -200,6 +192,7 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
                        SMILTime time,
                        SMILTimeOrigin origin);
   void InstanceListChanged();
+  void IntervalStateChanged();
 
   // This represents conditions on elements begin or end list that need to be
   // resolved on runtime, for example
@@ -240,7 +233,7 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
     AtomicString name_;
     SMILTime offset_;
     unsigned repeat_;
-    Member<SVGElement> base_element_;
+    Member<Element> base_element_;
     Member<IdTargetObserver> base_id_observer_;
     Member<ConditionEventListener> event_listener_;
   };
@@ -315,15 +308,12 @@ class CORE_EXPORT SVGSMILElement : public SVGElement, public SVGTests {
 
   bool interval_has_changed_;
   bool instance_lists_have_changed_;
+  bool interval_needs_revalidation_;
   bool is_notifying_dependents_;
 
   friend class ConditionEventListener;
 };
 
-template <>
-inline bool IsElementOfType<const SVGSMILElement>(const Node& node) {
-  return IsA<SVGSMILElement>(node);
-}
 template <>
 struct DowncastTraits<SVGSMILElement> {
   static bool AllowFrom(const Node& node) {

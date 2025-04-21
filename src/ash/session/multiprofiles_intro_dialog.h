@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SESSION_MULTIPROFILES_INTRO_DIALOG_H_
 #define ASH_SESSION_MULTIPROFILES_INTRO_DIALOG_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/window/dialog_delegate.h"
 
 namespace views {
@@ -27,7 +28,8 @@ class MultiprofilesIntroDialog : public views::DialogDelegateView {
   MultiprofilesIntroDialog& operator=(const MultiprofilesIntroDialog&) = delete;
 
   // views::View overrides.
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
  private:
   explicit MultiprofilesIntroDialog(OnAcceptCallback on_accept);
@@ -35,7 +37,7 @@ class MultiprofilesIntroDialog : public views::DialogDelegateView {
 
   void InitDialog();
 
-  views::Checkbox* never_show_again_checkbox_;
+  raw_ptr<views::Checkbox> never_show_again_checkbox_;
   OnAcceptCallback on_accept_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/policy/invalidation/affiliated_invalidation_service_provider.h"
 #include "components/policy/core/common/cloud/policy_invalidation_scope.h"
 
@@ -67,9 +68,10 @@ class AffiliatedCloudPolicyInvalidator
 
   const PolicyInvalidationScope scope_;
   const std::string device_local_account_id_;
-  CloudPolicyCore* const core_;
+  const raw_ptr<CloudPolicyCore> core_;
 
-  AffiliatedInvalidationServiceProvider* const invalidation_service_provider_;
+  const raw_ptr<AffiliatedInvalidationServiceProvider>
+      invalidation_service_provider_;
 
   // The highest invalidation version that was handled already.
   int64_t highest_handled_invalidation_version_;

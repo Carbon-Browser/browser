@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,7 @@ void AppendFlagDescription(const std::string& name,
   return v;
 }
 
-#if defined(WCHAR_T_IS_UTF16)
+#if defined(WCHAR_T_IS_16_BIT)
 // Overload for platforms where base::CommandLine::StringType == std::wstring.
 [[maybe_unused]] std::vector<std::string> ToQuicheStringVector(
     const std::vector<std::wstring>& v) {
@@ -99,7 +99,7 @@ void AppendFlagDescription(const std::string& name,
   }
   return qsv;
 }
-#endif  // defined(WCHAR_T_IS_UTF16)
+#endif  // defined(WCHAR_T_IS_16_BIT)
 
 }  // namespace
 

@@ -1,24 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module blink.mojom;
 
+import "cc/mojom/browser_controls_offset_tags_info.mojom";
+import "cc/mojom/browser_controls_state.mojom";
 import "cc/mojom/overscroll_behavior.mojom";
 import "cc/mojom/touch_action.mojom";
 import "mojo/public/mojom/base/string16.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "third_party/blink/public/mojom/input/gesture_event.mojom";
-import "third_party/blink/public/mojom/input/input_event.mojom";
+import "third_party/blink/public/mojom/input/handwriting_gesture_result.mojom";
 import "third_party/blink/public/mojom/input/input_event_result.mojom";
+import "third_party/blink/public/mojom/input/input_event.mojom";
 import "third_party/blink/public/mojom/input/pointer_lock_context.mojom";
 import "third_party/blink/public/mojom/input/pointer_lock_result.mojom";
+import "third_party/blink/public/mojom/input/stylus_writing_gesture.mojom";
 import "third_party/blink/public/mojom/input/touch_event.mojom";
 import "third_party/blink/public/mojom/selection_menu/selection_menu_behavior.mojom";
 import "ui/base/ime/mojom/ime_types.mojom";
-import "third_party/blink/public/mojom/input/stylus_writing_gesture.mojom";
-import "ui/events/mojom/event.mojom";
 import "ui/events/mojom/event_constants.mojom";
+import "ui/events/mojom/event_latency_metadata.mojom";
+import "ui/events/mojom/event.mojom";
 import "ui/events/mojom/scroll_granularity.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "ui/gfx/range/mojom/range.mojom";
@@ -49,8 +53,8 @@ struct KeyData {
 struct PointerData {
   int32 pointer_id;
   float force;
-  int32 tilt_x;
-  int32 tilt_y;
+  double tilt_x;
+  double tilt_y;
   float tangential_pressure;
   int32 twist;
   blink.mojom.Button button;
@@ -61,6 +65,7 @@ struct PointerData {
   gfx.mojom.PointF widget_position;
   gfx.mojom.PointF screen_position;
   MouseData? mouse_data;
+  int32 device_id;
 };
 
 struct WheelData {
@@ -82,11 +87,6 @@ struct MouseData {
   WheelData? wheel_data;
 };
 
-struct ScrollUpdate {
-  float velocity_x;
-  float velocity_y;
-};
-
 struct ScrollData {
   float delta_x;
   float delta_y;
@@ -98,7 +98,6 @@ struct ScrollData {
   // Used for GestureScrollBegin type only. If this is true, we use the scroll
   // sequence to do cursor control rather than scroll.
   bool cursor_control;
-  ScrollUpdate? update_details;
 };
 
 struct PinchBeginData {
@@ -127,6 +126,10 @@ struct TapData {
   bool needs_wheel_event;
 };
 
+struct TapDownData {
+  int32 tap_down_count;
+};
+
 struct GestureData {
   gfx.mojom.PointF screen_position;
   gfx.mojom.PointF widget_position;
@@ -141,6 +144,7 @@ struct GestureData {
   PinchUpdateData? pinch_update_data;
   PinchEndData? pinch_end_data;
   TapData? tap_data;
+  TapDownData? tap_down_data;
   FlingData? fling_data;
 };
 
@@ -166,6 +170,7 @@ struct Event {
   int32 modifiers;
   mojo_base.mojom.TimeTicks timestamp;
   ui.mojom.LatencyInfo latency;
+  ui.mojom.EventLatencyMetadata event_latency_metadata;
   KeyData? key_data;
   PointerData? pointer_data;
   GestureData? gesture_data;
@@ -252,7 +257,8 @@ interface WidgetInputHandlerHost {
   // Sends the character bounds after every composition change
   // to always have correct bound info.
   ImeCompositionRangeChanged(gfx.mojom.Range range,
-                             array<gfx.mojom.Rect> bounds);
+                             array<gfx.mojom.Rect>? character_bounds,
+                             array<gfx.mojom.Rect>? line_bounds);
 
   // Updates the mouse capture state of this widget. While capture is enabled,
   // all mouse events, including those that don't hittest to this widget, will
@@ -260,6 +266,13 @@ interface WidgetInputHandlerHost {
   // a scrollbar is being dragged, or text is being drag-highlighted, even
   // when the mouse passes across different RenderWidget areas.
   SetMouseCapture(bool capture);
+
+  // Updates the browser whether this main frame widget has ongoing autoscroll
+  // selection. Any further mouse up event should always be dispatched to the
+  // main frame in addition to it's event target (OOP child frame) if the state
+  // is active. This API should only ever be called on the InputHandler for a
+  // main frame's RenderWidgetHost.
+  SetAutoscrollSelectionActiveInMainFrame(bool autoscroll_selection);
 
   // Requests locking the target of mouse events to a single element and
   // removing the cursor from view.  Mostly used by the Pointer Lock API.
@@ -305,6 +318,12 @@ interface FrameWidgetInputHandler {
   // before and after the selection or caret.
   ExtendSelectionAndDelete(int32 before, int32 after);
 
+  // Deletes the current selection plus the specified number of characters
+  // before and after the selection or caret.
+  ExtendSelectionAndReplace(uint32 before,
+                            uint32 after,
+                            mojo_base.mojom.String16 replacement_text);
+
   // Deletes text before and after the current cursor position, excluding the
   // selection. The lengths are supplied in Java chars (UTF-16 Code Unit),
   // not in code points or in glyphs.
@@ -321,7 +340,9 @@ interface FrameWidgetInputHandler {
   SetEditableSelectionOffsets(int32 start, int32 end);
 
   // Stylus Writing - perform Gesture action in input using gesture data.
-  HandleStylusWritingGestureAction(blink.mojom.StylusWritingGestureData gesture_data);
+  HandleStylusWritingGestureAction(
+    blink.mojom.StylusWritingGestureData gesture_data)
+      => (HandwritingGestureResult result);
 
   // Message payload is the name/value of a WebCore edit command to execute.
   ExecuteEditCommand(string command, mojo_base.mojom.String16? value);
@@ -333,6 +354,7 @@ interface FrameWidgetInputHandler {
   Cut();
   Copy();
   CopyToFindPboard();
+  CenterSelection();
   Paste();
   PasteAndMatchStyle();
   Delete();
@@ -363,7 +385,6 @@ interface FrameWidgetInputHandler {
   // selection.
   // Expects ack with new selection information when finished, or null if the
   // selection failed.
-  [EnableIf=is_android]
   SelectAroundCaret(SelectionGranularity granularity, bool should_show_handle,
                     bool should_show_context_menu)
       => (SelectAroundCaretResult? result);
@@ -496,4 +517,10 @@ interface WidgetInputHandler {
   // serially.
   GetFrameWidgetInputHandler(
       pending_associated_receiver<FrameWidgetInputHandler> interface_request);
+
+  // see UpdateBrowserControlsState in third_party/blink/public/mojom/frame/frame.mojom for details
+  UpdateBrowserControlsState(cc.mojom.BrowserControlsState constraints,
+                             cc.mojom.BrowserControlsState current,
+                             bool animate,
+                             cc.mojom.BrowserControlsOffsetTagsInfo? offset_tags_info);
 };

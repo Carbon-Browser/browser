@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/containers/to_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "chromecast/device/bluetooth/le/remote_characteristic.h"
@@ -82,7 +83,7 @@ void OnSubscribeOrUnsubscribe(
   if (success)
     std::move(callback).Run();
   else
-    std::move(error_callback).Run(BluetoothGattService::GATT_ERROR_FAILED);
+    std::move(error_callback).Run(BluetoothGattService::GattErrorCode::kFailed);
 }
 
 }  // namespace
@@ -140,7 +141,7 @@ void BluetoothRemoteGattCharacteristicCast::ReadRemoteCharacteristic(
 }
 
 void BluetoothRemoteGattCharacteristicCast::WriteRemoteCharacteristic(
-    const std::vector<uint8_t>& value,
+    base::span<const uint8_t> value,
     WriteType write_type,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
@@ -156,24 +157,27 @@ void BluetoothRemoteGattCharacteristicCast::WriteRemoteCharacteristic(
       break;
   }
 
+  std::vector<uint8_t> value_vector = base::ToVector(value);
+
   remote_characteristic_->WriteAuth(
       chromecast::bluetooth_v2_shlib::Gatt::Client::AUTH_REQ_NONE,
-      chromecast_write_type, value,
+      chromecast_write_type, value_vector,
       base::BindOnce(
           &BluetoothRemoteGattCharacteristicCast::OnWriteRemoteCharacteristic,
-          weak_factory_.GetWeakPtr(), value, std::move(callback),
+          weak_factory_.GetWeakPtr(), value_vector, std::move(callback),
           std::move(error_callback)));
 }
 
 void BluetoothRemoteGattCharacteristicCast::DeprecatedWriteRemoteCharacteristic(
-    const std::vector<uint8_t>& value,
+    base::span<const uint8_t> value,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
+  std::vector<uint8_t> value_vector = base::ToVector(value);
   remote_characteristic_->Write(
-      value,
+      value_vector,
       base::BindOnce(
           &BluetoothRemoteGattCharacteristicCast::OnWriteRemoteCharacteristic,
-          weak_factory_.GetWeakPtr(), value, std::move(callback),
+          weak_factory_.GetWeakPtr(), value_vector, std::move(callback),
           std::move(error_callback)));
 }
 
@@ -213,10 +217,10 @@ void BluetoothRemoteGattCharacteristicCast::OnReadRemoteCharacteristic(
     const std::vector<uint8_t>& result) {
   if (success) {
     value_ = result;
-    std::move(callback).Run(/*error_code=*/absl::nullopt, result);
+    std::move(callback).Run(/*error_code=*/std::nullopt, result);
     return;
   }
-  std::move(callback).Run(BluetoothGattService::GATT_ERROR_FAILED,
+  std::move(callback).Run(BluetoothGattService::GattErrorCode::kFailed,
                           /*value=*/std::vector<uint8_t>());
 }
 
@@ -230,7 +234,7 @@ void BluetoothRemoteGattCharacteristicCast::OnWriteRemoteCharacteristic(
     std::move(callback).Run();
     return;
   }
-  std::move(error_callback).Run(BluetoothGattService::GATT_ERROR_FAILED);
+  std::move(error_callback).Run(BluetoothGattService::GattErrorCode::kFailed);
 }
 
 }  // namespace device

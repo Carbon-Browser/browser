@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,27 +7,30 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/password_manager/password_manager_interactive_test_base.h"
 #include "chrome/browser/password_manager/password_manager_uitest_util.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
 #include "chrome/browser/password_manager/passwords_navigation_observer.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/passwords/password_generation_popup_observer.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
-#include "components/autofill/core/browser/test_autofill_client.h"
+#include "components/autofill/content/browser/content_autofill_client.h"
+#include "components/autofill/content/browser/test_autofill_client_injector.h"
+#include "components/autofill/core/browser/foundations/test_autofill_client.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/password_manager/content/browser/content_password_manager_driver.h"
+#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/password_form_manager.h"
 #include "components/password_manager/core/browser/password_generation_frame_helper.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
@@ -38,6 +41,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/keycodes/keyboard_codes.h"
+#include "ui/gfx/geometry/point_f.h"
 
 namespace {
 
@@ -54,9 +58,6 @@ class PasswordGenerationInteractiveTest
  public:
   void SetUpOnMainThread() override {
     PasswordManagerBrowserTestBase::SetUpOnMainThread();
-    // Disable Autofill requesting access to AddressBook data. This will cause
-    // the tests to hang on Mac.
-    autofill::test::DisableSystemServices(browser()->profile()->GetPrefs());
 
     // Set observer for popup.
     ChromePasswordManagerClient* client =
@@ -70,57 +71,94 @@ class PasswordGenerationInteractiveTest
   }
 
   void TearDownOnMainThread() override {
+    // RunUntilIdle() is necessary because otherwise, under the hood
+    // PasswordFormManager::OnFetchComplete() callback is run after this test is
+    // destroyed meaning that OsCryptImpl will be used instead of OsCryptMocker,
+    // causing this test to fail.
+    base::RunLoop().RunUntilIdle();
     PasswordManagerBrowserTestBase::TearDownOnMainThread();
-
-    autofill::test::ReenableSystemServices();
   }
 
   // Waits until the value of the field with id |field_id| becomes non-empty.
   void WaitForNonEmptyFieldValue(const std::string& field_id) {
     const std::string script = base::StringPrintf(
         "element = document.getElementById('%s');"
-        "if (!element) {"
-        "  setTimeout(window.domAutomationController.send(%d), 0);"
-        "}"
-        "if (element.value) {"
-        "  setTimeout(window.domAutomationController.send(%d), 0); "
-        "} else {"
-        "  element.onchange = function() {"
-        "    if (element.value) {"
-        "      window.domAutomationController.send(%d);"
+        "new Promise(resolve => {"
+        "  if (!element) {"
+        "    setTimeout(() => resolve(%d), 0);"
+        "  }"
+        "  if (element.value) {"
+        "    setTimeout(() => resolve(%d), 0); "
+        "  } else {"
+        "    element.onchange = function() {"
+        "      if (element.value) {"
+        "        resove(%d);"
+        "      }"
         "    }"
         "  }"
-        "}",
+        "});",
         field_id.c_str(), RETURN_CODE_NO_ELEMENT, RETURN_CODE_OK,
         RETURN_CODE_OK);
     EXPECT_EQ(RETURN_CODE_OK,
               content::EvalJs(RenderFrameHost(), script,
-                              content::EXECUTE_SCRIPT_NO_USER_GESTURE |
-                                  content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+                              content::EXECUTE_SCRIPT_NO_USER_GESTURE));
   }
 
+  void WaitForFieldFocused(const std::string& field_id) {
+    const std::string script = base::StringPrintf(
+        "element = document.getElementById('%s');"
+        "new Promise(resolve => {"
+        "  if (!element) {"
+        "    resolve(%d);"
+        "  }"
+        "  if (document.activeElement && element.id == "
+        "document.activeElement.id) {"
+        "    resolve(%d);"
+        "  } else {"
+        "    element.onfocus = function() {"
+        "      resolve(%d);"
+        "      element.onfocus = undefined;"
+        "    }"
+        "  }"
+        "});",
+        field_id.c_str(), RETURN_CODE_NO_ELEMENT, RETURN_CODE_OK,
+        RETURN_CODE_OK);
+    EXPECT_EQ(RETURN_CODE_OK,
+              content::EvalJs(RenderFrameHost(), script,
+                              content::EXECUTE_SCRIPT_NO_USER_GESTURE));
+  }
+
+  void WaitForPasswordFieldFocused() { WaitForFieldFocused("password_field"); }
+
   std::string GetFocusedElement() {
-    std::string focused_element;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        WebContents(),
-        "window.domAutomationController.send("
-        "    document.activeElement.id)",
-        &focused_element));
-    return focused_element;
+    return content::EvalJs(WebContents(), "document.activeElement.id")
+        .ExtractString();
+  }
+
+  void SimulateMouseClickOrTapAt(content::RenderWidgetHost* rwh,
+                                 gfx::PointF point) {
+    blink::WebMouseEvent mouse_event(
+        blink::WebInputEvent::Type::kMouseDown,
+        blink::WebInputEvent::kNoModifiers,
+        blink::WebInputEvent::GetStaticTimeStampForTests());
+    mouse_event.button = blink::WebPointerProperties::Button::kLeft;
+    mouse_event.SetPositionInWidget(point.x(), point.y());
+    rwh->ForwardMouseEvent(mouse_event);
   }
 
   void FocusPasswordField() {
-    ASSERT_TRUE(content::ExecuteScript(
-        WebContents(), "document.getElementById('password_field').focus()"));
+    content::SimulateMouseClickOrTapElementWithId(WebContents(),
+                                                  "password_field");
+    WaitForPasswordFieldFocused();
   }
 
   void FocusUsernameField() {
-    ASSERT_TRUE(content::ExecuteScript(
+    ASSERT_TRUE(content::ExecJs(
         WebContents(), "document.getElementById('username_field').focus();"));
   }
 
   void SendKeyToPopup(ui::KeyboardCode key) {
-    content::NativeWebKeyboardEvent event(
+    input::NativeWebKeyboardEvent event(
         blink::WebKeyboardEvent::Type::kRawKeyDown,
         blink::WebInputEvent::kNoModifiers,
         blink::WebInputEvent::GetStaticTimeStampForTests());
@@ -130,6 +168,16 @@ class PasswordGenerationInteractiveTest
         ->GetRenderViewHost()
         ->GetWidget()
         ->ForwardKeyboardEvent(event);
+  }
+
+  void NavigateToAndAcceptSuggestedPassword() {
+    SendKeyToPopup(ui::VKEY_DOWN);
+    if (base::FeatureList::IsEnabled(
+            password_manager::features::kPasswordGenerationSoftNudge)) {
+      // With the feature enabled, cancel button is the first focusable element.
+      SendKeyToPopup(ui::VKEY_DOWN);
+    }
+    SendKeyToPopup(ui::VKEY_RETURN);
   }
 
   bool GenerationPopupShowing() {
@@ -149,23 +197,57 @@ class PasswordGenerationInteractiveTest
   }
 
   void WaitForGenerationPopupShowing() {
-    if (GenerationPopupShowing())
+    if (GenerationPopupShowing()) {
       return;
+    }
     observer_.WaitForStatusChange();
     EXPECT_TRUE(GenerationPopupShowing());
+  }
+
+  void WaitForEditingPopupShowing() {
+    if (EditingPopupShowing()) {
+      return;
+    }
+    observer_.WaitForStatusChange();
+    EXPECT_TRUE(EditingPopupShowing());
   }
 
  private:
   TestGenerationPopupObserver observer_;
 };
 
+// A test fixture that injects an `ObservingAutofillClient` into newly created
+// tabs to allow waiting for an Autofill popup to open.
+class PasswordGenerationAutofillPopupInteractiveTest
+    : public PasswordGenerationInteractiveTest {
+ public:
+  PasswordGenerationAutofillPopupInteractiveTest() {
+    // TODO(crbug.com/41492898): This class contains one test
+    // (HidesGenerationPopupWhenShowingPasswordSuggestionsWithGeneration)
+    // checking that the autofill popup with suggestions should be displayed
+    // (and generation popup hidden) on field focus. Make sure it works with the
+    // nudge popup as well.
+    scoped_feature_list_.InitAndDisableFeature(
+        password_manager::features::kPasswordGenerationSoftNudge);
+  }
+
+ protected:
+  ObservingAutofillClient& autofill_client() {
+    return *autofill_client_injector_[WebContents()];
+  }
+
+ private:
+  autofill::TestAutofillClientInjector<ObservingAutofillClient>
+      autofill_client_injector_;
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
                        PopupShownAndPasswordSelected) {
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
   base::HistogramTester histogram_tester;
-  SendKeyToPopup(ui::VKEY_DOWN);
-  SendKeyToPopup(ui::VKEY_RETURN);
+  NavigateToAndAcceptSuggestedPassword();
 
   // Selecting the password should fill the field and move focus to the
   // submit button.
@@ -176,10 +258,11 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
 
   // Re-focusing the password field should show the editing popup.
   FocusPasswordField();
-  EXPECT_TRUE(EditingPopupShowing());
+  WaitForEditingPopupShowing();
 
   // The metrics are recorded when the form manager is destroyed. Closing the
   // tab enforces it.
+  ClearWebContentsPtr();
   CloseAllBrowsers();
   histogram_tester.ExpectUniqueSample(
       "PasswordGeneration.UserDecision",
@@ -188,19 +271,20 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
       1);
 }
 
+// TODO(http://crbug.com/382272011): Re-enable this test after flakiness is
+// resolved.
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
-                       PopupShownAutomaticallyAndPasswordErased) {
+                       DISABLED_PopupShownAutomaticallyAndPasswordErased) {
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
-  SendKeyToPopup(ui::VKEY_DOWN);
-  SendKeyToPopup(ui::VKEY_RETURN);
+  WaitForGenerationPopupShowing();
+  NavigateToAndAcceptSuggestedPassword();
 
   // Wait until the password is filled.
   WaitForNonEmptyFieldValue("password_field");
 
   // Re-focusing the password field should show the editing popup.
   FocusPasswordField();
-  EXPECT_TRUE(EditingPopupShowing());
+  WaitForEditingPopupShowing();
 
   // Delete the password. The generation prompt should be visible.
   base::HistogramTester histogram_tester;
@@ -224,18 +308,17 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
   // The same flow happens when user generates a password from the context menu.
   password_manager_util::UserTriggeredManualGenerationFromContextMenu(
       ChromePasswordManagerClient::FromWebContents(WebContents()),
-      autofill::ChromeAutofillClient::FromWebContents(WebContents()));
+      autofill::ContentAutofillClient::FromWebContents(WebContents()));
   WaitForStatus(TestGenerationPopupObserver::GenerationPopup::kShown);
   EXPECT_TRUE(GenerationPopupShowing());
-  SendKeyToPopup(ui::VKEY_DOWN);
-  SendKeyToPopup(ui::VKEY_RETURN);
+  NavigateToAndAcceptSuggestedPassword();
 
   // Wait until the password is filled.
   WaitForNonEmptyFieldValue("password_field");
 
   // Re-focusing the password field should show the editing popup.
   FocusPasswordField();
-  EXPECT_TRUE(EditingPopupShowing());
+  WaitForEditingPopupShowing();
 
   // Delete the password. The generation prompt should not be visible.
   SimulateUserDeletingFieldContent("password_field");
@@ -247,13 +330,13 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
 // Verify that password generation popup is hidden when popup
 // with generation and password suggestions is visible.
 IN_PROC_BROWSER_TEST_F(
-    PasswordGenerationInteractiveTest,
+    PasswordGenerationAutofillPopupInteractiveTest,
     HidesGenerationPopupWhenShowingPasswordSuggestionsWithGeneration) {
   // Save the credentials since the autofill popup with generation and
   // password suggestion would not appear without stored passwords.
   password_manager::PasswordStoreInterface* password_store =
-      PasswordStoreFactory::GetForProfile(browser()->profile(),
-                                          ServiceAccessType::IMPLICIT_ACCESS)
+      ProfilePasswordStoreFactory::GetForProfile(
+          browser()->profile(), ServiceAccessType::IMPLICIT_ACCESS)
           .get();
   password_manager::PasswordForm signin_form;
   signin_form.signon_realm = embedded_test_server()->base_url().spec();
@@ -267,26 +350,16 @@ IN_PROC_BROWSER_TEST_F(
   // The user generates a password from the context menu.
   password_manager_util::UserTriggeredManualGenerationFromContextMenu(
       ChromePasswordManagerClient::FromWebContents(WebContents()),
-      autofill::ChromeAutofillClient::FromWebContents(WebContents()));
+      autofill::ContentAutofillClient::FromWebContents(WebContents()));
   WaitForStatus(TestGenerationPopupObserver::GenerationPopup::kShown);
+  WaitForGenerationPopupShowing();
   EXPECT_TRUE(GenerationPopupShowing());
-
-  password_manager::ContentPasswordManagerDriverFactory* driver_factory =
-      password_manager::ContentPasswordManagerDriverFactory::FromWebContents(
-          WebContents());
-  ObservingAutofillClient::CreateForWebContents(WebContents());
-  ObservingAutofillClient* observing_autofill_client =
-      ObservingAutofillClient::FromWebContents(WebContents());
-  password_manager::ContentPasswordManagerDriver* driver =
-      driver_factory->GetDriverForFrame(WebContents()->GetPrimaryMainFrame());
-  driver->GetPasswordAutofillManager()->set_autofill_client(
-      observing_autofill_client);
 
   // Click on the password field to display the autofill popup.
   content::SimulateMouseClickOrTapElementWithId(WebContents(),
                                                 "password_field");
-  // Make sure the autofill popup would be shown.
-  observing_autofill_client->WaitForAutofillPopup();
+  // Make sure that the autofill popup is showing.
+  autofill_client().WaitForAutofillPopup();
   // Make sure the generation popup is dismissed.
   WaitForStatus(TestGenerationPopupObserver::GenerationPopup::kHidden);
 }
@@ -294,7 +367,7 @@ IN_PROC_BROWSER_TEST_F(
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
                        PopupShownAndDismissed) {
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 
   FocusUsernameField();
 
@@ -305,7 +378,7 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
                        PopupShownAndDismissedByKeyPress) {
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 
   SendKeyToPopup(ui::VKEY_ESCAPE);
 
@@ -316,10 +389,9 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
                        PopupShownAndDismissedByScrolling) {
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 
-  ASSERT_TRUE(
-      content::ExecuteScript(WebContents(), "window.scrollTo(100, 0);"));
+  ASSERT_TRUE(content::ExecJs(WebContents(), "window.scrollTo(100, 0);"));
 
   EXPECT_FALSE(GenerationPopupShowing());
 }
@@ -331,12 +403,11 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
   // Execute the script in the context of the iframe so that it kinda receives a
   // user gesture.
   content::RenderFrameHost* child_frame = ChildFrameAt(WebContents(), 0);
+  gfx::PointF click_point =
+      GetCenterCoordinatesOfElementWithId(child_frame, "password_field");
+  SimulateMouseClickOrTapAt(child_frame->GetRenderWidgetHost(), click_point);
 
-  std::string focus_script =
-      "document.getElementById('password_field').focus();";
-
-  ASSERT_TRUE(content::ExecuteScript(child_frame, focus_script));
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 }
 
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
@@ -384,18 +455,17 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
   WaitForStatus(TestGenerationPopupObserver::GenerationPopup::kShown);
 }
 
-// https://crbug.com/791389
 IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
-                       DISABLED_AutoSavingGeneratedPassword) {
+                       AutoSavingGeneratedPassword) {
   scoped_refptr<password_manager::TestPasswordStore> password_store =
       static_cast<password_manager::TestPasswordStore*>(
-          PasswordStoreFactory::GetForProfile(
-              browser()->profile(), ServiceAccessType::IMPLICIT_ACCESS).get());
+          ProfilePasswordStoreFactory::GetForProfile(
+              browser()->profile(), ServiceAccessType::IMPLICIT_ACCESS)
+              .get());
 
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
-  SendKeyToPopup(ui::VKEY_DOWN);
-  SendKeyToPopup(ui::VKEY_RETURN);
+  WaitForGenerationPopupShowing();
+  NavigateToAndAcceptSuggestedPassword();
 
   // Change username.
   FocusUsernameField();
@@ -410,8 +480,8 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
   PasswordsNavigationObserver observer(WebContents());
   std::string submit_script =
       "document.getElementById('input_submit_button').click()";
-  ASSERT_TRUE(content::ExecuteScript(WebContents(), submit_script));
-  observer.Wait();
+  ASSERT_TRUE(content::ExecJs(WebContents(), submit_script));
+  ASSERT_TRUE(observer.Wait());
 
   WaitForPasswordStore();
   EXPECT_FALSE(password_store->IsEmpty());
@@ -429,7 +499,7 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationInteractiveTest,
                        NavigatingAwayClosesPopup) {
   // Open popup.
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 
   // Simulate navigating to a different page.
   NavigateToFile("/password/signup_form.html");
@@ -448,7 +518,7 @@ class PasswordGenerationPopupViewPrerenderingTest
   ~PasswordGenerationPopupViewPrerenderingTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     PasswordGenerationInteractiveTest::SetUp();
   }
 
@@ -464,11 +534,12 @@ IN_PROC_BROWSER_TEST_F(PasswordGenerationPopupViewPrerenderingTest,
                        PasswordGenerationPopupControllerInPrerendering) {
   // Open popup.
   FocusPasswordField();
-  EXPECT_TRUE(GenerationPopupShowing());
+  WaitForGenerationPopupShowing();
 
   auto prerender_url = embedded_test_server()->GetURL("/empty.html");
   // Loads a page in the prerender.
-  int host_id = prerender_helper()->AddPrerender(prerender_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper()->AddPrerender(prerender_url);
   content::test::PrerenderHostObserver host_observer(*WebContents(), host_id);
   // It should keep the current popup controller since the prerenedering should
   // not affect the current page.

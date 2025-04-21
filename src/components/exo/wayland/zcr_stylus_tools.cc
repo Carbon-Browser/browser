@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <wayland-server-core.h>
 #include <wayland-server-protocol-core.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/wayland/server_util.h"
@@ -50,7 +51,7 @@ class StylusTool : public SurfaceObserver {
   }
 
  private:
-  Surface* surface_;
+  raw_ptr<Surface> surface_;
 };
 
 void stylus_tool_destroy(wl_client* client, wl_resource* resource) {

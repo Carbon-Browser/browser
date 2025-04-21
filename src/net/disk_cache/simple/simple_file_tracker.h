@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define NET_DISK_CACHE_SIMPLE_SIMPLE_FILE_TRACKER_H_
 
 #include <stdint.h>
+
 #include <algorithm>
+#include <array>
 #include <list>
 #include <memory>
 #include <unordered_map>
@@ -14,7 +16,6 @@
 
 #include "base/files/file.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "net/base/net_export.h"
 #include "net/disk_cache/simple/simple_entry_format.h"
@@ -178,10 +179,10 @@ class NET_EXPORT_PRIVATE SimpleFileTracker {
     // Note that these are stored indirect since we hand out pointers to these,
     // and we don't want those to become invalid if some other thread appends
     // things here.
-    std::unique_ptr<base::File> files[kSimpleEntryTotalFileCount];
+    std::array<std::unique_ptr<base::File>, kSimpleEntryTotalFileCount> files;
 
-    State state[kSimpleEntryTotalFileCount];
-    std::list<TrackedFiles*>::iterator position_in_lru;
+    std::array<State, kSimpleEntryTotalFileCount> state;
+    std::list<raw_ptr<TrackedFiles, CtnExperimental>>::iterator position_in_lru;
 
     // true if position_in_lru is valid. For entries where we closed everything,
     // we try not to keep them in the LRU so that we don't have to constantly
@@ -218,7 +219,7 @@ class NET_EXPORT_PRIVATE SimpleFileTracker {
   base::Lock lock_;
   std::unordered_map<uint64_t, std::vector<std::unique_ptr<TrackedFiles>>>
       tracked_files_;
-  std::list<TrackedFiles*> lru_;
+  std::list<raw_ptr<TrackedFiles, CtnExperimental>> lru_;
 
   int file_limit_;
 

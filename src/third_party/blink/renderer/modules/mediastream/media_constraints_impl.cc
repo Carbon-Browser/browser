@@ -32,7 +32,6 @@
 
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/web_string.h"
-#include "third_party/blink/renderer/bindings/core/v8/array_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/dictionary.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_string_stringsequence.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_constrain_boolean_parameters.h"
@@ -50,7 +49,6 @@
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
-#include "third_party/blink/renderer/modules/mediastream/media_error_state.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -62,6 +60,8 @@
 namespace blink {
 namespace media_constraints_impl {
 
+namespace {
+
 // A naked value is treated as an "ideal" value in the basic constraints,
 // but as an exact value in "advanced" constraints.
 // https://w3c.github.io/mediacapture-main/#constrainable-interface
@@ -71,11 +71,11 @@ enum class NakedValueDisposition { kTreatAsIdeal, kTreatAsExact };
 struct NameValueStringConstraint {
   NameValueStringConstraint() = default;
 
-  NameValueStringConstraint(WebString name, WebString value)
+  NameValueStringConstraint(String name, String value)
       : name_(name), value_(value) {}
 
-  WebString name_;
-  WebString value_;
+  String name_;
+  String value_;
 };
 
 // Legal constraint names.
@@ -98,22 +98,14 @@ const char kMediaStreamRenderToAssociatedSink[] =
 // RenderToAssociatedSink will be going away some time.
 const char kEchoCancellation[] = "echoCancellation";
 const char kDisableLocalEcho[] = "disableLocalEcho";
-const char kGoogEchoCancellation[] = "googEchoCancellation";
-const char kGoogExperimentalEchoCancellation[] = "googEchoCancellation2";
 const char kGoogAutoGainControl[] = "googAutoGainControl";
-const char kGoogExperimentalAutoGainControl[] = "googAutoGainControl2";
 const char kGoogNoiseSuppression[] = "googNoiseSuppression";
-const char kGoogExperimentalNoiseSuppression[] = "googNoiseSuppression2";
 const char kGoogHighpassFilter[] = "googHighpassFilter";
 const char kGoogAudioMirroring[] = "googAudioMirroring";
 // Audio constraints.
 const char kDAEchoCancellation[] = "googDAEchoCancellation";
 // Google-specific constraint keys for a local video source (getUserMedia).
 const char kNoiseReduction[] = "googNoiseReduction";
-
-// Names used for testing.
-const char kTestConstraint1[] = "valid_and_supported_1";
-const char kTestConstraint2[] = "valid_and_supported_2";
 
 static bool ParseMandatoryConstraintsDictionary(
     const Dictionary& mandatory_constraints_dictionary,
@@ -136,75 +128,15 @@ static bool ParseOptionalConstraintsVectorElement(
   DummyExceptionStateForTesting exception_state;
   const Vector<String>& local_names =
       constraint.GetPropertyNames(exception_state);
-  if (exception_state.HadException())
+  if (exception_state.HadException() || local_names.size() != 1) {
     return false;
-  if (local_names.size() != 1)
-    return false;
+  }
   const String& key = local_names[0];
-  String value;
-  bool ok = DictionaryHelper::Get(constraint, key, value);
-  if (!ok)
+  std::optional<String> value = constraint.Get<IDLString>(key, exception_state);
+  if (exception_state.HadException() || !value) {
     return false;
-  optional_constraints_vector.push_back(NameValueStringConstraint(key, value));
-  return true;
-}
-
-// Old style parser. Deprecated.
-static bool Parse(const Dictionary& constraints_dictionary,
-                  Vector<NameValueStringConstraint>& optional,
-                  Vector<NameValueStringConstraint>& mandatory) {
-  if (constraints_dictionary.IsUndefinedOrNull())
-    return true;
-
-  DummyExceptionStateForTesting exception_state;
-  const Vector<String>& names =
-      constraints_dictionary.GetPropertyNames(exception_state);
-  if (exception_state.HadException())
-    return false;
-
-  String mandatory_name("mandatory");
-  String optional_name("optional");
-
-  for (const auto& name : names) {
-    if (name != mandatory_name && name != optional_name)
-      return false;
   }
-
-  if (names.Contains(mandatory_name)) {
-    Dictionary mandatory_constraints_dictionary;
-    bool ok = constraints_dictionary.Get(mandatory_name,
-                                         mandatory_constraints_dictionary);
-    if (!ok || mandatory_constraints_dictionary.IsUndefinedOrNull())
-      return false;
-    ok = ParseMandatoryConstraintsDictionary(mandatory_constraints_dictionary,
-                                             mandatory);
-    if (!ok)
-      return false;
-  }
-
-  if (names.Contains(optional_name)) {
-    ArrayValue optional_constraints;
-    bool ok = DictionaryHelper::Get(constraints_dictionary, optional_name,
-                                    optional_constraints);
-    if (!ok || optional_constraints.IsUndefinedOrNull())
-      return false;
-
-    uint32_t number_of_constraints;
-    ok = optional_constraints.length(number_of_constraints);
-    if (!ok)
-      return false;
-
-    for (uint32_t i = 0; i < number_of_constraints; ++i) {
-      Dictionary constraint;
-      ok = optional_constraints.Get(i, constraint);
-      if (!ok || constraint.IsUndefinedOrNull())
-        return false;
-      ok = ParseOptionalConstraintsVectorElement(constraint, optional);
-      if (!ok)
-        return false;
-    }
-  }
-
+  optional_constraints_vector.push_back(NameValueStringConstraint(key, *value));
   return true;
 }
 
@@ -230,8 +162,8 @@ static bool Parse(const MediaTrackConstraints* constraints_in,
   return true;
 }
 
-static bool ToBoolean(const WebString& as_web_string) {
-  return as_web_string.Equals("true");
+static bool ToBoolean(const String& as_string) {
+  return as_string == "true";
   // TODO(hta): Check against "false" and return error if it's neither.
   // https://crbug.com/576582
 }
@@ -239,78 +171,58 @@ static bool ToBoolean(const WebString& as_web_string) {
 static void ParseOldStyleNames(
     ExecutionContext* context,
     const Vector<NameValueStringConstraint>& old_names,
-    MediaTrackConstraintSetPlatform& result,
-    MediaErrorState& error_state) {
+    MediaTrackConstraintSetPlatform& result) {
   if (old_names.size() > 0) {
     UseCounter::Count(context, WebFeature::kOldConstraintsParsed);
   }
   for (const NameValueStringConstraint& constraint : old_names) {
-    if (constraint.name_.Equals(kMinAspectRatio)) {
+    if (constraint.name_ == kMinAspectRatio) {
       result.aspect_ratio.SetMin(atof(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMaxAspectRatio)) {
+    } else if (constraint.name_ == kMaxAspectRatio) {
       result.aspect_ratio.SetMax(atof(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMaxWidth)) {
+    } else if (constraint.name_ == kMaxWidth) {
       result.width.SetMax(atoi(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMinWidth)) {
+    } else if (constraint.name_ == kMinWidth) {
       result.width.SetMin(atoi(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMaxHeight)) {
+    } else if (constraint.name_ == kMaxHeight) {
       result.height.SetMax(atoi(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMinHeight)) {
+    } else if (constraint.name_ == kMinHeight) {
       result.height.SetMin(atoi(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMinFrameRate)) {
+    } else if (constraint.name_ == kMinFrameRate) {
       result.frame_rate.SetMin(atof(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kMaxFrameRate)) {
+    } else if (constraint.name_ == kMaxFrameRate) {
       result.frame_rate.SetMax(atof(constraint.value_.Utf8().c_str()));
-    } else if (constraint.name_.Equals(kEchoCancellation)) {
+    } else if (constraint.name_ == kEchoCancellation) {
       result.echo_cancellation.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kMediaStreamSource)) {
+    } else if (constraint.name_ == kMediaStreamSource) {
       // TODO(hta): This has only a few legal values. Should be
       // represented as an enum, and cause type errors.
       // https://crbug.com/576582
       result.media_stream_source.SetExact(constraint.value_);
-    } else if (constraint.name_.Equals(kDisableLocalEcho) &&
+    } else if (constraint.name_ == kDisableLocalEcho &&
                RuntimeEnabledFeatures::
                    DesktopCaptureDisableLocalEchoControlEnabled()) {
       result.disable_local_echo.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kMediaStreamSourceId) ||
-               constraint.name_.Equals(kMediaStreamSourceInfoId)) {
+    } else if (constraint.name_ == kMediaStreamSourceId ||
+               constraint.name_ == kMediaStreamSourceInfoId) {
       result.device_id.SetExact(constraint.value_);
-    } else if (constraint.name_.Equals(kMediaStreamRenderToAssociatedSink)) {
+    } else if (constraint.name_ == kMediaStreamRenderToAssociatedSink) {
       // TODO(hta): This is a boolean represented as string.
       // Should give TypeError when it's not parseable.
       // https://crbug.com/576582
       result.render_to_associated_sink.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogEchoCancellation)) {
-      result.goog_echo_cancellation.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogExperimentalEchoCancellation)) {
-      result.goog_experimental_echo_cancellation.SetExact(
-          ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogAutoGainControl)) {
-      result.goog_auto_gain_control.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogExperimentalAutoGainControl)) {
-      result.goog_experimental_auto_gain_control.SetExact(
-          ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogNoiseSuppression)) {
-      result.goog_noise_suppression.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogExperimentalNoiseSuppression)) {
-      result.goog_experimental_noise_suppression.SetExact(
-          ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogHighpassFilter)) {
+    } else if (constraint.name_ == kGoogAutoGainControl) {
+      result.auto_gain_control.SetExact(ToBoolean(constraint.value_));
+    } else if (constraint.name_ == kGoogNoiseSuppression) {
+      result.noise_suppression.SetExact(ToBoolean(constraint.value_));
+    } else if (constraint.name_ == kGoogHighpassFilter) {
       result.goog_highpass_filter.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kGoogAudioMirroring)) {
+    } else if (constraint.name_ == kGoogAudioMirroring) {
       result.goog_audio_mirroring.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kDAEchoCancellation)) {
+    } else if (constraint.name_ == kDAEchoCancellation) {
       result.goog_da_echo_cancellation.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kNoiseReduction)) {
+    } else if (constraint.name_ == kNoiseReduction) {
       result.goog_noise_reduction.SetExact(ToBoolean(constraint.value_));
-    } else if (constraint.name_.Equals(kTestConstraint1) ||
-               constraint.name_.Equals(kTestConstraint2)) {
-      // These constraints are only for testing parsing.
-      // Values 0 and 1 are legal, all others are a ConstraintError.
-      if (!constraint.value_.Equals("0") && !constraint.value_.Equals("1")) {
-        error_state.ThrowConstraintError("Illegal value for constraint",
-                                         constraint.name_);
-      }
     }
     // else: Nothing. Unrecognized constraints are simply ignored.
   }
@@ -319,41 +231,22 @@ static void ParseOldStyleNames(
 static MediaConstraints CreateFromNamedConstraints(
     ExecutionContext* context,
     Vector<NameValueStringConstraint>& mandatory,
-    const Vector<NameValueStringConstraint>& optional,
-    MediaErrorState& error_state) {
+    const Vector<NameValueStringConstraint>& optional) {
   MediaTrackConstraintSetPlatform basic;
   MediaTrackConstraintSetPlatform advanced;
   MediaConstraints constraints;
-  ParseOldStyleNames(context, mandatory, basic, error_state);
-  if (error_state.HadException())
-    return constraints;
-  // We ignore unknow names and syntax errors in optional constraints.
-  MediaErrorState ignored_error_state;
+  ParseOldStyleNames(context, mandatory, basic);
+  // We ignore unknown names and syntax errors in optional constraints.
   Vector<MediaTrackConstraintSetPlatform> advanced_vector;
   for (const auto& optional_constraint : optional) {
     MediaTrackConstraintSetPlatform advanced_element;
     Vector<NameValueStringConstraint> element_as_list(1, optional_constraint);
-    ParseOldStyleNames(context, element_as_list, advanced_element,
-                       ignored_error_state);
+    ParseOldStyleNames(context, element_as_list, advanced_element);
     if (!advanced_element.IsUnconstrained())
       advanced_vector.push_back(advanced_element);
   }
   constraints.Initialize(basic, advanced_vector);
   return constraints;
-}
-
-// Deprecated.
-MediaConstraints Create(ExecutionContext* context,
-                        const Dictionary& constraints_dictionary,
-                        MediaErrorState& error_state) {
-  Vector<NameValueStringConstraint> optional;
-  Vector<NameValueStringConstraint> mandatory;
-  if (!Parse(constraints_dictionary, optional, mandatory)) {
-    error_state.ThrowTypeError("Malformed constraints object.");
-    return MediaConstraints();
-  }
-  UseCounter::Count(context, WebFeature::kMediaStreamConstraintsFromDictionary);
-  return CreateFromNamedConstraints(context, mandatory, optional, error_state);
 }
 
 void CopyLongConstraint(const V8ConstrainLong* blink_union_form,
@@ -440,28 +333,22 @@ void CopyBooleanOrDoubleConstraint(
   }
 }
 
-bool ValidateString(const String& str, MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
+bool ValidateString(const String& str, String& error_message) {
   if (str.length() > kMaxConstraintStringLength) {
-    error_state.ThrowTypeError("Constraint string too long.");
+    error_message = "Constraint string too long.";
     return false;
   }
   return true;
 }
 
-bool ValidateStringSeq(const Vector<String>& strs,
-                       MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
+bool ValidateStringSeq(const Vector<String>& strs, String& error_message) {
   if (strs.size() > kMaxConstraintStringSeqLength) {
-    error_state.ThrowTypeError("Constraint string sequence too long.");
+    error_message = "Constraint string sequence too long.";
     return false;
   }
 
   for (const String& str : strs) {
-    if (!ValidateString(str, error_state)) {
-      DCHECK(error_state.HadException());
+    if (!ValidateString(str, error_message)) {
       return false;
     }
   }
@@ -471,58 +358,50 @@ bool ValidateStringSeq(const Vector<String>& strs,
 
 bool ValidateStringConstraint(
     V8UnionStringOrStringSequence* string_or_string_seq,
-    MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
+    String& error_message) {
   switch (string_or_string_seq->GetContentType()) {
     case V8UnionStringOrStringSequence::ContentType::kString: {
-      return ValidateString(string_or_string_seq->GetAsString(), error_state);
+      return ValidateString(string_or_string_seq->GetAsString(), error_message);
     }
     case V8UnionStringOrStringSequence::ContentType::kStringSequence: {
       return ValidateStringSeq(string_or_string_seq->GetAsStringSequence(),
-                               error_state);
+                               error_message);
     }
   }
   NOTREACHED();
-  return false;
 }
 
 bool ValidateStringConstraint(const V8ConstrainDOMString* blink_union_form,
-                              MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
+                              String& error_message) {
   switch (blink_union_form->GetContentType()) {
     case V8ConstrainDOMString::ContentType::kConstrainDOMStringParameters: {
       const auto* blink_form =
           blink_union_form->GetAsConstrainDOMStringParameters();
       if (blink_form->hasIdeal() &&
-          !ValidateStringConstraint(blink_form->ideal(), error_state)) {
+          !ValidateStringConstraint(blink_form->ideal(), error_message)) {
         return false;
       }
       if (blink_form->hasExact() &&
-          !ValidateStringConstraint(blink_form->exact(), error_state)) {
+          !ValidateStringConstraint(blink_form->exact(), error_message)) {
         return false;
       }
       return true;
     }
     case V8ConstrainDOMString::ContentType::kString:
-      return ValidateString(blink_union_form->GetAsString(), error_state);
+      return ValidateString(blink_union_form->GetAsString(), error_message);
     case V8ConstrainDOMString::ContentType::kStringSequence:
       return ValidateStringSeq(blink_union_form->GetAsStringSequence(),
-                               error_state);
+                               error_message);
   }
   NOTREACHED();
-  return false;
 }
 
 [[nodiscard]] bool ValidateAndCopyStringConstraint(
     const V8ConstrainDOMString* blink_union_form,
     NakedValueDisposition naked_treatment,
     StringConstraint& web_form,
-    MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
-  if (!ValidateStringConstraint(blink_union_form, error_state)) {
+    String& error_message) {
+  if (!ValidateStringConstraint(blink_union_form, error_message)) {
     return false;
   }
   web_form.SetIsPresent(true);
@@ -611,166 +490,204 @@ bool ValidateAndCopyConstraintSet(
     const MediaTrackConstraintSet* constraints_in,
     NakedValueDisposition naked_treatment,
     MediaTrackConstraintSetPlatform& constraint_buffer,
-    MediaErrorState& error_state) {
-  DCHECK(!error_state.HadException());
-
+    String& error_message) {
   if (constraints_in->hasWidth()) {
     CopyLongConstraint(constraints_in->width(), naked_treatment,
                        constraint_buffer.width);
   }
+
   if (constraints_in->hasHeight()) {
     CopyLongConstraint(constraints_in->height(), naked_treatment,
                        constraint_buffer.height);
   }
+
   if (constraints_in->hasAspectRatio()) {
     CopyDoubleConstraint(constraints_in->aspectRatio(), naked_treatment,
                          constraint_buffer.aspect_ratio);
   }
+
   if (constraints_in->hasFrameRate()) {
     CopyDoubleConstraint(constraints_in->frameRate(), naked_treatment,
                          constraint_buffer.frame_rate);
   }
+
   if (constraints_in->hasFacingMode()) {
     if (!ValidateAndCopyStringConstraint(
             constraints_in->facingMode(), naked_treatment,
-            constraint_buffer.facing_mode, error_state)) {
-      DCHECK(error_state.HadException());
+            constraint_buffer.facing_mode, error_message)) {
       return false;
     }
   }
+
   if (constraints_in->hasResizeMode()) {
     if (!ValidateAndCopyStringConstraint(
             constraints_in->resizeMode(), naked_treatment,
-            constraint_buffer.resize_mode, error_state)) {
-      DCHECK(error_state.HadException());
+            constraint_buffer.resize_mode, error_message)) {
       return false;
     }
   }
+
   if (constraints_in->hasSampleRate()) {
     CopyLongConstraint(constraints_in->sampleRate(), naked_treatment,
                        constraint_buffer.sample_rate);
   }
+
   if (constraints_in->hasSampleSize()) {
     CopyLongConstraint(constraints_in->sampleSize(), naked_treatment,
                        constraint_buffer.sample_size);
   }
+
   if (constraints_in->hasEchoCancellation()) {
     CopyBooleanConstraint(constraints_in->echoCancellation(), naked_treatment,
                           constraint_buffer.echo_cancellation);
   }
+
   if (constraints_in->hasAutoGainControl()) {
     CopyBooleanConstraint(constraints_in->autoGainControl(), naked_treatment,
-                          constraint_buffer.goog_auto_gain_control);
+                          constraint_buffer.auto_gain_control);
   }
+
   if (constraints_in->hasNoiseSuppression()) {
     CopyBooleanConstraint(constraints_in->noiseSuppression(), naked_treatment,
-                          constraint_buffer.goog_noise_suppression);
+                          constraint_buffer.noise_suppression);
   }
+
+  if (constraints_in->hasVoiceIsolation()) {
+    CopyBooleanConstraint(constraints_in->voiceIsolation(), naked_treatment,
+                          constraint_buffer.voice_isolation);
+  }
+
   if (constraints_in->hasLatency()) {
     CopyDoubleConstraint(constraints_in->latency(), naked_treatment,
                          constraint_buffer.latency);
   }
+
   if (constraints_in->hasChannelCount()) {
     CopyLongConstraint(constraints_in->channelCount(), naked_treatment,
                        constraint_buffer.channel_count);
   }
+
   if (constraints_in->hasDeviceId()) {
     if (!ValidateAndCopyStringConstraint(
             constraints_in->deviceId(), naked_treatment,
-            constraint_buffer.device_id, error_state)) {
-      DCHECK(error_state.HadException());
+            constraint_buffer.device_id, error_message)) {
       return false;
     }
   }
+
   if (constraints_in->hasGroupId()) {
     if (!ValidateAndCopyStringConstraint(
             constraints_in->groupId(), naked_treatment,
-            constraint_buffer.group_id, error_state)) {
-      DCHECK(error_state.HadException());
+            constraint_buffer.group_id, error_message)) {
       return false;
     }
   }
+
+  if (constraints_in->hasExposureCompensation()) {
+    CopyDoubleConstraint(constraints_in->exposureCompensation(),
+                         naked_treatment,
+                         constraint_buffer.exposure_compensation);
+  }
+
+  if (constraints_in->hasExposureTime()) {
+    CopyDoubleConstraint(constraints_in->exposureTime(), naked_treatment,
+                         constraint_buffer.exposure_time);
+  }
+
+  if (constraints_in->hasColorTemperature()) {
+    CopyDoubleConstraint(constraints_in->colorTemperature(), naked_treatment,
+                         constraint_buffer.color_temperature);
+  }
+
+  if (constraints_in->hasIso()) {
+    CopyDoubleConstraint(constraints_in->iso(), naked_treatment,
+                         constraint_buffer.iso);
+  }
+
+  if (constraints_in->hasBrightness()) {
+    CopyDoubleConstraint(constraints_in->brightness(), naked_treatment,
+                         constraint_buffer.brightness);
+  }
+
+  if (constraints_in->hasContrast()) {
+    CopyDoubleConstraint(constraints_in->contrast(), naked_treatment,
+                         constraint_buffer.contrast);
+  }
+
+  if (constraints_in->hasSaturation()) {
+    CopyDoubleConstraint(constraints_in->saturation(), naked_treatment,
+                         constraint_buffer.saturation);
+  }
+
+  if (constraints_in->hasSharpness()) {
+    CopyDoubleConstraint(constraints_in->sharpness(), naked_treatment,
+                         constraint_buffer.sharpness);
+  }
+
+  if (constraints_in->hasFocusDistance()) {
+    CopyDoubleConstraint(constraints_in->focusDistance(), naked_treatment,
+                         constraint_buffer.focus_distance);
+  }
+
   if (constraints_in->hasPan()) {
     CopyBooleanOrDoubleConstraint(constraints_in->pan(), naked_treatment,
                                   constraint_buffer.pan);
   }
+
   if (constraints_in->hasTilt()) {
     CopyBooleanOrDoubleConstraint(constraints_in->tilt(), naked_treatment,
                                   constraint_buffer.tilt);
   }
+
   if (constraints_in->hasZoom()) {
     CopyBooleanOrDoubleConstraint(constraints_in->zoom(), naked_treatment,
                                   constraint_buffer.zoom);
   }
+
+  if (constraints_in->hasTorch()) {
+    CopyBooleanConstraint(constraints_in->torch(), naked_treatment,
+                          constraint_buffer.torch);
+  }
+
+  if (constraints_in->hasBackgroundBlur()) {
+    CopyBooleanConstraint(constraints_in->backgroundBlur(), naked_treatment,
+                          constraint_buffer.background_blur);
+  }
+
+  if (constraints_in->hasBackgroundSegmentationMask()) {
+    CopyBooleanConstraint(constraints_in->backgroundSegmentationMask(),
+                          naked_treatment,
+                          constraint_buffer.background_segmentation_mask);
+  }
+
+  if (constraints_in->hasEyeGazeCorrection()) {
+    CopyBooleanConstraint(constraints_in->eyeGazeCorrection(), naked_treatment,
+                          constraint_buffer.eye_gaze_correction);
+  }
+
+  if (constraints_in->hasFaceFraming()) {
+    CopyBooleanConstraint(constraints_in->faceFraming(), naked_treatment,
+                          constraint_buffer.face_framing);
+  }
+
+  if (constraints_in->hasDisplaySurface()) {
+    if (!ValidateAndCopyStringConstraint(
+            constraints_in->displaySurface(), naked_treatment,
+            constraint_buffer.display_surface, error_message)) {
+      return false;
+    }
+  }
+
+  if (constraints_in->hasSuppressLocalAudioPlayback()) {
+    CopyBooleanConstraint(constraints_in->suppressLocalAudioPlayback(),
+                          naked_treatment,
+                          constraint_buffer.suppress_local_audio_playback);
+  }
   return true;
 }
 
-MediaConstraints ConvertTrackConstraintsToMediaConstraints(
-    const MediaTrackConstraints* constraints_in,
-    MediaErrorState& error_state) {
-  MediaConstraints constraints;
-  MediaTrackConstraintSetPlatform constraint_buffer;
-  Vector<MediaTrackConstraintSetPlatform> advanced_buffer;
-  if (!ValidateAndCopyConstraintSet(constraints_in,
-                                    NakedValueDisposition::kTreatAsIdeal,
-                                    constraint_buffer, error_state)) {
-    DCHECK(error_state.HadException());
-    return constraints;
-  }
-  if (constraints_in->hasAdvanced()) {
-    for (const auto& element : constraints_in->advanced()) {
-      MediaTrackConstraintSetPlatform advanced_element;
-      if (!ValidateAndCopyConstraintSet(element,
-                                        NakedValueDisposition::kTreatAsExact,
-                                        advanced_element, error_state)) {
-        DCHECK(error_state.HadException());
-        return constraints;
-      }
-      advanced_buffer.push_back(advanced_element);
-    }
-  }
-  constraints.Initialize(constraint_buffer, advanced_buffer);
-  return constraints;
-}
-
-MediaConstraints Create(ExecutionContext* context,
-                        const MediaTrackConstraints* constraints_in,
-                        MediaErrorState& error_state) {
-  MediaConstraints standard_form =
-      ConvertTrackConstraintsToMediaConstraints(constraints_in, error_state);
-  if (error_state.HadException()) {
-    return standard_form;
-  }
-  if (constraints_in->hasOptional() || constraints_in->hasMandatory()) {
-    if (!standard_form.IsUnconstrained()) {
-      UseCounter::Count(context, WebFeature::kMediaStreamConstraintsOldAndNew);
-      error_state.ThrowTypeError(
-          "Malformed constraint: Cannot use both optional/mandatory and "
-          "specific or advanced constraints.");
-      return MediaConstraints();
-    }
-    Vector<NameValueStringConstraint> optional;
-    Vector<NameValueStringConstraint> mandatory;
-    if (!Parse(constraints_in, optional, mandatory)) {
-      error_state.ThrowTypeError("Malformed constraints object.");
-      return MediaConstraints();
-    }
-    UseCounter::Count(context, WebFeature::kMediaStreamConstraintsNameValue);
-    return CreateFromNamedConstraints(context, mandatory, optional,
-                                      error_state);
-  }
-  UseCounter::Count(context, WebFeature::kMediaStreamConstraintsConformant);
-  return standard_form;
-}
-
-MediaConstraints Create() {
-  MediaConstraints constraints;
-  constraints.Initialize();
-  return constraints;
-}
-
 template <class T>
-bool UseNakedNumeric(T input, NakedValueDisposition which) {
+bool UseNakedNumeric(const T& input, NakedValueDisposition which) {
   switch (which) {
     case NakedValueDisposition::kTreatAsIdeal:
       return input.HasIdeal() &&
@@ -782,11 +699,10 @@ bool UseNakedNumeric(T input, NakedValueDisposition which) {
       break;
   }
   NOTREACHED();
-  return false;
 }
 
 template <class T>
-bool UseNakedNonNumeric(T input, NakedValueDisposition which) {
+bool UseNakedNonNumeric(const T& input, NakedValueDisposition which) {
   switch (which) {
     case NakedValueDisposition::kTreatAsIdeal:
       return input.HasIdeal() && !input.HasExact();
@@ -796,11 +712,10 @@ bool UseNakedNonNumeric(T input, NakedValueDisposition which) {
       break;
   }
   NOTREACHED();
-  return false;
 }
 
 template <typename U, class T>
-U GetNakedValue(T input, NakedValueDisposition which) {
+U GetNakedValue(const T& input, NakedValueDisposition which) {
   switch (which) {
     case NakedValueDisposition::kTreatAsIdeal:
       return input.Ideal();
@@ -810,7 +725,6 @@ U GetNakedValue(T input, NakedValueDisposition which) {
       break;
   }
   NOTREACHED();
-  return input.Exact();
 }
 
 V8ConstrainLong* ConvertLong(const LongConstraint& input,
@@ -875,13 +789,9 @@ V8UnionBooleanOrConstrainDouble* ConvertBooleanOrDouble(
 }
 
 V8UnionStringOrStringSequence* ConvertStringSequence(
-    const WebVector<WebString>& input) {
+    const Vector<String>& input) {
   if (input.size() > 1) {
-    Vector<String> buffer;
-    for (const auto& scanner : input)
-      buffer.push_back(scanner);
-    return MakeGarbageCollected<V8UnionStringOrStringSequence>(
-        std::move(buffer));
+    return MakeGarbageCollected<V8UnionStringOrStringSequence>(input);
   } else if (!input.empty()) {
     return MakeGarbageCollected<V8UnionStringOrStringSequence>(input[0]);
   }
@@ -891,13 +801,10 @@ V8UnionStringOrStringSequence* ConvertStringSequence(
 V8ConstrainDOMString* ConvertString(const StringConstraint& input,
                                     NakedValueDisposition naked_treatment) {
   if (UseNakedNonNumeric(input, naked_treatment)) {
-    WebVector<WebString> input_buffer(
-        GetNakedValue<WebVector<WebString>>(input, naked_treatment));
+    const Vector<String>& input_buffer(
+        GetNakedValue<const Vector<String>&>(input, naked_treatment));
     if (input_buffer.size() > 1) {
-      Vector<String> buffer;
-      for (const auto& scanner : input_buffer)
-        buffer.push_back(scanner);
-      return MakeGarbageCollected<V8ConstrainDOMString>(std::move(buffer));
+      return MakeGarbageCollected<V8ConstrainDOMString>(input_buffer);
     } else if (!input_buffer.empty()) {
       return MakeGarbageCollected<V8ConstrainDOMString>(input_buffer[0]);
     }
@@ -953,13 +860,17 @@ void ConvertConstraintSet(const MediaTrackConstraintSetPlatform& input,
     output->setEchoCancellation(
         ConvertBoolean(input.echo_cancellation, naked_treatment));
   }
-  if (!input.goog_auto_gain_control.IsUnconstrained()) {
+  if (!input.auto_gain_control.IsUnconstrained()) {
     output->setAutoGainControl(
-        ConvertBoolean(input.goog_auto_gain_control, naked_treatment));
+        ConvertBoolean(input.auto_gain_control, naked_treatment));
   }
-  if (!input.goog_noise_suppression.IsUnconstrained()) {
+  if (!input.noise_suppression.IsUnconstrained()) {
     output->setNoiseSuppression(
-        ConvertBoolean(input.goog_noise_suppression, naked_treatment));
+        ConvertBoolean(input.noise_suppression, naked_treatment));
+  }
+  if (!input.voice_isolation.IsUnconstrained()) {
+    output->setVoiceIsolation(
+        ConvertBoolean(input.voice_isolation, naked_treatment));
   }
   if (!input.latency.IsUnconstrained())
     output->setLatency(ConvertDouble(input.latency, naked_treatment));
@@ -969,15 +880,131 @@ void ConvertConstraintSet(const MediaTrackConstraintSetPlatform& input,
     output->setDeviceId(ConvertString(input.device_id, naked_treatment));
   if (!input.group_id.IsUnconstrained())
     output->setGroupId(ConvertString(input.group_id, naked_treatment));
+  if (!input.exposure_compensation.IsUnconstrained()) {
+    output->setExposureCompensation(
+        ConvertDouble(input.exposure_compensation, naked_treatment));
+  }
+  if (!input.exposure_time.IsUnconstrained()) {
+    output->setExposureTime(
+        ConvertDouble(input.exposure_time, naked_treatment));
+  }
+  if (!input.color_temperature.IsUnconstrained()) {
+    output->setColorTemperature(
+        ConvertDouble(input.color_temperature, naked_treatment));
+  }
+  if (!input.iso.IsUnconstrained()) {
+    output->setIso(ConvertDouble(input.iso, naked_treatment));
+  }
+  if (!input.brightness.IsUnconstrained()) {
+    output->setBrightness(ConvertDouble(input.brightness, naked_treatment));
+  }
+  if (!input.contrast.IsUnconstrained()) {
+    output->setContrast(ConvertDouble(input.contrast, naked_treatment));
+  }
+  if (!input.saturation.IsUnconstrained()) {
+    output->setSaturation(ConvertDouble(input.saturation, naked_treatment));
+  }
+  if (!input.sharpness.IsUnconstrained()) {
+    output->setSharpness(ConvertDouble(input.sharpness, naked_treatment));
+  }
+  if (!input.focus_distance.IsUnconstrained()) {
+    output->setFocusDistance(
+        ConvertDouble(input.focus_distance, naked_treatment));
+  }
   if (!input.pan.IsUnconstrained())
     output->setPan(ConvertBooleanOrDouble(input.pan, naked_treatment));
   if (!input.tilt.IsUnconstrained())
     output->setTilt(ConvertBooleanOrDouble(input.tilt, naked_treatment));
   if (!input.zoom.IsUnconstrained())
     output->setZoom(ConvertBooleanOrDouble(input.zoom, naked_treatment));
+  if (!input.torch.IsUnconstrained()) {
+    output->setTorch(ConvertBoolean(input.torch, naked_treatment));
+  }
+  if (!input.background_blur.IsUnconstrained()) {
+    output->setBackgroundBlur(
+        ConvertBoolean(input.background_blur, naked_treatment));
+  }
+  if (!input.background_segmentation_mask.IsUnconstrained()) {
+    output->setBackgroundSegmentationMask(
+        ConvertBoolean(input.background_segmentation_mask, naked_treatment));
+  }
+  if (!input.eye_gaze_correction.IsUnconstrained()) {
+    output->setEyeGazeCorrection(
+        ConvertBoolean(input.eye_gaze_correction, naked_treatment));
+  }
+  if (!input.face_framing.IsUnconstrained()) {
+    output->setFaceFraming(ConvertBoolean(input.face_framing, naked_treatment));
+  }
+  if (!input.suppress_local_audio_playback.IsUnconstrained()) {
+    output->setSuppressLocalAudioPlayback(
+        ConvertBoolean(input.suppress_local_audio_playback, naked_treatment));
+  }
   // TODO(hta): Decide the future of the nonstandard constraints.
   // If they go forward, they need to be added here.
   // https://crbug.com/605673
+}
+
+}  // namespace
+
+MediaConstraints ConvertTrackConstraintsToMediaConstraints(
+    const MediaTrackConstraints* constraints_in,
+    String& error_message) {
+  MediaTrackConstraintSetPlatform constraint_buffer;
+  Vector<MediaTrackConstraintSetPlatform> advanced_buffer;
+  if (!ValidateAndCopyConstraintSet(constraints_in,
+                                    NakedValueDisposition::kTreatAsIdeal,
+                                    constraint_buffer, error_message)) {
+    return MediaConstraints();
+  }
+  if (constraints_in->hasAdvanced()) {
+    for (const auto& element : constraints_in->advanced()) {
+      MediaTrackConstraintSetPlatform advanced_element;
+      if (!ValidateAndCopyConstraintSet(element,
+                                        NakedValueDisposition::kTreatAsExact,
+                                        advanced_element, error_message)) {
+        return MediaConstraints();
+      }
+      advanced_buffer.push_back(advanced_element);
+    }
+  }
+  MediaConstraints constraints;
+  constraints.Initialize(constraint_buffer, advanced_buffer);
+  return constraints;
+}
+
+MediaConstraints Create(ExecutionContext* context,
+                        const MediaTrackConstraints* constraints_in,
+                        String& error_message) {
+  MediaConstraints standard_form =
+      ConvertTrackConstraintsToMediaConstraints(constraints_in, error_message);
+  if (standard_form.IsNull()) {
+    return standard_form;
+  }
+  if (constraints_in->hasOptional() || constraints_in->hasMandatory()) {
+    if (!standard_form.IsUnconstrained()) {
+      UseCounter::Count(context, WebFeature::kMediaStreamConstraintsOldAndNew);
+      error_message =
+          "Malformed constraint: Cannot use both optional/mandatory and "
+          "specific or advanced constraints.";
+      return MediaConstraints();
+    }
+    Vector<NameValueStringConstraint> optional;
+    Vector<NameValueStringConstraint> mandatory;
+    if (!Parse(constraints_in, optional, mandatory)) {
+      error_message = "Malformed constraints object.";
+      return MediaConstraints();
+    }
+    UseCounter::Count(context, WebFeature::kMediaStreamConstraintsNameValue);
+    return CreateFromNamedConstraints(context, mandatory, optional);
+  }
+  UseCounter::Count(context, WebFeature::kMediaStreamConstraintsConformant);
+  return standard_form;
+}
+
+MediaConstraints Create() {
+  MediaConstraints constraints;
+  constraints.Initialize();
+  return constraints;
 }
 
 MediaTrackConstraints* ConvertConstraints(const MediaConstraints& input) {
@@ -995,7 +1022,7 @@ MediaTrackConstraints* ConvertConstraints(const MediaConstraints& input) {
     ConvertConstraintSet(it, NakedValueDisposition::kTreatAsExact, element);
     advanced_vector.push_back(element);
   }
-  if (!advanced_vector.IsEmpty())
+  if (!advanced_vector.empty())
     output->setAdvanced(advanced_vector);
 
   return output;

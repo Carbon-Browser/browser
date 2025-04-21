@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,10 @@ const char kWebViewSafebrowsingBlockAllResources[] =
 // Highlight the contents (including web contents) of all WebViews with a yellow
 // tint. This is useful for identifying WebViews in an Android application.
 const char kHighlightAllWebViews[] = "highlight-all-webviews";
+
+// Enable net logging from WebView. This captures network activity for debugging
+// purposes, and stores the files in DevUi.
+const char kNetLog[] = "net-log";
 
 // WebView will log additional debugging information to logcat, such as
 // variations and commandline state.
@@ -60,28 +64,42 @@ const char kFinchSeedMinUpdatePeriod[] = "finch-seed-min-update-period";
 const char kWebViewEnableModernCookieSameSite[] =
     "webview-enable-modern-cookie-same-site";
 
-// Disables throttling querying apps package names allowlist components in
-// WebView clients.
-const char kWebViewDisablePackageAllowlistThrottling[] =
-    "webview-disable-package-allowlist-throttling";
-
 // Enables use selective image inversion to automatically darken page, it will
 // be used when WebView is in dark mode, but website doesn't provide dark style.
 const char kWebViewSelectiveImageInversionDarkening[] =
     "webview-selective-image-inversion-darkening";
 
-// Enables MPArch-based FencedFrames. This also implies
-// PrivacySandboxAdsAPIsOverride and SharedStorageAPI.
-const char kWebViewMPArchFencedFrames[] = "webview-mparch-fenced-frames";
+// Enables FencedFrames. This also enables PrivacySandboxAdsAPIsOverride.
+const char kWebViewFencedFrames[] = "webview-fenced-frames";
 
-// Enables ShadowDOM-based FencedFrames. This also implies
-// PrivacySandboxAdsAPIsOverride and SharedStorageAPI.
-const char kWebViewShadowDOMFencedFrames[] = "webview-shadow-dom-fenced-frames";
+// Enables downloading TrustTokenKeyCommitmentsComponent by the component
+// updater downloading service in nonembedded WebView. See
+// https://crbug.com/1170468.
+const char kWebViewEnableTrustTokensComponent[] =
+    "webview-enable-trust-tokens-component";
 
-// Disables WebView from checking for app recovery mitigations.
-const char kWebViewDisableAppRecovery[] = "webview-disable-app-recovery";
+// Enables downloading TpcdMetadataComponentInstallerPolicy by the component
+// updater downloading service in nonembedded WebView.
+const char kWebViewTpcdMetadaComponent[] = "webview-tpcd-metadata-component";
 
-// Enables WebView to check for app recovery mitigations.
-const char kWebViewEnableAppRecovery[] = "webview-enable-app-recovery";
+// Enables downloading FirstPartySetsComponentInstallerPolicy by the component
+// updater downloading service in nonembedded WebView.
+const char kWebViewFpsComponent[] = "webview-fps-component";
+
+// Force disables 3rd party cookie for all apps.
+const char kWebViewForceDisable3pcs[] = "webview-force-disable-3pcs";
+
+// Enables crashes during WebView startup in the Java layer
+const char kWebViewForceCrashJava[] = "webview-force-crash-java";
+
+// Enables crashes during WebView startup in the Native layer
+const char kWebViewForceCrashNative[] = "webview-force-crash-native";
+
+// Use WebView's context for resource lookups instead of the embedding app's.
+const char kWebViewUseSeparateResourceContext[] =
+    "webview-use-separate-resource-context";
+
+// Override and enable features useful for BSA library testing/debugging.
+const char kDebugBsa[] = "debug-bsa";
 
 }  // namespace switches

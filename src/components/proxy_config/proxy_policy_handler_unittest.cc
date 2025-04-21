@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/proxy_config/proxy_policy_handler.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/ptr_util.h"
@@ -18,7 +19,6 @@
 #include "components/proxy_config/proxy_config_dictionary.h"
 #include "components/proxy_config/proxy_config_pref_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using policy::ConfigurationPolicyHandler;
 using policy::ConfigurationPolicyPrefStore;
@@ -59,13 +59,13 @@ class ProxyPolicyHandlerTest : public ConfigurationPolicyPrefStoreTest {
   // Verify that all the proxy prefs are set to the specified expected values.
   void VerifyProxyPrefs(const std::string& expected_proxy_server,
                         const std::string& expected_proxy_pac_url,
-                        absl::optional<bool> expected_proxy_pac_mandatory,
+                        std::optional<bool> expected_proxy_pac_mandatory,
                         const std::string& expected_proxy_bypass_list,
                         const ProxyPrefs::ProxyMode& expected_proxy_mode) {
     const base::Value* value = nullptr;
     ASSERT_TRUE(store_->GetValue(proxy_config::prefs::kProxy, &value));
     ASSERT_TRUE(value->is_dict());
-    ProxyConfigDictionary dict(value->Clone());
+    ProxyConfigDictionary dict(value->GetDict().Clone());
     std::string s;
     bool b;
     if (expected_proxy_server.empty()) {
@@ -113,7 +113,7 @@ TEST_F(ProxyPolicyHandlerTest, ManualOptions) {
       nullptr);
   UpdateProviderPolicy(policy);
 
-  VerifyProxyPrefs("chromium.org", std::string(), absl::nullopt,
+  VerifyProxyPrefs("chromium.org", std::string(), std::nullopt,
                    "http://chromium.org/override",
                    ProxyPrefs::MODE_FIXED_SERVERS);
 }
@@ -133,7 +133,7 @@ TEST_F(ProxyPolicyHandlerTest, ManualOptionsReversedApplyOrder) {
              POLICY_SOURCE_CLOUD, base::Value("chromium.org"), nullptr);
   UpdateProviderPolicy(policy);
 
-  VerifyProxyPrefs("chromium.org", std::string(), absl::nullopt,
+  VerifyProxyPrefs("chromium.org", std::string(), std::nullopt,
                    "http://chromium.org/override",
                    ProxyPrefs::MODE_FIXED_SERVERS);
 }
@@ -158,7 +158,7 @@ TEST_F(ProxyPolicyHandlerTest, NoProxyServerMode) {
              POLICY_SOURCE_CLOUD,
              base::Value(ProxyPolicyHandler::PROXY_SERVER_MODE), nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_DIRECT);
 }
 
@@ -168,7 +168,7 @@ TEST_F(ProxyPolicyHandlerTest, NoProxyModeName) {
              POLICY_SOURCE_CLOUD, base::Value(ProxyPrefs::kDirectProxyModeName),
              nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_DIRECT);
 }
 
@@ -180,7 +180,7 @@ TEST_F(ProxyPolicyHandlerTest, AutoDetectProxyServerMode) {
       base::Value(ProxyPolicyHandler::PROXY_AUTO_DETECT_PROXY_SERVER_MODE),
       nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_AUTO_DETECT);
 }
 
@@ -190,7 +190,7 @@ TEST_F(ProxyPolicyHandlerTest, AutoDetectProxyModeName) {
              POLICY_SOURCE_CLOUD,
              base::Value(ProxyPrefs::kAutoDetectProxyModeName), nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_AUTO_DETECT);
 }
 
@@ -210,10 +210,10 @@ TEST_F(ProxyPolicyHandlerTest, PacScriptProxyMode) {
 
 // ProxyPacMandatory can be set only via ProxySettings.
 TEST_F(ProxyPolicyHandlerTest, PacScriptProxyModeWithPacMandatory) {
-  base::Value proxy_settings(base::Value::Type::DICTIONARY);
-  proxy_settings.SetStringKey(kProxyPacUrl, "http://short.org/proxy.pac");
-  proxy_settings.SetStringKey(kProxyMode, ProxyPrefs::kPacScriptProxyModeName);
-  proxy_settings.SetBoolKey(kProxyPacMandatory, true);
+  base::Value proxy_settings(base::Value::Type::DICT);
+  proxy_settings.GetDict().Set(kProxyPacUrl, "http://short.org/proxy.pac");
+  proxy_settings.GetDict().Set(kProxyMode, ProxyPrefs::kPacScriptProxyModeName);
+  proxy_settings.GetDict().Set(kProxyPacMandatory, true);
 
   PolicyMap policy;
   policy.Set(kProxySettings, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
@@ -259,7 +259,7 @@ TEST_F(ProxyPolicyHandlerTest, UseSystemProxyServerMode) {
       base::Value(ProxyPolicyHandler::PROXY_USE_SYSTEM_PROXY_SERVER_MODE),
       nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_SYSTEM);
 }
 
@@ -269,7 +269,7 @@ TEST_F(ProxyPolicyHandlerTest, UseSystemProxyMode) {
              POLICY_SOURCE_CLOUD, base::Value(ProxyPrefs::kSystemProxyModeName),
              nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_SYSTEM);
 }
 
@@ -282,7 +282,7 @@ TEST_F(ProxyPolicyHandlerTest, ProxyModeOverridesProxyServerMode) {
              POLICY_SOURCE_CLOUD,
              base::Value(ProxyPrefs::kAutoDetectProxyModeName), nullptr);
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_AUTO_DETECT);
 }
 
@@ -323,7 +323,7 @@ TEST_F(ProxyPolicyHandlerTest, SeparateProxyPoliciesMerging) {
              nullptr);
 
   UpdateProviderPolicy(policy);
-  VerifyProxyPrefs(std::string(), std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(std::string(), std::string(), std::nullopt, std::string(),
                    ProxyPrefs::MODE_SYSTEM);
 }
 

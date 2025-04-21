@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <gtest/gtest.h>
 #include <stddef.h>
@@ -56,7 +61,7 @@ static const CommandLineTestParams kCommandLineTestParams[] = {
         "No proxy",
         // Input
         {
-            {switches::kNoProxyServer, NULL},
+            {switches::kNoProxyServer, nullptr},
         },
         // Expected result
         false,  // is_null
@@ -68,7 +73,7 @@ static const CommandLineTestParams kCommandLineTestParams[] = {
         "No proxy with extra parameters.",
         // Input
         {
-            {switches::kNoProxyServer, NULL},
+            {switches::kNoProxyServer, nullptr},
             {switches::kProxyServer, "http://proxy:8888"},
         },
         // Expected result
@@ -139,7 +144,7 @@ static const CommandLineTestParams kCommandLineTestParams[] = {
         "Autodetect",
         // Input
         {
-            {switches::kProxyAutoDetect, NULL},
+            {switches::kProxyAutoDetect, nullptr},
         },
         // Expected result
         false,  // is_null

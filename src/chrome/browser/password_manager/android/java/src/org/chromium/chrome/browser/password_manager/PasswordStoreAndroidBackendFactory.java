@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.password_manager;
 
-import static org.chromium.base.ThreadUtils.assertOnUiThread;
-
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
+
+import org.chromium.base.ResettersForTesting;
+import org.chromium.base.ServiceLoaderUtil;
+import org.chromium.chrome.browser.password_manager.PasswordStoreAndroidBackend.BackendException;
 
 /**
  * This factory returns an implementation for the backend. The factory itself is implemented
@@ -23,8 +24,12 @@ public abstract class PasswordStoreAndroidBackendFactory {
      * @return The shared {@link PasswordStoreAndroidBackendFactory} instance.
      */
     public static PasswordStoreAndroidBackendFactory getInstance() {
-        assertOnUiThread();
-        if (sInstance == null) sInstance = new PasswordStoreAndroidBackendFactoryImpl();
+        if (sInstance == null) {
+            sInstance = ServiceLoaderUtil.maybeCreate(PasswordStoreAndroidBackendFactory.class);
+        }
+        if (sInstance == null) {
+            sInstance = new PasswordStoreAndroidBackendFactoryUpstreamImpl();
+        }
         return sInstance;
     }
 
@@ -34,22 +39,26 @@ public abstract class PasswordStoreAndroidBackendFactory {
      * @return A non-null implementation of the {@link PasswordStoreAndroidBackend}.
      */
     public PasswordStoreAndroidBackend createBackend() {
-        assert canCreateBackend() : "Ensure that prerequisites of `canCreateBackend` are met!";
         return null;
     }
 
     /**
-     * Returns whether a down-stream implementation can be instantiated.
+     * Creates and returns new instance of the downstream implementation provided by subclasses.
      *
-     * @return True iff all preconditions for using the down-steam implementations are fulfilled.
+     * <p>Downstream should override this method with actual implementation.
+     *
+     * @return An implementation of the {@link PasswordStoreAndroidBackend} if one exists.
      */
-    public boolean canCreateBackend() {
-        return false;
+    protected PasswordStoreAndroidBackend doCreateBackend() throws BackendException {
+        throw new BackendException(
+                "Downstream implementation is not present.",
+                AndroidBackendErrorType.BACKEND_NOT_AVAILABLE);
     }
 
-    @VisibleForTesting
     public static void setFactoryInstanceForTesting(
             @Nullable PasswordStoreAndroidBackendFactory factory) {
+        var oldValue = sInstance;
         sInstance = factory;
+        ResettersForTesting.register(() -> sInstance = oldValue);
     }
 }

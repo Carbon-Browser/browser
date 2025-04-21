@@ -1,10 +1,12 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gfx/half_float.h"
 
 #include <math.h>
+
+#include <array>
 
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -71,10 +73,17 @@ TEST_F(HalfFloatTest, NoCrashTest) {
 }
 
 TEST_F(HalfFloatTest, SimpleTest) {
-  static float test[] = {
-      0.0f,    1.0f,    10.0f,    1000.0f,  65503.0f,
-      1.0E-3f, 1.0E-6f, 1.0E-20f, 1.0E-44f,
-  };
+  static auto test = std::to_array<float>({
+      0.0f,
+      1.0f,
+      10.0f,
+      1000.0f,
+      65503.0f,
+      1.0E-3f,
+      1.0E-6f,
+      1.0E-20f,
+      1.0E-44f,
+  });
   for (size_t i = 0; i < std::size(test); i++) {
     EXPECT_EQ(ConvertTruth(test[i]), Convert(test[i])) << " float = "
                                                        << test[i];

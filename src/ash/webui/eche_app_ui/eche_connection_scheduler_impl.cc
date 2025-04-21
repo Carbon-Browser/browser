@@ -1,12 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/eche_app_ui/eche_connection_scheduler_impl.h"
 
-#include "ash/components/multidevice/logging/logging.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
 
 namespace ash {
 namespace eche_app {
@@ -121,7 +121,7 @@ void EcheConnectionSchedulerImpl::ScheduleConnectionIfNeeded() {
                     << " seconds.";
 
     retry_backoff_.InformOfRequest(/*succeeded=*/false);
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&EcheConnectionSchedulerImpl::ScheduleConnectionNow,
                        weak_ptr_factory_.GetWeakPtr()),

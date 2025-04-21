@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class GIN_EXPORT V8Initializer {
  public:
   // This should be called by IsolateHolder::Initialize().
   static void Initialize(IsolateHolder::ScriptMode mode,
-                         const std::string js_command_line_flags = {},
+                         const std::string& js_command_line_flags = {},
                          v8::OOMErrorCallback oom_error_callback = nullptr);
 
   // Get address and size information for currently loaded snapshot.

@@ -1,8 +1,6 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "components/exo/wayland/clients/client_base.h"
 
 #include <linux-explicit-synchronization-unstable-v1-client-protocol.h>
 
@@ -14,10 +12,11 @@
 #include "base/files/scoped_file.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_executor.h"
+#include "components/exo/wayland/clients/client_base.h"
 #include "components/exo/wayland/clients/client_helper.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkSurface.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gl/gl_bindings.h"
 
@@ -37,7 +36,7 @@ void BufferReleaseFencedRelease(
     int32_t fd) {
   ClientBase::Buffer* buffer = static_cast<ClientBase::Buffer*>(data);
   gfx::GpuFenceHandle release_fence;
-  release_fence.owned_fd = base::ScopedFD(fd);
+  release_fence.Adopt(base::ScopedFD(fd));
   gfx::GpuFence(std::move(release_fence)).Wait();
   buffer->busy = false;
 }

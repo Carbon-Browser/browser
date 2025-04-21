@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,8 +50,6 @@ export function addTextItemToMenu(
 
 /**
  * Clear all the items in the menu except the header.
- *
- * @param menu The menu to clean.
  */
 export function clearMenu(menu: ParentNode): void {
   const toBeRemoved = [];
@@ -127,7 +125,7 @@ export function toAspectRatioAriaLabel(aspectRatioSet: AspectRatioSet): string {
 /**
  * Gets the string with I18n from given video resolution level.
  */
-export function toVideoResoloutionOptionLabel(level: VideoResolutionLevel):
+export function toVideoResolutionOptionLabel(level: VideoResolutionLevel):
     string {
   let label;
   switch (level) {
@@ -142,6 +140,9 @@ export function toVideoResoloutionOptionLabel(level: VideoResolutionLevel):
       break;
     case VideoResolutionLevel.HD:
       label = I18nString.LABEL_VIDEO_RESOLUTION_HD;
+      break;
+    case VideoResolutionLevel.THREE_SIXTY_P:
+      label = I18nString.LABEL_VIDEO_RESOLUTION_360P;
       break;
     case VideoResolutionLevel.FULL:
       label = I18nString.LABEL_FULL_RESOLUTION;

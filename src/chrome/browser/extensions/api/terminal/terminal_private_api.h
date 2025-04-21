@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,14 @@
 #define CHROME_BROWSER_EXTENSIONS_API_TERMINAL_TERMINAL_PRIVATE_API_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "chrome/browser/ash/crostini/crostini_simple_types.h"
-#include "chrome/browser/profiles/profile.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
-#include "components/value_store/value_store.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_function.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefChangeRegistrar;
 
@@ -25,7 +23,7 @@ struct GuestId;
 
 namespace extensions {
 
-class CrostiniStartupStatus;
+class StartupStatus;
 
 class TerminalPrivateAPI : public BrowserContextKeyedAPI {
  public:
@@ -46,7 +44,7 @@ class TerminalPrivateAPI : public BrowserContextKeyedAPI {
   // BrowserContextKeyedAPI implementation.
   static const char* service_name() { return "TerminalPrivateAPI"; }
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 };
 
@@ -65,13 +63,13 @@ class TerminalPrivateOpenTerminalProcessFunction : public ExtensionFunction {
   // Open the specified |process_name| with supplied |args|.
   ExtensionFunction::ResponseAction OpenProcess(
       const std::string& process_name,
-      std::unique_ptr<std::vector<std::string>> args);
+      std::optional<std::vector<std::string>> args);
 
  private:
-  void OnCrostiniRestarted(
-      const std::string& user_id_hash,
-      base::CommandLine cmdline,
-      crostini::CrostiniResult result);
+  void OnGuestRunning(const std::string& user_id_hash,
+                      base::CommandLine cmdline,
+                      bool success,
+                      std::string failure_reason);
 
   void OpenVmshellProcess(const std::string& user_id_hash,
                           base::CommandLine cmdline);
@@ -80,7 +78,7 @@ class TerminalPrivateOpenTerminalProcessFunction : public ExtensionFunction {
       const std::string& user_id_hash,
       base::CommandLine cmdline,
       const std::string& terminal_id,
-      absl::optional<vm_tools::cicerone::GetVshSessionResponse>);
+      std::optional<vm_tools::cicerone::GetVshSessionResponse>);
 
   void OpenProcess(const std::string& user_id_hash,
                    base::CommandLine cmdline);
@@ -96,8 +94,8 @@ class TerminalPrivateOpenTerminalProcessFunction : public ExtensionFunction {
                                 base::CommandLine cmdline,
                                 const std::string& user_id_hash);
   void RespondOnUIThread(bool success, const std::string& terminal_id);
-  std::unique_ptr<CrostiniStartupStatus> startup_status_;
-  std::unique_ptr<guest_os::GuestId> container_id_;
+  std::unique_ptr<StartupStatus> startup_status_;
+  std::unique_ptr<guest_os::GuestId> guest_id_;
 };
 
 // Opens new vmshell process. Returns the new terminal id.
@@ -128,6 +126,7 @@ class TerminalPrivateSendInputFunction : public ExtensionFunction {
  private:
   void SendInputOnRegistryTaskRunner(const std::string& terminal_id,
                                      const std::string& input);
+  void OnSendInput(bool success);
   void RespondOnUIThread(bool success);
 };
 

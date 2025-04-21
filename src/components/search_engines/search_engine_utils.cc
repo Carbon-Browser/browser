@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,24 +33,20 @@ SearchEngineType GetEngineType(const GURL& url) {
   // First special-case Google, because the prepopulate URL for it will not
   // convert to a GURL and thus won't have an origin.  Instead see if the
   // incoming URL's host is "[*.]google.<TLD>".
-  if (google_util::IsGoogleHostname(url.host(),
-                                    google_util::DISALLOW_SUBDOMAIN))
+  if (google_util::IsGoogleDomainUrl(url, google_util::DISALLOW_SUBDOMAIN,
+                                     google_util::ALLOW_NON_STANDARD_PORTS))
     return TemplateURLPrepopulateData::google.type;
 
   // Now check the rest of the prepopulate data.
-  for (size_t i = 0; i < TemplateURLPrepopulateData::kAllEnginesLength; ++i) {
-    // First check the main search URL.
-    if (SameDomain(
-            url, GURL(TemplateURLPrepopulateData::kAllEngines[i]->search_url)))
-      return TemplateURLPrepopulateData::kAllEngines[i]->type;
+  for (const auto* engine : TemplateURLPrepopulateData::kAllEngines) {
+    if (SameDomain(url, GURL(engine->search_url))) {
+      return engine->type;
+    }
 
-    // Then check the alternate URLs.
-    for (size_t j = 0;
-         j < TemplateURLPrepopulateData::kAllEngines[i]->alternate_urls_size;
-         ++j) {
-      if (SameDomain(url, GURL(TemplateURLPrepopulateData::kAllEngines[i]
-                                   ->alternate_urls[j])))
-        return TemplateURLPrepopulateData::kAllEngines[i]->type;
+    for (const auto* alt_url : engine->alternate_urls) {
+      if (SameDomain(url, GURL(alt_url))) {
+        return engine->type;
+      }
     }
   }
 

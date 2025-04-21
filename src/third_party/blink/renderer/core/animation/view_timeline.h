@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,10 @@
 #include "base/time/time.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline.h"
+#include "third_party/blink/renderer/core/animation/timeline_inset.h"
+#include "third_party/blink/renderer/core/animation/timeline_range.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 
 namespace blink {
@@ -29,17 +32,48 @@ class CORE_EXPORT ViewTimeline : public ScrollTimeline {
  public:
   static ViewTimeline* Create(Document&, ViewTimelineOptions*, ExceptionState&);
 
-  ViewTimeline(Document*, Element* subject, ScrollDirection orientation);
+  ViewTimeline(Document*, Element* subject, ScrollAxis axis, TimelineInset);
 
   bool IsViewTimeline() const override { return true; }
 
+  CSSNumericValue* getCurrentTime(const String& rangeName) override;
+
   // IDL API implementation.
-  Element* subject() const { return ReferenceElement(); }
+  Element* subject() const;
+
+  bool Matches(Element* subject, ScrollAxis, const TimelineInset&) const;
+
+  const TimelineInset& GetInset() const;
+
+  CSSNumericValue* startOffset() const;
+  CSSNumericValue* endOffset() const;
+
+  void Trace(Visitor*) const override;
 
  protected:
-  absl::optional<ScrollOffsets> CalculateOffsets(
-      PaintLayerScrollableArea* scrollable_area,
-      ScrollOrientation physical_orientation) const override;
+  void CalculateOffsets(PaintLayerScrollableArea* scrollable_area,
+                        ScrollOrientation physical_orientation,
+                        TimelineState* state) const override;
+
+ private:
+  double ToFractionalOffset(const TimelineOffset& timeline_offset) const;
+
+  std::optional<gfx::SizeF> SubjectSize() const;
+  std::optional<gfx::PointF> SubjectPosition(LayoutBox* scroll_container) const;
+
+  void ApplyStickyAdjustments(ScrollOffsets& scroll_offsets,
+                              ViewOffsets& view_offsets,
+                              double viewport_size,
+                              double target_size,
+                              double target_offset,
+                              ScrollOrientation orientation,
+                              LayoutBox* scroll_container) const;
+
+  TimelineInset inset_;
+  // If either of the following elements are non-null, we need to update
+  // |inset_| on a style change.
+  Member<const CSSValue> style_dependant_start_inset_;
+  Member<const CSSValue> style_dependant_end_inset_;
 };
 
 template <>

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -50,16 +51,14 @@ class FrameAssociatedMeasurementDelegate : public v8::MeasureMemoryDelegate {
     return true;
   }
 
-  void MeasurementComplete(
-      const std::vector<std::pair<v8::Local<v8::Context>, size_t>>&
-          context_sizes_in_bytes,
-      size_t unattributed_size_in_bytes) override {
+  void MeasurementComplete(v8::MeasureMemoryDelegate::Result result) override {
     DCHECK(IsMainThread());
     mojom::blink::PerIsolateV8MemoryUsagePtr isolate_memory_usage =
         mojom::blink::PerIsolateV8MemoryUsage::New();
-    for (const auto& context_and_size : context_sizes_in_bytes) {
-      const v8::Local<v8::Context>& context = context_and_size.first;
-      const size_t size = context_and_size.second;
+    DCHECK_EQ(result.contexts.size(), result.sizes_in_bytes.size());
+    for (size_t i = 0; i < result.contexts.size(); ++i) {
+      const v8::Local<v8::Context>& context = result.contexts[i];
+      const size_t size = result.sizes_in_bytes[i];
 
       LocalFrame* frame = ToLocalFrameIfNotDetached(context);
 
@@ -71,7 +70,8 @@ class FrameAssociatedMeasurementDelegate : public v8::MeasureMemoryDelegate {
         isolate_memory_usage->detached_bytes_used += size;
         continue;
       }
-      if (DOMWrapperWorld::World(context).GetWorldId() !=
+      v8::Isolate* isolate = context->GetIsolate();
+      if (DOMWrapperWorld::World(isolate, context).GetWorldId() !=
           DOMWrapperWorld::kMainWorldId) {
         // TODO(crbug.com/1085129): Handle extension contexts once they get
         // their own V8ContextToken.
@@ -89,7 +89,7 @@ class FrameAssociatedMeasurementDelegate : public v8::MeasureMemoryDelegate {
 #endif
       isolate_memory_usage->contexts.push_back(std::move(context_memory_usage));
     }
-    isolate_memory_usage->shared_bytes_used = unattributed_size_in_bytes;
+    isolate_memory_usage->shared_bytes_used = result.unattributed_size_in_bytes;
     std::move(callback_).Run(std::move(isolate_memory_usage));
   }
 
@@ -142,16 +142,16 @@ class V8ProcessMemoryReporter : public RefCounted<V8ProcessMemoryReporter> {
       MainMeasurementComplete(mojom::blink::PerIsolateV8MemoryUsage::New());
     } else {
       auto delegate = std::make_unique<FrameAssociatedMeasurementDelegate>(
-          WTF::Bind(&V8ProcessMemoryReporter::MainV8MeasurementComplete,
-                    scoped_refptr<V8ProcessMemoryReporter>(this)));
+          WTF::BindOnce(&V8ProcessMemoryReporter::MainV8MeasurementComplete,
+                        scoped_refptr<V8ProcessMemoryReporter>(this)));
 
       isolate_->MeasureMemory(std::move(delegate),
                               ToV8MeasureMemoryExecution(mode));
     }
     // 2. Start measurement of all worker isolates.
     V8WorkerMemoryReporter::GetMemoryUsage(
-        WTF::Bind(&V8ProcessMemoryReporter::WorkerMeasurementComplete,
-                  scoped_refptr<V8ProcessMemoryReporter>(this)),
+        WTF::BindOnce(&V8ProcessMemoryReporter::WorkerMeasurementComplete,
+                      scoped_refptr<V8ProcessMemoryReporter>(this)),
         ToV8MeasureMemoryExecution(mode));
   }
 
@@ -167,9 +167,9 @@ class V8ProcessMemoryReporter : public RefCounted<V8ProcessMemoryReporter> {
     // heap given by ThreadState::Current() is attached to the main V8
     // isolate given by v8::Isolate::GetCurrent().
     ThreadState::Current()->CollectNodeAndCssStatistics(
-        WTF::Bind(&V8ProcessMemoryReporter::MainBlinkMeasurementComplete,
-                  scoped_refptr<V8ProcessMemoryReporter>(this),
-                  std::move(isolate_memory_usage)));
+        WTF::BindOnce(&V8ProcessMemoryReporter::MainBlinkMeasurementComplete,
+                      scoped_refptr<V8ProcessMemoryReporter>(this),
+                      std::move(isolate_memory_usage)));
   }
 
   void MainBlinkMeasurementComplete(
@@ -241,7 +241,7 @@ class V8ProcessMemoryReporter : public RefCounted<V8ProcessMemoryReporter> {
 
     std::move(callback_).Run(std::move(result_));
   }
-  v8::Isolate* isolate_ = nullptr;
+  raw_ptr<v8::Isolate> isolate_ = nullptr;
   GetV8MemoryUsageCallback callback_;
   mojom::blink::PerProcessV8MemoryUsagePtr result_;
   bool main_measurement_done_ = false;

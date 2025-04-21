@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/download/internal/background_service/scheduler/battery_status_listener_impl.h"
 #include "components/download/network/network_status_listener_impl.h"
 #include "services/network/test/test_network_connection_tracker.h"
@@ -60,7 +61,7 @@ void TestDeviceStatusListener::Start(const base::TimeDelta& start_delay) {
   listening_ = true;
 
   // Simulates the delay after start up.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TestDeviceStatusListener::StartAfterDelay,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

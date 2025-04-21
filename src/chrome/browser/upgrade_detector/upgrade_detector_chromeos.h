@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,12 @@ class UpgradeDetectorChromeos : public UpgradeDetector,
   // user that a new version is available.
   void NotifyOnUpgrade();
 
-  absl::optional<InstalledVersionUpdater> installed_version_updater_;
+  // The function that sends out a notification (after a certain time has
+  // elapsed) that lets the rest of the UI know we should start notifying the
+  // user that an update is available but deferred.
+  void NotifyOnDeferredUpgrade();
+
+  std::optional<InstalledVersionUpdater> installed_version_updater_;
 
   // The time when elevated annoyance deadline is reached.
   base::Time elevated_deadline_;
@@ -97,9 +102,6 @@ class UpgradeDetectorChromeos : public UpgradeDetector,
   // call UpgradeDetector::NotifyUpgrade.
   base::OneShotTimer upgrade_notification_timer_;
   bool initialized_;
-
-  // Indicates whether the flag status has been sent to update engine.
-  bool toggled_update_flag_;
 
   // Indicates whether there is an update in progress.
   bool update_in_progress_;

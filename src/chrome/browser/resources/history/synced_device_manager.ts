@@ -1,40 +1,40 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './shared_style.css.js';
 import './synced_device_card.js';
-import './strings.m.js';
+import '/strings.m.js';
 
-import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {FocusGrid} from 'chrome://resources/js/cr/ui/focus_grid.js';
-import {FocusRow} from 'chrome://resources/js/cr/ui/focus_row.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import type {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {FocusGrid} from 'chrome://resources/js/focus_grid.js';
+import type {FocusRow} from 'chrome://resources/js/focus_row.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {Debouncer, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
 import {SYNCED_TABS_HISTOGRAM_NAME, SyncedTabsHistogram} from './constants.js';
-import {ForeignSession, ForeignSessionTab} from './externs.js';
-import {HistorySyncedDeviceCardElement} from './synced_device_card.js';
+import type {ForeignSession, ForeignSessionTab} from './externs.js';
+import type {HistorySyncedDeviceCardElement} from './synced_device_card.js';
 import {getTemplate} from './synced_device_manager.html.js';
 
-type ForeignDeviceInternal = {
-  device: string,
-  lastUpdateTime: string,
-  opened: boolean,
-  separatorIndexes: number[],
-  timestamp: number,
-  tabs: ForeignSessionTab[],
-  tag: string,
-};
+interface ForeignDeviceInternal {
+  device: string;
+  lastUpdateTime: string;
+  opened: boolean;
+  separatorIndexes: number[];
+  timestamp: number;
+  tabs: ForeignSessionTab[];
+  tag: string;
+}
 
 declare global {
   interface HTMLElementEventMap {
@@ -188,7 +188,7 @@ export class HistorySyncedDeviceManagerElement extends PolymerElement {
     };
   }
 
-  private onTurnOnSyncTap_() {
+  private onTurnOnSyncClick_() {
     BrowserServiceImpl.getInstance().startTurnOnSyncFlow();
   }
 
@@ -200,7 +200,7 @@ export class HistorySyncedDeviceManagerElement extends PolymerElement {
         SyncedTabsHistogram.LIMIT);
   }
 
-  private onOpenAllTap_() {
+  private onOpenAllClick_() {
     const menu = this.$.menu.getIfExists();
     assert(menu);
     const browserService = BrowserServiceImpl.getInstance();
@@ -235,7 +235,7 @@ export class HistorySyncedDeviceManagerElement extends PolymerElement {
     });
   }
 
-  private onDeleteSessionTap_() {
+  private onDeleteSessionClick_() {
     const menu = this.$.menu.getIfExists();
     assert(menu);
     const browserService = BrowserServiceImpl.getInstance();

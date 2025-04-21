@@ -1,4 +1,4 @@
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   const {page, session, dp} = await testRunner.startBlank(
       `Tests that browser.Target.setAutoAttach() attaches to window.open targets.`);
 
@@ -14,7 +14,6 @@
   const attachedEvent = await target.onceAttachedToTarget();
   testRunner.log('Attached to window, waitingForDebugger=' + attachedEvent.params.waitingForDebugger);
   const popupSession = new TestRunner.Session(testRunner, attachedEvent.params.sessionId);
-  const changedPromise = target.onceTargetInfoChanged();
   popupSession.protocol.Page.enable();
   await popupSession.protocol.Emulation.setUserAgentOverride({userAgent: 'Lynx v0.1'});
   popupSession.protocol.Runtime.runIfWaitingForDebugger();

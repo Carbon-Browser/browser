@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,9 @@
 // (e.g. backgroundColor, textDecoration, etc.).
 
 // Spec draft:
-// https://w3c.github.io/editing/docs/EditContext/index.html#textformatupdateevent
+// https://w3c.github.io/edit-context/#textformatupdateevent
 [
-    Exposed=Window,
-    RuntimeEnabled=EditContext
+  Exposed=Window
 ] interface TextFormatUpdateEvent : Event {
     constructor(DOMString type, optional TextFormatUpdateEventInit options = {});
 

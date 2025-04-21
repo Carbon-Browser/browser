@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/media/output_protection_proxy.h"
 #include "content/public/browser/browser_thread.h"
@@ -33,7 +33,7 @@ OutputProtectionImpl::OutputProtectionImpl(
     content::RenderFrameHost& render_frame_host,
     mojo::PendingReceiver<media::mojom::OutputProtection> receiver)
     : DocumentService(render_frame_host, std::move(receiver)),
-      render_process_id_(render_frame_host.GetProcess()->GetID()),
+      render_process_id_(render_frame_host.GetProcess()->GetDeprecatedID()),
       render_frame_id_(render_frame_host.GetRoutingID()) {}
 
 OutputProtectionImpl::~OutputProtectionImpl() {

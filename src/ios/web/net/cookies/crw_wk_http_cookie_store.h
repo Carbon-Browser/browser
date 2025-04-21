@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,26 +17,32 @@
 // wrapped WKHTTPCookieStore.
 @interface CRWWKHTTPCookieStore : NSObject
 
-// CRWWKHTTPCookieStore will not retain the WKHTTPCookieStore instance, and it
-// will be deleted with the owning WKWebSiteDataStore.
-// Note: CookieStore must be set before any web view that uses it is created.
-@property(nonatomic, weak) WKHTTPCookieStore* HTTPCookieStore;
+// WKHTTPCookieStore will be accessed via `websiteDataStore`.
+// CRWWKHTTPCookieStore will not retain the WKWebsiteDataStore and
+// WKHTTPCookieStore instances, and they will be deleted while tearing down an
+// application.
+// Note: the data store must be set before any web view that uses it is created.
+@property(nonatomic, weak) WKWebsiteDataStore* websiteDataStore;
 
 // Fetches all stored cookies. If the store didn't change between calls, this
 // method will return the cached result of the last call.
-// TODO(crbug.com/946171): Remove caching when WKHTTPCookieStore performance bug
-// is fixed.
+// TODO(crbug.com/40620220): Remove caching when WKHTTPCookieStore performance
+// bug is fixed.
 - (void)getAllCookies:(void (^)(NSArray<NSHTTPCookie*>*))completionHandler;
 
-// Sets |cookie| to the store, and invokes |completionHandler| after cookie is
+// Sets `cookie` to the store, and invokes `completionHandler` after cookie is
 // set.
 - (void)setCookie:(NSHTTPCookie*)cookie
     completionHandler:(void (^)(void))completionHandler;
 
-// Deletes |cookie| from the store, and invokes |completionHandler| after cookie
+// Deletes `cookie` from the store, and invokes `completionHandler` after cookie
 // is deleted.
 - (void)deleteCookie:(NSHTTPCookie*)cookie
     completionHandler:(void (^)(void))completionHandler;
+
+// Deletes all cookies from the store, and invokes `completionHandler` after
+// they have all been deleted.
+- (void)clearCookies:(void (^)(void))completionHandler;
 
 @end
 

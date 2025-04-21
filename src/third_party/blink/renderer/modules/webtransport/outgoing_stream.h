@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,13 @@
 #include <cstdint>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
@@ -72,10 +74,10 @@ class MODULES_EXPORT OutgoingStream final
   WritableStream* Writable() const {
     DVLOG(1) << "OutgoingStream::writable() called";
 
-    return writable_;
+    return writable_.Get();
   }
 
-  ScriptState* GetScriptState() { return script_state_; }
+  ScriptState* GetScriptState() { return script_state_.Get(); }
 
   // Called from WebTransport via a WebTransportStream.
   void OnOutgoingStreamClosed();
@@ -108,11 +110,14 @@ class MODULES_EXPORT OutgoingStream final
   void HandlePipeClosed();
 
   // Implements UnderlyingSink::write().
-  ScriptPromise SinkWrite(ScriptState*, ScriptValue chunk, ExceptionState&);
+  ScriptPromise<IDLUndefined> SinkWrite(ScriptState*,
+                                        ScriptValue chunk,
+                                        ExceptionState&);
 
   // Writes |data| to |data_pipe_|, possible saving unwritten data to
   // |cached_data_|.
-  ScriptPromise WriteOrCacheData(ScriptState*, base::span<const uint8_t> data);
+  ScriptPromise<IDLUndefined> WriteOrCacheData(ScriptState*,
+                                               base::span<const uint8_t> data);
 
   // Attempts to write some more of |cached_data_| to |data_pipe_|.
   void WriteCachedData();
@@ -139,24 +144,6 @@ class MODULES_EXPORT OutgoingStream final
   // Prepares the object for destruction.
   void Dispose();
 
-  class CachedDataBuffer {
-   public:
-    CachedDataBuffer(v8::Isolate* isolate, const uint8_t* data, size_t length);
-
-    ~CachedDataBuffer();
-
-    size_t length() const { return length_; }
-
-    uint8_t* data() { return buffer_; }
-
-   private:
-    // We need the isolate to call |AdjustAmountOfExternalAllocatedMemory| for
-    // the memory stored in |buffer_|.
-    v8::Isolate* isolate_;
-    size_t length_ = 0u;
-    uint8_t* buffer_ = nullptr;
-  };
-
   const Member<ScriptState> script_state_;
   Member<Client> client_;
   mojo::ScopedDataPipeProducerHandle data_pipe_;
@@ -172,6 +159,7 @@ class MODULES_EXPORT OutgoingStream final
   // Uses a custom CachedDataBuffer rather than a Vector because
   // WTF::Vector is currently limited to 2GB.
   // TODO(ricea): Change this to a Vector when it becomes 64-bit safe.
+  class CachedDataBuffer;
   std::unique_ptr<CachedDataBuffer> cached_data_;
 
   // The offset into |cached_data_| of the first byte that still needs to be
@@ -179,17 +167,18 @@ class MODULES_EXPORT OutgoingStream final
   size_t offset_ = 0;
 
   Member<WritableStream> writable_;
+  Member<AbortSignal::AlgorithmHandle> send_stream_abort_handle_;
   Member<WritableStreamDefaultController> controller_;
 
   // If an asynchronous write() on the underlying sink object is pending, this
   // will be non-null.
-  Member<ScriptPromiseResolver> write_promise_resolver_;
+  Member<ScriptPromiseResolver<IDLUndefined>> write_promise_resolver_;
 
   // If a close() on the underlying sink object is pending, this will be
   // non-null.
-  Member<ScriptPromiseResolver> close_promise_resolver_;
+  Member<ScriptPromiseResolver<IDLUndefined>> close_promise_resolver_;
 
-  Member<ScriptPromiseResolver> pending_operation_;
+  Member<ScriptPromiseResolver<IDLUndefined>> pending_operation_;
 
   State state_ = State::kOpen;
 };

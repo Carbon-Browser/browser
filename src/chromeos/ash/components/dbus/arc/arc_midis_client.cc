@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chromeos/ash/components/dbus/arc/arc_midis_client.h"
@@ -6,9 +6,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_midis_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -34,8 +35,9 @@ class ArcMidisClientImpl : public ArcMidisClient {
 
   ~ArcMidisClientImpl() override = default;
 
-  void BootstrapMojoConnection(base::ScopedFD fd,
-                               VoidDBusMethodCallback callback) override {
+  void BootstrapMojoConnection(
+      base::ScopedFD fd,
+      chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(midis::kMidisInterfaceName,
                                  midis::kBootstrapMojoConnectionMethod);
     dbus::MessageWriter writer(&method_call);
@@ -53,12 +55,12 @@ class ArcMidisClientImpl : public ArcMidisClient {
   }
 
  private:
-  void OnVoidDBusMethod(VoidDBusMethodCallback callback,
+  void OnVoidDBusMethod(chromeos::VoidDBusMethodCallback callback,
                         dbus::Response* response) {
     std::move(callback).Run(response != nullptr);
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

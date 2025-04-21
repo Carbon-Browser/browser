@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,32 @@
 
 #include <stdint.h>
 
-#include "base/containers/flat_map.h"
+#include <memory>
+#include <optional>
+#include <string>
+
+#include "base/containers/flat_set.h"
+#include "base/time/time.h"
+#include "build/build_config.h"
+#include "build/buildflag.h"
+#include "components/attribution_reporting/data_host.mojom-forward.h"
+#include "content/browser/attribution_reporting/attribution_suitable_context.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_frame_host_receiver_set.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
+#include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "third_party/blink/public/mojom/conversions/conversions.mojom.h"
 
 namespace content {
 
+struct AttributionInputEvent;
+class RenderFrameHost;
 class WebContents;
+
+#if BUILDFLAG(IS_ANDROID)
+class AttributionInputEventTrackerAndroid;
+#endif
 
 // Class responsible for listening to conversion events originating from blink,
 // and verifying that they are valid. Owned by the WebContents. Lifetime is
@@ -24,55 +40,77 @@ class WebContents;
 class CONTENT_EXPORT AttributionHost
     : public WebContentsObserver,
       public WebContentsUserData<AttributionHost>,
-      public blink::mojom::ConversionHost {
+      public blink::mojom::AttributionHost {
  public:
   explicit AttributionHost(WebContents* web_contents);
-  AttributionHost(const AttributionHost& other) = delete;
-  AttributionHost& operator=(const AttributionHost& other) = delete;
-  AttributionHost(AttributionHost&& other) = delete;
-  AttributionHost& operator=(AttributionHost&& other) = delete;
+  AttributionHost(const AttributionHost&) = delete;
+  AttributionHost& operator=(const AttributionHost&) = delete;
+  AttributionHost(AttributionHost&&) = delete;
+  AttributionHost& operator=(AttributionHost&&) = delete;
   ~AttributionHost() override;
 
   static void BindReceiver(
-      mojo::PendingAssociatedReceiver<blink::mojom::ConversionHost> receiver,
+      mojo::PendingAssociatedReceiver<blink::mojom::AttributionHost> receiver,
       RenderFrameHost* rfh);
+
+  AttributionInputEvent GetMostRecentNavigationInputEvent() const;
+
+#if BUILDFLAG(IS_ANDROID)
+  AttributionInputEventTrackerAndroid* input_event_tracker() {
+    return input_event_tracker_android_.get();
+  }
+#endif
 
  private:
   friend class AttributionHostTestPeer;
   friend class WebContentsUserData<AttributionHost>;
 
-  // blink::mojom::ConversionHost:
-  void RegisterDataHost(mojo::PendingReceiver<blink::mojom::AttributionDataHost>
-                            data_host) override;
+  struct PrimaryMainFrameData {
+    int num_data_hosts_registered = 0;
+    bool has_user_activation = false;
+    bool has_user_interaction = false;
+  };
+
+  // blink::mojom::AttributionHost:
+  void NotifyNavigationWithBackgroundRegistrationsWillStart(
+      const blink::AttributionSrcToken& attribution_src_token,
+      uint32_t expected_registrations) override;
+  void RegisterDataHost(
+      mojo::PendingReceiver<attribution_reporting::mojom::DataHost>,
+      attribution_reporting::mojom::RegistrationEligibility,
+      bool is_for_background_requests) override;
   void RegisterNavigationDataHost(
-      mojo::PendingReceiver<blink::mojom::AttributionDataHost> data_host,
+      mojo::PendingReceiver<attribution_reporting::mojom::DataHost> data_host,
       const blink::AttributionSrcToken& attribution_src_token) override;
 
   // WebContentsObserver:
   void DidStartNavigation(NavigationHandle* navigation_handle) override;
   void DidRedirectNavigation(NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
+  void FrameReceivedUserActivation(RenderFrameHost* render_frame_host) override;
+  void DidGetUserInteraction(const blink::WebInputEvent& event) override;
 
-  // Notifies the `AttributionDataHostManager` that a navigation with an
-  // associated `AttributionDataHost` failed, if necessary.
-  void MaybeNotifyFailedSourceNavigation(NavigationHandle* navigation_handle);
+  void NotifyNavigationRegistrationData(NavigationHandle* navigation_handle);
 
-  // Map which stores the top-frame origin an impression occurred on for all
-  // navigations with an associated impression, keyed by navigation ID.
-  // Initiator origins are stored at navigation start time to have the best
-  // chance of catching the initiating frame before it has a chance to go away.
-  // Storing the origins at navigation start also prevents cases where a frame
-  // initiates a navigation for itself, causing the frame to be correct but not
-  // representing the frame state at the time the navigation was initiated. They
-  // are stored until DidFinishNavigation, when they can be matched up with an
-  // impression.
-  //
-  // A flat_map is used as the number of ongoing impression navigations is
-  // expected to be very small in a given WebContents.
-  using NavigationImpressionOriginMap = base::flat_map<int64_t, url::Origin>;
-  NavigationImpressionOriginMap navigation_impression_origins_;
+  void MaybeLogClientBounce(NavigationHandle* navigation_handle) const;
 
-  RenderFrameHostReceiverSet<blink::mojom::ConversionHost> receivers_;
+  // Keeps track of navigations for which we can register sources (i.e. All
+  // conditions were met in `DidStartNavigation` and
+  // `DataHostManager::NotifyNavigationRegistrationStarted` was called). This
+  // avoids making useless calls or checks when processing responses in
+  // `DidRedirectNavigation` and `DidFinishNavigation` for navigations for which
+  // we can't register sources.
+  base::flat_set<int64_t> ongoing_registration_eligible_navigations_;
+
+  RenderFrameHostReceiverSet<blink::mojom::AttributionHost> receivers_;
+
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<AttributionInputEventTrackerAndroid>
+      input_event_tracker_android_;
+#endif
+
+  std::optional<base::Time> last_navigation_time_;
+  std::optional<PrimaryMainFrameData> primary_main_frame_data_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef REMOTING_HOST_DESKTOP_AND_CURSOR_COMPOSER_H_
 #define REMOTING_HOST_DESKTOP_AND_CURSOR_COMPOSER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_and_cursor_composer.h"
 
 namespace remoting {

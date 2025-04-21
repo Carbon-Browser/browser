@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,15 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "components/embedder_support/android/util/input_stream.h"
-#include "components/embedder_support/android/util_jni_headers/WebResourceResponseInfo_jni.h"
 #include "net/http/http_response_headers.h"
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_job.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/embedder_support/android/util_jni_headers/WebResourceResponseInfo_jni.h"
+
 using base::android::AppendJavaStringArrayToStringVector;
+using base::android::ConvertJavaStringToUTF8;
 using base::android::ScopedJavaLocalRef;
 
 namespace embedder_support {
@@ -26,7 +29,7 @@ WebResourceResponse::WebResourceResponse(
     const base::android::JavaRef<jobject>& obj)
     : java_object_(obj), input_stream_transferred_(false) {}
 
-WebResourceResponse::~WebResourceResponse() {}
+WebResourceResponse::~WebResourceResponse() = default;
 
 bool WebResourceResponse::HasInputStream(JNIEnv* env) const {
   ScopedJavaLocalRef<jobject> jstream =

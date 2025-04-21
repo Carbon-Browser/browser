@@ -19,13 +19,14 @@
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_INSTALLED_SUBSCRIPTION_H_
 
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/types/optional.h"
 
-#include "base/strings/string_piece_forward.h"
 #include "base/time/time.h"
 #include "components/adblock/core/common/content_type.h"
 #include "components/adblock/core/common/header_filter_data.h"
@@ -53,20 +54,27 @@ enum class FilterCategory { Allowing, Blocking, DomainSpecificBlocking };
 // Represents an installed subscription that can be queried for filters.
 class InstalledSubscription : public Subscription {
  public:
-  struct Selectors {
-    Selectors();
-    ~Selectors();
-    Selectors(const Selectors&);
-    Selectors(Selectors&&);
-    Selectors& operator=(const Selectors&);
-    Selectors& operator=(Selectors&&);
+  struct ContentFiltersData {
+    using Selector = std::string_view;
+    using SelectorWithCss = std::pair<Selector, std::string_view>;
+    using Selectors = std::vector<Selector>;
+    using SelectorsWithCss = std::vector<SelectorWithCss>;
+    ContentFiltersData();
+    ~ContentFiltersData();
+    ContentFiltersData(const ContentFiltersData&);
+    ContentFiltersData(ContentFiltersData&&);
+    ContentFiltersData& operator=(const ContentFiltersData&);
+    ContentFiltersData& operator=(ContentFiltersData&&);
     // The final set of selectors to apply on a page is |elemhide_selectors|
-    // minus |elemhide_exceptions|. This difference is not computed by this
-    // Subscription because there may be multiple subscriptions and
-    // |elemhide_exceptions| from one subscriptions may remove
+    // |remove_selectors| and |inline_css_selectors| each of them with
+    // removed entries from |elemhide_exceptions|. This difference is not
+    // computed by this Subscription because there may be multiple subscriptions
+    // and |elemhide_exceptions| from one subscriptions may remove f.e.
     // |elemhide_selectors| from another.
-    std::vector<base::StringPiece> elemhide_selectors;
-    std::vector<base::StringPiece> elemhide_exceptions;
+    Selectors elemhide_exceptions;
+    Selectors elemhide_selectors;
+    Selectors remove_selectors;
+    SelectorsWithCss selectors_to_inline_css;
   };
 
   class Snippet {
@@ -77,8 +85,8 @@ class InstalledSubscription : public Subscription {
     ~Snippet();
     Snippet& operator=(const Snippet&);
     Snippet& operator=(Snippet&&);
-    base::StringPiece command;
-    std::vector<base::StringPiece> arguments;
+    std::string_view command;
+    std::vector<std::string_view> arguments;
   };
 
   virtual bool HasUrlFilter(const GURL& url,
@@ -87,7 +95,7 @@ class InstalledSubscription : public Subscription {
                             const SiteKey& sitekey,
                             FilterCategory category) const = 0;
   virtual bool HasPopupFilter(const GURL& url,
-                              const GURL& opener_url,
+                              const std::string& document_domain,
                               const SiteKey& sitekey,
                               FilterCategory category) const = 0;
   virtual bool HasSpecialFilter(SpecialFilterType type,
@@ -95,15 +103,14 @@ class InstalledSubscription : public Subscription {
                                 const std::string& document_domain,
                                 const SiteKey& sitekey) const = 0;
   // CSP filters have a payload: a string that gets injected to a network
-  // response's Content-Security-Policy header.
-  // |nullopt| means no filter found. If a filter is found, the string will
-  // be non-empty.
-  virtual absl::optional<base::StringPiece> FindCspFilter(
-      const GURL& url,
-      const std::string& document_domain,
-      FilterCategory category) const = 0;
-  // Find an URL to rewrite if any for specific request
-  virtual absl::optional<base::StringPiece> FindRewriteFilter(
+  // response's Content-Security-Policy header. If a filters is found, it will
+  // be append to |results|.
+  virtual void FindCspFilters(const GURL& url,
+                              const std::string& document_domain,
+                              FilterCategory category,
+                              std::set<std::string_view>& results) const = 0;
+  // Find all rewrite filters matching category.
+  virtual std::set<std::string_view> FindRewriteFilters(
       const GURL& url,
       const std::string& document_domain,
       FilterCategory category) const = 0;
@@ -117,11 +124,12 @@ class InstalledSubscription : public Subscription {
   virtual std::vector<Snippet> MatchSnippets(
       const std::string& document_domain) const = 0;
 
-  virtual Selectors GetElemhideSelectors(const GURL& url,
-                                         bool domain_specfic) const = 0;
+  virtual ContentFiltersData GetElemhideData(const GURL& url,
+                                             bool domain_specfic) const = 0;
   // Note there's no "domain_specific". Emulation filters are always
   // domain-specific.
-  virtual Selectors GetElemhideEmulationSelectors(const GURL& url) const = 0;
+  virtual ContentFiltersData GetElemhideEmulationData(
+      const GURL& url) const = 0;
 
   // Instructs to remove the file which contains this subscription's data during
   // destruction. NOP if there is no backing file, when the subscription is

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/flat_map.h"
@@ -64,7 +65,8 @@ void WebMemoryImplTest::MeasureAndVerify(
     base::flat_map<std::string, Bytes> expected) {
   bool measurement_done = false;
   WebMemoryMeasurer web_memory(
-      frame->frame_token(), V8DetailedMemoryRequest::MeasurementMode::kDefault,
+      frame->GetFrameToken(),
+      V8DetailedMemoryRequest::MeasurementMode::kDefault,
       base::BindLambdaForTesting([&measurement_done, &expected](
                                      mojom::WebMemoryMeasurementPtr result) {
         base::flat_map<std::string, Bytes> actual;
@@ -76,7 +78,7 @@ void WebMemoryImplTest::MeasureAndVerify(
                   ? *entry->attribution[0]->url
                   : *entry->attribution[0]->src;
           actual[attribution_tag] =
-              entry->memory ? Bytes{entry->memory->bytes} : absl::nullopt;
+              entry->memory ? Bytes{entry->memory->bytes} : std::nullopt;
         }
         EXPECT_EQ(expected, actual);
         measurement_done = true;
@@ -136,7 +138,7 @@ TEST_F(WebMemoryImplPMTest, WebMeasureMemory) {
         run_loop.Quit();
       });
   auto bad_message_callback =
-      base::BindLambdaForTesting([&](base::StringPiece error) {
+      base::BindLambdaForTesting([&](std::string_view error) {
         ADD_FAILURE() << error;
         run_loop.Quit();
       });
@@ -180,7 +182,7 @@ TEST_F(WebMemoryImplPMTest, MeasurementInterrupted) {
         FAIL() << "Measurement callback ran unexpectedly";
       });
   auto bad_message_callback =
-      base::BindOnce([](base::StringPiece error) { FAIL() << error; });
+      base::BindOnce([](std::string_view error) { FAIL() << error; });
 
   base::WeakPtr<FrameNode> frame_node_wrapper =
       PerformanceManager::GetFrameNodeForRenderFrameHost(child_frame());
@@ -227,7 +229,7 @@ TEST_F(WebMemoryImplPMTest, MeasurementDisallowed) {
         run_loop.Quit();
       });
   auto bad_message_callback =
-      base::BindLambdaForTesting([&](base::StringPiece error) {
+      base::BindLambdaForTesting([&](std::string_view error) {
         SUCCEED() << error;
         run_loop.Quit();
       });

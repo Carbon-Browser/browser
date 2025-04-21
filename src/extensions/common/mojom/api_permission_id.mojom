@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
 // This source code is a part of eyeo Chromium SDK.
-// Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
-
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 module extensions.mojom;
 
@@ -47,7 +47,7 @@ enum APIPermissionID {
   kBackground = 17,
   kBluetoothPrivate = 18,
   kBookmark = 19,
-  kBookmarkManagerPrivate = 20,
+  kDeleted_BookmarkManagerPrivate = 20,
   kBrailleDisplayPrivate = 21,
   kBrowser = 22,
   kBrowsingData = 23,
@@ -64,7 +64,7 @@ enum APIPermissionID {
   kCookie = 34,
   kDeleted_Copresence = 35,
   kDeleted_CopresencePrivate = 36,
-  kCryptotokenPrivate = 37,
+  kDeleted_CryptotokenPrivate = 37,
   kDeleted_DataReductionProxy = 38,
   kDiagnostics = 39,
   kDeleted_Dial = 40,
@@ -73,13 +73,13 @@ enum APIPermissionID {
   kDeclarativeContent = 43,
   kDeclarativeWebRequest = 44,
   kDesktopCapture = 45,
-  kDesktopCapturePrivate = 46,
+  kDeleted_DesktopCapturePrivate = 46,
   kDeveloperPrivate = 47,
   kDevtools = 48,
   kDns = 49,
   kDocumentScan = 50,
   kDownloads = 51,
-  kDownloadsInternal = 52,
+  kDeleted_DownloadsInternal = 52,
   kDownloadsOpen = 53,
   kDownloadsShelf = 54,
   kDeleted_EasyUnlockPrivate = 55,
@@ -90,10 +90,11 @@ enum APIPermissionID {
   kDeleted_ExperienceSamplingPrivate = 60,
   kExperimental = 61,
   kDeleted_ExtensionView = 62,
-  kExternallyConnectableAllUrls = 63,
+  // TODO(crbug.com/40864987): Remove this entry.
+  kDeprecated_ExternallyConnectableAllUrls = 63,
   kFeedbackPrivate = 64,
   kFileBrowserHandler = 65,
-  kFileBrowserHandlerInternal = 66,
+  kDeleted_FileBrowserHandlerInternal = 66,
   kFileManagerPrivate = 67,
   kFileSystem = 68,
   kFileSystemDirectory = 69,
@@ -114,7 +115,7 @@ enum APIPermissionID {
   kHotwordPrivate = 84,
   kIdentity = 85,
   kIdentityEmail = 86,
-  kIdentityPrivate = 87,
+  kDeleted_IdentityPrivate = 87,
   kIdltest = 88,
   kIdle = 89,
   kImeWindowEnabled = 90,
@@ -128,7 +129,7 @@ enum APIPermissionID {
   kManagement = 98,
   kMediaGalleries = 99,
   kMediaPlayerPrivate = 100,
-  kMediaRouterPrivate = 101,
+  kDeleted_MediaRouterPrivate = 101,
   kMetricsPrivate = 102,
   kMDns = 103,
   kDeleted_MusicManagerPrivate = 104,
@@ -191,7 +192,7 @@ enum APIPermissionID {
   kWebrtcDesktopCapturePrivate = 161,
   kWebrtcLoggingPrivate = 162,
   kWebstorePrivate = 163,
-  kWebstoreWidgetPrivate = 164,
+  kDeleted_WebstoreWidgetPrivate = 164,
   kWebView = 165,
   kWindowShape = 166,
   kDeleted_ScreenlockPrivate = 167,
@@ -230,9 +231,9 @@ enum APIPermissionID {
   kClipboard = 200,
   kNetworkingOnc = 201,
   kVirtualKeyboard = 202,
-  kNetworkingCastPrivate = 203,
+  kDeleted_NetworkingCastPrivate = 203,
   kMediaPerceptionPrivate = 204,
-  kLockScreen = 205,
+  kDeleted_LockScreen = 205,
   kNewTabPageOverride = 206,
   kDeclarativeNetRequest = 207,
   kLockWindowFullscreenPrivate = 208,
@@ -270,9 +271,30 @@ enum APIPermissionID {
   kOffscreen = 240,
   kSidePanel = 241,
   kDownloadsUi = 242,
+  kWebRequestAuthProvider = 243,
+  kChromeOSTelemetryNetworkInformation = 244,
+  kPdfViewerPrivate = 245,
+  kSystemLog = 246,
+  kSmartCardProviderPrivate = 247,
+  kChromeOSEvents = 248,
+  kChromeOSAttachedDeviceInfo = 249,
+  kReadingList = 250,
+  kImageLoaderPrivate = 251,
+  kAccessibilityServicePrivate = 252,
+  kUserScripts = 253,
+  kChromeOSBluetoothPeripheralsInfo = 254,
+  kEnterpriseKioskInput = 255,
+  kOdfsConfigPrivate = 256,
+  kChromeOSManagementAudio = 257,
+  kChromeOSDiagnosticsNetworkInfoForMlab = 258,
+  kAILanguageModelOriginTrial = 259,
+  kExperimentalAiData = 260,
+  kOmniboxDirectInput = 261,
   kAdblockPrivate = 999,
+  kEyeoFilteringPrivate = 1000,
 
   // Add new entries at the end of the enum and be sure to update the
-  // "ExtensionPermission3" enum in tools/metrics/histograms/enums.xml
-  // (by running update_extension_permission.py).
+  // "ExtensionPermission3" enum in
+  // tools/metrics/histograms/metadata/extensions/enums.xml (by running
+  // update_extension_permission.py).
 };

@@ -1,23 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/core/device_cloud_policy_client_factory_ash.h"
 
 #include "base/test/task_environment.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/policy/core/common/cloud/mock_device_management_service.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-namespace ash::system {
-using ::chromeos::system::kAttestedDeviceIdKey;
-using ::chromeos::system::kDockMacAddressKey;
-using ::chromeos::system::kEthernetMacAddressKey;
-using ::chromeos::system::kManufactureDateKey;
-}  // namespace ash::system
 
 namespace policy {
 
@@ -44,8 +37,8 @@ class DeviceCloudPolicyClientFactoryAshTest : public testing::Test {
 };
 
 TEST_F(DeviceCloudPolicyClientFactoryAshTest, ValidStatistics) {
-  fake_statistics_provider_.SetMachineStatistic(
-      ash::system::kSerialNumberKeyForTest, kSerialNumberValue);
+  fake_statistics_provider_.SetMachineStatistic(ash::system::kSerialNumberKey,
+                                                kSerialNumberValue);
   fake_statistics_provider_.SetMachineStatistic(ash::system::kHardwareClassKey,
                                                 kHardwareClassValue);
   fake_statistics_provider_.SetMachineStatistic(ash::system::kRlzBrandCodeKey,

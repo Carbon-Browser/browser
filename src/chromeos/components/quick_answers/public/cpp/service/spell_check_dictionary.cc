@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,12 @@ bool SpellCheckDictionary::Initialize(base::File file) {
     return false;
   }
 
-  if (!hunspell::BDict::Verify(
-          reinterpret_cast<const char*>(mapped_dict_file_->data()),
-          mapped_dict_file_->length())) {
+  if (!hunspell::BDict::Verify(mapped_dict_file_->bytes())) {
     LOG(ERROR) << "Failed to verify dictionary file.";
     return false;
   }
 
-  hunspell_ = std::make_unique<Hunspell>(mapped_dict_file_->data(),
-                                         mapped_dict_file_->length());
+  hunspell_ = std::make_unique<Hunspell>(mapped_dict_file_->bytes());
 
   return true;
 }

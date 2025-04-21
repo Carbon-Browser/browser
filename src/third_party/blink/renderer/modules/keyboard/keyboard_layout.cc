@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/keyboard/keyboard_layout.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token_builder.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -66,7 +66,7 @@ void RecordGetLayoutMapResult(ExecutionContext* context,
 KeyboardLayout::KeyboardLayout(ExecutionContext* context)
     : ExecutionContextClient(context), service_(context) {}
 
-ScriptPromise KeyboardLayout::GetKeyboardLayoutMap(
+ScriptPromise<KeyboardLayoutMap> KeyboardLayout::GetKeyboardLayoutMap(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   DCHECK(script_state);
@@ -78,7 +78,7 @@ ScriptPromise KeyboardLayout::GetKeyboardLayoutMap(
   if (!IsLocalFrameAttached()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       kKeyboardMapFrameDetachedErrorMsg);
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   if (!EnsureServiceConnected()) {
@@ -90,13 +90,14 @@ ScriptPromise KeyboardLayout::GetKeyboardLayoutMap(
 
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       kKeyboardMapRequestFailedErrorMsg);
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   script_promise_resolver_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+      MakeGarbageCollected<ScriptPromiseResolver<KeyboardLayoutMap>>(
+          script_state, exception_state.GetContext());
   service_->GetKeyboardLayoutMap(
-      script_promise_resolver_->WrapCallbackInScriptScope(WTF::Bind(
+      script_promise_resolver_->WrapCallbackInScriptScope(WTF::BindOnce(
           &KeyboardLayout::GotKeyboardLayoutMap, WrapPersistent(this))));
   return script_promise_resolver_->Promise();
 }
@@ -118,7 +119,7 @@ bool KeyboardLayout::EnsureServiceConnected() {
 }
 
 void KeyboardLayout::GotKeyboardLayoutMap(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<KeyboardLayoutMap>* resolver,
     mojom::blink::GetKeyboardLayoutMapResultPtr result) {
   DCHECK(script_promise_resolver_);
 

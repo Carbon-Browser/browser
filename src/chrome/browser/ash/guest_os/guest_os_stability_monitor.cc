@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ GuestOsStabilityMonitor::GuestOsStabilityMonitor(const std::string& histogram)
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-GuestOsStabilityMonitor::~GuestOsStabilityMonitor() {}
+GuestOsStabilityMonitor::~GuestOsStabilityMonitor() = default;
 
 void GuestOsStabilityMonitor::ConciergeStarted(bool is_available) {
   DCHECK(is_available);

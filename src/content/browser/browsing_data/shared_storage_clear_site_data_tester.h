@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,9 @@ class SharedStorageClearSiteDataTester {
 
   std::vector<url::Origin> GetSharedStorageOrigins();
 
-  int GetSharedStorageNumEntriesForOrigin(url::Origin origin);
+  int GetSharedStorageNumBytesForOrigin(url::Origin origin);
 
-  int GetSharedStorageTotalEntries();
+  int GetSharedStorageTotalBytes();
 
  private:
   raw_ptr<StoragePartitionImpl> storage_partition_impl_;

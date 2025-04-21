@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 #define CHROME_APP_CHROME_MAIN_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/app/startup_timestamps.h"
 #include "chrome/browser/startup_data.h"
 #include "chrome/common/chrome_content_client.h"
+#include "components/memory_system/memory_system.h"
 #include "content/public/app/content_main_delegate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class CommandLine;
@@ -30,7 +32,7 @@ class TracingSamplerProfiler;
 
 class ChromeContentBrowserClient;
 class ChromeContentUtilityClient;
-class HeapProfilerController;
+class MainThreadStackSamplingProfiler;
 
 // Chrome implementation of ContentMainDelegate.
 class ChromeMainDelegate : public content::ContentMainDelegate {
@@ -38,11 +40,15 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
   static const char* const kNonWildcardDomainNonPortSchemes[];
   static const size_t kNonWildcardDomainNonPortSchemesSize;
 
+#if BUILDFLAG(IS_ANDROID)
   ChromeMainDelegate();
+#endif
 
-  // |exe_entry_point_ticks| is the time at which the main function of the
-  // executable was entered, or null if not available.
-  explicit ChromeMainDelegate(base::TimeTicks exe_entry_point_ticks);
+  // `timestamps.exe_entry_point_ticks` is the time at which the main function
+  // of the executable was entered. On Windows, StartupTimestamps contains
+  // timing information for calls to base::PreReadFile. `timestamps`' lifetime
+  // does not need to last beyond the constructor call.
+  explicit ChromeMainDelegate(const StartupTimestamps& timestamps);
 
   ChromeMainDelegate(const ChromeMainDelegate&) = delete;
   ChromeMainDelegate& operator=(const ChromeMainDelegate&) = delete;
@@ -51,7 +57,7 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
 
  protected:
   // content::ContentMainDelegate:
-  absl::optional<int> BasicStartupComplete() override;
+  std::optional<int> BasicStartupComplete() override;
   void PreSandboxStartup() override;
   void SandboxInitialized(const std::string& process_type) override;
   absl::variant<int, content::MainFunctionParams> RunProcess(
@@ -63,9 +69,11 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
                           delegates) override;
   void ZygoteForked() override;
 #endif
-  absl::optional<int> PreBrowserMain() override;
-  absl::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
+  std::optional<int> PreBrowserMain() override;
+  std::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
   bool ShouldCreateFeatureList(InvokedIn invoked_in) override;
+  bool ShouldInitializeMojo(InvokedIn invoked_in) override;
+  void CreateThreadPool(std::string_view name) override;
 #if BUILDFLAG(IS_WIN)
   bool ShouldHandleConsoleControlEvents() override;
 #endif
@@ -77,7 +85,11 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
   content::ContentUtilityClient* CreateContentUtilityClient() override;
 
   // Initialization that happens in all process types.
-  void CommonEarlyInitialization();
+  void CommonEarlyInitialization(InvokedIn invoked_in);
+
+  // Initializes |tracing_sampler_profiler_|. Deletes any existing
+  // |tracing_sampler_profiler_| as well.
+  void SetupTracing();
 
 #if BUILDFLAG(IS_MAC)
   void InitMacCrashReporter(const base::CommandLine& command_line,
@@ -85,19 +97,24 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
   void SetUpInstallerPreferences(const base::CommandLine& command_line);
 #endif  // BUILDFLAG(IS_MAC)
 
-  ChromeContentClient chrome_content_client_;
+  void InitializeMemorySystem();
 
   std::unique_ptr<ChromeContentBrowserClient> chrome_content_browser_client_;
   std::unique_ptr<ChromeContentUtilityClient> chrome_content_utility_client_;
-
   std::unique_ptr<tracing::TracingSamplerProfiler> tracing_sampler_profiler_;
 
-  // The controller schedules UMA heap profiles collections and forwarding down
-  // the reporting pipeline.
-  std::unique_ptr<HeapProfilerController> heap_profiler_controller_;
+  ChromeContentClient chrome_content_client_;
+
+  memory_system::MemorySystem memory_system_;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   std::unique_ptr<chromeos::LacrosService> lacros_service_;
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
+  // The sampling profiler exists until the `ChromeContentBrowserClient` is
+  // created and ownership is passed to it.
+  std::unique_ptr<MainThreadStackSamplingProfiler> sampling_profiler_;
 #endif
 };
 

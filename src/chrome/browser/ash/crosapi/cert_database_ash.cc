@@ -1,20 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/cert_database_ash.h"
 
-#include "ash/components/tpm/tpm_token_info_getter.h"
-#include "base/bind.h"
+#include <algorithm>
+
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/system/sys_info.h"
+#include "chrome/browser/ash/kcer/kcer_factory_ash.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/certificate_provider/certificate_provider_service.h"
+#include "chrome/browser/certificate_provider/certificate_provider_service_factory.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "chromeos/ash/components/tpm/tpm_token_info_getter.h"
 #include "chromeos/crosapi/mojom/cert_database.mojom.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
+#include "components/user_manager/user_names.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "crypto/nss_util_internal.h"
@@ -24,7 +32,7 @@
 namespace {
 using GotDbCallback =
     base::OnceCallback<void(unsigned long private_slot_id,
-                            absl::optional<unsigned long> system_slot_id)>;
+                            std::optional<unsigned long> system_slot_id)>;
 
 void GotCertDbOnIOThread(GotDbCallback ui_callback,
                          net::NSSCertDatabase* cert_db) {
@@ -37,7 +45,7 @@ void GotCertDbOnIOThread(GotDbCallback ui_callback,
   unsigned long private_slot_id =
       PK11_GetSlotID(cert_db->GetPrivateSlot().get());
 
-  absl::optional<unsigned long> system_slot_id;
+  std::optional<unsigned long> system_slot_id;
   crypto::ScopedPK11Slot system_slot = cert_db->GetSystemSlot();
   if (system_slot)
     system_slot_id = PK11_GetSlotID(system_slot.get());
@@ -68,13 +76,13 @@ namespace crosapi {
 
 CertDatabaseAsh::CertDatabaseAsh() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  DCHECK(chromeos::LoginState::IsInitialized());
-  chromeos::LoginState::Get()->AddObserver(this);
+  DCHECK(ash::LoginState::IsInitialized());
+  ash::LoginState::Get()->AddObserver(this);
 }
 
 CertDatabaseAsh::~CertDatabaseAsh() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  chromeos::LoginState::Get()->RemoveObserver(this);
+  ash::LoginState::Get()->RemoveObserver(this);
 }
 
 void CertDatabaseAsh::BindReceiver(
@@ -87,10 +95,10 @@ void CertDatabaseAsh::GetCertDatabaseInfo(
     GetCertDatabaseInfoCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  // TODO(crbug.com/1146430): For now Lacros-Chrome will initialize certificate
+  // TODO(crbug.com/40156265): For now Lacros-Chrome will initialize certificate
   // database only in session. Revisit later to decide what to do on the login
   // screen.
-  if (!chromeos::LoginState::Get()->IsUserLoggedIn()) {
+  if (!ash::LoginState::Get()->IsUserLoggedIn()) {
     LOG(ERROR) << "Not implemented";
     std::move(callback).Run(nullptr);
     return;
@@ -113,8 +121,7 @@ void CertDatabaseAsh::GetCertDatabaseInfo(
   }
 
   // Guest users should not have access to certs.
-  const bool is_guest =
-      user_manager::UserManager::Get()->IsGuestAccountId(user->GetAccountId());
+  const bool is_guest = user->GetAccountId() == user_manager::GuestAccountId();
 
   // Otherwise, if the TPM was already loaded previously, let the
   // caller know.
@@ -150,7 +157,7 @@ void CertDatabaseAsh::WaitForCertDatabaseReady(
 void CertDatabaseAsh::OnCertDatabaseReady(
     GetCertDatabaseInfoCallback callback,
     unsigned long private_slot_id,
-    absl::optional<unsigned long> system_slot_id) {
+    std::optional<unsigned long> system_slot_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   is_cert_database_ready_ = true;
@@ -170,9 +177,21 @@ void CertDatabaseAsh::LoggedInStateChanged() {
   is_cert_database_ready_.reset();
 }
 
-void CertDatabaseAsh::OnCertsChangedInLacros() {
+void CertDatabaseAsh::OnCertsChangedInLacros(
+    mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  net::CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
+  switch (change_type) {
+    case mojom::CertDatabaseChangeType::kUnknown:
+      net::CertDatabase::GetInstance()->NotifyObserversTrustStoreChanged();
+      net::CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
+      break;
+    case mojom::CertDatabaseChangeType::kTrustStore:
+      net::CertDatabase::GetInstance()->NotifyObserversTrustStoreChanged();
+      break;
+    case mojom::CertDatabaseChangeType::kClientCertStore:
+      net::CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
+      break;
+  }
 }
 
 void CertDatabaseAsh::AddAshCertDatabaseObserver(
@@ -182,11 +201,38 @@ void CertDatabaseAsh::AddAshCertDatabaseObserver(
       mojo::Remote<mojom::AshCertDatabaseObserver>(std::move(observer)));
 }
 
-void CertDatabaseAsh::NotifyCertsChangedInAsh() {
+void CertDatabaseAsh::SetCertsProvidedByExtension(
+    const std::string& extension_id,
+    const chromeos::certificate_provider::CertificateInfoList&
+        certificate_infos) {
+  // Some certificates could've failed to parse, which is represented by
+  // nullptr. We ignore such certificates to avoid closing the mojo pipe.
+  chromeos::certificate_provider::CertificateInfoList
+      filtered_certificate_infos;
+  base::ranges::copy_if(certificate_infos,
+                        std::back_inserter(filtered_certificate_infos),
+                        [&](const auto& certificate_info) {
+                          return certificate_info.certificate != nullptr;
+                        });
+  Profile* profile = ProfileManager::GetPrimaryUserProfile();
+  chromeos::CertificateProviderService* certificate_provider_service =
+      chromeos::CertificateProviderServiceFactory::GetForBrowserContext(
+          profile);
+  certificate_provider_service->SetCertificatesProvidedByExtension(
+      extension_id, filtered_certificate_infos);
+}
+
+void CertDatabaseAsh::NotifyCertsChangedInAsh(
+    mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   for (const auto& observer : observers_) {
-    observer->OnCertsChangedInAsh();
+    observer->OnCertsChangedInAsh(change_type);
   }
+}
+
+void CertDatabaseAsh::OnPkcs12CertDualWritten() {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  kcer::KcerFactoryAsh::RecordPkcs12CertDualWritten();
 }
 
 }  // namespace crosapi

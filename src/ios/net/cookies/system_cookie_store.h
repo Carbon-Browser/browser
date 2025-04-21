@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 
@@ -78,12 +78,14 @@ class SystemCookieStore {
  protected:
   // Compares cookies based on the path lengths and the creation times provided
   // by a non null creation time manager |context|, as per RFC6265.
-  static NSInteger CompareCookies(id a, id b, void* context);
+  static NSInteger CompareCookies(NSHTTPCookie* cookie_a,
+                                  NSHTTPCookie* cookie_b,
+                                  void* context);
 
   // Internal cookie stores doesn't store creation time. This object is used
   // to keep track of the creation time of cookies, this is required for
   // conversion between SystemCookie and Chromium CookieMonster.
-  // TODO(crbug.com/825227): Move this to be private.
+  // TODO(crbug.com/40568476): Move this to be private.
   std::unique_ptr<CookieCreationTimeManager> creation_time_manager_;
 
  private:

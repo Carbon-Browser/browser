@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <set>
 #include <string>
 
-#include "base/supports_user_data.h"
+#include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/offline_pages/core/offline_event_logger.h"
 #include "components/offline_pages/core/offline_page_archive_publisher.h"
@@ -21,6 +21,10 @@
 #include "components/offline_pages/core/page_criteria.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/supports_user_data.h"
+#endif
+
 namespace offline_pages {
 
 struct ClientId;
@@ -28,9 +32,17 @@ struct ClientId;
 // Service for saving pages offline, storing the offline copy and metadata, and
 // retrieving them upon request.
 //
+// DownloadUIAdapter instances can be optionally attached to OfflinePageModel
+// using base::SupportsUserData. This is limited to Android, as
+// DownloadUIAdapter is only used on Android.
+//
 // TODO(fgorski): Things to describe:
 // * how to cancel requests and what to expect
-class OfflinePageModel : public base::SupportsUserData, public KeyedService {
+class OfflinePageModel :
+#if BUILDFLAG(IS_ANDROID)
+    public base::SupportsUserData,
+#endif
+    public KeyedService {
  public:
   // Describes the parameters to control how to save a page.
   struct SavePageParams {
@@ -53,9 +65,6 @@ class OfflinePageModel : public base::SupportsUserData, public KeyedService {
 
     // Whether the page is being saved in the background.
     bool is_background;
-
-    // Run page problem detectors while generating MTHML if true.
-    bool use_page_problem_detectors;
 
     // The app package that the request originated from.
     std::string request_origin;
@@ -120,7 +129,7 @@ class OfflinePageModel : public base::SupportsUserData, public KeyedService {
   //   // Callback is of type SavePageCallback.
   //   model->SavePage(url, std::move(archiver), std::move(callback));
   //
-  // TODO(https://crbug.com/849424): This method's implementation shouldn't
+  // TODO(crbug.com/41392683): This method's implementation shouldn't
   // take ownership of OfflinePageArchiver.
   virtual void SavePage(const SavePageParams& save_page_params,
                         std::unique_ptr<OfflinePageArchiver> archiver,
@@ -183,7 +192,7 @@ class OfflinePageModel : public base::SupportsUserData, public KeyedService {
   // includes putting it in a public directory, updating the system download
   // manager, if any, and updating the offline page model database.
   //
-  // TODO(https://crbug.com/849424): This method's implementation shouldn't
+  // TODO(crbug.com/41392683): This method's implementation shouldn't
   // take ownership of OfflinePageArchiver.
   virtual void PublishInternalArchive(
       const OfflinePageItem& offline_page,

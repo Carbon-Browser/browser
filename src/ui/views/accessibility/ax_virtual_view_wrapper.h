@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ class AXVirtualViewWrapper : public AXAuraObjWrapper {
 
   // AXAuraObjWrapper:
   AXAuraObjWrapper* GetParent() override;
-  void GetChildren(std::vector<AXAuraObjWrapper*>* out_children) override;
+  void GetChildren(std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>*
+                       out_children) override;
   void Serialize(ui::AXNodeData* out_node_data) override;
   ui::AXNodeID GetUniqueId() const override;
   bool HandleAccessibleAction(const ui::AXActionData& action) override;

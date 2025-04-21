@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/test/task_environment.h"
@@ -26,7 +27,6 @@
 #include "extensions/common/constants.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/window_types.h"
 #include "ui/aura/window.h"
 
@@ -48,11 +48,11 @@ class AppTimeNotificationDelegateMock : public AppTimeNotificationDelegate {
   AppTimeNotificationDelegateMock& operator=(
       const AppTimeNotificationDelegateMock&) = delete;
 
-  ~AppTimeNotificationDelegateMock() = default;
+  ~AppTimeNotificationDelegateMock() override = default;
 
   MOCK_METHOD3(ShowAppTimeLimitNotification,
                void(const AppId&,
-                    const absl::optional<base::TimeDelta>&,
+                    const std::optional<base::TimeDelta>&,
                     AppNotification));
 };
 
@@ -62,7 +62,7 @@ class AppStateObserverMock : public AppActivityRegistry::AppStateObserver {
   AppStateObserverMock(const AppStateObserverMock&) = delete;
   AppStateObserverMock& operator=(const AppStateObserverMock&) = delete;
 
-  ~AppStateObserverMock() = default;
+  ~AppStateObserverMock() override = default;
 
   MOCK_METHOD3(OnAppLimitReached, void(const AppId&, base::TimeDelta, bool));
   MOCK_METHOD1(OnAppLimitRemoved, void(const AppId&));
@@ -87,7 +87,7 @@ class AppActivityRegistryTest : public ChromeViewsTestBase {
   base::UnguessableToken GetInstanceIdForApp(const AppId& app_id);
 
   void SetAppLimit(const AppId& app_id,
-                   const absl::optional<AppLimit>& app_limit);
+                   const std::optional<AppLimit>& app_limit);
 
   void ReInitializeRegistry();
 
@@ -150,7 +150,7 @@ base::UnguessableToken AppActivityRegistryTest::GetInstanceIdForApp(
 
 void AppActivityRegistryTest::SetAppLimit(
     const AppId& app_id,
-    const absl::optional<AppLimit>& app_limit) {
+    const std::optional<AppLimit>& app_limit) {
   registry().SetAppLimit(app_id, app_limit);
   task_environment()->RunUntilIdle();
 }
@@ -452,9 +452,9 @@ TEST_F(AppActivityRegistryTest, LimitChangedForActiveApp) {
 
   EXPECT_TRUE(registry().IsAppActive(kApp1));
   EXPECT_EQ(base::Minutes(0), registry().GetActiveTime(kApp1));
-  EXPECT_EQ(absl::nullopt, registry_test().GetAppLimit(kApp1));
-  EXPECT_EQ(absl::nullopt, registry().GetTimeLimit(kApp1));
-  EXPECT_EQ(absl::nullopt, registry_test().GetTimeLeft(kApp1));
+  EXPECT_EQ(std::nullopt, registry_test().GetAppLimit(kApp1));
+  EXPECT_EQ(std::nullopt, registry().GetTimeLimit(kApp1));
+  EXPECT_EQ(std::nullopt, registry_test().GetTimeLeft(kApp1));
 
   task_environment()->FastForwardBy(base::Minutes(5));
 
@@ -568,7 +568,7 @@ TEST_F(AppActivityRegistryTest, RemoveLimitsFromAllowlistedApps) {
   builder.SetUp();
   builder.AppendToAllowlistAppList(kApp1);
 
-  AppTimeLimitsAllowlistPolicyWrapper wrapper(&builder.value());
+  AppTimeLimitsAllowlistPolicyWrapper wrapper(&builder.dict());
   registry().OnTimeLimitAllowlistChanged(wrapper);
 
   EXPECT_FALSE(registry_test().GetAppLimit(kApp1));
@@ -580,7 +580,7 @@ TEST_F(AppActivityRegistryTest, AllowlistedAppsNoLimits) {
   AppTimeLimitsAllowlistPolicyBuilder builder;
   builder.SetUp();
   builder.AppendToAllowlistAppList(kApp1);
-  AppTimeLimitsAllowlistPolicyWrapper wrapper(&builder.value());
+  AppTimeLimitsAllowlistPolicyWrapper wrapper(&builder.dict());
   registry().OnTimeLimitAllowlistChanged(wrapper);
 
   // Set initial limit.
@@ -596,15 +596,15 @@ TEST_F(AppActivityRegistryTest, AllowlistedAppsNoLimits) {
 
 TEST_F(AppActivityRegistryTest, RestoredApplicationInformation) {
   auto app1_instance_id = CreateInstanceIdForApp(kApp1);
-  base::TimeDelta active_time = base::Minutes(30);
+  base::TimeDelta active_timedelta = base::Minutes(30);
 
-  const AppLimit limit(AppRestriction::kTimeLimit, active_time,
+  const AppLimit limit(AppRestriction::kTimeLimit, active_timedelta,
                        base::Time::Now());
   SetAppLimit(kApp1, limit);
 
   base::Time app1_start_time_1 = base::Time::Now();
   registry().OnAppActive(kApp1, app1_instance_id, app1_start_time_1);
-  task_environment()->FastForwardBy(active_time / 2);
+  task_environment()->FastForwardBy(active_timedelta / 2);
 
   // Save app activity.
   registry_test().SaveAppActivity();
@@ -617,7 +617,7 @@ TEST_F(AppActivityRegistryTest, RestoredApplicationInformation) {
 
   base::Time app1_start_time_2 = base::Time::Now();
   registry().OnAppActive(kApp1, app1_instance_id, app1_start_time_2);
-  task_environment()->FastForwardBy(active_time / 2);
+  task_environment()->FastForwardBy(active_timedelta / 2);
 
   // Time limit is reached. App becomes inactive.
   EXPECT_FALSE(registry().IsAppActive(kApp1));
@@ -633,15 +633,15 @@ TEST_F(AppActivityRegistryTest, RestoredApplicationInformation) {
   EXPECT_TRUE(registry().IsAppInstalled(kApp2));
   EXPECT_TRUE(registry().IsAppTimeLimitReached(kApp1));
   EXPECT_TRUE(registry().IsAppAvailable(kApp2));
-  EXPECT_EQ(registry().GetActiveTime(kApp1), active_time);
+  EXPECT_EQ(registry().GetActiveTime(kApp1), active_timedelta);
 
   // Now let's test that the app activity are stored appropriately.
-  const base::Value* value =
+  const base::Value::List& list =
       prefs()->GetList(prefs::kPerAppTimeLimitsAppActivities);
 
   const std::vector<PersistedAppInfo> app_infos =
       PersistedAppInfo::PersistedAppInfosFromList(
-          value,
+          list,
           /* include_app_activity_array */ true);
 
   // 3 applications. kApp1, kApp2 and Chrome browser.
@@ -678,12 +678,12 @@ TEST_F(AppActivityRegistryTest, RemoveUninstalledApplications) {
   registry().OnSuccessfullyReported(base::Time::Now());
 
   // Now let's test that the app activity are stored appropriately.
-  const base::Value* value =
+  const base::Value::List& list =
       prefs()->GetList(prefs::kPerAppTimeLimitsAppActivities);
 
   const std::vector<PersistedAppInfo> app_infos =
       PersistedAppInfo::PersistedAppInfosFromList(
-          value,
+          list,
           /* include_app_activity_array */ true);
 
   EXPECT_EQ(app_infos.size(), 3u);
@@ -695,12 +695,12 @@ TEST_F(AppActivityRegistryTest, RemoveUninstalledApplications) {
   registry().SaveAppActivity();
   registry().OnSuccessfullyReported(base::Time::Now());
 
-  const base::Value* new_value =
+  const base::Value::List& new_list =
       prefs()->GetList(prefs::kPerAppTimeLimitsAppActivities);
 
   const std::vector<PersistedAppInfo> final_app_infos =
       PersistedAppInfo::PersistedAppInfosFromList(
-          new_value,
+          new_list,
           /* include_app_activity_array */ false);
 
   // Two apps left. They are Chrome, and kApp2.
@@ -726,12 +726,12 @@ TEST_F(AppActivityRegistryTest, RemoveOldEntries) {
   ReInitializeRegistry();
 
   // Now let's test that the app activity are stored appropriately.
-  const base::Value* value =
+  const base::Value::List& list =
       prefs()->GetList(prefs::kPerAppTimeLimitsAppActivities);
 
   const std::vector<PersistedAppInfo> app_infos =
       PersistedAppInfo::PersistedAppInfosFromList(
-          value,
+          list,
           /* include_app_activity_array */ true);
 
   // The app activities have been cleared.
@@ -1057,7 +1057,7 @@ TEST_F(AppActivityRegistryTest, WebAppInstalled) {
 }
 
 TEST_F(AppActivityRegistryTest, AppBlocked) {
-  const AppLimit app1_limit(AppRestriction::kBlocked, absl::nullopt,
+  const AppLimit app1_limit(AppRestriction::kBlocked, std::nullopt,
                             base::Time::Now());
   const std::map<AppId, AppLimit> limits{{kApp1, app1_limit}};
 

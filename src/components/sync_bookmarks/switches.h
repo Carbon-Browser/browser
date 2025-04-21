@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,29 @@
 
 namespace switches {
 
-inline constexpr base::Feature kSyncOmitLargeBookmarkFaviconUrl{
-    "SyncOmitLargeBookmarkFaviconUrl", base::FEATURE_ENABLED_BY_DEFAULT};
-
-// TODO(crbug.com/1232951): remove the feature toggle once most of bookmarks
+// TODO(crbug.com/40780588): remove the feature toggle once most of bookmarks
 // have been reuploaded.
-inline constexpr base::Feature kSyncReuploadBookmarks{
-    "SyncReuploadBookmarks", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_DECLARE_FEATURE(kSyncReuploadBookmarks);
+
+BASE_DECLARE_FEATURE(kSyncMigrateBookmarksWithoutClientTagHash);
+
+BASE_DECLARE_FEATURE(kSyncMinimizeDeletionsDuringBookmarkBatchUpload);
+
+// Guards a performance optimization during batch upload. It only takes effect
+// if `kSyncMinimizeDeletionsDuringBookmarkBatchUpload` is also enabled.
+BASE_DECLARE_FEATURE(kSyncFastDeletionsDuringBookmarkBatchUpload);
+
+// If enabled, support displaying and uploading individual items (bookmarks or
+// folders) in the Batch Upload UI.
+//
+// Batch Upload of all items is supported regardless of this feature flag.
+//
+// On Windows/Mac/Linux: this flag only affects behavior if the
+// `syncer::kSyncEnableBookmarksInTransportMode` feature is also enabled.
+//
+// On Android: this flag does not affect user-visiable behavior, but does enable
+// new code paths.
+BASE_DECLARE_FEATURE(kSyncBookmarksBatchUploadSelectedItems);
 
 }  // namespace switches
 

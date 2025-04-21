@@ -1,17 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/app/application_delegate/memory_warning_helper.h"
 
-#include "base/memory/memory_pressure_listener.h"
-#include "base/metrics/histogram_macros.h"
+#import "base/memory/memory_pressure_listener.h"
+#import "base/metrics/histogram_macros.h"
 #import "components/previous_session_info/previous_session_info.h"
-#include "ios/chrome/browser/crash_report/crash_keys_helper.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/crash_report/model/crash_keys_helper.h"
 
 namespace {
 // The number of seconds to wait after a memory warning to clear the flag used
@@ -48,7 +44,7 @@ const CFTimeInterval kOutOfMemoryResetTimeInterval = 5;
   _outOfMemoryResetTime =
       CFAbsoluteTimeGetCurrent() + kOutOfMemoryResetTimeInterval;
 
-  // Add information to breakpad.
+  // Add information to crash keys.
   crash_keys::SetMemoryWarningCount(_foregroundMemoryWarningCount);
   crash_keys::SetMemoryWarningInProgress(true);
 

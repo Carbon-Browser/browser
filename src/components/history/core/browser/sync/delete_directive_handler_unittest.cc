@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "base/files/scoped_temp_dir.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/history/core/browser/history_backend.h"
 #include "components/history/core/browser/history_backend_client.h"
@@ -20,15 +20,17 @@
 #include "components/history/core/browser/in_memory_history_backend.h"
 #include "components/history/core/test/test_history_database.h"
 #include "components/sync/base/client_tag_hash.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/history_delete_directive_specifics.pb.h"
-#include "components/sync/test/model/fake_sync_change_processor.h"
-#include "components/sync/test/model/sync_change_processor_wrapper_for_test.h"
+#include "components/sync/test/fake_sync_change_processor.h"
+#include "components/sync/test/sync_change_processor_wrapper_for_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace history {
+
+const std::string kTestAppId1 = "org.chromium.dino.Pteranodon";
+const std::string kTestAppId2 = "org.chromium.dino.Trext";
 
 namespace {
 
@@ -44,24 +46,25 @@ class TestHistoryBackendDelegate : public HistoryBackend::Delegate {
   TestHistoryBackendDelegate& operator=(const TestHistoryBackendDelegate&) =
       delete;
 
+  bool CanAddURL(const GURL& url) const override { return true; }
   void NotifyProfileError(sql::InitStatus init_status,
                           const std::string& diagnostics) override {}
   void SetInMemoryBackend(
       std::unique_ptr<InMemoryHistoryBackend> backend) override {}
   void NotifyFaviconsChanged(const std::set<GURL>& page_urls,
                              const GURL& icon_url) override {}
-  void NotifyURLVisited(ui::PageTransition transition,
-                        const URLRow& row,
-                        base::Time visit_time) override {}
+  void NotifyURLVisited(const URLRow& url_row,
+                        const VisitRow& visit_row,
+                        std::optional<int64_t> local_navigation_id) override {}
   void NotifyURLsModified(const URLRows& changed_urls) override {}
-  void NotifyURLsDeleted(DeletionInfo deletion_info) override {}
+  void NotifyDeletions(DeletionInfo deletion_info) override {}
+  void NotifyVisitedLinksAdded(const HistoryAddPageArgs& args) override {}
+  void NotifyVisitedLinksDeleted(
+      const std::vector<DeletedVisitedLink>& links) override {}
   void NotifyKeywordSearchTermUpdated(const URLRow& row,
                                       KeywordID keyword_id,
                                       const std::u16string& term) override {}
   void NotifyKeywordSearchTermDeleted(URLID url_id) override {}
-  void NotifyContentModelAnnotationModified(
-      const URLRow& row,
-      const VisitContentModelAnnotations& model_annotations) override {}
   void DBLoaded() override {}
 };
 
@@ -72,7 +75,8 @@ void ScheduleDBTask(scoped_refptr<HistoryBackend> history_backend,
   base::CancelableTaskTracker::IsCanceledCallback is_canceled;
   tracker->NewTrackedTaskId(&is_canceled);
   history_backend->ProcessDBTask(
-      std::move(task), base::ThreadTaskRunnerHandle::Get(), is_canceled);
+      std::move(task), base::SingleThreadTaskRunner::GetCurrentDefault(),
+      is_canceled);
 }
 
 // Closure function that runs periodically to check result of delete directive
@@ -88,7 +92,7 @@ void CheckDirectiveProcessingResult(
   }
 
   base::PlatformThread::Sleep(base::Milliseconds(100));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CheckDirectiveProcessingResult, timeout,
                                 change_processor, num_changes));
 }
@@ -99,7 +103,7 @@ class HistoryDeleteDirectiveHandlerTest : public testing::Test {
       : history_backend_(base::MakeRefCounted<HistoryBackend>(
             std::make_unique<TestHistoryBackendDelegate>(),
             /*backend_client=*/nullptr,
-            base::ThreadTaskRunnerHandle::Get())) {}
+            base::SingleThreadTaskRunner::GetCurrentDefault())) {}
 
   void SetUp() override {
     ASSERT_TRUE(test_dir_.CreateUniqueTempDir());
@@ -110,10 +114,15 @@ class HistoryDeleteDirectiveHandlerTest : public testing::Test {
         base::BindRepeating(&ScheduleDBTask, history_backend_));
   }
 
-  void AddPage(const GURL& url, base::Time t) {
+  void AddPage(const GURL& url,
+               base::Time t,
+               std::optional<std::string> app_id = kNoAppIdFilter) {
     history::HistoryAddPageArgs args;
     args.url = url;
     args.time = t;
+    if (app_id) {
+      args.app_id = *app_id;
+    }
     history_backend_->AddPage(args);
   }
 
@@ -187,11 +196,10 @@ TEST_F(HistoryDeleteDirectiveHandlerTest,
           ->MergeDataAndStartSyncing(
               syncer::HISTORY_DELETE_DIRECTIVES, syncer::SyncDataList(),
               std::make_unique<syncer::SyncChangeProcessorWrapperForTest>(
-                  &change_processor),
-              std::unique_ptr<syncer::SyncErrorFactory>())
+                  &change_processor))
           .has_value());
 
-  absl::optional<syncer::ModelError> err =
+  std::optional<syncer::ModelError> err =
       handler()->ProcessLocalDeleteDirective(delete_directive);
   EXPECT_FALSE(err.has_value());
   EXPECT_EQ(1u, change_processor.changes().size());
@@ -245,13 +253,12 @@ TEST_F(HistoryDeleteDirectiveHandlerTest, ProcessGlobalIdDeleteDirective) {
                        syncer::HISTORY_DELETE_DIRECTIVES, directives,
                        std::unique_ptr<syncer::SyncChangeProcessor>(
                            new syncer::SyncChangeProcessorWrapperForTest(
-                               &change_processor)),
-                       std::unique_ptr<syncer::SyncErrorFactory>())
+                               &change_processor)))
                    .has_value());
 
   // Inject a task to check status and keep message loop filled before directive
   // processing finishes.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CheckDirectiveProcessingResult,
                                 base::Time::Now() + base::Seconds(10),
                                 &change_processor, 2));
@@ -311,13 +318,12 @@ TEST_F(HistoryDeleteDirectiveHandlerTest, ProcessTimeRangeDeleteDirective) {
                        syncer::HISTORY_DELETE_DIRECTIVES, directives,
                        std::unique_ptr<syncer::SyncChangeProcessor>(
                            new syncer::SyncChangeProcessorWrapperForTest(
-                               &change_processor)),
-                       std::unique_ptr<syncer::SyncErrorFactory>())
+                               &change_processor)))
                    .has_value());
 
   // Inject a task to check status and keep message loop filled before
   // directive processing finishes.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CheckDirectiveProcessingResult,
                                 base::Time::Now() + base::Seconds(10),
                                 &change_processor, 2));
@@ -335,6 +341,84 @@ TEST_F(HistoryDeleteDirectiveHandlerTest, ProcessTimeRangeDeleteDirective) {
   ASSERT_EQ(2u, sync_changes.size());
   EXPECT_EQ(syncer::SyncChange::ACTION_DELETE, sync_changes[0].change_type());
   EXPECT_EQ(syncer::SyncChange::ACTION_DELETE, sync_changes[1].change_type());
+}
+
+// Create delete directives for time ranges with or without app ID.  Only the
+// entries with the matching app ID (or all if not specified) should be deleted.
+TEST_F(HistoryDeleteDirectiveHandlerTest,
+       ProcessTimeRangeDeleteDirectiveByApp) {
+  const GURL test_url("http://www.google.com/");
+  for (int64_t i = 1; i <= 10; ++i) {
+    AddPage(test_url, UnixUsecToTime(i), kTestAppId1);
+  }
+
+  {
+    QueryURLResult query = QueryURL(test_url);
+    ASSERT_TRUE(query.success);
+    ASSERT_EQ(10, query.row.visit_count());
+  }
+
+  syncer::SyncDataList directives;
+  // 1st directive. Entries will be deleted as app ID is not specified, which
+  // will match any entries irrespective of the entries' app ID.
+  sync_pb::EntitySpecifics entity_specs;
+  sync_pb::TimeRangeDirective* time_range_directive =
+      entity_specs.mutable_history_delete_directive()
+          ->mutable_time_range_directive();
+  time_range_directive->set_start_time_usec(2);
+  time_range_directive->set_end_time_usec(4);
+  directives.push_back(
+      syncer::SyncData::CreateRemoteData(entity_specs, kFakeClientTagHash));
+
+  // 2nd directive. Entries will be deleted since the app ID is matched.
+  time_range_directive->Clear();
+  time_range_directive->set_start_time_usec(6);
+  time_range_directive->set_end_time_usec(7);
+  time_range_directive->set_app_id(kTestAppId1);
+  directives.push_back(
+      syncer::SyncData::CreateRemoteData(entity_specs, kFakeClientTagHash));
+
+  // 3rd directive. Entries cannot be deleted by this directive since the app
+  // ID doesn't match.
+  time_range_directive->Clear();
+  time_range_directive->set_start_time_usec(1);
+  time_range_directive->set_end_time_usec(10);
+  time_range_directive->set_app_id(kTestAppId2);
+  directives.push_back(
+      syncer::SyncData::CreateRemoteData(entity_specs, kFakeClientTagHash));
+
+  syncer::FakeSyncChangeProcessor change_processor;
+  EXPECT_FALSE(handler()
+                   ->MergeDataAndStartSyncing(
+                       syncer::HISTORY_DELETE_DIRECTIVES, directives,
+                       std::unique_ptr<syncer::SyncChangeProcessor>(
+                           new syncer::SyncChangeProcessorWrapperForTest(
+                               &change_processor)))
+                   .has_value());
+
+  // Inject a task to check status and keep message loop filled before
+  // directive processing finishes.
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&CheckDirectiveProcessingResult,
+                                base::Time::Now() + base::Seconds(10),
+                                &change_processor, 2));
+  base::RunLoop().RunUntilIdle();
+
+  QueryURLResult query = QueryURL(test_url);
+  EXPECT_TRUE(query.success);
+  ASSERT_EQ(5, query.row.visit_count());
+  EXPECT_EQ(UnixUsecToTime(1), query.visits[0].visit_time);
+  EXPECT_EQ(UnixUsecToTime(5), query.visits[1].visit_time);
+  EXPECT_EQ(UnixUsecToTime(8), query.visits[2].visit_time);
+  EXPECT_EQ(UnixUsecToTime(9), query.visits[3].visit_time);
+  EXPECT_EQ(UnixUsecToTime(10), query.visits[4].visit_time);
+
+  // Expect three sync changes for deleting processed directives.
+  const syncer::SyncChangeList& sync_changes = change_processor.changes();
+  ASSERT_EQ(3u, sync_changes.size());
+  EXPECT_EQ(syncer::SyncChange::ACTION_DELETE, sync_changes[0].change_type());
+  EXPECT_EQ(syncer::SyncChange::ACTION_DELETE, sync_changes[1].change_type());
+  EXPECT_EQ(syncer::SyncChange::ACTION_DELETE, sync_changes[2].change_type());
 }
 
 // Create a delete directive for urls.  The expected entries should be
@@ -377,13 +461,12 @@ TEST_F(HistoryDeleteDirectiveHandlerTest, ProcessUrlDeleteDirective) {
                        syncer::HISTORY_DELETE_DIRECTIVES, directives,
                        std::unique_ptr<syncer::SyncChangeProcessor>(
                            new syncer::SyncChangeProcessorWrapperForTest(
-                               &change_processor)),
-                       std::unique_ptr<syncer::SyncErrorFactory>())
+                               &change_processor)))
                    .has_value());
 
   // Inject a task to check status and keep message loop filled before
   // directive processing finishes.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CheckDirectiveProcessingResult,
                                 base::Time::Now() + base::Seconds(10),
                                 &change_processor, 2));

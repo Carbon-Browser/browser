@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define DEVICE_VR_PUBLIC_CPP_XR_FRAME_SINK_CLIENT_H_
 
 #include <memory>
-#include "base/callback_forward.h"
+#include <optional>
+
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "services/viz/privileged/mojom/compositing/frame_sink_manager.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 class FrameSinkId;
@@ -19,7 +20,7 @@ namespace device {
 
 // Helper enum used to describe if DOMOverlay should attempt to be setup, and if
 // it should, if initialization should fail if it is unable to be setup.
-enum DomOverlaySetup {
+enum class DomOverlaySetup {
   kNone,
   kRequired,
   kOptional,
@@ -49,7 +50,7 @@ class COMPONENT_EXPORT(VR_PUBLIC_CPP) XrFrameSinkClient {
 
   // Used to get the SurfaceId of the DOM content to be rendered.
   // May be called from any thread.
-  virtual absl::optional<viz::SurfaceId> GetDOMSurface() = 0;
+  virtual std::optional<viz::SurfaceId> GetDOMSurface() = 0;
 
   virtual viz::FrameSinkId FrameSinkId() = 0;
 };

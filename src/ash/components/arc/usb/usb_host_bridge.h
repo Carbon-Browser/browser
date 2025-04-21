@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 
 #include "ash/components/arc/mojom/usb_host.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
@@ -37,17 +38,6 @@ class ArcUsbHostBridge : public KeyedService,
                          public device::mojom::UsbDeviceManagerClient,
                          public mojom::UsbHostHost {
  public:
-  class Delegate {
-   public:
-    virtual ~Delegate() = default;
-
-    // Attaches the unclaimed USB devices to the ARCVM instance if ARCVM is
-    // enabled. Called by ArcUsbHostBridge once it successfully established the
-    // Mojo connection to the ARC instance. This may be called multiple times
-    // within the lifetime of a single ArcUsbHostBridge instance.
-    virtual void AttachDevicesToArcVm() = 0;
-  };
-
   // Returns singleton instance for the given BrowserContext,
   // or nullptr if the browser |context| is not allowed to use ARC.
   static ArcUsbHostBridge* GetForBrowserContext(
@@ -73,7 +63,7 @@ class ArcUsbHostBridge : public KeyedService,
                          bool interactive,
                          RequestPermissionCallback callback) override;
   void OpenDevice(const std::string& guid,
-                  const absl::optional<std::string>& package,
+                  const std::optional<std::string>& package,
                   OpenDeviceCallback callback) override;
   void GetDeviceInfo(const std::string& guid,
                      GetDeviceInfoCallback callback) override;
@@ -87,8 +77,7 @@ class ArcUsbHostBridge : public KeyedService,
 
   void SetUiDelegate(ArcUsbHostUiDelegate* ui_delegate);
 
-  // Sets the Delegate instance.
-  void SetDelegate(std::unique_ptr<Delegate> delegate);
+  static void EnsureFactoryBuilt();
 
  private:
   // Init |devices_| once the device list has been returned, so that we
@@ -109,7 +98,8 @@ class ArcUsbHostBridge : public KeyedService,
 
   SEQUENCE_CHECKER(sequence_);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // Connection to the DeviceService for usb manager.
   mojo::Remote<device::mojom::UsbDeviceManager> usb_manager_;
@@ -119,8 +109,7 @@ class ArcUsbHostBridge : public KeyedService,
   // A mapping from GUID -> UsbDeviceInfoPtr for each attached USB device.
   std::map<std::string, device::mojom::UsbDeviceInfoPtr> devices_;
 
-  ArcUsbHostUiDelegate* ui_delegate_ = nullptr;
-  std::unique_ptr<Delegate> delegate_;
+  raw_ptr<ArcUsbHostUiDelegate> ui_delegate_ = nullptr;
 
   // WeakPtrFactory to use for callbacks.
   base::WeakPtrFactory<ArcUsbHostBridge> weak_factory_{this};

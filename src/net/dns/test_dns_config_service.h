@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #define NET_DNS_TEST_DNS_CONFIG_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "net/base/net_export.h"
 #include "net/dns/dns_config_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -50,7 +50,7 @@ class NET_EXPORT_PRIVATE TestDnsConfigService : public DnsConfigService {
   }
 
  private:
-  absl::optional<DnsConfig> config_for_refresh_;
+  std::optional<DnsConfig> config_for_refresh_;
 };
 
 // Test implementation of `DnsConfigService` that exercises the

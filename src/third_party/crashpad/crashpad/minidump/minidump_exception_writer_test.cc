@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -235,7 +235,10 @@ TEST(MinidumpExceptionWriter, InitializeFromSnapshot) {
   thread_id_map[kThreadID] = expect_exception.ThreadId;
 
   auto exception_writer = std::make_unique<MinidumpExceptionWriter>();
-  exception_writer->InitializeFromSnapshot(&exception_snapshot, thread_id_map);
+  exception_writer->InitializeFromSnapshot(
+      &exception_snapshot,
+      thread_id_map,
+      /*allow_missing_thread_id_from_map=*/false);
 
   MinidumpFileWriter minidump_file_writer;
   ASSERT_TRUE(minidump_file_writer.AddStream(std::move(exception_writer)));

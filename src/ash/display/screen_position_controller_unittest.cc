@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_tracker.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/layout.h"
 #include "ui/display/display_layout.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/display_manager.h"
@@ -292,8 +291,9 @@ class ConvertToScreenEventHandler : public ui::EventHandler {
 
  private:
   void OnMouseEvent(ui::MouseEvent* event) override {
-    if (event->type() == ui::ET_MOUSE_CAPTURE_CHANGED)
+    if (event->type() == ui::EventType::kMouseCaptureChanged) {
       return;
+    }
 
     aura::Window* root =
         static_cast<aura::Window*>(event->target())->GetRootWindow();

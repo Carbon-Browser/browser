@@ -1,5 +1,5 @@
 <!--
-Copyright 2021 The Chromium Authors. All rights reserved.
+Copyright 2021 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -22,50 +22,24 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
-<histogram name="VRFreNotComplete" enum="BooleanHit" expires_after="M85">
-  <owner>ymalik@chromium.org</owner>
-  <summary>
-    Whether the user had been through the FRE when Chrome is launched in VR
-    mode.
-  </summary>
-</histogram>
-
-<histogram name="VRSessionTime" units="ms" expires_after="2023-01-15">
+<histogram name="VRSessionTime.WebVR" units="ms" expires_after="2025-03-09">
   <owner>alcooper@chromium.org</owner>
   <owner>xr-dev@chromium.org</owner>
   <summary>
     The duration of the VR session. Logged when a new disjoint session has
-    begun, or when the session has ended in a non-continuable way.
+    begun, or when the session has ended in a non-continuable way. Restricted to
+    the period that the browser is displaying WebVR (XR) content.
   </summary>
 </histogram>
 
-<histogram name="VRSessionVideoCount" units="units" expires_after="2023-01-15">
-  <owner>alcooper@chromium.org</owner>
-  <owner>xr-dev@chromium.org</owner>
-  <summary>
-    Number of videos watched in a VR session. Logged when a new disjoint session
-    has begun, or when the session has ended in a non-continuable way.
-  </summary>
-</histogram>
-
-<histogram name="VRSessionVideoTime" units="ms" expires_after="2023-01-15">
-  <owner>alcooper@chromium.org</owner>
-  <owner>xr-dev@chromium.org</owner>
-  <summary>
-    The duration of a single session spent watching video in VR. Logged when a
-    new disjoint session has begun, or when the session has ended in a
-    non-continuable way.
-  </summary>
-</histogram>
-
-<histogram name="VRViewerType" enum="VRViewerType" expires_after="2022-12-11">
+<histogram name="VRViewerType" enum="VRViewerType" expires_after="2025-03-30">
   <owner>alcooper@chromium.org</owner>
   <owner>xr-dev@chromium.org</owner>
   <summary>The type of headset being used for VR.</summary>
 </histogram>
 
 <histogram name="XR.ARCore.DepthBufferSizeInPixels" units="pixels"
-    expires_after="2022-12-10">
+    expires_after="2025-02-02">
   <owner>bialpio@chromium.org</owner>
   <owner>xr-dev@chromium.org</owner>
   <summary>
@@ -75,22 +49,22 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="XR.RuntimeUsed" enum="XRDeviceId" expires_after="2023-01-07">
+<histogram name="XR.ARCore.ImageCopyFastPath" enum="Boolean"
+    expires_after="2024-12-22">
+  <owner>alcooper@chromium.org</owner>
+  <owner>xr-dev@chromium.org</owner>
+  <summary>
+    Recorded every time an image is copied out of ArCore. Measures if we take
+    the &quot;fast&quot; direct copy path or have to copy pixel-by-pixel.
+  </summary>
+</histogram>
+
+<histogram name="XR.RuntimeUsed" enum="XRDeviceId" expires_after="2026-01-07">
   <owner>alcooper@chromium.org</owner>
   <owner>xr-dev@chromium.org</owner>
   <summary>
     Indicates which XR runtime was used for a session. Recorded when the session
     was successfully created.
-  </summary>
-</histogram>
-
-<histogram name="XR.WebXR.ReferenceSpace.Succeeded" enum="XRReferenceSpaceType"
-    expires_after="2022-12-11">
-  <owner>alcooper@chromium.org</owner>
-  <owner>xr-dev@chromium.org</owner>
-  <summary>
-    Records which reference spaces are successfully created when the promise
-    returned by XRSession.requestReferenceSpace() is resolved.
   </summary>
 </histogram>
 

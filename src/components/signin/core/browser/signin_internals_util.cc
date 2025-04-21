@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,35 +15,33 @@
 
 namespace signin_internals_util {
 
+// Preference prefixes for signin and token values.
 const char kSigninPrefPrefix[] = "google.services.signin.";
-const char kTokenPrefPrefix[] = "google.services.signin.tokens.";
 
-#define ENUM_CASE(x) case x: return (std::string(kSigninPrefPrefix) + #x)
+#define ENUM_CASE(x) \
+  case x:            \
+    return (std::string(kSigninPrefPrefix) + #x)
 std::string SigninStatusFieldToString(UntimedSigninStatusField field) {
   switch (field) {
     ENUM_CASE(ACCOUNT_ID);
     ENUM_CASE(GAIA_ID);
     ENUM_CASE(USERNAME);
-    case UNTIMED_FIELDS_END:
-      NOTREACHED();
-      return std::string();
   }
 
   NOTREACHED();
-  return std::string();
 }
 
 std::string SigninStatusFieldToString(TimedSigninStatusField field) {
   switch (field) {
     ENUM_CASE(AUTHENTICATION_RESULT_RECEIVED);
     ENUM_CASE(REFRESH_TOKEN_RECEIVED);
+    ENUM_CASE(LAST_SIGNIN_ACCESS_POINT);
+    ENUM_CASE(LAST_SIGNOUT_SOURCE);
     case TIMED_FIELDS_END:
       NOTREACHED();
-      return std::string();
   }
 
   NOTREACHED();
-  return std::string();
 }
 
-} //  namespace signin_internals_util
+}  //  namespace signin_internals_util

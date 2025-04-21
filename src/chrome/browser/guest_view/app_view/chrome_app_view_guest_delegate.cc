@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,9 @@
 
 namespace extensions {
 
-ChromeAppViewGuestDelegate::ChromeAppViewGuestDelegate() {
-}
+ChromeAppViewGuestDelegate::ChromeAppViewGuestDelegate() = default;
 
-ChromeAppViewGuestDelegate::~ChromeAppViewGuestDelegate() {
-}
+ChromeAppViewGuestDelegate::~ChromeAppViewGuestDelegate() = default;
 
 bool ChromeAppViewGuestDelegate::HandleContextMenu(
     content::RenderFrameHost& render_frame_host,
@@ -33,9 +31,8 @@ bool ChromeAppViewGuestDelegate::HandleContextMenu(
 }
 
 AppDelegate* ChromeAppViewGuestDelegate::CreateAppDelegate(
-    content::WebContents* web_contents) {
-  Profile* profile =
-      Profile::FromBrowserContext(web_contents->GetBrowserContext());
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
   DCHECK(profile);
   return new ChromeAppDelegate(profile, true);
 }

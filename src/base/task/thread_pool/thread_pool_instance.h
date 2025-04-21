@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define BASE_TASK_THREAD_POOL_THREAD_POOL_INSTANCE_H_
 
 #include <memory>
+#include <string_view>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner_thread_mode.h"
@@ -58,11 +58,19 @@ class BASE_EXPORT ThreadPoolInstance {
     };
 
     InitParams(size_t max_num_foreground_threads_in);
+    InitParams(size_t max_num_foreground_threads_in,
+               size_t max_num_utility_threads_in);
     ~InitParams();
 
     // Maximum number of unblocked tasks that can run concurrently in the
-    // foreground thread group.
+    // foreground thread group. This is capped at 256 (and should likely not be
+    // configured anywhere close to this in a browser, approaching that limit is
+    // most useful on compute farms running tests or compiles in parallel).
     size_t max_num_foreground_threads;
+
+    // Maximum number of unblocked tasks that can run concurrently in the
+    // utility thread group.
+    size_t max_num_utility_threads;
 
     // Whether COM is initialized when running sequenced and parallel tasks.
     CommonThreadPoolEnvironment common_thread_pool_environment =
@@ -115,6 +123,29 @@ class BASE_EXPORT ThreadPoolInstance {
     ScopedBestEffortExecutionFence& operator=(
         const ScopedBestEffortExecutionFence&) = delete;
     ~ScopedBestEffortExecutionFence();
+  };
+
+  // Used to restrict the maximum number of concurrent tasks that can run in a
+  // scope.
+  class BASE_EXPORT ScopedRestrictedTasks {
+   public:
+    ScopedRestrictedTasks();
+    ScopedRestrictedTasks(const ScopedRestrictedTasks&) = delete;
+    ScopedRestrictedTasks& operator=(const ScopedRestrictedTasks&) = delete;
+    ~ScopedRestrictedTasks();
+  };
+
+  // Used to allow posting `BLOCK_SHUTDOWN` tasks after shutdown in a scope. The
+  // tasks will fizzle (not run) but not trigger any checks that aim to catch
+  // this class of ordering bugs.
+  class BASE_EXPORT ScopedFizzleBlockShutdownTasks {
+   public:
+    ScopedFizzleBlockShutdownTasks();
+    ScopedFizzleBlockShutdownTasks(const ScopedFizzleBlockShutdownTasks&) =
+        delete;
+    ScopedFizzleBlockShutdownTasks& operator=(
+        const ScopedFizzleBlockShutdownTasks&) = delete;
+    ~ScopedFizzleBlockShutdownTasks();
   };
 
   // Destroying a ThreadPoolInstance is not allowed in production; it is always
@@ -174,6 +205,9 @@ class BASE_EXPORT ThreadPoolInstance {
   // after this call.
   virtual void JoinForTesting() = 0;
 
+  virtual void BeginFizzlingBlockShutdownTasks() = 0;
+  virtual void EndFizzlingBlockShutdownTasks() = 0;
+
   // CreateAndStartWithDefaultParams(), Create(), and SetInstance() register a
   // ThreadPoolInstance to handle tasks posted through the thread_pool.h API for
   // this process.
@@ -196,7 +230,7 @@ class BASE_EXPORT ThreadPoolInstance {
   // that calls this. Start() is called by this method; it is invalid to call it
   // again afterwards. CHECKs on failure. For tests, prefer
   // base::test::TaskEnvironment (ensures isolation).
-  static void CreateAndStartWithDefaultParams(StringPiece name);
+  static void CreateAndStartWithDefaultParams(std::string_view name);
 
   // Same as CreateAndStartWithDefaultParams() but allows callers to split the
   // Create() and StartWithDefaultParams() calls. Start() is called by this
@@ -210,7 +244,7 @@ class BASE_EXPORT ThreadPoolInstance {
   // called. Tasks can be posted at any time but will not run until after
   // Start() is called. For tests, prefer base::test::TaskEnvironment
   // (ensures isolation).
-  static void Create(StringPiece name);
+  static void Create(std::string_view name);
 
   // Registers |thread_pool| to handle tasks posted through the thread_pool.h
   // API for this process. For tests, prefer base::test::TaskEnvironment
@@ -262,6 +296,9 @@ class BASE_EXPORT ThreadPoolInstance {
   virtual void EndFence() = 0;
   virtual void BeginBestEffortFence() = 0;
   virtual void EndBestEffortFence() = 0;
+
+  virtual void BeginRestrictedTasks() = 0;
+  virtual void EndRestrictedTasks() = 0;
 };
 
 }  // namespace base

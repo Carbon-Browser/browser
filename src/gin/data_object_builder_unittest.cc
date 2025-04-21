@@ -1,10 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gin/data_object_builder.h"
 
-#include "base/bind.h"
+#include <string_view>
+
+#include "base/check_op.h"
+#include "base/debug/debugging_buildflags.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "gin/dictionary.h"
 #include "gin/public/isolate_holder.h"
@@ -66,16 +70,16 @@ TEST_F(DataObjectBuilderTest, DoesNotInvokeSetters) {
   ASSERT_TRUE(object_constructor.As<v8::Function>()
                   ->Get(context, StringToSymbol(isolate, "prototype"))
                   .ToLocal(&object_prototype));
-  ASSERT_TRUE(
-      object_prototype.As<v8::Object>()
-          ->SetAccessor(context, StringToSymbol(isolate, "key"),
-                        [](v8::Local<v8::Name>,
-                           const v8::PropertyCallbackInfo<v8::Value>&) {},
-                        [](v8::Local<v8::Name>, v8::Local<v8::Value>,
-                           const v8::PropertyCallbackInfo<void>&) {
-                          ADD_FAILURE() << "setter should not be invoked";
-                        })
-          .ToChecked());
+  ASSERT_TRUE(object_prototype.As<v8::Object>()
+                  ->SetNativeDataProperty(
+                      context, StringToSymbol(isolate, "key"),
+                      [](v8::Local<v8::Name>,
+                         const v8::PropertyCallbackInfo<v8::Value>&) {},
+                      [](v8::Local<v8::Name>, v8::Local<v8::Value>,
+                         const v8::PropertyCallbackInfo<void>&) {
+                        ADD_FAILURE() << "setter should not be invoked";
+                      })
+                  .ToChecked());
 
   // Create an object.
   DataObjectBuilder(isolate).Set("key", 42).Build();
@@ -84,7 +88,8 @@ TEST_F(DataObjectBuilderTest, DoesNotInvokeSetters) {
 // The internal handle is cleared when the builder is finished.
 // This makes the class harder to abuse, so that its methods cannot be used
 // after something may have modified the object in unexpected ways.
-#if DCHECK_IS_ON()
+// TODO(pbos): Consider making this a CHECK and test this everywhere.
+#if DCHECK_IS_ON() && !BUILDFLAG(DCHECK_IS_CONFIGURABLE)
 TEST_F(DataObjectBuilderTest, UnusableAfterBuild) {
   v8::Isolate* isolate = instance_->isolate();
   v8::HandleScope handle_scope(isolate);
@@ -92,13 +97,8 @@ TEST_F(DataObjectBuilderTest, UnusableAfterBuild) {
   DataObjectBuilder builder(isolate);
   EXPECT_FALSE(builder.Build().IsEmpty());
 
-  bool has_dcheck_failure = false;
-  logging::ScopedLogAssertHandler handler(base::BindRepeating(
-      [](bool* flag, const char* file, int line, base::StringPiece message,
-         base::StringPiece stack_trace) { *flag = true; },
-      base::Unretained(&has_dcheck_failure)));
-  builder.Build();
-  EXPECT_TRUE(has_dcheck_failure);
+  EXPECT_DEATH_IF_SUPPORTED(builder.Build(),
+                            "Check failed: !object_.IsEmpty\\(\\)");
 }
 #endif  // DCHECK_IS_ON()
 
@@ -124,9 +124,8 @@ TEST_F(DataObjectBuilderTest, CreatesDataPropertiesForIndices) {
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = context_.Get(isolate);
 
-  v8::Local<v8::Object> object = DataObjectBuilder(isolate)
-                                     .Set(42, base::StringPiece("forty-two"))
-                                     .Build();
+  v8::Local<v8::Object> object =
+      DataObjectBuilder(isolate).Set(42, std::string_view("forty-two")).Build();
   ASSERT_TRUE(object->HasOwnProperty(context, 42).ToChecked());
 
   v8::Local<v8::Value> descriptor_object;

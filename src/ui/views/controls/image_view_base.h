@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_CONTROLS_IMAGE_VIEW_BASE_H_
 #define UI_VIEWS_CONTROLS_IMAGE_VIEW_BASE_H_
 
+#include <optional>
 #include <string>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -17,9 +17,9 @@
 namespace views {
 
 class VIEWS_EXPORT ImageViewBase : public View {
- public:
-  METADATA_HEADER(ImageViewBase);
+  METADATA_HEADER(ImageViewBase, View)
 
+ public:
   enum class Alignment { kLeading, kCenter, kTrailing };
 
   ImageViewBase();
@@ -45,17 +45,15 @@ class VIEWS_EXPORT ImageViewBase : public View {
   Alignment GetVerticalAlignment() const;
 
   // Set the tooltip text.
-  void SetTooltipText(const std::u16string& tooltip);
+  virtual void SetTooltipText(const std::u16string& tooltip);
   const std::u16string& GetTooltipText() const;
 
-  // Set / Get the accessible name text.
-  void SetAccessibleName(const std::u16string& name);
-  const std::u16string& GetAccessibleName() const;
-
   // Overridden from View:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  void AdjustAccessibleName(std::u16string& new_name,
+                            ax::mojom::NameFrom& name_from) override;
   std::u16string GetTooltipText(const gfx::Point& p) const override;
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const SizeBounds& /*available_size*/) const override;
   views::PaintInfo::ScaleType GetPaintScaleType() const override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
   void PreferredSizeChanged() override;
@@ -65,7 +63,7 @@ class VIEWS_EXPORT ImageViewBase : public View {
   virtual gfx::Size GetImageSize() const = 0;
 
   // The requested image size.
-  absl::optional<gfx::Size> image_size_;
+  std::optional<gfx::Size> image_size_;
 
  private:
   friend class ImageViewTest;
@@ -84,16 +82,12 @@ class VIEWS_EXPORT ImageViewBase : public View {
 
   // The current tooltip text.
   std::u16string tooltip_text_;
-
-  // The current accessible name text.
-  std::u16string accessible_name_;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, ImageViewBase, View)
 VIEW_BUILDER_PROPERTY(gfx::Size, ImageSize)
 VIEW_BUILDER_PROPERTY(ImageViewBase::Alignment, HorizontalAlignment)
 VIEW_BUILDER_PROPERTY(ImageViewBase::Alignment, VerticalAlignment)
-VIEW_BUILDER_PROPERTY(std::u16string, AccessibleName)
 VIEW_BUILDER_PROPERTY(std::u16string, TooltipText)
 END_VIEW_BUILDER
 

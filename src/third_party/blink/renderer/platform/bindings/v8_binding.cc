@@ -30,8 +30,8 @@
 
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 
-#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 
 namespace blink {
 
@@ -51,24 +51,23 @@ v8::Local<v8::Value> FreezeV8Object(v8::Local<v8::Value> value,
   return value;
 }
 
-String GetCurrentScriptUrl() {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+String GetCurrentScriptUrl(v8::Isolate* isolate) {
   DCHECK(isolate);
   if (!isolate->InContext())
     return String();
 
   v8::Local<v8::String> script_name =
       v8::StackTrace::CurrentScriptNameOrSourceURL(isolate);
-  return ToCoreStringWithNullCheck(script_name);
+  return ToCoreStringWithNullCheck(isolate, script_name);
 }
 
-Vector<String> GetScriptUrlsFromCurrentStack(wtf_size_t unique_url_count) {
+Vector<String> GetScriptUrlsFromCurrentStack(v8::Isolate* isolate,
+                                             wtf_size_t unique_url_count) {
   Vector<String> unique_urls;
 
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  DCHECK(isolate);
-  if (!isolate->InContext())
+  if (!isolate || !isolate->InContext()) {
     return unique_urls;
+  }
 
   // CurrentStackTrace is 10x faster than CaptureStackTrace if all that you
   // need is the url of the script at the top of the stack. See
@@ -84,7 +83,7 @@ Vector<String> GetScriptUrlsFromCurrentStack(wtf_size_t unique_url_count) {
     v8::Local<v8::String> script_name = frame->GetScriptName();
     if (script_name.IsEmpty() || !script_name->Length())
       continue;
-    String url = ToCoreString(script_name);
+    String url = ToCoreString(isolate, script_name);
     if (!unique_urls.Contains(url)) {
       unique_urls.push_back(std::move(url));
     }
@@ -98,8 +97,7 @@ namespace bindings {
 
 void V8ObjectToPropertyDescriptor(v8::Isolate* isolate,
                                   v8::Local<v8::Value> descriptor_object,
-                                  V8PropertyDescriptorBag& descriptor_bag,
-                                  ExceptionState& exception_state) {
+                                  V8PropertyDescriptorBag& descriptor_bag) {
   // TODO(crbug.com/1261485): This function is the same as
   // v8::internal::PropertyDescriptor::ToPropertyDescriptor.  Make the
   // function exposed public and re-use it rather than re-implementing
@@ -109,24 +107,22 @@ void V8ObjectToPropertyDescriptor(v8::Isolate* isolate,
   desc = V8PropertyDescriptorBag();
 
   if (!descriptor_object->IsObject()) {
-    exception_state.ThrowTypeError("Property description must be an object.");
+    V8ThrowException::ThrowTypeError(isolate,
+                                     "Property description must be an object.");
     return;
   }
 
   v8::Local<v8::Context> current_context = isolate->GetCurrentContext();
   v8::Local<v8::Object> v8_desc = descriptor_object.As<v8::Object>();
-  v8::TryCatch try_catch(isolate);
 
   auto get_value = [&](const char* property, bool& has,
                        v8::Local<v8::Value>& value) -> bool {
     const auto& v8_property = V8AtomicString(isolate, property);
     if (!v8_desc->Has(current_context, v8_property).To(&has)) {
-      exception_state.RethrowV8Exception(try_catch.Exception());
       return false;
     }
     if (has) {
       if (!v8_desc->Get(current_context, v8_property).ToLocal(&value)) {
-        exception_state.RethrowV8Exception(try_catch.Exception());
         return false;
       }
     } else {
@@ -164,7 +160,8 @@ void V8ObjectToPropertyDescriptor(v8::Isolate* isolate,
     return;
 
   if ((desc.has_get || desc.has_set) && (desc.has_value || desc.has_writable)) {
-    exception_state.ThrowTypeError(
+    V8ThrowException::ThrowTypeError(
+        isolate,
         "Invalid property descriptor. Cannot both specify accessors and "
         "a value or writable attribute");
     return;

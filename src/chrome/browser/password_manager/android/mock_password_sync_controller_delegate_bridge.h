@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,10 @@ class MockPasswordSyncControllerDelegateBridge
   MockPasswordSyncControllerDelegateBridge();
   ~MockPasswordSyncControllerDelegateBridge() override;
   MOCK_METHOD(void, SetConsumer, (base::WeakPtr<Consumer>), (override));
-  MOCK_METHOD(void, NotifyCredentialManagerWhenSyncing, (), (override));
+  MOCK_METHOD(void,
+              NotifyCredentialManagerWhenSyncing,
+              (const std::string&),
+              (override));
   MOCK_METHOD(void, NotifyCredentialManagerWhenNotSyncing, (), (override));
 };
 

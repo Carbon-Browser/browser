@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/device_posture/device_posture.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_device_posture_type.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
@@ -13,33 +14,30 @@ namespace blink {
 
 namespace {
 
-String PostureToString(device::mojom::blink::DevicePostureType posture) {
+V8DevicePostureType::Enum PostureToV8Enum(
+    mojom::blink::DevicePostureType posture) {
   switch (posture) {
-    case device::mojom::blink::DevicePostureType::kContinuous:
-      return "continuous";
-    case device::mojom::blink::DevicePostureType::kFolded:
-      return "folded";
-    case device::mojom::blink::DevicePostureType::kFoldedOver:
-      return "folded-over";
+    case mojom::blink::DevicePostureType::kContinuous:
+      return V8DevicePostureType::Enum::kContinuous;
+    case mojom::blink::DevicePostureType::kFolded:
+      return V8DevicePostureType::Enum::kFolded;
   }
+  NOTREACHED();
 }
 
 }  // namespace
 
 DevicePosture::DevicePosture(LocalDOMWindow* window)
-    : ExecutionContextClient(window),
-      service_(GetExecutionContext()),
-      receiver_(this, GetExecutionContext()) {}
+    : ExecutionContextClient(window), receiver_(this, GetExecutionContext()) {}
 
 DevicePosture::~DevicePosture() = default;
 
-String DevicePosture::type() {
+V8DevicePostureType DevicePosture::type() {
   EnsureServiceConnection();
-  return PostureToString(posture_);
+  return V8DevicePostureType(PostureToV8Enum(posture_));
 }
 
-void DevicePosture::OnPostureChanged(
-    device::mojom::blink::DevicePostureType posture) {
+void DevicePosture::OnPostureChanged(mojom::blink::DevicePostureType posture) {
   if (posture_ == posture)
     return;
 
@@ -48,26 +46,27 @@ void DevicePosture::OnPostureChanged(
 }
 
 void DevicePosture::EnsureServiceConnection() {
-  auto* context = GetExecutionContext();
-  if (!context)
+  LocalDOMWindow* window = DomWindow();
+  if (!window) {
     return;
+  }
 
-  if (service_.is_bound())
+  if (receiver_.is_bound()) {
     return;
+  }
 
+  mojom::blink::DevicePostureProvider* service =
+      window->GetFrame()->GetDevicePostureProvider();
   auto task_runner =
       GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI);
-  GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
-      service_.BindNewPipeAndPassReceiver(task_runner));
-
-  service_->AddListenerAndGetCurrentPosture(
+  service->AddListenerAndGetCurrentPosture(
       receiver_.BindNewPipeAndPassRemote(task_runner),
-      WTF::Bind(&DevicePosture::OnPostureChanged, WrapPersistent(this)));
+      WTF::BindOnce(&DevicePosture::OnPostureChanged, WrapPersistent(this)));
 }
 
 void DevicePosture::AddedEventListener(const AtomicString& event_type,
                                        RegisteredEventListener& listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type, listener);
+  EventTarget::AddedEventListener(event_type, listener);
 
   if (event_type != event_type_names::kChange)
     return;
@@ -88,9 +87,8 @@ const AtomicString& DevicePosture::InterfaceName() const {
 }
 
 void DevicePosture::Trace(blink::Visitor* visitor) const {
-  visitor->Trace(service_);
   visitor->Trace(receiver_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 

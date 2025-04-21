@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/viz/host/viz_host_export.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
+#include "ui/base/ozone_buildflags.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace viz {
@@ -34,6 +34,11 @@ class VIZ_HOST_EXPORT HostDisplayClient : public mojom::DisplayClient {
   mojo::PendingRemote<mojom::DisplayClient> GetBoundRemote(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
+ protected:
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
+  gfx::AcceleratedWidget widget() const { return widget_; }
+#endif
+
  private:
   // mojom::DisplayClient implementation:
 #if BUILDFLAG(IS_APPLE)
@@ -44,13 +49,16 @@ class VIZ_HOST_EXPORT HostDisplayClient : public mojom::DisplayClient {
 #if BUILDFLAG(IS_WIN)
   void CreateLayeredWindowUpdater(
       mojo::PendingReceiver<mojom::LayeredWindowUpdater> receiver) override;
+  void AddChildWindowToBrowser(gpu::SurfaceHandle child_window) override;
 #endif
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) && BUILDFLAG(IS_OZONE_X11)
   void DidCompleteSwapWithNewSize(const gfx::Size& size) override;
-#endif
+#endif  // BUILDFLAG(IS_LINUX) && BUILDFLAG(IS_OZONE_X11)
+
+#if BUILDFLAG(IS_CHROMEOS)
+  void SetPreferredRefreshRate(float refresh_rate) override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   mojo::Receiver<mojom::DisplayClient> receiver_{this};
 #if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)

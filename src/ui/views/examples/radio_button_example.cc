@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/strings/string_number_conversions.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -22,8 +22,7 @@
 using l10n_util::GetStringUTF16;
 using l10n_util::GetStringUTF8;
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -63,11 +62,10 @@ void RadioButtonExample::CreateExampleView(View* container) {
 
 void RadioButtonExample::StatusButtonPressed() {
   // Show the state of radio buttons.
-  PrintStatus("Group: 1:%s, 2:%s, 3:%s",
-              BoolToOnOff(radio_buttons_[0]->GetChecked()),
-              BoolToOnOff(radio_buttons_[1]->GetChecked()),
-              BoolToOnOff(radio_buttons_[2]->GetChecked()));
+  PrintStatus(
+      base::StrCat({"Group: 1:", BoolToOnOff(radio_buttons_[0]->GetChecked()),
+                    ", 2:", BoolToOnOff(radio_buttons_[1]->GetChecked()),
+                    ", 3:", BoolToOnOff(radio_buttons_[2]->GetChecked())}));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

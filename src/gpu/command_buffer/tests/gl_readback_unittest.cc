@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -11,12 +16,12 @@
 #include <cmath>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/bit_cast.h"
+#include "base/containers/heap_array.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "gpu/command_buffer/tests/gl_test_utils.h"
@@ -38,7 +43,7 @@ class GLReadbackTest : public testing::Test {
     if (done) {
       std::move(cb).Run();
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&GLReadbackTest::WaitForQueryCallback,
                          base::Unretained(this), q, std::move(cb)),
@@ -285,11 +290,10 @@ TEST_F(GLReadbackTest, MAYBE_ReadPixelsFloat) {
 
         switch (read_type) {
           case GL_HALF_FLOAT_OES: {
-            std::unique_ptr<GLushort[]> buf(
-                new GLushort[kTextureSize * kTextureSize * read_comp_count]);
-            glReadPixels(
-                0, 0, kTextureSize, kTextureSize, read_format, read_type,
-                buf.get());
+            auto buf = base::HeapArray<GLushort>::Uninit(
+                kTextureSize * kTextureSize * read_comp_count);
+            glReadPixels(0, 0, kTextureSize, kTextureSize, read_format,
+                         read_type, buf.data());
             EXPECT_EQ(glGetError(), GLenum(GL_NO_ERROR));
             for (uint32_t jj = 0; jj < kTextureSize * kTextureSize; ++jj) {
               for (uint32_t kk = 0; kk < test_formats[ii].comp_count; ++kk) {
@@ -302,11 +306,10 @@ TEST_F(GLReadbackTest, MAYBE_ReadPixelsFloat) {
             break;
           }
           case GL_FLOAT: {
-            std::unique_ptr<GLfloat[]> buf(
-                new GLfloat[kTextureSize * kTextureSize * read_comp_count]);
-            glReadPixels(
-                0, 0, kTextureSize, kTextureSize, read_format, read_type,
-                buf.get());
+            auto buf = base::HeapArray<GLfloat>::Uninit(
+                kTextureSize * kTextureSize * read_comp_count);
+            glReadPixels(0, 0, kTextureSize, kTextureSize, read_format,
+                         read_type, buf.data());
             EXPECT_EQ(glGetError(), GLenum(GL_NO_ERROR));
             for (uint32_t jj = 0; jj < kTextureSize * kTextureSize; ++jj) {
               for (uint32_t kk = 0; kk < test_formats[ii].comp_count; ++kk) {

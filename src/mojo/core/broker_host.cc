@@ -1,17 +1,26 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "mojo/core/broker_host.h"
 
+#include <string_view>
 #include <utility>
 
 #include "base/logging.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 #include "mojo/core/broker_messages.h"
+#include "mojo/core/ipcz_driver/envelope.h"
 #include "mojo/core/platform_handle_utils.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -30,11 +39,8 @@ BrokerHost::BrokerHost(base::Process client_process,
       client_process_(std::move(client_process))
 #endif
 {
-  CHECK(connection_params.endpoint().is_valid() ||
-        connection_params.server_endpoint().is_valid());
-
   base::CurrentThread::Get()->AddDestructionObserver(this);
-
+  CHECK(connection_params.endpoint().is_valid());
   channel_ = Channel::Create(this, std::move(connection_params),
 #if BUILDFLAG(IS_WIN)
                              client_process_
@@ -44,7 +50,7 @@ BrokerHost::BrokerHost(base::Process client_process,
                                      .IsValid()
                                  ? Channel::HandlePolicy::kAcceptHandles
                                  : Channel::HandlePolicy::kRejectHandles,
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
   channel_->Start();
 }
 
@@ -100,14 +106,14 @@ bool BrokerHost::SendChannel(PlatformHandle handle) {
 
 #if BUILDFLAG(IS_WIN)
 
-void BrokerHost::SendNamedChannel(base::WStringPiece pipe_name) {
+void BrokerHost::SendNamedChannel(std::wstring_view pipe_name) {
   InitData* data;
   wchar_t* name_data;
   Channel::MessagePtr message = CreateBrokerMessage(
       BrokerMessageType::INIT, 0, sizeof(*name_data) * pipe_name.length(),
       &data, reinterpret_cast<void**>(&name_data));
   data->pipe_name_length = static_cast<uint32_t>(pipe_name.length());
-  std::copy(pipe_name.begin(), pipe_name.end(), name_data);
+  base::ranges::copy(pipe_name, name_data);
   channel_->Write(std::move(message));
 }
 
@@ -124,7 +130,8 @@ void BrokerHost::OnBufferRequest(uint32_t num_bytes) {
     ExtractPlatformHandlesFromSharedMemoryRegionHandle(
         region.PassPlatformHandle(), &h[0], &h[1]);
     handles.emplace_back(std::move(h[0]));
-#if !BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
     // Non-POSIX systems, as well as Android and Mac, only use a single handle
     // to represent a writable region.
     DCHECK(!h[1].is_valid());
@@ -151,9 +158,11 @@ void BrokerHost::OnBufferRequest(uint32_t num_bytes) {
   channel_->Write(std::move(message));
 }
 
-void BrokerHost::OnChannelMessage(const void* payload,
-                                  size_t payload_size,
-                                  std::vector<PlatformHandle> handles) {
+void BrokerHost::OnChannelMessage(
+    const void* payload,
+    size_t payload_size,
+    std::vector<PlatformHandle> handles,
+    scoped_refptr<ipcz_driver::Envelope> envelope) {
   if (payload_size < sizeof(BrokerMessageHeader))
     return;
 

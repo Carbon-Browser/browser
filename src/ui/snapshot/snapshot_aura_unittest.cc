@@ -1,13 +1,18 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/snapshot/snapshot.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -151,7 +156,7 @@ class SnapshotAuraTest : public testing::Test {
         test_window(), root_window(), &source_rect);
 
     scoped_refptr<SnapshotHolder> holder(new SnapshotHolder);
-    ui::GrabWindowSnapshotAsync(
+    ui::GrabWindowSnapshot(
         root_window(), source_rect,
         base::BindOnce(&SnapshotHolder::SnapshotCallback, holder));
 
@@ -204,7 +209,7 @@ class SnapshotAuraTest : public testing::Test {
 #endif
 TEST_F(SnapshotAuraTest, MAYBE_FullScreenWindow) {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
-  // TODO(https://crbug.com/1143031): Fix this test to run in < action_timeout()
+  // TODO(crbug.com/40154923): Fix this test to run in < action_timeout()
   // on the Linux Debug & TSAN bots.
   const base::test::ScopedRunLoopTimeout increased_run_timeout(
       FROM_HERE, TestTimeouts::action_max_timeout());
@@ -212,10 +217,10 @@ TEST_F(SnapshotAuraTest, MAYBE_FullScreenWindow) {
         // BUILDFLAG(IS_FUCHSIA)
 
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   SetupTestWindow(root_window()->bounds());
   WaitForDraw();
@@ -228,10 +233,10 @@ TEST_F(SnapshotAuraTest, MAYBE_FullScreenWindow) {
 
 TEST_F(SnapshotAuraTest, PartialBounds) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   gfx::Rect test_bounds(100, 100, 300, 200);
   SetupTestWindow(test_bounds);
@@ -244,10 +249,10 @@ TEST_F(SnapshotAuraTest, PartialBounds) {
 
 TEST_F(SnapshotAuraTest, Rotated) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   test_screen()->SetDisplayRotation(display::Display::ROTATE_90);
 
@@ -262,10 +267,10 @@ TEST_F(SnapshotAuraTest, Rotated) {
 
 TEST_F(SnapshotAuraTest, UIScale) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   const float kUIScale = 0.5f;
   test_screen()->SetUIScale(kUIScale);
@@ -276,7 +281,7 @@ TEST_F(SnapshotAuraTest, UIScale) {
 
   // Snapshot always captures the physical pixels.
   gfx::SizeF snapshot_size(test_bounds.size());
-  snapshot_size.Scale(1 / kUIScale);
+  snapshot_size.InvScale(kUIScale);
 
   gfx::Image snapshot = GrabSnapshotForTestWindow();
   EXPECT_EQ(gfx::ToRoundedSize(snapshot_size).ToString(),
@@ -286,10 +291,10 @@ TEST_F(SnapshotAuraTest, UIScale) {
 
 TEST_F(SnapshotAuraTest, DeviceScaleFactor) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   test_screen()->SetDeviceScaleFactor(2.0f);
 
@@ -309,10 +314,10 @@ TEST_F(SnapshotAuraTest, DeviceScaleFactor) {
 
 TEST_F(SnapshotAuraTest, RotateAndUIScale) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   const float kUIScale = 0.5f;
   test_screen()->SetUIScale(kUIScale);
@@ -324,7 +329,7 @@ TEST_F(SnapshotAuraTest, RotateAndUIScale) {
 
   // Snapshot always captures the physical pixels.
   gfx::SizeF snapshot_size(test_bounds.size());
-  snapshot_size.Scale(1 / kUIScale);
+  snapshot_size.InvScale(kUIScale);
 
   gfx::Image snapshot = GrabSnapshotForTestWindow();
   EXPECT_EQ(gfx::ToRoundedSize(snapshot_size).ToString(),
@@ -334,10 +339,10 @@ TEST_F(SnapshotAuraTest, RotateAndUIScale) {
 
 TEST_F(SnapshotAuraTest, RotateAndUIScaleAndScaleFactor) {
 #if BUILDFLAG(IS_WIN)
-  // TODO(https://crbug.com/850556): Make work on Win10.
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10)
-    return;
+  // TODO(crbug.com/41393300): Make work on Windows.
+  if (::testing::internal::AlwaysTrue()) {
+    GTEST_SKIP();
+  }
 #endif
   test_screen()->SetDeviceScaleFactor(2.0f);
   const float kUIScale = 0.5f;

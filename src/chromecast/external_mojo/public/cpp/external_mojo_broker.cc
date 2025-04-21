@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,17 @@
 #include <set>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include <sys/stat.h>
 #endif
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_for_io.h"
@@ -41,7 +44,6 @@
 #include "services/service_manager/public/cpp/service_receiver.h"
 #include "services/service_manager/public/mojom/connector.mojom.h"
 #include "services/service_manager/public/mojom/service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/bundle_utils.h"
@@ -65,7 +67,7 @@ void OnInternalBindResult(
     const std::string& service_name,
     const std::string& interface_name,
     service_manager::mojom::ConnectResult result,
-    const absl::optional<service_manager::Identity>& identity) {
+    const std::optional<service_manager::Identity>& identity) {
   if (result != service_manager::mojom::ConnectResult::SUCCEEDED) {
     LOG(ERROR) << "Failed to bind " << service_name << ":" << interface_name
                << ", result = " << result;
@@ -146,7 +148,7 @@ class ExternalMojoBroker::ConnectorImpl : public mojom::ExternalConnector {
       connector_->BindInterface(filter.service_name(), interface_name,
                                 std::move(interface_pipe));
       std::move(callback).Run(service_manager::mojom::ConnectResult::SUCCEEDED,
-                              absl::nullopt);
+                              std::nullopt);
     }
 
     void QueryService(const std::string& service_name,
@@ -158,7 +160,7 @@ class ExternalMojoBroker::ConnectorImpl : public mojom::ExternalConnector {
     void WarmService(const ::service_manager::ServiceFilter& filter,
                      WarmServiceCallback callback) override {
       std::move(callback).Run(service_manager::mojom::ConnectResult::SUCCEEDED,
-                              absl::nullopt);
+                              std::nullopt);
     }
 
     void RegisterServiceInstance(
@@ -236,7 +238,7 @@ class ExternalMojoBroker::ConnectorImpl : public mojom::ExternalConnector {
   void RegisterServiceInstance(
       const std::string& service_name,
       mojo::PendingRemote<mojom::ExternalService> service_remote) {
-    if (services_.find(service_name) != services_.end()) {
+    if (base::Contains(services_, service_name)) {
       LOG(ERROR) << "Duplicate service " << service_name;
       return;
     }

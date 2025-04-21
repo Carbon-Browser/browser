@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,16 @@ import "services/viz/privileged/mojom/compositing/overlay_strategy.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "ui/gfx/mojom/color_space.mojom";
 
+// same kInvalidDisplayId defined in ui/display/types/display_constants.h
+const int64 kInvalidDisplayId = -1;
+
+struct OcclusionCullerSettings {
+  uint16 quad_split_limit;
+  uint16 maximum_occluder_complexity;
+  uint16 minimum_fragments_reduced;
+};
+
 struct RendererSettings {
-  bool apply_simple_frame_rate_throttling;
   bool allow_antialiasing;
   bool force_antialiasing;
   bool force_blending_with_shaders;
@@ -21,6 +29,8 @@ struct RendererSettings {
   bool auto_resize_output_surface;
   bool requires_alpha_channel;
 
+  OcclusionCullerSettings occlusion_culler_settings;
+
   [EnableIf=is_android]
   gfx.mojom.Size initial_screen_size;
 
@@ -29,6 +39,9 @@ struct RendererSettings {
 
   [EnableIf=use_ozone]
   array<OverlayStrategy> overlay_strategies;
+
+  [EnableIf=is_mac]
+  int64 display_id = kInvalidDisplayId;
 };
 
 struct DebugRendererSettings {

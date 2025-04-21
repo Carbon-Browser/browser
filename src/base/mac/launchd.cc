@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,8 +65,9 @@ pid_t PIDForJob(const std::string& job_label) {
 
   launch_data_t pid_data =
       launch_data_dict_lookup(response.get(), LAUNCH_JOBKEY_PID);
-  if (!pid_data)
+  if (!pid_data) {
     return 0;
+  }
 
   if (launch_data_get_type(pid_data) != LAUNCH_DATA_INTEGER) {
     LOG(ERROR) << "PIDForJob: expected integer";

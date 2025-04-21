@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/models/menu_model.h"
 
 // Combines two menu models (without using submenus).
-class ConcatMenuModel : public ui::MenuModel {
+class ConcatMenuModel final : public ui::MenuModel {
  public:
   ConcatMenuModel(ui::MenuModel* m1, ui::MenuModel* m2);
 
@@ -21,8 +22,8 @@ class ConcatMenuModel : public ui::MenuModel {
 
   ~ConcatMenuModel() override;
 
-  // MenuModel:
-  bool HasIcons() const override;
+  // ui::MenuModel:
+  base::WeakPtr<ui::MenuModel> AsWeakPtr() override;
   size_t GetItemCount() const override;
   ItemType GetTypeAt(size_t index) const override;
   ui::MenuSeparatorType GetSeparatorTypeAt(size_t index) const override;
@@ -55,8 +56,10 @@ class ConcatMenuModel : public ui::MenuModel {
   // adjusted for the returned menu.
   ui::MenuModel* GetMenuAndIndex(size_t* index) const;
 
-  const raw_ptr<ui::MenuModel> m1_;
-  const raw_ptr<ui::MenuModel> m2_;
+  const raw_ptr<ui::MenuModel, DanglingUntriaged> m1_;
+  const raw_ptr<ui::MenuModel, DanglingUntriaged> m2_;
+
+  base::WeakPtrFactory<ConcatMenuModel> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_STATUS_ICONS_CONCAT_MENU_MODEL_H_

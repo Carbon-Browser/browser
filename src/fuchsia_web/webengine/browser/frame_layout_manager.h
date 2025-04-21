@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef FUCHSIA_WEB_WEBENGINE_BROWSER_FRAME_LAYOUT_MANAGER_H_
 #define FUCHSIA_WEB_WEBENGINE_BROWSER_FRAME_LAYOUT_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/layout_manager.h"
 #include "ui/aura/window.h"
 
@@ -44,7 +45,7 @@ class FrameLayoutManager : public aura::LayoutManager {
                       const gfx::Rect& requested_bounds) override;
 
   // The main window used for the WebContents.
-  aura::Window* main_child_ = nullptr;
+  raw_ptr<aura::Window> main_child_ = nullptr;
 
   gfx::Size render_size_override_;
 };

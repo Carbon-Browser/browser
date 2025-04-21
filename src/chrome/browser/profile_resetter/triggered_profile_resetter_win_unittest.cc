@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/profile_resetter/triggered_profile_resetter.h"
+
+#include <windows.h>
 
 #include <stdint.h>
 
@@ -21,8 +23,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#include <windows.h>
-
 using base::win::RegKey;
 
 class TriggeredProfileResetterTest : public testing::Test {
@@ -37,7 +37,7 @@ class TriggeredProfileResetterTest : public testing::Test {
     // Activate the triggered reset field trial for these tests.
     base::FieldTrial* trial = base::FieldTrialList::CreateFieldTrial(
         "TriggeredResetFieldTrial", "On");
-    trial->group();
+    trial->Activate();
   }
 
   content::BrowserTaskEnvironment task_environment_;

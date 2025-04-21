@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_view_host.h"
 #include "chrome/browser/profiles/profile.h"
@@ -23,15 +24,22 @@
 #include "ui/views/widget/widget.h"
 
 ExtensionViewViews::ExtensionViewViews(extensions::ExtensionViewHost* host)
-    : views::WebView(host->browser() ? host->browser()->profile() : nullptr),
+    : views::WebView(host->GetBrowser() ? host->GetBrowser()->profile()
+                                        : nullptr),
       host_(host) {
+  web_contents_attached_subscription_ =
+      AddWebContentsAttachedCallback(base::BindRepeating(
+          &ExtensionViewViews::OnWebContentsAttached, base::Unretained(this)));
   host_->set_view(this);
   SetWebContents(host_->web_contents());
 }
 
 ExtensionViewViews::~ExtensionViewViews() {
-  if (parent())
+  if (parent()) {
     parent()->RemoveChildView(this);
+  }
+
+  observers_.Notify(&Observer::OnViewDestroying);
 }
 
 void ExtensionViewViews::Init() {
@@ -59,10 +67,11 @@ void ExtensionViewViews::VisibilityChanged(View* starting_from,
     content::RenderWidgetHostView* host_view =
         host_->main_frame_host()->GetView();
     if (host_view) {
-      if (is_visible)
+      if (is_visible) {
         host_view->Show();
-      else
+      } else {
         host_view->Hide();
+      }
     }
   }
 }
@@ -72,8 +81,9 @@ gfx::Size ExtensionViewViews::GetMinimumSize() const {
 }
 
 void ExtensionViewViews::SetMinimumSize(const gfx::Size& minimum_size) {
-  if (minimum_size_ && minimum_size_.value() == minimum_size)
+  if (minimum_size_ && minimum_size_.value() == minimum_size) {
     return;
+  }
   minimum_size_ = minimum_size;
   OnPropertyChanged(&minimum_size_,
                     views::kPropertyEffectsPreferredSizeChanged);
@@ -86,7 +96,15 @@ void ExtensionViewViews::SetContainer(
 }
 
 ExtensionViewViews::Container* ExtensionViewViews::GetContainer() const {
-  return container_;
+  return container_.get();
+}
+
+void ExtensionViewViews::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void ExtensionViewViews::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
 }
 
 gfx::NativeView ExtensionViewViews::GetNativeView() {
@@ -113,7 +131,7 @@ void ExtensionViewViews::RenderFrameCreated(
 
 bool ExtensionViewViews::HandleKeyboardEvent(
     content::WebContents* source,
-    const content::NativeWebKeyboardEvent& event) {
+    const input::NativeWebKeyboardEvent& event) {
   return unhandled_keyboard_event_handler_.HandleKeyboardEvent(
       event, GetFocusManager());
 }
@@ -123,8 +141,9 @@ void ExtensionViewViews::OnLoaded() {
 
   // ExtensionPopup delegates showing the view to OnLoaded(). ExtensionDialog
   // handles visibility directly.
-  if (GetVisible())
+  if (GetVisible()) {
     return;
+  }
 
   SetVisible(true);
   ResizeDueToAutoResize(web_contents(), pending_preferred_size_);
@@ -134,18 +153,12 @@ ui::Cursor ExtensionViewViews::GetCursor(const ui::MouseEvent& event) {
   return ui::Cursor();
 }
 
-void ExtensionViewViews::PreferredSizeChanged() {
-  View::PreferredSizeChanged();
-  if (container_)
-    container_->OnExtensionSizeChanged(this);
-}
-
-void ExtensionViewViews::OnWebContentsAttached() {
+void ExtensionViewViews::OnWebContentsAttached(views::WebView*) {
   host_->CreateRendererSoon();
   SetVisible(false);
 }
 
-BEGIN_METADATA(ExtensionViewViews, views::WebView)
+BEGIN_METADATA(ExtensionViewViews)
 ADD_PROPERTY_METADATA(gfx::Size, MinimumSize)
 ADD_PROPERTY_METADATA(ExtensionViewViews::Container*, Container)
 END_METADATA

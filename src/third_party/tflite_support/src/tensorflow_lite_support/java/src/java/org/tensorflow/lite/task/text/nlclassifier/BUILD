@@ -3,7 +3,7 @@ load("@org_tensorflow//tensorflow/lite/java:aar_with_jni.bzl", "aar_with_jni")
 load("@build_bazel_rules_android//android:rules.bzl", "android_library")
 
 package(
-    default_visibility = ["//visibility:public"],
+    default_visibility = ["//tensorflow_lite_support:users"],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -32,7 +32,6 @@ android_library(
     srcs = [
         "NLClassifier.java",
     ],
-    javacopts = ["-source 7 -target 7"],
     deps = [
         "//tensorflow_lite_support/java:tensorflowlite_support_java",
         "//tensorflow_lite_support/java/src/java/org/tensorflow/lite/task/core:base_task_api",
@@ -57,7 +56,6 @@ android_library_with_tflite(
     srcs = [
         "BertNLClassifier.java",
     ],
-    javacopts = ["-source 7 -target 7"],
     tflite_exports = [
         "//tensorflow_lite_support/java/src/native/task/text/nlclassifier/bert:bert_nl_classifier_native",
     ],

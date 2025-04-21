@@ -1,157 +1,178 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_WEBID_ACCOUNT_SELECTION_BUBBLE_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_WEBID_ACCOUNT_SELECTION_BUBBLE_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webid/account_selection_view.h"
+#include "chrome/browser/ui/views/webid/account_selection_view_base.h"
 #include "components/image_fetcher/core/image_fetcher.h"
+#include "content/public/browser/identity_request_account.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "third_party/blink/public/mojom/webid/federated_auth_request.mojom.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view.h"
 
 namespace views {
+class Checkbox;
 class ImageButton;
-class ImageView;
 class Label;
 class MdTextButton;
 }  // namespace views
 
+namespace webid {
+
 // Bubble dialog that is used in the FedCM flow. It creates a dialog with an
 // account chooser for the user, and it changes the content of that dialog as
 // user moves through the FedCM flow steps.
-class AccountSelectionBubbleView : public views::BubbleDialogDelegateView {
+class AccountSelectionBubbleView : public views::BubbleDialogDelegateView,
+                                   public AccountSelectionViewBase {
+  METADATA_HEADER(AccountSelectionBubbleView, views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(AccountSelectionBubbleView);
   AccountSelectionBubbleView(
-      const std::string& rp_for_display,
-      const std::string& idp_for_display,
-      base::span<const content::IdentityRequestAccount> accounts,
-      const content::IdentityProviderMetadata& idp_metadata,
-      const content::ClientIdData& client_data,
+      const std::u16string& rp_for_display,
+      const std::optional<std::u16string>& idp_title,
+      blink::mojom::RpContext rp_context,
+      content::WebContents* web_contents,
       views::View* anchor_view,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      TabStripModel* tab_strip_model,
-      base::OnceCallback<void(const content::IdentityRequestAccount&)>
-          on_account_selected_callback);
+      FedCmAccountSelectionView* owner);
   ~AccountSelectionBubbleView() override;
 
- private:
+  // AccountSelectionViewBase:
+  void ShowMultiAccountPicker(
+      const std::vector<IdentityRequestAccountPtr>& accounts,
+      const std::vector<IdentityProviderDataPtr>& idp_list,
+      bool show_back_button,
+      bool is_choose_an_account) override;
+  void ShowVerifyingSheet(const IdentityRequestAccountPtr& account,
+                          const std::u16string& title) override;
+
+  void ShowSingleAccountConfirmDialog(const IdentityRequestAccountPtr& account,
+                                      bool show_back_button) override;
+
+  void ShowFailureDialog(
+      const std::u16string& idp_for_display,
+      const content::IdentityProviderMetadata& idp_metadata) override;
+
+  void ShowErrorDialog(const std::u16string& idp_for_display,
+                       const content::IdentityProviderMetadata& idp_metadata,
+                       const std::optional<TokenError>& error) override;
+
+  void ShowRequestPermissionDialog(
+      const IdentityRequestAccountPtr& account) override;
+
+  void ShowSingleReturningAccountDialog(
+      const std::vector<IdentityRequestAccountPtr>& accounts,
+      const std::vector<IdentityProviderDataPtr>& idp_list) override;
+
+  void OnAnchorBoundsChanged() override;
+
+  std::string GetDialogTitle() const override;
+
+  // views::BubbleDialogDelegateView:
   gfx::Rect GetBubbleBounds() override;
 
-  // Returns a View containing the logo of the identity provider and the title
-  // of the bubble, properly formatted.
-  std::unique_ptr<views::View> CreateHeaderView(const std::u16string& title,
-                                                bool has_icon);
+ private:
+  FRIEND_TEST_ALL_PREFIXES(AccountSelectionBubbleViewTest,
+                           WebContentsLargeEnoughToFitDialog);
 
-  void CloseBubble();
-
-  // Returns a View containing the account chooser, i.e. everything that goes
-  // below the horizontal separator on the initial FedCM bubble.
-  std::unique_ptr<views::View> CreateAccountChooser(
-      base::span<const content::IdentityRequestAccount> accounts);
+  // Returns a View containing the logo of the identity provider. Creates the
+  // `header_icon_view_` if `has_idp_icon` is true.
+  std::unique_ptr<views::View> CreateHeaderView(bool has_idp_icon);
 
   // Returns a View for single account chooser. It contains the account
   // information, disclosure text and a button for the user to confirm the
   // selection.
   std::unique_ptr<views::View> CreateSingleAccountChooser(
-      const content::IdentityRequestAccount& account);
+      const IdentityRequestAccountPtr& account);
 
-  // Returns a View for multiple account chooser. It contains the info for each
-  // account in a button, so the user can pick an account.
-  std::unique_ptr<views::View> CreateMultipleAccountChooser(
-      base::span<const content::IdentityRequestAccount> accounts);
+  // Adds a separator as well as a multiple account chooser. The chooser
+  // contains the info for each account in a button, so the user can pick an
+  // account. It also contains mismatch login URLs in the multiple IDP case.
+  void AddSeparatorAndMultipleAccountChooser(
+      const std::vector<IdentityRequestAccountPtr>& accounts,
+      const std::vector<IdentityProviderDataPtr>& idp_list);
 
-  // Returns a View containing information about an account: the picture for the
-  // account on the left, and information about the account on the right.
-  // |should_hover| determines whether the account row is a HoverButton or not.
-  std::unique_ptr<views::View> CreateAccountRow(
-      const content::IdentityRequestAccount& account,
-      bool should_hover);
+  // Adds the accounts provided to the given view. This method does not reorder
+  // the accounts, and assumes they are provided in the correct order.
+  void AddAccounts(const std::vector<IdentityRequestAccountPtr>& accounts,
+                   views::View* accounts_content,
+                   bool is_multi_idp);
 
-  // Called when the brand icon image has beend downloaded.
-  void OnBrandImageFetched(const gfx::Image& image,
-                           const image_fetcher::RequestMetadata& metadata);
+  // Returns a View containing a single returning account as well as a button to
+  // 'choose an account' which will show all accounts and IDPs that are
+  // available.
+  std::unique_ptr<views::View> CreateSingleReturningAccountChooser(
+      const std::vector<IdentityRequestAccountPtr>& accounts,
+      const std::vector<IdentityProviderDataPtr>& idp_list);
 
-  // Called when the user clicks on the privacy policy or terms of service URL.
-  // Opens the URL in a new tab.
-  void OnLinkClicked(const GURL& gurl);
+  // Returns a view containing a button for the user to login to an IDP for
+  // which there was a login status mismatch, to be used in the multiple account
+  // chooser case.
+  std::unique_ptr<views::View> CreateIdpLoginRow(
+      const std::u16string& idp_for_display,
+      const content::IdentityProviderMetadata& idp_metadata);
 
-  // Called when the user selects an account from the multiple account chooser
-  // menu. Modifies the UI to show one of the following:
-  // 1. For new users, the single account chooser.
-  // 2. For returning users, fetch the ID token automatically while displaying
-  // "Signing you in".
-  void OnSingleAccountPicked(const content::IdentityRequestAccount& account);
+  // Creates the "Use other account" button.
+  std::unique_ptr<views::View> CreateUseOtherAccountButton(
+      const content::IdentityProviderMetadata& idp_metadata,
+      const std::u16string& title,
+      int icon_margin);
 
-  // Called when the user clicks on the back button.
-  void HandleBackPressed();
-
-  // Called when the user clicks on the 'continue' button from the single
-  // account chooser.
-  void OnClickedContinue(const content::IdentityRequestAccount& account);
-
-  // Shows 'verifying' once the user has clicked to continue with a given
-  // account.
-  void ShowVerifySheet(const content::IdentityRequestAccount& account);
-
-  // Sets whether the back button in the header is visible.
-  void SetBackButtonVisible(bool is_visible);
+  // Updates the header title, the header icon visibility and the header back
+  // button visibiltiy. `idp_metadata` is not null when we need to set a header
+  // image based on the IDP.
+  void UpdateHeader(const content::IdentityProviderMetadata& idp_metadata,
+                    const std::u16string& title,
+                    bool show_back_button);
 
   // Removes all children except for `header_view_`.
   void RemoveNonHeaderChildViews();
 
-  // The ImageFetcher used to fetch the account pictures for FedCM.
-  std::unique_ptr<image_fetcher::ImageFetcher> image_fetcher_;
+  // Creates the "Choose an account" button, showing some IDP domains as well.
+  // Prioritizes showing any IDPs for which there was a login status mismatch.
+  std::unique_ptr<views::View> CreateChooseAnAccountButton(
+      const std::vector<std::u16string>& mismatch_idps,
+      const std::vector<std::u16string>& non_mismatch_idps);
 
-  // Used in various messages so the user is aware of who the IDP is.
-  std::u16string idp_for_display_;
+  // The current title for the dialog.
+  std::u16string title_;
 
-  // Used in single account chooser to determine the look of the consent button.
-  absl::optional<SkColor> brand_text_color_;
-  absl::optional<SkColor> brand_background_color_;
-
-  // The privacy policy and terms of service URLs.
-  const content::ClientIdData client_data_;
-
-  // The list of accounts to select from. Not updated when the user selects an
-  // account and navigates to the privacy policy / terms of service page.
-  const std::vector<content::IdentityRequestAccount> account_list_;
-
-  // The TabStripModel of the current browser. We need this in order to show the
-  // privacy policy and terms of service urls when the user clicks on the links.
-  const raw_ptr<TabStripModel> tab_strip_model_;
-
-  base::OnceCallback<void(const content::IdentityRequestAccount&)>
-      on_account_selected_callback_;
+  // The relying party context to show in the title.
+  blink::mojom::RpContext rp_context_;
 
   // View containing the logo of the identity provider and the title.
-  raw_ptr<views::View> header_view_{nullptr};
+  raw_ptr<views::View> header_view_ = nullptr;
 
-  // View containing the header icon.
-  raw_ptr<views::ImageView> header_icon_view_{nullptr};
+  // View containing the header IDP icon, if one needs to be used.
+  raw_ptr<BrandIconImageView> header_icon_view_ = nullptr;
 
   // View containing the back button.
-  raw_ptr<views::ImageButton> back_button_{nullptr};
+  raw_ptr<views::ImageButton> back_button_ = nullptr;
 
   // View containing the bubble title.
-  raw_ptr<views::Label> title_label_{nullptr};
+  raw_ptr<views::Label> title_label_ = nullptr;
 
   // View containing the continue button.
-  raw_ptr<views::MdTextButton> continue_button_{nullptr};
+  raw_ptr<views::MdTextButton> continue_button_ = nullptr;
 
-  // Used to differentiate UI dismissal scenarios.
-  bool verify_sheet_shown_{false};
+  // Auto re-authn opt-out checkbox.
+  raw_ptr<views::Checkbox> auto_reauthn_checkbox_ = nullptr;
+
+  // Whether to show the auto re-authn opt-out checkbox;
+  bool show_auto_reauthn_checkbox_{false};
 
   // Used to ensure that callbacks are not run if the AccountSelectionBubbleView
   // is destroyed.
   base::WeakPtrFactory<AccountSelectionBubbleView> weak_ptr_factory_{this};
 };
+
+}  // namespace webid
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBID_ACCOUNT_SELECTION_BUBBLE_VIEW_H_

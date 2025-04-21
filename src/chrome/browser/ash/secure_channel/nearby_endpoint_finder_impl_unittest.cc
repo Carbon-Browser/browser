@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <memory>
 #include <vector>
 
-#include "ash/services/nearby/public/cpp/mock_nearby_connections.h"
-#include "ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/services/nearby/public/cpp/mock_nearby_connections.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom-shared.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -20,10 +21,10 @@ namespace ash {
 namespace secure_channel {
 namespace {
 
-using ::location::nearby::connections::mojom::DiscoveredEndpointInfo;
-using ::location::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
-using ::location::nearby::connections::mojom::EndpointDiscoveryListener;
-using ::location::nearby::connections::mojom::Status;
+using ::nearby::connections::mojom::DiscoveredEndpointInfo;
+using ::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
+using ::nearby::connections::mojom::EndpointDiscoveryListener;
+using ::nearby::connections::mojom::Status;
 using ::testing::_;
 using ::testing::Invoke;
 
@@ -166,7 +167,7 @@ class NearbyEndpointFinderImplTest : public testing::Test {
     std::move(result_closure_).Run();
   }
 
-  void OnEndpointDiscoveryFailure() {
+  void OnEndpointDiscoveryFailure(::nearby::connections::mojom::Status status) {
     has_failed_ = true;
     std::move(result_closure_).Run();
   }

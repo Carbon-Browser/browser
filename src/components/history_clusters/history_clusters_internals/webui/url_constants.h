@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 namespace history_clusters_internals {
 
 // The host of the history clusters internals page URL.
-extern const char kChromeUIHistoryClustersInternalsHost[];
+inline constexpr char kChromeUIHistoryClustersInternalsHost[] =
+    "history-clusters-internals";
 
 }  // namespace history_clusters_internals
 

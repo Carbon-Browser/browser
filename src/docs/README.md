@@ -16,11 +16,12 @@ below.**
 
 ### Guidelines
 
-*   See the [Chromium Documentation Guidelines](/documentation_guidelines.md)
+*   See the [Chromium Documentation Guidelines](documentation_guidelines.md)
     and the
-    [Chromium Documentation Best Practices](/documentation_best_practices.md).
+    [Chromium Documentation Best Practices](documentation_best_practices.md).
 *   Markdown documents must follow the
-    [style guide](https://github.com/google/styleguide/tree/gh-pages/docguide).
+    [Markdown Style
+    Guide](https://chromium.googlesource.com/chromium/src/+/HEAD/styleguide/markdown/markdown.md).
 
 ### Previewing changes
 
@@ -41,18 +42,20 @@ This is only an estimate. The **gitiles** view may differ.
     e.g. https://chromium-review.googlesource.com/c/3362532/2/docs/README.md
 3.  You will see something like <br>
     Base
-    [browse](https://chromium.googlesource.com/chromium/src/+/ad44f6081ccc6b92479b12f1eb7e9482f474859d/docs/README.md)
+    [preview](https://chromium.googlesource.com/chromium/src/+/ad44f6081ccc6b92479b12f1eb7e9482f474859d/docs/README.md)
     -> Patchset 3
-    [browse](https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md)
+    [preview](https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md)
     | DOWNLOAD <br>
     at the top left of the page. Click on the second
-    "[browse](https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md)"
+    "[preview](https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md)"
     link to open the preview for the current patch set.
 
 This **gitiles** view is the authoritative view, exactly the same as will be
 used when committed.
 
 ## Document Index
+
+**Note**: this is not an exhaustive list of all documents.
 
 ### Checking Out and Building
 *   [Linux Build Instructions](linux/build_instructions.md) - Linux
@@ -98,6 +101,7 @@ used when committed.
 *   [Git Cookbook](git_cookbook.md) - A collection of git recipes for common
     tasks
 *   [Git Tips](git_tips.md) - More git tips
+*   [Git submodules](git_submodules.md) - Git submodule (tips, FAQ)
 
 ### Clang
 *   [Clang Compiler](clang.md) - General information on the clang compiler, used
@@ -124,6 +128,7 @@ used when committed.
 *   [Commit Checklist](commit_checklist.md) - Streamlined checklist to go
     through before uploading CLs on Gerrit.
 *   [Code Reviews](code_reviews.md) - Code review requirements and guidelines
+*   [Dependency management](dependencies.md) - Managing dependencies (DEPS, git submodules)
 *   [Respectful Code Reviews](cr_respect.md) - A guide for code reviewers
 *   [Respectful Changes](cl_respect.md) - A guide for code authors
 *   [Mandatory Code-Review Rollout](code_review_owners.md) - Upcoming policy changes related to code review and OWNERS
@@ -150,22 +155,23 @@ used when committed.
     Visualizing view trees during debugging
 *   [Bitmap Pipeline](bitmap_pipeline.md) - How bitmaps are moved from the
     renderer to the screen.
+*   [Flag Guarding Guidelines](flag_guarding_guidelines.md) - When to use
+    server controlled kill switches and A/B experiments to safely roll out
+    changes.
 *   [Using the Origin Trials Framework](origin_trials_integration.md) - A
     framework for conditionally enabling experimental APIs for testing.
 *   [Chrome Sync](https://source.chromium.org/chromium/chromium/src/+/main:docs/website/site/developers/design-documents/sync) -
     Docs for the subsystem that allows one to sync data across devices.
 *   [Ozone Overview](ozone_overview.md) - Ozone is an abstraction layer between
     the window system and low level input and graphics.
-*   [Optimizing Chrome Web UIs](optimizing_web_uis.md) - Notes on making webuis
-    more performant
-*   [Adding a new feature flag in chrome://flags](how_to_add_your_feature_flag.md) - Quick
-    guide to add a new feature flag to experiment your feature.
 *   [Guidelines for considering branch dates in project planning](release_branch_guidance.md) -
     What to do (and not to do) around branch dates when scheduling your project
     work.
 *   [WebUI Explainer](webui_explainer.md) - An explanation of C++ and JavaScript
     infrastructural code for Chrome UIs implemented with web technologies (i.e.
     chrome:// URLs).
+*   [Optimizing Chrome Web UIs](optimizing_web_uis.md) - Notes on making webuis
+    more performant
 *   [Watchlists](infra/watchlists.md) - Use watchlists to get notified of CLs
     you are interested in.
 *   [Shutdown](shutdown.md) - Explains the steps of Chrome shutdown, to make it
@@ -173,6 +179,8 @@ used when committed.
 *   [API Keys](api_keys.md) - When you need access to Google APIs for a custom
     build, fork, integration of stock Chromium, or are building ChromiumOS (for
     login).
+*   [User Education](../components/user_education/README.md) - Create
+    in-product help (IPH) and tutorials to call out Chromium features
 
 ### Testing
 *   [Running and Debugging Web Tests](testing/web_tests.md)
@@ -202,6 +210,14 @@ used when committed.
 *   [Code Coverage](testing/code_coverage.md) - Code coverage for Chromium.
 *   [Code Coverage in Gerrit](testing/code_coverage_in_gerrit.md) - Per-CL code
     coverage in Gerrit to assist code reviews.
+
+### Configuration Docs
+
+*   [Configuration: Prefs, Settings, Features, Switches & Flags](configuration.md) - Explains different ways to gate a new feature.
+*   [Adding a new feature flag in chrome://flags](how_to_add_your_feature_flag.md) - Quick guide to add a new feature flag to experiment your feature.
+*   [Runtime Enabled Features](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md)
+*   [Initialization of Blink runtime features in content layer](initialize_blink_features.md)
+*   [Integrating a feature with the origin trials framework](origin_trials_integration.md)
 
 ### GPU-related docs
 *   [GPU Pixel Wrangling](gpu/pixel_wrangling.md) - Instructions for GPU
@@ -321,17 +337,24 @@ used when committed.
 *   [Debugging tips](testing/chromeos_debugging_tips.md)
 
 ### Misc WebUI-Specific Docs
-*   [Creating WebUI Interfaces in components/](webui_in_components.md) How to
+*   [Creating WebUI Interfaces in components/](webui_in_components.md) - How to
     create a new WebUI component in the `components/` directory.
-*   [Trusted Types on WebUI](trusted_types_on_webui.md) Tips for coding in WebUI
-    with Trusted Types in mind.
+*   [Trusted Types on WebUI](trusted_types_on_webui.md) - Tips for coding in
+    WebUI with Trusted Types in mind.
+*   [chrome-untrusted:// FAQ](chrome_untrusted.md) - Explainer on the usage of
+    the `chrome-untrusted://` scheme for hosting WebUIs that handle
+    untrustworthy content.
 
 ### Media
 *   [Audio Focus Handling](media/audio_focus.md) - How multiple MediaSession
     audio streams interact
 *   [Autoplay of HTMLMediaElements](media/autoplay.md) - How HTMLMediaElements
     are autoplayed.
+*   [Latency tracing](media/latency_tracing.md) - How to use the
+    `"audio.latency"` tracing category to measure audio latency.
 *   [Piranha Plant](piranha_plant.md) - Future architecture of MediaStreams
+*   [Media Capture](media/capture/README.md) - Features and APIs that enable the
+    browser to capture pixels and audio from itself or the underlying OS.
 *   [Video Encode Accelerator Tests](media/gpu/veatest_usage.md) - How to
     use the accelerated video encoder test program.
 *   [Video Decoder Tests](media/gpu/video_decoder_test_usage.md) - Running the
@@ -361,6 +384,7 @@ used when committed.
 
 ### Memory
 *   [Memory Overview](memory/README.md)
+*   [Heap Profiling with External Tools](memory/heap_profiling_external.md)
 
 ### Memory Infrastructure Timeline Profiling (MemoryInfra)
 *   [Overview](memory-infra/README.md)
@@ -412,9 +436,34 @@ used when committed.
 *   [D-Bus Mojo Connection Service](dbus_mojo_connection_service.md) - A service
     in Chrome to bootstrap CrOS services' Mojo connection.
 
+### Security
+*   [The Rule Of 2](security/rule-of-2.md) - An imoportant security rule when
+    handling untrustworthy contents (like anything downloaded from the web).
+
 ### Speed
 *   [Chrome Speed](speed/README.md) - Documentation for performance measurements and regressions in Chrome.
 *   [Chrome Speed Metrics](speed_metrics/README.md) - Documentation about user experience metrics on the web and their JavaScript APIs.
+
+### UI
+*   [Chromium UI Platform](ui/index.md) - All things user interface
+
+### What's Up With That Transcripts
+
+These are transcripts of [What's Up With
+That](https://www.youtube.com/playlist?list=PL9ioqAuyl6ULIdZQys3fwRxi3G3ns39Hq),
+a video series of interviews with Chromium software engineers.
+
+*   [What's Up With Pointers - Episode 1](transcripts/wuwt-e01-pointers.md)
+*   [What's Up With DCHECKs - Episode 2](transcripts/wuwt-e02-dchecks.md)
+*   [What's Up With //content - Episode 3](transcripts/wuwt-e03-content.md)
+*   [What's Up With Tests - Episode 4](transcripts/wuwt-e04-tests.md)
+*   [What's Up With BUILD.gn - Episode 5](transcripts/wuwt-e05-build-gn.md)
+*   [What's Up With Open Source - Episode 6](transcripts/wuwt-e06-open-source.md)
+*   [What's Up With Mojo - Episode 7](transcripts/wuwt-e07-mojo.md)
+*   [What's Up With Processes - Episode 8](transcripts/wuwt-e08-processes.md)
+*   [What's Up With Site Isolation - Episode 9](transcripts/wuwt-e09-site-isolation.md)
+*   [What's Up With Web Platform - Episode 10](transcripts/wuwt-e10-web-platform.md)
+*   [What's Up With Web Standards - Episode 11](transcriptswuwt-e11-web-standards.md)
 
 ### Probably Obsolete
 *   [TPM Quick Reference](tpm_quick_ref.md) - Trusted Platform Module notes.

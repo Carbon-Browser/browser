@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,12 +54,14 @@ TEST_F(CredentialsCleanerRunnerTest, NonEmptyTasks) {
   }
 
   ::testing::InSequence dummy;
-  for (MockCredentialsCleaner* cleaner : raw_cleaners)
+  for (MockCredentialsCleaner* cleaner : raw_cleaners) {
     EXPECT_CALL(*cleaner, StartCleaning(cleaning_tasks_runner));
+  }
 
   cleaning_tasks_runner->StartCleaning();
-  for (int i = 0; i < kCleanersCount; ++i)
+  for (int i = 0; i < kCleanersCount; ++i) {
     cleaning_tasks_runner->CleaningCompleted();
+  }
 
   EXPECT_FALSE(cleaning_tasks_runner->HasPendingTasks());
 }

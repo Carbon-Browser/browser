@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_EVENTS_OZONE_EVDEV_LIBINPUT_EVENT_CONVERTER_H_
 #define UI_EVENTS_OZONE_EVDEV_LIBINPUT_EVENT_CONVERTER_H_
 
-#include "ui/events/ozone/evdev/event_converter_evdev.h"
-
 #include <libinput.h>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+#include <ostream>
+
+#include "ui/events/ozone/evdev/event_converter_evdev.h"
 
 namespace ui {
 
@@ -43,7 +44,7 @@ class LibInputEventConverter : public EventConverterEvdev {
   // This class wraps the libinput_device struct from libinput library.
   class LibInputDevice {
    public:
-    explicit LibInputDevice(libinput_device* const device);
+    LibInputDevice(int id, libinput_device* const device);
     LibInputDevice(LibInputDevice&& other);
     LibInputDevice(const LibInputDevice& other) = delete;
     LibInputDevice& operator=(const LibInputDevice& other) = delete;
@@ -58,6 +59,7 @@ class LibInputEventConverter : public EventConverterEvdev {
     void SetSensitivity(const int sensitivity) const;
     void SetTapToClickEnabled(const bool enabled) const;
 
+    const int device_id_;
     libinput_device* device_;
   };
 
@@ -65,17 +67,18 @@ class LibInputEventConverter : public EventConverterEvdev {
   // that uses libinput struct are implemented here.
   class LibInputContext {
    public:
-    static absl::optional<LibInputContext> Create();
+    static std::optional<LibInputContext> Create();
     LibInputContext(LibInputContext&& other);
     LibInputContext(const LibInputContext& other) = delete;
     LibInputContext& operator=(const LibInputContext& other) = delete;
     ~LibInputContext();
 
-    absl::optional<LibInputEventConverter::LibInputDevice> AddDevice(
+    std::optional<LibInputEventConverter::LibInputDevice> AddDevice(
+        int id,
         const base::FilePath& path) const;
     bool Dispatch() const;
     int Fd();
-    absl::optional<LibInputEventConverter::LibInputEvent> NextEvent() const;
+    std::optional<LibInputEventConverter::LibInputEvent> NextEvent() const;
 
    private:
     explicit LibInputContext(libinput* const li);
@@ -121,6 +124,8 @@ class LibInputEventConverter : public EventConverterEvdev {
 
   bool HasTouchscreen() const final;
 
+  std::ostream& DescribeForLog(std::ostream& os) const override;
+
  private:
   void OnFileCanReadWithoutBlocking(int fd) final;
   void HandleEvent(const LibInputEvent& event);
@@ -138,7 +143,7 @@ class LibInputEventConverter : public EventConverterEvdev {
   const bool has_touchscreen_;
 
   const LibInputContext context_;
-  const absl::optional<LibInputDevice> device_;
+  const std::optional<LibInputDevice> device_;
 };
 
 }  // namespace ui

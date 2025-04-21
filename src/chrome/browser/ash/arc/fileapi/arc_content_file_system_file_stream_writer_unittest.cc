@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_file_system_instance.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
 #include "chrome/test/base/testing_profile.h"
@@ -64,6 +64,7 @@ class ArcContentFileSystemFileStreamWriterTest : public testing::Test {
   void TearDown() override {
     arc_service_manager_->arc_bridge_service()->file_system()->CloseInstance(
         &fake_file_system_);
+    arc_service_manager_->set_browser_context(nullptr);
   }
 
  protected:

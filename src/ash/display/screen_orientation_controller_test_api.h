@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_DISPLAY_SCREEN_ORIENTATION_CONTROLLER_TEST_API_H_
 
 #include "ash/display/display_configuration_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/base/display_util.h"
 #include "ui/display/display.h"
 
@@ -39,7 +40,7 @@ class ScreenOrientationControllerTestApi {
   bool IsAutoRotationAllowed() const;
 
  private:
-  ScreenOrientationController* controller_;
+  raw_ptr<ScreenOrientationController> controller_;
 };
 
 }  // namespace ash

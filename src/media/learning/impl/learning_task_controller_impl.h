@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "media/learning/common/learning_task_controller.h"
 #include "media/learning/impl/distribution_reporter.h"
@@ -33,10 +33,9 @@ class LearningTaskControllerImplTest;
 // The idea is that one can create a LearningTask, give it to an LTCI, and the
 // LTCI will do the work of building / evaluating the model based on training
 // examples that are provided to it.
-class COMPONENT_EXPORT(LEARNING_IMPL) LearningTaskControllerImpl
+class COMPONENT_EXPORT(LEARNING_IMPL) LearningTaskControllerImpl final
     : public LearningTaskController,
-      public HasRandomNumberGenerator,
-      public base::SupportsWeakPtr<LearningTaskControllerImpl> {
+      public HasRandomNumberGenerator {
  public:
   LearningTaskControllerImpl(
       const LearningTask& task,
@@ -51,17 +50,16 @@ class COMPONENT_EXPORT(LEARNING_IMPL) LearningTaskControllerImpl
   // service should support default values, but it's much more convenient if
   // they're part of the base api.  So, since clients shouldn't be dealing with
   // us directly (see LearningSessionImpl), it's okay.
-  void BeginObservation(
-      base::UnguessableToken id,
-      const FeatureVector& features,
-      const absl::optional<TargetValue>& default_target,
-      const absl::optional<ukm::SourceId>& source_id) override;
+  void BeginObservation(base::UnguessableToken id,
+                        const FeatureVector& features,
+                        const std::optional<TargetValue>& default_target,
+                        const std::optional<ukm::SourceId>& source_id) override;
   void CompleteObservation(base::UnguessableToken id,
                            const ObservationCompletion& completion) override;
   void CancelObservation(base::UnguessableToken id) override;
   void UpdateDefaultTarget(
       base::UnguessableToken id,
-      const absl::optional<TargetValue>& default_target) override;
+      const std::optional<TargetValue>& default_target) override;
   const LearningTask& GetLearningTask() override;
   void PredictDistribution(const FeatureVector& features,
                            PredictionCB callback) override;
@@ -115,6 +113,8 @@ class COMPONENT_EXPORT(LEARNING_IMPL) LearningTaskControllerImpl
 
   // Number of features that we expect in each observation.
   size_t expected_feature_count_;
+
+  base::WeakPtrFactory<LearningTaskControllerImpl> weak_ptr_factory_{this};
 
   friend class LearningTaskControllerImplTest;
 };

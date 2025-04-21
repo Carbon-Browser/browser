@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include "base/debug/debugger.h"
 #include "base/logging.h"
 #include "base/notreached.h"
-#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/time/time_override.h"
+#include "base/trace_event/base_tracing.h"
+#include "base/trace_event/trace_event.h"
 
 namespace ui {
 namespace {
@@ -17,14 +18,16 @@ namespace {
 bool default_check_active_duration = true;
 }  // namespace
 
-// Do not fail on builds that run slow, such as SANITIZER, debug.
-#if !DCHECK_IS_ON() || defined(ADDRESS_SANITIZER) ||           \
-    defined(MEMORY_SANITIZER) || defined(THREAD_SANITIZER) ||  \
-    defined(LEAK_SANITIZER) || defined(UNDEFINED_SANITIZER) || \
-    !defined(NDEBUG)
-#define NOTREACHED_OR_WARN() LOG(WARNING)
+// This warning should only be fatal on non-official DCHECK builds that are not
+// known to be runtime-slow. Slow builds for this purpose are debug builds
+// (!NDEBUG) and any sanitizer build.
+#if !DCHECK_IS_ON() || defined(OFFICIAL_BUILD) || !defined(NDEBUG) || \
+    defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER) ||        \
+    defined(THREAD_SANITIZER) || defined(LEAK_SANITIZER) ||           \
+    defined(UNDEFINED_SANITIZER)
+#define DFATAL_OR_WARNING WARNING
 #else
-#define NOTREACHED_OR_WARN() NOTREACHED()
+#define DFATAL_OR_WARNING DFATAL
 #endif
 
 // Log animations that took more than 1m.  When DCHECK is enabled, it will fail
@@ -57,7 +60,10 @@ void CompositorAnimationObserver::ResetIfActive() {
 void CompositorAnimationObserver::NotifyFailure() {
   if (!base::debug::BeingDebugged() &&
       !base::subtle::ScopedTimeClockOverrides::overrides_active()) {
-    NOTREACHED_OR_WARN()
+    TRACE_EVENT_BEGIN("ui", "LongCompositorAnimationObserved",
+                      perfetto::ThreadTrack::Current(), *start_);
+    TRACE_EVENT_END("ui");
+    LOG(DFATAL_OR_WARNING)
         << "CompositorAnimationObserver is active for too long ("
         << (base::TimeTicks::Now() - *start_).InSecondsF()
         << "s) location=" << location_.ToString();

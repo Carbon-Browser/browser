@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 namespace chrome_pdf {
 
-// TODO(crbug.com/702993): After migrating away from PPAPI, re-evaluate where
+// TODO(crbug.com/40511452): After migrating away from PPAPI, re-evaluate where
 // this enum should live, whether it should become an enum class, and what
 // values it should contain.
 enum Result {

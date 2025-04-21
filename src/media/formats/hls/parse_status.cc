@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/formats/hls/parse_status.h"
 
+#include <string_view>
+
 #include "base/notreached.h"
-#include "base/strings/string_piece.h"
 
 namespace media::hls {
 
@@ -13,7 +14,7 @@ namespace media::hls {
   case ParseStatusCode::x:        \
     return #x
 
-base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
+std::string_view ParseStatusCodeToString(ParseStatusCode code) {
   switch (code) {
     PARSE_STATUS_CODE_CASE(kReachedEOF);
     PARSE_STATUS_CODE_CASE(kInvalidEOL);
@@ -27,6 +28,7 @@ base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
     PARSE_STATUS_CODE_CASE(kFailedToParseStableId);
     PARSE_STATUS_CODE_CASE(kFailedToParseInstreamId);
     PARSE_STATUS_CODE_CASE(kFailedToParseAudioChannels);
+    PARSE_STATUS_CODE_CASE(kFailedToParseHexadecimalString);
     PARSE_STATUS_CODE_CASE(kInvalidPlaylistVersion);
     PARSE_STATUS_CODE_CASE(kUnknownPlaylistType);
     PARSE_STATUS_CODE_CASE(kMalformedAttributeList);
@@ -40,6 +42,7 @@ base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
     PARSE_STATUS_CODE_CASE(kMediaSegmentExceedsTargetDuration);
     PARSE_STATUS_CODE_CASE(kPlaylistHasDuplicateTags);
     PARSE_STATUS_CODE_CASE(kPlaylistHasUnsupportedVersion);
+    PARSE_STATUS_CODE_CASE(kPlaylistHasVersionMismatch);
     PARSE_STATUS_CODE_CASE(kMediaPlaylistHasMultivariantPlaylistTag);
     PARSE_STATUS_CODE_CASE(kMultivariantPlaylistHasMediaPlaylistTag);
     PARSE_STATUS_CODE_CASE(kVariableUndefined);
@@ -61,10 +64,13 @@ base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
     PARSE_STATUS_CODE_CASE(kPartHoldBackDistanceTooLow);
     PARSE_STATUS_CODE_CASE(kPartInfTagWithoutPartHoldBack);
     PARSE_STATUS_CODE_CASE(kPlaylistHasUnexpectedDeltaUpdate);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupHasMultipleDefaultRenditions);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupHasDuplicateRenditionNames);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupDoesNotExist);
+    PARSE_STATUS_CODE_CASE(kUnsupportedEncryptionMethod);
   }
 
   NOTREACHED();
-  return "";
 }
 
 #undef PARSE_STATUS_CODE_CASE

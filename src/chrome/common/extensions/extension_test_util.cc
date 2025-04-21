@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,8 +42,8 @@ scoped_refptr<Extension> LoadManifestUnchecked(const std::string& dir,
       deserializer.Deserialize(nullptr, error);
   if (!result)
     return nullptr;
-  const base::DictionaryValue* dict;
-  CHECK(result->GetAsDictionary(&dict));
+  const base::Value::Dict* dict = result->GetIfDict();
+  CHECK(dict);
 
   scoped_refptr<Extension> extension = Extension::Create(
       path.DirName(), location, *dict, extra_flags, id, error);
@@ -93,6 +93,24 @@ void SetGalleryUpdateURL(const GURL& new_url) {
   command_line->AppendSwitchASCII(switches::kAppsGalleryUpdateURL,
                                   new_url.spec());
   extensions::ExtensionsClient::Get()->InitializeWebStoreUrls(command_line);
+}
+
+// Note: This list should be kept in sync with the set of all features which
+// have delegated availability checks. This includes controlled_frame and
+// webstore_overide.
+std::vector<const char*> GetExpectedDelegatedFeaturesForTest() {
+  return {
+      // Controlled frame:
+      "chromeWebViewInternal",
+      "controlledFrameInternal",
+      "guestViewInternal",
+      "webRequestInternal",
+      "webViewInternal",
+
+      // Webstore override:
+      "management",
+      "webstorePrivate",
+  };
 }
 
 }  // namespace extension_test_util

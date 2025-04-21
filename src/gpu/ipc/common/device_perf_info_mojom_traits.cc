@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,6 @@ EnumTraits<gpu::mojom::Direct3DFeatureLevel, D3D_FEATURE_LEVEL>::ToMojom(
       return gpu::mojom::Direct3DFeatureLevel::k12_2;
   }
   NOTREACHED() << "Invalid D3D_FEATURE_LEVEL:" << d3d_feature_level;
-  return gpu::mojom::Direct3DFeatureLevel::k1_0_Core;
 }
 
 // static
@@ -81,7 +80,6 @@ bool EnumTraits<gpu::mojom::Direct3DFeatureLevel, D3D_FEATURE_LEVEL>::FromMojom(
       return true;
   }
   NOTREACHED() << "Invalid D3D_FEATURE_LEVEL: " << input;
-  return false;
 }
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -98,7 +96,6 @@ EnumTraits<gpu::mojom::HasDiscreteGpu, gpu::HasDiscreteGpu>::ToMojom(
   }
   NOTREACHED() << "Invalid gpu::HasDiscreteGpu: "
                << static_cast<int>(has_discrete_gpu);
-  return gpu::mojom::HasDiscreteGpu::kUnknown;
 }
 
 // static
@@ -117,7 +114,6 @@ bool EnumTraits<gpu::mojom::HasDiscreteGpu, gpu::HasDiscreteGpu>::FromMojom(
       return true;
   }
   NOTREACHED() << "Invalid gpu::mojom::HasDiscreteGpu: " << input;
-  return false;
 }
 
 // static

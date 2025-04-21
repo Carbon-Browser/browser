@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class LoginScreenI18nApitest
   ~LoginScreenI18nApitest() override = default;
 
   void SetExpectedMessage(const std::string custom_arg) {
-    config_.SetKey("customArg", base::Value(custom_arg));
+    config_.Set("customArg", base::Value(custom_arg));
     extensions::TestGetConfigFunction::set_test_config_state(&config_);
   }
 
@@ -57,7 +57,7 @@ class LoginScreenI18nApitest
   }
 
  private:
-  base::DictionaryValue config_;
+  base::Value::Dict config_;
 };
 
 IN_PROC_BROWSER_TEST_P(LoginScreenI18nApitest, GetMessage) {

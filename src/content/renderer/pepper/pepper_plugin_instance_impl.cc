@@ -1,23 +1,30 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/renderer/pepper/pepper_plugin_instance_impl.h"
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/char_iterator.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -47,7 +54,6 @@
 #include "content/renderer/pepper/url_request_info_util.h"
 #include "content/renderer/pepper/url_response_info_util.h"
 #include "content/renderer/render_frame_impl.h"
-#include "content/renderer/render_view_impl.h"
 #include "content/renderer/sad_plugin.h"
 #include "device/gamepad/public/cpp/gamepads.h"
 #include "ppapi/c/dev/ppp_text_input_dev.h"
@@ -113,6 +119,7 @@
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 #include "ui/gfx/range/range.h"
@@ -122,7 +129,7 @@
 
 #if BUILDFLAG(ENABLE_PRINTING)
 // nogncheck because dependency on //printing is conditional upon
-// enable_basic_printing flags.
+// enable_printing flags.
 #include "printing/metafile_skia.h"          // nogncheck
 #endif
 
@@ -350,11 +357,43 @@ void PrintPDFOutput(PP_Resource print_output,
   BufferAutoMapper mapper(enter.object());
   if (!mapper.data() || !mapper.size()) {
     NOTREACHED();
-    return;
   }
 
   metafile->InitFromData(mapper);
 #endif  // BUILDFLAG(ENABLE_PRINTING)
+}
+
+// Stolen from //printing/units.{cc,h}
+
+// Length of an inch in CSS's 1pt unit.
+// http://dev.w3.org/csswg/css3-values/#absolute-length-units-cm-mm.-in-pt-pc
+constexpr int kPointsPerInch = 72;
+
+// Length of an inch in CSS's 1px unit.
+// http://dev.w3.org/csswg/css3-values/#the-px-unit
+constexpr int kPixelsPerInch = 96;
+
+float ConvertUnitFloat(float value, float old_unit, float new_unit) {
+  CHECK_GT(new_unit, 0);
+  CHECK_GT(old_unit, 0);
+  return value * new_unit / old_unit;
+}
+
+PP_Rect CSSPixelsToPoints(const gfx::RectF& rect) {
+  const gfx::Rect points_rect = gfx::ToEnclosedRect(gfx::RectF(
+      ConvertUnitFloat(rect.x(), kPixelsPerInch, kPointsPerInch),
+      ConvertUnitFloat(rect.y(), kPixelsPerInch, kPointsPerInch),
+      ConvertUnitFloat(rect.width(), kPixelsPerInch, kPointsPerInch),
+      ConvertUnitFloat(rect.height(), kPixelsPerInch, kPointsPerInch)));
+  return PP_MakeRectFromXYWH(points_rect.x(), points_rect.y(),
+                             points_rect.width(), points_rect.height());
+}
+
+PP_Size CSSPixelsToPoints(const gfx::SizeF& size) {
+  const gfx::Size points_size = gfx::ToFlooredSize(gfx::SizeF(
+      ConvertUnitFloat(size.width(), kPixelsPerInch, kPointsPerInch),
+      ConvertUnitFloat(size.height(), kPixelsPerInch, kPointsPerInch)));
+  return PP_MakeSize(points_size.width(), points_size.height());
 }
 
 }  // namespace
@@ -364,7 +403,8 @@ PepperPluginInstanceImpl* PepperPluginInstanceImpl::Create(
     RenderFrameImpl* render_frame,
     PluginModule* module,
     WebPluginContainer* container,
-    const GURL& plugin_url) {
+    const GURL& plugin_url,
+    v8::Isolate* isolate) {
   base::RepeatingCallback<const void*(const char*)> get_plugin_interface_func =
       base::BindRepeating(&PluginModule::GetPluginInterface, module);
   PPP_Instance_Combined* ppp_instance_combined =
@@ -372,11 +412,9 @@ PepperPluginInstanceImpl* PepperPluginInstanceImpl::Create(
   if (!ppp_instance_combined)
     return nullptr;
 
-  return new PepperPluginInstanceImpl(render_frame,
-                                      module,
-                                      ppp_instance_combined,
-                                      container,
-                                      plugin_url);
+  return new PepperPluginInstanceImpl(render_frame, module,
+                                      ppp_instance_combined, container,
+                                      plugin_url, isolate);
 }
 
 // static
@@ -404,7 +442,7 @@ PepperPluginInstanceImpl::ExternalDocumentLoader::~ExternalDocumentLoader() {}
 void PepperPluginInstanceImpl::ExternalDocumentLoader::ReplayReceivedData(
     WebAssociatedURLLoaderClient* document_loader) {
   for (auto it = data_.begin(); it != data_.end(); ++it) {
-    document_loader->DidReceiveData(it->c_str(), it->length());
+    document_loader->DidReceiveData(*it);
   }
   if (finished_loading_) {
     document_loader->DidFinishLoading();
@@ -415,9 +453,8 @@ void PepperPluginInstanceImpl::ExternalDocumentLoader::ReplayReceivedData(
 }
 
 void PepperPluginInstanceImpl::ExternalDocumentLoader::DidReceiveData(
-    const char* data,
-    int data_length) {
-  data_.push_back(std::string(data, data_length));
+    base::span<const char> data) {
+  data_.push_back(std::string(data.data(), data.size()));
 }
 
 void PepperPluginInstanceImpl::ExternalDocumentLoader::DidFinishLoading() {
@@ -460,7 +497,8 @@ PepperPluginInstanceImpl::PepperPluginInstanceImpl(
     PluginModule* module,
     ppapi::PPP_Instance_Combined* instance_interface,
     WebPluginContainer* container,
-    const GURL& plugin_url)
+    const GURL& plugin_url,
+    v8::Isolate* isolate)
     : RenderFrameObserver(render_frame),
       render_frame_(render_frame),
       module_(module),
@@ -498,7 +536,7 @@ PepperPluginInstanceImpl::PepperPluginInstanceImpl(
       selection_anchor_(0),
       document_loader_(nullptr),
       external_document_load_(false),
-      isolate_(v8::Isolate::GetCurrent()),
+      isolate_(isolate),
       is_deleted_(false),
       initialized_(false),
       created_in_process_instance_(false),
@@ -683,11 +721,10 @@ void PepperPluginInstanceImpl::InvalidateRect(const gfx::Rect& rect) {
 
 void PepperPluginInstanceImpl::CommitTransferableResource(
     const viz::TransferableResource& resource) {
-  if (!committed_texture_.mailbox_holder.mailbox.IsZero() &&
-      !IsTextureInUse(committed_texture_)) {
+  if (!committed_texture_.is_empty() && !IsTextureInUse(committed_texture_)) {
     committed_texture_graphics_3d_->ReturnFrontBuffer(
-        committed_texture_.mailbox_holder.mailbox,
-        committed_texture_consumed_sync_token_, false);
+        committed_texture_.mailbox(), committed_texture_consumed_sync_token_,
+        false);
   }
 
   committed_texture_ = resource;
@@ -706,14 +743,16 @@ void PepperPluginInstanceImpl::CommitTransferableResource(
 void PepperPluginInstanceImpl::PassCommittedTextureToTextureLayer() {
   DCHECK(bound_graphics_3d_);
 
-  if (committed_texture_.mailbox_holder.mailbox.IsZero())
+  if (committed_texture_.is_empty()) {
     return;
+  }
 
   viz::ReleaseCallback callback(base::BindOnce(
       &PepperPluginInstanceImpl::FinishedConsumingCommittedTexture,
       weak_factory_.GetWeakPtr(), committed_texture_,
       committed_texture_graphics_3d_));
 
+  committed_texture_.origin = kBottomLeft_GrSurfaceOrigin;
   IncrementTextureReferenceCount(committed_texture_);
   texture_layer_->SetTransferableResource(committed_texture_,
                                           std::move(callback));
@@ -725,8 +764,8 @@ void PepperPluginInstanceImpl::FinishedConsumingCommittedTexture(
     const gpu::SyncToken& sync_token,
     bool is_lost) {
   bool removed = DecrementTextureReferenceCount(resource);
-  bool is_committed_texture = committed_texture_.mailbox_holder.mailbox ==
-                              resource.mailbox_holder.mailbox;
+  bool is_committed_texture =
+      committed_texture_.mailbox() == resource.mailbox();
 
   if (is_committed_texture && !is_lost) {
     committed_texture_consumed_sync_token_ = sync_token;
@@ -734,8 +773,7 @@ void PepperPluginInstanceImpl::FinishedConsumingCommittedTexture(
   }
 
   if (removed && !is_committed_texture) {
-    graphics_3d->ReturnFrontBuffer(resource.mailbox_holder.mailbox, sync_token,
-                                   is_lost);
+    graphics_3d->ReturnFrontBuffer(resource.mailbox(), sync_token, is_lost);
   }
 }
 
@@ -908,9 +946,8 @@ bool PepperPluginInstanceImpl::
   // Set the composition target.
   for (size_t i = 0; i < ime_text_spans.size(); ++i) {
     if (ime_text_spans[i].thickness == ui::ImeTextSpan::Thickness::kThick) {
-      auto it = std::find(event.composition_segment_offsets.begin(),
-                          event.composition_segment_offsets.end(),
-                          utf8_offsets[2 * i + 2]);
+      auto it = base::ranges::find(event.composition_segment_offsets,
+                                   utf8_offsets[2 * i + 2]);
       if (it != event.composition_segment_offsets.end()) {
         event.composition_target_segment =
             it - event.composition_segment_offsets.begin();
@@ -1082,7 +1119,6 @@ void PepperPluginInstanceImpl::HandleMessage(ScopedPPVar message) {
     // The dispatcher should always be valid, and MessageChannel should never
     // send an 'object' var over PPP_Messaging.
     NOTREACHED();
-    return;
   }
   dispatcher->Send(new PpapiMsg_PPPMessaging_HandleMessage(
       ppapi::API_ID_PPP_MESSAGING,
@@ -1102,7 +1138,6 @@ bool PepperPluginInstanceImpl::HandleBlockingMessage(ScopedPPVar message,
     // The dispatcher should always be valid, and MessageChannel should never
     // send an 'object' var over PPP_Messaging.
     NOTREACHED();
-    return false;
   }
   ppapi::proxy::ReceiveSerializedVarReturnValue msg_reply;
   bool was_handled = false;
@@ -1154,7 +1189,7 @@ void PepperPluginInstanceImpl::ViewChanged(
   // TODO(chrishtr): remove device_scale
   view_data_.device_scale = 1;
   view_data_.css_scale =
-      container_->PageZoomFactor() * container_->PageScaleFactor();
+      container_->LayoutZoomFactor() * container_->PageScaleFactor();
   WebWidget* widget = render_frame()->GetLocalRootWebFrameWidget();
 
   viewport_to_dip_scale_ =
@@ -1466,7 +1501,7 @@ void PepperPluginInstanceImpl::UpdateWheelEventRequest() {
 void PepperPluginInstanceImpl::ScheduleAsyncDidChangeView() {
   if (view_change_weak_ptr_factory_.HasWeakPtrs())
     return;  // Already scheduled.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&PepperPluginInstanceImpl::SendAsyncDidChangeView,
                      view_change_weak_ptr_factory_.GetWeakPtr()));
@@ -1573,13 +1608,24 @@ int PepperPluginInstanceImpl::PrintBegin(const WebPrintParams& print_params) {
     // PrintBegin should not have been called since SupportsPrintInterface
     // would have returned false;
     NOTREACHED();
-    return 0;
   }
 
+  const blink::WebPrintPageDescription& description =
+      print_params.default_page_description;
+  gfx::SizeF page_area_size = description.size;
+  page_area_size.set_width(std::max(0.0f, page_area_size.width() -
+                                              description.margin_left -
+                                              description.margin_right));
+  page_area_size.set_height(std::max(0.0f, page_area_size.height() -
+                                               description.margin_top -
+                                               description.margin_bottom));
+
   PP_PrintSettings_Dev print_settings;
-  print_settings.printable_area = PP_FromGfxRect(print_params.printable_area);
-  print_settings.content_area = PP_FromGfxRect(print_params.print_content_area);
-  print_settings.paper_size = PP_FromGfxSize(print_params.paper_size);
+  print_settings.printable_area =
+      CSSPixelsToPoints(print_params.printable_area_in_css_pixels);
+  print_settings.content_area.point = PP_Point();
+  print_settings.content_area.size = CSSPixelsToPoints(page_area_size);
+  print_settings.paper_size = CSSPixelsToPoints(description.size);
   print_settings.dpi = print_params.printer_dpi;
   print_settings.orientation = PP_PRINTORIENTATION_NORMAL;
   print_settings.grayscale = PP_FALSE;
@@ -1738,7 +1784,6 @@ void PepperPluginInstanceImpl::UpdateLayer(bool force_creation) {
       texture_layer_ = cc::TextureLayer::CreateForMailbox(this);
       bound_graphics_2d_platform_->AttachedToNewLayer();
       opaque = bound_graphics_2d_platform_->IsAlwaysOpaque();
-      texture_layer_->SetFlipped(false);
     }
 
     // Ignore transparency in fullscreen.
@@ -1754,13 +1799,12 @@ void PepperPluginInstanceImpl::UpdateLayer(bool force_creation) {
 }
 
 bool PepperPluginInstanceImpl::PrepareTransferableResource(
-    cc::SharedBitmapIdRegistrar* bitmap_registrar,
     viz::TransferableResource* transferable_resource,
     viz::ReleaseCallback* release_callback) {
   if (!bound_graphics_2d_platform_)
     return false;
   return bound_graphics_2d_platform_->PrepareTransferableResource(
-      bitmap_registrar, transferable_resource, release_callback);
+      transferable_resource, release_callback);
 }
 
 void PepperPluginInstanceImpl::OnDestruct() {
@@ -1768,8 +1812,7 @@ void PepperPluginInstanceImpl::OnDestruct() {
 }
 
 void PepperPluginInstanceImpl::AddPluginObject(PluginObject* plugin_object) {
-  DCHECK(live_plugin_objects_.find(plugin_object) ==
-         live_plugin_objects_.end());
+  DCHECK(!base::Contains(live_plugin_objects_, plugin_object));
   live_plugin_objects_.insert(plugin_object);
 }
 
@@ -1806,7 +1849,6 @@ void PepperPluginInstanceImpl::SimulateInputEvent(
       container()->GetDocument().GetFrame()->LocalRoot()->FrameWidget();
   if (!widget) {
     NOTREACHED();
-    return;
   }
 
   bool handled = SimulateIMEEvent(input_event);
@@ -2028,7 +2070,7 @@ uint32_t PepperPluginInstanceImpl::GetAudioHardwareOutputSampleRate(
              ? blink::AudioDeviceFactory::GetInstance()
                    ->GetOutputDeviceInfo(
                        render_frame()->GetWebFrame()->GetLocalFrameToken(),
-                       media::AudioSinkParameters())
+                       std::string())
                    .output_params()
                    .sample_rate()
              : 0;
@@ -2040,7 +2082,7 @@ uint32_t PepperPluginInstanceImpl::GetAudioHardwareOutputBufferSize(
              ? blink::AudioDeviceFactory::GetInstance()
                    ->GetOutputDeviceInfo(
                        render_frame()->GetWebFrame()->GetLocalFrameToken(),
-                       media::AudioSinkParameters())
+                       std::string())
                    .output_params()
                    .frames_per_buffer()
              : 0;
@@ -2101,7 +2143,6 @@ ppapi::Resource* PepperPluginInstanceImpl::GetSingletonResource(
   }
 
   NOTREACHED();
-  return nullptr;
 }
 
 int32_t PepperPluginInstanceImpl::RequestInputEvents(PP_Instance instance,
@@ -2156,21 +2197,17 @@ PP_Bool PepperPluginInstanceImpl::SetCursor(PP_Instance instance,
   if (!auto_mapper.is_valid())
     return PP_FALSE;
 
-  auto custom_cursor =
-      std::make_unique<ui::Cursor>(ui::mojom::CursorType::kCustom);
-  custom_cursor->set_custom_hotspot(gfx::Point(hot_spot->x, hot_spot->y));
-
   SkBitmap bitmap(image_data->GetMappedBitmap());
   // Make a deep copy, so that the cursor remains valid even after the original
   // image data gets freed.
-  SkBitmap dst = custom_cursor->custom_bitmap();
+  SkBitmap dst;
   if (!dst.tryAllocPixels(bitmap.info()) ||
       !bitmap.readPixels(dst.info(), dst.getPixels(), dst.rowBytes(), 0, 0)) {
     return PP_FALSE;
   }
-  custom_cursor->set_custom_bitmap(dst);
 
-  DoSetCursor(std::move(custom_cursor));
+  DoSetCursor(std::make_unique<ui::Cursor>(ui::Cursor::NewCustom(
+      std::move(dst), gfx::Point(hot_spot->x, hot_spot->y))));
   return PP_TRUE;
 }
 
@@ -2239,7 +2276,7 @@ void PepperPluginInstanceImpl::SelectionChanged(PP_Instance instance) {
   // uses a weak pointer rather than exploiting the fact that this class is
   // refcounted because we don't actually want this operation to affect the
   // lifetime of the instance.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&PepperPluginInstanceImpl::RequestSurroundingText,
                      weak_factory_.GetWeakPtr(),
@@ -2652,13 +2689,10 @@ void PepperPluginInstanceImpl::ConvertDIPToViewport(gfx::Rect* rect) const {
 
 void PepperPluginInstanceImpl::IncrementTextureReferenceCount(
     const viz::TransferableResource& resource) {
-  auto it =
-      std::find_if(texture_ref_counts_.begin(), texture_ref_counts_.end(),
-                   [&resource](const MailboxRefCount& ref_count) {
-                     return ref_count.first == resource.mailbox_holder.mailbox;
-                   });
+  auto it = base::ranges::find(texture_ref_counts_, resource.mailbox(),
+                               &MailboxRefCount::first);
   if (it == texture_ref_counts_.end()) {
-    texture_ref_counts_.emplace_back(resource.mailbox_holder.mailbox, 1);
+    texture_ref_counts_.emplace_back(resource.mailbox(), 1);
     return;
   }
 
@@ -2667,12 +2701,9 @@ void PepperPluginInstanceImpl::IncrementTextureReferenceCount(
 
 bool PepperPluginInstanceImpl::DecrementTextureReferenceCount(
     const viz::TransferableResource& resource) {
-  auto it =
-      std::find_if(texture_ref_counts_.begin(), texture_ref_counts_.end(),
-                   [&resource](const MailboxRefCount& ref_count) {
-                     return ref_count.first == resource.mailbox_holder.mailbox;
-                   });
-  DCHECK(it != texture_ref_counts_.end());
+  auto it = base::ranges::find(texture_ref_counts_, resource.mailbox(),
+                               &MailboxRefCount::first);
+  CHECK(it != texture_ref_counts_.end(), base::NotFatalUntil::M130);
 
   if (it->second == 1) {
     texture_ref_counts_.erase(it);
@@ -2685,12 +2716,8 @@ bool PepperPluginInstanceImpl::DecrementTextureReferenceCount(
 
 bool PepperPluginInstanceImpl::IsTextureInUse(
     const viz::TransferableResource& resource) const {
-  auto it =
-      std::find_if(texture_ref_counts_.begin(), texture_ref_counts_.end(),
-                   [&resource](const MailboxRefCount& ref_count) {
-                     return ref_count.first == resource.mailbox_holder.mailbox;
-                   });
-  return it != texture_ref_counts_.end();
+  return base::Contains(texture_ref_counts_, resource.mailbox(),
+                        &MailboxRefCount::first);
 }
 
 void PepperPluginInstanceImpl::OnImeSetComposition(

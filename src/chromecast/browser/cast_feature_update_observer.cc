@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/cast_feature_update_observer.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "chromecast/base/pref_names.h"
 #include "chromecast/common/mojom/constants.mojom.h"
 #include "chromecast/external_mojo/external_service_support/external_connector.h"
@@ -38,14 +38,14 @@ void CastFeatureUpdateObserver::BindFeatureUpdateService() {
   // lifecycle of `cast_browser`. Until that is done, `cast_service` has a
   // shorter lifecycle than `cast_browser`, so we need to handle disconnects
   // here.
-  // TODO(crbug/1285360): remove once process lifecycles are inverted.
+  // TODO(crbug.com/40210465): remove once process lifecycles are inverted.
   receiver_.set_disconnect_handler(
       base::BindOnce(&CastFeatureUpdateObserver::BindFeatureUpdateService,
                      base::Unretained(this)));
 }
 
-void CastFeatureUpdateObserver::OnFeaturesUpdated(base::Value features) {
-  pref_service_->Set(prefs::kLatestDCSFeatures, std::move(features));
+void CastFeatureUpdateObserver::OnFeaturesUpdated(base::Value::Dict features) {
+  pref_service_->SetDict(prefs::kLatestDCSFeatures, std::move(features));
   pref_service_->CommitPendingWrite();
 }
 

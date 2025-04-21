@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,9 +42,10 @@ void BluetoothDelegateImpl::ShowDevicePairPrompt(
     RenderFrameHost* frame,
     const std::u16string& device_identifier,
     PairPromptCallback callback,
-    PairingKind pairing_kind) {
-  client_->ShowBluetoothDevicePairDialog(frame, device_identifier,
-                                         std::move(callback), pairing_kind);
+    PairingKind pairing_kind,
+    const std::optional<std::u16string>& pin) {
+  client_->ShowBluetoothDevicePairDialog(
+      frame, device_identifier, std::move(callback), pairing_kind, pin);
 }
 
 WebBluetoothDeviceId BluetoothDelegateImpl::GetWebBluetoothDeviceId(
@@ -90,6 +91,10 @@ void BluetoothDelegateImpl::RevokeDevicePermissionWebInitiated(
   client_->GetBluetoothChooserContext(frame)
       ->RevokeDevicePermissionWebInitiated(
           frame->GetMainFrame()->GetLastCommittedOrigin(), device_id);
+}
+
+bool BluetoothDelegateImpl::MayUseBluetooth(RenderFrameHost* frame) {
+  return true;
 }
 
 bool BluetoothDelegateImpl::IsAllowedToAccessService(

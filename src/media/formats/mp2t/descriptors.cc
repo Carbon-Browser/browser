@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/mp2t/descriptors.h"
 
@@ -107,6 +112,9 @@ bool Descriptors::HasCADescriptor(int* system_id,
   RCHECK(reader.SkipBits(3));
   RCHECK(reader.ReadBits(13, pid));
   size_t extra_bits = reader.bits_available();
+  if (extra_bits == 0) {
+    return true;
+  }
   RCHECK(extra_bits % 8 == 0);
   RCHECK(reader.ReadString(extra_bits, private_data));
   return true;

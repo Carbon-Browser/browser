@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_WINDOW_MANAGER_H_
 
 #include <memory>
+#include <ostream>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/gfx/geometry/size_f.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/ozone/platform/wayland/host/wayland_subsurface.h"
 #include "ui/ozone/platform/wayland/host/wayland_window_observer.h"
 
 namespace ui {
@@ -35,6 +37,9 @@ class WaylandWindowManager {
   // Notifies observers that the Window has been ack configured and
   // WaylandBufferManagerHost can start attaching buffers to the |surface_|.
   void NotifyWindowConfigured(WaylandWindow* window);
+
+  // Notifies observers that the window's wayland role has been assigned.
+  void NotifyWindowRoleAssigned(WaylandWindow* window);
 
   // Stores the window that should grab the located events.
   void GrabLocatedEvents(WaylandWindow* event_grabber);
@@ -105,24 +110,48 @@ class WaylandWindowManager {
   void RemoveSubsurface(gfx::AcceleratedWidget widget,
                         WaylandSubsurface* subsurface);
 
+  void RecycleSubsurface(std::unique_ptr<WaylandSubsurface> subsurface);
+
   // Creates a new unique gfx::AcceleratedWidget.
   gfx::AcceleratedWidget AllocateAcceleratedWidget();
 
+  // Returns the current value that to be used as windows' UI scale. If UI
+  // scaling feature is disabled or unavailable (eg: per-surface scaling
+  // unsupported), 1 is returned. If present, the value passed in through the
+  // force-device-scale-factor switch is used, otherwise the current font scale
+  // is returned, which presumably comes from system's "text scaling factor"
+  // setting, provided by LinuxUi, and set via SetFontScale function below.
+  float DetermineUiScale() const;
+  void SetFontScale(float new_font_scale);
+
+  void DumpState(std::ostream& out) const;
+
  private:
-  WaylandWindow* pointer_focused_window_ = nullptr;
-  WaylandWindow* keyboard_focused_window_ = nullptr;
+  raw_ptr<WaylandWindow> pointer_focused_window_ = nullptr;
+  raw_ptr<WaylandWindow> keyboard_focused_window_ = nullptr;
 
   const raw_ptr<WaylandConnection> connection_;
 
   base::ObserverList<WaylandWindowObserver> observers_;
 
-  base::flat_map<gfx::AcceleratedWidget, WaylandWindow*> window_map_;
+  base::flat_map<gfx::AcceleratedWidget,
+                 raw_ptr<WaylandWindow, CtnExperimental>>
+      window_map_;
+
+  // The cache of |primary_subsurface_| of the last closed WaylandWindow. This
+  // will be destroyed lazily to make sure the window closing animation works
+  // well. See crbug.com/1324548.
+  std::unique_ptr<WaylandSubsurface> subsurface_recycle_cache_;
 
   raw_ptr<WaylandWindow> located_events_grabber_ = nullptr;
 
   // Stores strictly monotonically increasing counter for allocating unique
   // AccelerateWidgets.
   gfx::AcceleratedWidget last_accelerated_widget_ = gfx::kNullAcceleratedWidget;
+
+  // Current system's text font scaling factor provided by WaylandScreen,
+  // through LinuxUi, when enabled.
+  float font_scale_ = 1.0f;
 };
 
 }  // namespace ui

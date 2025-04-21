@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ struct StructTraits<chrome::mojom::AttachedImageDataView,
       const ::metadata::AttachedImage& image) {
     // TODO(dcheng): perhaps metadata::AttachedImage should consider passing the
     // image data around in a std::vector<uint8_t>.
-    return base::make_span(reinterpret_cast<const uint8_t*>(image.data.data()),
-                           image.data.size());
+    return base::as_byte_span(image.data);
   }
 
   static bool Read(chrome::mojom::AttachedImageDataView view,

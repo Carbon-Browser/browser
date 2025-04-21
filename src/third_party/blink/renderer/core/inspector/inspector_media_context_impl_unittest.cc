@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 namespace {
@@ -31,6 +32,8 @@ class InspectorMediaContextImplTest : public ::testing::Test {
     return to_add;
   }
 
+  test::TaskEnvironment task_environment_;
+
   Persistent<MediaInspectorContextImpl> impl;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
 };
@@ -39,10 +42,10 @@ TEST_F(InspectorMediaContextImplTest, CanCreatePlayerAndAddEvents) {
   auto id = impl->CreatePlayer();
   auto* players = impl->GetPlayersForTesting();
   EXPECT_EQ(players->size(), 1u);
-  EXPECT_TRUE(players->at(id)->errors.IsEmpty());
-  EXPECT_TRUE(players->at(id)->events.IsEmpty());
-  EXPECT_TRUE(players->at(id)->messages.IsEmpty());
-  EXPECT_TRUE(players->at(id)->properties.IsEmpty());
+  EXPECT_TRUE(players->at(id)->errors.empty());
+  EXPECT_TRUE(players->at(id)->events.empty());
+  EXPECT_TRUE(players->at(id)->messages.empty());
+  EXPECT_TRUE(players->at(id)->properties.empty());
 
   impl->NotifyPlayerEvents(id, MakeEvents(10));
   EXPECT_EQ(players->at(id)->events.size(), wtf_size_t{10});

@@ -1,9 +1,6 @@
 {
-  "extends": "../../../../../tools/typescript/tsconfig_base.json",
+  "extends": "../tsconfig_base.json",
   "compilerOptions": {
-    "typeRoots": [
-       "./../../../../../third_party/node/node_modules/@types"
-    ],
-    "types": ["mocha"]
+    "types": ["chai", "mocha", "trusted-types", "dom-speech-recognition"]
   }
 }

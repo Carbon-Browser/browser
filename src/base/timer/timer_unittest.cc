@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -18,7 +18,6 @@
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -78,7 +77,8 @@ void RunTest_OneShotTimers_Cancel(
   auto* timer_ptr = timer.get();
 
   // This should run before the timer expires.
-  SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, std::move(timer));
+  SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                       std::move(timer));
 
   timer_ptr->Start(FROM_HERE, kTestDelay,
                    BindOnce(&Receiver::OnCalled, Unretained(&receiver)));
@@ -135,7 +135,8 @@ void RunTest_RepeatingTimer_Cancel(
   auto* timer_ptr = timer.get();
 
   // This should run before the timer expires.
-  SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, std::move(timer));
+  SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                       std::move(timer));
 
   timer_ptr->Start(FROM_HERE, delay,
                    BindRepeating(&Receiver::OnCalled, Unretained(&receiver)));
@@ -245,7 +246,7 @@ TEST(TimerTest, OneShotTimer_CustomTaskRunner) {
   // The timer will use the TestSimpleTaskRunner to schedule its delays.
   timer.SetTaskRunner(task_runner);
   timer.Start(FROM_HERE, Days(1),
-              BindLambdaForTesting([&]() { task_ran = true; }));
+              BindLambdaForTesting([&] { task_ran = true; }));
 
   EXPECT_FALSE(task_ran);
   EXPECT_TRUE(task_runner->HasPendingTask());
@@ -487,8 +488,8 @@ TEST(TimerTest, AbandonedTaskIsCancelled) {
   timer.Start(FROM_HERE, kTestDelay, base::DoNothing());
   EXPECT_EQ(1u, task_environment.GetPendingMainThreadTaskCount());
 
-  // After AbandonAndStop(), the task is correctly treated as cancelled.
-  timer.AbandonAndStop();
+  // After Stop(), the task is correctly treated as cancelled.
+  timer.Stop();
   EXPECT_EQ(0u, task_environment.GetPendingMainThreadTaskCount());
   EXPECT_FALSE(timer.IsRunning());
 }
@@ -536,6 +537,19 @@ TEST(TimerTest, DeadlineTimerTaskDestructed) {
   EXPECT_CALL(destructed, Run());
   timer.Stop();
   testing::Mock::VerifyAndClearExpectations(&destructed);
+}
+
+TEST(TimerTest, DeadlineTimerStartTwice) {
+  test::TaskEnvironment task_environment(
+      test::TaskEnvironment::TimeSource::MOCK_TIME);
+  DeadlineTimer timer;
+  TimeTicks start = TimeTicks::Now();
+
+  RunLoop run_loop;
+  timer.Start(FROM_HERE, start + Seconds(5), run_loop.QuitClosure());
+  timer.Start(FROM_HERE, start + Seconds(10), run_loop.QuitClosure());
+  run_loop.Run();
+  EXPECT_EQ(start + Seconds(10), TimeTicks::Now());
 }
 
 TEST(TimerTest, MetronomeTimer) {

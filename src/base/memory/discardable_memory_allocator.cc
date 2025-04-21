@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,8 +35,9 @@ DiscardableMemoryAllocator::AllocateLockedDiscardableMemoryWithRetryOrDie(
     OnceClosure on_no_memory) {
   auto* allocator = GetInstance();
   auto memory = allocator->AllocateLockedDiscardableMemory(size);
-  if (memory)
+  if (memory) {
     return memory;
+  }
 
   std::move(on_no_memory).Run();
   // The call above will likely have freed some memory, which will end up in the
@@ -45,8 +46,9 @@ DiscardableMemoryAllocator::AllocateLockedDiscardableMemoryWithRetryOrDie(
   ReleaseFreeMemory();
 
   memory = allocator->AllocateLockedDiscardableMemory(size);
-  if (!memory)
+  if (!memory) {
     TerminateBecauseOutOfMemory(size);
+  }
 
   return memory;
 }

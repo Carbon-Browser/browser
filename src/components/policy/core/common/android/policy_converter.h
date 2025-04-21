@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 
 #include <jni.h>
 
-#include <memory>
+#include <optional>
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
+#include "components/policy/core/common/policy_bundle.h"
 #include "components/policy/policy_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -23,7 +24,6 @@ class Value;
 
 namespace policy {
 
-class PolicyBundle;
 class Schema;
 
 namespace android {
@@ -39,7 +39,7 @@ class POLICY_EXPORT PolicyConverter {
 
   // Returns a policy bundle containing all policies collected since the last
   // call to this method.
-  std::unique_ptr<PolicyBundle> GetPolicyBundle();
+  PolicyBundle GetPolicyBundle();
 
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
 
@@ -68,11 +68,11 @@ class POLICY_EXPORT PolicyConverter {
   // additional restrictions, or the schema for value's items or properties in
   // the case of a list or dictionary value.
   // Public for testing.
-  static absl::optional<base::Value> ConvertValueToSchema(base::Value value,
-                                                          const Schema& schema);
+  static std::optional<base::Value> ConvertValueToSchema(base::Value value,
+                                                         const Schema& schema);
 
   // Public for testing.
-  static base::Value ConvertJavaStringArrayToListValue(
+  static base::Value::List ConvertJavaStringArrayToListValue(
       JNIEnv* env,
       const base::android::JavaRef<jobjectArray>& array);
 
@@ -82,7 +82,7 @@ class POLICY_EXPORT PolicyConverter {
  private:
   const raw_ptr<const Schema> policy_schema_;
 
-  std::unique_ptr<PolicyBundle> policy_bundle_;
+  PolicyBundle policy_bundle_;
 
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;
 

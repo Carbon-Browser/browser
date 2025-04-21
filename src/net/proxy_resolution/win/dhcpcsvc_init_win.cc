@@ -1,16 +1,16 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/proxy_resolution/win/dhcpcsvc_init_win.h"
 
-#include "base/check_op.h"
-#include "base/lazy_instance.h"
-
-#include <windows.h>  // Must be in front of other Windows header files.
+#include <windows.h>
 
 #include <dhcpcsdk.h>
 #include <dhcpv6csdk.h>
+
+#include "base/check_op.h"
+#include "base/lazy_instance.h"
 
 namespace {
 

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Checks that collected symbols are not missing things."""
@@ -241,7 +241,7 @@ def _DescribeSizeInfoContainerCoverage(raw_symbols, container):
           # E.g.: Set to 0 and see what warnings appear, then take max value.
           and ((sym.section in 'rd' and sym.padding >= 256) or
                (sym.section in 't' and sym.padding >= 64))):
-        # TODO(crbug.com/959906): We should synthesize symbols for these gaps
+        # TODO(crbug.com/40626114): We should synthesize symbols for these gaps
         #     rather than attribute them as padding.
         spam_counter += 1
         if spam_counter > 5:

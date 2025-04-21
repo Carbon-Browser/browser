@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/local_discovery/service_discovery_client_impl.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -104,8 +104,9 @@ class ServiceDiscoveryClientMdns::Proxy {
   void DeleteOnMdnsThread(T* t) {
     if (!t)
       return;
-    if (!client_->mdns_runner_->DeleteSoon(FROM_HERE, t))
-      delete t;
+    // If DeleteSoon fails to run `t` will be leaked as it is unsafe to
+    // delete t on the current thread.
+    client_->mdns_runner_->DeleteSoon(FROM_HERE, t);
   }
 
  private:
@@ -390,7 +391,7 @@ void ServiceDiscoveryClientMdns::ScheduleStartNewClient() {
   if (restart_attempts_ >= kMaxRestartAttempts)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ServiceDiscoveryClientMdns::StartNewClient,
                      weak_ptr_factory_.GetWeakPtr()),

@@ -1,27 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SHARING_SHARING_UI_CONTROLLER_H_
 #define CHROME_BROWSER_SHARING_SHARING_UI_CONTROLLER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/sharing/proto/sharing_message.pb.h"
-#include "chrome/browser/sharing/sharing_app.h"
-#include "chrome/browser/sharing/sharing_constants.h"
-#include "chrome/browser/sharing/sharing_dialog_data.h"
-#include "chrome/browser/sharing/sharing_metrics.h"
-#include "chrome/browser/sharing/sharing_service.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
+#include "components/sharing_message/proto/sharing_message.pb.h"
+#include "components/sharing_message/sharing_app.h"
+#include "components/sharing_message/sharing_constants.h"
+#include "components/sharing_message/sharing_dialog_data.h"
+#include "components/sharing_message/sharing_metrics.h"
+#include "components/sharing_message/sharing_service.h"
+#include "components/sharing_message/sharing_target_device_info.h"
 #include "components/sync/protocol/device_info_specifics.pb.h"
-#include "components/sync_device_info/device_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 class SharingDialog;
@@ -46,7 +46,7 @@ class SharingUiController {
   // Title of the dialog.
   virtual std::u16string GetTitle(SharingDialogType dialog_type);
   // Called when user chooses a synced device to complete the task.
-  virtual void OnDeviceChosen(const syncer::DeviceInfo& device) = 0;
+  virtual void OnDeviceChosen(const SharingTargetDeviceInfo& device) = 0;
   // Called when user chooses a local app to complete the task.
   virtual void OnAppChosen(const SharingApp& app) = 0;
   virtual PageActionIconType GetIconType() = 0;
@@ -56,9 +56,18 @@ class SharingUiController {
   // If true, shows a loading icon on omnibox when sending out the message.
   virtual bool ShouldShowLoadingIcon() const;
   virtual std::u16string GetTextForTooltipAndAccessibleName() const = 0;
+
+  // If false, any UI associated will be excluded from the accessibility tree,
+  // making it completely undiscoverable and unusable to (at least) screen
+  // reader users. If you override this function, please seek the review of
+  // an accessibility OWNER and clearly document the use case in your code.
+  virtual bool HasAccessibleUi() const;
+
   // Get the name of the feature to be used as a prefix for the metric name.
   virtual SharingFeatureName GetFeatureMetricsPrefix() const = 0;
-  // Describes the content type of shared data.
+  // Describes the content type of shared data. For most languages this
+  // will be lower case as it's intended to be put as a placeholder within
+  // a sentence.
   virtual std::u16string GetContentType() const = 0;
   // Returns the message to be shown in the body of error dialog based on
   // |send_result_|.
@@ -73,11 +82,10 @@ class SharingUiController {
   void ClearLastDialog();
 
   // Gets the current list of apps and devices and shows a new dialog.
-  void UpdateAndShowDialog(
-      const absl::optional<url::Origin>& initiating_origin);
+  void UpdateAndShowDialog(const std::optional<url::Origin>& initiating_origin);
 
   // Gets the current list of devices that support the required feature.
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> GetDevices() const;
+  std::vector<SharingTargetDeviceInfo> GetDevices() const;
 
   bool HasSendFailed() const;
 
@@ -105,10 +113,10 @@ class SharingUiController {
   // Shows an icon in the omnibox which will be removed when receiving a
   // response or when cancelling the request by calling the returned callback.
   base::OnceClosure SendMessageToDevice(
-      const syncer::DeviceInfo& device,
-      absl::optional<base::TimeDelta> response_timeout,
-      chrome_browser_sharing::SharingMessage sharing_message,
-      absl::optional<SharingMessageSender::ResponseCallback> callback);
+      const SharingTargetDeviceInfo& device,
+      std::optional<base::TimeDelta> response_timeout,
+      components_sharing_message::SharingMessage sharing_message,
+      std::optional<SharingMessageSender::ResponseCallback> callback);
 
   // Updates the omnibox icon if available.
   void UpdateIcon();
@@ -126,12 +134,12 @@ class SharingUiController {
   // response via |custom_callback|.
   void OnResponse(
       int dialog_id,
-      absl::optional<SharingMessageSender::ResponseCallback> custom_callback,
+      std::optional<SharingMessageSender::ResponseCallback> custom_callback,
       SharingSendMessageResult result,
-      std::unique_ptr<chrome_browser_sharing::ResponseMessage> response);
+      std::unique_ptr<components_sharing_message::ResponseMessage> response);
 
   void OnAppsReceived(int dialog_id,
-                      const absl::optional<url::Origin>& initiating_origin,
+                      const std::optional<url::Origin>& initiating_origin,
                       std::vector<SharingApp> apps);
 
   raw_ptr<SharingDialog> dialog_ = nullptr;

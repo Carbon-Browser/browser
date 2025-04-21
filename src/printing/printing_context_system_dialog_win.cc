@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/auto_reset.h"
+#include "base/compiler_specific.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/current_thread.h"
 #include "printing/backend/win_helper.h"
@@ -15,21 +16,17 @@
 #include "printing/print_settings_initializer_win.h"
 #include "skia/ext/skia_utils_win.h"
 
-#if BUILDFLAG(ENABLE_OOP_PRINTING)
-#include "printing/printing_features.h"
-#endif
-
 namespace printing {
 
 HWND PrintingContextSystemDialogWin::GetWindow() {
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
-  if (features::kEnableOopPrintDriversJobPrint.Get()) {
+  if (process_behavior() == ProcessBehavior::kOopEnabledPerformSystemCalls) {
     // Delving through the view tree to get to root window happens separately
     // in the browser process (i.e., not in `PrintingContextSystemDialogWin`)
     // before sending the identified window owner to the Print Backend service.
     // This means that this call is happening in the service, and thus should
     // just use the parent view as-is instead of looking for the root window.
-    // TODO(crbug.com/809738)  Pursue having a service-level instantiation of
+    // TODO(crbug.com/40561724)  Pursue having a service-level instantiation of
     // `PrintingContextSystemDialogWin` for this behavior.  That would ensure
     // this logic would be compile-time driven and only invoked by the service.
     return reinterpret_cast<HWND>(delegate_->GetParentView());
@@ -39,8 +36,9 @@ HWND PrintingContextSystemDialogWin::GetWindow() {
 }
 
 PrintingContextSystemDialogWin::PrintingContextSystemDialogWin(
-    Delegate* delegate)
-    : PrintingContextWin(delegate) {}
+    Delegate* delegate,
+    ProcessBehavior process_behavior)
+    : PrintingContextWin(delegate, process_behavior) {}
 
 PrintingContextSystemDialogWin::~PrintingContextSystemDialogWin() {}
 
@@ -113,7 +111,7 @@ HRESULT PrintingContextSystemDialogWin::ShowPrintDialog(PRINTDLGEX* options) {
   // browser frame (but still being modal) so neither the browser frame nor
   // the print dialog will get any input. See http://crbug.com/342697
   // http://crbug.com/180997 for details.
-  base::CurrentThread::ScopedNestableTaskAllower allow;
+  base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
 
   return PrintDlgEx(options);
 }
@@ -125,9 +123,9 @@ bool PrintingContextSystemDialogWin::InitializeSettingsWithRanges(
     int number_ranges,
     bool selection_only) {
   DCHECK(GetDeviceCaps(context(), CLIPCAPS));
-  DCHECK(GetDeviceCaps(context(), RASTERCAPS) & RC_STRETCHDIB);
-  DCHECK(GetDeviceCaps(context(), RASTERCAPS) & RC_BITMAP64);
   // Some printers don't advertise these.
+  // DCHECK(GetDeviceCaps(context(), RASTERCAPS) & RC_STRETCHDIB);
+  // DCHECK(GetDeviceCaps(context(), RASTERCAPS) & RC_BITMAP64);
   // DCHECK(GetDeviceCaps(context(), RASTERCAPS) & RC_SCALING);
   // DCHECK(GetDeviceCaps(context(), SHADEBLENDCAPS) & SB_CONST_ALPHA);
   // DCHECK(GetDeviceCaps(context(), SHADEBLENDCAPS) & SB_PIXEL_ALPHA);
@@ -135,7 +133,6 @@ bool PrintingContextSystemDialogWin::InitializeSettingsWithRanges(
   // StretchDIBits() support is needed for printing.
   if (!(GetDeviceCaps(context(), RASTERCAPS) & RC_STRETCHDIB) ||
       !(GetDeviceCaps(context(), RASTERCAPS) & RC_BITMAP64)) {
-    NOTREACHED();
     ResetSettings();
     return false;
   }
@@ -146,13 +143,15 @@ bool PrintingContextSystemDialogWin::InitializeSettingsWithRanges(
   if (!selection_only) {
     // Convert the PRINTPAGERANGE array to a PrintSettings::PageRanges vector.
     ranges_vector.reserve(number_ranges);
-    for (int i = 0; i < number_ranges; ++i) {
-      PageRange range;
-      // Transfer from 1-based to 0-based.
-      range.from = ranges[i].nFromPage - 1;
-      range.to = ranges[i].nToPage - 1;
-      ranges_vector.push_back(range);
-    }
+    UNSAFE_TODO({
+      for (int i = 0; i < number_ranges; ++i) {
+        PageRange range;
+        // Transfer from 1-based to 0-based.
+        range.from = ranges[i].nFromPage - 1;
+        range.to = ranges[i].nToPage - 1;
+        ranges_vector.push_back(range);
+      }
+    });
   }
 
   settings_->set_ranges(ranges_vector);
@@ -186,8 +185,10 @@ mojom::ResultCode PrintingContextSystemDialogWin::ParseDialogResultEx(
           reinterpret_cast<DEVNAMES*>(GlobalLock(dialog_options.hDevNames));
       DCHECK(dev_names);
       if (dev_names) {
-        device_name = reinterpret_cast<const wchar_t*>(dev_names) +
-                      dev_names->wDeviceOffset;
+        UNSAFE_TODO({
+          device_name = reinterpret_cast<const wchar_t*>(dev_names) +
+                        dev_names->wDeviceOffset;
+        });
         GlobalUnlock(dialog_options.hDevNames);
       }
     }

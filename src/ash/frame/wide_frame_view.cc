@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/frame/wide_frame_view.h"
+
 #include <memory>
 
-#include "ash/frame/header_view.h"
 #include "ash/frame/non_client_frame_view_ash.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/screen_util.h"
@@ -13,15 +13,18 @@
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/default_frame_header.h"
+#include "chromeos/ui/frame/header_view.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_targeter.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/events/types/event_type.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/caption_button_layout_constants.h"
 
@@ -32,7 +35,7 @@ using ::chromeos::ImmersiveFullscreenController;
 
 class WideFrameTargeter : public aura::WindowTargeter {
  public:
-  explicit WideFrameTargeter(HeaderView* header_view)
+  explicit WideFrameTargeter(chromeos::HeaderView* header_view)
       : header_view_(header_view) {}
 
   WideFrameTargeter(const WideFrameTargeter&) = delete;
@@ -59,7 +62,7 @@ class WideFrameTargeter : public aura::WindowTargeter {
   }
 
  private:
-  HeaderView* header_view_;
+  raw_ptr<chromeos::HeaderView> header_view_;
 };
 
 }  // namespace
@@ -102,19 +105,19 @@ WideFrameView::WideFrameView(views::Widget* target)
   // Use the HeaderView itself as a frame view because WideFrameView is
   // is the frame only.
   header_view_ = AddChildView(
-      std::make_unique<HeaderView>(target, /*frame view=*/nullptr));
+      std::make_unique<chromeos::HeaderView>(target, /*frame view=*/nullptr));
   header_view_->Init();
   GetTargetHeaderView()->SetShouldPaintHeader(false);
   header_view_->set_context_menu_controller(
       frame_context_menu_controller_.get());
 
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      views::Widget::InitParams::TYPE_POPUP);
   params.delegate = this;
   params.bounds = GetFrameBounds(target);
   params.name = "WideFrameView";
   params.parent = target->GetNativeWindow();
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   // Setup Opacity Control.
   // WideFrame should be used only when the rounded corner is not necessary.
   params.opacity = views::Widget::InitParams::WindowOpacity::kOpaque;
@@ -140,17 +143,18 @@ WideFrameView::WideFrameView(views::Widget* target)
 }
 
 WideFrameView::~WideFrameView() {
+  header_view_->set_context_menu_controller(nullptr);
   if (widget_)
     widget_->CloseNow();
   if (target_) {
-    HeaderView* target_header_view = GetTargetHeaderView();
+    chromeos::HeaderView* target_header_view = GetTargetHeaderView();
     target_header_view->SetShouldPaintHeader(true);
     target_header_view->GetFrameHeader()->UpdateFrameHeaderKey();
     target_->GetNativeWindow()->RemoveObserver(this);
   }
 }
 
-void WideFrameView::Layout() {
+void WideFrameView::Layout(PassKey) {
   int onscreen_height = header_view_->GetPreferredOnScreenHeight();
   if (onscreen_height == 0 || !GetVisible()) {
     header_view_->SetVisible(false);
@@ -163,7 +167,8 @@ void WideFrameView::Layout() {
 
 void WideFrameView::OnMouseEvent(ui::MouseEvent* event) {
   if (event->IsOnlyLeftMouseButton()) {
-    if ((event->flags() & ui::EF_IS_DOUBLE_CLICK)) {
+    if ((event->flags() & ui::EF_IS_DOUBLE_CLICK) &&
+        event->type() == ui::EventType::kMousePressed) {
       base::RecordAction(
           base::UserMetricsAction("Caption_ClickTogglesMaximize"));
       const WMEvent wm_event(WM_EVENT_TOGGLE_MAXIMIZE_CAPTION);
@@ -227,7 +232,7 @@ void WideFrameView::OnImmersiveFullscreenExited() {
   widget_->GetNativeWindow()->SetTransparent(false);
   if (target_)
     GetTargetHeaderView()->OnImmersiveFullscreenExited();
-  Layout();
+  DeprecatedLayoutImmediately();
 }
 
 void WideFrameView::SetVisibleFraction(double visible_fraction) {
@@ -248,7 +253,7 @@ bool WideFrameView::ShouldShowContextMenu(
       gfx::Rect(point_in_header_coords, gfx::Size(1, 1)));
 }
 
-HeaderView* WideFrameView::GetTargetHeaderView() {
+chromeos::HeaderView* WideFrameView::GetTargetHeaderView() {
   auto* frame_view = static_cast<NonClientFrameViewAsh*>(
       target_->non_client_view()->frame_view());
   return frame_view->GetHeaderView();

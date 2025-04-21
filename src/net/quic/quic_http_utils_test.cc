@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <limits>
 
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_alt_svc_wire_format.h"
+#include "net/third_party/quiche/src/quiche/http2/core/spdy_alt_svc_wire_format.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace net::test {

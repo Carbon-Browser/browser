@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -30,8 +30,9 @@
 
 namespace safe_browsing {
 
-ServicesDelegate::ServicesDelegate(SafeBrowsingService* safe_browsing_service,
-                                   ServicesCreator* services_creator)
+ServicesDelegate::ServicesDelegate(
+    SafeBrowsingServiceImpl* safe_browsing_service,
+    ServicesCreator* services_creator)
     : safe_browsing_service_(safe_browsing_service),
       services_creator_(services_creator) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);

@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/favicon/core/favicon_util.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "components/favicon/core/favicon_service.h"
 
 namespace favicon {
@@ -18,8 +18,7 @@ void RunCallbackWithImage(
     const favicon_base::FaviconRawBitmapResult& bitmap_result) {
   favicon_base::FaviconImageResult result;
   if (bitmap_result.is_valid()) {
-    result.image = gfx::Image::CreateFrom1xPNGBytes(
-        bitmap_result.bitmap_data->front(), bitmap_result.bitmap_data->size());
+    result.image = gfx::Image::CreateFrom1xPNGBytes(bitmap_result.bitmap_data);
     result.icon_url = bitmap_result.icon_url;
     std::move(callback).Run(result);
     return;

@@ -31,7 +31,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_WORKER_INSPECTOR_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_WORKER_INSPECTOR_CONTROLLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/unguessable_token.h"
 #include "third_party/blink/renderer/core/inspector/devtools_agent.h"
@@ -72,7 +72,7 @@ class WorkerInspectorController final
   WorkerInspectorController& operator=(const WorkerInspectorController&) =
       delete;
   ~WorkerInspectorController() override;
-  void Trace(Visitor*) const;
+  void Trace(Visitor*) const override;
 
   CoreProbeSink* GetProbeSink() const { return probe_sink_.Get(); }
   DevToolsAgent* GetDevToolsAgent() const { return agent_.Get(); }

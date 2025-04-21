@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/settings/cros_settings_names.h"
 #include "base/test/task_environment.h"
-#include "chrome/browser/ash/printing/bulk_printers_calculator.h"
+#include "chrome/browser/ash/printing/enterprise/bulk_printers_calculator.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "components/policy/core/common/mock_policy_service.h"
 #include "components/policy/core/common/policy_namespace.h"
@@ -29,25 +29,19 @@ const size_t kNumPrinters = 2;
 const char kDevicePrintersContentsJson[] = R"json(
 [
   {
-    "id": "First",
+    "guid": "First",
     "display_name": "LexaPrint",
     "description": "Laser on the test shelf",
-    "manufacturer": "LexaPrint, Inc.",
-    "model": "MS610de",
     "uri": "ipp://192.168.1.5",
     "ppd_resource": {
       "effective_model": "MS610de"
     }
   }, {
-    "id": "Second",
+    "guid": "Second",
     "display_name": "Color Laser",
     "description": "The printer next to the water cooler.",
-    "manufacturer": "Printer Manufacturer",
-    "model":"Color Laser 2004",
     "uri":"ipps://print-server.intranet.example.com:443/ipp/cl2k4",
-    "uuid":"1c395fdb-5d93-4904-b246-b2c046e79d12",
     "ppd_resource":{
-      "effective_manufacturer": "MakesPrinters",
       "effective_model": "ColorLaser2k4"
     }
   }
@@ -57,7 +51,7 @@ const char kDevicePrintersContentsJson[] = R"json(
 
 class DevicePrintersExternalDataHandlerTest : public testing::Test {
  protected:
-  DevicePrintersExternalDataHandlerTest() {}
+  DevicePrintersExternalDataHandlerTest() = default;
 
   // testing::Test
   void SetUp() override {

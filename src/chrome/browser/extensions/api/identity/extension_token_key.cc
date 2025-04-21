@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ ExtensionTokenKey::ExtensionTokenKey(const std::string& extension_id,
 
 ExtensionTokenKey::ExtensionTokenKey(const ExtensionTokenKey& other) = default;
 
-ExtensionTokenKey::~ExtensionTokenKey() {}
+ExtensionTokenKey::~ExtensionTokenKey() = default;
 
 bool ExtensionTokenKey::operator<(const ExtensionTokenKey& rhs) const {
   return std::tie(extension_id, account_info.account_id, scopes) <

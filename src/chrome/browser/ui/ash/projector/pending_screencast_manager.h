@@ -1,25 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_ASH_PROJECTOR_PENDING_SCREENCAST_MANAGER_H_
 #define CHROME_BROWSER_UI_ASH_PROJECTOR_PENDING_SCREENCAST_MANAGER_H_
 
+#include <map>
 #include <memory>
 
-#include "ash/components/drivefs/drivefs_host.h"
-#include "ash/components/drivefs/drivefs_host_observer.h"
 #include "ash/webui/projector_app/projector_app_client.h"
 #include "ash/webui/projector_app/projector_xhr_sender.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/observer_list.h"
-#include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "components/session_manager/core/session_manager.h"
-#include "components/session_manager/core/session_manager_observer.h"
-#include "components/user_manager/user_manager.h"
+#include "chrome/browser/ash/extensions/file_manager/scoped_suppress_drive_notifications_for_path.h"
+#include "chrome/browser/ui/ash/projector/projector_drivefs_provider.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
 
 namespace drivefs {
 namespace mojom {
@@ -36,13 +34,10 @@ class FilePath;
 // ProjectorAppClient::Observer. The argument is the set of pending screencasts
 // owned by PendingScreencastManager.
 using PendingScreencastChangeCallback =
-    base::RepeatingCallback<void(const ash::PendingScreencastSet&)>;
+    base::RepeatingCallback<void(const ash::PendingScreencastContainerSet&)>;
 
 // A class that handles pending screencast events.
-class PendingScreencastManager
-    : public drivefs::DriveFsHostObserver,
-      public user_manager::UserManager::UserSessionStateObserver,
-      public session_manager::SessionManagerObserver {
+class PendingScreencastManager : drivefs::DriveFsHost::Observer {
  public:
   explicit PendingScreencastManager(
       PendingScreencastChangeCallback pending_screencast_change_callback);
@@ -50,20 +45,39 @@ class PendingScreencastManager
   PendingScreencastManager& operator=(const PendingScreencastManager&) = delete;
   ~PendingScreencastManager() override;
 
-  // drivefs::DriveFsHostObserver:
+  // DriveFsHost::Observer implementation.
+  using drivefs::DriveFsHost::Observer::GetHost;
   void OnUnmounted() override;
   void OnSyncingStatusUpdate(
       const drivefs::mojom::SyncingStatus& status) override;
   void OnError(const drivefs::mojom::DriveError& error) override;
 
   // Returns a list of pending screencast from `pending_screencast_cache_`.
-  const ash::PendingScreencastSet& GetPendingScreencasts() const;
+  const ash::PendingScreencastContainerSet& GetPendingScreencasts() const;
+
+  // Maybe observe the current active profile.
+  void MaybeSwitchDriveFsObservation();
+
+  // Adds `screencast_paths` to `paths_notifications_suppressors_` and
+  // suppresses notification for these paths if `suppress` is true. Removes
+  // `screencast_paths` from `paths_notifications_suppressors_` when
+  // `suppress` is false.
+  void ToggleFileSyncingNotificationForPaths(
+      const std::vector<base::FilePath>& screencast_paths,
+      bool suppress);
+
+  // Resets (`is_active` is false) or creates (`is_active` is true) values for
+  // all keys stored in `paths_notifications_suppressors_`.
+  void OnAppActiveStatusChanged(bool is_active);
 
   // Test only:
   base::TimeTicks last_pending_screencast_change_tick() const {
     return last_pending_screencast_change_tick_;
   }
-  bool IsDriveFsObservationObservingSource(drivefs::DriveFsHost* source) const;
+  scoped_refptr<base::SequencedTaskRunner> blocking_task_runner() {
+    return blocking_task_runner_;
+  }
+
   using OnGetFileIdCallback =
       base::OnceCallback<void(const base::FilePath& local_file_path,
                               const std::string& file_id)>;
@@ -79,16 +93,7 @@ class PendingScreencastManager
   // Updates `pending_screencast_cache_` and notifies pending screencast change.
   void OnProcessAndGenerateNewScreencastsFinished(
       const base::TimeTicks task_start_tick,
-      const ash::PendingScreencastSet& screencasts);
-
-  // session_manager::SessionManagerObserver:
-  void OnUserProfileLoaded(const AccountId& account_id) override;
-
-  // user_manager::UserManager::UserSessionStateObserver:
-  void ActiveUserChanged(user_manager::User* active_user) override;
-
-  // Maybe reset `drivefs_observation_` and observe the current active profile.
-  void MaybeSwitchDriveFsObservation();
+      const ash::PendingScreencastContainerSet& screencasts);
 
   // Called when the `event_file` is synced to Drive. Removed completedly synced
   // files from `error_syncing_files_` and `syncing_metadata_files_` cached. If
@@ -107,7 +112,7 @@ class PendingScreencastManager
   // app.
 
   // A set that caches current pending screencast.
-  ash::PendingScreencastSet pending_screencast_cache_;
+  ash::PendingScreencastContainerSet pending_screencast_cache_;
 
   // A set of files failed to upload to Drive.
   std::set<base::FilePath> error_syncing_files_;
@@ -124,19 +129,6 @@ class PendingScreencastManager
   // A blocking task runner for file IO operations.
   scoped_refptr<base::SequencedTaskRunner> blocking_task_runner_;
 
-  base::ScopedObservation<drivefs::DriveFsHost, drivefs::DriveFsHostObserver>
-      drivefs_observation_{this};
-  base::ScopedObservation<session_manager::SessionManager,
-                          session_manager::SessionManagerObserver>
-      session_observation_{this};
-
-  base::ScopedObservation<
-      user_manager::UserManager,
-      user_manager::UserManager::UserSessionStateObserver,
-      &user_manager::UserManager::AddSessionStateObserver,
-      &user_manager::UserManager::RemoveSessionStateObserver>
-      session_state_observation_{this};
-
   // The time tick when last `pending_screencast_change_callback_` was called.
   // Could be null if last `pending_screencast_change_callback_` was called with
   // empty screencasts set or no `pending_screencast_change_callback_` invoked
@@ -151,6 +143,18 @@ class PendingScreencastManager
   // used in tests to verify the task quit correctly while error happens.
   OnGetRequestBodyCallback on_get_request_body_;
   OnGetFileIdCallback on_get_file_id_callback_;
+
+  ProjectorDriveFsProvider drive_helper_;
+
+  // A map to store `file_manager::ScopedSuppressDriveNotificationsForPath`. The
+  // entries get created/destroyed on calling
+  // `ToggleFileSyncingNotificationForPaths`, or when files whose paths are
+  // stored in this map are uploaded completely. All unique pointers get reset
+  // on app UI destroyed and re-created on app UI active.
+  std::map<
+      base::FilePath,
+      std::unique_ptr<file_manager::ScopedSuppressDriveNotificationsForPath>>
+      paths_notifications_suppressors_;
 
   base::WeakPtrFactory<PendingScreencastManager> weak_ptr_factory_{this};
 };

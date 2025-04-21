@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class ScreenlockMonitorSource;
 // A class used to monitor the screenlock state change and notify the observers
 // about the change event.
 // Currently available on Win/MacOSX/ChromOS only.
-// TODO(crbug.com/887585): Keep studying for a solid way to do this on Linux.
+// TODO(crbug.com/40594737): Keep studying for a solid way to do this on Linux.
 class CONTENT_EXPORT ScreenlockMonitor {
  public:
   ScreenlockMonitor(std::unique_ptr<ScreenlockMonitorSource> source);

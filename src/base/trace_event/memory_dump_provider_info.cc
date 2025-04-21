@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,9 @@ MemoryDumpProviderInfo::~MemoryDumpProviderInfo() = default;
 bool MemoryDumpProviderInfo::Comparator::operator()(
     const scoped_refptr<MemoryDumpProviderInfo>& a,
     const scoped_refptr<MemoryDumpProviderInfo>& b) const {
-  if (!a || !b)
+  if (!a || !b) {
     return a.get() < b.get();
+  }
   // Ensure that unbound providers (task_runner == nullptr) always run last.
   // Rationale: some unbound dump providers are known to be slow, keep them last
   // to avoid skewing timings of the other dump providers.

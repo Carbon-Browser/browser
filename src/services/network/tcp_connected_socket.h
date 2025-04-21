@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -63,7 +62,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) TCPConnectedSocket
   ~TCPConnectedSocket() override;
 
   void Connect(
-      const absl::optional<net::IPEndPoint>& local_addr,
+      const std::optional<net::IPEndPoint>& local_addr,
       const net::AddressList& remote_addr_list,
       mojom::TCPConnectedSocketOptionsPtr tcp_connected_socket_options,
       mojom::NetworkContext::CreateTCPConnectedSocketCallback callback);

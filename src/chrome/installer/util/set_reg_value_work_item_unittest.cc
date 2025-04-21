@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/win/registry.h"
@@ -34,7 +34,7 @@ class SetRegValueWorkItemTest : public testing::Test {
   SetRegValueWorkItemTest& operator=(const SetRegValueWorkItemTest&) = delete;
 
  protected:
-  SetRegValueWorkItemTest() {}
+  SetRegValueWorkItemTest() = default;
 
   void SetUp() override {
     ASSERT_NO_FATAL_FAILURE(

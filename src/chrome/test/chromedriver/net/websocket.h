@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class WebSocket {
   void Read();
   void OnRead(bool read_again, int code);
   void OnReadDuringHandshake(const char* data, int len);
-  void OnReadDuringOpen(const char* data, int len);
+  void OnReadDuringOpen(char* data, int len);
 
   void InvokeConnectCallback(int code);
   void Close(int code);
@@ -93,7 +93,7 @@ class WebSocket {
 // WebSocket.
 class WebSocketListener {
  public:
-  virtual ~WebSocketListener() {}
+  virtual ~WebSocketListener() = default;
 
   // Called when a WebSocket message is received.
   virtual void OnMessageReceived(const std::string& message) = 0;

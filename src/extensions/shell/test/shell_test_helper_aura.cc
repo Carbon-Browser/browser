@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@
 
 namespace extensions {
 
-ShellTestHelperAura::ShellTestHelperAura() {}
+ShellTestHelperAura::ShellTestHelperAura() = default;
 
-ShellTestHelperAura::~ShellTestHelperAura() {}
+ShellTestHelperAura::~ShellTestHelperAura() = default;
 
 void ShellTestHelperAura::SetUp() {
   // AuraTestHelper sets up the rest of the Aura initialization.
@@ -51,7 +51,7 @@ void ShellTestHelperAura::InitAppWindow(AppWindow* app_window,
 
   AppWindow::CreateParams params;
   params.content_spec.bounds = bounds;
-  app_window->Init(GURL(), app_window_contents.release(), main_frame, params);
+  app_window->Init(GURL(), std::move(app_window_contents), main_frame, params);
 }
 
 }  // namespace extensions

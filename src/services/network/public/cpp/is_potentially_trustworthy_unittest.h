@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_IS_POTENTIALLY_TRUSTWORTHY_UNITTEST_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_IS_POTENTIALLY_TRUSTWORTHY_UNITTEST_H_
 
+#include <string_view>
+
 #include "base/containers/contains.h"
-#include "base/strings/string_piece.h"
 #include "base/test/scoped_command_line.h"
 #include "net/base/url_util.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
@@ -22,7 +23,7 @@ namespace test {
 // with a class that has to expose the same members as url::UrlOriginTestTraits
 // and the following extra members:
 //   static bool IsOriginPotentiallyTrustworthy(const OriginType& origin);
-//   static bool IsUrlPotentiallyTrustworthy(base::StringPiece str);
+//   static bool IsUrlPotentiallyTrustworthy(std::string_view str);
 //   static bool IsOriginOfLocalhost(const OriginType& origin);
 template <typename TTrustworthinessTraits>
 class AbstractTrustworthinessTest
@@ -37,11 +38,11 @@ class AbstractTrustworthinessTest
   bool IsOriginPotentiallyTrustworthy(const OriginType& origin) {
     return TTrustworthinessTraits::IsOriginPotentiallyTrustworthy(origin);
   }
-  bool IsOriginPotentiallyTrustworthy(base::StringPiece str) {
+  bool IsOriginPotentiallyTrustworthy(std::string_view str) {
     auto origin = this->CreateOriginFromString(str);
     return TTrustworthinessTraits::IsOriginPotentiallyTrustworthy(origin);
   }
-  bool IsUrlPotentiallyTrustworthy(base::StringPiece str) {
+  bool IsUrlPotentiallyTrustworthy(std::string_view str) {
     return TTrustworthinessTraits::IsUrlPotentiallyTrustworthy(str);
   }
   bool IsOriginOfLocalhost(const OriginType& origin) {
@@ -67,9 +68,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, OriginFromString) {
   EXPECT_FALSE(
       this->IsOriginPotentiallyTrustworthy("javascript:alert('blah')"));
   EXPECT_FALSE(this->IsOriginPotentiallyTrustworthy("data:test/plain;blah"));
-
-  EXPECT_TRUE(this->IsOriginPotentiallyTrustworthy(
-      "quic-transport://example.com/counter"));
 }
 
 TYPED_TEST_P(AbstractTrustworthinessTest, CustomSchemes) {
@@ -208,9 +206,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, UrlFromString) {
       "filesystem:blob:https://example.com/"
       "578223a1-8c13-17b3-84d5-eca045ae384a"));
 
-  EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy(
-      "quic-transport://example.com/counter"));
-
   // These tests are imported from IsPotentiallyTrustworthy.Url.
   EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy("file:///test/fun.html"));
   EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy("file:///test/"));
@@ -268,7 +263,7 @@ TYPED_TEST_P(AbstractTrustworthinessTest, TestcasesInheritedFromBlink) {
     const char* url;
   };
 
-  TestCase inputs[] = {
+  static constexpr TestCase inputs[] = {
       // Access is granted to webservers running on localhost.
       {true, true, "http://localhost"},
       {true, true, "http://localhost."},
@@ -318,7 +313,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, TestcasesInheritedFromBlink) {
       // Secure transports are considered trustworthy.
       {true, false, "https://foobar.com"},
       {true, false, "wss://foobar.com"},
-      {true, false, "quic-transport://example.com/counter"},
 
       // Insecure transports are not considered trustworthy.
       {false, false, "ftp://foobar.com"},
@@ -361,20 +355,19 @@ TYPED_TEST_P(AbstractTrustworthinessTest, TestcasesInheritedFromBlink) {
       {false, false, "data:text/html,Hello"},
   };
 
-  for (size_t i = 0; i < std::size(inputs); ++i) {
-    SCOPED_TRACE(inputs[i].url);
-    auto origin = this->CreateOriginFromString(inputs[i].url);
-    EXPECT_EQ(inputs[i].is_potentially_trustworthy,
+  for (const auto& [is_potentially_trustworthy, is_localhost, url] : inputs) {
+    SCOPED_TRACE(url);
+    auto origin = this->CreateOriginFromString(url);
+    EXPECT_EQ(is_potentially_trustworthy,
               this->IsOriginPotentiallyTrustworthy(origin));
-    EXPECT_EQ(inputs[i].is_localhost, this->IsOriginOfLocalhost(origin));
+    EXPECT_EQ(is_localhost, this->IsOriginOfLocalhost(origin));
 
-    GURL test_gurl(inputs[i].url);
+    GURL test_gurl(url);
     if (!(test_gurl.SchemeIsBlob() || test_gurl.SchemeIsFileSystem())) {
       // Check that the origin's notion of localhost matches //net's notion of
       // localhost. This is skipped for blob: and filesystem: URLs since
       // blink::SecurityOrigin uses their inner URL's origin.
-      EXPECT_EQ(net::IsLocalhost(GURL(inputs[i].url)),
-                this->IsOriginOfLocalhost(origin));
+      EXPECT_EQ(net::IsLocalhost(GURL(url)), this->IsOriginOfLocalhost(origin));
     }
   }
 }

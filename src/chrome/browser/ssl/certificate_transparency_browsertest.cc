@@ -1,6 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <optional>
+#include <string_view>
 
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
@@ -20,7 +23,6 @@
 #include "components/policy/policy_constants.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "crypto/sha2.h"
 #include "net/base/hash_value.h"
@@ -32,13 +34,12 @@
 #include "net/test/test_data_directory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
 // Returns the Sha256 hash of the SPKI of |cert|.
 net::HashValue GetSPKIHash(const CRYPTO_BUFFER* cert) {
-  base::StringPiece spki_bytes;
+  std::string_view spki_bytes;
   EXPECT_TRUE(net::asn1::ExtractSPKIFromDERCert(
       net::x509_util::CryptoBufferAsStringPiece(cert), &spki_bytes));
   net::HashValue sha256(net::HASH_VALUE_SHA256);
@@ -65,7 +66,7 @@ class CertificateTransparencyBrowserTest : public CertVerifierBrowserTest {
 
   ~CertificateTransparencyBrowserTest() override {
     SystemNetworkContextManager::SetEnableCertificateTransparencyForTesting(
-        absl::nullopt);
+        std::nullopt);
   }
 
   void SetUpOnMainThread() override {
@@ -92,18 +93,18 @@ class CertificateTransparencyBrowserTest : public CertVerifierBrowserTest {
                                  const char* policy_name,
                                  const char* pref_name,
                                  const std::vector<std::string>& list_values) {
-    base::Value policy_value(base::Value::Type::LIST);
+    base::Value::List policy_value;
     for (const auto& value : list_values) {
       policy_value.Append(value);
     }
     policy::PolicyMap policy_map;
     policy_map.Set(policy_name, policy::POLICY_LEVEL_MANDATORY,
                    policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_CLOUD,
-                   std::move(policy_value), nullptr);
+                   base::Value(std::move(policy_value)), nullptr);
 
     EXPECT_NO_FATAL_FAILURE(UpdateChromePolicy(policy_map));
 
-    const base::Value::List& pref_value = pref_service->GetValueList(pref_name);
+    const base::Value::List& pref_value = pref_service->GetList(pref_name);
     std::vector<std::string> pref_values;
     for (const auto& value : pref_value) {
       ASSERT_TRUE(value.is_string());
@@ -135,9 +136,7 @@ class CertificateTransparencyBrowserTest : public CertVerifierBrowserTest {
 // Chrome CT Policy should be being enforced.
 IN_PROC_BROWSER_TEST_F(CertificateTransparencyBrowserTest,
                        EnforcedAfterApril2018) {
-  content::StoragePartition* partition =
-      browser()->profile()->GetDefaultStoragePartition();
-  partition->GetNetworkContext()->SetCTLogListAlwaysTimelyForTesting();
+  SystemNetworkContextManager::GetInstance()->SetCTLogListTimelyForTesting();
 
   ASSERT_TRUE(https_server()->Start());
 
@@ -187,49 +186,6 @@ IN_PROC_BROWSER_TEST_F(CertificateTransparencyBrowserTest,
       browser()->profile()->GetPrefs(),
       policy::key::kCertificateTransparencyEnforcementDisabledForCas,
       certificate_transparency::prefs::kCTExcludedSPKIs,
-      {verify_result.public_key_hashes.back().ToString()}));
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(), https_server()->GetURL("/ssl/google.html")));
-  ssl_test_util::CheckSecurityState(
-      browser()->tab_strip_model()->GetActiveWebContents(),
-      ssl_test_util::CertError::NONE, security_state::SECURE,
-      ssl_test_util::AuthState::NONE);
-}
-
-// Visit an HTTPS page that has a certificate issued by a certificate authority
-// that is trusted in a root store that Chrome does not consider consistently
-// secure. In the case where the certificate was issued after the Certificate
-// Transparency requirement date of April 2018 the connection would normally be
-// blocked, as the server will not be providing CT details, and the Chrome CT
-// Policy should be being enforced; however, because a policy configuration
-// exists that disables CT enforcement for that Legacy cert, the connection
-// should succeed. For more detail, see /net/docs/certificate-transparency.md
-IN_PROC_BROWSER_TEST_F(CertificateTransparencyBrowserTest,
-                       LegacyEnforcedAfterApril2018UnlessPoliciesSet) {
-  ASSERT_TRUE(https_server()->Start());
-
-  net::CertVerifyResult verify_result;
-  verify_result.verified_cert =
-      net::ImportCertFromFile(net::GetTestCertsDirectory(), "may_2018.pem");
-  ASSERT_TRUE(verify_result.verified_cert);
-  verify_result.is_issued_by_known_root = true;
-
-  // We'll use a SPKI hash corresponding to the Federal Common Policy CA as
-  // captured at https://fpki.idmanagement.gov/announcements/mspkichanges/
-  const net::SHA256HashValue legacy_spki_hash = {
-      0x8e, 0x8b, 0x56, 0xf5, 0x91, 0x8a, 0x25, 0xbd, 0x85, 0xdc, 0xe7,
-      0x66, 0x63, 0xfd, 0x94, 0xcc, 0x23, 0x69, 0x0f, 0x10, 0xea, 0x95,
-      0x86, 0x61, 0x31, 0x71, 0xc6, 0xf8, 0x37, 0x88, 0x90, 0xd5};
-  verify_result.public_key_hashes.push_back(net::HashValue(legacy_spki_hash));
-
-  mock_cert_verifier()->AddResultForCert(https_server()->GetCertificate().get(),
-                                         verify_result, net::OK);
-
-  ASSERT_NO_FATAL_FAILURE(ConfigureStringListPolicy(
-      browser()->profile()->GetPrefs(),
-      policy::key::kCertificateTransparencyEnforcementDisabledForLegacyCas,
-      certificate_transparency::prefs::kCTExcludedLegacySPKIs,
       {verify_result.public_key_hashes.back().ToString()}));
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(

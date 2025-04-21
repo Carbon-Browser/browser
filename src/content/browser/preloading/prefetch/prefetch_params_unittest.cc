@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,14 +35,6 @@ TEST_F(PrefetchParamsTest, DecoyProbabilityClampedOne) {
     EXPECT_TRUE(PrefetchServiceSendDecoyRequestForIneligblePrefetch(
         /* disabled_based_on_user_settings=*/false));
   }
-}
-
-TEST_F(PrefetchParamsTest, BypassProxyForHost) {
-  EXPECT_FALSE(PrefetchBypassProxyForHost().has_value());
-  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-      "bypass-prefetch-proxy-for-host", "www.www1.hostname.test");
-  EXPECT_TRUE(PrefetchBypassProxyForHost().has_value());
-  EXPECT_EQ(PrefetchBypassProxyForHost().value(), "www.www1.hostname.test");
 }
 
 }  // namespace

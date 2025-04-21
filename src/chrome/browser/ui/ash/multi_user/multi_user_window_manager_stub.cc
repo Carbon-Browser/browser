@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include "base/notreached.h"
 #include "components/account_id/account_id.h"
 
-MultiUserWindowManagerStub::MultiUserWindowManagerStub() {}
+MultiUserWindowManagerStub::MultiUserWindowManagerStub() = default;
 
-MultiUserWindowManagerStub::~MultiUserWindowManagerStub() {}
+MultiUserWindowManagerStub::~MultiUserWindowManagerStub() = default;
 
 void MultiUserWindowManagerStub::SetWindowOwner(aura::Window* window,
                                                 const AccountId& account_id) {
@@ -39,16 +39,6 @@ std::set<AccountId> MultiUserWindowManagerStub::GetOwnersOfVisibleWindows()
 const AccountId& MultiUserWindowManagerStub::GetUserPresentingWindow(
     const aura::Window* window) const {
   return EmptyAccountId();
-}
-
-void MultiUserWindowManagerStub::AddObserver(
-    ash::MultiUserWindowManagerObserver* observer) {
-  NOTIMPLEMENTED();
-}
-
-void MultiUserWindowManagerStub::RemoveObserver(
-    ash::MultiUserWindowManagerObserver* observer) {
-  NOTIMPLEMENTED();
 }
 
 const AccountId& MultiUserWindowManagerStub::CurrentAccountId() const {

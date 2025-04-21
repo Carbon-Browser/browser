@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_PASSWORD_UNDO_HELPER_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_PASSWORD_UNDO_HELPER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/undo/undo_manager.h"
 
 namespace password_manager {
@@ -16,8 +17,8 @@ struct PasswordForm;
 // entries.
 class PasswordUndoHelper {
  public:
-  explicit PasswordUndoHelper(raw_ptr<PasswordStoreInterface> profile_store,
-                              raw_ptr<PasswordStoreInterface> account_store);
+  explicit PasswordUndoHelper(PasswordStoreInterface* profile_store,
+                              PasswordStoreInterface* account_store);
   PasswordUndoHelper(const PasswordUndoHelper&) = delete;
   PasswordUndoHelper& operator=(const PasswordUndoHelper&) = delete;
 

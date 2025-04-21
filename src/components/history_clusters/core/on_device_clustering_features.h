@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,19 +15,16 @@ namespace features {
 // Params & helpers functions
 
 // Enables configuring the on-device clustering backend.
-extern const base::Feature kOnDeviceClustering;
-
-// Uses an in-memory cache that stores engagement score.
-extern const base::Feature kUseEngagementScoreCache;
-
-// Splits clustering task into smaller batches.
-extern const base::Feature kSplitClusteringTasksToSmallerBatches;
+BASE_DECLARE_FEATURE(kOnDeviceClustering);
 
 // Specifies various blocklists for on-device clustering backend.
-extern const base::Feature kOnDeviceClusteringBlocklists;
+BASE_DECLARE_FEATURE(kOnDeviceClusteringBlocklists);
 
 // Specifies how keywords get filtered and added to a cluster.
-extern const base::Feature kOnDeviceClusteringKeywordFiltering;
+BASE_DECLARE_FEATURE(kOnDeviceClusteringKeywordFiltering);
+
+// Specifies how visits within clusters are ranked.
+BASE_DECLARE_FEATURE(kOnDeviceClusteringVisitRanking);
 
 }  // namespace features
 }  // namespace history_clusters

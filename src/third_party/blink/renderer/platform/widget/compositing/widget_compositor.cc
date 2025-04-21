@@ -1,9 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/widget/compositing/widget_compositor.h"
 
+#include <utility>
+
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/types/pass_key.h"
 #include "cc/trees/layer_tree_host.h"
 #include "third_party/blink/renderer/platform/widget/compositing/queue_report_time_swap_promise.h"
 #include "third_party/blink/renderer/platform/widget/widget_base.h"
@@ -11,23 +16,28 @@
 
 namespace blink {
 
-WidgetCompositor::WidgetCompositor(
+// static
+scoped_refptr<WidgetCompositor> WidgetCompositor::Create(
     base::WeakPtr<WidgetBase> widget_base,
     scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
-    mojo::PendingReceiver<mojom::blink::WidgetCompositor> receiver)
-    : widget_base_(widget_base),
+    mojo::PendingReceiver<mojom::blink::WidgetCompositor> receiver) {
+  auto compositor = base::MakeRefCounted<WidgetCompositor>(
+      WidgetCompositorPassKeyProvider::GetPassKey(), std::move(widget_base),
+      std::move(main_task_runner), std::move(compositor_task_runner));
+  compositor->BindOnThread(std::move(receiver));
+  return compositor;
+}
+
+WidgetCompositor::WidgetCompositor(
+    base::PassKey<WidgetCompositorPassKeyProvider>,
+    base::WeakPtr<WidgetBase> widget_base,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
+    : widget_base_(std::move(widget_base)),
       main_task_runner_(std::move(main_task_runner)),
       compositor_task_runner_(std::move(compositor_task_runner)),
-      swap_queue_(std::make_unique<WidgetSwapQueue>()) {
-  if (!compositor_task_runner_) {
-    BindOnThread(std::move(receiver));
-  } else {
-    compositor_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&WidgetCompositor::BindOnThread,
-                                  base::Unretained(this), std::move(receiver)));
-  }
-}
+      swap_queue_(std::make_unique<WidgetSwapQueue>()) {}
 
 void WidgetCompositor::Shutdown() {
   if (!compositor_task_runner_) {
@@ -41,8 +51,14 @@ void WidgetCompositor::Shutdown() {
 
 void WidgetCompositor::BindOnThread(
     mojo::PendingReceiver<mojom::blink::WidgetCompositor> receiver) {
-  DCHECK(CalledOnValidCompositorThread());
-  receiver_.Bind(std::move(receiver), compositor_task_runner_);
+  if (CalledOnValidCompositorThread()) {
+    receiver_.Bind(std::move(receiver), compositor_task_runner_);
+  } else {
+    compositor_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&WidgetCompositor::BindOnThread, base::RetainedRef(this),
+                       std::move(receiver)));
+  }
 }
 
 void WidgetCompositor::ResetOnThread() {
@@ -106,9 +122,8 @@ void WidgetCompositor::CreateQueueSwapPromise(
   } else if (compositor_task_runner_) {
     // Delete callbacks on the compositor thread.
     compositor_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce([](base::OnceCallback<void(int)>, base::OnceClosure) {},
-                       std::move(drain_callback), std::move(swap_callback)));
+        FROM_HERE, base::DoNothingWithBoundArgs(std::move(drain_callback),
+                                                std::move(swap_callback)));
   }
 }
 

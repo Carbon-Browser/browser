@@ -27,7 +27,10 @@
     // public/common/permissions_policy/permissions_policy_features.h
     feature_default: {
       default: "EnableForSelf",
-      valid_values: ["EnableForAll", "EnableForSelf"]
+      valid_values: [
+        "EnableForAll",
+        "EnableForSelf",
+       ]
     },
 
     // "default_value_behind_flag" specifies default_value override values
@@ -49,6 +52,17 @@
     default_value_behind_flag: {
       default: [],
       valid_type: "list",
+    },
+
+    // "visibility" specifies which contexts a feature should be visible to. If
+    // a features is not visibile to a document, it cannot be granted, but also
+    // will not be exposed in `document.featurePolicy.features()`.
+    visibility: {
+      default: "All",
+      valid_values: [
+        "All",
+        "IsolatedContext"
+      ]
     }
   },
 
@@ -58,6 +72,12 @@
       permissions_policy_name: "accelerometer",
     },
     {
+      name: "AllScreensCapture",
+      permissions_policy_name: "all-screens-capture",
+      depends_on: ["GetAllScreensMedia"],
+      visibility: "IsolatedContext",
+    },
+    {
       name: "AmbientLightSensor",
       permissions_policy_name: "ambient-light-sensor",
       depends_on: ["SensorExtraClasses"],
@@ -65,7 +85,8 @@
     {
       name: "AttributionReporting",
       permissions_policy_name: "attribution-reporting",
-      depends_on: ["AttributionReporting"],
+      feature_default: "EnableForAll",
+      depends_on: ["AttributionReporting", "AttributionReportingCrossAppWeb"],
     },
     {
       name: "Autoplay",
@@ -93,6 +114,11 @@
       permissions_policy_name: "camera",
     },
     {
+      name: "CapturedSurfaceControl",
+      permissions_policy_name: "captured-surface-control",
+      depends_on: ["CapturedSurfaceControl"],
+    },
+    {
       name: "ClientHintDPR",
       permissions_policy_name: "ch-dpr",
     },
@@ -111,6 +137,14 @@
     {
       name: "ClientHintPrefersColorScheme",
       permissions_policy_name: "ch-prefers-color-scheme",
+    },
+    {
+      name: "ClientHintPrefersReducedMotion",
+      permissions_policy_name: "ch-prefers-reduced-motion",
+    },
+    {
+      name: "ClientHintPrefersReducedTransparency",
+      permissions_policy_name: "ch-prefers-reduced-transparency",
     },
     {
       name: "ClientHintRTT",
@@ -135,6 +169,10 @@
       permissions_policy_name: "ch-ua-bitness",
     },
     {
+      name: "ClientHintUAFormFactors",
+      permissions_policy_name: "ch-ua-form-factors",
+    },
+    {
       name: "ClientHintUAPlatform",
       permissions_policy_name: "ch-ua-platform",
       feature_default: "EnableForAll",
@@ -147,11 +185,6 @@
       name: "ClientHintUAMobile",
       permissions_policy_name: "ch-ua-mobile",
       feature_default: "EnableForAll",
-    },
-    {
-      name: "ClientHintUAFull",
-      permissions_policy_name: "ch-ua-full",
-      depends_on: ["SendFullUserAgentAfterReduction"],
     },
     {
       name: "ClientHintUAFullVersion",
@@ -168,11 +201,6 @@
     {
       name: "ClientHintUAWoW64",
       permissions_policy_name: "ch-ua-wow64",
-    },
-    {
-      name: "ClientHintUAReduced",
-      permissions_policy_name: "ch-ua-reduced",
-      depends_on: ["UserAgentReduction"],
     },
     {
       name: "ClientHintViewportHeight",
@@ -196,22 +224,52 @@
       permissions_policy_name: "clipboard-write",
     },
     {
+      name: "ComputePressure",
+      permissions_policy_name: "compute-pressure",
+      depends_on: ["ComputePressure"],
+    },
+    {
+      name: "ControlledFrame",
+      permissions_policy_name: "controlled-frame",
+      depends_on: ["ControlledFrame"],
+      visibility: "IsolatedContext",
+    },
+    {
       name: "CrossOriginIsolated",
       permissions_policy_name: "cross-origin-isolated",
+    },
+    {
+      name: "DeferredFetch",
+      permissions_policy_name: "deferred-fetch",
+      feature_default: "EnableForSelf",
+      depends_on: ["FetchLaterAPI"],
+    },
+    {
+      name: "DeferredFetchMinimal",
+      permissions_policy_name: "deferred-fetch-minimal",
+      feature_default: "EnableForAll",
+      depends_on: ["FetchLaterAPI"],
+    },
+    {
+      name: "DigitalCredentialsGet",
+      permissions_policy_name: "digital-credentials-get",
+      depends_on: ["WebIdentityDigitalCredentials"],
     },
     {
       name: "DirectSockets",
       permissions_policy_name: "direct-sockets",
       depends_on: ["DirectSockets"],
+      visibility: "IsolatedContext",
+    },
+    {
+      name: "DirectSocketsPrivate",
+      permissions_policy_name: "direct-sockets-private",
+      depends_on: ["DirectSockets"],
+      visibility: "IsolatedContext",
     },
     {
       name: "DisplayCapture",
       permissions_policy_name: "display-capture",
-    },
-    {
-      name: "DocumentDomain",
-      permissions_policy_name: "document-domain",
-      feature_default: "EnableForAll",
     },
     {
       name: "EncryptedMedia",
@@ -230,14 +288,15 @@
       depends_on: ["FreezeFramesOnVisibility"],
     },
     {
-      name: "FederatedCredentials",
-      permissions_policy_name: "federated-credentials",
-      depends_on: ["FedCmIframeSupport"],
+      name: "FencedUnpartitionedStorageRead",
+      permissions_policy_name: "fenced-unpartitioned-storage-read",
+      feature_default: "EnableForAll",
+      depends_on: ["FencedFramesLocalUnpartitionedDataAccess"],
     },
     {
       name: "FocusWithoutUserActivation",
       permissions_policy_name: "focus-without-user-activation",
-      feature_default: "EnableForAll",
+      feature_default: "EnableForSelf",
       depends_on: ["BlockingFocusWithoutUserActivation"],
     },
     {
@@ -268,9 +327,12 @@
       depends_on: ["WebHID"],
     },
     {
+      name: "IdentityCredentialsGet",
+      permissions_policy_name: "identity-credentials-get",
+    },
+    {
       name: "IdleDetection",
       permissions_policy_name: "idle-detection",
-      depends_on: ["IdleDetection"],
     },
     {
       name: "JoinAdInterestGroup",
@@ -286,8 +348,19 @@
       permissions_policy_name: "keyboard-map",
     },
     {
+      name: "LocalFonts",
+      permissions_policy_name: "local-fonts",
+      depends_on: ["FontAccess"],
+    },
+    {
       name: "Magnetometer",
       permissions_policy_name: "magnetometer",
+    },
+    {
+      name: "MediaPlaybackWhileNotVisible",
+      permissions_policy_name: "media-playback-while-not-visible",
+      feature_default: "EnableForAll",
+      depends_on: ["MediaPlaybackWhileNotVisiblePermissionPolicy"],
     },
     {
       name: "Microphone",
@@ -303,6 +376,12 @@
       depends_on: ["WebOTPAssertionFeaturePolicy"],
     },
     {
+      name: "PartitionedPopins",
+      permissions_policy_name: "popins",
+      feature_default: "EnableForSelf",
+      depends_on: ["PartitionedPopins"],
+    },
+    {
       name: "Payment",
       permissions_policy_name: "payment",
       depends_on: ["PaymentRequest"],
@@ -311,7 +390,22 @@
       name: "PictureInPicture",
       permissions_policy_name: "picture-in-picture",
       feature_default: "EnableForAll",
-      depends_on: ["PictureInPictureAPI"],
+    },
+    {
+      name: "PrivateAggregation",
+      permissions_policy_name: "private-aggregation",
+      feature_default: "EnableForAll",
+      depends_on: ["SharedStorageAPI", "Fledge"],
+    },
+    {
+      name: "PrivateStateTokenIssuance",
+      permissions_policy_name: "private-state-token-issuance",
+      feature_default: "EnableForAll",
+      depends_on: ["PrivateStateTokens"],
+    },
+    {
+      name: "PublicKeyCredentialsCreate",
+      permissions_policy_name: "publickey-credentials-create",
     },
     {
       name: "PublicKeyCredentialsGet",
@@ -348,10 +442,32 @@
       depends_on: ["SharedStorageAPI"],
     },
     {
+      name: "SharedStorageSelectUrl",
+      permissions_policy_name: "shared-storage-select-url",
+      feature_default: "EnableForAll",
+      depends_on: ["SharedStorageAPI"],
+    },
+    {
+      name: "SmartCard",
+      permissions_policy_name: "smart-card",
+      depends_on: ["SmartCard"],
+      visibility: "IsolatedContext",
+    },
+    {
+      name: "SpeakerSelection",
+      permissions_policy_name: "speaker-selection",
+      depends_on: ["SpeakerSelection"],
+    },
+    {
       name: "StorageAccessAPI",
       feature_default: "EnableForAll",
-      permissions_policy_name: "storage-access-api",
-      depends_on: ["StorageAccessAPI"],
+      permissions_policy_name: "storage-access",
+    },
+    {
+      name: "SubApps",
+      permissions_policy_name: "sub-apps",
+      depends_on: ["DesktopPWAsSubApps"],
+      visibility: "IsolatedContext",
     },
     {
       name: "SyncXHR",
@@ -360,8 +476,9 @@
     },
     {
       name: "TrustTokenRedemption",
-      permissions_policy_name: "trust-token-redemption",
-      depends_on: ["TrustTokens"],
+      permissions_policy_name: "private-state-token-redemption",
+      feature_default: "EnableForAll",
+      depends_on: ["PrivateStateTokens"],
     },
     {
       name: "Usb",
@@ -369,10 +486,34 @@
       depends_on: ["WebUSB"],
     },
     {
+      name: "UsbUnrestricted",
+      permissions_policy_name: "usb-unrestricted",
+      depends_on: ["UnrestrictedUsb"],
+      visibility: "IsolatedContext",
+    },
+    {
+      // Unload is special and can default to being disabled by default based
+      // on the DeprecateUnload flag.
+      name: "Unload",
+      permissions_policy_name: "unload",
+      feature_default: "EnableForAll",
+    },
+    {
       name: "VerticalScroll",
       permissions_policy_name: "vertical-scroll",
       feature_default: "EnableForAll",
       depends_on: ["ExperimentalPolicies"],
+    },
+    {
+      name: "WebAppInstallation",
+      permissions_policy_name: "web-app-installation",
+      depends_on: ["WebAppInstallation"],
+    },
+    {
+      name: "WebPrinting",
+      permissions_policy_name: "web-printing",
+      depends_on: ["WebPrinting"],
+      visibility: "IsolatedContext",
     },
     {
       name: "WebShare",
@@ -385,14 +526,8 @@
       depends_on: ["WebXR"],
     },
     {
-      name: "WindowPlacement",
-      permissions_policy_name: "window-placement",
-      depends_on: ["WindowPlacement"],
-    },
-    {
-      name: "LocalFonts",
-      permissions_policy_name: "local-fonts",
-      depends_on: ["FontAccess"],
+      name: "WindowManagement",
+      permissions_policy_name: "window-management",
     },
   ],
 }

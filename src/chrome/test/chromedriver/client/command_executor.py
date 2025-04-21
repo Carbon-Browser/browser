@@ -1,4 +1,4 @@
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -118,6 +118,10 @@ class Command(object):
       _Method.POST, '/session/:sessionId/window/minimize')
   FULLSCREEN_WINDOW = (
       _Method.POST, '/session/:sessionId/window/fullscreen')
+  SET_DEVICE_POSTURE = (
+      _Method.POST, '/session/:sessionId/deviceposture')
+  CLEAR_DEVICE_POSTURE = (
+      _Method.DELETE, '/session/:sessionId/deviceposture')
   CLOSE = (_Method.DELETE, '/session/:sessionId/window')
   DRAG_ELEMENT = (_Method.POST, '/session/:sessionId/element/:id/drag')
   GET_ELEMENT_VALUE_OF_CSS_PROPERTY = (
@@ -210,25 +214,78 @@ class Command(object):
   SET_USER_VERIFIED = (
       _Method.POST,
       '/session/:sessionId/webauthn/authenticator/:authenticatorId/uv')
+  SET_CREDENTIAL_PROPERTIES = (
+      _Method.POST,
+      '/session/:sessionId/webauthn/authenticator/:authenticatorId/credentials/'
+      ':credentialId/props')
   SET_SPC_TRANSACTION_MODE = (
       _Method.POST,
       '/session/:sessionId/secure-payment-confirmation/set-mode')
+  SET_RPH_REGISTRATION_MODE = (
+      _Method.POST,
+      '/session/:sessionId/custom-handlers/set-mode')
+  CREATE_VIRTUAL_SENSOR = (
+      _Method.POST, '/session/:sessionId/sensor')
+  UPDATE_VIRTUAL_SENSOR = (
+      _Method.POST, '/session/:sessionId/sensor/:type')
+  REMOVE_VIRTUAL_SENSOR = (
+      _Method.DELETE, '/session/:sessionId/sensor/:type')
+  GET_VIRTUAL_SENSOR_INFORMATION = (
+      _Method.GET, '/session/:sessionId/sensor/:type')
   SET_PERMISSION = (
       _Method.POST, '/session/:sessionId/permissions')
+  GET_CAST_SINKS = (
+      _Method.GET,
+      '/session/:sessionId/:vendorId/cast/get_sinks')
+  CANCEL_FEDCM_DIALOG = (
+      _Method.POST,
+      '/session/:sessionId/fedcm/canceldialog')
+  SELECT_ACCOUNT = (
+      _Method.POST,
+      '/session/:sessionId/fedcm/selectaccount')
+  CLICK_FEDCM_DIALOG_BUTTON = (
+      _Method.POST,
+      '/session/:sessionId/fedcm/clickdialogbutton')
+  GET_ACCOUNTS = (
+      _Method.GET,
+      '/session/:sessionId/fedcm/accountlist')
+  GET_FEDCM_TITLE = (
+      _Method.GET,
+      '/session/:sessionId/fedcm/gettitle')
+  GET_DIALOG_TYPE = (
+      _Method.GET,
+      '/session/:sessionId/fedcm/getdialogtype')
+  SET_DELAY_ENABLED = (
+      _Method.POST,
+      '/session/:sessionId/fedcm/setdelayenabled')
+  RESET_COOLDOWN = (
+      _Method.POST,
+      '/session/:sessionId/fedcm/resetcooldown')
+  RUN_BOUNCE_TRACKING_MITIGATIONS = (
+        _Method.DELETE,
+        '/session/:sessionId/storage/run_bounce_tracking_mitigations')
+  CREATE_VIRTUAL_PRESSURE_SOURCE = (
+      _Method.POST, '/session/:sessionId/pressuresource')
+  UPDATE_VIRTUAL_PRESSURE_SOURCE = (
+      _Method.POST, '/session/:sessionId/pressuresource/:type')
+  REMOVE_VIRTUAL_PRESSURE_SOURCE = (
+      _Method.DELETE, '/session/:sessionId/pressuresource/:type')
 
   # Custom Chrome commands.
   IS_LOADING = (_Method.GET, '/session/:sessionId/is_loading')
 
 class CommandExecutor(object):
-  def __init__(self, server_url):
+  def __init__(self, server_url, http_timeout=None):
     self._server_url = server_url
     parsed_url = urlparse(server_url)
-    timeout = 10
+    self._http_timeout = 10
     # see https://crbug.com/1045241: short timeout seems to introduce flakiness
     if util.IsMac() or util.IsWindows():
-      timeout = 30
+      self._http_timeout = 60
+    if http_timeout is not None:
+      self._http_timeout = http_timeout
     self._http_client = http.client.HTTPConnection(
-      parsed_url.hostname, parsed_url.port, timeout=timeout)
+      parsed_url.hostname, parsed_url.port, timeout=self._http_timeout)
 
   @staticmethod
   def CreatePath(template_url_path, params):
@@ -242,6 +299,9 @@ class CommandExecutor(object):
       else:
         substituted_parts += [part]
     return '/'.join(substituted_parts)
+
+  def HttpTimeout(self):
+    return self._http_timeout
 
   def Execute(self, command, params):
     url_path = self.CreatePath(command[1], params)

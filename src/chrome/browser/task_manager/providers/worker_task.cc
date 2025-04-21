@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ int GetTaskTitlePrefixMessageId(Task::Type task_type) {
       return IDS_TASK_MANAGER_SERVICE_WORKER_PREFIX;
     default:
       NOTREACHED();
-      return 0;
   }
 }
 

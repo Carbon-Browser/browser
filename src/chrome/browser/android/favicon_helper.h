@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@
 #include "components/favicon_base/favicon_types.h"
 #include "url/gurl.h"
 
+class Profile;
+
 class FaviconHelper {
  public:
   FaviconHelper();
@@ -27,20 +29,20 @@ class FaviconHelper {
 
   jboolean GetComposedFaviconImage(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& j_profile,
-      const base::android::JavaParamRef<jobjectArray>& j_urls,
+      Profile* profile,
+      std::vector<GURL>& gurls,
       jint j_desired_size_in_pixel,
       const base::android::JavaParamRef<jobject>& j_favicon_image_callback);
   jboolean GetLocalFaviconImageForURL(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& j_profile,
-      const base::android::JavaParamRef<jstring>& j_page_url,
+      Profile* profile,
+      GURL& page_url,
       jint j_desired_size_in_pixel,
       const base::android::JavaParamRef<jobject>& j_favicon_image_callback);
   jboolean GetForeignFaviconImageForURL(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& jprofile,
-      const base::android::JavaParamRef<jobject>& j_page_url,
+      Profile* profile,
+      GURL& page_url,
       jint j_desired_size_in_pixel,
       const base::android::JavaParamRef<jobject>& j_favicon_image_callback);
 
@@ -72,7 +74,7 @@ class FaviconHelper {
       const base::android::JavaRef<jobject>& j_favicon_image_callback,
       const favicon_base::FaviconRawBitmapResult& result);
 
-  void OnFaviconBitmapResultsAvailable(
+  void OnComposedFaviconBitmapResultsAvailable(
       const base::android::JavaRef<jobject>& j_favicon_image_callback,
       const int desired_size_in_pixel,
       const std::vector<favicon_base::FaviconRawBitmapResult>& result);

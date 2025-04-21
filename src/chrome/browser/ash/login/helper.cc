@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,24 @@
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/default_clock.h"
 #include "chrome/browser/ash/login/signin_partition_manager.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/ui/webui_login_view.h"
+#include "chrome/browser/ash/policy/core/device_local_account_policy_broker.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/password_manager/password_reuse_manager_factory.h"
+#include "chrome/browser/policy/networking/user_network_configuration_updater_ash.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/ash/login/webui_login_view.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
@@ -27,8 +31,15 @@
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_util.h"
+#include "chromeos/ash/components/network/proxy/proxy_config_service_impl.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_reuse_manager.h"
+#include "components/policy/core/common/policy_details.h"
+#include "components/policy/core/common/policy_map.h"
+#include "components/policy/policy_constants.h"
+#include "components/prefs/pref_service.h"
+#include "components/proxy_config/pref_proxy_config_tracker_impl.h"
+#include "components/proxy_config/proxy_prefs.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
@@ -36,11 +47,52 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
-#include "ui/gfx/image/image_skia.h"
 
 namespace ash {
+namespace {
+
+bool AreRiskyPoliciesUsed(policy::DeviceLocalAccountPolicyBroker* broker) {
+  const policy::PolicyMap& policy_map = broker->core()->store()->policy_map();
+  for (const auto& it : policy_map) {
+    const policy::PolicyDetails* policy_details =
+        policy::GetChromePolicyDetails(it.first);
+    if (!policy_details) {
+      continue;
+    }
+    for (policy::RiskTag risk_tag : policy_details->risk_tags) {
+      if (risk_tag == policy::RISK_TAG_WEBSITE_SHARING) {
+        VLOG(1) << "Considering managed session risky because " << it.first
+                << " policy was enabled by admin.";
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool IsProxyUsed(const PrefService* local_state_prefs) {
+  std::unique_ptr<ProxyConfigDictionary> proxy_config =
+      ProxyConfigServiceImpl::GetActiveProxyConfigDictionary(
+          ProfileHelper::Get()->GetSigninProfile()->GetPrefs(),
+          local_state_prefs);
+  ProxyPrefs::ProxyMode mode;
+  if (!proxy_config || !proxy_config->GetMode(&mode)) {
+    return false;
+  }
+  return mode != ProxyPrefs::MODE_DIRECT;
+}
+
+bool PolicyHasWebTrustedAuthorityCertificate(
+    policy::DeviceLocalAccountPolicyBroker* broker) {
+  return policy::UserNetworkConfigurationUpdaterAsh::
+      PolicyHasWebTrustedAuthorityCertificate(
+          broker->core()->store()->policy_map());
+}
+
+}  // namespace
 
 gfx::Rect CalculateScreenBounds(const gfx::Size& size) {
   gfx::Rect bounds = display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
@@ -59,13 +111,14 @@ int GetCurrentUserImageSize() {
   float scale_factor = display::Display::GetForcedDeviceScaleFactor();
   if (scale_factor > 1.0f)
     return static_cast<int>(scale_factor * kBaseUserImageSize);
-  return kBaseUserImageSize * gfx::ImageSkia::GetMaxSupportedScale();
+  const float max_scale = ui::GetScaleForMaxSupportedResourceScaleFactor();
+  return kBaseUserImageSize * max_scale;
 }
 
 namespace login {
 
-NetworkStateHelper::NetworkStateHelper() {}
-NetworkStateHelper::~NetworkStateHelper() {}
+NetworkStateHelper::NetworkStateHelper() = default;
+NetworkStateHelper::~NetworkStateHelper() = default;
 
 std::u16string NetworkStateHelper::GetCurrentNetworkName() const {
   NetworkStateHandler* nsh = NetworkHandler::Get()->network_state_handler();
@@ -87,24 +140,18 @@ std::u16string NetworkStateHelper::GetCurrentNetworkName() const {
 }
 
 bool NetworkStateHelper::IsConnected() const {
-  chromeos::NetworkStateHandler* nsh =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  return nsh->ConnectedNetworkByType(chromeos::NetworkTypePattern::Default()) !=
-         nullptr;
+  NetworkStateHandler* nsh = NetworkHandler::Get()->network_state_handler();
+  return nsh->ConnectedNetworkByType(NetworkTypePattern::Default()) != nullptr;
 }
 
 bool NetworkStateHelper::IsConnectedToEthernet() const {
-  chromeos::NetworkStateHandler* nsh =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  return nsh->ConnectedNetworkByType(
-             chromeos::NetworkTypePattern::Ethernet()) != nullptr;
+  NetworkStateHandler* nsh = NetworkHandler::Get()->network_state_handler();
+  return nsh->ConnectedNetworkByType(NetworkTypePattern::Ethernet()) != nullptr;
 }
 
 bool NetworkStateHelper::IsConnecting() const {
-  chromeos::NetworkStateHandler* nsh =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  return nsh->ConnectingNetworkByType(
-             chromeos::NetworkTypePattern::Default()) != nullptr;
+  NetworkStateHandler* nsh = NetworkHandler::Get()->network_state_handler();
+  return nsh->ConnectingNetworkByType(NetworkTypePattern::Default()) != nullptr;
 }
 
 void NetworkStateHelper::OnCreateConfiguration(
@@ -125,6 +172,19 @@ content::StoragePartition* GetSigninPartition() {
   if (!signin_partition_manager->IsInSigninSession())
     return nullptr;
   return signin_partition_manager->GetCurrentStoragePartition();
+}
+
+content::StoragePartition* GetLockScreenPartition() {
+  Profile* lock_screen_profile = ProfileHelper::GetLockScreenProfile();
+  // TODO(http://crbug/1348126): dependency on SigninPartitionManager should be
+  // refactored after we clarify when and how do we clear data from the lock
+  // screen profile.
+  SigninPartitionManager* partition_manager =
+      SigninPartitionManager::Factory::GetForBrowserContext(
+          lock_screen_profile);
+  if (!partition_manager->IsInSigninSession())
+    return nullptr;
+  return partition_manager->GetCurrentStoragePartition();
 }
 
 network::mojom::NetworkContext* GetSigninNetworkContext() {
@@ -169,6 +229,45 @@ base::TimeDelta TimeToOnlineSignIn(base::Time last_online_signin,
   const base::Time now = base::DefaultClock::GetInstance()->Now();
   // Time left to the next forced online signin.
   return offline_signin_limit - (now - last_online_signin);
+}
+
+bool IsFullManagementDisclosureNeeded(
+    policy::DeviceLocalAccountPolicyBroker* broker) {
+  auto* local_state = g_browser_process->local_state();
+  return AreRiskyPoliciesUsed(broker) ||
+         local_state->GetBoolean(::prefs::kManagedSessionUseFullLoginWarning) ||
+         PolicyHasWebTrustedAuthorityCertificate(broker) ||
+         IsProxyUsed(local_state);
+}
+
+void SetAuthFactorsForUser(const AccountId& user,
+                           const SessionAuthFactors& auth_factors,
+                           bool is_pin_disabled_by_policy,
+                           LoginScreenModel* login_screen) {
+  cryptohome::AuthFactorsSet available_factors;
+  cryptohome::PinLockAvailability pin_available_at = std::nullopt;
+
+  if (auth_factors.FindSmartCardFactor()) {
+    available_factors.Put(cryptohome::AuthFactorType::kSmartCard);
+  } else {
+    auto* password_factor = auth_factors.FindAnyPasswordFactor();
+    if (password_factor) {
+      available_factors.Put(cryptohome::AuthFactorType::kPassword);
+    }
+    auto* pin_factor = auth_factors.FindPinFactor();
+    if (pin_factor && !pin_factor->GetPinStatus().IsLockedFactor()) {
+      // If we end up with pin as the only auth factor and it is still disabled
+      // by policy, we will show the pin.
+      if (!is_pin_disabled_by_policy || !password_factor) {
+        available_factors.Put(cryptohome::AuthFactorType::kPin);
+      }
+    }
+    if (pin_factor && pin_factor->GetPinStatus().IsLockedFactor()) {
+      pin_available_at = pin_factor->GetPinStatus().AvailableAt();
+    }
+  }
+  login_screen->SetAuthFactorsForUser(user, available_factors,
+                                      pin_available_at);
 }
 
 }  // namespace login

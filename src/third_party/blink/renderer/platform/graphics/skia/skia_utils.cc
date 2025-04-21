@@ -30,21 +30,18 @@
 
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include <algorithm>
+#include <cmath>
+
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_flags.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
+#include "partition_alloc/partition_alloc.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
-#include "third_party/skia/include/effects/SkCornerPathEffect.h"
 #include "third_party/skia/modules/skcms/skcms.h"
 #include "ui/base/ui_base_features.h"
-
-#include <algorithm>
-#include <cmath>
 
 namespace blink {
 
@@ -83,7 +80,6 @@ SkBlendMode WebCoreCompositeToSkiaComposite(CompositeOperator op,
   }
 
   NOTREACHED();
-  return SkBlendMode::kSrcOver;
 }
 
 SkBlendMode WebCoreBlendModeToSkBlendMode(BlendMode blend_mode) {
@@ -125,7 +121,6 @@ SkBlendMode WebCoreBlendModeToSkBlendMode(BlendMode blend_mode) {
   }
 
   NOTREACHED();
-  return SkBlendMode::kSrcOver;
 }
 
 std::pair<CompositeOperator, BlendMode> CompositeAndBlendOpsFromSkBlendMode(
@@ -253,32 +248,22 @@ SkMatrix AffineTransformToSkMatrix(const AffineTransform& source) {
   return result;
 }
 
-SkMatrix TransformationMatrixToSkMatrix(const TransformationMatrix& source) {
-  // SkMatrix is 3x3, TransformationMatrix is 4x4, this function encodes
-  // assuming that a 2D-transformation with perspective is what's desired,
-  // throwing out the z-dimension values. i.e.:
-
-  //        INPUT                  OUTPUT
-  // | m11 m21 m31 m41 |       | m11 m21 m41 |
-  // | m12 m22 m32 m42 | ----> | m12 m22 m42 |
-  // | m13 m23 m33 m43 |       | m14 m24 m44 |
-  // | m14 m24 m34 m44 |
-
-  SkMatrix result;
-
-  result.setScaleX(WebCoreDoubleToSkScalar(source.M11()));
-  result.setSkewX(WebCoreDoubleToSkScalar(source.M21()));
-  result.setTranslateX(WebCoreDoubleToSkScalar(source.M41()));
-
-  result.setScaleY(WebCoreDoubleToSkScalar(source.M22()));
-  result.setSkewY(WebCoreDoubleToSkScalar(source.M12()));
-  result.setTranslateY(WebCoreDoubleToSkScalar(source.M42()));
-
-  result.setPerspX(source.M14());
-  result.setPerspY(source.M24());
-  result.set(SkMatrix::kMPersp2, source.M44());
-
-  return result;
+SkM44 AffineTransformToSkM44(const AffineTransform& source) {
+  //   INPUT           OUTPUT
+  // | a c e |       | a c 0 e |
+  // | b d f | ----> | b d 0 f |
+  //                 | 0 0 1 0 |
+  //                 | 0 0 0 1 |
+  SkScalar a = WebCoreDoubleToSkScalar(source.A());
+  SkScalar b = WebCoreDoubleToSkScalar(source.B());
+  SkScalar c = WebCoreDoubleToSkScalar(source.C());
+  SkScalar d = WebCoreDoubleToSkScalar(source.D());
+  SkScalar e = WebCoreDoubleToSkScalar(source.E());
+  SkScalar f = WebCoreDoubleToSkScalar(source.F());
+  return SkM44(a, c, 0, e,   // row 0
+               b, d, 0, f,   // row 1
+               0, 0, 1, 0,   // row 2
+               0, 0, 0, 1);  // row 3
 }
 
 bool NearlyIntegral(float value) {
@@ -378,7 +363,7 @@ InterpolationQuality ComputeInterpolationQuality(float src_width,
     return kInterpolationLow;
 
   // Everything else gets resampled at default quality.
-  return kInterpolationDefault;
+  return GetDefaultInterpolationQuality();
 }
 
 SkColor ScaleAlpha(SkColor color, float alpha) {
@@ -402,13 +387,7 @@ bool ApproximatelyEqualSkColorSpaces(sk_sp<SkColorSpace> src_color_space,
   return skcms_ApproximatelyEqualProfiles(&src_profile, &dst_profile);
 }
 
-SkRect LayoutRectToSkRect(const blink::LayoutRect& rect) {
-  return SkRect::MakeXYWH(SkFloatToScalar(rect.X()), SkFloatToScalar(rect.Y()),
-                          SkFloatToScalar(rect.Width()),
-                          SkFloatToScalar(rect.Height()));
-}
-
-static cc::PaintFlags PaintFlagsForFocusRing(SkColor color, float width) {
+static cc::PaintFlags PaintFlagsForFocusRing(SkColor4f color, float width) {
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setStyle(cc::PaintFlags::kStroke_Style);
@@ -419,29 +398,28 @@ static cc::PaintFlags PaintFlagsForFocusRing(SkColor color, float width) {
 
 void DrawPlatformFocusRing(const SkRRect& rrect,
                            cc::PaintCanvas* canvas,
-                           SkColor color,
+                           SkColor4f color,
                            float width) {
   canvas->drawRRect(rrect, PaintFlagsForFocusRing(color, width));
 }
 
 void DrawPlatformFocusRing(const SkPath& path,
                            cc::PaintCanvas* canvas,
-                           SkColor color,
+                           SkColor4f color,
                            float width,
                            float corner_radius) {
   cc::PaintFlags path_flags = PaintFlagsForFocusRing(color, width);
   if (corner_radius) {
-    path_flags.setPathEffect(
-        SkCornerPathEffect::Make(SkFloatToScalar(corner_radius)));
+    path_flags.setPathEffect(cc::PathEffect::MakeCorner(corner_radius));
   }
   canvas->drawPath(path, path_flags);
 }
 
 sk_sp<SkData> TryAllocateSkData(size_t size) {
-  void* buffer = WTF::Partitions::BufferPartition()->AllocWithFlags(
-      partition_alloc::AllocFlags::kReturnNull |
-          partition_alloc::AllocFlags::kZeroFill,
-      size, "SkData");
+  void* buffer =
+      WTF::Partitions::BufferPartition()
+          ->AllocInline<partition_alloc::AllocFlags::kReturnNull |
+                        partition_alloc::AllocFlags::kZeroFill>(size, "SkData");
   if (!buffer)
     return nullptr;
   return SkData::MakeWithProc(

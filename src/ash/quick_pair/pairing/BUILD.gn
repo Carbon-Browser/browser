@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,8 +13,6 @@ source_set("pairing") {
     "fast_pair/fast_pair_pairer.h",
     "fast_pair/fast_pair_pairer_impl.cc",
     "fast_pair/fast_pair_pairer_impl.h",
-    "fast_pair/fast_pair_unpair_handler.cc",
-    "fast_pair/fast_pair_unpair_handler.h",
     "pairer_broker.h",
     "pairer_broker_impl.cc",
     "pairer_broker_impl.h",
@@ -30,9 +28,10 @@ source_set("pairing") {
     "//ash/quick_pair/message_stream",
     "//ash/quick_pair/proto:fastpair_proto",
     "//ash/quick_pair/repository",
-    "//ash/services/quick_pair",
-    "//ash/services/quick_pair/public/cpp",
     "//base",
+    "//chromeos/ash/services/quick_pair",
+    "//chromeos/ash/services/quick_pair/public/cpp",
+    "//components/cross_device/logging:logging",
     "//crypto:crypto",
     "//device/bluetooth",
     "//third_party/protobuf:protobuf_lite",
@@ -53,6 +52,7 @@ static_library("test_support") {
 
   deps = [
     "//ash/quick_pair/common",
+    "//ash/quick_pair/common:test_support",
     "//ash/quick_pair/fast_pair_handshake",
     "//base",
     "//base/test:test_support",
@@ -66,7 +66,6 @@ source_set("unit_tests") {
 
   sources = [
     "fast_pair/fast_pair_pairer_impl_unittest.cc",
-    "fast_pair/fast_pair_unpair_handler_unittest.cc",
     "pairer_broker_impl_unittest.cc",
     "retroactive_pairing_detector_unittest.cc",
   ]
@@ -77,18 +76,21 @@ source_set("unit_tests") {
     "//ash:test_support",
     "//ash/public/cpp:test_support",
     "//ash/quick_pair/common",
+    "//ash/quick_pair/common:test_support",
     "//ash/quick_pair/fast_pair_handshake",
     "//ash/quick_pair/fast_pair_handshake:test_support",
+    "//ash/quick_pair/feature_status_tracker",
+    "//ash/quick_pair/feature_status_tracker:test_support",
     "//ash/quick_pair/message_stream",
     "//ash/quick_pair/message_stream:test_support",
     "//ash/quick_pair/proto:fastpair_proto",
     "//ash/quick_pair/repository:repository",
     "//ash/quick_pair/repository:test_support",
-    "//ash/services/quick_pair",
-    "//ash/services/quick_pair:test_support",
-    "//ash/services/quick_pair/public/cpp",
     "//base",
     "//base/test:test_support",
+    "//chromeos/ash/services/quick_pair",
+    "//chromeos/ash/services/quick_pair:test_support",
+    "//chromeos/ash/services/quick_pair/public/cpp",
     "//device/bluetooth",
     "//device/bluetooth:mocks",
     "//mojo/public/cpp/bindings",

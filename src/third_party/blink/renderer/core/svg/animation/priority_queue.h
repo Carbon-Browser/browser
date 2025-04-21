@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,9 +46,9 @@ class PriorityQueue {
   void ResetAllPriorities(PriorityType priority);
 
   wtf_size_t size() const { return heap_.size(); }
-  bool IsEmpty() const { return heap_.IsEmpty(); }
+  bool IsEmpty() const { return heap_.empty(); }
   const PriorityType& Min() const { return heap_.front().first; }
-  ElementType* MinElement() const { return heap_.front().second; }
+  ElementType* MinElement() const { return heap_.front().second.Get(); }
 
   iterator begin() { return heap_.begin(); }
   iterator end() { return heap_.end(); }

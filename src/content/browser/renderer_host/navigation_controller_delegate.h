@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 namespace content {
 
 struct LoadCommittedDetails;
-class WebContents;
 
 // Interface for objects embedding a NavigationController to provide the
 // functionality NavigationController needs.
@@ -22,8 +21,8 @@ class NavigationControllerDelegate {
  public:
   virtual ~NavigationControllerDelegate() {}
 
-  // TODO(https://crbug.com/1224294): Remove duplicates of WebContents methods.
-  virtual void NotifyNavigationStateChanged(InvalidateTypes changed_flags) = 0;
+  virtual void NotifyNavigationStateChangedFromController(
+      InvalidateTypes changed_flags) = 0;
 
   // Methods from WebContentsImpl that NavigationControllerImpl needs to
   // call. NavigationControllerImpl cannot call them directly because
@@ -41,10 +40,6 @@ class NavigationControllerDelegate {
   // Returns whether URLs for aborted browser-initiated navigations should be
   // preserved in the omnibox.  Defaults to false.
   virtual bool ShouldPreserveAbortedURLs() = 0;
-
-  // TODO(crbug.com/1225205): Remove this. It is a layering violation as
-  // renderer_host/ cannot depend on WebContents.
-  virtual WebContents* DeprecatedGetWebContents() = 0;
 
   virtual void UpdateOverridingUserAgent() = 0;
 };

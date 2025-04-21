@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom;
 import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.isNotChecked;
@@ -14,15 +15,15 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.core.AllOf.allOf;
 
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.isTransformed;
+import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.scrollToLastElement;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.selectTabAtPosition;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.whenDisplayed;
-import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabTestHelper.isKeyboardAccessoryTabLayout;
 
-import android.os.Build.VERSION_CODES;
+import android.os.Looper;
 
+import androidx.test.filters.MediumTest;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -30,30 +31,40 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper;
 import org.chromium.chrome.browser.keyboard_accessory.R;
+import org.chromium.chrome.browser.keyboard_accessory.button_group_component.KeyboardAccessoryButtonGroupView;
+import org.chromium.chrome.browser.password_manager.PasswordStoreBridge;
+import org.chromium.chrome.browser.password_manager.PasswordStoreCredential;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
-import org.chromium.ui.test.util.UiDisableIf;
+import org.chromium.net.test.EmbeddedTestServer;
+import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.url.GURL;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Integration tests for password accessory views.
- */
+/** Integration tests for password accessory views. */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE, "show-autofill-signatures"})
+@DisableFeatures({
+    ChromeFeatureList.EDGE_TO_EDGE_BOTTOM_CHIN,
+    ChromeFeatureList.EDGE_TO_EDGE_WEB_OPT_IN
+})
 public class PasswordAccessoryIntegrationTest {
     @Rule
-    public final ChromeTabbedActivityTestRule mActivityTestRule =
-            new ChromeTabbedActivityTestRule();
+    public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
+    private EmbeddedTestServer mTestServer;
+    private PasswordStoreBridge mPasswordStoreBridge;
     private final ManualFillingTestHelper mHelper = new ManualFillingTestHelper(mActivityTestRule);
 
     @After
@@ -66,25 +77,31 @@ public class PasswordAccessoryIntegrationTest {
     public void testPasswordSheetIsAvailable() {
         mHelper.loadTestPage(false);
 
-        CriteriaHelper.pollUiThread(() -> {
-            return mHelper.getOrCreatePasswordAccessorySheet() != null;
-        }, " Password Sheet should be bound to accessory sheet.");
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return mHelper.getOrCreatePasswordAccessorySheet() != null;
+                },
+                " Password Sheet should be bound to accessory sheet.");
     }
 
     @Test
-    @SmallTest
-    @DisableIf.
-    Build(sdk_is_greater_than = VERSION_CODES.LOLLIPOP_MR1, sdk_is_less_than = VERSION_CODES.N,
-            message = "Flaky on Marshmallow https://crbug.com/1102302")
-    public void
-    testPasswordSheetDisplaysProvidedItems() throws TimeoutException {
-        mHelper.loadTestPage(false);
-        mHelper.cacheCredentials("mayapark@gmail.com", "SomeHiddenPassword");
-
-        // Focus the field to bring up the accessory.
-        mHelper.focusPasswordField();
+    @MediumTest
+    public void testPasswordSheetDisplaysProvidedItems() throws TimeoutException {
+        preparePasswordBridge();
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPasswordStoreBridge.insertPasswordCredential(
+                            new PasswordStoreCredential(
+                                    new GURL(mTestServer.getURL("/")),
+                                    "mayapark@gmail.com",
+                                    "SomeHiddenPassword"));
+                });
+        mActivityTestRule.loadUrl(
+                mTestServer.getURL("/chrome/test/data/password/password_form.html"));
+        mHelper.focusPasswordField(false);
         mHelper.waitForKeyboardAccessoryToBeShown();
-        whenDisplayed(allOf(isDisplayed(), isKeyboardAccessoryTabLayout()))
+        mHelper.waitForKeyboardToShow();
+        whenDisplayed(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
                 .perform(selectTabAtPosition(0));
 
         // Check that the provided elements are there.
@@ -92,38 +109,58 @@ public class PasswordAccessoryIntegrationTest {
         whenDisplayed(withText("SomeHiddenPassword")).check(matches(isTransformed()));
     }
 
-    @Test
-    @SmallTest
-    public void testPasswordSheetDisplaysOptions() throws TimeoutException {
-        mHelper.loadTestPage(false);
-
-        // Focus the field to bring up the accessory.
-        mHelper.focusPasswordField();
-        mHelper.waitForKeyboardAccessoryToBeShown();
-        whenDisplayed(allOf(isDisplayed(), isKeyboardAccessoryTabLayout()))
-                .perform(selectTabAtPosition(0));
-
-        mHelper.waitForKeyboardToDisappear();
-        whenDisplayed(withId(R.id.passwords_sheet));
-        onView(withText(containsString("Manage password"))).check(matches(isDisplayed()));
+    private void preparePasswordBridge() {
+        Looper.prepare();
+        mActivityTestRule.startMainActivityOnBlankPage();
+        mTestServer = mActivityTestRule.getTestServer();
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPasswordStoreBridge =
+                            new PasswordStoreBridge(mActivityTestRule.getProfile(false));
+                });
     }
 
     @Test
     @SmallTest
-    @DisableIf.Device(type = {UiDisableIf.TABLET}) // https://crbug.com/1111770
-    public void testFillsPasswordOnTap() throws TimeoutException {
+    public void testPasswordSheetDisplaysOptions() throws TimeoutException {
         mHelper.loadTestPage(false);
-        mHelper.cacheCredentials("mpark@abc.com", "ShorterPassword");
+        // Marking the origin as denylisted shows only a very minimal accessory.
+        mHelper.cacheCredentials(new String[0], new String[0], true);
 
         // Focus the field to bring up the accessory.
         mHelper.focusPasswordField();
         mHelper.waitForKeyboardAccessoryToBeShown();
-        whenDisplayed(allOf(isDisplayed(), isKeyboardAccessoryTabLayout()))
+        whenDisplayed(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
+                .perform(selectTabAtPosition(0));
+
+        mHelper.waitForKeyboardToDisappear();
+        whenDisplayed(withId(R.id.passwords_sheet)).perform(scrollToLastElement());
+        onView(withText(containsString("Manage password"))).check(matches(isDisplayed()));
+    }
+
+    @Test
+    @MediumTest
+    @DisableIf.Device(DeviceFormFactor.TABLET) // https://crbug.com/1111770
+    @DisableFeatures({ChromeFeatureList.UNIFIED_PASSWORD_MANAGER_LOCAL_PWD_MIGRATION_WARNING})
+    public void testFillsPasswordOnTap() throws TimeoutException {
+        preparePasswordBridge();
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPasswordStoreBridge.insertPasswordCredential(
+                            new PasswordStoreCredential(
+                                    new GURL(mTestServer.getURL("/")),
+                                    "mpark@abc.com",
+                                    "ShorterPassword"));
+                });
+        mHelper.loadUrl("/chrome/test/data/password/password_form.html");
+        mHelper.focusPasswordField(false);
+        mHelper.waitForKeyboardAccessoryToBeShown();
+        mHelper.waitForKeyboardToShow();
+        whenDisplayed(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
                 .perform(selectTabAtPosition(0));
 
         // Click the suggestion.
         whenDisplayed(withText("ShorterPassword")).perform(click());
-
         // The callback should have triggered and set the reference to the selected Item.
         CriteriaHelper.pollInstrumentationThread(
                 () -> mHelper.getPasswordText().equals("ShorterPassword"));
@@ -133,13 +170,15 @@ public class PasswordAccessoryIntegrationTest {
     @SmallTest
     public void testDisplaysEmptyStateMessageWithoutSavedPasswords() throws TimeoutException {
         mHelper.loadTestPage(false);
+        // Mark the origin as denylisted to have a reason to show the accessory in the first place.
+        mHelper.cacheCredentials(new String[0], new String[0], true);
 
         // Focus the field to bring up the accessory.
         mHelper.focusPasswordField();
         mHelper.waitForKeyboardAccessoryToBeShown();
 
         // Click the tab to show the sheet and hide the keyboard.
-        whenDisplayed(allOf(isDisplayed(), isKeyboardAccessoryTabLayout()))
+        whenDisplayed(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
                 .perform(selectTabAtPosition(0));
         mHelper.waitForKeyboardToDisappear();
         whenDisplayed(withId(R.id.passwords_sheet));
@@ -148,17 +187,19 @@ public class PasswordAccessoryIntegrationTest {
 
     @Test
     @SmallTest
-    @EnableFeatures({ChromeFeatureList.RECOVER_FROM_NEVER_SAVE_ANDROID,
-            ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY})
-    public void
-    testEnablesUndenylistingToggle() throws TimeoutException {
-        mHelper.loadTestPage(false);
-        mHelper.cacheCredentials(new String[0], new String[0], true);
-
-        // Focus the field to bring up the accessory.
-        mHelper.focusPasswordField();
+    @DisabledTest(message = "https://crbug.com/1503085")
+    public void testEnablesUndenylistingToggle() throws TimeoutException, InterruptedException {
+        preparePasswordBridge();
+        String url = mTestServer.getURL("/chrome/test/data/password/password_form.html");
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPasswordStoreBridge.blocklistForTesting(url);
+                });
+        mActivityTestRule.loadUrl(url);
+        mHelper.focusPasswordField(false);
         mHelper.waitForKeyboardAccessoryToBeShown();
-        whenDisplayed(allOf(isDisplayed(), isKeyboardAccessoryTabLayout()))
+        mHelper.waitForKeyboardToShow();
+        whenDisplayed(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
                 .perform(selectTabAtPosition(0));
 
         whenDisplayed(withId(R.id.option_toggle_switch)).check(matches(isNotChecked()));

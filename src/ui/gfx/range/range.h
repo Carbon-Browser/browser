@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <iosfwd>
 #include <limits>
-#include <ostream>
 #include <string>
 
 #include "base/numerics/safe_conversions.h"
@@ -47,7 +47,12 @@ class GFX_RANGE_EXPORT Range {
 
   // Platform constructors.
 #if BUILDFLAG(IS_APPLE)
+  // Constructs a Range from a NSRange.
+  // CHECKs if NSRange is out of the maximum bound of Range.
   explicit Range(const NSRange& range);
+  // Constructs a Range from a NSRange.
+  // Returns InvalidRange() if NSRange is out of the maximum bound of Range.
+  static Range FromPossiblyInvalidNSRange(const NSRange& range);
 #endif
 
   // Returns a range that is invalid, which is {UINT32_MAX,UINT32_MAX}.
@@ -58,6 +63,16 @@ class GFX_RANGE_EXPORT Range {
   // Checks if the range is valid through comparison to InvalidRange().  If this
   // is not valid, you must not call start()/end().
   constexpr bool IsValid() const { return *this != InvalidRange(); }
+
+  // Ensures that the direction of this range matches the direction of the
+  // provided range, reversing this range if necessary. Returns a reference to
+  // `this` to allow method chaining.
+  Range& MatchDirection(const Range& other) {
+    if (is_reversed() != other.is_reversed()) {
+      std::swap(start_, end_);
+    }
+    return *this;
+  }
 
   // Getters and setters.
   constexpr size_t start() const { return start_; }
@@ -80,12 +95,8 @@ class GFX_RANGE_EXPORT Range {
     return start() > end() ? start() : end();
   }
 
-  constexpr bool operator==(const Range& other) const {
-    return start() == other.start() && end() == other.end();
-  }
-  constexpr bool operator!=(const Range& other) const {
-    return !(*this == other);
-  }
+  constexpr bool operator==(const Range& other) const = default;
+  constexpr auto operator<=>(const Range& other) const = default;
   constexpr bool EqualsIgnoringDirection(const Range& other) const {
     return GetMin() == other.GetMin() && GetMax() == other.GetMax();
   }
@@ -121,6 +132,8 @@ class GFX_RANGE_EXPORT Range {
   }
 
 #if BUILDFLAG(IS_APPLE)
+  // Constructs a Range from a NSRange.
+  // CHECKs if NSRange is out of the maximum bound of Range.
   Range& operator=(const NSRange& range);
 
   // NSRange does not store the directionality of a range, so if this

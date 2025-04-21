@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef STORAGE_BROWSER_BLOB_BLOB_TRANSPORT_STRATEGY_H_
 #define STORAGE_BROWSER_BLOB_BLOB_TRANSPORT_STRATEGY_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "storage/browser/blob/blob_memory_controller.h"
@@ -51,7 +51,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobTransportStrategy {
   BlobTransportStrategy(BlobDataBuilder* builder,
                         ResultCallback result_callback);
 
-  raw_ptr<BlobDataBuilder, DanglingUntriaged> builder_;
+  raw_ptr<BlobDataBuilder, AcrossTasksDanglingUntriaged> builder_;
   ResultCallback result_callback_;
 };
 

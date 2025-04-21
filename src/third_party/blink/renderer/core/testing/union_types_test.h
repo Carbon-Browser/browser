@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class UnionTypesTest final : public ScriptWrappable {
   String doubleOrStringArg(V8UnionDoubleOrString* arg);
   String doubleOrInternalEnumArg(V8UnionDoubleOrInternalEnum* arg);
   String doubleOrStringSequenceArg(
-      HeapVector<Member<V8UnionDoubleOrString>>& sequence);
+      const HeapVector<Member<V8UnionDoubleOrString>>& sequence);
 
   String nodeListOrElementArg(const V8UnionElementOrNodeList* arg);
   String nodeListOrElementOrNullArg(const V8UnionElementOrNodeList* arg);

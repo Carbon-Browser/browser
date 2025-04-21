@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,11 +50,6 @@ int32_t GetNetTrustAnchorHistogramIdForSPKI(const HashValue& spki_hash) {
   if (!root_data)
     return 0;
   return root_data->histogram_id;
-}
-
-bool IsLegacyPubliclyTrustedCA(const HashValue& spki_hash) {
-  const RootCertData* root_data = GetRootCertData(spki_hash);
-  return root_data && root_data->legacy_ca;
 }
 
 }  // namespace net

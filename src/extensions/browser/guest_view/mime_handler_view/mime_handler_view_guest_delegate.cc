@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ bool MimeHandlerViewGuestDelegate::HandleContextMenu(
 
 void MimeHandlerViewGuestDelegate::RecordLoadMetric(
     bool is_full_page,
-    const std::string& mime_type) {}
+    const std::string& mime_type,
+    content::BrowserContext* browser_context) {}
 
 }  // namespace extensions

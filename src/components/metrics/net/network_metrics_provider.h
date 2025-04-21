@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -41,7 +41,7 @@ class NetworkMetricsProvider
     NetworkQualityEstimatorProvider& operator=(
         const NetworkQualityEstimatorProvider&) = delete;
 
-    virtual ~NetworkQualityEstimatorProvider() {}
+    virtual ~NetworkQualityEstimatorProvider() = default;
 
     // Provides |this| with |callback| that would be invoked by |this| every
     // time there is a change in the network quality estimates.
@@ -50,7 +50,7 @@ class NetworkMetricsProvider
             callback) = 0;
 
    protected:
-    NetworkQualityEstimatorProvider() {}
+    NetworkQualityEstimatorProvider() = default;
   };
 
   // Creates a NetworkMetricsProvider, where
@@ -76,25 +76,12 @@ class NetworkMetricsProvider
                            ConnectionTypeIsAmbiguous);
 
   // MetricsProvider:
-  void ProvideCurrentSessionData(
-      ChromeUserMetricsExtension* uma_proto) override;
   void ProvideSystemProfileMetrics(SystemProfileProto* system_profile) override;
 
   // NetworkConnectionObserver:
   void OnConnectionChanged(network::mojom::ConnectionType type) override;
 
   SystemProfileProto::Network::ConnectionType GetConnectionType() const;
-  SystemProfileProto::Network::WifiPHYLayerProtocol GetWifiPHYLayerProtocol()
-      const;
-
-  // Posts a call to net::GetWifiPHYLayerProtocol on the blocking pool.
-  void ProbeWifiPHYLayerProtocol();
-  // Callback from the blocking pool with the result of
-  // net::GetWifiPHYLayerProtocol.
-  void OnWifiPHYLayerProtocolResult(net::WifiPHYLayerProtocol mode);
-
-  // Logs metrics that are functions of other metrics being uploaded.
-  void LogAggregatedMetrics();
 
   void OnEffectiveConnectionTypeChanged(net::EffectiveConnectionType type);
 
@@ -102,11 +89,6 @@ class NetworkMetricsProvider
   // set the |network_connection_tracker_|.
   void SetNetworkConnectionTracker(
       network::NetworkConnectionTracker* network_connection_tracker);
-
-  // Invoked at the time a new user metrics log record is being finalized, on
-  // the main thread. NCN Histograms that want to be logged once per record
-  // should be logged in this method.
-  void FinalizingMetricsLogRecord();
 
   // Watches for network connection changes.
   // This |network_connection_tracker_| raw pointer is not owned by this class.
@@ -121,17 +103,6 @@ class NetworkMetricsProvider
   network::mojom::ConnectionType connection_type_;
   // True if the network connection tracker has been initialized.
   bool network_connection_tracker_initialized_;
-
-  // True if |wifi_phy_layer_protocol_| changed during the lifetime of the log.
-  bool wifi_phy_layer_protocol_is_ambiguous_;
-  // The PHY mode of the currently associated access point obtained via
-  // net::GetWifiPHYLayerProtocol.
-  net::WifiPHYLayerProtocol wifi_phy_layer_protocol_;
-
-  // These metrics track histogram totals for the Net.ErrorCodesForMainFrame4
-  // histogram. They are used to compute deltas at upload time.
-  base::HistogramBase::Count total_aborts_;
-  base::HistogramBase::Count total_codes_;
 
   // Provides the network quality estimator. May be null.
   std::unique_ptr<NetworkQualityEstimatorProvider>

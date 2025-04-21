@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_file_watcher.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_mount_provider.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_service.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "content/public/browser/browser_thread.h"
 #include "google_apis/common/task_util.h"
@@ -34,8 +35,9 @@ base::FilePathWatcher* CreateAndStartFilePathWatcher(
 
   std::unique_ptr<base::FilePathWatcher> watcher(new base::FilePathWatcher);
   if (!watcher->Watch(watch_path, base::FilePathWatcher::Type::kNonRecursive,
-                      callback))
+                      callback)) {
     return nullptr;
+  }
 
   return watcher.release();
 }
@@ -54,7 +56,7 @@ std::unique_ptr<guest_os::GuestOsFileWatcher> GetForPath(
         crostini::DefaultContainerId(), std::move(crostini_mount),
         std::move(relative_path));
   }
-  auto* service = guest_os::GuestOsService::GetForProfile(profile);
+  auto* service = guest_os::GuestOsServiceFactory::GetForProfile(profile);
   if (!service) {
     return nullptr;
   }
@@ -83,7 +85,7 @@ FileWatcher::FileWatcher(const base::FilePath& virtual_path)
 FileWatcher::~FileWatcher() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  sequenced_task_runner_->DeleteSoon(FROM_HERE, local_file_watcher_);
+  sequenced_task_runner_->DeleteSoon(FROM_HERE, local_file_watcher_.get());
 }
 
 void FileWatcher::AddListener(const url::Origin& listener) {
@@ -103,8 +105,9 @@ void FileWatcher::RemoveListener(const url::Origin& listener) {
 
   // If entry found - decrease it's count and remove if necessary
   --it->second;
-  if (it->second == 0)
+  if (it->second == 0) {
     origins_.erase(it);
+  }
 }
 
 std::vector<url::Origin> FileWatcher::GetListeners() const {
@@ -132,8 +135,8 @@ void FileWatcher::WatchLocalFile(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      sequenced_task_runner_.get(), FROM_HERE,
+  sequenced_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CreateAndStartFilePathWatcher, local_path,
                      google_apis::CreateRelayCallback(file_watcher_callback)),
       base::BindOnce(&FileWatcher::OnWatcherStarted,

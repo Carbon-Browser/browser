@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,19 @@
 #include <time.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
+#include "base/containers/flat_set.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/privacy_mode.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 
 namespace base {
@@ -50,10 +51,9 @@ class NET_EXPORT SSLClientSessionCache {
     bool operator<(const Key& other) const;
 
     HostPortPair server;
-    absl::optional<IPAddress> dest_ip_addr;
-    NetworkIsolationKey network_isolation_key;
+    std::optional<IPAddress> dest_ip_addr;
+    NetworkAnonymizationKey network_anonymization_key;
     PrivacyMode privacy_mode = PRIVACY_MODE_DISABLED;
-    bool disable_legacy_crypto = false;
   };
 
   explicit SSLClientSessionCache(const Config& config);
@@ -82,8 +82,8 @@ class NET_EXPORT SSLClientSessionCache {
   // offering 0-RTT data on retries. See https://crbug.com/1066623.
   void ClearEarlyData(const Key& cache_key);
 
-  // Removes all entries associated with |server|.
-  void FlushForServer(const HostPortPair& server);
+  // Removes all entries associated with items in |servers|.
+  void FlushForServers(const base::flat_set<HostPortPair>& servers);
 
   // Removes all entries from the cache.
   void Flush();

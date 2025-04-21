@@ -1,8 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/tiles/mipmap_util.h"
+
+#include <algorithm>
+#include <limits>
 
 #include "base/numerics/safe_math.h"
 
@@ -21,7 +24,7 @@ int ScaleAxisToMipLevel(int axis_base_size, int mip_level) {
   // Increment the size by (2^mip_level - 1) so we round on when dividing it
   // below.
   base::CheckedNumeric<int> base_size = axis_base_size;
-  base_size += (1 << mip_level) - 1;
+  base_size += (1u << mip_level) - 1u;
   axis_base_size = base_size.ValueOrDefault(std::numeric_limits<int>::max());
   return std::max(1, axis_base_size >> mip_level);
 }

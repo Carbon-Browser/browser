@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,19 @@
 namespace extensions {
 
 DownloadsInternalDetermineFilenameFunction::
-    DownloadsInternalDetermineFilenameFunction() {}
+    DownloadsInternalDetermineFilenameFunction() = default;
 
 DownloadsInternalDetermineFilenameFunction::
-    ~DownloadsInternalDetermineFilenameFunction() {}
+    ~DownloadsInternalDetermineFilenameFunction() = default;
 
 typedef extensions::api::downloads_internal::DetermineFilename::Params
     DetermineFilenameParams;
 
 ExtensionFunction::ResponseAction
 DownloadsInternalDetermineFilenameFunction::Run() {
-  std::unique_ptr<DetermineFilenameParams> params(
-      DetermineFilenameParams::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<DetermineFilenameParams> params =
+      DetermineFilenameParams::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   EXTENSION_FUNCTION_VALIDATE(args().size() >= 2);
   EXTENSION_FUNCTION_VALIDATE(args()[1].is_string());
   const std::string& filename = args()[1].GetString();

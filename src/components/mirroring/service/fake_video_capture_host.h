@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,16 +34,8 @@ class FakeVideoCaptureHost : public media::mojom::VideoCaptureHost {
                void(const base::UnguessableToken&,
                     int32_t,
                     const media::VideoCaptureFeedback&));
-  MOCK_METHOD1(Pause, void(const base::UnguessableToken&));
-  MOCK_METHOD3(Resume,
-               void(const base::UnguessableToken&,
-                    const base::UnguessableToken&,
-                    const media::VideoCaptureParams&));
   MOCK_METHOD0(OnStopped, void());
   MOCK_METHOD2(OnLog, void(const base::UnguessableToken&, const std::string&));
-  MOCK_METHOD2(OnFrameDropped,
-               void(const base::UnguessableToken&,
-                    media::VideoCaptureFrameDropReason));
 
   void Start(const base::UnguessableToken& device_id,
              const base::UnguessableToken& session_id,
@@ -51,7 +43,10 @@ class FakeVideoCaptureHost : public media::mojom::VideoCaptureHost {
              mojo::PendingRemote<media::mojom::VideoCaptureObserver> observer)
       override;
   void Stop(const base::UnguessableToken& device_id) override;
-
+  void Pause(const base::UnguessableToken& device_id) override;
+  void Resume(const base::UnguessableToken& device_id,
+              const base::UnguessableToken& session_id,
+              const media::VideoCaptureParams& params) override;
   void GetDeviceSupportedFormats(
       const base::UnguessableToken& device_id,
       const base::UnguessableToken& session_id,
@@ -63,9 +58,16 @@ class FakeVideoCaptureHost : public media::mojom::VideoCaptureHost {
   // Create one video frame and send it to |observer_|.
   void SendOneFrame(const gfx::Size& size, base::TimeTicks capture_time);
 
+  // Get the most recent capture parameters passed to Start().
+  media::VideoCaptureParams GetVideoCaptureParams() const;
+
+  bool paused() { return paused_; }
+
  private:
   mojo::Receiver<media::mojom::VideoCaptureHost> receiver_;
   mojo::Remote<media::mojom::VideoCaptureObserver> observer_;
+  media::VideoCaptureParams last_params_;
+  bool paused_ = false;
 };
 
 }  // namespace mirroring

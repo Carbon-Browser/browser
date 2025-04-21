@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "net/base/cache_type.h"
@@ -34,8 +34,7 @@ typedef base::OnceCallback<void(int, scoped_refptr<net::DrainableIOBuffer>)>
 class PnaclTranslationCacheEntry;
 extern const int kMaxMemCacheSize;
 
-class PnaclTranslationCache
-    : public base::SupportsWeakPtr<PnaclTranslationCache> {
+class PnaclTranslationCache final {
  public:
   PnaclTranslationCache();
 
@@ -100,6 +99,7 @@ class PnaclTranslationCache
   CompletionOnceCallback init_callback_;
   bool in_memory_;
   std::map<void*, scoped_refptr<PnaclTranslationCacheEntry> > open_entries_;
+  base::WeakPtrFactory<PnaclTranslationCache> weak_ptr_factory_{this};
 };
 
 }  // namespace pnacl

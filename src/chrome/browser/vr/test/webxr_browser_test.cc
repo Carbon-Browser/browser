@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,10 @@ void WebXrBrowserTestBase::EndSession() {
 
 void WebXrBrowserTestBase::EndSessionOrFail() {
   EndSessionOrFail(GetCurrentWebContents());
+}
+
+void WebXrBrowserTestBase::WaitForSessionEndOrFail() {
+  WaitForSessionEndOrFail(GetCurrentWebContents());
 }
 
 }  // namespace vr

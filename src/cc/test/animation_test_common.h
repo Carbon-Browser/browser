@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,9 @@ class FakeFloatAnimationCurve : public gfx::FloatAnimationCurve {
 
   base::TimeDelta Duration() const override;
   float GetValue(base::TimeDelta now) const override;
+  float GetTransformedValue(
+      base::TimeDelta now,
+      gfx::TimingFunction::LimitDirection limit_direction) const override;
   std::unique_ptr<gfx::AnimationCurve> Clone() const override;
 
  private:
@@ -42,6 +45,10 @@ class FakeTransformTransition : public gfx::TransformAnimationCurve {
 
   base::TimeDelta Duration() const override;
   gfx::TransformOperations GetValue(base::TimeDelta time) const override;
+  gfx::TransformOperations GetTransformedValue(
+      base::TimeDelta time,
+      gfx::TimingFunction::LimitDirection limit_direction) const override;
+
   bool PreservesAxisAlignment() const override;
   bool MaximumScale(float* max_scale) const override;
 
@@ -58,6 +65,9 @@ class FakeFloatTransition : public gfx::FloatAnimationCurve {
 
   base::TimeDelta Duration() const override;
   float GetValue(base::TimeDelta time) const override;
+  float GetTransformedValue(
+      base::TimeDelta time,
+      gfx::TimingFunction::LimitDirection limit_direction) const override;
 
   std::unique_ptr<gfx::AnimationCurve> Clone() const override;
 
@@ -90,7 +100,9 @@ int AddOpacityTransitionToAnimation(Animation* animation,
                                     double duration,
                                     float start_opacity,
                                     float end_opacity,
-                                    bool use_timing_function);
+                                    bool use_timing_function,
+                                    std::optional<int> id = std::nullopt,
+                                    std::optional<int> group_id = std::nullopt);
 
 int AddAnimatedFilterToAnimation(Animation* animation,
                                  double duration,
@@ -155,6 +167,8 @@ int AddOpacityTransitionToElementWithAnimation(
     float start_opacity,
     float end_opacity,
     bool use_timing_function);
+
+scoped_refptr<Animation> CancelAndReplaceAnimation(Animation& animation);
 
 }  // namespace cc
 

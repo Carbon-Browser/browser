@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.components.crash.CrashKeyIndex;
 import org.chromium.components.crash.CrashKeys;
 
-/**
- * This class updates crash keys when the application state changes.
- */
+/** This class updates crash keys when the application state changes. */
 public class ApplicationStatusTracker implements ApplicationStatus.ApplicationStateListener {
     private static final String APP_FOREGROUND = "app_foreground";
     private static final String APP_BACKGROUND = "app_background";

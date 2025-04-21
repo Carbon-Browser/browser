@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,9 @@ import("//build/config/android/rules.gni")
 
 robolectric_library("junit_test_support") {
   sources = [
+    "java/src/org/chromium/testing/local/Allowlist.java",
+    "java/src/org/chromium/testing/local/ChromiumAndroidConfigurer.java",
+    "java/src/org/chromium/testing/local/ConfigFilter.java",
     "java/src/org/chromium/testing/local/CustomShadowApplicationPackageManager.java",
     "java/src/org/chromium/testing/local/GtestComputer.java",
     "java/src/org/chromium/testing/local/GtestFilter.java",
@@ -17,14 +20,16 @@ robolectric_library("junit_test_support") {
     "java/src/org/chromium/testing/local/JsonLogger.java",
     "java/src/org/chromium/testing/local/JunitTestArgParser.java",
     "java/src/org/chromium/testing/local/JunitTestMain.java",
-    "java/src/org/chromium/testing/local/LocalRobolectricTestRunner.java",
     "java/src/org/chromium/testing/local/PackageFilter.java",
     "java/src/org/chromium/testing/local/RunnerFilter.java",
     "java/src/org/chromium/testing/local/TestDir.java",
+    "java/src/org/chromium/testing/local/TestListComputer.java",
   ]
   deps = [
+    "//build/android:build_java",
+    "//third_party/android_build_tools/json:json_java",
     "//third_party/junit",
-    "//third_party/mockito:mockito_java",
+    "//third_party/mockito:mockito_jvm_java",
   ]
 }
 
@@ -34,5 +39,6 @@ robolectric_binary("junit_unit_tests") {
     "javatests/src/org/chromium/testing/local/GtestLoggerTest.java",
     "javatests/src/org/chromium/testing/local/PackageFilterTest.java",
     "javatests/src/org/chromium/testing/local/RunnerFilterTest.java",
+    "javatests/src/org/chromium/testing/local/TestListComputerTest.java",
   ]
 }

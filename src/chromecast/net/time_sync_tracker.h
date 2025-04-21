@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,6 @@ class TimeSyncTracker {
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
-
-  // Informs the tracker that the network is connected.
-  virtual void OnNetworkConnected() = 0;
 
   // Returns if the time has been synced.
   virtual bool IsTimeSynced() const = 0;

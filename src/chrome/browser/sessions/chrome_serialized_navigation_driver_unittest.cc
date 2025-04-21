@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@
 
 class ChromeSerializedNavigationDriverTest : public ::testing::Test {
  public:
-  ChromeSerializedNavigationDriverTest() {}
+  ChromeSerializedNavigationDriverTest() = default;
 
   ChromeSerializedNavigationDriverTest(
       const ChromeSerializedNavigationDriverTest&) = delete;
   ChromeSerializedNavigationDriverTest& operator=(
       const ChromeSerializedNavigationDriverTest&) = delete;
 
-  ~ChromeSerializedNavigationDriverTest() override {}
+  ~ChromeSerializedNavigationDriverTest() override = default;
 
   void SetUp() override {
     sessions::ContentSerializedNavigationDriver::SetInstance(

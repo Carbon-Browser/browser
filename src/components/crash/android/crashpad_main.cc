@@ -1,12 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "components/crash/android/java_handler_jni_headers/CrashpadMain_jni.h"
 #include "third_party/crashpad/crashpad/client/client_argv_handling.h"
 #include "third_party/crashpad/crashpad/handler/handler_main.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/crash/android/java_handler_jni_headers/CrashpadMain_jni.h"
 
 namespace crashpad {
 

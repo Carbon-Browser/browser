@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <cstring>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/containers/to_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/pepper/browser_ppapi_host_impl.h"
 #include "content/browser/renderer_host/pepper/pepper_socket_utils.h"
 #include "content/public/browser/browser_context.h"
@@ -43,9 +44,9 @@
 #include "ppapi/shared_impl/socket_option_data.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/firewall_hole/firewall_hole.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 using ppapi::NetAddressPrivateImpl;
 using ppapi::host::NetErrorToPepperError;
@@ -72,8 +73,7 @@ PepperUDPSocketMessageFilter::PendingSend::PendingSend(
 PepperUDPSocketMessageFilter::PendingSend::PendingSend(
     const PendingSend& other) = default;
 
-PepperUDPSocketMessageFilter::PendingSend::~PendingSend() {
-}
+PepperUDPSocketMessageFilter::PendingSend::~PendingSend() {}
 
 PepperUDPSocketMessageFilter::PepperUDPSocketMessageFilter(
     BrowserPpapiHostImpl* host,
@@ -96,13 +96,14 @@ PepperUDPSocketMessageFilter::PepperUDPSocketMessageFilter(
   ++g_num_udp_filter_instances;
   DCHECK(host);
 
-  if (!host->GetRenderFrameIDsForInstance(
-          instance, &render_process_id_, &render_frame_id_)) {
+  if (!host->GetRenderFrameIDsForInstance(instance, &render_process_id_,
+                                          &render_frame_id_)) {
     NOTREACHED();
   }
 }
 
 PepperUDPSocketMessageFilter::~PepperUDPSocketMessageFilter() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(closed_);
   DCHECK(!socket_);
   DCHECK(!receiver_.is_bound());
@@ -283,8 +284,8 @@ int32_t PepperUDPSocketMessageFilter::OnMsgSetOption(
     }
     case PP_UDPSOCKET_OPTION_MULTICAST_TTL: {
       int32_t integer_value = 0;
-      if (!value.GetInt32(&integer_value) ||
-          integer_value < 0 || integer_value > 255)
+      if (!value.GetInt32(&integer_value) || integer_value < 0 ||
+          integer_value > 255)
         return PP_ERROR_BADARGUMENT;
 
       // UDPSocket instance is not yet created, so remember the value here.
@@ -305,7 +306,6 @@ int32_t PepperUDPSocketMessageFilter::OnMsgSetOption(
     }
     default: {
       NOTREACHED();
-      return PP_ERROR_BADARGUMENT;
     }
   }
 }
@@ -328,10 +328,8 @@ int32_t PepperUDPSocketMessageFilter::OnMsgBind(
   SocketPermissionRequest request =
       pepper_socket_utils::CreateSocketPermissionRequest(
           SocketPermissionRequest::UDP_BIND, addr);
-  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_,
-                                             private_api_,
-                                             &request,
-                                             render_process_id_,
+  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_, private_api_,
+                                             &request, render_process_id_,
                                              render_frame_id_)) {
     return PP_ERROR_NOACCESS;
   }
@@ -431,10 +429,8 @@ int32_t PepperUDPSocketMessageFilter::OnMsgSendTo(
   SocketPermissionRequest request =
       pepper_socket_utils::CreateSocketPermissionRequest(
           SocketPermissionRequest::UDP_SEND_TO, addr);
-  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_,
-                                             private_api_,
-                                             &request,
-                                             render_process_id_,
+  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_, private_api_,
+                                             &request, render_process_id_,
                                              render_frame_id_)) {
     return PP_ERROR_NOACCESS;
   }
@@ -451,7 +447,6 @@ int32_t PepperUDPSocketMessageFilter::OnMsgSendTo(
           static_cast<size_t>(UDPSocketResourceConstants::kMaxWriteSize)) {
     // Size of |data| is checked on the plugin side.
     NOTREACHED();
-    return PP_ERROR_BADARGUMENT;
   }
 
   net::IPAddressBytes address;
@@ -460,9 +455,7 @@ int32_t PepperUDPSocketMessageFilter::OnMsgSendTo(
     return PP_ERROR_ADDRESS_INVALID;
   }
 
-  const uint8_t* data_ptr = reinterpret_cast<const uint8_t*>(data.data());
-  std::vector<uint8_t> data_vector(data_ptr, data_ptr + num_bytes);
-
+  std::vector<uint8_t> data_vector = base::ToVector(base::as_byte_span(data));
   pending_sends_.push(PendingSend(net::IPAddress(address), port,
                                   std::move(data_vector),
                                   context->MakeReplyMessageContext()));
@@ -553,7 +546,7 @@ void PepperUDPSocketMessageFilter::DoBindCallback(
     mojo::PendingReceiver<network::mojom::UDPSocketListener> listener_receiver,
     const ppapi::host::ReplyMessageContext& context,
     int result,
-    const absl::optional<net::IPEndPoint>& local_addr_out) {
+    const std::optional<net::IPEndPoint>& local_addr_out) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   if (result != net::OK) {
@@ -569,15 +562,15 @@ void PepperUDPSocketMessageFilter::DoBindCallback(
     return;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   pepper_socket_utils::OpenUDPFirewallHole(
       *local_addr_out,
       base::BindOnce(&PepperUDPSocketMessageFilter::OnFirewallHoleOpened,
                      firewall_hole_weak_ptr_factory_.GetWeakPtr(),
                      std::move(listener_receiver), context, net_address));
-#else   // !BUILDFLAG(IS_CHROMEOS_ASH)
+#else   // !BUILDFLAG(IS_CHROMEOS)
   OnBindComplete(std::move(listener_receiver), context, net_address);
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
 void PepperUDPSocketMessageFilter::OnBindComplete(
@@ -597,7 +590,7 @@ void PepperUDPSocketMessageFilter::OnBindComplete(
   socket_->ReceiveMore(UDPSocketResourceConstants::kPluginReceiveBufferSlots);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 void PepperUDPSocketMessageFilter::OnFirewallHoleOpened(
     mojo::PendingReceiver<network::mojom::UDPSocketListener> listener_receiver,
     const ppapi::host::ReplyMessageContext& context,
@@ -610,7 +603,7 @@ void PepperUDPSocketMessageFilter::OnFirewallHoleOpened(
 
   OnBindComplete(std::move(listener_receiver), context, net_address);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void PepperUDPSocketMessageFilter::StartPendingSend() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -636,8 +629,8 @@ void PepperUDPSocketMessageFilter::Close() {
 
 void PepperUDPSocketMessageFilter::OnReceived(
     int result,
-    const absl::optional<net::IPEndPoint>& src_addr,
-    absl::optional<base::span<const uint8_t>> data) {
+    const std::optional<net::IPEndPoint>& src_addr,
+    std::optional<base::span<const uint8_t>> data) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!closed_);
 
@@ -698,9 +691,6 @@ void PepperUDPSocketMessageFilter::SendBindReply(
     const ppapi::host::ReplyMessageContext& context,
     int32_t result,
     const PP_NetAddress_Private& addr) {
-  UMA_HISTOGRAM_BOOLEAN("Pepper.PluginContextSecurity.UDPBind",
-                        is_potentially_secure_plugin_context_);
-
   ppapi::host::ReplyMessageContext reply_context(context);
   reply_context.params.set_result(result);
   SendReply(reply_context, PpapiPluginMsg_UDPSocket_BindReply(addr));
@@ -743,16 +733,15 @@ void PepperUDPSocketMessageFilter::SendBindError(
     const ppapi::host::ReplyMessageContext& context,
     int32_t result) {
   socket_.reset();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // In the unlikely case that this is due to a Mojo error while trying to open
   // a hole in the firewall on ChromeOS, abandon opening a hole in the firewall.
   firewall_hole_weak_ptr_factory_.InvalidateWeakPtrs();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
   SendBindReply(context, result, NetAddressPrivateImpl::kInvalidNetAddress);
 }
 
-void PepperUDPSocketMessageFilter::SendRecvFromError(
-    int32_t result) {
+void PepperUDPSocketMessageFilter::SendRecvFromError(int32_t result) {
   SendRecvFromResult(result, std::string(),
                      NetAddressPrivateImpl::kInvalidNetAddress);
 }
@@ -782,10 +771,8 @@ int32_t PepperUDPSocketMessageFilter::CanUseMulticastAPI(
   SocketPermissionRequest request =
       pepper_socket_utils::CreateSocketPermissionRequest(
           SocketPermissionRequest::UDP_MULTICAST_MEMBERSHIP, addr);
-  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_,
-                                             private_api_,
-                                             &request,
-                                             render_process_id_,
+  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_, private_api_,
+                                             &request, render_process_id_,
                                              render_frame_id_)) {
     return PP_ERROR_NOACCESS;
   }

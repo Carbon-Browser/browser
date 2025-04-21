@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,8 +77,8 @@ class MessageCenterStatsCollector : public MessageCenterObserver {
   void OnNotificationUpdated(const std::string& notification_id) override;
   void OnNotificationClicked(
       const std::string& notification_id,
-      const absl::optional<int>& button_index,
-      const absl::optional<std::u16string>& reply) override;
+      const std::optional<int>& button_index,
+      const std::optional<std::u16string>& reply) override;
   void OnNotificationSettingsClicked(bool handled) override;
   void OnNotificationDisplayed(const std::string& notification_id,
                                const DisplaySource source) override;

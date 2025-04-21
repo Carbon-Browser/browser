@@ -27,6 +27,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_TRACK_TEXT_TRACK_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_TRACK_TEXT_TRACK_H_
 
+#include "third_party/blink/renderer/bindings/core/v8/v8_text_track_kind.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_text_track_mode.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
@@ -40,7 +41,9 @@ namespace blink {
 
 class CueTimeline;
 class ExceptionState;
+class ExecutionContext;
 class HTMLMediaElement;
+class HTMLElement;
 class TextTrack;
 class TextTrackCue;
 class TextTrackCueList;
@@ -48,24 +51,25 @@ class TextTrackList;
 
 using TextTrackMode = V8TextTrackMode::Enum;
 
-class CORE_EXPORT TextTrack : public EventTargetWithInlineData,
-                              public TrackBase {
+class CORE_EXPORT TextTrack : public EventTarget, public TrackBase {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   enum TextTrackType { kTrackElement, kAddTrack, kInBand };
 
-  TextTrack(const AtomicString& kind,
+  TextTrack(const V8TextTrackKind& kind,
             const AtomicString& label,
             const AtomicString& language,
+            HTMLElement& source_element,
             const AtomicString& id = g_empty_atom,
             TextTrackType = kAddTrack);
   ~TextTrack() override;
 
   virtual void SetTrackList(TextTrackList*);
-  TextTrackList* TrackList() { return track_list_; }
+  TextTrackList* TrackList() { return track_list_.Get(); }
 
   bool IsVisualKind() const;
+  bool IsSpokenKind() const;
 
   static const AtomicString& SubtitlesKeyword();
   static const AtomicString& CaptionsKeyword();
@@ -74,7 +78,8 @@ class CORE_EXPORT TextTrack : public EventTargetWithInlineData,
   static const AtomicString& MetadataKeyword();
   static bool IsValidKindKeyword(const String&);
 
-  void SetKind(const AtomicString& kind) { kind_ = kind; }
+  V8TextTrackKind kind() const { return V8TextTrackKind(kind_); }
+  void SetKind(const V8TextTrackKind& kind) { kind_ = kind.AsEnum(); }
   void SetLabel(const AtomicString& label) { label_ = label; }
   void SetLanguage(const AtomicString& language) { language_ = language; }
   void SetId(const String& id) { id_ = id; }
@@ -107,6 +112,7 @@ class CORE_EXPORT TextTrack : public EventTargetWithInlineData,
   DEFINE_ATTRIBUTE_EVENT_LISTENER(cuechange, kCuechange)
 
   TextTrackType TrackType() const { return track_type_; }
+  const AtomicString& Language() const { return language_; }
 
   int TrackIndex();
   void InvalidateTrackIndex();
@@ -146,12 +152,14 @@ class CORE_EXPORT TextTrack : public EventTargetWithInlineData,
   HeapVector<Member<CSSStyleSheet>> style_sheets_;
 
   Member<TextTrackList> track_list_;
+  Member<HTMLElement> source_element_;
   TextTrackMode mode_ = TextTrackMode::kDisabled;
   TextTrackType track_type_;
   ReadinessState readiness_state_;
   int track_index_;
   int rendered_track_index_;
   bool has_been_configured_;
+  V8TextTrackKind::Enum kind_ = V8TextTrackKind::Enum::kSubtitles;
 };
 
 template <>

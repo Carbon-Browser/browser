@@ -1,43 +1,37 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
 import 'chrome://resources/cr_elements/cr_nav_menu_item_style.css.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
-import 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
-import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
+import 'chrome://resources/cr_elements/cr_ripple/cr_ripple.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './shared_icons.html.js';
-import './shared_style.css.js';
-import './strings.m.js';
+import './shared_vars.css.js';
+import '/strings.m.js';
 
-import {BrowserProxyImpl} from 'chrome://resources/cr_components/history_clusters/browser_proxy.js';
-import {MetricsProxyImpl} from 'chrome://resources/cr_components/history_clusters/metrics_proxy.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {IronSelectorElement} from 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
-import {PaperRippleElement} from 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
+import type {CrMenuSelector} from 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
 import {Page, TABBED_PAGES} from './router.js';
 import {getTemplate} from './side_bar.html.js';
 
-export type FooterInfo = {
-  managed: boolean,
-  otherFormsOfHistory: boolean,
-};
+export interface FooterInfo {
+  managed: boolean;
+  otherFormsOfHistory: boolean;
+}
 
 export interface HistorySideBarElement {
   $: {
-    'cbd-ripple': PaperRippleElement,
     'history': HTMLAnchorElement,
-    'menu': IronSelectorElement,
-    'thc-ripple': PaperRippleElement,
+    'menu': CrMenuSelector,
     'toggle-history-clusters': HTMLElement,
     'syncedTabs': HTMLElement,
   };
@@ -100,23 +94,21 @@ export class HistorySideBarElement extends PolymerElement {
             'historyClustersEnabled, historyClustersVisible)',
       },
 
-      showToggleHistoryClusters_: {
-        type: Boolean,
-        computed: 'computeShowToggleHistoryClusters_(' +
-            'historyClustersEnabled, historyClustersVisibleManagedByPolicy_)',
-      },
+      compareHistoryEnabled_: Boolean,
     };
   }
 
   footerInfo: FooterInfo;
   historyClustersEnabled: boolean;
   historyClustersVisible: boolean;
-  selectedPage: Page;
+  selectedPage: string;
   selectedTab: number;
   private guestSession_ = loadTimeData.getBoolean('isGuestSession');
   private historyClustersVisibleManagedByPolicy_: boolean;
   private showFooter_: boolean;
   private showHistoryClusters_: boolean;
+  private compareHistoryEnabled_: boolean =
+      loadTimeData.getBoolean('compareHistoryEnabled');
 
   override ready() {
     super.ready();
@@ -137,11 +129,10 @@ export class HistorySideBarElement extends PolymerElement {
   /**
    * Relocates the user to the clear browsing data section of the settings page.
    */
-  private onClearBrowsingDataTap_(e: Event) {
+  private onClearBrowsingDataClick_(e: Event) {
     const browserService = BrowserServiceImpl.getInstance();
     browserService.recordAction('InitClearBrowsingData');
     browserService.openClearBrowsingData();
-    this.$['cbd-ripple'].upAction();
     e.preventDefault();
   }
 
@@ -151,7 +142,7 @@ export class HistorySideBarElement extends PolymerElement {
 
   /**
    * Prevent clicks on sidebar items from navigating. These are only links for
-   * accessibility purposes, taps are handled separately by <iron-selector>.
+   * accessibility purposes, taps are handled separately.
    */
   private onItemClick_(e: Event) {
     e.preventDefault();
@@ -179,43 +170,6 @@ export class HistorySideBarElement extends PolymerElement {
         Page.HISTORY;
   }
 
-  private getToggleHistoryClustersItemIcon_(): string {
-    return `history:journeys-${this.historyClustersVisible ? 'off' : 'on'}`;
-  }
-
-  private getToggleHistoryClustersItemLabel_(): string {
-    return loadTimeData.getString(
-        this.historyClustersVisible ? 'disableHistoryClusters' :
-                                      'enableHistoryClusters');
-  }
-
-  private onToggleHistoryClustersClick_() {
-    MetricsProxyImpl.getInstance().recordToggledVisibility(
-        !this.historyClustersVisible);
-    BrowserProxyImpl.getInstance()
-        .handler.toggleVisibility(!this.historyClustersVisible)
-        .then(({visible}) => {
-          this.historyClustersVisible = visible;
-          this.selectedTab = TABBED_PAGES.indexOf(
-              visible ? Page.HISTORY_CLUSTERS : Page.HISTORY);
-        });
-
-    this.$['thc-ripple'].upAction();
-  }
-
-  private onToggleHistoryClustersKeydown_(e: KeyboardEvent) {
-    // Handle 'Enter' keypress because the menu item is missing href attribute.
-    if (e.key === 'Enter') {
-      this.onToggleHistoryClustersClick_();
-    }
-  }
-
-  private onToggleHistoryClustersMousedown_(e: MouseEvent) {
-    // The menu item steals the focus on mousedown event because it is given a
-    // tabindex="0" so that it is focusable in sequential keyboard navigation.
-    e.preventDefault();
-  }
-
   private computeShowFooter_(
       includeOtherFormsOfBrowsingHistory: boolean, managed: boolean): boolean {
     return includeOtherFormsOfBrowsingHistory || managed;
@@ -223,11 +177,6 @@ export class HistorySideBarElement extends PolymerElement {
 
   private computeShowHistoryClusters_(): boolean {
     return this.historyClustersEnabled && this.historyClustersVisible;
-  }
-
-  private computeShowToggleHistoryClusters_(): boolean {
-    return this.historyClustersEnabled &&
-        !this.historyClustersVisibleManagedByPolicy_;
   }
 }
 

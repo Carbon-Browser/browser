@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,6 @@ struct HttpResponse {
     // encountered a network error.
     CONNECTION_UNAVAILABLE,
 
-    // IO_ERROR is returned when reading/writing to a buffer has failed.
-    IO_ERROR,
-
     // SYNC_SERVER_ERROR is returned when the HTTP status code indicates that
     // a non-auth error has occurred.
     SYNC_SERVER_ERROR,
@@ -55,15 +52,13 @@ struct HttpResponse {
   // The value of the Content-length header.
   int64_t content_length;
 
-  // The size of a download request's payload.
-  int64_t payload_length;
-
   static HttpResponse Uninitialized();
   static HttpResponse ForNetError(int net_error_code);
-  static HttpResponse ForIoError();
   static HttpResponse ForUnspecifiedError();
   static HttpResponse ForHttpStatusCode(int http_status_code);
-  static HttpResponse ForSuccess();
+
+  // For testing only.
+  static HttpResponse ForSuccessForTest();
 
  private:
   // Private to prevent accidental usage. Use Uninitialized() if you really need
@@ -97,14 +92,9 @@ class ServerConnectionManager {
 
   virtual ~ServerConnectionManager();
 
-  // POSTs |buffer_in| and reads the body of the response into |buffer_out|.
-  // Uses the currently set access token in the headers. When |allow_batching|
-  // is true, the embedder's network stack may batch the post request depending
-  // on the network quality to streamline network access.
-  // TODO(https://crbug.com/1293657): Consider integrating batching logic into
-  // the sync code rather than relying on the embedder's network stack.
+  // POSTs `buffer_in` and reads the body of the response into `buffer_out`.
+  // Uses the currently set access token in the headers.
   HttpResponse PostBufferWithCachedAuth(const std::string& buffer_in,
-                                        bool allow_batching,
                                         std::string* buffer_out);
 
   void AddListener(ServerConnectionEventListener* listener);
@@ -125,7 +115,7 @@ class ServerConnectionManager {
     return server_response_.http_status_code;
   }
 
-  // Sets a new access token. If |access_token| is empty, the current token is
+  // Sets a new access token. If `access_token` is empty, the current token is
   // invalidated and cleared. Returns false if the server is in authentication
   // error state.
   bool SetAccessToken(const std::string& access_token);
@@ -133,7 +123,7 @@ class ServerConnectionManager {
   bool HasInvalidAccessToken() { return access_token_.empty(); }
 
  protected:
-  // Updates |server_response_| and notifies listeners if the server status
+  // Updates `server_response_` and notifies listeners if the server status
   // changed.
   void SetServerResponse(const HttpResponse& server_response);
 
@@ -141,7 +131,6 @@ class ServerConnectionManager {
   // implement.
   virtual HttpResponse PostBuffer(const std::string& buffer_in,
                                   const std::string& access_token,
-                                  bool allow_batching,
                                   std::string* buffer_out) = 0;
 
   void ClearAccessToken();

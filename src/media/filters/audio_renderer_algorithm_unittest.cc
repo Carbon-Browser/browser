@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -7,6 +7,11 @@
 // data.  This ensures that for any rate we are consuming input data at the
 // correct rate.  We always pass in a very large destination buffer with the
 // expectation that FillBuffer() will fill as much as it can but no more.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/filters/audio_renderer_algorithm.h"
 
@@ -18,8 +23,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_timestamp_helper.h"
@@ -117,8 +122,9 @@ class AudioRendererAlgorithmTest : public testing::Test {
     else if (sample_format == kSampleFormatDts)
       format = media::AudioParameters::AUDIO_BITSTREAM_DTS;
 
-    AudioParameters params(format, channel_layout, samples_per_second,
-                           frames_per_buffer);
+    AudioParameters params(format,
+                           ChannelLayoutConfig(channel_layout, channels_),
+                           samples_per_second, frames_per_buffer);
     is_bitstream_format_ = params.IsBitstreamFormat();
     bool is_encrypted = false;
     algorithm_.Initialize(params, is_encrypted);
@@ -162,6 +168,7 @@ class AudioRendererAlgorithmTest : public testing::Test {
             1, 1, frame_size, kNoTimestamp);
         break;
       case kSampleFormatDts:
+      case kSampleFormatDtse:
       case kSampleFormatDtsxP2:
         buffer = MakeBitstreamAudioBuffer(
             sample_format_, channel_layout_,
@@ -195,8 +202,9 @@ class AudioRendererAlgorithmTest : public testing::Test {
   bool VerifyAudioData(AudioBus* bus, int offset, int frames, float value) {
     for (int ch = 0; ch < bus->channels(); ++ch) {
       for (int i = offset; i < offset + frames; ++i) {
-        if (bus->channel(ch)[i] != value)
+        if (bus->channel(ch)[i] != value) {
           return false;
+        }
       }
     }
     return true;
@@ -267,7 +275,10 @@ class AudioRendererAlgorithmTest : public testing::Test {
       // if at very first buffer-fill only one frame is written, that is zero
       // which might cause exception in CheckFakeData().
       if (!first_fill_buffer || frames_written > 1)
-        ASSERT_FALSE(AudioDataIsMuted(bus.get(), frames_written, dest_offset));
+        if (!bus->is_bitstream_format()) {
+          ASSERT_FALSE(
+              AudioDataIsMuted(bus.get(), frames_written, dest_offset));
+        }
       first_fill_buffer = false;
       frames_remaining -= frames_written;
 
@@ -345,11 +356,12 @@ class AudioRendererAlgorithmTest : public testing::Test {
 
   void WsolaTest(double playback_rate) {
     const int kSampleRateHz = 48000;
-    const ChannelLayout kChannelLayout = CHANNEL_LAYOUT_STEREO;
+    constexpr ChannelLayout kChannelLayout = CHANNEL_LAYOUT_STEREO;
     const int kNumFrames = kSampleRateHz / 100;  // 10 milliseconds.
 
     channels_ = ChannelLayoutToChannelCount(kChannelLayout);
-    AudioParameters params(AudioParameters::AUDIO_PCM_LINEAR, kChannelLayout,
+    AudioParameters params(AudioParameters::AUDIO_PCM_LINEAR,
+                           ChannelLayoutConfig::FromLayout<kChannelLayout>(),
                            kSampleRateHz, kNumFrames);
     bool is_encrypted = false;
     algorithm_.Initialize(params, is_encrypted);
@@ -481,6 +493,45 @@ TEST_F(AudioRendererAlgorithmTest, FillBuffer_ResamplingRates) {
   TestPlaybackRate(1.00);
   TestPlaybackRate(1.05);
   TestPlaybackRate(2.00);
+}
+
+// This test verifies that we use the right underlying algorithms based on
+// the preserves pitch flag and the playback rate.
+TEST_F(AudioRendererAlgorithmTest, FillBuffer_FillModes) {
+  Initialize();
+
+  // WSOLA.
+  algorithm_.SetPreservesPitch(true);
+
+  // Passthrough data when we are close to a playback rate of 1.0.
+  TestPlaybackRate(1.00);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kPassthrough);
+
+  // Use WSOLA when we are not close to 1.0.
+  TestPlaybackRate(1.05);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kWSOLA);
+
+  // Return to passthrough.
+  TestPlaybackRate(1.00);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kPassthrough);
+
+  // Always use resampling when preservesPitch is false.
+  algorithm_.SetPreservesPitch(false);
+
+  TestPlaybackRate(1.00);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kResampler);
+
+  TestPlaybackRate(1.05);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kResampler);
+
+  TestPlaybackRate(1.00);
+  EXPECT_EQ(algorithm_.last_mode_for_testing(),
+            AudioRendererAlgorithm::FillBufferMode::kResampler);
 }
 
 TEST_F(AudioRendererAlgorithmTest, FillBuffer_WithOffset) {
@@ -617,7 +668,7 @@ TEST_F(AudioRendererAlgorithmTest, DotProduct) {
   std::unique_ptr<AudioBus> a = AudioBus::Create(kChannels, kFrames);
   std::unique_ptr<AudioBus> b = AudioBus::Create(kChannels, kFrames);
 
-  std::unique_ptr<float[]> dot_prod(new float[kChannels]);
+  auto dot_prod = std::make_unique<float[]>(kChannels);
 
   FillWithSquarePulseTrain(kHalfPulseWidth, 0, 0, a.get());
   FillWithSquarePulseTrain(kHalfPulseWidth, 1, 1, a.get());
@@ -648,7 +699,7 @@ TEST_F(AudioRendererAlgorithmTest, MovingBlockEnergy) {
   const int kFramesPerBlock = 3;
   const int kNumBlocks = kFrames - (kFramesPerBlock - 1);
   std::unique_ptr<AudioBus> a = AudioBus::Create(kChannels, kFrames);
-  std::unique_ptr<float[]> energies(new float[kChannels * kNumBlocks]);
+  auto energies = std::make_unique<float[]>(kChannels * kNumBlocks);
   float* ch_left = a->channel(0);
   float* ch_right = a->channel(1);
 
@@ -710,7 +761,7 @@ TEST_F(AudioRendererAlgorithmTest, FullAndDecimatedSearch) {
   ch = target->channel(1);
   memcpy(ch, target_1, sizeof(float) * kFramePerBlock);
 
-  std::unique_ptr<float[]> energy_target(new float[kChannels]);
+  auto energy_target = std::make_unique<float[]>(kChannels);
 
   internal::MultiChannelDotProduct(target.get(), 0, target.get(), 0,
                                    kFramePerBlock, energy_target.get());
@@ -719,8 +770,8 @@ TEST_F(AudioRendererAlgorithmTest, FullAndDecimatedSearch) {
   ASSERT_EQ(2.01f, energy_target[1]);
 
   const int kNumCandidBlocks = kFramesInSearchRegion - (kFramePerBlock - 1);
-  std::unique_ptr<float[]> energy_candid_blocks(
-      new float[kNumCandidBlocks * kChannels]);
+  auto energy_candid_blocks =
+      std::make_unique<float[]>(kNumCandidBlocks * kChannels);
 
   internal::MultiChannelMovingBlockEnergies(
       search_region.get(), kFramePerBlock, energy_candid_blocks.get());
@@ -817,7 +868,7 @@ TEST_F(AudioRendererAlgorithmTest, WsolaSpeedup) {
 
 TEST_F(AudioRendererAlgorithmTest, FillBufferOffset) {
   Initialize();
-  // Pad the queue capacity so fill requests for all rates bellow can be fully
+  // Pad the queue capacity so fill requests for all rates below can be fully
   // satisfied.
   algorithm_.IncreasePlaybackThreshold();
 
@@ -984,7 +1035,7 @@ TEST_F(AudioRendererAlgorithmTest, LowLatencyHint) {
 
   // Clearing the hint should restore the higher default playback threshold,
   // such that we no longer have enough buffer to be "adequate for playback".
-  algorithm_.SetLatencyHint(absl::nullopt);
+  algorithm_.SetLatencyHint(std::nullopt);
   EXPECT_FALSE(algorithm_.IsQueueAdequateForPlayback());
 
   // Fill until "full". Verify that "adequate" now matches "full".
@@ -1035,7 +1086,7 @@ TEST_F(AudioRendererAlgorithmTest, HighLatencyHint) {
 
   // Clearing the hint should restore the lower default playback threshold and
   // capacity.
-  algorithm_.SetLatencyHint(absl::nullopt);
+  algorithm_.SetLatencyHint(std::nullopt);
   EXPECT_EQ(algorithm_.QueueCapacity(), default_capacity);
 
   // The queue is over-full from our last fill when the hint was set. Flush and
@@ -1082,7 +1133,7 @@ TEST_F(AudioRendererAlgorithmTest, ClampLatencyHint) {
 
   const base::TimeDelta kDefaultMax = base::Seconds(3);
   // Verify "full" and "adequate" thresholds increased, but to a known max well
-  // bellow the hinted value.
+  // below the hinted value.
   EXPECT_GT(algorithm_.QueueCapacity(), default_capacity);
   FillAlgorithmQueueUntilAdequate();
   EXPECT_EQ(BufferedTime(), kDefaultMax);

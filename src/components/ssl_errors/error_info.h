@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,7 @@ class ErrorInfo {
     CERT_SYMANTEC_LEGACY = 16,
     CERT_KNOWN_INTERCEPTION_BLOCKED = 17,
     LEGACY_TLS = 18,
+    CERT_NON_UNIQUE_NAME = 19,
     END_OF_ENUM
   };
 

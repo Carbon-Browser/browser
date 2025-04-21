@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,14 @@
 #include "base/memory/raw_ptr.h"
 #include "components/webdata/common/webdata_export.h"
 
+namespace os_crypt_async {
+class Encryptor;
+}
+
 namespace sql {
 class Database;
 class MetaTable;
-}
+}  // namespace sql
 
 // An abstract base class representing a table within a WebDatabase.
 // Each table should subclass this, adding type-specific methods as needed.
@@ -34,18 +38,16 @@ class WEBDATA_EXPORT WebDatabaseTable {
   virtual TypeKey GetTypeKey() const = 0;
 
   // Stores the passed members as instance variables.
-  void Init(sql::Database* db, sql::MetaTable* meta_table);
+  void Init(sql::Database* db,
+            sql::MetaTable* meta_table,
+            const os_crypt_async::Encryptor* encryptor);
+
+  // Resets the members stored during `Init()`.
+  void Shutdown();
 
   // Create all of the expected SQL tables if they do not already exist.
   // Returns true on success, false on failure.
   virtual bool CreateTablesIfNecessary() = 0;
-
-  // In order to encourage developers to think about sync when adding or
-  // or altering new tables, this method must be implemented. Please get in
-  // contact with the sync team if you believe you're making a change that they
-  // should be aware of (or if you could break something).
-  // TODO(andybons): Implement something more robust.
-  virtual bool IsSyncable() = 0;
 
   // Migrates this table to |version|. Returns false if there was
   // migration work to do and it failed, true otherwise.
@@ -58,12 +60,22 @@ class WEBDATA_EXPORT WebDatabaseTable {
                                 bool* update_compatible_version) = 0;
 
  protected:
-  // Non-owning. These are owned by WebDatabase, valid as long as that
-  // class exists. Since lifetime of WebDatabaseTable objects slightly
-  // exceeds that of WebDatabase, they should not be used in
-  // ~WebDatabaseTable.
+  sql::Database* db() const { return db_; }
+
+  sql::MetaTable* meta_table() const { return meta_table_; }
+
+  const os_crypt_async::Encryptor* encryptor() const { return encryptor_; }
+
+ private:
+  // Non-null, except before `Init()` and after `Shutdown()`. Effectively, this
+  // means that they are non-null except during the constructor and destructor.
+  // They point to objects owned by `WebDatabase` whose lifetime is slightly
+  // shorter than that of the `WebDatabaseBackend` owning `this`.
   raw_ptr<sql::Database> db_;
   raw_ptr<sql::MetaTable> meta_table_;
+  // Non-null, except before `Init()` and after `Shutdown()`. This object is
+  // owned by the `WebdatabaseBackend` owning `this`.
+  raw_ptr<const os_crypt_async::Encryptor> encryptor_;
 };
 
 #endif  // COMPONENTS_WEBDATA_COMMON_WEB_DATABASE_TABLE_H_

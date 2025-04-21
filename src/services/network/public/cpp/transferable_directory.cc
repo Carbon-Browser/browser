@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,6 @@ void TransferableDirectory::OpenForTransfer() {
 
 [[nodiscard]] base::OnceClosure TransferableDirectory::Mount() {
   NOTREACHED() << "Directory transfer not supported on this platform.";
-  return {};
 }
 
 #endif  // BUILDFLAG(IS_DIRECTORY_TRANSFER_REQUIRED)

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,12 @@ import android.text.TextUtils;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.BlockJUnit4ClassRunner;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
 
-/**
- * Unit tests for {@TextInputState}.
- */
-@RunWith(BlockJUnit4ClassRunner.class)
+/** Unit tests for {@TextInputState}. */
+@RunWith(BaseRobolectricTestRunner.class)
 public class TextInputStateTest {
     @Test
     @Feature({"TextInput"})
@@ -64,8 +62,9 @@ public class TextInputStateTest {
             for (int after = -1; after < 6; ++after) {
                 int beforeLength = before == 5 ? before : Integer.MAX_VALUE;
                 int afterLength = after == 5 ? after : Integer.MAX_VALUE;
-                verifySurroundingText(getSurroundingTextFrameworkDefaultVersion(
-                                              stateEmptySelection, beforeLength, afterLength),
+                verifySurroundingText(
+                        getSurroundingTextFrameworkDefaultVersion(
+                                stateEmptySelection, beforeLength, afterLength),
                         stateEmptySelection.getSurroundingTextInternal(beforeLength, afterLength));
             }
         }
@@ -76,15 +75,17 @@ public class TextInputStateTest {
             for (int after = -1; after < 6; ++after) {
                 int beforeLength = before == 5 ? before : Integer.MAX_VALUE;
                 int afterLength = after == 5 ? after : Integer.MAX_VALUE;
-                verifySurroundingText(getSurroundingTextFrameworkDefaultVersion(
-                                              stateNonEmptySelection, beforeLength, afterLength),
+                verifySurroundingText(
+                        getSurroundingTextFrameworkDefaultVersion(
+                                stateNonEmptySelection, beforeLength, afterLength),
                         stateNonEmptySelection.getSurroundingTextInternal(
                                 beforeLength, afterLength));
             }
         }
     }
 
-    void verifySurroundingText(TextInputState.SurroundingTextInternal expected,
+    void verifySurroundingText(
+            TextInputState.SurroundingTextInternal expected,
             TextInputState.SurroundingTextInternal value) {
         assertEquals(expected.mText, value.mText);
         assertEquals(expected.mSelectionStart, value.mSelectionStart);
@@ -112,7 +113,10 @@ public class TextInputStateTest {
         }
         CharSequence surroundingText =
                 TextUtils.concat(textBeforeCursor, selectedText, textAfterCursor);
-        return new TextInputState.SurroundingTextInternal(surroundingText,
-                textBeforeCursor.length(), textBeforeCursor.length() + selectedText.length(), -1);
+        return new TextInputState.SurroundingTextInternal(
+                surroundingText,
+                textBeforeCursor.length(),
+                textBeforeCursor.length() + selectedText.length(),
+                -1);
     }
 }

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -142,11 +142,13 @@ class ColorReferencesTest(unittest.TestCase):
                  ['<resources><color name="a">#f0f0f0</color></resources>']),
         MockFile('ui/android/java/res/values/semantic_colors_non_adaptive.xml',
                  [
-                     '<color name="b">@color/hello<color>',
-                     '<color name="c">@color/a<color>'
+                     '<resources>',
+                     '<color name="b">@color/hello</color>',
+                     '<color name="c">@color/a</color>',
+                     '</resources>'
                  ]),
         MockFile('ui/android/java/res/values/semantic_colors_adaptive.xml',
-                 ['<color name="c">@color/a<color>'])
+                 ['<color name="c">@color/a</color>'])
     ]
     errors = checkxmlstyle._CheckSemanticColorsReferences(
       mock_input_api, MockOutputApi())
@@ -158,7 +160,7 @@ class ColorReferencesTest(unittest.TestCase):
         MockFile(helpers.COLOR_PALETTE_PATH,
                  ['<resources><color name="foo">#f0f0f0</color></resources>']),
         MockFile('ui/android/java/res/values/semantic_colors_adaptive.xml',
-                 ['<color name="b">@color/foo<color>']),
+                 ['<color name="b">@color/foo</color>']),
         MockFile('ui/android/java/res/values/colors.xml', [
             '<color name="c">@color/b</color>',
             '<color name="d">@color/b</color>',
@@ -168,6 +170,23 @@ class ColorReferencesTest(unittest.TestCase):
     warnings = checkxmlstyle._CheckColorPaletteReferences(
         mock_input_api, MockOutputApi())
     self.assertEqual(1, len(warnings))
+
+  def testValidReferenceInNonAdaptive(self):
+    mock_input_api = MockInputApi()
+    mock_input_api.files = [
+        MockFile(helpers.COLOR_PALETTE_PATH,
+                 ['<resources><color name="a">#f0f0f0</color></resources>']),
+        MockFile('ui/android/java/res/values/semantic_colors_non_adaptive.xml',
+                 [
+                     '<resources>',
+                     '<color name="b">@color/a</color>',
+                     '<color name="c">@color/b</color>',
+                     '</resources>'
+                 ])
+    ]
+    errors = checkxmlstyle._CheckSemanticColorsReferences(
+        mock_input_api, MockOutputApi())
+    self.assertEqual(0, len(errors))
 
 
 class DuplicateColorsTest(unittest.TestCase):
@@ -187,7 +206,7 @@ class DuplicateColorsTest(unittest.TestCase):
     self.assertEqual('  %s:2' % helpers.COLOR_PALETTE_RELATIVE_PATH,
                      errors[0].items[1].splitlines()[0])
 
-  def testSucess(self):
+  def testSuccess(self):
     lines = ['<color name="color1">#61000000</color>',
              '<color name="color1">#FFFFFF</color>']
     mock_input_api = MockInputApi()
@@ -247,7 +266,7 @@ class XmlNamespacePrefixesTest(unittest.TestCase):
     self.assertEqual('  chrome/java/res_test/file.xml:1',
                      errors[0].items[0].splitlines()[0])
 
-  def testSucess(self):
+  def testSuccess(self):
     lines = ['xmlns:app="http://schemas.android.com/apk/res-auto"']
     mock_input_api = MockInputApi()
     mock_input_api.files = [MockFile('chrome/java/res_test/file.xml', lines)]
@@ -413,6 +432,30 @@ class NewTextAppearanceTest(unittest.TestCase):
     self.assertEqual(0, len(errors))
 
 
+class ImageAccessibilityTextTest(unittest.TestCase):
+
+  def testIgnoreContentDescription(self):
+    xmlChanges = [
+        '<ImageView',
+        '    android:id="@+id/obvious_image"',
+        '    tools:ignore="ContentDescription"',
+        '    android:layout_width="wrap_content"',
+        '    android:layout_height="match_parent"',
+        '    android:gravity="center_vertical"',
+        '/>'
+    ]
+    mock_input_api = MockInputApi()
+    mock_input_api.files = [
+        MockFile('chrome/android/java/res/layout/new_imageview.xml', xmlChanges)
+    ]
+    result = checkxmlstyle._CheckImportantForAccessibility(
+        mock_input_api, MockOutputApi())
+
+    self.assertEqual(1, len(result))
+    self.assertEqual(1, len(result[0].items))
+    self.assertEqual('  chrome/android/java/res/layout/new_imageview.xml:3',
+                       result[0].items[0].splitlines()[0])
+
 class UnfavoredLayoutAttributesTest(unittest.TestCase):
 
   def testLineSpacingAttributesUsage(self):
@@ -473,7 +516,7 @@ class UnfavoredWidgetsTest(unittest.TestCase):
 
 class StringResourcesTest(unittest.TestCase):
   def testInfavoredQuotations(self):
-    xmlChanges = (u'''<grit><release><messages>
+    xmlChanges = ('''<grit><release><messages>
       <message name="IDS_TEST_0">
           <ph><ex>Hi</ex></ph>, it\u0027s a good idea
       </message>
@@ -493,7 +536,7 @@ class StringResourcesTest(unittest.TestCase):
         \u201CMenus\u201D
       </message>
         <part file="site_settings.grdp" />
-          </messages></release></grit>'''.encode('utf-8')).splitlines()
+          </messages></release></grit>''').splitlines()
 
     mock_input_api = MockInputApi()
     mock_input_api.files = [
@@ -515,7 +558,7 @@ class StringResourcesTest(unittest.TestCase):
 
 
   def testInfavoredEllipsis(self):
-    xmlChanges = (u'''<grit><release><messages>
+    xmlChanges = ('''<grit><release><messages>
       <message name="IDS_TEST_0">
           <ph><ex>Hi</ex></ph>, file is downloading\u002E\u002E\u002E
       </message>
@@ -526,7 +569,7 @@ class StringResourcesTest(unittest.TestCase):
           <ph><ex>Oh</ex></ph>, file is downloaded\u002E
       </message>
         <part file="site_settings.grdp" />
-          </messages></release></grit>'''.encode('utf-8')).splitlines()
+          </messages></release></grit>''').splitlines()
 
     mock_input_api = MockInputApi()
     mock_input_api.files = [
@@ -539,6 +582,54 @@ class StringResourcesTest(unittest.TestCase):
     self.assertEqual(1, len(result[0].items))
     self.assertEqual('  ui/android/string/chrome_android_string.grd:3',
                      result[0].items[0].splitlines()[0])
+
+
+class BadStyleReferenceTest(unittest.TestCase):
+  def testFailure(self):
+    lines = [
+        ' android:theme="style/foo"',
+        ' android:theme="@stylefoo"',
+        ' android:theme="@foo"',
+        ' android:theme="@foo/foo"',
+        ' android:theme="attr/foo"',
+        ' android:theme="?attrfoo"',
+        ' android:theme="@attr/foo"',
+        ' android:theme="?anroid:attrfoo"',
+        ' android:theme="?foo"',
+        ' android:theme="?foo/foo"',
+        ' android:textAppearance="foo"',
+        ' style="foo"',
+    ]
+    mock_input_api = MockInputApi()
+    mock_input_api.files = [
+        MockFile(helpers.COLOR_PALETTE_RELATIVE_PATH, lines)
+    ]
+    warnings = checkxmlstyle._CheckBadStyleReference(mock_input_api,
+                                                     MockOutputApi())
+    self.assertEqual(1, len(warnings))
+    self.assertEqual(12, len(warnings[0].items))
+
+  def testSuccess(self):
+    lines = [
+        ' android:theme="@style/foo"',
+        ' android:theme="?attr/foo"',
+        ' android:theme="?android:attr/foo"',
+        ' android:textAppearance="@style/foo"',
+        ' android:textAppearance="?attr/foo"',
+        ' android:textAppearance="?android:attr/foo"',
+        ' style="@style/foo"',
+        ' style="?attr/foo"',
+        ' style="?android:attr/foo"',
+        ' foo="foo/stuff"',
+        ' foo="foo"',
+        ' foo="@foo"',
+        ' foo="?foo"',
+    ]
+    mock_input_api = MockInputApi()
+    mock_input_api.files = [MockFile('chrome/java/res_test/colors.xml', lines)]
+    warnings = checkxmlstyle._CheckBadStyleReference(mock_input_api,
+                                                     MockOutputApi())
+    self.assertEqual(0, len(warnings))
 
 
 if __name__ == '__main__':

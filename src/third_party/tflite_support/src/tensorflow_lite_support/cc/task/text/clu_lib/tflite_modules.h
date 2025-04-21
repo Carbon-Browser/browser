@@ -16,9 +16,9 @@ limitations under the License.
 #ifndef TENSORFLOW_LITE_SUPPORT_CC_TASK_TEXT_CLU_LIB_TFLITE_MODULES_H_
 #define TENSORFLOW_LITE_SUPPORT_CC_TASK_TEXT_CLU_LIB_TFLITE_MODULES_H_
 
-#include "absl/status/statusor.h"      // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "absl/strings/string_view.h"  // from @com_google_absl
-#include "tensorflow/lite/interpreter.h"
+#include "tensorflow_lite_support/cc/task/core/tflite_engine.h"
 #include "tensorflow_lite_support/cc/task/text/proto/bert_clu_annotator_options_proto_inc.h"
 #include "tensorflow_lite_support/cc/task/text/proto/clu_proto_inc.h"
 #include "tensorflow_lite_support/cc/text/tokenizers/bert_tokenizer.h"
@@ -76,7 +76,7 @@ class AbstractModule {
  protected:
   AbstractModule() = default;
 
-  absl::Status Init(Interpreter* interpreter,
+  absl::Status Init(core::TfLiteEngine::Interpreter* interpreter,
                     const BertCluAnnotatorOptions* options);
 
   using NamesAndConfidences =
@@ -85,11 +85,10 @@ class AbstractModule {
   // output tensors.
   // The tensors are assumed to be of shape [1, max_seq_len]
   absl::StatusOr<NamesAndConfidences> NamesAndConfidencesFromOutput(
-      int names_tensor_idx,
-      int scores_tensor_idx) const;
+      int names_tensor_idx, int scores_tensor_idx) const;
 
   // TFLite interpreter
-  Interpreter* interpreter_ = nullptr;
+  core::TfLiteEngine::Interpreter* interpreter_ = nullptr;
 
   const TensorIndexMap* tensor_index_map_ = nullptr;
 };
@@ -99,7 +98,7 @@ class AbstractModule {
 class UtteranceSeqModule : public AbstractModule {
  public:
   static absl::StatusOr<std::unique_ptr<AbstractModule>> Create(
-      Interpreter* interpreter,
+      core::TfLiteEngine::Interpreter* interpreter,
       const TensorIndexMap* tensor_index_map,
       const BertCluAnnotatorOptions* options,
       const tflite::support::text::tokenizer::BertTokenizer* tokenizer);
@@ -118,7 +117,7 @@ class UtteranceSeqModule : public AbstractModule {
 class DomainModule : public AbstractModule {
  public:
   static absl::StatusOr<std::unique_ptr<AbstractModule>> Create(
-      Interpreter* interpreter,
+      core::TfLiteEngine::Interpreter* interpreter,
       const TensorIndexMap* tensor_index_map,
       const BertCluAnnotatorOptions* options);
 
@@ -133,7 +132,7 @@ class DomainModule : public AbstractModule {
 class IntentModule : public AbstractModule {
  public:
   static absl::StatusOr<std::unique_ptr<AbstractModule>> Create(
-      Interpreter* interpreter,
+      core::TfLiteEngine::Interpreter* interpreter,
       const TensorIndexMap* tensor_index_map,
       const BertCluAnnotatorOptions* options);
 
@@ -145,11 +144,11 @@ class IntentModule : public AbstractModule {
   float categorical_slot_threshold_;
 };
 
-// Responsible for noncategorical slots.
+// Responsible for mentioned slots.
 class SlotModule : public AbstractModule {
  public:
   static absl::StatusOr<std::unique_ptr<AbstractModule>> Create(
-      Interpreter* interpreter,
+      core::TfLiteEngine::Interpreter* interpreter,
       const TensorIndexMap* tensor_index_map,
       const BertCluAnnotatorOptions* options);
 
@@ -157,7 +156,7 @@ class SlotModule : public AbstractModule {
                            CluResponse* response) const override;
 
  private:
-  float noncategorical_slot_threshold_;
+  float mentioned_slot_threshold_;
 };
 
 }  // namespace tflite::task::text::clu

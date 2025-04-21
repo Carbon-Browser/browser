@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,9 @@ const char kEnrollmentStepWorking[] = "working";
 const char kEnrollmentStepTPMChecking[] = "tpm-checking";
 const char kEnrollmentStepSuccess[] = "success";
 const char kEnrollmentStepDeviceAttributes[] = "attribute-prompt";
-const char kEnrollmentStepADJoin[] = "ad-join";
 const char kEnrollmentStepError[] = "error";
 const char kEnrollmentStepKioskEnrollment[] = "kiosk-enrollment";
 const char kEnrollmentStepDeviceAttributesError[] = "attribute-prompt-error";
-const char kEnrollmentStepADJoinError[] = "active-directory-join-error";
 
 }  // namespace ui
 
@@ -39,10 +37,10 @@ namespace {
 const char kEnrollmentUI[] = "enterprise-enrollment";
 
 const char* const kAllSteps[] = {
-    ui::kEnrollmentStepSignin,      ui::kEnrollmentStepWorking,
-    ui::kEnrollmentStepTPMChecking, ui::kEnrollmentStepDeviceAttributes,
-    ui::kEnrollmentStepSuccess,     ui::kEnrollmentStepADJoin,
-    ui::kEnrollmentStepError,       ui::kEnrollmentStepKioskEnrollment};
+    ui::kEnrollmentStepSignin,         ui::kEnrollmentStepWorking,
+    ui::kEnrollmentStepTPMChecking,    ui::kEnrollmentStepDeviceAttributes,
+    ui::kEnrollmentStepSuccess,        ui::kEnrollmentStepError,
+    ui::kEnrollmentStepKioskEnrollment};
 
 std::string StepElementID(const std::string& step) {
   return "step-" + step;
@@ -103,6 +101,10 @@ void EnrollmentUIMixin::ExpectErrorMessage(int error_message_id,
 
 void EnrollmentUIMixin::RetryAfterError() {
   OobeJS().ClickOnPath(kEnrollmentErrorRetryButtonPath);
+}
+
+void EnrollmentUIMixin::RetryAndWaitForSigninStep() {
+  RetryAfterError();
   WaitForStep(ui::kEnrollmentStepSignin);
 }
 

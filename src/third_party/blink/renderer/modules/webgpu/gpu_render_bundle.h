@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,22 @@ namespace blink {
 
 class GPUDevice;
 
-class GPURenderBundle : public DawnObject<WGPURenderBundle> {
+class GPURenderBundle : public DawnObject<wgpu::RenderBundle> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  explicit GPURenderBundle(GPUDevice* device, WGPURenderBundle render_bundle);
+  explicit GPURenderBundle(GPUDevice* device,
+                           wgpu::RenderBundle render_bundle,
+                           const String& label);
 
   GPURenderBundle(const GPURenderBundle&) = delete;
   GPURenderBundle& operator=(const GPURenderBundle&) = delete;
+
+ private:
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetHandle().SetLabel(utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/nacl/renderer/histogram.h"
 #include "components/nacl/renderer/nexe_load_manager.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/web_associated_url_loader.h"
 
@@ -42,14 +41,14 @@ void ManifestDownloader::DidReceiveResponse(
   status_code_ = response.HttpStatusCode();
 }
 
-void ManifestDownloader::DidReceiveData(const char* data, int data_length) {
-  if (buffer_.size() + data_length > kNaClManifestMaxFileBytes) {
+void ManifestDownloader::DidReceiveData(base::span<const char> data) {
+  if (buffer_.size() + data.size() > kNaClManifestMaxFileBytes) {
     pp_nacl_error_ = PP_NACL_ERROR_MANIFEST_TOO_LARGE;
     buffer_.clear();
   }
 
   if (pp_nacl_error_ == PP_NACL_ERROR_LOAD_SUCCESS)
-    buffer_.append(data, data_length);
+    buffer_.append(data.data(), data.size());
 }
 
 void ManifestDownloader::Close() {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,8 @@ void WorldSafeV8ReferenceInternal::MaybeCheckCreationContextWorld(
   if (!value.As<v8::Object>()->GetCreationContext().ToLocal(&context))
     return;
 
-  ScriptState* script_state = ScriptState::From(context);
+  v8::Isolate* isolate = context->GetIsolate();
+  ScriptState* script_state = ScriptState::From(isolate, context);
   CHECK_EQ(&world, &script_state->World());
 }
 

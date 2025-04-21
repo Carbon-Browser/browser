@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ GURL GetCustomDomain(bool use_install_url) {
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           switches::kCustomAndroidMessagesDomain);
   if (custom_domain.empty()) {
-    return GURL::EmptyGURL();
+    return GURL();
   }
 
   GURL url(custom_domain);

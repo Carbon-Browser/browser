@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ HeadlessWindowParentingClient::~HeadlessWindowParentingClient() {
 
 aura::Window* HeadlessWindowParentingClient::GetDefaultParent(
     aura::Window* window,
-    const gfx::Rect& bounds) {
+    const gfx::Rect& bounds,
+    const int64_t display_id) {
   return root_window_;
 }
 

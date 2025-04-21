@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,9 +34,6 @@ _mdc_public_headers = [
   "src/components/ActivityIndicator/src/private/MDCActivityIndicatorMotionSpec.h",
   "src/components/ActivityIndicator/src/private/MaterialActivityIndicatorStrings.h",
   "src/components/ActivityIndicator/src/private/MaterialActivityIndicatorStrings_table.h",
-  "src/components/AnimationTiming/src/CAMediaTimingFunction+MDCAnimationTiming.h",
-  "src/components/AnimationTiming/src/MaterialAnimationTiming.h",
-  "src/components/AnimationTiming/src/UIView+MDCTimingFunction.h",
   "src/components/AppBar/src/ColorThemer/MDCAppBarColorThemer.h",
   "src/components/AppBar/src/ColorThemer/MaterialAppBar+ColorThemer.h",
   "src/components/AppBar/src/MDCAppBar.h",
@@ -70,6 +67,7 @@ _mdc_public_headers = [
   "src/components/BottomNavigation/src/MDCBottomNavigationBarController.h",
   "src/components/BottomNavigation/src/MDCBottomNavigationBarControllerDelegate.h",
   "src/components/BottomNavigation/src/MDCBottomNavigationBarDelegate.h",
+  "src/components/BottomNavigation/src/MDCBottomNavigationBarItem.h",
   "src/components/BottomNavigation/src/MaterialBottomNavigation+BottomNavigationController.h",
   "src/components/BottomNavigation/src/MaterialBottomNavigation.h",
   "src/components/BottomNavigation/src/PerformantShadowMigration/MDCBottomNavigationBar+ShadowsPrivate.h",
@@ -164,6 +162,7 @@ _mdc_public_headers = [
   "src/components/Collections/src/private/MDCCollectionViewStyler.h",
   "src/components/Collections/src/private/MaterialCollectionsStrings.h",
   "src/components/Collections/src/private/MaterialCollectionsStrings_table.h",
+  "src/components/Color/src/UIColor+MaterialBlending.h",
   "src/components/Dialogs/src/ColorThemer/MDCAlertColorThemer.h",
   "src/components/Dialogs/src/ColorThemer/MaterialDialogs+ColorThemer.h",
   "src/components/Dialogs/src/MDCAlertController+ButtonForAction.h",
@@ -247,6 +246,7 @@ _mdc_public_headers = [
   "src/components/List/src/Theming/MDCSelfSizingStereoCell+MaterialTheming.h",
   "src/components/List/src/Theming/MaterialList+Theming.h",
   "src/components/List/src/private/MDCSelfSizingStereoCellLayout.h",
+  "src/components/M3CButton/src/M3CButton.h",
   "src/components/MinimumOS/src/MDCMinimumOS.h",
   "src/components/NavigationBar/src/ColorThemer/MDCNavigationBarColorThemer.h",
   "src/components/NavigationBar/src/ColorThemer/MaterialNavigationBar+ColorThemer.h",
@@ -287,6 +287,7 @@ _mdc_public_headers = [
   "src/components/ProgressView/src/Theming/MDCProgressView+MaterialTheming.h",
   "src/components/ProgressView/src/Theming/MaterialProgressView+Theming.h",
   "src/components/ProgressView/src/private/MDCProgressGradientView.h",
+  "src/components/ProgressView/src/private/MDCProgressLayerView.h",
   "src/components/ProgressView/src/private/MaterialProgressViewStrings.h",
   "src/components/ProgressView/src/private/MaterialProgressViewStrings_table.h",
   "src/components/Ripple/src/MDCRippleTouchController.h",
@@ -299,7 +300,7 @@ _mdc_public_headers = [
   "src/components/Ripple/src/private/MDCRippleLayerDelegate.h",
   "src/components/ScalableFontDescriptor/src/MDCScalableFontDescriptor.h",
   "src/components/ScalableFontDescriptor/src/MaterialScalableFontDescriptor.h",
-  "src/components/Shadow/src/Animations/UIView+MDCShadowAnimations.h",
+  "src/components/Shadow/src/M3CAnimationActions.h",
   "src/components/Shadow/src/MDCShadow.h",
   "src/components/Shadow/src/MDCShadowsCollection.h",
   "src/components/Shadow/src/MaterialShadow.h",
@@ -376,8 +377,6 @@ _mdc_public_headers = [
   "src/components/Tabs/src/TabBarView/private/MDCTabBarViewPrivateIndicatorContext.h",
   "src/components/Tabs/src/TabBarViewTheming/MDCTabBarView+MaterialTheming.h",
   "src/components/Tabs/src/TabBarViewTheming/MaterialTabs+TabBarViewTheming.h",
-  "src/components/Tabs/src/Theming/MDCTabBar+MaterialTheming.h",
-  "src/components/Tabs/src/Theming/MaterialTabs+Theming.h",
   "src/components/Tabs/src/TypographyThemer/MDCTabBarTypographyThemer.h",
   "src/components/Tabs/src/TypographyThemer/MaterialTabs+TypographyThemer.h",
   "src/components/Tabs/src/private/MDCItemBar.h",
@@ -455,7 +454,6 @@ _mdc_public_headers = [
   "src/components/Themes/src/MDCTonalColorScheme.h",
   "src/components/Themes/src/MDCTonalPalette.h",
   "src/components/Themes/src/MaterialThemes.h",
-  "src/components/Typography/src/FontLoader/MDCTypographyFontLoader.h",
   "src/components/Typography/src/FontScaler/MDCFontScaler.h",
   "src/components/Typography/src/MDCFontTextStyle.h",
   "src/components/Typography/src/MDCTypography.h",
@@ -470,7 +468,6 @@ _mdc_public_headers = [
   "src/components/private/Application/src/MaterialApplication.h",
   "src/components/private/Application/src/UIApplication+MDCAppExtensions.h",
   "src/components/private/Color/src/MaterialColor.h",
-  "src/components/private/Color/src/UIColor+MaterialBlending.h",
   "src/components/private/Color/src/UIColor+MaterialDynamic.h",
   "src/components/private/Icons/icons/ic_arrow_back/src/MaterialIcons+ic_arrow_back.h",
   "src/components/private/Icons/icons/ic_check/src/MaterialIcons+ic_check.h",
@@ -502,7 +499,6 @@ _mdc_public_headers = [
   "src/components/private/Snapshot/src/MaterialSnapshot.h",
   "src/components/private/Snapshot/src/SnapshotUtilities/UIImage+MDCSnapshot.h",
   "src/components/private/Snapshot/src/SnapshotUtilities/UIView+MDCSnapshot.h",
-  "src/components/private/Snapshot/src/SourceDummies/MDCSnapshotSourceDummy.h",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MDCTextControlStyleBase.h",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MDCTextControlVerticalPositioningReferenceBase.h",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MaterialTextControlsPrivate+BaseStyle.h",
@@ -552,9 +548,6 @@ _mdc_public_headers = [
   "src/components/schemes/Shape/src/MDCShapeCategory.h",
   "src/components/schemes/Shape/src/MDCShapeScheme.h",
   "src/components/schemes/Shape/src/MaterialShapeScheme.h",
-  "src/components/schemes/Typography/src/BasicFontScheme/MDCBasicFontScheme.h",
-  "src/components/schemes/Typography/src/BasicFontScheme/MaterialTypographyScheme+BasicFontScheme.h",
-  "src/components/schemes/Typography/src/MDCLegacyFontScheme.h",
   "src/components/schemes/Typography/src/MDCTypographyScheme.h",
   "src/components/schemes/Typography/src/MaterialTypographyScheme.h",
   "src/components/schemes/Typography/src/Scheming/MDCTypographyScheming.h",
@@ -571,7 +564,6 @@ _mdc_include_dirs = [
   "src/components/ActionSheet/src/private",
   "src/components/ActivityIndicator/src",
   "src/components/ActivityIndicator/src/private",
-  "src/components/AnimationTiming/src",
   "src/components/AppBar/src",
   "src/components/AppBar/src/ColorThemer",
   "src/components/AppBar/src/Theming",
@@ -609,6 +601,7 @@ _mdc_include_dirs = [
   "src/components/CollectionLayoutAttributes/src",
   "src/components/Collections/src",
   "src/components/Collections/src/private",
+  "src/components/Color/src",
   "src/components/Dialogs/src",
   "src/components/Dialogs/src/ColorThemer",
   "src/components/Dialogs/src/Theming",
@@ -629,6 +622,7 @@ _mdc_include_dirs = [
   "src/components/List/src",
   "src/components/List/src/Theming",
   "src/components/List/src/private",
+  "src/components/M3CButton/src",
   "src/components/MinimumOS/src",
   "src/components/NavigationBar/src",
   "src/components/NavigationBar/src/ColorThemer",
@@ -649,7 +643,6 @@ _mdc_include_dirs = [
   "src/components/Ripple/src/private",
   "src/components/ScalableFontDescriptor/src",
   "src/components/Shadow/src",
-  "src/components/Shadow/src/Animations",
   "src/components/ShadowElevations/src",
   "src/components/ShadowLayer/src",
   "src/components/ShapeLibrary/src",
@@ -665,7 +658,6 @@ _mdc_include_dirs = [
   "src/components/Tabs/src/TabBarView",
   "src/components/Tabs/src/TabBarView/private",
   "src/components/Tabs/src/TabBarViewTheming",
-  "src/components/Tabs/src/Theming",
   "src/components/Tabs/src/TypographyThemer",
   "src/components/Tabs/src/private",
   "src/components/TextControls/src/BaseTextAreas",
@@ -688,7 +680,6 @@ _mdc_include_dirs = [
   "src/components/TextFields/src/private",
   "src/components/Themes/src",
   "src/components/Typography/src",
-  "src/components/Typography/src/FontLoader",
   "src/components/Typography/src/FontScaler",
   "src/components/Typography/src/private",
   "src/components/private/Application/src",
@@ -712,7 +703,6 @@ _mdc_include_dirs = [
   "src/components/private/Overlay/src/private",
   "src/components/private/Snapshot/src",
   "src/components/private/Snapshot/src/SnapshotUtilities",
-  "src/components/private/Snapshot/src/SourceDummies",
   "src/components/private/TextControlsPrivate/src/BaseStyle",
   "src/components/private/TextControlsPrivate/src/FilledStyle",
   "src/components/private/TextControlsPrivate/src/OutlinedStyle",
@@ -726,7 +716,6 @@ _mdc_include_dirs = [
   "src/components/schemes/Container/src",
   "src/components/schemes/Shape/src",
   "src/components/schemes/Typography/src",
-  "src/components/schemes/Typography/src/BasicFontScheme",
   "src/components/schemes/Typography/src/Scheming",
 ]
 
@@ -760,11 +749,6 @@ _mdc_sources = [
   "src/components/ActivityIndicator/src/private/MDCActivityIndicatorMotionSpec.m",
   "src/components/ActivityIndicator/src/private/MaterialActivityIndicatorStrings.h",
   "src/components/ActivityIndicator/src/private/MaterialActivityIndicatorStrings_table.h",
-  "src/components/AnimationTiming/src/CAMediaTimingFunction+MDCAnimationTiming.h",
-  "src/components/AnimationTiming/src/CAMediaTimingFunction+MDCAnimationTiming.m",
-  "src/components/AnimationTiming/src/MaterialAnimationTiming.h",
-  "src/components/AnimationTiming/src/UIView+MDCTimingFunction.h",
-  "src/components/AnimationTiming/src/UIView+MDCTimingFunction.m",
   "src/components/AppBar/src/ColorThemer/MDCAppBarColorThemer.h",
   "src/components/AppBar/src/ColorThemer/MDCAppBarColorThemer.m",
   "src/components/AppBar/src/ColorThemer/MaterialAppBar+ColorThemer.h",
@@ -814,6 +798,8 @@ _mdc_sources = [
   "src/components/BottomNavigation/src/MDCBottomNavigationBarController.m",
   "src/components/BottomNavigation/src/MDCBottomNavigationBarControllerDelegate.h",
   "src/components/BottomNavigation/src/MDCBottomNavigationBarDelegate.h",
+  "src/components/BottomNavigation/src/MDCBottomNavigationBarItem.h",
+  "src/components/BottomNavigation/src/MDCBottomNavigationBarItem.m",
   "src/components/BottomNavigation/src/MaterialBottomNavigation+BottomNavigationController.h",
   "src/components/BottomNavigation/src/MaterialBottomNavigation.h",
   "src/components/BottomNavigation/src/PerformantShadowMigration/MDCBottomNavigationBar+ShadowsPrivate.h",
@@ -962,6 +948,8 @@ _mdc_sources = [
   "src/components/Collections/src/private/MDCCollectionViewStyler.m",
   "src/components/Collections/src/private/MaterialCollectionsStrings.h",
   "src/components/Collections/src/private/MaterialCollectionsStrings_table.h",
+  "src/components/Color/src/UIColor+MaterialBlending.h",
+  "src/components/Color/src/UIColor+MaterialBlending.m",
   "src/components/Dialogs/src/ColorThemer/MDCAlertColorThemer.h",
   "src/components/Dialogs/src/ColorThemer/MDCAlertColorThemer.m",
   "src/components/Dialogs/src/ColorThemer/MaterialDialogs+ColorThemer.h",
@@ -1085,6 +1073,8 @@ _mdc_sources = [
   "src/components/List/src/Theming/MaterialList+Theming.h",
   "src/components/List/src/private/MDCSelfSizingStereoCellLayout.h",
   "src/components/List/src/private/MDCSelfSizingStereoCellLayout.m",
+  "src/components/M3CButton/src/M3CButton.h",
+  "src/components/M3CButton/src/M3CButton.m",
   "src/components/MinimumOS/src/MDCMinimumOS.h",
   "src/components/NavigationBar/src/ColorThemer/MDCNavigationBarColorThemer.h",
   "src/components/NavigationBar/src/ColorThemer/MDCNavigationBarColorThemer.m",
@@ -1145,6 +1135,8 @@ _mdc_sources = [
   "src/components/ProgressView/src/Theming/MaterialProgressView+Theming.h",
   "src/components/ProgressView/src/private/MDCProgressGradientView.h",
   "src/components/ProgressView/src/private/MDCProgressGradientView.m",
+  "src/components/ProgressView/src/private/MDCProgressLayerView.h",
+  "src/components/ProgressView/src/private/MDCProgressLayerView.m",
   "src/components/ProgressView/src/private/MaterialProgressViewStrings.h",
   "src/components/ProgressView/src/private/MaterialProgressViewStrings_table.h",
   "src/components/Ripple/src/MDCRippleTouchController.h",
@@ -1162,8 +1154,8 @@ _mdc_sources = [
   "src/components/ScalableFontDescriptor/src/MDCScalableFontDescriptor.h",
   "src/components/ScalableFontDescriptor/src/MDCScalableFontDescriptor.m",
   "src/components/ScalableFontDescriptor/src/MaterialScalableFontDescriptor.h",
-  "src/components/Shadow/src/Animations/UIView+MDCShadowAnimations.h",
-  "src/components/Shadow/src/Animations/UIView+MDCShadowAnimations.m",
+  "src/components/Shadow/src/M3CAnimationActions.h",
+  "src/components/Shadow/src/M3CAnimationActions.m",
   "src/components/Shadow/src/MDCShadow.h",
   "src/components/Shadow/src/MDCShadow.m",
   "src/components/Shadow/src/MDCShadowsCollection.h",
@@ -1278,9 +1270,6 @@ _mdc_sources = [
   "src/components/Tabs/src/TabBarViewTheming/MDCTabBarView+MaterialTheming.h",
   "src/components/Tabs/src/TabBarViewTheming/MDCTabBarView+MaterialTheming.m",
   "src/components/Tabs/src/TabBarViewTheming/MaterialTabs+TabBarViewTheming.h",
-  "src/components/Tabs/src/Theming/MDCTabBar+MaterialTheming.h",
-  "src/components/Tabs/src/Theming/MDCTabBar+MaterialTheming.m",
-  "src/components/Tabs/src/Theming/MaterialTabs+Theming.h",
   "src/components/Tabs/src/TypographyThemer/MDCTabBarTypographyThemer.h",
   "src/components/Tabs/src/TypographyThemer/MDCTabBarTypographyThemer.m",
   "src/components/Tabs/src/TypographyThemer/MaterialTabs+TypographyThemer.h",
@@ -1399,7 +1388,6 @@ _mdc_sources = [
   "src/components/Themes/src/MDCTonalColorScheme.h",
   "src/components/Themes/src/MDCTonalPalette.h",
   "src/components/Themes/src/MaterialThemes.h",
-  "src/components/Typography/src/FontLoader/MDCTypographyFontLoader.h",
   "src/components/Typography/src/FontScaler/MDCFontScaler.h",
   "src/components/Typography/src/FontScaler/MDCFontScaler.m",
   "src/components/Typography/src/MDCFontTextStyle.h",
@@ -1424,8 +1412,6 @@ _mdc_sources = [
   "src/components/private/Application/src/UIApplication+MDCAppExtensions.h",
   "src/components/private/Application/src/UIApplication+MDCAppExtensions.m",
   "src/components/private/Color/src/MaterialColor.h",
-  "src/components/private/Color/src/UIColor+MaterialBlending.h",
-  "src/components/private/Color/src/UIColor+MaterialBlending.m",
   "src/components/private/Color/src/UIColor+MaterialDynamic.h",
   "src/components/private/Color/src/UIColor+MaterialDynamic.m",
   "src/components/private/Icons/icons/ic_arrow_back/src/MaterialIcons+ic_arrow_back.h",
@@ -1480,8 +1466,6 @@ _mdc_sources = [
   "src/components/private/Snapshot/src/SnapshotUtilities/UIImage+MDCSnapshot.m",
   "src/components/private/Snapshot/src/SnapshotUtilities/UIView+MDCSnapshot.h",
   "src/components/private/Snapshot/src/SnapshotUtilities/UIView+MDCSnapshot.m",
-  "src/components/private/Snapshot/src/SourceDummies/MDCSnapshotSourceDummy.h",
-  "src/components/private/Snapshot/src/SourceDummies/MDCSnapshotSourceDummy.m",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MDCTextControlStyleBase.h",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MDCTextControlStyleBase.m",
   "src/components/private/TextControlsPrivate/src/BaseStyle/MDCTextControlVerticalPositioningReferenceBase.h",
@@ -1564,9 +1548,6 @@ _mdc_sources = [
   "src/components/schemes/Shape/src/MDCShapeScheme.h",
   "src/components/schemes/Shape/src/MDCShapeScheme.m",
   "src/components/schemes/Shape/src/MaterialShapeScheme.h",
-  "src/components/schemes/Typography/src/BasicFontScheme/MDCBasicFontScheme.h",
-  "src/components/schemes/Typography/src/BasicFontScheme/MaterialTypographyScheme+BasicFontScheme.h",
-  "src/components/schemes/Typography/src/MDCLegacyFontScheme.h",
   "src/components/schemes/Typography/src/MDCTypographyScheme.h",
   "src/components/schemes/Typography/src/MDCTypographyScheme.m",
   "src/components/schemes/Typography/src/MaterialTypographyScheme.h",
@@ -1579,22 +1560,23 @@ config("config") {
   include_dirs = _mdc_include_dirs
 }
 
+# TODO(crbug.com/40281680): Necessary to build those third-party dependencies.
+# This config as well as disable_nullability_completeness and
+# disable_availability have been audited and that do not cause deprecation
+# leaks to the rest of chromium.
 config("disable_deprecated") {
   cflags = [ "-Wno-deprecated" ]
+  cflags += [ "-Wno-deprecated-declarations" ]
 }
 
-config("disable_deprecated_declarations") {
-  cflags = [ "-Wno-deprecated-declarations" ]
-}
-
-# TODO(crbug.com/1153275): MDCTabBarViewItemView.h has incomplete nullability
+# TODO(crbug.com/40159019): MDCTabBarViewItemView.h has incomplete nullability
 # specification, causing compilation to fail. Disable the warning until this
 # is fixed in MDC. Remove this once fixed.
 config("disable_nullability_completeness") {
   cflags = [ "-Wno-nullability-completeness" ]
 }
 
-# TODO(crbug.com/1339746): MDCNavigationBar.h has conflicting deprecation
+# TODO(crbug.com/40849891): MDCNavigationBar.h has conflicting deprecation
 # specification, causing compilation to fail. Disable the warning until this
 # is fixed in MDC. Remove this once fixed.
 config("disable_availability") {
@@ -1631,7 +1613,6 @@ ios_framework_bundle("material_components_ios") {
   ]
   configs += [
     ":config",
-    "//build/config/compiler:enable_arc",
     "//build/config/compiler:no_chromium_code",
     "//build/config/gcc:symbol_visibility_default",
 
@@ -1639,23 +1620,15 @@ ios_framework_bundle("material_components_ios") {
     # Disable the warning about deprecation usage.
     ":disable_deprecated",
 
-    # TODO(crbug.com/1153275): MDCTabBarViewItemView.h has incomplete
+    # TODO(crbug.com/40159019): MDCTabBarViewItemView.h has incomplete
     # nullability specification, causing compilation to fail. Disable
     # the warning until this is fixed in MDC. Remove this once fixed.
     ":disable_nullability_completeness",
 
-    # TODO(crbug.com/1339746): MDCNavigationBar.h has conflicting deprecation
+    # TODO(crbug.com/40849891): MDCNavigationBar.h has conflicting deprecation
     # specification, causing compilation to fail. Disable the warning until this
     # is fixed in MDC. Remove this once fixed.
     ":disable_availability",
-  ]
-
-  public_configs = [
-    # TODO(crbug.com/1344830): A number of components used by Chrome are
-    # marked deprecated in material_components_ios. Disable deprecation
-    # warnings as a temporary measure, until we remove all existing use in
-    # Chrome.
-    ":disable_deprecated_declarations",
   ]
 }
 

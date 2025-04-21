@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 PepperHelper::PepperHelper(content::RenderFrame* render_frame)
     : RenderFrameObserver(render_frame) {}
 
-PepperHelper::~PepperHelper() {}
+PepperHelper::~PepperHelper() = default;
 
 void PepperHelper::DidCreatePepperPlugin(content::RendererPpapiHost* host) {
   // TODO(brettw) figure out how to hook up the host factory. It needs some

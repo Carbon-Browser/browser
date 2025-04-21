@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,17 @@
 #define COMPONENTS_POLICY_CORE_BROWSER_WEBUI_JSON_GENERATION_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/values.h"
 #include "components/policy/policy_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Value;
 }
 
 namespace policy {
-class PolicyConversionsClient;
 
 POLICY_EXPORT extern const char kChromeMetadataVersionKey[];
 POLICY_EXPORT extern const char kChromeMetadataOSKey[];
@@ -69,18 +68,19 @@ struct POLICY_EXPORT JsonGenerationParams {
   std::string application_name;
   std::string channel_name;
   std::string processor_variation;
-  absl::optional<std::string> cohort_name;
-  absl::optional<std::string> os_name;
-  absl::optional<std::string> platform_name;
+  std::optional<std::string> cohort_name;
+  std::optional<std::string> os_name;
+  std::optional<std::string> platform_name;
 };
 
-// Generates a string of JSON containing the currently applied policies along
+// Generates a string of JSON containing |policy_values| along
 // with additional metadata about the current device/build, based both on what
 // is stored in |params| and also information that is statically available.
-POLICY_EXPORT std::string GenerateJson(
-    std::unique_ptr<PolicyConversionsClient> client,
-    base::Value status,
-    const JsonGenerationParams& params);
+// Expects |policy_values| in the format PolicyValueProvider returns. Expects
+// |status| in the format policy::PolicyStatusProvider returns.
+POLICY_EXPORT std::string GenerateJson(base::Value::Dict policy_values,
+                                       base::Value::Dict status,
+                                       const JsonGenerationParams& params);
 
 // Returns metadata about the current device/build, based both on what
 // is stored in |params| and also information that is statically available.

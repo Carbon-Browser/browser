@@ -1,17 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler_impl.h"
 
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/constants/ash_features.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -42,7 +44,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
   void SetUp() override {
     testing::Test::SetUp();
     network_handler_test_helper_ =
-        std::make_unique<chromeos::NetworkHandlerTestHelper>();
+        std::make_unique<ash::NetworkHandlerTestHelper>();
   }
 
   void TearDown() override {
@@ -99,7 +101,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
 
     handler_ = base::WrapUnique(new DeviceNamePolicyHandlerImpl(
         ash::CrosSettings::Get(), &fake_statistics_provider_,
-        chromeos::NetworkHandler::Get()->network_state_handler()));
+        ash::NetworkHandler::Get()->network_state_handler()));
     handler_->AddObserver(&fake_observer_);
     base::RunLoop().RunUntilIdle();
   }
@@ -114,7 +116,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
               handler_->GetDeviceNamePolicy());
 
     // GetHostnameChosenByAdministrator() should therefore return null.
-    const absl::optional<std::string> hostname =
+    const std::optional<std::string> hostname =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_FALSE(hostname);
   }
@@ -128,7 +130,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
               handler_->GetDeviceNamePolicy());
 
     // GetHostnameChosenByAdministrator() should therefore return null.
-    const absl::optional<std::string> hostname =
+    const std::optional<std::string> hostname =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_FALSE(hostname);
   }
@@ -152,7 +154,7 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
         after);
     // Check GetHostnameChosenByAdministrator() returns the expected hostname
     // value.
-    const absl::optional<std::string> hostname_chosen_by_administrator =
+    const std::optional<std::string> hostname_chosen_by_administrator =
         handler_->GetHostnameChosenByAdministrator();
     EXPECT_EQ(hostname_chosen_by_administrator, hostname_template);
 
@@ -212,11 +214,10 @@ class DeviceNamePolicyHandlerImplTest : public testing::Test {
  private:
   base::test::TaskEnvironment task_environment_;
   base::test::ScopedFeatureList feature_list_;
-  std::unique_ptr<chromeos::NetworkHandlerTestHelper>
-      network_handler_test_helper_;
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
   std::unique_ptr<ash::ScopedStubInstallAttributes> attributes_;
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
   FakeObserver fake_observer_;
 };
 

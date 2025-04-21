@@ -1,6 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/webaudio/oscillator_handler.h"
 
@@ -8,6 +13,7 @@
 #include <limits>
 
 #include "base/synchronization/lock.h"
+#include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_graph_tracer.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
@@ -204,40 +210,46 @@ OscillatorHandler::~OscillatorHandler() {
   Uninitialize();
 }
 
-String OscillatorHandler::GetType() const {
+V8OscillatorType::Enum OscillatorHandler::GetType() const {
   switch (type_) {
     case SINE:
-      return "sine";
+      return V8OscillatorType::Enum::kSine;
     case SQUARE:
-      return "square";
+      return V8OscillatorType::Enum::kSquare;
     case SAWTOOTH:
-      return "sawtooth";
+      return V8OscillatorType::Enum::kSawtooth;
     case TRIANGLE:
-      return "triangle";
+      return V8OscillatorType::Enum::kTriangle;
     case CUSTOM:
-      return "custom";
+      return V8OscillatorType::Enum::kCustom;
     default:
       NOTREACHED();
-      return "custom";
   }
 }
 
-void OscillatorHandler::SetType(const String& type,
+void OscillatorHandler::SetType(V8OscillatorType::Enum type,
                                 ExceptionState& exception_state) {
-  if (type == "sine") {
-    SetType(SINE);
-  } else if (type == "square") {
-    SetType(SQUARE);
-  } else if (type == "sawtooth") {
-    SetType(SAWTOOTH);
-  } else if (type == "triangle") {
-    SetType(TRIANGLE);
-  } else if (type == "custom") {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "'type' cannot be set directly to "
-                                      "'custom'.  Use setPeriodicWave() to "
-                                      "create a custom Oscillator type.");
+  switch (type) {
+    case V8OscillatorType::Enum::kSine:
+      SetType(SINE);
+      return;
+    case V8OscillatorType::Enum::kSquare:
+      SetType(SQUARE);
+      return;
+    case V8OscillatorType::Enum::kSawtooth:
+      SetType(SAWTOOTH);
+      return;
+    case V8OscillatorType::Enum::kTriangle:
+      SetType(TRIANGLE);
+      return;
+    case V8OscillatorType::Enum::kCustom:
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                        "'type' cannot be set directly to "
+                                        "'custom'.  Use setPeriodicWave() to "
+                                        "create a custom Oscillator type.");
+      return;
   }
+  NOTREACHED();
 }
 
 bool OscillatorHandler::SetType(uint8_t type) {
@@ -261,7 +273,6 @@ bool OscillatorHandler::SetType(uint8_t type) {
       // Return false for invalid types, including CUSTOM since
       // setPeriodicWave() method must be called explicitly.
       NOTREACHED();
-      return false;
   }
 
   SetPeriodicWave(periodic_wave->impl());
@@ -276,8 +287,6 @@ bool OscillatorHandler::CalculateSampleAccuratePhaseIncrements(
 
   if (first_render_) {
     first_render_ = false;
-    frequency_->ResetSmoothedValue();
-    detune_->ResetSmoothedValue();
   }
 
   bool has_sample_accurate_values = false;
@@ -648,6 +657,10 @@ double OscillatorHandler::ProcessARate(int n,
 }
 
 void OscillatorHandler::Process(uint32_t frames_to_process) {
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+              "OscillatorHandler::Process", "this",
+              reinterpret_cast<void*>(this), "type", GetType());
+
   AudioBus* output_bus = Output(0).Bus();
 
   if (!IsInitialized() || !output_bus->NumberOfChannels()) {
@@ -757,6 +770,10 @@ void OscillatorHandler::SetPeriodicWave(PeriodicWaveImpl* periodic_wave) {
 
 bool OscillatorHandler::PropagatesSilence() const {
   return !IsPlayingOrScheduled() || HasFinished() || !periodic_wave_;
+}
+
+base::WeakPtr<AudioScheduledSourceHandler> OscillatorHandler::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void OscillatorHandler::HandleStoppableSourceNode() {

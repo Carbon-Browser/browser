@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,16 @@ std::string TooltipTypeToString(TooltipType type) {
       return "keyboard_backlight_color";
     case TooltipType::kKeyboardBacklightWallpaperColor:
       return "keyboard_backlight_wallpaper_color";
+    case TooltipType::kTimeOfDayFeatureBanner:
+      return "time_of_day_feature_banner";
+    case TooltipType::kTimeOfDayWallpaperDialog:
+      return "time_of_day_wallpaper_dialog";
+    case TooltipType::kSeaPenVcBackgroundIntroDialog:
+      return "sea_pen_vc_background_intro_dialog";
+    case TooltipType::kSeaPenWallpaperIntroDialog:
+      return "sea_pen_wallpaper_intro_dialog";
+    case TooltipType::kSeaPenFreeformIntroDialog:
+      return "sea_pen_freeform_intro_dialog";
   }
   return "invalid";
 }
@@ -72,23 +82,23 @@ std::string GetPath(TooltipType type, const std::string& sub_pref) {
 
 base::Time GetLastShownTime(PrefService* prefs, TooltipType type) {
   const base::Value* last_shown_time =
-      prefs->GetDictionary(prefs::kContextualTooltips)
-          ->FindPath(GetPath(type, kLastTimeShown));
+      prefs->GetDict(prefs::kContextualTooltips)
+          .FindByDottedPath(GetPath(type, kLastTimeShown));
   if (!last_shown_time)
     return base::Time();
   return *base::ValueToTime(last_shown_time);
 }
 
 int GetSuccessCount(PrefService* prefs, TooltipType type) {
-  absl::optional<int> success_count =
-      prefs->GetDictionary(prefs::kContextualTooltips)
-          ->FindIntPath(GetPath(type, kSuccessCount));
+  std::optional<int> success_count =
+      prefs->GetDict(prefs::kContextualTooltips)
+          .FindIntByDottedPath(GetPath(type, kSuccessCount));
   return success_count.value_or(0);
 }
 
-const absl::optional<base::TimeDelta>& GetMinIntervalOverride() {
+const std::optional<base::TimeDelta>& GetMinIntervalOverride() {
   // Overridden minimum time between showing contextual nudges to the user.
-  static absl::optional<base::TimeDelta> min_interval_override;
+  static std::optional<base::TimeDelta> min_interval_override;
   if (!min_interval_override) {
     min_interval_override = switches::ContextualNudgesInterval();
   }
@@ -98,8 +108,9 @@ const absl::optional<base::TimeDelta>& GetMinIntervalOverride() {
 }  // namespace
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  if (features::AreContextualNudgesEnabled())
+  if (features::IsHideShelfControlsInTabletModeEnabled()) {
     registry->RegisterDictionaryPref(prefs::kContextualTooltips);
+  }
 }
 
 bool ShouldShowNudge(PrefService* prefs,
@@ -110,7 +121,7 @@ bool ShouldShowNudge(PrefService* prefs,
       *recheck_delay = delay;
   };
 
-  if (!features::AreContextualNudgesEnabled()) {
+  if (!features::IsHideShelfControlsInTabletModeEnabled()) {
     set_recheck_delay(base::TimeDelta());
     return false;
   }
@@ -129,7 +140,17 @@ bool ShouldShowNudge(PrefService* prefs,
       (type == TooltipType::kInAppToHome &&
        success_count >= kSuccessLimitInAppToHome) ||
       (type == TooltipType::kKeyboardBacklightColor &&
-       success_count >= kSuccessLimitKeyboardBacklightColor)) {
+       success_count >= kSuccessLimitKeyboardBacklightColor) ||
+      (type == TooltipType::kTimeOfDayFeatureBanner &&
+       success_count >= kSuccessLimitTimeOfDayFeatureBanner) ||
+      (type == TooltipType::kTimeOfDayWallpaperDialog &&
+       success_count >= kSuccessLimitTimeOfDayWallpaperDialog) ||
+      (type == TooltipType::kSeaPenVcBackgroundIntroDialog &&
+       success_count >= kSuccessLimitSeaPenVcBackgroundIntroDialog) ||
+      (type == TooltipType::kSeaPenWallpaperIntroDialog &&
+       success_count >= kSuccessLimitSeaPenWallpaperIntroDialog) ||
+      (type == TooltipType::kSeaPenFreeformIntroDialog &&
+       success_count >= kSuccessLimitSeaPenFreeformIntroDialog)) {
     set_recheck_delay(base::TimeDelta());
     return false;
   }
@@ -209,23 +230,24 @@ base::TimeDelta GetNudgeTimeout(PrefService* prefs, TooltipType type) {
 }
 
 int GetShownCount(PrefService* prefs, TooltipType type) {
-  absl::optional<int> shown_count =
-      prefs->GetDictionary(prefs::kContextualTooltips)
-          ->FindIntPath(GetPath(type, kShownCount));
+  std::optional<int> shown_count =
+      prefs->GetDict(prefs::kContextualTooltips)
+          .FindIntByDottedPath(GetPath(type, kShownCount));
   return shown_count.value_or(0);
 }
 
 void HandleNudgeShown(PrefService* prefs, TooltipType type) {
   const int shown_count = GetShownCount(prefs, type);
-  DictionaryPrefUpdate update(prefs, prefs::kContextualTooltips);
-  update->SetIntPath(GetPath(type, kShownCount), shown_count + 1);
-  update->SetPath(GetPath(type, kLastTimeShown), base::TimeToValue(GetTime()));
+  ScopedDictPrefUpdate update(prefs, prefs::kContextualTooltips);
+  update->SetByDottedPath(GetPath(type, kShownCount), shown_count + 1);
+  update->SetByDottedPath(GetPath(type, kLastTimeShown),
+                          base::TimeToValue(GetTime()));
 }
 
 void HandleGesturePerformed(PrefService* prefs, TooltipType type) {
   const int success_count = GetSuccessCount(prefs, type);
-  DictionaryPrefUpdate update(prefs, prefs::kContextualTooltips);
-  update->SetIntPath(GetPath(type, kSuccessCount), success_count + 1);
+  ScopedDictPrefUpdate update(prefs, prefs::kContextualTooltips);
+  update->SetByDottedPath(GetPath(type, kSuccessCount), success_count + 1);
 }
 
 void SetDragHandleNudgeDisabledForHiddenShelf(bool nudge_disabled) {
@@ -238,12 +260,12 @@ void SetBackGestureNudgeShowing(bool showing) {
 
 void ClearPrefs() {
   DCHECK(Shell::Get()->session_controller()->GetLastActiveUserPrefService());
-  DictionaryPrefUpdate update(
+  ScopedDictPrefUpdate update(
       Shell::Get()->session_controller()->GetLastActiveUserPrefService(),
       prefs::kContextualTooltips);
-  base::Value* nudges_dict = update.Get();
-  if (nudges_dict && !nudges_dict->DictEmpty())
-    nudges_dict->DictClear();
+  base::Value::Dict& nudges_dict = update.Get();
+  if (!nudges_dict.empty())
+    nudges_dict.clear();
 }
 
 void OverrideClockForTesting(base::Clock* test_clock) {

@@ -1,8 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback.h"
+#include <array>
+
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -48,16 +50,13 @@ constexpr int kHarmonyTitleSize = 15;
 
 class LayoutProviderTest : public testing::Test {
  public:
-  LayoutProviderTest() {}
+  LayoutProviderTest() = default;
 
   LayoutProviderTest(const LayoutProviderTest&) = delete;
   LayoutProviderTest& operator=(const LayoutProviderTest&) = delete;
 
  protected:
   static void SetUpTestSuite() {
-#if BUILDFLAG(IS_WIN)
-    base::win::EnableHighDPISupport();
-#endif
     gfx::InitializeFonts();
     // Some previous test may have left the default font description set to an
     // unexpected state.
@@ -78,13 +77,6 @@ TEST_F(LayoutProviderTest, EnsuresDefaultSystemSettings) {
       << "The test requires that fonts smoothing (anti-aliasing) is "
          "activated. If this assert is failing you need to manually activate "
          "the flag in your system fonts settings.";
-
-  // Ensures that the screen resolution is at the default value.
-  float system_dpi_scale = display::win::GetDPIScale();
-  EXPECT_EQ(system_dpi_scale, 1.0)
-      << "The test requires default display settings. The DPI of the display "
-         "is not 100%. dpi_scale="
-      << system_dpi_scale;
 
   double accessibility_font_scale = display::win::GetAccessibilityFontScale();
   EXPECT_EQ(accessibility_font_scale, 1.0)
@@ -295,8 +287,6 @@ TEST_F(LayoutProviderTest, RequestFontBySize) {
 // reads the base font configuration at runtime, and only tests font sizes, so
 // should be robust against platform changes.
 TEST_F(LayoutProviderTest, FontSizeRelativeToBase) {
-  using views::style::GetFont;
-
   constexpr int kStyle = views::style::STYLE_PRIMARY;
 
   std::unique_ptr<views::LayoutProvider> layout_provider =
@@ -310,22 +300,32 @@ TEST_F(LayoutProviderTest, FontSizeRelativeToBase) {
   const int twelve = gfx::FontList().GetFontSize();
 #endif
 
+  const auto& typography_provider = views::TypographyProvider::Get();
   EXPECT_EQ(twelve,
-            GetFont(CONTEXT_DIALOG_BODY_TEXT_SMALL, kStyle).GetFontSize());
-  EXPECT_EQ(twelve, GetFont(views::style::CONTEXT_LABEL, kStyle).GetFontSize());
+            typography_provider.GetFont(CONTEXT_DIALOG_BODY_TEXT_SMALL, kStyle)
+                .GetFontSize());
   EXPECT_EQ(twelve,
-            GetFont(views::style::CONTEXT_TEXTFIELD, kStyle).GetFontSize());
+            typography_provider.GetFont(views::style::CONTEXT_LABEL, kStyle)
+                .GetFontSize());
   EXPECT_EQ(twelve,
-            GetFont(views::style::CONTEXT_BUTTON, kStyle).GetFontSize());
+            typography_provider.GetFont(views::style::CONTEXT_TEXTFIELD, kStyle)
+                .GetFontSize());
+  EXPECT_EQ(twelve,
+            typography_provider.GetFont(views::style::CONTEXT_BUTTON, kStyle)
+                .GetFontSize());
 
   // E.g. Headline should give a 20pt font.
-  EXPECT_EQ(twelve + 8, GetFont(CONTEXT_HEADLINE, kStyle).GetFontSize());
-  // Titles should be 15pt. Etc.
-  EXPECT_EQ(twelve + 3,
-            GetFont(views::style::CONTEXT_DIALOG_TITLE, kStyle).GetFontSize());
   EXPECT_EQ(
-      twelve + 1,
-      GetFont(views::style::CONTEXT_DIALOG_BODY_TEXT, kStyle).GetFontSize());
+      twelve + 8,
+      typography_provider.GetFont(CONTEXT_HEADLINE, kStyle).GetFontSize());
+  // Titles should be 15pt. Etc.
+  EXPECT_EQ(twelve + 3, typography_provider
+                            .GetFont(views::style::CONTEXT_DIALOG_TITLE, kStyle)
+                            .GetFontSize());
+  EXPECT_EQ(twelve + 1,
+            typography_provider
+                .GetFont(views::style::CONTEXT_DIALOG_BODY_TEXT, kStyle)
+                .GetFontSize());
 }
 
 // Ensure that line height can be overridden by Chrome's TypographyProvider for
@@ -339,21 +339,27 @@ TEST_F(LayoutProviderTest, TypographyLineHeight) {
   std::unique_ptr<views::LayoutProvider> layout_provider =
       ChromeLayoutProvider::CreateLayoutProvider();
 
-  constexpr struct {
+  struct Increases {
     int context;
     int min;
     int max;
-  } kExpectedIncreases[] = {{CONTEXT_HEADLINE, 4, 8},
-                            {views::style::CONTEXT_DIALOG_TITLE, 1, 4},
-                            {views::style::CONTEXT_DIALOG_BODY_TEXT, 2, 4},
-                            {CONTEXT_DIALOG_BODY_TEXT_SMALL, 4, 5},
-                            {views::style::CONTEXT_BUTTON_MD, 0, 1}};
+  };
 
+  static constexpr auto kExpectedIncreases =
+      std::to_array<Increases>({{CONTEXT_HEADLINE, 4, 8},
+                                {views::style::CONTEXT_DIALOG_TITLE, 1, 4},
+                                {views::style::CONTEXT_DIALOG_BODY_TEXT, 2, 4},
+                                {CONTEXT_DIALOG_BODY_TEXT_SMALL, 4, 5},
+                                {views::style::CONTEXT_BUTTON_MD, -2, 1}});
+
+  const auto& typography_provider = views::TypographyProvider::Get();
   for (size_t i = 0; i < std::size(kExpectedIncreases); ++i) {
     SCOPED_TRACE(testing::Message() << "Testing index: " << i);
     const auto& increase = kExpectedIncreases[i];
-    const gfx::FontList& font = views::style::GetFont(increase.context, kStyle);
-    int line_spacing = views::style::GetLineHeight(increase.context, kStyle);
+    const gfx::FontList& font =
+        typography_provider.GetFont(increase.context, kStyle);
+    int line_spacing =
+        typography_provider.GetLineHeight(increase.context, kStyle);
     EXPECT_GE(increase.max, line_spacing - font.GetHeight());
     EXPECT_LE(increase.min, line_spacing - font.GetHeight());
   }
@@ -366,28 +372,32 @@ TEST_F(LayoutProviderTest, ExplicitTypographyLineHeight) {
   std::unique_ptr<views::LayoutProvider> layout_provider =
       ChromeLayoutProvider::CreateLayoutProvider();
 
+  const auto& typography_provider = views::TypographyProvider::Get();
   constexpr int kStyle = views::style::STYLE_PRIMARY;
-  if (views::style::GetFont(views::style::CONTEXT_DIALOG_TITLE, kStyle)
+  if (typography_provider.GetFont(views::style::CONTEXT_DIALOG_TITLE, kStyle)
           .GetFontSize() != kHarmonyTitleSize) {
     LOG(WARNING) << "Skipping: Test machine not in default configuration.";
     return;
   }
 
   // Line heights from the Harmony spec.
-  constexpr int kBodyLineHeight = 20;
-  constexpr struct {
+  struct HarmonyHeight {
     int context;
     int line_height;
-  } kHarmonyHeights[] = {
-      {CONTEXT_HEADLINE, 32},
-      {views::style::CONTEXT_DIALOG_TITLE, 22},
-      {views::style::CONTEXT_DIALOG_BODY_TEXT, kBodyLineHeight},
-      {CONTEXT_DIALOG_BODY_TEXT_SMALL, kBodyLineHeight}};
+  };
+
+  constexpr int kBodyLineHeight = 20;
+  static constexpr auto kHarmonyHeights = std::to_array<HarmonyHeight>(
+      {{CONTEXT_HEADLINE, 32},
+       {views::style::CONTEXT_DIALOG_TITLE, 22},
+       {views::style::CONTEXT_DIALOG_BODY_TEXT, kBodyLineHeight},
+       {CONTEXT_DIALOG_BODY_TEXT_SMALL, kBodyLineHeight}});
 
   for (size_t i = 0; i < std::size(kHarmonyHeights); ++i) {
     SCOPED_TRACE(testing::Message() << "Testing index: " << i);
-    EXPECT_EQ(kHarmonyHeights[i].line_height,
-              views::style::GetLineHeight(kHarmonyHeights[i].context, kStyle));
+    EXPECT_EQ(
+        kHarmonyHeights[i].line_height,
+        typography_provider.GetLineHeight(kHarmonyHeights[i].context, kStyle));
 
     views::Label label(u"test", kHarmonyHeights[i].context);
     label.SizeToPreferredSize();
@@ -397,8 +407,8 @@ TEST_F(LayoutProviderTest, ExplicitTypographyLineHeight) {
   // TODO(tapted): Pass in contexts to StyledLabel instead. Currently they are
   // stuck on style::CONTEXT_LABEL. That only matches the default line height in
   // ChromeTypographyProvider::GetLineHeight(), which is body text.
-  EXPECT_EQ(kBodyLineHeight,
-            views::style::GetLineHeight(views::style::CONTEXT_LABEL, kStyle));
+  EXPECT_EQ(kBodyLineHeight, views::TypographyProvider::Get().GetLineHeight(
+                                 views::style::CONTEXT_LABEL, kStyle));
   views::StyledLabel styled_label;
   styled_label.SetText(u"test");
   constexpr int kStyledLabelWidth = 200;  // Enough to avoid wrapping.
@@ -453,8 +463,9 @@ TEST_F(LayoutProviderTest, OmniboxFontAlways14) {
   for (; latin_height_threshold > 0; --latin_height_threshold) {
     if (kOmniboxDesiredSize - base_font_size !=
         GetFontSizeDeltaBoundedByAvailableHeight(latin_height_threshold,
-                                                 kOmniboxDesiredSize))
+                                                 kOmniboxDesiredSize)) {
       break;
+    }
   }
   // The threshold should always be the same, but the value depends on font
   // metrics. Check for some sane value. This should only change if Roboto

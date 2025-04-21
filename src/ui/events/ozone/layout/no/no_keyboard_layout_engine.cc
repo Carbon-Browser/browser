@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,18 @@
 
 namespace ui {
 
+std::string_view NoKeyboardLayoutEngine::GetLayoutName() const {
+  return std::string_view();
+}
+
 bool NoKeyboardLayoutEngine::CanSetCurrentLayout() const {
   return false;
 }
 
-bool NoKeyboardLayoutEngine::SetCurrentLayoutByName(
-    const std::string& layout_name) {
-  return false;
+void NoKeyboardLayoutEngine::SetCurrentLayoutByName(
+    const std::string& layout_name,
+    base::OnceCallback<void(bool)> callback) {
+  std::move(callback).Run(false);
 }
 
 bool NoKeyboardLayoutEngine::SetCurrentLayoutFromBuffer(const char* keymap_str,

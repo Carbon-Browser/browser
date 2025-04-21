@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_MEDIA_MEDIA_INTERNALS_AUDIO_FOCUS_HELPER_H_
 
 #include <map>
+#include <string_view>
 
 #include "base/values.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -56,8 +57,8 @@ class MediaInternalsAudioFocusHelper
       const std::string& id,
       media_session::mojom::MediaSessionDebugInfoPtr info);
 
-  void SerializeAndSendUpdate(const std::string& function,
-                              const base::Value* value);
+  void SerializeAndSendUpdate(std::string_view function,
+                              const base::Value::Dict& value);
 
   // Build the name of the request to display and inject values from |state|.
   std::string BuildNameString(
@@ -74,7 +75,7 @@ class MediaInternalsAudioFocusHelper
   mojo::Remote<media_session::mojom::AudioFocusManagerDebug> audio_focus_debug_;
 
   // Must only be accessed on the UI thread.
-  base::DictionaryValue audio_focus_data_;
+  base::Value::Dict audio_focus_data_;
   std::map<std::string, media_session::mojom::AudioFocusRequestStatePtr>
       request_state_;
 

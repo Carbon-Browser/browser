@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 static ExternalDisplayBrightnessService* g_external_display_brightness_service =
@@ -78,40 +79,42 @@ void ExternalDisplayBrightnessService::OnAdaptorDisconnect() {
 
 void ExternalDisplayBrightnessService::SetExternalDisplayALSBrightness(
     bool enabled) {
-  PowerManagerClient::Get()->SetExternalDisplayALSBrightness(enabled);
+  chromeos::PowerManagerClient::Get()->SetExternalDisplayALSBrightness(enabled);
 }
 
 void ExternalDisplayBrightnessService::OnGetExternalDisplayALSBrightness(
     GetExternalDisplayALSBrightnessCallback callback,
-    absl::optional<bool> enabled) {
+    std::optional<bool> enabled) {
   std::move(callback).Run(enabled.value_or(false));
 }
 
 void ExternalDisplayBrightnessService::GetExternalDisplayALSBrightness(
     GetExternalDisplayALSBrightnessCallback callback) {
-  PowerManagerClient::Get()->GetExternalDisplayALSBrightness(base::BindOnce(
-      &ExternalDisplayBrightnessService::OnGetExternalDisplayALSBrightness,
-      std::move(callback)));
+  chromeos::PowerManagerClient::Get()->GetExternalDisplayALSBrightness(
+      base::BindOnce(
+          &ExternalDisplayBrightnessService::OnGetExternalDisplayALSBrightness,
+          std::move(callback)));
 }
 
 void ExternalDisplayBrightnessService::SetExternalDisplayBrightnessPercent(
     double percent) {
   power_manager::SetBacklightBrightnessRequest request;
   request.set_percent(percent);
-  PowerManagerClient::Get()->SetScreenBrightness(request);
+  chromeos::PowerManagerClient::Get()->SetScreenBrightness(request);
 }
 
 void ExternalDisplayBrightnessService::OnGetExternalDisplayBrightnessPercent(
     GetExternalDisplayBrightnessPercentCallback callback,
-    absl::optional<double> percent) {
+    std::optional<double> percent) {
   std::move(callback).Run(percent.value_or(-1.0));
 }
 
 void ExternalDisplayBrightnessService::GetExternalDisplayBrightnessPercent(
     GetExternalDisplayBrightnessPercentCallback callback) {
-  PowerManagerClient::Get()->GetScreenBrightnessPercent(base::BindOnce(
-      &ExternalDisplayBrightnessService::OnGetExternalDisplayBrightnessPercent,
-      std::move(callback)));
+  chromeos::PowerManagerClient::Get()->GetScreenBrightnessPercent(
+      base::BindOnce(&ExternalDisplayBrightnessService::
+                         OnGetExternalDisplayBrightnessPercent,
+                     std::move(callback)));
 }
 
 void ExternalDisplayBrightnessService::OnMojoDisconnect() {

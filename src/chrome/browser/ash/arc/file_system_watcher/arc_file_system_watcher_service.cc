@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,18 +13,17 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/mojom/file_system.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/singleton.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/file_system_watcher/arc_file_system_watcher_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
@@ -177,21 +176,6 @@ class ArcFileSystemWatcherServiceFactory
   ~ArcFileSystemWatcherServiceFactory() override = default;
 };
 
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused. Please keep in sync with
-// "ArcFileSystemWatcherExceedLimitState" in
-// src/tools/metrics/histograms/enums.xml.
-enum class ArcFileSystemWatcherExceedLimitState {
-  kOnStart = 0,
-  kOnFilePathChanged = 1,
-  kMaxValue = kOnFilePathChanged,
-};
-
-void RecordArcFileSystemWatcherExceedLimit(
-    const ArcFileSystemWatcherExceedLimitState status) {
-  base::UmaHistogramEnumeration("Arc.FileSystemWatcher.ExceedLimit", status);
-}
-
 }  // namespace
 
 // The core part of ArcFileSystemWatcherService to watch for file changes in
@@ -265,8 +249,6 @@ ArcFileSystemWatcherService::FileSystemWatcher::~FileSystemWatcher() {
 void ArcFileSystemWatcherService::FileSystemWatcher::Start() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // Count how many times instance of FileSystemWatcher is created.
-  base::UmaHistogramBoolean("Arc.FileSystemWatcher.Created", true);
   // Initialize with the current timestamp map and avoid initial notification.
   // It is not needed since MediaProvider scans whole storage area on boot.
   last_notify_time_ = base::TimeTicks::Now();
@@ -282,8 +264,6 @@ void ArcFileSystemWatcherService::FileSystemWatcher::Start() {
     LOG(WARNING)
         << "Failed to start FileSystemWatcher for " << cros_dir_
         << " because the number of required inotify watches exceeded its limit";
-    RecordArcFileSystemWatcherExceedLimit(
-        ArcFileSystemWatcherExceedLimitState::kOnStart);
   }
 }
 
@@ -300,13 +280,11 @@ void ArcFileSystemWatcherService::FileSystemWatcher::OnFilePathChanged(
         << "The watcher won't be notified of subsequent filesystem changes in "
         << cros_dir_
         << " because the number of required inotify watches exceeded its limit";
-    RecordArcFileSystemWatcherExceedLimit(
-        ArcFileSystemWatcherExceedLimitState::kOnFilePathChanged);
     return;
   }
   if (!outstanding_task_) {
     outstanding_task_ = true;
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FileSystemWatcher::DelayBuildTimestampMap,
                        weak_ptr_factory_.GetWeakPtr()),
@@ -487,8 +465,7 @@ void ArcFileSystemWatcherService::StopWatchingRemovableMedia(
     const std::string& mount_path) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (!removable_media_watchers_.count(mount_path)) {
-    LOG(ERROR) << "Unmounting non-existing volume with mount path: "
-               << mount_path;
+    VLOG(1) << "Unmounting non-existing volume with mount path: " << mount_path;
     return;
   }
   file_task_runner_->DeleteSoon(
@@ -499,6 +476,11 @@ void ArcFileSystemWatcherService::StopWatchingRemovableMedia(
 void ArcFileSystemWatcherService::TriggerSendAllMountEvents() const {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   ArcVolumeMounterBridge::GetForBrowserContext(context_)->SendAllMountEvents();
+}
+
+// static
+void ArcFileSystemWatcherService::EnsureFactoryBuilt() {
+  ArcFileSystemWatcherServiceFactory::GetInstance();
 }
 
 }  // namespace arc

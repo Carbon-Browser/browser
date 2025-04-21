@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,13 +64,7 @@ class ScopedPrivacyBudgetConfig {
     SurfaceSetEquivalentClassesList equivalence_classes;
     IdentifiableSurfaceBlocks blocks;
     std::vector<double> block_weights;
-    IdentifiableSurfaceBlocks reid_blocks;
-    std::vector<uint64_t> reid_salts_ranges;
-    std::vector<int> reid_bits;
-    std::vector<double> reid_noise;
     std::vector<blink::IdentifiableSurface::Type> allowed_random_types;
-    bool enable_active_sampling = false;
-    std::vector<std::string> actively_sampled_fonts;
   };
 
   // Doesn't do anything until Apply() is called.

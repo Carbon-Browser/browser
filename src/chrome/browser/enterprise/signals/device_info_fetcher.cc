@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,7 @@ class StubDeviceFetcher : public DeviceInfoFetcher {
     device_info.device_host_name = "midnightshift";
     device_info.device_model = "topshot";
     device_info.serial_number = "twirlchange";
+    device_info.secure_boot_enabled = SettingValue::ENABLED;
     device_info.screen_lock_secured = SettingValue::ENABLED;
     device_info.disk_encrypted = SettingValue::DISABLED;
     device_info.mac_addresses.push_back("00:00:00:00:00:00");
@@ -63,19 +64,16 @@ std::unique_ptr<DeviceInfoFetcher> DeviceInfoFetcher::CreateInstance() {
   if (force_stub_for_testing) {
     return std::make_unique<StubDeviceFetcher>();
   }
-
-// TODO(pastarmovj): Instead of the if-defs implement the CreateInstance
-// function in the platform specific classes.
-#if BUILDFLAG(IS_MAC)
-  return std::make_unique<DeviceInfoFetcherMac>();
-#elif BUILDFLAG(IS_WIN)
-  return std::make_unique<DeviceInfoFetcherWin>();
-#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  return std::make_unique<DeviceInfoFetcherLinux>();
-#else
-  return std::make_unique<StubDeviceFetcher>();
-#endif
+  return CreateInstanceInternal();
 }
+
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN) && \
+    !(BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
+// static
+std::unique_ptr<DeviceInfoFetcher> DeviceInfoFetcher::CreateInstanceInternal() {
+  return std::make_unique<StubDeviceFetcher>();
+}
+#endif
 
 // static
 std::unique_ptr<DeviceInfoFetcher>

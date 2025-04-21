@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,22 +11,7 @@
 #include "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace history {
-
-// static
-void WebStateTopSitesObserver::CreateForWebState(web::WebState* web_state,
-                                                 TopSites* top_sites) {
-  DCHECK(web_state);
-  if (!FromWebState(web_state)) {
-    web_state->SetUserData(
-        UserDataKey(),
-        base::WrapUnique(new WebStateTopSitesObserver(web_state, top_sites)));
-  }
-}
 
 WebStateTopSitesObserver::WebStateTopSitesObserver(web::WebState* web_state,
                                                    TopSites* top_sites)
@@ -40,7 +25,7 @@ WebStateTopSitesObserver::~WebStateTopSitesObserver() {
 void WebStateTopSitesObserver::DidFinishNavigation(
     web::WebState* web_state,
     web::NavigationContext* navigation_context) {
-  // TODO(crbug.com/931841): Remove GetLastCommittedItem nil check once
+  // TODO(crbug.com/41441240): Remove GetLastCommittedItem nil check once
   // HasComitted has been fixed.
   if (top_sites_ && navigation_context->HasCommitted() &&
       web_state->GetNavigationManager()->GetLastCommittedItem()) {

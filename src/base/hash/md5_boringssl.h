@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 
 #include <stdint.h>
 
+#include <array>
+
 #include "third_party/boringssl/src/include/openssl/md5.h"
 
 namespace base {
 
 // The output of an MD5 operation.
 struct MD5Digest {
-  uint8_t a[MD5_DIGEST_LENGTH];
+  std::array<uint8_t, MD5_DIGEST_LENGTH> a;
 };
 
 // Used for storing intermediate data during an MD5 computation. Callers

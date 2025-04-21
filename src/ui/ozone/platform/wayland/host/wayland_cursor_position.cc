@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,11 @@ void WaylandCursorPosition::OnCursorPositionChanged(
 
 gfx::Point WaylandCursorPosition::GetCursorSurfacePoint() const {
   return cursor_surface_point_;
+}
+
+void WaylandCursorPosition::DumpState(std::ostream& out) const {
+  out << "WaylandCursorPositoin: cursor_surface_point:"
+      << cursor_surface_point_.ToString();
 }
 
 }  // namespace ui

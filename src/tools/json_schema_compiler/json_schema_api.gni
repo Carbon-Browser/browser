@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,7 +41,7 @@ compiler_root = "//tools/json_schema_compiler"
 compiler_script = "$compiler_root/compiler.py"
 compiler_sources = [
   "$compiler_root/cc_generator.py",
-  "$compiler_root/code.py",
+  "$compiler_root/code_util.py",
   "$compiler_root/compiler.py",
   "$compiler_root/cpp_bundle_generator.py",
   "$compiler_root/cpp_generator.py",
@@ -131,10 +131,7 @@ template("generated_json_strings") {
   # Compute the contents of the library/source set.
   lib_sources = get_target_outputs(":$bundle_generator_schema_name")
   lib_deps = [ ":$bundle_generator_schema_name" ]
-  lib_public_deps = [
-    # For base::StringPiece.
-    "//base",
-  ]
+  lib_public_deps = [ "//base" ]
   lib_extra_configs = []
   if (defined(invoker.configs)) {
     lib_extra_configs += invoker.configs
@@ -149,6 +146,7 @@ template("generated_json_strings") {
     deps = lib_deps
     public_deps = lib_public_deps
     configs += lib_extra_configs
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
     public_configs = [ ":$generated_config_name" ]
 
     if (defined(invoker.visibility)) {
@@ -263,6 +261,7 @@ template("function_registration") {
     deps = lib_deps
     public_deps = []
     configs += lib_extra_configs
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
     public_configs = [ ":$generated_config_name" ]
 
     if (defined(invoker.visibility)) {
@@ -360,6 +359,7 @@ template("generated_types") {
     deps = lib_deps
     public_deps = lib_public_deps
     configs += lib_extra_configs
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
     public_configs = [ ":$generated_config_name" ]
 
     if (defined(invoker.visibility)) {

@@ -1,8 +1,7 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/components/arc/session/arc_session.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
@@ -10,6 +9,7 @@
 #include "build/chromeos_buildflags.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/components/arc/session/arc_session.h"
 #include "base/allocator/buildflags.h"
 #endif
 
@@ -19,40 +19,32 @@
 namespace performance_manager {
 namespace features {
 
-#if BUILDFLAG(IS_WIN)
-// The EmptyWorkingSet feature as used on Windows.
-extern const base::Feature kEmptyWorkingSet;
-#endif  // BUILDFLAG(IS_WIN)
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
 // The trim on Memory Pressure feature will trim a process nodes working set
 // according to the parameters below.
-extern const base::Feature kTrimOnMemoryPressure;
+BASE_DECLARE_FEATURE(kTrimOnMemoryPressure);
 
 // If enabled we will periodically walk procfs looking for ARC++ processes to
 // trim under memory pressure.
-extern const base::Feature kTrimArcOnMemoryPressure;
+BASE_DECLARE_FEATURE(kTrimArcOnMemoryPressure);
 
 // If enabled we will try to trim ARCVM's crosvm under memory pressure.
-extern const base::Feature kTrimArcVmOnMemoryPressure;
+BASE_DECLARE_FEATURE(kTrimArcVmOnMemoryPressure);
 
 // The trim on freeze feature will trim the working set of a process when all
 // frames are frozen.
-extern const base::Feature kTrimOnFreeze;
+BASE_DECLARE_FEATURE(kTrimOnFreeze);
+
+// If enabled, this disables trimming process nodes and ARC++ processes and
+// ARCVM under memory pressure while the system is suspended. The system can run
+// while the device is suspended if dark resume feature is enabled.
+BASE_DECLARE_FEATURE(kDisableTrimmingWhileSuspended);
 
 // The graph walk backoff is the _minimum_ backoff time between graph walks
 // under moderate pressure in seconds. By default we will not walk more than
 // once every 2 minutes.
 extern const base::FeatureParam<int> kGraphWalkBackoffTimeSec;
-
-// Specifies the minimum amount of time a parent frame node must be invisible
-// before considering the process node for working set trim.
-extern const base::FeatureParam<int> kNodeInvisibileTimeSec;
-
-// Specifies the minimum amount of time a parent frame node must be invisible
-// before considering the process node for working set trim.
-extern const base::FeatureParam<int> kNodeTrimBackoffTimeSec;
 
 // Specifies the frequency in which we will fetch the arc process list.
 extern const base::FeatureParam<int> kArcProcessListFetchBackoffTimeSec;
@@ -133,6 +125,7 @@ struct TrimOnMemoryPressureParams {
   base::TimeDelta graph_walk_backoff_time;
   base::TimeDelta node_invisible_time;
   base::TimeDelta node_trim_backoff_time;
+  base::TimeDelta suspend_backoff_time;
 
   // These are used when kTrimArcOnMemoryPressure is enabled.
   base::TimeDelta arc_process_trim_backoff_time;

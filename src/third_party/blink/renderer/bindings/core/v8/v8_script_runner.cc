@@ -26,9 +26,12 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_script_runner.h"
 
 #include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/page/v8_compile_hints_histograms.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/buildflags.h"
 #include "third_party/blink/renderer/bindings/core/v8/binding_security.h"
 #include "third_party/blink/renderer/bindings/core/v8/referrer_script_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_cache_consumer.h"
@@ -37,7 +40,12 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_streamer.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_common.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_consumer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_producer.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_initializer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_local_compile_hints_consumer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_local_compile_hints_producer.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
@@ -46,6 +54,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
 #include "third_party/blink/renderer/core/loader/modulescript/module_script_creation_params.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/script/classic_script.h"
 #include "third_party/blink/renderer/core/script/modulator.h"
@@ -67,11 +76,6 @@ namespace {
 // Used to throw an exception before we exceed the C++ stack and crash.
 // This limit was arrived at arbitrarily. crbug.com/449744
 const int kMaxRecursionDepth = 44;
-
-bool InDiscardExperiment() {
-  return base::FeatureList::IsEnabled(
-      blink::features::kDiscardCodeCacheAfterFirstUse);
-}
 
 // In order to make sure all pending messages to be processed in
 // v8::Function::Call, we don't call throwStackOverflowException
@@ -119,8 +123,18 @@ v8::MaybeLocal<v8::Script> CompileScriptInternal(
     v8::ScriptOrigin origin,
     v8::ScriptCompiler::CompileOptions compile_options,
     v8::ScriptCompiler::NoCacheReason no_cache_reason,
-    absl::optional<inspector_compile_script_event::V8ConsumeCacheResult>*
+    bool can_use_crowdsourced_compile_hints,
+    std::optional<inspector_compile_script_event::V8ConsumeCacheResult>*
         cache_result) {
+  // Record the script compilation in ScriptState (accessible via
+  // internals.idl).
+  {
+    const bool use_code_cache =
+        (compile_options & v8::ScriptCompiler::kConsumeCodeCache) != 0;
+    script_state->RecordScriptCompilation(classic_script.SourceUrl(),
+                                          use_code_cache);
+  }
+
   v8::Local<v8::String> code = V8String(isolate, classic_script.SourceText());
 
   // TODO(kouhei): Plumb the ScriptState into this function and replace all
@@ -141,9 +155,9 @@ v8::MaybeLocal<v8::Script> CompileScriptInternal(
   // The probe below allows inspector to either inject the cached code
   // or override compile_options to force eager compilation of code
   // when producing the cache.
-  probe::ApplyCompilationModeOverride(ExecutionContext::From(script_state),
-                                      classic_script, &inspector_data,
-                                      &compile_options);
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  probe::ApplyCompilationModeOverride(execution_context, classic_script,
+                                      &inspector_data, &compile_options);
   if (inspector_data) {
     v8::ScriptCompiler::Source source(code, origin, inspector_data);
     v8::MaybeLocal<v8::Script> script =
@@ -152,21 +166,114 @@ v8::MaybeLocal<v8::Script> CompileScriptInternal(
     return script;
   }
 
-  switch (compile_options) {
+  switch (static_cast<int>(compile_options)) {
+    case v8::ScriptCompiler::kConsumeCompileHints:
+    case v8::ScriptCompiler::kConsumeCompileHints |
+        v8::ScriptCompiler::kFollowCompileHintsMagicComment: {
+      // We can only consume local or crowdsourced compile hints, but
+      // not both at the same time. If the page has crowdsourced compile hints,
+      // we won't generate local compile hints, so won't ever have them.
+      // We'd only have both local and crowdsourced compile hints available in
+      // special cases, e.g., if crowdsourced compile hints were temporarily
+      // unavailable, we generated local compile hints, and during the next page
+      // load we have both available.
+
+      // TODO(40286622): Enable using crowdsourced compile hints and augmenting
+      // them with local compile hints. 1) Enable consuming compile hints and at
+      // the same time, producing compile hints for functions which were still
+      // lazy and 2) enable consuming both kind of compile hints at the same
+      // time.
+      if (can_use_crowdsourced_compile_hints) {
+        base::UmaHistogramEnumeration(
+            v8_compile_hints::kStatusHistogram,
+            v8_compile_hints::Status::
+                kConsumeCrowdsourcedCompileHintsClassicNonStreaming);
+
+        // Based on how `can_use_crowdsourced_compile_hints` in CompileScript is
+        // computed, we must get a non-null LocalDOMWindow and LocalFrame here.
+        LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(execution_context);
+        CHECK(window);
+        LocalFrame* frame = window->GetFrame();
+        CHECK(frame);
+        Page* page = frame->GetPage();
+        CHECK(page);
+        // This ptr keeps the data alive during v8::ScriptCompiler::Compile.
+        std::unique_ptr<v8_compile_hints::V8CrowdsourcedCompileHintsConsumer::
+                            DataAndScriptNameHash>
+            compile_hint_data =
+                page->GetV8CrowdsourcedCompileHintsConsumer()
+                    .GetDataWithScriptNameHash(v8_compile_hints::ScriptNameHash(
+                        origin.ResourceName(), script_state->GetContext(),
+                        isolate));
+        v8::ScriptCompiler::Source source(
+            code, origin,
+            &v8_compile_hints::V8CrowdsourcedCompileHintsConsumer::
+                CompileHintCallback,
+            compile_hint_data.get());
+        return v8::ScriptCompiler::Compile(script_state->GetContext(), &source,
+                                           compile_options, no_cache_reason);
+      }
+      // No crowdsourced compile hints; compile with local compile hints.
+      CHECK(base::FeatureList::IsEnabled(features::kLocalCompileHints));
+      base::UmaHistogramEnumeration(
+          v8_compile_hints::kStatusHistogram,
+          v8_compile_hints::Status::
+              kConsumeLocalCompileHintsClassicNonStreaming);
+      CachedMetadataHandler* cache_handler = classic_script.CacheHandler();
+      CHECK(cache_handler);
+      scoped_refptr<CachedMetadata> cached_metadata =
+          V8CodeCache::GetCachedMetadataForCompileHints(cache_handler);
+      v8_compile_hints::V8LocalCompileHintsConsumer
+          v8_local_compile_hints_consumer(cached_metadata.get());
+      if (v8_local_compile_hints_consumer.IsRejected()) {
+        cache_handler->ClearCachedMetadata(
+            ExecutionContext::GetCodeCacheHostFromContext(execution_context),
+            CachedMetadataHandler::kClearPersistentStorage);
+        // Compile without compile hints.
+        compile_options = v8::ScriptCompiler::CompileOptions(
+            compile_options & (~v8::ScriptCompiler::kConsumeCompileHints));
+        v8::ScriptCompiler::Source source(code, origin);
+        return v8::ScriptCompiler::Compile(script_state->GetContext(), &source,
+                                           compile_options, no_cache_reason);
+      }
+      v8::ScriptCompiler::Source source(
+          code, origin,
+          v8_compile_hints::V8LocalCompileHintsConsumer::GetCompileHint,
+          &v8_local_compile_hints_consumer);
+      return v8::ScriptCompiler::Compile(script_state->GetContext(), &source,
+                                         compile_options, no_cache_reason);
+    }
+    case v8::ScriptCompiler::kProduceCompileHints:
+    case v8::ScriptCompiler::kProduceCompileHints |
+        v8::ScriptCompiler::kFollowCompileHintsMagicComment: {
+      base::UmaHistogramEnumeration(
+          v8_compile_hints::kStatusHistogram,
+          v8_compile_hints::Status::kProduceCompileHintsClassicNonStreaming);
+      v8::ScriptCompiler::Source source(code, origin);
+      return v8::ScriptCompiler::Compile(script_state->GetContext(), &source,
+                                         compile_options, no_cache_reason);
+    }
     case v8::ScriptCompiler::kNoCompileOptions:
-    case v8::ScriptCompiler::kEagerCompile: {
+    case v8::ScriptCompiler::kEagerCompile:
+    case v8::ScriptCompiler::kFollowCompileHintsMagicComment: {
+      base::UmaHistogramEnumeration(
+          v8_compile_hints::kStatusHistogram,
+          v8_compile_hints::Status::kNoCompileHintsClassicNonStreaming);
       v8::ScriptCompiler::Source source(code, origin);
       return v8::ScriptCompiler::Compile(script_state->GetContext(), &source,
                                          compile_options, no_cache_reason);
     }
 
     case v8::ScriptCompiler::kConsumeCodeCache: {
+      base::UmaHistogramEnumeration(
+          v8_compile_hints::kStatusHistogram,
+          v8_compile_hints::Status::kConsumeCodeCacheClassicNonStreaming);
       // Compile a script, and consume a V8 cache that was generated previously.
-      SingleCachedMetadataHandler* cache_handler =
-          classic_script.CacheHandler();
+      CachedMetadataHandler* cache_handler = classic_script.CacheHandler();
       ScriptCacheConsumer* cache_consumer = classic_script.CacheConsumer();
       scoped_refptr<CachedMetadata> cached_metadata =
           V8CodeCache::GetCachedMetadata(cache_handler);
+      const bool full_code_cache = V8CodeCache::IsFull(cached_metadata.get());
       v8::ScriptCompiler::Source source(
           code, origin,
           V8CodeCache::CreateCachedData(cached_metadata).release(),
@@ -191,27 +298,17 @@ v8::MaybeLocal<v8::Script> CompileScriptInternal(
             ExecutionContext::GetCodeCacheHostFromContext(
                 ExecutionContext::From(script_state)),
             CachedMetadataHandler::kClearPersistentStorage);
-      } else if (InDiscardExperiment()) {
-        // Experimentally free code cache from memory after first use. See
-        // http://crbug.com/1045052.
-        cache_handler->ClearCachedMetadata(
-            ExecutionContext::GetCodeCacheHostFromContext(
-                ExecutionContext::From(script_state)),
-            CachedMetadataHandler::kDiscardLocally);
       }
       if (cache_result) {
-        *cache_result = absl::make_optional(
+        *cache_result = std::make_optional(
             inspector_compile_script_event::V8ConsumeCacheResult(
-                cached_data->length, cached_data->rejected));
+                cached_data->length, cached_data->rejected, full_code_cache));
       }
       return script;
     }
+    default:
+      NOTREACHED();
   }
-
-  // All switch branches should return and we should never get here.
-  // But some compilers aren't sure, hence this default.
-  NOTREACHED();
-  return v8::MaybeLocal<v8::Script>();
 }
 
 int GetMicrotasksScopeDepth(v8::Isolate* isolate,
@@ -226,9 +323,10 @@ int GetMicrotasksScopeDepth(v8::Isolate* isolate,
 v8::MaybeLocal<v8::Script> V8ScriptRunner::CompileScript(
     ScriptState* script_state,
     const ClassicScript& classic_script,
+    v8::ScriptOrigin origin,
     v8::ScriptCompiler::CompileOptions compile_options,
     v8::ScriptCompiler::NoCacheReason no_cache_reason,
-    v8::Local<v8::Data> host_defined_options) {
+    bool can_use_crowdsourced_compile_hints) {
   v8::Isolate* isolate = script_state->GetIsolate();
   if (classic_script.SourceText().length() >= v8::String::kMaxLength) {
     V8ThrowException::ThrowError(isolate, "Source file too large.");
@@ -246,32 +344,17 @@ v8::MaybeLocal<v8::Script> V8ScriptRunner::CompileScript(
                          script_start_position.line_.ZeroBasedInt(),
                          script_start_position.column_.ZeroBasedInt());
 
-  const SanitizeScriptErrors sanitize_script_errors =
-      classic_script.GetSanitizeScriptErrors();
-
-  // NOTE: For compatibility with WebCore, ClassicScript's line starts at
-  // 1, whereas v8 starts at 0.
-  v8::ScriptOrigin origin(
-      isolate, V8String(isolate, file_name),
-      script_start_position.line_.ZeroBasedInt(),
-      script_start_position.column_.ZeroBasedInt(),
-      sanitize_script_errors == SanitizeScriptErrors::kDoNotSanitize, -1,
-      V8String(isolate, classic_script.SourceMapUrl()),
-      sanitize_script_errors == SanitizeScriptErrors::kSanitize,
-      false,  // is_wasm
-      false,  // is_module
-      host_defined_options);
-
   if (!*TRACE_EVENT_API_GET_CATEGORY_GROUP_ENABLED(kTraceEventCategoryGroup)) {
     return CompileScriptInternal(isolate, script_state, classic_script, origin,
-                                 compile_options, no_cache_reason, nullptr);
+                                 compile_options, no_cache_reason,
+                                 can_use_crowdsourced_compile_hints, nullptr);
   }
 
-  absl::optional<inspector_compile_script_event::V8ConsumeCacheResult>
+  std::optional<inspector_compile_script_event::V8ConsumeCacheResult>
       cache_result;
-  v8::MaybeLocal<v8::Script> script =
-      CompileScriptInternal(isolate, script_state, classic_script, origin,
-                            compile_options, no_cache_reason, &cache_result);
+  v8::MaybeLocal<v8::Script> script = CompileScriptInternal(
+      isolate, script_state, classic_script, origin, compile_options,
+      no_cache_reason, can_use_crowdsourced_compile_hints, &cache_result);
   TRACE_EVENT_END1(
       kTraceEventCategoryGroup, "v8.compile", "data",
       [&](perfetto::TracedValue context) {
@@ -298,8 +381,7 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
   // |resource_is_shared_cross_origin| is always true and |resource_is_opaque|
   // is always false because CORS is enforced to module scripts.
   v8::ScriptOrigin origin(
-      isolate, V8String(isolate, file_name),
-      start_position.line_.ZeroBasedInt(),
+      V8String(isolate, file_name), start_position.line_.ZeroBasedInt(),
       start_position.column_.ZeroBasedInt(),
       true,                        // resource_is_shared_cross_origin
       -1,                          // script id
@@ -310,7 +392,7 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
       referrer_info.ToV8HostDefinedOptions(isolate, params.SourceURL()));
 
   v8::Local<v8::String> code = V8String(isolate, params.GetSourceText());
-  absl::optional<inspector_compile_script_event::V8ConsumeCacheResult>
+  std::optional<inspector_compile_script_event::V8ConsumeCacheResult>
       cache_result;
   v8::MaybeLocal<v8::Module> script;
   ScriptStreamer* streamer = params.GetScriptStreamer();
@@ -322,9 +404,24 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
         isolate->GetCurrentContext(), streamer->Source(v8::ScriptType::kModule),
         code, origin);
   } else {
-    switch (compile_options) {
+    switch (static_cast<int>(compile_options)) {
+      // TODO(40286622): Compile hints for modules.
+      case v8::ScriptCompiler::kProduceCompileHints:
+      case v8::ScriptCompiler::kConsumeCompileHints:
+      case v8::ScriptCompiler::kFollowCompileHintsMagicComment |
+          v8::ScriptCompiler::kProduceCompileHints:
+      case v8::ScriptCompiler::kFollowCompileHintsMagicComment |
+          v8::ScriptCompiler::kConsumeCompileHints:
+        compile_options = v8::ScriptCompiler::CompileOptions(
+            compile_options & (~(v8::ScriptCompiler::kProduceCompileHints |
+                                 v8::ScriptCompiler::kConsumeCompileHints)));
+        ABSL_FALLTHROUGH_INTENDED;
+      case v8::ScriptCompiler::kFollowCompileHintsMagicComment:
       case v8::ScriptCompiler::kNoCompileOptions:
       case v8::ScriptCompiler::kEagerCompile: {
+        base::UmaHistogramEnumeration(
+            v8_compile_hints::kStatusHistogram,
+            v8_compile_hints::Status::kNoCompileHintsModuleNonStreaming);
         v8::ScriptCompiler::Source source(code, origin);
         script = v8::ScriptCompiler::CompileModule(
             isolate, &source, compile_options, no_cache_reason);
@@ -332,11 +429,17 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
       }
 
       case v8::ScriptCompiler::kConsumeCodeCache: {
+        base::UmaHistogramEnumeration(
+            v8_compile_hints::kStatusHistogram,
+            v8_compile_hints::Status::kConsumeCodeCacheModuleNonStreaming);
         // Compile a script, and consume a V8 cache that was generated
         // previously.
-        SingleCachedMetadataHandler* cache_handler = params.CacheHandler();
+        CachedMetadataHandler* cache_handler = params.CacheHandler();
         DCHECK(cache_handler);
         cache_handler->DidUseCodeCache();
+        const scoped_refptr<CachedMetadata> cached_metadata =
+            V8CodeCache::GetCachedMetadata(cache_handler);
+        const bool full_code_cache = V8CodeCache::IsFull(cached_metadata.get());
         // TODO(leszeks): Add support for passing in ScriptCacheConsumer.
         v8::ScriptCompiler::Source source(
             code, origin,
@@ -355,18 +458,14 @@ v8::MaybeLocal<v8::Module> V8ScriptRunner::CompileModule(
           cache_handler->ClearCachedMetadata(
               ExecutionContext::GetCodeCacheHostFromContext(execution_context),
               CachedMetadataHandler::kClearPersistentStorage);
-        } else if (InDiscardExperiment()) {
-          // Experimentally free code cache from memory after first use. See
-          // http://crbug.com/1045052.
-          cache_handler->ClearCachedMetadata(
-              ExecutionContext::GetCodeCacheHostFromContext(execution_context),
-              CachedMetadataHandler::kDiscardLocally);
         }
-        cache_result = absl::make_optional(
+        cache_result = std::make_optional(
             inspector_compile_script_event::V8ConsumeCacheResult(
-                cached_data->length, cached_data->rejected));
+                cached_data->length, cached_data->rejected, full_code_cache));
         break;
       }
+      default:
+        NOTREACHED();
     }
   }
 
@@ -387,8 +486,6 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
     v8::Local<v8::Data> host_defined_options,
     ExecutionContext* context) {
   DCHECK(!script.IsEmpty());
-  LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(context);
-  ScopedFrameBlamer frame_blamer(window ? window->GetFrame() : nullptr);
 
   v8::Local<v8::Value> script_name =
       script->GetUnboundScript()->GetScriptName();
@@ -410,8 +507,12 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
       ThrowScriptForbiddenException(isolate);
       return v8::MaybeLocal<v8::Value>();
     }
+    if (RuntimeEnabledFeatures::BlinkLifecycleScriptForbiddenEnabled()) {
+      CHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    } else {
+      DCHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+    }
 
-    v8::Isolate::SafeForTerminationScope safe_for_termination(isolate);
     v8::MicrotasksScope microtasks_scope(isolate, microtask_queue,
                                          v8::MicrotasksScope::kRunMicrotasks);
     v8::Local<v8::String> script_url;
@@ -421,8 +522,8 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
 
     // ToCoreString here should be zero copy due to externalized string
     // unpacked.
-    probe::ExecuteScript probe(context, isolate->GetCurrentContext(),
-                               ToCoreString(script_url),
+    String url = ToCoreString(isolate, script_url);
+    probe::ExecuteScript probe(context, isolate->GetCurrentContext(), url,
                                script->GetUnboundScript()->GetId());
     result = script->Run(isolate->GetCurrentContext(), host_defined_options);
   }
@@ -434,7 +535,7 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::RunCompiledScript(
 namespace {
 void DelayedProduceCodeCacheTask(ScriptState* script_state,
                                  v8::Global<v8::Script> script,
-                                 SingleCachedMetadataHandler* cache_handler,
+                                 CachedMetadataHandler* cache_handler,
                                  size_t source_text_length,
                                  KURL source_url,
                                  TextPosition source_start_position) {
@@ -456,8 +557,7 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
     ClassicScript* classic_script,
     ExecuteScriptPolicy policy,
     RethrowErrorsOption rethrow_errors) {
-  if (!script_state)
-    return ScriptEvaluationResult::FromClassicNotRun();
+  CHECK(script_state);
 
   // |script_state->GetContext()| must be initialized here already, typically
   // due to a WindowProxy() call inside ToScriptState*() that is used to get the
@@ -495,7 +595,7 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
   v8::Context::Scope scope(script_state->GetContext());
 
   DEVTOOLS_TIMELINE_TRACE_EVENT(
-      "EvaluateScript", inspector_evaluate_script_event::Data, frame,
+      "EvaluateScript", inspector_evaluate_script_event::Data, isolate, frame,
       classic_script->SourceUrl().GetString(), classic_script->StartPosition());
 
   // Scope for |v8::TryCatch|.
@@ -511,34 +611,46 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
       try_catch.SetVerbose(true);
     }
 
-    const ReferrerScriptInfo referrer_info(classic_script->BaseUrl(),
-                                           classic_script->FetchOptions());
-
     v8::Local<v8::Script> script;
 
-    SingleCachedMetadataHandler* cache_handler = classic_script->CacheHandler();
+    CachedMetadataHandler* cache_handler = classic_script->CacheHandler();
     if (cache_handler) {
       cache_handler->Check(
           ExecutionContext::GetCodeCacheHostFromContext(execution_context),
           classic_script->SourceText());
     }
-    v8::Local<v8::Data> host_defined_options =
-        referrer_info.ToV8HostDefinedOptions(isolate,
-                                             classic_script->SourceUrl());
     v8::ScriptCompiler::CompileOptions compile_options;
     V8CodeCache::ProduceCacheOptions produce_cache_options;
     v8::ScriptCompiler::NoCacheReason no_cache_reason;
-    std::tie(compile_options, produce_cache_options, no_cache_reason) =
-        V8CodeCache::GetCompileOptions(execution_context->GetV8CacheOptions(),
-                                       *classic_script);
+    Page* page = frame != nullptr ? frame->GetPage() : nullptr;
+    const bool is_http = classic_script->SourceUrl().ProtocolIsInHTTPFamily();
+    const bool might_generate_crowdsourced_compile_hints =
+        is_http && page != nullptr &&
+        page->GetV8CrowdsourcedCompileHintsProducer().MightGenerateData();
+    const bool can_use_crowdsourced_compile_hints =
+        is_http && page != nullptr && page->MainFrame() == frame &&
+        page->GetV8CrowdsourcedCompileHintsConsumer().HasData();
 
+    std::tie(compile_options, produce_cache_options, no_cache_reason) =
+        V8CodeCache::GetCompileOptions(
+            execution_context->GetV8CacheOptions(), *classic_script,
+            might_generate_crowdsourced_compile_hints,
+            can_use_crowdsourced_compile_hints,
+            v8_compile_hints::GetMagicCommentMode(execution_context));
+
+    v8::ScriptOrigin origin = classic_script->CreateScriptOrigin(isolate);
     v8::MaybeLocal<v8::Value> maybe_result;
-    if (V8ScriptRunner::CompileScript(script_state, *classic_script,
+    if (V8ScriptRunner::CompileScript(script_state, *classic_script, origin,
                                       compile_options, no_cache_reason,
-                                      host_defined_options)
+                                      can_use_crowdsourced_compile_hints)
             .ToLocal(&script)) {
+      DEVTOOLS_TIMELINE_TRACE_EVENT_WITH_CATEGORIES(
+          TRACE_DISABLED_BY_DEFAULT("devtools.target-rundown"),
+          "ScriptCompiled", inspector_target_rundown_event::Data,
+          execution_context, isolate, script_state,
+          script->GetUnboundScript()->GetId());
       maybe_result = V8ScriptRunner::RunCompiledScript(
-          isolate, script, host_defined_options, execution_context);
+          isolate, script, origin.GetHostDefinedOptions(), execution_context);
       probe::DidProduceCompilationCache(
           probe::ToCoreProbeSink(execution_context), *classic_script, script);
 
@@ -556,7 +668,10 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
       }
       if (produce_cache_options ==
               V8CodeCache::ProduceCacheOptions::kProduceCodeCache &&
-          base::FeatureList::IsEnabled(features::kCacheCodeOnIdle)) {
+          base::FeatureList::IsEnabled(features::kCacheCodeOnIdle) &&
+          (features::kCacheCodeOnIdleDelayServiceWorkerOnlyParam.Get()
+               ? execution_context->IsServiceWorkerGlobalScope()
+               : true)) {
         auto delay =
             base::Milliseconds(features::kCacheCodeOnIdleDelayParam.Get());
         // Workers don't have a concept of idle tasks, so use a default task for
@@ -565,15 +680,15 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
             frame ? TaskType::kIdleTask : TaskType::kInternalDefault;
         execution_context->GetTaskRunner(task_type)->PostDelayedTask(
             FROM_HERE,
-            WTF::Bind(&DelayedProduceCodeCacheTask,
-                      // TODO(leszeks): Consider passing the
-                      // script state as a weak persistent.
-                      WrapPersistent(script_state),
-                      v8::Global<v8::Script>(isolate, script),
-                      WrapPersistent(cache_handler),
-                      classic_script->SourceText().length(),
-                      classic_script->SourceUrl(),
-                      classic_script->StartPosition()),
+            WTF::BindOnce(&DelayedProduceCodeCacheTask,
+                          // TODO(leszeks): Consider passing the
+                          // script state as a weak persistent.
+                          WrapPersistent(script_state),
+                          v8::Global<v8::Script>(isolate, script),
+                          WrapPersistent(cache_handler),
+                          classic_script->SourceText().length(),
+                          classic_script->SourceUrl(),
+                          classic_script->StartPosition()),
             delay);
       } else {
         V8CodeCache::ProduceCache(
@@ -582,6 +697,27 @@ ScriptEvaluationResult V8ScriptRunner::CompileAndRunScript(
             script, cache_handler, classic_script->SourceText().length(),
             classic_script->SourceUrl(), classic_script->StartPosition(),
             produce_cache_options);
+      }
+
+      // `SharedStorageWorkletGlobalScope` has a out-of-process worklet
+      // architecture that does not have a `page` associated.
+      // TODO(crbug.com/340920456): Figure out what should be done here.
+      if (compile_options == v8::ScriptCompiler::kProduceCompileHints &&
+          !execution_context->IsSharedStorageWorkletGlobalScope()) {
+        CHECK(page);
+        CHECK(frame);
+        // We can produce both crowdsourced and local compile hints at the
+        // same time.
+#if BUILDFLAG(PRODUCE_V8_COMPILE_HINTS)
+        // TODO(40286622): Add a compile hints solution for workers.
+        // TODO(40286622): Add a compile hints solution for fenced frames.
+        // TODO(40286622): Add a compile hints solution for out-of-process
+        // iframes.
+        page->GetV8CrowdsourcedCompileHintsProducer().RecordScript(
+            frame, execution_context, script, script_state);
+#endif  // BUILDFLAG(ENABLE_V8_COMPILE_HINTS)
+        frame->GetV8LocalCompileHintsProducer().RecordScript(
+            execution_context, script, classic_script);
       }
     }
 
@@ -668,6 +804,11 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallAsConstructor(
     ThrowScriptForbiddenException(isolate);
     return v8::MaybeLocal<v8::Value>();
   }
+  if (RuntimeEnabledFeatures::BlinkLifecycleScriptForbiddenEnabled()) {
+    CHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+  } else {
+    DCHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+  }
 
   // TODO(dominicc): When inspector supports tracing object
   // invocation, change this to use v8::Object instead of
@@ -676,7 +817,6 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallAsConstructor(
   CHECK(constructor->IsFunction());
   v8::Local<v8::Function> function = constructor.As<v8::Function>();
 
-  v8::Isolate::SafeForTerminationScope safe_for_termination(isolate);
   v8::MicrotasksScope microtasks_scope(isolate, ToMicrotaskQueue(context),
                                        v8::MicrotasksScope::kRunMicrotasks);
   probe::CallFunction probe(context, isolate->GetCurrentContext(), function,
@@ -708,8 +848,6 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallFunction(
     v8::Local<v8::Value> argv[],
     v8::Isolate* isolate) {
   LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(context);
-  LocalFrame* frame = window ? window->GetFrame() : nullptr;
-  ScopedFrameBlamer frame_blamer(frame);
   TRACE_EVENT0("v8", "v8.callFunction");
   RuntimeCallStatsScopedTracer rcs_scoped_tracer(isolate);
   RUNTIME_CALL_TIMER_SCOPE(isolate, RuntimeCallStats::CounterId::kV8);
@@ -725,12 +863,15 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallFunction(
     ThrowScriptForbiddenException(isolate);
     return v8::MaybeLocal<v8::Value>();
   }
+  if (RuntimeEnabledFeatures::BlinkLifecycleScriptForbiddenEnabled()) {
+    CHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+  } else {
+    DCHECK(!ScriptForbiddenScope::WillBeScriptForbidden());
+  }
 
-  DCHECK(!frame ||
-         BindingSecurity::ShouldAllowAccessToFrame(
-             ToLocalDOMWindow(function->GetCreationContextChecked()), frame,
-             BindingSecurity::ErrorReportOption::kDoNotReport));
-  v8::Isolate::SafeForTerminationScope safe_for_termination(isolate);
+  DCHECK(!window || !window->GetFrame() ||
+         BindingSecurity::ShouldAllowAccessTo(
+             ToLocalDOMWindow(function->GetCreationContextChecked()), window));
   v8::MicrotasksScope microtasks_scope(isolate, microtask_queue,
                                        v8::MicrotasksScope::kRunMicrotasks);
   if (!depth) {
@@ -743,8 +884,8 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallFunction(
 
   probe::CallFunction probe(context, isolate->GetCurrentContext(), function,
                             depth);
-  v8::MaybeLocal<v8::Value> result =
-      function->Call(isolate->GetCurrentContext(), receiver, argc, argv);
+  v8::MaybeLocal<v8::Value> result = function->Call(
+      isolate, isolate->GetCurrentContext(), receiver, argc, argv);
   CHECK(!isolate->IsDead());
 
   if (!depth)
@@ -754,13 +895,12 @@ v8::MaybeLocal<v8::Value> V8ScriptRunner::CallFunction(
 }
 
 class ModuleEvaluationRejectionCallback final
-    : public ScriptFunction::Callable {
+    : public ThenCallable<IDLAny, ModuleEvaluationRejectionCallback> {
  public:
   ModuleEvaluationRejectionCallback() = default;
 
-  ScriptValue Call(ScriptState* script_state, ScriptValue value) override {
+  void React(ScriptState* script_state, ScriptValue value) {
     ModuleRecord::ReportException(script_state, value.V8Value());
-    return ScriptValue();
   }
 };
 
@@ -834,7 +974,6 @@ ScriptEvaluationResult V8ScriptRunner::EvaluateModule(
 
     TRACE_EVENT0("v8,devtools.timeline", "v8.evaluateModule");
     RUNTIME_CALL_TIMER_SCOPE(isolate, RuntimeCallStats::CounterId::kV8);
-    v8::Isolate::SafeForTerminationScope safe_for_termination(isolate);
 
     // Do not perform a microtask checkpoint here. A checkpoint is performed
     // only after module error handling to ensure proper timing with and
@@ -858,26 +997,27 @@ ScriptEvaluationResult V8ScriptRunner::EvaluateModule(
 
   // [not specced] Store V8 code cache on successful evaluation.
   if (result.GetResultType() == ScriptEvaluationResult::ResultType::kSuccess) {
+    DEVTOOLS_TIMELINE_TRACE_EVENT_WITH_CATEGORIES(
+        TRACE_DISABLED_BY_DEFAULT("devtools.target-rundown"), "ModuleEvaluated",
+        inspector_target_rundown_event::Data, execution_context, isolate,
+        script_state, module_script->V8Module()->ScriptId());
     execution_context->GetTaskRunner(TaskType::kNetworking)
-        ->PostTask(FROM_HERE,
-                   WTF::Bind(&Modulator::ProduceCacheModuleTreeTopLevel,
-                             WrapWeakPersistent(Modulator::From(script_state)),
-                             WrapWeakPersistent(module_script)));
+        ->PostTask(
+            FROM_HERE,
+            WTF::BindOnce(&Modulator::ProduceCacheModuleTreeTopLevel,
+                          WrapWeakPersistent(Modulator::From(script_state)),
+                          WrapWeakPersistent(module_script)));
   }
 
   if (!rethrow_errors.ShouldRethrow()) {
     // <spec step="7"> If report errors is true, then upon rejection of
     // evaluationPromise with reason, report the exception given by reason
     // for script.</spec>
-    v8::Local<v8::Function> callback_failure =
-        MakeGarbageCollected<ScriptFunction>(
-            script_state,
-            MakeGarbageCollected<ModuleEvaluationRejectionCallback>())
-            ->V8Function();
     // Add a rejection handler to report back errors once the result
     // promise is rejected.
     result.GetPromise(script_state)
-        .Then(v8::Local<v8::Function>(), callback_failure);
+        .Catch(script_state,
+               MakeGarbageCollected<ModuleEvaluationRejectionCallback>());
   }
 
   // <spec step="8">Clean up after running script with settings.</spec>
@@ -888,7 +1028,7 @@ ScriptEvaluationResult V8ScriptRunner::EvaluateModule(
 
 void V8ScriptRunner::ReportException(v8::Isolate* isolate,
                                      v8::Local<v8::Value> exception) {
-  DCHECK(!exception.IsEmpty());
+  CHECK(!exception.IsEmpty());
 
   // https://html.spec.whatwg.org/C/#report-the-error
   v8::Local<v8::Message> message =

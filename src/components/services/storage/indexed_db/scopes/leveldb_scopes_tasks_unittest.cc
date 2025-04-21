@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,14 @@
 
 #include <limits>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_coding.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_test_utils.h"
 #include "components/services/storage/indexed_db/scopes/scopes_metadata.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace content {
+namespace content::indexed_db {
 namespace {
 
 class LevelDBScopesTasksTest : public LevelDBScopesTestBase {
@@ -36,9 +35,10 @@ class LevelDBScopesTasksTest : public LevelDBScopesTestBase {
                                 bool ignore_cleanup_tasks) {
     WriteScopesMetadata(scope_number, ignore_cleanup_tasks);
 
-    cleanup_task_buffer_.mutable_delete_range()->set_begin(
+    cleanup_task_buffer_.mutable_delete_range_and_compact()->set_begin(
         delete_range_start_key_);
-    cleanup_task_buffer_.mutable_delete_range()->set_end(delete_range_end_key_);
+    cleanup_task_buffer_.mutable_delete_range_and_compact()->set_end(
+        delete_range_end_key_);
     WriteCleanupTask(scope_number, /*sequence_number=*/0);
 
     int64_t undo_sequence_number = leveldb_scopes::kFirstSequenceNumberToWrite;
@@ -259,7 +259,7 @@ TEST_F(LevelDBScopesTasksTest, RevertAndCleanup) {
       scopes_encoder_.UndoTaskKeyPrefix(metadata_prefix_, kScopeNumber)));
 }
 
-TEST_F(LevelDBScopesTasksTest, ErrorsDuringCleanupArePropogated) {
+TEST_F(LevelDBScopesTasksTest, ErrorsDuringCleanupArePropagated) {
   const int64_t kScopeNumber = 1;
 
   // This test will fail if the pattern of leveldb operations in this test
@@ -296,7 +296,7 @@ TEST_F(LevelDBScopesTasksTest, ErrorsDuringCleanupArePropogated) {
   }
 }
 
-TEST_F(LevelDBScopesTasksTest, ErrorsDuringRevertArePropogated) {
+TEST_F(LevelDBScopesTasksTest, ErrorsDuringRevertArePropagated) {
   const int64_t kScopeNumber = 1;
 
   // This test will fail if the pattern of leveldb operations in this test
@@ -330,4 +330,4 @@ TEST_F(LevelDBScopesTasksTest, ErrorsDuringRevertArePropogated) {
 }
 
 }  // namespace
-}  // namespace content
+}  // namespace content::indexed_db

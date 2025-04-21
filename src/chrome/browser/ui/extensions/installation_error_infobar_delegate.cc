@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,9 @@ void InstallationErrorInfoBarDelegate::Create(
 
 InstallationErrorInfoBarDelegate::InstallationErrorInfoBarDelegate(
     const extensions::CrxInstallError& error)
-    : ConfirmInfoBarDelegate(), error_(error) {}
+    : error_(error) {}
 
-InstallationErrorInfoBarDelegate::~InstallationErrorInfoBarDelegate() {}
+InstallationErrorInfoBarDelegate::~InstallationErrorInfoBarDelegate() = default;
 
 infobars::InfoBarDelegate::InfoBarIdentifier
 InstallationErrorInfoBarDelegate::GetIdentifier() const {

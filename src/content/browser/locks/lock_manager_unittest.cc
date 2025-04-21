@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class LockManagerInvalidBucketTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  LockManager lock_manager_;
+  LockManager<storage::BucketId> lock_manager_;
   mojo::PendingRemote<blink::mojom::LockManager> pending_remote_;
   mojo::PendingReceiver<blink::mojom::LockManager> pending_receiver_;
   mojo::Remote<blink::mojom::LockManager> remote_;
@@ -58,17 +58,10 @@ class TestLockRequest : public blink::mojom::LockRequest {
     run_loop_.Quit();
   }
 
-  void Abort(const std::string& reason) override {
-    aborted_ = true;
-    run_loop_.Quit();
-    return;
-  }
-
   void WaitForCallback() { run_loop_.Run(); }
 
   bool FailureCalled() const { return failed_; }
   bool GrantedCalled() const { return granted_; }
-  bool AbortCalled() const { return aborted_; }
 
  private:
   raw_ptr<mojo::PendingAssociatedRemote<blink::mojom::LockHandle>> remote_;
@@ -76,7 +69,6 @@ class TestLockRequest : public blink::mojom::LockRequest {
   base::RunLoop run_loop_;
   bool failed_ = false;
   bool granted_ = false;
-  bool aborted_ = false;
 };
 
 TEST_F(LockManagerInvalidBucketTest, RequestLock) {
@@ -86,13 +78,12 @@ TEST_F(LockManagerInvalidBucketTest, RequestLock) {
   TestLockRequest request(std::move(pending_receiver));
 
   GetRemote()->RequestLock("lock", blink::mojom::LockMode::EXCLUSIVE,
-                           LockManager::WaitMode::WAIT,
+                           blink::mojom::LockManager::WaitMode::WAIT,
                            std::move(pending_remote));
 
   request.WaitForCallback();
   EXPECT_TRUE(request.FailureCalled());
   EXPECT_FALSE(request.GrantedCalled());
-  EXPECT_FALSE(request.AbortCalled());
 }
 
 TEST_F(LockManagerInvalidBucketTest, QueryState) {

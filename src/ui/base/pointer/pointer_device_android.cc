@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include "base/android/jni_array.h"
 #include "base/check_op.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "ui/base/ui_base_jni_headers/TouchDevice_jni.h"
 
-using base::android::AttachCurrentThread;
+using jni_zero::AttachCurrentThread;
 
 namespace ui {
 
@@ -52,6 +54,14 @@ HoverType GetPrimaryHoverType(int available_hover_types) {
     return HOVER_TYPE_NONE;
   DCHECK_EQ(available_hover_types, HOVER_TYPE_HOVER);
   return HOVER_TYPE_HOVER;
+}
+
+std::optional<PointerDevice> GetPointerDevice(PointerDevice::Key key) {
+  return std::nullopt;
+}
+
+std::vector<PointerDevice> GetPointerDevices() {
+  return {};
 }
 
 }  // namespace ui

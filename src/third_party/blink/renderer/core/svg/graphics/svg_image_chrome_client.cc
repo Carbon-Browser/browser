@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image.h"
 #include "third_party/blink/renderer/platform/graphics/image_observer.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
@@ -39,9 +40,12 @@ namespace blink {
 
 static constexpr base::TimeDelta kAnimationFrameDelay = base::Hertz(60);
 
+bool IsolatedSVGChromeClient::IsIsolatedSVGChromeClient() const {
+  return true;
+}
+
 SVGImageChromeClient::SVGImageChromeClient(SVGImage* image)
-    : image_(image),
-      timeline_state_(kRunning) {}
+    : image_(image), timeline_state_(kRunning) {}
 
 void SVGImageChromeClient::InitAnimationTimer(
     scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner) {
@@ -51,19 +55,16 @@ void SVGImageChromeClient::InitAnimationTimer(
       &SVGImageChromeClient::AnimationTimerFired);
 }
 
-bool SVGImageChromeClient::IsSVGImageChromeClient() const {
-  return true;
-}
-
 void SVGImageChromeClient::ChromeDestroyed() {
   image_ = nullptr;
 }
 
 void SVGImageChromeClient::InvalidateContainer() {
-  // If image_->page_ is null, we're being destructed, so don't fire
+  // If image_->document_host_ is null, we're being destructed, so don't fire
   // |Changed()| in that case.
-  if (image_ && image_->GetImageObserver() && image_->page_)
+  if (image_ && image_->GetImageObserver() && image_->document_host_) {
     image_->GetImageObserver()->Changed(image_);
+  }
 }
 
 void SVGImageChromeClient::SuspendAnimation() {

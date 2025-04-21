@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/containers/contains.h"
+#include "base/not_fatal_until.h"
 #include "base/observer_list.h"
 #include "ui/gfx/animation/animation_container.h"
 #include "ui/gfx/animation/slide_animation.h"
@@ -37,8 +38,9 @@ BoundsAnimator::~BoundsAnimator() {
   // that it won't call AnimationCanceled().
   ViewToDataMap data;
   data.swap(data_);
-  for (auto& entry : data)
+  for (auto& entry : data) {
     CleanupData(false, &entry.second);
+  }
 }
 
 void BoundsAnimator::AnimateViewTo(
@@ -54,8 +56,9 @@ void BoundsAnimator::AnimateViewTo(
   // bounds.
   if (is_animating && target == data_[view].target_bounds) {
     // If this animation specifies a different delegate, swap them out.
-    if (delegate && delegate != data_[view].delegate)
+    if (delegate && delegate != data_[view].delegate) {
       SetAnimationDelegate(view, std::move(delegate));
+    }
 
     return;
   }
@@ -122,10 +125,11 @@ void BoundsAnimator::AnimateViewTo(
 
 void BoundsAnimator::SetTargetBounds(View* view, const gfx::Rect& target) {
   const auto i = data_.find(view);
-  if (i == data_.end())
+  if (i == data_.end()) {
     AnimateViewTo(view, target);
-  else
+  } else {
     i->second.target_bounds = target;
+  }
 }
 
 gfx::Rect BoundsAnimator::GetTargetBounds(const View* view) const {
@@ -142,15 +146,16 @@ void BoundsAnimator::SetAnimationDelegate(
     View* view,
     std::unique_ptr<AnimationDelegate> delegate) {
   const auto i = data_.find(view);
-  DCHECK(i != data_.end());
+  CHECK(i != data_.end(), base::NotFatalUntil::M130);
 
   i->second.delegate = std::move(delegate);
 }
 
 void BoundsAnimator::StopAnimatingView(View* view) {
   const auto i = data_.find(view);
-  if (i != data_.end())
+  if (i != data_.end()) {
     i->second.animation->Stop();
+  }
 }
 
 bool BoundsAnimator::IsAnimating(View* view) const {
@@ -162,22 +167,26 @@ bool BoundsAnimator::IsAnimating() const {
 }
 
 void BoundsAnimator::Complete() {
-  if (data_.empty())
+  if (data_.empty()) {
     return;
+  }
 
-  while (!data_.empty())
+  while (!data_.empty()) {
     data_.begin()->second.animation->End();
+  }
 
   // Invoke AnimationContainerProgressed to force a repaint and notify delegate.
   AnimationContainerProgressed(container_.get());
 }
 
 void BoundsAnimator::Cancel() {
-  if (data_.empty())
+  if (data_.empty()) {
     return;
+  }
 
-  while (!data_.empty())
+  while (!data_.empty()) {
     data_.begin()->second.animation->Stop();
+  }
 
   // Invoke AnimationContainerProgressed to force a repaint and notify delegate.
   AnimationContainerProgressed(container_.get());
@@ -210,7 +219,7 @@ BoundsAnimator::Data::~Data() = default;
 
 BoundsAnimator::Data BoundsAnimator::RemoveFromMaps(View* view) {
   const auto i = data_.find(view);
-  DCHECK(i != data_.end());
+  CHECK(i != data_.end(), base::NotFatalUntil::M130);
   DCHECK_GT(animation_to_view_.count(i->second.animation.get()), 0u);
 
   Data old_data = std::move(i->second);
@@ -220,8 +229,9 @@ BoundsAnimator::Data BoundsAnimator::RemoveFromMaps(View* view) {
 }
 
 void BoundsAnimator::CleanupData(bool send_cancel, Data* data) {
-  if (send_cancel && data->delegate)
+  if (send_cancel && data->delegate) {
     data->delegate->AnimationCanceled(data->animation.get());
+  }
 
   data->delegate.reset();
 
@@ -234,8 +244,9 @@ void BoundsAnimator::CleanupData(bool send_cancel, Data* data) {
 std::unique_ptr<gfx::Animation> BoundsAnimator::ResetAnimationForView(
     View* view) {
   const auto i = data_.find(view);
-  if (i == data_.end())
+  if (i == data_.end()) {
     return nullptr;
+  }
 
   std::unique_ptr<gfx::Animation> old_animation =
       std::move(i->second.animation);
@@ -274,10 +285,9 @@ void BoundsAnimator::AnimationEndedOrCanceled(const gfx::Animation* animation,
       // where the animation stopped. See comment in AnimateViewTo() for details
       // as to why GetMirroredRect() is used.
       const gfx::Transform transform = view->GetTransform();
-      gfx::RectF bounds_f(parent_->GetMirroredRect(view->bounds()));
-      transform.TransformRect(&bounds_f);
-      view->SetBoundsRect(
-          parent_->GetMirroredRect(gfx::ToRoundedRect(bounds_f)));
+      gfx::Rect bounds = parent_->GetMirroredRect(view->bounds());
+      bounds = gfx::ToRoundedRect(transform.MapRect(gfx::RectF(bounds)));
+      view->SetBoundsRect(parent_->GetMirroredRect(bounds));
     }
     view->SetTransform(gfx::Transform());
   }
@@ -319,8 +329,9 @@ void BoundsAnimator::AnimationProgressed(const gfx::Animation* animation) {
     }
   }
 
-  if (data.delegate)
+  if (data.delegate) {
     data.delegate->AnimationProgressed(animation);
+  }
 }
 
 void BoundsAnimator::AnimationEnded(const gfx::Animation* animation) {
@@ -341,14 +352,12 @@ void BoundsAnimator::AnimationContainerProgressed(
     repaint_bounds_.SetRect(0, 0, 0, 0);
   }
 
-  for (BoundsAnimatorObserver& observer : observers_)
-    observer.OnBoundsAnimatorProgressed(this);
+  observers_.Notify(&BoundsAnimatorObserver::OnBoundsAnimatorProgressed, this);
 
   if (!IsAnimating()) {
     // Notify here rather than from AnimationXXX to avoid deleting the animation
     // while the animation is calling us.
-    for (BoundsAnimatorObserver& observer : observers_)
-      observer.OnBoundsAnimatorDone(this);
+    observers_.Notify(&BoundsAnimatorObserver::OnBoundsAnimatorDone, this);
   }
 }
 
@@ -359,8 +368,9 @@ void BoundsAnimator::OnChildViewRemoved(views::View* observed_view,
                                         views::View* removed) {
   DCHECK_EQ(parent_, observed_view);
   const auto iter = data_.find(removed);
-  if (iter == data_.end())
+  if (iter == data_.end()) {
     return;
+  }
   AnimationCanceled(iter->second.animation.get());
 }
 

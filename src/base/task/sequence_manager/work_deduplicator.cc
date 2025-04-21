@@ -1,10 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/work_deduplicator.h"
 
+#include <ostream>
 #include <utility>
+
 #include "base/check_op.h"
 
 namespace base {

@@ -1,8 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "components/remote_cocoa/app_shim/views_scrollbar_bridge.h"
+
+#include "base/check.h"
+#include "base/memory/raw_ptr.h"
 
 @interface ViewsScrollbarBridge ()
 
@@ -11,12 +14,14 @@
 
 @end
 
-@implementation ViewsScrollbarBridge
+@implementation ViewsScrollbarBridge {
+  raw_ptr<ViewsScrollbarBridgeDelegate> _delegate;  // Weak. Owns this.
+}
 
 - (instancetype)initWithDelegate:(ViewsScrollbarBridgeDelegate*)delegate {
   if ((self = [super init])) {
     _delegate = delegate;
-    [[NSNotificationCenter defaultCenter]
+    [NSNotificationCenter.defaultCenter
         addObserver:self
            selector:@selector(onScrollerStyleChanged:)
                name:NSPreferredScrollerStyleDidChangeNotification
@@ -27,12 +32,11 @@
 
 - (void)dealloc {
   DCHECK(!_delegate);
-  [super dealloc];
 }
 
 - (void)clearDelegate {
   _delegate = nullptr;
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 - (void)onScrollerStyleChanged:(NSNotification*)notification {
@@ -40,8 +44,8 @@
     _delegate->OnScrollerStyleChanged();
 }
 
-+ (NSScrollerStyle)getPreferredScrollerStyle {
-  return [NSScroller preferredScrollerStyle];
++ (NSScrollerStyle)preferredScrollerStyle {
+  return NSScroller.preferredScrollerStyle;
 }
 
 @end

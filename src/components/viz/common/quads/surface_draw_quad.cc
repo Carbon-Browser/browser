@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/check_op.h"
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 
@@ -53,7 +52,7 @@ void SurfaceDrawQuad::SetAll(const SharedQuadState* shared_quad_state,
 }
 
 const SurfaceDrawQuad* SurfaceDrawQuad::MaterialCast(const DrawQuad* quad) {
-  DCHECK_EQ(quad->material, DrawQuad::Material::kSurfaceContent);
+  CHECK_EQ(quad->material, DrawQuad::Material::kSurfaceContent);
   return static_cast<const SurfaceDrawQuad*>(quad);
 }
 

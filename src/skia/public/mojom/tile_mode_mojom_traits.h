@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@ struct EnumTraits<skia::mojom::TileMode, SkTileMode> {
         return skia::mojom::TileMode::DECAL;
     }
     NOTREACHED();
-    return skia::mojom::TileMode::DECAL;
   }
 
   static bool FromMojom(skia::mojom::TileMode input, SkTileMode* out) {

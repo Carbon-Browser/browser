@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_TRUST_TOKENS_SUITABLE_TRUST_TOKEN_ORIGIN_H_
 #define SERVICES_NETWORK_TRUST_TOKENS_SUITABLE_TRUST_TOKEN_ORIGIN_H_
 
+#include <optional>
+
 #include "base/types/pass_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace network {
@@ -32,8 +33,8 @@ class SuitableTrustTokenOrigin {
   // Returns nullopt if |origin| (or |url|) is unsuitable for keying Trust
   // Tokens persistent state. Otherwise, returns a new SuitableTrustTokenOrigin
   // wrapping |origin| (or |url|).
-  static absl::optional<SuitableTrustTokenOrigin> Create(url::Origin origin);
-  static absl::optional<SuitableTrustTokenOrigin> Create(const GURL& url);
+  static std::optional<SuitableTrustTokenOrigin> Create(url::Origin origin);
+  static std::optional<SuitableTrustTokenOrigin> Create(const GURL& url);
 
   std::string Serialize() const;
   const url::Origin& origin() const { return origin_; }

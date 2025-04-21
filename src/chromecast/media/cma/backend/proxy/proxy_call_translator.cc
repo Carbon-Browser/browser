@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/media/cma/backend/proxy/proxy_call_translator.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chromecast/media/cma/backend/proxy/push_buffer_pending_handler.h"
 #include "chromecast/media/cma/backend/proxy/push_buffer_queue.h"
@@ -35,7 +35,6 @@ CmaProxyHandler::PipelineState ToClientTypes(
       return CmaProxyHandler::PipelineState::kPaused;
     default:
       NOTREACHED();
-      return CmaProxyHandler::PipelineState::kUninitialized;
   }
 }
 
@@ -68,7 +67,6 @@ cast::media::AudioConfiguration_AudioCodec ToGrpcTypes(AudioCodec codec) {
           AudioConfiguration_AudioCodec_AUDIO_CODEC_MPEG_H_AUDIO;
     default:
       NOTREACHED();
-      return cast::media::AudioConfiguration_AudioCodec_AUDIO_CODEC_UNKNOWN;
   }
 }
 
@@ -94,8 +92,6 @@ cast::media::AudioConfiguration_ChannelLayout ToGrpcTypes(
           AudioConfiguration_ChannelLayout_CHANNEL_LAYOUT_DISCRETE;
     default:
       NOTREACHED();
-      return cast::media::
-          AudioConfiguration_ChannelLayout_CHANNEL_LAYOUT_UNSUPPORTED;
   }
 }
 
@@ -125,7 +121,6 @@ cast::media::AudioConfiguration_SampleFormat ToGrpcTypes(
       return cast::media::AudioConfiguration_SampleFormat_SAMPLE_FORMAT_S24;
     default:
       NOTREACHED();
-      return cast::media::AudioConfiguration_SampleFormat_SAMPLE_FORMAT_UNKNOWN;
   }
 }
 
@@ -288,7 +283,7 @@ CmaBackend::BufferStatus ProxyCallTranslator::PushBuffer(
       ToGrpcTypes(std::move(buffer), buffer_id));
 }
 
-absl::optional<ProxyCallTranslator::PushBufferRequest>
+std::optional<ProxyCallTranslator::PushBufferRequest>
 ProxyCallTranslator::GetBufferedData() {
   return push_buffer_handler_.GetBufferedData();
 }
@@ -339,7 +334,7 @@ void ProxyCallTranslator::HandlePushBufferResponse(
 }
 
 void ProxyCallTranslator::HandleGetMediaTimeResponse(
-    absl::optional<MediaTime> time,
+    std::optional<MediaTime> time,
     CastRuntimeAudioChannelBroker::StatusCode status) {
   NOTREACHED();
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ class MODULES_EXPORT DynamicsCompressorHandler final : public AudioHandler {
   }
 
   void SetChannelCount(unsigned, ExceptionState&) final;
-  void SetChannelCountMode(const String&, ExceptionState&) final;
+  void SetChannelCountMode(V8ChannelCountMode::Enum, ExceptionState&) final;
 
  private:
   DynamicsCompressorHandler(AudioNode&,

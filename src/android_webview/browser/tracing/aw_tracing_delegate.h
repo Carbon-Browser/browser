@@ -1,37 +1,35 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ANDROID_WEBVIEW_BROWSER_TRACING_AW_TRACING_DELEGATE_H_
 #define ANDROID_WEBVIEW_BROWSER_TRACING_AW_TRACING_DELEGATE_H_
 
+#include <optional>
+
 #include "content/public/browser/tracing_delegate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
-
-namespace base {
-class Value;
-}  // namespace base
+namespace tracing {
+class BackgroundTracingStateManager;
+}
 
 namespace android_webview {
 
 class AwTracingDelegate : public content::TracingDelegate {
  public:
   AwTracingDelegate();
+  explicit AwTracingDelegate(
+      std::unique_ptr<tracing::BackgroundTracingStateManager> state_manager);
   ~AwTracingDelegate() override;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
   // content::TracingDelegate implementation:
-  bool IsAllowedToBeginBackgroundScenario(
-      const content::BackgroundTracingConfig& config,
-      bool requires_anonymized_data) override;
-  bool IsAllowedToEndBackgroundScenario(
-      const content::BackgroundTracingConfig& config,
-      bool requires_anonymized_data,
-      bool is_crash_scenario) override;
-  absl::optional<base::Value> GenerateMetadataDict() override;
+  bool IsRecordingAllowed(bool requires_anonymized_data) const override;
+
+ private:
+  std::unique_ptr<tracing::BackgroundTracingStateManager> state_manager_;
 };
 
 }  // namespace android_webview

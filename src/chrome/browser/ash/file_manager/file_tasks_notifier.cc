@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
-#include "chrome/browser/ash/file_manager/file_tasks_notifier_factory.h"
 #include "chrome/browser/ash/file_manager/file_tasks_observer.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -35,7 +35,6 @@ namespace {
 bool IsSupportedFileSystemType(storage::FileSystemType type) {
   switch (type) {
     case storage::kFileSystemTypeLocal:
-    case storage::kFileSystemTypeRestrictedLocal:
     case storage::kFileSystemTypeDriveFs:
       return true;
     default:
@@ -54,7 +53,7 @@ void ReturnQueryResults(
 
 struct FileTasksNotifier::PendingFileAvailabilityTask {
   storage::FileSystemURL url;
-  FileTasksNotifier::FileAvailability* output;
+  raw_ptr<FileTasksNotifier::FileAvailability, DanglingUntriaged> output;
   base::OnceClosure done;
 };
 
@@ -63,11 +62,6 @@ FileTasksNotifier::FileTasksNotifier(Profile* profile)
       download_notifier_(profile_->GetDownloadManager(), this) {}
 
 FileTasksNotifier::~FileTasksNotifier() = default;
-
-// static
-FileTasksNotifier* FileTasksNotifier::GetForProfile(Profile* profile) {
-  return FileTasksNotifierFactory::GetInstance()->GetForProfile(profile);
-}
 
 void FileTasksNotifier::AddObserver(FileTasksObserver* observer) {
   observers_.AddObserver(observer);
@@ -99,7 +93,7 @@ void FileTasksNotifier::QueryFileAvailability(
     tasks.push_back({url, &results[i]});
   }
   if (tasks.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), std::move(results)));
     return;
   }
@@ -181,15 +175,15 @@ void FileTasksNotifier::GetFileAvailability(PendingFileAvailabilityTask task) {
   }
   if (!GetDriveFsInterface()) {
     *task.output = FileTasksNotifier::FileAvailability::kUnknown;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(task.done));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(task.done));
     return;
   }
   base::FilePath drive_path;
   if (!GetRelativeDrivePath(task.url.path(), &drive_path)) {
     *task.output = FileTasksNotifier::FileAvailability::kGone;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(task.done));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(task.done));
     return;
   }
   GetDriveFsInterface()->GetMetadata(

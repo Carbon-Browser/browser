@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,6 @@ class FakeGCMDriver : public GCMDriver {
                             const std::vector<std::string>& sender_ids,
                             const std::string& registration_id,
                             ValidateRegistrationCallback callback) override;
-  void OnSignedIn() override;
-  void OnSignedOut() override;
   void AddConnectionObserver(GCMConnectionObserver* observer) override;
   void RemoveConnectionObserver(GCMConnectionObserver* observer) override;
   GCMClient* GetGCMClientForTesting() const override;

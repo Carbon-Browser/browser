@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@ package org.chromium.chrome.browser.firstrun;
 
 import android.os.Bundle;
 
+import org.chromium.base.Promise;
 import org.chromium.base.supplier.OneshotSupplier;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
+import org.chromium.chrome.browser.ui.signin.fullscreen_signin.FullscreenSigninMediator;
+import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Defines the host interface for First Run Experience pages.
- */
+/** Defines the host interface for First Run Experience pages. */
 public interface FirstRunPageDelegate {
-    /**
-     * Returns FRE properties bundle.
-     */
+    /** Returns FRE properties bundle. */
     Bundle getProperties();
 
     /**
@@ -51,18 +51,17 @@ public interface FirstRunPageDelegate {
      */
     boolean didAcceptTermsOfService();
 
-    /**
-     * Returns whether chrome is launched as a custom tab.
-     */
+    /** Returns whether chrome is launched as a custom tab. */
     boolean isLaunchedFromCct();
 
     /**
      * Notifies all interested parties that the user has accepted Chrome Terms of Service.
      * Must be called only after the delegate has fully initialized.
      * Does not automatically advance to the next page, call {@link #advanceToNextPage()} directly.
-     * @param allowCrashUpload True if the user allows to upload crash dumps and collect stats.
+     * @param allowMetricsAndCrashUploading True if the user allows to upload crash dumps and
+     *         collect stats.
      */
-    void acceptTermsOfService(boolean allowCrashUpload);
+    void acceptTermsOfService(boolean allowMetricsAndCrashUploading);
 
     /**
      * Show an informational web page. The page doesn't show navigation control.
@@ -71,31 +70,38 @@ public interface FirstRunPageDelegate {
     void showInfoPage(int url);
 
     /**
-     * Records the FRE progress histogram MobileFre.Progress.*.
+     * Records the FRE progress histogram MobileFre.Progress.
+     *
      * @param state FRE state to record.
      */
     void recordFreProgressHistogram(@MobileFreProgress int state);
 
-    /** Records MobileFre.FromLaunch.NativeAndPoliciesLoaded histogram. **/
-    void recordNativePolicyAndChildStatusLoadedHistogram();
+    /** Records MobileFre.FromLaunch.NativeAndPoliciesLoaded histogram. */
+    void recordLoadCompletedHistograms(@FullscreenSigninMediator.LoadPoint int slowestLoadPoint);
 
-    /** Records MobileFre.FromLaunch.NativeInitialized histogram. **/
+    /** Records MobileFre.FromLaunch.NativeInitialized histogram. */
     void recordNativeInitializedHistogram();
 
     /**
-     * The supplier that supplies whether reading policy value is necessary.
-     * See {@link PolicyLoadListener} for details.
+     * @return The supplier that provides the Profile (when available).
+     */
+    OneshotSupplier<ProfileProvider> getProfileProviderSupplier();
+
+    /**
+     * The supplier that supplies whether reading policy value is necessary. See {@link
+     * PolicyLoadListener} for details.
      */
     OneshotSupplier<Boolean> getPolicyLoadListener();
 
-    /**
-     * Returns the supplier that supplies child account status.
-     */
+    /** Returns the supplier that supplies child account status. */
     OneshotSupplier<Boolean> getChildAccountStatusSupplier();
 
     /**
-     * Whether FRE pages can use layouts optimized for landscape orientation. Returns false if the
-     * FRE is shown in a dialog.
+     * Returns the promise that provides information about native initialization. Callers can use
+     * {@link Promise#isFulfilled()} to check whether the native has already been initialized.
      */
-    boolean canUseLandscapeLayout();
+    Promise<Void> getNativeInitializationPromise();
+
+    /** Return the {@link WindowAndroid} for the FirstRunActivity. */
+    WindowAndroid getWindowAndroid();
 }

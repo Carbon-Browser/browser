@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,18 +89,11 @@ class POLICY_EXPORT CloudPolicyStore {
   }
   bool has_policy() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    DCHECK_EQ(policy_.get() != nullptr,
-              policy_fetch_response_.get() != nullptr);
     return policy_.get() != nullptr;
   }
   const enterprise_management::PolicyData* policy() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return policy_.get();
-  }
-  const enterprise_management::PolicyFetchResponse* policy_fetch_response()
-      const {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    return policy_fetch_response_.get();
   }
   bool is_managed() const;
   Status status() const {
@@ -150,6 +143,9 @@ class POLICY_EXPORT CloudPolicyStore {
   // Removes the specified observer.
   void RemoveObserver(Observer* observer);
 
+  // Checks if `observer` was already added.
+  bool HasObserver(CloudPolicyStore::Observer* observer);
+
   // The invalidation version of the last policy stored. This value can be read
   // by observers to determine which version of the policy is now available.
   int64_t invalidation_version() {
@@ -170,6 +166,8 @@ class POLICY_EXPORT CloudPolicyStore {
   void set_policy_data_for_testing(
       std::unique_ptr<enterprise_management::PolicyData> policy);
 
+  void set_policy_signature_public_key_for_testing(const std::string& key);
+
  protected:
   // Invokes the corresponding callback on all registered observers.
   void NotifyStoreLoaded();
@@ -180,8 +178,6 @@ class POLICY_EXPORT CloudPolicyStore {
   virtual void UpdateFirstPoliciesLoaded();
 
   void SetPolicy(
-      std::unique_ptr<enterprise_management::PolicyFetchResponse>
-          policy_fetch_response,
       std::unique_ptr<enterprise_management::PolicyData> policy_data);
   void ResetPolicy();
 
@@ -218,10 +214,6 @@ class POLICY_EXPORT CloudPolicyStore {
   // triggered by calling Load().
   bool is_initialized_ = false;
 
-  // Currently effective policy. Should be always in sync and kept private.
-  // Use `SetPolicy()` and `ResetPolicy()` to alter the fields.
-  std::unique_ptr<enterprise_management::PolicyFetchResponse>
-      policy_fetch_response_;
   std::unique_ptr<enterprise_management::PolicyData> policy_;
 
   base::ObserverList<Observer, true>::Unchecked observers_;

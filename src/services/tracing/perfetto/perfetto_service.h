@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include <memory>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/tracing/perfetto_task_runner.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
@@ -71,15 +73,12 @@ class PerfettoService : public mojom::PerfettoService {
   void SetActiveServicePidsInitialized();
 
   std::set<base::ProcessId> active_service_pids() const {
+    base::AutoLock lock(active_service_pids_lock_);
     return active_service_pids_;
   }
 
   bool active_service_pids_initialized() const {
     return active_service_pids_initialized_;
-  }
-
-  base::tracing::PerfettoTaskRunner* perfetto_task_runner() {
-    return &perfetto_task_runner_;
   }
 
  private:
@@ -93,8 +92,14 @@ class PerfettoService : public mojom::PerfettoService {
   std::unique_ptr<perfetto::TracingService> service_;
   mojo::ReceiverSet<mojom::PerfettoService, uint32_t> receivers_;
   mojo::UniqueReceiverSet<mojom::ProducerHost, uint32_t> producer_receivers_;
-  std::set<ConsumerHost::TracingSession*> tracing_sessions_;  // Not owned.
-  std::set<base::ProcessId> active_service_pids_;
+  std::set<raw_ptr<ConsumerHost::TracingSession, SetExperimental>>
+      tracing_sessions_;  // Not owned.
+  // Protects access to |active_service_pids_|. We need this lock because
+  // CustomEventRecorder calls active_service_pids() from a possibly different
+  // thread on incremental state reset.
+  mutable base::Lock active_service_pids_lock_;
+  std::set<base::ProcessId> active_service_pids_
+      GUARDED_BY(active_service_pids_lock_);
   std::map<base::ProcessId, int> num_active_connections_;
   bool active_service_pids_initialized_ = false;
 };

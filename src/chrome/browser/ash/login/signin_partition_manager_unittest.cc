@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/browser/browser_context.h"
@@ -24,7 +23,7 @@
 #include "content/public/test/web_contents_tester.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/cookies/cookie_store.h"
 #include "net/http/http_auth.h"
 #include "net/http/http_auth_cache.h"
@@ -58,7 +57,7 @@ void AddEntryToHttpAuthCache(network::NetworkContext* network_context) {
                                             ->http_auth_cache();
   http_auth_cache->Add(
       url::SchemeHostPort(GURL(kEmbedderUrl)), net::HttpAuth::AUTH_PROXY, "",
-      net::HttpAuth::AUTH_SCHEME_BASIC, net::NetworkIsolationKey(), "",
+      net::HttpAuth::AUTH_SCHEME_BASIC, net::NetworkAnonymizationKey(), "",
       net::AuthCredentials(), "");
 }
 
@@ -72,7 +71,7 @@ void IsEntryInHttpAuthCache(network::NetworkContext* network_context,
       http_auth_cache->Lookup(url::SchemeHostPort(GURL(kEmbedderUrl)),
                               net::HttpAuth::AUTH_PROXY, "",
                               net::HttpAuth::AUTH_SCHEME_BASIC,
-                              net::NetworkIsolationKey()) != nullptr;
+                              net::NetworkAnonymizationKey()) != nullptr;
 }
 
 }  // namespace
@@ -84,8 +83,8 @@ class SigninPartitionManagerTest : public ChromeRenderViewHostTestHarness {
       delete;
 
  protected:
-  SigninPartitionManagerTest() {}
-  ~SigninPartitionManagerTest() override {}
+  SigninPartitionManagerTest() = default;
+  ~SigninPartitionManagerTest() override = default;
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();

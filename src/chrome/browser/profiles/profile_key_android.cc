@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include "base/android/jni_android.h"
 #include "base/memory/ptr_util.h"
-#include "chrome/browser/android/profile_key_util.h"
-#include "chrome/browser/profiles/android/jni_headers/ProfileKey_jni.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_key.h"
-#include "chrome/browser/profiles/profile_manager.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/profiles/android/jni_headers/ProfileKey_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaParamRef;
@@ -39,29 +39,6 @@ ProfileKey* ProfileKeyAndroid::FromProfileKeyAndroid(
   if (!profile_key_android)
     return nullptr;
   return profile_key_android->key_;
-}
-
-// static
-ScopedJavaLocalRef<jobject> JNI_ProfileKey_GetLastUsedRegularProfileKey(
-    JNIEnv* env) {
-  return ProfileKeyAndroid::GetLastUsedRegularProfileKey(env);
-}
-
-ScopedJavaLocalRef<jobject> ProfileKeyAndroid::GetLastUsedRegularProfileKey(
-    JNIEnv* env) {
-  ProfileKey* key = ::android::GetLastUsedRegularProfileKey();
-  if (key == nullptr) {
-    NOTREACHED() << "ProfileKey not found.";
-    return ScopedJavaLocalRef<jobject>();
-  }
-
-  ProfileKeyAndroid* profile_key_android = key->GetProfileKeyAndroid();
-  if (profile_key_android == nullptr) {
-    NOTREACHED() << "ProfileKeyAndroid not found.";
-    return ScopedJavaLocalRef<jobject>();
-  }
-
-  return ScopedJavaLocalRef<jobject>(profile_key_android->obj_);
 }
 
 ScopedJavaLocalRef<jobject> ProfileKeyAndroid::GetOriginalKey(JNIEnv* env) {

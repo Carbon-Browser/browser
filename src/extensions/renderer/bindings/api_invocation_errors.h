@@ -1,14 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_RENDERER_BINDINGS_API_INVOCATION_ERRORS_H_
 #define EXTENSIONS_RENDERER_BINDINGS_API_INVOCATION_ERRORS_H_
 
+#include <cstdint>
 #include <set>
 #include <string>
-
-#include "base/strings/string_piece.h"
 
 // A collection of error-related strings and utilities for parsing API
 // invocations.
@@ -39,6 +38,7 @@ std::string TooFewStringChars(int minimum, int found);
 std::string TooManyStringChars(int maximum, int found);
 std::string NumberTooSmall(int minimum);
 std::string NumberTooLarge(int maximum);
+std::string NumberIsNaNOrInfinity();
 std::string InvalidType(const char* expected_type, const char* actual_type);
 std::string NotAnInstance(const char* instance_type);
 std::string InvalidChoice();

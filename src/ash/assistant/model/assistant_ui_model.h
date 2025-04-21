@@ -1,17 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_ASSISTANT_MODEL_ASSISTANT_UI_MODEL_H_
 #define ASH_ASSISTANT_MODEL_ASSISTANT_UI_MODEL_H_
 
+#include <optional>
 #include <ostream>
 
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "base/component_export.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace ash {
@@ -45,8 +45,8 @@ enum class AssistantButtonId {
 // Models the Assistant UI.
 class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
  public:
-  using AssistantEntryPoint = chromeos::assistant::AssistantEntryPoint;
-  using AssistantExitPoint = chromeos::assistant::AssistantExitPoint;
+  using AssistantEntryPoint = assistant::AssistantEntryPoint;
+  using AssistantExitPoint = assistant::AssistantExitPoint;
 
   AssistantUiModel();
 
@@ -86,15 +86,14 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
 
  private:
   void SetVisibility(AssistantVisibility visibility,
-                     absl::optional<AssistantEntryPoint> entry_point,
-                     absl::optional<AssistantExitPoint> exit_point);
+                     std::optional<AssistantEntryPoint> entry_point,
+                     std::optional<AssistantExitPoint> exit_point);
 
   void NotifyKeyboardTraversalModeChanged();
   void NotifyUiModeChanged(bool due_to_interaction);
-  void NotifyUiVisibilityChanged(
-      AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point);
+  void NotifyUiVisibilityChanged(AssistantVisibility old_visibility,
+                                 std::optional<AssistantEntryPoint> entry_point,
+                                 std::optional<AssistantExitPoint> exit_point);
   void NotifyUsableWorkAreaChanged();
 
   AssistantVisibility visibility_ = AssistantVisibility::kClosed;

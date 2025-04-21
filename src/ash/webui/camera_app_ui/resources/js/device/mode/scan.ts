@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ export function getDefaultScanCorners(size: Resolution): Point[] {
 }
 
 /**
- * Provides external dependency functions used by photo mode and handles the
+ * Provides external dependency functions used by scan mode and handles the
  * captured result photo.
  */
 export interface ScanHandler extends PhotoHandler {
@@ -61,10 +61,14 @@ class DocumentPhotoHandler implements PhotoHandler {
   onPhotoCaptureDone(pendingPhotoResult: Promise<PhotoResult>): Promise<void> {
     return this.handler.onDocumentCaptureDone(pendingPhotoResult);
   }
+
+  shouldUsePreviewAsPhoto(): boolean {
+    return this.handler.shouldUsePreviewAsPhoto();
+  }
 }
 
 /**
- * Photo mode capture controller.
+ * Scan mode capture controller.
  */
 export class Scan extends Photo {
   constructor(
@@ -77,7 +81,7 @@ export class Scan extends Photo {
 }
 
 /**
- * Factory for creating photo mode capture object.
+ * Factory for creating scan mode capture object.
  */
 export class ScanFactory extends ModeFactory {
   /**

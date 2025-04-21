@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,15 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/fuchsia/scoped_service_binding.h"
 #include "base/fuchsia/test_component_context_for_process.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/fuchsia_legacymetrics/legacymetrics_client.h"
 #include "components/fuchsia_legacymetrics/legacymetrics_histogram_flattener.h"
@@ -51,11 +51,11 @@ class TestMetricsRecorder
     return std::move(recorded_events_);
   }
 
-  void DropAck() { ack_callback_ = absl::nullopt; }
+  void DropAck() { ack_callback_ = std::nullopt; }
 
   void SendAck() {
     (*ack_callback_)();
-    ack_callback_ = absl::nullopt;
+    ack_callback_ = std::nullopt;
   }
 
   void set_expect_ack_dropped(bool expect_dropped) {
@@ -84,7 +84,7 @@ class TestMetricsRecorder
  private:
   std::vector<fuchsia::legacymetrics::Event> recorded_events_;
   base::OnceClosure on_record_cb_;
-  absl::optional<RecordCallback> ack_callback_;
+  std::optional<RecordCallback> ack_callback_;
   bool expect_ack_dropped_ = false;
 };
 
@@ -97,7 +97,8 @@ class LegacyMetricsClientTest : public testing::Test {
 
   void SetUp() override {
     service_binding_ = MakeServiceBinding();
-    base::SetRecordActionTaskRunner(base::ThreadTaskRunnerHandle::Get());
+    base::SetRecordActionTaskRunner(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     // Flush any dirty histograms from previous test runs in this process.
     GetLegacyMetricsDeltas();
@@ -337,7 +338,9 @@ TEST_F(LegacyMetricsClientTest,
   }
 }
 
-TEST_F(LegacyMetricsClientTest, ReconnectDelayNeverExceedsMax) {
+// The test is flaky.
+// TODO: crbug.com/326659366 - Reenable the test.
+TEST_F(LegacyMetricsClientTest, DISABLED_ReconnectDelayNeverExceedsMax) {
   StartClientAndExpectConnection();
 
   // Find the theoretical maximum number of consecutive failed connections. Also

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,96 +9,92 @@
  * of this element to take the user to another page in the app or to an external
  * page (somewhat like an HTML link).
  */
-import '../cr_actionable_row_style.m.js';
-import '../cr_icon_button/cr_icon_button.m.js';
-import '../hidden_style_css.m.js';
-import '../icons.m.js';
-import '../shared_style_css.m.js';
-import '../shared_vars_css.m.js';
-import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../cr_icon_button/cr_icon_button.js';
+import '../cr_icon/cr_icon.js';
+import '../icons.html.js';
 
-import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from '//resources/js/load_time_data.js';
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
-import {CrIconButtonElement} from '../cr_icon_button/cr_icon_button.m.js';
+import type {CrIconButtonElement} from '../cr_icon_button/cr_icon_button.js';
 
-import {getTemplate} from './cr_link_row.html.js';
+import {getCss} from './cr_link_row.css.js';
+import {getHtml} from './cr_link_row.html.js';
 
 export interface CrLinkRowElement {
   $: {
     icon: CrIconButtonElement,
+    buttonAriaDescription: HTMLElement,
   };
 }
 
-export class CrLinkRowElement extends PolymerElement {
+export class CrLinkRowElement extends CrLitElement {
   static get is() {
     return 'cr-link-row';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
-      startIcon: {
-        type: String,
-        value: '',
+      ariaShowLabel: {
+        type: Boolean,
+        reflect: true,
       },
 
-      label: {
-        type: String,
-        value: '',
+      ariaShowSublabel: {
+        type: Boolean,
+        reflect: true,
       },
 
-      subLabel: {
-        type: String,
-        /* Value used for noSubLabel attribute. */
-        value: '',
-      },
+      startIcon: {type: String},
+      label: {type: String},
+      subLabel: {type: String},
 
       disabled: {
         type: Boolean,
-        reflectToAttribute: true,
+        reflect: true,
       },
 
-      external: {
-        type: Boolean,
-        value: false,
-      },
-
-      usingSlottedLabel: {
-        type: Boolean,
-        value: false,
-      },
-
-      roleDescription: String,
-
-      hideLabelWrapper_: {
-        type: Boolean,
-        computed: 'computeHideLabelWrapper_(label, usingSlottedLabel)',
-      },
+      external: {type: Boolean},
+      usingSlottedLabel: {type: Boolean},
+      roleDescription: {type: String},
+      buttonAriaDescription: {type: String},
     };
   }
 
-  startIcon: string;
-  label: string;
-  subLabel: string;
-  disabled: boolean;
-  external: boolean;
-  usingSlottedLabel: boolean;
-  roleDescription: string;
-  private hideLabelWrapper_: boolean;
+  ariaShowLabel: boolean = false;
+  ariaShowSublabel: boolean = false;
+  startIcon: string = '';
+  label: string = '';
+  subLabel: string = '';
+  disabled: boolean = false;
+  external: boolean = false;
+  usingSlottedLabel: boolean = false;
+  roleDescription?: string;
+  buttonAriaDescription?: string;
 
   override focus() {
     this.$.icon.focus();
   }
 
-  private computeHideLabelWrapper_(): boolean {
+  protected shouldHideLabelWrapper_(): boolean {
     return !(this.label || this.usingSlottedLabel);
   }
 
-  private getIcon_(): string {
-    return this.external ? 'cr:open-in-new' : 'cr:arrow-right';
+  protected getIcon_(): string {
+    return this.external ? 'cr:open-in-new' : 'cr:chevron-right';
+  }
+
+  protected getButtonAriaDescription_(): string {
+    return this.buttonAriaDescription ??
+        (this.external ? loadTimeData.getString('opensInNewTab') : '');
   }
 }
 

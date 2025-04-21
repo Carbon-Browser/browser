@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
+#include <set>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
+#include "base/strings/cstring_view.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
@@ -29,36 +35,38 @@
 #include "content/public/browser/storage_partition.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "sql/database.h"
+#include "sql/error_delegate_util.h"
 #include "sql/meta_table.h"
+#include "sql/sqlite_result_code.h"
 #include "sql/statement.h"
+#include "sql/statement_id.h"
 #include "sql/transaction.h"
-#include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 namespace content {
 
-namespace {
-
-constexpr base::FilePath::CharType kDatabasePath[] =
-    FILE_PATH_LITERAL("AggregationService");
-
 // Version number of the database.
 //
 // Version 1 - https://crrev.com/c/3038364
 //             https://crrev.com/c/3462368
 // Version 2 - https://crrev.com/c/3733377 (adding report_requests table)
-constexpr int kCurrentVersionNumber = 2;
+// Version 3 - https://crrev.com/c/3842459 (adding reporting_origin index)
+constexpr int AggregationServiceStorageSql::kCurrentVersionNumber = 3;
 
 // Earliest version which can use a `kCurrentVersionNumber` database
 // without failing.
-constexpr int kCompatibleVersionNumber = 2;
+constexpr int AggregationServiceStorageSql::kCompatibleVersionNumber = 3;
 
 // Latest version of the database that cannot be upgraded to
 // `kCurrentVersionNumber` without razing the database.
-constexpr int kDeprecatedVersionNumber = 0;
+constexpr int AggregationServiceStorageSql::kDeprecatedVersionNumber = 0;
+
+namespace {
+
+constexpr base::FilePath::CharType kDatabasePath[] =
+    FILE_PATH_LITERAL("AggregationService");
 
 // All columns in this table except `report_time` are designed to be "const".
 // `request_id` uses AUTOINCREMENT to ensure that IDs aren't reused over the
@@ -69,7 +77,7 @@ constexpr int kDeprecatedVersionNumber = 0;
 // `reporting_origin` should match the corresponding proto field, but is
 // maintained separately for data deletion.
 // `request_proto` is a serialized AggregatableReportRequest proto.
-static constexpr char kReportRequestsCreateTableSql[] =
+static constexpr base::cstring_view kReportRequestsCreateTableSql =
     // clang-format off
     "CREATE TABLE IF NOT EXISTS report_requests("
         "request_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,"
@@ -80,39 +88,53 @@ static constexpr char kReportRequestsCreateTableSql[] =
 // clang-format on
 
 // Used to optimize report request lookup by report_time.
-static constexpr char kReportTimeIndexSql[] =
+static constexpr base::cstring_view kReportTimeIndexSql =
     "CREATE INDEX IF NOT EXISTS report_time_idx ON "
     "report_requests(report_time)";
 
 // Will be used to optimize report request lookup by creation_time for data
 // clearing, see crbug.com/1340053.
-static constexpr char kCreationTimeIndexSql[] =
+static constexpr base::cstring_view kCreationTimeIndexSql =
     "CREATE INDEX IF NOT EXISTS creation_time_idx ON "
     "report_requests(creation_time)";
 
+// Used to optimize checking whether there is capacity for the reporting origin.
+static constexpr base::cstring_view kReportingOriginIndexSql =
+    "CREATE INDEX IF NOT EXISTS reporting_origin_idx ON "
+    "report_requests(reporting_origin)";
+
 bool UpgradeAggregationServiceStorageSqlSchema(sql::Database& db,
                                                sql::MetaTable& meta_table) {
-  if (meta_table.GetVersionNumber() != 1)
-    return false;  // Only one migration is supported.
-
-  // == Migrate from version 1 to 2 ==
-  // Simply create the new empty table.
+  if (meta_table.GetVersionNumber() != 1 && meta_table.GetVersionNumber() != 2)
+    return false;  // Migration is not supported.
 
   sql::Transaction transaction(&db);
+
   if (!transaction.Begin())
     return false;
 
-  if (!db.Execute(kReportRequestsCreateTableSql))
+  if (meta_table.GetVersionNumber() == 1) {
+    // == Migrate from version 1 to 2 ==
+    // Create the new empty table.
+
+    if (!db.Execute(kReportRequestsCreateTableSql))
+      return false;
+
+    if (!db.Execute(kReportTimeIndexSql))
+      return false;
+
+    if (!db.Execute(kCreationTimeIndexSql))
+      return false;
+  }
+
+  // == Migrate from version 2 to 3 ==
+  // Add the new index.
+  if (!db.Execute(kReportingOriginIndexSql))
     return false;
 
-  if (!db.Execute(kReportTimeIndexSql))
-    return false;
-
-  if (!db.Execute(kCreationTimeIndexSql))
-    return false;
-
-  meta_table.SetVersionNumber(kCurrentVersionNumber);
-  return transaction.Commit();
+  return meta_table.SetVersionNumber(
+             AggregationServiceStorageSql::kCurrentVersionNumber) &&
+         transaction.Commit();
 }
 
 void RecordInitializationStatus(
@@ -126,19 +148,19 @@ void RecordInitializationStatus(
 AggregationServiceStorageSql::AggregationServiceStorageSql(
     bool run_in_memory,
     const base::FilePath& path_to_database,
-    const base::Clock* clock)
+    const base::Clock* clock,
+    int max_stored_requests_per_reporting_origin)
     : run_in_memory_(run_in_memory),
       path_to_database_(run_in_memory_
                             ? base::FilePath()
                             : path_to_database.Append(kDatabasePath)),
       clock_(*clock),
-      db_(sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 32}) {
+      max_stored_requests_per_reporting_origin_(
+          max_stored_requests_per_reporting_origin),
+      db_(sql::DatabaseOptions{.page_size = 4096, .cache_size = 32},
+          /*tag=*/"AggregationService") {
   DETACH_FROM_SEQUENCE(sequence_checker_);
-  DCHECK(clock);
-
-  db_.set_histogram_tag("AggregationService");
+  CHECK(clock);
 
   // base::Unretained is safe here because the callback will only be called
   // while the sql::Database in `db_` is alive, and this instance owns `db_`.
@@ -154,7 +176,7 @@ AggregationServiceStorageSql::~AggregationServiceStorageSql() {
 std::vector<PublicKey> AggregationServiceStorageSql::GetPublicKeys(
     const GURL& url) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(network::IsUrlPotentiallyTrustworthy(url));
+  CHECK(network::IsUrlPotentiallyTrustworthy(url));
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
     return {};
@@ -164,7 +186,7 @@ std::vector<PublicKey> AggregationServiceStorageSql::GetPublicKeys(
   sql::Statement get_url_id_statement(
       db_.GetCachedStatement(SQL_FROM_HERE, kGetUrlIdSql));
   get_url_id_statement.BindString(0, url.spec());
-  get_url_id_statement.BindTime(1, clock_.Now());
+  get_url_id_statement.BindTime(1, clock_->Now());
   if (!get_url_id_statement.Step())
     return {};
 
@@ -205,10 +227,10 @@ std::vector<PublicKey> AggregationServiceStorageSql::GetPublicKeys(
 void AggregationServiceStorageSql::SetPublicKeys(const GURL& url,
                                                  const PublicKeyset& keyset) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(network::IsUrlPotentiallyTrustworthy(url));
-  DCHECK_LE(keyset.keys.size(), PublicKeyset::kMaxNumberKeys);
+  CHECK(network::IsUrlPotentiallyTrustworthy(url));
+  CHECK_LE(keyset.keys.size(), PublicKeyset::kMaxNumberKeys);
 
-  // TODO(crbug.com/1231703): Add an allowlist for helper server urls and
+  // TODO(crbug.com/40190806): Add an allowlist for helper server urls and
   // validate the url.
 
   // Force the creation of the database if it doesn't exist, as we need to
@@ -233,7 +255,7 @@ void AggregationServiceStorageSql::SetPublicKeys(const GURL& url,
 
 void AggregationServiceStorageSql::ClearPublicKeys(const GURL& url) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(network::IsUrlPotentiallyTrustworthy(url));
+  CHECK(network::IsUrlPotentiallyTrustworthy(url));
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
     return;
@@ -250,9 +272,9 @@ void AggregationServiceStorageSql::ClearPublicKeys(const GURL& url) {
 void AggregationServiceStorageSql::ClearPublicKeysFetchedBetween(
     base::Time delete_begin,
     base::Time delete_end) {
-  DCHECK(!delete_begin.is_null());
-  DCHECK(!delete_end.is_null());
-  DCHECK(!delete_begin.is_min() || !delete_end.is_max());
+  CHECK(!delete_begin.is_null());
+  CHECK(!delete_end.is_null());
+  CHECK(!delete_begin.is_min() || !delete_end.is_max());
 
   sql::Transaction transaction(&db_);
   if (!transaction.Begin())
@@ -281,7 +303,7 @@ void AggregationServiceStorageSql::ClearPublicKeysFetchedBetween(
 void AggregationServiceStorageSql::ClearPublicKeysExpiredBy(
     base::Time delete_end) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!delete_end.is_null());
+  CHECK(!delete_end.is_null());
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
     return;
@@ -313,9 +335,9 @@ void AggregationServiceStorageSql::ClearPublicKeysExpiredBy(
 bool AggregationServiceStorageSql::InsertPublicKeysImpl(
     const GURL& url,
     const PublicKeyset& keyset) {
-  DCHECK(!keyset.fetch_time.is_null());
-  DCHECK(!keyset.expiry_time.is_null());
-  DCHECK(db_.HasActiveTransactions());
+  CHECK(!keyset.fetch_time.is_null());
+  CHECK(!keyset.expiry_time.is_null());
+  CHECK(db_.HasActiveTransactions());
 
   static constexpr char kInsertUrlSql[] =
       "INSERT INTO urls(url, fetch_time, expiry_time) VALUES (?,?,?)";
@@ -337,8 +359,8 @@ bool AggregationServiceStorageSql::InsertPublicKeysImpl(
       db_.GetCachedStatement(SQL_FROM_HERE, kInsertKeySql));
 
   for (const PublicKey& key : keyset.keys) {
-    DCHECK_LE(key.id.size(), PublicKey::kMaxIdSize);
-    DCHECK_EQ(key.key.size(), PublicKey::kKeyByteLength);
+    CHECK_LE(key.id.size(), PublicKey::kMaxIdSize);
+    CHECK_EQ(key.key.size(), PublicKey::kKeyByteLength);
 
     insert_key_statement.Reset(/*clear_bound_vars=*/true);
     insert_key_statement.BindInt64(0, url_id);
@@ -353,7 +375,7 @@ bool AggregationServiceStorageSql::InsertPublicKeysImpl(
 }
 
 bool AggregationServiceStorageSql::ClearPublicKeysImpl(const GURL& url) {
-  DCHECK(db_.HasActiveTransactions());
+  CHECK(db_.HasActiveTransactions());
 
   static constexpr char kDeleteUrlSql[] =
       "DELETE FROM urls WHERE url = ? "
@@ -375,7 +397,7 @@ bool AggregationServiceStorageSql::ClearPublicKeysImpl(const GURL& url) {
 }
 
 bool AggregationServiceStorageSql::ClearPublicKeysByUrlId(int64_t url_id) {
-  DCHECK(db_.HasActiveTransactions());
+  CHECK(db_.HasActiveTransactions());
 
   static constexpr char kDeleteKeysSql[] = "DELETE FROM keys WHERE url_id = ?";
   sql::Statement delete_keys_statement(
@@ -404,12 +426,105 @@ void AggregationServiceStorageSql::ClearAllPublicKeys() {
   transaction.Commit();
 }
 
+bool AggregationServiceStorageSql::ReportingOriginHasCapacity(
+    std::string_view serialized_reporting_origin) {
+  static constexpr char kCountRequestSql[] =
+      "SELECT COUNT(*)FROM report_requests WHERE reporting_origin = ?";
+  sql::Statement count_request_statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kCountRequestSql));
+  count_request_statement.BindString(0, serialized_reporting_origin);
+
+  if (!count_request_statement.Step())
+    return false;
+
+  int64_t count = count_request_statement.ColumnInt64(0);
+
+  // Goes above 1000 to ensure the limit is being applied correctly.
+  base::UmaHistogramCustomCounts(
+      "PrivacySandbox.AggregationService.Storage.Sql."
+      "StoredRequestsPerReportingOrigin",
+      count, /*min=*/1, /*exclusive_max=*/2000, /*buckets=*/50);
+
+  return count < max_stored_requests_per_reporting_origin_;
+}
+
+void AggregationServiceStorageSql::UpdateReportForSendFailure(
+    AggregationServiceStorage::RequestId request_id,
+    base::Time new_report_time) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!EnsureDatabaseOpen(DbCreationPolicy::kCreateIfAbsent))
+    return;
+
+  sql::Transaction transaction(&db_);
+  if (!transaction.Begin())
+    return;
+
+  static constexpr char kGetRequestProtoSql[] =
+      "SELECT request_proto FROM report_requests WHERE request_id=?";
+  sql::Statement get_request_statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kGetRequestProtoSql));
+  get_request_statement.BindInt64(0, request_id.value());
+
+  if (!get_request_statement.Step())
+    return;
+
+  base::span<const uint8_t> blob = get_request_statement.ColumnBlob(0);
+  proto::AggregatableReportRequest request_proto;
+  if (!request_proto.ParseFromArray(blob.data(), blob.size()))
+    return;
+
+  if (request_proto.failed_send_attempts() < 0)
+    return;
+
+  request_proto.set_failed_send_attempts(request_proto.failed_send_attempts() +
+                                         1);
+
+  size_t size = request_proto.ByteSizeLong();
+  std::vector<uint8_t> serialized_proto(size);
+  if (!request_proto.SerializeToArray(serialized_proto.data(), size))
+    return;
+
+  static constexpr char kUpdateRequestSql[] =
+      "UPDATE report_requests SET report_time=?,request_proto=? "
+      "WHERE request_id=?";
+
+  sql::Statement update_request_statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kUpdateRequestSql));
+
+  update_request_statement.BindTime(0, new_report_time);
+  update_request_statement.BindBlob(1, serialized_proto);
+  update_request_statement.BindInt64(2, request_id.value());
+
+  if (!update_request_statement.Run())
+    return;
+
+  transaction.Commit();
+}
+
 void AggregationServiceStorageSql::StoreRequest(
     AggregatableReportRequest request) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Force the creation of the database if it doesn't exist, as we need to
-  // persist the public keys.
+  // persist the request.
   if (!EnsureDatabaseOpen(DbCreationPolicy::kCreateIfAbsent))
+    return;
+
+  sql::Transaction transaction(&db_);
+  if (!transaction.Begin())
+    return;
+
+  const AggregatableReportSharedInfo& shared_info = request.shared_info();
+  std::string serialized_reporting_origin =
+      shared_info.reporting_origin.Serialize();
+
+  bool reporting_origin_has_capacity =
+      ReportingOriginHasCapacity(serialized_reporting_origin);
+  base::UmaHistogramBoolean(
+      "PrivacySandbox.AggregationService.Storage.Sql.StoreRequestHasCapacity",
+      reporting_origin_has_capacity);
+
+  if (!reporting_origin_has_capacity)
     return;
 
   static constexpr char kStoreRequestSql[] =
@@ -420,21 +535,21 @@ void AggregationServiceStorageSql::StoreRequest(
   sql::Statement store_request_statement(
       db_.GetCachedStatement(SQL_FROM_HERE, kStoreRequestSql));
 
-  const AggregatableReportSharedInfo& shared_info = request.shared_info();
-
   store_request_statement.BindTime(0, shared_info.scheduled_report_time);
-  store_request_statement.BindTime(1, clock_.Now());
-  store_request_statement.BindString(2,
-                                     shared_info.reporting_origin.Serialize());
+  store_request_statement.BindTime(1, clock_->Now());
+  store_request_statement.BindString(2, serialized_reporting_origin);
 
   std::vector<uint8_t> serialized_request = request.Serialize();
 
   // While an empty vector can be a valid proto serialization, report requests
   // should always be non-empty.
-  DCHECK(!serialized_request.empty());
+  CHECK(!serialized_request.empty());
   store_request_statement.BindBlob(3, serialized_request);
 
-  store_request_statement.Run();
+  if (!store_request_statement.Run())
+    return;
+
+  transaction.Commit();
 }
 
 void AggregationServiceStorageSql::DeleteRequest(
@@ -459,13 +574,18 @@ bool AggregationServiceStorageSql::DeleteRequestImpl(RequestId request_id) {
   return delete_request_statement.Run();
 }
 
-absl::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfter(
+std::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfter(
     base::Time strictly_after_time) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
-    return absl::nullopt;
+    return std::nullopt;
 
+  return NextReportTimeAfterImpl(strictly_after_time);
+}
+
+std::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfterImpl(
+    base::Time strictly_after_time) {
   static constexpr char kGetRequestsSql[] =
       "SELECT MIN(report_time) FROM report_requests WHERE report_time>?";
 
@@ -478,46 +598,176 @@ absl::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfter(
       get_requests_statement.GetColumnType(0) != sql::ColumnType::kNull) {
     return get_requests_statement.ColumnTime(0);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::vector<AggregationServiceStorage::RequestAndId>
 AggregationServiceStorageSql::GetRequestsReportingOnOrBefore(
-    base::Time not_after_time) {
+    base::Time not_after_time,
+    std::optional<int> limit) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!limit.has_value() || limit.value() > 0);
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
     return {};
 
+  sql::Transaction transaction(&db_);
+  if (!transaction.Begin()) {
+    return {};
+  }
+
   static constexpr char kGetRequestsSql[] =
       "SELECT request_id,report_time,request_proto FROM report_requests "
-      "WHERE report_time<=? ORDER BY report_time";
+      "WHERE report_time<=? ORDER BY report_time LIMIT ?";
 
   sql::Statement get_requests_statement(
       db_.GetCachedStatement(SQL_FROM_HERE, kGetRequestsSql));
   get_requests_statement.BindTime(0, not_after_time);
+  // Negative number indicates no limit.
+  // See https://www.sqlite.org/lang_select.html.
+  get_requests_statement.BindInt(1, limit.value_or(-1));
 
-  // Partial results are not returned in case of any error.
-  // TODO(crbug.com/1340046): Limit the total number of results that can be
+  // TODO(crbug.com/40230192): Limit the total number of results that can be
   // returned in one query.
   std::vector<AggregationServiceStorage::RequestAndId> result;
+  std::vector<AggregationServiceStorage::RequestId> failures;
   while (get_requests_statement.Step()) {
-    absl::optional<AggregatableReportRequest> parsed_request =
+    AggregationServiceStorage::RequestId request_id{
+        get_requests_statement.ColumnInt64(0)};
+    std::optional<AggregatableReportRequest> parsed_request =
         AggregatableReportRequest::Deserialize(
             get_requests_statement.ColumnBlob(2));
-    if (!parsed_request)
-      return {};
+    if (!parsed_request) {
+      failures.push_back(request_id);
+      continue;
+    }
+
+    // Exclude internals page requests
+    if (!not_after_time.is_max()) {
+      base::UmaHistogramCustomTimes(
+          "PrivacySandbox.AggregationService.Storage.Sql."
+          "RequestDelayFromUpdatedReportTime2",
+          not_after_time - get_requests_statement.ColumnTime(1),
+          /*min=*/base::Milliseconds(1),
+          /*max=*/base::Days(24),
+          /*buckets=*/50);
+    }
 
     result.push_back(AggregationServiceStorage::RequestAndId{
-        .request = std::move(parsed_request.value()),
-        .id = AggregationServiceStorage::RequestId(
-            get_requests_statement.ColumnInt64(0))});
+        .request = std::move(parsed_request.value()), .id = request_id});
   }
 
   if (!get_requests_statement.Succeeded())
     return {};
 
+  // In case of deserialization failures, remove the request from storage. This
+  // could occur if the coordinator chosen is no longer on the allowlist. It is
+  // also possible in case of database corruption.
+  for (AggregationServiceStorage::RequestId request_id : failures) {
+    if (!DeleteRequestImpl(request_id)) {
+      return {};
+    }
+  }
+
+  if (!transaction.Commit()) {
+    return {};
+  }
+
   return result;
+}
+
+std::vector<AggregationServiceStorage::RequestAndId>
+AggregationServiceStorageSql::GetRequests(
+    const std::vector<AggregationServiceStorage::RequestId>& ids) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
+    return {};
+
+  static constexpr char kGetRequestSql[] =
+      "SELECT request_id,request_proto FROM report_requests "
+      "WHERE request_id=?";
+  sql::Statement statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kGetRequestSql));
+
+  std::vector<AggregationServiceStorage::RequestAndId> result;
+  for (AggregationServiceStorage::RequestId id : ids) {
+    statement.Reset(/*clear_bound_vars=*/true);
+    statement.BindInt64(0, *id);
+    if (!statement.Step())
+      continue;
+    std::optional<AggregatableReportRequest> parsed_request =
+        AggregatableReportRequest::Deserialize(statement.ColumnBlob(1));
+    if (!parsed_request)
+      continue;
+    result.push_back(AggregationServiceStorage::RequestAndId{
+        .request = std::move(*parsed_request),
+        .id = id,
+    });
+  }
+  return result;
+}
+
+std::optional<base::Time>
+AggregationServiceStorageSql::AdjustOfflineReportTimes(
+    base::Time now,
+    base::TimeDelta min_delay,
+    base::TimeDelta max_delay) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  CHECK_GE(min_delay, base::TimeDelta());
+  CHECK_GE(max_delay, base::TimeDelta());
+  CHECK_LE(min_delay, max_delay);
+
+  if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
+    return std::nullopt;
+
+  // Set the report time for all reports that should have been sent before `now`
+  // to `now` + a random number of microseconds between `min_delay` and
+  // `max_delay`, both inclusive. We use RANDOM, instead of a C++ method to
+  // avoid having to pull all reports into memory and update them one by one. We
+  // use ABS because RANDOM may return a negative integer. We add 1 to the
+  // difference between `max_delay` and `min_delay` to ensure that the range of
+  // generated values is inclusive. If `max_delay == min_delay`, we take the
+  // remainder modulo 1, which is always 0.
+  static constexpr char kAdjustOfflineReportTimesSql[] =
+      "UPDATE report_requests SET report_time=?+ABS(RANDOM()%?)"
+      "WHERE report_time<?";
+
+  sql::Statement statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kAdjustOfflineReportTimesSql));
+  statement.BindTime(0, now + min_delay);
+  statement.BindInt64(1, 1 + (max_delay - min_delay).InMicroseconds());
+  statement.BindTime(2, now);
+
+  statement.Run();
+
+  return NextReportTimeAfterImpl(base::Time::Min());
+}
+
+std::set<url::Origin>
+AggregationServiceStorageSql::GetReportRequestReportingOrigins() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent)) {
+    return {};
+  }
+
+  std::set<url::Origin> origins;
+  static constexpr char kSelectRequestReportingOrigins[] =
+      "SELECT reporting_origin FROM report_requests";
+  sql::Statement statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kSelectRequestReportingOrigins));
+
+  while (statement.Step()) {
+    url::Origin reporting_origin =
+        url::Origin::Create(GURL(statement.ColumnString(0)));
+    if (reporting_origin.opaque()) {
+      continue;
+    }
+    origins.insert(std::move(reporting_origin));
+  }
+
+  return origins;
 }
 
 void AggregationServiceStorageSql::ClearDataBetween(
@@ -555,9 +805,9 @@ void AggregationServiceStorageSql::ClearRequestsStoredBetween(
     base::Time delete_begin,
     base::Time delete_end,
     StoragePartition::StorageKeyMatcherFunction filter) {
-  DCHECK(!delete_begin.is_null());
-  DCHECK(!delete_end.is_null());
-  DCHECK(!delete_begin.is_min() || !delete_end.is_max() || !filter.is_null());
+  CHECK(!delete_begin.is_null());
+  CHECK(!delete_end.is_null());
+  CHECK(!delete_begin.is_min() || !delete_end.is_max() || !filter.is_null());
 
   sql::Transaction transaction(&db_);
   if (!transaction.Begin())
@@ -574,7 +824,8 @@ void AggregationServiceStorageSql::ClearRequestsStoredBetween(
   while (select_requests_to_delete_statement.Step()) {
     url::Origin reporting_origin = url::Origin::Create(
         GURL(select_requests_to_delete_statement.ColumnString(1)));
-    if (filter.is_null() || filter.Run(blink::StorageKey(reporting_origin))) {
+    if (filter.is_null() ||
+        filter.Run(blink::StorageKey::CreateFirstParty(reporting_origin))) {
       if (!DeleteRequestImpl(
               RequestId(select_requests_to_delete_statement.ColumnInt64(0)))) {
         return;
@@ -599,22 +850,38 @@ void AggregationServiceStorageSql::ClearAllRequests() {
 void AggregationServiceStorageSql::HandleInitializationFailure(
     const InitStatus status) {
   RecordInitializationStatus(status);
-  db_init_status_ = DbStatus::kClosed;
+
+  meta_table_.Reset();
+  db_.Close();
+
+  // It's possible that `db_status_` was set by `DatabaseErrorCallback()` during
+  // a call to `sql::Database::Open()`. Some databases attempt recovery at this
+  // point, but we opt to delete the database from disk. Recovery can always
+  // result in partial data loss, even when it appears to succeed. SQLite's
+  // documentation discusses how some use cases can tolerate partial data loss,
+  // while others cannot: <https://www.sqlite.org/recovery.html>.
+  if (db_status_ == DbStatus::kClosedDueToCatastrophicError) {
+    const bool delete_ok = sql::Database::Delete(path_to_database_);
+    LOG_IF(WARNING, !delete_ok)
+        << "Failed to delete database after catastrophic SQLite error";
+  }
+
+  db_status_ = DbStatus::kClosed;
 }
 
 bool AggregationServiceStorageSql::EnsureDatabaseOpen(
     DbCreationPolicy creation_policy) {
-  if (!db_init_status_) {
+  if (!db_status_) {
     if (run_in_memory_) {
-      db_init_status_ = DbStatus::kDeferringCreation;
+      db_status_ = DbStatus::kDeferringCreation;
     } else {
-      db_init_status_ = base::PathExists(path_to_database_)
-                            ? DbStatus::kDeferringOpen
-                            : DbStatus::kDeferringCreation;
+      db_status_ = base::PathExists(path_to_database_)
+                       ? DbStatus::kDeferringOpen
+                       : DbStatus::kDeferringCreation;
     }
   }
 
-  switch (*db_init_status_) {
+  switch (*db_status_) {
     // If the database file has not been created, we defer creation until
     // storage needs to be used for an operation which needs to operate even on
     // an empty database.
@@ -624,10 +891,11 @@ bool AggregationServiceStorageSql::EnsureDatabaseOpen(
       break;
     case DbStatus::kDeferringOpen:
       break;
-    case DbStatus::kClosed:
-      return false;
     case DbStatus::kOpen:
       return true;
+    case DbStatus::kClosed:
+    case DbStatus::kClosedDueToCatastrophicError:
+      return false;
   }
 
   if (run_in_memory_) {
@@ -651,12 +919,12 @@ bool AggregationServiceStorageSql::EnsureDatabaseOpen(
     }
   }
 
-  if (!InitializeSchema(db_init_status_ == DbStatus::kDeferringCreation)) {
+  if (!InitializeSchema(db_status_ == DbStatus::kDeferringCreation)) {
     HandleInitializationFailure(InitStatus::kFailedToInitializeSchema);
     return false;
   }
 
-  db_init_status_ = DbStatus::kOpen;
+  db_status_ = DbStatus::kOpen;
   RecordInitializationStatus(InitStatus::kSuccess);
   return true;
 }
@@ -755,29 +1023,72 @@ bool AggregationServiceStorageSql::CreateSchema() {
   if (!db_.Execute(kCreationTimeIndexSql))
     return false;
 
+  if (!db_.Execute(kReportingOriginIndexSql))
+    return false;
+
   if (!meta_table_.Init(&db_, kCurrentVersionNumber,
                         kCompatibleVersionNumber)) {
     return false;
   }
 
-  base::UmaHistogramMediumTimes(
-      "PrivacySandbox.AggregationService.Storage.Sql.CreationTime",
-      timer.Elapsed());
+  if (timer.is_supported()) {
+    base::UmaHistogramMediumTimes(
+        "PrivacySandbox.AggregationService.Storage.Sql.CreationTime2",
+        timer.Elapsed());
+  }
 
   return transaction.Commit();
 }
 
+// The interaction between this error callback and `sql::Database` is complex.
+// Here are just a few of the sharp edges:
+//
+// 1. This callback would become reentrant if it called a `sql::Database` method
+//    that could encounter an error.
+//
+// 2. This callback may be invoked multiple times by a single call to a
+//    `sql::Database` method.
+//
+// 3. This callback may see phantom errors that do not otherwise bubble up via
+//    return values. This can happen because `sql::Database` runs the error
+//    callback eagerly despite the fact that some of its methods ignore certain
+//    errors.
+//
+//    A concrete example: opening the database may run the error callback *and*
+//    return true if `sql::Database::Open()` encounters a transient error, but
+//    opens the database successfully on the second try.
+//
+// Reducing this complexity will likely require a redesign of `sql::Database`'s
+// error handling interface. See <https://crbug.com/40199997>.
 void AggregationServiceStorageSql::DatabaseErrorCallback(int extended_error,
                                                          sql::Statement* stmt) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // The default handling is to assert on debug and to ignore on release.
-  if (!sql::Database::IsExpectedSqliteError(extended_error) &&
-      !ignore_errors_for_testing_)
-    DLOG(FATAL) << db_.GetErrorMessage();
+  // Inform the test framework that we encountered this error.
+  std::ignore = sql::Database::IsExpectedSqliteError(extended_error);
 
-  // Consider the database closed to avoid further errors.
-  db_init_status_ = DbStatus::kClosed;
+  if (ignore_errors_for_testing_) {
+    return;
+  }
+
+  // Consider the database closed to avoid further errors. Note that the value
+  // we write to `db_status_` may be subsequently overwritten elsewhere if
+  // `sql::Database` ignores the error (see sharp edge #3 above).
+  if (sql::IsErrorCatastrophic(extended_error)) {
+    db_status_ = DbStatus::kClosedDueToCatastrophicError;
+  } else {
+    db_status_ = DbStatus::kClosed;
+  }
+
+  // Prevent future uses of `db_` from having any effect until we unpoison it
+  // with `db_.Close()`.
+  if (db_.is_open()) {
+    db_.Poison();
+  }
+
+  base::UmaHistogramEnumeration(
+      "PrivacySandbox.AggregationService.Storage.Sql.Error",
+      sql::ToSqliteLoggedResultCode(extended_error));
 }
 
 }  // namespace content

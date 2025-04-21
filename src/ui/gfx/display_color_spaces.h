@@ -1,14 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_DISPLAY_COLOR_SPACES_H_
 #define UI_GFX_DISPLAY_COLOR_SPACES_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "skia/ext/skcolorspace_primaries.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/color_space_export.h"
@@ -94,7 +96,7 @@ class COLOR_SPACE_EXPORT DisplayColorSpaces {
     return hdr_max_luminance_relative_;
   }
 
-  // TODO(https://crbug.com/1116870): These helper functions exist temporarily
+  // TODO(crbug.com/40144904): These helper functions exist temporarily
   // to handle the transition of display::ScreenInfo off of ColorSpace. All
   // calls to these functions are to be eliminated.
   ColorSpace GetScreenInfoColorSpace() const;
@@ -113,7 +115,10 @@ class COLOR_SPACE_EXPORT DisplayColorSpaces {
   bool SupportsHDR() const;
 
   // Return the primaries that define the color gamut of the display.
-  SkColorSpacePrimaries GetPrimaries() const;
+  const SkColorSpacePrimaries& GetPrimaries() const { return primaries_; }
+  void SetPrimaries(const SkColorSpacePrimaries& primaries) {
+    primaries_ = primaries;
+  }
 
   // Output as a vector of strings. This is a helper function for printing in
   // about:gpu. All output vectors will be the same length. Each entry will be
@@ -125,6 +130,11 @@ class COLOR_SPACE_EXPORT DisplayColorSpaces {
   bool operator==(const DisplayColorSpaces& other) const;
   bool operator!=(const DisplayColorSpaces& other) const;
 
+  // Return true if the two parameters are equal except for their
+  // `hdr_max_luminance_relative_` member.
+  static bool EqualExceptForHdrHeadroom(const DisplayColorSpaces& a,
+                                        const DisplayColorSpaces& b);
+
  private:
   // Serialization of DisplayColorSpaces directly accesses members.
   friend struct IPC::ParamTraits<gfx::DisplayColorSpaces>;
@@ -133,6 +143,7 @@ class COLOR_SPACE_EXPORT DisplayColorSpaces {
 
   gfx::ColorSpace color_spaces_[kConfigCount];
   gfx::BufferFormat buffer_formats_[kConfigCount];
+  SkColorSpacePrimaries primaries_ = SkNamedPrimariesExt::kSRGB;
   float sdr_max_luminance_nits_ = ColorSpace::kDefaultSDRWhiteLevel;
   float hdr_max_luminance_relative_ = 1.f;
 };

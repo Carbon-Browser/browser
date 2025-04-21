@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define UI_VIEWS_INTERACTION_INTERACTION_SEQUENCE_VIEWS_H_
 
 #include <memory>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "ui/base/interaction/interaction_sequence.h"
 #include "ui/views/views_export.h"
 
@@ -38,7 +38,7 @@ class VIEWS_EXPORT InteractionSequenceViews {
   // or which is not attached to a Widget.
   static void NameView(ui::InteractionSequence* sequence,
                        View* view,
-                       const base::StringPiece& name);
+                       std::string_view name);
 };
 
 }  // namespace views

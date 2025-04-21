@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,48 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 
-namespace enterprise_management {
-class DeviceManagementResponse;
-}  // namespace enterprise_management
-
 namespace policy {
+
+struct DMServerJobResult;
+
+// This enum is tied directly to the UMA `EnrollmentNudgePolicyFetchResult` enum
+// defined in //tools/metrics/histograms/enums.xml, and should always reflect it
+// (do not change one without changing the other). Entries should be never
+// modified or deleted. Only additions possible.
+enum class EnrollmentNudgePolicyFetchResult {
+  kUnknown = 0,
+  kNoPolicyInResponse = 1,
+  kEnrollmentRequired = 2,
+  kAllowConsumerSignIn = 3,
+  kMaxValue = kAllowConsumerSignIn
+};
+
+struct AccountStatus {
+  // This enum is tied directly to a UMA enum `EnterpriseAccountStatus` defined
+  // in //tools/metrics/histograms/enums.xml, and should always reflect it (do
+  // not change one without changing the other). Entries should be never
+  // modified or deleted. Only additions possible.
+  enum class Type {
+    kUnknown = 0,
+    kConsumerWithConsumerDomain = 1,
+    kConsumerWithBusinessDomain = 2,
+    kOrganisationalAccountUnverified = 3,
+    kOrganisationalAccountVerified = 4,
+    kDasher = 5,
+    kMaxValue = kDasher
+  };
+
+  Type type = Type::kUnknown;
+  bool enrollment_required = false;
+};
+
+bool operator==(const AccountStatus&, const AccountStatus&);
+bool operator!=(const AccountStatus&, const AccountStatus&);
 
 // This class handles sending request to check account to DM server,
 // waits for the response and retrieves the account status from it.
@@ -36,33 +68,16 @@ class AccountStatusCheckFetcher {
       delete;
   ~AccountStatusCheckFetcher();
 
-  // This enum is tied directly to a UMA enum defined in
-  // //tools/metrics/histograms/enums.xml, and should always reflect it (do not
-  // change one without changing the other). Entries should be never modified
-  // or deleted. Only additions possible.
-  enum class AccountStatus {
-    kUnknown = 0,
-    kConsumerWithConsumerDomain = 1,
-    kConsumerWithBusinessDomain = 2,
-    kOrganisationalAccountUnverified = 3,
-    kOrganisationalAccountVerified = 4,
-    kDasher = 5,
-    kMaxValue = kDasher
-  };
   using FetchCallback =
       base::OnceCallback<void(bool fetch_succeeded, AccountStatus status)>;
 
   // Sends request to the DM server, gets and checks the response and
-  // calls the callback. It's possible to call Fetch several times.
-  void Fetch(FetchCallback callback);
+  // calls the callback.
+  void Fetch(FetchCallback callback, bool fetch_enrollment_nudge_policy);
 
  private:
   // Response from DM server.
-  void OnAccountStatusCheckReceived(
-      DeviceManagementService::Job* job,
-      DeviceManagementStatus dm_status,
-      int net_error,
-      const enterprise_management::DeviceManagementResponse& response);
+  void OnAccountStatusCheckReceived(DMServerJobResult result);
 
   // Account ID, added to the DM server request.
   std::string email_;
@@ -70,10 +85,7 @@ class AccountStatusCheckFetcher {
   // Job that sends request to the DM server.
   std::unique_ptr<DeviceManagementService::Job> fetch_request_job_;
 
-  // Acconut status.
-  AccountStatus result_ = AccountStatus::kUnknown;
-
-  DeviceManagementService* service_ = nullptr;
+  raw_ptr<DeviceManagementService, DanglingUntriaged> service_ = nullptr;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // Randomly generated device id for the request to make sure request won't
@@ -84,6 +96,11 @@ class AccountStatusCheckFetcher {
 
   // Called at the end of Fetch().
   FetchCallback callback_;
+
+  // Indicates whether `AccountStatusCheckFetcher` is currently being used to
+  // fetch the value of Enrollment Nudge policy.
+  bool is_fetching_enrollment_nudge_policy_ = false;
+
   base::WeakPtrFactory<AccountStatusCheckFetcher> weak_ptr_factory_{this};
 };
 

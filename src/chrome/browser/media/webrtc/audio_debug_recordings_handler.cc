@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -76,7 +76,7 @@ void AudioDebugRecordingsHandler::StartAudioDebugRecordings(
       base::BindOnce(&GetLogDirectoryAndEnsureExists,
                      browser_context_->GetPath()),
       base::BindOnce(&AudioDebugRecordingsHandler::DoStartAudioDebugRecordings,
-                     this, host->GetID(), delay, std::move(callback),
+                     this, host->GetDeprecatedID(), delay, std::move(callback),
                      std::move(error_callback)));
 }
 
@@ -93,7 +93,7 @@ void AudioDebugRecordingsHandler::StopAudioDebugRecordings(
       base::BindOnce(&GetLogDirectoryAndEnsureExists,
                      browser_context_->GetPath()),
       base::BindOnce(&AudioDebugRecordingsHandler::DoStopAudioDebugRecordings,
-                     this, host->GetID(), is_manual_stop,
+                     this, host->GetDeprecatedID(), is_manual_stop,
                      current_audio_debug_recordings_id_, std::move(callback),
                      std::move(error_callback)));
 }

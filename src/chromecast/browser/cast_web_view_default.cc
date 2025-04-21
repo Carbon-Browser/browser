@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/base/cast_features.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
-#include "chromecast/browser/accessibility/accessibility_service_impl.h"
 #include "chromecast/browser/cast_browser_process.h"
 #include "chromecast/browser/cast_web_service.h"
 #include "chromecast/browser/lru_renderer_cache.h"
@@ -104,9 +103,6 @@ CastWebViewDefault::CastWebViewDefault(
                   : web_service->CreateWindow(params_->Clone())) {
   DCHECK(web_service_);
   DCHECK(window_);
-  cast_web_contents_.local_interfaces()
-      ->AddInterface<chromecast::shell::mojom::CastAccessibilityService>(
-          shell::CastBrowserProcess::GetInstance()->accessibility_service());
   window_->SetCastWebContents(&cast_web_contents_);
   web_contents_->SetDelegate(this);
 #if defined(USE_AURA)
@@ -172,7 +168,9 @@ void CastWebViewDefault::CloseContents(content::WebContents* source) {
 
 content::WebContents* CastWebViewDefault::OpenURLFromTab(
     content::WebContents* source,
-    const content::OpenURLParams& params) {
+    const content::OpenURLParams& params,
+    base::OnceCallback<void(content::NavigationHandle&)>
+        navigation_handle_callback) {
   LOG(INFO) << "Change url: " << params.url;
   // If source is NULL which means current tab, use web_contents_ of this class.
   if (!source)
@@ -180,8 +178,12 @@ content::WebContents* CastWebViewDefault::OpenURLFromTab(
   DCHECK_EQ(source, web_contents_.get());
   // We don't want to create another web_contents. Load url only when source is
   // specified.
-  source->GetController().LoadURL(params.url, params.referrer,
-                                  params.transition, params.extra_headers);
+  auto navigation_handle = source->GetController().LoadURL(
+      params.url, params.referrer, params.transition, params.extra_headers);
+
+  if (navigation_handle_callback && navigation_handle) {
+    std::move(navigation_handle_callback).Run(*navigation_handle);
+  }
   return source;
 }
 
@@ -192,7 +194,7 @@ void CastWebViewDefault::ActivateContents(content::WebContents* contents) {
 
 bool CastWebViewDefault::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (!chromecast::IsFeatureEnabled(kAllowUserMediaAccess) &&
       !params_->allow_media_access) {
@@ -213,7 +215,7 @@ bool CastWebViewDefault::DidAddMessageToConsole(
   std::u16string single_line_message;
   // Mult-line message is not friendly to dumpstate redact.
   base::ReplaceChars(message, u"\n", u"\\n ", &single_line_message);
-  logging::LogMessage("CONSOLE", line_no, ::logging::LOG_INFO).stream()
+  logging::LogMessage("CONSOLE", line_no, ::logging::LOGGING_INFO).stream()
       << params_->log_prefix << ": \"" << single_line_message
       << "\", source: " << source_id << " (" << line_no << ")";
   return true;
@@ -221,13 +223,10 @@ bool CastWebViewDefault::DidAddMessageToConsole(
 
 const blink::MediaStreamDevice* GetRequestedDeviceOrDefault(
     const blink::MediaStreamDevices& devices,
-    const std::string& requested_device_id) {
-  if (!requested_device_id.empty()) {
-    auto it = std::find_if(
-        devices.begin(), devices.end(),
-        [requested_device_id](const blink::MediaStreamDevice& device) {
-          return device.id == requested_device_id;
-        });
+    const std::vector<std::string>& requested_device_ids) {
+  if (!requested_device_ids.empty() && !requested_device_ids.front().empty()) {
+    auto it = base::ranges::find(devices, requested_device_ids.front(),
+                                 &blink::MediaStreamDevice::id);
     return it != devices.end() ? &(*it) : nullptr;
   }
 
@@ -265,7 +264,7 @@ void CastWebViewDefault::RequestMediaAccessPermission(
   if (request.audio_type ==
       blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE) {
     const blink::MediaStreamDevice* device = GetRequestedDeviceOrDefault(
-        audio_devices, request.requested_audio_device_id);
+        audio_devices, request.requested_audio_device_ids);
     if (device) {
       DVLOG(1) << __func__ << "Using audio device: id=" << device->id
                << " name=" << device->name;
@@ -276,7 +275,7 @@ void CastWebViewDefault::RequestMediaAccessPermission(
   if (request.video_type ==
       blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE) {
     const blink::MediaStreamDevice* device = GetRequestedDeviceOrDefault(
-        video_devices, request.requested_video_device_id);
+        video_devices, request.requested_video_device_ids);
     if (device) {
       DVLOG(1) << __func__ << "Using video device: id=" << device->id
                << " name=" << device->name;

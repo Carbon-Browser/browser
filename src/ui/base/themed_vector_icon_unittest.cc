@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace {
 const gfx::VectorIcon* GetVectorIcon() {
   static constexpr gfx::PathElement path[] = {gfx::CommandType::CIRCLE, 24, 18,
                                               5};
-  static const gfx::VectorIconRep rep[] = {{path, 4}};
+  static const gfx::VectorIconRep rep[] = {{path}};
   static constexpr gfx::VectorIcon circle_icon = {rep, 1, "circle"};
 
   return &circle_icon;

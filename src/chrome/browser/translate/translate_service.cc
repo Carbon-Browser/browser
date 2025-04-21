@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/translate/translate_service.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
@@ -28,7 +28,7 @@
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/file_manager/app_id.h"
+#include "chromeos/ash/components/file_manager/app_id.h"
 #include "extensions/common/constants.h"
 #endif
 
@@ -45,7 +45,7 @@ TranslateService::TranslateService()
   resource_request_allowed_notifier_.Init(this, true /* leaky */);
 }
 
-TranslateService::~TranslateService() {}
+TranslateService::~TranslateService() = default;
 
 // static
 void TranslateService::Initialize() {
@@ -71,6 +71,8 @@ void TranslateService::Initialize() {
 // static
 void TranslateService::Shutdown() {
   translate::TranslateDownloadManager::GetInstance()->Shutdown();
+  delete g_translate_service;
+  g_translate_service = nullptr;
 }
 
 // static
@@ -90,7 +92,7 @@ void TranslateService::InitializeForTesting(
 
 // static
 void TranslateService::ShutdownForTesting() {
-  translate::TranslateDownloadManager::GetInstance()->Shutdown();
+  TranslateService::Shutdown();
 }
 
 void TranslateService::OnResourceRequestsAllowed() {
@@ -98,7 +100,6 @@ void TranslateService::OnResourceRequestsAllowed() {
       translate::TranslateDownloadManager::GetInstance()->language_list();
   if (!language_list) {
     NOTREACHED();
-    return;
   }
 
   language_list->SetResourceRequestsAllowed(

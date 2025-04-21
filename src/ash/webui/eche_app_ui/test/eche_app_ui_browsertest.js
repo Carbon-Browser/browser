@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ function queryIFrame() {
 
 // Tests that chrome://eche-app goes somewhere instead of
 // 404ing or crashing.
-TEST_F('EcheAppUIBrowserTest', 'HasChromeSchemeURL', () => {
+TEST_F('EcheAppUIBrowserTest', 'HasChromeSchemeURL', async () => {
+  const {assertEquals} = await import('chrome://webui-test/chai_assert.js');
   assertEquals(document.title, 'Eche');
   assertEquals(document.location.origin, HOST_ORIGIN);
   testDone();
@@ -48,6 +49,7 @@ TEST_F('EcheAppUIBrowserTest', 'HasChromeSchemeURL', () => {
 // (failure detected in content/public/test/no_renderer_crashes_assertion.cc).
 // Flaky. See crbug.com/1242355,
 TEST_F('EcheAppUIBrowserTest', 'GuestCanLoad', async () => {
+  const {assertEquals} = await import('chrome://webui-test/chai_assert.js');
   const guest = queryIFrame();
 
   assertEquals(document.location.origin, HOST_ORIGIN);

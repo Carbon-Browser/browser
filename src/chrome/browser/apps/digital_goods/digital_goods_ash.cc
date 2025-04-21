@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 #include "chrome/browser/apps/digital_goods/util.h"
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/digital_goods/mojom/digital_goods.mojom.h"
 #include "components/payments/core/features.h"
 #include "components/payments/core/payments_experimental_features.h"
@@ -24,11 +22,11 @@ namespace {
 constexpr char kSupportedPaymentMethod[] = "https://play.google.com/billing";
 
 // Gets the package name of the Android app linked to this web app.
-absl::optional<std::string> GetTwaPackageName(const std::string& app_id) {
+std::optional<std::string> GetTwaPackageName(const std::string& app_id) {
   Profile* profile = ProfileManager::GetPrimaryUserProfile();
   auto* apk_web_app_service = ash::ApkWebAppService::Get(profile);
   if (!apk_web_app_service) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return apk_web_app_service->GetPackageNameForWebApp(app_id);
 }
@@ -67,7 +65,7 @@ void DigitalGoodsAsh::GetDetails(const std::string& web_app_id,
     return;
   }
 
-  absl::optional<std::string> package_name = GetTwaPackageName(web_app_id);
+  std::optional<std::string> package_name = GetTwaPackageName(web_app_id);
   if (!package_name) {
     std::move(callback).Run(
         payments::mojom::BillingResponseCode::kClientAppUnavailable,
@@ -91,7 +89,7 @@ void DigitalGoodsAsh::ListPurchases(const std::string& web_app_id,
     return;
   }
 
-  absl::optional<std::string> package_name = GetTwaPackageName(web_app_id);
+  std::optional<std::string> package_name = GetTwaPackageName(web_app_id);
   if (!package_name) {
     std::move(callback).Run(
         payments::mojom::BillingResponseCode::kClientAppUnavailable,
@@ -116,7 +114,7 @@ void DigitalGoodsAsh::ListPurchaseHistory(
     return;
   }
 
-  absl::optional<std::string> package_name = GetTwaPackageName(web_app_id);
+  std::optional<std::string> package_name = GetTwaPackageName(web_app_id);
   if (!package_name) {
     std::move(callback).Run(
         payments::mojom::BillingResponseCode::kClientAppUnavailable,
@@ -140,7 +138,7 @@ void DigitalGoodsAsh::Consume(const std::string& web_app_id,
     return;
   }
 
-  absl::optional<std::string> package_name = GetTwaPackageName(web_app_id);
+  std::optional<std::string> package_name = GetTwaPackageName(web_app_id);
   if (!package_name) {
     std::move(callback).Run(
         payments::mojom::BillingResponseCode::kClientAppUnavailable);

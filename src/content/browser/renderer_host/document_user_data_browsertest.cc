@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,15 +81,17 @@ class PopupCreatedObserver : public WebContentsDelegate {
   explicit PopupCreatedObserver(WebContentsCreatedCallback callback)
       : callback_(std::move(callback)) {}
 
-  void AddNewContents(WebContents* source_contents,
-                      std::unique_ptr<WebContents> new_contents,
-                      const GURL& target_url,
-                      WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
-                      bool user_gesture,
-                      bool* was_blocked) override {
+  WebContents* AddNewContents(
+      WebContents* source_contents,
+      std::unique_ptr<WebContents> new_contents,
+      const GURL& target_url,
+      WindowOpenDisposition disposition,
+      const blink::mojom::WindowFeatures& window_features,
+      bool user_gesture,
+      bool* was_blocked) override {
     callback_.Run(new_contents.get());
     web_contents_.push_back(std::move(new_contents));
+    return nullptr;
   }
 
  private:
@@ -294,13 +296,13 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   DisableProactiveBrowsingInstanceSwapFor(rfh_a);
   shell()->LoadURLForFrame(url_b, std::string(),
                            ui::PageTransitionFromInt(ui::PAGE_TRANSITION_LINK));
-  EXPECT_TRUE(manager.WaitForRequestStart());
+  manager.WaitForSpeculativeRenderFrameHostCreation();
 
   FrameTreeNode* root = web_contents()->GetPrimaryFrameTree().root();
   RenderFrameHostImpl* pending_rfh =
       root->render_manager()->speculative_frame_host();
   NavigationRequest* navigation_request = root->navigation_request();
-  EXPECT_EQ(navigation_request->associated_rfh_type(),
+  EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
             NavigationRequest::AssociatedRenderFrameHostType::SPECULATIVE);
   EXPECT_TRUE(pending_rfh);
 
@@ -327,7 +329,7 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   EXPECT_TRUE(data);
 
   // 6) Let the navigation finish and make sure it has succeeded.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());
 
@@ -379,7 +381,7 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   RenderFrameHostImpl* current_rfh =
       root->render_manager()->current_frame_host();
   NavigationRequest* navigation_request = root->navigation_request();
-  EXPECT_EQ(navigation_request->associated_rfh_type(),
+  EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
             NavigationRequest::AssociatedRenderFrameHostType::CURRENT);
   EXPECT_TRUE(current_rfh);
   EXPECT_TRUE(current_rfh->IsActive());
@@ -392,7 +394,7 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   EXPECT_TRUE(data);
 
   // 5) Let the navigation finish and make sure it has succeeded.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());
 
@@ -469,13 +471,13 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   // 2) Start navigation to B, but don't commit yet.
   TestNavigationManager manager(shell()->web_contents(), url_b);
   shell()->LoadURL(url_b);
-  EXPECT_TRUE(manager.WaitForRequestStart());
+  manager.WaitForSpeculativeRenderFrameHostCreation();
 
   FrameTreeNode* root = web_contents()->GetPrimaryFrameTree().root();
   RenderFrameHostImpl* pending_rfh =
       root->render_manager()->speculative_frame_host();
   NavigationRequest* navigation_request = root->navigation_request();
-  EXPECT_EQ(navigation_request->associated_rfh_type(),
+  EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
             NavigationRequest::AssociatedRenderFrameHostType::SPECULATIVE);
   EXPECT_TRUE(pending_rfh);
 
@@ -486,7 +488,7 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest,
   EXPECT_TRUE(data_before_commit);
 
   // 4) Let the navigation finish and make sure it is succeeded.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());
 
@@ -517,9 +519,9 @@ IN_PROC_BROWSER_TEST_F(DocumentUserDataTest, SpeculativeRFHDeleted) {
   LeaveInPendingDeletionState(rfh_b);
 
   // 2) Navigation from B to C. The server is slow to respond.
-  TestNavigationManager navigation_observer(web_contents(), url_c);
+  SpeculativeRenderFrameHostObserver observer(web_contents(), url_c);
   EXPECT_TRUE(ExecJs(rfh_b, JsReplace("location.href=$1;", url_c)));
-  EXPECT_TRUE(navigation_observer.WaitForRequestStart());
+  observer.Wait();
   RenderFrameHostImpl* pending_rfh_c =
       rfh_b->frame_tree_node()->render_manager()->speculative_frame_host();
 
@@ -969,13 +971,9 @@ class DocumentUserDataWithBackForwardCacheTest : public DocumentUserDataTest {
  public:
   DocumentUserDataWithBackForwardCacheTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{features::kBackForwardCache,
-          // Set a very long TTL before expiration (longer than the test
-          // timeout) so tests that are expecting deletion don't pass when
-          // they shouldn't.
-          {{"TimeToLiveInBackForwardCacheInSeconds", "3600"}}}},
-        // Allow BackForwardCache for all devices regardless of their memory.
-        {features::kBackForwardCacheMemoryControls});
+        GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            /*ignore_outstanding_network_request=*/false),
+        GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
  private:

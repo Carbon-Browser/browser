@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/webauthn/remote_webauthn_caller_security_utils.h"
 
+#include <string_view>
+
 #include "base/environment.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 
@@ -43,20 +44,26 @@ constexpr auto kAllowedCallerPrograms =
     base::MakeFixedFlatSet<base::FilePath::StringPieceType>({
         "/opt/google/chrome/chrome",
         "/opt/google/chrome-beta/chrome",
+        "/opt/google/chrome-canary/chrome",
         "/opt/google/chrome-unstable/chrome",
     });
 
 #elif BUILDFLAG(IS_WIN)
 
-// Names of environment variables that store the path to the Program Files or
-// the Program Files (x86) directory. We may find Chrome in any of the env vars
-// below, depending on the architecture of the Chrome binary, the NMH binary,
-// and the OS.
-constexpr auto kProgramFilesEnvVars =
-    base::MakeFixedFlatSet<base::StringPiece>({
+// Names of environment variables that store the path to directories where apps
+// are installed.
+constexpr auto kAppsDirectoryEnvVars =
+    base::MakeFixedFlatSet<std::string_view>({
         "PROGRAMFILES",
+
+        // May happen if Chrome is upgraded from a 32-bit version.
         "PROGRAMFILES(X86)",
+
+        // Refers to "C:\Program Files" if current process is 32-bit.
         "ProgramW6432",
+
+        // For per-user installations.
+        "LOCALAPPDATA",
     });
 
 // Relative to the Program Files directory.
@@ -79,6 +86,10 @@ bool IsLaunchedByTrustedProcess() {
 #elif BUILDFLAG(IS_LINUX)
   base::ProcessId parent_pid =
       base::GetParentProcessId(base::GetCurrentProcessHandle());
+  // Note that on Linux the process image may no longer exist in its original
+  // path. This will happen when Chrome has been updated but hasn't been
+  // relaunched. The path can still be trusted since it's not spoofable even if
+  // it's no longer pointing to the current Chrome binary.
   base::FilePath parent_image_path = GetProcessImagePath(parent_pid);
   return kAllowedCallerPrograms.contains(parent_image_path.value());
 #elif BUILDFLAG(IS_WIN)
@@ -117,20 +128,19 @@ bool IsLaunchedByTrustedProcess() {
   }
 
   // Check if the caller's image path is allowlisted.
-  for (const base::StringPiece& program_files_env_var : kProgramFilesEnvVars) {
-    std::string program_files_path_utf8;
-    if (!environment->GetVar(program_files_env_var, &program_files_path_utf8)) {
+  for (std::string_view apps_dir_env_var : kAppsDirectoryEnvVars) {
+    std::string apps_dir_path_utf8;
+    if (!environment->GetVar(apps_dir_env_var, &apps_dir_path_utf8)) {
       continue;
     }
-    auto program_files_path =
-        base::FilePath::FromUTF8Unsafe(program_files_path_utf8);
-    if (!program_files_path.IsParent(parent_image_path)) {
+    auto apps_dir_path = base::FilePath::FromUTF8Unsafe(apps_dir_path_utf8);
+    if (!apps_dir_path.IsParent(parent_image_path)) {
       continue;
     }
     for (const base::FilePath::StringPieceType& allowed_caller_program :
          kAllowedCallerPrograms) {
       base::FilePath allowed_caller_program_full_path =
-          program_files_path.Append(allowed_caller_program);
+          apps_dir_path.Append(allowed_caller_program);
       if (base::FilePath::CompareEqualIgnoreCase(
               parent_image_path.value(),
               allowed_caller_program_full_path.value())) {

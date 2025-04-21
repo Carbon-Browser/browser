@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,20 +17,21 @@
 
 namespace {
 
-std::u16string GetTaskTitle(content::RenderFrameHost* render_frame_host,
-                            task_manager::RendererTask* parent_task) {
+std::u16string GetTaskTitle(
+    content::RenderFrameHost* render_frame_host,
+    base::WeakPtr<task_manager::RendererTask> parent_task) {
   content::SiteInstance* site_instance = render_frame_host->GetSiteInstance();
 
   const bool is_incognito =
       site_instance->GetBrowserContext()->IsOffTheRecord();
 
-  // TODO(crbug.com/1225508): Display the page title instead of the site URL for
-  // main frames.
+  // TODO(crbug.com/40775860): Display the page title instead of the site URL
+  // for main frames.
   const GURL& site_url = site_instance->GetSiteURL();
   const std::u16string name = base::UTF8ToUTF16(site_url.spec());
 
   int message_id;
-  if (parent_task == nullptr) {
+  if (!parent_task) {
     message_id = is_incognito
                      ? IDS_TASK_MANAGER_BACK_FORWARD_CACHE_INCOGNITO_PREFIX
                      : IDS_TASK_MANAGER_BACK_FORWARD_CACHE_PREFIX;
@@ -49,17 +50,19 @@ namespace task_manager {
 
 BackForwardCacheTask::BackForwardCacheTask(
     content::RenderFrameHost* render_frame_host,
-    RendererTask* parent_task,
+    base::WeakPtr<RendererTask> parent_task,
     WebContentsTaskProvider* task_provider)
     : RendererTask(
           GetTaskTitle(render_frame_host, parent_task),
-          nullptr,  // TODO(crbug.com/1225508): Set Favicon for main frames.
+          nullptr,  // TODO(crbug.com/40775860): Set Favicon for main frames.
           render_frame_host),
-      parent_task_(parent_task),
+      parent_task_(std::move(parent_task)),
       task_provider_(task_provider) {}
 
+BackForwardCacheTask::~BackForwardCacheTask() = default;
+
 // For the top level BackForwardCacheTask |parent_task_| is nullptr.
-Task* BackForwardCacheTask::GetParentTask() const {
+base::WeakPtr<Task> BackForwardCacheTask::GetParentTask() const {
   return parent_task_ ? parent_task_
                       : task_provider_->GetTaskOfFrame(
                             web_contents()->GetPrimaryMainFrame());

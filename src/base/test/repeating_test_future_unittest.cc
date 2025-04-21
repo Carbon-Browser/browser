@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/repeating_test_future.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -18,7 +18,7 @@ namespace {
 struct MoveOnlyValue {
  public:
   MoveOnlyValue() = default;
-  MoveOnlyValue(std::string data) : data(std::move(data)) {}
+  explicit MoveOnlyValue(std::string data) : data(std::move(data)) {}
   MoveOnlyValue(const MoveOnlyValue&) = delete;
   auto& operator=(const MoveOnlyValue&) = delete;
   MoveOnlyValue(MoveOnlyValue&&) = default;
@@ -38,7 +38,8 @@ class RepeatingTestFutureTest : public ::testing::Test {
   ~RepeatingTestFutureTest() override = default;
 
   void RunLater(OnceClosure callable) {
-    ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(callable));
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                          std::move(callable));
   }
 
  private:
@@ -79,7 +80,7 @@ TEST_F(RepeatingTestFutureTest,
   EXPECT_FALSE(future.IsEmpty());
 }
 
-TEST_F(RepeatingTestFutureTest, ShouldBeAbleToTakeElementsFiFo) {
+TEST_F(RepeatingTestFutureTest, ShouldTakeElementsFiFo) {
   RepeatingTestFuture<std::string> future;
 
   future.AddValue("first value");
@@ -92,7 +93,7 @@ TEST_F(RepeatingTestFutureTest, ShouldBeAbleToTakeElementsFiFo) {
 TEST_F(RepeatingTestFutureTest, WaitShouldBlockUntilElementArrives) {
   RepeatingTestFuture<std::string> future;
 
-  RunLater(BindLambdaForTesting([&future]() { future.AddValue("a value"); }));
+  RunLater(BindLambdaForTesting([&future] { future.AddValue("a value"); }));
   EXPECT_TRUE(future.IsEmpty());
 
   EXPECT_TRUE(future.Wait());
@@ -103,7 +104,7 @@ TEST_F(RepeatingTestFutureTest, WaitShouldBlockUntilElementArrives) {
 TEST_F(RepeatingTestFutureTest, WaitShouldReturnTrueWhenValueArrives) {
   RepeatingTestFuture<std::string> future;
 
-  RunLater(BindLambdaForTesting([&future]() { future.AddValue("a value"); }));
+  RunLater(BindLambdaForTesting([&future] { future.AddValue("a value"); }));
 
   EXPECT_TRUE(future.Wait());
 
@@ -122,13 +123,13 @@ TEST_F(RepeatingTestFutureTest,
 TEST_F(RepeatingTestFutureTest, WaitShouldReturnFalseIfTimeoutHappens) {
   test::ScopedRunLoopTimeout timeout(FROM_HERE, Milliseconds(1));
 
-  // |ScopedRunLoopTimeout| will automatically fail the test when a timeout
-  // happens, so we use EXPECT_FATAL_FAILURE to handle this failure.
-  // EXPECT_FATAL_FAILURE only works on static objects.
+  // `ScopedRunLoopTimeout` will automatically fail the test when a timeout
+  // happens, so we use EXPECT_NONFATAL_FAILURE to handle this failure.
+  // EXPECT_NONFATAL_FAILURE only works on static objects.
   static bool success;
   static RepeatingTestFuture<std::string> future;
 
-  EXPECT_FATAL_FAILURE({ success = future.Wait(); }, "timed out");
+  EXPECT_NONFATAL_FAILURE({ success = future.Wait(); }, "timed out");
 
   EXPECT_FALSE(success);
 }
@@ -137,7 +138,7 @@ TEST_F(RepeatingTestFutureTest, TakeShouldBlockUntilAnElementArrives) {
   RepeatingTestFuture<std::string> future;
 
   RunLater(BindLambdaForTesting(
-      [&future]() { future.AddValue("value pushed delayed"); }));
+      [&future] { future.AddValue("value pushed delayed"); }));
 
   EXPECT_EQ(future.Take(), "value pushed delayed");
 }
@@ -154,7 +155,7 @@ TEST_F(RepeatingTestFutureTest, TakeShouldWorkWithMoveOnlyValue) {
   RepeatingTestFuture<MoveOnlyValue> future;
 
   RunLater(BindLambdaForTesting(
-      [&future]() { future.AddValue(MoveOnlyValue("move only value")); }));
+      [&future] { future.AddValue(MoveOnlyValue("move only value")); }));
 
   MoveOnlyValue result = future.Take();
 
@@ -200,7 +201,7 @@ TEST_F(RepeatingTestFutureTest, ShouldStoreMultipleValuesInATuple) {
   RepeatingTestFuture<int, std::string> future;
 
   RunLater(BindLambdaForTesting(
-      [&]() { future.AddValue(expected_int_value, expected_string_value); }));
+      [&] { future.AddValue(expected_int_value, expected_string_value); }));
 
   std::tuple<int, std::string> actual = future.Take();
   EXPECT_EQ(expected_int_value, std::get<0>(actual));

@@ -1,13 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/feed/core/v2/types.h"
 
 #include <ostream>
+#include <string_view>
 #include <utility>
 
 #include "base/base64.h"
+#include "base/containers/span.h"
 #include "base/json/values_util.h"
 #include "base/pickle.h"
 #include "base/strings/strcat.h"
@@ -52,7 +59,7 @@ bool UnpickleNetworkResponseInfo(base::PickleIterator& iterator,
 }
 
 void PickleOptionalNetworkResponseInfo(
-    const absl::optional<NetworkResponseInfo>& value,
+    const std::optional<NetworkResponseInfo>& value,
     base::Pickle& pickle) {
   if (value.has_value()) {
     pickle.WriteBool(true);
@@ -64,7 +71,7 @@ void PickleOptionalNetworkResponseInfo(
 
 bool UnpickleOptionalNetworkResponseInfo(
     base::PickleIterator& iterator,
-    absl::optional<NetworkResponseInfo>& value) {
+    std::optional<NetworkResponseInfo>& value) {
   bool has_network_response_info = false;
   if (!iterator.ReadBool(&has_network_response_info))
     return false;
@@ -96,6 +103,15 @@ bool UnpickleDebugStreamData(base::PickleIterator iterator,
          iterator.ReadString(&value.load_stream_status);
 }
 
+std::vector<uint32_t> GetExpandedHashes(
+    const std::vector<feedstore::StreamContentHashList>& hashes_list) {
+  std::vector<uint32_t> expanded_hashes;
+  for (const feedstore::StreamContentHashList& hash_list : hashes_list)
+    for (const auto& hash : hash_list.hashes())
+      expanded_hashes.push_back(hash);
+  return expanded_hashes;
+}
+
 }  // namespace
 
 RequestMetadata::RequestMetadata() = default;
@@ -107,10 +123,21 @@ feedwire::ClientInfo RequestMetadata::ToClientInfo() const {
 }
 
 NetworkResponseInfo::NetworkResponseInfo() = default;
-NetworkResponseInfo::~NetworkResponseInfo() = default;
 NetworkResponseInfo::NetworkResponseInfo(const NetworkResponseInfo&) = default;
+NetworkResponseInfo::NetworkResponseInfo(NetworkResponseInfo&&) = default;
 NetworkResponseInfo& NetworkResponseInfo::operator=(
     const NetworkResponseInfo&) = default;
+NetworkResponseInfo& NetworkResponseInfo::operator=(NetworkResponseInfo&&) =
+    default;
+NetworkResponseInfo::~NetworkResponseInfo() = default;
+
+NetworkResponse::NetworkResponse() = default;
+NetworkResponse::NetworkResponse(const std::string& response_bytes,
+                                 int status_code)
+    : response_bytes(response_bytes), status_code(status_code) {}
+NetworkResponse::~NetworkResponse() = default;
+NetworkResponse::NetworkResponse(const NetworkResponse&) = default;
+NetworkResponse& NetworkResponse::operator=(const NetworkResponse&) = default;
 
 std::string ToString(ContentRevision c) {
   // The 'c/' prefix is used to identify slices as content. Don't change this
@@ -124,7 +151,7 @@ ContentRevision ToContentRevision(const std::string& str) {
 
   uint32_t value;
   if (str[0] == 'c' && str[1] == '/' &&
-      base::StringToUint(base::StringPiece(str).substr(2), &value)) {
+      base::StringToUint(std::string_view(str).substr(2), &value)) {
     return ContentRevision(value);
   }
   return {};
@@ -138,15 +165,16 @@ std::string SerializeDebugStreamData(const DebugStreamData& data) {
       base::span<const uint8_t>(pickle_data_ptr, pickle.size()));
 }
 
-absl::optional<DebugStreamData> DeserializeDebugStreamData(
-    base::StringPiece base64_encoded) {
+std::optional<DebugStreamData> DeserializeDebugStreamData(
+    std::string_view base64_encoded) {
   std::string binary_data;
   if (!base::Base64Decode(base64_encoded, &binary_data))
-    return absl::nullopt;
-  base::Pickle pickle(binary_data.data(), binary_data.size());
+    return std::nullopt;
+  base::Pickle pickle =
+      base::Pickle::WithUnownedBuffer(base::as_byte_span(binary_data));
   DebugStreamData result;
   if (!UnpickleDebugStreamData(base::PickleIterator(pickle), result))
-    return absl::nullopt;
+    return std::nullopt;
   return result;
 }
 
@@ -161,22 +189,43 @@ base::Value::Dict PersistentMetricsDataToDict(
   dict.Set("day_start", base::TimeToValue(data.current_day_start));
   dict.Set("time_spent_in_feed",
            base::TimeDeltaToValue(data.accumulated_time_spent_in_feed));
+  dict.Set("visit_start", base::TimeToValue(data.visit_start));
+  dict.Set("visit_end", base::TimeToValue(data.visit_end));
+  dict.Set("did_report_good_visit", base::Value(data.did_report_good_visit));
+  dict.Set("time_in_feed_for_good_visit",
+           base::TimeDeltaToValue(data.time_in_feed_for_good_visit));
+  dict.Set("did_scroll_in_visit", base::Value(data.did_scroll_in_visit));
   return dict;
 }
 
 PersistentMetricsData PersistentMetricsDataFromDict(
     const base::Value::Dict& dict) {
   PersistentMetricsData result;
-  absl::optional<base::Time> day_start =
+  std::optional<base::Time> day_start =
       base::ValueToTime(dict.Find("day_start"));
   if (!day_start)
     return result;
   result.current_day_start = *day_start;
-  absl::optional<base::TimeDelta> time_spent_in_feed =
+  std::optional<base::TimeDelta> time_spent_in_feed =
       base::ValueToTimeDelta(dict.Find("time_spent_in_feed"));
   if (time_spent_in_feed) {
     result.accumulated_time_spent_in_feed = *time_spent_in_feed;
   }
+
+  result.visit_start =
+      base::ValueToTime(dict.Find("visit_start")).value_or(base::Time());
+  result.visit_end =
+      base::ValueToTime(dict.Find("visit_end")).value_or(base::Time());
+
+  if (const base::Value* value = dict.Find("did_report_good_visit"))
+    result.did_report_good_visit = value->GetIfBool().value_or(false);
+
+  result.time_in_feed_for_good_visit =
+      base::ValueToTimeDelta(dict.Find("time_in_feed_for_good_visit"))
+          .value_or(base::Seconds(0));
+
+  if (const base::Value* value = dict.Find("did_scroll_in_visit"))
+    result.did_scroll_in_visit = value->GetIfBool().value_or(false);
 
   return result;
 }
@@ -191,29 +240,42 @@ void LoadLatencyTimes::StepComplete(StepKind kind) {
 
 ContentHashSet::ContentHashSet() = default;
 ContentHashSet::~ContentHashSet() = default;
-ContentHashSet::ContentHashSet(base::flat_set<uint32_t> content_hashes)
-    : content_hashes_(std::move(content_hashes)) {}
+ContentHashSet::ContentHashSet(
+    std::vector<feedstore::StreamContentHashList> hashes)
+    : original_hashes_(std::move(hashes)),
+      sorted_hashes_(GetExpandedHashes(original_hashes_)) {}
 ContentHashSet::ContentHashSet(const ContentHashSet&) = default;
 ContentHashSet::ContentHashSet(ContentHashSet&&) = default;
 ContentHashSet& ContentHashSet::operator=(const ContentHashSet&) = default;
 ContentHashSet& ContentHashSet::operator=(ContentHashSet&&) = default;
 bool ContentHashSet::ContainsAllOf(const ContentHashSet& items) const {
-  for (uint32_t id : items.content_hashes_) {
-    if (!content_hashes_.contains(id))
+  for (uint32_t hash : items.sorted_hashes_) {
+    if (!sorted_hashes_.contains(hash))
       return false;
   }
   return true;
 }
+bool ContentHashSet::Contains(uint32_t hash) const {
+  return sorted_hashes_.contains(hash);
+}
 bool ContentHashSet::IsEmpty() const {
-  return content_hashes_.empty();
+  return sorted_hashes_.empty();
 }
 bool ContentHashSet::operator==(const ContentHashSet& rhs) const {
-  return content_hashes_ == rhs.content_hashes_;
+  return sorted_hashes_ == rhs.sorted_hashes_;
 }
-std::ostream& operator<<(std::ostream& s, const ContentHashSet& id_set) {
+std::ostream& operator<<(std::ostream& s, const ContentHashSet& hash_set) {
   s << "{";
-  for (uint32_t id : id_set.values()) {
-    s << id << ", ";
+  for (const auto& hash_list : hash_set.original_hashes()) {
+    s << "(";
+    for (const auto hash : hash_list.hashes()) {
+      s << hash << ", ";
+    }
+    s << ")";
+  }
+  s << "} {";
+  for (const auto& hash : hash_set.sorted_hashes()) {
+    s << hash << ", ";
   }
   s << "}";
   return s;

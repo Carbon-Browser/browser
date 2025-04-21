@@ -1,11 +1,9 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_TEST_BASE_TEST_LAUNCHER_UTILS_H_
 #define CHROME_TEST_BASE_TEST_LAUNCHER_UTILS_H_
-
-#include <string>
 
 #include "base/files/file_path.h"
 
@@ -26,13 +24,6 @@ void PrepareBrowserCommandLineForTests(base::CommandLine* command_line);
 // PrepareBrowserCommandLineForTests().
 void PrepareBrowserCommandLineForBrowserTests(base::CommandLine* command_line,
                                               bool open_about_blank_on_launch);
-
-// Appends all switches from |in_command_line| to |out_command_line| except for
-// |switch_to_remove|.
-// TODO(xhwang): Add CommandLine::RemoveSwitch() so we don't need this hack.
-void RemoveCommandLineSwitch(const base::CommandLine& in_command_line,
-                             const std::string& switch_to_remove,
-                             base::CommandLine* out_command_line);
 
 // Creates and overrides the current process' user data dir.
 [[nodiscard]] bool CreateUserDataDir(base::ScopedTempDir* temp_dir);

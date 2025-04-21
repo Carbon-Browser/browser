@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,8 @@ class MEDIA_EXPORT VideoBitrateAllocation {
   // Sum of all bitrates.
   uint32_t GetSumBps() const;
 
+  // Returns peak bitrate.
+  uint32_t GetPeakBps() const;
   // Non-layered bitrate allocation. If there are layers, this bitrate's target
   // bps equals the sum of the layers' bitrates.
   const Bitrate GetSumBitrate() const;

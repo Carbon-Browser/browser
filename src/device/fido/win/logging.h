@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define DEVICE_FIDO_WIN_LOGGING_H_
 
 #include <windows.h>
+
 #include <ostream>
 
 #include "third_party/microsoft_webauthn/webauthn.h"
@@ -48,5 +49,8 @@ std::ostream& operator<<(std::ostream& out,
                          const WEBAUTHN_CREDENTIAL_ATTESTATION& in);
 
 std::ostream& operator<<(std::ostream& out, const WEBAUTHN_ASSERTION& in);
+
+std::ostream& operator<<(std::ostream& out,
+                         const WEBAUTHN_GET_CREDENTIALS_OPTIONS& in);
 
 #endif  // DEVICE_FIDO_WIN_LOGGING_H_

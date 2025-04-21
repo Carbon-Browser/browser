@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/navigation_predictor/search_engine_preconnector.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -14,6 +14,7 @@
 #include "chrome/browser/navigation_predictor/navigation_predictor_keyed_service_factory.h"
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
+#include "chrome/browser/predictors/predictors_traffic_annotations.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/common/pref_names.h"
@@ -36,8 +37,12 @@ const bool kDefaultSkipInBackground = true;
 
 namespace features {
 // Feature to control preconnect to search.
-const base::Feature kPreconnectToSearch{"PreconnectToSearch",
-                                        base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kPreconnectToSearch,
+             "PreconnectToSearch",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kPreconnectToSearchWithPrivacyModeEnabled,
+             "PreconnectToSearchWithPrivacyModeEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace features
 
 SearchEnginePreconnector::SearchEnginePreconnector(
@@ -70,7 +75,6 @@ void SearchEnginePreconnector::StartPreconnecting(bool with_startup_delay) {
 void SearchEnginePreconnector::PreconnectDSE() {
   DCHECK(!browser_context_->IsOffTheRecord());
   DCHECK(!timer_.IsRunning());
-
   if (!base::FeatureList::IsEnabled(features::kPreconnectToSearch))
     return;
 
@@ -104,10 +108,19 @@ void SearchEnginePreconnector::PreconnectDSE() {
                                                kDefaultSkipInBackground) ||
       is_browser_app_likely_in_foreground) {
     net::SchemefulSite schemeful_site(preconnect_url);
-    net::NetworkIsolationKey network_isolation_key(schemeful_site,
-                                                   schemeful_site);
+    auto network_anonymziation_key =
+        net::NetworkAnonymizationKey::CreateSameSite(schemeful_site);
     loading_predictor->PreconnectURLIfAllowed(
-        preconnect_url, /*allow_credentials=*/true, network_isolation_key);
+        preconnect_url, /*allow_credentials=*/true, network_anonymziation_key,
+        predictors::kSearchEnginePreconnectTrafficAnnotation);
+
+    if (base::FeatureList::IsEnabled(
+            features::kPreconnectToSearchWithPrivacyModeEnabled)) {
+      loading_predictor->PreconnectURLIfAllowed(
+          preconnect_url,
+          /*allow_credentials=*/false, network_anonymziation_key,
+          predictors::kSearchEnginePreconnectTrafficAnnotation);
+    }
   }
 
   // The delay beyond the idle socket timeout that net uses when
@@ -117,10 +130,7 @@ void SearchEnginePreconnector::PreconnectDSE() {
   // Set/Reset the timer to fire after the preconnect times out. Add an extra
   // delay to make sure the preconnect has expired if it wasn't used.
   timer_.Start(FROM_HERE,
-               base::Seconds(base::GetFieldTrialParamByFeatureAsInt(
-                   net::features::kNetUnusedIdleSocketTimeout,
-                   "unused_idle_socket_timeout_seconds", 60)) +
-                   retry_delay,
+               base::Seconds(GetPreconnectIntervalSec()) + retry_delay,
                base::BindOnce(&SearchEnginePreconnector::PreconnectDSE,
                               base::Unretained(this)));
 }
@@ -142,4 +152,12 @@ bool SearchEnginePreconnector::IsBrowserAppLikelyInForeground() const {
           Profile::FromBrowserContext(browser_context_));
 
   return keyed_service && keyed_service->IsBrowserAppLikelyInForeground();
+}
+
+int SearchEnginePreconnector::GetPreconnectIntervalSec() const {
+  constexpr int kPreconnectIntervalSec = 60;
+  int preconnect_interval = base::GetFieldTrialParamByFeatureAsInt(
+      net::features::kSearchEnginePreconnectInterval, "preconnect_interval",
+      kPreconnectIntervalSec);
+  return preconnect_interval;
 }

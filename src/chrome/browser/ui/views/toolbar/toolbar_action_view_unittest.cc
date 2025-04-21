@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/button/menu_button.h"
 
@@ -53,7 +54,9 @@ class TestToolbarActionViewDelegate : public ToolbarActionView::Delegate {
   }
   bool CanStartDragForView(views::View* sender,
                            const gfx::Point& press_pt,
-                           const gfx::Point& p) override { return false; }
+                           const gfx::Point& p) override {
+    return false;
+  }
 
   void set_web_contents(content::WebContents* web_contents) {
     web_contents_ = web_contents;
@@ -67,20 +70,17 @@ class TestToolbarActionViewDelegate : public ToolbarActionView::Delegate {
 
 class OpenMenuListener : public views::ContextMenuController {
  public:
-  explicit OpenMenuListener(views::View* view)
-      : view_(view),
-        opened_menu_(false) {
+  explicit OpenMenuListener(views::View* view) : view_(view) {
     view_->set_context_menu_controller(this);
   }
   OpenMenuListener(const OpenMenuListener&) = delete;
   OpenMenuListener& operator=(const OpenMenuListener&) = delete;
-  ~OpenMenuListener() override {
-    view_->set_context_menu_controller(nullptr);
-  }
+  ~OpenMenuListener() override { view_->set_context_menu_controller(nullptr); }
 
-  void ShowContextMenuForViewImpl(views::View* source,
-                                  const gfx::Point& point,
-                                  ui::MenuSourceType source_type) override {
+  void ShowContextMenuForViewImpl(
+      views::View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override {
     opened_menu_ = true;
   }
 
@@ -89,7 +89,7 @@ class OpenMenuListener : public views::ContextMenuController {
  private:
   raw_ptr<views::View> view_;
 
-  bool opened_menu_;
+  bool opened_menu_ = false;
 };
 
 }  // namespace
@@ -107,7 +107,8 @@ class ToolbarActionViewUnitTest : public ChromeViewsTestBase {
     controller_ =
         std::make_unique<TestToolbarActionViewController>("fake controller");
     action_view_delegate_ = std::make_unique<TestToolbarActionViewDelegate>();
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   }
 
   void TearDown() override {
@@ -139,7 +140,7 @@ class TestToolbarActionView : public ToolbarActionView {
       : ToolbarActionView(view_controller, delegate) {}
   TestToolbarActionView(const TestToolbarActionView&) = delete;
   TestToolbarActionView& operator=(const TestToolbarActionView&) = delete;
-  ~TestToolbarActionView() override {}
+  ~TestToolbarActionView() override = default;
 };
 
 // Verifies there is no crash when a ToolbarActionView with an InkDrop is
@@ -181,7 +182,7 @@ TEST_F(ToolbarActionViewUnitTest,
 // a controller's state.
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
     BUILDFLAG(IS_WIN)
-// TODO(crbug.com/1042220): Test is flaky on Mac, Linux and Win10.
+// TODO(crbug.com/40668368): Test is flaky on Mac, Linux and Win10.
 #define MAYBE_BasicToolbarActionViewTest DISABLED_BasicToolbarActionViewTest
 #else
 #define MAYBE_BasicToolbarActionViewTest BasicToolbarActionViewTest

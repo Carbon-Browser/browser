@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "extensions/browser/api/webcam_private/visca_webcam.h"
 
@@ -10,7 +15,8 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "extensions/common/extension_id.h"
 
 using content::BrowserThread;
 
@@ -158,23 +164,23 @@ ViscaWebcam::ViscaWebcam() = default;
 
 ViscaWebcam::~ViscaWebcam() = default;
 
-void ViscaWebcam::Open(const std::string& extension_id,
+void ViscaWebcam::Open(const ExtensionId& extension_id,
                        api::SerialPortManager* port_manager,
                        const std::string& path,
                        const OpenCompleteCallback& open_callback) {
   api::serial::ConnectionOptions options;
 
   // Set the receive buffer size to receive the response data 1 by 1.
-  options.buffer_size = std::make_unique<int>(1);
-  options.persistent = std::make_unique<bool>(false);
-  options.bitrate = std::make_unique<int>(9600);
-  options.cts_flow_control = std::make_unique<bool>(false);
+  options.buffer_size = 1;
+  options.persistent = false;
+  options.bitrate = 9600;
+  options.cts_flow_control = false;
   // Enable send and receive timeout error.
-  options.receive_timeout = std::make_unique<int>(3000);
-  options.send_timeout = std::make_unique<int>(3000);
-  options.data_bits = api::serial::DATA_BITS_EIGHT;
-  options.parity_bit = api::serial::PARITY_BIT_NO;
-  options.stop_bits = api::serial::STOP_BITS_ONE;
+  options.receive_timeout = 3000;
+  options.send_timeout = 3000;
+  options.data_bits = api::serial::DataBits::kEight;
+  options.parity_bit = api::serial::ParityBit::kNo;
+  options.stop_bits = api::serial::StopBits::kOne;
 
   serial_connection_ = std::make_unique<SerialConnection>(extension_id);
   serial_connection_->Open(
@@ -233,7 +239,7 @@ void ViscaWebcam::OnSendCompleted(const CommandCompleteCallback& callback,
                                   uint32_t bytes_sent,
                                   api::serial::SendError error) {
   // TODO(xdai): Check |bytes_sent|?
-  if (error == api::serial::SEND_ERROR_NONE) {
+  if (error == api::serial::SendError::kNone) {
     serial_connection_->StartPolling(base::BindRepeating(
         &ViscaWebcam::OnReceiveEvent, base::Unretained(this), callback));
   } else {
@@ -246,7 +252,7 @@ void ViscaWebcam::OnReceiveEvent(const CommandCompleteCallback& callback,
                                  api::serial::ReceiveError error) {
   data_buffer_.insert(data_buffer_.end(), data.begin(), data.end());
 
-  if (error != api::serial::RECEIVE_ERROR_NONE || data_buffer_.empty()) {
+  if (error != api::serial::ReceiveError::kNone || data_buffer_.empty()) {
     // Clear |data_buffer_|.
     std::vector<char> response;
     response.swap(data_buffer_);

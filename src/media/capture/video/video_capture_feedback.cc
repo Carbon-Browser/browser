@@ -1,27 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/capture/video/video_capture_feedback.h"
 
-#include <algorithm>
 #include <cmath>
 
+#include "base/containers/contains.h"
 #include "base/logging.h"
 
 namespace media {
-
-namespace {
-
-// Arbitrary limit above what is considered a reasonable request.
-constexpr size_t kCombinedMappedSizesCountLimit = 6;
-
-void SortSizesDescending(std::vector<gfx::Size>& sizes) {
-  std::sort(sizes.begin(), sizes.end(),
-            [](gfx::Size& a, gfx::Size& b) { return a.height() > b.height(); });
-}
-
-}  // namespace
 
 VideoCaptureFeedback::VideoCaptureFeedback() = default;
 VideoCaptureFeedback::VideoCaptureFeedback(const VideoCaptureFeedback& other) =
@@ -59,30 +47,12 @@ void VideoCaptureFeedback::Combine(const VideoCaptureFeedback& other) {
 
   // If any consumer wants mapped frames, all of them should get it.
   require_mapped_frame |= other.require_mapped_frame;
-
-  // Merge mapped sizes for all consumers.
-  for (const gfx::Size& mapped_size : other.mapped_sizes) {
-    // Skip duplicates.
-    if (std::find(mapped_sizes.begin(), mapped_sizes.end(), mapped_size) !=
-        mapped_sizes.end()) {
-      continue;
-    }
-    // As a safety measure, limit the number of sizes that can be asked for.
-    if (mapped_sizes.size() >= kCombinedMappedSizesCountLimit) {
-      LOG(WARNING) << "Consumer mapped sizes count exceeds "
-                   << kCombinedMappedSizesCountLimit;
-      break;
-    }
-    mapped_sizes.push_back(mapped_size);
-  }
-  SortSizesDescending(mapped_sizes);
 }
 
 bool VideoCaptureFeedback::Empty() const {
   return !std::isfinite(max_framerate_fps) &&
          max_pixels == std::numeric_limits<int>::max() &&
-         (resource_utilization < 0.0) && !require_mapped_frame &&
-         mapped_sizes.empty();
+         (resource_utilization < 0.0) && !require_mapped_frame;
 }
 
 VideoCaptureFeedback& VideoCaptureFeedback::WithUtilization(float utilization) {
@@ -103,13 +73,6 @@ VideoCaptureFeedback& VideoCaptureFeedback::WithMaxPixels(int pixels) {
 
 VideoCaptureFeedback& VideoCaptureFeedback::RequireMapped(bool require) {
   require_mapped_frame = require;
-  return *this;
-}
-
-VideoCaptureFeedback& VideoCaptureFeedback::WithMappedSizes(
-    std::vector<gfx::Size> sizes) {
-  mapped_sizes = std::move(sizes);
-  SortSizesDescending(mapped_sizes);
   return *this;
 }
 

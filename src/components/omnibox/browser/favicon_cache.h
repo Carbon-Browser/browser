@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <list>
 #include <map>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -122,11 +122,10 @@ class FaviconCache : public history::HistoryServiceObserver {
 
   // history::HistoryServiceObserver:
   void OnURLVisited(history::HistoryService* history_service,
-                    ui::PageTransition transition,
-                    const history::URLRow& row,
-                    base::Time visit_time) override;
-  void OnURLsDeleted(history::HistoryService* history_service,
-                     const history::DeletionInfo& deletion_info) override;
+                    const history::URLRow& url_row,
+                    const history::VisitRow& new_visit) override;
+  void OnHistoryDeletions(history::HistoryService* history_service,
+                          const history::DeletionInfo& deletion_info) override;
   void OnFaviconsChanged(const std::set<GURL>& page_urls, const GURL& icon_url);
 
   // Non-owning pointer to a KeyedService.

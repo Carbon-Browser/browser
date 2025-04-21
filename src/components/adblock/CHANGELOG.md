@@ -1,7 +1,275 @@
 # Release Notes
 
-## eyeo Chromium SDK 105.1
-* Fixed faulty handling URL redirection by creating AdblockURLLoaderFactory as the last proxy
+## eyeo Browser Ad Filtering Solution 133.0
+* Updated to Chromium 133.0.6943.49
+* Updated snippet library to version 2.0.0 (DPD-3211)
+* Added rejecting of URL filters without any valid domain in domain option (DPD-3031)
+* Added filter list conversion optimization for parsing domain options (DPD-1760)
+* Refactoring: Made FlatbufferConverter non static (DPD-3152)
+* Refactoring: Split adblock_utils (DPD-1724)
+
+## eyeo Browser Ad Filtering Solution 132.0
+* Updated to Chromium 132.0.6834.5
+
+## eyeo Browser Ad Filtering Solution 131.0
+* Updated to Chromium 131.0.6778.39
+* Updated snippet library to version 1.7.0 (DPD-2944)
+* Avoid using Prefs to establish application locale (DPD-3071)
+* Fixed crash in InstalledSubscriptionImpl::GetElemhideData (DPD-2994)
+* Delay all eyeo-issued network requests for 30 seconds after startup (DPD-2992)
+* eyeometry schema extended to include AA stats (DPD-2954, DPD-2955)
+
+## eyeo Browser Ad Filtering Solution 130.0
+* Updated to Chromium 130.0.6723.5
+
+## eyeo Browser Ad Filtering Solution 129.0
+* Updated to Chromium 129.0.6668.54
+* Introduced Safe Filter lists in BAS (DPD-2795)
+* Updated snippets library to version 1.7.0 (DPD-2944)
+* Fixed parsing incorrect domain options (DPD-2789)
+* Fixed crash on opening preview frame (DPD-2884)
+* Fixed crash on loading pages from local files (DPD-2893)
+* Fixed crash on null response headers (DPD-2910)
+
+## eyeo Browser Ad Filtering Solution 128.0
+* Updated to Chromium 128.0.6613.7
+
+## eyeo Browser Ad Filtering Solution 127.0
+* Updated to Chromium 127.0.6533.4
+* Introduced Enhanced Filter List Delivery feature (DPD-2613)
+* Fixed document allowlisting miss sitekey check (DPD-2685)
+* Fixed ad-filtering request initiated by service workers (DPD-2589)
+* Fixed crash on WebSocket interception (DPD-2719)
+* Fixed misleading filter list removal log (DPD-2692)
+
+## eyeo Browser Ad Filtering Solution 126.0
+* Updated to Chromium 126.0.6465.0
+
+## eyeo Browser Ad Filtering Solution 125.0
+* Updated to Chromium 125.0.6422.53
+* New dependency for bundled ML inference service (DPD-2355)
+  See chrome/browser/resources/adblock_ml
+  This is experimental feature disabled by default.
+* Added stats for custom filters hits by means of listing "adblock:custom"
+  among filter list in chrome://adblock-internals (DPD-2713)
+* Allow priviliged filters from locally hosted filter lists (DPD-2625)
+* Fix eyeo performance benchmark arguments (DPD-2668)
+* Fix crash in pattern matcher (DPD-2644)
+
+## eyeo Browser Ad Filtering Solution 124.0
+* Updated to Chromium 124.0.6367.8
+
+## eyeo Browser Ad Filtering Solution 123.0
+* Updated to Chromium 123.0.6312.59
+* Added support for Content Shell (DPD-2433)
+* Added ContentShell JNI and Android tests (DPD-2542)
+* Fixed redundant rewrite filter check for navigation (DPD-2490)
+* Fixed potential crash in CSP injection (DPD-2494)
+* Fixed problem of allowing filtering configurations with duplicated name (DPD-2498)
+* Fixed generating the schema hash (DPD-2504)
+* Fixed race condition wrt building frame hierarchy which affected allowlisting (DPD-2291)
+* Improved element hiding script for blocked resource (DPD-2451)
+* Improved element hiding script to skip unsupported CSS selectors (DPD-2543)
+* Updated snippets library to version 1.2.0 (DPD-2567)
+* Reduced code duplication in AdblockContentBrowserClients (DPD-2435)
+* Removed redundant adblock prefs registration (DPD-2468)
+* Separated pack for adblock core resources (DPD-2477)
+* Limited our APIs to only allowlisted extensions (DPD-2465)
+* Moved implementation of chrome://adblock-internals under components (DPD-2475)
+* Enabled filtering and element hiding for localhost urls (DPD-2575)
+
+## eyeo Browser Ad Filtering Solution 122.0
+* Updated to Chromium 122.0.6261.5
+
+## eyeo Browser Ad Filtering Solution 121.0
+* Updated to Chromium 121.0.6167.101
+* Added support for domain wildcard filters (DPD-2287)
+* Fixed addonVersion value for FL downloads (DPD-2385)
+* Added support for remove filters (DPD-2294)
+* Added support for inline CSS filters (DPD-2295)
+* Fixed last_installation_time in HEAD requests (DPD-2378)
+* Removed deprecated AdblockContentType and AdblockCounters (DPD-2286)
+* Implemented sending trusted JS events via dispatchEvent() from adblock isolated world (DPD-2453)
+* Added support for trusted JS click events called from adblock isolated world (DPD-2429)
+* Fixed BrowserContext usage in eyeo factories (DPD-2458)
+
+## eyeo Browser Ad Filtering Solution 120.0
+* Updated to Chromium 120.0.6099.4
+* Remade JNI bindings (DPD-2231)
+* Resolved linker conflicst for monochrome targets (DPD-2232)
+* Snippets library updated to 0.10.0 (DPD-2324)
+* Component extension for AI snippets. It is active only if related flag is on. (DPD-2073)
+
+## eyeo Browser Ad Filtering Solution 119.0
+* Updated to Chromium 119.0.6045.66
+* Deprecated AdblockController class in Java (DPD-2239)
+* Renamed some C++ functions to use "resource" instead of "ad" more consistently (DPD-2246)
+* Removed a "Copying xpath3 deps code from .." log from the build output (DPD-2114)
+* WebView: started using the user space pref store instead of local space (DPD-2251)
+* Made the FilteringConfiguration Java and JavaScript APIs more consistent wrt naming (DPD-2252)
+
+Known issues:
+* monochrome_public_bundle target doesn't link. This is prioritized for fixing in 121.
+
+## eyeo Browser Ad Filtering Solution 118.0
+* Updated to Chromium 118.0.5993.48
+* Allow removing existing FilteringConfigurations via Java API (DPD-2090)
+* Extracting some common code shared between the WebView and Chrome integrations (DPD-2159)
+* Fixed xpath3 snippets for WebView integrations (DPD-2162)
+* Update snippets repository URL to reflect repo move (DPD-2149)
+* Removing references to C++ AdblockController class (DPD-2153). Use the FilteringConfiguration in C++ now.
+* AdblockController still remains in Java. Internally, it redirects methods to its FilteringConfiguration.
+* Eyeometry TopicProviders can now provide debug information asynchronously (DPD-2175). This debug info is shown on chrome://adblock-internals
+* Hopeful fix for a non-reproducible crash in IsActiveOnDomain (DPD-2101)
+* The following locales now install global-filters+easylist.txt by default: th, el, sl, hr, sr, bs (DPD-2180)
+* Uzbek and Kazakh locales now install ruadlist+easylist.txt by default (DPD-2228)
+* Simplify localization of filter list titles in Android UI (DPD-2227)
+
+Known issues:
+* monochrome_public_bundle target doesn't link. This is prioritized for fixing in 119.
+
+## eyeo Chromium SDK 117.0
+* Updated to Chromium 117.0.5938.44
+* Added support for hide-if-matches-xpath3 snippet (DPD-2065)
+* Added Japanese and Turkish filter lists (DPD-2096)
+* Fixed dump from dangling pointer detector in adblock::ElementHider (DPD-2122)
+* Revert changes introduced with DPD-2101 that caused a crash in chrome://flags
+
+## eyeo Chromium SDK 116.0
+* Updated to Chromium 116.0.5845.78
+* Added webview support (DPD-2036)
+* Added gn gen argument to disable eyeo filtering for first run (DPD-2063)
+* Added chrome://adblock-internals status page (DPD-1708)
+* Removed deprecated APIs from AdblockController (DPD-2060)
+* Improved blocking of popups (DPD-1977)
+* Fix bug that injects CSS/JS multiple times for the same document (DPD-1773)
+
+## eyeo Chromium SDK 115.0
+* Updated to Chromium 115.0.5790.98
+* Fixed bug with not allowlisting frames with 'about:blank...' urls (DPD-1946)
+* Fixed bug with logging telemetry authentication token in release builds (DPD-1951)
+* Fixed several problems with rewrite filters and refactored code (DPD-1657)
+* Fixed bug with handling domain matching filters with empty url pattern (DPD-1978)
+* Updated extensions JavaScript API and Java API by adding FilteringConfiguration name to blocked/allowed notifications (DPD-1909)
+* Updated snippets library version from v0.6.1 to v0.7.0 (DPD-1974)
+
+## eyeo Chromium SDK 114.0
+* Updated to Chromium 114.0.5735.53
+* Fixed bug of gn gen build settings for "eyeo_application_name" and "eyeo_application_version" being ignored (DPD-1937)
+* Fixed bug of not removing flatbuffer file after uninstalling subscription (DPD-1911)
+* Increased Telemetry ping interval from 8 hrs to 12 hrs
+* Removed ComposeFilterSuggestions on Android (DPD-699)
+* Refactored and simplified SnippetTokenizer (DPD-939)
+
+## eyeo Chromium SDK 113.0
+* Updated to Chromium 113.0.5672.76
+* Added new extension API which exposes filtering configurations, and which also supports promises (DPD-1719)
+  See chrome/common/extensions/api/eyeo_filtering_private.idl
+* Reduce JavaScript console output for element hiding emulation (DPD-1750)
+* Added TypeScript definitions for eyeo extension API (DPD-1870)
+* Restricted too generic filters that can affect many sites (DPD-1867)
+* Fix for filters containing | character in the middle of a string (DPD-1755)
+* Support for 'webbundle' filter content type (DPD-1876)
+* Ignore domain duplicates in filters (DPD-1795)
+* More events for extension API notifying about changes in allowed domains, custom filters, filters
+  lists and enable state (DPD-1871)
+* Filter lists downloads check network state and run only when connection is available (DPD-1762)
+* Relaxed base64 decoding for sitekey (DPD-1912)
+
+## eyeo Chromium SDK 112.0
+* Updated to Chromium 112.0.5615.37
+* Subscription for adblock_private events available in incognito mode (DPD-1868)
+* Restored deprecated subscriptions API removed in previous version. This methods will be kept until version 115 (DPD-1839, DPD-1771)
+* AdblockController::Observer is deprecated. Will be removed in version 115 (DPD-1754)
+* Java Subscription class now has method to report version (DPD-1794)
+* Regexp filters should not be converted to lowercase internally (DPD-1806)
+* Filter lists in repo now compressed (DPD-1774)
+
+## eyeo Chromium SDK 111.0
+* Updated to Chromium 111.0.5563.38
+* Updated snippets library from v0.5.5 to v0.6.1
+* Removed deprecated subscriptions API (DPD-1771)
+* Refactored filter lists converter (DPD-1355)
+* Rewritten pattern matching logic to improve url filtering performance (DPD-1745)
+* Added collecting frame hierarchy for popup filtering (DPD-1749)
+* Added Java API for multiple FilteringConfigurations (DPD-1661)
+* Fixed bug when AdblockController is created too late to register its FilteringConfiguration (DPD-1752)
+* Fixed sending redundant HEAD requests for Acceptable Ads when multiple FilteringConfigurations are enabled (DPD-1763)
+* Fixed problem of not removing downloaded filter list file from temp folder (DPD-1748)
+
+## eyeo Chromium SDK 110.0
+* Updated to Chromium 110.0.5481.50
+* Support multiple FilteringConfigurations (DPD-1568)
+* Fixed potential crash in SubscriptionValidator (DPD-1709)
+* Covered AdblockURLLoaderFactory with UT (DPD-1634)
+* Fixed desktop setting page (DPD-1663)
+* Added CRLF support in filter lists converter
+* Added support for multiple CSP filters per resource (DPD-1145)
+* Simplified resource type detection (DPD-1437)
+
+## eyeo Chromium SDK 109.0
+* Updated to Chromium 109.0.5414.86
+* Removed deprecated Allowed Connection Type API (DPD-1582)
+* Deprecated the distinction between installing Built-In vs Custom subscriptions (DPD-1441)
+  - Added API functions to install/uninstall/get subscriptions regardless of their provenance
+  - Deprecated API functions that select/unselect/get "built-in" subscriptions
+  - Deprecated API functions that add/remove/get "custom" subscriptions
+  - The deprecated API functions will disappear in version 111
+  - Identifying recommended filter lists is still possible via separate API functions
+* Fixed parsing URL filters with # symbol (DPD-1632)
+* Removed unneeded AdblockMojoInterface (DPD-1295)
+* Replaced some usage of render frame ID + render process ID with GlobalRenderFrameHostId (DPD-1130)
+* Fixed build issues on Windows
+* Initial work for enabling independent Filtering Configurations (DPD-1567)
+  - Filtering Configurations will allow supporting independently set up filter engine users, e.g.
+    an "ad-filtering" setting alongside a "privacy boosting" setting or "parental control" setting.
+  - Each may have independent filter lists, custom filters, allowed domains etc.
+  - The "ad-filtering" configuration remains the only possible configuration currently, maintaining
+    all existing semantics and APIs
+  - Support for multiple configurations is planned for a future release
+* Fixed invalid behavior when removing previously added custom filters and allowed domains
+
+## eyeo Chromium SDK 108.0
+* Updated to Chromium 108.0.5359.28
+* Allow Telemetry TopicProviders to collect payload asynchronously (DPD-1507)
+* Download filter list on any connection type (DPD-1418)
+  - Filter lists are now being compressed server-side and are very small (~400 kB)
+  - It's no longer advantageous to download them only on Wi-Fi
+  - APIs related to Allowed Connection Type are deprecated and non-functional
+  - Those APIs will be removed in version 109
+* Ensure Telemetry pings trigger correctly after the computer wakes up from sleep (DPD-1559)
+* Ensure filter list download requests attach Accept-Language header (DPD-1405)
+* Fixed a use-after-free when element hiding was applied on a closed tab (DPD-1600)
+* Fixed element hiding to apply within iframes served from Web Bundles (DPD-1510)
+* Improved page load times significantly by optimizing filter matching regular expressions (DPD-586)
+
+## eyeo Chromium SDK 107.0
+* Updated to Chromium 107.0.5304.54
+* Packaging a non-obfuscated version of snippets library for debug builds (DPD-1448)
+* Add GetCustomFilters call to web extensions API (DPD-849)
+* Add eyeo_intercept_debug_url build flag to hide internal testing feature (DPD-1407, DPD-1532)
+* Allow all requests from web extensions (DPD-1505)
+* Fixed a rare crash when tab is closed before websocket classification completes (DPD-1548)
+* Fixed a rare crash when network service disconnects during resource classification (DPD-1496)
+* Fixed Telemetry pings being sent too rarely when PC is suspended (DPD-1559)
+* Removed deprecated abp telemetry gn gen arguments
+
+Known issues:
+* Disabled AdblockMojoInterfaceImpl related unit tests. Will be removed in future releases
+
+## eyeo Chromium SDK 106.0
+* Updated to Chromium 106.0.5249.38
+* Updated snippets library from v0.5.1 to v0.5.5
+* Fixed faulty handling URL redirection by creating AdblockURLLoaderFactory as the last proxy (DPD-1492). Backported into 105.1
+* Fixed SiteKey validation for redirected urls (DPD-1452)
+* Improved logging related to subscription update (DPD-1359)
+* Simplified subscription first run update (DPD-1389)
+
+Known issues:
+* The following browser tests are failing and will be fixed in future releases:
+  - OutOfProcessPPAPITest.URLLoader3
+  - PasswordDialogViewTest.PopupAccountChooserWithMultipleCredentialsReturnEmpty
+  - CredentialManagerAvatarTest.AvatarFetchIsolatedPerOrigin
 
 ## eyeo Chromium SDK 105.0
 * Updated to Chromium 105.0.5195.68

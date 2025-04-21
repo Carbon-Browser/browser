@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 #include "third_party/blink/renderer/modules/xr/xr_reference_space_event.h"
 #include "third_party/blink/renderer/modules/xr/xr_rigid_transform.h"
 #include "third_party/blink/renderer/modules/xr/xr_session.h"
@@ -35,7 +36,9 @@ Member<DOMPointReadOnly> RoundedDOMPoint(const gfx::Point3F& val) {
 XRBoundedReferenceSpace::XRBoundedReferenceSpace(XRSession* session)
     : XRReferenceSpace(
           session,
-          device::mojom::blink::XRReferenceSpaceType::kBoundedFloor) {}
+          device::mojom::blink::XRReferenceSpaceType::kBoundedFloor),
+      offset_bounds_geometry_(
+          MakeGarbageCollected<FrozenArray<DOMPointReadOnly>>()) {}
 
 XRBoundedReferenceSpace::XRBoundedReferenceSpace(
     XRSession* session,
@@ -43,7 +46,9 @@ XRBoundedReferenceSpace::XRBoundedReferenceSpace(
     : XRReferenceSpace(
           session,
           origin_offset,
-          device::mojom::blink::XRReferenceSpaceType::kBoundedFloor) {}
+          device::mojom::blink::XRReferenceSpaceType::kBoundedFloor),
+      offset_bounds_geometry_(
+          MakeGarbageCollected<FrozenArray<DOMPointReadOnly>>()) {}
 
 XRBoundedReferenceSpace::~XRBoundedReferenceSpace() = default;
 
@@ -60,8 +65,8 @@ void XRBoundedReferenceSpace::EnsureUpdated() const {
 
   if (stage_parameters) {
     // Use the transform given by stage_parameters if available.
-    mojo_from_bounded_native_ = std::make_unique<TransformationMatrix>(
-        stage_parameters->mojo_from_floor);
+    mojo_from_bounded_native_ =
+        std::make_unique<gfx::Transform>(stage_parameters->mojo_from_floor);
 
     // In order to ensure that the bounds continue to line up with the user's
     // physical environment we need to transform them from native to offset.
@@ -69,24 +74,28 @@ void XRBoundedReferenceSpace::EnsureUpdated() const {
     // TODO(https://crbug.com/1008466): move originOffset to separate class? If
     // yes, that class would need to apply a transform in the boundsGeometry
     // accessor.
-    TransformationMatrix offset_from_native = OffsetFromNativeMatrix();
+    gfx::Transform offset_from_native = OffsetFromNativeMatrix();
 
     // We may not have bounds if we've lost tracking after being created.
     // Whether we have them or not, we need to clear the existing bounds.
-    offset_bounds_geometry_.clear();
+    FrozenArray<DOMPointReadOnly>::VectorType offset_bounds_geometry;
     if (stage_parameters->bounds &&
         stage_parameters->bounds->size() >= kMinimumNumberOfBoundVertices) {
       for (const auto& bound : *(stage_parameters->bounds)) {
         gfx::Point3F p = offset_from_native.MapPoint(
             gfx::Point3F(bound.x(), 0.0, bound.z()));
-        offset_bounds_geometry_.push_back(RoundedDOMPoint(p));
+        offset_bounds_geometry.push_back(RoundedDOMPoint(p));
       }
     }
+    offset_bounds_geometry_ =
+        MakeGarbageCollected<FrozenArray<DOMPointReadOnly>>(
+            std::move(offset_bounds_geometry));
   } else {
     // If stage parameters aren't available set the transform to null, which
     // will subsequently cause this reference space to return null poses.
     mojo_from_bounded_native_.reset();
-    offset_bounds_geometry_.clear();
+    offset_bounds_geometry_ =
+        MakeGarbageCollected<FrozenArray<DOMPointReadOnly>>();
   }
 
   // DispatchEvent inherited from core/dom/events/event_target.h isn't const.
@@ -96,19 +105,19 @@ void XRBoundedReferenceSpace::EnsureUpdated() const {
       *XRReferenceSpaceEvent::Create(event_type_names::kReset, mutable_this));
 }
 
-absl::optional<TransformationMatrix> XRBoundedReferenceSpace::MojoFromNative()
-    const {
+std::optional<gfx::Transform> XRBoundedReferenceSpace::MojoFromNative() const {
   EnsureUpdated();
 
   if (!mojo_from_bounded_native_)
-    return absl::nullopt;
+    return std::nullopt;
 
   return *mojo_from_bounded_native_;
 }
 
-HeapVector<Member<DOMPointReadOnly>> XRBoundedReferenceSpace::boundsGeometry() {
+const FrozenArray<DOMPointReadOnly>& XRBoundedReferenceSpace::boundsGeometry()
+    const {
   EnsureUpdated();
-  return offset_bounds_geometry_;
+  return *offset_bounds_geometry_.Get();
 }
 
 void XRBoundedReferenceSpace::Trace(Visitor* visitor) const {

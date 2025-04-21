@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 
 suite('UrlUtilTest', function() {
   function getExpectedImageSet(url: string): string {
-    return '-webkit-image-set(' +
+    return 'image-set(' +
         'url("chrome://favicon2/?size=20&scaleFactor=1x&pageUrl=' +
         encodeURIComponent(url) + '&allowGoogleServerFallback=0") 1x, ' +
         'url("chrome://favicon2/?size=20&scaleFactor=2x&pageUrl=' +

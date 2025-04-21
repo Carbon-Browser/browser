@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ class WebContents;
 }
 
 class Profile;
+class PerformanceControlsHatsService;
 
 // This is a browser side per tab helper that allows an entry trigger to
 // launch Happiness Tracking Surveys (HaTS)
@@ -28,6 +29,8 @@ class HatsHelper : public content::WebContentsObserver,
   friend class content::WebContentsUserData<HatsHelper>;
 
   explicit HatsHelper(content::WebContents* web_contents);
+
+  raw_ptr<PerformanceControlsHatsService> performance_controls_hats_service_;
 
   // contents::WebContentsObserver:
   void PrimaryPageChanged(content::Page& page) override;

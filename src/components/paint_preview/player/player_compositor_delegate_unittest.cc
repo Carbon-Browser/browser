@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/unguessable_token.h"
 #include "components/memory_pressure/fake_memory_pressure_monitor.h"
@@ -50,7 +51,7 @@ class FakePaintPreviewCompositorClient : public PaintPreviewCompositorClient {
   FakePaintPreviewCompositorClient& operator=(
       const FakePaintPreviewCompositorClient&) = delete;
 
-  const absl::optional<base::UnguessableToken>& Token() const override {
+  const std::optional<base::UnguessableToken>& Token() const override {
     return token_;
   }
 
@@ -129,7 +130,7 @@ class FakePaintPreviewCompositorClient : public PaintPreviewCompositorClient {
 
  private:
   mojom::PaintPreviewCompositor::BeginCompositeStatus response_status_;
-  absl::optional<base::UnguessableToken> token_;
+  std::optional<base::UnguessableToken> token_;
   base::OnceClosure disconnect_handler_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };
@@ -163,10 +164,7 @@ class FakePaintPreviewCompositorService : public PaintPreviewCompositorService {
 
   void SetTimeout() { timeout_ = true; }
 
-  bool HasActiveClients() const override {
-    NOTREACHED();
-    return false;
-  }
+  bool HasActiveClients() const override { NOTREACHED(); }
 
   void SetDisconnectHandler(base::OnceClosure disconnect_handler) override {
     disconnect_handler_ = std::move(disconnect_handler);
@@ -296,7 +294,7 @@ class PlayerCompositorDelegateTest : public testing::Test {
               auto root_file = directory->AppendASCII("0.skp");
               proto->mutable_root_frame()->set_file_path(
                   root_file.AsUTF8Unsafe());
-              base::WriteFile(root_file, fake_data.data(), fake_data.size());
+              base::WriteFile(root_file, fake_data);
 
               if (!skip_proto_serialization) {
                 file_manager->SerializePaintPreviewProto(key, *proto, false);
@@ -365,12 +363,12 @@ TEST_F(PlayerCompositorDelegateTest, OnClick) {
             auto root_file = directory->AppendASCII("0.skp");
             proto->mutable_root_frame()->set_file_path(
                 root_file.AsUTF8Unsafe());
-            base::WriteFile(root_file, fake_data.data(), fake_data.size());
+            base::WriteFile(root_file, fake_data);
 
             auto subframe_file = directory->AppendASCII("1.skp");
             proto->mutable_subframes(0)->set_file_path(
                 subframe_file.AsUTF8Unsafe());
-            base::WriteFile(subframe_file, fake_data.data(), fake_data.size());
+            base::WriteFile(subframe_file, fake_data);
 
             file_manager->SerializePaintPreviewProto(key, *proto, false);
             std::move(quit).Run();
@@ -419,7 +417,7 @@ TEST_F(PlayerCompositorDelegateTest, BadProto) {
             auto directory = file_manager->CreateOrGetDirectory(key, true);
             std::string fake_data = "Hello World!";
             auto proto_file = directory->AppendASCII("proto.pb");
-            base::WriteFile(proto_file, fake_data.data(), fake_data.size());
+            base::WriteFile(proto_file, fake_data);
           },
           loop.QuitClosure(), file_manager, key));
 
@@ -663,14 +661,13 @@ TEST_F(PlayerCompositorDelegateTest, CompressOnClose) {
                      false),
       base::BindOnce(
           [](base::FilePath* out,
-             const absl::optional<base::FilePath>& file_path) {
+             const std::optional<base::FilePath>& file_path) {
             *out = file_path.value();
           },
           base::Unretained(&dir)));
   env.RunUntilIdle();
   std::string data = "foo";
-  EXPECT_TRUE(
-      base::WriteFile(dir.AppendASCII("test_file"), data.data(), data.size()));
+  EXPECT_TRUE(base::WriteFile(dir.AppendASCII("test_file"), data));
   {
     PlayerCompositorDelegateImpl player_compositor_delegate;
     player_compositor_delegate.SetExpected(CompositorStatus::NO_CAPTURE, 0.0);
@@ -880,7 +877,7 @@ TEST_F(PlayerCompositorDelegateTest, RequestMainFrameBitmapSuccess) {
 
     base::RunLoop loop;
     player_compositor_delegate.RequestBitmap(
-        absl::nullopt, gfx::Rect(10, 20, 30, 40), 1.0,
+        std::nullopt, gfx::Rect(10, 20, 30, 40), 1.0,
         base::BindOnce(
             [](base::OnceClosure quit,
                mojom::PaintPreviewCompositor::BitmapStatus status,
@@ -962,10 +959,10 @@ TEST_F(PlayerCompositorDelegateTest, CriticalMemoryPressureBeforeStart) {
     // execution the files are required by the service or no bitmap will be
     // created.
     base::RunLoop loop;
-    PlayerCompositorDelegateImpl player_compositor_delegate;
     memory_pressure::test::FakeMemoryPressureMonitor memory_pressure_monitor;
     memory_pressure_monitor.SetAndNotifyMemoryPressure(
         base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
+    PlayerCompositorDelegateImpl player_compositor_delegate;
     player_compositor_delegate.SetFakeMemoryPressureMonitor(
         &memory_pressure_monitor);
     player_compositor_delegate.Initialize(

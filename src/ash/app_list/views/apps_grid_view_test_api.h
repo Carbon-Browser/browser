@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,10 @@
 #include <string>
 
 #include "ash/app_list/views/apps_grid_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace gfx {
 class Rect;
-}
-
-namespace ui {
-class Layer;
 }
 
 namespace views {
@@ -24,7 +21,6 @@ class View;
 namespace ash {
 
 class AppListItemView;
-class PagedViewStructure;
 
 namespace test {
 
@@ -48,7 +44,15 @@ class AppsGridViewTestApi {
 
   void PressItemAt(int index);
 
-  size_t TilesPerPage(int page) const;
+  // Returns the number of tiles per page in paged apps grid. It should not be
+  // called for scrollable apps grid, in which case number of tiles per page is
+  // not defined.
+  size_t TilesPerPageInPagedGrid(int page) const;
+
+  // Returns number of tiles allowed on the page for paged apps grid, or
+  // `default_value` for scrollable apps grid, for which number of tiles per
+  // page is not defined.
+  size_t TilesPerPageOr(int page, size_t default_value) const;
 
   int AppsOnPage(int page) const;
 
@@ -70,17 +74,7 @@ class AppsGridViewTestApi {
   // reordering animation to complete.
   void FireReorderTimerAndWaitForAnimationDone();
 
-  // Fires the timer for reparenting items from a folder apps grid.
-  void FireFolderItemReparentTimer();
-
   void Update() { view_->Update(); }
-
-  // Returns the drag icon proxy view's bounds in the apps grid coordinates.
-  // Returns empty bounds if the icon proxy has not been created.
-  gfx::Rect GetDragIconBoundsInAppsGridView();
-
-  // Returns the layer used by the app drag icon proxy.
-  ui::Layer* GetDragIconLayer();
 
   // Moves the app list item at `source_index` to `target_index` by drag and
   // drop. `source_index` and `target_index` are view indices in `view_`.
@@ -88,12 +82,8 @@ class AppsGridViewTestApi {
 
   AppListItemList* GetItemList() { return view_->item_list_; }
 
-  PagedViewStructure* GetPagedViewStructure() {
-    return &view_->view_structure_;
-  }
-
  private:
-  AppsGridView* view_;
+  raw_ptr<AppsGridView, DanglingUntriaged> view_;
 };
 
 }  // namespace test

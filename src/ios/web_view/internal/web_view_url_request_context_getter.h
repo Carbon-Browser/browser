@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
@@ -62,9 +61,9 @@ class WebViewURLRequestContextGetter : public net::URLRequestContextGetter {
   std::unique_ptr<net::URLRequestContext> url_request_context_;
   // SystemCookieStore must be created on UI thread in
   // WebViewURLRequestContextGetter's constructor. Later the ownership is passed
-  // to net::URLRequestContextStorage on IO thread. |system_cookie_store_| is
+  // to net::URLRequestContext on IO thread. |system_cookie_store_| is
   // created in constructor and cleared in GetURLRequestContext() where
-  // net::URLRequestContextStorage is lazily created.
+  // net::URLRequestContext is created.
   std::unique_ptr<net::SystemCookieStore> system_cookie_store_;
   // Protocol handler for web ui.
   std::unique_ptr<net::URLRequestJobFactory::ProtocolHandler> protocol_handler_;

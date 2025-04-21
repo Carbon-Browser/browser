@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,9 @@ class Label;
 //
 // TODO(msw): Remove this class or merge it with DialogDelegateView.
 class ConfirmBubbleViews : public views::DialogDelegateView {
+  METADATA_HEADER(ConfirmBubbleViews, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(ConfirmBubbleViews);
   explicit ConfirmBubbleViews(std::unique_ptr<ConfirmBubbleModel> model);
   ConfirmBubbleViews(const ConfirmBubbleViews&) = delete;
   ConfirmBubbleViews& operator=(const ConfirmBubbleViews&) = delete;

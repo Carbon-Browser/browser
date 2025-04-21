@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 The Chromium Authors. All rights reserved.
+/* Copyright 2013 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
@@ -16,15 +16,6 @@
 
 .update-log-failure {
   background-color: #be2026;
-}
-
-.update-log-legacy-api-usage {
-  background-color: #fed14b;
-}
-
-.ssrc-info-block {
-  color: #999;
-  font-size: 0.8em;
 }
 
 .stats-graph-container {
@@ -125,7 +116,7 @@ th {
   margin: 5px 0 5px 0;
 }
 
-.audio-diagnostic-dumps-info {
+.dumps-info {
   max-width: 60em;
 }
 
@@ -161,8 +152,3 @@ details[open] details summary {
 .candidategrid-candidate td:first-of-type {
     text-align: right;
 }
-
-#legacy-stats-warning {
-    display: none;
-}
-

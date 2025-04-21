@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ SoftwareOutputDeviceOzone::SoftwareOutputDeviceOzone(
   vsync_provider_ = surface_ozone_->CreateVSyncProvider();
 }
 
-SoftwareOutputDeviceOzone::~SoftwareOutputDeviceOzone() {}
+SoftwareOutputDeviceOzone::~SoftwareOutputDeviceOzone() = default;
 
 void SoftwareOutputDeviceOzone::Resize(const gfx::Size& viewport_pixel_size,
                                        float scale_factor) {
@@ -50,11 +50,12 @@ void SoftwareOutputDeviceOzone::EndPaint() {
 }
 
 void SoftwareOutputDeviceOzone::OnSwapBuffers(
-    SwapBuffersCallback swap_ack_callback) {
+    SwapBuffersCallback swap_ack_callback,
+    gfx::FrameData data) {
   if (surface_ozone_->SupportsAsyncBufferSwap())
-    surface_ozone_->OnSwapBuffers(std::move(swap_ack_callback));
+    surface_ozone_->OnSwapBuffers(std::move(swap_ack_callback), data);
   else
-    SoftwareOutputDevice::OnSwapBuffers(std::move(swap_ack_callback));
+    SoftwareOutputDevice::OnSwapBuffers(std::move(swap_ack_callback), data);
 }
 
 int SoftwareOutputDeviceOzone::MaxFramesPending() const {

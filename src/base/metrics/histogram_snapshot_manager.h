@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,36 +55,21 @@ class BASE_EXPORT HistogramSnapshotManager final {
   void PrepareDelta(HistogramBase* histogram);
   void PrepareFinalDelta(const HistogramBase* histogram);
 
+  // Used to avoid a dangling pointer `histogram_flattener_` if the referenced
+  // `HistogramFlattener` is destroyed first.
+  void ResetFlattener() { histogram_flattener_ = nullptr; }
+
  private:
   FRIEND_TEST_ALL_PREFIXES(HistogramSnapshotManagerTest, CheckMerge);
 
-  // During a snapshot, samples are acquired and aggregated. This structure
-  // contains all the information for a given histogram that persists between
-  // collections.
-  struct SampleInfo {
-    // The set of inconsistencies (flags) already seen for the histogram.
-    // See HistogramBase::Inconsistency for values.
-    uint32_t inconsistencies = 0;
-  };
-
   // Capture and hold samples from a histogram. This does all the heavy
-  // lifting for PrepareDelta() and PrepareAbsolute().
+  // lifting for PrepareDelta() and PrepareFinalDelta().
   void PrepareSamples(const HistogramBase* histogram,
-                      std::unique_ptr<HistogramSamples> samples);
+                      const HistogramSamples& samples);
 
   // |histogram_flattener_| handles the logistics of recording the histogram
   // deltas.
-  const raw_ptr<HistogramFlattener> histogram_flattener_;  // Weak.
-
-  // For histograms, track what has been previously seen, indexed
-  // by the hash of the histogram name.
-  std::map<uint64_t, SampleInfo> known_histograms_;
-
-  // A flag indicating if a thread is currently doing an operation. This is
-  // used to check against concurrent access which is not supported. A Thread-
-  // Checker is not sufficient because it may be guarded by at outside lock
-  // (as is the case with cronet).
-  std::atomic<bool> is_active_;
+  raw_ptr<HistogramFlattener> histogram_flattener_;  // Weak.
 };
 
 }  // namespace base

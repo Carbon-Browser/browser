@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <sstream>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
 #include "build/build_config.h"
@@ -50,7 +49,7 @@ class LayerTreeHostPerfTest : public LayerTreeTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     constexpr bool disable_display_vsync = true;
@@ -59,9 +58,9 @@ class LayerTreeHostPerfTest : public LayerTreeTest {
         !layer_tree_host()->GetSettings().single_thread_proxy_scheduler;
     return std::make_unique<TestLayerTreeFrameSink>(
         compositor_context_provider, std::move(worker_context_provider),
-        gpu_memory_buffer_manager(), renderer_settings, &debug_settings_,
-        task_runner_provider(), synchronous_composite, disable_display_vsync,
-        refresh_rate);
+        /*shared_image_interface=*/nullptr, gpu_memory_buffer_manager(),
+        renderer_settings, &debug_settings_, task_runner_provider(),
+        synchronous_composite, disable_display_vsync, refresh_rate);
   }
 
   void BeginTest() override {
@@ -332,9 +331,9 @@ class BrowserCompositorInvalidateLayerTreePerfTest
     next_sync_token.SetVerifyFlush();
 
     constexpr gfx::Size size(64, 64);
-    viz::TransferableResource resource = viz::TransferableResource::MakeGL(
-        gpu_mailbox, GL_LINEAR, GL_TEXTURE_2D, next_sync_token, size,
-        false /* is_overlay_candidate */);
+    viz::TransferableResource resource = viz::TransferableResource::MakeGpu(
+        gpu_mailbox, GL_TEXTURE_2D, next_sync_token, size,
+        viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
     next_fence_sync_++;
 
     tab_contents_->SetTransferableResource(resource, std::move(callback));

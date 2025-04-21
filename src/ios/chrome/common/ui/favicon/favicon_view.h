@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,10 @@
 
 #import "ios/chrome/common/ui/favicon/favicon_attributes.h"
 
-namespace {
 // Minimum width and height of favicon.
-const CGFloat kFaviconMinSize = 16.0f;
+extern const CGFloat kFaviconMinSize;
 // Default width and height of favicon.
-const CGFloat kFaviconPreferredSize = 24.0f;
-}  // namespace
+extern const CGFloat kFaviconPreferredSize;
 
 @interface FaviconView : UIView
 

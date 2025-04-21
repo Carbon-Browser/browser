@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/strings/stringprintf.h"
 #include "cc/animation/animation_id_provider.h"
 #include "cc/animation/keyframe_model.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/float_animation_curve_adapter.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_delegate.h"
@@ -243,11 +244,10 @@ class GrayscaleTransition : public LayerAnimationElement {
 
 class ColorTransition : public LayerAnimationElement {
  public:
-  ColorTransition(SkColor target, base::TimeDelta duration)
+  ColorTransition(SkColor4f target, base::TimeDelta duration)
       : LayerAnimationElement(COLOR, duration),
-        start_(SK_ColorBLACK),
-        target_(target) {
-  }
+        start_(SkColors::kBlack),
+        target_(target) {}
 
   ColorTransition(const ColorTransition&) = delete;
   ColorTransition& operator=(const ColorTransition&) = delete;
@@ -274,8 +274,8 @@ class ColorTransition : public LayerAnimationElement {
   void OnAbort(LayerAnimationDelegate* delegate) override {}
 
  private:
-  SkColor start_;
-  const SkColor target_;
+  SkColor4f start_;
+  const SkColor4f target_;
 };
 
 // ClipRectTransition ----------------------------------------------------------
@@ -385,10 +385,10 @@ class GradientMaskTransition : public LayerAnimationElement {
     DCHECK_EQ(start_.step_count(), target_.step_count());
     for (auto i = 0; i < static_cast<int>(start_.step_count()); ++i) {
       gradient_mask.AddStep(
-          gfx::Tween::FloatValueBetween(t, start_.steps()[i].percent,
-                                        target_.steps()[i].percent),
+          gfx::Tween::FloatValueBetween(t, start_.steps()[i].fraction,
+                                        target_.steps()[i].fraction),
           gfx::Tween::IntValueBetween(t, start_.steps()[i].alpha,
-                                        target_.steps()[i].alpha));
+                                      target_.steps()[i].alpha));
     }
 
     delegate->SetGradientMaskFromAnimation(
@@ -521,6 +521,9 @@ class ThreadedOpacityTransition : public ThreadedLayerAnimationElement {
   }
 
   std::unique_ptr<cc::KeyframeModel> CreateCCKeyframeModel() override {
+    // Ensures that we don't remove and add a model with the same id in a single
+    // frame.
+    UpdateKeyframeModelId();
     std::unique_ptr<gfx::AnimationCurve> animation_curve(
         new FloatAnimationCurveAdapter(tween_type(), start_, target_,
                                        duration()));
@@ -594,6 +597,9 @@ class ThreadedTransformTransition : public ThreadedLayerAnimationElement {
   }
 
   std::unique_ptr<cc::KeyframeModel> CreateCCKeyframeModel() override {
+    // Ensures that we don't remove and add a model with the same id in a single
+    // frame.
+    UpdateKeyframeModelId();
     std::unique_ptr<gfx::AnimationCurve> animation_curve(
         new TransformAnimationCurveAdapter(tween_type(), start_, target_,
                                            duration()));
@@ -633,7 +639,8 @@ LayerAnimationElement::TargetValue::TargetValue(
       visibility(delegate ? delegate->GetVisibilityForAnimation() : false),
       brightness(delegate ? delegate->GetBrightnessForAnimation() : 0.0f),
       grayscale(delegate ? delegate->GetGrayscaleForAnimation() : 0.0f),
-      color(delegate ? delegate->GetColorForAnimation() : SK_ColorTRANSPARENT),
+      color(delegate ? delegate->GetColorForAnimation()
+                     : SkColors::kTransparent),
       clip_rect(delegate ? delegate->GetClipRectForAnimation() : gfx::Rect()),
       rounded_corners(delegate ? delegate->GetRoundedCornersForAnimation()
                                : gfx::RoundedCornersF()),
@@ -766,6 +773,10 @@ std::string LayerAnimationElement::ToString() const {
       last_progressed_fraction_);
 }
 
+void LayerAnimationElement::UpdateKeyframeModelId() {
+  keyframe_model_id_ = cc::AnimationIdProvider::NextKeyframeModelId();
+}
+
 std::string LayerAnimationElement::DebugName() const {
   return "Default";
 }
@@ -780,7 +791,6 @@ LayerAnimationElement::ToAnimatableProperty(cc::TargetProperty::Type property) {
       return OPACITY;
     default:
       NOTREACHED();
-      return AnimatableProperty();
   }
 }
 
@@ -833,7 +843,6 @@ std::string LayerAnimationElement::AnimatablePropertiesToString(
           break;
         case SENTINEL:
           NOTREACHED();
-          break;
       }
       property_count++;
     }
@@ -910,7 +919,7 @@ LayerAnimationElement::CreatePauseElement(AnimatableProperties properties,
 
 // static
 std::unique_ptr<LayerAnimationElement>
-LayerAnimationElement::CreateColorElement(SkColor color,
+LayerAnimationElement::CreateColorElement(SkColor4f color,
                                           base::TimeDelta duration) {
   return std::make_unique<ColorTransition>(color, duration);
 }

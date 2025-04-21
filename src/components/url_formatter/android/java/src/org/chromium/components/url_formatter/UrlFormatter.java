@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,26 +8,28 @@ import android.text.TextUtils;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
 
-/**
- * Wrapper for utilities in url_formatter.
- */
+/** Wrapper for utilities in url_formatter. */
 @JNINamespace("url_formatter::android")
-@MainDex
+@NullMarked
 public final class UrlFormatter {
     /**
      * Refer to url_formatter::FixupURL.
      *
+     * <pre>
      * Given a URL-like string, returns a possibly-invalid GURL. For example:
      *  - "google.com" -> "http://google.com/"
      *  - "about:" -> "chrome://version/"
      *  - "//mail.google.com:/" -> "file:///mail.google.com:/"
      *  - "0x100.0" -> "http://0x100.0/" (invalid)
+     * </pre>
      */
     public static GURL fixupUrl(String uri) {
         if (TextUtils.isEmpty(uri)) return GURL.emptyGURL();
@@ -230,22 +232,31 @@ public final class UrlFormatter {
      * @deprecated Please use {@link #formatUrlForSecurityDisplay(GURL, int)} instead.
      */
     @Deprecated
-    public static String formatUrlForSecurityDisplay(String uri, @SchemeDisplay int schemeDisplay) {
+    public static String formatUrlForSecurityDisplay(@Nullable String uri, @SchemeDisplay int schemeDisplay) {
         return UrlFormatterJni.get().formatStringUrlForSecurityDisplay(uri, schemeDisplay);
     }
 
-    @VisibleForTesting
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
     public interface Natives {
         GURL fixupUrl(String url);
+
         String formatUrlForDisplayOmitScheme(String url);
+
         String formatUrlForDisplayOmitHTTPScheme(String url);
+
         String formatUrlForDisplayOmitSchemeOmitTrivialSubdomains(String url);
+
         String formatUrlForDisplayOmitSchemePathAndTrivialSubdomains(GURL url);
+
         String formatUrlForDisplayOmitUsernamePassword(String url);
+
         String formatUrlForCopy(String url);
+
         String formatUrlForSecurityDisplay(GURL url, @SchemeDisplay int schemeDisplay);
+
         String formatOriginForSecurityDisplay(Origin origin, @SchemeDisplay int schemeDisplay);
-        String formatStringUrlForSecurityDisplay(String url, @SchemeDisplay int schemeDisplay);
+
+        String formatStringUrlForSecurityDisplay(@Nullable String url, @SchemeDisplay int schemeDisplay);
     }
 }

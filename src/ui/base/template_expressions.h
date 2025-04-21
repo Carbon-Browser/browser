@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 
 #include "base/component_export.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 
 namespace ui {
@@ -33,7 +33,7 @@ void TemplateReplacementsFromDictionaryValue(
 // be unaltered.
 COMPONENT_EXPORT(UI_BASE)
 std::string ReplaceTemplateExpressions(
-    base::StringPiece source,
+    std::string_view source,
     const TemplateReplacements& replacements,
     bool skip_unexpected_placeholder_check = false);
 
@@ -51,7 +51,7 @@ std::string ReplaceTemplateExpressions(
 // Note: Currently, this only supports the legacy Polymer syntax, i.e.:
 //     _template: html` ... `,
 COMPONENT_EXPORT(UI_BASE)
-bool ReplaceTemplateExpressionsInJS(base::StringPiece source,
+bool ReplaceTemplateExpressionsInJS(std::string_view source,
                                     const TemplateReplacements& replacements,
                                     std::string* output);
 

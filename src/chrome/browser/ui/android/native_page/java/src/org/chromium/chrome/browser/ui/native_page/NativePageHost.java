@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import android.graphics.Rect;
 import org.chromium.base.supplier.DestroyableObservableSupplier;
 import org.chromium.content_public.browser.LoadUrlParams;
 
-/**
- * This interface represents a view that is capable of hosting a NativePage.
- */
+/** This interface represents a view that is capable of hosting a NativePage. */
 public interface NativePageHost {
     /**
      * @return A context to use for inflating views and obtaining resources.
@@ -20,16 +18,24 @@ public interface NativePageHost {
     Context getContext();
 
     /**
-     * Load a non-native URL in an active tab. This should be used to either navigate away from
-     * the current native page or load external content in a content area (i.e. a tab or web
-     * contents).
+     * Load a non-native URL in an active tab. This should be used to either navigate away from the
+     * current native page or load external content in a content area (i.e. a tab or web contents).
+     *
      * @param urlParams The params describing the URL to be loaded.
      * @param incognito Whether the URL should be loaded in incognito mode.
      */
     void loadUrl(LoadUrlParams urlParams, boolean incognito);
 
     /**
+     * Load a non-native URL in a new tab. This should be used to open hyperlink in a new tab.
+     *
+     * @param urlParams The params describing the URL to be loaded.
+     */
+    void openNewTab(LoadUrlParams urlParams);
+
+    /**
      * If the host is a tab, get the ID of its parent.
+     *
      * @return The ID of the parent tab or INVALID_TAB_ID.
      */
     int getParentId();
